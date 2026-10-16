@@ -68,12 +68,21 @@ export const ERROR_MESSAGES: Record<string, string> = {
   bot_url_not_configured: 'Ссылки для приглашений временно недоступны. Сообщите в поддержку.',
   direction_not_confirmed: 'Это направление ещё не подтверждено в вашем профиле',
   style_not_confirmed: 'Этот вид практики ещё не подтверждён в вашем профиле',
-  zoom_meeting_not_active: 'Встреча Zoom для этой практики недоступна',
   group_in_use:
     'Эта группа — единственная аудитория одной из практик. Сначала измените аудиторию практики, затем удалите группу.',
   invite_invalid:
     'Приглашение одноразовое: возможно, оно уже использовано или ссылка повреждена. Запросите новую ссылку у администратора.',
   insufficient_balance: 'Недостаточно средств на балансе',
+
+  // Standalone F4 -- Zoom inside the app (zoom/sdk.py). zoom_meeting_not_active
+  // (seeded above until F4) left with the start-ticket endpoint, its only
+  // raise site; zoom_sdk_not_configured and zoom_entry_not_joinable have
+  // their own states on the practice screen, the phrase is the fallback.
+  zoom_sdk_not_configured: 'Вход в Zoom на этом сервере пока не настроен',
+  zoom_entry_not_joinable: 'Сейчас войти в эту практику нельзя',
+  zoom_unavailable: 'Zoom не ответил. Попробуйте ещё раз через минуту',
+  zoom_host_token_unavailable:
+    'Zoom не дал начать встречу. Попробуйте ещё раз; если повторится — напишите в поддержку',
 
   // New -- written from each raise site's own English message.
   already_master: 'Вы уже мастер',

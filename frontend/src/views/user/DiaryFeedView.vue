@@ -1077,7 +1077,7 @@ onBeforeUnmount(() => {
    which already excludes that padding; an absolute px var does not).
    AppFrame's own content box is `--velo-vvh` (at rest) minus
    `--velo-content-safe-top` (0 in-chat, ~70px in Telegram fullscreen,
-   useSafeArea.ts) -- binding straight to `--velo-vvh` reintroduced exactly
+   env(safe-area-inset-top) outside Telegram -- useSafeArea.ts) -- binding straight to `--velo-vvh` reintroduced exactly
    this screen's own defect class in fullscreen: the column would be the
    FULL viewport tall while starting `--velo-content-safe-top` px down, so
    its bottom -- the composer -- would overshoot the actually-visible bottom

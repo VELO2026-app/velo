@@ -6,6 +6,12 @@
 // QW-4: role returns null (not 'user') for unauthenticated users.
 // W-1: logout() resets masterStore to prevent data leak between sessions.
 //
+// Standalone phase 3: the session token is kept where the PLATFORM says
+// (platform/session-token.ts -- localStorage outside Telegram, sessionStorage
+// inside). Outside Telegram the person signs in with "Log In With Telegram":
+// startBrowserLogin() leaves for Telegram's page, completeBrowserLogin() runs
+// on the return (composables/useAuth.ts, initAuth).
+//
 // Profile reads/writes go through api/users.ts wrappers (getMe / updateMe)
 // instead of inline api.get/patch calls, so the endpoint path lives in one
 // place. updateProfile() is used by the profile screen and by the welcome
@@ -17,8 +23,12 @@ import { ref, computed } from 'vue'
 import { api, setAuthToken, setOnUnauthorized, ApiResponseError } from '@/api/client'
 import { getMe, updateMe, switchRole as apiSwitchRole } from '@/api/users'
 import { platform } from '@/platform'
+import { host } from '@/platform/host'
+import { newMark, rememberLoginMark } from '@/platform/browser-login'
 import type {
   AuthResponse,
+  BrowserLoginResponse,
+  BrowserLoginStartResponse,
   MasterApplicationInfo,
   RoleSwitchInfo,
   UserResponse,
@@ -26,7 +36,17 @@ import type {
   UserUpdate,
 } from '@/api/types'
 
-const TOKEN_KEY = 'velo_token'
+/**
+ * How restoring a saved session ended (Standalone phase 3, gate item R6).
+ *   restored    -- the token is good, the user is loaded;
+ *   none        -- nothing was saved;
+ *   rejected    -- the server refused the token (401) or the account
+ *                  (403): the token is removed;
+ *   unreachable -- no answer (network, timeout, 5xx): the token is KEPT.
+ *                  A launch of the installed app without network must not
+ *                  throw away a 30-day sign-in.
+ */
+export type RestoreOutcome = 'restored' | 'none' | 'rejected' | 'unreachable'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<UserResponse | null>(null)
@@ -63,11 +83,7 @@ export const useAuthStore = defineStore('auth', () => {
   function _setToken(newToken: string | null): void {
     token.value = newToken
     setAuthToken(newToken)
-    if (newToken) {
-      sessionStorage.setItem(TOKEN_KEY, newToken)
-    } else {
-      sessionStorage.removeItem(TOKEN_KEY)
-    }
+    platform.writeSessionToken(newToken)
   }
 
   function _setUser(newUser: UserResponse | null): void {
@@ -102,19 +118,103 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function restoreSession(): Promise<boolean> {
-    const savedToken = sessionStorage.getItem(TOKEN_KEY)
-    if (!savedToken) return false
+  async function restoreSession(): Promise<RestoreOutcome> {
+    const savedToken = platform.readSessionToken()
+    if (!savedToken) return 'none'
 
     _setToken(savedToken)
     loading.value = true
     try {
       const me = await getMe()
       _setUser(me)
-      return true
+      return 'restored'
+    } catch (error) {
+      if (error instanceof ApiResponseError && (error.status === 401 || error.status === 403)) {
+        _clearSession()
+        return 'rejected'
+      }
+      // No answer about the token: keep it saved for the next attempt, but
+      // this page is not signed in.
+      token.value = null
+      setAuthToken(null)
+      _setUser(null)
+      return 'unreachable'
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /**
+   * Close `staleToken`'s session on the server, best-effort. The ONE place a
+   * session this page is abandoning gets revoked (completeBrowserLogin,
+   * discardSession): left alone it would stay live in Redis for the rest of
+   * its 30 days with nobody holding it. A 401 (already gone) or no answer is
+   * fine -- either way it is not this page's session any more. A 401 here
+   * also fires the client's onUnauthorized -> _clearSession; the callers set
+   * or clear the session themselves right after.
+   */
+  async function _revokeOnServer(staleToken: string): Promise<void> {
+    setAuthToken(staleToken)
+    try {
+      await api.post('/api/v1/auth/logout')
     } catch {
-      _clearSession()
-      return false
+      // Already gone (401) or unreachable -- it expires on its own.
+    }
+  }
+
+  /**
+   * Drop the session this page holds -- revoked on the server, forgotten
+   * here -- WITHOUT logout()'s side effects (logout() closes the Mini App in
+   * Telegram). Used when a restored session turns out not to belong to the
+   * person who opened the app (useAuth.ts, initAuth).
+   */
+  async function discardSession(): Promise<void> {
+    const current = token.value
+    if (current) {
+      await _revokeOnServer(current)
+    }
+    _clearSession()
+  }
+
+  /**
+   * Browser sign-in, step 1: ask the backend for Telegram's URL, remember
+   * { state, mark } in this browser (platform/browser-login.ts) and leave
+   * for Telegram. Throws the API error for the login screen to word.
+   */
+  async function startBrowserLogin(): Promise<void> {
+    const mark = newMark()
+    const started = await api.post<BrowserLoginStartResponse>(
+      '/api/v1/auth/telegram/browser/start',
+      { mark },
+    )
+    rememberLoginMark({ state: started.state, mark })
+    host.location.assign(started.url)
+  }
+
+  /**
+   * Browser sign-in, step 2 (on the return, after the mark matched): trade
+   * Telegram's code for a session. A session already saved in this browser
+   * -- the same account or another one -- is closed on the server first, so
+   * it does not linger in Redis for the rest of its 30 days.
+   *
+   * Returns whether THIS sign-in gave the bot the right to write. Throws the
+   * API error for the login screen to word; the saved session is then left
+   * as it was.
+   */
+  async function completeBrowserLogin(code: string, state: string, mark: string): Promise<boolean> {
+    loading.value = true
+    try {
+      const response = await api.post<BrowserLoginResponse>(
+        '/api/v1/auth/telegram/browser/complete',
+        { code, state, mark, language: host.navigator.language || null },
+      )
+      const previous = platform.readSessionToken()
+      if (previous && previous !== response.session_token) {
+        await _revokeOnServer(previous)
+      }
+      _setToken(response.session_token)
+      _setUser(response.user)
+      return response.bot_access_granted
     } finally {
       loading.value = false
     }
@@ -218,7 +318,9 @@ export const useAuthStore = defineStore('auth', () => {
     // Arm the logging-out gate FIRST so the App.vue gate shows LoadingView
     // during the brief window between _clearSession() (isAuthenticated -> false)
     // and the Mini App actually closing -- otherwise it would flash the
-    // StandaloneStubView ("Open via Telegram"). Dynamic import breaks the
+    // TelegramStubView ("Open via Telegram"). Outside Telegram there is
+    // nothing to close: the cleared session puts the login screen up, and
+    // the token is gone from storage (_setToken). Dynamic import breaks the
     // circular dep auth -> useAuth -> auth (same pattern as the master store).
     const inTelegram = platform.name === 'telegram'
     if (inTelegram) {
@@ -256,6 +358,9 @@ export const useAuthStore = defineStore('auth', () => {
     masterApplication,
     loginViaTelegram,
     restoreSession,
+    startBrowserLogin,
+    completeBrowserLogin,
+    discardSession,
     fetchMe,
     updateProfile,
     switchRole,

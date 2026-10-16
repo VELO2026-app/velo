@@ -45,9 +45,9 @@ import base64
 import binascii
 import enum
 import random
-import secrets
 from dataclasses import dataclass
 from datetime import UTC
+from urllib.parse import parse_qs, urlsplit
 from uuid import UUID, uuid4
 
 import structlog
@@ -57,7 +57,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_session_factory
-from app.core.redis import get_redis
 from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.users.models import User
@@ -75,7 +74,6 @@ from app.modules.zoom.zoom_client import (
     ZoomAPIError,
     create_meeting,
     create_registrant,
-    get_meeting,
     get_meeting_recordings,
     list_registrants,
     patch_meeting,
@@ -112,23 +110,59 @@ def _registration_email_for(user: User) -> str:
 # row at the cap (owner ruling, BE-72: five attempts, no more -- a link that
 # has not arrived by then arrives too late to matter).
 #
-# "No link" is a FALSY join_url, not a NULL one: an empty string opens
-# nothing either.
+# "No link" means NO ENTRY TOKEN (Standalone F4). Nobody follows join_url
+# any more: the Meeting SDK enters a registered meeting with the registrant's
+# token, the `tk` query parameter of that URL (registrant_entry_token below).
+# A join_url without a usable tk -- NULL, empty, no tk, an empty or repeated
+# tk -- opens nothing, so it is no link. The constant below keeps its name:
+# it is a value in the zoom_registrant_link_unavailable log line, and the
+# row it names is still "registered, nothing to enter with".
 
 LINK_UNAVAILABLE_RETRY_CAP = "retry_cap"
 LINK_UNAVAILABLE_REGISTERED_WITHOUT_JOIN_URL = "registered_without_join_url"
 
 
-def link_unavailable_reason(row: ZoomRegistrant) -> str | None:
-    """Why this registrant will not get a join link, or None if it has one
-    or one may still come.
+def entry_token_from_join_url(join_url: str | None) -> str | None:
+    """The registrant token (`tk`) carried by a registrant join_url, or None.
 
-    None for: a row with a link; a pending row (the meeting is not active
+    Zoom documents the registrant URL as https://.../w/<id>?tk=<token>; the
+    Meeting SDK's join() takes that token as `tk`. None for no URL, no `tk`,
+    an empty `tk`, and a `tk` given more than once -- two tokens in one URL
+    is not a shape Zoom documents, and guessing which one is the person's
+    would be a guess about identity.
+    """
+    if not join_url:
+        return None
+    values = parse_qs(urlsplit(join_url).query, keep_blank_values=True).get("tk")
+    if not values or len(values) != 1:
+        return None
+    token = values[0].strip()
+    return token or None
+
+
+def registrant_entry_token(row: ZoomRegistrant) -> str | None:
+    """This registrant's SDK entry token, or None when it has none.
+
+    THE ONE predicate for "this person has something to enter with": the
+    entry resolver (resolve_zoom_entry, PERSONAL), the booking lists
+    (bookings/service.py, zoom_registrant_ready) and the attendance verdict
+    (attendance_service, BE-72 branch) all ask this and only this, so a list
+    row, the practice screen and the verdict cannot disagree about the same
+    registrant.
+    """
+    return entry_token_from_join_url(row.join_url)
+
+
+def link_unavailable_reason(row: ZoomRegistrant) -> str | None:
+    """Why this registrant will not get an entry token, or None if it has
+    one or one may still come.
+
+    None for: a row with a token; a pending row (the meeting is not active
     yet, or the first attempt is queued); a create_failed row still under
     settings.zoom_registrant_create_max_retries (the poller will try again);
-    a cancelled row (nobody is waiting for its link).
+    a cancelled row (nobody is waiting for its token).
     """
-    if row.join_url:
+    if registrant_entry_token(row) is not None:
         return None
     if row.status == ZoomRegistrantStatus.REGISTERED.value:
         return LINK_UNAVAILABLE_REGISTERED_WITHOUT_JOIN_URL
@@ -797,78 +831,11 @@ async def delete_meeting_for_practice(
 
 
 # ---------------------------------------------------------------------------
-# T21-1: read-only host-link lookups for owner-facing PracticeResponse.zoom_
-# host_join_url. Never used for a student's own link (that's the booking's
-# own registrant, looked up by booking_id in bookings/service.py) -- these
-# two only ever resolve the role='host' row, the master's own personal link.
-# ---------------------------------------------------------------------------
-
-
-async def get_host_join_url(
-    practice_id: UUID,
-    session: AsyncSession,
-) -> str | None:
-    """This practice's host registrant join_url, or None if there is no
-    USABLE one -- meeting not created yet, Zoom hasn't returned a link yet
-    (see ZoomRegistrant.join_url docstring), or the meeting was since
-    deleted (ZoomMeetingStatus.DELETED -- the registrant row itself is not
-    touched on delete, only the meeting, so status must be checked here
-    rather than trusting the registrant row alone)."""
-    zoom_meeting_id = (
-        await session.execute(
-            select(ZoomMeeting.id).where(
-                ZoomMeeting.practice_id == practice_id,
-                ZoomMeeting.status == ZoomMeetingStatus.ACTIVE.value,
-            )
-        )
-    ).scalar_one_or_none()
-    if zoom_meeting_id is None:
-        return None
-    return (
-        await session.execute(
-            select(ZoomRegistrant.join_url).where(
-                ZoomRegistrant.zoom_meeting_id == zoom_meeting_id,
-                ZoomRegistrant.role == ZoomRegistrantRole.HOST.value,
-                ZoomRegistrant.status != ZoomRegistrantStatus.CANCELLED.value,
-            )
-        )
-    ).scalar_one_or_none()
-
-
-async def get_host_join_urls(
-    practice_ids: list[UUID],
-    session: AsyncSession,
-) -> dict[UUID, str]:
-    """Batched form of get_host_join_url for a list endpoint (master's own
-    practice list) -- one query, no N+1, same pattern as
-    bookings/service.py's feedback/checkin set-membership lookups."""
-    if not practice_ids:
-        return {}
-    rows = (
-        await session.execute(
-            select(ZoomMeeting.practice_id, ZoomRegistrant.join_url)
-            .join(
-                ZoomRegistrant,
-                ZoomRegistrant.zoom_meeting_id == ZoomMeeting.id,
-            )
-            .where(
-                ZoomMeeting.practice_id.in_(practice_ids),
-                ZoomMeeting.status == ZoomMeetingStatus.ACTIVE.value,
-                ZoomRegistrant.role == ZoomRegistrantRole.HOST.value,
-                ZoomRegistrant.status != ZoomRegistrantStatus.CANCELLED.value,
-                ZoomRegistrant.join_url.is_not(None),
-            )
-        )
-    ).all()
-    return {row[0]: row[1] for row in rows}
-
-
-# ---------------------------------------------------------------------------
 # A4 V2 (PROMPT №572): read-only ZoomMeetingStatus lookups for
 # PracticeResponse.zoom_meeting_status / PracticeSummary.zoom_meeting_status.
-# Unlike get_host_join_url[s] above, this is NOT owner-gated -- the status
-# value itself carries no secret material (same zero-masking posture as the
-# admin zoom-attendance endpoint's own zoom_meeting_status field,
+# NOT owner-gated -- the status value itself carries no secret material
+# (same zero-masking posture as the admin zoom-attendance endpoint's own
+# zoom_meeting_status field,
 # admin/practices/schemas.py), and BOTH the master and a booked participant
 # need it to tell "still preparing" (pending_creation) apart from
 # "permanently failed" (create_failed) -- utils/zoomLink.ts previously had no
@@ -896,7 +863,7 @@ async def get_zoom_meeting_statuses(
     session: AsyncSession,
 ) -> dict[UUID, str]:
     """Batched form of get_zoom_meeting_status for a list endpoint -- one
-    query, no N+1, same pattern as get_host_join_urls above."""
+    query, no N+1."""
     if not practice_ids:
         return {}
     rows = (
@@ -907,89 +874,6 @@ async def get_zoom_meeting_statuses(
         )
     ).all()
     return {row[0]: row[1] for row in rows}
-
-
-# ---------------------------------------------------------------------------
-# PROMPT №556 (OWNER-1, option В): "Начать" -- the master starts their own
-# meeting as host. start_url is a bearer credential (its holder needs no
-# further Zoom-side identity check to become host) that also expires, so the
-# owner decided against ever storing or returning it: it is fetched fresh
-# from Zoom at the moment the master clicks, and handed to the browser only
-# via an HTTP redirect (a Location header), never through a JSON body a
-# frontend variable could hold onto.
-#
-# A plain browser navigation (window.location / Telegram WebApp.openLink)
-# never carries our Authorization header -- there is no cookie session
-# either (client.ts is bearer-only) -- so the redirect endpoint cannot reuse
-# get_current_master. The ticket below stands in for that header for exactly
-# one redirect: minted only after the ownership check already ran
-# (practices/router.py, same P-08 pattern as update/delete/cancel_practice),
-# single-use (deleted the instant it's read), and short-lived enough that a
-# leaked ticket (server access logs, browser history) is worthless within
-# seconds -- a much smaller exposure than the general session token would be
-# if that were reused here instead.
-# ---------------------------------------------------------------------------
-
-_START_TICKET_PREFIX = "zoom_start_ticket:"
-_START_TICKET_TTL_SECONDS = 30
-
-
-async def get_active_meeting_for_practice(
-    practice_id: UUID,
-    session: AsyncSession,
-) -> ZoomMeeting | None:
-    """This practice's ZoomMeeting row if one exists and is currently
-    active, else None. Used to give an honest "no meeting" refusal before
-    ever minting a start ticket for a practice that has nothing to start."""
-    return (
-        await session.execute(
-            select(ZoomMeeting).where(
-                ZoomMeeting.practice_id == practice_id,
-                ZoomMeeting.status == ZoomMeetingStatus.ACTIVE.value,
-            )
-        )
-    ).scalar_one_or_none()
-
-
-async def create_start_ticket(zoom_meeting_id: UUID) -> str:
-    """Mint a single-use, short-lived ticket authorizing ONE start_url fetch
-    for this meeting. Caller must already have verified the requester owns
-    the practice this meeting belongs to -- this function trusts its input."""
-    ticket = secrets.token_urlsafe(32)
-    redis = get_redis()
-    await redis.set(
-        f"{_START_TICKET_PREFIX}{ticket}",
-        str(zoom_meeting_id),
-        ex=_START_TICKET_TTL_SECONDS,
-    )
-    return ticket
-
-
-async def redeem_start_ticket(ticket: str) -> UUID | None:
-    """Atomically read-and-delete a start ticket. Returns the ZoomMeeting id
-    it authorized, or None if the ticket is missing, expired, or already
-    used (GETDEL is one round trip -- no separate GET+DEL race window)."""
-    redis = get_redis()
-    value = await redis.getdel(f"{_START_TICKET_PREFIX}{ticket}")
-    if value is None:
-        return None
-    return UUID(value)
-
-
-async def get_meeting_start_url(zoom_meeting_id: str) -> str | None:
-    """Fetch the meeting's CURRENT start_url from Zoom, at request time --
-    never read from a stored column (none exists; see create_meeting's
-    docstring for why one was never added). Returns None if Zoom's response
-    has no usable start_url; raises ZoomAPIError on any Zoom-side failure
-    (network, non-2xx) for the caller to translate into an honest message.
-
-    Does not log `response` or any field of it -- do not add a logging call
-    here that would put start_url in a log line."""
-    response = await get_meeting(zoom_meeting_id=zoom_meeting_id)
-    start_url = response.get("start_url")
-    if not isinstance(start_url, str) or not start_url.startswith("https://"):
-        return None
-    return start_url
 
 
 # ---------------------------------------------------------------------------
@@ -1006,7 +890,8 @@ async def get_meeting_start_url(zoom_meeting_id: str) -> str | None:
 async def get_meeting_recording_link(zoom_meeting_id: str) -> str | None:
     """This meeting's current recording link, passcode embedded, fetched
     fresh from Zoom every call -- never stored, same "ask Zoom at request
-    time" posture as get_meeting_start_url above, and for the same reason:
+    time" posture as the Meeting SDK entry (zoom/sdk.py), and for the same
+    reason:
     a stored link would go stale the moment Zoom's own 7-day retention
     deletes the file, and re-deriving staleness ourselves would duplicate a
     job Zoom already does.
@@ -1018,8 +903,8 @@ async def get_meeting_recording_link(zoom_meeting_id: str) -> str | None:
     that here and collapse the two.
 
     Does not log `response` or the constructed link -- the link carries the
-    passcode inline once built, same "never log the credential" rule
-    get_meeting_start_url's docstring states for start_url above.
+    passcode inline once built -- the same "never log the credential" rule
+    zoom/sdk.py keeps for the meeting passcode and the host's ZAK.
     """
     try:
         response = await get_meeting_recordings(zoom_meeting_id=zoom_meeting_id)
@@ -1059,8 +944,10 @@ async def get_meeting_recording_link(zoom_meeting_id: str) -> str | None:
 #
 # The wrapper kills that CONSTRUCTIVELY rather than by discipline: if no raw
 # Zoom URL exists outside this backend, a student physically cannot enter past
-# his own personal link -- the resolver hands him that one, because it knows
-# who he is. Nothing here waits on a fix to the matcher (T24's territory).
+# his own personal entry -- the resolver hands him that one, because it knows
+# who he is (since Standalone F4: his registrant's token, used by the Meeting
+# SDK inside the app; no Zoom URL reaches the app at all). Nothing here
+# waits on a fix to the matcher (T24's territory).
 #
 # THE CODE IS NOT A SECRET. It is base64url(practice.id.bytes) -- reversible,
 # deterministic, 22 characters, no padding. Any authenticated user already
@@ -1191,17 +1078,21 @@ def build_public_practice_link(practice_id: UUID) -> str:
 class ZoomEntryKind(enum.StrEnum):
     """What the resolver decided about ONE person's entry into ONE practice.
 
-    PERSONAL -- their own registrant link; the only outcome attendance can
-                be written from, and the whole point of the feature.
-    HOST     -- the practice's own master; url is None on purpose, the
-                client uses the existing start-ticket flow instead.
-    GUEST    -- nobody attendance will judge; the shared guest link. url is
-                None when the shared registrant was never minted.
+    PERSONAL -- their own registrant's entry token; the only outcome
+                attendance can be written from, and the whole point of the
+                feature. Entered through the Meeting SDK (zoom/sdk.py).
+    HOST     -- the practice's own master; starts the meeting as host
+                through the Meeting SDK with a ZAK (zoom/sdk.py).
+    GUEST    -- nobody attendance will judge. Inside the app this is "not
+                booked -- book first" (Standalone F4, owner decision 12:
+                no guest entry from the app); only the anonymous /z/{code}
+                page still enters a guest, through the shared link in url
+                (None when the shared registrant was never minted).
     PENDING  -- honest "being prepared".
     FAILED   -- meeting creation is permanently failed; waiting is pointless
                 until someone acts.
     UNAVAILABLE -- the meeting exists and the person holds a live booking,
-                but their own registrant will not get a link
+                but their own registrant will not get an entry token
                 (link_unavailable_reason). Not FAILED: there IS a meeting,
                 and "ask the master to retry" would be a lie -- nothing
                 retries a registrant past this point. Not PENDING: nothing
@@ -1220,18 +1111,30 @@ class ZoomEntryKind(enum.StrEnum):
 
 @dataclass(frozen=True)
 class ZoomEntryResolution:
-    """kind + the URL to send the browser to, if any.
+    """kind + what entering takes, for the two kinds that carry something.
 
-    url is None for HOST (by construction -- the start-ticket flow owns
-    that path) and for GUEST when ensure_shared_registrant never succeeded.
-    Callers must branch on kind and handle a null url on BOTH, never
-    collapse either into FAILED: FAILED means there is no meeting, while
-    a guest with no link means the meeting exists and only the guest seat
-    in it does not. Two different facts.
+    entry_token is set for PERSONAL and only for it: the registrant's `tk`
+    (registrant_entry_token) -- PERSONAL is decided BY its presence, so a
+    PERSONAL resolution always carries one. It never leaves the server
+    except inside the SDK join parameters of that same person. With it,
+    registration_email: the address that registrant was registered under
+    (ZoomRegistrant.registration_email, frozen at registration) -- the
+    Meeting SDK asks for the registrant's email on a registered meeting.
+
+    url is set for GUEST only, and only the anonymous public page reads it
+    (guest_entry below): the shared guest link, None when
+    ensure_shared_registrant never succeeded. The authenticated resolve
+    endpoint does not return it -- no Zoom URL reaches the app. Callers of
+    the public half must still handle a GUEST with no url and never
+    collapse it into FAILED: FAILED means there is no meeting, while a guest
+    with no link means the meeting exists and only the guest seat in it
+    does not. Two different facts.
     """
 
     kind: ZoomEntryKind
-    url: str | None
+    url: str | None = None
+    entry_token: str | None = None
+    registration_email: str | None = None
 
 
 def is_publicly_resolvable(practice: Practice) -> bool:
@@ -1284,9 +1187,10 @@ async def resolve_zoom_entry(
          NOT a check for create_failed. THIS IS THE STEP A FUTURE
          REFACTOR WILL WANT TO "SIMPLIFY" BACK INTO ONE STATUS: don't.
          ZoomMeetingStatus has four values plus "no row at all", and three
-         of those five would then fall through to HOST, whose button leads
-         to create_zoom_start_ticket_endpoint, which answers 400
-         zoom_meeting_not_active. pending_creation is not exotic either --
+         of those five would then fall through to HOST, and the master would
+         be handed SDK parameters for a meeting Zoom cannot start (zoom/
+         sdk.py asks Zoom for an ACTIVE row only). pending_creation is not
+         exotic either --
          series children are born in it (series_service.py).
            create_failed                      -> FAILED (the owner gets an
              action: the retry endpoint is owner-only, so he is the only
@@ -1296,12 +1200,13 @@ async def resolve_zoom_entry(
              retry poller claims those alongside create_failed).
       4. the owner -> HOST. Reached only with an ACTIVE meeting, so the
          "Начать" button cannot land on nothing BY CONSTRUCTION.
-      5. a live booking -> PERSONAL when the registrant link exists;
-         UNAVAILABLE when link_unavailable_reason says none will come (Zoom
-         does not always return a tokenized join_url on create -- see
-         ZoomRegistrant.join_url -- and the retry poller never revisits a
-         registered row; or the poller gave up at its cap); PENDING
-         otherwise, while a link may still come. PENDING bookings resolve
+      5. a live booking -> PERSONAL when the registrant's entry token
+         exists (registrant_entry_token); UNAVAILABLE when
+         link_unavailable_reason says none will come (Zoom does not always
+         return a tokenized join_url on create -- see ZoomRegistrant.join_url
+         -- and the retry poller never revisits a registered row; or the
+         poller gave up at its cap); PENDING otherwise, while one may still
+         come. PENDING bookings resolve
          to PENDING too, see _LIVE_BOOKING_STATUSES.
       6. no live booking -> GUEST.
 
@@ -1312,12 +1217,12 @@ async def resolve_zoom_entry(
     A practice with audience_kind students/groups is hidden from a
     non-member by get_practice_detail (404). This resolver does not apply
     that gate, so an authenticated non-member holding the practice id gets
-    kind=GUEST and the shared link. That asymmetry is intentional and it
-    costs nothing that is not already spent: the ANONYMOUS /z/{code} page
-    hands the same guest link to anybody at all, by design -- the master
-    publishes that link into a Telegram channel himself. Gating the
-    authenticated half while the anonymous half stays open would protect
-    nothing and would break the one thing this feature exists to do.
+    kind=GUEST. Since Standalone F4 that hands him nothing inside the app
+    (GUEST there means "book first", and the SDK join refuses it); the
+    ANONYMOUS /z/{code} page still hands the shared guest link to anybody
+    at all, by design -- the master publishes that link into a Telegram
+    channel himself. An audience gate here would still protect nothing
+    while that page stays open.
 
     An audience gate for Zoom entry is a separate, deliberate non-goal
     (owner ruling: practices are free today, the mechanism comes later and
@@ -1326,7 +1231,7 @@ async def resolve_zoom_entry(
 
     ANONYMITY IS STRUCTURAL, NOT A RULE: user is None for the public page,
     and steps 4 and 5 cannot fire without a user. A link forwarded out of a
-    channel therefore CANNOT produce somebody else's personal link, no
+    channel therefore CANNOT produce somebody else's entry token, no
     matter what the caller does.
     """
     # -- 2. cancelled --
@@ -1382,9 +1287,16 @@ async def resolve_zoom_entry(
                         )
                     )
                 ).scalars().first()
-            if registrant is not None and registrant.join_url:
+            token = (
+                registrant_entry_token(registrant)
+                if registrant is not None
+                else None
+            )
+            if token is not None:
                 return ZoomEntryResolution(
-                    kind=ZoomEntryKind.PERSONAL, url=registrant.join_url,
+                    kind=ZoomEntryKind.PERSONAL,
+                    entry_token=token,
+                    registration_email=registrant.registration_email,
                 )
             if registrant is not None and link_unavailable_reason(registrant):
                 return ZoomEntryResolution(
@@ -1531,7 +1443,7 @@ def split_guest_name(name: str) -> tuple[str, str]:
     return first, (rest or GUEST_LAST_NAME_STUB)
 
 
-def _meeting_display_name(user: User, role: str) -> str:
+def meeting_display_name(user: User, role: str) -> str:
     """The name a registrant of this meeting carries in Zoom -- the same
     fallbacks ensure_host_registrant and create_registrant_for_booking send,
     so the comparison is against what the master actually sees."""
@@ -1565,10 +1477,10 @@ async def _guest_name_exclusions(
         )
     ).all()
     names = list(issued)
-    names.extend(_meeting_display_name(user, role) for user, role in registrants)
+    names.extend(meeting_display_name(user, role) for user, role in registrants)
     master = await session.get(User, practice.master_id)
     if master is not None:
-        names.append(_meeting_display_name(master, ZoomRegistrantRole.HOST.value))
+        names.append(meeting_display_name(master, ZoomRegistrantRole.HOST.value))
     return names
 
 

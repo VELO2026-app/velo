@@ -569,11 +569,10 @@ async def test_cancel_booking_marks_registrant_cancelled_even_when_zoom_fails(
 
 
 # ===================================================================
-# 5. A participant's join_url stops being handed out once the meeting is
-#    gone (PROMPT №563) -- the registrant row itself is never touched when a
-#    meeting is deleted outside the normal cancel flow (see
-#    zoom/service.get_host_join_url's own docstring), so the list endpoints
-#    must consult ZoomMeeting.status themselves, same as the host path.
+# 5. A participant's entry stops reading "ready" once the meeting is gone
+#    (PROMPT №563) -- the registrant row itself is never touched when a
+#    meeting is deleted outside the normal cancel flow, so the list endpoints
+#    must consult ZoomMeeting.status themselves.
 # ===================================================================
 
 
@@ -590,6 +589,11 @@ async def test_participant_join_url_hidden_once_meeting_deleted(
     and still non-NULL. Before this fix, bookings/service.py's two list
     queries filtered only on ZoomRegistrant.status/join_url and never joined
     ZoomMeeting at all, so a stale link kept being served.
+
+    Standalone F4: the lists no longer carry the URL (row[4] was the
+    join_url, compared to the registrant's); they carry "has an entry token"
+    (zoom_registrant_ready). Same property, exact form: True while ACTIVE,
+    False once DELETED, the registrant row untouched throughout.
     """
     from app.modules.bookings.service import list_upcoming_bookings, list_user_bookings
 
@@ -611,15 +615,14 @@ async def test_participant_join_url_hidden_once_meeting_deleted(
     # -- Baseline: meeting still ACTIVE, the real link is served. --
     items, _total = await list_user_bookings(student_user, db_session)
     row = next(r for r in items if str(r[0].id) == booking_id)
-    assert row[4] == registrant.join_url
+    assert row[4] is True
 
     upcoming = await list_upcoming_bookings(student_user, db_session)
     upcoming_row = next(r for r in upcoming if str(r[0].id) == booking_id)
-    assert upcoming_row[4] == registrant.join_url
+    assert upcoming_row[4] is True
 
     # -- Meeting vanishes outside the normal cancel flow. The registrant row
-    # (and its join_url) is deliberately left untouched -- that is the exact
-    # shape get_host_join_url's docstring describes for the host side. --
+    # (and its join_url) is deliberately left untouched. --
     zoom_meeting = (
         await db_session.execute(
             select(ZoomMeeting).where(ZoomMeeting.practice_id == UUID(practice_id))
@@ -634,8 +637,8 @@ async def test_participant_join_url_hidden_once_meeting_deleted(
 
     items, _total = await list_user_bookings(student_user, db_session)
     row = next(r for r in items if str(r[0].id) == booking_id)
-    assert row[4] is None, "a dead link must not be handed to the participant"
+    assert row[4] is False, "a dead meeting must not read as enterable"
 
     upcoming = await list_upcoming_bookings(student_user, db_session)
     upcoming_row = next(r for r in upcoming if str(r[0].id) == booking_id)
-    assert upcoming_row[4] is None, "same gate on the dashboard's nearest-practice widget"
+    assert upcoming_row[4] is False, "same gate on the dashboard's nearest-practice widget"

@@ -317,13 +317,14 @@ describe('DiaryThreadCard -- external activity (FE-70)', () => {
 
     const card = q('.tcard--activity')
     expect(card).not.toBeNull()
-    // The entry base provides the split icon/text boxes.
+    // The entry base provides the split icon/text boxes. The suffix rides
+    // the shared flag (PM-9 branch 1, 2026-10-12): real scores show.
     expect(card?.classList.contains('tcard--entry')).toBe(true)
-    expect(q('.tcard__entry-title')?.textContent).toBe('Медитация')
+    expect(q('.tcard__entry-title')?.textContent).toBe('Медитация · 6/10')
     expect(q('.tcard__entry-preview')?.textContent).toBe('Спокойно, дома')
   })
 
-  it('custom: the caption is the user own name, verbatim', () => {
+  it('custom: the caption base is the user own name, verbatim (+ the flagged mood suffix)', () => {
     mountCard(
       feedItem(
         'external_activity',
@@ -336,7 +337,7 @@ describe('DiaryThreadCard -- external activity (FE-70)', () => {
       ),
     )
 
-    expect(q('.tcard__entry-title')?.textContent).toBe('Бальные танцы')
+    expect(q('.tcard__entry-title')?.textContent).toBe('Бальные танцы · 9/10')
   })
 
   it('is NOT a button and never emits tap -- no detail/edit/delete endpoint exists to open', () => {

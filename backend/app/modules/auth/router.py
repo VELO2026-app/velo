@@ -5,6 +5,8 @@
 #
 # ENDPOINTS:
 #   POST /api/v1/auth/telegram     — Login via Telegram WebApp initData
+#   POST /api/v1/auth/telegram/browser/start    — Browser sign-in: Telegram URL
+#   POST /api/v1/auth/telegram/browser/complete — Browser sign-in: the return
 #   POST /api/v1/auth/logout       — Logout current session
 #   POST /api/v1/auth/logout-all   — Logout all sessions (W-06)
 #
@@ -15,13 +17,29 @@
 
 import structlog
 from fastapi import APIRouter, Depends, Request
+from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db_session
-from app.core.exceptions import BadRequestError, TooManyRequestsError
+from app.core.exceptions import (
+    BadRequestError,
+    ForbiddenError,
+    NotFoundError,
+    TooManyRequestsError,
+    VeloError,
+)
+from app.core.i18n import normalize_language
+from app.modules.auth import browser_login, telegram_oidc
 from app.modules.auth.dependencies import get_current_user
-from app.modules.auth.schemas import AuthResponse, TelegramAuthRequest
+from app.modules.auth.schemas import (
+    AuthResponse,
+    BrowserLoginCompleteRequest,
+    BrowserLoginResponse,
+    BrowserLoginStartRequest,
+    BrowserLoginStartResponse,
+    TelegramAuthRequest,
+)
 from app.modules.auth.service import (
     TelegramValidationError,
     check_auth_rate_limit,
@@ -51,6 +69,7 @@ async def auth_telegram(
       1. Validate initData signature (HMAC-SHA256) + auth_date freshness
       2. CRITICAL-4: Rate limit per telegram_id (5 req / 60s)
       3. Find or create User by telegram_id
+      3a. Refuse a deactivated account -- no session for it (403)
       4. Flush DB (get user.id) -- commit deferred to get_db_session
       5. Create session in Redis (token, TTL 30 days)
       6. Return user + session_token
@@ -99,6 +118,17 @@ async def auth_telegram(
     # Step 3: Create or update user.
     user = await upsert_user_on_login(telegram_user, session)
 
+    # Step 3a: a deactivated account gets no session. Before this check a
+    # session was created and every request then answered 403 from
+    # get_current_user; now the door itself refuses, the same refusal the
+    # browser sign-in gives (browser_login_complete). The upsert above is
+    # undone by get_db_session, which rolls the request's transaction back
+    # when the endpoint raises (par0 §8) -- a dependency, not a property of
+    # this function.
+    if not user.is_active:
+        logger.warning("telegram_auth_deactivated", user_id=str(user.id))
+        raise ForbiddenError("Account is deactivated", code="account_deactivated")
+
     # Step 4: M-02 fix: flush (not commit) to get user.id for Redis.
     # get_db_session will commit after return. If Redis fails,
     # the entire transaction rolls back -- no orphan DB records.
@@ -110,6 +140,172 @@ async def auth_telegram(
     return AuthResponse(
         user=user,  # type: ignore[arg-type]  # from_attributes handles ORM
         session_token=token,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Browser sign-in through Telegram (Standalone phase 3, browser_login.py)
+# ---------------------------------------------------------------------------
+#
+# Every refusal is a code the login screen turns into a phrase:
+#   404 login_not_configured  -- no Telegram login keys, or CORS_ORIGINS is
+#                                not exactly one https origin (return_url);
+#   400 login_expired         -- the state is unknown, expired or taken;
+#   400 login_foreign         -- the return came to a browser that did not
+#                                start this sign-in (the mark does not match);
+#   400 telegram_failed       -- Telegram did not prove a user;
+#   403 account_deactivated   -- the account exists and is switched off;
+#   429                       -- the per-source or per-account limit;
+#   503 service_unavailable   -- Redis did not answer.
+
+
+def _unavailable() -> VeloError:
+    return VeloError(
+        message="Service temporarily unavailable. Try again in a minute.",
+        code="service_unavailable",
+        status_code=503,
+    )
+
+
+def _not_configured() -> NotFoundError:
+    return NotFoundError(
+        "Browser sign-in is not configured on this server",
+        code="login_not_configured",
+    )
+
+
+async def _source_limit() -> None:
+    """The /auth/telegram per-source limiter (T-47), on the same counter --
+    a source spends one budget on both doors. Redis down -> 503."""
+    source = structlog.contextvars.get_contextvars().get("ip_address")
+    try:
+        await check_source_rate_limit(source)
+    except RedisError:
+        raise _unavailable() from None
+
+
+@router.post("/telegram/browser/start", response_model=BrowserLoginStartResponse)
+async def browser_login_start(
+    body: BrowserLoginStartRequest,
+) -> BrowserLoginStartResponse:
+    """Begin a browser sign-in: the Telegram URL to send the browser to.
+
+    The state is kept in Redis with the hash of the browser's mark; nothing
+    touches the database.
+    """
+    await _source_limit()
+    redirect_uri = browser_login.return_url()
+    if redirect_uri is None or not telegram_oidc.configured():
+        raise _not_configured()
+    try:
+        url, state = await browser_login.start(
+            redirect_uri=redirect_uri, mark=body.mark
+        )
+    except RedisError:
+        raise _unavailable() from None
+    return BrowserLoginStartResponse(url=url, state=state)
+
+
+@router.post("/telegram/browser/complete", response_model=BrowserLoginResponse)
+async def browser_login_complete(
+    body: BrowserLoginCompleteRequest,
+    session: AsyncSession = Depends(get_db_session),
+) -> BrowserLoginResponse:
+    """Finish a browser sign-in: Telegram's code -> the same account as in
+    the Mini App (created on the first sign-in) -> a session.
+
+    ORDER, and why:
+      1. the source limit, before anything else (as /auth/telegram);
+      2. the state is TAKEN, once -- a reload or a second tab gets 400;
+      3. the mark is checked BEFORE Telegram is asked: a return opened in a
+         browser that did not start the sign-in never exchanges the code;
+      4. Telegram (two HTTP requests) -- with NO database connection held:
+         `session` has run no statement yet, and an AsyncSession takes its
+         connection on the first one (par0 §8: no external HTTP inside a
+         transaction);
+      5. the per-account limit, now that the account is known;
+      6. upsert -> refuse a deactivated account -> session in Redis.
+    """
+    await _source_limit()
+    if browser_login.return_url() is None or not telegram_oidc.configured():
+        raise _not_configured()
+
+    try:
+        started = await browser_login.take(body.state)
+    except RedisError:
+        raise _unavailable() from None
+    if started is None:
+        raise BadRequestError(
+            "The sign-in link has expired. Start again.", code="login_expired"
+        )
+    if not browser_login.mark_matches(started, body.mark):
+        logger.warning("browser_login_foreign_return")
+        raise BadRequestError(
+            "This sign-in was started in another browser.", code="login_foreign"
+        )
+
+    try:
+        identity = await telegram_oidc.complete_login(
+            code=body.code,
+            redirect_uri=started["redirect_uri"],
+            code_verifier=started["verifier"],
+            bot_access_requested=started["bot_access"],
+        )
+    except telegram_oidc.TelegramLoginError as exc:
+        logger.info("browser_login_telegram_failed", reason=exc.reason)
+        raise BadRequestError(
+            "Telegram did not confirm the sign-in.", code="telegram_failed"
+        ) from None
+
+    try:
+        await check_auth_rate_limit(identity.telegram_id)
+    except TelegramValidationError as e:
+        logger.warning("telegram_auth_rate_limited", telegram_id=identity.telegram_id)
+        raise TooManyRequestsError(str(e)) from e
+    except RedisError:
+        raise _unavailable() from None
+
+    # The same dict shape initData gives upsert_user_on_login. A claim
+    # Telegram did not send is None, and the upsert writes it as such -- the
+    # same as a field initData leaves out. The browser's language tag is
+    # untrusted: only its normalized form goes in, and the upsert applies the
+    # language column on INSERT only.
+    user = await upsert_user_on_login(
+        {
+            "id": identity.telegram_id,
+            "first_name": identity.first_name,
+            "last_name": identity.last_name,
+            "username": identity.username,
+            "photo_url": identity.photo_url,
+            "language_code": (
+                normalize_language(body.language) if body.language else None
+            ),
+        },
+        session,
+    )
+    if not user.is_active:
+        # Refused BEFORE a session exists. The upsert above is undone by
+        # get_db_session, which rolls the request's transaction back when the
+        # endpoint raises (par0 §8) -- a dependency, not a property of this
+        # function.
+        raise ForbiddenError("Account is deactivated", code="account_deactivated")
+
+    await session.flush()
+    try:
+        token = await create_session(user)
+    except RedisError:
+        # Raised inside the endpoint: get_db_session rolls the upsert back.
+        raise _unavailable() from None
+
+    logger.info(
+        "browser_login_completed",
+        user_id=str(user.id),
+        bot_access_granted=identity.bot_access_granted,
+    )
+    return BrowserLoginResponse(
+        user=user,  # type: ignore[arg-type]  # from_attributes handles ORM
+        session_token=token,
+        bot_access_granted=identity.bot_access_granted,
     )
 
 

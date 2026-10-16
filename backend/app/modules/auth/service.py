@@ -50,10 +50,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.events import emit_user_upserted  # Phase 6 / T0
 from app.core.exceptions import TooManyRequestsError
+from app.core.i18n import normalize_language
 from app.core.ratelimit import count_in_window, limitable_source
 from app.core.redis import get_redis
 from app.core.telegram_links import normalize_telegram_url
-from app.core.i18n import normalize_language
 from app.modules.users.models import User
 
 logger = structlog.get_logger()

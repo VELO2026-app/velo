@@ -16,14 +16,18 @@
       gap into the 33px layout padding, clear of the screen edge; fields
       keep the full rail;
     - the header carries no right-hand "..." placeholder;
-    - the «Мое состояние» block is HIDDEN for now (EXTERNAL_ACTIVITY_MOOD_HIDDEN
-      in utils/constants.ts): the backend's required mood submits as the
-      neutral zone centre until the block returns with its Figma pressed
-      states, and the feed card hides the «· N/10» suffix for the same reason.
+    - the «Мое состояние после» block is the FE-85 unified MoodSlider (PM-9
+      branch 1, owner 2026-10-12): the same 1..10 deck as Check-in/Feedback,
+      gated
+      by EXTERNAL_ACTIVITY_MOOD_HIDDEN in utils/constants.ts -- ONE flag
+      also drives the feed card's «· N/10» suffix.
 
-  Everything a person enters here deliberately starts EMPTY: no prefilled
-  "now", no default mood shown. The reference starts blank, and an autofill
-  would invent a plausible-but-wrong diary entry.
+  Everything a person TYPES here deliberately starts EMPTY: no prefilled
+  "now", no draft text -- an autofill would invent a plausible-but-wrong
+  diary entry. The mood scale is the one exception: it opens on the VISIBLE
+  MOOD_SCALE_DEFAULT_SCORE (5 «Нормально»), the same untouched-form canon
+  as Check-in/Feedback -- a default the person can see is an answer they
+  can correct, not a fabricated one.
 
   Submit is the real POST /api/v1/diary/external-activities through
   diaryStore.submitExternalActivity; the store refreshes the feed (the
@@ -163,31 +167,24 @@
         }}</span>
       </section>
 
-      <!-- ================= Мое состояние =================
-           HIDDEN for now (owner 2026-09-10, flag: EXTERNAL_ACTIVITY_MOOD_HIDDEN
-           in utils/constants.ts): the block comes back with its Figma pressed
-           states; until then the backend's required mood is submitted as the
-           neutral zone centre and the feed card hides the suffix. The
-           markup/logic stay in place behind the flag. -->
+      <!-- ================= Мое состояние после =================
+           The FE-85 unified 1..10 scale -- the same MoodSlider deck as
+           Check-in/Feedback (PM-9 branch 1 + the owner's unification
+           ruling, 2026-10-12; the three-button 2/6/9 picker is gone).
+           Untouched it stands on the visible DEFAULT_SCORE (5 «Нормально»);
+           the exact number travels to the backend as `mood`. The error
+           span is not client validation -- it is the only sink for a
+           backend mood 422 (contract drift), which no interaction on this
+           screen can otherwise produce. -->
       <section v-if="!EXTERNAL_ACTIVITY_MOOD_HIDDEN" class="ea__section">
-        <h2 class="velo-section-title">Мое состояние <span class="ea__req">*</span></h2>
+        <h2 class="velo-section-title">Мое состояние после</h2>
 
         <div class="ea__state-block" data-field="state">
-          <div class="ea__state" role="group" aria-label="Мое состояние">
-            <button
-              v-for="opt in STATE_OPTIONS"
-              :key="opt.score"
-              type="button"
-              class="ea__state-btn"
-              :class="{ 'ea__state-btn--selected': stateScore === opt.score }"
-              :style="{ color: opt.color }"
-              :aria-pressed="stateScore === opt.score"
-              :aria-label="opt.label"
-              @click="selectState(opt.score)"
-            >
-              <component :is="opt.icon" class="ea__state-icon" :size="56" />
-            </button>
-          </div>
+          <MoodSlider
+            v-model="moodScore"
+            aria-label="Оценка состояния от 1 до 10"
+            :disabled="diaryStore.externalActivitySubmitting"
+          />
         </div>
         <span class="ea__field-error" :class="{ 'ea__field-error--show': !!errors.state }">{{
           errors.state
@@ -255,13 +252,14 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { DateTime } from 'luxon'
 import { VBackButton, VChip, VTextarea } from '@/components/ui'
-import { IconRatingConfused, IconRatingGood, IconRatingFire } from '@/components/icons'
 import DatePickerSheet from '@/components/shared/DatePickerSheet.vue'
 import TimePickerSheet from '@/components/shared/TimePickerSheet.vue'
+import MoodSlider from '@/components/shared/MoodSlider.vue'
 import { useDiaryStore, type ExternalActivityFieldErrors } from '@/stores/diary'
 import { useToast } from '@/composables/useToast'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import { EXTERNAL_ACTIVITY_MOOD_HIDDEN } from '@/utils/constants'
+import { MOOD_SCALE_DEFAULT_SCORE } from '@/utils/moodScale'
 import { formatShortDate } from '@/utils/format'
 import type { ExternalActivityType } from '@/api/types'
 
@@ -283,40 +281,12 @@ const ACTIVITY_OPTIONS: ReadonlyArray<{ value: ExternalActivityType; label: stri
   { value: 'dance', label: 'Танцы' },
 ]
 
-// The three MoodSlider zone centres (2 / 6 / 9) as plain icon buttons: this
-// screen has no track/thumb/zone labels, and the initial value stays null --
-// a silently pre-picked «Хорошо» would answer the question for the person.
-//
-// The accents are this picker's OWN palette (the --velo-rating-* tokens), not
-// a shared zone map: the server's zones are five since BE-77 and the shared
-// three-key maps were removed with them. This picker is its own product
-// scenario (PM-9 / FE-74) and keeps its three buttons until that scenario is
-// redesigned.
-const STATE_OPTIONS = [
-  {
-    score: 2 as const,
-    label: 'Есть вопросы',
-    icon: IconRatingConfused,
-    color: 'var(--velo-rating-confused)',
-  },
-  {
-    score: 6 as const,
-    label: 'Хорошо',
-    icon: IconRatingGood,
-    color: 'var(--velo-rating-good)',
-  },
-  {
-    score: 9 as const,
-    label: 'Огонь',
-    icon: IconRatingFire,
-    color: 'var(--velo-rating-fire)',
-  },
-]
-
-// The «Мое состояние» mood block is currently hidden -- owner decision lives
-// in EXTERNAL_ACTIVITY_MOOD_HIDDEN (utils/constants.ts): ONE flag drives the
-// form (picker hidden, neutral centre submitted) AND the feed card (the
-// «· N/10» suffix suppressed). Flip the constant when the block returns.
+// «Мое состояние» is the FE-85 unified MoodSlider (PM-9 branch 1 + the
+// owner's unification ruling, 2026-10-12) -- the same deck as
+// Check-in/Feedback. Untouched it stands on the VISIBLE default (5
+// «Нормально»), the untouched-form canon of those screens; the exact number
+// travels to the backend as `mood`. The flag in utils/constants.ts remains
+// the one switch shared with the feed card's «· N/10» suffix.
 
 // Backend contract caps (CreateExternalActivityRequest): custom name <= 120,
 // thoughts <= 10000. Enforced here so a 422 length error is unreachable.
@@ -336,7 +306,7 @@ const customInput = ref('')
 // FE-70 owner rule 2026-09-14: the committed custom chip text -- null means
 // no custom chip is on the board (the input is available again).
 const customChip = ref<string | null>(null)
-const stateScore = ref<2 | 6 | 9 | null>(null)
+const moodScore = ref(MOOD_SCALE_DEFAULT_SCORE)
 const thoughts = ref('')
 
 const errors = ref({
@@ -418,11 +388,6 @@ function removeCustomChip(): void {
   clearError('activity')
 }
 
-function selectState(score: 2 | 6 | 9): void {
-  stateScore.value = score
-  clearError('state')
-}
-
 function onThoughtsInput(value: string): void {
   thoughts.value = value
   clearError('thoughts')
@@ -451,11 +416,9 @@ function validate(): boolean {
   errors.value.activity = selectedActivity.value ? '' : 'Выберите активность'
   errors.value.custom =
     selectedActivity.value === 'custom' && customChip.value === null ? 'Укажите ваш вариант' : ''
-  // The mood is only askable while its block is on screen; hidden, it owes
-  // The mood is only askable while its block is on screen; hidden, it owes
-  // no error (the neutral centre travels with the submit instead).
-  errors.value.state =
-    !EXTERNAL_ACTIVITY_MOOD_HIDDEN && stateScore.value === null ? 'Выберите состояние' : ''
+  // The mood never blocks: the slider stands on the visible default, so
+  // errors.state exists only as the sink for a backend mood 422
+  // (applyFieldErrors) -- no interaction on this screen can set it.
   errors.value.future = ''
   const ts = occurredAt()
   if (ts && ts > DateTime.now()) {
@@ -512,7 +475,6 @@ async function onSubmit(): Promise<void> {
   const ts = occurredAt()
   const activity = selectedActivity.value
   if (!ts || activity === null) return
-  if (!EXTERNAL_ACTIVITY_MOOD_HIDDEN && stateScore.value === null) return
   const occurredIso = ts.toISO()
   if (occurredIso === null) return
 
@@ -520,10 +482,11 @@ async function onSubmit(): Promise<void> {
     occurred_at: occurredIso,
     activity_type: activity,
     // The custom name travels only with the custom choice; whitespace-only
-    // thoughts become null -- both per the backend contract. While the mood
-    // block is hidden the neutral centre (6) travels, per the shared flag.
+    // thoughts become null -- both per the backend contract. The mood is
+    // the slider's exact score (the visible default 5 when untouched), the
+    // FE-85 canon shared with Check-in/Feedback.
     custom_activity_name: activity === 'custom' ? customChip.value : null,
-    mood: EXTERNAL_ACTIVITY_MOOD_HIDDEN ? 6 : (stateScore.value as 2 | 6 | 9),
+    mood: moodScore.value,
     thoughts: thoughts.value.trim() || null,
   })
 
@@ -871,51 +834,11 @@ async function onSubmit(): Promise<void> {
   stroke-linejoin: round;
 }
 
-/* -- «Мое состояние» (currently hidden behind EXTERNAL_ACTIVITY_MOOD_HIDDEN):
-       full-rail icon row; its seal hugs the block's right edge. -- */
+/* -- «Мое состояние»: the FE-85 MoodSlider deck (the same component as
+      Check-in/Feedback) -- the section owns only the field wrapper; the
+      deck's own look lives in the component. -- */
 .ea__state-block {
-  position: relative;
-}
-
-.ea__state {
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-}
-
-.ea__state-btn {
-  flex: 0 1 auto;
-  min-width: var(--velo-size-44);
-  min-height: var(--velo-size-44);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: none;
-  background: none;
-  cursor: pointer;
-}
-
-/* Selected: a thin outer halo in the glyph's OWN colour + a slight scale on
-   the icon alone -- no glyph recolour (the three colours are semantic) and no
-   row-height change. Interim treatment until the Figma pressed state lands. */
-.ea__state-btn--selected {
-  border-radius: var(--radius-full);
-  box-shadow: 0 0 0 2px currentColor;
-}
-
-.ea__state-icon {
-  transition: transform var(--transition-fast);
-}
-
-.ea__state-btn--selected .ea__state-icon {
-  transform: scale(1.06);
-}
-
-.ea__state-btn:focus-visible {
-  outline: 2px solid var(--velo-primary);
-  outline-offset: 2px;
-  border-radius: var(--radius-full);
+  min-width: 0;
 }
 
 /* -- «Мысли»: the DS textarea as a solid white plate (its rest state is

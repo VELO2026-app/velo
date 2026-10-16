@@ -2,8 +2,9 @@
   VELO Frontend -- Onboarding View (onboarding 05-07)
 
   Three-step welcome carousel, shown once to new users (those whose
-  onboarding_completed flag is false) right after they tap "Войти" on
-  WelcomeView. App.vue mounts this only for new users.
+  onboarding_completed flag is still false). App.vue mounts it after "Войти"
+  on WelcomeView; the school-join flow (CuratorGroupJoinView) mounts the same
+  carousel AFTER a successful join (FE-83) -- the invitation comes first.
 
   Steps:
     0  "Найдите свою практику"      (intro)

@@ -2,7 +2,7 @@
 // VELO Frontend -- useAuth Composable (Phase F1.3, fixed 10.4, BUG-role-redirect, TD-F01)
 // =============================================================================
 //
-// FIX 10.4: isReady/isStandalone are reactive refs inside composable scope,
+// FIX 10.4: isReady and the other flags are reactive refs inside composable scope,
 // but shared via module-level refs (Vue pattern for singleton composables).
 // Testable: reset by calling initAuth() in test setup.
 //
@@ -21,18 +21,87 @@
 // Store the RAW start parameter in pendingStartParam; roleRedirect parses it
 // once auth knows the role (Links: a notification button carries no viewer)
 // and clears it after first use to prevent stale redirects.
+//
+// Standalone phase 3 -- outside Telegram the person signs in with "Log In
+// With Telegram". The sign-in always ENDS on a fresh page load: Telegram
+// sends the browser back to RETURN_PATH, and initAuth() completes it here,
+// before isReady -- so the router's first navigation and the App.vue stage
+// already see the signed-in user. A failed or refused return leaves a
+// LoginNotice for the login screen to word.
 // =============================================================================
 
 import { ref, computed, watch } from 'vue'
 import { platform } from '@/platform'
+import { takeLoginMark, takeLoginReturn } from '@/platform/browser-login'
 import { useAuthStore } from '@/stores/auth'
+import { ApiNetworkError, ApiResponseError, ApiTimeoutError } from '@/api/client'
 import type { UserRole } from '@/api/types'
 
 /** Whether auth initialization has completed. */
 const isReady = ref(false)
 
-/** Whether we're in standalone mode (no Telegram initData). */
-const isStandalone = ref(false)
+/**
+ * Why the login screen is up (outside Telegram), worded by TelegramLoginView:
+ *   cancelled       -- the person declined on Telegram's page;
+ *   foreign         -- the return came to a browser that did not start this
+ *                      sign-in (no mark, or a mark for another state);
+ *   expired         -- the backend no longer holds the state (taken, late);
+ *   telegram_failed -- Telegram did not prove a user;
+ *   not_configured  -- browser sign-in is not set up on this server;
+ *   deactivated     -- the account is switched off;
+ *   rate_limited    -- too many attempts;
+ *   unavailable     -- the server answered that it cannot right now;
+ *   network         -- no answer at all.
+ */
+export type LoginNotice =
+  | 'cancelled'
+  | 'foreign'
+  | 'expired'
+  | 'telegram_failed'
+  | 'not_configured'
+  | 'deactivated'
+  | 'rate_limited'
+  | 'unavailable'
+  | 'network'
+
+/** The notice for the login screen, or null. */
+export const loginNotice = ref<LoginNotice | null>(null)
+
+/**
+ * The sign-in that just finished did NOT give the bot the right to write to
+ * the person. Shown once after this sign-in (BotAccessHint) and kept nowhere
+ * else -- the next launch does not show it again.
+ */
+export const botAccessHint = ref(false)
+
+/**
+ * The saved session could not be checked (no answer from the server). The
+ * token is still saved; App.vue shows the "try again" screen instead of the
+ * login screen.
+ */
+export const restoreUnreachable = ref(false)
+
+/** Word an error of the browser sign-in endpoints as a LoginNotice. */
+export function loginNoticeFor(error: unknown): LoginNotice {
+  if (error instanceof ApiNetworkError || error instanceof ApiTimeoutError) return 'network'
+  if (!(error instanceof ApiResponseError)) return 'telegram_failed'
+  switch (error.status) {
+    case 404:
+      return 'not_configured'
+    case 403:
+      return 'deactivated'
+    case 429:
+      return 'rate_limited'
+    case 400:
+      if (error.code === 'login_expired') return 'expired'
+      if (error.code === 'login_foreign') return 'foreign'
+      return 'telegram_failed'
+    case 422:
+      return 'telegram_failed'
+    default:
+      return 'unavailable'
+  }
+}
 
 /**
  * Whether a logout is in progress (Telegram only).
@@ -40,7 +109,7 @@ const isStandalone = ref(false)
  * Set the instant logout() starts clearing the session and kept true until
  * the Mini App actually closes. The App.vue gate shows LoadingView while this
  * is true, so the brief window between _clearSession() (isAuthenticated -> false)
- * and platform.close() never falls through to StandaloneStubView. Without it,
+ * and platform.close() never falls through to TelegramStubView. Without it,
  * a reactive tick could flash the "Open via Telegram" stub before the app closes.
  */
 const isLoggingOut = ref(false)
@@ -112,6 +181,15 @@ export function decodePracticeCode(code: string): string | null {
     return null
   }
 }
+
+/**
+ * The school invite token pattern (FE-18): ONE copy shared by parseStartParam
+ * (route resolution) and isSchoolInviteStartParam (FE-81 entry-gate deferral),
+ * so a startapp that counts as an invite for one counts for the other -- a
+ * malformed token degrades to the plain new-user flow, never opens the app
+ * around the gate.
+ */
+const SCHOOL_INVITE_PARAM = /^school__([A-Za-z0-9_-]{16,128})$/
 
 /**
  * Parse the Telegram startapp parameter into a router location.
@@ -189,7 +267,7 @@ export function parseStartParam(
   // here. Links (3 October): the kind is `school__` (owner) -- 8 + 43 = 51
   // characters; the former curator_group_invite__ made 65 against
   // Telegram's 64 and the link did not open.
-  const curatorInviteMatch = startParam.match(/^school__([A-Za-z0-9_-]{16,128})$/)
+  const curatorInviteMatch = startParam.match(SCHOOL_INVITE_PARAM)
   if (curatorInviteMatch?.[1]) {
     return { name: 'curator-group-join', params: { token: curatorInviteMatch[1] } }
   }
@@ -234,13 +312,31 @@ export function parseStartParam(
 }
 
 /**
+ * FE-81: did the app open via a school invite deep link (`school__<token>`)?
+ *
+ * The entry gate (App.vue) defers the new-user Welcome for exactly this one
+ * startapp kind: the router has already resolved the link to the standalone
+ * invitation screen, so the gate opens the RouterView around it, and the join
+ * view runs the onboarding carousel after a successful join (FE-83).
+ *
+ * Reads the platform live instead of pendingStartParam: roleRedirect may
+ * already have consumed and cleared the pending copy by the time the gate
+ * decides its initial stage -- both run right after initAuth() resolves.
+ */
+export function isSchoolInviteStartParam(): boolean {
+  return SCHOOL_INVITE_PARAM.test(platform.getStartParam() ?? '')
+}
+
+/**
  * Reset auth state (for testing).
  */
 export function resetAuthState(): void {
   isReady.value = false
-  isStandalone.value = false
   isLoggingOut.value = false
   pendingStartParam.value = null
+  loginNotice.value = null
+  botAccessHint.value = false
+  restoreUnreachable.value = false
 }
 
 /**
@@ -313,25 +409,114 @@ async function initAuth(): Promise<void> {
   const startParam = platform.getStartParam()
   pendingStartParam.value = startParam
 
-  // Step 1: try to restore existing session (page reload).
-  const restored = await authStore.restoreSession()
-  if (restored) {
+  if (platform.name === 'standalone') {
+    await initStandalone(authStore)
     isReady.value = true
     return
   }
 
-  // Step 2: try platform-specific login.
-  const initData = platform.getInitData()
+  // Telegram. Step 1: restore this run's session (a page reload inside the
+  // Mini App -- initData older than the backend's 300 s window would be
+  // refused, so a reload cannot simply sign in again).
+  //
+  // The restored session is used ONLY if it belongs to the person who opened
+  // the app: its telegram_id must equal the user id in THIS initData.
+  // Telegram Web keeps the iframe's sessionStorage across an account switch
+  // in the same tab, so without this check account B would open account A.
+  // The id is read from the unsigned initData string -- enough, because the
+  // check can only DROP a session or keep one this tab already holds; every
+  // new session still comes from the server, which verifies the signature.
+  const restored = await authStore.restoreSession()
+  if (restored === 'restored') {
+    const ownerId = authStore.user?.telegram_id ?? null
+    if (ownerId !== null && ownerId === initDataUserId(platform.getInitData())) {
+      isReady.value = true
+      return
+    }
+    // Someone else's session (or initData naming nobody): revoke it and
+    // let initData decide.
+    await authStore.discardSession()
+  }
 
+  // Step 2: sign in with initData. A failure leaves the session cleared and
+  // App.vue shows TelegramStubView.
+  const initData = platform.getInitData()
   if (initData) {
     await authStore.loginViaTelegram(initData)
-    isReady.value = true
+  }
+  isReady.value = true
+}
+
+/**
+ * The Telegram user id in an initData string, or null when there is none:
+ * no string, no `user` field, not JSON, or no integer `id`. Unsigned -- see
+ * initAuth for why that is enough for the one decision it feeds.
+ */
+export function initDataUserId(initData: string | null): number | null {
+  if (!initData) return null
+  const raw = new URLSearchParams(initData).get('user')
+  if (!raw) return null
+  try {
+    const user: unknown = JSON.parse(raw)
+    const id = user !== null && typeof user === 'object' ? (user as { id?: unknown }).id : undefined
+    return typeof id === 'number' && Number.isSafeInteger(id) ? id : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Outside Telegram: finish a sign-in this page is the return of, else
+ * restore the saved session, else leave the login screen to App.vue.
+ */
+async function initStandalone(authStore: ReturnType<typeof useAuthStore>): Promise<void> {
+  if (await completeFromReturn(authStore)) return
+
+  const outcome = await authStore.restoreSession()
+  if (outcome === 'restored') {
+    // Signed in already: a refused return (someone else's link) has nothing
+    // to show on a screen this person will not see.
+    loginNotice.value = null
     return
   }
+  restoreUnreachable.value = outcome === 'unreachable'
+}
 
-  // Standalone: no auto-login possible.
-  isStandalone.value = true
-  isReady.value = true
+/**
+ * The return from Telegram, if this page is one. The address is wiped and
+ * the mark taken FIRST, whatever happens next: a reload must not replay the
+ * same state, and a mark serves one return only.
+ *
+ * Refused WITHOUT a request: an error from Telegram, a return without code
+ * and state, and a return this browser holds no mark for (another browser's
+ * link -- platform/browser-login.ts, WHY THE MARK).
+ */
+async function completeFromReturn(authStore: ReturnType<typeof useAuthStore>): Promise<boolean> {
+  const back = takeLoginReturn()
+  if (!back) return false
+  const started = takeLoginMark()
+
+  if (back.error) {
+    loginNotice.value = 'cancelled'
+    return false
+  }
+  if (!back.code || !back.state) {
+    loginNotice.value = 'telegram_failed'
+    return false
+  }
+  if (!started || started.state !== back.state) {
+    loginNotice.value = 'foreign'
+    return false
+  }
+
+  try {
+    const granted = await authStore.completeBrowserLogin(back.code, back.state, started.mark)
+    botAccessHint.value = !granted
+    return true
+  } catch (error) {
+    loginNotice.value = loginNoticeFor(error)
+    return false
+  }
 }
 
 export function useAuth() {
@@ -340,7 +525,9 @@ export function useAuth() {
   return {
     isReady,
     isAuthenticated: computed(() => authStore.isAuthenticated),
-    isStandalone,
+    restoreUnreachable,
+    loginNotice,
+    botAccessHint,
     isLoggingOut,
     initAuth,
     /** Exposed for testing (10.4). */

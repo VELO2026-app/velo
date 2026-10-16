@@ -7,8 +7,8 @@
   - default (colored): layered light composition -- mandala-blue.png ring +
     velo-word-blue.svg wordmark (#4C6589) on top, the word scaled 1.8x
     (operator-calibrated) so it matches the old lockup. Replaces the heavy
-    logo.svg vector (191KB -> ~67KB) per operator 2026-06-12. logo.svg is kept
-    as a file for non-component brand uses but is no longer referenced here.
+    logo.svg vector (191KB -> ~67KB) per operator 2026-06-12; logo.svg itself
+    was deleted 14.10.2026 (no consumer left).
     Future auth/onboarding screens that use VeloLogo inherit this automatically.
   - white: logo-white.svg, or a spinning ring (mandala-white.png + wordmark)
     when `spin` is set.
@@ -64,17 +64,6 @@
       alt="VELΘ"
     />
   </div>
-  <!-- Blue line-art lockup (mandala + VELΘ wordmark in one vector). The original
-       all-in-one logo.svg, kept for brand uses; reused by the parked master-web
-       auth screens whose Figma uses the line lockup (not the filled mandala). -->
-  <img
-    v-else-if="variant === 'lockup'"
-    src="/icons/logo.svg"
-    :width="size"
-    :height="size"
-    alt="VELΘ"
-    class="velo-logo"
-  />
   <!-- White static logo. -->
   <img
     v-else
@@ -90,8 +79,7 @@
 withDefaults(
   defineProps<{
     size?: number
-    /** 'lockup' = blue line-art logo.svg (mandala + wordmark), used by auth screens. */
-    variant?: 'default' | 'white' | 'lockup'
+    variant?: 'default' | 'white'
     /** White only: slowly rotate the mandala ring with the wordmark static. */
     spin?: boolean
   }>(),

@@ -370,7 +370,14 @@ async def test_host_link_dies_on_our_pages_at_once_even_if_zoom_refuses(
     cancelled practice is no longer served from the cancel on, whatever
     Zoom answers to the DELETE later. Until this delivery a refused DELETE
     left the meeting active and the link resolving. Pair: before the cancel
-    it resolves."""
+    it resolves.
+
+    Standalone F4: the "host link" (get_host_join_url) is gone with the
+    start-ticket flow -- the master now enters as host through the ladder's
+    HOST rung and the Meeting SDK. The same property, measured where it now
+    lives: before the cancel the ladder answers HOST on an ACTIVE meeting;
+    from the cancel on it never answers HOST again, and the meeting row is
+    no longer ACTIVE, whatever Zoom answers to the DELETE."""
     master = await _master(client, db_session, 70007)
     practice, meeting = await _practice(
         db_session, master, meeting_status=ZoomMeetingStatus.ACTIVE.value,
@@ -378,7 +385,8 @@ async def test_host_link_dies_on_our_pages_at_once_even_if_zoom_refuses(
     )
     await zoom_service.ensure_host_registrant(meeting, practice, db_session)
     await db_session.commit()
-    assert await zoom_service.get_host_join_url(practice.id, db_session)
+    before = await zoom_service.resolve_zoom_entry(practice, master, db_session)
+    assert before.kind == zoom_service.ZoomEntryKind.HOST
 
     _watch_delete(
         monkeypatch, None,
@@ -386,7 +394,14 @@ async def test_host_link_dies_on_our_pages_at_once_even_if_zoom_refuses(
     )
     await cancel_practice(practice.id, master, db_session)
     await db_session.commit()
-    assert await zoom_service.get_host_join_url(practice.id, db_session) is None
+    await db_session.refresh(practice)
+    await db_session.refresh(meeting)
+    after = await zoom_service.resolve_zoom_entry(practice, master, db_session)
+    assert after.kind == zoom_service.ZoomEntryKind.CANCELLED
+    assert meeting.status != ZoomMeetingStatus.ACTIVE.value
 
     assert await retry_poller._delete_meeting_one(meeting.id) is True
-    assert await zoom_service.get_host_join_url(practice.id, db_session) is None
+    await db_session.refresh(meeting)
+    later = await zoom_service.resolve_zoom_entry(practice, master, db_session)
+    assert later.kind == zoom_service.ZoomEntryKind.CANCELLED
+    assert meeting.status != ZoomMeetingStatus.ACTIVE.value

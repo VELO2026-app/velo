@@ -8,7 +8,9 @@
 # AUTH STRATEGY:
 #   - telegram_id: indexed column for fast lookup on every login.
 #   - credentials: JSONB sandbox for evolving auth data (telegram username,
-#     photo_url, future email/password, OAuth tokens, etc.).
+#     photo_url, etc.). No password is kept: every sign-in is through
+#     Telegram (initData in the Mini App, OpenID Connect in a browser --
+#     auth/browser_login.py).
 #   Rule: search by column, store in JSONB.
 #
 # BALANCE (Phase 6.1, TD-033):
@@ -65,8 +67,17 @@ class User(JSONBMixin, UUIDMixin, TimestampMixin, Base):
 
     # JSONB sandbox for auth-related data that doesn't need fast lookup.
     # TD-024: JSONBMixin added -- use set_jsonb("credentials", value) for mutations.
-    # Current: {telegram_username, telegram_photo_url, raw_init_data}
-    # Future: {email, password_hash, google_id, apple_id, ...}
+    # Keys and who writes them (read from the writers' bodies, 14.10.2026):
+    #   telegram_username, telegram_photo_url, language_code
+    #       -- every sign-in, auth/service.py upsert_user_on_login (merged
+    #          into the stored dict, `||`);
+    #   onboarding_completed, master_onboarding_completed, phone, bio, email
+    #       -- the profile edit, users/service.py update_user
+    #          (_JSONB_CREDENTIAL_FIELDS); account deletion resets
+    #          onboarding_completed to False;
+    #   role_switch.home_role -- server-written by users/service.py
+    #       switch_user_role; dropped by credentials_without_admin_home
+    #       (admin/users, admin/masters services).
     credentials: Mapped[dict] = mapped_column(
         JSONB,
         default=dict,

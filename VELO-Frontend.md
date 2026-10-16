@@ -45,7 +45,10 @@
 | ------------------------ | ------------------------------------------------------------------ |
 | `platform/types.ts`      | Интерфейс `Platform` (общий контракт)                              |
 | `platform/telegram.ts`   | Реализация для Telegram WebApp SDK                                 |
-| `platform/standalone.ts` | Заглушки для браузера (Phase F10)                                  |
+| `platform/standalone.ts` | Браузер и рабочий стол: токен в localStorage, вход через Telegram  |
+| `platform/browser-login.ts` | Вход в браузере: метка браузера, разбор возврата из Telegram    |
+| `platform/session-token.ts` | Носитель токена: localStorage вне Telegram, sessionStorage в нём |
+| `platform/zoom-sdk.ts`   | Zoom внутри приложения (Meeting SDK, client view, Стендалон Ф4): ленивая загрузка, `init`/`join`, выход через `leaveUrl` |
 | `platform/index.ts`      | Автодетект: `window.Telegram?.WebApp` → telegram, иначе standalone |
 
 Интерфейс `Platform`:
@@ -60,14 +63,20 @@ interface Platform {
   showBackButton(cb: () => void): void;
   hideBackButton(): void;
   openLink(url: string): void; // external link: Telegram WebApp.openLink / window.open(noopener)
+  cameraBlockedByHost(): boolean; // Telegram iOS: чёрный поток камеры (решение 11)
   close(): void;
 }
 ```
 
-MVP работает только в Telegram. Standalone — Phase F10.
+Вне Telegram (браузер, приложение с рабочего стола) вход — «Войти через Telegram»
+(OpenID Connect, Стендалон Ф3): `platform/browser-login.ts`, `stores/auth.ts`, `views/auth/TelegramLoginView.vue`.
 
-`openLink` добавлен для экрана Practice-Live (кнопка "Войти" в Zoom). В Telegram —
+`openLink` открывает внешнюю ссылку (например, запись практики). В Telegram --
 `WebApp.openLink(url)`, в standalone — `window.open(url, '_blank', 'noopener')`.
+Вход в Zoom ссылкой больше не открывается (Стендалон Ф4): Zoom работает внутри
+VELO -- экран практики берёт у сервера параметры `POST /practices/{id}/zoom/sdk-join`
+и передаёт их Meeting SDK (`platform/zoom-sdk.ts`). `cameraBlockedByHost()` --
+подсказка «Чтобы включить камеру, откройте VELO с рабочего стола» в Telegram на iOS.
 
 ### 1.3. Структура проекта
 
@@ -131,7 +140,7 @@ frontend/
 │   │   └── practiceOptions.ts -- DURATION_OPTIONS, TIMEZONE_OPTIONS, DIRECTION_OPTIONS, DIFFICULTY_OPTIONS
 │   │
 │   └── views/
-│       ├── auth/              -- LoadingView, StandaloneStubView, WelcomeView, OnboardingView
+│       ├── auth/              -- LoadingView, LoadingErrorView, TelegramStubView, TelegramLoginView, BotAccessHint, WelcomeView, OnboardingView
 │       ├── shells/            -- UserShell, MasterShell, AdminShell
 │       ├── user/              -- Dashboard, Calendar, Diary, Profile...
 │       ├── master/            -- Dashboard, Practices, Analytics, Profile...
@@ -140,8 +149,7 @@ frontend/
 ├── public/
 │   ├── js/telegram-web-app.js -- Локальная копия Telegram SDK (CDN заблокирован ТСПУ)
 │   ├── bg/                    -- Фоновое изображение VELΘ (background.png)
-│   ├── icons/                 -- PWA иконки + логотипы VELΘ (logo.svg, logo-white.svg)
-│   └── manifest.json          -- PWA manifest
+│   └── icons/                 -- PWA иконки (в т.ч. maskable 512, apple-touch 180) + логотипы VELΘ (logo-white.svg, mandala-*.png, velo-word-*.svg)
 ├── Dockerfile
 └── package.json
 ```
@@ -185,6 +193,7 @@ frontend/
 /master/practices/new       → CreatePracticeView           [masterStatusGuard, hideTabBar]
 /master/practices/:id       → EditPracticeView             [masterStatusGuard, hideTabBar]
 /master/practices/:id/attendance → AttendanceView          [masterStatusGuard, hideTabBar]
+/master/practice-live/:practiceId -> PracticeLiveView      (name: master-practice-live -- тот же экран 14 в зоне мастера, «Начать» ведущим) [masterStatusGuard, headerless, hideTabBar]
 /master/practices/:id/detail → MasterPracticeDetailView    [masterStatusGuard, hideTabBar]
 /master/practices/:id/roster → AttendanceRosterView        [masterStatusGuard, hideTabBar]
 /master/analytics           → AnalyticsView
@@ -219,11 +228,7 @@ frontend/
 /admin/practices[/:id]      → AdminPracticesView / AdminPracticeDetailView
 /admin/withdrawals[/:id]    → AdminWithdrawalsView / AdminWithdrawalDetailView
 
--- Parked Phase A web-auth (DORMANT + UNLINKED; недостижимы в Telegram, ждут Zod E17) --
-/auth/landing               → LandingView
-/auth/login                 → LoginView
-/auth/recover               → RecoverPasswordRequestView
-/auth/recover/reset         → RecoverPasswordSetView
+/auth/telegram/return       → redirect '/' (возврат со страницы входа Telegram; разбирает useAuth.ts)
 
 /auth-error                 → LoadingErrorView
 /404                        → NotFoundView
@@ -260,12 +265,14 @@ frontend/
 **Шлюз входа в `App.vue` (splash -> welcome/onboarding/app).** После успешной авторизации
 `App.vue` не сразу рендерит `RouterView`, а проходит через локальную машину
 состояний `stage: 'welcome' | 'onboarding' | 'app' | null` (обычный `ref`, вне роутера —
-консистентно с тем, как LoadingView/StandaloneStubView гейтят доступ). `null` — стартовое
+консистентно с тем, как LoadingView и экраны входа гейтят доступ). `null` — стартовое
 «ещё решаем»: пока `initAuth()` не завершился, показывается LoadingView (splash).
 
 ```
 !isReady || isLoggingOut || stage === null -> LoadingView (splash)
-isStandalone || !isAuthenticated           -> StandaloneStubView
+restoreUnreachable                         -> LoadingErrorView (вне Telegram: сервер не ответил, токен сохранён)
+!isAuthenticated, в Telegram               -> TelegramStubView
+!isAuthenticated, вне Telegram             -> TelegramLoginView («Войти через Telegram»)
 иначе по stage:
   'welcome'    -> WelcomeView      (только новым: onboarding_completed === false)
   'onboarding' -> OnboardingView   (новым, после «Войти»)
@@ -285,8 +292,8 @@ isStandalone || !isAuthenticated           -> StandaloneStubView
 - Таймзона онбординга берётся с устройства (`Intl`-автодетект, валидный IANA,
   фолбэк `UTC`) — ручного шага в карусели больше нет; сменить пояс —
   Профиль → Часовой пояс (`TimezoneSettingsView`).
-- WelcomeView `@create-account`: только standalone/браузерная сборка (F10); в Telegram
-  кнопка скрыта (`v-if="isStandalone"`).
+- Вход в браузере всегда завершается на свежей загрузке страницы возврата (`initAuth()`),
+  поэтому стартовый stage решается уже с известным пользователем.
 
 **Продуктовое решение (FE-39, отмена прежнего):** раньше Welcome показывался при
 каждом открытии, для всех. Теперь повторный запуск зарегистрированным юзером
@@ -332,7 +339,7 @@ isStandalone || !isAuthenticated           -> StandaloneStubView
 | `VSegment` / `VSegmentTrack`                 | сегмент 2-pill · сегмент track+thumb (variant `tabs`/`toggle`)                                                                                                                                                                |
 | `VMenu` / `VMenuItem` / `VMenuRow`           | «…»-меню (popover) + его строки                                                                                                                                                                                               |
 | `VAccordion`                                 | `title` — раскрывающаяся строка                                                                                                                                                                                               |
-| `VeloLogo`                                   | `size`, `variant` (default/white/**lockup**) — `<img>` из `public/icons/` (lockup = знак+слово, Phase A Landing)                                                                                                                                                                |
+| `VeloLogo`                                   | `size`, `variant` (default/white) — `<img>` из `public/icons/`                                                                                                                                                                |
 
 **Новое (v1.8):** `VPaginationDots` — DS-точки пагинации для онбординг-каруселей (юзер +
 мастер) и визарда заявки. Пропы `total` / `active`: активная точка 13×13, неактивные 7×7.
@@ -403,7 +410,7 @@ user/master; admin → все три; обычный юзер → пусто/н�
 | ------------------------ | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 10/11 Dashboard          | `views/user/UserDashboardView.vue`                           | белые карточки `--velo-bg-card-solid`, алерты, карточка ближайшей практики, AI-блок (тоггл Неделя/Месяц + mood). `nearestIsLive` + `openNearest()`: live → practice-live, иначе practice-detail. `[FE-11]` колокольчик уведомлений — 5-й кнопкой в таб-доке user-зоны (`UserShell.tabs`; `TabItem.badge` → точка-присутствие 10px с белым кольцом 1px в `VTabBar`, эксперимент владельца): точка только при `unread > 0` из `stores/notifications.ts` (refresh на mount шелла; инбокс применяет серверный бейдж после load/mark-read/mark-all; цифры-счётчика нет по решению владельца), тап → `user-inbox` (`UserInboxView`); на самом дашборде колокольчика нет. `[FE-12]` диплинки живут в `UserInboxView`: тап = отметить прочитанным + переход (`open_thread` → `user-chat` прямо в диалог, `open_practice`/`confirm_waitlist` → `practice-detail`, `open_feedback`/`open_wallet` → свои экраны, `msg.*` без action → список сообщений); слайдер Все/Сообщения/Мероприятия/Другое — скроллящийся (`VSegmentTrack scrollable`)                                                                                                                                                                                                                                                                                                                                                                              |
 | 12/13 Check-in + Success | `views/user/CheckinView.vue` (+ `shared/FormShell.vue`)      | mood-лица `IconMood*`, success `IconCheck`. `onBack()` → `router.back()` (фикс петли 12↔15)                                                                                                                                                                                                                                                                                                                                                    |
-| 14 Practice-Live         | `views/user/PracticeLiveView.vue`                            | видео-плейсхолдер, бейдж "● В эфире", "Войти" (`platform.openLink`, дизейбл без `https`-zoom), "Check-in", "Покинуть". Достижим из дашборда при live                                                                                                                                                                                                                                                                                           |
+| 14 Practice-Live         | `views/user/PracticeLiveView.vue`                            | Zoom внутри VELO (Meeting SDK, Ф4): по ответу `zoom/resolve` -- «Войти» (ученик, `sdk-join` -> SDK), «Начать» (мастер-владелец), «Вы не записаны» + «К практике» (гость), честные состояния; «Check-in», «Покинуть» -- только ученику; подсказка про камеру в Telegram iOS. Выход -- `leaveUrl`: ученик -> отзыв, мастер -> его главная. Достижим из дашбордов ученика и мастера |
 | 15 Practice Detail       | `views/user/PracticeDetailView.vue`                          | каталог + booked + бронь (после Батча 6 — единый экран). Hero/master в `PracticeHeroCard`/`MasterCard`. Поглотил бывший «Бронирование» (экран 18): строка «Статус» (`VBadge` по `myAnyBooking` — любой статус, вкл. cancelled/no_show) и секция ZOOM (только при активной брони). Заголовок «Моя практика» при любой брони; «Забронировать» скрыт для attended/no_show. `myBooking`/`booked` (активные статусы) и check-in/feedback не тронуты |
 | 16 AI-summary            | `views/user/AiSummaryView.vue`                               | честная заглушка "в разработке" (`IconBrain`). Персонального AI-саммари юзера на бэке НЕТ                                                                                                                                                                                                                                                                                                                                                      |
 | 17 My reservations       | `views/user/MyBookingsView.vue` (+ `shared/BookingCard.vue`) | две секции Предстоящие/Прошедшие. Деление по правилу B (24ч-потолок + статус completed/cancelled, как дашборд), реактивный clock 60с. Бейдж "В эфире" приоритетнее today/tomorrow; live сортируются вверх (`upcomingRank`). Даты в TZ зрителя (`calendarDate(d, tz)` ← `useViewerTimezone`). Тап ведёт на `practice-detail` по `practice_id` (Батч 6)                                                                                          |
@@ -516,7 +523,7 @@ hero — `VAvatar xl`. Единый паттерн вызова `:url="avatarUrl
 
 ### 3.8. Флоу МАСТЕР-ПРОГРАММА (DS-rebuild, v1.8)
 
-Путь «стать мастером → онбординг» + Phase A web-auth. DS-first; контролы без бэка =
+Путь «стать мастером → онбординг». DS-first; контролы без бэка =
 honest-стабы (тост «недоступно» + запись для Zod), НЕ фейк.
 
 **Онбординг мастера (пост-апрув).** `views/master/MasterOnboardingView.vue` — карусель,
@@ -545,12 +552,9 @@ Per-session гард — `master.onboardingShownThisSession` (быстрый п�
 (rejected; **generic-причина** до Zod **E14** + 2 CTA: «Написать в поддержку» / «Подать
 новую заявку»). Иллюстрации — `public/onboarding/master-verdict-*.svg`.
 
-**Phase A parked web-auth.** `views/auth/{LandingView,LoginView,RecoverPasswordRequestView,
-RecoverPasswordSetView}.vue` + спящие `/auth/*` маршруты (§2.1). Построены 100% из DS над
-классическим app-фоном; web-auth-бэкенд = Zod **E17**. **Недостижимы в Telegram-флоу:**
-`App.vue` рендерит `StandaloneStubView` для браузерной сессии, role-redirect никогда не ведёт
-на `/auth/*`, и ничто не линкует туда. `LandingView` «Подать заявку» / `LoginView` — инертные
-стабы (тост) до E17.
+**Веб-вход по e-mail и паролю удалён целиком** (решение владельца 14.10.2026, Стендалон Ф3):
+экраны Landing/Login/восстановление×2, их маршруты `/auth/*`, кнопка «Создать аккаунт»
+на Welcome. Единственный вход в браузере — «Войти через Telegram» (`TelegramLoginView`).
 
 **5-экранное превью заявки (`ffca7a0`) — УДАЛЕНО (№260 Batch-STRIP).** Вся превью-механика
 (`ui.previewApplyFlow`, кнопка, превью-ветки Landing/Apply/Pending/гардов, `beforeEach`-сброс)
@@ -724,10 +728,14 @@ try {
 }
 ```
 
-### FP-08: sessionStorage для token, не localStorage
+### FP-08: носитель токена выбирает платформа, а не прикладной код
 
-Telegram WebApp закрывает вкладку — `sessionStorage` очищается автоматически.
-`localStorage` оставлял бы протухший токен навсегда.
+Токен читается и пишется только через `platform.readSessionToken()` /
+`platform.writeSessionToken()` (`platform/session-token.ts`). В Telegram — `sessionStorage`:
+один запуск Mini App, при каждом открытии решает `initData` (свежий профиль, и сохранённый
+токен другого аккаунта Telegram не всплывёт). Вне Telegram — `localStorage`: установленное
+приложение держит вход между запусками (Стендалон §1 п.14). Восстановление стирает токен
+только на 401/403; без ответа сервера токен остаётся.
 
 ### FP-09: API-типы генерируются из OpenAPI, не пишутся вручную
 
@@ -811,8 +819,7 @@ script-эмуляцию. Контр-тест (убрать фикс → ошиб
 
 ---
 
-**Новое (v1.8):** типографские токены `--text-28` / `--text-46` (заголовки онбординга
-мастера и Phase A Landing). `VPaginationDots` — геометрия точек 13×13 (активная) / 7×7
+**Новое (v1.8):** `VPaginationDots` — геометрия точек 13×13 (активная) / 7×7
 (неактивные) через DS-токены.
 
 ---
@@ -827,7 +834,7 @@ script-эмуляцию. Контр-тест (убрать фикс → ошиб
 
 | Задача                 | Описание                                                                                           | Зависимость                   |
 | ---------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------- |
-| Standalone-авторизация | `platform/standalone.ts` — полноценная реализация. Новый бэкенд-эндпоинт `POST /api/v1/auth/email` | Новый бэкенд                  |
+| Standalone-авторизация | ✅ Стендалон Ф3: «Войти через Telegram» (OIDC), `POST /api/v1/auth/telegram/browser/{start,complete}` | —                             |
 | Push-уведомления       | Service Worker + Web Push channel в notification formatters                                        | Бэкенд Phase 7 частично готов |
 | Skeleton-загрузки      | Заменить спиннеры на skeleton placeholders                                                         | —                             |
 | Тёмная тема            | CSS-переменные позволяют, нужен toggle + сохранение                                                | —                             |
@@ -956,7 +963,7 @@ if (role === 'master' || role === 'admin') && to === /user/dashboard:
 | TD-FE-W4                     | 🧪    | `MasterProfileView.vue`                                                                    | `v-show` на payout-форме — весь DOM всегда присутствует                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Заменить на `v-if` если форма не нужна при анимированном переходе                                                                                                                                              |
 | TD-FE-W6                     | ✅    | `MasterFinanceView.vue`                                                                    | `MIN_WITHDRAWAL_EUROS=50` и `WITHDRAWAL_FEE_EUROS=2` захардкожены — рассинхрон с `config.py` при изменении                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | CR-01: бэкенд отдаёт `min_withdrawal_cents` и `withdrawal_fee_cents` в `MasterProfileResponse`                                                                                                                 |
 | TD-FE-A11Y                   | 🧪    | Admin views (5 файлов)                                                                     | Clickable `<div>` без `role="button"`, `tabindex="0"`, `@keydown` handlers. Нарушает WCAG 2.1 AA 2.1.1. Затронуто: алертовый баннер, stat cards, action cards, master cards, report cards                                                                                                                                                                                                                                                                                                                                                                                                  | Добавить `role="button"`, `tabindex="0"`, `@keydown.enter.stop`, `@keydown.space.prevent`                                                                                                                      |
-| TD-FE-LOGO-SVGO              | 🧪    | `public/icons/logo.svg`, `public/icons/logo-white.svg`                                     | SVG-логотипы загружены через `<img>` как есть из Figma-экспорта: `logo.svg` — 228KB, `logo-white.svg` — 434KB. Избыточный размер из-за неоптимизированных path-данных                                                                                                                                                                                                                                                                                                                                                                                                                      | Прогнать через `svgo` с дефолтными настройками — ожидаемое уменьшение в 5–10× без видимых изменений                                                                                                            |
+| TD-FE-LOGO-SVGO              | 🧪    | `public/icons/logo-white.svg`                                                              | SVG-логотип загружен через `<img>` как есть из Figma-экспорта: `logo-white.svg` — 434KB (`logo.svg` удалён 14.10.2026, потребителей не было). Избыточный размер из-за неоптимизированных path-данных                                                                                                                                                                                                                                                                                                                                                                                                                      | Прогнать через `svgo` с дефолтными настройками — ожидаемое уменьшение в 5–10× без видимых изменений                                                                                                            |
 | AUDIT-0520-FE                | 🧪    | `src/**`                                                                                   | Нет компонентных тестов фронтенда (отмечено аудитом 2026-05-20). Логика вью покрыта только ручной проверкой                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Vitest + Vue Test Utils для ключевых вью (OnboardingView gate-машина, BookingPopup, формы)                                                                                                                     |
 | **TD-FE-AISUM**              | 🧪    | `views/user/AiSummaryView.vue`                                                             | Экран 16 — честная заглушка "в разработке". Персонального AI-саммари юзера на бэке нет (есть только мастерский per-practice, розетка Phase 9)                                                                                                                                                                                                                                                                                                                                                                                                                                              | Реализовать полноценный экран, когда появится бэк-эндпоинт юзерского AI-саммари                                                                                                                                |
 | **TD-FE-DASH-STATS** | 🧪 | `views/user/UserDashboardView.vue` | Внешний аудит (E3/F8), W-6: прогресс-статы считаются из пагинированного списка броней (~20) -- у юзера с >20 посещёнными числа частичны. Задокументировано в коде (~стр.16) как осознанный MVP-компромисс | Пост-MVP: брать из `getMyStats()` (`GET /bookings/me/stats`), а не выводить из страницы броней. Не блокер прод-запуска |
@@ -986,7 +993,7 @@ if (role === 'master' || role === 'admin') && to === /user/dashboard:
 > - `cursor:default` при одном языке, авто-снимается при добавлении второго).
 >   W-1/W-4/S-5 — на бэке (Бэковый Кодекс §9). W-3/S-3 — осознанно не код.
 
-### Мастер-программа — honest-стабы (Zod E13–E17, v1.8)
+### Мастер-программа — honest-стабы (Zod E13–E16, v1.8)
 
 | ID | Среда | Файл | Описание | Решение |
 | --- | --- | --- | --- | --- |
@@ -994,7 +1001,6 @@ if (role === 'master' || role === 'admin') && to === /user/dashboard:
 | TD-FE-E14-REJECT-REASON | 🧪 | `MasterPendingView.vue` | Экран отказа — generic-причина; реальная `rejection_reason` не на `MasterProfileResponse` | Zod E14: отдать причину отказа |
 | TD-FE-E15-ONBOARDING-FLAG | ✅ | `utils/masterOnboarding.ts`, `MasterDashboardView.vue` | **ЗАКРЫТ (v1.11, №256/257):** `master_onboarding_completed` персистится бэком + типизирован в `generated.ts`; пере-показа на новой сессии нет | закрыт (E15 сделан своими силами) |
 | TD-FE-E16-APPLY-LANGS | 🧪 | `MasterApplyView.vue` | Тоггл языка практик — локальный, не уходит с заявкой | Zod E16: поле языков в заявке |
-| TD-FE-E17-WEB-AUTH | 🧪 | `views/auth/*`, `/auth/*` | Phase A экраны (Landing/Login/восстановление×2) — спящие/незалинкованные, инертные стабы | Zod E17: web-auth-бэкенд (email/OAuth) |
 
 > **TEST-аффордансы — УДАЛЕНЫ (№260 Batch-STRIP, «тест==прод»).** Повтор онбординга
 > (`ui.forceOnboarding`) и 5-экранное превью заявки (`ui.previewApplyFlow`) вынуты из кода.
@@ -1006,7 +1012,7 @@ if (role === 'master' || role === 'admin') && to === /user/dashboard:
 | Решение                                                                  | Обоснование                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | API-типы генерируются из OpenAPI (CR-01)                                 | Единый источник правды — Pydantic-схемы бэкенда. `generated.ts` создаётся автоматически при `velo update`. Drift невозможен конструктивно                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `sessionStorage` для token (не `localStorage`)                           | Telegram WebApp закрывает вкладку — sessionStorage очищается автоматически                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Носитель токена выбирает платформа (`platform/session-token.ts`) | Telegram — `sessionStorage` (решает `initData`); вне Telegram — `localStorage` (вход живёт между запусками) |
 | Свой CSS вместо Tailwind                                                 | Дизайн-система VELΘ готова в мокапах, перенос 1:1 проще                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Внутренний Nginx в Docker фронтенда                                      | SPA fallback + кеширование без усложнения хост-конфига                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Telegram SDK через локальную копию (не npm)                              | CDN Telegram заблокирован ТСПУ; локальная копия гарантирует загрузку                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
@@ -1014,7 +1020,7 @@ if (role === 'master' || role === 'admin') && to === /user/dashboard:
 | `v-show` на payout-форме                                                 | Анимированное скрытие; `v-if` ломает CSS-переход                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | Auth guard в `App.vue` (Phase F1), не в router                           | В F1 один маршрут; guards добавлены в F2.2                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | Фон через `body { background }` в `global.css`, не через `#app::before`  | `#app::before` — статический CSS, Telegram WebApp кеширует и не обновляет. `global.css` импортируется в `main.ts` и попадает в JS-бандл, который обновляется при каждом деплое                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| SVG-логотипы через `<img>` (не inline)                                   | Файлы из Figma-экспорта весят 228KB и 434KB — inline SVG раздует HTML. `<img>` позволяет браузеру кешировать отдельно (TD-FE-LOGO-SVGO покроет оптимизацию)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| SVG-логотипы через `<img>` (не inline)                                   | Файл из Figma-экспорта (`logo-white.svg`) весит 434KB — inline SVG раздует HTML. `<img>` позволяет браузеру кешировать отдельно (TD-FE-LOGO-SVGO покроет оптимизацию)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | Один `PracticeDetailView` на каталог + booked + бронь (экран 15)         | Состояния практики (доступна к брони / забронирована / прошедшая-отменённая бронь) различаются в одном вью. Батч 6: поглотил бывший «Бронирование» (экран 18) — статус-строка и ZOOM перенесены сюда (`myAnyBooking`), `BookingDetailView` и роут `booking-detail` удалены. God-component-долг смягчён выносом hero/master в `PracticeHeroCard`/`MasterCard`                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `MasterCard` "Подробнее" → toast вместо disabled (S-4)                   | ЗАКРЫТО (Calendar flow): экран профиля мастера для юзера реализован (`MasterPublicView`), `onMore()` теперь ведёт на `user-master-public` (с guard `if (!masterId)` → toast). Toast-заглушка убрана                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Отдельный `useCalendarStore` (не общий `usePracticesStore`)              | Навигация по неделям и фасет-фильтры Календаря не должны задевать общий фид. Дашборд использует `usePracticesStore`/`useBookingsStore` — изолирован                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |

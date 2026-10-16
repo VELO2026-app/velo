@@ -1,62 +1,47 @@
 <!--
   VELO Frontend -- PracticeLiveView (screen 14, Practice-Live)
 
-  Full-screen view for a practice that is currently in progress (LIVE).
-  Header has a back arrow (VHeader show-back) so the user can return to the
-  previous screen without leaving the practice. "Покинуть практику" remains
-  the explicit way to leave (sets left_at + back to dashboard).
+  The practice screen: where a person ENTERS the practice. Since Standalone
+  F4 Zoom runs inside VELO -- the Meeting SDK (client view) -- and no Zoom
+  link is ever opened. ONE view, two zones (the CuratorGroupPageView
+  pattern): the user zone mounts it as 'practice-live', the master zone as
+  'master-practice-live'. The zone only picks the back target and hides the
+  student-only actions; WHAT the person may do is the server's answer.
 
   Layout (top -> bottom):
-    - Video placeholder (no real video in MVP; Zoom is external)
-    - Info card: title + master + "В эфире" badge
-    - Actions:
-        no booking for this practice -- N1 (PROMPT №587): honest inline
-          "Вы не записаны" empty state instead of the badges/"Войти" button
-        "Войти"            -- join (sets joined_at) + open Zoom link
-        "Check-in"         -- go to the check-in form
-        "Покинуть практику" -- leave (sets left_at) + back to dashboard
+    - Video placeholder (the meeting itself takes over the whole page once
+      entered -- client view draws its own full-page UI)
+    - Info card: title + master + «В эфире» badge
+    - Actions, by the server's answer (GET /practices/{id}/zoom/resolve):
+        personal  -- «Войти»: join (sets joined_at), then the SDK as attendee
+        host      -- «Начать»: the SDK as host (the practice's own master)
+        guest     -- not booked: «Вы не записаны» and the way to the practice
+                     (owner decision 12: no guest entry from the app)
+        pending / failed / unavailable / cancelled -- honest states
+      + «Check-in», «Покинуть практику» -- student actions, user zone only
+      + the camera hint where the host app blocks the camera (Telegram iOS)
 
-  Data:
-    - practicesStore.fetchPractice(practiceId) -> title, master_name, status
-    - bookingsStore -> the user's booking (booking.id, joined_at)
-    - resolveZoomEntry(practiceId) -> HOW THIS USER ENTERS (T-35)
-
-  Backend (Phase 5.4, ready):
-    POST /bookings/{id}/join   -- confirmed + scheduled/live, 409 if already joined
-    POST /bookings/{id}/leave  -- requires joined_at, 400 if not joined
-
-  Zoom entry (T-35): this screen no longer CHOOSES a link. It asks the server
-  (GET /practices/{id}/zoom/resolve) and renders the answer:
-
-    personal  -- the user's own registrant link; attendance is recorded.
-    guest     -- no live booking, so nothing to record; the shared link. url
-                 may be null (the guest registrant was never minted) -- an
-                 honest line, not a dead button.
-    host      -- the practice's own master, arriving by his own link. url is
-                 always null: he starts through the existing ticket flow.
-    pending   -- a live booking exists but no usable link yet (Zoom does not
-                 always return join_url on create). NEVER downgraded to a
-                 guest link: joining as an unmatchable guest with a confirmed
-                 booking is exactly what produces a false NO_SHOW.
-    failed    -- meeting creation permanently failed.
-    cancelled -- the practice is cancelled.
+  Entering (onEnter / onStart): POST .../zoom/sdk-join for the parameters,
+  then platform/zoom-sdk.ts loads the SDK and joins. Leaving is the SDK's
+  own leaveUrl -- a full page load: the student lands on the feedback
+  screen, the master on his dashboard. «Назад» while in the meeting leaves it
+  the same way.
 
   This screen is also the DEEP LINK target (startapp=zoom__<22>). A code of
   valid shape can name a practice that no longer exists; the client cannot
   know that locally, so the resolve call 404s and this screen shows an honest
   error instead of an empty state.
 
-  Route: /user/practice-live/:practiceId
+  Routes: /user/practice-live/:practiceId, /master/practice-live/:practiceId
 -->
 
 <template>
   <div class="live">
-    <!-- Back -> dashboard (router.back() looped check-in <-> live). Uses the
-         shared DS back button (arrow-only pill, same as the diary). -->
+    <!-- Back -> the zone's dashboard (router.back() looped check-in <-> live).
+         Uses the shared DS back button (arrow-only pill, same as the diary). -->
     <VBackButton class="live__back" @click="goBack" />
 
-    <!-- Themed direction placeholder in place of a real video stream
-         (no real video in MVP; Zoom is external). -->
+    <!-- Themed direction placeholder until the meeting takes over the page. -->
     <PracticePlaceholder
       class="live__video"
       :direction="practice?.direction"
@@ -86,15 +71,13 @@
         description="Возможно, её удалили или ссылка скопирована не полностью"
       />
 
-      <!-- T-35: the master arriving by his OWN public link. url is null by
-           design here -- he starts as host through the ticket flow, which
-           lives on his own screens; sending him in as a guest would leave his
-           meeting waiting for a host who is standing inside it. -->
+      <!-- F4: the server has no Meeting SDK keys (or runs the Zoom stub).
+           Said out loud instead of a button that cannot work. -->
       <VEmptyState
-        v-else-if="zoomEntry?.kind === 'host'"
-        icon="calendar"
-        title="Это ваша практика"
-        description="Начните встречу с экрана мастера — там кнопка «Начать»"
+        v-else-if="sdkNotConfigured"
+        icon="warning"
+        title="Zoom внутри приложения не настроен"
+        description="На этом сервере вход в Zoom пока не работает. Напишите в поддержку."
       />
 
       <VEmptyState
@@ -105,85 +88,117 @@
       />
 
       <!-- Links (3 October): 'unavailable' -- the meeting exists and this
-           person holds a live booking, but their personal join link could
-           not be made (resolve_zoom_entry: nothing retries it, so «ask the
-           master to retry» would be a lie). No guest link either: a live
-           booking never falls back to it. No way in -- say so, no «Войти». -->
+           person holds a live booking, but their personal entry could not be
+           made (resolve_zoom_entry: nothing retries it, so «ask the master to
+           retry» would be a lie). No way in -- say so, no «Войти». -->
       <VEmptyState
         v-else-if="zoomEntry?.kind === 'unavailable'"
         icon="warning"
-        title="Ссылка на встречу недоступна"
-        description="Вашу личную ссылку для входа создать не удалось, и повторной попытки не будет. Напишите в поддержку."
+        title="Вход в Zoom недоступен"
+        description="Вашу личную регистрацию во встрече создать не удалось, и повторной попытки не будет. Напишите в поддержку."
       />
 
-      <template v-else>
-        <!-- T-35: no live booking -> the guest link. Attendance writes nothing
-             for this person either way, so nothing is lost by it -- and
-             anyone who DOES hold a live booking gets 'pending' instead, never
-             this. -->
-        <VBadge v-if="zoomEntry?.kind === 'guest'" variant="warning" class="live__zoom-note">
-          Вы не записаны — вход гостем, посещение не засчитается
-        </VBadge>
+      <!-- F4, owner decision 12: no guest entry from inside the app. A person
+           without a live booking is told so and sent to the practice, where
+           booking is. -->
+      <VEmptyState
+        v-else-if="zoomEntry?.kind === 'guest'"
+        icon="calendar"
+        title="Вы не записаны"
+        description="Запишитесь на практику — после записи вход в Zoom откроется здесь"
+      >
+        <VButton size="sm" @click="goToPractice">К практике</VButton>
+      </VEmptyState>
 
+      <!-- The practice's own master: he starts the meeting as host, inside
+           VELO. Reached from his dashboard (master zone) or by his own
+           published link (user zone) -- either way the same «Начать». -->
+      <template v-else-if="zoomEntry?.kind === 'host'">
+        <p v-if="cameraHint" class="live__camera-hint">{{ CAMERA_HINT }}</p>
+        <VButton
+          variant="primary"
+          size="lg"
+          block
+          :disabled="entering"
+          :loading="entering"
+          @click="onStart"
+        >
+          Начать
+        </VButton>
+      </template>
+
+      <template v-else>
         <!-- A4 V2 (PROMPT №572): honest permanent-failure state, distinct from
-             "still preparing" -- before this, create_failed rendered the
-             identical "Ссылка готовится" spinner forever. A participant has
-             no retry action (only the master does, MasterDashboardView) --
-             this just tells the truth instead of hiding it. -->
+             "still preparing". A participant has no retry action (only the
+             master does, MasterDashboardView) -- this just tells the truth. -->
         <VBadge v-if="zoomEntry?.kind === 'failed'" variant="error" class="live__zoom-note">
           Не удалось создать встречу — обратитесь к мастеру
         </VBadge>
 
-        <!-- T-35: 'guest' with no url is the minting miss
-             (ensure_shared_registrant is best-effort). NOT 'failed': the
-             meeting exists, only the guest seat in it does not. -->
-        <VBadge
-          v-if="zoomEntry?.kind === 'guest' && !zoomEntry?.url"
-          variant="error"
-          class="live__zoom-note"
-        >
-          Гостевой вход сейчас недоступен
-        </VBadge>
+        <p v-if="cameraHint" class="live__camera-hint">{{ CAMERA_HINT }}</p>
 
         <VButton
           variant="primary"
           size="lg"
           block
-          :disabled="!canJoin || joining"
-          :loading="joining"
+          :disabled="!canJoin || entering"
+          :loading="entering"
           @click="onEnter"
         >
-          <template v-if="zoomEntry?.kind === 'failed'">Ссылка недоступна</template>
-          <template v-else-if="zoomEntry?.kind === 'pending'">Ссылка готовится</template>
+          <template v-if="zoomEntry?.kind === 'failed'">Вход недоступен</template>
+          <template v-else-if="zoomEntry?.kind === 'pending'">Вход готовится</template>
           <template v-else>Войти</template>
         </VButton>
       </template>
 
-      <!-- One check-in per practice: once done, the button locks and shows
-           why (so it does not read as a random disabled control). -->
-      <VButton variant="secondary" size="lg" block :disabled="alreadyCheckedIn" @click="onCheckin">
-        <template v-if="alreadyCheckedIn">Check-in сделан</template>
-        <template v-else>Check-in</template>
-      </VButton>
+      <!-- Student actions -- the user zone only, and not for the practice's
+           own master (he checks no one in to his own practice). -->
+      <template v-if="studentActions">
+        <!-- One check-in per practice: once done, the button locks and shows
+             why (so it does not read as a random disabled control). -->
+        <VButton
+          variant="secondary"
+          size="lg"
+          block
+          :disabled="alreadyCheckedIn"
+          @click="onCheckin"
+        >
+          <template v-if="alreadyCheckedIn">Check-in сделан</template>
+          <template v-else>Check-in</template>
+        </VButton>
 
-      <VButton variant="danger" size="lg" block :loading="leaving" @click="onLeave">
-        Покинуть практику
-      </VButton>
+        <VButton variant="danger" size="lg" block :loading="leaving" @click="onLeave">
+          Покинуть практику
+        </VButton>
+      </template>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch } from 'vue'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'
 import { useBookingsStore } from '@/stores/bookings'
 import { useToast } from '@/composables/useToast'
+import { extractApiError } from '@/composables/useApiError'
 import { platform } from '@/platform'
+import {
+  appUrl,
+  enterZoomMeeting,
+  leaveZoomMeeting,
+  setZoomInsetTop,
+  zoomSdkLoaded,
+} from '@/platform/zoom-sdk'
+import { useSafeArea } from '@/composables/useSafeArea'
 import { VButton, VBackButton, VCard, VBadge, VEmptyState } from '@/components/ui'
 import PracticePlaceholder from '@/components/shared/PracticePlaceholder.vue'
-import { resolveZoomEntry } from '@/api/practices'
+import { joinZoomSdk, resolveZoomEntry } from '@/api/practices'
+import { ApiResponseError } from '@/api/client'
 import type { ZoomEntryResolveResponse } from '@/api/types'
+
+/** Owner decision 11, verbatim. */
+const CAMERA_HINT = 'Чтобы включить камеру, откройте VELO с рабочего стола'
 
 const route = useRoute()
 const router = useRouter()
@@ -192,9 +207,22 @@ const bookingsStore = useBookingsStore()
 const toast = useToast()
 
 const practiceId = route.params.practiceId as string
+/** The master zone mounts this same view (router: 'master-practice-live'). */
+const isMasterZone = route.name === 'master-practice-live'
 
-const joining = ref(false)
+const entering = ref(false)
 const leaving = ref(false)
+
+/** F4 fix: the top safe area the meeting's root keeps clear -- the SAME
+ * source as every screen of ours (Telegram fullscreen controls, or
+ * env(safe-area-inset-top) in the installed app). */
+const { contentSafeTopCss } = useSafeArea()
+/** True from the moment the SDK is handed the page until a failure takes
+ * it back -- while true, a changed inset follows into the meeting. */
+let inMeeting = false
+watch(contentSafeTopCss, (value) => {
+  if (inMeeting) setZoomInsetTop(value)
+})
 
 const practice = computed(() => practicesStore.selected)
 
@@ -209,47 +237,91 @@ const alreadyCheckedIn = computed(() => !!myBooking.value?.has_checkin)
 /**
  * T-35: the server's answer for THIS user on THIS practice. null until the
  * resolve call returns; resolveFailed when it 404s (no such practice, or
- * draft/deleted -- reachable from a stale deep link).
- *
- * The choice is deliberately NOT made here. It used to be: resolveZoomLink()
- * picked between a personal link and a manual one, which made correctness a
- * rule this file had to keep. utils/zoomLink.ts still exists for list views
- * that already hold the personal link in their payload, but it no longer
- * chooses between two links -- there is only one.
+ * draft/deleted -- reachable from a stale deep link). The choice is
+ * deliberately NOT made here.
  */
 const zoomEntry = ref<ZoomEntryResolveResponse | null>(null)
 const resolveFailed = ref(false)
+/** F4: sdk-join answered zoom_sdk_not_configured -- no SDK keys here. */
+const sdkNotConfigured = ref(false)
 
-/** "Войти" is enabled only when the server handed us a URL to open. That is
- * true for 'personal' and for 'guest' with a minted link, and false for
- * 'pending' / 'failed' / 'host' / a guest whose link was never minted -- so
- * the button cannot open something that does not exist. */
-const canJoin = computed(() => !!zoomEntry.value?.url)
+/** «Войти» is enabled only for 'personal' -- the one answer that carries an
+ * entry for this person. */
+const canJoin = computed(() => zoomEntry.value?.kind === 'personal')
+
+/** Check-in and «Покинуть» belong to a student in the user zone; never to
+ * the practice's own master. */
+const studentActions = computed(
+  () => !isMasterZone && !resolveFailed.value && zoomEntry.value?.kind !== 'host',
+)
+
+/** The camera hint: where an entry button is on screen and the host app is
+ * known to black out the camera (platform.cameraBlockedByHost). */
+const cameraHint = computed(() => {
+  const kind = zoomEntry.value?.kind
+  const entryOnScreen = kind === 'personal' || kind === 'pending' || kind === 'host'
+  return entryOnScreen && !sdkNotConfigured.value && platform.cameraBlockedByHost()
+})
 
 // -- Actions --
 
 /**
- * "Войти": check in (if not joined yet) and open the Zoom link.
- * A 409 "Already joined" is treated as a no-op -- we still open Zoom.
+ * Ask the server for this person's SDK parameters and enter. Resolves once
+ * the SDK has joined (it then owns the page until leaveUrl reloads it).
+ * Every refusal is shown, none is swallowed:
+ *   zoom_sdk_not_configured -> the screen says so instead of the button;
+ *   zoom_entry_not_joinable -> the state changed under us: re-resolve;
+ *   anything else          -> its phrase, or a plain «try again».
+ */
+async function enterThroughSdk(): Promise<void> {
+  let params
+  try {
+    params = await joinZoomSdk(practiceId)
+  } catch (e) {
+    if (e instanceof ApiResponseError && e.code === 'zoom_sdk_not_configured') {
+      sdkNotConfigured.value = true
+      return
+    }
+    if (e instanceof ApiResponseError && e.code === 'zoom_entry_not_joinable') {
+      toast.info('Состояние практики изменилось')
+      await loadEntry()
+      return
+    }
+    toast.error(extractApiError(e, 'Не удалось открыть Zoom. Попробуйте ещё раз'))
+    return
+  }
+  // The student leaves to his feedback screen; the master to his dashboard
+  // (he has no feedback screen of his own).
+  const leaveTo =
+    params.role === 1
+      ? router.resolve({ name: 'master-dashboard' })
+      : router.resolve({ name: 'user-feedback', params: { practiceId } })
+  inMeeting = true
+  try {
+    await enterZoomMeeting(params, appUrl(leaveTo.href), {
+      insetTop: contentSafeTopCss.value,
+    })
+  } catch {
+    // enterZoomMeeting has already taken its style off again.
+    inMeeting = false
+    toast.error('Не удалось открыть Zoom. Попробуйте ещё раз')
+  }
+}
+
+/**
+ * «Войти» (personal): check in to the booking if not joined yet -- joined_at
+ * is set here, by the button, exactly as before F4 -- then enter. A 409
+ * "Already joined" is not an error: entering is still the right action.
  */
 async function onEnter(): Promise<void> {
-  if (!zoomEntry.value?.url) return
-  if (joining.value) return
-
-  // Capture the link now: the guard above narrows it to a string, but the await
-  // below resets that narrowing (zoomEntry is a ref).
-  const zoomUrl = zoomEntry.value.url
-  joining.value = true
+  if (!canJoin.value || entering.value) return
+  entering.value = true
   try {
     const booking = myBooking.value
-    // Only call join if we have a booking that has not joined yet.
     if (booking && booking.joined_at === null) {
       const result = await bookingsStore.joinBooking(booking.id)
-      // Ignore "already joined" -- opening Zoom is still the right action.
       // FE-78.2: the gate keys on the machine status (the join endpoint's
-      // only 409 is "already joined"), never on the human-readable text --
-      // extractApiError speaks Russian and the old includes('already')
-      // could never match anything it said.
+      // only 409 is "already joined"), never on the human-readable text.
       if (!result.ok && result.status !== 409) {
         toast.error(result.error)
       }
@@ -259,11 +331,25 @@ async function onEnter(): Promise<void> {
     } catch {
       /* silent fallback */
     }
-    // Open the Zoom link via the platform abstraction (Telegram-SDK openLink vs
-    // window.open). zoomUrl was captured above while narrowed to a valid https URL.
-    platform.openLink(zoomUrl)
+    await enterThroughSdk()
   } finally {
-    joining.value = false
+    entering.value = false
+  }
+}
+
+/** «Начать» (host): the practice's own master starts the meeting in VELO. */
+async function onStart(): Promise<void> {
+  if (zoomEntry.value?.kind !== 'host' || entering.value) return
+  entering.value = true
+  try {
+    try {
+      platform.hapticFeedback('medium')
+    } catch {
+      /* silent fallback */
+    }
+    await enterThroughSdk()
+  } finally {
+    entering.value = false
   }
 }
 
@@ -272,9 +358,14 @@ function onCheckin(): void {
   void router.push({ name: 'user-checkin', params: { practiceId } })
 }
 
-/** Back arrow -> dashboard (breaks the check-in <-> live loop). */
+/** Not booked: the practice screen, where booking is. */
+function goToPractice(): void {
+  void router.push({ name: 'practice-detail', params: { id: practiceId } })
+}
+
+/** Back arrow -> the zone's dashboard (breaks the check-in <-> live loop). */
 function goBack(): void {
-  void router.push({ name: 'user-dashboard' })
+  void router.push({ name: isMasterZone ? 'master-dashboard' : 'user-dashboard' })
 }
 
 /**
@@ -298,19 +389,35 @@ async function onLeave(): Promise<void> {
   }
 }
 
+/** T-35: how THIS user enters. Failure here is not a toast -- this screen's
+ * whole purpose is entering the practice, so it becomes the screen's state. */
+async function loadEntry(): Promise<void> {
+  try {
+    zoomEntry.value = await resolveZoomEntry(practiceId)
+    resolveFailed.value = false
+  } catch {
+    resolveFailed.value = true
+  }
+}
+
+// Inside the meeting the SDK owns the page; any in-app navigation away
+// (the arrow, the system back gesture) leaves the meeting instead, and the
+// SDK's leaveUrl then reloads the app where it belongs.
+onBeforeRouteLeave(() => {
+  if (zoomSdkLoaded()) {
+    leaveZoomMeeting()
+    return false
+  }
+  return true
+})
+
 onMounted(async () => {
   if (practicesStore.selected?.id !== practiceId) {
     void practicesStore.fetchPractice(practiceId)
   }
   // Needed to resolve the user's booking id for join/leave.
   void bookingsStore.fetchMyBookings()
-  // T-35: how THIS user enters. Failure here is not a toast -- this screen's
-  // whole purpose is entering the practice, so it becomes the screen's state.
-  try {
-    zoomEntry.value = await resolveZoomEntry(practiceId)
-  } catch {
-    resolveFailed.value = true
-  }
+  await loadEntry()
 })
 </script>
 
@@ -397,5 +504,16 @@ onMounted(async () => {
 .live__zoom-note {
   align-self: center;
   text-align: center;
+}
+
+/* F4: the camera hint (owner decision 11) -- plain secondary text above the
+   entry button, not a warning badge: nothing is broken, the camera just
+   lives in the home-screen app. */
+.live__camera-hint {
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--velo-text-secondary);
 }
 </style>

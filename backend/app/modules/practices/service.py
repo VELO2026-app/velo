@@ -229,9 +229,9 @@ _BOOKED_STATUSES = {
 }
 
 # Booking statuses that grant a user access to this practice's PERSONAL Zoom
-# link (M-3 access gate). STRICTER than _BOOKED_STATUSES above: a PENDING
-# booking does NOT unlock the link -- only CONFIRMED or ATTENDED does. Read by
-# GET /bookings/me for zoom_registrant_join_url and by zoom/service.py's
+# entry (M-3 access gate). STRICTER than _BOOKED_STATUSES above: a PENDING
+# booking does NOT unlock it -- only CONFIRMED or ATTENDED does. Read by
+# GET /bookings/me for zoom_registrant_ready and by zoom/service.py's
 # resolve_zoom_entry (T-35) for the 'personal' rung. NOTE for that resolver:
 # the set that decides "guest or not" is deliberately WIDER than this one --
 # see _LIVE_BOOKING_STATUSES there.
@@ -1478,7 +1478,6 @@ def practice_to_response(
     checkin_count: int | None = None,
     attended: int | None = None,
     no_show: int | None = None,
-    zoom_host_join_url: str | None = None,
     zoom_public_link_visible: bool = False,
     zoom_meeting_status: str | None = None,
     deduplicated: bool = False,
@@ -1527,15 +1526,11 @@ def practice_to_response(
     resp.attended = attended
     resp.no_show = no_show
 
-    # T21-1: host join_url -- caller decides whether to fetch/pass it (owner-
-    # facing responses only); everyone else gets the schema default (None).
-    resp.zoom_host_join_url = zoom_host_join_url
-
     # T-35: OUR public link, replacing the raw shared Zoom URL that used to be
     # returned here. Built, not stored -- the code is a pure function of
     # practice.id, so there is nothing to look up and nothing to keep in step
-    # after a reschedule. Same owner-only posture as zoom_host_join_url above;
-    # see the schema field for why that gate is NOT a security boundary.
+    # after a reschedule. Owner-only (zoom_public_link_visible); see the
+    # schema field for why that gate is NOT a security boundary.
     if zoom_public_link_visible:
         # Lazy, like every other zoom/service call in this module (that module
         # reaches back into this one).
@@ -1544,7 +1539,7 @@ def practice_to_response(
     else:
         resp.zoom_public_link = None
 
-    # A4 V2 (PROMPT №572): NOT owner-gated, unlike zoom_host_join_url above --
+    # A4 V2 (PROMPT №572): NOT owner-gated, unlike zoom_public_link above --
     # see the schema field's own docstring for why.
     resp.zoom_meeting_status = zoom_meeting_status
 
@@ -2207,19 +2202,11 @@ async def get_practice_detail(
         if is_owner
         else {}
     )
-    # T21-1: host join_url, owner-only -- same is_owner gate as the
-    # attendance counts above (a non-owner must never see the master's
-    # personal link either).
-    #
     # T-35: the per-viewer zoom_link gate that used to stand here is gone with
-    # the column. A booked non-owner no longer receives ANY link from this
-    # endpoint -- they ask resolve_zoom_entry_endpoint, which answers for them
-    # specifically. The narrowing query this replaced only existed to decide
-    # whether to echo a hand-typed URL back.
-    host_join_url = None
-    if is_owner:
-        from app.modules.zoom.service import get_host_join_url
-        host_join_url = await get_host_join_url(practice.id, session)
+    # the column. Nobody receives a Zoom link from this endpoint -- the owner
+    # included since Standalone F4 (his host-registrant link went with the
+    # start-ticket flow): entering is resolve_zoom_entry_endpoint plus the
+    # Meeting SDK join, which answer for the caller specifically.
     # A4 V2 (PROMPT №572): NOT owner-gated -- this is the call site behind
     # GET /practices/{id}, which is also what PracticeLiveView reads for a
     # booked (non-owner) participant. Both need to distinguish pending_
@@ -2247,7 +2234,6 @@ async def get_practice_detail(
         master_avatar_url=master_avatar_url,
         is_booked=is_booked,
         is_paid=is_paid,
-        zoom_host_join_url=host_join_url,
         zoom_public_link_visible=is_owner,
         zoom_meeting_status=zoom_meeting_status,
         audience_group_names=audience_group_names,

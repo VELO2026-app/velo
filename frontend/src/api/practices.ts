@@ -37,6 +37,7 @@ import type {
   AudiencePreviewRequest,
   AudiencePreviewResponse,
   ZoomEntryResolveResponse,
+  ZoomSdkJoinResponse,
 } from '@/api/types'
 
 // ============================================================================
@@ -159,27 +160,6 @@ export function getAttendance(id: string): Promise<AttendanceResponse> {
   return api.get<AttendanceResponse>(`/api/v1/practices/${id}/attendance`)
 }
 
-// ============================================================================
-// Zoom "Начать" (PROMPT №556, OWNER-1 option В)
-// ============================================================================
-//
-// start_url is a bearer credential (its holder needs no further Zoom-side
-// check to become host) that also expires -- the owner decided it must
-// never be stored, never appear in a JSON response, and never be held by
-// this frontend at all. So this API never returns a start_url: it returns a
-// one-time ticket, and the actual redirect to Zoom happens entirely on the
-// backend (GET .../zoom/start), reached via a PLAIN browser navigation
-// (platform.openLink), not this authenticated fetch client.
-
-/**
- * Request a one-time, 30s ticket authorizing a single Zoom start_url fetch
- * for this practice's meeting. Throws ApiResponseError (e.g. code
- * 'zoom_meeting_not_active') if there is nothing to start.
- */
-export function createZoomStartTicket(practiceId: string): Promise<{ ticket: string }> {
-  return api.post<{ ticket: string }>(`/api/v1/practices/${practiceId}/zoom/start-ticket`)
-}
-
 /**
  * A4 V2 (PROMPT №572): the "Повторить" action on a permanently-failed Zoom
  * meeting (zoom_meeting_status === 'create_failed'). Owner-only; throws
@@ -195,8 +175,9 @@ export function retryZoomMeeting(practiceId: string): Promise<PracticeResponse> 
 /**
  * T-35: ask the SERVER how the current user enters this practice right now.
  *
- * The answer -- personal link, guest link, host, or an honest waiting/failed/
- * cancelled state -- is a decision, and it deliberately does not live here.
+ * The answer -- personal entry, host, not booked (guest), or an honest
+ * waiting/failed/cancelled state -- is a decision, and it deliberately does
+ * not live here.
  * It used to: utils/zoomLink.ts chose between a personal and a shared link,
  * which made correctness a rule four entry points had to remember. This
  * endpoint is the same choice made where it can be made correctly, by the
@@ -215,26 +196,19 @@ export function resolveZoomEntry(practiceId: string): Promise<ZoomEntryResolveRe
 }
 
 /**
- * Build the URL to hand to platform.openLink() -- a plain browser
- * navigation to our backend, which redeems the ticket and 302s straight to
- * Zoom. Never fetch() this URL: that would not navigate the browser, and
- * the point of the redirect is that the frontend never touches start_url.
+ * Standalone F4: the Meeting SDK join parameters for the current user on this
+ * practice, minted by the server at the moment of entering and never stored
+ * (backend zoom/sdk.py). Only 'personal' and 'host' get them; anything else
+ * is ApiResponseError 409 zoom_entry_not_joinable (re-resolve and show the
+ * new state). 409 zoom_sdk_not_configured: this server has no SDK keys. 502
+ * zoom_unavailable / zoom_host_token_unavailable: Zoom did not answer. 429:
+ * the per-user limit.
  *
- * FAILS CLOSED (PROMPT №557): no hardcoded fallback domain. If
- * VITE_API_BASE_URL is not configured, returns null rather than a URL --
- * the caller must show an honest "unavailable" message and navigate
- * nowhere. A foreign fallback domain here would mean a plain browser
- * navigation carrying the one-time start-ticket to a THIRD PARTY'S server
- * (api.talentir.info, per the open-issues registry, belongs to a different
- * project entirely) -- unlike TopupView.vue's checkout_url (validated
- * against an allowlist before navigating, and the value itself comes from
- * Stripe, not from us), there is no allowlist check possible here: this
- * ticket must only ever reach OUR OWN backend.
+ * The body carries credentials (passcode, token, a host's ZAK): hand it to
+ * the SDK and drop it -- never store it, never log it.
  */
-export function zoomStartRedirectUrl(ticket: string): string | null {
-  const base = import.meta.env.VITE_API_BASE_URL
-  if (!base) return null
-  return `${base}/api/v1/practices/zoom/start?ticket=${encodeURIComponent(ticket)}`
+export function joinZoomSdk(practiceId: string): Promise<ZoomSdkJoinResponse> {
+  return api.post<ZoomSdkJoinResponse>(`/api/v1/practices/${practiceId}/zoom/sdk-join`)
 }
 
 /**

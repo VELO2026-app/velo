@@ -459,8 +459,34 @@ export interface BookingWithPracticeResponse {
   has_checkin: boolean
   has_reflection: boolean
   practice: PracticeSummary
-  zoom_registrant_join_url?: string | null
+  zoom_registrant_ready?: boolean
   zoom_registrant_link_unavailable?: boolean
+}
+
+/** POST /api/v1/auth/telegram/browser/complete -- request body. `code` and `state` are what Telegram put on the return address; `mark` is the browser's own. `language` is the browser's language tag: untrusted, optional, bounded here, and used only through normalize_language and only when the account is created (auth/service.py, upsert_user_on_login). */
+export interface BrowserLoginCompleteRequest {
+  code: string
+  state: string
+  mark: string
+  language?: string | null
+}
+
+/** POST /api/v1/auth/telegram/browser/complete -- response body: the same as POST /auth/telegram, plus whether THIS sign-in gave the bot the right to write to the person (telegram_oidc.py, THE BOT'S RIGHT TO WRITE). */
+export interface BrowserLoginResponse {
+  user: UserResponse
+  session_token: string
+  bot_access_granted: boolean
+}
+
+/** POST /api/v1/auth/telegram/browser/start -- request body. */
+export interface BrowserLoginStartRequest {
+  mark: string
+}
+
+/** Where to send the browser, and the state the frontend keeps next to its mark until the return. */
+export interface BrowserLoginStartResponse {
+  url: string
+  state: string
 }
 
 /** DELETE /api/v1/bookings/{id} -- optional body. */
@@ -1637,7 +1663,6 @@ export interface PracticeResponse {
   is_paid?: boolean
   created_at: string
   updated_at: string | null
-  zoom_host_join_url?: string | null
   zoom_public_link?: string | null
   zoom_meeting_status?: string | null
   deduplicated?: boolean
@@ -2001,6 +2026,19 @@ export interface TelegramAuthRequest {
   init_data: string
 }
 
+/** GET /api/v1/users/timezones -- what the timezone picker is built from. names: every name PATCH /users/me stores unchanged; aliases: every other accepted spelling -> the name stored for it; labels: Russian city/country per name, where CLDR has one. See app/core/timezone_catalog.py. */
+export interface TimezoneCatalogResponse {
+  names: string[]
+  aliases: Record<string, unknown>
+  labels: Record<string, unknown>
+}
+
+/** Russian names of a zone from CLDR (app/core/timezone_catalog.py). */
+export interface TimezoneLabel {
+  city_ru: string | null
+  country_ru: string | null
+}
+
 /** A loyal user, ranked by all-time attended practices. */
 export interface TopUser {
   id: string
@@ -2190,13 +2228,20 @@ export interface WithdrawalResponse {
   updated_at: string | null
 }
 
-/** GET /api/v1/practices/{id}/zoom/resolve (T-35) -- the SERVER's answer to "how does this person enter this practice right now". The choice itself lives on the server (zoom/service.py's resolve_zoom_entry) and this schema only transports it: the client renders `kind` and never decides between two links. That is the point of the endpoint -- the old ladder lived in frontend/src/utils/zoomLink.ts, where it was a rule every entry point had to remember, and a rule cannot be enforced by construction. url is deliberately nullable on TWO kinds, and a caller must handle both without collapsing either into 'failed': - 'host' -- by design; the master starts his own meeting through the existing start-ticket flow, never through a stored URL. - 'guest' -- when ensure_shared_registrant never succeeded. The meeting exists; only the guest seat in it does not. */
+/** GET /api/v1/practices/{id}/zoom/resolve (T-35) -- the SERVER's answer to "how does this person enter this practice right now". The choice itself lives on the server (zoom/service.py's resolve_zoom_entry) and this schema only transports it: the client renders `kind` and never decides. That is the point of the endpoint -- the old ladder lived in frontend/src/utils/zoomLink.ts, where it was a rule every entry point had to remember, and a rule cannot be enforced by construction. No URL (Standalone F4): nobody is sent to a Zoom link any more. 'personal' and 'host' enter through the Meeting SDK -- the screen asks POST .../zoom/sdk-join for the parameters at the moment of entering; 'guest' means "not booked -- book first" inside the app. */
 export interface ZoomEntryResolveResponse {
   kind: 'personal' | 'host' | 'guest' | 'pending' | 'failed' | 'cancelled' | 'unavailable'
-  url?: string | null
 }
 
-/** POST /api/v1/practices/{id}/zoom/start-ticket (PROMPT №556, OWNER-1). Deliberately carries a one-time ticket, never a start_url -- see zoom/service.py's ticket-issuance docstring for why. */
-export interface ZoomStartTicketResponse {
-  ticket: string
+/** POST /api/v1/practices/{id}/zoom/sdk-join (Standalone F4) -- what the Meeting SDK's ZoomMtg.join() needs for THIS person, minted per request and never stored (zoom/sdk.py). role 0 joins (tk set: the registrant's token, so attendance keeps matching by registrant_id; user_email: the address that registrant was registered under); role 1 starts as host (zak set). Never both kinds. signature is the Meeting SDK JWT, valid about half an hour; zak lives five minutes. Sent with Cache-Control: no-store. */
+export interface ZoomSdkJoinResponse {
+  sdk_key: string
+  signature: string
+  meeting_number: string
+  password: string
+  user_name: string
+  role: number
+  tk?: string | null
+  user_email?: string | null
+  zak?: string | null
 }

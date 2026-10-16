@@ -1,5 +1,7 @@
 # pnpm settings (pnpm >= 10 reads config from this file, not package.json).
 # Dependency build-script allowlist; packages not listed stay unexecuted.
 allowBuilds:
+  # Its postinstall only prints a notice (read 2026-10-15) -- nothing to run.
+  '@zoom/meetingsdk': false
   esbuild: true
   vue-demi: true

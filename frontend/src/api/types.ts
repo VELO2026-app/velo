@@ -38,6 +38,8 @@ export type {
   BookingDetailResponse,
   BookingRecordingResponse,
   BookingResponse,
+  BrowserLoginResponse,
+  BrowserLoginStartResponse,
   CancelBookingRequest,
   CheckinMetricResponse,
   CheckinRequest,
@@ -197,13 +199,15 @@ export type {
   WaitlistWithPracticeResponse,
   WithdrawalResponse,
   ZoomEntryResolveResponse,
+  ZoomSdkJoinResponse,
 } from './generated'
 
 // -- T21-1 bridge: two fields the backend already returns, ahead of the next
 // `generated.ts` regen (velo-manage.sh regenerates it from a live backend on
-// deploy; never hand-edited -- see file header). Remove this block once a
-// regen picks up `zoom_registrant_join_url` / `zoom_host_join_url` natively
-// and switch these two back to the plain re-export above.
+// deploy; never hand-edited -- see file header). The two Zoom fields it was
+// opened for are native now (Standalone F4 replaced them: no URL, a
+// zoom_registrant_ready flag); what remains below is the other bridged
+// fields'.
 import type {
   BookingWithPracticeResponse as GeneratedBookingWithPracticeResponse,
   CreatePracticeRequest as GeneratedCreatePracticeRequest,
@@ -269,10 +273,10 @@ export interface AudiencePreviewResponse {
 }
 
 export interface PracticeResponse extends GeneratedPracticeResponse {
-  /* T-35: zoom_host_join_url, zoom_meeting_status and the new
-   * zoom_public_link are all NATIVE in generated.ts now (the T-35 regen
-   * picked them up), so this bridge no longer restates them. zoom_link is
-   * gone from generated.ts entirely -- the column no longer exists. */
+  /* T-35: zoom_meeting_status and zoom_public_link are NATIVE in
+   * generated.ts, so this bridge does not restate them. zoom_link is gone
+   * with its column; zoom_host_join_url went with the start-ticket flow
+   * (Standalone F4) -- the master starts through the Meeting SDK. */
   /** A4 V6 (PROMPT №572): True when this response is the master's own
    * EARLIER submission returned again (a window-scoped retry-after-timeout
    * dedup, or the losing side of a genuine concurrent double-tap) instead
@@ -302,12 +306,6 @@ export interface PracticeResponse extends GeneratedPracticeResponse {
 export type PracticeSummary = GeneratedPracticeSummary
 
 export interface BookingWithPracticeResponse extends GeneratedBookingWithPracticeResponse {
-  /** This booking's own Zoom registrant link (the personal ?tk= URL), or
-   * null/undefined if not yet confirmed/attended or not yet created by
-   * Zoom. Optional (not just nullable): existing test fixtures built before
-   * this field existed omit it entirely, and the ladder treats a missing
-   * field the same as an explicit null. */
-  zoom_registrant_join_url?: string | null
   /** Overrides the generated field's type to OUR PracticeSummary alias
    * above, so both names stay interchangeable at call sites. */
   practice: PracticeSummary

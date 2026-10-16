@@ -164,12 +164,6 @@
   --text-10: 10px;
   --text-12: 12px;
   --text-16: 16px;
-  /* Master-web auth screens (parked Phase A, master web SVGs): off-scale title /
-     hero-brand sizes the legacy xs..2xl scale doesn't cover (28 sits between
-     base 18 and xl 32; 46 between xl 32 and 2xl 50). Value-named per the
-     --text-NN convention above. Additive — no existing token changed. */
-  --text-28: 28px;
-  --text-46: 46px;
 
   /* === Spacing === */
   --space-1: 4px;

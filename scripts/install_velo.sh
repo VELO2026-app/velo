@@ -360,6 +360,49 @@ echo ""
 read -p "Press ENTER when DNS records are configured..."
 echo ""
 
+# BE-133: the object storage volume is the ONE store a reinstall must not
+# take by default (§0 §4: people's files are not disposable). Its compose
+# project (storage/docker-compose.yml, project velo-storage) is never named
+# by the `down -v` below; the only way its files go is THIS question,
+# answered with the word DELETE. The root key file lives outside repo/ for
+# the same reason: it survives `rm -rf repo` together with the volume it
+# protects. Asked AFTER "start fresh? y", so that answering n to that
+# leaves the storage exactly as it was.
+STORAGE_VOLUME="velo_storage_data"
+STORAGE_ROOT_FILE="$INSTALL_BASE/storage.env"
+STORAGE_GUARD_DONE=0
+storage_reinstall_guard() {
+    STORAGE_GUARD_DONE=1
+    command -v docker > /dev/null 2>&1 || return 0
+    docker volume inspect "$STORAGE_VOLUME" > /dev/null 2>&1 || return 0
+    echo ""
+    warn "Object storage volume $STORAGE_VOLUME exists -- uploaded files of people."
+    echo "  Press ENTER to KEEP the files (the default)."
+    echo "  Type DELETE (capital letters) to ERASE them for good."
+    local answer=""
+    read -r -p "Storage files [keep]: " answer
+    if [ "$answer" = "DELETE" ]; then
+        log "Erasing object storage..."
+        docker ps -aq --filter "label=com.docker.compose.project=velo-storage" \
+            | xargs -r docker rm -f > /dev/null 2>&1 || true
+        if ! docker volume rm "$STORAGE_VOLUME" > /dev/null; then
+            error "Could not remove volume $STORAGE_VOLUME -- nothing else was removed"
+            exit 1
+        fi
+        rm -f "$STORAGE_ROOT_FILE"
+        success "Object storage erased (volume and root key file)"
+        return 0
+    fi
+    [ -n "$answer" ] && info "'$answer' is not DELETE -- keeping the files"
+    if [ ! -f "$STORAGE_ROOT_FILE" ]; then
+        error "The files are kept, but $STORAGE_ROOT_FILE is missing:"
+        error "the storage could not be opened with them. Nothing was removed."
+        error "Restore the file, or re-run this installer and type DELETE."
+        exit 1
+    fi
+    success "Object storage kept (volume and root key file stay)"
+}
+
 # Check for previous installation. "Previous installation" now means EITHER
 # stack: velo (this checkout) or comms (orchestrated below) -- an orphaned
 # comms stack surviving a "fresh" reinstall would silently carry old secrets
@@ -370,6 +413,7 @@ if [ -d "$INSTALL_BASE/repo" ] || [ -d "$COMMS_REPO_DIR" ]; then
     read -p "Remove existing installation and start fresh? (y/n): " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
+        storage_reinstall_guard
         log "Stopping existing services and removing volumes..."
         cd "$INSTALL_BASE/repo" 2>/dev/null && docker compose down -v 2>/dev/null || true
         # Tear down the comms stack the same way (containers + volumes).
@@ -388,6 +432,11 @@ if [ -d "$INSTALL_BASE/repo" ] || [ -d "$COMMS_REPO_DIR" ]; then
         cd "$INSTALL_BASE" 2>/dev/null || cd /
         log "Removing existing installation..."
         rm -rf "$INSTALL_BASE/repo"
+        # Deployed-commit markers (velo-manage.sh, BE-154) describe the
+        # stack just torn down. Kept, they would let the first `velo update`
+        # after a reinstall that died half-way report "already up to date".
+        # Gone, the first update runs one full cycle and records it.
+        rm -rf "$INSTALL_BASE/deployed"
         # Reinstall = clean server (owner ruling): the WHOLE comms state
         # goes -- checkout, master .env (secrets re-minted on install),
         # profile (smoke profile re-seeded), backups. Backing up before a
@@ -400,6 +449,9 @@ if [ -d "$INSTALL_BASE/repo" ] || [ -d "$COMMS_REPO_DIR" ]; then
         exit 1
     fi
 fi
+# No previous installation, but a storage volume left behind: the same
+# question, before anything is created.
+[ "$STORAGE_GUARD_DONE" -eq 1 ] || storage_reinstall_guard
 
 # ==============================================================================
 # FIX LOCALE
@@ -1024,12 +1076,51 @@ generate_env() {
     read -p "Do you have REAL Zoom credentials for this server? (y/n): " -n 1 -r
     echo
     local ZOOM_ACCOUNT_ID ZOOM_CLIENT_ID ZOOM_CLIENT_SECRET ALLOW_ZOOM_STUB
+    local ZOOM_SDK_CLIENT_ID="" ZOOM_SDK_CLIENT_SECRET=""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         read -p "ZOOM_ACCOUNT_ID: " ZOOM_ACCOUNT_ID
         read -p "ZOOM_CLIENT_ID: " ZOOM_CLIENT_ID
         read -p "ZOOM_CLIENT_SECRET: " ZOOM_CLIENT_SECRET
         ALLOW_ZOOM_STUB=false
         success "Real Zoom credentials recorded — meetings will be REAL."
+        echo ""
+        # Standalone F4: Zoom inside the app needs a SECOND Zoom app (the
+        # Meeting SDK cannot live on a Server-to-Server app). Same both-or-
+        # neither shape and the same value check as the Telegram login pair
+        # above: Enter on the Client ID skips it, a Client ID makes the
+        # secret required, no half pair is ever written.
+        echo -e "${YELLOW}Zoom inside the app (Meeting SDK) -- in the SAME Zoom account:${NC}"
+        echo -e "${YELLOW}  1. App Marketplace -> Develop -> Build App -> General App.${NC}"
+        echo -e "${YELLOW}  2. Features -> Embed -> switch Meeting SDK on.${NC}"
+        echo -e "${YELLOW}  3. App Credentials, Development column: Client ID, Client Secret.${NC}"
+        echo -e "${YELLOW}The Server-to-Server app above also needs the scope${NC}"
+        echo -e "${YELLOW}user:read:token:admin, or masters cannot start their meetings.${NC}"
+        echo -e "${YELLOW}Press Enter to skip -- the practice screen then says Zoom inside${NC}"
+        echo -e "${YELLOW}the app is not configured; set later with 'velo env set'.${NC}"
+        while true; do
+            read -r -p "ZOOM_SDK_CLIENT_ID [Enter = skip]: " ZOOM_SDK_CLIENT_ID
+            [ -z "$ZOOM_SDK_CLIENT_ID" ] && break
+            printf '%s' "$ZOOM_SDK_CLIENT_ID" | bash "$VELO_MANAGE" __env-value-ok && break
+        done
+        if [ -n "$ZOOM_SDK_CLIENT_ID" ]; then
+            while true; do
+                if ! read -r -s -p "ZOOM_SDK_CLIENT_SECRET (input hidden): " ZOOM_SDK_CLIENT_SECRET; then
+                    echo ""
+                    error "Input ended before the Client Secret was given."
+                    error "Re-run the installer; or press Enter at the Client ID to skip."
+                    exit 1
+                fi
+                echo ""
+                if [ -z "$ZOOM_SDK_CLIENT_SECRET" ]; then
+                    echo -e "${RED}✗ The secret is required once a Client ID is given.${NC}"
+                    continue
+                fi
+                printf '%s' "$ZOOM_SDK_CLIENT_SECRET" | bash "$VELO_MANAGE" __env-value-ok && break
+            done
+            success "Zoom inside the app: keys recorded"
+        else
+            warn "Zoom inside the app: skipped -- off until both keys are set"
+        fi
     else
         ZOOM_ACCOUNT_ID=""
         ZOOM_CLIENT_ID=""
@@ -1167,6 +1258,12 @@ ZOOM_CLIENT_SECRET=${ZOOM_CLIENT_SECRET}
 # in production -- deliberately: a server whose meetings are fabricated must
 # not look identical to a working one.
 ALLOW_ZOOM_STUB=${ALLOW_ZOOM_STUB}
+# Zoom inside the app (Meeting SDK, Standalone F4): the General App's
+# Development Client ID / Secret, both or neither. Both empty = the practice
+# screen says Zoom inside the app is not configured. Change later with
+# `velo env set <KEY>`, then `velo restart`.
+ZOOM_SDK_CLIENT_ID=${ZOOM_SDK_CLIENT_ID}
+ZOOM_SDK_CLIENT_SECRET=${ZOOM_SDK_CLIENT_SECRET}
 
 # --- Voice transcription (GT-41) ---
 # Read by the SERVER. It is never a VITE_ variable and never reaches the
@@ -1878,6 +1975,15 @@ start_stack() {
     curl -s "$HEALTH_URL" | python3 -m json.tool 2>/dev/null || curl -s "$HEALTH_URL"
     echo ""
 }
+
+# BE-133: object storage BEFORE the stack -- the step also writes the
+# backend's storage secret into backend/.env, which the app reads at start.
+# ONE implementation, the one `velo update` runs (velo-manage.sh).
+log "Starting object storage (velo-storage)..."
+if ! bash "$INSTALL_BASE/repo/scripts/velo-manage.sh" __storage-step; then
+    error "Object storage did not come up -- see the lines above."
+    exit 1
+fi
 
 start_stack
 

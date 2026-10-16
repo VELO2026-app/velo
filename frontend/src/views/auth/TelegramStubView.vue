@@ -1,9 +1,13 @@
 <!--
-  VELO Frontend -- Standalone Stub View (DS-6, fixed 2026-07-14)
+  VELO Frontend -- Telegram Stub View (DS-6, fixed 2026-07-14; renamed from
+  StandaloneStubView in Standalone phase 3)
 
-  Shown when user opens app outside Telegram (no initData).
-  Directs them to open via the bot.
+  Shown INSIDE Telegram when there is no session: the initData sign-in
+  failed, or the session ended (401). Directs the person back to the bot.
+  Outside Telegram the login screen (TelegramLoginView) is shown instead.
   Matches 01_Welcome.png mockup style — glassmorphism buttons, pill shape.
+  backend/app/modules/practices/router.py carries a copy of this markup
+  (the /z/ guest page).
 
   Two fixes on 2026-07-14:
     - target="_blank" removed. This is a universal link: on iOS Safari and

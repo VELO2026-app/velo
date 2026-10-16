@@ -164,6 +164,22 @@ function thoughtTextarea(): HTMLTextAreaElement {
   return el
 }
 
+// -- The unified mood scale (MoodSlider) inside «Мое состояние» -----------------
+
+function stateRange(): HTMLInputElement {
+  const el = host?.querySelector<HTMLInputElement>('[data-field="state"] input[type="range"]')
+  if (!el) throw new Error('the mood range did not render')
+  return el
+}
+
+function faceCard(label: string): HTMLButtonElement {
+  const el = Array.from(host?.querySelectorAll<HTMLButtonElement>('[role="radio"]') ?? []).find(
+    (b) => b.textContent?.trim() === label,
+  )
+  if (!el) throw new Error(`mood face «${label}» did not render`)
+  return el
+}
+
 // -- Sheet drivers (the real teleported pickers) -------------------------------
 // All sheet queries are scoped to the LIVE overlay (`.v-sheet__overlay:not(
 // .v-sheet-leave-active)`): a CLOSED sheet's <Transition> leave never fires
@@ -227,8 +243,8 @@ function typeThoughts(value: string): void {
 }
 
 /** A fully valid form: yesterday 12:00, Медитация, no thoughts. The mood
- *  block is hidden (owner 2026-09-10), so no state click -- the payload
- *  carries MOOD_WHEN_STATE_HIDDEN. */
+ *  scale needs NO interaction: it opens on the visible default (5) and the
+ *  untouched value travels with the payload, like Check-in/Feedback. */
 async function fillValidForm(): Promise<void> {
   await pickDate(19)
   await pickDefaultTime()
@@ -249,7 +265,7 @@ beforeEach(() => {
     occurred_at: '2026-07-19T16:00:00Z',
     activity_type: 'meditation',
     custom_activity_name: null,
-    mood: 6,
+    mood: 5,
     thoughts: null,
     created_at: '2026-07-20T08:00:05Z',
   })
@@ -284,8 +300,14 @@ describe('ExternalActivityCreateView', () => {
       const titles = Array.from(host?.querySelectorAll('.velo-section-title') ?? []).map((t) =>
         t.textContent?.trim(),
       )
-      // «Мое состояние» is hidden for now (owner 2026-09-10).
-      expect(titles).toEqual(['Когда произошло событие *', 'Выбор активности *', 'Мысли'])
+      // «Мое состояние после» is the unified scale's section (no star: the mood
+      // never blocks -- the visible default always carries).
+      expect(titles).toEqual([
+        'Когда произошло событие *',
+        'Выбор активности *',
+        'Мое состояние после',
+        'Мысли',
+      ])
       expect(thoughtTextarea().getAttribute('placeholder')).toBe(
         'Напишите, что это было и что с вами произошло. Вы можете вернуться к рефлексии позже',
       )
@@ -312,7 +334,7 @@ describe('ExternalActivityCreateView', () => {
       ])
     })
 
-    it('starts BLANK: no activity, no date, no time, no custom chip; the state block is hidden', () => {
+    it('starts BLANK: no activity, no date, no time, no custom chip; the mood stands on the visible default', () => {
       mount()
 
       expect(chipButtons().every((b) => b.getAttribute('aria-pressed') !== 'true')).toBe(true)
@@ -320,10 +342,11 @@ describe('ExternalActivityCreateView', () => {
       expect(picker(0).textContent?.trim()).toBe('Дата')
       expect(picker(1).textContent?.trim()).toBe('Время')
       expect(screenText()).not.toContain('Свой вариант')
-      // The mood icons (Есть вопросы / Хорошо / Огонь) are hidden for now.
-      expect(host?.querySelector('[aria-label="Хорошо"]')).toBeNull()
-      expect(host?.querySelector('[aria-label="Огонь"]')).toBeNull()
-      expect(screenText()).not.toContain('Мое состояние')
+      // The unified scale renders untouched: the active face is «Нормально»,
+      // the range sits on the default 5.
+      expect(host?.querySelector('[data-field="state"]')).not.toBeNull()
+      expect(faceCard('Нормально').getAttribute('aria-checked')).toBe('true')
+      expect(stateRange().value).toBe('5')
     })
 
     it('owner 2026-10-01: the rosettes are gone -- the section stars mark the required sections', () => {
@@ -443,29 +466,48 @@ describe('ExternalActivityCreateView', () => {
     })
   })
 
-  describe('Мое состояние (hidden for now, owner 2026-09-10)', () => {
-    it('the mood block renders NOTHING: no icons, no seal, no section title', () => {
+  describe('Мое состояние после (the FE-85 unified scale)', () => {
+    it('renders the five-face deck, the active face «Нормально», the range on the default 5', () => {
       mount()
 
-      expect(host?.querySelector('[aria-label="Есть вопросы"]')).toBeNull()
-      expect(host?.querySelector('[aria-label="Хорошо"]')).toBeNull()
-      expect(host?.querySelector('[aria-label="Огонь"]')).toBeNull()
-      expect(host?.querySelector('[data-field="state"]')).toBeNull()
+      expect(host?.querySelector('[data-field="state"] [role="radiogroup"]')).not.toBeNull()
+      const faces = Array.from(host?.querySelectorAll('[role="radio"]') ?? []).map((f) =>
+        f.textContent?.trim(),
+      )
+      expect(faces).toEqual(['Плохо', 'Не очень', 'Нормально', 'Хорошо', 'Огонь'])
+      expect(faceCard('Нормально').getAttribute('aria-checked')).toBe('true')
+      expect(stateRange().value).toBe('5')
     })
 
-    it('validation does NOT demand a mood while the block is hidden', async () => {
+    it('tapping a face moves the selection and the payload carries the exact top score', async () => {
       mount()
-      await pickDate(19)
-      await pickDefaultTime()
-      chip('Медитация').click()
-      await flush()
+      await fillValidForm()
+      faceCard('Огонь').click()
+      await nextTick()
+      expect(faceCard('Огонь').getAttribute('aria-checked')).toBe('true')
+      expect(faceCard('Нормально').getAttribute('aria-checked')).toBe('false')
 
       saveBtn().click()
       await flush()
 
-      expect(screenText()).not.toContain('Выберите состояние')
-      // The neutral mood travels with the payload instead (asserted below).
-      expect(diaryApi.createExternalActivity).toHaveBeenCalled()
+      expect(diaryApi.createExternalActivity).toHaveBeenCalledWith(
+        expect.objectContaining({ mood: 10 }),
+      )
+    })
+
+    it('the native range carries EXACT values (a drag stops where it stops), not only top scores', async () => {
+      mount()
+      await fillValidForm()
+      stateRange().value = '7'
+      stateRange().dispatchEvent(new Event('input'))
+      await nextTick()
+
+      saveBtn().click()
+      await flush()
+
+      expect(diaryApi.createExternalActivity).toHaveBeenCalledWith(
+        expect.objectContaining({ mood: 7 }),
+      )
     })
   })
 
@@ -479,7 +521,8 @@ describe('ExternalActivityCreateView', () => {
       expect(screenText()).toContain('Выберите дату')
       expect(screenText()).toContain('Выберите время')
       expect(screenText()).toContain('Выберите активность')
-      // The hidden mood block demands nothing on screen.
+      // The mood scale never blocks: it stands on the visible default, so
+      // no state error exists on an untouched form.
       expect(screenText()).not.toContain('Выберите состояние')
       expect(diaryApi.createExternalActivity).not.toHaveBeenCalled()
     })
@@ -520,7 +563,7 @@ describe('ExternalActivityCreateView', () => {
   })
 
   describe('submit -- success', () => {
-    it('posts the exact contract payload (offset ISO in the profile zone, neutral mood while the block is hidden)', async () => {
+    it('posts the exact contract payload (offset ISO in the profile zone, the visible default mood when untouched)', async () => {
       mount()
       await fillValidForm()
       typeThoughts('   ')
@@ -535,9 +578,9 @@ describe('ExternalActivityCreateView', () => {
         occurred_at: '2026-07-19T12:00:00.000-04:00',
         activity_type: 'meditation',
         custom_activity_name: null,
-        // The mood block is hidden (owner 2026-09-10): the neutral zone
-        // centre travels with the submit, nothing shown on screen.
-        mood: 6,
+        // The untouched mood scale travels as its visible default (5) -- the
+        // same untouched-form canon as Check-in/Feedback.
+        mood: 5,
         thoughts: null, // whitespace-only -> null, per the contract
       })
     })
@@ -558,7 +601,7 @@ describe('ExternalActivityCreateView', () => {
         occurred_at: '2026-07-19T12:00:00.000-04:00',
         activity_type: 'custom',
         custom_activity_name: 'Бальные танцы',
-        mood: 6,
+        mood: 5,
         thoughts: 'Прекрасный вечер',
       })
     })
@@ -633,6 +676,11 @@ describe('ExternalActivityCreateView', () => {
             msg: "Value error, custom_activity_name is required when activity_type is 'custom'",
             type: 'value_error',
           },
+          {
+            loc: ['body', 'mood'],
+            msg: 'Value error, mood must be between 1 and 10',
+            type: 'value_error',
+          },
         ]),
       )
       mount()
@@ -647,6 +695,9 @@ describe('ExternalActivityCreateView', () => {
 
       expect(screenText()).toContain('occurred_at cannot be in the future')
       expect(screenText()).toContain('custom_activity_name is required')
+      // The mood field's 422 has its own sink under the scale -- the only
+      // path that can light it, since no client validation exists there.
+      expect(screenText()).toContain('mood must be between 1 and 10')
       // The rejected name comes back INTO the input for editing (the chip is
       // off the board), so nothing the person typed is lost.
       expect(customInput().value).toBe('Йога-нидра')

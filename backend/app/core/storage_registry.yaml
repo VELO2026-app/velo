@@ -1,0 +1,62 @@
+# =============================================================================
+# Object storage registry (BE-133) -- the ONE source of what velo-storage holds
+# =============================================================================
+#
+# Read by THREE consumers, none of which carries its own copy:
+#   - velo-storage-init (storage/docker-compose.yml) builds every bucket, its
+#     privacy, its lifecycle rule and every service key's policy from it, on
+#     each `velo update` and each install;
+#   - `velo doctor` checks the live storage against it (same init, check mode);
+#   - the backend (app/core/storage_registry.py) resolves buckets from it.
+#
+# A new data type is one entry under `buckets`. A new key (e.g. the read-only
+# key BE-131's backup will need) is one entry under `service_keys`. Nothing
+# else is edited: a bucket or a key that is not here does not exist for the
+# init, and a SERVICE KEY that is not here is REMOVED by it on the next run.
+#
+# Buckets are never removed by anything automatic: object storage is the one
+# store that is NOT disposable (§0 §4). Dropping an entry here leaves the
+# bucket and its files on disk; `velo doctor` names it as not in the registry.
+#
+# Every bucket has a twin `<name><test_bucket_suffix>` with the same rule. The
+# stand's suite works only there -- the service key can create no buckets.
+# =============================================================================
+
+test_bucket_suffix: "-test"
+
+buckets:
+  voice:
+    # Recordings sent to comms for transcription (BE-136). The lifecycle rule
+    # is Days=1, and "a day" here is NOT 24 hours: RustFS, like S3, rounds the
+    # expiry UP to the next midnight UTC, so an object lives from 24 to 48
+    # hours, plus up to one scanner cycle before it is actually removed.
+    # BE-136 signs its links for 30 minutes, far inside the shortest of those.
+    expire_days: 1
+    backup: false
+    # Only comms reads it, by a signed GET link on velo-storage:9000.
+    reader: signed_link
+
+  master-documents:
+    # Documents of master candidates (BE-137). How long they live is the
+    # owner's decision, still open in BE-137 -- so no expiry rule at all.
+    expire_days: null
+    # Personal data that a reinstall cannot recreate (BE-131 backs it up).
+    backup: true
+    # Only an admin, through the VELO API. No signed link is ever issued.
+    reader: api
+
+service_keys:
+  # The backend's own key. Its NAME is fixed here and nowhere else: only the
+  # secret lives in backend/.env, under the variable named below, so a
+  # reinstall or `velo env set STORAGE_SECRET_KEY` changes the secret of THIS
+  # key instead of minting a second one beside it.
+  velo-app:
+    secret_env: STORAGE_SECRET_KEY
+    # Objects in, objects out, list -- over every bucket above and its test
+    # twin. It cannot create buckets or change their policy.
+    actions:
+      - s3:GetObject
+      - s3:PutObject
+      - s3:DeleteObject
+      - s3:ListBucket
+      - s3:GetBucketLocation

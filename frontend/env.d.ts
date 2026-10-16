@@ -20,7 +20,8 @@ interface ImportMeta {
 // =============================================================================
 // Telegram WebApp SDK (Phase F1.1, updated TD-F01)
 // =============================================================================
-// Minimal type declarations for the SDK loaded via CDN in index.html.
+// Minimal type declarations for the SDK that platform/launch.ts loads from
+// the CDN when Telegram launched the app (absent everywhere else).
 // Only methods actually used by src/platform/telegram.ts are typed.
 // Full SDK docs: https://core.telegram.org/bots/webapps
 // =============================================================================
@@ -46,6 +47,9 @@ interface TelegramWebApp {
   }
   /** Current color scheme: 'light' or 'dark'. */
   colorScheme: 'light' | 'dark'
+  /** The Telegram client this Mini App runs in: 'ios', 'android',
+   * 'tdesktop', 'macos', 'web', ... ('unknown' when Telegram cannot tell). */
+  platform: string
   /** Tell Telegram the app is ready to be shown. */
   ready(): void
   /** Expand the WebApp to full viewport height. */

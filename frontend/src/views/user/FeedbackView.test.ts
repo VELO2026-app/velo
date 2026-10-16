@@ -236,6 +236,13 @@ function practice(overrides: Partial<PracticeResponse> = {}): PracticeResponse {
  * so a dropped `...overrides` fails loudly instead of quietly asserting the
  * default. `status: 'completed'` mirrors what this screen actually meets -- a
  * feedback is post-practice.
+ *
+ * Standalone F4: the booking defaulted to 'confirmed'. That was harmless while
+ * this screen ignored the booking's status, but it was never what the server
+ * accepts a feedback for (upsert_feedback wants ATTENDED). The screen now
+ * shows the form only for an attended booking and an honest «ждём
+ * подтверждения» otherwise, so the default is the status that really reaches
+ * the form; the waiting/not-attended states override it in their own tests.
  */
 function booking(
   overrides: Partial<BookingWithPracticeResponse> = {},
@@ -244,7 +251,7 @@ function booking(
     id: 'b1',
     practice_id: 'p1',
     user_id: 'u1',
-    status: 'confirmed',
+    status: 'attended',
     purchase_id: null,
     cancelled_at: null,
     cancellation_reason: null,
@@ -1099,4 +1106,99 @@ describe('FeedbackView', () => {
   //    pinned as a tripwire because pinning it would assert a product decision this
   //    file has no standing to make. Worth an operator ruling.
   // ===========================================================================
+  // ===========================================================================
+  // Standalone F4: the Meeting SDK's leaveUrl lands a student here the moment
+  // he leaves -- before Zoom's report has confirmed he was there. The server
+  // accepts a feedback only for an ATTENDED booking, so the screen says what
+  // is true instead of offering a form that would only fail.
+  describe('F4: honest states instead of a form the server would refuse', () => {
+    it('confirmed (not yet judged): «Отзыв можно будет оставить, когда Zoom подтвердит участие», no form', async () => {
+      getMyBookingsMock.mockResolvedValue(bookingsPage([booking({ status: 'confirmed' })]))
+      mount()
+      await flush()
+
+      expect(text()).toContain('Отзыв можно будет оставить, когда Zoom подтвердит участие')
+      expect(text()).not.toContain('Как прошла практика?')
+      expect(submitBtn()).toBeUndefined()
+    })
+
+    it('pending is waiting too -- nothing has been judged', async () => {
+      getMyBookingsMock.mockResolvedValue(bookingsPage([booking({ status: 'pending' })]))
+      mount()
+      await flush()
+
+      expect(text()).toContain('когда Zoom подтвердит участие')
+    })
+
+    it('the waiting state has a way back: «На главную»', async () => {
+      getMyBookingsMock.mockResolvedValue(bookingsPage([booking({ status: 'confirmed' })]))
+      mount()
+      await flush()
+
+      button('На главную')?.click()
+      await flush()
+      expect(push).toHaveBeenCalledWith({ name: 'user-dashboard' })
+    })
+
+    it('no_show: not "wait" (nothing will come) -- Zoom did not confirm, no form', async () => {
+      getMyBookingsMock.mockResolvedValue(bookingsPage([booking({ status: 'no_show' })]))
+      mount()
+      await flush()
+
+      expect(text()).toContain('Отзыв недоступен')
+      expect(text()).toContain('Zoom не подтвердил ваше участие')
+      expect(text()).not.toContain('когда Zoom подтвердит участие')
+      expect(submitBtn()).toBeUndefined()
+    })
+
+    it('only a cancelled booking: unavailable, and why', async () => {
+      getMyBookingsMock.mockResolvedValue(bookingsPage([booking({ status: 'cancelled' })]))
+      mount()
+      await flush()
+
+      expect(text()).toContain('Запись на эту практику отменена')
+      expect(submitBtn()).toBeUndefined()
+    })
+
+    it('a cancelled AND a live booking of the practice: the live one decides', async () => {
+      getMyBookingsMock.mockResolvedValue(
+        bookingsPage([
+          booking({ id: 'old', status: 'cancelled' }),
+          booking({ id: 'now', status: 'attended' }),
+        ]),
+      )
+      mount()
+      await flush()
+
+      expect(text()).toContain('Как прошла практика?')
+    })
+
+    it('a booking of ANOTHER practice decides nothing here', async () => {
+      getMyBookingsMock.mockResolvedValue(
+        bookingsPage([booking({ id: 'b9', practice_id: 'p-other', status: 'confirmed' })]),
+      )
+      mount()
+      await flush()
+
+      expect(text()).not.toContain('когда Zoom подтвердит участие')
+    })
+
+    it('not in the loaded list (it is one page): the form, as before -- the server judges', async () => {
+      getMyBookingsMock.mockResolvedValue(bookingsPage([]))
+      mount()
+      await flush()
+
+      expect(text()).toContain('Как прошла практика?')
+    })
+
+    it('before the list arrives: neither a form nor a verdict', async () => {
+      getMyBookingsMock.mockReturnValue(new Promise(() => {}))
+      mount()
+      await flush()
+
+      expect(text()).not.toContain('Как прошла практика?')
+      expect(text()).not.toContain('когда Zoom подтвердит участие')
+      expect(text()).not.toContain('Отзыв недоступен')
+    })
+  })
 })

@@ -418,6 +418,18 @@ class Settings(BaseSettings):
     # the bell, never crash velo (T1 handoff constraint).
     comms_http_timeout_seconds: float = 5.0
 
+    # -- Object storage (BE-133) --
+    # The secret of the backend's own key to velo-storage. The key's NAME is
+    # fixed in app/core/storage_registry.yaml; only the secret lives in the
+    # environment. Nobody types it: `velo update` (and the installer) write
+    # it into backend/.env when it is absent, and the storage init sets the
+    # storage to it on every run -- so `velo env set STORAGE_SECRET_KEY`
+    # followed by `velo update` is a rotation. Empty by default, with no
+    # validator, on purpose: the first deploy of BE-133 runs the OLD update
+    # script, which writes no key, and the app must still start. The
+    # storage module refuses on an empty secret when it is called.
+    storage_secret_key: str = ""
+
     # -- Voice transcription (GT-41) --
     # The key lives HERE, on the server, and nowhere else. Voice input used
     # to call OpenRouter straight from the browser with a VITE_ key compiled
@@ -613,6 +625,24 @@ class Settings(BaseSettings):
     # Zoom-side meeting DELETE calls the retry poller makes before it stops
     # and leaves the row visibly pending.
     zoom_meeting_delete_max_retries: int = 5
+
+    # -- Zoom Meeting SDK, Zoom inside the app (Standalone F4) --
+    # Client ID / Client Secret of the account's General App with the Meeting
+    # SDK feature on (Development credentials). NOT the Server-to-Server app
+    # above: an S2S app has no Meeting SDK, so these are a second key pair.
+    # They sign the SDK JWT and nothing else; the secret never leaves the
+    # server and is never logged. Optional in .env.example on purpose: a
+    # server without them still deploys, and says so out loud --
+    # POST /practices/{id}/zoom/sdk-join answers 409 zoom_sdk_not_configured
+    # and the practice screen shows that line instead of a dead button.
+    zoom_sdk_client_id: str = ""
+    zoom_sdk_client_secret: str = ""
+    # Per-user fixed window on sdk-join: every call reaches Zoom (meeting
+    # details, plus a ZAK for the host), so a stuck button or a script must
+    # cost a counter, not Zoom API quota. Six a minute leaves a person
+    # retrying after a failure well inside it.
+    zoom_sdk_join_rate_limit_max_requests: int = 6
+    zoom_sdk_join_rate_limit_window_seconds: int = 60
 
     # -- Zoom report ingestion (E21 step F, PROMPT №521) --
     # Background worker toggle, same rationale as the other three loops:
@@ -1058,6 +1088,24 @@ class Settings(BaseSettings):
             or not self.zoom_client_id
             or not self.zoom_client_secret
             or self.zoom_client_secret.upper() == "TEST"
+        )
+
+    @property
+    def is_zoom_sdk_configured(self) -> bool:
+        """True when the app can hand out Meeting SDK entry: the SDK key pair
+        is set AND Zoom itself is real.
+
+        Both halves are needed. Without the key pair there is nothing to sign
+        with. Under the S2S stub (is_zoom_stub) every meeting number is
+        fabricated, so a correctly signed JWT would still open nothing -- the
+        same "plausible but fiction" failure is_zoom_stub_blocked's docstring
+        describes, and the reason this answers False there too rather than
+        handing the screen a meeting that does not exist.
+        """
+        return (
+            not self.is_zoom_stub
+            and bool(self.zoom_sdk_client_id)
+            and bool(self.zoom_sdk_client_secret)
         )
 
     @property

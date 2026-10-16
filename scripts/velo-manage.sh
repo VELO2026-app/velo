@@ -105,12 +105,167 @@ read_env_value() {
     grep -E "^${key}=" "$file" 2>/dev/null | tail -n 1 | cut -d= -f2-
 }
 
+# =============================================================================
+# Object storage (BE-133) -- the velo-storage compose project
+# =============================================================================
+#
+# storage_step is the ONE implementation of "make the storage what the
+# repository says". It runs on EVERY `velo update` -- on the deploy path
+# right after the db projection, before `up -d app`, and on the "already up
+# to date" path too -- and from the installer (`__storage-step`, below)
+# before the stack starts. Everything in it is idempotent.
+#
+# Defined HERE, above the early dispatch, because the installer calls it
+# before /opt/velo/velo.conf exists; it needs nothing that file sets.
+# Colours may not be defined yet at that point: ${RED:-} and friends.
+
+STORAGE_ROOT_FILE="$INSTALL_BASE/storage.env"
+STORAGE_COMPOSE_FILE="$COMPOSE_DIR/storage/docker-compose.yml"
+STORAGE_ENV_PROJECTION="$COMPOSE_DIR/storage/.env.storage"
+STORAGE_VOLUME="velo_storage_data"
+
+storage_compose() {
+    # The project name comes from the file's own `name: velo-storage`.
+    docker compose -f "$STORAGE_COMPOSE_FILE" "$@"
+}
+
+# Letters and digits only, exactly N of them.
+storage_mint() {
+    python3 -c "import secrets, string, sys
+alphabet = string.ascii_letters + string.digits
+print(''.join(secrets.choice(alphabet) for _ in range(int(sys.argv[1]))))" "$1"
+}
+
+# The root keys of the storage. Minted ONCE, when neither the file nor the
+# volume exists; after that the file is only read. It lives outside the
+# repository (a reinstall removes repo/, not this) and outside backend/.env
+# (the app container never sees it).
+#
+# KNOWN CEILING -- the root key of velo-storage is never rotated.
+#   1. Mechanics: the root pair is minted only when there is neither this
+#      file nor the volume, and nothing writes it again. RustFS keeps the
+#      service keys under the root user that created them; what a different
+#      root pair does to an existing volume's IAM state was not measured,
+#      so no path here changes the pair over a live volume.
+#   2. Status: acknowledged by design.
+#   3. Task: none -- no one needs a new root key today; the backend works
+#      through its own service key, which IS rotated (velo env set
+#      STORAGE_SECRET_KEY, then velo update).
+#   4. Unfreeze when: the root pair has to change -- a leak of
+#      /opt/velo/storage.env, or an owner ruling to rotate it.
+#   5. Fix: measure RustFS 1.0.1 with a changed RUSTFS_ACCESS_KEY /
+#      RUSTFS_SECRET_KEY over the live volume (the service keys' parent,
+#      IAM decryption), then a `velo` command that rotates both sides
+#      together.
+#   6. Rejected: keeping the root pair in backend/.env, so that `velo env
+#      set` could rotate it -- the app would then hold root access to every
+#      bucket, documents of masters included.
+storage_root_ensure() {
+    if [ -f "$STORAGE_ROOT_FILE" ]; then
+        chmod 600 "$STORAGE_ROOT_FILE" 2>/dev/null || true
+        return 0
+    fi
+    if docker volume inspect "$STORAGE_VOLUME" > /dev/null 2>&1; then
+        echo -e "${RED:-}✗ The storage volume $STORAGE_VOLUME exists, but $STORAGE_ROOT_FILE does not${NC:-}"
+        echo "  The files in the volume are keyed to a root key this box no longer has."
+        echo "  Nothing was changed. Restore the file from where it was kept, or erase"
+        echo "  the files through the installer's DELETE question (reinstall)."
+        return 1
+    fi
+    local access secret tmp old_umask
+    access=$(storage_mint 20) && secret=$(storage_mint 40) || {
+        echo -e "${RED:-}✗ Could not mint the storage root key${NC:-}"; return 1; }
+    if [ "${#access}" -ne 20 ] || [ "${#secret}" -ne 40 ]; then
+        echo -e "${RED:-}✗ Could not mint the storage root key${NC:-}"; return 1
+    fi
+    tmp="${STORAGE_ROOT_FILE}.tmp.$$"
+    old_umask=$(umask)
+    umask 077
+    if ! printf '%s\n' \
+        "# velo-storage ROOT key (BE-133). Written once, never regenerated:" \
+        "# the files in volume $STORAGE_VOLUME are keyed to it. Do not edit." \
+        "RUSTFS_ACCESS_KEY=$access" "RUSTFS_SECRET_KEY=$secret" > "$tmp" \
+        || ! chmod 600 "$tmp" || ! mv -f "$tmp" "$STORAGE_ROOT_FILE"; then
+        umask "$old_umask"; rm -f "$tmp"
+        echo -e "${RED:-}✗ Could not write $STORAGE_ROOT_FILE${NC:-}"; return 1
+    fi
+    umask "$old_umask"
+    chmod 600 "$STORAGE_ROOT_FILE" 2>/dev/null || true
+    access=""; secret=""
+    echo -e "${GREEN:-}✓ Storage root key created in $STORAGE_ROOT_FILE (value not shown)${NC:-}"
+}
+
+# The backend key's secret, in backend/.env. Absent or empty -> minted (no
+# one types secrets). Present -> left as it is: the init sets the storage
+# to it, which is how a reinstall and `velo env set` rotate it.
+storage_app_secret_ensure() {
+    local env_file="$COMPOSE_DIR/backend/.env" secret tmp
+    if [ ! -f "$env_file" ]; then
+        echo -e "${RED:-}✗ $env_file not found${NC:-}"; return 1
+    fi
+    if [ -n "$(read_env_value "$env_file" STORAGE_SECRET_KEY)" ]; then
+        return 0
+    fi
+    secret=$(storage_mint 40) || secret=""
+    if [ "${#secret}" -ne 40 ]; then
+        echo -e "${RED:-}✗ Could not mint STORAGE_SECRET_KEY${NC:-}"; return 1
+    fi
+    # Same write as `velo env set`: every line of the key dropped, one
+    # appended, the new file renamed over the old one with its owner/mode.
+    tmp=$(mktemp "$(dirname "$env_file")/.env.storage-key.XXXXXX") || {
+        echo -e "${RED:-}✗ Could not create a temporary file next to $env_file${NC:-}"; return 1; }
+    if ! chmod --reference="$env_file" "$tmp" || ! chown --reference="$env_file" "$tmp"; then
+        rm -f "$tmp"; echo -e "${RED:-}✗ Could not copy the owner and mode of $env_file${NC:-}"; return 1
+    fi
+    grep -v "^STORAGE_SECRET_KEY=" "$env_file" > "$tmp"
+    if [ $? -gt 1 ] || ! printf 'STORAGE_SECRET_KEY=%s\n' "$secret" >> "$tmp" \
+        || ! mv -f "$tmp" "$env_file"; then
+        rm -f "$tmp"; echo -e "${RED:-}✗ Could not write $env_file -- the old file is untouched${NC:-}"; return 1
+    fi
+    secret=""
+    echo -e "${GREEN:-}✓ STORAGE_SECRET_KEY created in backend/.env (value not shown)${NC:-}"
+    echo "  The app container reads it when it is next recreated (the next deploy"
+    echo "  of the backend, or 'velo restart')."
+}
+
+storage_step() {
+    echo "Object storage (velo-storage)..."
+    if [ ! -f "$STORAGE_COMPOSE_FILE" ]; then
+        echo -e "${RED:-}✗ $STORAGE_COMPOSE_FILE not found${NC:-}"; return 1
+    fi
+    if ! docker network inspect aivis-shared > /dev/null 2>&1; then
+        echo -e "${RED:-}✗ docker network aivis-shared does not exist${NC:-}"; return 1
+    fi
+    storage_root_ensure || return 1
+    storage_app_secret_ensure || return 1
+    # shellcheck source=/dev/null
+    source "$COMPOSE_DIR/scripts/env-render.sh" || return 1
+    if ! write_storage_env "$STORAGE_ROOT_FILE" "$COMPOSE_DIR/backend/.env" "$STORAGE_ENV_PROJECTION"; then
+        echo -e "${RED:-}✗ Could not write storage/.env.storage -- the storage was not touched${NC:-}"
+        return 1
+    fi
+    if ! storage_compose up -d velo-storage; then
+        echo -e "${RED:-}✗ velo-storage did not start${NC:-}"; return 1
+    fi
+    # `run` starts nothing new (velo-storage is up), waits for it to be
+    # healthy (depends_on) and returns the init's own exit code.
+    if ! storage_compose run --rm -T velo-storage-init; then
+        echo -e "${RED:-}✗ velo-storage-init failed -- see its lines above${NC:-}"; return 1
+    fi
+    echo -e "${GREEN:-}✓ Object storage matches the registry${NC:-}"
+}
+
 # Internal subcommands for install_velo.sh -- not in the usage text.
 #   __env-value-ok   reads the value from STDIN (a secret on the command
 #                    line would show in `ps`), exit 0 if it may go into the
 #                    file, else prints the refusal and exits 1;
 #   __env-get FILE KEY   prints read_env_value.
+#   __storage-step   storage_step above (the installer, before the stack).
 case "${1:-}" in
+    __storage-step)
+        storage_step
+        exit $?
+        ;;
     __env-value-ok)
         # read -d '': the whole input, newlines included -- a value with a
         # newline must fail the check, not be cut at the first line.
@@ -917,6 +1072,63 @@ check_nginx() {
     fi
 }
 
+# BE-133: object storage, for `velo doctor`. One line per fact, no values.
+# The registry part is the init container itself in read-only mode
+# (STORAGE_INIT_MODE=check): the same builders that set the storage up are
+# the ones that check it, so the two cannot disagree about what "right" is.
+check_storage() {
+    echo "--- object storage (velo-storage) ---"
+    local fail=0 mode state answering
+    if [ -f "$STORAGE_ROOT_FILE" ]; then
+        mode=$(stat -c '%a' "$STORAGE_ROOT_FILE" 2>/dev/null)
+        if [ "$mode" = "600" ]; then
+            echo -e "${GREEN}✓${NC} root key file present, mode 600 (value not shown)"
+        else
+            echo -e "${RED}✗ $STORAGE_ROOT_FILE has mode ${mode:-?}, not 600${NC}"; fail=1
+        fi
+    else
+        echo -e "${RED}✗ $STORAGE_ROOT_FILE not found -- run: velo update${NC}"; fail=1
+    fi
+
+    state=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+        velo-storage 2>/dev/null)
+    if [ "$state" != "healthy" ]; then
+        echo -e "${RED}✗ velo-storage is not running healthy (state: ${state:-no container})${NC}"
+        echo -e "${YELLOW}⊘ buckets, lifecycle rules, service keys: not checked${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}✓${NC} velo-storage is alive (healthy)"
+
+    # Docker accepts the same name on two containers of one network, and its
+    # DNS then answers with both: a link signed for velo-storage:9000 could
+    # be fetched from somebody else's store. Exactly one may answer. Name
+    # and Aliases only: .DNSNames would be more complete but does not exist
+    # before Docker API 1.45, and a template error there would count 0.
+    answering=$(docker network inspect aivis-shared \
+            -f '{{range $id, $c := .Containers}}{{$id}} {{end}}' 2>/dev/null \
+        | xargs -r docker inspect -f \
+            '{{.Name}}|{{with index .NetworkSettings.Networks "aivis-shared"}}{{range .Aliases}}{{.}},{{end}}{{end}}' \
+            2>/dev/null \
+        | grep -c -E '^/velo-storage\||[|,]velo-storage,')
+    if [ "$answering" = "1" ]; then
+        echo -e "${GREEN}✓${NC} exactly one container answers to velo-storage on aivis-shared"
+    else
+        echo -e "${RED}✗ ${answering:-0} containers answer to velo-storage on aivis-shared -- must be 1${NC}"
+        fail=1
+    fi
+
+    if [ ! -f "$STORAGE_ENV_PROJECTION" ]; then
+        echo -e "${RED}✗ storage/.env.storage not found -- run: velo update${NC}"
+        echo -e "${YELLOW}⊘ buckets, lifecycle rules, service keys: not checked${NC}"
+        return 1
+    fi
+    if ! storage_compose run --rm -T --no-deps -e STORAGE_INIT_MODE=check velo-storage-init 2>&1 \
+            | sed 's/^/  /'; then
+        fail=1
+    fi
+    return $fail
+}
+
 # =============================================================================
 # UPDATE CYCLE -- every service on this box, one command (H-D1, 2026-08-04)
 # =============================================================================
@@ -1022,7 +1234,161 @@ svc_sync_checkout() {
     if [ "$(git rev-parse HEAD)" != "$(git rev-parse "origin/$want")" ]; then
         SVC_CHANGED=1
     fi
+    # BE-154: HEAD == origin is not "deployed" -- the service's own updater
+    # pulls first, so a run that died after its pull leaves HEAD current over
+    # a deploy that never finished. What decides is the last COMPLETED deploy.
+    if [ "$(deployed_commit_get "$name")" != "$(git rev-parse "origin/$want")" ]; then
+        SVC_CHANGED=1
+    fi
     return 0
+}
+
+# ---------------------------------------------------------------------------
+# DEPLOYED-COMMIT MARKERS (BE-154).
+#
+# "Is there anything to deploy?" used to be answered by git alone: HEAD vs
+# origin. But the pull is the FIRST step of a deploy, not the last -- a run
+# that pulled and then died (a red gate, a failed build) left HEAD == origin,
+# and every later `velo update` reported "already up to date" over a deploy
+# that never finished. Found live on 2026-10-14 (dev, 2197b16f -> 408d6f51):
+# the run stopped at the container freshness gate, and a re-run would have
+# deployed nothing.
+#
+# So the answer now comes from what was DEPLOYED: one file per registry name
+# under $DEPLOYED_DIR holding the full sha of the last run that finished
+# successfully. Written only at the very end of a successful run; any failure
+# leaves the previous value, so the next run redoes the work. No file (a box
+# that predates this, or a fresh install) means "unknown" and is treated as
+# "not deployed": one full run settles it.
+# ---------------------------------------------------------------------------
+DEPLOYED_DIR="$INSTALL_BASE/deployed"
+
+# The sha recorded for NAME, or exit 1 when there is none. A file that does
+# not hold exactly one full sha on its first line counts as none.
+deployed_commit_get() {
+    local file="$DEPLOYED_DIR/$1" sha
+    [ -f "$file" ] || return 1
+    sha=$(head -n 1 "$file" 2>/dev/null)
+    [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || return 1
+    echo "$sha"
+}
+
+# Record SHA as the last completed deploy of NAME (write + rename, so a crash
+# mid-write cannot leave a half-written marker that reads as a sha).
+deployed_commit_set() {
+    local name="$1" sha="$2"
+    [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || return 1
+    mkdir -p "$DEPLOYED_DIR" 2>/dev/null || return 1
+    printf '%s\n' "$sha" > "$DEPLOYED_DIR/$name.tmp" 2>/dev/null || return 1
+    mv -f "$DEPLOYED_DIR/$name.tmp" "$DEPLOYED_DIR/$name" 2>/dev/null
+}
+
+# Same, but a failure to write is a warning, not a failed deploy: the deploy
+# itself succeeded, and a missing marker only costs one repeated run.
+record_deployed() {
+    local name="$1" sha="$2"
+    if deployed_commit_set "$name" "$sha"; then
+        echo -e "${GREEN}✓ $name: recorded as deployed at ${sha:0:8}${NC}"
+    else
+        echo -e "${YELLOW}⚠ $name: deployed, but could not record it in $DEPLOYED_DIR/$name${NC}"
+        echo "  The next 'velo update' will run this cycle once more."
+    fi
+}
+
+# Is there anything for the PRODUCT to deploy on BRANCH? Returns 1 ("up to
+# date") only when origin/BRANCH is both checked out AND the last completed
+# deploy; 0 otherwise. Sets LAST_DEPLOYED to the recorded sha ("" if none) --
+# update_product prints it and the --frontend-only guard diffs against it.
+product_needs_deploy() {
+    local branch="$1" target
+    LAST_DEPLOYED=$(deployed_commit_get velo) || LAST_DEPLOYED=""
+    target=$(git rev-parse "origin/$branch" 2>/dev/null) || return 0
+    if [ "$LAST_DEPLOYED" = "$target" ] && [ "$(git rev-parse HEAD)" = "$target" ]; then
+        return 1
+    fi
+    return 0
+}
+
+# May --frontend-only deploy NEW_COMMIT? Only when backend/ is unchanged
+# since the last COMPLETED deploy -- not since HEAD before this pull, which
+# after an interrupted run is already past backend changes nobody deployed.
+# No record -> refuse: nothing says which backend is running.
+frontend_only_allowed() {
+    local new="$1"
+    if [ -z "$LAST_DEPLOYED" ]; then
+        echo -e "${RED}✗ No completed deploy is recorded on this box -- refusing --frontend-only${NC}"
+        echo "  --frontend-only skips the backend, so it needs to know which backend"
+        echo "  is running; $DEPLOYED_DIR/velo is where that is recorded."
+        echo ""
+        echo "Run once: velo update            (full cycle, records the deploy)"
+        return 1
+    fi
+    if ! git diff --quiet "$LAST_DEPLOYED" "$new" -- backend/ 2>/dev/null; then
+        echo -e "${RED}✗ backend/ changed since the last completed deploy (${LAST_DEPLOYED:0:8} -> ${new:0:8})${NC}"
+        echo -e "${RED}  Refusing to run with --frontend-only.${NC}"
+        echo ""
+        echo "Changed backend files:"
+        git diff --name-only "$LAST_DEPLOYED" "$new" -- backend/ 2>/dev/null | sed 's/^/  /'
+        echo ""
+        echo "Run: velo update            (full cycle)"
+        echo "  or velo update --skip-tests  (full cycle without tests)"
+        return 1
+    fi
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# CONTAINER FRESHNESS (BE-154).
+#
+# After `up -d <svc>` the container must run the image the build just tagged:
+# everything after it (migrations, tests, the OpenAPI snapshot, the site)
+# trusts that. Compose recreates a service only when IT sees a different
+# image, and with the containerd image store it can disagree with the tag: a
+# fully cached build still exports a NEW manifest list (new image ID, same
+# config; most likely the build's provenance attestation -- not verified),
+# compose sees the same image and keeps the container, the tag points
+# elsewhere. Measured on dev 2026-10-14:
+# container on sha256:383b3a90..., tag on sha256:e8897b6f..., whose config
+# was created hours before that run; `docker info` = containerd snapshotter.
+#
+# So a mismatch is first answered by ONE forced recreate, and only a mismatch
+# that survives it stops the run -- that one is a real silent non-recreate,
+# which is what this gate exists for (three incidents, see the build gates).
+# --no-deps: --force-recreate applies to every service `up` starts, and
+# postgres/redis (app's dependencies) or app (frontend's) are not ours to
+# bounce here.
+# The old image is NOT compared by config digest: after the tag moves, the
+# containerd store may no longer hold the container's image at all
+# ("No such image", same measurement).
+# ---------------------------------------------------------------------------
+
+# 0 when SERVICE's container runs the image its image name is tagged to now.
+service_runs_tagged_image() {
+    local svc="$1" cid running expected
+    cid=$($COMPOSE_CMD ps -q "$svc" 2>/dev/null)
+    [ -n "$cid" ] || return 1
+    running=$(docker inspect --format '{{.Image}}' "$cid" 2>/dev/null)
+    expected=$(docker image inspect --format '{{.Id}}' \
+        "$(docker inspect --format '{{.Config.Image}}' "$cid" 2>/dev/null)" 2>/dev/null)
+    [ -n "$running" ] && [ -n "$expected" ] && [ "$running" = "$expected" ]
+}
+
+# Make SERVICE run its freshly tagged image: check, at most one forced
+# recreate, check again. Returns 1 only when the mismatch survives.
+ensure_service_fresh() {
+    local svc="$1"
+    service_runs_tagged_image "$svc" && return 0
+    echo -e "${YELLOW}↻ $svc: container is not on the image its tag points to -- recreating once${NC}"
+    if ! $COMPOSE_CMD up -d --no-deps --force-recreate "$svc"; then
+        echo -e "${RED}✗ $svc: forced recreate failed${NC}"
+        return 1
+    fi
+    if service_runs_tagged_image "$svc"; then
+        echo -e "${GREEN}✓ $svc: now on the freshly built image${NC}"
+        return 0
+    fi
+    echo -e "${RED}✗ Running $svc container does not match the freshly built image, even after a forced recreate${NC}"
+    return 1
 }
 
 # Update ONE registry record. Returns non-zero to stop the whole cycle.
@@ -1066,6 +1432,9 @@ update_service() {
         echo -e "${RED}✗ $name: update failed${NC}"
         return 1
     fi
+    # Only now is it deployed (BE-154): the service's updater pulled, built
+    # and restarted, so HEAD is what runs.
+    record_deployed "$name" "$(git -C "$dir" rev-parse HEAD)"
     echo ""
     return 0
 }
@@ -1336,14 +1705,25 @@ update_product() {
             git reset --hard HEAD
         fi
 
-        # Fetch and check
+        # Fetch and check -- against the last COMPLETED deploy, not against
+        # HEAD (BE-154; see DEPLOYED-COMMIT MARKERS above): a run that pulled
+        # and then died leaves HEAD == origin, and the re-run must finish it.
         git fetch origin
-        if git diff --quiet HEAD "origin/$BRANCH" 2>/dev/null; then
+        if ! product_needs_deploy "$BRANCH"; then
             echo -e "${GREEN}✓ velo: already up to date${NC}"
+            # BE-133: the storage step runs on EVERY update, this path
+            # included -- the first update after the delivery runs the OLD
+            # script, and the next one lands here with nothing to pull.
+            ensure_shared_network || return 1
+            storage_step || return 1
             # return, NOT exit: this is one service in a cycle now, and
             # the product is the LAST of them -- but an exit here would
             # also swallow the cycle's own epilogue.
             return 0
+        fi
+        echo "Last completed deploy: ${LAST_DEPLOYED:+${LAST_DEPLOYED:0:8}}${LAST_DEPLOYED:-none recorded}"
+        if [ "$(git rev-parse HEAD)" = "$(git rev-parse "origin/$BRANCH")" ]; then
+            echo -e "${CYAN}↻ $CURRENT_COMMIT is checked out but its deploy never completed -- resuming${NC}"
         fi
 
         # Pull
@@ -1449,24 +1829,28 @@ update_product() {
                 echo "  would come up without database credentials."
                 exit 1
             fi
+            # BE-133: object storage, before `up -d app` below -- the suite
+            # this deploy runs reads and writes it.
+            ensure_shared_network || {
+                echo -e "${RED}✗ Cannot create docker network aivis-shared${NC}"
+                exit 1
+            }
+            if ! storage_step; then
+                echo "  Nothing past this point was touched -- the containers still"
+                echo "  running are the ones from before this update."
+                exit 1
+            fi
             echo ""
         fi
 
-        # Fool-proof guard for --frontend-only:
-        # if backend/ changed between CURRENT_COMMIT and NEW_COMMIT, refuse hard.
+        # Fool-proof guard for --frontend-only: refuse hard if backend/
+        # changed since the last COMPLETED deploy (BE-154: not since HEAD
+        # before this pull -- see frontend_only_allowed).
         if [ $FRONTEND_ONLY -eq 1 ]; then
-            if ! git diff --quiet "$CURRENT_COMMIT" "$NEW_COMMIT" -- backend/; then
-                echo -e "${RED}✗ Detected changes in backend/ between $CURRENT_COMMIT and $NEW_COMMIT${NC}"
-                echo -e "${RED}  Refusing to run with --frontend-only.${NC}"
-                echo ""
-                echo "Changed backend files:"
-                git diff --name-only "$CURRENT_COMMIT" "$NEW_COMMIT" -- backend/ | sed 's/^/  /'
-                echo ""
-                echo "Run: velo update            (full cycle)"
-                echo "  or velo update --skip-tests  (full cycle without tests)"
+            if ! frontend_only_allowed "$(git rev-parse HEAD)"; then
                 exit 1
             fi
-            echo -e "${GREEN}✓ No backend/ changes -- proceeding frontend-only${NC}"
+            echo -e "${GREEN}✓ No backend/ changes since the last completed deploy -- proceeding frontend-only${NC}"
             echo ""
         fi
 
@@ -1541,15 +1925,12 @@ update_product() {
             # serve migrations, tests and the OpenAPI snapshot actually
             # runs the image the build above just produced. The exit code
             # above catches a dead recreate; this catches a silent
-            # non-recreate, whatever its future cause.
-            APP_CID=$($COMPOSE_CMD ps -q app)
-            RUNNING_IMG=$(docker inspect --format '{{.Image}}' "$APP_CID" 2>/dev/null)
-            EXPECTED_IMG=$(docker image inspect --format '{{.Id}}' \
-                "$(docker inspect --format '{{.Config.Image}}' "$APP_CID" 2>/dev/null)" 2>/dev/null)
-            if [ -z "$APP_CID" ] || [ -z "$RUNNING_IMG" ] || [ "$RUNNING_IMG" != "$EXPECTED_IMG" ]; then
-                echo -e "${RED}✗ Running app container does not match the freshly built image${NC}"
+            # non-recreate, whatever its future cause -- after ONE forced
+            # recreate, because with the containerd image store a cached
+            # build alone already moves the tag (CONTAINER FRESHNESS above).
+            if ! ensure_service_fresh app; then
                 echo "Refusing to run migrations/tests/type-regen against a stale backend."
-                echo "Check: velo status && docker compose up -d app"
+                echo "Check: velo status; velo logs app"
                 exit 1
             fi
 
@@ -1710,7 +2091,20 @@ Triggered by velo update on commit $NEW_COMMIT" || {
             exit 1
         fi
         compose_progress_note
-        $COMPOSE_CMD up -d frontend
+        # Same two gates as the backend's (BE-154): the exit code, and the
+        # container actually on the image just built. Unchecked, a failed or
+        # silently skipped recreate here fell through to "Update complete"
+        # with the previous build still serving the site.
+        if ! $COMPOSE_CMD up -d frontend; then
+            echo -e "${RED}✗ FRONTEND RESTART FAILED${NC}"
+            echo "The new frontend image is built but not running. Fix and run: velo update"
+            exit 1
+        fi
+        if ! ensure_service_fresh frontend; then
+            echo "The previous frontend build may still be serving the site."
+            echo "Check: velo status; velo logs frontend"
+            exit 1
+        fi
 
         # Health check
         echo ""
@@ -1721,9 +2115,19 @@ Triggered by velo update on commit $NEW_COMMIT" || {
             echo ""
             echo -e "${GREEN}✓ Update complete. API is healthy.${NC}"
             echo "$HEALTH" | python3 -m json.tool 2>/dev/null || echo "$HEALTH"
+            # The deploy is complete only here (BE-154). HEAD, not
+            # NEW_COMMIT: a velo-bot types commit above moved it, and origin
+            # with it. A --frontend-only run skipped the backend cycle, so it
+            # is NOT a completed deploy of this commit and records nothing.
+            if [ $FRONTEND_ONLY -eq 0 ]; then
+                record_deployed velo "$(git -C "$COMPOSE_DIR" rev-parse HEAD)"
+            else
+                echo -e "${CYAN}ℹ --frontend-only: not recorded as a completed deploy (backend cycle skipped)${NC}"
+            fi
         else
             echo -e "${RED}⚠ API health check failed after update${NC}"
             echo "Check logs: velo logs app"
+            echo "Not recorded as deployed: the next 'velo update' runs this cycle again."
         fi
 
         # -- 5. Lightweight cleanup --
@@ -1807,6 +2211,73 @@ check_oauth_env() {
     return 0
 }
 
+# Browser sign-in (Standalone phase 3): is it configured in the RUNNING app?
+# The rule lives once, in the backend (app/modules/auth/browser_login.py):
+# this asks the app container through app/modules/auth/doctor_probe.py and
+# only words its one-line answer -- it does not re-derive the rule here.
+# NO VALUE of any key is printed or passed on a command line: the probe
+# answers with key NAMES and a reason word (`missing=A,B cors=<reason>`, or
+# `error=<ExceptionClass>`), parsed with bash builtins.
+# What it checks is the container's environment, i.e. backend/.env as of the
+# last `velo restart` / `velo update`. The Redirect URI in BotFather is NOT
+# checked -- nothing on this server can see it.
+# Compose is resolved from the current directory -- the caller does
+# cd_compose, as every branch here.
+check_browser_login() {
+    if ! $COMPOSE_CMD ps --services --status running 2>/dev/null | grep -qx app; then
+        echo -e "${YELLOW}⊘ Browser sign-in: not checked -- the app container is not running${NC}"
+        return 0
+    fi
+
+    local probe
+    probe=$($COMPOSE_CMD exec -T app python -m app.modules.auth.doctor_probe 2>/dev/null)
+
+    if [[ "$probe" =~ ^error=([A-Za-z_][A-Za-z0-9_]*)$ ]]; then
+        echo -e "${YELLOW}⊘ Browser sign-in: not checked -- the check failed inside the app (${BASH_REMATCH[1]})${NC}"
+        return 0
+    fi
+    if ! [[ "$probe" =~ ^missing=([A-Z0-9_,]*)\ cors=([a-z_]+)$ ]]; then
+        echo -e "${YELLOW}⊘ Browser sign-in: not checked -- no answer from the app${NC}"
+        return 0
+    fi
+
+    local missing_csv="${BASH_REMATCH[1]}" cors="${BASH_REMATCH[2]}"
+    local cors_problem=""
+    case "$cors" in
+        ok)         ;;
+        empty)      cors_problem="CORS_ORIGINS is empty" ;;
+        several)    cors_problem="CORS_ORIGINS lists more than one address" ;;
+        wildcard)   cors_problem="CORS_ORIGINS is the wildcard *" ;;
+        not_https)  cors_problem="CORS_ORIGINS is not an https:// address" ;;
+        not_origin) cors_problem="CORS_ORIGINS has a path, query or credentials -- not a bare https://host" ;;
+        *)          cors_problem="CORS_ORIGINS: unknown answer '$cors'" ;;
+    esac
+
+    if [ -z "$missing_csv" ] && [ -z "$cors_problem" ]; then
+        echo -e "${GREEN}✓ Browser sign-in: configured${NC}"
+    else
+        echo -e "${YELLOW}⊘ Browser sign-in: off${NC}"
+        local key
+        if [ -n "$missing_csv" ]; then
+            echo "  missing in the app's environment: ${missing_csv//,/ }"
+            echo "  to set each one:"
+            for key in ${missing_csv//,/ }; do
+                echo "    velo env set $key"
+            done
+        fi
+        if [ -n "$cors_problem" ]; then
+            echo "  $cors_problem; it must be exactly one https:// address -- the frontend's"
+            echo "    velo env set CORS_ORIGINS"
+        fi
+    fi
+    echo "  (a change in backend/.env takes effect after: velo restart)"
+    echo "  not checked here: the bot's Redirect URI in BotFather (Login Widget ->"
+    echo "  Redirect URIs) must list the frontend address + /auth/telegram/return"
+    return 0
+}
+
+# Compose is resolved from the current directory -- the caller does
+# cd_compose, as every branch here.
 check_attendance_deadends() {
     if ! $COMPOSE_CMD ps 2>/dev/null | grep -q postgres; then
         echo -e "${YELLOW}⊘ Attendance dead-ends: database not running, skipped${NC}"
@@ -3007,6 +3478,12 @@ case "${1:-}" in
         ;;
 
     doctor)
+        # Compose resolves the project from the CURRENT directory (COMPOSE_CMD
+        # has no -f / --project-directory). check_attendance_deadends and
+        # check_browser_login ask compose; without this, run from anywhere
+        # but the repo they reported running containers as "not running"
+        # (BE-153's side note; F3 tails, 14.10.2026). Same as `status)`.
+        cd_compose
         echo -e "${CYAN}VELO Doctor -- drift watchman${NC}"
         echo "Checks artifacts written once at install time and never"
         echo "regenerated by 'velo update', against the tracked repo."
@@ -3022,16 +3499,21 @@ case "${1:-}" in
         echo ""
         check_nginx "$COMPOSE_DIR/scripts/nginx-render.sh" "/etc/nginx/sites-available/velo" "${DOMAIN_FRONTEND:-}" "${DOMAIN_API:-}" "${DOMAIN_PUBLIC:-}" || NGINX_DRIFT=1
         echo ""
+        STORAGE_FAIL=0
+        check_storage || STORAGE_FAIL=1
+        echo ""
 
         check_attendance_deadends
         echo ""
         check_oauth_env "$COMPOSE_DIR/backend/.env"
         echo ""
+        check_browser_login
+        echo ""
 
         echo "Checked: vite.env keys, backend/.env keys, nginx config (rendered vs"
         echo "live), attendance dead-ends (data -- warns only, never fails), MCP"
-        echo "OAuth state (informs only, never fails)."
-        if [ "$VITE_DRIFT" -eq 0 ] && [ "$BACKEND_DRIFT" -eq 0 ] && [ "$NGINX_DRIFT" -eq 0 ]; then
+        echo "OAuth state and browser sign-in (both inform only, never fail)."
+        if [ "$VITE_DRIFT" -eq 0 ] && [ "$BACKEND_DRIFT" -eq 0 ] && [ "$NGINX_DRIFT" -eq 0 ] && [ "$STORAGE_FAIL" -eq 0 ]; then
             echo -e "${GREEN}✓ 0 drift found${NC}"
             exit 0
         else

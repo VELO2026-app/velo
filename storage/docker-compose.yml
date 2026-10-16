@@ -1,0 +1,286 @@
+name: velo-storage
+# The compose PROJECT name, declared (convention of every stack on these
+# servers, see the root docker-compose.yml): equal to the service name.
+
+# =============================================================================
+# VELO object storage -- RustFS, its OWN compose project (BE-133)
+# =============================================================================
+#
+# Not in the root docker-compose.yml, on purpose:
+#   - the installer's "start fresh" runs `docker compose down -v` in the
+#     repository, which removes the volumes of project `velo` -- Postgres and
+#     Redis are disposable, people's files are not (§0 §4). This project is
+#     never named by that command; its volume goes only through the separate
+#     DELETE question of the installer;
+#   - `velo update` runs from a snapshot of the OLD velo-manage.sh on the
+#     first deploy of a change to it. A service added to the root compose
+#     would meet that old script, which renders no env for it and creates no
+#     volume -- and every compose command of the deploy would die on it.
+#
+# Brought up by velo-manage.sh (storage_step) on EVERY `velo update` and by the
+# installer before the stack. Nothing here is started by hand.
+#
+#   velo-storage       the server. Reachable ONLY as http://velo-storage:9000
+#                      inside the docker networks: no port is published on the
+#                      host, no nginx route, no DNS name. The backend reaches
+#                      it over aivis-shared (the app is a member), and so does
+#                      comms-worker, which fetches voice bodies by signed link.
+#   velo-storage-init  one-shot: builds buckets, privacy, lifecycle rules and
+#                      service keys from backend/app/core/storage_registry.yaml.
+#                      Run with `docker compose run --rm`, never kept running.
+#                      STORAGE_INIT_MODE=check makes it read-only: that is
+#                      `velo doctor`'s storage check.
+#
+# ENV: ./.env.storage, a PROJECTION written by scripts/env-render.sh
+# (write_storage_env) on every run of the step, never edited. It carries the
+# ROOT keys (from /opt/velo/storage.env, outside the repository -- the app
+# container never sees them) and the backend key's secret (from backend/.env).
+# =============================================================================
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  velo-storage:
+    # Same pinned build as aivis (owner ruling BE-133: same version, own
+    # instance). Tag names it, the digest fixes it.
+    image: rustfs/rustfs:1.0.1@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c
+    # The container name is the network name comms puts in LLM_BODY_HOSTS
+    # (velo-storage:9000) and the host every signed link is made for.
+    container_name: velo-storage
+    env_file:
+      - ./.env.storage
+    environment:
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_VOLUMES: /data
+      RUSTFS_CONSOLE_ENABLE: "false"
+    # NO `ports:` -- nothing on the host talks to it (aivis publishes one for
+    # its nginx; we have no such consumer).
+    volumes:
+      - velo_storage_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9000/health > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    logging: *default-logging
+    networks:
+      - default        # velo-storage-init
+      - aivis-shared   # the velo backend and comms-worker
+
+  velo-storage-init:
+    image: rustfs/rc:v0.1.36@sha256:ab024bfebee49a750ce886b4c70963ccd9ddaa03f491704a90710641d7a26699
+    depends_on:
+      velo-storage: { condition: service_healthy }
+    env_file:
+      - ./.env.storage
+    environment:
+      STORAGE_INIT_MODE: apply
+    volumes:
+      # The registry, read-only: the init holds no list of its own.
+      - ../backend/app/core/storage_registry.yaml:/registry.yaml:ro
+    restart: "no"
+    logging: *default-logging
+    # KNOWN CEILING -- the backend key's secret is in argv while init runs.
+    #   1. Mechanics: `rc admin service-account create` / `update` (v0.1.36)
+    #      take the secret only as a command-line argument -- there is no
+    #      file, stdin or environment form. For the second or two the init
+    #      runs, the secret of the backend key is in the argv of an `rc`
+    #      process, and /proc/<pid>/cmdline is readable by any local user of
+    #      the host. The ROOT key does not have this problem: it reaches rc
+    #      through RC_HOST_local, an environment variable.
+    #   2. Status: acknowledged by design.
+    #   3. Task: none -- there is nothing for us to change until rc offers
+    #      another channel; recorded in the BE-133 delivery report.
+    #   4. Unfreeze when: an rc release whose `rc admin service-account
+    #      update --help` lists a secret-from-file, -stdin or -env option.
+    #   5. Fix: pass the secret through that option and move the pinned rc
+    #      tag and digest above.
+    #   6. Rejected: calling the RustFS admin API with curl (it would mean
+    #      re-implementing the admin request encryption, and curl's argv shows
+    #      the secret just the same); running the init less often (running it
+    #      on every update is what makes rotation and reinstall work).
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        # rc keeps its state under $$HOME; the image's user may have no writable home.
+        export HOME=/tmp
+        mode="$${STORAGE_INIT_MODE:-apply}"
+        case "$$mode" in
+          apply|check) ;;
+          *) echo "velo-storage-init: unknown STORAGE_INIT_MODE '$$mode'"; exit 2 ;;
+        esac
+        say() { echo "velo-storage-init: $$*"; }
+
+        # REFUSE ON EMPTY CREDENTIALS, BEFORE TOUCHING ANYTHING: a bucket made
+        # with the root key and a service key made from an empty secret would
+        # leave the storage half-built and the backend holding a key that does
+        # not exist.
+        if [ -z "$${RUSTFS_ACCESS_KEY:-}" ] || [ -z "$${RUSTFS_SECRET_KEY:-}" ]; then
+          say "the root keys are empty -- nothing was touched"
+          exit 1
+        fi
+        reg=/tmp/registry.json
+        yq -o=json '.' /registry.yaml > "$$reg"
+        suffix=$$(jq -r '.test_bucket_suffix' "$$reg")
+        keys=$$(jq -r '.service_keys | keys[]' "$$reg")
+        bases=$$(jq -r '.buckets | keys[]' "$$reg")
+        if [ -z "$$keys" ] || [ -z "$$bases" ] || [ -z "$$suffix" ]; then
+          say "the registry names no buckets or no service keys -- nothing was touched"
+          exit 1
+        fi
+        for key in $$keys; do
+          env_name=$$(jq -r --arg k "$$key" '.service_keys[$$k].secret_env' "$$reg")
+          if [ -z "$$(printenv "$$env_name" || true)" ]; then
+            say "$$env_name (the secret of service key $$key) is empty -- nothing was touched"
+            exit 1
+          fi
+        done
+
+        # The root key reaches rc through the environment, never through argv.
+        export RC_HOST_local="http://$${RUSTFS_ACCESS_KEY}:$${RUSTFS_SECRET_KEY}@velo-storage:9000"
+
+        # The lifecycle document a bucket must carry, canonical (sorted, compact):
+        # what `rc ilm rule import` is given in apply mode and what `rc ilm rule
+        # export` must give back in check mode. ONE builder for both.
+        want_rules() {
+          jq -cnS --argjson d "$$1" \
+            'if $$d == null then {rules: []}
+             else {rules: [{id: "velo-expire", status: "Enabled", expiration: {days: $$d}}]} end'
+        }
+        have_rules() {
+          rc --json ilm rule export "local/$$1" > /tmp/rules.json || return 1
+          jq -cS '{rules: (.rules // [])}' /tmp/rules.json
+        }
+        # The policy of one service key: its actions over every registry bucket
+        # and every test twin, nothing else.
+        policy_of() {
+          jq -c --arg k "$$1" --arg s "$$suffix" \
+            '{Version: "2012-10-17", Statement: [{Effect: "Allow",
+              Action: .service_keys[$$k].actions,
+              Resource: [.buckets | keys[] | (., . + $$s)
+                         | ("arn:aws:s3:::" + .), ("arn:aws:s3:::" + . + "/*")]}]}' "$$reg"
+        }
+
+        if [ "$$mode" = apply ]; then
+          # What was already there, so the summary can say what this run CREATED:
+          # after a reinstall that kept the files, nothing is created -- the
+          # buckets and the key were found in the kept volume. That line is the
+          # owner's evidence that the volume survived.
+          rc --json ls local > /tmp/buckets.json
+          jq -r '.items[].key | rtrimstr("/")' /tmp/buckets.json > /tmp/bucket-names
+          n=0; new=0; updated=0; created=0
+          for base in $$bases; do
+            days=$$(jq -c --arg b "$$base" '.buckets[$$b].expire_days' "$$reg")
+            for b in "$$base" "$$base$$suffix"; do
+              grep -qx "$$b" /tmp/bucket-names || new=$$((new + 1))
+              rc mb -p "local/$$b" > /dev/null
+              # Private, stated rather than assumed: also resets a bucket somebody
+              # opened by hand.
+              rc anonymous set private "local/$$b" > /dev/null
+              if [ "$$days" = null ]; then
+                # No rule wanted: drop whatever is there (a hand-made rule
+                # included). `remove --all` is not run on a bucket with no rules.
+                if [ "$$(have_rules "$$b")" != '{"rules":[]}' ]; then
+                  rc ilm rule remove "local/$$b" --all > /dev/null
+                fi
+              else
+                # import REPLACES the whole configuration, so a rerun leaves one
+                # rule, not one more (`rule add` appends a rule per run).
+                want_rules "$$days" > /tmp/lifecycle.json
+                rc ilm rule import "local/$$b" /tmp/lifecycle.json > /dev/null
+              fi
+              n=$$((n + 1))
+            done
+          done
+
+          # Every registry key gets its CURRENT secret and policy on every run:
+          # a reinstall, `velo env set` of the secret and a new bucket in the
+          # registry all reach the storage this way. Output goes to /dev/null --
+          # `create` prints the secret it was given.
+          for key in $$keys; do
+            env_name=$$(jq -r --arg k "$$key" '.service_keys[$$k].secret_env' "$$reg")
+            policy_of "$$key" > /tmp/policy.json
+            if rc admin service-account info local "$$key" > /dev/null 2>&1; then
+              rc admin service-account update local "$$key" \
+                --secret-key "$$(printenv "$$env_name")" --policy /tmp/policy.json > /dev/null
+              updated=$$((updated + 1))
+            else
+              rc admin service-account create local "$$key" "$$(printenv "$$env_name")" \
+                --policy /tmp/policy.json > /dev/null
+              created=$$((created + 1))
+            fi
+          done
+          # Any other service key of the root user is removed: a key that is not
+          # in the registry is a key nobody is meant to hold.
+          rc --json admin service-account ls local > /tmp/accounts.json
+          for have in $$(jq -r '.accounts[].accessKey' /tmp/accounts.json); do
+            if ! jq -e --arg k "$$have" '.service_keys | has($$k)' "$$reg" > /dev/null; then
+              rc admin service-account rm local "$$have" > /dev/null
+              say "removed service key '$$have' -- it is not in the registry"
+            fi
+          done
+          say "OK -- $$n buckets ($$new created now), service keys: $$updated found and updated, $$created created -- all match the registry"
+          exit 0
+        fi
+
+        # ---- check mode: read only, one line per finding, exit 1 on any failure ----
+        fail=0
+        rc --json ls local > /tmp/buckets.json
+        jq -r '.items[].key | rtrimstr("/")' /tmp/buckets.json > /tmp/bucket-names
+        missing=0; rules_bad=0; open_bad=0; expected=""
+        for base in $$bases; do
+          days=$$(jq -c --arg b "$$base" '.buckets[$$b].expire_days' "$$reg")
+          want=$$(want_rules "$$days")
+          for b in "$$base" "$$base$$suffix"; do
+            expected="$$expected $$b"
+            if ! grep -qx "$$b" /tmp/bucket-names; then
+              echo "✗ bucket '$$b' is missing"; missing=$$((missing + 1)); continue
+            fi
+            if ! have=$$(have_rules "$$b"); then
+              echo "✗ bucket '$$b': lifecycle rules could not be read"; rules_bad=$$((rules_bad + 1))
+            elif [ "$$have" != "$$want" ]; then
+              echo "✗ bucket '$$b': lifecycle is $$have, the registry wants $$want"; rules_bad=$$((rules_bad + 1))
+            fi
+            rc --json anonymous get "local/$$b" > /tmp/anon.json
+            if [ "$$(jq -r '.permission' /tmp/anon.json)" != private ]; then
+              echo "✗ bucket '$$b' is not private"; open_bad=$$((open_bad + 1))
+            fi
+          done
+        done
+        nexp=$$(echo "$$expected" | wc -w)
+        [ "$$missing" -eq 0 ] && echo "✓ buckets: all $$nexp registry buckets exist (test twins included)" || fail=1
+        [ "$$rules_bad" -eq 0 ] && echo "✓ lifecycle: every bucket carries exactly its registry rule" || fail=1
+        [ "$$open_bad" -eq 0 ] && echo "✓ privacy: every bucket is private" || fail=1
+        while read -r b; do
+          case " $$expected " in *" $$b "*) ;; *) echo "ℹ bucket '$$b' is not in the registry (left as it is)" ;; esac
+        done < /tmp/bucket-names
+        rc --json admin service-account ls local > /tmp/accounts.json
+        jq -r '.accounts[].accessKey' /tmp/accounts.json | sort > /tmp/keys-have
+        echo "$$keys" | tr ' ' '\n' | sed '/^$$/d' | sort > /tmp/keys-want
+        if cmp -s /tmp/keys-have /tmp/keys-want; then
+          echo "✓ service keys: exactly the registry list ($$(echo $$keys))"
+        else
+          echo "✗ service keys: the storage has [$$(echo $$(cat /tmp/keys-have))], the registry lists [$$(echo $$keys)]"
+          fail=1
+        fi
+        exit "$$fail"
+
+volumes:
+  # Physical name pinned: the name on disk is the name written here, and the
+  # installer's DELETE question removes exactly this name.
+  velo_storage_data:
+    name: velo_storage_data
+
+networks:
+  # The shared bus with comms. EXTERNAL: created by install_velo.sh /
+  # velo-manage.sh (ensure_shared_network) or by comms -- never by compose.
+  aivis-shared:
+    external: true

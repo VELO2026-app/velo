@@ -8,6 +8,7 @@
 
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { RETURN_PATH } from '@/platform/browser-login'
 import { useUiStore } from '@/stores/ui'
 import {
   roleRedirect,
@@ -333,6 +334,19 @@ const router = createRouter({
           beforeEnter: masterStatusGuard,
           meta: { hideTabBar: true },
           component: () => import('@/views/master/EditPracticeView.vue'),
+        },
+        {
+          // Standalone F4: the master's practice screen -- ONE view for both
+          // zones (TZ 6.3 pattern, as CuratorGroupPageView): the user zone
+          // mounts it as 'practice-live' below. Here the server's ladder
+          // answers 'host' and the screen starts the meeting inside VELO
+          // (Meeting SDK); the zone picks the back target and hides the
+          // student-only actions (Check-in, «Покинуть практику»).
+          path: 'practice-live/:practiceId',
+          name: 'master-practice-live',
+          beforeEnter: masterStatusGuard,
+          meta: { headerless: true, hideTabBar: true },
+          component: () => import('@/views/user/PracticeLiveView.vue'),
         },
         {
           path: 'practices/:id/attendance',
@@ -738,32 +752,16 @@ const router = createRouter({
     },
 
     // =========================================================================
-    // PARKED master-web auth routes (Phase A) — DORMANT + UNLINKED.
-    // Registered for the future web-auth backend (Zod E17) only. App.vue's stage
-    // machine + role redirects NEVER route here and nothing links in, so they are
-    // unreachable in the Telegram flow (App.vue renders StandaloneStubView for a
-    // browser session, so RouterView — and these views — never mount until E17).
-    // No guards, no shell; the views render transparent over the app background.
+    // Return from Telegram's sign-in page (Standalone phase 3). The page is
+    // never shown. The address keeps code/state until the first navigation
+    // finishes, and that navigation waits for isReady -- so useAuth.ts reads
+    // them first, wipes them and finishes the sign-in. The route exists so
+    // the first navigation lands on '/' (roleRedirect, the role already
+    // known) instead of the catch-all's /404.
     // =========================================================================
     {
-      path: '/auth/landing',
-      name: 'auth-landing',
-      component: () => import('@/views/auth/LandingView.vue'),
-    },
-    {
-      path: '/auth/login',
-      name: 'auth-login',
-      component: () => import('@/views/auth/LoginView.vue'),
-    },
-    {
-      path: '/auth/recover',
-      name: 'auth-recover',
-      component: () => import('@/views/auth/RecoverPasswordRequestView.vue'),
-    },
-    {
-      path: '/auth/recover/reset',
-      name: 'auth-recover-reset',
-      component: () => import('@/views/auth/RecoverPasswordSetView.vue'),
+      path: RETURN_PATH,
+      redirect: '/',
     },
 
     {

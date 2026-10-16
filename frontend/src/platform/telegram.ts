@@ -10,6 +10,11 @@
 // =============================================================================
 
 import type { Platform } from './types'
+import { host } from './host'
+import { sessionTokenStore } from './session-token'
+
+/** Session token carrier: sessionStorage (session-token.ts). */
+const _tokens = sessionTokenStore(() => host.sessionStorage)
 
 /** Lazy accessor -- avoids crash if SDK didn't load. */
 function getWebApp(): TelegramWebApp {
@@ -67,6 +72,10 @@ export const telegramPlatform: Platform = {
     return getWebApp().initDataUnsafe?.start_param ?? null
   },
 
+  // One run of the Mini App (session-token.ts): initData decides on every open.
+  readSessionToken: () => _tokens.read(),
+  writeSessionToken: (token: string | null) => _tokens.write(token),
+
   getTheme(): 'light' | 'dark' {
     return getWebApp().colorScheme || 'light'
   },
@@ -104,6 +113,11 @@ export const telegramPlatform: Platform = {
     } catch {
       // Silently ignore -- older clients or missing SDK.
     }
+  },
+
+  cameraBlockedByHost(): boolean {
+    // Owner decision 11: Telegram for iOS gives a black camera stream.
+    return getWebApp().platform === 'ios'
   },
 
   openLink(url: string): void {

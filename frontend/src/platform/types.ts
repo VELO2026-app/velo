@@ -30,6 +30,17 @@ export interface Platform {
   getInitData(): string | null
 
   /**
+   * The saved session token, or null. Where it is kept is the platform's
+   * call (session-token.ts): standalone -- localStorage, so the installed
+   * app keeps the sign-in between launches; telegram -- sessionStorage, one
+   * run of the Mini App, so initData decides on every open.
+   */
+  readSessionToken(): string | null
+
+  /** Save the session token, or remove it (null). */
+  writeSessionToken(token: string | null): void
+
+  /**
    * Get the startapp parameter from the deep link.
    * Telegram: WebApp.initDataUnsafe.start_param (set when bot link has startapp=...).
    * Standalone: null.
@@ -75,13 +86,25 @@ export interface Platform {
   hapticNotification(type: 'error' | 'success' | 'warning'): void
 
   /**
-   * Open an external URL (e.g. a Zoom meeting link).
+   * Open an external URL (e.g. a meeting's recording link). Not used to
+   * enter Zoom: since Standalone F4 Zoom runs inside VELO (Meeting SDK).
    * Telegram: WebApp.openLink(url) -- opens in the external browser.
    * Standalone: window.open(url) in a new tab.
    *
    * Callers must validate the URL (https only) before calling.
    */
   openLink(url: string): void
+
+  /**
+   * True where the host app is known to give the page a black camera
+   * stream, so a camera-needing screen should say so up front.
+   * Telegram: true on Telegram for iOS -- its webview delivers no video from
+   * getUserMedia (Telegram's bug, owner decision 11, Standalone F4). The
+   * person can still see and hear; the camera works when VELO is opened
+   * from the home screen.
+   * Standalone: false.
+   */
+  cameraBlockedByHost(): boolean
 
   /**
    * Show the native back button (top-left in Telegram).

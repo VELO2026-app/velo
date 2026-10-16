@@ -20,11 +20,13 @@
 #   2. THE RESOLVER answers kind='unavailable' for it, not 'pending'; a row
 #      still under the cap stays 'pending' (pair).
 #   3. THE BOOKING LISTS carry zoom_registrant_link_unavailable from the same
-#      predicate, behind the same M-3 gate as the link.
+#      predicate, behind the same M-3 gate as zoom_registrant_ready (which
+#      replaced the link itself in Standalone F4).
 #   4. THE LOG: zoom_registrant_link_unavailable, once per registrant, at the
 #      transition -- never on a read.
 #   5. THE INGEST gives no Zoom verdict to a registrant without
-#      zoom_registrant_id or join_url; the proxy (BE-41) decides, and the
+#      zoom_registrant_id or an entry token (the `tk` of its join_url,
+#      Standalone F4); the proxy (BE-41) decides, and the
 #      neighbour with a link is still judged by Zoom in the same run.
 #
 # Every "unavailable" has its pair "and a row with a link is personal";
@@ -240,13 +242,13 @@ def test_link_unavailable_reason_table(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("status", "join_url", "retry_count", "kind", "url"),
+    ("status", "join_url", "retry_count", "kind"),
     [
-        (ZoomRegistrantStatus.CREATE_FAILED.value, None, _CAP, "unavailable", None),
-        (ZoomRegistrantStatus.REGISTERED.value, "", 0, "unavailable", None),
+        (ZoomRegistrantStatus.CREATE_FAILED.value, None, _CAP, "unavailable"),
+        (ZoomRegistrantStatus.REGISTERED.value, "", 0, "unavailable"),
         # Pairs: still under the cap is honest waiting; a link is personal.
-        (ZoomRegistrantStatus.CREATE_FAILED.value, None, _CAP - 1, "pending", None),
-        (ZoomRegistrantStatus.REGISTERED.value, _LINK, 0, "personal", _LINK),
+        (ZoomRegistrantStatus.CREATE_FAILED.value, None, _CAP - 1, "pending"),
+        (ZoomRegistrantStatus.REGISTERED.value, _LINK, 0, "personal"),
     ],
 )
 async def test_resolver_answers_from_the_predicate(
@@ -256,8 +258,11 @@ async def test_resolver_answers_from_the_predicate(
     join_url: str | None,
     retry_count: int,
     kind: str,
-    url: str | None,
 ) -> None:
+    """Standalone F4: the body used to be {"kind", "url"} with the personal
+    link echoed for 'personal' -- right while the screen opened that URL.
+    The endpoint now carries no URL at all, so the exact body is {"kind"};
+    the token behind 'personal' is asserted in test_zoom_sdk_join.py."""
     master, _ = await _user(client, db_session, 60100, master=True)
     student, token = await _user(client, db_session, 60101)
     practice, meeting = await _practice_with_meeting(db_session, master, "555000201")
@@ -274,7 +279,7 @@ async def test_resolver_answers_from_the_predicate(
     )
 
     assert resp.status_code == 200, resp.text
-    assert resp.json() == {"kind": kind, "url": url}
+    assert resp.json() == {"kind": kind}
 
 
 @pytest.mark.asyncio
@@ -314,15 +319,19 @@ async def test_both_booking_lists_carry_the_flag_from_the_same_predicate(
 ) -> None:
     """Three bookings of one student on three practices: at the cap, still
     under it, and with a link. GET /me and GET /me/upcoming must agree
-    with each other and with the predicate."""
+    with each other and with the predicate.
+
+    Standalone F4: the first element was the join_url itself (None / the
+    link); the lists now carry zoom_registrant_ready, so it is False / True
+    -- the same three cases, the same agreement."""
     master, _ = await _user(client, db_session, 60104, master=True)
     student, token = await _user(client, db_session, 60105)
 
-    expected: dict[str, tuple[str | None, bool]] = {}
+    expected: dict[str, tuple[bool, bool]] = {}
     cases = [
-        ("555000203", _FAILED, None, _CAP, (None, True)),
-        ("555000204", _FAILED, None, _CAP - 1, (None, False)),
-        ("555000205", ZoomRegistrantStatus.REGISTERED.value, _LINK, 0, (_LINK, False)),
+        ("555000203", _FAILED, None, _CAP, (False, True)),
+        ("555000204", _FAILED, None, _CAP - 1, (False, False)),
+        ("555000205", ZoomRegistrantStatus.REGISTERED.value, _LINK, 0, (True, False)),
     ]
     for zoom_id, status, join_url, retry_count, want in cases:
         practice, meeting = await _practice_with_meeting(db_session, master, zoom_id)
@@ -343,7 +352,7 @@ async def test_both_booking_lists_carry_the_flag_from_the_same_predicate(
     for rows in (listed.json()["items"], upcoming.json()):
         got = {
             r["id"]: (
-                r["zoom_registrant_join_url"],
+                r["zoom_registrant_ready"],
                 r["zoom_registrant_link_unavailable"],
             )
             for r in rows
@@ -358,7 +367,9 @@ async def test_list_flag_stays_behind_the_m3_gate(
 ) -> None:
     """A PENDING booking (purchase not settled) never shows the link, and so
     never shows why it is missing either. Pair: the same registrant on a
-    CONFIRMED booking raises the flag (previous test)."""
+    CONFIRMED booking raises the flag (previous test). Standalone F4: "never
+    shows the link" (join_url None) is now zoom_registrant_ready False; the
+    gate on ready with a REAL token is asserted in test_zoom_sdk_join.py."""
     master, _ = await _user(client, db_session, 60106, master=True)
     student, token = await _user(client, db_session, 60107)
     practice, meeting = await _practice_with_meeting(db_session, master, "555000206")
@@ -373,7 +384,7 @@ async def test_list_flag_stays_behind_the_m3_gate(
 
     row = next(r for r in listed.json()["items"] if r["id"] == str(booking.id))
     assert row["zoom_registrant_link_unavailable"] is False
-    assert row["zoom_registrant_join_url"] is None
+    assert row["zoom_registrant_ready"] is False
 
 
 # ===========================================================================

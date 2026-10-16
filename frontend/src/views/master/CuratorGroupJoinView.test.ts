@@ -36,8 +36,11 @@ vi.mock('@/composables/useToast', () => ({
 // The school page route depends on the viewer's role -- the store mock is
 // mutable per test via mockRole.
 let mockRole: 'user' | 'master' | 'admin' = 'user'
+// FE-83: the join branches on the account's onboarding flag -- the default
+// true keeps the original direct-navigation tests untouched.
+let mockOnboarded = true
 vi.mock('@/stores/auth', () => ({
-  useAuthStore: () => ({ role: mockRole }),
+  useAuthStore: () => ({ role: mockRole, user: { onboarding_completed: mockOnboarded } }),
 }))
 
 // FE-88: a successful join must refresh the dock's «Школы» tab probe (the
@@ -46,6 +49,19 @@ vi.mock('@/stores/auth', () => ({
 const hubRefresh = vi.fn()
 vi.mock('@/stores/schoolsHub', () => ({
   useSchoolsHubStore: () => ({ refreshCurator: hubRefresh }),
+}))
+
+// OnboardingView is a heavy carousel with its own test file; the join flow
+// only cares that it emits `done` (finish OR skip). The stub rides inside a
+// Teleport to body, so overlay assertions must look at document.body, not
+// this file's host element.
+vi.mock('@/views/auth/OnboardingView.vue', () => ({
+  default: {
+    name: 'OnboardingViewStub',
+    emits: ['done'],
+    template:
+      '<button type="button" class="onboarding-stub" @click="$emit(\'done\')">done</button>',
+  },
 }))
 
 let app: App | null = null
@@ -75,6 +91,13 @@ function buttonWith(label: string): HTMLElement | undefined {
   )
 }
 
+/** The onboarding overlay is Teleported to body -- outside the view's host. */
+function stubButton(): HTMLElement | undefined {
+  return Array.from(document.body.querySelectorAll<HTMLElement>('button')).find((b) =>
+    b.classList.contains('onboarding-stub'),
+  )
+}
+
 /** A green preview: a school, viewer not yet a member. */
 function previewResponse(
   overrides: Partial<CuratorGroupInvitePreviewResponse> = {},
@@ -98,6 +121,7 @@ function previewResponse(
 beforeEach(() => {
   routeParams.token = 'a'.repeat(43)
   mockRole = 'user'
+  mockOnboarded = true
   vi.mocked(cgApi.getCuratorGroupInvitePreview).mockReset()
   vi.mocked(cgApi.joinCuratorGroup).mockReset()
   push.mockReset()
@@ -355,5 +379,50 @@ describe('CuratorGroupJoinView -- the join gate', () => {
     expect(cgApi.joinCuratorGroup).not.toHaveBeenCalled()
     expect(replace).toHaveBeenCalledWith({ name: 'root' })
     expect(hubRefresh).not.toHaveBeenCalled()
+  })
+
+  it('FE-83: a NEW user stays for the post-join onboarding -- no navigation, the carousel overlays the invitation', async () => {
+    mockOnboarded = false
+    vi.mocked(cgApi.getCuratorGroupInvitePreview).mockResolvedValue(previewResponse())
+    vi.mocked(cgApi.joinCuratorGroup).mockResolvedValue({
+      group_id: 'g1',
+      relation: 'student',
+      already_member: false,
+    })
+    mount()
+    await flush()
+
+    buttonWith('Вступить')?.click()
+    await flush()
+
+    expect(toastSuccess).toHaveBeenCalledWith('Вы вступили в школу «Тихая школа»')
+    // FE-88 still applies: the dock's «Школы» tab probe refreshes even though
+    // the navigation into the shell is deferred behind the carousel.
+    expect(hubRefresh).toHaveBeenCalledTimes(1)
+    expect(replace).not.toHaveBeenCalled()
+    // The overlay (and its stub carousel) is Teleported to body.
+    expect(document.body.querySelector('.cg-join__onboarding')).toBeTruthy()
+    expect(document.body.querySelector('.onboarding-stub')).toBeTruthy()
+  })
+
+  it('FE-84: finishing (or skipping) the post-join onboarding lands in the joined school', async () => {
+    mockOnboarded = false
+    vi.mocked(cgApi.getCuratorGroupInvitePreview).mockResolvedValue(previewResponse())
+    vi.mocked(cgApi.joinCuratorGroup).mockResolvedValue({
+      group_id: 'g1',
+      relation: 'student',
+      already_member: false,
+    })
+    mount()
+    await flush()
+
+    buttonWith('Вступить')?.click()
+    await flush()
+    stubButton()?.click() // the stub emits done (finish OR skip)
+    await flush()
+
+    expect(replace).toHaveBeenCalledTimes(1)
+    expect(replace).toHaveBeenCalledWith({ name: 'user-curator-group', params: { id: 'g1' } })
+    expect(document.body.querySelector('.cg-join__onboarding')).toBeNull()
   })
 })

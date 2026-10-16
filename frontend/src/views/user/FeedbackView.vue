@@ -4,12 +4,52 @@
   Full-screen post-practice feedback form.
   Uses FormShell for shared layout/CSS. Only rating-specific logic stays here.
 
+  Standalone F4: the Meeting SDK's leaveUrl lands a student here the moment
+  he leaves the practice -- before Zoom's report has confirmed he was there.
+  The backend accepts a feedback only for an ATTENDED booking (upsert_feedback,
+  diary/service.py), so a form shown then would only end in an error. The
+  screen says what is true instead (feedbackGate below):
+    attended                -> the form;
+    pending / confirmed     -> «Отзыв можно будет оставить, когда Zoom
+                               подтвердит участие» -- and a way back;
+    no_show / only cancelled -> feedback is not available here, and why;
+    not in the loaded list  -> the form, as before F4 (the list is one page;
+                               the server stays the judge).
+
   Route: /user/feedback/:practiceId
   Param: practiceId (practice UUID)
 -->
 
 <template>
+  <!-- F4: honest state instead of a form the server would refuse. -->
+  <div v-if="feedbackGate !== 'open'" class="feedback-gate">
+    <VHeader show-back back-label="Feedback" @back="onBack" />
+    <div v-if="feedbackGate === 'loading'" class="feedback-gate__loader">
+      <VLoader />
+    </div>
+    <VEmptyState
+      v-else-if="feedbackGate === 'waiting'"
+      icon="calendar"
+      title="Ждём подтверждения участия"
+      description="Отзыв можно будет оставить, когда Zoom подтвердит участие"
+    >
+      <VButton size="sm" @click="goToDashboard">На главную</VButton>
+    </VEmptyState>
+    <VEmptyState
+      v-else
+      icon="warning"
+      title="Отзыв недоступен"
+      :description="
+        feedbackGate === 'not_attended'
+          ? 'Zoom не подтвердил ваше участие в этой практике'
+          : 'Запись на эту практику отменена'
+      "
+    >
+      <VButton size="sm" @click="goToDashboard">На главную</VButton>
+    </VEmptyState>
+  </div>
   <FormShell
+    v-else
     v-model:comment="comment"
     back-label="Feedback"
     :practice="practice"
@@ -74,7 +114,8 @@ import { useBookingsStore } from '@/stores/bookings'
 import { useDiaryStore } from '@/stores/diary'
 import { useToast } from '@/composables/useToast'
 import { platform } from '@/platform'
-import { VButton } from '@/components/ui'
+import { VButton, VEmptyState, VLoader } from '@/components/ui'
+import { VHeader } from '@/components/layout'
 import { IconHeart, IconCalendar } from '@/components/icons'
 import FormShell from '@/components/shared/FormShell.vue'
 import MoodSlider from '@/components/shared/MoodSlider.vue'
@@ -117,6 +158,29 @@ const submitted = ref(false)
 const alreadyGaveFeedback = computed<boolean>(() =>
   bookingsStore.bookings.some((b) => b.practice_id === practiceId && b.has_feedback),
 )
+
+/**
+ * F4: whether this screen may offer the form right now -- see the header.
+ * Keys on this practice's booking in the loaded list: a live one (not
+ * cancelled) decides; only a cancelled one means none is left. Absent from
+ * the list -> 'open': the list is a single page, and the server, not a
+ * guess, then says whether the feedback lands.
+ */
+type FeedbackGate = 'loading' | 'open' | 'waiting' | 'not_attended' | 'cancelled'
+/** Set once the booking list has been fetched on mount -- until then the
+ * gate cannot know, and neither a form nor a verdict is shown. */
+const bookingsReady = ref(false)
+const feedbackGate = computed<FeedbackGate>(() => {
+  if (!bookingsReady.value) return 'loading'
+  const ofPractice = bookingsStore.bookings.filter((b) => b.practice_id === practiceId)
+  const live = ofPractice.find((b) => b.status !== 'cancelled')
+  if (live) {
+    if (live.status === 'attended') return 'open'
+    if (live.status === 'no_show') return 'not_attended'
+    return 'waiting'
+  }
+  return ofPractice.length > 0 ? 'cancelled' : 'open'
+})
 
 async function onSubmit(): Promise<void> {
   if (diaryStore.feedbackSubmitting || alreadyGaveFeedback.value) return
@@ -184,7 +248,13 @@ onMounted(async () => {
   // fetchMyBookings is a no-op when the list is already populated (arriving from
   // the dashboard); on a direct deep-link it performs the initial load
   // (bookings.ts:132). Mirrors CheckinView:234.
-  await bookingsStore.fetchMyBookings()
+  try {
+    await bookingsStore.fetchMyBookings()
+  } finally {
+    // A failed fetch leaves the list as it was; the gate then falls back to
+    // the form and the server judges, exactly as before F4.
+    bookingsReady.value = true
+  }
   if (alreadyGaveFeedback.value) {
     submitted.value = true
   }
@@ -227,5 +297,19 @@ onMounted(async () => {
   outline: 2px solid var(--velo-primary);
   outline-offset: 4px;
   border-radius: var(--radius-md);
+}
+
+/* F4: the honest states that stand in for the form. */
+.feedback-gate {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-height: 100%;
+}
+
+.feedback-gate__loader {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-6) 0;
 }
 </style>
