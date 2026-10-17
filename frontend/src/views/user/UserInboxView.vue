@@ -39,7 +39,9 @@
   <div class="user-inbox">
     <VHeader title="Уведомления" show-back @back="router.back()">
       <template v-if="unread > 0" #action>
-        <button type="button" class="user-inbox__read-all" @click="markAll">Прочитать всё</button>
+        <button type="button" class="user-inbox__read-all" @click="markAll">
+          {{ t('views.user.UserInboxView.m3') }}
+        </button>
       </template>
     </VHeader>
 
@@ -53,13 +55,10 @@
           <IconBellPlain :size="48" />
         </template>
       </VEmptyState>
-      <VButton size="sm" @click="load">Повторить</VButton>
+      <VButton size="sm" @click="load">{{ t('views.user.UserInboxView.m4') }}</VButton>
     </div>
 
-    <VEmptyState
-      v-else-if="items.length === 0"
-      title="Здесь появятся уведомления о записях, сообщениях и операциях"
-    >
+    <VEmptyState v-else-if="items.length === 0" :title="t('views.user.UserInboxView.m1')">
       <template #icon>
         <IconBellPlain :size="48" />
       </template>
@@ -74,11 +73,11 @@
         variant="tabs"
         scrollable
         class="user-inbox__filter"
-        aria-label="Тип уведомлений"
+        :aria-label="t('views.user.UserInboxView.m2')"
       />
 
       <div v-if="visibleItems.length === 0" class="user-inbox__center">
-        <p class="user-inbox__filter-empty">В этой категории пока нет уведомлений</p>
+        <p class="user-inbox__filter-empty">{{ t('views.user.UserInboxView.m5') }}</p>
       </div>
 
       <div v-else class="user-inbox__list">
@@ -98,6 +97,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -134,10 +134,10 @@ const unread = ref(0)
 // = practice life; «Другое» = everything else (finance, future kinds).
 type InboxFilter = 'all' | 'messages' | 'events' | 'other'
 const FILTER_OPTIONS: ReadonlyArray<{ value: InboxFilter; label: string }> = [
-  { value: 'all', label: 'Все' },
-  { value: 'messages', label: 'Сообщения' },
-  { value: 'events', label: 'Мероприятия' },
-  { value: 'other', label: 'Другое' },
+  { value: 'all', label: t('views.user.UserInboxView.m6') },
+  { value: 'messages', label: t('views.user.UserInboxView.m7') },
+  { value: 'events', label: t('views.user.UserInboxView.m8') },
+  { value: 'other', label: t('views.user.UserInboxView.m9') },
 ]
 const filter = ref<InboxFilter>('all')
 
@@ -169,7 +169,7 @@ async function load(): Promise<void> {
     unread.value = page.unread
     notifications.applyUnread(page.unread)
   } catch (e) {
-    error.value = extractApiError(e, 'Попробуйте ещё раз')
+    error.value = extractApiError(e, t('views.user.UserInboxView.m10'))
   } finally {
     loading.value = false
   }
@@ -191,7 +191,7 @@ async function markOne(item: NotificationItem): Promise<void> {
   } catch (e) {
     item.read_at = previousReadAt
     unread.value = previousUnread
-    toast.error(extractApiError(e, 'Не удалось отметить прочитанным'))
+    toast.error(extractApiError(e, t('views.user.UserInboxView.m11')))
   }
 }
 
@@ -212,7 +212,7 @@ async function markAll(): Promise<void> {
       i.read_at = previous[idx] ?? null
     })
     unread.value = previousUnread
-    toast.error(extractApiError(e, 'Не удалось отметить прочитанным'))
+    toast.error(extractApiError(e, t('views.user.UserInboxView.m12')))
   }
 }
 

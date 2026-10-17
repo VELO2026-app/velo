@@ -72,7 +72,7 @@
     <div v-if="!masterMode && !schoolMode" class="calendar__selector">
       <!-- Collapsed: pill + funnel -->
       <button v-if="!expanded" type="button" class="calendar__select-pill" @click="expanded = true">
-        <span class="calendar__select-label">Выбрать практики</span>
+        <span class="calendar__select-label">{{ t('views.user.CalendarView.m3') }}</span>
         <span class="calendar__funnel" @click.stop="showFilter = true">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
             <path
@@ -119,7 +119,7 @@
         <button
           type="button"
           class="calendar__collapse"
-          aria-label="Свернуть"
+          :aria-label="t('views.user.CalendarView.m1')"
           @click="expanded = false"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -144,10 +144,10 @@
     <VEmptyState
       v-else-if="store.error"
       icon="warning"
-      title="Не удалось загрузить"
+      :title="t('views.user.CalendarView.m2')"
       :description="store.error"
     >
-      <VButton size="sm" @click="store.loadWeek()">Повторить</VButton>
+      <VButton size="sm" @click="store.loadWeek()">{{ t('views.user.CalendarView.m4') }}</VButton>
     </VEmptyState>
 
     <!-- Empty: no practices on the selected day -->
@@ -187,6 +187,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCalendarStore } from '@/stores/calendar'
@@ -284,7 +285,7 @@ function openFilter(): void {
 // Practices on the selected day (already sorted by the store).
 const dayPractices = computed<PracticeResponse[]>(() => store.selectedDayPractices)
 
-// Section header for the selected day ("Сегодня" / "Завтра" / "28 января"),
+// Section header for the selected day (t('views.user.CalendarView.m5') / t('views.user.CalendarView.m6') / t('views.user.CalendarView.m7')),
 // derived from the VIEWER's profile timezone (SW2) -- matching the store's
 // own viewer-tz bucketing (store.ts selectedDayPractices) and the cards'
 // rendered time, never the first practice's own timezone. dayLabel is only
@@ -307,9 +308,9 @@ interface ActiveChip {
 
 const TYPE_LABEL: Record<string, string> = {
   live: 'Live',
-  series: 'Серии',
-  one_on_one: 'Личные',
-  replay: 'Записи',
+  series: t('views.user.CalendarView.m8'),
+  one_on_one: t('views.user.CalendarView.m9'),
+  replay: t('views.user.CalendarView.m10'),
 }
 
 const activeChips = computed<ActiveChip[]>(() => {

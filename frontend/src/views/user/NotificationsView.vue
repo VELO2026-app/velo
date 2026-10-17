@@ -83,6 +83,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -103,32 +104,32 @@ const ROWS = [
     // behavioural questions on 2026-08-13 and said nothing about the strings,
     // and silence is not approval. Every label below is a one-line edit; keep
     // it that way and do not treat any of them as final.
-    label: 'Напоминания о практиках',
-    sub: 'За сутки, за час и за 10 минут; просьба оставить отзыв',
+    label: t('views.user.NotificationsView.m1'),
+    sub: t('views.user.NotificationsView.m2'),
   },
   {
     key: 'bookings',
-    label: 'Записи и переносы',
-    sub: 'Подтверждения, отмены, освободившееся место',
+    label: t('views.user.NotificationsView.m3'),
+    sub: t('views.user.NotificationsView.m4'),
   },
   {
     key: 'msg_participants',
-    label: 'Сообщения',
-    sub: 'Новые сообщения в ваших чатах',
+    label: t('views.user.NotificationsView.m5'),
+    sub: t('views.user.NotificationsView.m6'),
   },
   {
     key: 'finance',
-    label: 'Кошелёк',
-    sub: 'Пополнения и выплаты',
+    label: t('views.user.NotificationsView.m7'),
+    sub: t('views.user.NotificationsView.m8'),
   },
 ] as const
 
 type CategoryKey = (typeof ROWS)[number]['key']
 
 // PROVISIONAL WORDING, same standing as the row labels above.
-const MASTER_LABEL = 'Уведомления'
-const MASTER_SUB = 'Выключите, чтобы не приходило ничего'
-const SECTION_TITLE = 'Что присылать'
+const MASTER_LABEL = t('views.user.NotificationsView.m9')
+const MASTER_SUB = t('views.user.NotificationsView.m10')
+const SECTION_TITLE = t('views.user.NotificationsView.m11')
 
 // Server state. Empty until the first successful load; a category the server
 // does not report is one we cannot honestly control, so its row is disabled
@@ -170,7 +171,7 @@ async function loadPrefs(): Promise<void> {
     // screen was rebuilt to remove. (The master screen leaves its switches
     // live here; that difference is deliberate and was approved.)
     loadFailed.value = true
-    toast.error('Не удалось загрузить настройки уведомлений')
+    toast.error(t('views.user.NotificationsView.m12'))
     console.warn('notification prefs load failed', error)
   }
 }
@@ -189,7 +190,7 @@ async function persist(
     await updateNotificationPrefs({ categories: next })
   } catch (error) {
     Object.assign(categories, previous)
-    toast.error('Не удалось сохранить настройку')
+    toast.error(t('views.user.NotificationsView.m13'))
     console.warn('preference save failed', error)
   } finally {
     savingKey.value = ''

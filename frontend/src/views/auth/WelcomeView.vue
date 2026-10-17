@@ -60,7 +60,7 @@ import { t } from '@/locales'
 import { VeloLogo } from '@/components/ui'
 
 defineEmits<{
-  /** "Войти" tapped -- continue into the app (carousel or dashboard). */
+  /** t('views.auth.WelcomeView.m1') tapped -- continue into the app (carousel or dashboard). */
   enter: []
 }>()
 </script>

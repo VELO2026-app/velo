@@ -46,7 +46,7 @@
         :model-value="kind"
         :options="kindOptions"
         variant="tabs"
-        aria-label="Вкладки списка участников"
+        :aria-label="t('views.user.SchoolMembersView.m1')"
         @update:model-value="switchKind"
       />
 
@@ -72,11 +72,13 @@
       <VEmptyState
         v-else-if="notFound"
         icon="notfound"
-        title="Школа недоступна"
-        description="Возможно, она была удалена или вы в ней не состоите."
+        :title="t('views.user.SchoolMembersView.m2')"
+        :description="t('views.user.SchoolMembersView.m3')"
       >
         <template #action>
-          <VButton variant="primary" @click="goBack">К школе</VButton>
+          <VButton variant="primary" @click="goBack">{{
+            t('views.user.SchoolMembersView.m4')
+          }}</VButton>
         </template>
       </VEmptyState>
 
@@ -88,7 +90,9 @@
         :description="error ?? undefined"
       >
         <template #action>
-          <VButton variant="outline" @click="retry">Повторить</VButton>
+          <VButton variant="outline" @click="retry">{{
+            t('views.user.SchoolMembersView.m5')
+          }}</VButton>
         </template>
       </VEmptyState>
 
@@ -153,6 +157,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, onMounted, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -192,9 +197,9 @@ import { formatShortDate } from '@/utils/format'
 type MemberTab = CuratorGroupMemberKind | 'blocked'
 
 const KIND_OPTIONS: ReadonlyArray<{ value: MemberTab; label: string; icon?: Component }> = [
-  { value: 'master', label: 'Мастера' },
-  { value: 'student', label: 'Ученики' },
-  { value: 'blocked', label: 'Блок', icon: IconLock },
+  { value: 'master', label: t('views.user.SchoolMembersView.m6') },
+  { value: 'student', label: t('views.user.SchoolMembersView.m7') },
+  { value: 'blocked', label: t('views.user.SchoolMembersView.m8'), icon: IconLock },
 ]
 
 const route = useRoute()
@@ -263,11 +268,11 @@ const emptyTitle = computed(() => {
 })
 const emptyDescription = computed(() => {
   if (kind.value === 'blocked') {
-    return 'Участник появится здесь, когда вы заблокируете его через меню на странице профиля.'
+    return t('views.user.SchoolMembersView.m9')
   }
   return kind.value === 'master'
-    ? 'Мастером школы участник становится после принятия предложения куратора.'
-    : 'Ученики появляются в школе после вступления по ссылке-приглашению.'
+    ? t('views.user.SchoolMembersView.m10')
+    : t('views.user.SchoolMembersView.m11')
 })
 const errorTitle = computed(() => {
   if (kind.value === 'blocked') return 'Не удалось загрузить заблокированных'
@@ -401,14 +406,14 @@ async function onUnblock(person: CuratorGroupBlockedItem): Promise<void> {
   unblocking.value = person.user_id
   try {
     await unblockCuratorGroupMember(groupId.value, person.user_id)
-    toast.success('Участник разблокирован')
+    toast.success(t('views.user.SchoolMembersView.m12'))
     await refresh()
   } catch (e) {
     if (e instanceof ApiResponseError && e.status === 404) {
       await refresh()
       return
     }
-    toast.error(extractApiError(e, 'Не удалось разблокировать участника'))
+    toast.error(extractApiError(e, t('views.user.SchoolMembersView.m13')))
   } finally {
     unblocking.value = null
   }

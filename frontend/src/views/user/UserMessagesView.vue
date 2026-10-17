@@ -31,13 +31,13 @@
           <IconMessages :size="48" />
         </template>
       </VEmptyState>
-      <VButton size="sm" @click="load"> Повторить </VButton>
+      <VButton size="sm" @click="load">{{ t('views.user.UserMessagesView.m4') }}</VButton>
     </div>
 
     <VEmptyState
       v-else-if="threads.length === 0"
-      title="Здесь появятся ваши переписки с мастерами"
-      description="Откройте профиль мастера и задайте вопрос"
+      :title="t('views.user.UserMessagesView.m1')"
+      :description="t('views.user.UserMessagesView.m2')"
     >
       <template #icon>
         <IconMessages :size="48" />
@@ -46,18 +46,19 @@
 
     <div v-else class="user-messages__list">
       <ChatListRow
-        v-for="t in threads"
-        :key="t.id"
-        :peer="t.peer"
-        peer-fallback="Мастер"
-        :unread="t.unread ?? 0"
-        @open="openThread(t.id)"
+        v-for="thread in threads"
+        :key="thread.id"
+        :peer="thread.peer"
+        :peer-fallback="t('views.user.UserMessagesView.m3')"
+        :unread="thread.unread ?? 0"
+        @open="openThread(thread.id)"
       />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -82,7 +83,7 @@ async function load(): Promise<void> {
   try {
     threads.value = (await listChats()).threads
   } catch (e) {
-    error.value = extractApiError(e, 'Попробуйте ещё раз')
+    error.value = extractApiError(e, t('views.user.UserMessagesView.m5'))
   }
   loading.value = false
 }

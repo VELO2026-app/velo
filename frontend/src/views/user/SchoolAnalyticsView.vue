@@ -40,11 +40,13 @@
       <VEmptyState
         v-else-if="notFound"
         icon="notfound"
-        title="Школа недоступна"
-        description="Возможно, она была удалена или вы больше не её куратор."
+        :title="t('views.user.SchoolAnalyticsView.m1')"
+        :description="t('views.user.SchoolAnalyticsView.m2')"
       >
         <template #action>
-          <VButton variant="primary" @click="goBack">К школе</VButton>
+          <VButton variant="primary" @click="goBack">{{
+            t('views.user.SchoolAnalyticsView.m10')
+          }}</VButton>
         </template>
       </VEmptyState>
 
@@ -52,11 +54,13 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        title="Не удалось загрузить аналитику"
-        description="Проверьте соединение и попробуйте ещё раз."
+        :title="t('views.user.SchoolAnalyticsView.m3')"
+        :description="t('views.user.SchoolAnalyticsView.m4')"
       >
         <template #action>
-          <VButton variant="outline" @click="refresh">Повторить</VButton>
+          <VButton variant="outline" @click="refresh">{{
+            t('views.user.SchoolAnalyticsView.m11')
+          }}</VButton>
         </template>
       </VEmptyState>
 
@@ -69,7 +73,7 @@
           class="school-analytics__period"
           :options="PERIOD_OPTIONS"
           variant="tabs"
-          aria-label="Период статистики"
+          :aria-label="t('views.user.SchoolAnalyticsView.m5')"
         />
 
         <!-- Interim scaffold (owner 2026-10-02: «бек доедет»): every
@@ -82,7 +86,9 @@
             <span class="school-analytics__stat-value">
               {{ data.engagement?.practices_conducted ?? 0 }}
             </span>
-            <span class="school-analytics__stat-label">Практик проведено</span>
+            <span class="school-analytics__stat-label">{{
+              t('views.user.SchoolAnalyticsView.m12')
+            }}</span>
           </div>
           <div class="school-analytics__stat">
             <span class="school-analytics__stat-value">
@@ -105,7 +111,9 @@
             <span class="school-analytics__stat-value">
               {{ data.engagement?.joined_never_came ?? 0 }}
             </span>
-            <span class="school-analytics__stat-label">Вступили и не пришли</span>
+            <span class="school-analytics__stat-label">{{
+              t('views.user.SchoolAnalyticsView.m13')
+            }}</span>
           </div>
         </div>
 
@@ -114,10 +122,10 @@
              numbers (reviews из visits) come ready from the server. -->
         <DistributionCard
           class="school-analytics__feedback"
-          title="Процент фидбеков"
+          :title="t('views.user.SchoolAnalyticsView.m6')"
           :count-label="feedbackCountLabel"
           :bars="feedbackBars"
-          empty-text="Пока нет отзывов"
+          :empty-text="t('views.user.SchoolAnalyticsView.m7')"
         />
 
         <!-- Part 3: every practice of the selected period, newest first --
@@ -170,8 +178,8 @@
           <VEmptyState
             v-else
             variant="note"
-            title="Пока нет практик за этот период"
-            description="Карточки появятся после первой проведённой практики."
+            :title="t('views.user.SchoolAnalyticsView.m8')"
+            :description="t('views.user.SchoolAnalyticsView.m9')"
           />
         </section>
       </template>
@@ -180,6 +188,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ApiResponseError } from '@/api/client'
@@ -206,9 +215,9 @@ const inMasterZone = computed(() => String(route.name ?? '').startsWith('master'
 //    own calendar, the slider only names it. --
 const period = ref<SchoolAnalyticsPeriod>('week')
 const PERIOD_OPTIONS: ReadonlyArray<{ value: SchoolAnalyticsPeriod; label: string }> = [
-  { value: 'week', label: 'Неделя' },
-  { value: 'month', label: 'Месяц' },
-  { value: 'quarter', label: 'Квартал' },
+  { value: 'week', label: t('views.user.SchoolAnalyticsView.m14') },
+  { value: 'month', label: t('views.user.SchoolAnalyticsView.m15') },
+  { value: 'quarter', label: t('views.user.SchoolAnalyticsView.m16') },
 ]
 
 // -- The feedback block (part 2). «Процент фидбеков» = the period's reviews
@@ -234,9 +243,9 @@ const feedbackBars = computed(() => moodStripBars(data.value?.engagement?.rating
 const periodSectionTitle = computed(
   (): string =>
     ({
-      week: 'Практики недели',
-      month: 'Практики месяца',
-      quarter: 'Практики квартала',
+      week: t('views.user.SchoolAnalyticsView.m17'),
+      month: t('views.user.SchoolAnalyticsView.m18'),
+      quarter: t('views.user.SchoolAnalyticsView.m19'),
     })[period.value],
 )
 const periodPractices = computed(() => data.value?.engagement?.conducted_practices ?? [])

@@ -20,15 +20,15 @@
          screen ("Ваш баланс" / "Выберите сумму" are section-level labels, not a
          page title) -- sr-only heading so screen-reader users navigating by
          heading still get a page label for this screen. -->
-    <h1 class="velo-sr-only">Пополнение баланса</h1>
+    <h1 class="velo-sr-only">{{ t('views.user.TopupView.m1') }}</h1>
     <!-- Balance -->
     <div class="topup__balance">
-      <span class="topup__balance-label">Ваш баланс</span>
+      <span class="topup__balance-label">{{ t('views.user.TopupView.m2') }}</span>
       <span class="topup__balance-value">{{ balanceStore.formattedBalance }}</span>
     </div>
 
     <!-- Preset amounts -->
-    <div class="topup__section-title">Выберите сумму</div>
+    <div class="topup__section-title">{{ t('views.user.TopupView.m3') }}</div>
     <div class="topup__presets">
       <button
         v-for="preset in PRESETS"
@@ -88,6 +88,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { host } from '@/platform/host'
 import { ref, computed, nextTick, onMounted } from 'vue'
 import { VButton, VInput } from '@/components/ui'
@@ -139,8 +140,8 @@ const effectiveCents = computed(() => (customMode.value ? customCents.value : se
 const validationError = computed(() => {
   if (!customMode.value) return ''
   if (!customValue.value) return ''
-  if (customCents.value < MIN_CENTS) return 'Минимальная сумма — €1'
-  if (customCents.value > MAX_CENTS) return 'Максимальная сумма — €500'
+  if (customCents.value < MIN_CENTS) return t('views.user.TopupView.m4')
+  if (customCents.value > MAX_CENTS) return t('views.user.TopupView.m5')
   return ''
 })
 
@@ -194,14 +195,14 @@ async function onTopup(): Promise<void> {
 
     // C-1: Validate redirect URL before navigating.
     if (!isAllowedRedirectUrl(response.checkout_url)) {
-      toast.error('Некорректный URL платёжной системы')
+      toast.error(t('views.user.TopupView.m6'))
       return
     }
 
     // Redirect to Stripe checkout (or success URL in stub mode).
     host.location.href = response.checkout_url
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось создать платёж'))
+    toast.error(extractApiError(e, t('views.user.TopupView.m7')))
   } finally {
     loading.value = false
   }

@@ -28,7 +28,7 @@
     <!-- Header: arrow-only back-pill (63×35) + left-aligned title (Figma "View entry") -->
     <header class="detail__header">
       <VBackButton aria-label="Назад" @click="goBack" />
-      <h1 class="detail__title-bar">Запись</h1>
+      <h1 class="detail__title-bar">{{ t('views.user.DetailView.m2') }}</h1>
     </header>
 
     <!-- Body -->
@@ -42,11 +42,11 @@
       <VEmptyState
         v-else-if="loadError"
         icon="warning"
-        title="Не удалось загрузить запись"
+        :title="t('views.user.DetailView.m1')"
         :description="loadError"
       >
         <template #action>
-          <VButton variant="primary" @click="reload">Повторить</VButton>
+          <VButton variant="primary" @click="reload">{{ t('views.user.DetailView.m3') }}</VButton>
         </template>
       </VEmptyState>
 
@@ -72,7 +72,7 @@
         <VCard class="detail__card">
           <p class="detail__date">{{ dateLine }}</p>
           <p v-if="comment" class="detail__content">{{ comment }}</p>
-          <p v-else class="detail__empty">Без комментария</p>
+          <p v-else class="detail__empty">{{ t('views.user.DetailView.m4') }}</p>
           <p v-if="contextLine" class="detail__context">{{ contextLine }}</p>
         </VCard>
       </template>
@@ -81,6 +81,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VLoader, VEmptyState, VButton, VBackButton, VCard } from '@/components/ui'
@@ -151,10 +152,10 @@ const practiceDuration = computed(() =>
 )
 
 // Context line under the comment: relates this check-in / feedback to the
-// linked practice ("Перед практикой: X с Y" / "После практики: X с Y").
+// linked practice (t('views.user.DetailView.m5') / t('views.user.DetailView.m6')).
 const contextLine = computed(() => {
   if (!practice.value) return ''
-  const name = practice.value.master_name ?? 'Мастером'
+  const name = practice.value.master_name ?? t('views.user.DetailView.m7')
   const rel = detailType.value === 'checkin' ? 'Перед практикой' : 'После практики'
   return `${rel}: ${practice.value.title} с ${name}`
 })
@@ -187,7 +188,7 @@ async function reload(): Promise<void> {
       }
     }
   } catch (e) {
-    loadError.value = extractApiError(e, 'Запись не найдена')
+    loadError.value = extractApiError(e, t('views.user.DetailView.m8'))
   } finally {
     loading.value = false
   }

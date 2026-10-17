@@ -49,20 +49,20 @@
           <template #default="{ close }">
             <VMenuItem
               :icon="IconMessages"
-              ariaLabel="Написать сообщение"
+              :ariaLabel="t('views.user.SchoolStudentProfileView.m1')"
               @click="onMessageClick(close)"
             />
             <VMenuItem
               v-if="!masterOffer"
               :icon="IconPen"
-              ariaLabel="Изменить роль"
+              :ariaLabel="t('views.user.SchoolStudentProfileView.m2')"
               @click="onRoleClick(close)"
             />
             <!-- The lock opens the block confirm (owner ruling 2026-09-30 --
                  blocking replaced the removed exclusion); BE-79 (2) wired it. -->
             <VMenuItem
               :icon="IconLock"
-              ariaLabel="Заблокировать"
+              :ariaLabel="t('views.user.SchoolStudentProfileView.m3')"
               danger
               @click="onBlockClick(close)"
             />
@@ -77,22 +77,26 @@
       <VEmptyState
         v-if="profileNotFound"
         icon="notfound"
-        title="Ученик недоступен"
-        description="Возможно, он вышел из школы или был удалён."
+        :title="t('views.user.SchoolStudentProfileView.m4')"
+        :description="t('views.user.SchoolStudentProfileView.m5')"
       >
         <template #action>
-          <VButton variant="primary" @click="goBack">К списку учеников</VButton>
+          <VButton variant="primary" @click="goBack">{{
+            t('views.user.SchoolStudentProfileView.m17')
+          }}</VButton>
         </template>
       </VEmptyState>
 
       <VEmptyState
         v-else-if="profileError"
         icon="warning"
-        title="Не удалось загрузить профиль"
-        description="Проверьте соединение и попробуйте ещё раз."
+        :title="t('views.user.SchoolStudentProfileView.m6')"
+        :description="t('views.user.SchoolStudentProfileView.m7')"
       >
         <template #action>
-          <VButton variant="outline" @click="load">Повторить</VButton>
+          <VButton variant="outline" @click="load">{{
+            t('views.user.SchoolStudentProfileView.m18')
+          }}</VButton>
         </template>
       </VEmptyState>
 
@@ -137,13 +141,17 @@
          is a disabled button, never a silent no-op request. -->
     <VModal :open="roleOpen" :show-close="false" @close="onRoleClose">
       <div class="ssp__role">
-        <h2 class="ssp__role-title">Изменить роль</h2>
+        <h2 class="ssp__role-title">{{ t('views.user.SchoolStudentProfileView.m19') }}</h2>
         <TargetUserCard :name="studentName" :avatar-url="studentAvatar || null" />
-        <p class="ssp__role-sub">Выберите роль</p>
+        <p class="ssp__role-sub">{{ t('views.user.SchoolStudentProfileView.m20') }}</p>
         <VRadioGroup v-model="roleKind" :options="roleOptions" :disabled="roleBusy" />
         <template v-if="kindError">
-          <p class="ssp__offer-text" role="alert">Не удалось проверить роль участника.</p>
-          <VButton variant="outline" @click="resolveCurrentKind">Повторить</VButton>
+          <p class="ssp__offer-text" role="alert">
+            {{ t('views.user.SchoolStudentProfileView.m21') }}
+          </p>
+          <VButton variant="outline" @click="resolveCurrentKind">{{
+            t('views.user.SchoolStudentProfileView.m22')
+          }}</VButton>
         </template>
         <p v-else-if="roleKind === 'master' && currentKind === 'student'" class="ssp__offer-text">
           Участник получит предложение. Для назначения нужны подтверждение мастера платформы и его
@@ -168,9 +176,9 @@
 
     <VConfirmDialog
       :open="cancelOfferOpen"
-      title="Отменить предложение?"
-      message="Участник останется учеником школы. Вы сможете предложить ему роль мастера снова."
-      confirm-label="Отменить предложение"
+      :title="t('views.user.SchoolStudentProfileView.m8')"
+      :message="t('views.user.SchoolStudentProfileView.m9')"
+      :confirm-label="t('views.user.SchoolStudentProfileView.m10')"
       :loading="cancellingOffer"
       @confirm="onCancelOffer"
       @cancel="cancelOfferOpen = false"
@@ -189,9 +197,9 @@
          opens only on the server's 204. -->
     <VConfirmDialog
       :open="blockConfirmOpen"
-      title="Заблокировать участника школы?"
+      :title="t('views.user.SchoolStudentProfileView.m11')"
       :message="blockCopy"
-      confirm-label="Заблокировать"
+      :confirm-label="t('views.user.SchoolStudentProfileView.m12')"
       danger
       warning-panel
       cancel-variant="primary"
@@ -210,10 +218,10 @@
          + compact pills. Shown after the server's 204 (BE-79 (2)). -->
     <VConfirmDialog
       :open="blockedDialogOpen"
-      title="Пользователь заблокирован"
-      message="Пользователь перемещён во вкладку «Блок» участников школы. Если он нарушал правила — например, сорвал практику или вел себя неподобающе, — вы можете сообщить об этом в поддержку."
-      confirm-label="В поддержку"
-      cancel-label="Не сейчас"
+      :title="t('views.user.SchoolStudentProfileView.m13')"
+      :message="t('views.user.SchoolStudentProfileView.m14')"
+      :confirm-label="t('views.user.SchoolStudentProfileView.m15')"
+      :cancel-label="t('views.user.SchoolStudentProfileView.m16')"
       compact-actions
       warning-panel
       :warning-panel-icon="false"
@@ -238,6 +246,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -281,7 +290,9 @@ const userId = computed(() => String(route.params.userId ?? ''))
 
 // Server truth once loaded; the roster query is only the instant-paint hint.
 const studentName = computed(
-  () => profile.value?.display_name ?? String(route.query.name ?? 'Ученик'),
+  () =>
+    profile.value?.display_name ??
+    String(route.query.name ?? t('views.user.SchoolStudentProfileView.m23')),
 )
 const studentAvatar = computed(() => profile.value?.avatar_url ?? String(route.query.avatar ?? ''))
 
@@ -391,10 +402,10 @@ const roleBusy = computed(() => rolePending.value || kindResolving.value)
 // «Изменить» disabled -- the popup never offers a demotion it does not send.
 const roleOptions = computed(() =>
   currentKind.value === 'master'
-    ? [{ value: 'master', label: 'Мастер' }]
+    ? [{ value: 'master', label: t('views.user.SchoolStudentProfileView.m24') }]
     : [
-        { value: 'student', label: 'Ученик' },
-        { value: 'master', label: 'Мастер' },
+        { value: 'student', label: t('views.user.SchoolStudentProfileView.m25') },
+        { value: 'master', label: t('views.user.SchoolStudentProfileView.m26') },
       ],
 )
 
@@ -456,11 +467,11 @@ async function onRoleConfirm(): Promise<void> {
   rolePending.value = true
   try {
     await offerCuratorGroupMaster(groupId.value, userId.value)
-    toast.success('Предложение отправлено')
+    toast.success(t('views.user.SchoolStudentProfileView.m27'))
     roleOpen.value = false
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось отправить предложение'))
+    toast.error(extractApiError(e, t('views.user.SchoolStudentProfileView.m28')))
   } finally {
     rolePending.value = false
   }
@@ -474,11 +485,11 @@ async function onCancelOffer(): Promise<void> {
   cancellingOffer.value = true
   try {
     await cancelCuratorGroupMasterOffer(groupId.value, userId.value)
-    toast.success('Предложение отменено')
+    toast.success(t('views.user.SchoolStudentProfileView.m29'))
     cancelOfferOpen.value = false
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось отменить предложение'))
+    toast.error(extractApiError(e, t('views.user.SchoolStudentProfileView.m30')))
   } finally {
     cancellingOffer.value = false
   }
@@ -520,11 +531,11 @@ async function onBlockConfirm(): Promise<void> {
   } catch (e) {
     blockConfirmOpen.value = false
     if (e instanceof ApiResponseError && e.status === 404) {
-      toast.error('Участник уже не в школе')
+      toast.error(t('views.user.SchoolStudentProfileView.m31'))
       void router.push(rosterRoute.value)
       return
     }
-    toast.error(extractApiError(e, 'Не удалось заблокировать участника'))
+    toast.error(extractApiError(e, t('views.user.SchoolStudentProfileView.m32')))
   } finally {
     blocking.value = false
   }

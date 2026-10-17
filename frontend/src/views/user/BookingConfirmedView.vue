@@ -37,10 +37,12 @@
     <VEmptyState
       v-else-if="store.selectedError || !practice"
       icon="warning"
-      title="Практика не найдена"
+      :title="t('views.user.BookingConfirmedView.m1')"
       :description="store.selectedError ?? 'Не удалось загрузить практику'"
     >
-      <VButton size="sm" @click="goToDashboard">На главную</VButton>
+      <VButton size="sm" @click="goToDashboard">{{
+        t('views.user.BookingConfirmedView.m4')
+      }}</VButton>
     </VEmptyState>
 
     <!-- Content -->
@@ -50,7 +52,7 @@
         <span class="booking-confirmed__icon">
           <IconSuccess :size="56" />
         </span>
-        <h1 class="booking-confirmed__title">Практика забронирована!</h1>
+        <h1 class="booking-confirmed__title">{{ t('views.user.BookingConfirmedView.m5') }}</h1>
         <p class="booking-confirmed__text">
           Войти в Zoom можно будет прямо в VELO — на экране практики.
         </p>
@@ -66,15 +68,12 @@
       <div class="booking-confirmed__ask">
         <VTextarea
           v-model="masterRequest"
-          label="Ваш запрос мастеру (по желанию)"
+          :label="t('views.user.BookingConfirmedView.m2')"
           :rows="2"
           maxlength="4000"
           :disabled="sending"
         />
-        <Banner
-          variant="info"
-          body="Оставляя запрос, вы помогаете мастеру подготовить практику с учётом ваших пожеланий"
-        >
+        <Banner variant="info" :body="t('views.user.BookingConfirmedView.m3')">
           <template #icon><IconSupport :size="28" /></template>
         </Banner>
         <VButton
@@ -93,6 +92,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'
@@ -154,7 +154,7 @@ async function onSendRequest(): Promise<void> {
     const thread = await openChat(masterId)
     await sendChatMessage(thread.id, composeRequest(body))
     masterRequest.value = ''
-    toast.success('Запрос отправлен мастеру')
+    toast.success(t('views.user.BookingConfirmedView.m6'))
     // [FE-1] Requirement: post-send navigation (capability: user-booking)
     // After a successful send the app SHALL NOT open the chat thread; it
     // SHALL show the «Запрос отправлен мастеру» toast and land the user on
@@ -184,7 +184,7 @@ async function onSendRequest(): Promise<void> {
       await router.replace({ name: 'practice-detail', params: { id: practiceId } })
     }
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось отправить запрос'))
+    toast.error(extractApiError(e, t('views.user.BookingConfirmedView.m7')))
   } finally {
     sending.value = false
   }

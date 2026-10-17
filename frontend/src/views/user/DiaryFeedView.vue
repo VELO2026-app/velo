@@ -73,7 +73,7 @@
           <!-- Filter (funnel) + Search (magnifier). "Связи" (Relationships)
                is an AI feature outside the MVP and is intentionally omitted. -->
           <VMenuItem
-            ariaLabel="Фильтр"
+            :ariaLabel="t('views.user.DiaryFeedView.m1')"
             @click="
               () => {
                 openFilter()
@@ -95,7 +95,7 @@
             </svg>
           </VMenuItem>
           <VMenuItem
-            ariaLabel="Поиск"
+            :ariaLabel="t('views.user.DiaryFeedView.m2')"
             @click="
               () => {
                 toggleSearch()
@@ -196,11 +196,13 @@
       <VEmptyState
         v-else-if="feedError && items.length === 0"
         icon="warning"
-        title="Не удалось загрузить дневник"
-        description="Проверьте соединение и попробуйте ещё раз"
+        :title="t('views.user.DiaryFeedView.m3')"
+        :description="t('views.user.DiaryFeedView.m4')"
       >
         <template #action>
-          <VButton variant="primary" @click="reload">Повторить</VButton>
+          <VButton variant="primary" @click="reload">{{
+            t('views.user.DiaryFeedView.m8')
+          }}</VButton>
         </template>
       </VEmptyState>
 
@@ -215,7 +217,7 @@
            a jump window is open (the thread rung owns the screen then). -->
       <VEmptyState
         v-else-if="searchActive && !jumpActive && items.length === 0"
-        title="Ничего не найдено"
+        :title="t('views.user.DiaryFeedView.m5')"
         :description="`По запросу «${feedFilters.search}» записей нет`"
       >
         <template #icon>
@@ -230,7 +232,9 @@
           </svg>
         </template>
         <template #action>
-          <VButton variant="primary" @click="onResetSearch">Сбросить поиск</VButton>
+          <VButton variant="primary" @click="onResetSearch">{{
+            t('views.user.DiaryFeedView.m9')
+          }}</VButton>
         </template>
       </VEmptyState>
 
@@ -261,8 +265,8 @@
       <!-- Empty -->
       <VEmptyState
         v-else-if="items.length === 0"
-        title="Дневник пуст"
-        description="Здесь появятся ваши записи, практики, check-ins и отзывы"
+        :title="t('views.user.DiaryFeedView.m6')"
+        :description="t('views.user.DiaryFeedView.m7')"
       >
         <template #icon><IconDiaryBook :size="64" /></template>
       </VEmptyState>
@@ -318,7 +322,7 @@
 
     <!-- Undo bar: shown after deleting an entry (Figma screen 58) -->
     <div v-if="deletedEntryId" class="diary-feed__undo">
-      <span class="diary-feed__undo-text">Запись удалена</span>
+      <span class="diary-feed__undo-text">{{ t('views.user.DiaryFeedView.m10') }}</span>
       <button type="button" class="diary-feed__undo-btn" :disabled="undoing" @click="onUndoDelete">
         Отменить
       </button>
@@ -366,6 +370,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { onDocumentEvent, offDocumentEvent, activeHTMLElement } from '@/platform/dom'
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
@@ -739,7 +744,7 @@ async function clearFilter(): Promise<void> {
 // -- Undo bar (after deleting an entry on EntryView) -------------------------
 //
 // EntryView soft-deletes then navigates back here with ?deleted=<entryId>.
-// We surface an "Запись удалена / Отменить" bar (Figma screen 58); tapping
+// We surface an t('views.user.DiaryFeedView.m11') bar (Figma screen 58); tapping
 // Отменить restores the entry. The bar auto-dismisses after a few seconds.
 
 const UNDO_DURATION_MS = 6000
@@ -1279,7 +1284,7 @@ onBeforeUnmount(() => {
   padding-bottom: var(--space-6);
 }
 
-/* -- Search scrim: RETIRED (owner 2026-09-09: "блюр и затемнение убираем")
+/* -- Search scrim: RETIRED (owner 2026-09-09: t('views.user.DiaryFeedView.m12'))
    -- no dim, no soft blur; the screen behind the search stays fully visible
    and crisp. Closing the search is the bar's OUTER x. */
 
@@ -1413,7 +1418,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
-  /* Deletion tone (Figma "запись удалена.svg"): pink fill + pink border +
+  /* Deletion tone (Figma t('views.user.DiaryFeedView.m13')): pink fill + pink border +
      rose text, distinct from the neutral glass chrome. */
   background: var(--velo-glass-pink-40);
   border: 1px solid var(--velo-pink-300);

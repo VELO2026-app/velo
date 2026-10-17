@@ -41,18 +41,19 @@
 
     <div v-else class="messages__list">
       <ChatListRow
-        v-for="t in threads"
-        :key="t.id"
-        :peer="t.peer"
-        peer-fallback="Ученик"
-        :unread="t.unread ?? 0"
-        @open="openThread(t.id)"
+        v-for="thread in threads"
+        :key="thread.id"
+        :peer="thread.peer"
+        :peer-fallback="t('views.master.MasterMessagesView.m1')"
+        :unread="thread.unread ?? 0"
+        @open="openThread(thread.id)"
       />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'

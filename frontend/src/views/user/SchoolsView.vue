@@ -29,7 +29,7 @@
           v-if="canCreate"
           type="button"
           class="schools__add-btn"
-          aria-label="Новая школа"
+          :aria-label="t('views.user.SchoolsView.m1')"
           @click="router.push({ name: 'master-curator-group-create' })"
         >
           <IconPlusFilled :size="20" />
@@ -45,11 +45,11 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        title="Не удалось загрузить школы"
-        description="Проверьте соединение и попробуйте ещё раз."
+        :title="t('views.user.SchoolsView.m2')"
+        :description="t('views.user.SchoolsView.m3')"
       >
         <template #action>
-          <VButton variant="outline" @click="load">Повторить</VButton>
+          <VButton variant="outline" @click="load">{{ t('views.user.SchoolsView.m6') }}</VButton>
         </template>
       </VEmptyState>
 
@@ -73,8 +73,8 @@
       <VEmptyState
         v-else-if="!schools.length"
         icon="group"
-        title="Пока нет школ"
-        description="Вступите по ссылке от куратора. Создавать школы может мастер, которому администратор выдал это право."
+        :title="t('views.user.SchoolsView.m4')"
+        :description="t('views.user.SchoolsView.m5')"
       />
 
       <template v-else>
@@ -90,6 +90,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getCuratorGroups, getMyCuratorGroups } from '@/api/curatorGroups'

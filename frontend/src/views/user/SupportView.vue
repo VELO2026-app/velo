@@ -32,8 +32,8 @@
       <div class="support__ok-circle">
         <IconSupportChat :size="48" />
       </div>
-      <h2 class="support__ok-title">Спасибо за обращение</h2>
-      <p class="support__ok-text">Мы получили ваше обращение и ответим здесь же, в приложении.</p>
+      <h2 class="support__ok-title">{{ t('views.user.SupportView.m4') }}</h2>
+      <p class="support__ok-text">{{ t('views.user.SupportView.m5') }}</p>
       <VButton variant="primary" block class="support__ok-cta" @click="goHome">
         На главную
       </VButton>
@@ -43,13 +43,13 @@
     <div v-else class="support__content">
       <div class="support__hero">
         <IconSupportChat :size="56" class="support__hero-ic" />
-        <div class="support__hero-title">Как мы можем помочь?</div>
-        <div class="support__hero-sub">Обычно отвечаем в течение 24 часов</div>
+        <div class="support__hero-title">{{ t('views.user.SupportView.m6') }}</div>
+        <div class="support__hero-sub">{{ t('views.user.SupportView.m7') }}</div>
       </div>
 
       <!-- Topic -->
       <section class="support__section">
-        <h2 class="support__title">Тема</h2>
+        <h2 class="support__title">{{ t('views.user.SupportView.m8') }}</h2>
         <div class="support__card">
           <VRadioGroup v-model="topic" :options="topicOptions" />
           <div v-if="topic === 'other'" class="support__other">
@@ -57,8 +57,8 @@
               v-model="otherText"
               type="text"
               class="support__other-input"
-              placeholder="Укажите ваш вариант"
-              aria-label="Свой вариант темы"
+              :placeholder="t('views.user.SupportView.m1')"
+              :aria-label="t('views.user.SupportView.m2')"
               @focus="onFieldFocus"
             />
           </div>
@@ -67,18 +67,16 @@
 
       <!-- Message -->
       <section class="support__section">
-        <h2 class="support__title">Сообщение</h2>
+        <h2 class="support__title">{{ t('views.user.SupportView.m9') }}</h2>
         <VTextarea
           v-model="message"
           :rows="5"
-          placeholder="Опишите вашу проблему или вопрос..."
+          :placeholder="t('views.user.SupportView.m3')"
           @focus="onFieldFocus"
         />
       </section>
 
-      <a class="support__email" :href="emailHref"
-        >Не дождались ответа? Напишите на support@velo.app</a
-      >
+      <a class="support__email" :href="emailHref">{{ t('views.user.SupportView.m10') }}</a>
 
       <VButton
         variant="primary"
@@ -95,6 +93,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -120,11 +119,11 @@ interface SupportTopic {
   priority: SupportPriority
 }
 const TOPICS: SupportTopic[] = [
-  { value: 'payment', label: 'Проблема с оплатой / транзакцией', priority: 'P1' },
-  { value: 'complaint_master', label: 'Жалоба на мастера', priority: 'P0' },
-  { value: 'practice', label: 'Проблема с практикой', priority: 'P1' },
-  { value: 'technical', label: 'Технический вопрос', priority: 'P2' },
-  { value: 'other', label: 'Другое', priority: 'P2' },
+  { value: 'payment', label: t('views.user.SupportView.m11'), priority: 'P1' },
+  { value: 'complaint_master', label: t('views.user.SupportView.m12'), priority: 'P0' },
+  { value: 'practice', label: t('views.user.SupportView.m13'), priority: 'P1' },
+  { value: 'technical', label: t('views.user.SupportView.m14'), priority: 'P2' },
+  { value: 'other', label: t('views.user.SupportView.m15'), priority: 'P2' },
 ]
 // VRadioGroup only needs {value,label}; priority stays off the rendered options.
 const topicOptions = TOPICS.map((t) => ({ value: t.value, label: t.label }))
@@ -164,7 +163,7 @@ async function onSubmit(): Promise<void> {
     await sendSupportMessage(topicLabel, text)
     submitted.value = true
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось отправить обращение'))
+    toast.error(extractApiError(e, t('views.user.SupportView.m16')))
   } finally {
     submitting.value = false
   }

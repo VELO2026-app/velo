@@ -22,7 +22,7 @@
 <template>
   <FormShell
     v-model:comment="comment"
-    back-label="Практика"
+    :back-label="t('views.user.ReflectionView.m1')"
     :practice="practice"
     :practice-loading="practiceLoading"
     :load-error="practiceLoadError"
@@ -30,11 +30,11 @@
     :question-subtitle="variant.screenSubtitle"
     :submitting="diaryStore.reflectionSubmitting"
     :submit-disabled="false"
-    submit-label="Отправить"
+    :submit-label="t('views.user.ReflectionView.m2')"
     :submitted="submitted"
     success-icon=""
-    success-title="Спасибо, что поделились"
-    success-text="Бережно к себе. Возвращайтесь, когда будете готовы."
+    :success-title="t('views.user.ReflectionView.m3')"
+    :success-text="t('views.user.ReflectionView.m4')"
     @back="onBack"
     @retry="loadPractice"
     @submit="onSubmit"
@@ -47,7 +47,9 @@
       <span class="form-shell__practice-meta-cell">
         с {{ practice?.master_name ?? 'Мастером' }}
       </span>
-      <span class="form-shell__practice-meta-cell"> <IconCalendar :size="14" /> Вы не пришли </span>
+      <span class="form-shell__practice-meta-cell">
+        <IconCalendar :size="14" />{{ t('views.user.ReflectionView.m5') }}</span
+      >
     </template>
 
     <!-- No #selection slot: a no-show reflection has no rating slider. -->
@@ -59,12 +61,15 @@
       </span>
     </template>
     <template #success-actions>
-      <VButton variant="primary" size="lg" block @click="goToDashboard"> На главную </VButton>
+      <VButton variant="primary" size="lg" block @click="goToDashboard">{{
+        t('views.user.ReflectionView.m6')
+      }}</VButton>
     </template>
   </FormShell>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { historyHasBack } from '@/platform/history'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'

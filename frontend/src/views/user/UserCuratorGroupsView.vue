@@ -23,19 +23,21 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        title="Не удалось загрузить школы"
-        description="Проверьте соединение и попробуйте ещё раз."
+        :title="t('views.user.UserCuratorGroupsView.m1')"
+        :description="t('views.user.UserCuratorGroupsView.m2')"
       >
         <template #action>
-          <VButton variant="outline" @click="load">Повторить</VButton>
+          <VButton variant="outline" @click="load">{{
+            t('views.user.UserCuratorGroupsView.m5')
+          }}</VButton>
         </template>
       </VEmptyState>
 
       <VEmptyState
         v-else-if="!groups.length"
         icon="group"
-        title="Пока нет школ"
-        description="Вступить в школу можно по ссылке от куратора."
+        :title="t('views.user.UserCuratorGroupsView.m3')"
+        :description="t('views.user.UserCuratorGroupsView.m4')"
       />
 
       <template v-else>
@@ -51,6 +53,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getMyCuratorGroups } from '@/api/curatorGroups'

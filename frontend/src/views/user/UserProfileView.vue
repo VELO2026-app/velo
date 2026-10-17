@@ -48,7 +48,7 @@
     <div class="profile__menus">
       <!-- Account -->
       <div class="profile__menu-section">
-        <div class="profile__menu-title">Аккаунт</div>
+        <div class="profile__menu-title">{{ t('views.user.UserProfileView.m2') }}</div>
         <div class="profile__menu-list">
           <VMenuRow label="Редактировать профиль" @click="onEditProfile">
             <template #icon><IconPen :size="20" /></template>
@@ -58,7 +58,7 @@
           </VMenuRow>
           <VMenuRow
             v-if="authStore.role === 'user' && authStore.masterApplication"
-            label="Заявка мастера"
+            :label="t('views.user.UserProfileView.m1')"
             @click="router.push({ name: applicationRoute })"
           >
             <template #icon><IconPen :size="20" /></template>
@@ -76,7 +76,7 @@
 
       <!-- Settings -->
       <div class="profile__menu-section">
-        <div class="profile__menu-title">Настройки</div>
+        <div class="profile__menu-title">{{ t('views.user.UserProfileView.m3') }}</div>
         <div class="profile__menu-list">
           <VMenuRow label="Уведомления" @click="onNotifications">
             <template #icon><IconBell :size="20" /></template>
@@ -94,7 +94,7 @@
 
       <!-- Help -->
       <div class="profile__menu-section">
-        <div class="profile__menu-title">Помощь</div>
+        <div class="profile__menu-title">{{ t('views.user.UserProfileView.m4') }}</div>
         <div class="profile__menu-list">
           <VMenuRow label="Поддержка" @click="onSupport">
             <template #icon><IconSupport :size="20" /></template>
@@ -139,6 +139,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -175,13 +176,13 @@ const user = computed(() => authStore.user)
 const displayName = computed(() => {
   if (!user.value) return ''
   const parts = [user.value.first_name, user.value.last_name].filter(Boolean)
-  return parts.length > 0 ? parts.join(' ') : 'Пользователь'
+  return parts.length > 0 ? parts.join(' ') : t('views.user.UserProfileView.m5')
 })
 
 // -- Stats (attended practices + hours) from /bookings/me/stats --
 const practicesAttended = ref(0)
 const hoursAttended = ref(0)
-// B52: colour indicator on the "Сообщения" row, same request, no new call.
+// B52: colour indicator on the t('views.user.UserProfileView.m6') row, same request, no new call.
 const hasUnreadMessages = ref(false)
 
 /**
@@ -222,7 +223,7 @@ function onSupport(): void {
 }
 
 function onShare(): void {
-  toast.info('Поделиться будет доступно в следующем обновлении')
+  toast.info(t('views.user.UserProfileView.m7'))
 }
 
 async function onLogout(): Promise<void> {

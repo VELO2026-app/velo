@@ -37,10 +37,10 @@
   <VEmptyState
     v-else-if="store.selectedError"
     icon="warning"
-    title="Практика не найдена"
+    :title="t('views.user.PracticeDetailView.m1')"
     :description="store.selectedError"
   >
-    <VButton size="sm" @click="router.back()">Назад</VButton>
+    <VButton size="sm" @click="router.back()">{{ t('views.user.PracticeDetailView.m4') }}</VButton>
   </VEmptyState>
 
   <!-- Content -->
@@ -56,7 +56,7 @@
           <template #default="{ close }">
             <VMenuItem
               :icon="IconPen"
-              ariaLabel="Редактировать"
+              :ariaLabel="t('views.user.PracticeDetailView.m2')"
               @click="
                 () => {
                   goEdit()
@@ -89,7 +89,7 @@
       <!-- Status row (Batch 6: ported from BookingDetailView). Shown when
              the viewer holds a booking for this practice in any status. -->
       <VCard v-if="myAnyBooking" class="detail__status-row" padding="none">
-        <span class="detail__status-label">Статус</span>
+        <span class="detail__status-label">{{ t('views.user.PracticeDetailView.m5') }}</span>
         <VBadge :variant="statusVariant">
           <component :is="statusIcon" v-if="statusIcon" :size="12" />
           {{ statusLabel }}
@@ -108,7 +108,7 @@
 
       <!-- Master card (shared component) -->
       <section class="detail__section">
-        <h3 class="detail__section-title">Мастер</h3>
+        <h3 class="detail__section-title">{{ t('views.user.PracticeDetailView.m6') }}</h3>
         <MasterCard
           :master-name="practice.master_name"
           :methods="practice.master_methods"
@@ -133,7 +133,7 @@
       <Banner
         v-if="practice.contraindications"
         variant="warning"
-        title="ПРОТИВОПОКАЗАНИЯ"
+        :title="t('views.user.PracticeDetailView.m3')"
         :body="practice.contraindications"
         class="detail__contraindications"
       >
@@ -147,7 +147,7 @@
            "Моя практика" view (Figma 15) the practice is already paid for,
            so the price row is hidden. -->
       <VCard v-if="!booked" class="detail__price-row" padding="none">
-        <span class="detail__price-label">Стоимость</span>
+        <span class="detail__price-label">{{ t('views.user.PracticeDetailView.m7') }}</span>
         <span
           class="detail__price-value"
           :class="{ 'detail__price-value--free': practice.is_free }"
@@ -201,7 +201,7 @@
              is the real Zoom-side retention (owner-set in the console);
              phrased as a fact about the recording, not a promise from us --
              our backend does not control when Zoom deletes the file. -->
-        <p class="detail__recording-caption">Запись доступна в течение 7 дней после практики</p>
+        <p class="detail__recording-caption">{{ t('views.user.PracticeDetailView.m8') }}</p>
       </template>
 
       <!-- BE-108: no-show reflection. OUTSIDE the v-if/else-if ladder above
@@ -263,6 +263,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'
@@ -397,14 +398,14 @@ const myBooking = computed(() => {
 })
 
 // =========================================================================
-// Batch 6: merged "Бронирование" screen. The dedicated BookingDetailView is
+// Batch 6: merged t('views.user.PracticeDetailView.m9') screen. The dedicated BookingDetailView is
 // gone; its unique pieces (a status row + a ZOOM card) live here now.
 //
 // `myAnyBooking` is ANY booking the viewer holds for this practice, in ANY
 // status (including cancelled / no_show) -- so the history (status row, "Моя
 // практика" title) survives for past/cancelled bookings. This is separate
 // from `booked` / `myBooking` above (active-status semantics), which keep
-// driving price / "Забронировать" / "Вы записаны" / check-in / feedback and
+// driving price / t('views.user.PracticeDetailView.m10') / t('views.user.PracticeDetailView.m11') / check-in / feedback and
 // must NOT change. Selection: an active booking
 // (confirmed/pending/attended) wins; otherwise the latest by created_at.
 // =========================================================================
@@ -428,10 +429,10 @@ const myAnyBooking = computed((): BookingWithPracticeResponse | null => {
   )
 })
 
-/** Any booking exists (any status) -> show the "Моя практика" framing. */
+/** Any booking exists (any status) -> show the t('views.user.PracticeDetailView.m12') framing. */
 const hasAnyBooking = computed((): boolean => myAnyBooking.value !== null)
 
-/** A finished booking (attended / no_show) -> hide the "Забронировать" CTA. */
+/** A finished booking (attended / no_show) -> hide the t('views.user.PracticeDetailView.m13') CTA. */
 const isPastBooking = computed((): boolean => {
   const b = myAnyBooking.value
   return !!b && (b.status === 'attended' || b.status === 'no_show')
@@ -440,7 +441,7 @@ const isPastBooking = computed((): boolean => {
 /**
  * True once the practice has started (scheduled_at <= now). The booking
  * endpoint rejects a started practice (backend create_booking time guard);
- * we hide the "Забронировать" CTA so it never dangles on a past practice
+ * we hide the t('views.user.PracticeDetailView.m14') CTA so it never dangles on a past practice
  * opened from history / a deep link. Uses the reactive `now` (60s tick) so
  * the button disappears live when the start time passes. The backend stays
  * the source of truth (direct API call / the start-while-open race).
@@ -455,14 +456,14 @@ const practiceStarted = computed((): boolean => {
 // бывшую disabled-кнопку). Глобальный лейбл «Подтверждена» (Мои записи и пр.)
 // живёт в своих местах и не трогается.
 const STATUS_LABEL: Record<BookingStatus, string> = {
-  pending: 'Ожидает',
-  confirmed: 'Вы записаны',
-  attended: 'Завершена',
-  // B30 (PROMPT №746, owner wording): was 'Неявка', inconsistent with
-  // MyBookingsView's 'Не состоялась' for the same status -- now identical
+  pending: t('views.user.PracticeDetailView.m15'),
+  confirmed: t('views.user.PracticeDetailView.m16'),
+  attended: t('views.user.PracticeDetailView.m17'),
+  // B30 (PROMPT №746, owner wording): was t('views.user.PracticeDetailView.m18'), inconsistent with
+  // MyBookingsView's t('views.user.PracticeDetailView.m19') for the same status -- now identical
   // to it there too.
-  no_show: 'Вы не пришли',
-  cancelled: 'Отменена',
+  no_show: t('views.user.PracticeDetailView.m20'),
+  cancelled: t('views.user.PracticeDetailView.m21'),
 }
 
 const STATUS_VARIANT: Record<BookingStatus, 'success' | 'warning' | 'error' | 'info'> = {
@@ -488,7 +489,7 @@ const attendancePending = computed((): boolean => {
 })
 
 const statusLabel = computed(() => {
-  if (attendancePending.value) return 'Посещаемость подсчитывается'
+  if (attendancePending.value) return t('views.user.PracticeDetailView.m22')
   return myAnyBooking.value ? STATUS_LABEL[myAnyBooking.value.status] : ''
 })
 const statusVariant = computed(() => {
@@ -524,7 +525,7 @@ const showZoom = computed((): boolean => {
 const inCheckinWindow = computed((): boolean => {
   if (!practice.value || !myBooking.value) return false
   if (myBooking.value.status !== 'confirmed') return false
-  // One check-in per booking: once done, drop back to the "Вы записаны" state.
+  // One check-in per booking: once done, drop back to the t('views.user.PracticeDetailView.m23') state.
   if (myBooking.value.has_checkin) return false
   const scheduledMs = new Date(practice.value.scheduled_at).getTime()
   return isInCheckinWindow(scheduledMs, now.value)
@@ -536,7 +537,7 @@ const inCheckinWindow = computed((): boolean => {
 const inFeedbackWindow = computed((): boolean => {
   if (!practice.value || !myBooking.value) return false
   if (myBooking.value.status !== 'attended') return false
-  // One feedback per booking: once left, drop back to the "Вы записаны" state.
+  // One feedback per booking: once left, drop back to the t('views.user.PracticeDetailView.m24') state.
   if (myBooking.value.has_feedback) return false
   const scheduledMs = new Date(practice.value.scheduled_at).getTime()
   return isInFeedbackWindow(scheduledMs, practice.value.duration_minutes, now.value)
@@ -652,9 +653,9 @@ const full = computed(() => {
 })
 
 const bookButtonText = computed(() => {
-  if (full.value) return 'Мест нет'
-  if (practice.value?.is_free) return 'Записаться бесплатно'
-  return 'Забронировать'
+  if (full.value) return t('views.user.PracticeDetailView.m25')
+  if (practice.value?.is_free) return t('views.user.PracticeDetailView.m26')
+  return t('views.user.PracticeDetailView.m27')
 })
 
 // =========================================================================
@@ -741,7 +742,7 @@ async function onCancelBooking(): Promise<void> {
     toast.error(result.error)
     return
   }
-  toast.success('Бронирование отменено')
+  toast.success(t('views.user.PracticeDetailView.m28'))
   justPurchased.value = false
 }
 
@@ -801,7 +802,7 @@ onUnmounted(() => {
 
 /* Outer container: a plain block — the whole screen scrolls in MobileLayout's
  * single __main scroll. No nested scroll / no pinned footer (operator fix:
- * "скролл на блоке, а не общий"). Hero + body + actions flow top-to-bottom. */
+ * t('views.user.PracticeDetailView.m29')). Hero + body + actions flow top-to-bottom. */
 .detail {
   display: flex;
   flex-direction: column;

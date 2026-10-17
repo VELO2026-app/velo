@@ -30,22 +30,22 @@
     <VEmptyState
       v-else-if="feedbackGate === 'waiting'"
       icon="calendar"
-      title="Ждём подтверждения участия"
-      description="Отзыв можно будет оставить, когда Zoom подтвердит участие"
+      :title="t('views.user.FeedbackView.m1')"
+      :description="t('views.user.FeedbackView.m2')"
     >
-      <VButton size="sm" @click="goToDashboard">На главную</VButton>
+      <VButton size="sm" @click="goToDashboard">{{ t('views.user.FeedbackView.m10') }}</VButton>
     </VEmptyState>
     <VEmptyState
       v-else
       icon="warning"
-      title="Отзыв недоступен"
+      :title="t('views.user.FeedbackView.m3')"
       :description="
         feedbackGate === 'not_attended'
           ? 'Zoom не подтвердил ваше участие в этой практике'
           : 'Запись на эту практику отменена'
       "
     >
-      <VButton size="sm" @click="goToDashboard">На главную</VButton>
+      <VButton size="sm" @click="goToDashboard">{{ t('views.user.FeedbackView.m11') }}</VButton>
     </VEmptyState>
   </div>
   <FormShell
@@ -55,15 +55,15 @@
     :practice="practice"
     :practice-loading="practiceLoading"
     :load-error="practiceLoadError"
-    question-title="Как прошла практика?"
-    question-subtitle="Оцените своё состояние после"
+    :question-title="t('views.user.FeedbackView.m4')"
+    :question-subtitle="t('views.user.FeedbackView.m5')"
     :submitting="diaryStore.feedbackSubmitting"
     :submit-disabled="false"
-    submit-label="Отправить feedback"
+    :submit-label="t('views.user.FeedbackView.m6')"
     :submitted="submitted"
     success-icon=""
-    success-title="Спасибо за feedback!"
-    success-text="Ваш отзыв поможет нам улучшить практики"
+    :success-title="t('views.user.FeedbackView.m7')"
+    :success-text="t('views.user.FeedbackView.m8')"
     @back="onBack"
     @retry="loadPractice"
     @submit="onSubmit"
@@ -73,7 +73,9 @@
       <span class="form-shell__practice-meta-cell">
         с {{ practice?.master_name ?? 'Мастером' }}
       </span>
-      <span class="form-shell__practice-meta-cell"> <IconCalendar :size="14" /> Завершена </span>
+      <span class="form-shell__practice-meta-cell">
+        <IconCalendar :size="14" />{{ t('views.user.FeedbackView.m12') }}</span
+      >
     </template>
 
     <!-- Rating: the same FE-85 unified scale as Check-in (one component, one
@@ -82,7 +84,7 @@
       <div class="feedback__rating">
         <MoodSlider
           v-model="ratingScore"
-          aria-label="Оценка практики от 1 до 10"
+          :aria-label="t('views.user.FeedbackView.m9')"
           :disabled="diaryStore.feedbackSubmitting"
         />
       </div>
@@ -97,7 +99,9 @@
 
     <!-- Success actions: primary "В дневник" + text link "На главную" (Figma 2266:2296) -->
     <template #success-actions>
-      <VButton variant="primary" size="lg" block @click="goToDiary"> В дневник </VButton>
+      <VButton variant="primary" size="lg" block @click="goToDiary">{{
+        t('views.user.FeedbackView.m13')
+      }}</VButton>
       <button type="button" class="feedback__success-link" @click="goToDashboard">
         На главную
       </button>
@@ -106,6 +110,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { historyHasBack } from '@/platform/history'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'

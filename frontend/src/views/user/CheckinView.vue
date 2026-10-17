@@ -15,16 +15,16 @@
     :practice="practice"
     :practice-loading="practiceLoading"
     :load-error="practiceLoadError"
-    question-title="Как вы себя чувствуете?"
-    question-subtitle="Оцените своё состояние перед практикой"
+    :question-title="t('views.user.CheckinView.m1')"
+    :question-subtitle="t('views.user.CheckinView.m2')"
     :submitting="diaryStore.checkinSubmitting"
     :submit-disabled="windowClosed"
     :disabled-hint="practice && windowClosed ? 'Check-in закрыт — практика уже началась' : ''"
-    submit-label="Отправить"
+    :submit-label="t('views.user.CheckinView.m3')"
     :show-skip="true"
     :submitted="submitted"
-    success-title="Check-in отправлен"
-    success-text="Ваше состояние записано, хорошей практики!"
+    :success-title="t('views.user.CheckinView.m4')"
+    :success-text="t('views.user.CheckinView.m5')"
     @back="onBack"
     @retry="loadPractice"
     @submit="onSubmit"
@@ -46,7 +46,7 @@
       <div class="checkin__mood">
         <MoodSlider
           v-model="moodScore"
-          aria-label="Оценка состояния от 1 до 10"
+          :aria-label="t('views.user.CheckinView.m6')"
           :disabled="diaryStore.checkinSubmitting"
         />
       </div>
@@ -64,12 +64,15 @@
       <VButton variant="primary" size="lg" block @click="goToPracticeLive">
         Начать практику
       </VButton>
-      <VButton variant="ghost" block @click="goToDashboard"> На главную </VButton>
+      <VButton variant="ghost" block @click="goToDashboard">{{
+        t('views.user.CheckinView.m7')
+      }}</VButton>
     </template>
   </FormShell>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'
@@ -119,7 +122,7 @@ const windowClosed = computed<boolean>(() => {
   // deep link whose fetch failed offered a live button for a POST the backend
   // was always going to refuse. The hint is gated on `practice` in the template
   // for the same reason: while we have no data, the button is disabled because
-  // we do not KNOW, and claiming "практика уже началась" would be a guess.
+  // we do not KNOW, and claiming t('views.user.CheckinView.m8') would be a guess.
   if (!s) return true
   return nowMs.value > new Date(s).getTime()
 })
@@ -182,22 +185,22 @@ async function onSubmit(): Promise<void> {
 // loaded, no second round-trip) -- never a raw backend string.
 function closedPracticeMessage(code: string | undefined): string | null {
   if (code === 'blocked_by_master') {
-    return 'Мастер ограничил вам доступ к этой практике'
+    return t('views.user.CheckinView.m9')
   }
   if (code === 'not_a_student') {
-    return 'Эта практика доступна только ученикам мастера'
+    return t('views.user.CheckinView.m10')
   }
   if (code === 'not_in_audience') {
     const names = practice.value?.audience_group_names ?? []
     return names.length
       ? `Вы не состоите в группе «${names.join('», «')}»`
-      : 'Вы не состоите в группе, которой открыта эта практика'
+      : t('views.user.CheckinView.m11')
   }
   return null
 }
 
 function onSkip(): void {
-  // Optimistic: hide the dashboard "Пора на check-in" banner instantly this
+  // Optimistic: hide the dashboard t('views.user.CheckinView.m12') banner instantly this
   // session, so navigation feels immediate.
   bookingsStore.dismissCheckin(practiceId)
   // Persist the skip (B2) so the prompt stays hidden across sessions/devices.
@@ -208,7 +211,7 @@ function onSkip(): void {
   if (booking) {
     void bookingsStore.skipCheckin(booking.id)
   }
-  toast.info('Check-in пропущен')
+  toast.info(t('views.user.CheckinView.m13'))
   void router.push({ name: 'user-dashboard' })
 }
 
