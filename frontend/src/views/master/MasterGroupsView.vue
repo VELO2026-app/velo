@@ -49,8 +49,8 @@
         <div class="groups__search-field">
           <VInput
             v-model="search"
-            :placeholder="t('views.master.MasterGroupsView.m1')"
-            :aria-label="t('views.master.MasterGroupsView.m2')"
+            :placeholder="t('masterScreens.masterGroups.m1')"
+            :aria-label="t('masterScreens.masterGroups.m2')"
             @focus="onFieldFocus"
           />
         </div>
@@ -60,7 +60,7 @@
         <!-- Group-name matches: instant, client-side over already-loaded groups. -->
         <template v-if="matchingGroups.length">
           <h2 class="velo-section-title groups__search-heading">
-            {{ t('views.master.MasterGroupsView.m9') }}
+            {{ t('masterScreens.masterGroups.m9') }}
           </h2>
           <div
             v-for="group in matchingGroups"
@@ -83,17 +83,17 @@
         <VEmptyState
           v-else-if="searchError"
           icon="warning"
-          :title="t('views.master.MasterGroupsView.m3')"
+          :title="t('masterScreens.masterGroups.m3')"
           :description="searchError"
         >
           <VButton size="sm" variant="outline" @click="loadSearch">{{
-            t('views.master.MasterGroupsView.m10')
+            t('masterScreens.masterGroups.m10')
           }}</VButton>
         </VEmptyState>
 
         <template v-else-if="searchResults.length">
           <h2 class="velo-section-title groups__search-heading">
-            {{ t('views.master.MasterGroupsView.m11') }}
+            {{ t('masterScreens.masterGroups.m11') }}
           </h2>
           <VListRow
             v-for="row in searchResults"
@@ -118,8 +118,8 @@
             searchResults.length === 0
           "
           icon="group"
-          :title="t('views.master.MasterGroupsView.m4')"
-          :description="t('views.master.MasterGroupsView.m5')"
+          :title="t('masterScreens.masterGroups.m4')"
+          :description="t('masterScreens.masterGroups.m5')"
         />
       </template>
 
@@ -132,11 +132,11 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        :title="t('views.master.MasterGroupsView.m6')"
+        :title="t('masterScreens.masterGroups.m6')"
         :description="error"
       >
         <VButton size="sm" variant="outline" @click="load">{{
-          t('views.master.MasterGroupsView.m12')
+          t('masterScreens.masterGroups.m12')
         }}</VButton>
       </VEmptyState>
 
@@ -163,8 +163,8 @@
         <VEmptyState
           v-if="groups.length === 0"
           icon="group"
-          :title="t('views.master.MasterGroupsView.m7')"
-          :description="t('views.master.MasterGroupsView.m8')"
+          :title="t('masterScreens.masterGroups.m7')"
+          :description="t('masterScreens.masterGroups.m8')"
         />
       </template>
     </div>
@@ -199,7 +199,7 @@ async function load(): Promise<void> {
     const res = await getGroups()
     groups.value = res.items
   } catch (e) {
-    error.value = extractApiError(e, t('views.master.MasterGroupsView.m13'))
+    error.value = extractApiError(e, t('masterScreens.masterGroups.m13'))
   } finally {
     loading.value = false
   }
@@ -225,7 +225,7 @@ async function loadSearch(): Promise<void> {
     const res = await searchGroupMemberships(search.value)
     searchResults.value = res.items
   } catch (e) {
-    searchError.value = extractApiError(e, t('views.master.MasterGroupsView.m14'))
+    searchError.value = extractApiError(e, t('masterScreens.masterGroups.m14'))
   } finally {
     searchLoading.value = false
   }
@@ -245,7 +245,7 @@ watch(search, (value) => {
 })
 
 // Show the first 5 (owner Q7, PROMPT №610 -- was 10); the rest hide behind
-// the outlined t('views.master.MasterGroupsView.m15') pill (VShowMore already built this exact
+// the outlined t('masterScreens.masterGroups.m15') pill (VShowMore already built this exact
 // recipe -- primary stroke + primary text, see that file -- no visual
 // change needed there, only this constant). Never applies while a search
 // query is active: that's a structurally separate branch above

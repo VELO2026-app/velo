@@ -41,7 +41,7 @@
     <div v-else-if="error" class="checkins__content">
       <VEmptyState icon="warning" title="Не удалось загрузить check-ins" :description="error">
         <VButton size="sm" variant="outline" @click="load">{{
-          t('views.master.AttendanceView.m3')
+          t('masterScreens.attendance.m3')
         }}</VButton>
       </VEmptyState>
     </div>
@@ -61,8 +61,8 @@
         <VEmptyState
           v-if="attendance.total === 0"
           icon="group"
-          :title="t('views.master.AttendanceView.m1')"
-          :description="t('views.master.AttendanceView.m2')"
+          :title="t('masterScreens.attendance.m1')"
+          :description="t('masterScreens.attendance.m2')"
         />
 
         <!-- Participants -->
@@ -79,14 +79,14 @@
               {{ item.checkin.comment }}
             </div>
             <div v-else-if="item.status === 'no_show'" class="checkins__meta">
-              {{ t('views.master.AttendanceView.m4') }}
+              {{ t('masterScreens.attendance.m4') }}
             </div>
             <!-- Checked in (mood submitted) but left no comment: do NOT say
                  «Ожидает check-in» — their mood face already shows they're in. -->
             <div v-else-if="item.checkin" class="checkins__meta">
-              {{ t('views.master.AttendanceView.m5') }}
+              {{ t('masterScreens.attendance.m5') }}
             </div>
-            <div v-else class="checkins__meta">{{ t('views.master.AttendanceView.m6') }}</div>
+            <div v-else class="checkins__meta">{{ t('masterScreens.attendance.m6') }}</div>
           </div>
         </div>
 
@@ -171,7 +171,7 @@ async function load(): Promise<void> {
     const [attendanceData] = await Promise.all([getAttendance(practiceId), loadPractice()])
     attendance.value = attendanceData
   } catch (e) {
-    error.value = extractApiError(e, t('views.master.AttendanceView.m7'))
+    error.value = extractApiError(e, t('masterScreens.attendance.m7'))
   } finally {
     loading.value = false
   }

@@ -40,7 +40,7 @@
   <div class="ea">
     <header class="ea__header">
       <VBackButton aria-label="Назад на главную" @click="goBack" />
-      <h1 class="ea__title">{{ t('views.user.ExternalActivityCreateView.m9') }}</h1>
+      <h1 class="ea__title">{{ t('user.screens.externalActivityCreate.m9') }}</h1>
     </header>
 
     <div ref="bodyEl" class="ea__body">
@@ -50,14 +50,14 @@
       <!--
       <div class="ea__legend">
         <IconRequired class="ea__legend-seal" :size="22" />
-        <span>{{ t('views.user.ExternalActivityCreateView.m10') }}</span>
+        <span>{{ t('user.screens.externalActivityCreate.m10') }}</span>
       </div>
       -->
 
       <!-- ================= Когда произошло событие ================= -->
       <section class="ea__section">
         <h2 class="velo-section-title">
-          {{ t('views.user.ExternalActivityCreateView.m11') }}<span class="ea__req">*</span>
+          {{ t('user.screens.externalActivityCreate.m11') }}<span class="ea__req">*</span>
         </h2>
 
         <div class="ea__field" data-field="date">
@@ -97,7 +97,7 @@
       <!-- ================= Выбор активности ================= -->
       <section class="ea__section">
         <h2 class="velo-section-title">
-          {{ t('views.user.ExternalActivityCreateView.m12') }}<span class="ea__req">*</span>
+          {{ t('user.screens.externalActivityCreate.m12') }}<span class="ea__req">*</span>
         </h2>
 
         <div class="ea__activity" data-field="activity">
@@ -123,7 +123,7 @@
               <button
                 type="button"
                 class="ea__chip-remove"
-                :aria-label="t('views.user.ExternalActivityCreateView.m1')"
+                :aria-label="t('user.screens.externalActivityCreate.m1')"
                 @click="removeCustomChip"
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -142,9 +142,9 @@
               v-model="customInput"
               class="ea__custom-input"
               type="text"
-              :placeholder="t('views.user.ExternalActivityCreateView.m2')"
+              :placeholder="t('user.screens.externalActivityCreate.m2')"
               :maxlength="CUSTOM_NAME_MAX"
-              :aria-label="t('views.user.ExternalActivityCreateView.m3')"
+              :aria-label="t('user.screens.externalActivityCreate.m3')"
               :disabled="!!customChip"
               @input="onCustomInput"
               @keydown.enter.prevent="commitCustom"
@@ -152,7 +152,7 @@
             <button
               type="button"
               class="ea__custom-commit"
-              :aria-label="t('views.user.ExternalActivityCreateView.m4')"
+              :aria-label="t('user.screens.externalActivityCreate.m4')"
               :disabled="!!customChip"
               @click="commitCustom"
             >
@@ -181,12 +181,12 @@
            backend mood 422 (contract drift), which no interaction on this
            screen can otherwise produce. -->
       <section v-if="!EXTERNAL_ACTIVITY_MOOD_HIDDEN" class="ea__section">
-        <h2 class="velo-section-title">{{ t('views.user.ExternalActivityCreateView.m13') }}</h2>
+        <h2 class="velo-section-title">{{ t('user.screens.externalActivityCreate.m13') }}</h2>
 
         <div class="ea__state-block" data-field="state">
           <MoodSlider
             v-model="moodScore"
-            :aria-label="t('views.user.ExternalActivityCreateView.m5')"
+            :aria-label="t('user.screens.externalActivityCreate.m5')"
             :disabled="diaryStore.externalActivitySubmitting"
           />
         </div>
@@ -197,10 +197,10 @@
 
       <!-- ================= Мысли ================= -->
       <section class="ea__section">
-        <h2 class="velo-section-title">{{ t('views.user.ExternalActivityCreateView.m14') }}</h2>
+        <h2 class="velo-section-title">{{ t('user.screens.externalActivityCreate.m14') }}</h2>
         <div class="ea__thoughts" data-field="thoughts">
           <VTextarea
-            :label="t('views.user.ExternalActivityCreateView.m6')"
+            :label="t('user.screens.externalActivityCreate.m6')"
             hide-label
             :rows="5"
             :maxlength="THOUGHTS_MAX"
@@ -229,7 +229,7 @@
           class="ea__save-spinner"
           aria-hidden="true"
         />
-        <span class="ea__save-label">{{ t('views.user.ExternalActivityCreateView.m15') }}</span>
+        <span class="ea__save-label">{{ t('user.screens.externalActivityCreate.m15') }}</span>
       </button>
     </div>
 
@@ -237,14 +237,14 @@
       :open="showDate"
       :model-value="date"
       :max="todayIso"
-      :title="t('views.user.ExternalActivityCreateView.m7')"
+      :title="t('user.screens.externalActivityCreate.m7')"
       @update:model-value="onDatePicked"
       @close="showDate = false"
     />
     <TimePickerSheet
       :open="showTime"
       :model-value="time"
-      :title="t('views.user.ExternalActivityCreateView.m8')"
+      :title="t('user.screens.externalActivityCreate.m8')"
       @update:model-value="onTimePicked"
       @close="showTime = false"
     />
@@ -278,12 +278,12 @@ const timezone = useViewerTimezone()
 // "UI key -> backend enum" adapter the task doc planned is this table itself:
 // one place to read, nothing to drift.
 const ACTIVITY_OPTIONS: ReadonlyArray<{ value: ExternalActivityType; label: string }> = [
-  { value: 'vocal', label: t('views.user.ExternalActivityCreateView.m16') },
-  { value: 'nail_standing', label: t('views.user.ExternalActivityCreateView.m17') },
-  { value: 'meditation', label: t('views.user.ExternalActivityCreateView.m18') },
-  { value: 'massage', label: t('views.user.ExternalActivityCreateView.m19') },
-  { value: 'yoga', label: t('views.user.ExternalActivityCreateView.m20') },
-  { value: 'dance', label: t('views.user.ExternalActivityCreateView.m21') },
+  { value: 'vocal', label: t('user.screens.externalActivityCreate.m16') },
+  { value: 'nail_standing', label: t('user.screens.externalActivityCreate.m17') },
+  { value: 'meditation', label: t('user.screens.externalActivityCreate.m18') },
+  { value: 'massage', label: t('user.screens.externalActivityCreate.m19') },
+  { value: 'yoga', label: t('user.screens.externalActivityCreate.m20') },
+  { value: 'dance', label: t('user.screens.externalActivityCreate.m21') },
 ]
 
 // «Мое состояние» is the FE-85 unified MoodSlider (PM-9 branch 1 + the
@@ -297,7 +297,7 @@ const ACTIVITY_OPTIONS: ReadonlyArray<{ value: ExternalActivityType; label: stri
 // thoughts <= 10000. Enforced here so a 422 length error is unreachable.
 const CUSTOM_NAME_MAX = 120
 const THOUGHTS_MAX = 10000
-const THOUGHTS_PLACEHOLDER = t('views.user.ExternalActivityCreateView.m22')
+const THOUGHTS_PLACEHOLDER = t('user.screens.externalActivityCreate.m22')
 
 // -- Draft: everything empty at start (no prefilled now / default state) ------
 const date = ref('') // YYYY-MM-DD, the viewer's own calendar
@@ -332,7 +332,7 @@ const bodyEl = ref<HTMLElement | null>(null)
 const zone = computed(() => timezone.value ?? 'UTC')
 const todayIso = computed(() => DateTime.now().setZone(zone.value).toISODate() ?? '')
 
-// Friendly date for the trigger field, e.g. t('views.user.ExternalActivityCreateView.m23') -- the same recipe
+// Friendly date for the trigger field, e.g. t('user.screens.externalActivityCreate.m23') -- the same recipe
 // CreatePracticeView's own date trigger uses.
 const dateDisplay = computed((): string =>
   date.value ? `${formatShortDate(`${date.value}T12:00:00`)} ${date.value.slice(0, 4)}` : '',
@@ -373,7 +373,7 @@ function onCustomInput(): void {
 function commitCustom(): void {
   const name = customInput.value.trim()
   if (name.length === 0) {
-    errors.value.custom = t('views.user.ExternalActivityCreateView.m24')
+    errors.value.custom = t('user.screens.externalActivityCreate.m24')
     return
   }
   customChip.value = name
@@ -415,11 +415,9 @@ function fieldHasError(key: (typeof FIELD_ORDER)[number]): boolean {
 }
 
 function validate(): boolean {
-  errors.value.date = date.value ? '' : t('views.user.ExternalActivityCreateView.m25')
-  errors.value.time = time.value ? '' : t('views.user.ExternalActivityCreateView.m26')
-  errors.value.activity = selectedActivity.value
-    ? ''
-    : t('views.user.ExternalActivityCreateView.m27')
+  errors.value.date = date.value ? '' : t('user.screens.externalActivityCreate.m25')
+  errors.value.time = time.value ? '' : t('user.screens.externalActivityCreate.m26')
+  errors.value.activity = selectedActivity.value ? '' : t('user.screens.externalActivityCreate.m27')
   errors.value.custom =
     selectedActivity.value === 'custom' && customChip.value === null ? 'Укажите ваш вариант' : ''
   // The mood never blocks: the slider stands on the visible default, so
@@ -428,7 +426,7 @@ function validate(): boolean {
   errors.value.future = ''
   const ts = occurredAt()
   if (ts && ts > DateTime.now()) {
-    errors.value.future = t('views.user.ExternalActivityCreateView.m28')
+    errors.value.future = t('user.screens.externalActivityCreate.m28')
   }
   return !FIELD_ORDER.some(fieldHasError)
 }
@@ -497,7 +495,7 @@ async function onSubmit(): Promise<void> {
   })
 
   if (result.ok) {
-    toast.success(t('views.user.ExternalActivityCreateView.m29'))
+    toast.success(t('user.screens.externalActivityCreate.m29'))
     void router.push({ name: 'user-diary' })
     return
   }
@@ -507,7 +505,7 @@ async function onSubmit(): Promise<void> {
   }
   // Unknown/network failure: stay on the form, keep the draft, one honest
   // toast -- never a success and never a navigation.
-  toast.error(t('views.user.ExternalActivityCreateView.m30'))
+  toast.error(t('user.screens.externalActivityCreate.m30'))
 }
 </script>
 

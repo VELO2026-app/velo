@@ -28,7 +28,7 @@
     <!-- Header: arrow-only back-pill (63×35) + left-aligned title (Figma "View entry") -->
     <header class="detail__header">
       <VBackButton aria-label="Назад" @click="goBack" />
-      <h1 class="detail__title-bar">{{ t('views.user.DetailView.m2') }}</h1>
+      <h1 class="detail__title-bar">{{ t('user.screens.detail.m2') }}</h1>
     </header>
 
     <!-- Body -->
@@ -42,11 +42,11 @@
       <VEmptyState
         v-else-if="loadError"
         icon="warning"
-        :title="t('views.user.DetailView.m1')"
+        :title="t('user.screens.detail.m1')"
         :description="loadError"
       >
         <template #action>
-          <VButton variant="primary" @click="reload">{{ t('views.user.DetailView.m3') }}</VButton>
+          <VButton variant="primary" @click="reload">{{ t('user.screens.detail.m3') }}</VButton>
         </template>
       </VEmptyState>
 
@@ -72,7 +72,7 @@
         <VCard class="detail__card">
           <p class="detail__date">{{ dateLine }}</p>
           <p v-if="comment" class="detail__content">{{ comment }}</p>
-          <p v-else class="detail__empty">{{ t('views.user.DetailView.m4') }}</p>
+          <p v-else class="detail__empty">{{ t('user.screens.detail.m4') }}</p>
           <p v-if="contextLine" class="detail__context">{{ contextLine }}</p>
         </VCard>
       </template>
@@ -152,10 +152,10 @@ const practiceDuration = computed(() =>
 )
 
 // Context line under the comment: relates this check-in / feedback to the
-// linked practice (t('views.user.DetailView.m5') / t('views.user.DetailView.m6')).
+// linked practice (t('user.screens.detail.m5') / t('user.screens.detail.m6')).
 const contextLine = computed(() => {
   if (!practice.value) return ''
-  const name = practice.value.master_name ?? t('views.user.DetailView.m7')
+  const name = practice.value.master_name ?? t('user.screens.detail.m7')
   const rel = detailType.value === 'checkin' ? 'Перед практикой' : 'После практики'
   return `${rel}: ${practice.value.title} с ${name}`
 })
@@ -188,7 +188,7 @@ async function reload(): Promise<void> {
       }
     }
   } catch (e) {
-    loadError.value = extractApiError(e, t('views.user.DetailView.m8'))
+    loadError.value = extractApiError(e, t('user.screens.detail.m8'))
   } finally {
     loading.value = false
   }

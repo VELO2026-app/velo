@@ -29,7 +29,7 @@
           v-if="canCreate"
           type="button"
           class="schools__add-btn"
-          :aria-label="t('views.user.SchoolsView.m1')"
+          :aria-label="t('user.screens.schools.m1')"
           @click="router.push({ name: 'master-curator-group-create' })"
         >
           <IconPlusFilled :size="20" />
@@ -45,11 +45,11 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        :title="t('views.user.SchoolsView.m2')"
-        :description="t('views.user.SchoolsView.m3')"
+        :title="t('user.screens.schools.m2')"
+        :description="t('user.screens.schools.m3')"
       >
         <template #action>
-          <VButton variant="outline" @click="load">{{ t('views.user.SchoolsView.m6') }}</VButton>
+          <VButton variant="outline" @click="load">{{ t('user.screens.schools.m6') }}</VButton>
         </template>
       </VEmptyState>
 
@@ -73,8 +73,8 @@
       <VEmptyState
         v-else-if="!schools.length"
         icon="group"
-        :title="t('views.user.SchoolsView.m4')"
-        :description="t('views.user.SchoolsView.m5')"
+        :title="t('user.screens.schools.m4')"
+        :description="t('user.screens.schools.m5')"
       />
 
       <template v-else>

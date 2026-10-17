@@ -17,7 +17,7 @@
   <div class="admin-list">
     <header class="admin-list__top">
       <VBackButton @click="router.push({ name: 'admin-masters' })" />
-      <h1 class="admin-list__title">{{ t('views.admin.AdminCuratorGroupsView.m3') }}</h1>
+      <h1 class="admin-list__title">{{ t('adminScreens.adminCuratorGroups.m3') }}</h1>
       <span class="admin-list__count">{{ total || '—' }}</span>
     </header>
 
@@ -26,12 +26,12 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('views.admin.AdminCuratorGroupsView.m1')"
-      :description="t('views.admin.AdminCuratorGroupsView.m2')"
+      :title="t('adminScreens.adminCuratorGroups.m1')"
+      :description="t('adminScreens.adminCuratorGroups.m2')"
     >
       <template #action
         ><VButton variant="primary" @click="load(true)">{{
-          t('views.admin.AdminCuratorGroupsView.m4')
+          t('adminScreens.adminCuratorGroups.m4')
         }}</VButton></template
       >
     </VEmptyState>
@@ -61,7 +61,7 @@
 
       <div v-if="hasMore" class="admin-list__more">
         <VButton variant="outline" :loading="loading" @click="load(false)">{{
-          t('views.admin.AdminCuratorGroupsView.m5')
+          t('adminScreens.adminCuratorGroups.m5')
         }}</VButton>
       </div>
     </template>
@@ -105,7 +105,7 @@ async function load(reset: boolean): Promise<void> {
     total.value = res.total
     groups.value = reset ? res.items : [...groups.value, ...res.items]
   } catch {
-    toast.error(t('views.admin.AdminCuratorGroupsView.m6'))
+    toast.error(t('adminScreens.adminCuratorGroups.m6'))
     // W12 discipline: only a failed FIRST page is an error state; a failed
     // loadMore keeps the loaded page and toasts.
     if (reset) error.value = true
@@ -114,7 +114,7 @@ async function load(reset: boolean): Promise<void> {
   }
 }
 
-// t('views.admin.AdminCuratorGroupsView.m7') — school creation month, from created_at (UTC).
+// t('adminScreens.adminCuratorGroups.m7') — school creation month, from created_at (UTC).
 function createdLabel(iso: string): string {
   const d = new Date(iso)
   const month = new Intl.DateTimeFormat('ru-RU', { month: 'short', timeZone: 'UTC' })

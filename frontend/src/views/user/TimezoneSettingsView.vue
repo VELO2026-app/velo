@@ -30,7 +30,7 @@
     <div class="tz-settings__content">
       <!-- Timezone (UNCHANGED — existing onboarding picker, shared with the user) -->
       <section class="tz-settings__section">
-        <h2 class="tz-settings__section-title">{{ t('views.user.TimezoneSettingsView.m1') }}</h2>
+        <h2 class="tz-settings__section-title">{{ t('user.screens.timezoneSettings.m1') }}</h2>
         <p class="tz-settings__subtitle">
           Время практик будет отображаться в выбранном часовом поясе
         </p>
@@ -39,7 +39,7 @@
 
       <!-- Date format (captured-only — see header / Zod task) -->
       <section class="tz-settings__section">
-        <h2 class="tz-settings__section-title">{{ t('views.user.TimezoneSettingsView.m2') }}</h2>
+        <h2 class="tz-settings__section-title">{{ t('user.screens.timezoneSettings.m2') }}</h2>
         <VSelect v-model="selectedDateFormat" :options="DATE_FORMAT_OPTIONS" />
       </section>
     </div>
@@ -65,9 +65,9 @@ const authStore = useAuthStore()
 // Built per the SVG but inert: dates render through the fixed format.ts, so the
 // choice does not apply yet. Zod task: persist + apply a date-format preference.
 const DATE_FORMAT_OPTIONS = [
-  { value: 'dd.mm.yyyy', label: t('views.user.TimezoneSettingsView.m3') },
-  { value: 'yyyy-mm-dd', label: t('views.user.TimezoneSettingsView.m4') },
-  { value: 'mm/dd/yyyy', label: t('views.user.TimezoneSettingsView.m5') },
+  { value: 'dd.mm.yyyy', label: t('user.screens.timezoneSettings.m3') },
+  { value: 'yyyy-mm-dd', label: t('user.screens.timezoneSettings.m4') },
+  { value: 'mm/dd/yyyy', label: t('user.screens.timezoneSettings.m5') },
 ]
 const selectedDateFormat = ref('dd.mm.yyyy')
 
@@ -99,11 +99,11 @@ async function onTimezoneChange(value: string): Promise<void> {
   saving.value = true
   try {
     await authStore.updateProfile({ timezone: value })
-    toast.info(t('views.user.TimezoneSettingsView.m6'))
+    toast.info(t('user.screens.timezoneSettings.m6'))
   } catch (error) {
     // Revert the selection so the UI matches the server on failure.
     selectedTimezone.value = previous
-    toast.error(extractApiError(error, t('views.user.TimezoneSettingsView.m7')))
+    toast.error(extractApiError(error, t('user.screens.timezoneSettings.m7')))
   } finally {
     saving.value = false
   }

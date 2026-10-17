@@ -194,7 +194,7 @@ async function enterFinalStep(): Promise<void> {
   finishArmed.value = true
 }
 
-/** t('views.auth.OnboardingView.m1') -- finish onboarding outright with the device timezone. */
+/** t('common.skip') -- finish onboarding outright with the device timezone. */
 function onSkip(): void {
   void finish()
 }
@@ -237,7 +237,7 @@ async function finish(): Promise<void> {
     })
     emit('done')
   } catch (error) {
-    toast.error(extractApiError(error, t('views.auth.OnboardingView.m2')))
+    toast.error(extractApiError(error, t('auth.onboarding.saveFailed')))
   } finally {
     submitting.value = false
   }

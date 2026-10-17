@@ -30,8 +30,8 @@
       <VEmptyState
         v-if="refused"
         icon="warning"
-        :title="t('views.master.MasterCuratorGroupCreateView.m1')"
-        :description="t('views.master.MasterCuratorGroupCreateView.m2')"
+        :title="t('masterScreens.masterCuratorGroupCreate.m1')"
+        :description="t('masterScreens.masterCuratorGroupCreate.m2')"
       >
         <template #action>
           <VButton variant="outline" @click="router.replace({ name: 'master-curator-groups' })">
@@ -47,18 +47,18 @@
         <!--
         <div class="ncg__legend">
           <IconRequired class="ncg__legend-seal" :size="22" />
-          <span>{{ t('views.master.MasterCuratorGroupCreateView.m7') }}</span>
+          <span>{{ t('masterScreens.masterCuratorGroupCreate.m7') }}</span>
         </div>
         -->
 
         <h2 class="velo-section-title">
-          {{ t('views.master.MasterCuratorGroupCreateView.m8') }}<span class="ncg__req">*</span>
+          {{ t('masterScreens.masterCuratorGroupCreate.m8') }}<span class="ncg__req">*</span>
         </h2>
 
         <VInput
           v-model="name"
-          :label="t('views.master.MasterCuratorGroupCreateView.m3')"
-          :placeholder="t('views.master.MasterCuratorGroupCreateView.m4')"
+          :label="t('masterScreens.masterCuratorGroupCreate.m3')"
+          :placeholder="t('masterScreens.masterCuratorGroupCreate.m4')"
           hide-label
           :error="fieldError"
           @focus="onFieldFocus"
@@ -71,8 +71,8 @@
 
         <VTextarea
           v-model="description"
-          :label="t('views.master.MasterCuratorGroupCreateView.m5')"
-          :placeholder="t('views.master.MasterCuratorGroupCreateView.m6')"
+          :label="t('masterScreens.masterCuratorGroupCreate.m5')"
+          :placeholder="t('masterScreens.masterCuratorGroupCreate.m6')"
           hide-label
           :rows="3"
           autogrow
@@ -86,7 +86,7 @@
              name/description only). -->
         <template v-if="SCHOOL_MEDIA_UPLOAD_ENABLED">
           <h2 class="velo-section-title">
-            {{ t('views.master.MasterCuratorGroupCreateView.m9') }}
+            {{ t('masterScreens.masterCuratorGroupCreate.m9') }}
           </h2>
           <p class="ncg__media-hint">
             Фото будет использовано на платформе в открытом доступе для участников
@@ -94,7 +94,7 @@
           <SchoolAvatarPicker v-model="avatarUrl" aria-label="Аватар школы" />
 
           <h2 class="velo-section-title">
-            {{ t('views.master.MasterCuratorGroupCreateView.m10') }}
+            {{ t('masterScreens.masterCuratorGroupCreate.m10') }}
           </h2>
           <p class="ncg__media-hint">
             Фото будет использовано на платформе в открытом доступе для участников
@@ -158,7 +158,7 @@ async function onCreate(): Promise<void> {
   fieldError.value = ''
 
   if (!trimmed) {
-    await showFieldError(t('views.master.MasterCuratorGroupCreateView.m11'))
+    await showFieldError(t('masterScreens.masterCuratorGroupCreate.m11'))
     return
   }
 
@@ -175,7 +175,7 @@ async function onCreate(): Promise<void> {
     void router.replace({ name: 'master-curator-group', params: { id: created.id } })
   } catch (e) {
     if (e instanceof ApiResponseError && e.code === 'curator_group_name_taken') {
-      await showFieldError(t('views.master.MasterCuratorGroupCreateView.m12'))
+      await showFieldError(t('masterScreens.masterCuratorGroupCreate.m12'))
     }
     if (e instanceof ApiResponseError && e.code === 'group_creation_not_allowed') {
       // Not a field error and not a retryable failure -- the RIGHT is
@@ -183,7 +183,7 @@ async function onCreate(): Promise<void> {
       // phrase errorMessages.ts already carries.
       refused.value = true
     }
-    toast.error(extractApiError(e, t('views.master.MasterCuratorGroupCreateView.m13')))
+    toast.error(extractApiError(e, t('masterScreens.masterCuratorGroupCreate.m13')))
   } finally {
     creating.value = false
   }

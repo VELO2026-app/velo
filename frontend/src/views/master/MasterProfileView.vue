@@ -34,7 +34,7 @@
     <div class="master-profile__menus">
       <!-- Аккаунт -->
       <div class="master-profile__menu-section">
-        <div class="master-profile__menu-title">{{ t('views.master.MasterProfileView.m2') }}</div>
+        <div class="master-profile__menu-title">{{ t('masterScreens.masterProfile.m2') }}</div>
         <div class="master-profile__menu-list">
           <VMenuRow label="Редактировать профиль" @click="onEditProfile">
             <template #icon><IconPen :size="20" /></template>
@@ -53,7 +53,7 @@
 
       <!-- Настройки -->
       <div class="master-profile__menu-section">
-        <div class="master-profile__menu-title">{{ t('views.master.MasterProfileView.m3') }}</div>
+        <div class="master-profile__menu-title">{{ t('masterScreens.masterProfile.m3') }}</div>
         <div class="master-profile__menu-list">
           <VMenuRow label="Уведомления" @click="onNotifications">
             <template #icon><IconBell :size="20" /></template>
@@ -68,7 +68,7 @@
            RoleSwitchSection below (a real role switch); the redundant «Открыть
            как пользователь» uiMode-preview row was removed (batch L, L8). -->
       <div class="master-profile__menu-section">
-        <div class="master-profile__menu-title">{{ t('views.master.MasterProfileView.m4') }}</div>
+        <div class="master-profile__menu-title">{{ t('masterScreens.masterProfile.m4') }}</div>
         <div class="master-profile__menu-list">
           <VMenuRow label="Поддержка" @click="onSupport">
             <template #icon><IconSupport :size="20" /></template>
@@ -83,7 +83,7 @@
       <div class="master-profile__menu-section">
         <div class="master-profile__menu-list">
           <VMenuRow
-            :label="t('views.master.MasterProfileView.m1')"
+            :label="t('masterScreens.masterProfile.m1')"
             variant="danger"
             :show-arrow="false"
             @click="showLogoutModal = true"
@@ -97,10 +97,10 @@
     <!-- Log out confirmation (design «Log out») -->
     <VModal :open="showLogoutModal" @close="showLogoutModal = false">
       <div class="master-profile__logout-modal">
-        <h2 class="master-profile__logout-title">{{ t('views.master.MasterProfileView.m5') }}</h2>
+        <h2 class="master-profile__logout-title">{{ t('masterScreens.masterProfile.m5') }}</h2>
         <div class="master-profile__logout-actions">
           <button type="button" class="master-profile__logout-btn" @click="onLogout">
-            {{ t('views.master.MasterProfileView.m6') }}
+            {{ t('masterScreens.masterProfile.m6') }}
           </button>
           <button type="button" class="master-profile__logout-btn" @click="showLogoutModal = false">
             Нет
@@ -139,7 +139,7 @@ const displayName = computed(
   () =>
     masterStore.profile?.display_name ??
     authStore.user?.first_name ??
-    t('views.master.MasterProfileView.m7'),
+    t('masterScreens.masterProfile.m7'),
 )
 const avatarUrl = computed(() => authStore.user?.avatar_url ?? undefined)
 

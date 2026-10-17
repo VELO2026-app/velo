@@ -22,12 +22,12 @@
       <span class="ai-summary__icon">
         <IconBrain :size="40" />
       </span>
-      <h1 class="ai-summary__title">{{ t('views.user.AiSummaryView.m1') }}</h1>
+      <h1 class="ai-summary__title">{{ t('user.screens.aiSummary.m1') }}</h1>
       <p class="ai-summary__text">
         Скоро здесь появится ваше персональное саммари недели с рекомендациями.
       </p>
       <VButton variant="primary" size="lg" @click="goToDashboard">{{
-        t('views.user.AiSummaryView.m2')
+        t('user.screens.aiSummary.m2')
       }}</VButton>
     </div>
   </div>

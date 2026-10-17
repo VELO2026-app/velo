@@ -45,19 +45,19 @@
           <template #default="{ close }">
             <VMenuItem
               :icon="IconMessages"
-              :ariaLabel="t('views.user.MasterPublicView.m1')"
+              :ariaLabel="t('user.screens.masterPublic.m1')"
               @click="onMessageClick(close)"
             />
             <VMenuItem
               v-if="schoolContext"
               :icon="IconPen"
-              :ariaLabel="t('views.user.MasterPublicView.m2')"
+              :ariaLabel="t('user.screens.masterPublic.m2')"
               @click="onRoleClick(close)"
             />
             <VMenuItem
               v-if="schoolContext"
               :icon="IconLock"
-              :ariaLabel="t('views.user.MasterPublicView.m3')"
+              :ariaLabel="t('user.screens.masterPublic.m3')"
               danger
               @click="onBlockClick(close)"
             />
@@ -75,10 +75,10 @@
     <VEmptyState
       v-else-if="notFound"
       icon="warning"
-      :title="t('views.user.MasterPublicView.m4')"
+      :title="t('user.screens.masterPublic.m4')"
       :description="error ?? undefined"
     >
-      <VButton size="sm" @click="router.back()">{{ t('views.user.MasterPublicView.m8') }}</VButton>
+      <VButton size="sm" @click="router.back()">{{ t('user.screens.masterPublic.m8') }}</VButton>
     </VEmptyState>
 
     <!-- Server/network error (B11 item 2): distinct from "not found" -- this
@@ -86,11 +86,11 @@
     <VEmptyState
       v-else-if="error || !profile"
       icon="warning"
-      :title="t('views.user.MasterPublicView.m5')"
+      :title="t('user.screens.masterPublic.m5')"
       :description="error ?? undefined"
     >
       <VButton size="sm" @click="loadMaster(masterId)">{{
-        t('views.user.MasterPublicView.m9')
+        t('user.screens.masterPublic.m9')
       }}</VButton>
     </VEmptyState>
 
@@ -146,14 +146,14 @@
             {{ chip.label }}
           </VTag>
         </div>
-        <p v-else class="master-public__note">{{ t('views.user.MasterPublicView.m10') }}</p>
+        <p v-else class="master-public__note">{{ t('user.screens.masterPublic.m10') }}</p>
       </VAccordion>
 
       <!-- «Предстоящие практики» (owner 2026-09-30): nav row to the stacked
            master-practice calendar. A row, not an accordion -- it only
            navigates. -->
       <button type="button" class="master-public__nav" @click="goToCalendar">
-        <span class="master-public__nav-label">{{ t('views.user.MasterPublicView.m11') }}</span>
+        <span class="master-public__nav-label">{{ t('user.screens.masterPublic.m11') }}</span>
         <IconChevronRight :size="16" />
       </button>
 
@@ -173,7 +173,7 @@
            accordion from operator 2026-06-05 is retired; the ⋯ menu keeps
            floating above). show-date: практики идут в разные дни. -->
       <section class="master-public__upcoming">
-        <h3 class="master-public__section-title">{{ t('views.user.MasterPublicView.m12') }}</h3>
+        <h3 class="master-public__section-title">{{ t('user.screens.masterPublic.m12') }}</h3>
         <div v-if="upcoming.length" class="master-public__practices">
           <CalendarPracticeCard
             v-for="p in upcoming"
@@ -183,7 +183,7 @@
             @click="goToPractice"
           />
         </div>
-        <p v-else class="master-public__note">{{ t('views.user.MasterPublicView.m13') }}</p>
+        <p v-else class="master-public__note">{{ t('user.screens.masterPublic.m13') }}</p>
       </section>
 
       <!-- «Написать сообщение» (the ⋯ menu) replaced the «Задать вопрос»
@@ -218,13 +218,13 @@
          (info toast) and the copy stays a draft. -->
     <VModal :open="roleOpen" :show-close="false" @close="onRoleClose">
       <div class="master-public__role">
-        <h2 class="master-public__role-title">{{ t('views.user.MasterPublicView.m14') }}</h2>
+        <h2 class="master-public__role-title">{{ t('user.screens.masterPublic.m14') }}</h2>
         <TargetUserCard :name="displayName" :avatar-url="profile?.avatar_url ?? null" />
-        <p class="master-public__role-sub">{{ t('views.user.MasterPublicView.m15') }}</p>
+        <p class="master-public__role-sub">{{ t('user.screens.masterPublic.m15') }}</p>
         <VRadioGroup v-model="roleKind" :options="roleOptions" />
         <div class="master-public__role-actions">
           <VButton variant="danger" block @click="onRoleClose">{{
-            t('views.user.MasterPublicView.m16')
+            t('user.screens.masterPublic.m16')
           }}</VButton>
           <VButton
             variant="primary"
@@ -244,9 +244,9 @@
          DRAFT for the owner's review. -->
     <VConfirmDialog
       :open="blockConfirmOpen"
-      :title="t('views.user.MasterPublicView.m6')"
+      :title="t('user.screens.masterPublic.m6')"
       :message="blockCopy"
-      :confirm-label="t('views.user.MasterPublicView.m7')"
+      :confirm-label="t('user.screens.masterPublic.m7')"
       danger
       warning-panel
       cancel-variant="primary"
@@ -302,7 +302,7 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 /** B11 item 2: 404 (master genuinely doesn't exist) is a DIFFERENT state
  *  from a 5xx/network failure (server down, worth retrying) -- collapsing
- *  them both into t('views.user.MasterPublicView.m17') told the user to give up on a master
+ *  them both into t('user.screens.masterPublic.m17') told the user to give up on a master
  *  who might well exist. Derived from the caught error's own status, no
  *  backend field added. */
 const notFound = ref(false)
@@ -310,7 +310,7 @@ const notFound = ref(false)
 const masterId = computed(() => String(route.params.id))
 
 const displayName = computed(
-  () => profile.value?.display_name ?? t('views.user.MasterPublicView.m18'),
+  () => profile.value?.display_name ?? t('user.screens.masterPublic.m18'),
 )
 
 // Method tags cycle through three tints (same as MasterCard).
@@ -330,8 +330,8 @@ const roleOpen = ref(false)
 type MemberKind = 'student' | 'master'
 const roleKind = ref<MemberKind>('master')
 const roleOptions: { value: MemberKind; label: string }[] = [
-  { value: 'student', label: t('views.user.MasterPublicView.m19') },
-  { value: 'master', label: t('views.user.MasterPublicView.m20') },
+  { value: 'student', label: t('user.screens.masterPublic.m19') },
+  { value: 'master', label: t('user.screens.masterPublic.m20') },
 ]
 const roleConfirmDisabled = computed(() => roleKind.value === 'master')
 
@@ -357,9 +357,9 @@ async function onRoleConfirm(): Promise<void> {
   try {
     await demoteCuratorGroupMaster(groupId.value, masterId.value)
     roleOpen.value = false
-    toast.success(t('views.user.MasterPublicView.m21'))
+    toast.success(t('user.screens.masterPublic.m21'))
   } catch (e) {
-    toast.error(extractApiError(e, t('views.user.MasterPublicView.m22')))
+    toast.error(extractApiError(e, t('user.screens.masterPublic.m22')))
   } finally {
     demoting.value = false
   }
@@ -368,7 +368,7 @@ async function onRoleConfirm(): Promise<void> {
 const composerOpen = ref(false)
 const blockConfirmOpen = ref(false)
 
-const blockCopy = t('views.user.MasterPublicView.m23')
+const blockCopy = t('user.screens.masterPublic.m23')
 
 function onBlockClick(close: () => void): void {
   close()
@@ -387,16 +387,16 @@ async function onBlockConfirm(): Promise<void> {
   try {
     await blockCuratorGroupMember(groupId.value, masterId.value)
     blockConfirmOpen.value = false
-    toast.success(t('views.user.MasterPublicView.m24'))
+    toast.success(t('user.screens.masterPublic.m24'))
     router.back()
   } catch (e) {
     blockConfirmOpen.value = false
     if (e instanceof ApiResponseError && e.status === 404) {
-      toast.error(t('views.user.MasterPublicView.m25'))
+      toast.error(t('user.screens.masterPublic.m25'))
       router.back()
       return
     }
-    toast.error(extractApiError(e, t('views.user.MasterPublicView.m26')))
+    toast.error(extractApiError(e, t('user.screens.masterPublic.m26')))
   } finally {
     blocking.value = false
   }
@@ -416,25 +416,25 @@ const methodChips = computed(() => (profile.value?.methods ?? []).map(methodChip
 function pluralYears(n: number): string {
   return plural(
     n,
-    t('views.user.MasterPublicView.m27'),
-    t('views.user.MasterPublicView.m28'),
-    t('views.user.MasterPublicView.m29'),
+    t('user.screens.masterPublic.m27'),
+    t('user.screens.masterPublic.m28'),
+    t('user.screens.masterPublic.m29'),
   )
 }
 function pluralPractices(n: number): string {
   return plural(
     n,
-    t('views.user.MasterPublicView.m30'),
-    t('views.user.MasterPublicView.m31'),
-    t('views.user.MasterPublicView.m32'),
+    t('user.screens.masterPublic.m30'),
+    t('user.screens.masterPublic.m31'),
+    t('user.screens.masterPublic.m32'),
   )
 }
 function pluralReviews(n: number): string {
   return plural(
     n,
-    t('views.user.MasterPublicView.m33'),
-    t('views.user.MasterPublicView.m34'),
-    t('views.user.MasterPublicView.m35'),
+    t('user.screens.masterPublic.m33'),
+    t('user.screens.masterPublic.m34'),
+    t('user.screens.masterPublic.m35'),
   )
 }
 
@@ -503,7 +503,7 @@ async function loadMaster(id: string): Promise<void> {
     notFound.value = is404
     error.value = extractApiError(
       e,
-      is404 ? t('views.user.MasterPublicView.m36') : t('views.user.MasterPublicView.m37'),
+      is404 ? t('user.screens.masterPublic.m36') : t('user.screens.masterPublic.m37'),
     )
     profile.value = null
   } finally {

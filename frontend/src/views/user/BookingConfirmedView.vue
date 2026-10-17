@@ -37,11 +37,11 @@
     <VEmptyState
       v-else-if="store.selectedError || !practice"
       icon="warning"
-      :title="t('views.user.BookingConfirmedView.m1')"
+      :title="t('user.screens.bookingConfirmed.m1')"
       :description="store.selectedError ?? 'Не удалось загрузить практику'"
     >
       <VButton size="sm" @click="goToDashboard">{{
-        t('views.user.BookingConfirmedView.m4')
+        t('user.screens.bookingConfirmed.m4')
       }}</VButton>
     </VEmptyState>
 
@@ -52,7 +52,7 @@
         <span class="booking-confirmed__icon">
           <IconSuccess :size="56" />
         </span>
-        <h1 class="booking-confirmed__title">{{ t('views.user.BookingConfirmedView.m5') }}</h1>
+        <h1 class="booking-confirmed__title">{{ t('user.screens.bookingConfirmed.m5') }}</h1>
         <p class="booking-confirmed__text">
           Войти в Zoom можно будет прямо в VELO — на экране практики.
         </p>
@@ -68,12 +68,12 @@
       <div class="booking-confirmed__ask">
         <VTextarea
           v-model="masterRequest"
-          :label="t('views.user.BookingConfirmedView.m2')"
+          :label="t('user.screens.bookingConfirmed.m2')"
           :rows="2"
           maxlength="4000"
           :disabled="sending"
         />
-        <Banner variant="info" :body="t('views.user.BookingConfirmedView.m3')">
+        <Banner variant="info" :body="t('user.screens.bookingConfirmed.m3')">
           <template #icon><IconSupport :size="28" /></template>
         </Banner>
         <VButton
@@ -154,7 +154,7 @@ async function onSendRequest(): Promise<void> {
     const thread = await openChat(masterId)
     await sendChatMessage(thread.id, composeRequest(body))
     masterRequest.value = ''
-    toast.success(t('views.user.BookingConfirmedView.m6'))
+    toast.success(t('user.screens.bookingConfirmed.m6'))
     // [FE-1] Requirement: post-send navigation (capability: user-booking)
     // After a successful send the app SHALL NOT open the chat thread; it
     // SHALL show the «Запрос отправлен мастеру» toast and land the user on
@@ -184,7 +184,7 @@ async function onSendRequest(): Promise<void> {
       await router.replace({ name: 'practice-detail', params: { id: practiceId } })
     }
   } catch (e) {
-    toast.error(extractApiError(e, t('views.user.BookingConfirmedView.m7')))
+    toast.error(extractApiError(e, t('user.screens.bookingConfirmed.m7')))
   } finally {
     sending.value = false
   }

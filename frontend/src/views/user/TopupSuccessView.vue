@@ -10,8 +10,8 @@
 <template>
   <div class="topup-result">
     <IconSuccess :size="64" class="topup-result__icon" />
-    <h1 class="topup-result__title">{{ t('views.user.TopupSuccessView.m1') }}</h1>
-    <p class="topup-result__text">{{ t('views.user.TopupSuccessView.m2') }}</p>
+    <h1 class="topup-result__title">{{ t('user.screens.topupSuccess.m1') }}</h1>
+    <p class="topup-result__text">{{ t('user.screens.topupSuccess.m2') }}</p>
     <div class="topup-result__balance">
       <VLoader v-if="loading" size="sm" />
       <span v-else>{{ balanceStore.formattedBalance }}</span>

@@ -29,7 +29,7 @@
   <div class="admin-support">
     <header class="admin-support__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-support__title">{{ t('views.admin.AdminSupportView.m5') }}</h1>
+      <h1 class="admin-support__title">{{ t('adminScreens.adminSupport.m5') }}</h1>
       <span v-if="items.length" class="admin-support__count">{{ items.length }}</span>
     </header>
 
@@ -40,12 +40,12 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('views.admin.AdminSupportView.m1')"
-      :description="t('views.admin.AdminSupportView.m2')"
+      :title="t('adminScreens.adminSupport.m1')"
+      :description="t('adminScreens.adminSupport.m2')"
     >
       <template #action
         ><VButton variant="primary" @click="loadInitial">{{
-          t('views.admin.AdminSupportView.m6')
+          t('adminScreens.adminSupport.m6')
         }}</VButton></template
       >
     </VEmptyState>
@@ -53,8 +53,8 @@
     <VEmptyState
       v-else-if="items.length === 0"
       icon="empty"
-      :title="t('views.admin.AdminSupportView.m3')"
-      :description="t('views.admin.AdminSupportView.m4')"
+      :title="t('adminScreens.adminSupport.m3')"
+      :description="t('adminScreens.adminSupport.m4')"
     />
 
     <template v-else>
@@ -117,7 +117,7 @@ const loadingMore = ref(false)
 const error = ref(false)
 
 function openerName(item: SupportThread): string {
-  return item.opener?.name ?? t('views.admin.AdminSupportView.m7')
+  return item.opener?.name ?? t('adminScreens.adminSupport.m7')
 }
 
 function triageBadge(item: SupportThread): {
@@ -126,10 +126,10 @@ function triageBadge(item: SupportThread): {
 } {
   if (item.status === 'resolved') return { variant: 'success', label: 'Решено' }
   if (item.status === 'closed') return { variant: 'info', label: 'Закрыто' }
-  if (!item.assignee) return { variant: 'warning', label: t('views.admin.AdminSupportView.m8') }
+  if (!item.assignee) return { variant: 'warning', label: t('adminScreens.adminSupport.m8') }
   if (item.assignee === authStore.user?.id)
-    return { variant: 'success', label: t('views.admin.AdminSupportView.m9') }
-  return { variant: 'info', label: t('views.admin.AdminSupportView.m10') }
+    return { variant: 'success', label: t('adminScreens.adminSupport.m9') }
+  return { variant: 'info', label: t('adminScreens.adminSupport.m10') }
 }
 
 async function loadInitial(): Promise<void> {
@@ -143,7 +143,7 @@ async function loadInitial(): Promise<void> {
     nextCursor.value = res.next_cursor
   } catch (e) {
     error.value = true
-    toast.error(extractApiError(e, t('views.admin.AdminSupportView.m11')))
+    toast.error(extractApiError(e, t('adminScreens.adminSupport.m11')))
   } finally {
     loading.value = false
   }
@@ -157,7 +157,7 @@ async function loadMore(): Promise<void> {
     items.value.push(...res.threads)
     nextCursor.value = res.next_cursor
   } catch (e) {
-    toast.error(extractApiError(e, t('views.admin.AdminSupportView.m12')))
+    toast.error(extractApiError(e, t('adminScreens.adminSupport.m12')))
   } finally {
     loadingMore.value = false
   }

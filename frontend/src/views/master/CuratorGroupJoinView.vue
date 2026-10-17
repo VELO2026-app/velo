@@ -44,12 +44,12 @@ so the order is invitation -> join -> onboarding (skippable) -> school.
       <!-- Preview in flight -->
       <template v-if="loading">
         <VLoader size="lg" />
-        <p class="cg-join__subtitle">{{ t('views.master.CuratorGroupJoinView.m2') }}</p>
+        <p class="cg-join__subtitle">{{ t('masterScreens.curatorGroupJoin.m2') }}</p>
       </template>
 
       <!-- Transient (network/timeout): offer a retry, not a dead-link verdict. -->
       <template v-else-if="transientError">
-        <h2 class="cg-join__title">{{ t('views.master.CuratorGroupJoinView.m3') }}</h2>
+        <h2 class="cg-join__title">{{ t('masterScreens.curatorGroupJoin.m3') }}</h2>
         <p class="cg-join__subtitle">
           Проблема с соединением. Проверьте интернет и попробуйте ещё раз.
         </p>
@@ -86,11 +86,11 @@ so the order is invitation -> join -> onboarding (skippable) -> school.
           :masters-count="preview.group.masters_count"
           :description="preview.group.description"
           :curator-name="preview.group.curator_name"
-          :heading="t('views.master.CuratorGroupJoinView.m1')"
+          :heading="t('masterScreens.curatorGroupJoin.m1')"
         />
         <div class="cg-join__actions">
           <VButton variant="primary" block :loading="joining" @click="join">{{
-            t('views.master.CuratorGroupJoinView.m4')
+            t('masterScreens.curatorGroupJoin.m4')
           }}</VButton>
           <VButton variant="outline" block :disabled="joining" @click="decline">
             Отказаться
@@ -166,8 +166,8 @@ interface RefusalView {
 const blocked = computed<RefusalView | null>(() => {
   if (notFound.value) {
     return {
-      title: t('views.master.CuratorGroupJoinView.m5'),
-      description: t('views.master.CuratorGroupJoinView.m6'),
+      title: t('masterScreens.curatorGroupJoin.m5'),
+      description: t('masterScreens.curatorGroupJoin.m6'),
       open: false,
     }
   }
@@ -176,34 +176,34 @@ const blocked = computed<RefusalView | null>(() => {
   switch (p.reason) {
     case 'own_group':
       return {
-        title: t('views.master.CuratorGroupJoinView.m7'),
-        description: t('views.master.CuratorGroupJoinView.m8'),
+        title: t('masterScreens.curatorGroupJoin.m7'),
+        description: t('masterScreens.curatorGroupJoin.m8'),
         open: true,
       }
     case 'already_member':
       return {
-        title: t('views.master.CuratorGroupJoinView.m9'),
-        description: t('views.master.CuratorGroupJoinView.m10'),
+        title: t('masterScreens.curatorGroupJoin.m9'),
+        description: t('masterScreens.curatorGroupJoin.m10'),
         open: true,
       }
     case 'blocked_by_curator':
       return {
-        title: t('views.master.CuratorGroupJoinView.m11'),
-        description: t('views.master.CuratorGroupJoinView.m12'),
+        title: t('masterScreens.curatorGroupJoin.m11'),
+        description: t('masterScreens.curatorGroupJoin.m12'),
         open: false,
       }
     // BE-79 (DRAFT wording): blocked by the curator IN this school -- the
     // preview says so, and a join refused 403 re-reads the preview (below).
     case 'blocked_in_group':
       return {
-        title: t('views.master.CuratorGroupJoinView.m13'),
-        description: t('views.master.CuratorGroupJoinView.m14'),
+        title: t('masterScreens.curatorGroupJoin.m13'),
+        description: t('masterScreens.curatorGroupJoin.m14'),
         open: false,
       }
     default:
       // can_join=false with no reason is not a contract shape; stay honest
       // rather than guessing — same title as blocked, no invented details.
-      return { title: t('views.master.CuratorGroupJoinView.m15'), description: '', open: false }
+      return { title: t('masterScreens.curatorGroupJoin.m15'), description: '', open: false }
   }
 })
 
@@ -268,7 +268,7 @@ async function join(): Promise<void> {
         return
       }
     }
-    toast.error(extractApiError(e, t('views.master.CuratorGroupJoinView.m16')))
+    toast.error(extractApiError(e, t('masterScreens.curatorGroupJoin.m16')))
   } finally {
     joining.value = false
   }

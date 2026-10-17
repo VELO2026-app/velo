@@ -21,7 +21,7 @@
   <div class="admin-promos">
     <header class="admin-promos__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-promos__title">{{ t('views.admin.AdminPromosView.m4') }}</h1>
+      <h1 class="admin-promos__title">{{ t('adminScreens.adminPromos.m4') }}</h1>
       <span class="admin-promos__count">{{ headerCount }}</span>
     </header>
 
@@ -36,12 +36,12 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('views.admin.AdminPromosView.m1')"
-      :description="t('views.admin.AdminPromosView.m2')"
+      :title="t('adminScreens.adminPromos.m1')"
+      :description="t('adminScreens.adminPromos.m2')"
     >
       <template #action
         ><VButton variant="primary" @click="loadInitial">{{
-          t('views.admin.AdminPromosView.m5')
+          t('adminScreens.adminPromos.m5')
         }}</VButton></template
       >
     </VEmptyState>
@@ -100,7 +100,7 @@
     <VConfirmDialog
       :open="confirmTarget !== null"
       :message="confirmMessage"
-      :confirm-label="t('views.admin.AdminPromosView.m3')"
+      :confirm-label="t('adminScreens.adminPromos.m3')"
       danger
       :loading="deactivatingId !== null"
       @confirm="onConfirmDeactivate"
@@ -141,10 +141,10 @@ type Filter = 'all' | 'master' | 'company' | 'inactive'
 const filter = ref<Filter>('all')
 
 const segOptions: SegmentOption[] = [
-  { value: 'all', label: t('views.admin.AdminPromosView.m6') },
-  { value: 'master', label: t('views.admin.AdminPromosView.m7') },
-  { value: 'company', label: t('views.admin.AdminPromosView.m8') },
-  { value: 'inactive', label: t('views.admin.AdminPromosView.m9') },
+  { value: 'all', label: t('adminScreens.adminPromos.m6') },
+  { value: 'master', label: t('adminScreens.adminPromos.m7') },
+  { value: 'company', label: t('adminScreens.adminPromos.m8') },
+  { value: 'inactive', label: t('adminScreens.adminPromos.m9') },
 ]
 
 const items = ref<AdminPromoResponse[]>([])
@@ -160,7 +160,7 @@ const emptyTitle = computed<string>(() => {
   if (filter.value === 'master') return 'Нет промокодов мастеров'
   if (filter.value === 'company') return 'Нет промокодов компании'
   if (filter.value === 'inactive') return 'Нет деактивированных промокодов'
-  return t('views.admin.AdminPromosView.m10')
+  return t('adminScreens.adminPromos.m10')
 })
 
 /** Query params for the current tab -- server-side filtered (type/is_active),
@@ -173,19 +173,19 @@ function currentParams(): { type?: AdminPromoTypeFilter; isActive?: boolean } {
   return {}
 }
 
-/** Owner display: master's "First Last" (falls back to t('views.admin.AdminPromosView.m11') like
+/** Owner display: master's "First Last" (falls back to t('adminScreens.adminPromos.m11') like
  *  masterDisplayName), or "VELO" for a company promo (master_id=null). */
 function ownerName(p: AdminPromoResponse): string {
   if (p.type === 'company') return 'VELO'
   const parts = [p.master_first_name, p.master_last_name].filter(Boolean)
-  return parts.length > 0 ? parts.join(' ') : t('views.admin.AdminPromosView.m12')
+  return parts.length > 0 ? parts.join(' ') : t('adminScreens.adminPromos.m12')
 }
 
 function usedLabel(p: AdminPromoResponse): string {
   return `${p.used_count} из ${p.max_uses ?? '∞'}`
 }
 function untilLabel(p: AdminPromoResponse): string {
-  return p.valid_until ? formatShortDate(p.valid_until) : t('views.admin.AdminPromosView.m13')
+  return p.valid_until ? formatShortDate(p.valid_until) : t('adminScreens.adminPromos.m13')
 }
 
 // -- Fetch (generation counter discards stale responses on rapid tab-switch,
@@ -209,7 +209,7 @@ async function loadInitial(): Promise<void> {
   } catch (e) {
     if (myGeneration !== generation) return
     error.value = true
-    toast.error(extractApiError(e, t('views.admin.AdminPromosView.m14')))
+    toast.error(extractApiError(e, t('adminScreens.adminPromos.m14')))
   } finally {
     if (myGeneration === generation) loading.value = false
   }
@@ -223,7 +223,7 @@ async function loadMore(): Promise<void> {
     items.value.push(...res.items)
     hasMore.value = items.value.length < res.total
   } catch (e) {
-    toast.error(extractApiError(e, t('views.admin.AdminPromosView.m15')))
+    toast.error(extractApiError(e, t('adminScreens.adminPromos.m15')))
   } finally {
     loadingMore.value = false
   }
@@ -254,9 +254,9 @@ async function onConfirmDeactivate(): Promise<void> {
     // The "inactive" tab is server-filtered on is_active=false -- a promo
     // deactivated while that tab is open already satisfies the filter, so no
     // removal needed there. Any other tab just flips the badge in place.
-    toast.success(t('views.admin.AdminPromosView.m16'))
+    toast.success(t('adminScreens.adminPromos.m16'))
   } catch (e) {
-    toast.error(extractApiError(e, t('views.admin.AdminPromosView.m17')))
+    toast.error(extractApiError(e, t('adminScreens.adminPromos.m17')))
   } finally {
     deactivatingId.value = null
     confirmTarget.value = null

@@ -30,22 +30,22 @@
     <VEmptyState
       v-else-if="feedbackGate === 'waiting'"
       icon="calendar"
-      :title="t('views.user.FeedbackView.m1')"
-      :description="t('views.user.FeedbackView.m2')"
+      :title="t('user.screens.feedback.m1')"
+      :description="t('user.screens.feedback.m2')"
     >
-      <VButton size="sm" @click="goToDashboard">{{ t('views.user.FeedbackView.m10') }}</VButton>
+      <VButton size="sm" @click="goToDashboard">{{ t('user.screens.feedback.m10') }}</VButton>
     </VEmptyState>
     <VEmptyState
       v-else
       icon="warning"
-      :title="t('views.user.FeedbackView.m3')"
+      :title="t('user.screens.feedback.m3')"
       :description="
         feedbackGate === 'not_attended'
           ? 'Zoom не подтвердил ваше участие в этой практике'
           : 'Запись на эту практику отменена'
       "
     >
-      <VButton size="sm" @click="goToDashboard">{{ t('views.user.FeedbackView.m11') }}</VButton>
+      <VButton size="sm" @click="goToDashboard">{{ t('user.screens.feedback.m11') }}</VButton>
     </VEmptyState>
   </div>
   <FormShell
@@ -55,15 +55,15 @@
     :practice="practice"
     :practice-loading="practiceLoading"
     :load-error="practiceLoadError"
-    :question-title="t('views.user.FeedbackView.m4')"
-    :question-subtitle="t('views.user.FeedbackView.m5')"
+    :question-title="t('user.screens.feedback.m4')"
+    :question-subtitle="t('user.screens.feedback.m5')"
     :submitting="diaryStore.feedbackSubmitting"
     :submit-disabled="false"
-    :submit-label="t('views.user.FeedbackView.m6')"
+    :submit-label="t('user.screens.feedback.m6')"
     :submitted="submitted"
     success-icon=""
-    :success-title="t('views.user.FeedbackView.m7')"
-    :success-text="t('views.user.FeedbackView.m8')"
+    :success-title="t('user.screens.feedback.m7')"
+    :success-text="t('user.screens.feedback.m8')"
     @back="onBack"
     @retry="loadPractice"
     @submit="onSubmit"
@@ -74,7 +74,7 @@
         с {{ practice?.master_name ?? 'Мастером' }}
       </span>
       <span class="form-shell__practice-meta-cell">
-        <IconCalendar :size="14" />{{ t('views.user.FeedbackView.m12') }}</span
+        <IconCalendar :size="14" />{{ t('user.screens.feedback.m12') }}</span
       >
     </template>
 
@@ -84,7 +84,7 @@
       <div class="feedback__rating">
         <MoodSlider
           v-model="ratingScore"
-          :aria-label="t('views.user.FeedbackView.m9')"
+          :aria-label="t('user.screens.feedback.m9')"
           :disabled="diaryStore.feedbackSubmitting"
         />
       </div>
@@ -100,7 +100,7 @@
     <!-- Success actions: primary "В дневник" + text link "На главную" (Figma 2266:2296) -->
     <template #success-actions>
       <VButton variant="primary" size="lg" block @click="goToDiary">{{
-        t('views.user.FeedbackView.m13')
+        t('user.screens.feedback.m13')
       }}</VButton>
       <button type="button" class="feedback__success-link" @click="goToDashboard">
         На главную

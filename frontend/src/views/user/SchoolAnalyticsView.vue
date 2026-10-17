@@ -40,12 +40,12 @@
       <VEmptyState
         v-else-if="notFound"
         icon="notfound"
-        :title="t('views.user.SchoolAnalyticsView.m1')"
-        :description="t('views.user.SchoolAnalyticsView.m2')"
+        :title="t('user.screens.schoolAnalytics.m1')"
+        :description="t('user.screens.schoolAnalytics.m2')"
       >
         <template #action>
           <VButton variant="primary" @click="goBack">{{
-            t('views.user.SchoolAnalyticsView.m10')
+            t('user.screens.schoolAnalytics.m10')
           }}</VButton>
         </template>
       </VEmptyState>
@@ -54,12 +54,12 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        :title="t('views.user.SchoolAnalyticsView.m3')"
-        :description="t('views.user.SchoolAnalyticsView.m4')"
+        :title="t('user.screens.schoolAnalytics.m3')"
+        :description="t('user.screens.schoolAnalytics.m4')"
       >
         <template #action>
           <VButton variant="outline" @click="refresh">{{
-            t('views.user.SchoolAnalyticsView.m11')
+            t('user.screens.schoolAnalytics.m11')
           }}</VButton>
         </template>
       </VEmptyState>
@@ -73,7 +73,7 @@
           class="school-analytics__period"
           :options="PERIOD_OPTIONS"
           variant="tabs"
-          :aria-label="t('views.user.SchoolAnalyticsView.m5')"
+          :aria-label="t('user.screens.schoolAnalytics.m5')"
         />
 
         <!-- Interim scaffold (owner 2026-10-02: «бек доедет»): every
@@ -87,7 +87,7 @@
               {{ data.engagement?.practices_conducted ?? 0 }}
             </span>
             <span class="school-analytics__stat-label">{{
-              t('views.user.SchoolAnalyticsView.m12')
+              t('user.screens.schoolAnalytics.m12')
             }}</span>
           </div>
           <div class="school-analytics__stat">
@@ -112,7 +112,7 @@
               {{ data.engagement?.joined_never_came ?? 0 }}
             </span>
             <span class="school-analytics__stat-label">{{
-              t('views.user.SchoolAnalyticsView.m13')
+              t('user.screens.schoolAnalytics.m13')
             }}</span>
           </div>
         </div>
@@ -122,10 +122,10 @@
              numbers (reviews из visits) come ready from the server. -->
         <DistributionCard
           class="school-analytics__feedback"
-          :title="t('views.user.SchoolAnalyticsView.m6')"
+          :title="t('user.screens.schoolAnalytics.m6')"
           :count-label="feedbackCountLabel"
           :bars="feedbackBars"
-          :empty-text="t('views.user.SchoolAnalyticsView.m7')"
+          :empty-text="t('user.screens.schoolAnalytics.m7')"
         />
 
         <!-- Part 3: every practice of the selected period, newest first --
@@ -178,8 +178,8 @@
           <VEmptyState
             v-else
             variant="note"
-            :title="t('views.user.SchoolAnalyticsView.m8')"
-            :description="t('views.user.SchoolAnalyticsView.m9')"
+            :title="t('user.screens.schoolAnalytics.m8')"
+            :description="t('user.screens.schoolAnalytics.m9')"
           />
         </section>
       </template>
@@ -215,9 +215,9 @@ const inMasterZone = computed(() => String(route.name ?? '').startsWith('master'
 //    own calendar, the slider only names it. --
 const period = ref<SchoolAnalyticsPeriod>('week')
 const PERIOD_OPTIONS: ReadonlyArray<{ value: SchoolAnalyticsPeriod; label: string }> = [
-  { value: 'week', label: t('views.user.SchoolAnalyticsView.m14') },
-  { value: 'month', label: t('views.user.SchoolAnalyticsView.m15') },
-  { value: 'quarter', label: t('views.user.SchoolAnalyticsView.m16') },
+  { value: 'week', label: t('user.screens.schoolAnalytics.m14') },
+  { value: 'month', label: t('user.screens.schoolAnalytics.m15') },
+  { value: 'quarter', label: t('user.screens.schoolAnalytics.m16') },
 ]
 
 // -- The feedback block (part 2). «Процент фидбеков» = the period's reviews
@@ -243,9 +243,9 @@ const feedbackBars = computed(() => moodStripBars(data.value?.engagement?.rating
 const periodSectionTitle = computed(
   (): string =>
     ({
-      week: t('views.user.SchoolAnalyticsView.m17'),
-      month: t('views.user.SchoolAnalyticsView.m18'),
-      quarter: t('views.user.SchoolAnalyticsView.m19'),
+      week: t('user.screens.schoolAnalytics.m17'),
+      month: t('user.screens.schoolAnalytics.m18'),
+      quarter: t('user.screens.schoolAnalytics.m19'),
     })[period.value],
 )
 const periodPractices = computed(() => data.value?.engagement?.conducted_practices ?? [])

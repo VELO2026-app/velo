@@ -20,13 +20,13 @@
   <div class="wd">
     <header class="wd__top">
       <VBackButton @click="router.back()" />
-      <h1 class="wd__title">{{ t('views.admin.AdminWithdrawalDetailView.m4') }}</h1>
+      <h1 class="wd__title">{{ t('adminScreens.adminWithdrawalDetail.m4') }}</h1>
     </header>
 
     <template v-if="w">
       <!-- Hero -->
       <div class="wd__hero">
-        <div class="wd__hero-label">{{ t('views.admin.AdminWithdrawalDetailView.m5') }}</div>
+        <div class="wd__hero-label">{{ t('adminScreens.adminWithdrawalDetail.m5') }}</div>
         <div class="wd__hero-amount">{{ grossLabel }}</div>
         <div class="wd__hero-master">{{ masterName }}</div>
       </div>
@@ -34,15 +34,15 @@
       <!-- Breakdown -->
       <VCard class="wd__rows" padding="none">
         <div class="wd__row">
-          <span class="wd__k">{{ t('views.admin.AdminWithdrawalDetailView.m6') }}</span>
+          <span class="wd__k">{{ t('adminScreens.adminWithdrawalDetail.m6') }}</span>
           <span class="wd__v">{{ bankLabel }}</span>
         </div>
         <div class="wd__row">
-          <span class="wd__k">{{ t('views.admin.AdminWithdrawalDetailView.m7') }}</span>
+          <span class="wd__k">{{ t('adminScreens.adminWithdrawalDetail.m7') }}</span>
           <span class="wd__v">{{ feeLabel }}</span>
         </div>
         <div class="wd__row">
-          <span class="wd__k">{{ t('views.admin.AdminWithdrawalDetailView.m8') }}</span>
+          <span class="wd__k">{{ t('adminScreens.adminWithdrawalDetail.m8') }}</span>
           <span class="wd__v">{{ netLabel }}</span>
         </div>
       </VCard>
@@ -50,7 +50,7 @@
       <!-- Actions (pending only) -->
       <div v-if="isPending" class="wd__foot">
         <VButton variant="danger" :disabled="anyLoading" @click="openReject">{{
-          t('views.admin.AdminWithdrawalDetailView.m9')
+          t('adminScreens.adminWithdrawalDetail.m9')
         }}</VButton>
         <VButton variant="primary" :disabled="anyLoading" @click="showConfirm = true">
           Подтвердить
@@ -62,20 +62,20 @@
     </template>
 
     <VCard v-else
-      ><p class="wd__empty">{{ t('views.admin.AdminWithdrawalDetailView.m10') }}</p></VCard
+      ><p class="wd__empty">{{ t('adminScreens.adminWithdrawalDetail.m10') }}</p></VCard
     >
 
     <!-- Reject reason -->
     <VBottomSheet
       :open="showReject"
-      :title="t('views.admin.AdminWithdrawalDetailView.m1')"
-      :save-label="t('views.admin.AdminWithdrawalDetailView.m2')"
+      :title="t('adminScreens.adminWithdrawalDetail.m1')"
+      :save-label="t('adminScreens.adminWithdrawalDetail.m2')"
       @save="onReject"
       @close="showReject = false"
     >
       <VTextarea
         v-model="rejectReason"
-        :placeholder="t('views.admin.AdminWithdrawalDetailView.m3')"
+        :placeholder="t('adminScreens.adminWithdrawalDetail.m3')"
         :rows="3"
         :error="rejectError"
       />
@@ -160,7 +160,7 @@ const bankLabel = computed<string>(() => {
   if (!p) return '—'
   const d = payoutDetails.value
   if (p.method === 'bank_transfer') {
-    const bank = str(d.bank_name) || t('views.admin.AdminWithdrawalDetailView.m11')
+    const bank = str(d.bank_name) || t('adminScreens.adminWithdrawalDetail.m11')
     const acc = (str(d.iban) || str(d.account)).replace(/\s+/g, '')
     const tail = acc ? acc.slice(-4) : ''
     return tail ? `${bank} •••• ${tail}` : bank
@@ -171,9 +171,9 @@ const bankLabel = computed<string>(() => {
 })
 
 const STATUS_LABELS: Record<string, string> = {
-  pending: t('views.admin.AdminWithdrawalDetailView.m12'),
-  approved: t('views.admin.AdminWithdrawalDetailView.m13'),
-  rejected: t('views.admin.AdminWithdrawalDetailView.m14'),
+  pending: t('adminScreens.adminWithdrawalDetail.m12'),
+  approved: t('adminScreens.adminWithdrawalDetail.m13'),
+  rejected: t('adminScreens.adminWithdrawalDetail.m14'),
 }
 const statusLabel = computed<string>(() => STATUS_LABELS[w.value?.status ?? ''] ?? '')
 
@@ -188,11 +188,11 @@ async function onApprove(): Promise<void> {
   approving.value = true
   try {
     await approveWithdrawal(w.value.id)
-    toast.success(t('views.admin.AdminWithdrawalDetailView.m15'))
+    toast.success(t('adminScreens.adminWithdrawalDetail.m15'))
     showConfirm.value = false
     router.back()
   } catch (e) {
-    toast.error(extractApiError(e, t('views.admin.AdminWithdrawalDetailView.m16')))
+    toast.error(extractApiError(e, t('adminScreens.adminWithdrawalDetail.m16')))
   } finally {
     approving.value = false
   }
@@ -202,17 +202,17 @@ async function onReject(): Promise<void> {
   if (!w.value || rejecting.value) return
   rejectError.value = ''
   if (!rejectReason.value.trim()) {
-    rejectError.value = t('views.admin.AdminWithdrawalDetailView.m17')
+    rejectError.value = t('adminScreens.adminWithdrawalDetail.m17')
     return
   }
   rejecting.value = true
   try {
     await rejectWithdrawal(w.value.id, rejectReason.value.trim())
-    toast.success(t('views.admin.AdminWithdrawalDetailView.m18'))
+    toast.success(t('adminScreens.adminWithdrawalDetail.m18'))
     showReject.value = false
     router.back()
   } catch (e) {
-    toast.error(extractApiError(e, t('views.admin.AdminWithdrawalDetailView.m19')))
+    toast.error(extractApiError(e, t('adminScreens.adminWithdrawalDetail.m19')))
   } finally {
     rejecting.value = false
   }

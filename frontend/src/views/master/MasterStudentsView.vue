@@ -25,11 +25,11 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        :title="t('views.master.MasterStudentsView.m1')"
+        :title="t('masterScreens.masterStudents.m1')"
         :description="error"
       >
         <VButton size="sm" variant="outline" @click="load">{{
-          t('views.master.MasterStudentsView.m10')
+          t('masterScreens.masterStudents.m10')
         }}</VButton>
       </VEmptyState>
 
@@ -41,8 +41,8 @@
           <div class="students__search-field">
             <VInput
               v-model="query"
-              :placeholder="t('views.master.MasterStudentsView.m2')"
-              :aria-label="t('views.master.MasterStudentsView.m3')"
+              :placeholder="t('masterScreens.masterStudents.m2')"
+              :aria-label="t('masterScreens.masterStudents.m3')"
               @focus="onFieldFocus"
             />
           </div>
@@ -69,7 +69,7 @@
           </div>
           <button
             class="students__msg"
-            :aria-label="t('views.master.MasterStudentsView.m4')"
+            :aria-label="t('masterScreens.masterStudents.m4')"
             @click.stop="openMessage(student.id, student.name)"
           >
             <IconMessages :size="22" />
@@ -80,7 +80,7 @@
         <VShowMore
           v-if="!expanded && hiddenCount > 0"
           :count="hiddenCount"
-          :noun="t('views.master.MasterStudentsView.m5')"
+          :noun="t('masterScreens.masterStudents.m5')"
           @click="expanded = true"
         />
 
@@ -88,14 +88,14 @@
         <VEmptyState
           v-if="students.length === 0"
           icon="group"
-          :title="t('views.master.MasterStudentsView.m6')"
-          :description="t('views.master.MasterStudentsView.m7')"
+          :title="t('masterScreens.masterStudents.m6')"
+          :description="t('masterScreens.masterStudents.m7')"
         />
         <VEmptyState
           v-else-if="filtered.length === 0"
           icon="group"
-          :title="t('views.master.MasterStudentsView.m8')"
-          :description="t('views.master.MasterStudentsView.m9')"
+          :title="t('masterScreens.masterStudents.m8')"
+          :description="t('masterScreens.masterStudents.m9')"
         />
       </template>
     </div>
@@ -141,7 +141,7 @@ async function load(): Promise<void> {
     const res = await getStudents()
     students.value = res.items
   } catch {
-    error.value = t('views.master.MasterStudentsView.m11')
+    error.value = t('masterScreens.masterStudents.m11')
   } finally {
     loading.value = false
   }

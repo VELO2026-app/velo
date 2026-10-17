@@ -40,11 +40,11 @@
       <VEmptyState
         v-else-if="threadError"
         icon="warning"
-        :title="t('views.admin.AdminSupportDetailView.m1')"
+        :title="t('adminScreens.adminSupportDetail.m1')"
         :description="threadError"
       >
         <VButton size="sm" variant="outline" @click="loadThread">{{
-          t('views.admin.AdminSupportDetailView.m6')
+          t('adminScreens.adminSupportDetail.m6')
         }}</VButton>
       </VEmptyState>
 
@@ -76,11 +76,11 @@
         <VEmptyState
           v-else-if="messagesError"
           icon="warning"
-          :title="t('views.admin.AdminSupportDetailView.m2')"
+          :title="t('adminScreens.adminSupportDetail.m2')"
           :description="messagesError"
         >
           <VButton size="sm" variant="outline" @click="loadMessages">{{
-            t('views.admin.AdminSupportDetailView.m7')
+            t('adminScreens.adminSupportDetail.m7')
           }}</VButton>
         </VEmptyState>
         <template v-else>
@@ -112,7 +112,7 @@
             <div class="support-detail__input">
               <VTextarea
                 v-model="draft"
-                :placeholder="t('views.admin.AdminSupportDetailView.m3')"
+                :placeholder="t('adminScreens.adminSupportDetail.m3')"
                 :rows="1"
                 autogrow
                 maxlength="4000"
@@ -135,11 +135,11 @@
       <div v-else class="support-detail__not-found">
         <VEmptyState
           icon="notfound"
-          :title="t('views.admin.AdminSupportDetailView.m4')"
-          :description="t('views.admin.AdminSupportDetailView.m5')"
+          :title="t('adminScreens.adminSupportDetail.m4')"
+          :description="t('adminScreens.adminSupportDetail.m5')"
         />
         <VButton variant="outline" block @click="router.back()">{{
-          t('views.admin.AdminSupportDetailView.m8')
+          t('adminScreens.adminSupportDetail.m8')
         }}</VButton>
       </div>
     </div>
@@ -185,7 +185,7 @@ const sending = ref(false)
 const claiming = ref(false)
 
 const headerTitle = computed(
-  () => thread.value?.opener?.name ?? t('views.admin.AdminSupportDetailView.m9'),
+  () => thread.value?.opener?.name ?? t('adminScreens.adminSupportDetail.m9'),
 )
 const canReply = computed(() => !!thread.value && thread.value.assignee === myId.value)
 
@@ -199,19 +199,19 @@ const triageBadge = computed<{ variant: 'warning' | 'success' | 'info'; label: s
     return { variant: 'info', label: t('admin.supportTicket.closed') }
   }
   if (!threadItem.assignee) {
-    return { variant: 'warning', label: t('views.admin.AdminSupportDetailView.m10') }
+    return { variant: 'warning', label: t('adminScreens.adminSupportDetail.m10') }
   }
   if (threadItem.assignee === myId.value) {
-    return { variant: 'success', label: t('views.admin.AdminSupportDetailView.m11') }
+    return { variant: 'success', label: t('adminScreens.adminSupportDetail.m11') }
   }
-  return { variant: 'info', label: t('views.admin.AdminSupportDetailView.m12') }
+  return { variant: 'info', label: t('adminScreens.adminSupportDetail.m12') }
 })
 
 const claimPanelText = computed(() => {
   if (!thread.value?.assignee) {
-    return t('views.admin.AdminSupportDetailView.m13')
+    return t('adminScreens.adminSupportDetail.m13')
   }
-  return t('views.admin.AdminSupportDetailView.m14')
+  return t('adminScreens.adminSupportDetail.m14')
 })
 
 function formatTime(iso: string): string {
@@ -237,7 +237,7 @@ async function loadThread(): Promise<void> {
     const page = await listAdminSupportThreads(100)
     thread.value = page.threads.find((t) => t.id === threadId) ?? null
   } catch (e) {
-    threadError.value = extractApiError(e, t('views.admin.AdminSupportDetailView.m15'))
+    threadError.value = extractApiError(e, t('adminScreens.adminSupportDetail.m15'))
   } finally {
     loadingThread.value = false
   }
@@ -250,7 +250,7 @@ async function loadMessages(): Promise<void> {
     const page = await getAdminSupportMessages(threadId)
     messages.value = [...page.messages].reverse()
   } catch (e) {
-    messagesError.value = extractApiError(e, t('views.admin.AdminSupportDetailView.m16'))
+    messagesError.value = extractApiError(e, t('adminScreens.adminSupportDetail.m16'))
   } finally {
     loadingMessages.value = false
   }
@@ -261,10 +261,10 @@ async function onClaim(): Promise<void> {
   try {
     const result = await claimSupportThread(threadId)
     if (thread.value) thread.value = { ...thread.value, assignee: result.thread.assignee }
-    if (result.claimed) toast.success(t('views.admin.AdminSupportDetailView.m17'))
-    else toast.error(t('views.admin.AdminSupportDetailView.m18'))
+    if (result.claimed) toast.success(t('adminScreens.adminSupportDetail.m17'))
+    else toast.error(t('adminScreens.adminSupportDetail.m18'))
   } catch (e) {
-    toast.error(extractApiError(e, t('views.admin.AdminSupportDetailView.m19')))
+    toast.error(extractApiError(e, t('adminScreens.adminSupportDetail.m19')))
   } finally {
     claiming.value = false
   }
@@ -279,7 +279,7 @@ async function onSend(): Promise<void> {
     messages.value = [...messages.value, sent]
     draft.value = ''
   } catch (e) {
-    toast.error(extractApiError(e, t('views.admin.AdminSupportDetailView.m20')))
+    toast.error(extractApiError(e, t('adminScreens.adminSupportDetail.m20')))
   } finally {
     sending.value = false
   }

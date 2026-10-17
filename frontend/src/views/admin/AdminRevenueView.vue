@@ -17,14 +17,14 @@
   <div class="admin-detail">
     <header class="admin-detail__top">
       <VBackButton @click="router.back()" />
-      <span class="admin-detail__title">{{ t('views.admin.AdminRevenueView.m3') }}</span>
+      <span class="admin-detail__title">{{ t('adminScreens.adminRevenue.m3') }}</span>
     </header>
 
     <VSegment
       compact
       :model-value="period"
       :options="periodOptions"
-      :aria-label="t('views.admin.AdminRevenueView.m1')"
+      :aria-label="t('adminScreens.adminRevenue.m1')"
       @update:model-value="selectPeriod"
     />
 
@@ -33,11 +33,11 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('views.admin.AdminRevenueView.m2')"
+      :title="t('adminScreens.adminRevenue.m2')"
       :description="error"
     >
       <VButton size="sm" variant="outline" @click="load">{{
-        t('views.admin.AdminRevenueView.m4')
+        t('adminScreens.adminRevenue.m4')
       }}</VButton>
     </VEmptyState>
 
@@ -51,7 +51,7 @@
         <VStatCard :value="payoutLabel" label="Выплачено" />
       </div>
 
-      <h3 class="admin-detail__section">{{ t('views.admin.AdminRevenueView.m5') }}</h3>
+      <h3 class="admin-detail__section">{{ t('adminScreens.adminRevenue.m5') }}</h3>
       <div v-if="data.per_master.length" class="admin-detail__items">
         <VListRow
           v-for="m in data.per_master"
@@ -65,7 +65,7 @@
         </VListRow>
       </div>
       <VCard v-else
-        ><p class="admin-detail__empty">{{ t('views.admin.AdminRevenueView.m6') }}</p></VCard
+        ><p class="admin-detail__empty">{{ t('adminScreens.adminRevenue.m6') }}</p></VCard
       >
     </template>
   </div>
@@ -102,8 +102,8 @@ const error = ref<string | null>(null)
 // Период (Неделя/Месяц), default 'week' matches the backend default.
 const period = ref<'week' | 'month'>('week')
 const periodOptions: SegmentOption[] = [
-  { value: 'week', label: t('views.admin.AdminRevenueView.m7') },
-  { value: 'month', label: t('views.admin.AdminRevenueView.m8') },
+  { value: 'week', label: t('adminScreens.adminRevenue.m7') },
+  { value: 'month', label: t('adminScreens.adminRevenue.m8') },
 ]
 const revenueHeroLabel = computed<string>(() =>
   period.value === 'week' ? 'Выручка за неделю' : 'Выручка за месяц',
@@ -115,7 +115,7 @@ function selectPeriod(p: string): void {
   period.value = p
 }
 
-// allowZero=true: free-seed totals must show €0.00, not t('views.admin.AdminRevenueView.m9').
+// allowZero=true: free-seed totals must show €0.00, not t('adminScreens.adminRevenue.m9').
 function money(cents: number): string {
   return formatMoney(cents, 'EUR', 'ru', true)
 }
@@ -132,7 +132,7 @@ async function load(): Promise<void> {
   try {
     data.value = await getAdminRevenue(period.value)
   } catch (e) {
-    error.value = extractApiError(e, t('views.admin.AdminRevenueView.m10'))
+    error.value = extractApiError(e, t('adminScreens.adminRevenue.m10'))
   } finally {
     loading.value = false
   }

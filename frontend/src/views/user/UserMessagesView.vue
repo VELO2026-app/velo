@@ -31,13 +31,13 @@
           <IconMessages :size="48" />
         </template>
       </VEmptyState>
-      <VButton size="sm" @click="load">{{ t('views.user.UserMessagesView.m4') }}</VButton>
+      <VButton size="sm" @click="load">{{ t('user.screens.userMessages.m4') }}</VButton>
     </div>
 
     <VEmptyState
       v-else-if="threads.length === 0"
-      :title="t('views.user.UserMessagesView.m1')"
-      :description="t('views.user.UserMessagesView.m2')"
+      :title="t('user.screens.userMessages.m1')"
+      :description="t('user.screens.userMessages.m2')"
     >
       <template #icon>
         <IconMessages :size="48" />
@@ -49,7 +49,7 @@
         v-for="thread in threads"
         :key="thread.id"
         :peer="thread.peer"
-        :peer-fallback="t('views.user.UserMessagesView.m3')"
+        :peer-fallback="t('user.screens.userMessages.m3')"
         :unread="thread.unread ?? 0"
         @open="openThread(thread.id)"
       />
@@ -83,7 +83,7 @@ async function load(): Promise<void> {
   try {
     threads.value = (await listChats()).threads
   } catch (e) {
-    error.value = extractApiError(e, t('views.user.UserMessagesView.m5'))
+    error.value = extractApiError(e, t('user.screens.userMessages.m5'))
   }
   loading.value = false
 }

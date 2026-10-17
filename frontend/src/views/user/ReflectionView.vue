@@ -22,7 +22,7 @@
 <template>
   <FormShell
     v-model:comment="comment"
-    :back-label="t('views.user.ReflectionView.m1')"
+    :back-label="t('user.screens.reflection.m1')"
     :practice="practice"
     :practice-loading="practiceLoading"
     :load-error="practiceLoadError"
@@ -30,11 +30,11 @@
     :question-subtitle="variant.screenSubtitle"
     :submitting="diaryStore.reflectionSubmitting"
     :submit-disabled="false"
-    :submit-label="t('views.user.ReflectionView.m2')"
+    :submit-label="t('user.screens.reflection.m2')"
     :submitted="submitted"
     success-icon=""
-    :success-title="t('views.user.ReflectionView.m3')"
-    :success-text="t('views.user.ReflectionView.m4')"
+    :success-title="t('user.screens.reflection.m3')"
+    :success-text="t('user.screens.reflection.m4')"
     @back="onBack"
     @retry="loadPractice"
     @submit="onSubmit"
@@ -48,7 +48,7 @@
         с {{ practice?.master_name ?? 'Мастером' }}
       </span>
       <span class="form-shell__practice-meta-cell">
-        <IconCalendar :size="14" />{{ t('views.user.ReflectionView.m5') }}</span
+        <IconCalendar :size="14" />{{ t('user.screens.reflection.m5') }}</span
       >
     </template>
 
@@ -62,7 +62,7 @@
     </template>
     <template #success-actions>
       <VButton variant="primary" size="lg" block @click="goToDashboard">{{
-        t('views.user.ReflectionView.m6')
+        t('user.screens.reflection.m6')
       }}</VButton>
     </template>
   </FormShell>

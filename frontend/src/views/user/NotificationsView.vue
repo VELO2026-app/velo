@@ -104,32 +104,32 @@ const ROWS = [
     // behavioural questions on 2026-08-13 and said nothing about the strings,
     // and silence is not approval. Every label below is a one-line edit; keep
     // it that way and do not treat any of them as final.
-    label: t('views.user.NotificationsView.m1'),
-    sub: t('views.user.NotificationsView.m2'),
+    label: t('user.screens.notifications.m1'),
+    sub: t('user.screens.notifications.m2'),
   },
   {
     key: 'bookings',
-    label: t('views.user.NotificationsView.m3'),
-    sub: t('views.user.NotificationsView.m4'),
+    label: t('user.screens.notifications.m3'),
+    sub: t('user.screens.notifications.m4'),
   },
   {
     key: 'msg_participants',
-    label: t('views.user.NotificationsView.m5'),
-    sub: t('views.user.NotificationsView.m6'),
+    label: t('user.screens.notifications.m5'),
+    sub: t('user.screens.notifications.m6'),
   },
   {
     key: 'finance',
-    label: t('views.user.NotificationsView.m7'),
-    sub: t('views.user.NotificationsView.m8'),
+    label: t('user.screens.notifications.m7'),
+    sub: t('user.screens.notifications.m8'),
   },
 ] as const
 
 type CategoryKey = (typeof ROWS)[number]['key']
 
 // PROVISIONAL WORDING, same standing as the row labels above.
-const MASTER_LABEL = t('views.user.NotificationsView.m9')
-const MASTER_SUB = t('views.user.NotificationsView.m10')
-const SECTION_TITLE = t('views.user.NotificationsView.m11')
+const MASTER_LABEL = t('user.screens.notifications.m9')
+const MASTER_SUB = t('user.screens.notifications.m10')
+const SECTION_TITLE = t('user.screens.notifications.m11')
 
 // Server state. Empty until the first successful load; a category the server
 // does not report is one we cannot honestly control, so its row is disabled
@@ -171,7 +171,7 @@ async function loadPrefs(): Promise<void> {
     // screen was rebuilt to remove. (The master screen leaves its switches
     // live here; that difference is deliberate and was approved.)
     loadFailed.value = true
-    toast.error(t('views.user.NotificationsView.m12'))
+    toast.error(t('user.screens.notifications.m12'))
     console.warn('notification prefs load failed', error)
   }
 }
@@ -190,7 +190,7 @@ async function persist(
     await updateNotificationPrefs({ categories: next })
   } catch (error) {
     Object.assign(categories, previous)
-    toast.error(t('views.user.NotificationsView.m13'))
+    toast.error(t('user.screens.notifications.m13'))
     console.warn('preference save failed', error)
   } finally {
     savingKey.value = ''

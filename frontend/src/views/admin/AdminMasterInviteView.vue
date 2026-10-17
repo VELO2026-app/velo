@@ -18,12 +18,12 @@
   <div class="invite">
     <header class="invite__top">
       <VBackButton @click="router.back()" />
-      <h1 class="invite__title">{{ t('views.admin.AdminMasterInviteView.m1') }}</h1>
+      <h1 class="invite__title">{{ t('adminScreens.adminMasterInvite.m1') }}</h1>
     </header>
 
     <!-- Form card -->
     <VCard class="invite__card">
-      <span class="invite__section-title">{{ t('views.admin.AdminMasterInviteView.m2') }}</span>
+      <span class="invite__section-title">{{ t('adminScreens.adminMasterInvite.m2') }}</span>
       <p class="invite__desc">
         Создайте ссылку и отправьте её будущему мастеру. Она одноразовая: сработает у первого, кто
         её откроет, — после этого погашается. Срок действия — 7 дней.
@@ -36,12 +36,12 @@
 
     <!-- Result card (replaced in place on re-generate) -->
     <VCard v-if="inviteLink" class="invite__card">
-      <span class="invite__section-title">{{ t('views.admin.AdminMasterInviteView.m3') }}</span>
+      <span class="invite__section-title">{{ t('adminScreens.adminMasterInvite.m3') }}</span>
       <p class="invite__link">{{ inviteLink }}</p>
       <VButton variant="secondary" block @click="onCopy">{{
-        t('views.admin.AdminMasterInviteView.m4')
+        t('adminScreens.adminMasterInvite.m4')
       }}</VButton>
-      <p class="invite__caption">{{ t('views.admin.AdminMasterInviteView.m5') }}</p>
+      <p class="invite__caption">{{ t('adminScreens.adminMasterInvite.m5') }}</p>
     </VCard>
   </div>
 </template>
@@ -77,7 +77,7 @@ async function onCreate(): Promise<void> {
       // B8 (PROMPT №746): phrase now lives in errorMessages.ts, not here.
       toast.error(errorMessage('bot_url_not_configured'))
     } else {
-      toast.error(extractApiError(e, t('views.admin.AdminMasterInviteView.m6')))
+      toast.error(extractApiError(e, t('adminScreens.adminMasterInvite.m6')))
     }
   } finally {
     creating.value = false
@@ -88,9 +88,9 @@ async function onCreate(): Promise<void> {
 async function onCopy(): Promise<void> {
   try {
     await navigator.clipboard.writeText(inviteLink.value)
-    toast.success(t('views.admin.AdminMasterInviteView.m7'))
+    toast.success(t('adminScreens.adminMasterInvite.m7'))
   } catch {
-    toast.error(t('views.admin.AdminMasterInviteView.m8'))
+    toast.error(t('adminScreens.adminMasterInvite.m8'))
   }
 }
 </script>

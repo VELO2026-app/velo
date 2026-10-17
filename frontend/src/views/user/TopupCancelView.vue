@@ -10,8 +10,8 @@
 <template>
   <div class="topup-result">
     <IconClose :size="64" class="topup-result__icon" />
-    <h1 class="topup-result__title">{{ t('views.user.TopupCancelView.m1') }}</h1>
-    <p class="topup-result__text">{{ t('views.user.TopupCancelView.m2') }}</p>
+    <h1 class="topup-result__title">{{ t('user.screens.topupCancel.m1') }}</h1>
+    <p class="topup-result__text">{{ t('user.screens.topupCancel.m2') }}</p>
     <div class="topup-result__actions">
       <VButton variant="primary" size="lg" block @click="router.push({ name: 'user-topup' })">
         Попробовать снова

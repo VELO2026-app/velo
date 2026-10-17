@@ -40,7 +40,7 @@
     <VHeader title="Уведомления" show-back @back="router.back()">
       <template v-if="unread > 0" #action>
         <button type="button" class="user-inbox__read-all" @click="markAll">
-          {{ t('views.user.UserInboxView.m3') }}
+          {{ t('user.screens.userInbox.m3') }}
         </button>
       </template>
     </VHeader>
@@ -55,10 +55,10 @@
           <IconBellPlain :size="48" />
         </template>
       </VEmptyState>
-      <VButton size="sm" @click="load">{{ t('views.user.UserInboxView.m4') }}</VButton>
+      <VButton size="sm" @click="load">{{ t('user.screens.userInbox.m4') }}</VButton>
     </div>
 
-    <VEmptyState v-else-if="items.length === 0" :title="t('views.user.UserInboxView.m1')">
+    <VEmptyState v-else-if="items.length === 0" :title="t('user.screens.userInbox.m1')">
       <template #icon>
         <IconBellPlain :size="48" />
       </template>
@@ -73,11 +73,11 @@
         variant="tabs"
         scrollable
         class="user-inbox__filter"
-        :aria-label="t('views.user.UserInboxView.m2')"
+        :aria-label="t('user.screens.userInbox.m2')"
       />
 
       <div v-if="visibleItems.length === 0" class="user-inbox__center">
-        <p class="user-inbox__filter-empty">{{ t('views.user.UserInboxView.m5') }}</p>
+        <p class="user-inbox__filter-empty">{{ t('user.screens.userInbox.m5') }}</p>
       </div>
 
       <div v-else class="user-inbox__list">
@@ -134,10 +134,10 @@ const unread = ref(0)
 // = practice life; «Другое» = everything else (finance, future kinds).
 type InboxFilter = 'all' | 'messages' | 'events' | 'other'
 const FILTER_OPTIONS: ReadonlyArray<{ value: InboxFilter; label: string }> = [
-  { value: 'all', label: t('views.user.UserInboxView.m6') },
-  { value: 'messages', label: t('views.user.UserInboxView.m7') },
-  { value: 'events', label: t('views.user.UserInboxView.m8') },
-  { value: 'other', label: t('views.user.UserInboxView.m9') },
+  { value: 'all', label: t('user.screens.userInbox.m6') },
+  { value: 'messages', label: t('user.screens.userInbox.m7') },
+  { value: 'events', label: t('user.screens.userInbox.m8') },
+  { value: 'other', label: t('user.screens.userInbox.m9') },
 ]
 const filter = ref<InboxFilter>('all')
 
@@ -169,7 +169,7 @@ async function load(): Promise<void> {
     unread.value = page.unread
     notifications.applyUnread(page.unread)
   } catch (e) {
-    error.value = extractApiError(e, t('views.user.UserInboxView.m10'))
+    error.value = extractApiError(e, t('user.screens.userInbox.m10'))
   } finally {
     loading.value = false
   }
@@ -191,7 +191,7 @@ async function markOne(item: NotificationItem): Promise<void> {
   } catch (e) {
     item.read_at = previousReadAt
     unread.value = previousUnread
-    toast.error(extractApiError(e, t('views.user.UserInboxView.m11')))
+    toast.error(extractApiError(e, t('user.screens.userInbox.m11')))
   }
 }
 
@@ -212,7 +212,7 @@ async function markAll(): Promise<void> {
       i.read_at = previous[idx] ?? null
     })
     unread.value = previousUnread
-    toast.error(extractApiError(e, t('views.user.UserInboxView.m12')))
+    toast.error(extractApiError(e, t('user.screens.userInbox.m12')))
   }
 }
 

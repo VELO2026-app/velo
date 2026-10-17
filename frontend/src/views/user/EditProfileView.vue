@@ -61,7 +61,7 @@
       <!-- Методы практик (мастер): flat set + admin-approved change-request (M3).
            Order (L2): below Имя/Фамилия/E-mail, above Языки/О себе. -->
       <div v-if="isMaster" class="edit-profile__methods">
-        <label class="edit-profile__methods-label">{{ t('views.user.EditProfileView.m4') }}</label>
+        <label class="edit-profile__methods-label">{{ t('user.screens.editProfile.m4') }}</label>
 
         <!-- Pending: the proposed set is locked while an admin reviews it —
              shown in the SAME направление→вид white cards (batch L, readonly
@@ -70,7 +70,7 @@
         <template v-if="methodRequestPending">
           <MethodTaxonomyPicker :model-value="pendingProposedMethods" readonly />
           <div class="edit-profile__methods-status">
-            <VBadge variant="warning">{{ t('views.user.EditProfileView.m5') }}</VBadge>
+            <VBadge variant="warning">{{ t('user.screens.editProfile.m5') }}</VBadge>
           </div>
           <p class="edit-profile__methods-note">{{ METHOD_CHANGE_NOTE }}</p>
         </template>
@@ -106,7 +106,7 @@
 
       <!-- Языки практик (мастер): freely editable, no moderation (E16, Q2=А). -->
       <div v-if="isMaster" class="edit-profile__methods">
-        <label class="edit-profile__methods-label">{{ t('views.user.EditProfileView.m6') }}</label>
+        <label class="edit-profile__methods-label">{{ t('user.screens.editProfile.m6') }}</label>
         <div class="edit-profile__methods-chips">
           <VChip
             v-for="l in LANGUAGES"
@@ -133,16 +133,16 @@
       <!-- About -->
       <VTextarea
         v-model="form.bio"
-        :label="t('views.user.EditProfileView.m1')"
+        :label="t('user.screens.editProfile.m1')"
         :rows="4"
-        :placeholder="t('views.user.EditProfileView.m2')"
+        :placeholder="t('user.screens.editProfile.m2')"
         :error="bioError"
         @focus="onFieldFocus"
       />
 
       <!-- Save -->
       <VButton variant="primary" block :loading="saving" @click="onSave">{{
-        t('views.user.EditProfileView.m7')
+        t('user.screens.editProfile.m7')
       }}</VButton>
 
       <!-- Delete account (opens modal D) -->
@@ -154,18 +154,18 @@
     <!-- ===== Screen D: delete account modal (design «Delete account») ===== -->
     <VModal :open="showDeleteModal" @close="closeDeleteModal">
       <div class="edit-profile__del">
-        <h2 class="edit-profile__del-title">{{ t('views.user.EditProfileView.m8') }}</h2>
+        <h2 class="edit-profile__del-title">{{ t('user.screens.editProfile.m8') }}</h2>
 
         <div class="edit-profile__del-warning">
           <IconWarning :size="20" />
-          <span>{{ t('views.user.EditProfileView.m9') }}</span>
+          <span>{{ t('user.screens.editProfile.m9') }}</span>
         </div>
 
-        <p class="edit-profile__del-intro">{{ t('views.user.EditProfileView.m10') }}</p>
+        <p class="edit-profile__del-intro">{{ t('user.screens.editProfile.m10') }}</p>
         <ul class="edit-profile__del-list">
-          <li>{{ t('views.user.EditProfileView.m11') }}</li>
-          <li>{{ t('views.user.EditProfileView.m12') }}</li>
-          <li>{{ t('views.user.EditProfileView.m13') }}</li>
+          <li>{{ t('user.screens.editProfile.m11') }}</li>
+          <li>{{ t('user.screens.editProfile.m12') }}</li>
+          <li>{{ t('user.screens.editProfile.m13') }}</li>
         </ul>
 
         <template v-if="hasBalance">
@@ -175,21 +175,21 @@
           </VButton>
           <VCheckbox
             v-model="delConsent"
-            :label="t('views.user.EditProfileView.m3')"
+            :label="t('user.screens.editProfile.m3')"
             class="edit-profile__del-consent"
           />
         </template>
 
         <template v-if="showConfirmField">
           <div ref="confirmFieldEl">
-            <p class="edit-profile__del-confirm-hint">{{ t('views.user.EditProfileView.m14') }}</p>
+            <p class="edit-profile__del-confirm-hint">{{ t('user.screens.editProfile.m14') }}</p>
             <VInput v-model="delConfirmText" placeholder="УДАЛИТЬ" />
           </div>
         </template>
 
         <div class="edit-profile__del-actions">
           <VButton variant="secondary" @click="closeDeleteModal">{{
-            t('views.user.EditProfileView.m15')
+            t('user.screens.editProfile.m15')
           }}</VButton>
           <VButton variant="danger" :disabled="!canDelete" @click="onConfirmDelete">
             Удалить навсегда
@@ -244,9 +244,9 @@ const isMaster = computed(() => authStore.role === 'master')
 // shared MethodTaxonomyPicker emits; the change-request payload/schema is
 // unchanged (still a flat string[] to submitMethodChangeRequest).
 const METHOD_CHANGE_NOTE =
-  t('views.user.EditProfileView.m16') +
-  t('views.user.EditProfileView.m17') +
-  t('views.user.EditProfileView.m18')
+  t('user.screens.editProfile.m16') +
+  t('user.screens.editProfile.m17') +
+  t('user.screens.editProfile.m18')
 
 // The master's current live methods (from the profile).
 const currentMethods = computed((): string[] => masterStore.profile?.methods ?? [])
@@ -297,9 +297,9 @@ async function onSubmitMethods(): Promise<void> {
     await submitMethodChangeRequest([...selectedMethods.value])
     // Refetch so the pending badge appears (method_change_request now set).
     await masterStore.fetchMyProfile(true)
-    toast.info(t('views.user.EditProfileView.m19'))
+    toast.info(t('user.screens.editProfile.m19'))
   } catch (error) {
-    toast.error(extractApiError(error, t('views.user.EditProfileView.m20')))
+    toast.error(extractApiError(error, t('user.screens.editProfile.m20')))
   } finally {
     submittingMethods.value = false
   }
@@ -338,9 +338,9 @@ async function onSaveLanguages(): Promise<void> {
   try {
     await updateMasterLanguages([...selectedLanguages.value])
     await masterStore.fetchMyProfile(true)
-    toast.info(t('views.user.EditProfileView.m21'))
+    toast.info(t('user.screens.editProfile.m21'))
   } catch (error) {
-    toast.error(extractApiError(error, t('views.user.EditProfileView.m22')))
+    toast.error(extractApiError(error, t('user.screens.editProfile.m22')))
   } finally {
     savingLanguages.value = false
   }
@@ -361,7 +361,7 @@ const displayName = computed(() => {
   const u = user.value
   if (!u) return ''
   const parts = [u.first_name, u.last_name].filter(Boolean)
-  return parts.length > 0 ? parts.join(' ') : t('views.user.EditProfileView.m23')
+  return parts.length > 0 ? parts.join(' ') : t('user.screens.editProfile.m23')
 })
 
 // Editable form, initialised from the current profile. Phone + bio restored to
@@ -376,21 +376,21 @@ const form = reactive({
 
 // -- Validation (mirrors backend soft rules) --------------------------------
 const bioError = computed((): string =>
-  form.bio.length > 2000 ? t('views.user.EditProfileView.m24') : '',
+  form.bio.length > 2000 ? t('user.screens.editProfile.m24') : '',
 )
 
 // Soft email check (backend also 422s). Empty is allowed (clears the field).
 const emailError = computed((): string => {
   const v = form.email.trim()
   if (v === '') return ''
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? '' : t('views.user.EditProfileView.m25')
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? '' : t('user.screens.editProfile.m25')
 })
 
 const hasErrors = computed(() => !!bioError.value || !!emailError.value)
 
 // -- Actions ----------------------------------------------------------------
 function onChangePhoto(): void {
-  toast.info(t('views.user.EditProfileView.m26'))
+  toast.info(t('user.screens.editProfile.m26'))
 }
 
 const saving = ref(false)
@@ -398,7 +398,7 @@ const saving = ref(false)
 async function onSave(): Promise<void> {
   if (saving.value) return
   if (hasErrors.value) {
-    toast.error(t('views.user.EditProfileView.m27'))
+    toast.error(t('user.screens.editProfile.m27'))
     return
   }
 
@@ -425,17 +425,17 @@ async function onSave(): Promise<void> {
   }
 
   if (Object.keys(body).length === 0) {
-    toast.info(t('views.user.EditProfileView.m28'))
+    toast.info(t('user.screens.editProfile.m28'))
     return
   }
 
   saving.value = true
   try {
     await authStore.updateProfile(body)
-    toast.info(t('views.user.EditProfileView.m29'))
+    toast.info(t('user.screens.editProfile.m29'))
     router.back()
   } catch (error) {
-    toast.error(extractApiError(error, t('views.user.EditProfileView.m30')))
+    toast.error(extractApiError(error, t('user.screens.editProfile.m30')))
   } finally {
     saving.value = false
   }
@@ -494,7 +494,7 @@ function onWithdrawFirst(): void {
 
 function onConfirmDelete(): void {
   // Stub per the operator rule -- real deletion isn't implemented (see note).
-  toast.info(t('views.user.EditProfileView.m31'))
+  toast.info(t('user.screens.editProfile.m31'))
 }
 </script>
 

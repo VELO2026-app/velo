@@ -32,14 +32,14 @@
     <!-- Header -->
     <header class="entry__header">
       <VBackButton aria-label="Назад" @click="goBack" />
-      <h1 class="entry__title-bar">{{ t('views.user.EntryView.m7') }}</h1>
+      <h1 class="entry__title-bar">{{ t('user.screens.entry.m7') }}</h1>
 
       <!-- "..." menu (view mode only): edit + delete. -->
       <VMenu v-if="mode === 'view'">
         <template #default="{ close }">
           <VMenuItem
             :icon="IconPen"
-            :ariaLabel="t('views.user.EntryView.m1')"
+            :ariaLabel="t('user.screens.entry.m1')"
             @click="
               () => {
                 startEdit()
@@ -49,7 +49,7 @@
           />
           <VMenuItem
             :icon="IconTrash"
-            :ariaLabel="t('views.user.EntryView.m2')"
+            :ariaLabel="t('user.screens.entry.m2')"
             danger
             @click="
               () => {
@@ -73,11 +73,11 @@
       <VEmptyState
         v-else-if="loadError"
         icon="warning"
-        :title="t('views.user.EntryView.m3')"
+        :title="t('user.screens.entry.m3')"
         :description="loadError"
       >
         <template #action>
-          <VButton variant="primary" @click="reload">{{ t('views.user.EntryView.m8') }}</VButton>
+          <VButton variant="primary" @click="reload">{{ t('user.screens.entry.m8') }}</VButton>
         </template>
       </VEmptyState>
 
@@ -109,8 +109,8 @@
               v-model="editTitle"
               class="entry__edit-title"
               type="text"
-              :placeholder="t('views.user.EntryView.m4')"
-              :aria-label="t('views.user.EntryView.m5')"
+              :placeholder="t('user.screens.entry.m4')"
+              :aria-label="t('user.screens.entry.m5')"
               :maxlength="MAX_TITLE_LEN"
               :disabled="saving"
             />
@@ -118,7 +118,7 @@
               ref="editEl"
               v-model="editContent"
               class="entry__edit-content"
-              :aria-label="t('views.user.EntryView.m6')"
+              :aria-label="t('user.screens.entry.m6')"
               rows="3"
               :maxlength="MAX_CONTENT_LEN"
               :disabled="saving"
@@ -207,7 +207,7 @@ const practiceDuration = computed(() =>
 // Muted context line linking the note to its practice (if any).
 const contextLine = computed(() => {
   if (!practice.value) return ''
-  const name = practice.value.master_name ?? t('views.user.EntryView.m9')
+  const name = practice.value.master_name ?? t('user.screens.entry.m9')
   return `Связано с практикой: ${practice.value.title} с ${name}`
 })
 

@@ -17,7 +17,7 @@
   <div class="admin-list">
     <header class="admin-list__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-list__title">{{ t('views.admin.AdminParticipantsView.m3') }}</h1>
+      <h1 class="admin-list__title">{{ t('adminScreens.adminParticipants.m3') }}</h1>
       <span class="admin-list__count">{{ headerCount }}</span>
     </header>
 
@@ -48,7 +48,7 @@
 
       <div v-if="hasMore" class="admin-list__more">
         <VButton variant="outline" @click="loadMore">{{
-          t('views.admin.AdminParticipantsView.m4')
+          t('adminScreens.adminParticipants.m4')
         }}</VButton>
       </div>
     </template>
@@ -59,18 +59,18 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('views.admin.AdminParticipantsView.m1')"
-      :description="t('views.admin.AdminParticipantsView.m2')"
+      :title="t('adminScreens.adminParticipants.m1')"
+      :description="t('adminScreens.adminParticipants.m2')"
     >
       <template #action
         ><VButton variant="primary" @click="load(true)">{{
-          t('views.admin.AdminParticipantsView.m5')
+          t('adminScreens.adminParticipants.m5')
         }}</VButton></template
       >
     </VEmptyState>
 
     <VCard v-else-if="!loading">
-      <p class="admin-list__empty">{{ t('views.admin.AdminParticipantsView.m6') }}</p>
+      <p class="admin-list__empty">{{ t('adminScreens.adminParticipants.m6') }}</p>
     </VCard>
   </div>
 </template>
@@ -115,11 +115,11 @@ const headerCount = computed<string>(() =>
 const segOptions = computed<SegmentOption[]>(() => [
   {
     value: 'all',
-    label: t('views.admin.AdminParticipantsView.m7'),
+    label: t('adminScreens.adminParticipants.m7'),
     badge: totalCount.value ?? undefined,
   },
-  { value: 'new', label: t('views.admin.AdminParticipantsView.m8') },
-  { value: 'active', label: t('views.admin.AdminParticipantsView.m9') },
+  { value: 'new', label: t('adminScreens.adminParticipants.m8') },
+  { value: 'active', label: t('adminScreens.adminParticipants.m9') },
 ])
 
 async function load(reset: boolean): Promise<void> {
@@ -132,10 +132,10 @@ async function load(reset: boolean): Promise<void> {
     total.value = res.total
     participants.value = reset ? res.items : [...participants.value, ...res.items]
   } catch {
-    toast.error(t('views.admin.AdminParticipantsView.m10'))
+    toast.error(t('adminScreens.adminParticipants.m10'))
     // A failed initial/filter load (reset) means the list below is genuinely
     // unknown, not empty -- render the real error state (W12) instead of
-    // falling through to t('views.admin.AdminParticipantsView.m11'). A failed loadMore leaves the
+    // falling through to t('adminScreens.adminParticipants.m11'). A failed loadMore leaves the
     // already-loaded page visible; the toast is enough there.
     if (reset) error.value = true
   } finally {
@@ -150,7 +150,7 @@ function loadMore(): void {
   void load(false)
 }
 
-// t('views.admin.AdminParticipantsView.m12') — registration month, from created_at (UTC).
+// t('adminScreens.adminParticipants.m12') — registration month, from created_at (UTC).
 function joinedLabel(iso: string): string {
   const d = new Date(iso)
   const month = new Intl.DateTimeFormat('ru-RU', { month: 'short', timeZone: 'UTC' })
@@ -159,14 +159,14 @@ function joinedLabel(iso: string): string {
   return `${month.charAt(0).toUpperCase()}${month.slice(1)} ${d.getUTCFullYear()}`
 }
 
-// t('views.admin.AdminParticipantsView.m13') / t('views.admin.AdminParticipantsView.m14') / t('views.admin.AdminParticipantsView.m15') — last app-open, from last_login_at.
+// t('adminScreens.adminParticipants.m13') / t('adminScreens.adminParticipants.m14') / t('adminScreens.adminParticipants.m15') — last app-open, from last_login_at.
 function lastActiveLabel(iso: string): string {
   return dayLabelOf(iso)
 }
 
 // No admin->user messaging endpoint yet -> stub toast (build-full-design).
 function messageStub(): void {
-  toast.info(t('views.admin.AdminParticipantsView.m16'))
+  toast.info(t('adminScreens.adminParticipants.m16'))
 }
 </script>
 

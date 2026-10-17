@@ -33,10 +33,10 @@
         <VLoader size="lg" />
       </template>
       <VCard v-else-if="statusError" class="pending-view__card">
-        <h2 class="pending-view__title">{{ t('views.master.MasterPendingView.m3') }}</h2>
-        <p class="pending-view__subtitle">{{ t('views.master.MasterPendingView.m4') }}</p>
+        <h2 class="pending-view__title">{{ t('masterScreens.masterPending.m3') }}</h2>
+        <p class="pending-view__subtitle">{{ t('masterScreens.masterPending.m4') }}</p>
         <VButton variant="primary" block @click="refreshStatus">{{
-          t('views.master.MasterPendingView.m5')
+          t('masterScreens.masterPending.m5')
         }}</VButton>
       </VCard>
 
@@ -51,7 +51,7 @@
             alt=""
             class="pending-view__illu pending-view__illu--lg"
           />
-          <h2 class="pending-view__title">{{ t('views.master.MasterPendingView.m6') }}</h2>
+          <h2 class="pending-view__title">{{ t('masterScreens.masterPending.m6') }}</h2>
           <p class="pending-view__subtitle">
             Переключитесь в режим мастера, чтобы открыть кабинет. Вернуться в режим пользователя
             можно в любой момент из настроек.
@@ -72,12 +72,12 @@
             alt=""
             class="pending-view__illu pending-view__illu--lg"
           />
-          <h2 class="pending-view__title">{{ t('views.master.MasterPendingView.m7') }}</h2>
-          <p class="pending-view__subtitle">{{ t('views.master.MasterPendingView.m8') }}</p>
+          <h2 class="pending-view__title">{{ t('masterScreens.masterPending.m7') }}</h2>
+          <p class="pending-view__subtitle">{{ t('masterScreens.masterPending.m8') }}</p>
 
           <div class="pending-view__reason">
             <div class="pending-view__reason-label">
-              {{ t('views.master.MasterPendingView.m9') }}
+              {{ t('masterScreens.masterPending.m9') }}
             </div>
             <div class="pending-view__reason-text">{{ rejectionReason }}</div>
           </div>
@@ -101,11 +101,11 @@
       <template v-else>
         <VCard class="pending-view__card">
           <img src="/onboarding/master-verdict-sent.svg" alt="" class="pending-view__illu" />
-          <h2 class="pending-view__title">{{ t('views.master.MasterPendingView.m10') }}</h2>
-          <p class="pending-view__subtitle">{{ t('views.master.MasterPendingView.m11') }}</p>
+          <h2 class="pending-view__title">{{ t('masterScreens.masterPending.m10') }}</h2>
+          <p class="pending-view__subtitle">{{ t('masterScreens.masterPending.m11') }}</p>
           <div class="pending-view__actions">
             <VButton variant="outline" block @click="refreshStatus">{{
-              t('views.master.MasterPendingView.m12')
+              t('masterScreens.masterPending.m12')
             }}</VButton>
             <VButton variant="ghost" block @click="router.push({ name: 'user-dashboard' })">
               На главную
@@ -124,8 +124,8 @@
 
     <VConfirmDialog
       :open="confirmWithdrawOpen"
-      :message="t('views.master.MasterPendingView.m1')"
-      :confirm-label="t('views.master.MasterPendingView.m2')"
+      :message="t('masterScreens.masterPending.m1')"
+      :confirm-label="t('masterScreens.masterPending.m2')"
       danger
       :loading="withdrawing"
       @confirm="onWithdraw"
@@ -196,7 +196,7 @@ const rejectionReason = computed((): string => {
   return (
     masterStore.profile?.rejection_reason ??
     authStore.masterApplication?.rejection_reason ??
-    t('views.master.MasterPendingView.m13')
+    t('masterScreens.masterPending.m13')
   )
 })
 
@@ -255,7 +255,7 @@ async function enterMasterMode(): Promise<void> {
     }
     void router.push({ name: 'master-dashboard' })
   } catch {
-    toast.error(t('views.master.MasterPendingView.m14'))
+    toast.error(t('masterScreens.masterPending.m14'))
   } finally {
     switching.value = false
   }
@@ -275,13 +275,13 @@ async function onWithdraw(): Promise<void> {
     // guard) doesn't mistake a stale session for a still-pending applicant.
     sessionStorage.removeItem(MASTER_APPLIED_KEY)
     await authStore.fetchMe()
-    toast.success(t('views.master.MasterPendingView.m15'))
+    toast.success(t('masterScreens.masterPending.m15'))
     void router.replace({ name: 'user-dashboard' })
   } catch (e) {
     // 409 means someone else (e.g. an admin) already acted on it between
     // opening this dialog and confirming -- a generic message covers both
     // that race and any other failure without guessing which happened.
-    toast.error(extractApiError(e, t('views.master.MasterPendingView.m16')))
+    toast.error(extractApiError(e, t('masterScreens.masterPending.m16')))
   } finally {
     withdrawing.value = false
     confirmWithdrawOpen.value = false

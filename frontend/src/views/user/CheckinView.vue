@@ -15,16 +15,16 @@
     :practice="practice"
     :practice-loading="practiceLoading"
     :load-error="practiceLoadError"
-    :question-title="t('views.user.CheckinView.m1')"
-    :question-subtitle="t('views.user.CheckinView.m2')"
+    :question-title="t('user.screens.checkin.m1')"
+    :question-subtitle="t('user.screens.checkin.m2')"
     :submitting="diaryStore.checkinSubmitting"
     :submit-disabled="windowClosed"
     :disabled-hint="practice && windowClosed ? 'Check-in закрыт — практика уже началась' : ''"
-    :submit-label="t('views.user.CheckinView.m3')"
+    :submit-label="t('user.screens.checkin.m3')"
     :show-skip="true"
     :submitted="submitted"
-    :success-title="t('views.user.CheckinView.m4')"
-    :success-text="t('views.user.CheckinView.m5')"
+    :success-title="t('user.screens.checkin.m4')"
+    :success-text="t('user.screens.checkin.m5')"
     @back="onBack"
     @retry="loadPractice"
     @submit="onSubmit"
@@ -46,7 +46,7 @@
       <div class="checkin__mood">
         <MoodSlider
           v-model="moodScore"
-          :aria-label="t('views.user.CheckinView.m6')"
+          :aria-label="t('user.screens.checkin.m6')"
           :disabled="diaryStore.checkinSubmitting"
         />
       </div>
@@ -65,7 +65,7 @@
         Начать практику
       </VButton>
       <VButton variant="ghost" block @click="goToDashboard">{{
-        t('views.user.CheckinView.m7')
+        t('user.screens.checkin.m7')
       }}</VButton>
     </template>
   </FormShell>
@@ -122,7 +122,7 @@ const windowClosed = computed<boolean>(() => {
   // deep link whose fetch failed offered a live button for a POST the backend
   // was always going to refuse. The hint is gated on `practice` in the template
   // for the same reason: while we have no data, the button is disabled because
-  // we do not KNOW, and claiming t('views.user.CheckinView.m8') would be a guess.
+  // we do not KNOW, and claiming t('user.screens.checkin.m8') would be a guess.
   if (!s) return true
   return nowMs.value > new Date(s).getTime()
 })
@@ -185,22 +185,22 @@ async function onSubmit(): Promise<void> {
 // loaded, no second round-trip) -- never a raw backend string.
 function closedPracticeMessage(code: string | undefined): string | null {
   if (code === 'blocked_by_master') {
-    return t('views.user.CheckinView.m9')
+    return t('user.screens.checkin.m9')
   }
   if (code === 'not_a_student') {
-    return t('views.user.CheckinView.m10')
+    return t('user.screens.checkin.m10')
   }
   if (code === 'not_in_audience') {
     const names = practice.value?.audience_group_names ?? []
     return names.length
       ? `Вы не состоите в группе «${names.join('», «')}»`
-      : t('views.user.CheckinView.m11')
+      : t('user.screens.checkin.m11')
   }
   return null
 }
 
 function onSkip(): void {
-  // Optimistic: hide the dashboard t('views.user.CheckinView.m12') banner instantly this
+  // Optimistic: hide the dashboard t('user.screens.checkin.m12') banner instantly this
   // session, so navigation feels immediate.
   bookingsStore.dismissCheckin(practiceId)
   // Persist the skip (B2) so the prompt stays hidden across sessions/devices.
@@ -211,7 +211,7 @@ function onSkip(): void {
   if (booking) {
     void bookingsStore.skipCheckin(booking.id)
   }
-  toast.info(t('views.user.CheckinView.m13'))
+  toast.info(t('user.screens.checkin.m13'))
   void router.push({ name: 'user-dashboard' })
 }
 
