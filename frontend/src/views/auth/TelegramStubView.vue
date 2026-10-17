@@ -27,15 +27,16 @@
       <VeloLogo :size="120" />
     </div>
     <h1 class="stub__title">VELΘ</h1>
-    <p class="stub__message">Пространство для практики<br />и внутреннего развития</p>
+    <p class="stub__message">{{ t('auth.tagline1') }}<br />{{ t('auth.tagline2') }}</p>
     <a :href="botUrl" class="stub__button stub__button--primary" rel="noopener">
-      Открыть в Telegram
+      {{ t('auth.stub.open') }}
     </a>
-    <p class="stub__hint">Нажмите кнопку «Открыть VELO» в чате с ботом</p>
+    <p class="stub__hint">{{ t('auth.stub.hint') }}</p>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { VeloLogo } from '@/components/ui'
 
 const botUrl = import.meta.env.VITE_TELEGRAM_BOT_URL || 'https://telegram.me/veloappbot'

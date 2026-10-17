@@ -17,18 +17,19 @@
     <div class="auth-error__card">
       <div class="auth-error__icon">⏱️</div>
 
-      <h1 class="auth-error__title">Не удалось загрузить</h1>
+      <h1 class="auth-error__title">{{ t('auth.loadFailedTitle') }}</h1>
 
       <p class="auth-error__body">
-        Соединение заняло слишком много времени. Проверьте интернет и попробуйте снова.
+        {{ t('auth.loadFailedText') }}
       </p>
 
-      <VButton variant="primary" size="lg" block @click="onRetry"> Попробовать снова </VButton>
+      <VButton variant="primary" size="lg" block @click="onRetry">{{ t('common.retry') }}</VButton>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { host } from '@/platform/host'
 import { VButton } from '@/components/ui'
 

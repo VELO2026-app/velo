@@ -6,12 +6,13 @@
   <div class="not-found velo-kbd-scroll">
     <IconSearch :size="64" class="not-found__icon" />
     <h1 class="not-found__title">404</h1>
-    <p class="not-found__text">Страница не найдена</p>
-    <button class="not-found__btn" @click="router.push('/')">На главную</button>
+    <p class="not-found__text">{{ t('auth.notFoundText') }}</p>
+    <button class="not-found__btn" @click="router.push('/')">{{ t('auth.notFoundHome') }}</button>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { useRouter } from 'vue-router'
 import { IconSearch } from '@/components/icons'
 const router = useRouter()
