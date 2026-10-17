@@ -48,7 +48,7 @@
 
     <!-- Difficulty dots (Calendar frame 4): label + dots only, no word level. -->
     <div v-if="difficultyDots > 0" class="hero-card__difficulty">
-      <span class="hero-card__difficulty-label">Сложность</span>
+      <span class="hero-card__difficulty-label">{{ t('shared.heroCard.difficulty') }}</span>
       <span class="hero-card__difficulty-dots" :aria-label="difficultyLabel || undefined">
         <span
           v-for="n in 3"
@@ -67,9 +67,13 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { IconCalendar, IconClock, IconGroup, IconRepeat } from '@/components/icons'
 import { DIRECTION_ICON, DIRECTION_ICON_FALLBACK } from '@/utils/displayHelpers'
 import type { PracticeDirection } from '@/api/types'
+
+// tz-i18n 2.2b: difficulty label via shared.heroCard.*.
+const { t } = useI18n({ useScope: 'global' })
 
 const props = withDefaults(
   defineProps<{

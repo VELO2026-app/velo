@@ -16,8 +16,8 @@
 <template>
   <VBottomSheet
     :open="open"
-    :title="title"
-    save-label="Сохранить"
+    :title="title ?? t('shared.datePicker.title')"
+    :save-label="t('ui.save')"
     @save="save"
     @close="$emit('close')"
   >
@@ -32,7 +32,7 @@
           <button
             type="button"
             class="dps__navbtn"
-            aria-label="Предыдущий месяц"
+            :aria-label="t('ui.prevMonth')"
             @click="shiftMonth(-1)"
           >
             <svg class="dps__chev" viewBox="0 0 14 22"><path d="M11 2L3 11L11 20" /></svg>
@@ -40,7 +40,7 @@
           <button
             type="button"
             class="dps__navbtn"
-            aria-label="Следующий месяц"
+            :aria-label="t('ui.nextMonth')"
             :disabled="nextMonthDisabled"
             @click="shiftMonth(1)"
           >
@@ -93,8 +93,14 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { getLocale } from '@/locales'
 import { daysInMonth, firstWeekdayMonFirst, shiftMonthParts } from '@/utils/calendarMath'
 import { VBottomSheet, VWheel } from '@/components/ui'
+
+// tz-i18n 2.2b: title fallback via shared.datePicker.title; save/nav labels
+// and calendar names from catalogs.
+const { t } = useI18n({ useScope: 'global' })
 
 const props = withDefaults(
   defineProps<{
@@ -109,7 +115,7 @@ const props = withDefaults(
     /** Sheet title (default «Дата практики»; reused as «Дата заявки» in admin). */
     title?: string
   }>(),
-  { modelValue: '', min: '', max: '', title: 'Дата практики' },
+  { modelValue: '', min: '', max: '' },
 )
 
 const emit = defineEmits<{
@@ -117,21 +123,15 @@ const emit = defineEmits<{
   close: []
 }>()
 
-const MONTHS = [
-  'Январь',
-  'Февраль',
-  'Март',
-  'Апрель',
-  'Май',
-  'Июнь',
-  'Июль',
-  'Август',
-  'Сентябрь',
-  'Октябрь',
-  'Ноябрь',
-  'Декабрь',
-]
-const WEEKDAYS = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС']
+// tz-i18n 2.2b: month names via Intl (nominative, capitalized), weekday
+// abbreviations via the shared display.weekdayAbbr keys.
+const MONTHS = Array.from({ length: 12 }, (_, m) => {
+  const name = new Intl.DateTimeFormat(getLocale(), { month: 'long' }).format(
+    new Date(Date.UTC(2026, m, 1)),
+  )
+  return name.charAt(0).toUpperCase() + name.slice(1)
+})
+const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7].map((d) => t(`display.weekdayAbbr.${d}`).toUpperCase())
 
 const mode = ref<'calendar' | 'wheel'>('calendar')
 

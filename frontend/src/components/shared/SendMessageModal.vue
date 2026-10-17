@@ -27,10 +27,19 @@
       </div>
       <!-- maxlength is a native attr VTextarea forwards to the field, the same
            4000 cap the chat thread's own Composer enforces. -->
-      <VTextarea v-model="text" placeholder="Сообщение…" :rows="5" maxlength="4000" />
+      <VTextarea
+        v-model="text"
+        :placeholder="t('chat.messagePlaceholder')"
+        :rows="5"
+        maxlength="4000"
+      />
       <div class="send-msg__actions">
-        <VButton variant="danger" block :disabled="sending" @click="$emit('close')">Отмена</VButton>
-        <VButton variant="primary" block :loading="sending" @click="onSend">Отправить</VButton>
+        <VButton variant="danger" block :disabled="sending" @click="$emit('close')">
+          {{ t('ui.cancel') }}
+        </VButton>
+        <VButton variant="primary" block :loading="sending" @click="onSend">
+          {{ t('chat.send') }}
+        </VButton>
       </div>
     </div>
   </VModal>
@@ -38,10 +47,14 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { VModal, VAvatar, VTextarea, VButton } from '@/components/ui'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
 import { openChat, openStudentChat, sendChatMessage } from '@/api/chats'
+
+// tz-i18n 2.2b: composer copy + result toasts via chat.* / ui.*.
+const { t } = useI18n({ useScope: 'global' })
 
 const props = withDefaults(
   defineProps<{
@@ -82,10 +95,10 @@ async function onSend(): Promise<void> {
       ? await openChat(props.masterId)
       : await openStudentChat(props.studentId)
     await sendChatMessage(thread.id, body)
-    toast.success('Сообщение отправлено')
+    toast.success(t('chat.sent'))
     emit('close')
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось отправить сообщение'))
+    toast.error(extractApiError(e, t('chat.sendFailed')))
   } finally {
     sending.value = false
   }

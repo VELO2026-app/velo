@@ -18,7 +18,7 @@
     <div class="mfilter">
       <div class="mfilter__header">
         <span class="mfilter__header-icon"><IconFilter :size="20" /></span>
-        <h2 class="mfilter__heading">Фильтр</h2>
+        <h2 class="mfilter__heading">{{ t('filters.title') }}</h2>
       </div>
 
       <!-- Date (opens the reused DatePickerSheet) -->
@@ -31,10 +31,10 @@
 
       <!-- Категория -->
       <section class="mfilter__group">
-        <h3 class="mfilter__label">Категория</h3>
+        <h3 class="mfilter__label">{{ t('moderation.category') }}</h3>
         <div class="mfilter__chips">
           <VChip size="md" clickable :active="draftCats.length === 0" @click="draftCats = []">
-            Все
+            {{ t('common.all') }}
           </VChip>
           <VChip
             v-for="c in CATEGORIES"
@@ -51,7 +51,7 @@
 
       <!-- Приоритет -->
       <section class="mfilter__group">
-        <h3 class="mfilter__label">Приоритет</h3>
+        <h3 class="mfilter__label">{{ t('moderation.priority') }}</h3>
         <div class="mfilter__chips">
           <VChip
             v-for="p in PRIORITIES"
@@ -68,7 +68,7 @@
 
       <!-- Статус заявки -->
       <section class="mfilter__group">
-        <h3 class="mfilter__label">Статус заявки</h3>
+        <h3 class="mfilter__label">{{ t('moderation.status') }}</h3>
         <div class="mfilter__chips">
           <VChip
             v-for="s in STATUSES"
@@ -85,7 +85,7 @@
 
       <!-- Reset: clears all drafts, stays open (closing the sheet applies). -->
       <VButton variant="ghost" block :disabled="!hasActiveFilters" @click="resetFilters">
-        Сбросить
+        {{ t('common.reset') }}
       </VButton>
     </div>
   </VModal>
@@ -94,7 +94,7 @@
   <DatePickerSheet
     :open="showDate"
     :model-value="draftDate"
-    title="Дата заявки"
+    :title="t('moderation.reportDate')"
     @update:model-value="draftDate = $event"
     @close="showDate = false"
   />
@@ -102,11 +102,15 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { VModal, VChip, VButton } from '@/components/ui'
 import { IconFilter } from '@/components/icons'
 import DatePickerSheet from '@/components/shared/DatePickerSheet.vue'
 import { formatRelative } from '@/utils/adminHelpers'
 import type { ModerationFilter } from './moderationFilter'
+
+// tz-i18n 2.2a: heading/labels/chip groups via moderation.*/filters.*/common.*.
+const { t } = useI18n({ useScope: 'global' })
 
 const props = defineProps<{
   open: boolean
@@ -118,15 +122,41 @@ const emit = defineEmits<{
   close: []
 }>()
 
+// Labels resolve at ACCESS time (getters) -- tz-i18n 1.1.
 const CATEGORIES = [
-  { value: 'tickets', label: 'Тикеты' },
-  { value: 'complaints', label: 'Жалобы' },
-  { value: 'payments', label: 'Платежи' },
+  {
+    value: 'tickets',
+    get label(): string {
+      return t('moderation.cats.tickets')
+    },
+  },
+  {
+    value: 'complaints',
+    get label(): string {
+      return t('moderation.cats.complaints')
+    },
+  },
+  {
+    value: 'payments',
+    get label(): string {
+      return t('moderation.cats.payments')
+    },
+  },
 ]
 const PRIORITIES = ['P0', 'P1', 'P2', 'P3']
 const STATUSES = [
-  { value: 'open', label: 'Открытая' },
-  { value: 'closed', label: 'Закрытая' },
+  {
+    value: 'open',
+    get label(): string {
+      return t('moderation.statuses.open')
+    },
+  },
+  {
+    value: 'closed',
+    get label(): string {
+      return t('moderation.statuses.closed')
+    },
+  },
 ]
 
 const draftCats = ref<string[]>([])

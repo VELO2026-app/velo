@@ -40,11 +40,11 @@
 <template>
   <VBottomSheet
     :open="open"
-    title="Удалить из группы"
+    :title="t('shared.groups.removeTitle')"
     compact-title
     title-strong
-    save-label="Удалить"
-    cancel-label="Отмена"
+    :save-label="t('shared.groups.removeSave')"
+    :cancel-label="t('ui.cancel')"
     @save="onSave"
     @close="$emit('close')"
   >
@@ -68,13 +68,14 @@
     </template>
 
     <p v-if="mode === 'all'" class="remove-from-group__note">
-      Участник автоматически переносится в группу «Ученики»
+      {{ t('shared.groups.autoMove') }}
     </p>
   </VBottomSheet>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { VBottomSheet, VRadioGroup, VChip } from '@/components/ui'
 import TargetUserCard from './TargetUserCard.vue'
 import { removeGroupMember } from '@/api/groups'
@@ -99,10 +100,28 @@ const emit = defineEmits<{ close: []; saved: [] }>()
 
 const toast = useToast()
 
+// tz-i18n 2.2b: sheet copy + radio options via shared.groups.*.
+const { t } = useI18n({ useScope: 'global' })
+
 const ALL_MODE_OPTIONS = [
-  { value: 'current', label: 'Удалить из текущей группы' },
-  { value: 'selected', label: 'Удалить из выбранных групп' },
-  { value: 'all', label: 'Удалить из всех групп' },
+  {
+    value: 'current',
+    get label(): string {
+      return t('shared.groups.removeCurrent')
+    },
+  },
+  {
+    value: 'selected',
+    get label(): string {
+      return t('shared.groups.removeSelected')
+    },
+  },
+  {
+    value: 'all',
+    get label(): string {
+      return t('shared.groups.removeAll')
+    },
+  },
 ]
 
 // No currentGroupId (profile menu, T24-10) -- drop the "current" option,

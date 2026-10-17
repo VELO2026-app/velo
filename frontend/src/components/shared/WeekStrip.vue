@@ -95,7 +95,15 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { getLocale } from '@/locales'
 import { IconCalendar } from '@/components/icons'
+
+// tz-i18n 2.2b: weekday abbreviations come from display.weekdayAbbr (the
+// array stays indexed by Date.getDay, 0=Sun..6=Sat); the stationary chip's
+// month abbreviations come from shared.monthsShort (ru) / ICU short month
+// (other locales).
+const { t } = useI18n({ useScope: 'global' })
 
 const props = defineProps<{
   /** The 7 day-Dates of the current window (today-anchored). */
@@ -116,25 +124,23 @@ const emit = defineEmits<{
   'shift-days': [delta: number]
 }>()
 
-// Short Russian weekday labels, Monday-first (Date.getDay: 0=Sun..6=Sat).
-const WEEKDAY_LABELS = ['ВС', 'ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ']
+// Short weekday labels, Monday-first (Date.getDay: 0=Sun..6=Sat).
+const WEEKDAY_LABELS = [7, 1, 2, 3, 4, 5, 6].map((iso) =>
+  t(`display.weekdayAbbr.${iso}`).toUpperCase(),
+)
 
-// [owner pass] Short Russian month abbreviations -- the STATIONARY 6th chip
+// [owner pass] Short month abbreviations -- the STATIONARY 6th chip
 // shows the month(s) of the five visible days ("Авг" / "Авг-Сен").
-const MONTH_ABBR = [
-  'Янв',
-  'Фев',
-  'Мар',
-  'Апр',
-  'Май',
-  'Июн',
-  'Июл',
-  'Авг',
-  'Сен',
-  'Окт',
-  'Ноя',
-  'Дек',
-]
+const MONTH_ABBR = Array.from({ length: 12 }, (_, m) => {
+  if (getLocale() === 'ru') return t(`shared.monthsShort.${m + 1}`)
+  const name = new Intl.DateTimeFormat(getLocale(), { month: 'short' }).format(
+    new Date(Date.UTC(2026, m, 1)),
+  )
+  return name.charAt(0).toUpperCase() + name.replace('.', '').slice(1)
+})
+
+// [owner pass] Short month abbreviations -- the STATIONARY 6th chip
+// shows the month(s) of the five visible days ("Авг" / "Авг-Сен").
 
 interface Cell {
   key: string
