@@ -110,6 +110,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import {
   onDocumentEvent,
   offDocumentEvent,
@@ -118,7 +119,6 @@ import {
   rootStyleValue,
 } from '@/platform/dom'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { VHeader } from '@/components/layout'
 import { VEmptyState, VLoader, VButton } from '@/components/ui'
 import { IconMessages } from '@/components/icons'
@@ -136,7 +136,6 @@ import { extractApiError } from '@/composables/useApiError'
 import { useComposerGrowCap } from '@/composables/useComposerGrowCap'
 
 // tz-i18n 2.2b: load-failed/empty states via chat.* / common.retry.
-const { t } = useI18n({ useScope: 'global' })
 
 const props = defineProps<{
   threadId: string

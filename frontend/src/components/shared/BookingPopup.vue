@@ -102,9 +102,9 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
 import { VModal, VButton } from '@/components/ui'
 import { useToast } from '@/composables/useToast'
 import { useBalanceStore } from '@/stores/balance'
@@ -132,7 +132,6 @@ const router = useRouter()
 const toast = useToast()
 const balanceStore = useBalanceStore()
 // tz-i18n phase 2 (2.2a): template labels + CTA + toasts via booking.* keys.
-const { t } = useI18n({ useScope: 'global' })
 
 // Promo codes are temporarily hidden in the prototype (kept, not removed).
 // Flip to true to bring the promo input + discount line back.

@@ -86,8 +86,8 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { VBottomSheet, VTextarea } from '@/components/ui'
 import { IconCheck } from '@/components/icons'
 import TargetUserCard from '@/components/shared/TargetUserCard.vue'
@@ -102,7 +102,6 @@ import { REASON_CODES, type ReportReasonCode } from '@/utils/reportReasons'
 // to localized labels; legacy records (free text) render verbatim.
 // Codes themselves live in utils/reportReasons.ts (shared with the admin
 // decoder).
-const { t } = useI18n({ useScope: 'global' })
 
 const props = defineProps<{
   open: boolean

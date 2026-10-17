@@ -37,9 +37,7 @@
 </template>
 
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
-
-const { t } = useI18n({ useScope: 'global' })
+import { t } from '@/locales'
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { VTag, VAvatar } from '@/components/ui'

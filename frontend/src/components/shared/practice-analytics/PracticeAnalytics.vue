@@ -3,8 +3,8 @@
 // requests and the paging; every number here is the server's -- zones
 // included (ScoreZone, BE-24: never a raw 1..10). Every "X из N" uses
 // N = summary.attended.
+import { t } from '@/locales'
 import { computed, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { VAvatar, VButton, VCard, VEmptyState, VLoader } from '@/components/ui'
 import { VHeader } from '@/components/layout'
 import { IconCalendar, IconCheckin, IconGroup } from '@/components/icons'
@@ -22,7 +22,6 @@ import PracticeMoodDistribution from './PracticeMoodDistribution.vue'
 
 // tz-i18n 2.2a: headers/labels via shared.analytics.*; the pairs " ещё N"
 // ladder is the built-in plural (Intl.PluralRules) now.
-const { t } = useI18n({ useScope: 'global' })
 import { moodTotal, personTarget, type AnalyticsPerson } from './analytics'
 
 const props = withDefaults(

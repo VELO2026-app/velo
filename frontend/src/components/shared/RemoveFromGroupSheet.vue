@@ -74,8 +74,8 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { VBottomSheet, VRadioGroup, VChip } from '@/components/ui'
 import TargetUserCard from './TargetUserCard.vue'
 import { removeGroupMember } from '@/api/groups'
@@ -101,7 +101,6 @@ const emit = defineEmits<{ close: []; saved: [] }>()
 const toast = useToast()
 
 // tz-i18n 2.2b: sheet copy + radio options via shared.groups.*.
-const { t } = useI18n({ useScope: 'global' })
 
 const ALL_MODE_OPTIONS = [
   {

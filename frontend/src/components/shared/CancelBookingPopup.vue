@@ -49,11 +49,10 @@
 </template>
 
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
+import { t } from '@/locales'
 import { VModal, VButton } from '@/components/ui'
 
 // tz-i18n 2.2b: dialog copy via bookingCancel.*.
-const { t } = useI18n({ useScope: 'global' })
 
 // Structural minimum: works with both BookingWithPracticeResponse (list)
 // and BookingDetailResponse (detail) -- the popup only needs the practice

@@ -73,6 +73,18 @@ i18n.global.mergeLocaleMessage(INSTANCE.defaultLocale, { brand: INSTANCE.brand }
 
 export default i18n
 
+/**
+ * The project-wide translator (tz-i18n convention): ONE import, no per-file
+ * useI18n composition. useI18n({ useScope: 'global' }) returns THIS same
+ * composer, so files needing t write
+ *   import { t } from '@/locales'
+ * and templates call t() directly (script-setup bindings are exposed to the
+ * template; globalInjection also provides $t for template-only cases).
+ * Reactivity is the composer's own: every call reads the live locale ref,
+ * so a locale switch re-renders.
+ */
+export const t = i18n.global.t
+
 /** Active locale for non-component callers (Intl formatters, etc.). */
 export function getLocale(): string {
   return i18n.global.locale.value

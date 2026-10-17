@@ -29,11 +29,10 @@
 </template>
 
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
+import { t } from '@/locales'
 
 // tz-i18n 1.3: the day NAMES live in the ui.dayShort/dayFull catalogs (the
 // codes stay canonical Mon→Sun); the row order/shape is unchanged.
-const { t } = useI18n({ useScope: 'global' })
 
 const props = withDefaults(
   defineProps<{

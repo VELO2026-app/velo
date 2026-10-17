@@ -177,8 +177,8 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { reactive, watch, computed, onMounted, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { VModal, VButton, VChip } from '@/components/ui'
 import { DIFFICULTY_LABEL, TIME_OF_DAY_LABEL } from '@/utils/displayHelpers'
 import { catalogDirectionOptions, catalogStylesForDirection } from '@/utils/practiceOptions'
@@ -188,7 +188,6 @@ import type { CalendarFacetFilters } from '@/stores/calendar'
 import type { PracticeDirection, PracticeDifficulty, DurationBucket, TimeOfDay } from '@/api/types'
 
 // tz-i18n 2.2a: heading/section labels/all-chips/reset via filters.*/common.*.
-const { t } = useI18n({ useScope: 'global' })
 
 const props = defineProps<{
   open: boolean

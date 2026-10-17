@@ -157,9 +157,7 @@
 </template>
 
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
-
-const { t } = useI18n({ useScope: 'global' })
+import { t } from '@/locales'
 import { computed } from 'vue'
 import { useDiaryCardModel } from '@/composables/useDiaryCardModel'
 import DiaryBubbleShape from '@/components/shared/DiaryBubbleShape.vue'

@@ -47,11 +47,10 @@
 </template>
 
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
+import { t } from '@/locales'
 import { VModal, VButton } from '@/components/ui'
 
 // tz-i18n 2.2b: payout sheet copy via payout.*.
-const { t } = useI18n({ useScope: 'global' })
 
 defineProps<{
   open: boolean

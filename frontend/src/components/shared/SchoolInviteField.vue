@@ -77,13 +77,12 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { onMounted, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { createCuratorGroupInvite } from '@/api/curatorGroups'
 import { extractApiError } from '@/composables/useApiError'
 
 // tz-i18n 2.2b: chip label/copy-aria + result toasts via school.*.
-const { t } = useI18n({ useScope: 'global' })
 import { useToast } from '@/composables/useToast'
 import { IconCopy, IconLink } from '@/components/icons'
 

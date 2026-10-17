@@ -72,9 +72,7 @@
 </template>
 
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
-
-const { t } = useI18n({ useScope: 'global' })
+import { t } from '@/locales'
 import { ref, computed, watch, nextTick, onBeforeUnmount, type Component } from 'vue'
 import { practiceIconFor } from '@/utils/displayHelpers'
 import { formatShortDate, formatTime } from '@/utils/format'

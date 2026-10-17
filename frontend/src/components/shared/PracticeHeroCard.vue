@@ -66,14 +66,13 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { IconCalendar, IconClock, IconGroup, IconRepeat } from '@/components/icons'
 import { DIRECTION_ICON, DIRECTION_ICON_FALLBACK } from '@/utils/displayHelpers'
 import type { PracticeDirection } from '@/api/types'
 
 // tz-i18n 2.2b: difficulty label via shared.heroCard.*.
-const { t } = useI18n({ useScope: 'global' })
 
 const props = withDefaults(
   defineProps<{

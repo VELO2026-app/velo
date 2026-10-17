@@ -103,9 +103,7 @@
 </template>
 
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
-
-const { t } = useI18n({ useScope: 'global' })
+import { t } from '@/locales'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { VCard, VChip, VInput } from '@/components/ui'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'

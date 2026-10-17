@@ -56,8 +56,8 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { VInput } from '@/components/ui'
 import { IconSearch, IconCheck } from '@/components/icons'
 import { timezoneRows } from '@/utils/timezoneCities'
@@ -67,7 +67,6 @@ import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 
 // tz-i18n 2.2a: the empty hint and the placeholder are keys; the SEARCH
 // itself stays data-driven (city names + latin aliases are the data, §3.1).
-const { t } = useI18n({ useScope: 'global' })
 
 // Lift the city search above the soft keyboard once it settles (shared M5
 // composable) so the field isn't left under the keyboard on focus (K3).

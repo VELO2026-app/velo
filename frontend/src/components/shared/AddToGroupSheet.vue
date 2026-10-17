@@ -65,15 +65,14 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { VBottomSheet, VChip, VCheckbox } from '@/components/ui'
 import TargetUserCard from './TargetUserCard.vue'
 import { addGroupMember, removeGroupMember } from '@/api/groups'
 import { useToast } from '@/composables/useToast'
 
 // tz-i18n 2.2b: sheet copy via shared.groups.* / ui.*.
-const { t } = useI18n({ useScope: 'global' })
 import { extractApiError } from '@/composables/useApiError'
 import type { GroupListItem } from '@/api/groups'
 

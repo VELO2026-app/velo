@@ -39,13 +39,12 @@
 </template>
 
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
+import { t } from '@/locales'
 import { VBackButton } from '@/components/ui'
 import { useFloatingHeader } from '@/components/layout/useFloatingHeader'
 
 // tz-i18n 1.3: the back-aria fallback comes from ui.back; backLabel stays a
 // caller prop (shells pass it per screen).
-const { t } = useI18n({ useScope: 'global' })
 
 // True when a floating-header island host (MobileLayout) is an ancestor: the
 // header then teleports into the island and registers its presence (so the feed

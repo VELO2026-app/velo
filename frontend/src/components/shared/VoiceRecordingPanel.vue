@@ -63,9 +63,7 @@
 </template>
 
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
-
-const { t } = useI18n({ useScope: 'global' })
+import { t } from '@/locales'
 import { computed } from 'vue'
 import { IconClose, IconStop } from '@/components/icons'
 import { VLoader } from '@/components/ui'

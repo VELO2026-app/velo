@@ -43,8 +43,8 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { VBottomSheet, VInput, VChip } from '@/components/ui'
 import { setStudentTag, getMyTags } from '@/api/groups'
 import { useToast } from '@/composables/useToast'
@@ -52,7 +52,6 @@ import { extractApiError } from '@/composables/useApiError'
 
 // tz-i18n 2.2b: sheet copy via tags.* (ui.save); the palette loop var is
 // `existing` so it never shadows the i18n `t`.
-const { t } = useI18n({ useScope: 'global' })
 
 const props = defineProps<{
   open: boolean

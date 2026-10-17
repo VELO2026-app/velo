@@ -77,13 +77,12 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { IconClock } from '@/components/icons'
 import { practiceIconFor } from '@/utils/displayHelpers'
 
 // tz-i18n 2.2b: master-name fallback via booking.masterFallback.
-const { t } = useI18n({ useScope: 'global' })
 
 interface PracticeLike {
   /** Direction picks the icon. */

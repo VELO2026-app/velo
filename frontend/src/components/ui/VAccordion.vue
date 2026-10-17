@@ -42,11 +42,10 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref } from 'vue'
-import { useI18n } from 'vue-i18n'
 
 // tz-i18n 1.3: aria labels from the ui.* catalog.
-const { t } = useI18n({ useScope: 'global' })
 
 const props = withDefaults(
   defineProps<{

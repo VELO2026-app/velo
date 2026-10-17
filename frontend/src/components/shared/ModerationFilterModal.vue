@@ -101,8 +101,8 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { VModal, VChip, VButton } from '@/components/ui'
 import { IconFilter } from '@/components/icons'
 import DatePickerSheet from '@/components/shared/DatePickerSheet.vue'
@@ -110,7 +110,6 @@ import { formatRelative } from '@/utils/adminHelpers'
 import type { ModerationFilter } from './moderationFilter'
 
 // tz-i18n 2.2a: heading/labels/chip groups via moderation.*/filters.*/common.*.
-const { t } = useI18n({ useScope: 'global' })
 
 const props = defineProps<{
   open: boolean

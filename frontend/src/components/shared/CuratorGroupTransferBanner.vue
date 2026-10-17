@@ -38,8 +38,8 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
 import {
   acceptCuratorGroupTransfer,
   cancelCuratorGroupTransfer,
@@ -51,7 +51,6 @@ import { useToast } from '@/composables/useToast'
 import { VButton } from '@/components/ui'
 
 // tz-i18n 2.2b: banner copy via transfer.*.
-const { t } = useI18n({ useScope: 'global' })
 
 const props = defineProps<{
   /** The server-filled offer (curator's own view or the addressee's). */

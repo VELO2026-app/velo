@@ -47,11 +47,10 @@
 </template>
 
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
+import { t } from '@/locales'
 import { IconArrowRight } from '@/components/icons'
 
 // tz-i18n 1.3: aria fallback resolves at render time (?? t() in template).
-const { t } = useI18n({ useScope: 'global' })
 
 withDefaults(
   defineProps<{

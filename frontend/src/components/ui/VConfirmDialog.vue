@@ -105,7 +105,7 @@
 </template>
 
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
+import { t } from '@/locales'
 import VModal from './VModal.vue'
 import VButton from './VButton.vue'
 import { IconWarning } from '@/components/icons'
@@ -113,7 +113,6 @@ import { IconWarning } from '@/components/icons'
 // tz-i18n 1.3: label defaults resolve at render time (?? t() in the
 // template), so a locale switch re-renders them; withDefaults factories
 // would freeze the label at instance creation.
-const { t } = useI18n({ useScope: 'global' })
 
 withDefaults(
   defineProps<{

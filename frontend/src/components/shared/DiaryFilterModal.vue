@@ -150,8 +150,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { getLocale } from '@/locales'
+import { getLocale, t } from '@/locales'
 import {
   dayKeyOf,
   daysInMonth,
@@ -165,7 +164,6 @@ import type { DiaryFeedCategory } from '@/api/types'
 
 // tz-i18n 2.2a: heading/chips/actions via filters.*/diary.categories/common.*;
 // calendar month+weekday names via Intl/display keys.
-const { t } = useI18n({ useScope: 'global' })
 
 const props = defineProps<{
   open: boolean

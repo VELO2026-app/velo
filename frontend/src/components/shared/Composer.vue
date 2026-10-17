@@ -126,15 +126,14 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, nextTick, watch, onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { IconSend, IconMic } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 
 // tz-i18n 2.2b: aria labels via chat.send/composer.voiceAria; recorder/
 // transcription toasts via composer.* (fallbacks keep the storeErrors keys).
-const { t } = useI18n({ useScope: 'global' })
 import { useVoiceRecorder, type VoiceTake } from '@/composables/useVoiceRecorder'
 import { transcribeAudio } from '@/api/transcription'
 import { SILENCE_PEAK_THRESHOLD } from '@/utils/audio'

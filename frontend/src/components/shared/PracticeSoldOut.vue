@@ -63,13 +63,12 @@
 </template>
 
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
+import { t } from '@/locales'
 import { VButton } from '@/components/ui'
 import ResultScreen from '@/components/shared/ResultScreen.vue'
 
 // tz-i18n 2.2b: sold-out copy via shared.soldOut.*; the text-link «Закрыть»
 // reuses ui.close.
-const { t } = useI18n({ useScope: 'global' })
 
 defineEmits<{
   'find-other': []

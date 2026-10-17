@@ -64,9 +64,7 @@
 </template>
 
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
-
-const { t } = useI18n({ useScope: 'global' })
+import { t } from '@/locales'
 import { onMounted, ref } from 'vue'
 import type { CuratorGroupMineItem } from '@/api/types'
 import { schoolHashFromName } from '@/utils/schoolBranding'

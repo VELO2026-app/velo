@@ -46,15 +46,14 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { VModal, VAvatar, VTextarea, VButton } from '@/components/ui'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
 import { openChat, openStudentChat, sendChatMessage } from '@/api/chats'
 
 // tz-i18n 2.2b: composer copy + result toasts via chat.* / ui.*.
-const { t } = useI18n({ useScope: 'global' })
 
 const props = withDefaults(
   defineProps<{

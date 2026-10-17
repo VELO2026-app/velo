@@ -56,8 +56,8 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { VModal, VButton, VRadioGroup } from '@/components/ui'
 import Banner from '@/components/shared/Banner.vue'
 import { IconWarning, IconRepeat, IconGroup } from '@/components/icons'
@@ -67,7 +67,6 @@ import type { PracticeResponse } from '@/api/types'
 
 // tz-i18n 2.2b: dialog copy via practiceCancel.*; scope radio labels resolve
 // at ACCESS time (getters).
-const { t } = useI18n({ useScope: 'global' })
 
 const props = withDefaults(
   defineProps<{

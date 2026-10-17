@@ -75,8 +75,8 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, ref, useId, type Component } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { VCard } from '@/components/ui'
 import { IconGroup } from '@/components/icons'
 import VShowMore from '@/components/shared/VShowMore.vue'
@@ -84,7 +84,6 @@ import { formatPercent } from '@/utils/format'
 
 // tz-i18n 2.2b: the expand pill via common.hide/distribution.breakdown
 // (title/countLabel/emptyText are caller props).
-const { t } = useI18n({ useScope: 'global' })
 
 export interface DistributionBar {
   /** Stable identity for the strip's list items and details rows. */

@@ -95,15 +95,13 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { getLocale } from '@/locales'
+import { getLocale, t } from '@/locales'
 import { IconCalendar } from '@/components/icons'
 
 // tz-i18n 2.2b: weekday abbreviations come from display.weekdayAbbr (the
 // array stays indexed by Date.getDay, 0=Sun..6=Sat); the stationary chip's
 // month abbreviations come from shared.monthsShort (ru) / ICU short month
 // (other locales).
-const { t } = useI18n({ useScope: 'global' })
 
 const props = defineProps<{
   /** The 7 day-Dates of the current window (today-anchored). */

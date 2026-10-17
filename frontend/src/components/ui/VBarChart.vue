@@ -31,11 +31,10 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 
 // tz-i18n 1.3: empty-text fallback resolves at render time (?? t()).
-const { t } = useI18n({ useScope: 'global' })
 
 const props = withDefaults(
   defineProps<{

@@ -150,13 +150,12 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { VButton, VLoader, VTextarea, VEmptyState } from '@/components/ui'
 import { VHeader } from '@/components/layout'
 
 // tz-i18n 2.2a: load-failed state, host line and skip via shared.form.*/common.*.
-const { t } = useI18n({ useScope: 'global' })
 import PracticeHeroCard from '@/components/shared/PracticeHeroCard.vue'
 import ResultScreen from '@/components/shared/ResultScreen.vue'
 import { cleanPracticeTitle } from '@/utils/format'
