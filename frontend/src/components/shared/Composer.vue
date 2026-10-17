@@ -92,7 +92,7 @@
         <button
           type="button"
           class="composer__btn"
-          aria-label="Отправить"
+          :aria-label="t('chat.send')"
           :data-testid="sendTestId"
           :disabled="submitting"
           @pointerdown.prevent
@@ -116,7 +116,7 @@
       v-if="voiceInput && text.length === 0 && !voiceActive"
       type="button"
       class="composer__btn composer__btn--side"
-      aria-label="Голосовой ввод"
+      :aria-label="t('composer.voiceAria')"
       data-testid="voice-mic"
       @click="onMicTap"
     >
@@ -127,9 +127,14 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick, watch, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { IconSend, IconMic } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
+
+// tz-i18n 2.2b: aria labels via chat.send/composer.voiceAria; recorder/
+// transcription toasts via composer.* (fallbacks keep the storeErrors keys).
+const { t } = useI18n({ useScope: 'global' })
 import { useVoiceRecorder, type VoiceTake } from '@/composables/useVoiceRecorder'
 import { transcribeAudio } from '@/api/transcription'
 import { SILENCE_PEAK_THRESHOLD } from '@/utils/audio'
@@ -414,9 +419,9 @@ async function onMicTap(): Promise<void> {
   }
   // Honest failure, exact texts from the error table.
   if (recorderError.value === 'permission') {
-    toast.error('Доступ к микрофону запрещён')
+    toast.error(t('composer.micDenied'))
   } else {
-    toast.error('Микрофон недоступен на этом устройстве')
+    toast.error(t('composer.micUnavailable'))
   }
 }
 
@@ -430,7 +435,7 @@ async function onVoiceStop(): Promise<void> {
   if (recorderState.value !== 'recording') return
   if (recorderElapsed.value < 1) {
     cancelRecorder()
-    toast.info('Запись слишком короткая')
+    toast.info(t('composer.tooShort'))
     return
   }
   // Freeze the row BEFORE the recorder unwinds: its state passes through
@@ -466,7 +471,7 @@ async function onVoiceTakeReady(take: VoiceTake | null): Promise<void> {
       // Nothing audible: the model would answer with an apologetic sentence
       // that used to land in the field as a fake transcript -- reject locally.
       platform.hapticNotification('error')
-      toast.error('Не удалось распознать речь')
+      toast.error(t('composer.notRecognized'))
       return
     }
     const result = await transcribeAudio(take.wav)
@@ -481,7 +486,7 @@ async function onVoiceTakeReady(take: VoiceTake | null): Promise<void> {
     } else {
       // An ok response with no usable text is still a recognition failure.
       platform.hapticNotification('error')
-      toast.error(result.error ?? 'Не удалось распознать речь')
+      toast.error(result.error ?? t('composer.notRecognized'))
     }
   } finally {
     transcribing.value = false
@@ -499,7 +504,7 @@ async function onSend(): Promise<void> {
       autogrow()
       emit('sent')
     } else {
-      toast.error(result.error ?? 'Не удалось отправить')
+      toast.error(result.error ?? t('storeErrors.diary.send'))
     }
   } finally {
     submitting.value = false

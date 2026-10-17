@@ -21,11 +21,17 @@
     <p class="cgt__text">{{ text }}</p>
     <div class="cgt__actions">
       <template v-if="isAddressee">
-        <VButton variant="primary" size="sm" :loading="busy" @click="onAccept">Принять</VButton>
-        <VButton variant="outline" size="sm" :disabled="busy" @click="onDecline">Отклонить</VButton>
+        <VButton variant="primary" size="sm" :loading="busy" @click="onAccept">
+          {{ t('transfer.accept') }}
+        </VButton>
+        <VButton variant="outline" size="sm" :disabled="busy" @click="onDecline">
+          {{ t('transfer.decline') }}
+        </VButton>
       </template>
       <template v-else>
-        <VButton variant="outline" size="sm" :loading="busy" @click="onCancel">Отменить</VButton>
+        <VButton variant="outline" size="sm" :loading="busy" @click="onCancel">
+          {{ t('transfer.cancel') }}
+        </VButton>
       </template>
     </div>
   </div>
@@ -33,6 +39,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   acceptCuratorGroupTransfer,
   cancelCuratorGroupTransfer,
@@ -42,6 +49,9 @@ import type { CuratorGroupPageResponse, CuratorGroupTransferRef } from '@/api/ty
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import { VButton } from '@/components/ui'
+
+// tz-i18n 2.2b: banner copy via transfer.*.
+const { t } = useI18n({ useScope: 'global' })
 
 const props = defineProps<{
   /** The server-filled offer (curator's own view or the addressee's). */
@@ -71,10 +81,10 @@ const visible = computed(() => (isCurator.value && !!effective.value) || isAddre
 
 const text = computed(() => {
   if (isCurator.value && effective.value) {
-    return `Предложение передать школу отправлено: ${effective.value.to_display_name}. Пока оно не принято, его можно отменить.`
+    return t('transfer.sentTo', { name: effective.value.to_display_name })
   }
   if (isAddressee.value) {
-    return 'Вам предлагают стать куратором этой школы. Приняв предложение, вы станете её владельцем.'
+    return t('transfer.invite')
   }
   return ''
 })
@@ -83,10 +93,10 @@ async function onCancel(): Promise<void> {
   busy.value = true
   try {
     await cancelCuratorGroupTransfer(props.groupId)
-    toast.success('Предложение отменено')
+    toast.success(t('transfer.cancelled'))
     emit('cancelled')
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось отменить предложение'))
+    toast.error(extractApiError(e, t('transfer.cancel')))
   } finally {
     busy.value = false
   }
@@ -100,7 +110,7 @@ async function onAccept(): Promise<void> {
     const page = await acceptCuratorGroupTransfer(props.groupId)
     emit('accepted', page)
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось принять школу'))
+    toast.error(extractApiError(e, t('transfer.acceptFailed')))
   } finally {
     busy.value = false
   }
@@ -110,10 +120,10 @@ async function onDecline(): Promise<void> {
   busy.value = true
   try {
     await declineCuratorGroupTransfer(props.groupId)
-    toast.success('Предложение отклонено')
+    toast.success(t('transfer.declined'))
     emit('declined')
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось отклонить предложение'))
+    toast.error(extractApiError(e, t('transfer.declineFailed')))
   } finally {
     busy.value = false
   }

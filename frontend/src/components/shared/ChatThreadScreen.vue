@@ -36,12 +36,12 @@
 
     <!-- Load failure: the thread may well exist -- offer a retry. -->
     <div v-else-if="error" class="chat-thread__center">
-      <VEmptyState title="Не удалось загрузить переписку" :description="error">
+      <VEmptyState :title="t('chat.loadFailed')" :description="error">
         <template #icon>
           <IconMessages :size="48" />
         </template>
       </VEmptyState>
-      <VButton size="sm" @click="reload"> Повторить </VButton>
+      <VButton size="sm" @click="reload">{{ t('common.retry') }}</VButton>
     </div>
 
     <template v-else>
@@ -60,7 +60,7 @@
         >
           <!-- Empty thread: an honest invitation, not a fake history. -->
           <div v-if="messages.length === 0" class="chat-thread__empty">
-            Сообщений пока нет — напишите первое.
+            {{ t('chat.empty') }}
           </div>
 
           <div
@@ -118,6 +118,7 @@ import {
   rootStyleValue,
 } from '@/platform/dom'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { VHeader } from '@/components/layout'
 import { VEmptyState, VLoader, VButton } from '@/components/ui'
 import { IconMessages } from '@/components/icons'
@@ -133,6 +134,9 @@ import {
 import { useAuthStore } from '@/stores/auth'
 import { extractApiError } from '@/composables/useApiError'
 import { useComposerGrowCap } from '@/composables/useComposerGrowCap'
+
+// tz-i18n 2.2b: load-failed/empty states via chat.* / common.retry.
+const { t } = useI18n({ useScope: 'global' })
 
 const props = defineProps<{
   threadId: string

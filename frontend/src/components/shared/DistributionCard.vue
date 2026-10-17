@@ -65,7 +65,7 @@
         </div>
       </div>
       <VShowMore
-        :label="expanded ? 'Скрыть' : 'Расшифровка'"
+        :label="expanded ? t('common.hide') : t('distribution.breakdown')"
         :aria-expanded="expanded"
         :aria-controls="detailsId"
         @click="expanded = !expanded"
@@ -76,10 +76,15 @@
 
 <script setup lang="ts">
 import { computed, ref, useId, type Component } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { VCard } from '@/components/ui'
 import { IconGroup } from '@/components/icons'
 import VShowMore from '@/components/shared/VShowMore.vue'
 import { formatPercent } from '@/utils/format'
+
+// tz-i18n 2.2b: the expand pill via common.hide/distribution.breakdown
+// (title/countLabel/emptyText are caller props).
+const { t } = useI18n({ useScope: 'global' })
 
 export interface DistributionBar {
   /** Stable identity for the strip's list items and details rows. */
