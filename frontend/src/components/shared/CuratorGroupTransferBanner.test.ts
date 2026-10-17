@@ -9,6 +9,7 @@
 // the banner respects that boundary instead of guessing.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, defineComponent, h, nextTick, type App } from 'vue'
 import CuratorGroupTransferBanner from '@/components/shared/CuratorGroupTransferBanner.vue'
@@ -70,7 +71,7 @@ function mount(props: {
         })
     },
   })
-  app = createApp(Wrapper)
+  app = createApp(Wrapper).use(createTestI18n())
   app.mount(host)
   return host
 }

@@ -9,6 +9,7 @@
 // where the profile lives -- a row navigates, it does not act).
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { createApp, h, nextTick, type App } from 'vue'
 import SchoolMemberRow from '@/components/shared/SchoolMemberRow.vue'
@@ -37,7 +38,7 @@ function mountRow(
 ): void {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp({ render: () => h(SchoolMemberRow, { member: m, onOpen }) })
+  app = createApp({ render: () => h(SchoolMemberRow, { member: m, onOpen }) }).use(createTestI18n())
   app.mount(host)
 }
 
@@ -107,4 +108,3 @@ describe("SchoolMemberRow -- a school master's row (BE-76)", () => {
     expect(host?.querySelector('.v-list-row__sub')).toBeNull()
   })
 })
-

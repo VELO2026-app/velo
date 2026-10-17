@@ -12,6 +12,7 @@
 // failure keeps the list (toast only).
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import SchoolMembersView from '@/views/user/SchoolMembersView.vue'
@@ -57,7 +58,7 @@ function mountWith(query: Record<string, string> = {}): HTMLElement {
   routeState.query = query
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(SchoolMembersView)
+  app = createApp(SchoolMembersView).use(createTestI18n())
   app.mount(host)
   return host
 }

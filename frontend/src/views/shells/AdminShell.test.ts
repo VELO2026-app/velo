@@ -33,6 +33,7 @@
 // concern -- proven by the audit's own framing).
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { createRouter, createMemoryHistory, type Router } from 'vue-router'
@@ -93,7 +94,7 @@ async function mount(routeName: string): Promise<HTMLElement> {
   await router.push({ name: routeName })
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminShell)
+  app = createApp(AdminShell).use(createTestI18n())
   app.use(pinia)
   app.use(router)
   app.mount(host)

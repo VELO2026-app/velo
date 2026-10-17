@@ -10,6 +10,7 @@
 // derived mandala resolves (§5.2 variant A).
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, afterEach } from 'vitest'
 import { createApp, defineComponent, h, nextTick, type App } from 'vue'
 import SchoolInviteCard from '@/components/shared/SchoolInviteCard.vue'
@@ -34,7 +35,7 @@ function mount(props: {
       return () => h(SchoolInviteCard, { ...props })
     },
   })
-  app = createApp(Wrapper)
+  app = createApp(Wrapper).use(createTestI18n())
   app.mount(host)
   return host
 }

@@ -37,6 +37,7 @@
 // fixture), no money, no second store beyond the real practices singleton.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, h, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
@@ -117,7 +118,7 @@ async function boot(): Promise<void> {
   document.body.appendChild(host)
   router = buildRouter()
   router.afterEach((to) => visited.push(to.path))
-  app = createApp({ render: () => h(RouterView) })
+  app = createApp({ render: () => h(RouterView) }).use(createTestI18n())
   app.use(pinia)
   app.use(router)
   app.mount(host)

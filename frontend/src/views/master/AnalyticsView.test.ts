@@ -57,6 +57,7 @@
 // afterEach purges it unconditionally.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
@@ -194,10 +195,30 @@ function insights(
 // The two periods differ on EVERY figure on purpose -- equal numbers would let a
 // toggle that does nothing pass.
 const INSIGHTS: Record<string, PracticeInsightsResponse> = {
-  p1: insights('p1', 10, { bad: 1, low: 0, neutral: 2, good: 0, fire: 4 }, { bad: 1, low: 0, neutral: 0, good: 1, fire: 3 }),
-  p2: insights('p2', 10, { bad: 0, low: 0, neutral: 1, good: 0, fire: 2 }, { bad: 0, low: 0, neutral: 2, good: 0, fire: 1 }),
-  p3: insights('p3', 5, { bad: 0, low: 0, neutral: 0, good: 0, fire: 5 }, { bad: 1, low: 1, neutral: 0, good: 1, fire: 0 }),
-  p5: insights('p5', 100, { bad: 0, low: 0, neutral: 0, good: 0, fire: 100 }, { bad: 0, low: 0, neutral: 0, good: 0, fire: 100 }),
+  p1: insights(
+    'p1',
+    10,
+    { bad: 1, low: 0, neutral: 2, good: 0, fire: 4 },
+    { bad: 1, low: 0, neutral: 0, good: 1, fire: 3 },
+  ),
+  p2: insights(
+    'p2',
+    10,
+    { bad: 0, low: 0, neutral: 1, good: 0, fire: 2 },
+    { bad: 0, low: 0, neutral: 2, good: 0, fire: 1 },
+  ),
+  p3: insights(
+    'p3',
+    5,
+    { bad: 0, low: 0, neutral: 0, good: 0, fire: 5 },
+    { bad: 1, low: 1, neutral: 0, good: 1, fire: 0 },
+  ),
+  p5: insights(
+    'p5',
+    100,
+    { bad: 0, low: 0, neutral: 0, good: 0, fire: 100 },
+    { bad: 0, low: 0, neutral: 0, good: 0, fire: 100 },
+  ),
 }
 
 function review(overrides: Partial<MasterReviewItem> = {}): MasterReviewItem {
@@ -326,7 +347,7 @@ let pinia: Pinia
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AnalyticsView)
+  app = createApp(AnalyticsView).use(createTestI18n())
   app.use(pinia)
   app.mount(host)
   return host
@@ -780,7 +801,12 @@ describe('AnalyticsView', () => {
       // `totalFeedbacks(p.id) > 0` (.vue:148) -- a practice with check-ins but
       // zero feedback would otherwise show a confident row of 0% badges.
       vi.mocked(diaryApi.getPracticeInsights).mockResolvedValue(
-        insights('p1', 10, { bad: 0, low: 0, neutral: 0, good: 0, fire: 4 }, { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 }),
+        insights(
+          'p1',
+          10,
+          { bad: 0, low: 0, neutral: 0, good: 0, fire: 4 },
+          { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 },
+        ),
       )
       mount()
       await flush()

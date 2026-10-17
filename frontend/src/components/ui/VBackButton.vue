@@ -39,7 +39,7 @@
     type="button"
     class="v-back"
     :class="{ 'v-back--glass': variant === 'glass' }"
-    :aria-label="ariaLabel"
+    :aria-label="ariaLabel ?? t('ui.back')"
     @click="$emit('click')"
   >
     <IconArrowRight :size="18" class="v-back__arrow" />
@@ -47,7 +47,11 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { IconArrowRight } from '@/components/icons'
+
+// tz-i18n 1.3: aria fallback resolves at render time (?? t() in template).
+const { t } = useI18n({ useScope: 'global' })
 
 withDefaults(
   defineProps<{
@@ -56,7 +60,7 @@ withDefaults(
     /** 'solid' = opaque white (DS default); 'glass' = frosted, for floating over scrolling content. */
     variant?: 'solid' | 'glass'
   }>(),
-  { ariaLabel: 'Назад', variant: 'solid' },
+  { variant: 'solid' },
 )
 
 defineEmits<{ click: [] }>()

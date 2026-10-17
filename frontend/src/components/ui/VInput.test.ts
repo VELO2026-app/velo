@@ -23,6 +23,7 @@
 // Dependency-free SFC mount (createApp + happy-dom), per velo-idiom §1.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { createApp, nextTick, ref, h, type App, type Ref } from 'vue'
 import VInput from '@/components/ui/VInput.vue'
@@ -51,7 +52,7 @@ function mountWith(
           model.value = normalise(v)
         },
       }),
-  })
+  }).use(createTestI18n())
   app.mount(host)
   const input = host.querySelector('input')
   if (!input) throw new Error('VInput rendered no <input>')
@@ -225,7 +226,7 @@ describe('VInput', () => {
             },
             { prefix: () => h('span', '€') },
           ),
-      })
+      }).use(createTestI18n())
       app.mount(host)
       const input = host.querySelector('input')!
       expect(host.querySelector('.v-input__field--bare')).not.toBeNull()

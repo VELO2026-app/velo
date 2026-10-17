@@ -32,6 +32,7 @@
 //    isFogRoute (the boolean gate) IS covered; the pixel math it feeds is not.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, ref, type App, type Ref } from 'vue'
 import { createPinia, type Pinia } from 'pinia'
@@ -106,7 +107,7 @@ async function mount(
   await router.push({ name: routeName, params })
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(MasterShell)
+  app = createApp(MasterShell).use(createTestI18n())
   // The shell reads the schoolsHub store (the «Школы» tab probe).
   const pinia = createPinia()
   app.use(pinia)

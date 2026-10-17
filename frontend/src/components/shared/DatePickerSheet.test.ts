@@ -18,6 +18,7 @@
 // derives the view from it), never through the wall clock.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import DatePickerSheet from './DatePickerSheet.vue'
@@ -39,7 +40,7 @@ function mount(props: MountProps = {}): void {
     open: true,
     ...props,
     'onUpdate:modelValue': (v: string) => emitted.push(v),
-  })
+  }).use(createTestI18n())
   app.mount(host)
 }
 

@@ -8,6 +8,7 @@
 // navigation.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import UserCuratorGroupsView from '@/views/user/UserCuratorGroupsView.vue'
@@ -33,7 +34,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(UserCuratorGroupsView)
+  app = createApp(UserCuratorGroupsView).use(createTestI18n())
   app.mount(host)
   return host
 }

@@ -24,6 +24,7 @@
 // (formatShortDate pins timezone='UTC' itself), and reads no clock of its own.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import MasterPromocodesView from '@/views/master/MasterPromocodesView.vue'
@@ -75,7 +76,7 @@ let writeText: ReturnType<typeof vi.fn>
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(MasterPromocodesView)
+  app = createApp(MasterPromocodesView).use(createTestI18n())
   app.mount(host)
   return host
 }

@@ -12,23 +12,29 @@
     <VDayPicker v-model="days" />   // days: string[] of 'mon'..'sun'
 -->
 <template>
-  <div class="v-day-picker" role="group" :aria-label="ariaLabel || 'Дни недели'">
+  <div class="v-day-picker" role="group" :aria-label="ariaLabel || t('ui.weekdays')">
     <button
       v-for="d in DAYS"
-      :key="d.value"
+      :key="d"
       type="button"
       class="v-day-picker__day"
-      :class="{ 'v-day-picker__day--on': isOn(d.value) }"
-      :aria-pressed="isOn(d.value)"
-      :aria-label="d.full"
-      @click="toggle(d.value)"
+      :class="{ 'v-day-picker__day--on': isOn(d) }"
+      :aria-pressed="isOn(d)"
+      :aria-label="t(`ui.dayFull.${d}`)"
+      @click="toggle(d)"
     >
-      {{ d.label }}
+      {{ t(`ui.dayShort.${d}`) }}
     </button>
   </div>
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
+// tz-i18n 1.3: the day NAMES live in the ui.dayShort/dayFull catalogs (the
+// codes stay canonical Mon→Sun); the row order/shape is unchanged.
+const { t } = useI18n({ useScope: 'global' })
+
 const props = withDefaults(
   defineProps<{
     /** Selected day codes, e.g. ['mon','wed','fri']. */
@@ -45,22 +51,8 @@ const emit = defineEmits<{
   'update:modelValue': [value: string[]]
 }>()
 
-interface Day {
-  value: string
-  label: string
-  full: string
-}
-
 // Mon-first, matching the calendar / onboarding week convention.
-const DAYS: Day[] = [
-  { value: 'mon', label: 'ПН', full: 'Понедельник' },
-  { value: 'tue', label: 'ВТ', full: 'Вторник' },
-  { value: 'wed', label: 'СР', full: 'Среда' },
-  { value: 'thu', label: 'ЧТ', full: 'Четверг' },
-  { value: 'fri', label: 'ПТ', full: 'Пятница' },
-  { value: 'sat', label: 'СБ', full: 'Суббота' },
-  { value: 'sun', label: 'ВС', full: 'Воскресенье' },
-]
+const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 
 function isOn(value: string): boolean {
   return props.modelValue.includes(value)
@@ -73,7 +65,7 @@ function toggle(value: string): void {
   // Emit in canonical Mon→Sun order regardless of click sequence.
   emit(
     'update:modelValue',
-    DAYS.map((d) => d.value).filter((v) => next.includes(v)),
+    DAYS.filter((v) => next.includes(v)),
   )
 }
 </script>

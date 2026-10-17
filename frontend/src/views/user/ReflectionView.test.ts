@@ -89,6 +89,7 @@
 //    (.vue:104). Left real on purpose.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
@@ -180,7 +181,7 @@ let pinia: Pinia
 function mount(): void {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(ReflectionView)
+  app = createApp(ReflectionView).use(createTestI18n())
   app.use(pinia)
   app.mount(host)
 }

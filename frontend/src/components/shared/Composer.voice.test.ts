@@ -12,6 +12,7 @@
 // DiaryComposer.test.ts -- no @vue/test-utils).
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, ref, type App } from 'vue'
 import type { useVoiceRecorder, VoiceTake } from '@/composables/useVoiceRecorder'
@@ -114,7 +115,7 @@ async function mount(props: Record<string, unknown> = { voiceInput: true }): Pro
     send: async () => ({ ok: true }),
     onComposingChange: (v: boolean) => composingEvents.push(v),
     ...props,
-  })
+  }).use(createTestI18n())
   app.mount(host)
   await flush(2)
 }

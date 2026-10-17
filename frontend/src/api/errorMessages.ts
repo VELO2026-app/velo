@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- Backend error code -> Russian phrase (B8)
+// VELO Frontend -- Backend error code -> phrase (B8)
 // =============================================================================
 //
 // Owner ruling 2026-08-16: PLAIN RUSSIAN, nothing else. No key system, no
@@ -63,132 +63,95 @@
 // style_not_confirmed, zoom_meeting_not_active, group_in_use, invite_invalid,
 // insufficient_balance. The other 15 genuinely-raised codes plus
 // practice_not_found are new, written from each raise site's own message.
-export const ERROR_MESSAGES: Record<string, string> = {
-  // Seeded verbatim from existing point-branches.
-  bot_url_not_configured: 'Ссылки для приглашений временно недоступны. Сообщите в поддержку.',
-  direction_not_confirmed: 'Это направление ещё не подтверждено в вашем профиле',
-  style_not_confirmed: 'Этот вид практики ещё не подтверждён в вашем профиле',
-  group_in_use:
-    'Эта группа — единственная аудитория одной из практик. Сначала измените аудиторию практики, затем удалите группу.',
-  invite_invalid:
-    'Приглашение одноразовое: возможно, оно уже использовано или ссылка повреждена. Запросите новую ссылку у администратора.',
-  insufficient_balance: 'Недостаточно средств на балансе',
+//
+// tz-i18n 1.2 (the owner's "own future task" has started): the table itself
+// moved to locales/ru.json under the `errors` namespace -- keys
+// errors.<code>, the phrases VERBATIM what the table above used to carry.
+// errorMessage()/extractApiError() look the key up and fall back to
+// errors.generic for a code the catalog does not know. ERROR_CODES below is
+// the machine-readable list of what the catalog must contain; the CI key
+// audit (tz-i18n §4.4) checks catalog <-> list.
+// =============================================================================
 
-  // Standalone F4 -- Zoom inside the app (zoom/sdk.py). zoom_meeting_not_active
-  // (seeded above until F4) left with the start-ticket endpoint, its only
-  // raise site; zoom_sdk_not_configured and zoom_entry_not_joinable have
-  // their own states on the practice screen, the phrase is the fallback.
-  zoom_sdk_not_configured: 'Вход в Zoom на этом сервере пока не настроен',
-  zoom_entry_not_joinable: 'Сейчас войти в эту практику нельзя',
-  zoom_unavailable: 'Zoom не ответил. Попробуйте ещё раз через минуту',
-  zoom_host_token_unavailable:
-    'Zoom не дал начать встречу. Попробуйте ещё раз; если повторится — напишите в поддержку',
+import i18n from '@/locales'
 
-  // New -- written from each raise site's own English message.
-  already_master: 'Вы уже мастер',
-  master_offer_not_found: 'Назначение недействительно или уже отменено',
-  blocked_by_master: 'Мастер этой практики закрыл вам доступ',
-  master_profile_not_found: 'Профиль мастера не найден',
-  master_profile_not_verified: 'Профиль мастера ещё не подтверждён',
-  method_change_pending: 'Заявка на изменение методов уже на рассмотрении',
-  not_a_student: 'Эта практика доступна только ученикам мастера',
-  not_in_audience: 'Эта практика недоступна для вашей группы',
-  practice_completed: 'Эта практика уже завершена — отменить бронирование нельзя',
-  // Not currently raised anywhere (only named in exceptions.py's own usage
-  // example) -- included defensively so a future raise site is covered
-  // without anyone needing to remember this table.
-  practice_not_found: 'Практика не найдена',
-  role_not_allowed: 'Эта роль недоступна для вашего аккаунта',
+export const ERROR_CODES = [
+  'bot_url_not_configured',
+  'direction_not_confirmed',
+  'style_not_confirmed',
+  'group_in_use',
+  'invite_invalid',
+  'insufficient_balance',
+  'zoom_sdk_not_configured',
+  'zoom_entry_not_joinable',
+  'zoom_unavailable',
+  'zoom_host_token_unavailable',
+  'already_master',
+  'master_offer_not_found',
+  'blocked_by_master',
+  'master_profile_not_found',
+  'master_profile_not_verified',
+  'method_change_pending',
+  'not_a_student',
+  'not_in_audience',
+  'practice_completed',
+  'practice_not_found',
+  'role_not_allowed',
+  'no_active_booking',
+  'checkin_window_closed',
+  'checkin_window_not_open',
+  'curator_group_name_taken',
+  'group_creation_not_allowed',
+  'curator_cannot_leave',
+  'own_group',
+  'master_required',
+  'blocked_by_curator',
+  'blocked_in_group',
+  'cannot_block_curator',
+  'master_id_requires_school',
+  'master_not_in_school',
+  'curator_only',
+  'curator_cannot_add_occurrence',
+  'curator_group_not_usable',
+  'transfer_pending',
+  'invite_not_found',
+  'transfer_not_found',
+  'transfer_target_not_member',
+  'reflection_not_available',
+  'reflection_already_submitted',
+  'mcp_token_limit_reached',
+  'mcp_token_not_found',
+  'mcp_token_name_taken',
+  'unauthorized',
+  'not_found',
+  'forbidden',
+  'conflict',
+  'bad_request',
+  'internal_error',
+  'validation_error',
+] as const
 
-  // Check-in (BE-92): the two 404s and the two window 400s of
-  // diary/checkins_service.py upsert_checkin used to arrive as the generic
-  // not_found / bad_request. no_active_booking is ONE code for «брони нет»,
-  // «бронь отменена», «бронь не подтверждена» and «такой практики нет» on
-  // purpose: telling them apart would make the endpoint an existence oracle.
-  no_active_booking: 'У вас нет подтверждённой брони на эту практику',
-  checkin_window_closed: 'Check-in закрыт — практика уже началась',
-  checkin_window_not_open: 'Check-in ещё не открыт — он откроется ближе к началу практики',
-
-  // Curator groups (schools). Ten codes before BE-79 added two more
-  // (blocked_in_group, cannot_block_curator); of the ten, six were reachable before
-  // this table knew about them, three were added to their raise sites so the
-  // 404s stopped arriving as the generic `not_found`, and the tenth
-  // (group_creation_not_allowed, GT-15) arrives with its raise site. Three of
-  // the ten are deliberately ONE code for several causes -- see each phrase.
-  curator_group_name_taken: 'У вас уже есть школа с таким названием',
-  // GT-15. NOT master_profile_not_verified: this master IS verified, and
-  // telling them their profile is unconfirmed would send them to the wrong
-  // screen to fix a thing that is not broken. Founding a school is a right
-  // an admin grants, and only an admin can grant it.
-  group_creation_not_allowed: 'Заводить школы может мастер, которому администратор выдал это право',
-  curator_cannot_leave:
-    'Куратор не может покинуть свою школу. Передайте её другому мастеру или удалите.',
-  own_group: 'Это ваша школа',
-  // GT-27: it used to say «Ссылка предназначена для верифицированных
-  // мастеров» -- the master invite link refusing an unverified account.
-  // That link is gone; the code now comes from appointing a school
-  // master, so the phrase had to stop talking about a link.
-  master_required: 'Назначить мастером школы можно только верифицированного мастера',
-  blocked_by_curator: 'Вступление в эту школу недоступно',
-  // BE-79 (DRAFT wording, owner reviews): the person is blocked in THIS
-  // school (join by link refused, 403) / the curator tried to block
-  // themselves (409).
-  blocked_in_group: 'Вы заблокированы в этой школе',
-  cannot_block_curator: 'Куратора школы нельзя заблокировать',
-  // FE-92 / BE-102 (DRAFT wording): a curator creating a practice for a
-  // master of the school. The fourth refusal, a school that is not usable,
-  // is curator_group_not_usable below.
-  master_id_requires_school: 'Выберите школу, в которой создаётся практика',
-  master_not_in_school: 'Этот мастер не состоит в школе или не верифицирован',
-  curator_only: 'Создавать практику за мастера может только куратор школы',
-  // FE-92 follow-up (DRAFT wording): the school refusal now has its own code
-  // (practices/service.py, every cause: switched off, inactive, not a member,
-  // deleted mid-create).
-  // BE-102 publish (DRAFT wording): for a master a curator creates a
-  // standalone practice or a series root, not an occurrence of a series.
-  curator_cannot_add_occurrence: 'Куратор не может добавить занятие в серию мастера',
-  curator_group_not_usable: 'Школа недоступна: она отключена или вы в ней больше не состоите',
-  transfer_pending:
-    'Предложение уже отправлено. Сначала отмените его, затем предложите другому мастеру.',
-  // One code for: неизвестный токен, отозванная ссылка, удалённая школа и
-  // школа с неверифицированным куратором. Различать их нельзя намеренно:
-  // иначе по ссылке можно было бы выведать существование школы.
-  invite_not_found: 'Приглашение недействительно',
-  // One code for «предложения нет» и «предложение адресовано не вам».
-  transfer_not_found: 'Предложение о передаче не найдено',
-  // One code for ученика, постороннего, скрытого мастера и самого куратора.
-  transfer_target_not_member: 'Передать школу можно только мастеру из её состава',
-  // BE-108, raised through constants in diary/service.py -- the same blind
-  // spot of the literal-count command named above.
-  reflection_not_available: 'Поделиться можно только по пропущенной практике',
-  reflection_already_submitted: 'Вы уже поделились — спасибо',
-  // BE-138, mcp/service.py.
-  mcp_token_limit_reached: 'Активных токенов уже 10 — отзовите ненужный, чтобы создать новый',
-  mcp_token_not_found: 'Токен не найден — обновите список',
-  // BE-139, mcp/service.py.
-  mcp_token_name_taken: 'Токен с таким названием уже есть — выберите другое',
-
-  // VeloError base-class defaults (no module-specific code set).
-  unauthorized: 'Сессия истекла — войдите заново',
-  not_found: 'Запрошенный ресурс не найден',
-  forbidden: 'Действие недоступно',
-  conflict: 'Конфликт с текущим состоянием — попробуйте обновить страницу',
-  bad_request: 'Некорректный запрос',
-  internal_error: 'Внутренняя ошибка сервера. Попробуйте ещё раз',
-
-  // NOT a VeloError.code -- assigned by the FRONTEND itself (client.ts:195)
-  // for a raw Pydantic 422 response (backend validation, not a VeloError
-  // raise site). Found while fixing the №747 test repair round: this code
-  // is real and structurally guaranteed on every Pydantic validation
-  // failure, so it was leaking English exactly like the 16 originally
-  // measured -- just never counted, because the backend-only reconciliation
-  // couldn't see a code the frontend assigns to itself.
-  validation_error: 'Проверьте введённые данные',
+/** Whether the catalog carries a phrase for this backend code. */
+export function hasErrorMessage(code: string): boolean {
+  const key = `errors.${code}`
+  // The seed catalog (ru) is the complete one: check it first, then the
+  // active locale (an instance overlay may cover a code the seed does not).
+  return i18n.global.te(key, 'ru') || i18n.global.te(key)
 }
 
-// Safety-net text ONLY (PROMPT №747) -- for a code with no table entry at
-// all (a genuinely new/forgotten backend code, or the `code: string =
-// 'unknown'` default on a malformed response). Not the per-call-site
-// fallback extractApiError() callers already supply -- this backs
-// errorMessage() below, whose whole point is a lookup with no caller input.
-export const GENERIC_ERROR_MESSAGE = 'Что-то пошло не так. Попробуйте ещё раз.'
+/**
+ * Look up a known backend error code's phrase directly, with no caught
+ * exception and no caller-supplied fallback.
+ *
+ * PROMPT №747: replaces the `ERROR_MESSAGES.some_code!` non-null-assertion
+ * pattern the 7 migrated point-branches used -- that assertion SILENCED
+ * `noUncheckedIndexedAccess` instead of answering it. This function answers
+ * it: a code with a catalog entry returns its phrase; anything else (a typo,
+ * a future code the catalog hasn't caught up with yet) returns
+ * errors.generic, never `undefined`, so the type is `string` everywhere
+ * without an assertion at any call site.
+ */
+export function errorMessage(code: string): string {
+  const key = `errors.${code}`
+  return hasErrorMessage(code) ? i18n.global.t(key) : i18n.global.t('errors.generic')
+}

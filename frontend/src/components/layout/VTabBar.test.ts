@@ -10,6 +10,7 @@
 // verification, per house rules.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import VTabBar from '@/components/layout/VTabBar.vue'
@@ -28,7 +29,7 @@ const navigate = vi.fn()
 function mount(items: TabItem[], active?: string): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(VTabBar, { items, active, onNavigate: navigate })
+  app = createApp(VTabBar, { items, active, onNavigate: navigate }).use(createTestI18n())
   app.mount(host)
   return host
 }

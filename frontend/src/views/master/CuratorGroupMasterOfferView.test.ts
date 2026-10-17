@@ -10,6 +10,7 @@
 // and decline never fails for a reason the screen could show.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import CuratorGroupMasterOfferView from '@/views/master/CuratorGroupMasterOfferView.vue'
@@ -46,7 +47,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(CuratorGroupMasterOfferView)
+  app = createApp(CuratorGroupMasterOfferView).use(createTestI18n())
   app.mount(host)
   return host
 }

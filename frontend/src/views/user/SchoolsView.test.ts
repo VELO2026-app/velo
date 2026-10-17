@@ -11,6 +11,7 @@
 // it shares the same seam, so one vi.mock serves both.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { createPinia } from 'pinia'
@@ -37,7 +38,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(SchoolsView)
+  app = createApp(SchoolsView).use(createTestI18n())
   // The hub reads the schoolsHub store (the tab probe shares this seam).
   app.use(createPinia())
   app.mount(host)

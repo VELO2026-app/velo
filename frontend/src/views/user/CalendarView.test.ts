@@ -98,6 +98,7 @@
 // No order dependence: every test mounts its own app + fresh Pinia.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
@@ -213,7 +214,7 @@ function mount(
   routeState.query = routeQuery
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(CalendarView)
+  app = createApp(CalendarView).use(createTestI18n())
   app.use(pinia)
   app.mount(host)
   return host

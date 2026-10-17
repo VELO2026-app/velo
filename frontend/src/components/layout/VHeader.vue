@@ -25,7 +25,7 @@
       <div class="v-header__left">
         <VBackButton
           v-if="showBack"
-          :aria-label="title ? 'Назад' : backLabel"
+          :aria-label="title ? t('ui.back') : backLabel"
           @click="$emit('back')"
         />
         <h1 v-if="title" class="v-header__title">{{ title }}</h1>
@@ -39,8 +39,13 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { VBackButton } from '@/components/ui'
 import { useFloatingHeader } from '@/components/layout/useFloatingHeader'
+
+// tz-i18n 1.3: the back-aria fallback comes from ui.back; backLabel stays a
+// caller prop (shells pass it per screen).
+const { t } = useI18n({ useScope: 'global' })
 
 // True when a floating-header island host (MobileLayout) is an ancestor: the
 // header then teleports into the island and registers its presence (so the feed
@@ -57,7 +62,7 @@ withDefaults(
   {
     title: '',
     showBack: false,
-    backLabel: 'Назад',
+    backLabel: undefined,
     badge: undefined,
   },
 )

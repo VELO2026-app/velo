@@ -19,6 +19,7 @@
 // configured) -- do not reorder these two tests relative to each other.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import CalendarFilterModal from '@/components/shared/CalendarFilterModal.vue'
@@ -41,7 +42,7 @@ function mount(onApply: (filters: CalendarFacetFilters) => void): void {
     filters: {},
     onApply,
     onClose: () => {},
-  })
+  }).use(createTestI18n())
   app.mount(host)
 }
 

@@ -26,19 +26,23 @@
         <span class="v-bar-chart__label">{{ bar.label }}</span>
       </div>
     </div>
-    <p v-else class="v-bar-chart__empty">{{ emptyText }}</p>
+    <p v-else class="v-bar-chart__empty">{{ emptyText ?? t('ui.emptyChart') }}</p>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+// tz-i18n 1.3: empty-text fallback resolves at render time (?? t()).
+const { t } = useI18n({ useScope: 'global' })
 
 const props = withDefaults(
   defineProps<{
     bars?: { label: string; value: number }[]
     emptyText?: string
   }>(),
-  { bars: () => [], emptyText: 'Данных пока нет' },
+  { bars: () => [] },
 )
 
 const max = computed((): number => Math.max(1, ...props.bars.map((b) => b.value)))

@@ -15,6 +15,7 @@
 // zone only picks the route family.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, reactive, type App } from 'vue'
 import CuratorGroupPageView from '@/views/user/CuratorGroupPageView.vue'
@@ -54,7 +55,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(CuratorGroupPageView)
+  app = createApp(CuratorGroupPageView).use(createTestI18n())
   app.mount(host)
   return host
 }

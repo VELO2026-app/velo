@@ -32,6 +32,7 @@
 //      per-filter empty note, and no slider over an empty feed.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import MasterInboxView from '@/views/master/MasterInboxView.vue'
@@ -84,7 +85,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(MasterInboxView)
+  app = createApp(MasterInboxView).use(createTestI18n())
   app.mount(host)
   return host
 }

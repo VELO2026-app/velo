@@ -8,6 +8,7 @@
 // @/stores/auth (only .user.id matters, for the triage-badge "У меня" case).
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import AdminSupportView from '@/views/admin/AdminSupportView.vue'
@@ -74,7 +75,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminSupportView)
+  app = createApp(AdminSupportView).use(createTestI18n())
   app.mount(host)
   return host
 }

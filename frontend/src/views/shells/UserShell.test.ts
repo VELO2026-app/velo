@@ -27,6 +27,7 @@
 //    isFogRoute itself (the boolean gate) IS covered.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, ref, type App, type Ref } from 'vue'
 import { createPinia, type Pinia } from 'pinia'
@@ -130,7 +131,7 @@ async function mount(
   await router.push({ name: routeName, params })
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(UserShell)
+  app = createApp(UserShell).use(createTestI18n())
   const pinia = createPinia()
   app.use(pinia)
   // Seed BEFORE mount so onMounted's probe sees the seeded account.

@@ -88,6 +88,7 @@
 // relies on it; localStorage/sessionStorage are cleared per test.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, reactive, type App } from 'vue'
 import MasterPendingView from '@/views/master/MasterPendingView.vue'
@@ -203,7 +204,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(MasterPendingView)
+  app = createApp(MasterPendingView).use(createTestI18n())
   app.mount(host)
   return host
 }

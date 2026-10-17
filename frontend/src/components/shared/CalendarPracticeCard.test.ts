@@ -9,6 +9,7 @@
 // shared card carries nothing.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { createApp, defineComponent, h, nextTick, type App } from 'vue'
 import CalendarPracticeCard from '@/components/shared/CalendarPracticeCard.vue'
@@ -54,7 +55,7 @@ async function mountCard(p: PracticeResponse): Promise<string> {
       return () => h(CalendarPracticeCard, { practice: p, showDate: true })
     },
   })
-  app = createApp(Wrapper)
+  app = createApp(Wrapper).use(createTestI18n())
   app.mount(host)
   await nextTick()
   await nextTick()

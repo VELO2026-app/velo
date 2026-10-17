@@ -72,6 +72,7 @@
 // relies on it.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import EditPracticeView from '@/views/master/EditPracticeView.vue'
@@ -183,7 +184,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(EditPracticeView)
+  app = createApp(EditPracticeView).use(createTestI18n())
   app.mount(host)
   return host
 }

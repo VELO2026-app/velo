@@ -14,6 +14,7 @@
 //
 // Fake timers own the debounce; flush() advances them.
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import DiarySearchBar from '@/components/shared/DiarySearchBar.vue'
@@ -36,7 +37,7 @@ function mount(props: Record<string, unknown> = {}): HTMLElement {
     onLive: (q: string) => events.live.push(q),
     onCancel: () => events.cancel.push(1),
     onClose: () => events.close.push(1),
-  })
+  }).use(createTestI18n())
   app.mount(host)
   return host
 }

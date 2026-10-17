@@ -15,6 +15,9 @@ import { extractApiError } from '@/composables/useApiError'
 import { ApiResponseError } from '@/api/client'
 import { MASTER_APPLIED_KEY } from '@/utils/constants'
 import type { MasterProfileResponse, PracticeResponse } from '@/api/types'
+import i18n from '@/locales'
+
+const { t } = i18n.global
 
 export const useMasterStore = defineStore('master', () => {
   // =========================================================================
@@ -63,7 +66,7 @@ export const useMasterStore = defineStore('master', () => {
       profileLoaded.value = true
       profileMissing.value = false
     } catch (e) {
-      profileError.value = extractApiError(e, 'Не удалось загрузить профиль мастера')
+      profileError.value = extractApiError(e, t('storeErrors.master.profile'))
       profileMissing.value = e instanceof ApiResponseError && e.code === 'master_profile_not_found'
     } finally {
       profileLoading.value = false

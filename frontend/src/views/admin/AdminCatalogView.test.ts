@@ -71,6 +71,7 @@
 // never a shell heredoc.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import AdminCatalogView from '@/views/admin/AdminCatalogView.vue'
@@ -156,7 +157,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminCatalogView)
+  app = createApp(AdminCatalogView).use(createTestI18n())
   app.mount(host)
   return host
 }

@@ -22,6 +22,7 @@
 // happy-dom -- the close is asserted on the emitted event, not on DOM removal.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import SendMessageModal from '@/components/shared/SendMessageModal.vue'
@@ -99,7 +100,7 @@ beforeEach(() => {
     studentId: STUDENT_ID,
     name: 'Анна Кузнецова',
     onClose: closed,
-  })
+  }).use(createTestI18n())
   app.mount(host)
 })
 

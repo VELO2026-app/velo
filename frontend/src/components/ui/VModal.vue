@@ -27,7 +27,7 @@
           <button
             v-if="showClose"
             class="v-modal__close"
-            aria-label="Закрыть"
+            :aria-label="t('ui.close')"
             @click="$emit('close')"
           >
             <IconClose :size="16" />
@@ -44,8 +44,11 @@
 <script setup lang="ts">
 import { onDocumentEvent, offDocumentEvent } from '@/platform/dom'
 import { onMounted, onUnmounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { IconClose } from '@/components/icons'
 import { lockBodyScroll, unlockBodyScroll } from '@/composables/useBodyScrollLock'
+
+const { t } = useI18n({ useScope: 'global' })
 
 const props = withDefaults(
   defineProps<{

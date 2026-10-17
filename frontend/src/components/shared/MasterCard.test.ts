@@ -9,6 +9,7 @@
 // neutral fallback glyph.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { createApp, defineComponent, h, nextTick, type App } from 'vue'
 import MasterCard from '@/components/shared/MasterCard.vue'
@@ -38,7 +39,7 @@ async function mountCard(methods: string[] | null): Promise<HTMLElement> {
         })
     },
   })
-  app = createApp(Wrapper)
+  app = createApp(Wrapper).use(createTestI18n())
   app.mount(host)
   await nextTick()
   await nextTick()

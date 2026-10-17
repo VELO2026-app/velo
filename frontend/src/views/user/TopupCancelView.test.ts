@@ -13,6 +13,7 @@
 // no store, so wiring one would mock a layer it does not have.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import TopupCancelView from '@/views/user/TopupCancelView.vue'
@@ -28,7 +29,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(TopupCancelView)
+  app = createApp(TopupCancelView).use(createTestI18n())
   app.mount(host)
   return host
 }

@@ -30,6 +30,7 @@
 // which is what the 404 test leans on.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import NotificationsView from '@/views/user/NotificationsView.vue'
@@ -92,7 +93,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(NotificationsView)
+  app = createApp(NotificationsView).use(createTestI18n())
   app.mount(host)
   return host
 }

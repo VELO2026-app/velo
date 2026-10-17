@@ -8,6 +8,7 @@
 // read-only-ness (no mutation API is even imported).
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import AdminCuratorGroupsView from '@/views/admin/AdminCuratorGroupsView.vue'
@@ -33,7 +34,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminCuratorGroupsView)
+  app = createApp(AdminCuratorGroupsView).use(createTestI18n())
   app.mount(host)
   return host
 }

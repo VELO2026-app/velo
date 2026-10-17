@@ -11,7 +11,7 @@
 //
 // PATTERN: no Pinia, no API mock -- nothing to seam. `done` is a root emit,
 // captured the same way as auth/OnboardingView.test.ts: `onDone` passed as a
-// root prop to createApp(MasterOnboardingView, { onDone }).
+// root prop to createApp(MasterOnboardingView, { onDone }).use(createTestI18n()).
 //
 // THE GUARD, and how it differs from the user carousel's: `finished` is a
 // single boolean, not a two-flag microtask race -- there is no timezone-step
@@ -23,6 +23,7 @@
 // would just prove the disabled attribute instead.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import MasterOnboardingView from '@/views/master/MasterOnboardingView.vue'
@@ -33,7 +34,7 @@ let host: HTMLElement | null = null
 function mount(onDone: () => void = () => {}): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(MasterOnboardingView, { onDone })
+  app = createApp(MasterOnboardingView, { onDone }).use(createTestI18n())
   app.mount(host)
   return host
 }

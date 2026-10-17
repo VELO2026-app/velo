@@ -24,6 +24,7 @@
 //      mark-read only, never a broken route. A READ row still navigates.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
@@ -93,7 +94,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(UserInboxView)
+  app = createApp(UserInboxView).use(createTestI18n())
   app.mount(host)
   return host
 }

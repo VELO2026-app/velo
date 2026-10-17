@@ -15,6 +15,7 @@
 // and the test would pass for the wrong reason.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, defineComponent, h, type App } from 'vue'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
@@ -54,7 +55,7 @@ function mount(): void {
         h('input', { ref: (el) => (inputEl = el as HTMLInputElement), onFocus: onFieldFocus })
     },
   })
-  app = createApp(Host)
+  app = createApp(Host).use(createTestI18n())
   app.mount(host)
 }
 

@@ -67,6 +67,7 @@
 // uses 4, generous per velo-idiom §3 (an over-count is harmless).
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
@@ -149,7 +150,7 @@ let pinia: Pinia
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(BookingConfirmedView)
+  app = createApp(BookingConfirmedView).use(createTestI18n())
   app.use(pinia)
   app.mount(host)
   return host

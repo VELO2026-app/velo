@@ -23,6 +23,7 @@
 // fixtures below are literals relative to the frozen instant.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import AdminWithdrawalsView from '@/views/admin/AdminWithdrawalsView.vue'
@@ -74,7 +75,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminWithdrawalsView)
+  app = createApp(AdminWithdrawalsView).use(createTestI18n())
   app.mount(host)
   return host
 }

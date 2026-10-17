@@ -77,6 +77,7 @@
 // gate). No order dependence -- every test mounts its own app + fresh Pinia.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
@@ -139,7 +140,12 @@ function checkinResult(rate_pct: number) {
   return { rate_pct, total_records: 0, checked_in: 0, series: [], low_practices: [] }
 }
 function feedbackResult(rate_pct: number) {
-  return { rate_pct, visited: 0, left_review: 0, distribution: { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 } }
+  return {
+    rate_pct,
+    visited: 0,
+    left_review: 0,
+    distribution: { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 },
+  }
 }
 function returnResult(rate_pct: number) {
   return { rate_pct, total_users: 0, returning: 0, top_users: [] }
@@ -163,7 +169,7 @@ let fetchOverviewSpy: any
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminDashboardView)
+  app = createApp(AdminDashboardView).use(createTestI18n())
   app.use(pinia)
   app.mount(host)
   return host

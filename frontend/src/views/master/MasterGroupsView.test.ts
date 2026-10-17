@@ -11,6 +11,7 @@
 // (same pattern as MasterPromocodesView.test.ts's writeText mock).
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import MasterGroupsView from '@/views/master/MasterGroupsView.vue'
@@ -61,7 +62,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(MasterGroupsView)
+  app = createApp(MasterGroupsView).use(createTestI18n())
   app.mount(host)
   return host
 }

@@ -10,6 +10,7 @@
 // suites cover their own wiring; this file covers the shared mechanism.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { createApp, defineComponent, h, nextTick, ref, type App } from 'vue'
 import PracticeAudiencePicker from '@/components/shared/PracticeAudiencePicker.vue'
@@ -77,7 +78,7 @@ function mount(opts: MountOpts = {}): HTMLElement {
         })
     },
   })
-  app = createApp(Wrapper)
+  app = createApp(Wrapper).use(createTestI18n())
   app.mount(host)
   return host
 }

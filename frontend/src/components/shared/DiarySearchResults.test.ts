@@ -12,6 +12,7 @@
 // The row's model derivation itself (kind -> title/icon) is useDiaryCardModel's
 // own tested territory; here it is exercised through the real row component.
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import DiarySearchResults from '@/components/shared/DiarySearchResults.vue'
@@ -44,7 +45,7 @@ function mount(props: Record<string, unknown>): HTMLElement {
   app = createApp(DiarySearchResults, {
     ...props,
     onJump: (item: DiaryFeedItem) => jumps.push(item),
-  })
+  }).use(createTestI18n())
   app.mount(host)
   return host
 }

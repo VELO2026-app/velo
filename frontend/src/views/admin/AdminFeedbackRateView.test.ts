@@ -55,6 +55,7 @@
 // never a shell heredoc.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import AdminFeedbackRateView from '@/views/admin/AdminFeedbackRateView.vue'
@@ -97,7 +98,7 @@ function mount(query: Record<string, string> = {}): HTMLElement {
   routeQuery = query
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminFeedbackRateView)
+  app = createApp(AdminFeedbackRateView).use(createTestI18n())
   app.mount(host)
   return host
 }
@@ -268,7 +269,13 @@ describe('AdminFeedbackRateView', () => {
       expect(heroValue()).toBe('—')
       expect(statValue('Посетили')).toBe('—')
       expect(statValue('Оставили отзыв')).toBe('—')
-      expect(ratingValues()).toEqual({ Огонь: '—', Хорошо: '—', Нормально: '—', 'Не очень': '—', Плохо: '—' })
+      expect(ratingValues()).toEqual({
+        Огонь: '—',
+        Хорошо: '—',
+        Нормально: '—',
+        'Не очень': '—',
+        Плохо: '—',
+      })
     })
   })
 
@@ -298,7 +305,13 @@ describe('AdminFeedbackRateView', () => {
       mount()
       await flush()
 
-      expect(ratingValues()).toEqual({ Огонь: '—', Хорошо: '—', Нормально: '—', 'Не очень': '—', Плохо: '—' })
+      expect(ratingValues()).toEqual({
+        Огонь: '—',
+        Хорошо: '—',
+        Нормально: '—',
+        'Не очень': '—',
+        Плохо: '—',
+      })
     })
 
     it('a bucket that IS zero while the total is NOT zero shows "0%", a real measured value, not "—"', async () => {

@@ -42,6 +42,7 @@
 // never a shell heredoc.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import AdminReportDetailView from '@/views/admin/AdminReportDetailView.vue'
@@ -109,7 +110,7 @@ function mount(id: string, stateReport: ReportResponse | null = null): HTMLEleme
   window.history.replaceState(stateReport ? { report: stateReport } : {}, '')
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminReportDetailView)
+  app = createApp(AdminReportDetailView).use(createTestI18n())
   app.mount(host)
   return host
 }

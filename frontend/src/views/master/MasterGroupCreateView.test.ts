@@ -2,6 +2,7 @@
 // VELO Frontend -- MasterGroupCreateView Screen Tests (Master GROUPS P2, PROMPT №591)
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import MasterGroupCreateView from '@/views/master/MasterGroupCreateView.vue'
@@ -28,7 +29,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(MasterGroupCreateView)
+  app = createApp(MasterGroupCreateView).use(createTestI18n())
   app.mount(host)
   return host
 }

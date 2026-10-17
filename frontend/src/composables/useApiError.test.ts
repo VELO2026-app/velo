@@ -19,10 +19,13 @@
 import { describe, it, expect } from 'vitest'
 import { extractApiError } from '@/composables/useApiError'
 import { ApiResponseError } from '@/api/client'
-import { ERROR_MESSAGES } from '@/api/errorMessages'
+import { errorMessage } from '@/api/errorMessages'
 
 describe('extractApiError', () => {
-  it('returns the table phrase for an ApiResponseError whose code is mapped, ignoring detail', () => {
+  it('returns the catalog phrase for an ApiResponseError whose code is mapped, ignoring detail', () => {
+    // Pins the errors.* catalog verbatim: the phrase migrated from the old
+    // ERROR_MESSAGES table unchanged (tz-i18n 1.2).
+    expect(errorMessage('insufficient_balance')).toBe('Недостаточно средств на балансе')
     const result = extractApiError(
       new ApiResponseError(
         400,
@@ -31,7 +34,7 @@ describe('extractApiError', () => {
       ),
       'fallback',
     )
-    expect(result).toBe(ERROR_MESSAGES.insufficient_balance)
+    expect(result).toBe(errorMessage('insufficient_balance'))
   })
 
   it('returns the fallback for an ApiResponseError whose code has no table entry -- never e.detail', () => {

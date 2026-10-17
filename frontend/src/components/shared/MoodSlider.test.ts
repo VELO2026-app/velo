@@ -25,6 +25,7 @@
 // cropping are browser-checked work (tz §3/§9), flagged in the handoff.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, afterEach } from 'vitest'
 import { nextTick, ref, createApp, defineComponent, h, type App } from 'vue'
 import MoodSlider from '@/components/shared/MoodSlider.vue'
@@ -53,7 +54,7 @@ function mountSlider(initial = 5, disabled = false): { host: HTMLElement; change
         })
     },
   })
-  app = createApp(Wrapper)
+  app = createApp(Wrapper).use(createTestI18n())
   app.mount(host)
   return { host, changes }
 }
