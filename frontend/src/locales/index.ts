@@ -22,39 +22,27 @@ import { createI18n } from 'vue-i18n'
 
 import { setRootLang } from '@/platform/dom'
 import { INSTANCE, isSupportedLocale } from '@/platform/instance'
-// Per-domain catalogs (tz-i18n §4.1): split by feature, merged here at
-// startup. The per-domain files are also the seam for phase-4 lazy chunks.
-import admin from './ru/admin.json'
-import auth from './ru/auth.json'
-import chat from './ru/chat.json'
-import common from './ru/common.json'
-import diary from './ru/diary.json'
-import errors from './ru/errors.json'
-import master from './ru/master.json'
-import practice from './ru/practice.json'
-import profile from './ru/profile.json'
-import schools from './ru/schools.json'
-import shared from './ru/shared.json'
-import taxonomy from './ru/taxonomy.json'
-import ui from './ru/ui.json'
-import views from './ru/views.json'
+// Per-domain catalogs (tz-i18n §4.1): one FOLDER per locale, one FILE per
+// domain, composed generically below. Adding a language = adding a folder;
+// adding a domain = adding a file. No per-language import chains.
+// Non-default locales reuse the same folders via dynamic import in
+// setLocale (phase 4 lazy chunks).
+// Eager today (the default locale must be in the main bundle anyway);
+// phase 4 flips this to lazy per-locale dynamic imports over the SAME glob.
+const catalogs = import.meta.glob('./*/*.json', { eager: true })
 
-export const ru = {
-  ...common,
-  ...ui,
-  ...taxonomy,
-  ...errors,
-  ...auth,
-  ...practice,
-  ...diary,
-  ...profile,
-  ...schools,
-  ...master,
-  ...admin,
-  ...chat,
-  ...shared,
-  ...views,
+const LOCALE_MESSAGES: Record<string, Record<string, unknown>> = {}
+for (const [path, mod] of Object.entries(catalogs)) {
+  // './ru/common.json' -> locale 'ru'
+  const locale = path.split('/')[1]
+  if (!locale) continue
+  LOCALE_MESSAGES[locale] = {
+    ...(LOCALE_MESSAGES[locale] ?? {}),
+    ...(mod as { default: Record<string, unknown> }).default,
+  }
 }
+
+export const ru = LOCALE_MESSAGES[INSTANCE.defaultLocale] ?? LOCALE_MESSAGES.ru ?? {}
 
 /**
  * vue-i18n's built-in plural choice is English-shaped (1 -> first form,
@@ -64,7 +52,6 @@ export const ru = {
  * form index (tz-i18n §4.4: the ONE plural mechanism):
  *   2-form messages: one -> 0, every other category -> 1
  *   3+form messages: one -> 0, few -> 1, many/other -> 2
- * (zero/two are unused by our catalogs.)
  */
 export function cldrPluralChoice(
   locale: string,
@@ -86,21 +73,21 @@ const PLURAL_RULES = {
   es: cldrPluralChoice('es'),
 }
 
+// No `messages` in the options: the composed catalog goes in through
+// setLocaleMessage right after -- with a dynamic (non-literal) schema this
+// keeps createI18n's options and the composer types clean.
 const i18n = createI18n({
   legacy: false,
   locale: INSTANCE.defaultLocale,
   fallbackLocale: INSTANCE.defaultLocale,
-  messages: { ru },
   pluralRules: PLURAL_RULES,
   globalInjection: true,
-  // A hardcoded→key miss announces itself in dev; in prod it silently falls
-  // back to the default locale instead of littering the console.
   missingWarn: import.meta.env.DEV,
   fallbackWarn: false,
 })
+i18n.global.setLocaleMessage('ru', ru)
+i18n.global.setLocaleMessage(INSTANCE.defaultLocale, ru)
 
-// The brand as a message: every catalog can inline it with the linked form
-// `@:brand` -- no per-call params, one source of truth (the passport).
 i18n.global.mergeLocaleMessage(INSTANCE.defaultLocale, { brand: INSTANCE.brand })
 
 export default i18n
@@ -136,12 +123,6 @@ export function applyInstanceOverrides(
   }
 }
 
-/**
- * Locale chunks beyond the default load lazily (tz-i18n §4.1). Fill as the
- * phase-4 catalogs land: { en: () => import('./en.json'), ... }
- */
-const LOCALE_LOADERS: Partial<Record<string, () => Promise<Record<string, unknown>>>> = {}
-
 const loadedLocales = new Set<string>(['ru'])
 
 /**
@@ -149,17 +130,15 @@ const loadedLocales = new Set<string>(['ru'])
  * this is a no-op (fallback keeps rendering); the language switcher UI
  * (tz-i18n phase 5) only ever offers locales that have catalogs.
  */
-export async function setLocale(locale: string): Promise<void> {
+export function setLocale(locale: string): void {
   if (!isSupportedLocale(locale) || locale === i18n.global.locale.value) return
   if (!loadedLocales.has(locale)) {
-    const loader = LOCALE_LOADERS[locale]
-    if (!loader) return
-    // createI18n narrows its schema to the seed catalog's literal shape; a
-    // lazily loaded catalog is the same bag of namespaces by contract.
-    i18n.global.setLocaleMessage(locale, (await loader()) as typeof ru)
+    const messages = LOCALE_MESSAGES[locale]
+    if (!messages) return
+    i18n.global.setLocaleMessage(locale, messages)
     loadedLocales.add(locale)
   }
-  i18n.global.locale.value = locale as 'ru'
+  i18n.global.locale.value = locale
   setRootLang(locale)
 }
 

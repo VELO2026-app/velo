@@ -22,14 +22,15 @@ import { createI18n } from 'vue-i18n'
 import { cldrPluralChoice, ru } from './index'
 
 export function createTestI18n() {
-  return createI18n({
+  const instance = createI18n({
     legacy: false,
     locale: 'ru',
     fallbackLocale: 'ru',
-    messages: { ru },
     pluralRules: { ru: cldrPluralChoice('ru') },
     globalInjection: true,
     missingWarn: false,
     fallbackWarn: false,
   })
+  instance.global.setLocaleMessage('ru', ru)
+  return instance
 }
