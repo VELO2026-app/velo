@@ -26,6 +26,7 @@
     "apply": "Применить",
     "resetDates": "Сбросить даты"
   },
+  "calendarCard": { "paid": "Оплачено", "free": "Бесплатно" },
   "diary": {
     "categories": {
       "entries": "Дневник",
@@ -33,7 +34,35 @@
       "feedbacks": "Feedbacks",
       "checkins": "Check-ins",
       "practices": "Практики"
-    }
+    },
+    "search": {
+      "placeholder": "Искать...",
+      "aria": "Поиск по дневнику",
+      "clearAria": "Очистить",
+      "recent": "Недавно вы искали:",
+      "found": "Найдено: {n}"
+    },
+    "bannerConfirmedTitle": "Вы записались на",
+    "bannerConfirmedRef": "[{title} с {master}]",
+    "bannerConfirmedRefNoMaster": "[{title}]"
+  },
+  "audience": {
+    "noGroups": "Пока нет ни одной группы. Создайте группу на экране «Мои группы».",
+    "noSchools": "Нет школ, доступных для выбора.",
+    "chooseSome": "Выберите хотя бы одну группу"
+  },
+  "useTemplate": { "head": "Вы создавали ранее…", "empty": "Данных пока нет…" },
+  "roleSwitch": {
+    "title": "Переключение роли",
+    "user": "Режим пользователя",
+    "master": "Режим мастера",
+    "admin": "Режим администратора",
+    "failed": "Не удалось переключить роль"
+  },
+  "voice": {
+    "cancelAria": "Отменить запись",
+    "transcribing": "Транскрибация…",
+    "stopAria": "Завершить запись"
   },
   "moderation": {
     "reportDate": "Дата заявки",
@@ -142,8 +171,16 @@
     "copyFailed": "Не удалось скопировать ссылку",
     "curator": "Куратор: {name}",
     "students": "{n} ученик | {n} ученика | {n} учеников",
-    "masters": "{n} мастер | {n} мастера | {n} мастеров"
+    "masters": "{n} мастер | {n} мастера | {n} мастеров",
+    "upload": "+ Загрузить фото",
+    "replace": "Заменить",
+    "remove": "Убрать",
+    "bannerUpload": "+ Загрузить фото",
+    "bannerReplace": "Заменить",
+    "bannerRemove": "Убрать"
   },
+  "timePicker": { "title": "Время практики" },
+  "curatorGroup": { "offerBadge": "Кураторство" },
   "distribution": {
     "title": "Процент фидбеков",
     "countLabel": "{n}% · {m} из {total}",
@@ -295,7 +332,8 @@
     "neutral": "Нормально",
     "good": "Хорошо",
     "fire": "Огонь",
-    "valueText": "{score} из {max} — {label}"
+    "valueText": "{score} из {max} — {label}",
+    "ariaScale": "Оценка состояния от 1 до 10"
   },
   "reflection": {
     "v1": {
@@ -425,8 +463,10 @@
       "awaiting_answer": "Ожидает ответа участника"
     },
     "regular": "Регулярная",
-    "remainingSessions": "Осталось {left} из {total} занятий"
+    "remainingSessions": "Осталось {left} из {total} занятий",
+    "placeholderAlt": "Практика"
   },
+  "masterCard": { "profileUnavailable": "Профиль мастера недоступен" },
   "admin": {
     "fallbackUserName": "Пользователь",
     "masterStatus": {

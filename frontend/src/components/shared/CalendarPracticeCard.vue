@@ -30,6 +30,9 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n({ useScope: 'global' })
 import { computed } from 'vue'
 import { formatShortDate, formatTime, formatDuration, formatMoney } from '@/utils/format'
 import { IconCheck } from '@/components/icons'
@@ -84,10 +87,10 @@ interface Badge {
 
 const badge = computed<Badge>(() => {
   if (props.practice.is_paid) {
-    return { label: 'Оплачено', variant: 'success', paid: true }
+    return { label: t('calendarCard.paid'), variant: 'success', paid: true }
   }
   if (props.practice.is_free) {
-    return { label: 'Бесплатно', variant: 'blue', paid: false }
+    return { label: t('common.free'), variant: 'blue', paid: false }
   }
   return {
     label: formatMoney(props.practice.price_cents, props.practice.currency),

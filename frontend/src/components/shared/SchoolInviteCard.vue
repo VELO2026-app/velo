@@ -42,7 +42,9 @@
 
     <h2 class="school-invite__name">{{ name }}</h2>
 
-    <p v-if="curatorName" class="school-invite__curator">Куратор: {{ curatorName }}</p>
+    <p v-if="curatorName" class="school-invite__curator">
+      {{ t('school.curator', { name: curatorName }) }}
+    </p>
 
     <div class="school-invite__stats">
       <span><IconUsers :size="18" />{{ studentsLabel }}</span>
@@ -58,10 +60,12 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n({ useScope: 'global' })
 import { computed, onMounted, ref } from 'vue'
 import { IconMeditation, IconUsers } from '@/components/icons'
 import { VAvatar, VCard } from '@/components/ui'
-import { plural } from '@/utils/plural'
 import { schoolHashFromName } from '@/utils/schoolBranding'
 import SchoolMandalaBadge from '@/components/shared/SchoolMandalaBadge.vue'
 
@@ -94,12 +98,8 @@ onMounted(() => {
 })
 const resolvedHash = computed(() => props.hash ?? derivedHash.value)
 
-const studentsLabel = computed(
-  () => `${props.studentsCount} ${plural(props.studentsCount, 'ученик', 'ученика', 'учеников')}`,
-)
-const mastersLabel = computed(
-  () => `${props.mastersCount} ${plural(props.mastersCount, 'мастер', 'мастера', 'мастеров')}`,
-)
+const studentsLabel = computed(() => t('school.students', { n: props.studentsCount }))
+const mastersLabel = computed(() => t('school.masters', { n: props.mastersCount }))
 </script>
 
 <style scoped>

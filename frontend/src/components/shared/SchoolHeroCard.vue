@@ -64,10 +64,12 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n({ useScope: 'global' })
 import { computed } from 'vue'
 import { IconMeditation, IconUsers } from '@/components/icons'
 import { VAvatar } from '@/components/ui'
-import { plural } from '@/utils/plural'
 import { brandingBodyTint } from '@/utils/schoolBranding'
 import SchoolBrandBanner from '@/components/shared/SchoolBrandBanner.vue'
 import SchoolMandalaBadge from '@/components/shared/SchoolMandalaBadge.vue'
@@ -85,12 +87,8 @@ const props = defineProps<{
   hash?: string | null
 }>()
 
-const studentsLabel = computed(
-  () => `${props.studentsCount} ${plural(props.studentsCount, 'ученик', 'ученика', 'учеников')}`,
-)
-const mastersLabel = computed(
-  () => `${props.mastersCount} ${plural(props.mastersCount, 'мастер', 'мастера', 'мастеров')}`,
-)
+const studentsLabel = computed(() => t('school.students', { n: props.studentsCount }))
+const mastersLabel = computed(() => t('school.masters', { n: props.mastersCount }))
 // The analytic summary has priority; the description is the honest temporary
 // fallback; the Figma example is never hardcoded here.
 const copy = computed(() => props.summary?.trim() || props.description?.trim() || '')

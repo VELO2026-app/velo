@@ -17,7 +17,7 @@
 
 <template>
   <button type="button" class="master-card master-card--clickable" @click="onMore">
-    <VAvatar :url="avatarUrl ?? ''" :name="masterName ?? 'Мастер'" size="xl" />
+    <VAvatar :url="avatarUrl ?? ''" :name="masterName ?? t('booking.masterFallback')" size="xl" />
     <div class="master-card__info">
       <div class="master-card__name">
         {{ masterName ?? 'Мастер' }}
@@ -37,6 +37,9 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n({ useScope: 'global' })
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { VTag, VAvatar } from '@/components/ui'
@@ -74,7 +77,7 @@ const toast = useToast()
 function onMore(): void {
   if (!props.masterId) {
     // No id to navigate to (defensive -- detail always passes master_id).
-    toast.info('Профиль мастера недоступен')
+    toast.info(t('masterCard.profileUnavailable'))
     return
   }
   void router.push({ name: 'user-master-public', params: { id: props.masterId } })

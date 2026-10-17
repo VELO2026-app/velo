@@ -11,7 +11,9 @@
 
 <template>
   <div class="dsr">
-    <p class="dsr__count" aria-live="polite">Найдено: {{ items.length }}{{ hasMore ? '+' : '' }}</p>
+    <p class="dsr__count" aria-live="polite">
+      {{ t('diary.search.found', { n: items.length }) }}{{ hasMore ? '+' : '' }}
+    </p>
     <DiarySearchResultRow
       v-for="item in items"
       :key="item.id"
@@ -24,6 +26,9 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n({ useScope: 'global' })
 import DiarySearchResultRow from '@/components/shared/DiarySearchResultRow.vue'
 import type { DiaryFeedItem } from '@/api/types'
 

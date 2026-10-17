@@ -57,11 +57,16 @@
         </span>
       </span>
     </span>
-    <VChip v-if="group.transfer_offered" class="cg-row__offer" active> Кураторство </VChip>
+    <VChip v-if="group.transfer_offered" class="cg-row__offer" active
+      >{{ t('curatorGroup.offerBadge') }}
+    </VChip>
   </button>
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n({ useScope: 'global' })
 import { onMounted, ref } from 'vue'
 import type { CuratorGroupMineItem } from '@/api/types'
 import { schoolHashFromName } from '@/utils/schoolBranding'

@@ -20,10 +20,13 @@
 -->
 
 <template>
-  <img class="ph" :src="art" :alt="title ?? 'Практика'" />
+  <img class="ph" :src="art" :alt="title ?? t('practice.placeholderAlt')" />
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n({ useScope: 'global' })
 import { computed } from 'vue'
 import meditation from '@/assets/practice-cards/meditation.svg'
 import yoga from '@/assets/practice-cards/yoga.svg'

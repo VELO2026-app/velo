@@ -31,7 +31,7 @@
       :aria-expanded="open"
       @click="open = !open"
     >
-      <span class="use-template__head-text">Вы создавали ранее…</span>
+      <span class="use-template__head-text">{{ t('useTemplate.head') }}</span>
       <svg class="use-template__chev" viewBox="0 0 16 10" fill="none" aria-hidden="true">
         <path d="M2 2L8 8L14 2" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
       </svg>
@@ -39,7 +39,7 @@
 
     <!-- Empty: master has no practices yet. -->
     <div v-if="open && practices.length === 0" class="use-template__empty">
-      Данных пока нет — создайте первую практику
+      {{ t('useTemplate.empty') }}
     </div>
 
     <!-- List: compact bordered cards (NP-5/6/7); ~3 tall then scroll. The native
@@ -72,6 +72,9 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n({ useScope: 'global' })
 import { ref, computed, watch, nextTick, onBeforeUnmount, type Component } from 'vue'
 import { practiceIconFor } from '@/utils/displayHelpers'
 import { formatShortDate, formatTime } from '@/utils/format'

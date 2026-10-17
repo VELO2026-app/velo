@@ -40,9 +40,9 @@
         v-model="query"
         class="diary-search__input"
         type="text"
-        placeholder="Искать..."
+        :placeholder="t('diary.search.placeholder')"
         enterkeyhint="search"
-        aria-label="Поиск по дневнику"
+        :aria-label="t('diary.search.aria')"
         @input="onUserInput"
         @keydown.enter.prevent="commit"
       />
@@ -54,7 +54,7 @@
         v-if="query"
         type="button"
         class="diary-search__clear"
-        aria-label="Очистить"
+        :aria-label="t('diary.search.clearAria')"
         @click="clear"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
@@ -70,7 +70,7 @@
       <!-- Recent searches: a glass panel under the field, only while the
            field is empty -- typing anything dismisses it. -->
       <section v-if="recentsVisible" class="diary-search__recents">
-        <h3 class="diary-search__recent-label">Недавно вы искали:</h3>
+        <h3 class="diary-search__recent-label">{{ t('diary.search.recent') }}</h3>
         <button
           v-for="term in recents"
           :key="term"
@@ -123,6 +123,9 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n({ useScope: 'global' })
 import { onDocumentEvent, offDocumentEvent } from '@/platform/dom'
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 

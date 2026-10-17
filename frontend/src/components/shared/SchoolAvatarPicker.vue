@@ -29,19 +29,26 @@
       <img v-if="modelValue" :src="modelValue" class="sap__img" alt="" />
       <span v-else class="sap__zone">
         <IconCamera :size="22" />
-        <span>+ Загрузить фото</span>
+        <span>{{ t('school.upload') }}</span>
       </span>
       <span v-if="modelValue" class="sap__actions">
         <!-- .stop keeps the inner buttons from re-triggering the label's
              file dialog; each button drives the input explicitly. -->
-        <button type="button" class="sap__action" @click.stop="inputEl?.click()">Заменить</button>
-        <button type="button" class="sap__action" @click.stop="onRemove">Убрать</button>
+        <button type="button" class="sap__action" @click.stop="inputEl?.click()">
+          {{ t('school.replace') }}
+        </button>
+        <button type="button" class="sap__action" @click.stop="onRemove">
+          {{ t('school.remove') }}
+        </button>
       </span>
     </span>
   </label>
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n({ useScope: 'global' })
 import { onBeforeUnmount, ref } from 'vue'
 import { IconCamera } from '@/components/icons'
 
