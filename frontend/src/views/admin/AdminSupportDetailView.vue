@@ -40,10 +40,12 @@
       <VEmptyState
         v-else-if="threadError"
         icon="warning"
-        title="Ошибка загрузки"
+        :title="t('views.admin.AdminSupportDetailView.m1')"
         :description="threadError"
       >
-        <VButton size="sm" variant="outline" @click="loadThread">Повторить</VButton>
+        <VButton size="sm" variant="outline" @click="loadThread">{{
+          t('views.admin.AdminSupportDetailView.m6')
+        }}</VButton>
       </VEmptyState>
 
       <template v-else-if="thread">
@@ -74,10 +76,12 @@
         <VEmptyState
           v-else-if="messagesError"
           icon="warning"
-          title="Не удалось загрузить сообщения"
+          :title="t('views.admin.AdminSupportDetailView.m2')"
           :description="messagesError"
         >
-          <VButton size="sm" variant="outline" @click="loadMessages">Повторить</VButton>
+          <VButton size="sm" variant="outline" @click="loadMessages">{{
+            t('views.admin.AdminSupportDetailView.m7')
+          }}</VButton>
         </VEmptyState>
         <template v-else>
           <div class="support-detail__feed">
@@ -108,7 +112,7 @@
             <div class="support-detail__input">
               <VTextarea
                 v-model="draft"
-                placeholder="Ответ…"
+                :placeholder="t('views.admin.AdminSupportDetailView.m3')"
                 :rows="1"
                 autogrow
                 maxlength="4000"
@@ -131,16 +135,19 @@
       <div v-else class="support-detail__not-found">
         <VEmptyState
           icon="notfound"
-          title="Обращение не найдено"
-          description="Вернитесь к списку обращений"
+          :title="t('views.admin.AdminSupportDetailView.m4')"
+          :description="t('views.admin.AdminSupportDetailView.m5')"
         />
-        <VButton variant="outline" block @click="router.back()">Назад</VButton>
+        <VButton variant="outline" block @click="router.back()">{{
+          t('views.admin.AdminSupportDetailView.m8')
+        }}</VButton>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -177,24 +184,34 @@ const draft = ref('')
 const sending = ref(false)
 const claiming = ref(false)
 
-const headerTitle = computed(() => thread.value?.opener?.name ?? 'Обращение')
+const headerTitle = computed(
+  () => thread.value?.opener?.name ?? t('views.admin.AdminSupportDetailView.m9'),
+)
 const canReply = computed(() => !!thread.value && thread.value.assignee === myId.value)
 
 const triageBadge = computed<{ variant: 'warning' | 'success' | 'info'; label: string }>(() => {
-  const t = thread.value
-  if (!t) return { variant: 'info', label: '' }
-  if (t.status === 'resolved') return { variant: 'success', label: 'Решено' }
-  if (t.status === 'closed') return { variant: 'info', label: 'Закрыто' }
-  if (!t.assignee) return { variant: 'warning', label: 'Не взято' }
-  if (t.assignee === myId.value) return { variant: 'success', label: 'У меня' }
-  return { variant: 'info', label: 'Занято' }
+  const threadItem = thread.value
+  if (!threadItem) return { variant: 'info', label: '' }
+  if (threadItem.status === 'resolved') {
+    return { variant: 'success', label: t('admin.supportTicket.resolved') }
+  }
+  if (threadItem.status === 'closed') {
+    return { variant: 'info', label: t('admin.supportTicket.closed') }
+  }
+  if (!threadItem.assignee) {
+    return { variant: 'warning', label: t('views.admin.AdminSupportDetailView.m10') }
+  }
+  if (threadItem.assignee === myId.value) {
+    return { variant: 'success', label: t('views.admin.AdminSupportDetailView.m11') }
+  }
+  return { variant: 'info', label: t('views.admin.AdminSupportDetailView.m12') }
 })
 
 const claimPanelText = computed(() => {
   if (!thread.value?.assignee) {
-    return 'Обращение не закреплено. Возьмите его в работу, чтобы отвечать.'
+    return t('views.admin.AdminSupportDetailView.m13')
   }
-  return 'Обращение уже закреплено за другим администратором — ответить может только он.'
+  return t('views.admin.AdminSupportDetailView.m14')
 })
 
 function formatTime(iso: string): string {
@@ -220,7 +237,7 @@ async function loadThread(): Promise<void> {
     const page = await listAdminSupportThreads(100)
     thread.value = page.threads.find((t) => t.id === threadId) ?? null
   } catch (e) {
-    threadError.value = extractApiError(e, 'Ошибка загрузки обращения')
+    threadError.value = extractApiError(e, t('views.admin.AdminSupportDetailView.m15'))
   } finally {
     loadingThread.value = false
   }
@@ -233,7 +250,7 @@ async function loadMessages(): Promise<void> {
     const page = await getAdminSupportMessages(threadId)
     messages.value = [...page.messages].reverse()
   } catch (e) {
-    messagesError.value = extractApiError(e, 'Попробуйте ещё раз')
+    messagesError.value = extractApiError(e, t('views.admin.AdminSupportDetailView.m16'))
   } finally {
     loadingMessages.value = false
   }
@@ -244,10 +261,10 @@ async function onClaim(): Promise<void> {
   try {
     const result = await claimSupportThread(threadId)
     if (thread.value) thread.value = { ...thread.value, assignee: result.thread.assignee }
-    if (result.claimed) toast.success('Обращение закреплено за вами')
-    else toast.error('Уже взято другим администратором')
+    if (result.claimed) toast.success(t('views.admin.AdminSupportDetailView.m17'))
+    else toast.error(t('views.admin.AdminSupportDetailView.m18'))
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось закрепить обращение'))
+    toast.error(extractApiError(e, t('views.admin.AdminSupportDetailView.m19')))
   } finally {
     claiming.value = false
   }
@@ -262,7 +279,7 @@ async function onSend(): Promise<void> {
     messages.value = [...messages.value, sent]
     draft.value = ''
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось отправить ответ'))
+    toast.error(extractApiError(e, t('views.admin.AdminSupportDetailView.m20')))
   } finally {
     sending.value = false
   }

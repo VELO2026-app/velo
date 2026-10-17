@@ -21,7 +21,7 @@
   <div class="admin-list">
     <header class="admin-list__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-list__title">Практики</h1>
+      <h1 class="admin-list__title">{{ t('views.admin.AdminPracticesView.m2') }}</h1>
       <span class="admin-list__count">{{ headerCount }}</span>
     </header>
 
@@ -32,10 +32,12 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      title="Не удалось загрузить практики"
+      :title="t('views.admin.AdminPracticesView.m1')"
       :description="error"
     >
-      <VButton size="sm" variant="outline" @click="load">Повторить</VButton>
+      <VButton size="sm" variant="outline" @click="load">{{
+        t('views.admin.AdminPracticesView.m3')
+      }}</VButton>
     </VEmptyState>
 
     <div v-else-if="practices.length" class="admin-list__items">
@@ -57,12 +59,13 @@
     </div>
 
     <VCard v-else>
-      <p class="admin-list__empty">Данных пока нет</p>
+      <p class="admin-list__empty">{{ t('views.admin.AdminPracticesView.m4') }}</p>
     </VCard>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { VBackButton, VSegment, VCard, VLoader, VEmptyState, VButton } from '@/components/ui'
@@ -90,9 +93,13 @@ const totalCount = computed<number | null>(() => adminStore.stats?.practices_cou
 const headerCount = computed<string>(() => (total.value !== null ? String(total.value) : '—'))
 
 const segOptions = computed<SegmentOption[]>(() => [
-  { value: 'all', label: 'Все', badge: totalCount.value ?? undefined },
-  { value: 'upcoming', label: 'Предстоящие' },
-  { value: 'past', label: 'Прошедшие' },
+  {
+    value: 'all',
+    label: t('views.admin.AdminPracticesView.m5'),
+    badge: totalCount.value ?? undefined,
+  },
+  { value: 'upcoming', label: t('views.admin.AdminPracticesView.m6') },
+  { value: 'past', label: t('views.admin.AdminPracticesView.m7') },
 ])
 
 function whenLabel(p: AdminPracticeListItem): string {
@@ -124,7 +131,7 @@ async function load(): Promise<void> {
     practices.value = res.items
     total.value = res.total
   } catch (e) {
-    error.value = extractApiError(e, 'Ошибка загрузки')
+    error.value = extractApiError(e, t('views.admin.AdminPracticesView.m8'))
   } finally {
     loading.value = false
   }

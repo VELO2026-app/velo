@@ -118,10 +118,12 @@
         <VEmptyState
           v-else
           icon="calendar"
-          title="Нет предстоящих практик"
-          description="Создайте первую практику"
+          :title="t('views.master.MasterPracticesView.m1')"
+          :description="t('views.master.MasterPracticesView.m2')"
         >
-          <VButton size="sm" variant="outline" @click="goNew">Создать</VButton>
+          <VButton size="sm" variant="outline" @click="goNew">{{
+            t('views.master.MasterPracticesView.m5')
+          }}</VButton>
         </VEmptyState>
       </template>
 
@@ -158,8 +160,8 @@
         <VEmptyState
           v-else
           icon="list"
-          title="Нет прошедших практик"
-          description="Здесь появятся завершённые практики"
+          :title="t('views.master.MasterPracticesView.m3')"
+          :description="t('views.master.MasterPracticesView.m4')"
         />
       </template>
 
@@ -174,6 +176,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -220,14 +223,14 @@ const activeTab = ref<'upcoming' | 'past'>(route.query.tab === 'past' ? 'past' :
 // backend transitions a practice scheduled/live -> completed BY WALL CLOCK
 // (the autofinalize worker, practices/service.py's state machine), not on
 // request. Without a local time check, a class that ended five minutes ago
-// stays rendered under "Предстоящие" until something else (an edit,
+// stays rendered under t('views.master.MasterPracticesView.m6') until something else (an edit,
 // create, cancel elsewhere) happens to call refreshMyPractices(), or a hard
 // reload. Mirrors MasterDashboardView's own 60s clock + practiceHasEnded
 // filter (nearestPractices) exactly -- same fix, same idiom, applied to
 // the full list instead of the dashboard's top-2 preview. Draft is
 // deliberately EXCLUDED from this filter (unlike Dashboard's narrower
 // widget): a draft's scheduled_at can be stale from the moment it was
-// created and still legitimately belongs in "Предстоящие" until the
+// created and still legitimately belongs in t('views.master.MasterPracticesView.m7') until the
 // master publishes or deletes it -- it is not something the clock auto-
 // finalizes away.
 const now = ref(Date.now())
@@ -261,13 +264,13 @@ const currentHasMore = computed(() =>
 )
 
 const tabOptions = [
-  { value: 'upcoming' as const, label: 'Предстоящие' },
-  { value: 'past' as const, label: 'Прошедшие' },
+  { value: 'upcoming' as const, label: t('views.master.MasterPracticesView.m8') },
+  { value: 'past' as const, label: t('views.master.MasterPracticesView.m9') },
 ]
 
 // -- Card subtitle helpers --------------------------------------------------
 
-/** Relative "Сегодня"/"Завтра", else compact "25 янв." (timezone-safe). */
+/** Relative t('views.master.MasterPracticesView.m10')/t('views.master.MasterPracticesView.m11'), else compact t('views.master.MasterPracticesView.m12') (timezone-safe). */
 function whenLabel(p: PracticeResponse): string {
   const rel = formatDateShort(p.scheduled_at, p.timezone)
   return rel === 'Сегодня' || rel === 'Завтра' ? rel : formatShortDate(p.scheduled_at, p.timezone)
@@ -282,7 +285,7 @@ function participantsLabel(p: PracticeResponse): string {
 /** «N участников» with Russian plural agreement — past-card sub-line (PL-E1). */
 function participantsCount(p: PracticeResponse): string {
   const n = p.current_participants
-  return `${n} ${plural(n, 'участник', 'участника', 'участников')}`
+  return `${n} ${plural(n, t('views.master.MasterPracticesView.m13'), t('views.master.MasterPracticesView.m14'), t('views.master.MasterPracticesView.m15'))}`
 }
 
 // -- Insights-derived (REAL) ------------------------------------------------
@@ -305,9 +308,9 @@ function ratingPcts(id: string): Record<MoodScaleKey, number> {
 }
 
 /** Eager-load insights for the visible tab (idempotent: cached ids are skipped).
- *  E12 swap (PROMPT №419): the "Предстоящие" tab's check-in badge now reads
+ *  E12 swap (PROMPT №419): the t('views.master.MasterPracticesView.m16') tab's check-in badge now reads
  *  checkin_count straight off the practice, not insights -- so insights are
- *  only fetched for "Прошедшие" (rating badges). Upcoming skips the round-trip
+ *  only fetched for t('views.master.MasterPracticesView.m17') (rating badges). Upcoming skips the round-trip
  *  entirely. */
 function loadTabInsights(): Promise<void[]> {
   if (activeTab.value !== 'past') return Promise.resolve([])
@@ -330,7 +333,7 @@ function goDetail(id: string): void {
 }
 
 /** Lazily fetch the bucket a tab needs -- each tab paginates independently
- *  and fetches on activation (T22-3/T22-5): "Прошедшие" is never fetched
+ *  and fetches on activation (T22-3/T22-5): t('views.master.MasterPracticesView.m18') is never fetched
  *  until the master actually switches to it. No-op if already loaded. */
 async function ensureBucketLoaded(tab: 'upcoming' | 'past'): Promise<void> {
   if (tab === 'past') await masterStore.fetchPastPractices()

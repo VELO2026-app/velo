@@ -21,10 +21,12 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      title="Не удалось загрузить метрику"
+      :title="t('views.admin.AdminReturnRateView.m1')"
       :description="error"
     >
-      <VButton size="sm" variant="outline" @click="load">Повторить</VButton>
+      <VButton size="sm" variant="outline" @click="load">{{
+        t('views.admin.AdminReturnRateView.m2')
+      }}</VButton>
     </VEmptyState>
 
     <template v-else>
@@ -37,16 +39,19 @@
         <VStatCard :value="returning" label="Повторно" />
       </div>
 
-      <h3 class="admin-detail__section">Топ лояльных юзеров</h3>
+      <h3 class="admin-detail__section">{{ t('views.admin.AdminReturnRateView.m3') }}</h3>
       <template v-if="loyalUsers.length">
         <VListRow v-for="u in loyalUsers" :key="u.id" :title="u.title" :subtitle="u.subtitle" />
       </template>
-      <VCard v-else><p class="admin-detail__empty">Данных пока нет</p></VCard>
+      <VCard v-else
+        ><p class="admin-detail__empty">{{ t('views.admin.AdminReturnRateView.m4') }}</p></VCard
+      >
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -98,7 +103,7 @@ async function load(): Promise<void> {
   try {
     data.value = await getReturnMetric(period, offset)
   } catch (e) {
-    error.value = extractApiError(e, 'Ошибка загрузки')
+    error.value = extractApiError(e, t('views.admin.AdminReturnRateView.m5'))
   } finally {
     loading.value = false
   }

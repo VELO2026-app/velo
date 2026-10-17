@@ -17,7 +17,7 @@
   <div class="admin-list">
     <header class="admin-list__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-list__title">Участники</h1>
+      <h1 class="admin-list__title">{{ t('views.admin.AdminParticipantsView.m3') }}</h1>
       <span class="admin-list__count">{{ headerCount }}</span>
     </header>
 
@@ -47,7 +47,9 @@
       </div>
 
       <div v-if="hasMore" class="admin-list__more">
-        <VButton variant="outline" @click="loadMore">Показать ещё</VButton>
+        <VButton variant="outline" @click="loadMore">{{
+          t('views.admin.AdminParticipantsView.m4')
+        }}</VButton>
       </div>
     </template>
 
@@ -57,21 +59,24 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      title="Не удалось загрузить участников"
-      description="Проверьте соединение и попробуйте ещё раз"
+      :title="t('views.admin.AdminParticipantsView.m1')"
+      :description="t('views.admin.AdminParticipantsView.m2')"
     >
       <template #action
-        ><VButton variant="primary" @click="load(true)">Повторить</VButton></template
+        ><VButton variant="primary" @click="load(true)">{{
+          t('views.admin.AdminParticipantsView.m5')
+        }}</VButton></template
       >
     </VEmptyState>
 
     <VCard v-else-if="!loading">
-      <p class="admin-list__empty">Данных пока нет</p>
+      <p class="admin-list__empty">{{ t('views.admin.AdminParticipantsView.m6') }}</p>
     </VCard>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { VBackButton, VSegment, VButton, VCard, VEmptyState } from '@/components/ui'
@@ -108,9 +113,13 @@ const headerCount = computed<string>(() =>
 )
 
 const segOptions = computed<SegmentOption[]>(() => [
-  { value: 'all', label: 'Все', badge: totalCount.value ?? undefined },
-  { value: 'new', label: 'Новые' },
-  { value: 'active', label: 'Активные' },
+  {
+    value: 'all',
+    label: t('views.admin.AdminParticipantsView.m7'),
+    badge: totalCount.value ?? undefined,
+  },
+  { value: 'new', label: t('views.admin.AdminParticipantsView.m8') },
+  { value: 'active', label: t('views.admin.AdminParticipantsView.m9') },
 ])
 
 async function load(reset: boolean): Promise<void> {
@@ -123,10 +132,10 @@ async function load(reset: boolean): Promise<void> {
     total.value = res.total
     participants.value = reset ? res.items : [...participants.value, ...res.items]
   } catch {
-    toast.error('Не удалось загрузить участников')
+    toast.error(t('views.admin.AdminParticipantsView.m10'))
     // A failed initial/filter load (reset) means the list below is genuinely
     // unknown, not empty -- render the real error state (W12) instead of
-    // falling through to "Данных пока нет". A failed loadMore leaves the
+    // falling through to t('views.admin.AdminParticipantsView.m11'). A failed loadMore leaves the
     // already-loaded page visible; the toast is enough there.
     if (reset) error.value = true
   } finally {
@@ -141,7 +150,7 @@ function loadMore(): void {
   void load(false)
 }
 
-// "Дек 2025" — registration month, from created_at (UTC).
+// t('views.admin.AdminParticipantsView.m12') — registration month, from created_at (UTC).
 function joinedLabel(iso: string): string {
   const d = new Date(iso)
   const month = new Intl.DateTimeFormat('ru-RU', { month: 'short', timeZone: 'UTC' })
@@ -150,14 +159,14 @@ function joinedLabel(iso: string): string {
   return `${month.charAt(0).toUpperCase()}${month.slice(1)} ${d.getUTCFullYear()}`
 }
 
-// "Сегодня" / "Вчера" / "24 января" — last app-open, from last_login_at.
+// t('views.admin.AdminParticipantsView.m13') / t('views.admin.AdminParticipantsView.m14') / t('views.admin.AdminParticipantsView.m15') — last app-open, from last_login_at.
 function lastActiveLabel(iso: string): string {
   return dayLabelOf(iso)
 }
 
 // No admin->user messaging endpoint yet -> stub toast (build-full-design).
 function messageStub(): void {
-  toast.info('Сообщения пока недоступны')
+  toast.info(t('views.admin.AdminParticipantsView.m16'))
 }
 </script>
 

@@ -20,7 +20,7 @@
   <div class="admin-reports">
     <header class="admin-reports__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-reports__title">Модерация</h1>
+      <h1 class="admin-reports__title">{{ t('views.admin.AdminReportsView.m5') }}</h1>
       <span class="admin-reports__count">{{ headerCount }}</span>
     </header>
 
@@ -30,7 +30,9 @@
       <IconFilter :size="22" />
     </button>
 
-    <div v-if="!filter.categories.length" class="admin-reports__active">Все</div>
+    <div v-if="!filter.categories.length" class="admin-reports__active">
+      {{ t('views.admin.AdminReportsView.m6') }}
+    </div>
 
     <!-- Loading: initial -->
     <div v-if="loading && items.length === 0" class="admin-reports__loader">
@@ -41,11 +43,13 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      title="Не удалось загрузить"
-      description="Проверьте соединение и попробуйте ещё раз"
+      :title="t('views.admin.AdminReportsView.m1')"
+      :description="t('views.admin.AdminReportsView.m2')"
     >
       <template #action
-        ><VButton variant="primary" @click="loadInitial">Повторить</VButton></template
+        ><VButton variant="primary" @click="loadInitial">{{
+          t('views.admin.AdminReportsView.m7')
+        }}</VButton></template
       >
     </VEmptyState>
 
@@ -53,8 +57,8 @@
     <VEmptyState
       v-else-if="items.length === 0"
       icon="success"
-      title="Обращений нет"
-      description="По выбранным фильтрам ничего не найдено"
+      :title="t('views.admin.AdminReportsView.m3')"
+      :description="t('views.admin.AdminReportsView.m4')"
     />
 
     <template v-else>
@@ -103,6 +107,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { VBackButton, VButton, VLoader, VEmptyState, VCard } from '@/components/ui'
@@ -137,9 +142,9 @@ const filter = ref<ModerationFilter>({
 })
 
 const CATEGORY_LABELS: Record<string, string> = {
-  tickets: 'Тикеты',
-  complaints: 'Жалобы',
-  payments: 'Платежи',
+  tickets: t('views.admin.AdminReportsView.m8'),
+  complaints: t('views.admin.AdminReportsView.m9'),
+  payments: t('views.admin.AdminReportsView.m10'),
 }
 
 const headerCount = computed<string>(() => (total.value ? String(total.value) : '—'))
@@ -148,14 +153,14 @@ const headerCount = computed<string>(() => (total.value ? String(total.value) : 
 // backend yet, so this is a display-only echo of the chosen chips).
 const categoryLabel = computed<string>(() => {
   const cats = filter.value.categories
-  if (cats.length === 0) return 'Все'
+  if (cats.length === 0) return t('views.admin.AdminReportsView.m11')
   return cats.map((c) => CATEGORY_LABELS[c] ?? c).join(', ')
 })
 
 // The filter pill echoes the active category (operator «payments»/«complaints»
 // variants); the «Платежи» selection swaps the card glyph to the payment $.
 const pillLabel = computed<string>(() =>
-  filter.value.categories.length ? categoryLabel.value : 'Фильтр',
+  filter.value.categories.length ? categoryLabel.value : t('views.admin.AdminReportsView.m12'),
 )
 const isPayments = computed<boolean>(() => filter.value.categories.includes('payments'))
 
@@ -192,7 +197,7 @@ async function loadInitial(): Promise<void> {
   } catch (e) {
     if (myGeneration !== generation) return
     error.value = true
-    toast.error(extractApiError(e, 'Ошибка загрузки обращений'))
+    toast.error(extractApiError(e, t('views.admin.AdminReportsView.m13')))
   } finally {
     if (myGeneration === generation) loading.value = false
   }
@@ -205,7 +210,7 @@ async function loadMore(): Promise<void> {
     items.value.push(...res.items)
     hasMore.value = items.value.length < res.total
   } catch (e) {
-    toast.error(extractApiError(e, 'Ошибка загрузки'))
+    toast.error(extractApiError(e, t('views.admin.AdminReportsView.m14')))
   } finally {
     loadingMore.value = false
   }

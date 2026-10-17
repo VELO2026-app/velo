@@ -25,20 +25,21 @@
           <IconMessages :size="48" />
         </template>
       </VEmptyState>
-      <VButton size="sm" @click="router.back()"> Назад </VButton>
+      <VButton size="sm" @click="router.back()">{{ t('views.master.MasterChatView.m2') }}</VButton>
     </div>
 
     <ChatThreadScreen
       v-else
       :thread-id="threadId"
       :peer="peer"
-      peer-fallback="Ученик"
+      :peer-fallback="t('views.master.MasterChatView.m1')"
       @back="router.back()"
     />
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'

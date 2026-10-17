@@ -27,7 +27,9 @@
   <div class="master-onboarding">
     <!-- Skip: dismisses the carousel from any step. -->
     <div class="master-onboarding__skip-row">
-      <button type="button" class="master-onboarding__skip" @click="skip">Пропустить</button>
+      <button type="button" class="master-onboarding__skip" @click="skip">
+        {{ t('views.master.MasterOnboardingView.m1') }}
+      </button>
     </div>
 
     <div class="master-onboarding__body">
@@ -51,6 +53,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed } from 'vue'
 import { VPaginationDots } from '@/components/ui'
 
@@ -63,18 +66,18 @@ const emit = defineEmits<{
 const SLIDES = [
   {
     image: '/onboarding/master-welcome.svg',
-    title: 'Добро пожаловать',
-    text: 'Вы — часть сообщества мастеров VELO',
+    title: t('views.master.MasterOnboardingView.m2'),
+    text: t('views.master.MasterOnboardingView.m3'),
   },
   {
     image: '/onboarding/master-space.svg',
-    title: 'Ваше пространство',
-    text: 'Персональное пространство с вашим профилем, описанием метода, расписанием и записями практик',
+    title: t('views.master.MasterOnboardingView.m4'),
+    text: t('views.master.MasterOnboardingView.m5'),
   },
   {
     image: '/onboarding/master-analytics.svg',
-    title: 'AI-аналитика о состоянии группы',
-    text: 'Эмоциональный ландшафт участников до и после практики',
+    title: t('views.master.MasterOnboardingView.m6'),
+    text: t('views.master.MasterOnboardingView.m7'),
   },
 ] as const
 

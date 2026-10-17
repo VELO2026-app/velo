@@ -18,7 +18,7 @@
       <!--
       <div class="new-promo__legend">
         <IconRequired class="new-promo__legend-seal" :size="22" />
-        <span>— поля, обязательные для заполнения</span>
+        <span>{{ t('views.master.MasterNewPromocodeView.m3') }}</span>
       </div>
       -->
 
@@ -39,7 +39,7 @@
            future-only via :min) instead of the OS-native date input. -->
       <div class="cp-req-label">
         <div class="new-promo__field">
-          <label class="new-promo__label">Действует до</label>
+          <label class="new-promo__label">{{ t('views.master.MasterNewPromocodeView.m4') }}</label>
           <div class="new-promo__field-row">
             <button
               type="button"
@@ -59,7 +59,7 @@
       </div>
       <VInput
         v-model="form.limit"
-        label="Лимит использований"
+        :label="t('views.master.MasterNewPromocodeView.m1')"
         type="number"
         min="1"
         placeholder="10"
@@ -81,7 +81,7 @@
       :open="showDate"
       :model-value="form.until"
       :min="todayISO"
-      title="Действует до"
+      :title="t('views.master.MasterNewPromocodeView.m2')"
       @update:model-value="form.until = $event"
       @close="showDate = false"
     />
@@ -89,6 +89,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { reactive, computed, ref, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -143,7 +144,7 @@ const form = reactive({
 // (not UTC) so it doesn't drift a day near midnight for east/west-of-UTC testers.
 const todayISO = computed((): string => todayLocalISO())
 
-// Shared calendar sheet state + the friendly trigger label, e.g. "27 июн. 2026".
+// Shared calendar sheet state + the friendly trigger label, e.g. t('views.master.MasterNewPromocodeView.m5').
 const showDate = ref(false)
 const untilDisplay = computed((): string =>
   form.until ? `${formatShortDate(`${form.until}T12:00:00`)} ${form.until.slice(0, 4)}` : '',
@@ -163,16 +164,16 @@ async function onCreate(): Promise<void> {
   if (creating.value) return
   if (!form.code.trim()) {
     await showFieldError(() => {
-      codeError.value = 'Введите код промокода'
+      codeError.value = t('views.master.MasterNewPromocodeView.m6')
     })
-    toast.error('Введите код промокода')
+    toast.error(t('views.master.MasterNewPromocodeView.m7'))
     return
   }
   if (!form.until) {
     await showFieldError(() => {
-      untilError.value = 'Укажите дату окончания действия'
+      untilError.value = t('views.master.MasterNewPromocodeView.m8')
     })
-    toast.error('Укажите дату окончания действия')
+    toast.error(t('views.master.MasterNewPromocodeView.m9'))
     return
   }
   creating.value = true
@@ -188,10 +189,10 @@ async function onCreate(): Promise<void> {
       valid_until: new Date(`${form.until}T23:59:59+00:00`).toISOString(),
       max_uses: form.limit ? Number(form.limit) : null,
     })
-    toast.success('Промокод создан')
+    toast.success(t('views.master.MasterNewPromocodeView.m10'))
     void router.push({ name: 'master-promocodes' })
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось создать промокод'))
+    toast.error(extractApiError(e, t('views.master.MasterNewPromocodeView.m11')))
   } finally {
     creating.value = false
   }

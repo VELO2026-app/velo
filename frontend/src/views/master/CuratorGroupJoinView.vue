@@ -44,12 +44,12 @@ so the order is invitation -> join -> onboarding (skippable) -> school.
       <!-- Preview in flight -->
       <template v-if="loading">
         <VLoader size="lg" />
-        <p class="cg-join__subtitle">Проверяем приглашение…</p>
+        <p class="cg-join__subtitle">{{ t('views.master.CuratorGroupJoinView.m2') }}</p>
       </template>
 
       <!-- Transient (network/timeout): offer a retry, not a dead-link verdict. -->
       <template v-else-if="transientError">
-        <h2 class="cg-join__title">Не удалось проверить приглашение</h2>
+        <h2 class="cg-join__title">{{ t('views.master.CuratorGroupJoinView.m3') }}</h2>
         <p class="cg-join__subtitle">
           Проблема с соединением. Проверьте интернет и попробуйте ещё раз.
         </p>
@@ -86,10 +86,12 @@ so the order is invitation -> join -> onboarding (skippable) -> school.
           :masters-count="preview.group.masters_count"
           :description="preview.group.description"
           :curator-name="preview.group.curator_name"
-          heading="Вас пригласили в школу!"
+          :heading="t('views.master.CuratorGroupJoinView.m1')"
         />
         <div class="cg-join__actions">
-          <VButton variant="primary" block :loading="joining" @click="join">Вступить</VButton>
+          <VButton variant="primary" block :loading="joining" @click="join">{{
+            t('views.master.CuratorGroupJoinView.m4')
+          }}</VButton>
           <VButton variant="outline" block :disabled="joining" @click="decline">
             Отказаться
           </VButton>
@@ -115,6 +117,7 @@ so the order is invitation -> join -> onboarding (skippable) -> school.
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getCuratorGroupInvitePreview, joinCuratorGroup } from '@/api/curatorGroups'
@@ -163,8 +166,8 @@ interface RefusalView {
 const blocked = computed<RefusalView | null>(() => {
   if (notFound.value) {
     return {
-      title: 'Приглашение недействительно',
-      description: 'Возможно, ссылка повреждена, устарела или была отозвана.',
+      title: t('views.master.CuratorGroupJoinView.m5'),
+      description: t('views.master.CuratorGroupJoinView.m6'),
       open: false,
     }
   }
@@ -172,27 +175,35 @@ const blocked = computed<RefusalView | null>(() => {
   if (!p || p.can_join) return null
   switch (p.reason) {
     case 'own_group':
-      return { title: 'Это ваша школа', description: 'Вы куратор этой школы.', open: true }
+      return {
+        title: t('views.master.CuratorGroupJoinView.m7'),
+        description: t('views.master.CuratorGroupJoinView.m8'),
+        open: true,
+      }
     case 'already_member':
-      return { title: 'Вы уже в школе', description: 'Вы уже состоите в этой школе.', open: true }
+      return {
+        title: t('views.master.CuratorGroupJoinView.m9'),
+        description: t('views.master.CuratorGroupJoinView.m10'),
+        open: true,
+      }
     case 'blocked_by_curator':
       return {
-        title: 'Вступление недоступно',
-        description: 'Куратор ограничил вам доступ в эту школу.',
+        title: t('views.master.CuratorGroupJoinView.m11'),
+        description: t('views.master.CuratorGroupJoinView.m12'),
         open: false,
       }
     // BE-79 (DRAFT wording): blocked by the curator IN this school -- the
     // preview says so, and a join refused 403 re-reads the preview (below).
     case 'blocked_in_group':
       return {
-        title: 'Вступление недоступно',
-        description: 'Вы заблокированы в этой школе.',
+        title: t('views.master.CuratorGroupJoinView.m13'),
+        description: t('views.master.CuratorGroupJoinView.m14'),
         open: false,
       }
     default:
       // can_join=false with no reason is not a contract shape; stay honest
       // rather than guessing — same title as blocked, no invented details.
-      return { title: 'Вступление недоступно', description: '', open: false }
+      return { title: t('views.master.CuratorGroupJoinView.m15'), description: '', open: false }
   }
 })
 
@@ -257,7 +268,7 @@ async function join(): Promise<void> {
         return
       }
     }
-    toast.error(extractApiError(e, 'Не удалось вступить в школу. Попробуйте ещё раз.'))
+    toast.error(extractApiError(e, t('views.master.CuratorGroupJoinView.m16')))
   } finally {
     joining.value = false
   }

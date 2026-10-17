@@ -49,7 +49,7 @@
           v-model="period"
           :options="PERIOD_OPTIONS"
           variant="toggle"
-          aria-label="Период статистики"
+          :aria-label="t('views.master.AnalyticsView.m1')"
         />
       </template>
     </VHeader>
@@ -76,7 +76,7 @@
 
       <!-- Общая статистика -->
       <section class="analytics__section">
-        <h2 class="velo-section-title">Общая статистика</h2>
+        <h2 class="velo-section-title">{{ t('views.master.AnalyticsView.m5') }}</h2>
         <VRatingDistribution :counts="ratingTotals" />
       </section>
 
@@ -85,7 +85,7 @@
            Тап по карточке → профиль ученика (E1: user_id на MasterReviewItem);
            кнопка сообщения — @click.stop, шлёт сообщение, не навигируя (PROMPT №229). -->
       <section v-if="attentionItems.length > 0" class="analytics__section">
-        <h2 class="velo-section-title">Требуют внимания</h2>
+        <h2 class="velo-section-title">{{ t('views.master.AnalyticsView.m6') }}</h2>
         <div
           v-for="(item, i) in attentionItems"
           :key="i"
@@ -105,7 +105,7 @@
           </div>
           <button
             class="analytics__attention-msg"
-            aria-label="Написать сообщение"
+            :aria-label="t('views.master.AnalyticsView.m2')"
             @click.stop="openMessage(item.user_id, item.reviewer_name)"
           >
             <IconMessages :size="22" />
@@ -115,7 +115,7 @@
 
       <!-- Прошедшие практики -->
       <section class="analytics__section">
-        <h2 class="velo-section-title">Прошедшие практики</h2>
+        <h2 class="velo-section-title">{{ t('views.master.AnalyticsView.m7') }}</h2>
 
         <div
           v-if="masterStore.practicesPastLoading && pastPractices.length === 0"
@@ -127,7 +127,7 @@
         <VEmptyState
           v-else-if="periodPractices.length === 0"
           variant="note"
-          title="За выбранный период практик нет"
+          :title="t('views.master.AnalyticsView.m3')"
         />
 
         <template v-else>
@@ -163,7 +163,7 @@
           <VShowMore
             v-if="!pastExpanded && hiddenPastCount > 0"
             :count="hiddenPastCount"
-            noun="практик"
+            :noun="t('views.master.AnalyticsView.m4')"
             @click="pastExpanded = true"
           />
           <div v-else-if="pastExpanded && masterStore.practicesPastHasMore" class="analytics__more">
@@ -187,14 +187,16 @@
 
       <VCard v-else-if="paymentsError" class="analytics__pay-error">
         <p class="analytics__empty">{{ paymentsError }}</p>
-        <VButton size="sm" variant="outline" @click="loadPayments">Повторить</VButton>
+        <VButton size="sm" variant="outline" @click="loadPayments">{{
+          t('views.master.AnalyticsView.m8')
+        }}</VButton>
       </VCard>
 
       <template v-else>
         <!-- Income (E2: getIncome by period; delta_pct vs previous period). -->
         <div class="analytics__income">
           <div class="analytics__income-value">{{ income }}</div>
-          <div class="analytics__income-label">Доход за период</div>
+          <div class="analytics__income-label">{{ t('views.master.AnalyticsView.m9') }}</div>
           <div
             v-if="incomeDelta"
             class="analytics__income-delta"
@@ -208,25 +210,27 @@
 
         <!-- Транзакции (E2: getTransactions — signed title-tagged ledger rows). -->
         <section class="analytics__section">
-          <h2 class="velo-section-title">Транзакции</h2>
+          <h2 class="velo-section-title">{{ t('views.master.AnalyticsView.m10') }}</h2>
           <div v-if="transactions.length > 0" class="analytics__txns">
-            <div v-for="(t, i) in transactions" :key="i" class="analytics__txn">
+            <div v-for="(tx, i) in transactions" :key="i" class="analytics__txn">
               <div class="analytics__txn-info">
-                <div class="analytics__txn-title">{{ txnTitle(t) }}</div>
+                <div class="analytics__txn-title">{{ txnTitle(tx) }}</div>
                 <div class="analytics__txn-meta">
-                  {{ formatShortDate(t.created_at)
-                  }}<template v-if="t.counterparty_name"> · {{ t.counterparty_name }}</template>
+                  {{ formatShortDate(tx.created_at)
+                  }}<template v-if="tx.counterparty_name"> · {{ tx.counterparty_name }}</template>
                 </div>
               </div>
               <div
                 class="analytics__txn-amt"
-                :class="t.amount_cents >= 0 ? 'analytics__txn-amt--in' : 'analytics__txn-amt--out'"
+                :class="tx.amount_cents >= 0 ? 'analytics__txn-amt--in' : 'analytics__txn-amt--out'"
               >
-                {{ formatTxnAmount(t.amount_cents) }}
+                {{ formatTxnAmount(tx.amount_cents) }}
               </div>
             </div>
             <div v-if="hasMoreTx" class="analytics__more">
-              <VButton variant="ghost" @click="loadMoreTx">Показать ещё</VButton>
+              <VButton variant="ghost" @click="loadMoreTx">{{
+                t('views.master.AnalyticsView.m11')
+              }}</VButton>
             </div>
           </div>
           <VEmptyState v-else variant="note" title="Данных пока нет" />
@@ -245,6 +249,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMasterStore } from '@/stores/master'
@@ -296,16 +301,16 @@ const PAYMENTS_TAB_ENABLED: boolean = false
 
 const activeTab = ref<'reviews' | 'payments'>('reviews')
 const TAB_OPTIONS: Array<{ value: 'reviews' | 'payments'; label: string }> = [
-  { value: 'reviews', label: 'Отзывы' },
-  { value: 'payments', label: 'Платежи' },
+  { value: 'reviews', label: t('views.master.AnalyticsView.m12') },
+  { value: 'payments', label: t('views.master.AnalyticsView.m13') },
 ]
 
 // Period scoping has no backend yet -> the toggle only moves the active pill
 // (mirrors the master-dashboard pattern). Roadmap: period-scoped summary API.
 const period = ref<'week' | 'month'>('week')
 const PERIOD_OPTIONS: ReadonlyArray<{ value: 'week' | 'month'; label: string }> = [
-  { value: 'week', label: 'Неделя' },
-  { value: 'month', label: 'Месяц' },
+  { value: 'week', label: t('views.master.AnalyticsView.m14') },
+  { value: 'month', label: t('views.master.AnalyticsView.m15') },
 ]
 
 // =========================================================================
@@ -342,17 +347,11 @@ const hiddenPastCount = computed(() => Math.max(0, periodPractices.value.length 
 // =========================================================================
 
 const aggregateTotalFeedbacks = computed((): number =>
-  periodInsights.value.reduce(
-    (t, ins) => t + zoneTotal(ins.feedbacks),
-    0,
-  ),
+  periodInsights.value.reduce((t, ins) => t + zoneTotal(ins.feedbacks), 0),
 )
 
 const aggregateTotalCheckins = computed((): number =>
-  periodInsights.value.reduce(
-    (t, ins) => t + zoneTotal(ins.checkins),
-    0,
-  ),
+  periodInsights.value.reduce((t, ins) => t + zoneTotal(ins.checkins), 0),
 )
 
 const aggregateTotalParticipants = computed((): number =>
@@ -502,7 +501,7 @@ async function loadPayments(): Promise<void> {
     transactions.value = txRes.items
     txTotal.value = txRes.total
   } catch (e) {
-    paymentsError.value = extractApiError(e, 'Ошибка загрузки')
+    paymentsError.value = extractApiError(e, t('views.master.AnalyticsView.m16'))
   } finally {
     paymentsLoading.value = false
   }
@@ -554,8 +553,8 @@ function openReviews(practiceId: string): void {
 onMounted(async () => {
   if (PAYMENTS_TAB_ENABLED) void loadPayments()
   void loadReviews()
-  // T22-5 (PROMPT №561): this tab only ever needs "Прошедшие" -- fetching the
-  // combined bucket here would warm "Предстоящие" for no reason.
+  // T22-5 (PROMPT №561): this tab only ever needs t('views.master.AnalyticsView.m17') -- fetching the
+  // combined bucket here would warm t('views.master.AnalyticsView.m18') for no reason.
   await masterStore.fetchPastPractices()
   await loadVisibleInsights()
 })

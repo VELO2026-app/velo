@@ -59,12 +59,12 @@
           v-model="period"
           :options="PERIOD_OPTIONS"
           variant="toggle"
-          aria-label="Период статистики"
+          :aria-label="t('views.master.MasterDashboardView.m1')"
         />
         <button
           class="master-dashboard__bell"
           type="button"
-          aria-label="Уведомления"
+          :aria-label="t('views.master.MasterDashboardView.m2')"
           @click="onBell"
         >
           <span class="master-dashboard__bell-icon">
@@ -81,13 +81,13 @@
       <div class="master-dashboard__stats-grid">
         <VStatCard
           :value="practicesStat"
-          label="Практик"
+          :label="t('views.master.MasterDashboardView.m3')"
           :delta="practicesDelta"
           :delta-tone="practicesDeltaTone"
         />
         <VStatCard
           :value="participantsStat"
-          label="Участников"
+          :label="t('views.master.MasterDashboardView.m4')"
           :delta="participantsDelta"
           :delta-tone="participantsDeltaTone"
         />
@@ -250,6 +250,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -297,9 +298,9 @@ const toast = useToast()
 //    would silently keep the WEEK figures under a «Квартал» label). --
 const period = ref<'week' | 'month' | 'quarter'>('week')
 const PERIOD_OPTIONS: ReadonlyArray<{ value: 'week' | 'month' | 'quarter'; label: string }> = [
-  { value: 'week', label: 'Неделя' },
-  { value: 'month', label: 'Месяц' },
-  { value: 'quarter', label: 'Квартал' },
+  { value: 'week', label: t('views.master.MasterDashboardView.m5') },
+  { value: 'month', label: t('views.master.MasterDashboardView.m6') },
+  { value: 'quarter', label: t('views.master.MasterDashboardView.m7') },
 ]
 
 // True for a brand-new master with no practices at all (zero state).
@@ -401,7 +402,7 @@ const nearestPractices = computed((): PracticeResponse[] =>
     .slice(0, 2),
 )
 
-// "Завтра, 07:00 • 45 мин" — rendered in the practice's own timezone (the master
+// t('views.master.MasterDashboardView.m8') — rendered in the practice's own timezone (the master
 // set it), matching MasterPracticesView.
 function practiceWhen(p: PracticeResponse): string {
   const day = formatDateShort(p.scheduled_at, p.timezone)
@@ -435,13 +436,13 @@ function zoomStateFor(p: PracticeResponse): ZoomEntryStateKind {
 // there whether he may start it; this button only stays honest.
 function onZoom(p: PracticeResponse): void {
   if (zoomStateFor(p) !== 'ready') {
-    toast.info('Встреча Zoom ещё готовится')
+    toast.info(t('views.master.MasterDashboardView.m9'))
     return
   }
   void router.push({ name: 'master-practice-live', params: { practiceId: p.id } })
 }
 
-// A4 V2 (PROMPT №572): "Повторить" on a create_failed meeting. The endpoint
+// A4 V2 (PROMPT №572): t('views.master.MasterDashboardView.m10') on a create_failed meeting. The endpoint
 // itself never raises for a Zoom-side failure (same "never blocks"
 // contract as publish) -- it resolves 200 either way, so success/failure
 // is read off the RETURNED zoom_meeting_status, not off a thrown error.
@@ -455,18 +456,18 @@ async function onRetryZoom(p: PracticeResponse): Promise<void> {
   try {
     const updated = await retryZoomMeeting(p.id)
     if (updated.zoom_meeting_status === 'active') {
-      toast.success('Встреча Zoom создана')
+      toast.success(t('views.master.MasterDashboardView.m11'))
     } else {
-      toast.error('Всё ещё не удалось создать встречу. Попробуйте позже')
+      toast.error(t('views.master.MasterDashboardView.m12'))
     }
     await masterStore.refreshMyPractices()
   } catch (e) {
     if (e instanceof ApiResponseError && e.code === 'zoom_meeting_not_failed') {
       // Recovered by itself (poller won the race) -- refresh, no error tone.
-      toast.info('Статус встречи уже обновился')
+      toast.info(t('views.master.MasterDashboardView.m13'))
       await masterStore.refreshMyPractices()
     } else {
-      toast.error('Не удалось повторить попытку')
+      toast.error(t('views.master.MasterDashboardView.m14'))
     }
   } finally {
     retryingId.value = null

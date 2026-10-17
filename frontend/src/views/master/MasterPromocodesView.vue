@@ -25,17 +25,21 @@
 
     <!-- Error -->
     <VEmptyState v-else-if="error" icon="warning" title="Не удалось загрузить промокоды">
-      <VButton size="sm" variant="outline" @click="load">Повторить</VButton>
+      <VButton size="sm" variant="outline" @click="load">{{
+        t('views.master.MasterPromocodesView.m4')
+      }}</VButton>
     </VEmptyState>
 
     <!-- Empty -->
     <VEmptyState
       v-else-if="activePromos.length === 0"
       icon="list"
-      title="Промокодов пока нет"
-      description="Создайте первый промокод для участников"
+      :title="t('views.master.MasterPromocodesView.m1')"
+      :description="t('views.master.MasterPromocodesView.m2')"
     >
-      <VButton size="sm" variant="outline" @click="onNew">Создать</VButton>
+      <VButton size="sm" variant="outline" @click="onNew">{{
+        t('views.master.MasterPromocodesView.m5')
+      }}</VButton>
     </VEmptyState>
 
     <!-- List -->
@@ -54,7 +58,9 @@
           </div>
         </div>
         <div class="promo__actions">
-          <VButton variant="primary" @click="onCopy(p.code)">Копировать</VButton>
+          <VButton variant="primary" @click="onCopy(p.code)">{{
+            t('views.master.MasterPromocodesView.m6')
+          }}</VButton>
           <VButton variant="danger" :loading="deactivatingId === p.id" @click="onDelete(p)">
             Удалить
           </VButton>
@@ -62,17 +68,14 @@
       </div>
     </div>
 
-    <Banner
-      variant="warning"
-      body="Промокоды для участников, которые уже оплатили вне платформы"
-      class="promo__note"
-    >
+    <Banner variant="warning" :body="t('views.master.MasterPromocodesView.m3')" class="promo__note">
       <template #icon><IconHint :size="22" /></template>
     </Banner>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -113,7 +116,7 @@ function usedLabel(p: PromoResponse): string {
   return `${p.used_count} из ${p.max_uses ?? '∞'}`
 }
 function untilLabel(p: PromoResponse): string {
-  return p.valid_until ? formatShortDate(p.valid_until) : 'бессрочно'
+  return p.valid_until ? formatShortDate(p.valid_until) : t('views.master.MasterPromocodesView.m7')
 }
 
 function onNew(): void {
@@ -123,9 +126,9 @@ function onNew(): void {
 async function onCopy(code: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(code)
-    toast.success('Промокод скопирован')
+    toast.success(t('views.master.MasterPromocodesView.m8'))
   } catch {
-    toast.error('Не удалось скопировать')
+    toast.error(t('views.master.MasterPromocodesView.m9'))
   }
 }
 // Soft-deactivate (no hard-delete endpoint): drops the code from the active list.
@@ -135,9 +138,9 @@ async function onDelete(p: PromoResponse): Promise<void> {
   try {
     await deactivatePromo(p.id)
     p.is_active = false
-    toast.success('Промокод деактивирован')
+    toast.success(t('views.master.MasterPromocodesView.m10'))
   } catch {
-    toast.error('Не удалось деактивировать промокод')
+    toast.error(t('views.master.MasterPromocodesView.m11'))
   } finally {
     deactivatingId.value = null
   }

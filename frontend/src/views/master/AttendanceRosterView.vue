@@ -33,7 +33,9 @@
     <!-- Error -->
     <div v-else-if="error" class="roster__content">
       <VEmptyState icon="warning" title="Не удалось загрузить посещаемость" :description="error">
-        <VButton size="sm" variant="outline" @click="load">Повторить</VButton>
+        <VButton size="sm" variant="outline" @click="load">{{
+          t('views.master.AttendanceRosterView.m5')
+        }}</VButton>
       </VEmptyState>
     </div>
 
@@ -71,34 +73,34 @@
         <VEmptyState
           v-if="attendedItems.length === 0 && noShowItems.length === 0"
           icon="group"
-          title="Нет данных о посещаемости"
-          description="На этой практике никто не отмечен"
+          :title="t('views.master.AttendanceRosterView.m1')"
+          :description="t('views.master.AttendanceRosterView.m2')"
         />
 
         <!-- Присутствовали -->
         <section v-if="attendedItems.length > 0" class="roster__section">
-          <h2 class="velo-section-title">Присутствовали</h2>
+          <h2 class="velo-section-title">{{ t('views.master.AttendanceRosterView.m6') }}</h2>
           <div v-for="item in visibleAttended" :key="item.booking_id" class="roster__row">
             <IconCheck :size="24" class="roster__ic roster__ic--ok" />
             <span class="roster__name">{{ displayName(item) }}</span>
           </div>
           <VShowMore
             v-if="hiddenAttended > 0"
-            label="посмотреть еще"
+            :label="t('views.master.AttendanceRosterView.m3')"
             @click="attendedExpanded = true"
           />
         </section>
 
         <!-- Не пришли -->
         <section v-if="noShowItems.length > 0" class="roster__section">
-          <h2 class="velo-section-title">Не пришли</h2>
+          <h2 class="velo-section-title">{{ t('views.master.AttendanceRosterView.m7') }}</h2>
           <div v-for="item in visibleNoShow" :key="item.booking_id" class="roster__row">
             <IconClose :size="24" class="roster__ic roster__ic--no" />
             <span class="roster__name">{{ displayName(item) }}</span>
           </div>
           <VShowMore
             v-if="hiddenNoShow > 0"
-            label="посмотреть еще"
+            :label="t('views.master.AttendanceRosterView.m4')"
             @click="noShowExpanded = true"
           />
         </section>
@@ -108,6 +110,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMasterStore } from '@/stores/master'
@@ -192,7 +195,7 @@ async function load(): Promise<void> {
     ])
     attendance.value = attendanceData
   } catch (e) {
-    error.value = extractApiError(e, 'Ошибка загрузки')
+    error.value = extractApiError(e, t('views.master.AttendanceRosterView.m8'))
   } finally {
     loading.value = false
   }

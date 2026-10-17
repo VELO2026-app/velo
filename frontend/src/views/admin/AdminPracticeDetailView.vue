@@ -19,7 +19,7 @@
   <div class="admin-detail">
     <header class="admin-detail__top">
       <VBackButton @click="router.back()" />
-      <span class="admin-detail__title">Детали практики</span>
+      <span class="admin-detail__title">{{ t('views.admin.AdminPracticeDetailView.m2') }}</span>
     </header>
 
     <div v-if="loading" class="admin-detail__loader"><VLoader size="lg" /></div>
@@ -27,10 +27,12 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      title="Не удалось загрузить практику"
+      :title="t('views.admin.AdminPracticeDetailView.m1')"
       :description="error"
     >
-      <VButton size="sm" variant="outline" @click="load">Повторить</VButton>
+      <VButton size="sm" variant="outline" @click="load">{{
+        t('views.admin.AdminPracticeDetailView.m3')
+      }}</VButton>
     </VEmptyState>
 
     <template v-else-if="practice">
@@ -59,11 +61,15 @@
       <VCard v-if="zoomAttendance" class="admin-detail__zoom">
         <h3 class="admin-detail__section admin-detail__section--first">Zoom</h3>
         <div class="admin-detail__zoom-row">
-          <span class="admin-detail__zoom-label">Статус встречи</span>
+          <span class="admin-detail__zoom-label">{{
+            t('views.admin.AdminPracticeDetailView.m4')
+          }}</span>
           <VBadge :variant="zoomStatusBadge.variant">{{ zoomStatusBadge.label }}</VBadge>
         </div>
         <div class="admin-detail__zoom-row">
-          <span class="admin-detail__zoom-label">Нераспознанные участники</span>
+          <span class="admin-detail__zoom-label">{{
+            t('views.admin.AdminPracticeDetailView.m5')
+          }}</span>
           <VBadge :variant="zoomAttendance.unmatched_count > 0 ? 'warning' : 'muted'">
             {{ zoomAttendance.unmatched_count }}
           </VBadge>
@@ -73,7 +79,9 @@
              above). Raw, whatever English the backend recorded -- no
              translation layer exists for developer-facing error text (B8). -->
         <div v-if="zoomAttendance.last_sync_error" class="admin-detail__zoom-error-row">
-          <span class="admin-detail__zoom-label">Причина ошибки</span>
+          <span class="admin-detail__zoom-label">{{
+            t('views.admin.AdminPracticeDetailView.m6')
+          }}</span>
           <span class="admin-detail__zoom-error">{{ zoomAttendance.last_sync_error }}</span>
         </div>
       </VCard>
@@ -88,7 +96,11 @@
             </template>
           </VListRow>
         </div>
-        <VCard v-else><p class="admin-detail__empty">Данных пока нет</p></VCard>
+        <VCard v-else
+          ><p class="admin-detail__empty">
+            {{ t('views.admin.AdminPracticeDetailView.m7') }}
+          </p></VCard
+        >
       </template>
 
       <!-- Past: who attended / who didn't -->
@@ -106,7 +118,11 @@
             </template>
           </VListRow>
         </div>
-        <VCard v-else><p class="admin-detail__empty">Данных пока нет</p></VCard>
+        <VCard v-else
+          ><p class="admin-detail__empty">
+            {{ t('views.admin.AdminPracticeDetailView.m8') }}
+          </p></VCard
+        >
 
         <h3 class="admin-detail__section">Не пришли ({{ absent.length }})</h3>
         <div v-if="absent.length" class="admin-detail__items">
@@ -121,17 +137,22 @@
             </template>
           </VListRow>
         </div>
-        <VCard v-else><p class="admin-detail__empty">Нет данных</p></VCard>
+        <VCard v-else
+          ><p class="admin-detail__empty">
+            {{ t('views.admin.AdminPracticeDetailView.m9') }}
+          </p></VCard
+        >
       </template>
     </template>
 
     <VCard v-else>
-      <p class="admin-detail__empty">Практика недоступна</p>
+      <p class="admin-detail__empty">{{ t('views.admin.AdminPracticeDetailView.m10') }}</p>
     </VCard>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -166,7 +187,9 @@ const zoomAttendance = ref<AdminZoomAttendanceResponse | null>(null)
 const isPast = computed<boolean>(() => practice.value?.status === 'past')
 
 const masterInitial = computed<string>(() =>
-  (practice.value?.master_name.trim().charAt(0) || 'М').toUpperCase(),
+  (
+    practice.value?.master_name.trim().charAt(0) || t('views.admin.AdminPracticeDetailView.m11')
+  ).toUpperCase(),
 )
 
 const whenLabel = computed<string>(() =>
@@ -196,16 +219,16 @@ const ZOOM_STATUS_BADGES: Record<
   string,
   { label: string; variant: 'success' | 'error' | 'muted' }
 > = {
-  active: { label: 'Активна', variant: 'success' },
-  pending_creation: { label: 'Ожидает создания', variant: 'muted' },
-  create_failed: { label: 'Ошибка создания', variant: 'error' },
-  deleted: { label: 'Удалена', variant: 'muted' },
+  active: { label: t('views.admin.AdminPracticeDetailView.m12'), variant: 'success' },
+  pending_creation: { label: t('views.admin.AdminPracticeDetailView.m13'), variant: 'muted' },
+  create_failed: { label: t('views.admin.AdminPracticeDetailView.m14'), variant: 'error' },
+  deleted: { label: t('views.admin.AdminPracticeDetailView.m15'), variant: 'muted' },
 }
 const zoomStatusBadge = computed<{ label: string; variant: 'success' | 'error' | 'muted' }>(() => {
   const status = zoomAttendance.value?.zoom_meeting_status
   return status
     ? (ZOOM_STATUS_BADGES[status] ?? { label: status, variant: 'muted' })
-    : { label: 'Не создана', variant: 'muted' }
+    : { label: t('views.admin.AdminPracticeDetailView.m16'), variant: 'muted' }
 })
 
 // Roster from the detail response. Past practices bucket by booking status.
@@ -224,7 +247,7 @@ async function load(): Promise<void> {
   try {
     practice.value = await getAdminPracticeDetail(practiceId)
   } catch (e) {
-    error.value = extractApiError(e, 'Ошибка загрузки')
+    error.value = extractApiError(e, t('views.admin.AdminPracticeDetailView.m17'))
   } finally {
     loading.value = false
   }

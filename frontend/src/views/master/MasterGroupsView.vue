@@ -49,8 +49,8 @@
         <div class="groups__search-field">
           <VInput
             v-model="search"
-            placeholder="Искать..."
-            aria-label="Искать по группам и участникам"
+            :placeholder="t('views.master.MasterGroupsView.m1')"
+            :aria-label="t('views.master.MasterGroupsView.m2')"
             @focus="onFieldFocus"
           />
         </div>
@@ -59,7 +59,9 @@
       <template v-if="search.trim()">
         <!-- Group-name matches: instant, client-side over already-loaded groups. -->
         <template v-if="matchingGroups.length">
-          <h2 class="velo-section-title groups__search-heading">Группы</h2>
+          <h2 class="velo-section-title groups__search-heading">
+            {{ t('views.master.MasterGroupsView.m9') }}
+          </h2>
           <div
             v-for="group in matchingGroups"
             :key="group.id"
@@ -81,14 +83,18 @@
         <VEmptyState
           v-else-if="searchError"
           icon="warning"
-          title="Не удалось выполнить поиск"
+          :title="t('views.master.MasterGroupsView.m3')"
           :description="searchError"
         >
-          <VButton size="sm" variant="outline" @click="loadSearch">Повторить</VButton>
+          <VButton size="sm" variant="outline" @click="loadSearch">{{
+            t('views.master.MasterGroupsView.m10')
+          }}</VButton>
         </VEmptyState>
 
         <template v-else-if="searchResults.length">
-          <h2 class="velo-section-title groups__search-heading">Участники</h2>
+          <h2 class="velo-section-title groups__search-heading">
+            {{ t('views.master.MasterGroupsView.m11') }}
+          </h2>
           <VListRow
             v-for="row in searchResults"
             :key="`${row.student_user_id}-${row.group_id}`"
@@ -112,8 +118,8 @@
             searchResults.length === 0
           "
           icon="group"
-          title="Никого не найдено"
-          description="Попробуйте изменить запрос"
+          :title="t('views.master.MasterGroupsView.m4')"
+          :description="t('views.master.MasterGroupsView.m5')"
         />
       </template>
 
@@ -126,10 +132,12 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        title="Не удалось загрузить группы"
+        :title="t('views.master.MasterGroupsView.m6')"
         :description="error"
       >
-        <VButton size="sm" variant="outline" @click="load">Повторить</VButton>
+        <VButton size="sm" variant="outline" @click="load">{{
+          t('views.master.MasterGroupsView.m12')
+        }}</VButton>
       </VEmptyState>
 
       <template v-else>
@@ -155,8 +163,8 @@
         <VEmptyState
           v-if="groups.length === 0"
           icon="group"
-          title="Групп пока нет"
-          description="Создайте первую группу учеников"
+          :title="t('views.master.MasterGroupsView.m7')"
+          :description="t('views.master.MasterGroupsView.m8')"
         />
       </template>
     </div>
@@ -164,6 +172,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -190,7 +199,7 @@ async function load(): Promise<void> {
     const res = await getGroups()
     groups.value = res.items
   } catch (e) {
-    error.value = extractApiError(e, 'Попробуйте ещё раз')
+    error.value = extractApiError(e, t('views.master.MasterGroupsView.m13'))
   } finally {
     loading.value = false
   }
@@ -216,7 +225,7 @@ async function loadSearch(): Promise<void> {
     const res = await searchGroupMemberships(search.value)
     searchResults.value = res.items
   } catch (e) {
-    searchError.value = extractApiError(e, 'Попробуйте ещё раз')
+    searchError.value = extractApiError(e, t('views.master.MasterGroupsView.m14'))
   } finally {
     searchLoading.value = false
   }
@@ -236,7 +245,7 @@ watch(search, (value) => {
 })
 
 // Show the first 5 (owner Q7, PROMPT №610 -- was 10); the rest hide behind
-// the outlined "+ ещё N групп" pill (VShowMore already built this exact
+// the outlined t('views.master.MasterGroupsView.m15') pill (VShowMore already built this exact
 // recipe -- primary stroke + primary text, see that file -- no visual
 // change needed there, only this constant). Never applies while a search
 // query is active: that's a structurally separate branch above

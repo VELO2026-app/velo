@@ -25,10 +25,12 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        title="Не удалось загрузить учеников"
+        :title="t('views.master.MasterStudentsView.m1')"
         :description="error"
       >
-        <VButton size="sm" variant="outline" @click="load">Повторить</VButton>
+        <VButton size="sm" variant="outline" @click="load">{{
+          t('views.master.MasterStudentsView.m10')
+        }}</VButton>
       </VEmptyState>
 
       <template v-else>
@@ -39,8 +41,8 @@
           <div class="students__search-field">
             <VInput
               v-model="query"
-              placeholder="Искать…"
-              aria-label="Искать ученика"
+              :placeholder="t('views.master.MasterStudentsView.m2')"
+              :aria-label="t('views.master.MasterStudentsView.m3')"
               @focus="onFieldFocus"
             />
           </div>
@@ -67,7 +69,7 @@
           </div>
           <button
             class="students__msg"
-            aria-label="Написать сообщение"
+            :aria-label="t('views.master.MasterStudentsView.m4')"
             @click.stop="openMessage(student.id, student.name)"
           >
             <IconMessages :size="22" />
@@ -78,7 +80,7 @@
         <VShowMore
           v-if="!expanded && hiddenCount > 0"
           :count="hiddenCount"
-          noun="учеников"
+          :noun="t('views.master.MasterStudentsView.m5')"
           @click="expanded = true"
         />
 
@@ -86,14 +88,14 @@
         <VEmptyState
           v-if="students.length === 0"
           icon="group"
-          title="Учеников пока нет"
-          description="Они появятся после первых практик"
+          :title="t('views.master.MasterStudentsView.m6')"
+          :description="t('views.master.MasterStudentsView.m7')"
         />
         <VEmptyState
           v-else-if="filtered.length === 0"
           icon="group"
-          title="Никого не найдено"
-          description="Попробуйте изменить запрос"
+          :title="t('views.master.MasterStudentsView.m8')"
+          :description="t('views.master.MasterStudentsView.m9')"
         />
       </template>
     </div>
@@ -108,6 +110,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -138,7 +141,7 @@ async function load(): Promise<void> {
     const res = await getStudents()
     students.value = res.items
   } catch {
-    error.value = 'Попробуйте ещё раз'
+    error.value = t('views.master.MasterStudentsView.m11')
   } finally {
     loading.value = false
   }

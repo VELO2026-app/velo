@@ -55,7 +55,9 @@
   <div class="master-inbox">
     <VHeader title="Уведомления" show-back @back="router.back()">
       <template v-if="unread > 0" #action>
-        <button type="button" class="master-inbox__read-all" @click="markAll">Прочитать всё</button>
+        <button type="button" class="master-inbox__read-all" @click="markAll">
+          {{ t('views.master.MasterInboxView.m3') }}
+        </button>
       </template>
     </VHeader>
 
@@ -69,13 +71,10 @@
           <IconBellPlain :size="48" />
         </template>
       </VEmptyState>
-      <VButton size="sm" @click="load">Повторить</VButton>
+      <VButton size="sm" @click="load">{{ t('views.master.MasterInboxView.m4') }}</VButton>
     </div>
 
-    <VEmptyState
-      v-else-if="items.length === 0"
-      title="Здесь появятся уведомления о записях, сообщениях и операциях"
-    >
+    <VEmptyState v-else-if="items.length === 0" :title="t('views.master.MasterInboxView.m1')">
       <template #icon>
         <IconBellPlain :size="48" />
       </template>
@@ -90,11 +89,11 @@
         variant="tabs"
         scrollable
         class="master-inbox__filter"
-        aria-label="Тип уведомлений"
+        :aria-label="t('views.master.MasterInboxView.m2')"
       />
 
       <div v-if="visibleItems.length === 0" class="master-inbox__center">
-        <p class="master-inbox__filter-empty">В этой категории пока нет уведомлений</p>
+        <p class="master-inbox__filter-empty">{{ t('views.master.MasterInboxView.m5') }}</p>
       </div>
 
       <div v-else class="master-inbox__list">
@@ -114,6 +113,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -142,10 +142,10 @@ const unread = ref(0)
 // row icons share ONE classifier so a tab and its glyph can never disagree.
 type InboxFilter = 'messages' | 'practices' | 'finance' | 'other'
 const FILTER_OPTIONS: ReadonlyArray<{ value: InboxFilter; label: string }> = [
-  { value: 'messages', label: 'Сообщения' },
-  { value: 'practices', label: 'Практики' },
-  { value: 'finance', label: 'Финансы' },
-  { value: 'other', label: 'Другое' },
+  { value: 'messages', label: t('views.master.MasterInboxView.m6') },
+  { value: 'practices', label: t('views.master.MasterInboxView.m7') },
+  { value: 'finance', label: t('views.master.MasterInboxView.m8') },
+  { value: 'other', label: t('views.master.MasterInboxView.m9') },
 ]
 const filter = ref<InboxFilter>('messages')
 
@@ -181,7 +181,7 @@ async function load(): Promise<void> {
     items.value = page.items
     unread.value = page.unread
   } catch (e) {
-    error.value = extractApiError(e, 'Попробуйте ещё раз')
+    error.value = extractApiError(e, t('views.master.MasterInboxView.m10'))
   } finally {
     loading.value = false
   }
@@ -203,7 +203,7 @@ async function markOne(item: NotificationItem): Promise<void> {
   } catch (e) {
     item.read_at = previousReadAt
     unread.value = previousUnread
-    toast.error(extractApiError(e, 'Не удалось отметить прочитанным'))
+    toast.error(extractApiError(e, t('views.master.MasterInboxView.m11')))
   }
 }
 
@@ -223,7 +223,7 @@ async function markAll(): Promise<void> {
       i.read_at = previous[idx] ?? null
     })
     unread.value = previousUnread
-    toast.error(extractApiError(e, 'Не удалось отметить прочитанным'))
+    toast.error(extractApiError(e, t('views.master.MasterInboxView.m12')))
   }
 }
 

@@ -29,7 +29,7 @@
   <div class="admin-catalog">
     <header class="admin-catalog__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-catalog__title">Каталог практик</h1>
+      <h1 class="admin-catalog__title">{{ t('views.admin.AdminCatalogView.m8') }}</h1>
     </header>
 
     <VCard class="admin-catalog__note" padding="none">
@@ -40,7 +40,7 @@
     <VCard class="admin-catalog__add" padding="none">
       <VInput
         v-model="newDirectionLabel"
-        placeholder="Новое направление…"
+        :placeholder="t('views.admin.AdminCatalogView.m1')"
         class="admin-catalog__add-input"
       />
       <VButton
@@ -59,10 +59,14 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      title="Не удалось загрузить каталог"
-      description="Проверьте соединение и попробуйте ещё раз"
+      :title="t('views.admin.AdminCatalogView.m2')"
+      :description="t('views.admin.AdminCatalogView.m3')"
     >
-      <template #action><VButton variant="primary" @click="load">Повторить</VButton></template>
+      <template #action
+        ><VButton variant="primary" @click="load">{{
+          t('views.admin.AdminCatalogView.m9')
+        }}</VButton></template
+      >
     </VEmptyState>
 
     <VCard
@@ -79,7 +83,7 @@
           <button
             type="button"
             class="admin-catalog__icon-btn"
-            aria-label="Сохранить"
+            :aria-label="t('views.admin.AdminCatalogView.m4')"
             @click="saveDirectionLabel(dir)"
           >
             <IconCheck :size="18" />
@@ -87,7 +91,7 @@
           <button
             type="button"
             class="admin-catalog__icon-btn"
-            aria-label="Отмена"
+            :aria-label="t('views.admin.AdminCatalogView.m5')"
             @click="cancelEdit"
           >
             <IconClose :size="18" />
@@ -99,7 +103,7 @@
           <button
             type="button"
             class="admin-catalog__icon-btn"
-            aria-label="Редактировать"
+            :aria-label="t('views.admin.AdminCatalogView.m6')"
             @click="startEditDirection(dir)"
           >
             <IconPen :size="18" />
@@ -138,12 +142,12 @@
             {{ st.label }} {{ st.is_active ? '✕' : '· Активировать' }}
           </VChip>
         </div>
-        <div v-else class="admin-catalog__none">Без видов</div>
+        <div v-else class="admin-catalog__none">{{ t('views.admin.AdminCatalogView.m10') }}</div>
 
         <div class="admin-catalog__add-style">
           <VInput
             v-model="newStyleLabel[dir.id]"
-            placeholder="Новый вид…"
+            :placeholder="t('views.admin.AdminCatalogView.m7')"
             class="admin-catalog__add-style-input"
           />
           <VButton
@@ -165,6 +169,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -228,10 +233,10 @@ async function addDirection(): Promise<void> {
   try {
     await createTaxonomyDirection({ value: genSlug(), label })
     newDirectionLabel.value = ''
-    toast.success('Направление добавлено')
+    toast.success(t('views.admin.AdminCatalogView.m11'))
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось добавить направление'))
+    toast.error(extractApiError(e, t('views.admin.AdminCatalogView.m12')))
   } finally {
     addingDirection.value = false
   }
@@ -248,10 +253,10 @@ async function addStyle(dir: TaxonomyDirectionItem): Promise<void> {
   try {
     await createTaxonomyStyle(dir.id, { value: genSlug(), label })
     newStyleLabel[dir.id] = ''
-    toast.success('Вид добавлен')
+    toast.success(t('views.admin.AdminCatalogView.m13'))
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось добавить вид'))
+    toast.error(extractApiError(e, t('views.admin.AdminCatalogView.m14')))
   } finally {
     addingStyleFor.value = null
   }
@@ -279,10 +284,10 @@ async function saveDirectionLabel(dir: TaxonomyDirectionItem): Promise<void> {
   try {
     await updateTaxonomyDirection(dir.id, { label })
     editingDirectionId.value = null
-    toast.success('Сохранено')
+    toast.success(t('views.admin.AdminCatalogView.m15'))
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось сохранить'))
+    toast.error(extractApiError(e, t('views.admin.AdminCatalogView.m16')))
   } finally {
     savingDirectionId.value = null
   }
@@ -298,7 +303,7 @@ async function toggleDirectionActive(dir: TaxonomyDirectionItem): Promise<void> 
     await updateTaxonomyDirection(dir.id, { is_active: !dir.is_active })
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось изменить статус'))
+    toast.error(extractApiError(e, t('views.admin.AdminCatalogView.m17')))
   } finally {
     togglingId.value = null
   }
@@ -311,7 +316,7 @@ async function toggleStyleActive(st: TaxonomyStyleItem): Promise<void> {
     await updateTaxonomyStyle(st.id, { is_active: !st.is_active })
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось изменить статус'))
+    toast.error(extractApiError(e, t('views.admin.AdminCatalogView.m18')))
   } finally {
     togglingId.value = null
   }
@@ -363,7 +368,7 @@ onMounted(load)
   align-items: center;
   /* T21-9 (PROMPT №546): the input can shrink to 0 (min-width:0 below) but
      VButton is white-space:nowrap with no min-width override, so on a narrow
-     card it cannot shrink below "+ Добавить"'s full width and pokes out past
+     card it cannot shrink below t('views.admin.AdminCatalogView.m19')'s full width and pokes out past
      the card edge. Same escape hatch already used at .admin-catalog__dir-head
      (Bug 6b, PROMPT №408) -- let the button drop to its own line instead. */
   flex-wrap: wrap;

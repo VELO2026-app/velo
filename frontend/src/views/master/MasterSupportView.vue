@@ -41,8 +41,8 @@
       <div class="support__ok-circle">
         <IconSupportChat :size="48" />
       </div>
-      <h2 class="support__ok-title">Спасибо за обращение</h2>
-      <p class="support__ok-text">Мы получили ваше обращение и ответим здесь же, в приложении.</p>
+      <h2 class="support__ok-title">{{ t('views.master.MasterSupportView.m6') }}</h2>
+      <p class="support__ok-text">{{ t('views.master.MasterSupportView.m7') }}</p>
       <VButton variant="primary" block class="support__ok-cta" @click="onGoHome">
         На главную
       </VButton>
@@ -52,13 +52,13 @@
     <div v-else class="support__content">
       <div class="support__hero">
         <IconSupportChat :size="56" class="support__hero-ic" />
-        <div class="support__hero-title">Как мы можем помочь?</div>
-        <div class="support__hero-sub">Обычно отвечаем в течение 24 часов</div>
+        <div class="support__hero-title">{{ t('views.master.MasterSupportView.m8') }}</div>
+        <div class="support__hero-sub">{{ t('views.master.MasterSupportView.m9') }}</div>
       </div>
 
       <!-- Topic -->
       <section class="support__section">
-        <h2 class="support__title">Тема</h2>
+        <h2 class="support__title">{{ t('views.master.MasterSupportView.m10') }}</h2>
         <div class="support__card">
           <VRadioGroup v-model="topic" :options="topicOptions" />
           <div v-if="topic === 'other'" class="support__other">
@@ -66,8 +66,8 @@
               v-model="otherText"
               type="text"
               class="support__other-input"
-              placeholder="Укажите ваш вариант"
-              aria-label="Свой вариант темы"
+              :placeholder="t('views.master.MasterSupportView.m1')"
+              :aria-label="t('views.master.MasterSupportView.m2')"
               @focus="onFieldFocus"
             />
             <IconArrowRight :size="18" class="support__other-arrow" />
@@ -77,29 +77,29 @@
 
       <!-- Message -->
       <section class="support__section">
-        <h2 class="support__title">Сообщение</h2>
+        <h2 class="support__title">{{ t('views.master.MasterSupportView.m11') }}</h2>
         <VTextarea
           v-model="message"
           :rows="5"
-          placeholder="Опишите вашу проблему или вопрос..."
+          :placeholder="t('views.master.MasterSupportView.m3')"
           @focus="onFieldFocus"
         />
       </section>
 
       <!-- Attachments (UI built; files captured locally, NOT uploaded — stub) -->
       <section class="support__section">
-        <h2 class="support__title">Прикрепить файл</h2>
+        <h2 class="support__title">{{ t('views.master.MasterSupportView.m12') }}</h2>
         <div class="support__upload">
           <button type="button" class="support__drop" @click="openFilePicker">
             <IconFile :size="26" />
-            <span>+ Добавить файл (5MB)</span>
+            <span>{{ t('views.master.MasterSupportView.m13') }}</span>
           </button>
           <input
             ref="fileInput"
             type="file"
             multiple
             class="support__file-input"
-            aria-label="Прикрепить файл"
+            :aria-label="t('views.master.MasterSupportView.m4')"
             @change="onFilesPicked"
           />
           <div v-if="attachments.length" class="support__thumbs">
@@ -109,7 +109,7 @@
               type="button"
               class="support__thumb"
               :title="file.name"
-              aria-label="Удалить файл"
+              :aria-label="t('views.master.MasterSupportView.m5')"
               @click="removeAttachment(i)"
             >
               <IconClose :size="12" />
@@ -118,9 +118,7 @@
         </div>
       </section>
 
-      <a class="support__email" :href="emailHref"
-        >Не дождались ответа? Напишите на support@velo.app</a
-      >
+      <a class="support__email" :href="emailHref">{{ t('views.master.MasterSupportView.m14') }}</a>
 
       <VButton
         variant="primary"
@@ -137,6 +135,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -165,11 +164,11 @@ interface SupportTopic {
   priority: SupportPriority
 }
 const TOPICS: SupportTopic[] = [
-  { value: 'withdrawal', label: 'Проблема с выводом', priority: 'P0' },
-  { value: 'practices', label: 'Вопрос по практикам', priority: 'P1' },
-  { value: 'technical', label: 'Технические проблемы', priority: 'P2' },
-  { value: 'add_direction', label: 'Добавить направление практики', priority: 'P2' },
-  { value: 'other', label: 'Другое', priority: 'P2' },
+  { value: 'withdrawal', label: t('views.master.MasterSupportView.m15'), priority: 'P0' },
+  { value: 'practices', label: t('views.master.MasterSupportView.m16'), priority: 'P1' },
+  { value: 'technical', label: t('views.master.MasterSupportView.m17'), priority: 'P2' },
+  { value: 'add_direction', label: t('views.master.MasterSupportView.m18'), priority: 'P2' },
+  { value: 'other', label: t('views.master.MasterSupportView.m19'), priority: 'P2' },
 ]
 // VRadioGroup only needs {value,label}; priority stays off the rendered options.
 const topicOptions = TOPICS.map((t) => ({ value: t.value, label: t.label }))
@@ -229,7 +228,7 @@ async function onSubmit(): Promise<void> {
     await sendSupportMessage(topicLabel, text)
     submitted.value = true
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось отправить обращение'))
+    toast.error(extractApiError(e, t('views.master.MasterSupportView.m20')))
   } finally {
     submitting.value = false
   }

@@ -21,7 +21,7 @@
   <div class="admin-users">
     <header class="admin-users__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-users__title">Пользователи</h1>
+      <h1 class="admin-users__title">{{ t('views.admin.AdminUsersView.m4') }}</h1>
       <span class="admin-users__count">{{ headerCount }}</span>
     </header>
 
@@ -34,11 +34,13 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      title="Не удалось загрузить пользователей"
-      description="Проверьте соединение и попробуйте ещё раз"
+      :title="t('views.admin.AdminUsersView.m1')"
+      :description="t('views.admin.AdminUsersView.m2')"
     >
       <template #action
-        ><VButton variant="primary" @click="load(true)">Повторить</VButton></template
+        ><VButton variant="primary" @click="load(true)">{{
+          t('views.admin.AdminUsersView.m5')
+        }}</VButton></template
       >
     </VEmptyState>
 
@@ -62,7 +64,9 @@
       </div>
 
       <div v-if="hasMore" class="admin-users__more">
-        <VButton variant="outline" :loading="loadingMore" @click="loadMore">Показать ещё</VButton>
+        <VButton variant="outline" :loading="loadingMore" @click="loadMore">{{
+          t('views.admin.AdminUsersView.m6')
+        }}</VButton>
       </div>
     </template>
 
@@ -74,7 +78,7 @@
     <VConfirmDialog
       :open="confirm.open"
       :message="confirm.message"
-      confirm-label="Назначить"
+      :confirm-label="t('views.admin.AdminUsersView.m3')"
       :loading="confirm.loading"
       @confirm="doMakeMaster"
       @cancel="closeConfirm"
@@ -83,6 +87,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -116,7 +121,7 @@ const hasMore = computed<boolean>(() => users.value.length < total.value)
 
 function nameOf(u: UserResponse): string {
   const name = [u.first_name, u.last_name].filter(Boolean).join(' ').trim()
-  return name || 'Без имени'
+  return name || t('views.admin.AdminUsersView.m7')
 }
 
 const headerCount = computed<string>(() => (total.value ? String(total.value) : '—'))
@@ -134,13 +139,13 @@ const filtered = computed<UserResponse[]>(() => {
 })
 
 const emptyText = computed<string>(() =>
-  search.value.trim() ? 'Никого не найдено' : 'Пользователей пока нет',
+  search.value.trim() ? t('views.admin.AdminUsersView.m8') : t('views.admin.AdminUsersView.m9'),
 )
 
 function roleLabel(role: string): string {
   if (role === 'admin') return 'Админ'
   if (role === 'master') return 'Мастер'
-  return 'Пользователь'
+  return t('views.admin.AdminUsersView.m10')
 }
 
 function roleVariant(role: string): 'success' | 'warning' | 'info' {
@@ -164,7 +169,7 @@ async function load(reset: boolean): Promise<void> {
     total.value = res.total
   } catch (e) {
     error.value = true
-    toast.error(extractApiError(e, 'Ошибка загрузки пользователей'))
+    toast.error(extractApiError(e, t('views.admin.AdminUsersView.m11')))
   } finally {
     loading.value = false
     loadingMore.value = false
@@ -205,12 +210,12 @@ async function doMakeMaster(): Promise<void> {
   confirm.loading = true
   try {
     await makeMaster(confirm.target.id)
-    toast.success('Пользователь назначен мастером')
+    toast.success(t('views.admin.AdminUsersView.m12'))
     confirm.open = false
     confirm.target = null
     await load(true)
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось назначить мастером'))
+    toast.error(extractApiError(e, t('views.admin.AdminUsersView.m13')))
   } finally {
     confirm.loading = false
   }

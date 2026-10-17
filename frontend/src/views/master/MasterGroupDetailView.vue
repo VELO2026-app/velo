@@ -40,13 +40,13 @@
           <template #default="{ close }">
             <VMenuItem
               :icon="IconShare"
-              ariaLabel="Пригласить в группу"
+              :ariaLabel="t('views.master.MasterGroupDetailView.m1')"
               @click="onHeaderInviteClick(close)"
             />
             <VMenuItem :icon="IconPen" ariaLabel="Изменить" @click="onRenameClick(close)" />
             <VMenuItem
               :icon="IconTrash"
-              ariaLabel="Удалить группу"
+              :ariaLabel="t('views.master.MasterGroupDetailView.m2')"
               danger
               @click="onDeleteClick(close)"
             />
@@ -65,8 +65,8 @@
         <div class="group-detail__search-field">
           <VInput
             v-model="search"
-            placeholder="Искать ученика..."
-            aria-label="Искать ученика"
+            :placeholder="t('views.master.MasterGroupDetailView.m3')"
+            :aria-label="t('views.master.MasterGroupDetailView.m4')"
             @focus="onFieldFocus"
           />
         </div>
@@ -81,10 +81,12 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        title="Не удалось загрузить участников"
+        :title="t('views.master.MasterGroupDetailView.m5')"
         :description="error"
       >
-        <VButton size="sm" variant="outline" @click="retry">Повторить</VButton>
+        <VButton size="sm" variant="outline" @click="retry">{{
+          t('views.master.MasterGroupDetailView.m11')
+        }}</VButton>
       </VEmptyState>
 
       <template v-else>
@@ -140,17 +142,17 @@
          prop, and was missed when this dialog was built. -->
     <VBottomSheet
       :open="renameOpen"
-      title="Изменить название и описание"
+      :title="t('views.master.MasterGroupDetailView.m6')"
       compact-title
-      save-label="Сохранить"
+      :save-label="t('views.master.MasterGroupDetailView.m7')"
       @save="onRenameSave"
       @close="renameOpen = false"
     >
       <VInput v-model="renameName" label="Название" placeholder="Название группы" />
       <VTextarea
         v-model="renameDescription"
-        label="Описание"
-        placeholder="Описание"
+        :label="t('views.master.MasterGroupDetailView.m8')"
+        :placeholder="t('views.master.MasterGroupDetailView.m9')"
         :rows="3"
         autogrow
       />
@@ -160,7 +162,7 @@
     <VConfirmDialog
       :open="deleteConfirmOpen"
       :message="deleteMessage"
-      confirm-label="Удалить"
+      :confirm-label="t('views.master.MasterGroupDetailView.m10')"
       danger
       :loading="deleting"
       @confirm="onDeleteConfirm"
@@ -170,6 +172,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -267,7 +270,7 @@ async function loadGroups(): Promise<void> {
       // being absent means genuinely gone or invalid -- reuse this
       // screen's own existing error state rather than leaving a blank
       // header (owner Q12's own explicit warning).
-      error.value = 'Группа не найдена'
+      error.value = t('views.master.MasterGroupDetailView.m12')
     }
   } catch {
     // Best-effort: load() below (members) has its own independent error
@@ -283,7 +286,7 @@ async function load(): Promise<void> {
     const res = await getGroupMembers(groupId.value, search.value)
     members.value = res.items
   } catch (e) {
-    error.value = extractApiError(e, 'Попробуйте ещё раз')
+    error.value = extractApiError(e, t('views.master.MasterGroupDetailView.m13'))
   } finally {
     loading.value = false
   }
@@ -343,9 +346,9 @@ async function onInviteClick(): Promise<void> {
     // Clipboard needs no backend — write the link straight to the
     // clipboard (B2, same pattern as MasterGroupsView's row invite).
     await navigator.clipboard.writeText(res.invite_url)
-    toast.success('Ссылка скопирована')
+    toast.success(t('views.master.MasterGroupDetailView.m14'))
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось создать ссылку'))
+    toast.error(extractApiError(e, t('views.master.MasterGroupDetailView.m15')))
   } finally {
     inviting.value = false
   }
@@ -380,7 +383,7 @@ async function onRenameSave(): Promise<void> {
     // rewriting the URL, same source of truth loadGroups() already is.
     await loadGroups()
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось переименовать группу'))
+    toast.error(extractApiError(e, t('views.master.MasterGroupDetailView.m16')))
   }
 }
 
@@ -411,7 +414,7 @@ async function onDeleteConfirm(): Promise<void> {
     if (e instanceof ApiResponseError && e.code === 'group_in_use') {
       toast.error(errorMessage('group_in_use'))
     } else {
-      toast.error(extractApiError(e, 'Не удалось удалить группу'))
+      toast.error(extractApiError(e, t('views.master.MasterGroupDetailView.m17')))
     }
   } finally {
     deleting.value = false

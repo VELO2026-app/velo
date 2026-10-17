@@ -20,7 +20,9 @@
 
       <!-- Error (SW8): distinct from "not found" -- retry, not a dead end. -->
       <VEmptyState v-else-if="error" icon="warning" title="Ошибка загрузки" :description="error">
-        <VButton size="sm" variant="outline" @click="loadReport">Повторить</VButton>
+        <VButton size="sm" variant="outline" @click="loadReport">{{
+          t('views.admin.AdminReportDetailView.m7')
+        }}</VButton>
       </VEmptyState>
 
       <template v-else-if="report">
@@ -36,20 +38,28 @@
 
         <!-- Report content -->
         <div class="report-detail__section">
-          <div class="report-detail__section-title">Текст жалобы</div>
+          <div class="report-detail__section-title">
+            {{ t('views.admin.AdminReportDetailView.m8') }}
+          </div>
           <VCard class="report-detail__reason">{{ decodedReason }}</VCard>
         </div>
 
         <!-- Meta -->
         <div class="report-detail__section">
-          <div class="report-detail__section-title">Детали</div>
+          <div class="report-detail__section-title">
+            {{ t('views.admin.AdminReportDetailView.m9') }}
+          </div>
           <VCard class="report-detail__meta-list" padding="none">
             <div class="report-detail__meta-row">
-              <span class="report-detail__meta-key">Тип цели</span>
+              <span class="report-detail__meta-key">{{
+                t('views.admin.AdminReportDetailView.m10')
+              }}</span>
               <span class="report-detail__meta-val">{{ report.target_type }}</span>
             </div>
             <div class="report-detail__meta-row">
-              <span class="report-detail__meta-key">ID цели</span>
+              <span class="report-detail__meta-key">{{
+                t('views.admin.AdminReportDetailView.m11')
+              }}</span>
               <button
                 v-if="targetRoute"
                 type="button"
@@ -63,14 +73,18 @@
               </span>
             </div>
             <div class="report-detail__meta-row">
-              <span class="report-detail__meta-key">Создана</span>
+              <span class="report-detail__meta-key">{{
+                t('views.admin.AdminReportDetailView.m12')
+              }}</span>
               <span class="report-detail__meta-val">
                 {{ formatDateTime(report.created_at) }}
               </span>
             </div>
             <template v-if="report.resolved_at">
               <div class="report-detail__meta-row">
-                <span class="report-detail__meta-key">Обработана</span>
+                <span class="report-detail__meta-key">{{
+                  t('views.admin.AdminReportDetailView.m13')
+                }}</span>
                 <span class="report-detail__meta-val">
                   {{ formatDateTime(report.resolved_at) }}
                 </span>
@@ -78,7 +92,9 @@
             </template>
             <template v-if="report.resolution_note">
               <div class="report-detail__meta-row report-detail__meta-row--column">
-                <span class="report-detail__meta-key">Примечание</span>
+                <span class="report-detail__meta-key">{{
+                  t('views.admin.AdminReportDetailView.m14')
+                }}</span>
                 <span class="report-detail__meta-note">{{ report.resolution_note }}</span>
               </div>
             </template>
@@ -88,12 +104,14 @@
         <!-- Actions: only for pending -->
         <template v-if="currentStatus === 'pending'">
           <div class="report-detail__section">
-            <div class="report-detail__section-title">Решить жалобу</div>
+            <div class="report-detail__section-title">
+              {{ t('views.admin.AdminReportDetailView.m15') }}
+            </div>
             <div class="report-detail__action-form">
               <VTextarea
                 v-model="resolveNote"
-                label="Примечание к решению *"
-                placeholder="Опишите, какие меры приняты"
+                :label="t('views.admin.AdminReportDetailView.m1')"
+                :placeholder="t('views.admin.AdminReportDetailView.m2')"
                 :rows="3"
                 :error="resolveError"
               />
@@ -110,12 +128,14 @@
           </div>
 
           <div class="report-detail__section">
-            <div class="report-detail__section-title">Отклонить жалобу</div>
+            <div class="report-detail__section-title">
+              {{ t('views.admin.AdminReportDetailView.m16') }}
+            </div>
             <div class="report-detail__action-form">
               <VTextarea
                 v-model="dismissNote"
-                label="Примечание (необязательно)"
-                placeholder="Причина отклонения"
+                :label="t('views.admin.AdminReportDetailView.m3')"
+                :placeholder="t('views.admin.AdminReportDetailView.m4')"
                 :rows="2"
               />
               <VButton
@@ -142,16 +162,19 @@
       <div v-else class="report-detail__not-found">
         <VEmptyState
           icon="notfound"
-          title="Жалоба не найдена"
-          description="Вернитесь к списку жалоб"
+          :title="t('views.admin.AdminReportDetailView.m5')"
+          :description="t('views.admin.AdminReportDetailView.m6')"
         />
-        <VButton variant="outline" block @click="router.back()">Назад</VButton>
+        <VButton variant="outline" block @click="router.back()">{{
+          t('views.admin.AdminReportDetailView.m17')
+        }}</VButton>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { decodeReportReason } from '@/utils/reportReasons'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -217,7 +240,7 @@ async function loadReport(): Promise<void> {
     currentStatus.value = fetched.status
   } catch (e) {
     // SW8: own error rung + retry, distinct from "not found".
-    error.value = extractApiError(e, 'Ошибка загрузки жалобы')
+    error.value = extractApiError(e, t('views.admin.AdminReportDetailView.m18'))
   } finally {
     loading.value = false
   }
@@ -226,18 +249,18 @@ async function loadReport(): Promise<void> {
 async function onResolve(): Promise<void> {
   resolveError.value = ''
   if (!resolveNote.value.trim()) {
-    resolveError.value = 'Введите примечание к решению'
+    resolveError.value = t('views.admin.AdminReportDetailView.m19')
     return
   }
   if (anyLoading.value) return
   resolving.value = true
   try {
     await resolveReport(reportId, resolveNote.value.trim())
-    toast.success('Жалоба решена')
+    toast.success(t('views.admin.AdminReportDetailView.m20'))
     // S-1/S-2: push to list instead of back() -- guarantees fresh loadInitial().
     void router.push({ name: 'admin-reports' })
   } catch (e) {
-    toast.error(extractApiError(e, 'Ошибка при обработке'))
+    toast.error(extractApiError(e, t('views.admin.AdminReportDetailView.m21')))
   } finally {
     resolving.value = false
   }
@@ -248,11 +271,11 @@ async function onDismiss(): Promise<void> {
   dismissing.value = true
   try {
     await dismissReport(reportId, dismissNote.value.trim() || undefined)
-    toast.success('Жалоба отклонена')
+    toast.success(t('views.admin.AdminReportDetailView.m22'))
     // S-1/S-2: push to list instead of back() -- guarantees fresh loadInitial().
     void router.push({ name: 'admin-reports' })
   } catch (e) {
-    toast.error(extractApiError(e, 'Ошибка при обработке'))
+    toast.error(extractApiError(e, t('views.admin.AdminReportDetailView.m23')))
   } finally {
     dismissing.value = false
   }

@@ -26,13 +26,13 @@
           <IconMessages :size="48" />
         </template>
       </VEmptyState>
-      <VButton size="sm" @click="load"> Повторить </VButton>
+      <VButton size="sm" @click="load">{{ t('views.master.MasterMessagesView.m3') }}</VButton>
     </div>
 
     <VEmptyState
       v-else-if="threads.length === 0"
-      title="Здесь появятся переписки с учениками"
-      description="Ученики пишут вам со страницы вашего профиля"
+      :title="t('views.master.MasterMessagesView.m1')"
+      :description="t('views.master.MasterMessagesView.m2')"
     >
       <template #icon>
         <IconMessages :size="48" />
@@ -44,7 +44,7 @@
         v-for="thread in threads"
         :key="thread.id"
         :peer="thread.peer"
-        :peer-fallback="t('views.master.MasterMessagesView.m1')"
+        :peer-fallback="t('views.master.MasterMessagesView.peerFallback')"
         :unread="thread.unread ?? 0"
         @open="openThread(thread.id)"
       />
@@ -80,7 +80,7 @@ async function load(): Promise<void> {
   try {
     threads.value = (await listChats()).threads
   } catch (e) {
-    error.value = extractApiError(e, 'Попробуйте ещё раз')
+    error.value = extractApiError(e, t('views.master.MasterMessagesView.m4'))
   }
   loading.value = false
 }

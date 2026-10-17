@@ -25,7 +25,7 @@
   <div class="admin-list">
     <header class="admin-list__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-list__title">Мастера</h1>
+      <h1 class="admin-list__title">{{ t('views.admin.AdminMastersView.m3') }}</h1>
       <span class="admin-list__count">{{ headerCount }}</span>
     </header>
 
@@ -48,10 +48,14 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      title="Не удалось загрузить мастеров"
-      description="Проверьте соединение и попробуйте ещё раз"
+      :title="t('views.admin.AdminMastersView.m1')"
+      :description="t('views.admin.AdminMastersView.m2')"
     >
-      <template #action><VButton variant="primary" @click="load">Повторить</VButton></template>
+      <template #action
+        ><VButton variant="primary" @click="load">{{
+          t('views.admin.AdminMastersView.m4')
+        }}</VButton></template
+      >
     </VEmptyState>
 
     <!-- List -->
@@ -90,7 +94,7 @@
               {{ c.label }}
             </VChip>
           </template>
-          <span v-else class="mcard__muted">Направления не указаны</span>
+          <span v-else class="mcard__muted">{{ t('views.admin.AdminMastersView.m5') }}</span>
         </div>
 
         <!-- R8: stats footer -- Практик / Ученики / К выводу, real backend
@@ -98,15 +102,15 @@
              (honest stub; should not happen for a master in this page). -->
         <div class="mcard__stats">
           <div class="mcard__stat">
-            <span class="mcard__stat-key">Практик</span>
+            <span class="mcard__stat-key">{{ t('views.admin.AdminMastersView.m6') }}</span>
             <span class="mcard__stat-val">{{ statVal(m.practices_count) }}</span>
           </div>
           <div class="mcard__stat">
-            <span class="mcard__stat-key">Ученики</span>
+            <span class="mcard__stat-key">{{ t('views.admin.AdminMastersView.m7') }}</span>
             <span class="mcard__stat-val">{{ statVal(m.students_count) }}</span>
           </div>
           <div class="mcard__stat">
-            <span class="mcard__stat-key">К выводу</span>
+            <span class="mcard__stat-key">{{ t('views.admin.AdminMastersView.m8') }}</span>
             <span class="mcard__stat-val">{{ payoutVal(m.available_cents) }}</span>
           </div>
         </div>
@@ -121,6 +125,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { toHistoryState } from '@/utils/historySnapshot'
 import { ref, computed, onMounted, type Component } from 'vue'
 import { useRouter } from 'vue-router'
@@ -209,12 +214,28 @@ const headerCount = computed<string>(() => (total.value ? String(total.value) : 
 // `cancelled_by_user` (the tab exists, count 0 — expected). F5: short labels;
 // the strip is compact + horizontally scrollable (VSegment scrollable).
 const segOptions = computed<SegmentOption[]>(() => [
-  { value: 'all', label: 'Все', badge: total.value || undefined },
-  { value: 'pending', label: 'Проверка', badge: statusCount('pending') },
-  { value: 'verified', label: 'Верифиц.', badge: statusCount('verified') },
-  { value: 'rejected', label: 'Отклонены', badge: statusCount('rejected') },
-  { value: 'suspended', label: 'Заблок.', badge: statusCount('suspended') },
-  { value: 'cancelled_by_user', label: 'Удалены', badge: statusCount('cancelled_by_user') },
+  { value: 'all', label: t('views.admin.AdminMastersView.m9'), badge: total.value || undefined },
+  { value: 'pending', label: t('views.admin.AdminMastersView.m10'), badge: statusCount('pending') },
+  {
+    value: 'verified',
+    label: t('views.admin.AdminMastersView.m11'),
+    badge: statusCount('verified'),
+  },
+  {
+    value: 'rejected',
+    label: t('views.admin.AdminMastersView.m12'),
+    badge: statusCount('rejected'),
+  },
+  {
+    value: 'suspended',
+    label: t('views.admin.AdminMastersView.m13'),
+    badge: statusCount('suspended'),
+  },
+  {
+    value: 'cancelled_by_user',
+    label: t('views.admin.AdminMastersView.m14'),
+    badge: statusCount('cancelled_by_user'),
+  },
 ])
 
 const filtered = computed<AdminMasterListItem[]>(() =>
@@ -225,13 +246,13 @@ const filtered = computed<AdminMasterListItem[]>(() =>
 
 const emptyText = computed<string>(() => {
   const byFilter: Record<string, string> = {
-    pending: 'Нет мастеров на проверке',
-    verified: 'Нет верифицированных мастеров',
-    rejected: 'Нет отклонённых мастеров',
-    suspended: 'Нет заблокированных мастеров',
-    cancelled_by_user: 'Нет удалённых аккаунтов',
+    pending: t('views.admin.AdminMastersView.m15'),
+    verified: t('views.admin.AdminMastersView.m16'),
+    rejected: t('views.admin.AdminMastersView.m17'),
+    suspended: t('views.admin.AdminMastersView.m18'),
+    cancelled_by_user: t('views.admin.AdminMastersView.m19'),
   }
-  return byFilter[filter.value] ?? 'Мастеров пока нет'
+  return byFilter[filter.value] ?? t('views.admin.AdminMastersView.m20')
 })
 
 // Status badge labels match the operator SVG (the shared helper uses shorter ones).
@@ -269,7 +290,7 @@ async function load(): Promise<void> {
     total.value = res.total
   } catch (e) {
     error.value = true
-    toast.error(extractApiError(e, 'Ошибка загрузки мастеров'))
+    toast.error(extractApiError(e, t('views.admin.AdminMastersView.m21')))
   } finally {
     loading.value = false
   }

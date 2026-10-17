@@ -17,14 +17,14 @@
   <div class="admin-detail">
     <header class="admin-detail__top">
       <VBackButton @click="router.back()" />
-      <span class="admin-detail__title">Выручка</span>
+      <span class="admin-detail__title">{{ t('views.admin.AdminRevenueView.m3') }}</span>
     </header>
 
     <VSegment
       compact
       :model-value="period"
       :options="periodOptions"
-      aria-label="Период выручки"
+      :aria-label="t('views.admin.AdminRevenueView.m1')"
       @update:model-value="selectPeriod"
     />
 
@@ -33,10 +33,12 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      title="Не удалось загрузить выручку"
+      :title="t('views.admin.AdminRevenueView.m2')"
       :description="error"
     >
-      <VButton size="sm" variant="outline" @click="load">Повторить</VButton>
+      <VButton size="sm" variant="outline" @click="load">{{
+        t('views.admin.AdminRevenueView.m4')
+      }}</VButton>
     </VEmptyState>
 
     <template v-else-if="data">
@@ -49,7 +51,7 @@
         <VStatCard :value="payoutLabel" label="Выплачено" />
       </div>
 
-      <h3 class="admin-detail__section">По мастерам</h3>
+      <h3 class="admin-detail__section">{{ t('views.admin.AdminRevenueView.m5') }}</h3>
       <div v-if="data.per_master.length" class="admin-detail__items">
         <VListRow
           v-for="m in data.per_master"
@@ -62,12 +64,15 @@
           </template>
         </VListRow>
       </div>
-      <VCard v-else><p class="admin-detail__empty">Данных пока нет</p></VCard>
+      <VCard v-else
+        ><p class="admin-detail__empty">{{ t('views.admin.AdminRevenueView.m6') }}</p></VCard
+      >
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -97,8 +102,8 @@ const error = ref<string | null>(null)
 // Период (Неделя/Месяц), default 'week' matches the backend default.
 const period = ref<'week' | 'month'>('week')
 const periodOptions: SegmentOption[] = [
-  { value: 'week', label: 'Неделя' },
-  { value: 'month', label: 'Месяц' },
+  { value: 'week', label: t('views.admin.AdminRevenueView.m7') },
+  { value: 'month', label: t('views.admin.AdminRevenueView.m8') },
 ]
 const revenueHeroLabel = computed<string>(() =>
   period.value === 'week' ? 'Выручка за неделю' : 'Выручка за месяц',
@@ -110,7 +115,7 @@ function selectPeriod(p: string): void {
   period.value = p
 }
 
-// allowZero=true: free-seed totals must show €0.00, not "Бесплатно".
+// allowZero=true: free-seed totals must show €0.00, not t('views.admin.AdminRevenueView.m9').
 function money(cents: number): string {
   return formatMoney(cents, 'EUR', 'ru', true)
 }
@@ -127,7 +132,7 @@ async function load(): Promise<void> {
   try {
     data.value = await getAdminRevenue(period.value)
   } catch (e) {
-    error.value = extractApiError(e, 'Ошибка загрузки')
+    error.value = extractApiError(e, t('views.admin.AdminRevenueView.m10'))
   } finally {
     loading.value = false
   }

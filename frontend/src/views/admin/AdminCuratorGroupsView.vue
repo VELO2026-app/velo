@@ -17,7 +17,7 @@
   <div class="admin-list">
     <header class="admin-list__top">
       <VBackButton @click="router.push({ name: 'admin-masters' })" />
-      <h1 class="admin-list__title">Школы</h1>
+      <h1 class="admin-list__title">{{ t('views.admin.AdminCuratorGroupsView.m3') }}</h1>
       <span class="admin-list__count">{{ total || '—' }}</span>
     </header>
 
@@ -26,11 +26,13 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      title="Не удалось загрузить школы"
-      description="Проверьте соединение и попробуйте ещё раз"
+      :title="t('views.admin.AdminCuratorGroupsView.m1')"
+      :description="t('views.admin.AdminCuratorGroupsView.m2')"
     >
       <template #action
-        ><VButton variant="primary" @click="load(true)">Повторить</VButton></template
+        ><VButton variant="primary" @click="load(true)">{{
+          t('views.admin.AdminCuratorGroupsView.m4')
+        }}</VButton></template
       >
     </VEmptyState>
 
@@ -58,7 +60,9 @@
       </div>
 
       <div v-if="hasMore" class="admin-list__more">
-        <VButton variant="outline" :loading="loading" @click="load(false)">Показать ещё</VButton>
+        <VButton variant="outline" :loading="loading" @click="load(false)">{{
+          t('views.admin.AdminCuratorGroupsView.m5')
+        }}</VButton>
       </div>
     </template>
 
@@ -72,6 +76,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { VBackButton, VBadge, VButton, VCard, VEmptyState, VLoader } from '@/components/ui'
@@ -100,7 +105,7 @@ async function load(reset: boolean): Promise<void> {
     total.value = res.total
     groups.value = reset ? res.items : [...groups.value, ...res.items]
   } catch {
-    toast.error('Не удалось загрузить школы')
+    toast.error(t('views.admin.AdminCuratorGroupsView.m6'))
     // W12 discipline: only a failed FIRST page is an error state; a failed
     // loadMore keeps the loaded page and toasts.
     if (reset) error.value = true
@@ -109,7 +114,7 @@ async function load(reset: boolean): Promise<void> {
   }
 }
 
-// "Авг 2026" — school creation month, from created_at (UTC).
+// t('views.admin.AdminCuratorGroupsView.m7') — school creation month, from created_at (UTC).
 function createdLabel(iso: string): string {
   const d = new Date(iso)
   const month = new Intl.DateTimeFormat('ru-RU', { month: 'short', timeZone: 'UTC' })

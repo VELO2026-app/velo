@@ -81,7 +81,9 @@
         >
           {{ masterPracticeBadge(practice.status)!.label }}
         </VBadge>
-        <span class="edit-practice__readonly-text">Редактирование недоступно</span>
+        <span class="edit-practice__readonly-text">{{
+          t('views.master.EditPracticeView.m8')
+        }}</span>
       </div>
 
       <div class="edit-practice__content">
@@ -101,7 +103,7 @@
           <!-- Направление — options catalog-first (T2 stage 2), см. CreatePracticeView. -->
           <VSelect
             v-model="form.direction"
-            label="Направление"
+            :label="t('views.master.EditPracticeView.m1')"
             :options="directionOptions"
             :error="errors.direction"
             @update:modelValue="onDirectionChange"
@@ -116,7 +118,9 @@
           <!-- Дата — DS-пикер (реш. В: возвращена по логике — перенос практики
                норм. операция; нативный type=date заменён на брендовый пикер). -->
           <div class="edit-practice__field">
-            <label class="edit-practice__field-label">Дата</label>
+            <label class="edit-practice__field-label">{{
+              t('views.master.EditPracticeView.m9')
+            }}</label>
             <button
               type="button"
               class="edit-practice__picker"
@@ -129,7 +133,9 @@
 
           <!-- Время — DS-пикер (24ч, шаг 5 мин). -->
           <div class="edit-practice__field">
-            <label class="edit-practice__field-label">Время</label>
+            <label class="edit-practice__field-label">{{
+              t('views.master.EditPracticeView.m10')
+            }}</label>
             <button
               type="button"
               class="edit-practice__picker"
@@ -142,13 +148,13 @@
 
           <VSelect
             v-model="form.duration_minutes"
-            label="Длительность"
+            :label="t('views.master.EditPracticeView.m2')"
             :options="DURATION_OPTIONS"
           />
 
           <VInput
             v-model="form.max_participants_raw"
-            label="Максимум мест"
+            :label="t('views.master.EditPracticeView.m3')"
             type="number"
             :error="errors.max_participants"
           />
@@ -161,7 +167,9 @@
                sections here, Реш. В above).
                ================================================================ -->
           <div class="edit-practice__field edit-practice__audience">
-            <label class="edit-practice__field-label">Для кого практика</label>
+            <label class="edit-practice__field-label">{{
+              t('views.master.EditPracticeView.m11')
+            }}</label>
             <!-- BE-74: a practice of a school keeps its school for good
                  (practice_school_immutable), and the backend allows such a
                  practice only the 'public'/'curator_groups' pair
@@ -201,16 +209,16 @@
 
           <VTextarea
             v-model="form.contraindications"
-            label="Противопоказания"
-            placeholder="Беременность, сердечно-сосудистые заболевания"
+            :label="t('views.master.EditPracticeView.m4')"
+            :placeholder="t('views.master.EditPracticeView.m5')"
             :rows="2"
             autogrow
           />
 
           <VTextarea
             v-model="form.what_to_prepare"
-            label="Что подготовить"
-            placeholder="Коврик, плед, вода"
+            :label="t('views.master.EditPracticeView.m6')"
+            :placeholder="t('views.master.EditPracticeView.m7')"
             :rows="3"
             autogrow
           />
@@ -328,6 +336,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { historyHasBack } from '@/platform/history'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { DateTime } from 'luxon'
@@ -420,7 +429,7 @@ const anyLoading = computed(
 const confirmDialog = reactive({
   visible: false,
   message: '',
-  confirmLabel: 'Подтвердить',
+  confirmLabel: t('views.master.EditPracticeView.m12'),
   danger: false,
   loading: false,
   onConfirm: (): void => {
@@ -432,7 +441,7 @@ const confirmDialog = reactive({
 // (not UTC) so it doesn't drift a day near midnight for east/west-of-UTC users.
 const todayDate = computed(() => todayLocalISO())
 
-// Friendly date for the picker trigger, e.g. "25 янв. 2026" (mirrors Create).
+// Friendly date for the picker trigger, e.g. t('views.master.EditPracticeView.m13') (mirrors Create).
 const dateDisplay = computed((): string =>
   form.date ? `${formatShortDate(`${form.date}T12:00:00`)} ${form.date.slice(0, 4)}` : '',
 )
@@ -646,7 +655,7 @@ onMounted(async () => {
     practice.value = p
     populateForm(p)
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось загрузить практику'))
+    toast.error(extractApiError(e, t('views.master.EditPracticeView.m14')))
   } finally {
     loading.value = false
   }
@@ -661,22 +670,22 @@ function validate(): boolean {
   errors.audience_group_ids = ''
 
   if (!form.title.trim()) {
-    errors.title = 'Введите название'
+    errors.title = t('views.master.EditPracticeView.m15')
     ok = false
   }
   if (!form.direction) {
-    errors.direction = 'Выберите направление'
+    errors.direction = t('views.master.EditPracticeView.m16')
     ok = false
   }
   if (form.max_participants_raw) {
     const n = parseInt(form.max_participants_raw, 10)
     if (isNaN(n) || n < 1) {
-      errors.max_participants = 'Введите положительное число или оставьте пустым'
+      errors.max_participants = t('views.master.EditPracticeView.m17')
       ok = false
     }
   }
   if (form.audience_kind === 'groups' && form.audience_group_ids.length === 0) {
-    errors.audience_group_ids = 'Выберите хотя бы одну группу'
+    errors.audience_group_ids = t('views.master.EditPracticeView.m18')
     ok = false
   }
   return ok
@@ -723,7 +732,7 @@ async function save(): Promise<void> {
       })
     } catch (e) {
       saving.value = false
-      toast.error(extractApiError(e, 'Не удалось проверить аудиторию'))
+      toast.error(extractApiError(e, t('views.master.EditPracticeView.m19')))
       return
     }
     saving.value = false
@@ -737,7 +746,7 @@ async function save(): Promise<void> {
       // canonical Russian pluralizer, already used app-wide for counts)
       // covers the NOUN's 1 / 2-4 / 5+ forms -- but «записавшийся» is a
       // substantivized participle, where the 2-4 and 5+ forms happen to be
-      // IDENTICAL ("записавшихся" either way), so plural()'s 3-way split
+      // IDENTICAL (t('views.master.EditPracticeView.m20') either way), so plural()'s 3-way split
       // collapses to a binary one here. That same one-vs-rest split also
       // governs the sentence's verb/pronoun agreement (попадёт/попадут,
       // он/они, его/их, сможет/смогут), which plural() only ever returns a
@@ -745,14 +754,19 @@ async function save(): Promise<void> {
       // count === 1 directly rather than threading three template
       // variants through one helper call.
       const n = preview.stranded_count
-      const noun = plural(n, 'записавшийся', 'записавшихся', 'записавшихся')
+      const noun = plural(
+        n,
+        t('views.master.EditPracticeView.m21'),
+        t('views.master.EditPracticeView.m22'),
+        t('views.master.EditPracticeView.m23'),
+      )
       confirmDialog.message =
         n === 1
           ? `${n} ${noun} не попадёт на эту практику — он не входит в выбранную аудиторию. ` +
-            'Его запись останется, но войти он не сможет. Сохранить?'
+            t('views.master.EditPracticeView.m24')
           : `${n} ${noun} не попадут на эту практику — они не входят в выбранную аудиторию. ` +
-            'Их запись останется, но войти они не смогут. Сохранить?'
-      confirmDialog.confirmLabel = 'Сохранить всё равно'
+            t('views.master.EditPracticeView.m25')
+      confirmDialog.confirmLabel = t('views.master.EditPracticeView.m26')
       confirmDialog.danger = false
       confirmDialog.onConfirm = () => {
         void commitSave()
@@ -779,7 +793,7 @@ async function commitSave(): Promise<void> {
         zone: form.timezone,
       })
       if (!dt.isValid) {
-        toast.error('Некорректные дата или время')
+        toast.error(t('views.master.EditPracticeView.m27'))
         return
       }
       scheduledAt = dt.toUTC().toISO() ?? undefined
@@ -808,7 +822,7 @@ async function commitSave(): Promise<void> {
     })
     practice.value = updated
     confirmDialog.visible = false
-    toast.success('Сохранено')
+    toast.success(t('views.master.EditPracticeView.m28'))
     await masterStore.refreshMyPractices()
   } catch (e) {
     // A4 V3 (PROMPT №571): _assert_master_confirmed_taxonomy's rejection is a
@@ -821,7 +835,7 @@ async function commitSave(): Promise<void> {
     } else if (e instanceof ApiResponseError && e.code === 'style_not_confirmed') {
       toast.error(errorMessage('style_not_confirmed'))
     } else {
-      toast.error(extractApiError(e, 'Ошибка сохранения'))
+      toast.error(extractApiError(e, t('views.master.EditPracticeView.m29')))
     }
   } finally {
     saving.value = false
@@ -836,11 +850,11 @@ async function publish(): Promise<void> {
   try {
     const updated = await updatePractice(practiceId, { status: 'scheduled' })
     practice.value = updated
-    toast.success('Практика опубликована!')
+    toast.success(t('views.master.EditPracticeView.m30'))
     await masterStore.refreshMyPractices()
     void router.push({ name: 'master-practices' })
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось опубликовать'))
+    toast.error(extractApiError(e, t('views.master.EditPracticeView.m31')))
   } finally {
     transitioning.value = false
   }
@@ -860,11 +874,11 @@ async function cancel(scope: 'this' | 'this_and_future'): Promise<void> {
     const updated = await cancelPractice(practiceId, scope)
     practice.value = updated
     cancelModalOpen.value = false
-    toast.success('Практика отменена, возвраты выполнены')
+    toast.success(t('views.master.EditPracticeView.m32'))
     await masterStore.refreshMyPractices()
     void router.push({ name: 'master-practices' })
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось отменить'))
+    toast.error(extractApiError(e, t('views.master.EditPracticeView.m33')))
   } finally {
     cancelling.value = false
   }
@@ -872,8 +886,8 @@ async function cancel(scope: 'this' | 'this_and_future'): Promise<void> {
 
 // -- Confirm delete --
 function confirmDelete(): void {
-  confirmDialog.message = 'Удалить черновик? Это действие нельзя отменить.'
-  confirmDialog.confirmLabel = 'Удалить'
+  confirmDialog.message = t('views.master.EditPracticeView.m34')
+  confirmDialog.confirmLabel = t('views.master.EditPracticeView.m35')
   confirmDialog.danger = true
   confirmDialog.visible = true
   confirmDialog.onConfirm = () => {
@@ -888,11 +902,11 @@ async function remove(): Promise<void> {
   try {
     await deletePractice(practiceId)
     confirmDialog.visible = false
-    toast.success('Черновик удалён')
+    toast.success(t('views.master.EditPracticeView.m36'))
     await masterStore.refreshMyPractices()
     void router.push({ name: 'master-practices' })
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось удалить'))
+    toast.error(extractApiError(e, t('views.master.EditPracticeView.m37')))
   } finally {
     confirmDialog.loading = false
   }

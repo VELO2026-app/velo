@@ -29,7 +29,7 @@
 
     <!-- ===================== BALANCE ===================== -->
     <div class="finance-view__balance">
-      <div class="finance-view__balance-label">Доступно к выводу</div>
+      <div class="finance-view__balance-label">{{ t('views.master.MasterFinanceView.m7') }}</div>
       <div class="finance-view__balance-value">{{ formattedAvailable }}</div>
       <!-- frozen kept beyond the SVG: real «in review» money the master should see -->
       <div v-if="frozenCents > 0" class="finance-view__balance-frozen">
@@ -39,7 +39,7 @@
 
     <!-- ===================== PAYMENT METHOD (= configured payout, Б) ===================== -->
     <section class="finance-view__section">
-      <h2 class="finance-view__title">Метод оплаты</h2>
+      <h2 class="finance-view__title">{{ t('views.master.MasterFinanceView.m8') }}</h2>
 
       <template v-if="!showPayoutForm">
         <div v-if="hasPayout" class="finance-view__card">
@@ -54,7 +54,7 @@
           <button
             type="button"
             class="finance-view__card-x"
-            aria-label="Удалить способ выплаты"
+            :aria-label="t('views.master.MasterFinanceView.m1')"
             @click="removePayout"
           >
             <IconClose :size="16" />
@@ -87,12 +87,12 @@
           />
           <VInput
             v-model="payoutForm.accountHolder"
-            label="Имя владельца счёта"
+            :label="t('views.master.MasterFinanceView.m2')"
             placeholder="Ivan Ivanov"
           />
           <VInput
             v-model="payoutForm.swift"
-            label="BIC / SWIFT (необязательно)"
+            :label="t('views.master.MasterFinanceView.m3')"
             placeholder="COBADEFFXXX"
           />
         </template>
@@ -110,8 +110,8 @@
         <template v-else-if="payoutForm.method === 'revolut'">
           <VInput
             v-model="payoutForm.tag"
-            label="Revolut Tag или телефон *"
-            placeholder="@username или +49123456789"
+            :label="t('views.master.MasterFinanceView.m4')"
+            :placeholder="t('views.master.MasterFinanceView.m5')"
             :error="formErrors.tag"
           />
         </template>
@@ -123,7 +123,7 @@
         <template v-else-if="payoutForm.method === 'card'">
           <VInput
             v-model="payoutForm.cardNumber"
-            label="Номер карты"
+            :label="t('views.master.MasterFinanceView.m6')"
             placeholder="0000 0000 0000 0000"
             :error="formErrors.card"
           />
@@ -148,7 +148,9 @@
 
     <!-- ===================== WITHDRAW AMOUNT (always visible) ===================== -->
     <section class="finance-view__section">
-      <h2 class="finance-view__title">Сумма вывода <span class="finance-view__req">*</span></h2>
+      <h2 class="finance-view__title">
+        {{ t('views.master.MasterFinanceView.m9') }}<span class="finance-view__req">*</span>
+      </h2>
       <p class="finance-view__hint">
         Срок зачисления: 1-3 рабочих дня. Комиссия платёжного провайдера будет удержана из суммы
         вывода.
@@ -198,7 +200,7 @@
 
     <!-- ===================== HISTORY ===================== -->
     <section class="finance-view__section">
-      <h2 class="finance-view__title">История выводов</h2>
+      <h2 class="finance-view__title">{{ t('views.master.MasterFinanceView.m10') }}</h2>
 
       <div v-if="historyLoading && withdrawals.length === 0" class="finance-view__loader">
         <VLoader size="md" />
@@ -243,6 +245,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, reactive, onMounted, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -291,10 +294,10 @@ const formattedFrozen = computed(() => formatMoney(frozenCents.value, 'EUR', 'ru
 // ---------------------------------------------------------------------------
 
 const METHOD_OPTIONS = [
-  { value: 'bank_transfer', label: 'Банковский перевод (IBAN)' },
+  { value: 'bank_transfer', label: t('views.master.MasterFinanceView.m11') },
   { value: 'paypal', label: 'PayPal' },
   { value: 'revolut', label: 'Revolut' },
-  { value: 'card', label: 'Перевод по номеру карты' },
+  { value: 'card', label: t('views.master.MasterFinanceView.m12') },
 ]
 
 const showPayoutForm = ref(false)
@@ -363,7 +366,7 @@ function buildPayoutBody(): PayoutDetails | null {
   clearFormErrors()
   if (payoutForm.method === 'bank_transfer') {
     if (!payoutForm.iban.trim()) {
-      formErrors.iban = 'IBAN обязателен'
+      formErrors.iban = t('views.master.MasterFinanceView.m13')
       return null
     }
     const details: Record<string, string> = { iban: payoutForm.iban.trim() }
@@ -373,14 +376,14 @@ function buildPayoutBody(): PayoutDetails | null {
   }
   if (payoutForm.method === 'paypal') {
     if (!payoutForm.email.trim() || !payoutForm.email.includes('@')) {
-      formErrors.email = 'Введите корректный email'
+      formErrors.email = t('views.master.MasterFinanceView.m14')
       return null
     }
     return { method: 'paypal', details: { email: payoutForm.email.trim() } }
   }
   if (payoutForm.method === 'revolut') {
     if (!payoutForm.tag.trim()) {
-      formErrors.tag = 'Укажите Revolut tag или телефон'
+      formErrors.tag = t('views.master.MasterFinanceView.m15')
       return null
     }
     const value = payoutForm.tag.trim()
@@ -391,7 +394,7 @@ function buildPayoutBody(): PayoutDetails | null {
     // В1=А: persist ONLY the card number (no CVV, no expiry). Digits only.
     const digits = payoutForm.cardNumber.replace(/\D/g, '')
     if (digits.length < 12 || digits.length > 19) {
-      formErrors.card = 'Введите корректный номер карты'
+      formErrors.card = t('views.master.MasterFinanceView.m16')
       return null
     }
     return { method: 'card', details: { card_number: digits } }
@@ -408,9 +411,9 @@ async function savePayout(): Promise<void> {
     const result = await updatePayoutDetails(body)
     if (masterStore.profile) masterStore.profile.payout = result
     showPayoutForm.value = false
-    toast.success('Реквизиты сохранены')
+    toast.success(t('views.master.MasterFinanceView.m17'))
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось сохранить реквизиты'))
+    toast.error(extractApiError(e, t('views.master.MasterFinanceView.m18')))
   } finally {
     savingPayout.value = false
   }
@@ -423,22 +426,24 @@ function maskedDetails(payout: PayoutDetails): string {
     case 'bank_transfer': {
       const iban = (d['iban'] ?? '').replace(/\s/g, '')
       const last4 = iban.slice(-4)
-      return last4 ? `IBAN ···· ${last4}` : 'IBAN настроен'
+      return last4 ? `IBAN ···· ${last4}` : t('views.master.MasterFinanceView.m19')
     }
     case 'paypal': {
       const email = d['email'] ?? ''
       const at = email.indexOf('@')
-      return at > 1 ? email[0] + '···' + email.slice(at) : email || 'Email настроен'
+      return at > 1
+        ? email[0] + '···' + email.slice(at)
+        : email || t('views.master.MasterFinanceView.m20')
     }
     case 'revolut':
-      return d['tag'] ?? d['phone'] ?? 'Настроено'
+      return d['tag'] ?? d['phone'] ?? t('views.master.MasterFinanceView.m21')
     case 'card': {
       const num = (d['card_number'] ?? '').replace(/\s/g, '')
       const last4 = num.slice(-4)
-      return last4 ? `Карта ···· ${last4}` : 'Карта настроена'
+      return last4 ? `Карта ···· ${last4}` : t('views.master.MasterFinanceView.m22')
     }
     default:
-      return 'Настроено'
+      return t('views.master.MasterFinanceView.m23')
   }
 }
 
@@ -457,9 +462,9 @@ async function removePayout(): Promise<void> {
   try {
     await deletePayout()
     if (masterStore.profile) masterStore.profile.payout = null
-    toast.success('Способ выплаты удалён')
+    toast.success(t('views.master.MasterFinanceView.m24'))
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось удалить способ выплаты'))
+    toast.error(extractApiError(e, t('views.master.MasterFinanceView.m25')))
   } finally {
     savingPayout.value = false
   }
@@ -486,12 +491,12 @@ const amountCents = computed((): number => eurStringToCents(amountInput.value))
 const amountError = computed((): string => {
   if (!amountInput.value) return ''
   const cents = amountCents.value
-  if (cents <= 0) return 'Введите корректную сумму'
+  if (cents <= 0) return t('views.master.MasterFinanceView.m26')
   if (cents < MIN_WITHDRAWAL_EUROS * 100) {
     return `Минимальная сумма вывода ${formatMoney(MIN_WITHDRAWAL_EUROS * 100, 'EUR', 'ru', true)}`
   }
   if (cents > availableCents.value) {
-    return 'Недостаточно средств'
+    return t('views.master.MasterFinanceView.m27')
   }
   return ''
 })
@@ -512,14 +517,14 @@ async function submitWithdrawal(): Promise<void> {
   submitting.value = true
   try {
     await createWithdrawal(amountCents.value)
-    toast.success('Запрос на вывод отправлен. Ожидайте решения администратора.')
+    toast.success(t('views.master.MasterFinanceView.m28'))
     amountInput.value = ''
     // Refresh profile to update available/frozen balances.
     await masterStore.fetchMyProfile(true)
     // Reload withdrawal history from start.
     await reloadHistory()
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось создать запрос'))
+    toast.error(extractApiError(e, t('views.master.MasterFinanceView.m29')))
   } finally {
     submitting.value = false
   }
@@ -548,7 +553,7 @@ async function reloadHistory(): Promise<void> {
     // Surface the failure instead of rendering an empty history as if
     // "no withdrawals yet" -- a master with pending payouts must not be
     // told they have none. Mirrors loadMoreWithdrawals below.
-    toast.error('Не удалось загрузить историю выводов')
+    toast.error(t('views.master.MasterFinanceView.m30'))
   } finally {
     historyLoading.value = false
   }
@@ -563,7 +568,7 @@ async function loadMoreWithdrawals(): Promise<void> {
     historyTotal.value = data.total
     historyOffset.value += data.items.length
   } catch {
-    toast.error('Не удалось загрузить историю выводов')
+    toast.error(t('views.master.MasterFinanceView.m31'))
   } finally {
     historyLoading.value = false
   }
@@ -574,9 +579,9 @@ async function loadMoreWithdrawals(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 const STATUS_LABEL: Record<WithdrawalStatus, string> = {
-  pending: 'На рассмотрении',
-  approved: 'Одобрен',
-  rejected: 'Отклонён',
+  pending: t('views.master.MasterFinanceView.m32'),
+  approved: t('views.master.MasterFinanceView.m33'),
+  rejected: t('views.master.MasterFinanceView.m34'),
 }
 
 function statusLabel(s: WithdrawalStatus): string {

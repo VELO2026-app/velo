@@ -49,7 +49,7 @@
                  отменяет, с подтверждением). -->
             <VMenuItem
               :icon="IconPen"
-              ariaLabel="Редактировать"
+              :ariaLabel="t('views.master.MasterPracticeDetailView.m1')"
               @click="
                 () => {
                   goEdit()
@@ -81,7 +81,9 @@
     <!-- Error -->
     <div v-else-if="error" class="practice-detail__content">
       <VEmptyState icon="warning" title="Не удалось загрузить практику" :description="error">
-        <VButton size="sm" variant="outline" @click="load">Повторить</VButton>
+        <VButton size="sm" variant="outline" @click="load">{{
+          t('views.master.MasterPracticeDetailView.m6')
+        }}</VButton>
       </VEmptyState>
     </div>
 
@@ -128,7 +130,9 @@
              it keeps working after a reschedule, because it names the
              practice, never the meeting. -->
         <div v-if="publicLink" class="pd-shared-link">
-          <span class="pd-shared-link__label">Ссылка на практику — для канала и гостей</span>
+          <span class="pd-shared-link__label">{{
+            t('views.master.MasterPracticeDetailView.m7')
+          }}</span>
           <VButton size="sm" variant="outline" :loading="copyingShared" @click="onCopySharedLink">
             Копировать
           </VButton>
@@ -142,7 +146,7 @@
 
         <!-- Записались (roster; первые 5 + раскрытие — operator 2026-06-18) -->
         <section v-if="rosterItems.length > 0" class="practice-detail__section">
-          <h2 class="velo-section-title">Записались</h2>
+          <h2 class="velo-section-title">{{ t('views.master.MasterPracticeDetailView.m8') }}</h2>
           <div v-for="item in visibleRoster" :key="item.booking_id" class="pd-prow">
             <span class="pd-prow__ava">
               <img
@@ -159,7 +163,7 @@
           <VShowMore
             v-if="!rosterExpanded && hiddenRosterCount > 0"
             :count="hiddenRosterCount"
-            noun="участников"
+            :noun="t('views.master.MasterPracticeDetailView.m2')"
             @click="rosterExpanded = true"
           />
         </section>
@@ -177,7 +181,7 @@
               :aria-label="descOpen ? 'Свернуть' : 'Развернуть'"
               @click="descOpen = !descOpen"
             >
-              <span class="pd-acc__title">Описание</span>
+              <span class="pd-acc__title">{{ t('views.master.MasterPracticeDetailView.m9') }}</span>
               <svg
                 class="pd-acc__chev"
                 viewBox="0 0 24 24"
@@ -202,7 +206,9 @@
               :aria-label="contraOpen ? 'Свернуть' : 'Развернуть'"
               @click="contraOpen = !contraOpen"
             >
-              <span class="pd-acc__title">Противопоказания</span>
+              <span class="pd-acc__title">{{
+                t('views.master.MasterPracticeDetailView.m10')
+              }}</span>
               <svg
                 class="pd-acc__chev"
                 viewBox="0 0 24 24"
@@ -223,7 +229,9 @@
               :aria-label="prepOpen ? 'Свернуть' : 'Развернуть'"
               @click="prepOpen = !prepOpen"
             >
-              <span class="pd-acc__title">Что подготовить</span>
+              <span class="pd-acc__title">{{
+                t('views.master.MasterPracticeDetailView.m11')
+              }}</span>
               <svg
                 class="pd-acc__chev"
                 viewBox="0 0 24 24"
@@ -254,10 +262,7 @@
           :direction="practice.direction"
         >
           <template v-if="hasRating" #extra>
-            <VRatingBadges
-              size="lg"
-              :pcts="ratingPcts"
-            />
+            <VRatingBadges size="lg" :pcts="ratingPcts" />
           </template>
         </PracticeHeroCard>
 
@@ -269,7 +274,7 @@
 
         <!-- Отзывы участников (E1 named reviews — getPracticeReviews) -->
         <section class="practice-detail__section">
-          <h2 class="velo-section-title">Отзывы участников</h2>
+          <h2 class="velo-section-title">{{ t('views.master.MasterPracticeDetailView.m12') }}</h2>
           <div v-if="reviewsLoading && reviews.length === 0" class="practice-detail__rloader">
             <VLoader />
           </div>
@@ -286,11 +291,13 @@
             <!-- Первые 10 + раскрытие «посмотреть еще» (operator PROMPT №160). -->
             <VShowMore
               v-if="!reviewsExpanded && hiddenReviewsCount > 0"
-              label="посмотреть еще"
+              :label="t('views.master.MasterPracticeDetailView.m3')"
               @click="expandReviews"
             />
             <div v-else-if="reviewsExpanded && hasMoreReviews" class="practice-detail__more">
-              <VButton variant="ghost" @click="loadMoreReviews">Показать ещё</VButton>
+              <VButton variant="ghost" @click="loadMoreReviews">{{
+                t('views.master.MasterPracticeDetailView.m13')
+              }}</VButton>
             </div>
           </template>
           <VEmptyState v-else variant="note" title="Отзывов пока нет" />
@@ -299,7 +306,9 @@
         <!-- CTAs -->
         <div class="practice-detail__actions">
           <VButton variant="primary" block @click="goCheckins">Check-ins</VButton>
-          <VButton variant="outline" block @click="goRoster">Посещаемость</VButton>
+          <VButton variant="outline" block @click="goRoster">{{
+            t('views.master.MasterPracticeDetailView.m14')
+          }}</VButton>
         </div>
       </div>
     </template>
@@ -316,8 +325,8 @@
     <!-- Delete a draft practice. -->
     <VConfirmDialog
       :open="showDelete"
-      message="Удалить черновик практики? Это действие необратимо."
-      confirm-label="Удалить"
+      :message="t('views.master.MasterPracticeDetailView.m4')"
+      :confirm-label="t('views.master.MasterPracticeDetailView.m5')"
       :loading="deleting"
       @confirm="doDelete"
       @cancel="showDelete = false"
@@ -326,6 +335,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDiaryStore } from '@/stores/diary'
@@ -358,11 +368,7 @@ import { zonePercents, zoneTotal, type MoodScaleKey } from '@/utils/moodScale'
 // IconTrash is not re-exported from the icons barrel; import the component
 // directly (same as EntryView).
 import { IconTrash } from '@/components/icons'
-import {
-  DIFFICULTY_DOTS,
-  DIFFICULTY_LABEL,
-  recurrenceDaysLabel,
-} from '@/utils/displayHelpers'
+import { DIFFICULTY_DOTS, DIFFICULTY_LABEL, recurrenceDaysLabel } from '@/utils/displayHelpers'
 import { formatDateShort, formatTime } from '@/utils/format'
 import { useToast } from '@/composables/useToast'
 import type {
@@ -393,8 +399,16 @@ const isPast = computed(
 )
 const isUpcoming = computed((): boolean => practice.value != null && !isPast.value)
 const isDraft = computed((): boolean => practice.value?.status === 'draft')
-const headerTitle = computed((): string => (isPast.value ? 'Прошедшая практика' : 'Практика'))
-const destructiveLabel = computed((): string => (isDraft.value ? 'Удалить' : 'Отменить практику'))
+const headerTitle = computed((): string =>
+  isPast.value
+    ? t('views.master.MasterPracticeDetailView.m15')
+    : t('views.master.MasterPracticeDetailView.m16'),
+)
+const destructiveLabel = computed((): string =>
+  isDraft.value
+    ? t('views.master.MasterPracticeDetailView.m17')
+    : t('views.master.MasterPracticeDetailView.m18'),
+)
 
 // Reactive insights cache (shared with Analytics / Practices — often warm).
 const insightsCache = diaryStore.insightsCache
@@ -417,7 +431,10 @@ const durationLabel = computed((): string =>
 // for a series, «Регулярная» when the day list is empty; null hides the chip.
 const recurrenceLabel = computed((): string | null => {
   if (practice.value?.practice_type !== 'series') return null
-  return recurrenceDaysLabel(practice.value.recurrence_days) ?? 'Регулярная'
+  return (
+    recurrenceDaysLabel(practice.value.recurrence_days) ??
+    t('views.master.MasterPracticeDetailView.m19')
+  )
 })
 
 // T-35: OUR public link for this practice ({PUBLIC_LINK_BASE}/z/{code}),
@@ -434,9 +451,9 @@ async function onCopySharedLink(): Promise<void> {
     // Clipboard needs no backend -- same pattern as MasterGroupDetailView's
     // group-invite copy.
     await navigator.clipboard.writeText(publicLink.value)
-    toast.success('Ссылка скопирована')
+    toast.success(t('views.master.MasterPracticeDetailView.m20'))
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось скопировать ссылку'))
+    toast.error(extractApiError(e, t('views.master.MasterPracticeDetailView.m21')))
   } finally {
     copyingShared.value = false
   }
@@ -584,11 +601,11 @@ async function doCancel(scope: 'this' | 'this_and_future'): Promise<void> {
   cancelling.value = true
   try {
     await cancelPractice(practiceId, scope)
-    toast.success('Практика отменена')
+    toast.success(t('views.master.MasterPracticeDetailView.m22'))
     await masterStore.refreshMyPractices()
     router.back()
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось отменить практику'))
+    toast.error(extractApiError(e, t('views.master.MasterPracticeDetailView.m23')))
   } finally {
     cancelling.value = false
     showCancel.value = false
@@ -600,11 +617,11 @@ async function doDelete(): Promise<void> {
   deleting.value = true
   try {
     await deletePractice(practiceId)
-    toast.success('Черновик удалён')
+    toast.success(t('views.master.MasterPracticeDetailView.m24'))
     await masterStore.refreshMyPractices()
     router.back()
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось удалить практику'))
+    toast.error(extractApiError(e, t('views.master.MasterPracticeDetailView.m25')))
   } finally {
     deleting.value = false
     showDelete.value = false
@@ -630,7 +647,7 @@ async function load(): Promise<void> {
     // Named reviews only exist for finished practices; non-fatal alongside the load.
     if (isPast.value) void loadReviews()
   } catch (e) {
-    error.value = extractApiError(e, 'Ошибка загрузки')
+    error.value = extractApiError(e, t('views.master.MasterPracticeDetailView.m26'))
   } finally {
     loading.value = false
   }

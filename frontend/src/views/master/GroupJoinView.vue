@@ -27,17 +27,19 @@ design, mirroring MasterInviteClaimView's own state machine exactly:
       <!-- Joining -->
       <template v-if="joining">
         <VLoader size="lg" />
-        <p class="group-join__subtitle">Проверяем приглашение…</p>
+        <p class="group-join__subtitle">{{ t('views.master.GroupJoinView.m1') }}</p>
       </template>
 
       <!-- Transient (network/timeout) -- offer a retry, not a dead-link verdict. -->
       <template v-else-if="transientError">
-        <h2 class="group-join__title">Не удалось проверить приглашение</h2>
+        <h2 class="group-join__title">{{ t('views.master.GroupJoinView.m2') }}</h2>
         <p class="group-join__subtitle">
           Проблема с соединением. Проверьте интернет и попробуйте ещё раз.
         </p>
         <div class="group-join__actions">
-          <VButton variant="primary" block :loading="joining" @click="join"> Повторить </VButton>
+          <VButton variant="primary" block :loading="joining" @click="join">{{
+            t('views.master.GroupJoinView.m3')
+          }}</VButton>
         </div>
       </template>
 
@@ -56,6 +58,7 @@ design, mirroring MasterInviteClaimView's own state machine exactly:
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { joinGroup } from '@/api/groups'
@@ -83,11 +86,11 @@ async function join(): Promise<void> {
     void router.replace({ name: 'root' })
   } catch (e) {
     if (e instanceof ApiResponseError && e.status === 403) {
-      errorTitle.value = 'Мастер ограничил вам доступ'
-      errorDescription.value = 'Вы не сможете присоединиться к этой группе.'
+      errorTitle.value = t('views.master.GroupJoinView.m4')
+      errorDescription.value = t('views.master.GroupJoinView.m5')
     } else if (e instanceof ApiResponseError && e.status === 404) {
-      errorTitle.value = 'Ссылка недействительна'
-      errorDescription.value = 'Возможно, ссылка повреждена или устарела.'
+      errorTitle.value = t('views.master.GroupJoinView.m6')
+      errorDescription.value = t('views.master.GroupJoinView.m7')
     } else {
       transientError.value = true
     }

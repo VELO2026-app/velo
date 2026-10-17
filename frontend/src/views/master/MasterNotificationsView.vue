@@ -39,7 +39,9 @@
           <div class="mn-card__text">
             <span class="mn-card__title-row">
               <span class="mn-card__title">{{ row.label }}</span>
-              <VBadge v-if="isStub(row.key)" variant="muted" class="mn-card__soon">Скоро</VBadge>
+              <VBadge v-if="isStub(row.key)" variant="muted" class="mn-card__soon">{{
+                t('views.master.MasterNotificationsView.m3')
+              }}</VBadge>
             </span>
             <span v-if="row.sub" class="mn-card__sub">{{ row.sub }}</span>
           </div>
@@ -54,13 +56,13 @@
 
       <!-- Delivery schedule -->
       <section class="mn-section">
-        <h2 class="mn-section__title">График уведомлений</h2>
-        <p class="mn-section__sub">Получать уведомления с</p>
+        <h2 class="mn-section__title">{{ t('views.master.MasterNotificationsView.m4') }}</h2>
+        <p class="mn-section__sub">{{ t('views.master.MasterNotificationsView.m5') }}</p>
         <div class="mn-sched">
           <button type="button" class="mn-sched__field" @click="openTimePicker('from')">
             {{ schedule.from }}
           </button>
-          <span class="mn-sched__sep">до</span>
+          <span class="mn-sched__sep">{{ t('views.master.MasterNotificationsView.m6') }}</span>
           <button type="button" class="mn-sched__field" @click="openTimePicker('to')">
             {{ schedule.to }}
           </button>
@@ -68,7 +70,7 @@
         <div class="mn-days-card">
           <VDayPicker
             :model-value="schedule.days"
-            aria-label="Дни доставки уведомлений"
+            :aria-label="t('views.master.MasterNotificationsView.m1')"
             @update:model-value="onScheduleDays"
           />
         </div>
@@ -78,7 +80,7 @@
     <TimePickerSheet
       :open="timePickerOpen"
       :model-value="schedule[timePickerEdge]"
-      title="Время уведомлений"
+      :title="t('views.master.MasterNotificationsView.m2')"
       @update:model-value="onTimePicked"
       @close="timePickerOpen = false"
     />
@@ -86,6 +88,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -124,34 +127,54 @@ interface Group {
 
 const GROUPS: Group[] = [
   {
-    title: 'Практики',
+    title: t('views.master.MasterNotificationsView.m7'),
     rows: [
-      { key: 'new_booking', label: 'Новое бронирование', sub: 'Кто-то записался' },
-      { key: 'booking_cancelled', label: 'Отмена бронирования', sub: 'Кто-то отменил' },
-      { key: 'reminder', label: 'Напоминание', sub: 'За 1 час до начала' },
+      {
+        key: 'new_booking',
+        label: t('views.master.MasterNotificationsView.m8'),
+        sub: t('views.master.MasterNotificationsView.m9'),
+      },
+      {
+        key: 'booking_cancelled',
+        label: t('views.master.MasterNotificationsView.m10'),
+        sub: t('views.master.MasterNotificationsView.m11'),
+      },
+      {
+        key: 'reminder',
+        label: t('views.master.MasterNotificationsView.m12'),
+        sub: t('views.master.MasterNotificationsView.m13'),
+      },
     ],
   },
   {
-    title: 'Участники',
+    title: t('views.master.MasterNotificationsView.m14'),
     rows: [
       {
         key: 'new_checkin',
-        label: 'Новый check-in',
-        sub: 'Участник отметился о состоянии перед практикой',
+        label: t('views.master.MasterNotificationsView.m15'),
+        sub: t('views.master.MasterNotificationsView.m16'),
       },
-      { key: 'new_feedback', label: 'Новый feedback', sub: 'Участник оставил отзыв' },
+      {
+        key: 'new_feedback',
+        label: t('views.master.MasterNotificationsView.m17'),
+        sub: t('views.master.MasterNotificationsView.m18'),
+      },
     ],
   },
   {
-    title: 'Школы',
+    title: t('views.master.MasterNotificationsView.m19'),
     // FE-67 (BE-25): the curator_groups comms category -- member_joined plus
     // both school-master appointment outcomes (comms-profile/types.yaml).
     rows: [
-      { key: 'curator_groups', label: 'События школ', sub: 'Вступления и назначения мастеров' },
+      {
+        key: 'curator_groups',
+        label: t('views.master.MasterNotificationsView.m20'),
+        sub: t('views.master.MasterNotificationsView.m21'),
+      },
     ],
   },
   {
-    title: 'Сообщения',
+    title: t('views.master.MasterNotificationsView.m22'),
     // P-2 (H-T2-UI): labels follow the RECEIVER side of the msg.* axis
     // (comms app/notifier.py:214-232): a thread's OPERATOR -- the master --
     // receives students' chat messages as msg.support_message -> category
@@ -164,21 +187,29 @@ const GROUPS: Group[] = [
     rows: [
       {
         key: 'msg_support',
-        label: 'Сообщения учеников',
-        sub: 'Новые сообщения в ваших чатах',
+        label: t('views.master.MasterNotificationsView.m23'),
+        sub: t('views.master.MasterNotificationsView.m24'),
       },
       {
         key: 'msg_participants',
-        label: 'Ответы в ваших обращениях',
-        sub: 'Чаты, где вы — автор',
+        label: t('views.master.MasterNotificationsView.m25'),
+        sub: t('views.master.MasterNotificationsView.m26'),
       },
     ],
   },
   {
-    title: 'Аналитика',
+    title: t('views.master.MasterNotificationsView.m27'),
     rows: [
-      { key: 'ai_summary', label: 'AI-саммари', sub: 'По понедельникам' },
-      { key: 'monthly_report', label: 'Ежемесячный отчет', sub: '1-го числа месяца' },
+      {
+        key: 'ai_summary',
+        label: t('views.master.MasterNotificationsView.m28'),
+        sub: t('views.master.MasterNotificationsView.m29'),
+      },
+      {
+        key: 'monthly_report',
+        label: t('views.master.MasterNotificationsView.m30'),
+        sub: t('views.master.MasterNotificationsView.m31'),
+      },
     ],
   },
 ]
@@ -195,7 +226,7 @@ const CATEGORY_BY_KEY: Partial<Record<ToggleKey, string>> = {
 
 // Owner ruling 2026-08-16 (PROMPT №746): a stub row -- no comms category yet
 // -- stays VISIBLE but its switch is DISABLED (VSwitch's own `disabled`, not
-// a moved-then-reverted flip) and carries a short "Скоро" marker. Not
+// a moved-then-reverted flip) and carries a short t('views.master.MasterNotificationsView.m32') marker. Not
 // deleted, not made to persist -- forthcoming controls on an in-progress
 // screen are normal, per his standard on this.
 function isStub(key: ToggleKey): boolean {
@@ -263,7 +294,7 @@ async function loadPrefs(): Promise<void> {
     // H-R2 (3.6): a silent load failure left the screen showing defaults
     // the server never confirmed -- surface it (same tone as the
     // category handler below).
-    toast.error('Не удалось загрузить настройки уведомлений')
+    toast.error(t('views.master.MasterNotificationsView.m33'))
     console.warn('notification prefs load failed', error)
   }
 }
@@ -275,7 +306,7 @@ function persistSchedule(): void {
   }).catch((error) => {
     // H-R2 (3.6): the schedule save failing silently meant the picker
     // showed a schedule the server never accepted.
-    toast.error('Не удалось сохранить расписание')
+    toast.error(t('views.master.MasterNotificationsView.m34'))
     console.warn('schedule save failed', error)
   })
 }
@@ -306,7 +337,7 @@ function onToggle(key: ToggleKey, value: boolean): void {
       toggles.new_booking = prevBookingPair.nb
       toggles.booking_cancelled = prevBookingPair.bc
     }
-    toast.error('Не удалось сохранить настройку')
+    toast.error(t('views.master.MasterNotificationsView.m35'))
     console.warn('preference save failed', error)
   })
 }

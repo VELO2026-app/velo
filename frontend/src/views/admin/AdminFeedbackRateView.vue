@@ -22,10 +22,12 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      title="Не удалось загрузить метрику"
+      :title="t('views.admin.AdminFeedbackRateView.m1')"
       :description="error"
     >
-      <VButton size="sm" variant="outline" @click="load">Повторить</VButton>
+      <VButton size="sm" variant="outline" @click="load">{{
+        t('views.admin.AdminFeedbackRateView.m2')
+      }}</VButton>
     </VEmptyState>
 
     <template v-else>
@@ -38,7 +40,7 @@
         <VStatCard :value="leftReview" label="Оставили отзыв" />
       </div>
 
-      <h3 class="admin-detail__section">Распределение оценок</h3>
+      <h3 class="admin-detail__section">{{ t('views.admin.AdminFeedbackRateView.m3') }}</h3>
       <VCard class="admin-detail__rating">
         <VRatingBar
           v-for="row in ratingRows"
@@ -55,6 +57,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -120,7 +123,7 @@ async function load(): Promise<void> {
   try {
     data.value = await getFeedbackMetric(period, offset)
   } catch (e) {
-    error.value = extractApiError(e, 'Ошибка загрузки')
+    error.value = extractApiError(e, t('views.admin.AdminFeedbackRateView.m4'))
   } finally {
     loading.value = false
   }

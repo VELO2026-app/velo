@@ -49,7 +49,7 @@
         <VInput
           v-model="form.display_name"
           floating-label
-          label="Имя"
+          :label="t('views.master.MasterApplyView.m1')"
           :error="errors.display_name"
         />
         <VInput v-model="form.email" floating-label label="E-mail" type="email" />
@@ -76,7 +76,9 @@
            STEP 2: Опыт
            ================================================================ -->
       <template v-else-if="step === 2">
-        <h3 class="apply-view__step-title">Шаг 2: Опыт <span class="apply-view__req">*</span></h3>
+        <h3 class="apply-view__step-title">
+          {{ t('views.master.MasterApplyView.m5') }}<span class="apply-view__req">*</span>
+        </h3>
 
         <!-- Направления практик — TWO-LEVEL taxonomy, extracted into the shared
              MethodTaxonomyPicker (batch L, single source of truth). The outer
@@ -84,7 +86,7 @@
              chips, the per-direction style cards and «Свой вариант». v-model is
              the flat `methods: string[]` payload (unchanged schema). -->
         <div class="apply-view__field">
-          <label class="apply-view__label">Направления практик *</label>
+          <label class="apply-view__label">{{ t('views.master.MasterApplyView.m6') }}</label>
           <MethodTaxonomyPicker v-model="methods" />
           <p
             class="apply-view__field-error"
@@ -96,15 +98,15 @@
 
         <VSelect
           v-model="experienceLabel"
-          label="Опыт преподавания *"
+          :label="t('views.master.MasterApplyView.m2')"
           :options="EXPERIENCE_OPTIONS"
           :error="errors.experience_years"
         />
 
         <VTextarea
           v-model="form.bio"
-          label="О себе *"
-          placeholder="Расскажите о вашем опыте и подходе к практикам…"
+          :label="t('views.master.MasterApplyView.m3')"
+          :placeholder="t('views.master.MasterApplyView.m4')"
           :rows="4"
           :error="errors.bio"
         />
@@ -112,7 +114,7 @@
         <!-- Язык проведения практик (E16): sent with the application as
              experience.languages (selectedLanguages). -->
         <div class="apply-view__field">
-          <label class="apply-view__label">Язык проведения практик</label>
+          <label class="apply-view__label">{{ t('views.master.MasterApplyView.m7') }}</label>
           <VCard class="apply-view__langs" padding="none">
             <VCheckbox v-model="langRu" label="Русский" />
             <VCheckbox v-model="langEn" label="English" />
@@ -150,20 +152,22 @@
 
         <!-- Passport -->
         <div class="apply-view__field">
-          <label class="apply-view__label">Паспорт (скан или фото) *</label>
-          <p class="apply-view__hint">Для верификации личности. Не публикуется.</p>
+          <label class="apply-view__label">{{ t('views.master.MasterApplyView.m8') }}</label>
+          <p class="apply-view__hint">{{ t('views.master.MasterApplyView.m9') }}</p>
           <VCard class="apply-view__upload-card" padding="sm">
             <button type="button" class="apply-view__upload" @click="onUpload">
               <IconFile :size="26" class="apply-view__upload-icon" />
-              <span class="apply-view__upload-text">Загрузить документ</span>
+              <span class="apply-view__upload-text">{{
+                t('views.master.MasterApplyView.m10')
+              }}</span>
             </button>
           </VCard>
         </div>
 
         <!-- Certificates (multi-file UI; chip list renders once E13 stores files) -->
         <div class="apply-view__field">
-          <label class="apply-view__label">Сертификаты</label>
-          <p class="apply-view__hint">Можно загрузить несколько файлов.</p>
+          <label class="apply-view__label">{{ t('views.master.MasterApplyView.m11') }}</label>
+          <p class="apply-view__hint">{{ t('views.master.MasterApplyView.m12') }}</p>
           <div v-for="cert in uploadedCerts" :key="cert" class="apply-view__filechip">
             <IconCheck :size="18" />
             <span class="apply-view__filechip-name">{{ cert }}</span>
@@ -171,21 +175,25 @@
           <VCard class="apply-view__upload-card" padding="sm">
             <button type="button" class="apply-view__upload" @click="onUpload">
               <IconFile :size="26" class="apply-view__upload-icon" />
-              <span class="apply-view__upload-text">Добавить сертификат</span>
+              <span class="apply-view__upload-text">{{
+                t('views.master.MasterApplyView.m13')
+              }}</span>
             </button>
           </VCard>
         </div>
 
         <!-- Profile photo -->
         <div class="apply-view__field">
-          <label class="apply-view__label">Фото профиля</label>
+          <label class="apply-view__label">{{ t('views.master.MasterApplyView.m14') }}</label>
           <p class="apply-view__hint">
             Будет использовано на платформе в открытом доступе для участников.
           </p>
           <VCard class="apply-view__upload-card" padding="sm">
             <button type="button" class="apply-view__upload" @click="onUpload">
               <IconFile :size="26" class="apply-view__upload-icon" />
-              <span class="apply-view__upload-text">Загрузить фото</span>
+              <span class="apply-view__upload-text">{{
+                t('views.master.MasterApplyView.m15')
+              }}</span>
             </button>
           </VCard>
         </div>
@@ -233,6 +241,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, reactive, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -278,11 +287,11 @@ watch(step, () => {
 
 // -- Experience years options: label -> integer value mapping --
 const EXPERIENCE_OPTIONS = [
-  { label: 'Менее 1 года', value: '0' },
-  { label: '1-3 года', value: '2' },
-  { label: '3-5 лет', value: '4' },
-  { label: '5-10 лет', value: '7' },
-  { label: 'Более 10 лет', value: '11' },
+  { label: t('views.master.MasterApplyView.m16'), value: '0' },
+  { label: t('views.master.MasterApplyView.m17'), value: '2' },
+  { label: t('views.master.MasterApplyView.m18'), value: '4' },
+  { label: t('views.master.MasterApplyView.m19'), value: '7' },
+  { label: t('views.master.MasterApplyView.m20'), value: '11' },
 ]
 
 // -- Form state --
@@ -339,7 +348,7 @@ const experienceYears = computed((): number => {
 
 // -- Upload stub (Zod E13: no file storage yet) --
 function onUpload(): void {
-  toast.info('Загрузка файлов пока недоступна')
+  toast.info(t('views.master.MasterApplyView.m21'))
 }
 
 // -- Navigation --
@@ -356,11 +365,11 @@ function goToStep2(): void {
   errors.display_name = ''
   errors.privacy = ''
   if (!form.display_name.trim()) {
-    errors.display_name = 'Пожалуйста, введите имя'
+    errors.display_name = t('views.master.MasterApplyView.m22')
     return
   }
   if (!form.privacyAccepted) {
-    errors.privacy = 'Необходимо принять условия использования'
+    errors.privacy = t('views.master.MasterApplyView.m23')
     return
   }
   step.value = 2
@@ -372,15 +381,15 @@ function goToStep3(): void {
   errors.experience_years = ''
   errors.bio = ''
   if (methods.value.length === 0) {
-    errors.methods = 'Выберите хотя бы одно направление'
+    errors.methods = t('views.master.MasterApplyView.m24')
     return
   }
   if (!experienceLabel.value) {
-    errors.experience_years = 'Выберите опыт преподавания'
+    errors.experience_years = t('views.master.MasterApplyView.m25')
     return
   }
   if (!form.bio.trim()) {
-    errors.bio = 'Пожалуйста, расскажите о себе'
+    errors.bio = t('views.master.MasterApplyView.m26')
     return
   }
   step.value = 3
@@ -403,7 +412,7 @@ async function submit(skipDocuments = false): Promise<void> {
 
   errors.docs = ''
   if (!skipDocuments && !form.docsConsent) {
-    errors.docs = 'Необходимо дать согласие на обработку документов'
+    errors.docs = t('views.master.MasterApplyView.m27')
     return
   }
 
@@ -432,7 +441,7 @@ async function submit(skipDocuments = false): Promise<void> {
       // Refresh the store so masterNoProfileGuard sees the fresh profile
       // instead of the stale profileMissing from the earlier 403.
       await masterStore.fetchMyProfile(true)
-      toast.success('Профиль создан')
+      toast.success(t('views.master.MasterApplyView.m28'))
       void router.push({ name: 'master-dashboard' })
     } else {
       // Normal application (role='user') -> pending verdict flow. Mark this
@@ -450,11 +459,11 @@ async function submit(skipDocuments = false): Promise<void> {
       if (authStore.user?.id) {
         localStorage.removeItem(masterRejectionSeenKey(authStore.user.id))
       }
-      toast.success('Заявка отправлена!')
+      toast.success(t('views.master.MasterApplyView.m29'))
       void router.push({ name: 'master-pending' })
     }
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось отправить заявку'))
+    toast.error(extractApiError(e, t('views.master.MasterApplyView.m30')))
   } finally {
     submitting.value = false
   }

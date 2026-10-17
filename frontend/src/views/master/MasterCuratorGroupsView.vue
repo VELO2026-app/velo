@@ -25,7 +25,7 @@
           v-if="canCreate"
           type="button"
           class="mcg__add-btn"
-          aria-label="Новая школа"
+          :aria-label="t('views.master.MasterCuratorGroupsView.m1')"
           @click="router.push({ name: 'master-curator-group-create' })"
         >
           <IconPlusFilled :size="20" />
@@ -41,19 +41,21 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        title="Не удалось загрузить школы"
-        description="Проверьте соединение и попробуйте ещё раз."
+        :title="t('views.master.MasterCuratorGroupsView.m2')"
+        :description="t('views.master.MasterCuratorGroupsView.m3')"
       >
         <template #action>
-          <VButton variant="outline" @click="load">Повторить</VButton>
+          <VButton variant="outline" @click="load">{{
+            t('views.master.MasterCuratorGroupsView.m8')
+          }}</VButton>
         </template>
       </VEmptyState>
 
       <VEmptyState
         v-else-if="!groups.length && canCreate"
         icon="group"
-        title="Пока нет школ"
-        description="Создайте школу или вступите по ссылке от куратора."
+        :title="t('views.master.MasterCuratorGroupsView.m4')"
+        :description="t('views.master.MasterCuratorGroupsView.m5')"
       >
         <template #action>
           <VButton variant="primary" @click="router.push({ name: 'master-curator-group-create' })">
@@ -68,13 +70,15 @@
       <VEmptyState
         v-else-if="!groups.length"
         icon="group"
-        title="Пока нет школ"
-        description="Вступите по ссылке от куратора. Создавать школы может мастер, которому администратор выдал это право."
+        :title="t('views.master.MasterCuratorGroupsView.m6')"
+        :description="t('views.master.MasterCuratorGroupsView.m7')"
       />
 
       <template v-else>
         <template v-if="curated.length">
-          <h2 class="velo-section-title mcg__section">Я куратор</h2>
+          <h2 class="velo-section-title mcg__section">
+            {{ t('views.master.MasterCuratorGroupsView.m9') }}
+          </h2>
           <CuratorGroupRow
             v-for="g in curated"
             :key="g.id"
@@ -84,7 +88,9 @@
         </template>
 
         <template v-if="memberOnly.length">
-          <h2 class="velo-section-title mcg__section">Я участник</h2>
+          <h2 class="velo-section-title mcg__section">
+            {{ t('views.master.MasterCuratorGroupsView.m10') }}
+          </h2>
           <CuratorGroupRow
             v-for="g in memberOnly"
             :key="g.id"
@@ -104,6 +110,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getCuratorGroups, getMyCuratorGroups } from '@/api/curatorGroups'
