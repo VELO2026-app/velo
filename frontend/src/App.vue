@@ -70,9 +70,10 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useAuth, isSchoolInviteStartParam } from '@/composables/useAuth'
 import { useAuthStore } from '@/stores/auth'
+import { applyUserLanguage } from '@/locales'
 import { platform } from '@/platform'
 import { useBackgroundStabilizer } from '@/composables/useBackgroundStabilizer'
 import { useViewportGeometry } from '@/composables/useViewportGeometry'
@@ -88,16 +89,18 @@ import BotAccessHint from '@/views/auth/BotAccessHint.vue'
 import WelcomeView from '@/views/auth/WelcomeView.vue'
 import OnboardingView from '@/views/auth/OnboardingView.vue'
 
-const {
-  isReady,
-  isAuthenticated,
-  isLoggingOut,
-  restoreUnreachable,
-  botAccessHint,
-  initAuth,
-} = useAuth()
+const { isReady, isAuthenticated, isLoggingOut, restoreUnreachable, botAccessHint, initAuth } =
+  useAuth()
 const authStore = useAuthStore()
 const inTelegram = platform.name === 'telegram'
+
+// tz-i18n 0.3: the server owns the language (User.language, normalized by
+// the backend to en/de/es/ru); the UI follows it the moment the user record
+// arrives or changes (profile edit, phase-5 switcher).
+watch(
+  () => authStore.user?.language,
+  (language) => applyUserLanguage(language),
+)
 
 // Pin the fixed photo-background against the iOS/Telegram keyboard viewport
 // shift (the "dancing background"). Mounted once here, on the app root.

@@ -12,7 +12,13 @@
 // Copy source = operator SVGs (3 ReflectionView screens + 2 banner plates,
 // PROMPT №269). V2 bannerTitle defaults to «Поделитесь состоянием» (F5=А).
 // Text-only: no backend, no new component.
+// Fields resolve at ACCESS time (getters): the active locale's copy, and the
+// stable-hash pick stays as-is (tz-i18n 1.1).
 // =============================================================================
+
+import i18n from '@/locales'
+
+const { t } = i18n.global
 
 export interface ReflectionVariant {
   /** Dashboard plate title (operator banner SVGs). */
@@ -26,22 +32,40 @@ export interface ReflectionVariant {
 // Named so pickReflectionVariant has a definite (non-undefined) fallback under
 // noUncheckedIndexedAccess without a cast / non-null assertion.
 const VARIANT_WELLBEING: ReflectionVariant = {
-  bannerTitle: 'Как ваше самочувствие?',
-  screenTitle: 'Заметили, что вас сегодня не было',
-  screenSubtitle: 'Как ваше самочувствие?',
+  get bannerTitle(): string {
+    return t('reflection.v1.bannerTitle')
+  },
+  get screenTitle(): string {
+    return t('reflection.v1.screenTitle')
+  },
+  get screenSubtitle(): string {
+    return t('reflection.v1.screenSubtitle')
+  },
 }
 
 export const REFLECTION_VARIANTS: readonly ReflectionVariant[] = [
   VARIANT_WELLBEING,
   {
-    bannerTitle: 'Как прошел ваш день?',
-    screenTitle: 'Мы скучали без вас',
-    screenSubtitle: 'Расскажете, как прошел ваш день?',
+    get bannerTitle(): string {
+      return t('reflection.v2.bannerTitle')
+    },
+    get screenTitle(): string {
+      return t('reflection.v2.screenTitle')
+    },
+    get screenSubtitle(): string {
+      return t('reflection.v2.screenSubtitle')
+    },
   },
   {
-    bannerTitle: 'Поделитесь состоянием',
-    screenTitle: 'Иногда тело просит паузы',
-    screenSubtitle: 'Что вам сегодня было нужно больше?',
+    get bannerTitle(): string {
+      return t('reflection.v3.bannerTitle')
+    },
+    get screenTitle(): string {
+      return t('reflection.v3.screenTitle')
+    },
+    get screenSubtitle(): string {
+      return t('reflection.v3.screenSubtitle')
+    },
   },
 ]
 

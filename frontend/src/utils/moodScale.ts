@@ -25,12 +25,16 @@
 // =============================================================================
 
 import type { ScoreZone } from '@/api/types'
+import i18n from '@/locales'
+
+const { t } = i18n.global
 
 export type MoodScaleKey = 'bad' | 'low' | 'neutral' | 'good' | 'fire'
 
 // Exact type equality (not mutual assignability, which a union subset would
 // pass through a widening context). Exported so noUnusedLocals keeps it.
-type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false
+type Equal<A, B> =
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false
 type AssertTrue<T extends true> = T
 export type MoodScaleKeyMatchesServerZone = AssertTrue<Equal<MoodScaleKey, ScoreZone>>
 
@@ -44,14 +48,32 @@ export const MOOD_SCALE_MAX = 10
 export const MOOD_SCALE_DEFAULT_SCORE = 5
 
 /** Scale order, left to right on the slider. */
-export const MOOD_SCALE_KEYS = ['bad', 'low', 'neutral', 'good', 'fire'] as const satisfies readonly MoodScaleKey[]
+export const MOOD_SCALE_KEYS = [
+  'bad',
+  'low',
+  'neutral',
+  'good',
+  'fire',
+] as const satisfies readonly MoodScaleKey[]
 
+// Labels resolve at ACCESS time (getters), not at import: a saved score is
+// named by the ACTIVE locale's emotion word (tz-i18n 1.1).
 export const MOOD_SCALE_LABELS: Record<MoodScaleKey, string> = {
-  bad: 'Плохо',
-  low: 'Не очень',
-  neutral: 'Нормально',
-  good: 'Хорошо',
-  fire: 'Огонь',
+  get bad(): string {
+    return t('mood.bad')
+  },
+  get low(): string {
+    return t('mood.low')
+  },
+  get neutral(): string {
+    return t('mood.neutral')
+  },
+  get good(): string {
+    return t('mood.good')
+  },
+  get fire(): string {
+    return t('mood.fire')
+  },
 }
 
 /** Display-side clamp of a (possibly damaged) stored score. */
@@ -90,7 +112,11 @@ export function moodLabelFromScore(score: number): string {
 
 /** Range input's aria-valuetext: «5 из 10 — Нормально» (tz §8). */
 export function moodValueText(score: number): string {
-  return `${clampMoodScore(score)} из ${MOOD_SCALE_MAX} — ${moodLabelFromScore(score)}`
+  return t('mood.valueText', {
+    score: clampMoodScore(score),
+    max: MOOD_SCALE_MAX,
+    label: moodLabelFromScore(score),
+  })
 }
 
 /** Sum of a per-zone count record (the server's ScoreZoneCounts). */

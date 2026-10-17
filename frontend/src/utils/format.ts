@@ -9,7 +9,14 @@
 //
 // F4.2: formatMoney gains allowZero param for balance display.
 // F5 review: S-24 -- minimumFractionDigits: 2 for consistent money format.
+// tz-i18n 1.1: labels come from the active locale's catalog; the Intl
+// locale parameter defaults to it too (getLocale()). cleanPracticeTitle is
+// NOT i18n scope -- "(эфир)" is a DATA suffix from the seed/backend.
 // =============================================================================
+
+import i18n, { getLocale } from '@/locales'
+
+const { t } = i18n.global
 
 /**
  * Format cents into a currency string using Intl.NumberFormat.
@@ -27,10 +34,10 @@
 export function formatMoney(
   cents: number,
   currency: string,
-  locale = 'ru',
+  locale: string = getLocale(),
   allowZero = false,
 ): string {
-  if (cents === 0 && !allowZero) return 'Бесплатно'
+  if (cents === 0 && !allowZero) return t('common.free')
   return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency,
@@ -46,7 +53,11 @@ export function formatMoney(
  *   formatDate('2026-02-28T07:00:00Z') -> "28 февраля, 10:00" (in Europe/Moscow)
  *   formatDate('2026-02-28T07:00:00Z', 'UTC') -> "28 февраля, 07:00"
  */
-export function formatDate(isoString: string, timezone = 'UTC', locale = 'ru'): string {
+export function formatDate(
+  isoString: string,
+  timezone = 'UTC',
+  locale: string = getLocale(),
+): string {
   const date = new Date(isoString)
   return new Intl.DateTimeFormat(locale, {
     day: 'numeric',
@@ -62,7 +73,11 @@ export function formatDate(isoString: string, timezone = 'UTC', locale = 'ru'): 
  *
  * Returns relative labels for today/tomorrow, otherwise "28 февраля".
  */
-export function formatDateShort(isoString: string, timezone = 'UTC', locale = 'ru'): string {
+export function formatDateShort(
+  isoString: string,
+  timezone = 'UTC',
+  locale: string = getLocale(),
+): string {
   const date = new Date(isoString)
   const now = new Date()
 
@@ -85,8 +100,8 @@ export function formatDateShort(isoString: string, timezone = 'UTC', locale = 'r
   // calendar day once reformatted here.
   const tomorrowStr = fmt(new Date(now.getTime() + 24 * 60 * 60 * 1000))
 
-  if (dateStr === todayStr) return 'Сегодня'
-  if (dateStr === tomorrowStr) return 'Завтра'
+  if (dateStr === todayStr) return t('common.today')
+  if (dateStr === tomorrowStr) return t('common.tomorrow')
 
   return new Intl.DateTimeFormat(locale, {
     day: 'numeric',
@@ -121,6 +136,7 @@ const VELO_SHORT_MONTHS = [
 
 export function formatShortDate(isoString: string, timezone = 'UTC'): string {
   const date = new Date(isoString)
+  const locale = getLocale()
   const parts = new Intl.DateTimeFormat('en-CA', {
     day: 'numeric',
     month: 'numeric',
@@ -135,7 +151,13 @@ export function formatShortDate(isoString: string, timezone = 'UTC'): string {
   const dayRaw = parts.find((p) => p.type === 'day')?.value ?? ''
   const day = dayRaw === '' ? '' : String(Number(dayRaw))
   const monthNum = Number(parts.find((p) => p.type === 'month')?.value ?? '1')
-  const month = VELO_SHORT_MONTHS[monthNum - 1] ?? ''
+  // The agreed VELO short-month table is a RUSSIAN typographic rule (a
+  // genitive <= 4 letters in full, otherwise abbreviated + dot); other
+  // locales render ICU's own short month.
+  const month =
+    locale === 'ru'
+      ? (VELO_SHORT_MONTHS[monthNum - 1] ?? '')
+      : new Intl.DateTimeFormat(locale, { month: 'short', timeZone: timezone }).format(date)
   return `${day} ${month}`.trim()
 }
 
@@ -185,9 +207,9 @@ export function dayLabelOf(isoString: string, timezone = 'UTC'): string {
     new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString(),
     timezone,
   )
-  if (key === todayKey) return 'Сегодня'
-  if (key === yesterdayKey) return 'Вчера'
-  return new Intl.DateTimeFormat('ru-RU', {
+  if (key === todayKey) return t('common.today')
+  if (key === yesterdayKey) return t('common.yesterday')
+  return new Intl.DateTimeFormat(getLocale(), {
     day: 'numeric',
     month: 'long',
     timeZone: timezone,
@@ -212,7 +234,11 @@ export function todayLocalISO(): string {
 /**
  * Format an ISO datetime string into time only: "07:00".
  */
-export function formatTime(isoString: string, timezone = 'UTC', locale = 'ru'): string {
+export function formatTime(
+  isoString: string,
+  timezone = 'UTC',
+  locale: string = getLocale(),
+): string {
   const date = new Date(isoString)
   return new Intl.DateTimeFormat(locale, {
     hour: '2-digit',
@@ -269,7 +295,11 @@ export function localSortKey(isoString: string, timezone = 'UTC'): number {
  * Used by DiaryFeedCard. Defaults to the user's timezone (the diary is a
  * personal timeline -- "when it happened in my time").
  */
-export function formatFeedDateTime(isoString: string, timezone = 'UTC', locale = 'ru'): string {
+export function formatFeedDateTime(
+  isoString: string,
+  timezone = 'UTC',
+  locale: string = getLocale(),
+): string {
   const date = new Date(isoString)
   const dayMonth = new Intl.DateTimeFormat(locale, {
     day: 'numeric',
@@ -303,18 +333,18 @@ export function formatFeedDateTime(isoString: string, timezone = 'UTC', locale =
  *   formatDuration(120) -> "2 ч"       (exact multi-hour, no plural declension)
  */
 export function formatDuration(minutes: number): string {
-  if (minutes < 60) return `${minutes} мин`
+  if (minutes < 60) return `${minutes} ${t('common.duration.min')}`
   const h = Math.floor(minutes / 60)
   const m = minutes % 60
-  if (m === 0) return h === 1 ? '1 час' : `${h} ч`
-  return `${h} ч ${m} м`
+  if (m === 0) return h === 1 ? `1 ${t('common.duration.hour')}` : `${h} ${t('common.duration.h')}`
+  return `${h} ${t('common.duration.h')} ${m} ${t('common.duration.m')}`
 }
 
 /**
  * Format participants count: "5/20" or "N участн." when unlimited.
  */
 export function formatParticipants(current: number, max: number | null): string {
-  if (max === null) return `${current} участн.`
+  if (max === null) return t('common.participantsAbbr', { n: current })
   // No trailing «мест» — the group icon already conveys it; the design shows a
   // bare «N/M» (operator 2026-06-17).
   return `${current}/${max}`

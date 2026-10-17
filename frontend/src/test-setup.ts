@@ -9,7 +9,15 @@
 // =============================================================================
 
 import { beforeEach } from 'vitest'
+import { config } from '@vue/test-utils'
 import { resetClientState } from '@/api/client'
+import { createTestI18n } from '@/locales/testing'
+
+// tz-i18n 0.4: every @vue/test-utils mount gets i18n injected -- components
+// migrate to useI18n from phase 1 on. Raw `createApp(...)` test mounts (120
+// files) take app.use(createTestI18n()) via a codemod at the START of
+// phase 2, before the first shared component migrates.
+config.global.plugins = [...config.global.plugins, createTestI18n()]
 
 beforeEach(() => {
   resetClientState()

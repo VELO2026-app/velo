@@ -16,6 +16,7 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
+import VueI18nPlugin from '@intlify/unplugin-vue-i18n/vite'
 import { fileURLToPath, URL } from 'node:url'
 import { pwaManifest } from './src/pwa/manifest'
 
@@ -26,6 +27,16 @@ const ZOOM_SDK_MODULE =
 
 export default defineConfig({
   plugins: [
+    // tz-i18n §4.1: locale catalogs (src/locales/*.json) compile ahead of
+    // runtime -- the message compiler stays out of the bundle and the PWA
+    // precache. Include is scoped to the catalogs; other .json imports
+    // (package.json etc.) must not be treated as messages.
+    VueI18nPlugin({
+      // Only the catalogs themselves: the plugin requires `export default`
+      // message objects, and locales/*.ts (the singleton, test helper) are
+      // regular modules.
+      include: [fileURLToPath(new URL('./src/locales/*.json', import.meta.url))],
+    }),
     vue(),
     VitePWA({
       // Generate SW automatically from build output.

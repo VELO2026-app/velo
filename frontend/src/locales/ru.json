@@ -1,0 +1,215 @@
+{
+  "common": {
+    "today": "Сегодня",
+    "tomorrow": "Завтра",
+    "yesterday": "Вчера",
+    "free": "Бесплатно",
+    "duration": { "min": "мин", "hour": "час", "h": "ч", "m": "м" },
+    "participantsAbbr": "{n} участн.",
+    "traceSuffix": "{message} · код {code}"
+  },
+  "tabs": {
+    "dashboard": "Дашборд",
+    "calendar": "Календарь",
+    "diary": "Дневник",
+    "schools": "Школы",
+    "profile": "Я",
+    "practices": "Практики",
+    "analytics": "Аналитика",
+    "masters": "Мастера",
+    "moderation": "Модерация"
+  },
+  "display": {
+    "direction": {
+      "meditation": "Медитация",
+      "yoga": "Йога",
+      "breathwork": "Дыхательные практики",
+      "somatic": "Соматика",
+      "tantra": "Тантра",
+      "circles": "Круги",
+      "sound_healing": "Саундхиллинг",
+      "art": "Арт-практики",
+      "narrative": "Нарративные практики",
+      "movement": "Движение"
+    },
+    "difficulty": { "beginner": "Начальная", "medium": "Средняя", "high": "Высокая" },
+    "durationBucket": { "short": "До 1 часа", "long": "1 час и больше" },
+    "timeOfDay": { "night": "Ночь", "morning": "Утро", "day": "День", "evening": "Вечер" },
+    "feedKind": {
+      "booking_confirmed": "Вы записались",
+      "booking_cancelled_by_user": "Вы отменили запись",
+      "practice_rescheduled": "Мастер перенёс практику",
+      "practice_cancelled_by_master": "Практика отменена",
+      "practice_outcome": "",
+      "checkin": "Check-in",
+      "feedback": "Feedback",
+      "note": "Дневник",
+      "dream": "Сонник",
+      "thread_started": "Вы начали диалог",
+      "external_activity": ""
+    },
+    "externalActivity": {
+      "vocal": "Вокал",
+      "nail_standing": "Гвоздестояние",
+      "meditation": "Медитация",
+      "massage": "Массаж",
+      "yoga": "Йога",
+      "dance": "Танцы",
+      "custom": ""
+    },
+    "outcome": { "attended": "Done", "no_show": "Вы не пришли" },
+    "weekdayAbbr": {
+      "1": "Пн",
+      "2": "Вт",
+      "3": "Ср",
+      "4": "Чт",
+      "5": "Пт",
+      "6": "Сб",
+      "7": "Вс"
+    },
+    "recurrenceDaily": "Ежедневно"
+  },
+  "mood": {
+    "bad": "Плохо",
+    "low": "Не очень",
+    "neutral": "Нормально",
+    "good": "Хорошо",
+    "fire": "Огонь",
+    "valueText": "{score} из {max} — {label}"
+  },
+  "reflection": {
+    "v1": {
+      "bannerTitle": "Как ваше самочувствие?",
+      "screenTitle": "Заметили, что вас сегодня не было",
+      "screenSubtitle": "Как ваше самочувствие?"
+    },
+    "v2": {
+      "bannerTitle": "Как прошел ваш день?",
+      "screenTitle": "Мы скучали без вас",
+      "screenSubtitle": "Расскажете, как прошел ваш день?"
+    },
+    "v3": {
+      "bannerTitle": "Поделитесь состоянием",
+      "screenTitle": "Иногда тело просит паузы",
+      "screenSubtitle": "Что вам сегодня было нужно больше?"
+    }
+  },
+  "errors": {
+    "bot_url_not_configured": "Ссылки для приглашений временно недоступны. Сообщите в поддержку.",
+    "direction_not_confirmed": "Это направление ещё не подтверждено в вашем профиле",
+    "style_not_confirmed": "Этот вид практики ещё не подтверждён в вашем профиле",
+    "group_in_use": "Эта группа — единственная аудитория одной из практик. Сначала измените аудиторию практики, затем удалите группу.",
+    "invite_invalid": "Приглашение одноразовое: возможно, оно уже использовано или ссылка повреждена. Запросите новую ссылку у администратора.",
+    "insufficient_balance": "Недостаточно средств на балансе",
+    "zoom_sdk_not_configured": "Вход в Zoom на этом сервере пока не настроен",
+    "zoom_entry_not_joinable": "Сейчас войти в эту практику нельзя",
+    "zoom_unavailable": "Zoom не ответил. Попробуйте ещё раз через минуту",
+    "zoom_host_token_unavailable": "Zoom не дал начать встречу. Попробуйте ещё раз; если повторится — напишите в поддержку",
+    "already_master": "Вы уже мастер",
+    "master_offer_not_found": "Назначение недействительно или уже отменено",
+    "blocked_by_master": "Мастер этой практики закрыл вам доступ",
+    "master_profile_not_found": "Профиль мастера не найден",
+    "master_profile_not_verified": "Профиль мастера ещё не подтверждён",
+    "method_change_pending": "Заявка на изменение методов уже на рассмотрении",
+    "not_a_student": "Эта практика доступна только ученикам мастера",
+    "not_in_audience": "Эта практика недоступна для вашей группы",
+    "practice_completed": "Эта практика уже завершена — отменить бронирование нельзя",
+    "practice_not_found": "Практика не найдена",
+    "role_not_allowed": "Эта роль недоступна для вашего аккаунта",
+    "no_active_booking": "У вас нет подтверждённой брони на эту практику",
+    "checkin_window_closed": "Check-in закрыт — практика уже началась",
+    "checkin_window_not_open": "Check-in ещё не открыт — он откроется ближе к началу практики",
+    "curator_group_name_taken": "У вас уже есть школа с таким названием",
+    "group_creation_not_allowed": "Заводить школы может мастер, которому администратор выдал это право",
+    "curator_cannot_leave": "Куратор не может покинуть свою школу. Передайте её другому мастеру или удалите.",
+    "own_group": "Это ваша школа",
+    "master_required": "Назначить мастером школы можно только верифицированного мастера",
+    "blocked_by_curator": "Вступление в эту школу недоступно",
+    "blocked_in_group": "Вы заблокированы в этой школе",
+    "cannot_block_curator": "Куратора школы нельзя заблокировать",
+    "master_id_requires_school": "Выберите школу, в которой создаётся практика",
+    "master_not_in_school": "Этот мастер не состоит в школе или не верифицирован",
+    "curator_only": "Создавать практику за мастера может только куратор школы",
+    "curator_cannot_add_occurrence": "Куратор не может добавить занятие в серию мастера",
+    "curator_group_not_usable": "Школа недоступна: она отключена или вы в ней больше не состоите",
+    "transfer_pending": "Предложение уже отправлено. Сначала отмените его, затем предложите другому мастеру.",
+    "invite_not_found": "Приглашение недействительно",
+    "transfer_not_found": "Предложение о передаче не найдено",
+    "transfer_target_not_member": "Передать школу можно только мастеру из её состава",
+    "reflection_not_available": "Поделиться можно только по пропущенной практике",
+    "reflection_already_submitted": "Вы уже поделились — спасибо",
+    "mcp_token_limit_reached": "Активных токенов уже 10 — отзовите ненужный, чтобы создать новый",
+    "mcp_token_not_found": "Токен не найден — обновите список",
+    "mcp_token_name_taken": "Токен с таким названием уже есть — выберите другое",
+    "unauthorized": "Сессия истекла — войдите заново",
+    "not_found": "Запрошенный ресурс не найден",
+    "forbidden": "Действие недоступно",
+    "conflict": "Конфликт с текущим состоянием — попробуйте обновить страницу",
+    "bad_request": "Некорректный запрос",
+    "internal_error": "Внутренняя ошибка сервера. Попробуйте ещё раз",
+    "validation_error": "Проверьте введённые данные",
+    "generic": "Что-то пошло не так. Попробуйте ещё раз."
+  },
+  "transcription": {
+    "generic": "Сервис транскрибации недоступен",
+    "transcription_not_configured": "Голосовой ввод недоступен",
+    "transcription_unavailable": "Сервис транскрибации недоступен",
+    "transcription_failed": "Сервис транскрибации недоступен",
+    "speech_not_recognized": "Не удалось распознать речь",
+    "audio_too_large": "Запись слишком длинная",
+    "audio_invalid": "Не удалось обработать запись",
+    "unauthorized": "Сессия истекла, войдите заново"
+  },
+  "storeErrors": {
+    "admin.dashboard": "Не удалось загрузить статистику",
+    "admin.overview": "Не удалось загрузить статистику за период",
+    "bookings.selected": "Не удалось загрузить бронирование",
+    "bookings.upcoming": "Не удалось загрузить ближайшую практику",
+    "bookings.cancel": "Не удалось отменить бронирование",
+    "bookings.join": "Не удалось войти в практику",
+    "bookings.leave": "Не удалось покинуть практику",
+    "bookings.skipCheckin": "Не удалось пропустить check-in",
+    "master.profile": "Не удалось загрузить профиль мастера",
+    "calendar.schoolPractices": "Не удалось загрузить практики школы",
+    "calendar.calendar": "Не удалось загрузить календарь",
+    "practices.selected": "Не удалось загрузить практику",
+    "diary.sendCheckin": "Не удалось отправить check-in",
+    "diary.sendFeedback": "Не удалось отправить feedback",
+    "diary.send": "Не удалось отправить",
+    "diary.saveEvent": "Не удалось сохранить событие",
+    "diary.jump": "Не удалось открыть запись",
+    "diary.loadEntries": "Не удалось загрузить записи",
+    "diary.entryNotFound": "Запись не найдена",
+    "diary.create": "Не удалось создать запись",
+    "diary.update": "Не удалось обновить запись",
+    "diary.delete": "Не удалось удалить запись",
+    "diary.restore": "Не удалось восстановить запись",
+    "diary.insights": "Не удалось загрузить аналитику"
+  },
+  "practice": {
+    "status": { "draft": "Черновик", "completed": "Завершена", "cancelled": "Отменена" },
+    "offer": {
+      "awaiting_verification": "Ожидает проверки мастера",
+      "awaiting_answer": "Ожидает ответа участника"
+    },
+    "regular": "Регулярная",
+    "remainingSessions": "Осталось {left} из {total} занятий"
+  },
+  "admin": {
+    "fallbackUserName": "Пользователь",
+    "masterStatus": {
+      "pending": "Ожидает",
+      "verified": "Верифицирован",
+      "rejected": "Отклонён",
+      "suspended": "Заблокирован",
+      "cancelled_by_user": "Аккаунт удалён"
+    },
+    "reportStatus": { "pending": "Ожидает", "resolved": "Решена", "dismissed": "Отклонена" },
+    "reportTarget": { "user": "Юзер", "master": "Мастер", "practice": "Практика" },
+    "relative": {
+      "justNow": "только что",
+      "minutesAgo": "{n} мин назад",
+      "hoursAgo": "{n} ч назад"
+    }
+  }
+}

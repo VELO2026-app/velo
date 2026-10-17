@@ -11,6 +11,12 @@ declare module '*.vue' {
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL: string
   readonly VITE_TELEGRAM_BOT_URL?: string
+  // Instance passport seams (tz-whitelabel §1). All optional: defaults =
+  // the golden build (ru, VELO, full feature set).
+  readonly VITE_DEFAULT_LOCALE?: string
+  readonly VITE_LOCALES?: string
+  readonly VITE_BRAND?: string
+  readonly VITE_FEATURES?: string
 }
 
 interface ImportMeta {

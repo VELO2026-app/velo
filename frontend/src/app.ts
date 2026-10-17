@@ -29,6 +29,7 @@ import { createPinia } from 'pinia'
 
 import App from './App.vue'
 import router from './router'
+import i18n from './locales'
 
 // Global styles (order matters: variables first, then reset/base).
 import './styles/variables.css'
@@ -44,6 +45,11 @@ const app = createApp(App)
 
 // Pinia = state manager (like a global dict of reactive objects).
 app.use(createPinia())
+
+// i18n (tz-i18n phase 0): the ru catalog is verbatim the previously
+// hardcoded strings, so this changes no rendered text. The UI language
+// follows authStore.user.language (App.vue watches it).
+app.use(i18n)
 
 // Router = URL -> component mapping (like FastAPI include_router).
 app.use(router)

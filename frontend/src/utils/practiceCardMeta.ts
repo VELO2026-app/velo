@@ -16,8 +16,11 @@
 // InsightsCache param: this file no longer touches diaryStore data.
 // =============================================================================
 
+import i18n from '@/locales'
 import { recurrenceDaysLabel } from './displayHelpers'
 import type { PracticeResponse } from '@/api/types'
+
+const { t } = i18n.global
 
 /** Check-in count "N/M" (distinct PRE check-ins / capacity), owner-only.
  *
@@ -39,7 +42,7 @@ export function checkinLabel(p: PracticeResponse): string | null {
  * back to «Регулярная» for a series with no day list. null when not a series. */
 export function recurrenceLabel(p: PracticeResponse): string | null {
   if (p.practice_type !== 'series') return null
-  return recurrenceDaysLabel(p.recurrence_days) ?? 'Регулярная'
+  return recurrenceDaysLabel(p.recurrence_days) ?? t('practice.regular')
 }
 
 /** «Осталось N из M занятий» for a series with a known session count; null otherwise. */
@@ -47,5 +50,5 @@ export function remainingSessionsLabel(p: PracticeResponse): string | null {
   const total = p.total_sessions
   if (total == null) return null
   const left = Math.max(0, total - (p.completed_sessions ?? 0))
-  return `Осталось ${left} из ${total} занятий`
+  return t('practice.remainingSessions', { left, total })
 }

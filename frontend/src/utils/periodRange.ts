@@ -17,21 +17,26 @@
 // different absolute week/month than each other.
 // =============================================================================
 
+import { getLocale } from '@/locales'
+
 /** e.g. week → "29 июн - 5 июл"; month → "Июль 2026". */
 export function formatPeriodRange(period: 'week' | 'month', offset: number): string {
   const now = new Date()
+  const locale = getLocale()
   if (period === 'week') {
     const dow = (now.getUTCDay() + 6) % 7 // Mon = 0, UTC calendar day
     const mon = new Date(
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - dow + offset * 7),
     )
     const sun = new Date(Date.UTC(mon.getUTCFullYear(), mon.getUTCMonth(), mon.getUTCDate() + 6))
-    const fmt = (d: Date): string =>
-      d
-        .toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', timeZone: 'UTC' })
-        .replace('.', '')
+    const fmt = (d: Date): string => {
+      const s = d.toLocaleDateString(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' })
+      // ICU marks the Russian short month with a dot («июн.»); the design drops it.
+      // Other locales' short forms keep their own punctuation.
+      return locale === 'ru' ? s.replace('.', '') : s
+    }
     return `${fmt(mon)} - ${fmt(sun)}`
   }
   const m = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + offset, 1))
-  return m.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+  return m.toLocaleDateString(locale, { month: 'long', year: 'numeric', timeZone: 'UTC' })
 }

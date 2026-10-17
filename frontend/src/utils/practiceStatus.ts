@@ -16,7 +16,10 @@
 // a booking's embedded practice) for callers that hold a practice directly.
 // =============================================================================
 
+import i18n from '@/locales'
 import type { PracticeStatus } from '@/api/types'
+
+const { t } = i18n.global
 
 export interface PracticeStatusBadge {
   label: string
@@ -30,11 +33,11 @@ export interface PracticeStatusBadge {
 export function masterPracticeBadge(status: PracticeStatus): PracticeStatusBadge | null {
   switch (status) {
     case 'draft':
-      return { label: 'Черновик', variant: 'warning' }
+      return { label: t('practice.status.draft'), variant: 'warning' }
     case 'completed':
-      return { label: 'Завершена', variant: 'success' }
+      return { label: t('practice.status.completed'), variant: 'success' }
     case 'cancelled':
-      return { label: 'Отменена', variant: 'error' }
+      return { label: t('practice.status.cancelled'), variant: 'error' }
     default:
       // scheduled / live / deleted → no badge (date + buttons convey the phase)
       return null

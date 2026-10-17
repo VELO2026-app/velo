@@ -17,6 +17,7 @@ import type {
 } from '@/api/types'
 import type { MoodScaleKey } from '@/utils/moodScale'
 import type { Component } from 'vue'
+import i18n from '@/locales'
 import {
   IconMeditation,
   IconYoga,
@@ -31,6 +32,11 @@ import {
   IconDots,
   IconCalendarStar,
 } from '@/components/icons'
+
+// Label dictionaries resolve at ACCESS time (getters), not at module import:
+// the active locale's words, and the many `LABEL[x]` call sites across views
+// stay untouched until their phase-3 batch (tz-i18n 1.1).
+const { t } = i18n.global
 
 // ---------------------------------------------------------------------------
 // Practice type — emoji map removed (F-9 2026-06): practice cards use the
@@ -75,16 +81,36 @@ export const MOOD_SCALE_FILLS: Record<MoodScaleKey, string> = {
 // do not duplicate these strings in components.
 
 export const DIRECTION_LABEL: Record<PracticeDirection, string> = {
-  meditation: 'Медитация',
-  yoga: 'Йога',
-  breathwork: 'Дыхательные практики',
-  somatic: 'Соматика',
-  tantra: 'Тантра',
-  circles: 'Круги',
-  sound_healing: 'Саундхиллинг',
-  art: 'Арт-практики',
-  narrative: 'Нарративные практики',
-  movement: 'Движение',
+  get meditation(): string {
+    return t('display.direction.meditation')
+  },
+  get yoga(): string {
+    return t('display.direction.yoga')
+  },
+  get breathwork(): string {
+    return t('display.direction.breathwork')
+  },
+  get somatic(): string {
+    return t('display.direction.somatic')
+  },
+  get tantra(): string {
+    return t('display.direction.tantra')
+  },
+  get circles(): string {
+    return t('display.direction.circles')
+  },
+  get sound_healing(): string {
+    return t('display.direction.sound_healing')
+  },
+  get art(): string {
+    return t('display.direction.art')
+  },
+  get narrative(): string {
+    return t('display.direction.narrative')
+  },
+  get movement(): string {
+    return t('display.direction.movement')
+  },
 }
 
 // Direction -> icon component for the practice hero card.
@@ -143,9 +169,15 @@ export function practiceIconFor(p: {
 }
 
 export const DIFFICULTY_LABEL: Record<PracticeDifficulty, string> = {
-  beginner: 'Начальная',
-  medium: 'Средняя',
-  high: 'Высокая',
+  get beginner(): string {
+    return t('display.difficulty.beginner')
+  },
+  get medium(): string {
+    return t('display.difficulty.medium')
+  },
+  get high(): string {
+    return t('display.difficulty.high')
+  },
 }
 
 /**
@@ -159,15 +191,27 @@ export const DIFFICULTY_DOTS: Record<PracticeDifficulty, number> = {
 }
 
 export const DURATION_BUCKET_LABEL: Record<DurationBucket, string> = {
-  short: 'До 1 часа',
-  long: '1 час и больше',
+  get short(): string {
+    return t('display.durationBucket.short')
+  },
+  get long(): string {
+    return t('display.durationBucket.long')
+  },
 }
 
 export const TIME_OF_DAY_LABEL: Record<TimeOfDay, string> = {
-  night: 'Ночь',
-  morning: 'Утро',
-  day: 'День',
-  evening: 'Вечер',
+  get night(): string {
+    return t('display.timeOfDay.night')
+  },
+  get morning(): string {
+    return t('display.timeOfDay.morning')
+  },
+  get day(): string {
+    return t('display.timeOfDay.day')
+  },
+  get evening(): string {
+    return t('display.timeOfDay.evening')
+  },
 }
 
 // ---------------------------------------------------------------------------
@@ -183,20 +227,34 @@ export const TIME_OF_DAY_LABEL: Record<TimeOfDay, string> = {
 import type { DiaryEventKind } from '@/api/types'
 
 export const FEED_KIND_TITLE: Record<DiaryEventKind, string> = {
-  booking_confirmed: 'Вы записались',
-  booking_cancelled_by_user: 'Вы отменили запись',
-  practice_rescheduled: 'Мастер перенёс практику',
-  practice_cancelled_by_master: 'Практика отменена',
+  get booking_confirmed(): string {
+    return t('display.feedKind.booking_confirmed')
+  },
+  get booking_cancelled_by_user(): string {
+    return t('display.feedKind.booking_cancelled_by_user')
+  },
+  get practice_rescheduled(): string {
+    return t('display.feedKind.practice_rescheduled')
+  },
+  get practice_cancelled_by_master(): string {
+    return t('display.feedKind.practice_cancelled_by_master')
+  },
   practice_outcome: '', // uses practice_title from snapshot
   checkin: 'Check-in', // + ": " + mood label
   feedback: 'Feedback', // + ": " + rating label
-  note: 'Дневник',
-  dream: 'Сонник',
+  get note(): string {
+    return t('display.feedKind.note')
+  },
+  get dream(): string {
+    return t('display.feedKind.dream')
+  },
   // Written when the chat proxy opens (or re-finds) the DM with a master. The
   // thread can be created without a message being sent yet, so the copy is
   // about the conversation starting, not about writing. The master's name is
   // the card's preview line (useDiaryCardModel.preview).
-  thread_started: 'Вы начали диалог',
+  get thread_started(): string {
+    return t('display.feedKind.thread_started')
+  },
   // FE-70: the caption is NOT kind-level -- it comes from the snapshot's
   // activity_type (custom -> the user's own custom_activity_name). Derived in
   // useDiaryCardModel.baseTitle, like practice_outcome reads practice_title.
@@ -210,12 +268,24 @@ export const FEED_KIND_TITLE: Record<DiaryEventKind, string> = {
 // -- its caption is the user's own custom_activity_name, verbatim.
 
 export const EXTERNAL_ACTIVITY_LABEL: Record<ExternalActivityType, string> = {
-  vocal: 'Вокал',
-  nail_standing: 'Гвоздестояние',
-  meditation: 'Медитация',
-  massage: 'Массаж',
-  yoga: 'Йога',
-  dance: 'Танцы',
+  get vocal(): string {
+    return t('display.externalActivity.vocal')
+  },
+  get nail_standing(): string {
+    return t('display.externalActivity.nail_standing')
+  },
+  get meditation(): string {
+    return t('display.externalActivity.meditation')
+  },
+  get massage(): string {
+    return t('display.externalActivity.massage')
+  },
+  get yoga(): string {
+    return t('display.externalActivity.yoga')
+  },
+  get dance(): string {
+    return t('display.externalActivity.dance')
+  },
   custom: '',
 }
 
@@ -235,16 +305,17 @@ export const EXTERNAL_ACTIVITY_ICON: Component = IconCalendarStar
  * useDiaryCardModel's outcomeLabel, both user-facing (DetailView.vue).
  */
 export const OUTCOME_LABEL: Record<string, string> = {
-  attended: 'Done',
-  no_show: 'Вы не пришли',
+  get attended(): string {
+    return t('display.outcome.attended')
+  },
+  get no_show(): string {
+    return t('display.outcome.no_show')
+  },
 }
 
 // ---------------------------------------------------------------------------
 // Date helper
 // ---------------------------------------------------------------------------
-
-/** Short Russian weekday names indexed by ISO weekday − 1 (1=Mon … 7=Sun). */
-const WEEKDAY_ABBR = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'] as const
 
 /**
  * Recurrence label for a series from its ISO weekday list: «Ежедневно» when all
@@ -256,6 +327,6 @@ export function recurrenceDaysLabel(days: number[] | null | undefined): string |
   if (!days || days.length === 0) return null
   const valid = [...new Set(days)].filter((d) => d >= 1 && d <= 7).sort((a, b) => a - b)
   if (valid.length === 0) return null
-  if (valid.length === 7) return 'Ежедневно'
-  return valid.map((d) => WEEKDAY_ABBR[d - 1]).join(', ')
+  if (valid.length === 7) return t('display.recurrenceDaily')
+  return valid.map((d) => t(`display.weekdayAbbr.${d}`)).join(', ')
 }
