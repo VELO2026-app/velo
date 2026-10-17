@@ -19,6 +19,7 @@
 
 import { createI18n } from 'vue-i18n'
 
+import { cldrPluralChoice } from './index'
 import ru from './ru.json'
 
 export function createTestI18n() {
@@ -27,6 +28,7 @@ export function createTestI18n() {
     locale: 'ru',
     fallbackLocale: 'ru',
     messages: { ru },
+    pluralRules: { ru: cldrPluralChoice('ru') },
     globalInjection: true,
     missingWarn: false,
     fallbackWarn: false,

@@ -24,11 +24,42 @@ import { setRootLang } from '@/platform/dom'
 import { INSTANCE, isSupportedLocale } from '@/platform/instance'
 import ru from './ru.json'
 
+/**
+ * vue-i18n's built-in plural choice is English-shaped (1 -> first form,
+ * everything else -> last form). Our catalogs write CLDR forms -- ru messages
+ * `one|few|many`, en/de/es `one|other` -- so the choice delegates to
+ * Intl.PluralRules of the message's locale and maps the category onto the
+ * form index (tz-i18n §4.4: the ONE plural mechanism):
+ *   2-form messages: one -> 0, every other category -> 1
+ *   3+form messages: one -> 0, few -> 1, many/other -> 2
+ * (zero/two are unused by our catalogs.)
+ */
+export function cldrPluralChoice(
+  locale: string,
+): (choice: number, choicesLength: number) => number {
+  const rules = new Intl.PluralRules(locale)
+  return (choice: number, choicesLength: number): number => {
+    const category = rules.select(choice)
+    if (choicesLength <= 2) return category === 'one' ? 0 : 1
+    if (category === 'one') return 0
+    if (category === 'few') return 1
+    return 2
+  }
+}
+
+const PLURAL_RULES = {
+  ru: cldrPluralChoice('ru'),
+  en: cldrPluralChoice('en'),
+  de: cldrPluralChoice('de'),
+  es: cldrPluralChoice('es'),
+}
+
 const i18n = createI18n({
   legacy: false,
   locale: INSTANCE.defaultLocale,
   fallbackLocale: INSTANCE.defaultLocale,
   messages: { ru },
+  pluralRules: PLURAL_RULES,
   globalInjection: true,
   // A hardcoded→key miss announces itself in dev; in prod it silently falls
   // back to the default locale instead of littering the console.

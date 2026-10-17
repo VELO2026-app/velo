@@ -25,21 +25,21 @@
 
 <template>
   <VModal :open="open" @close="onClose">
-    <h2 class="popup__title">Бронирование</h2>
+    <h2 class="popup__title">{{ t('booking.title') }}</h2>
 
     <!-- Summary -->
     <div class="popup__summary">
       <div class="popup__row">
-        <span class="popup__label">Практика</span>
+        <span class="popup__label">{{ t('booking.labels.practice') }}</span>
         <span class="popup__value">{{ practice.title }}</span>
       </div>
       <div class="popup__row">
-        <span class="popup__label">Дата</span>
+        <span class="popup__label">{{ t('booking.labels.date') }}</span>
         <span class="popup__value">{{ formattedDate }}</span>
       </div>
       <div class="popup__row">
-        <span class="popup__label">Мастер</span>
-        <span class="popup__value">{{ practice.master_name ?? 'Мастер' }}</span>
+        <span class="popup__label">{{ t('booking.labels.master') }}</span>
+        <span class="popup__value">{{ practice.master_name ?? t('booking.masterFallback') }}</span>
       </div>
     </div>
 
@@ -49,8 +49,8 @@
         v-model.trim="promoCode"
         type="text"
         class="popup__promo-input"
-        placeholder="Промокод"
-        aria-label="Промокод"
+        :placeholder="t('booking.promoPlaceholder')"
+        :aria-label="t('booking.promoPlaceholder')"
         :disabled="purchasing"
         @keydown.enter="onApplyPromo"
       />
@@ -67,19 +67,19 @@
 
     <!-- Promo result -->
     <div v-if="PROMO_ENABLED && promoApplied" class="popup__discount">
-      <span class="popup__discount-label">Скидка {{ discountPercent }}%</span>
+      <span class="popup__discount-label">{{ t('booking.discount', { n: discountPercent }) }}</span>
       <span class="popup__discount-value"> −{{ formattedDiscount }} </span>
     </div>
 
     <!-- Total -->
     <div class="popup__total">
-      <span class="popup__total-label">Итого</span>
+      <span class="popup__total-label">{{ t('booking.labels.total') }}</span>
       <span class="popup__total-value">{{ formattedTotal }}</span>
     </div>
 
     <!-- Insufficient balance warning -->
     <div v-if="insufficientBalance" class="popup__warning">
-      Недостаточно средств. Ваш баланс: {{ balanceStore.formattedBalance }}
+      {{ t('booking.insufficientBalance', { balance: balanceStore.formattedBalance }) }}
     </div>
 
     <!-- Actions -->
@@ -94,7 +94,9 @@
       >
         {{ purchaseButtonText }}
       </VButton>
-      <VButton variant="ghost" block :disabled="purchasing" @click="onClose"> Отмена </VButton>
+      <VButton variant="ghost" block :disabled="purchasing" @click="onClose">
+        {{ t('ui.cancel') }}
+      </VButton>
     </div>
   </VModal>
 </template>
@@ -102,6 +104,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { VModal, VButton } from '@/components/ui'
 import { useToast } from '@/composables/useToast'
 import { useBalanceStore } from '@/stores/balance'
@@ -128,6 +131,8 @@ const emit = defineEmits<{
 const router = useRouter()
 const toast = useToast()
 const balanceStore = useBalanceStore()
+// tz-i18n phase 2 (2.2a): template labels + CTA + toasts via booking.* keys.
+const { t } = useI18n({ useScope: 'global' })
 
 // Promo codes are temporarily hidden in the prototype (kept, not removed).
 // Flip to true to bring the promo input + discount line back.
@@ -181,9 +186,9 @@ const insufficientBalance = computed(
 )
 
 const purchaseButtonText = computed(() => {
-  if (insufficientBalance.value) return 'Пополнить баланс'
-  if (props.practice.is_free) return 'Записаться'
-  return 'Оплатить'
+  if (insufficientBalance.value) return t('booking.cta.topup')
+  if (props.practice.is_free) return t('booking.cta.signup')
+  return t('booking.cta.pay')
 })
 
 // -- Actions --
@@ -209,7 +214,7 @@ async function onApplyPromo(): Promise<void> {
     preview.value = await previewPurchase(props.practice.id, promoCode.value)
   } catch (e) {
     preview.value = null
-    toast.error(extractApiError(e, 'Не удалось проверить промокод'))
+    toast.error(extractApiError(e, t('booking.toast.promoFailed')))
   } finally {
     previewing.value = false
   }
@@ -232,7 +237,7 @@ async function onPurchase(): Promise<void> {
     const appliedPromo = promoApplied.value ? promoCode.value : undefined
     await purchasePractice(props.practice.id, appliedPromo)
 
-    toast.success('Вы записаны!')
+    toast.success(t('booking.toast.booked'))
     resetState()
     emit('purchased')
   } catch (e) {
@@ -249,16 +254,16 @@ async function onPurchase(): Promise<void> {
         emit('close')
         emit('soldOut')
       } else if (e.status === 409) {
-        toast.error('Вы уже записаны на эту практику')
+        toast.error(t('booking.toast.alreadyBooked'))
       } else {
         // B8 (PROMPT №746): was toast.error(e.detail) -- the backend's raw,
         // often-English message. extractApiError() now looks e.code up in
-        // errorMessages.ts first; an unmapped code falls back to this
-        // Russian sentence, never to e.detail.
-        toast.error(extractApiError(e, 'Не удалось оформить бронирование'))
+        // the errors catalog first; an unmapped code falls back to this
+        // phrase (booking.toast.purchaseFailed), never to e.detail.
+        toast.error(extractApiError(e, t('booking.toast.purchaseFailed')))
       }
     } else {
-      toast.error('Ошибка при бронировании')
+      toast.error(t('booking.toast.bookingError'))
     }
   } finally {
     // F-02: always refresh balance -- on success deduction is confirmed,

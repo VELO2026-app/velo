@@ -67,10 +67,10 @@
       <VEmptyState
         v-if="loadError"
         icon="warning"
-        title="Не удалось загрузить практику"
+        :title="t('shared.form.loadFailed')"
         :description="loadError"
       >
-        <VButton size="sm" @click="emit('retry')">Повторить</VButton>
+        <VButton size="sm" @click="emit('retry')">{{ t('common.retry') }}</VButton>
       </VEmptyState>
 
       <template v-else>
@@ -84,7 +84,15 @@
           <template #meta>
             <slot name="practice-meta">
               <span class="form-shell__practice-meta-cell">
-                с {{ practice.master_name ?? 'Мастером' }}
+                <!-- tz-i18n 2.2a: the whole phrase is one key with a name
+                     param -- non-Russian locales assemble it differently
+                     ("with {name}"), the instrumental-case fallback is the
+                     hostFallback key. -->
+                {{
+                  t('shared.form.hostLine', {
+                    name: practice.master_name ?? t('shared.form.hostFallback'),
+                  })
+                }}
               </span>
             </slot>
           </template>
@@ -110,7 +118,7 @@
            keyboard settles (batch I — shared useKeyboardFieldScroll). -->
         <VTextarea
           :model-value="comment"
-          placeholder="Добавьте комментарий..."
+          :placeholder="t('shared.form.commentPlaceholder')"
           :rows="3"
           maxlength="1000"
           @focus="onFieldFocus"
@@ -133,7 +141,7 @@
             {{ disabledHint }}
           </p>
           <VButton v-if="showSkip" variant="ghost" block @click="emit('skip')">
-            Пропустить
+            {{ t('common.skip') }}
           </VButton>
         </div>
       </template>
@@ -143,8 +151,12 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { VButton, VLoader, VTextarea, VEmptyState } from '@/components/ui'
 import { VHeader } from '@/components/layout'
+
+// tz-i18n 2.2a: load-failed state, host line and skip via shared.form.*/common.*.
+const { t } = useI18n({ useScope: 'global' })
 import PracticeHeroCard from '@/components/shared/PracticeHeroCard.vue'
 import ResultScreen from '@/components/shared/ResultScreen.vue'
 import { cleanPracticeTitle } from '@/utils/format'

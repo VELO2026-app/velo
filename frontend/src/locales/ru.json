@@ -6,7 +6,52 @@
     "free": "Бесплатно",
     "duration": { "min": "мин", "hour": "час", "h": "ч", "m": "м" },
     "participantsAbbr": "{n} участн.",
-    "traceSuffix": "{message} · код {code}"
+    "traceSuffix": "{message} · код {code}",
+    "retry": "Повторить",
+    "skip": "Пропустить",
+    "showMore": "Показать ещё",
+    "loading": "Загружаем…",
+    "hide": "Скрыть"
+  },
+  "shared": {
+    "form": {
+      "loadFailed": "Не удалось загрузить практику",
+      "hostLine": "с {name}",
+      "hostFallback": "Мастером",
+      "commentPlaceholder": "Добавьте комментарий..."
+    },
+    "analytics": {
+      "title": "Аналитика по практике",
+      "loading": "Загружаем аналитику…",
+      "loadFailed": "Не удалось загрузить аналитику",
+      "unavailable": "Данные аналитики недоступны",
+      "attended": "Пришли:",
+      "checkins": "Чек-ины:",
+      "before": "До практики",
+      "after": "После практики",
+      "cameLeft": "Пришел → ушел",
+      "outOf": "{a} из {b}",
+      "noPairs": "Пока нет пар для сравнения",
+      "pairsMore": "+ ещё {count} пару | + ещё {count} пары | + ещё {count} пар",
+      "reviews": "Отзывы",
+      "noReviews": "Отзывов пока нет"
+    }
+  },
+  "booking": {
+    "title": "Бронирование",
+    "labels": { "practice": "Практика", "date": "Дата", "master": "Мастер", "total": "Итого" },
+    "masterFallback": "Мастер",
+    "promoPlaceholder": "Промокод",
+    "discount": "Скидка {n}%",
+    "insufficientBalance": "Недостаточно средств. Ваш баланс: {balance}",
+    "cta": { "topup": "Пополнить баланс", "signup": "Записаться", "pay": "Оплатить" },
+    "toast": {
+      "booked": "Вы записаны!",
+      "alreadyBooked": "Вы уже записаны на эту практику",
+      "purchaseFailed": "Не удалось оформить бронирование",
+      "bookingError": "Ошибка при бронировании",
+      "promoFailed": "Не удалось проверить промокод"
+    }
   },
   "tabs": {
     "dashboard": "Дашборд",
