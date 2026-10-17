@@ -35,7 +35,7 @@ export default defineConfig({
       // Only the catalogs themselves: the plugin requires `export default`
       // message objects, and locales/*.ts (the singleton, test helper) are
       // regular modules.
-      include: [fileURLToPath(new URL('./src/locales/*.json', import.meta.url))],
+      include: [fileURLToPath(new URL('./src/locales/**/*.json', import.meta.url))],
     }),
     vue(),
     VitePWA({

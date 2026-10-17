@@ -13,7 +13,7 @@
 //   }
 //
 // tz-i18n 1.2: a known code resolves through the `errors` catalog
-// (locales/ru.json, was the ERROR_MESSAGES table); the caller fallback is
+// (locales/ru/errors.json, was the ERROR_MESSAGES table); the caller fallback is
 // still a plain string -- stores use storeErrors.* keys, views migrate in
 // their phase-3 batches.
 // =============================================================================

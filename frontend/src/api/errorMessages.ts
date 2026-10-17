@@ -65,7 +65,7 @@
 // practice_not_found are new, written from each raise site's own message.
 //
 // tz-i18n 1.2 (the owner's "own future task" has started): the table itself
-// moved to locales/ru.json under the `errors` namespace -- keys
+// moved to locales/ru/errors.json under the `errors` namespace -- keys
 // errors.<code>, the phrases VERBATIM what the table above used to carry.
 // errorMessage()/extractApiError() look the key up and fall back to
 // errors.generic for a code the catalog does not know. ERROR_CODES below is

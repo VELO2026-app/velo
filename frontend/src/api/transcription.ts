@@ -43,7 +43,7 @@ const TIMEOUT_MS = 30000
 
 /**
  * Machine code -> the sentence the person reads. The table lives in
- * locales/ru.json under `transcription` (tz-i18n 1.2) -- keys
+ * locales/ru/errors.json under `transcription` (tz-i18n 1.2) -- keys
  * transcription.<code>, phrases verbatim what the JS table carried.
  *
  * Every entry the backend can raise is there; anything unlisted falls back

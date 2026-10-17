@@ -1,0 +1,34 @@
+{
+  "common": {
+    "today": "Сегодня",
+    "tomorrow": "Завтра",
+    "yesterday": "Вчера",
+    "free": "Бесплатно",
+    "duration": {
+      "min": "мин",
+      "hour": "час",
+      "h": "ч",
+      "m": "м"
+    },
+    "participantsAbbr": "{n} участн.",
+    "traceSuffix": "{message} · код {code}",
+    "retry": "Повторить",
+    "skip": "Пропустить",
+    "showMore": "Показать ещё",
+    "loading": "Загружаем…",
+    "hide": "Скрыть",
+    "all": "Все",
+    "reset": "Сбросить"
+  },
+  "tabs": {
+    "dashboard": "Дашборд",
+    "calendar": "Календарь",
+    "diary": "Дневник",
+    "schools": "Школы",
+    "profile": "Я",
+    "practices": "Практики",
+    "analytics": "Аналитика",
+    "masters": "Мастера",
+    "moderation": "Модерация"
+  }
+}

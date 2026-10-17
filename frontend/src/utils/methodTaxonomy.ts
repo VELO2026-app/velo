@@ -39,7 +39,10 @@
 import { ref, shallowRef } from 'vue'
 import type { PracticeDirection } from '@/api/types'
 import i18n from '@/locales'
-import ru from '@/locales/ru.json'
+// Storage-canon seed: the SERVER catalog's labels are the canon; the ru seed
+// catalogs cover a cold cache (the historic storage vocabulary).
+import taxonomySeed from '@/locales/ru/taxonomy.json'
+import practiceSeed from '@/locales/ru/practice.json'
 import {
   DIRECTION_OPTIONS,
   stylesForDirection,
@@ -57,9 +60,17 @@ import { getActiveTaxonomy, type TaxonomyListResponse } from '@/api/taxonomy'
 //               from the server catalog's labels, or the ru seed when the
 //               cache is cold) -- a non-ru UI never forks the stored
 //               vocabulary.
-const ruSeed = ru as {
-  display?: { direction?: Record<string, string> }
-  practice?: { styles?: Record<string, string> }
+const ruSeed = {
+  display: {
+    direction:
+      (taxonomySeed as unknown as { display?: { direction?: Record<string, string> } }).display
+        ?.direction ?? {},
+  },
+  practice: {
+    styles:
+      (practiceSeed as unknown as { practice?: { styles?: Record<string, string> } }).practice
+        ?.styles ?? {},
+  },
 }
 
 /** The two-level picker's selection state. Mirrors the fields the wizard held

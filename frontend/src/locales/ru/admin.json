@@ -1,0 +1,56 @@
+{
+  "moderation": {
+    "reportDate": "Дата заявки",
+    "category": "Категория",
+    "priority": "Приоритет",
+    "status": "Статус заявки",
+    "cats": {
+      "tickets": "Тикеты",
+      "complaints": "Жалобы",
+      "payments": "Платежи"
+    },
+    "statuses": {
+      "open": "Открытая",
+      "closed": "Закрытая"
+    }
+  },
+  "payout": {
+    "title": "Подтвердить выплату",
+    "sub": "Средства уйдут мастеру через провайдера",
+    "amount": "Сумма",
+    "fee": "Комиссия провайдера",
+    "net": "К получению",
+    "bank": "Банк",
+    "master": "Мастер",
+    "approve": "Одобрить выплату"
+  },
+  "admin": {
+    "fallbackUserName": "Пользователь",
+    "masterStatus": {
+      "pending": "Ожидает",
+      "verified": "Верифицирован",
+      "rejected": "Отклонён",
+      "suspended": "Заблокирован",
+      "cancelled_by_user": "Аккаунт удалён"
+    },
+    "reportStatus": {
+      "pending": "Ожидает",
+      "resolved": "Решена",
+      "dismissed": "Отклонена"
+    },
+    "reportTarget": {
+      "user": "Юзер",
+      "master": "Мастер",
+      "practice": "Практика"
+    },
+    "relative": {
+      "justNow": "только что",
+      "minutesAgo": "{n} мин назад",
+      "hoursAgo": "{n} ч назад"
+    },
+    "supportTicket": {
+      "resolved": "Решено",
+      "closed": "Закрыто"
+    }
+  }
+}

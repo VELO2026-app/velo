@@ -19,8 +19,7 @@
 
 import { createI18n } from 'vue-i18n'
 
-import { cldrPluralChoice } from './index'
-import ru from './ru.json'
+import { cldrPluralChoice, ru } from './index'
 
 export function createTestI18n() {
   return createI18n({

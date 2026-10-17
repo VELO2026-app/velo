@@ -1,0 +1,38 @@
+{
+  "diary": {
+    "categories": {
+      "entries": "Дневник",
+      "dreams": "Сонник",
+      "feedbacks": "Feedbacks",
+      "checkins": "Check-ins",
+      "practices": "Практики"
+    },
+    "search": {
+      "placeholder": "Искать...",
+      "aria": "Поиск по дневнику",
+      "clearAria": "Очистить",
+      "recent": "Недавно вы искали:",
+      "found": "Найдено: {n}"
+    },
+    "bannerConfirmedTitle": "Вы записались на",
+    "bannerConfirmedRef": "[{title} с {master}]",
+    "bannerConfirmedRefNoMaster": "[{title}]"
+  },
+  "reflection": {
+    "v1": {
+      "bannerTitle": "Как ваше самочувствие?",
+      "screenTitle": "Заметили, что вас сегодня не было",
+      "screenSubtitle": "Как ваше самочувствие?"
+    },
+    "v2": {
+      "bannerTitle": "Как прошел ваш день?",
+      "screenTitle": "Мы скучали без вас",
+      "screenSubtitle": "Расскажете, как прошел ваш день?"
+    },
+    "v3": {
+      "bannerTitle": "Поделитесь состоянием",
+      "screenTitle": "Иногда тело просит паузы",
+      "screenSubtitle": "Что вам сегодня было нужно больше?"
+    }
+  }
+}

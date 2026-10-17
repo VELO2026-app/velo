@@ -1,0 +1,108 @@
+{
+  "filters": {
+    "title": "Фильтр",
+    "direction": "Направление практики",
+    "style": "Вид практики",
+    "difficulty": "Сложность",
+    "duration": "Длительность",
+    "timeOfDay": "Время",
+    "durationChips": {
+      "short": "30 - 45 мин",
+      "long": "1 час и более"
+    },
+    "apply": "Применить",
+    "resetDates": "Сбросить даты"
+  },
+  "calendarCard": {
+    "paid": "Оплачено",
+    "free": "Бесплатно"
+  },
+  "audience": {
+    "noGroups": "Пока нет ни одной группы. Создайте группу на экране «Мои группы».",
+    "noSchools": "Нет школ, доступных для выбора.",
+    "chooseSome": "Выберите хотя бы одну группу"
+  },
+  "useTemplate": {
+    "head": "Вы создавали ранее…",
+    "empty": "Данных пока нет…"
+  },
+  "practiceCancel": {
+    "title": "Отменить практику?",
+    "participants": "{n} участников",
+    "notify": "Участникам будет отправлено уведомление. Оплаты вернутся автоматически.",
+    "recurring": "Это регулярная практика",
+    "keep": "Не отменять",
+    "cancel": "Отменить",
+    "scopeOne": "Только эту",
+    "scopeFuture": "Эту и будущие"
+  },
+  "timePicker": {
+    "title": "Время практики"
+  },
+  "bookingCancel": {
+    "title": "Отменить бронирование?",
+    "keep": "Нет, оставить",
+    "confirm": "Да, отменить"
+  },
+  "booking": {
+    "title": "Бронирование",
+    "labels": {
+      "practice": "Практика",
+      "date": "Дата",
+      "master": "Мастер",
+      "total": "Итого"
+    },
+    "masterFallback": "Мастер",
+    "promoPlaceholder": "Промокод",
+    "discount": "Скидка {n}%",
+    "insufficientBalance": "Недостаточно средств. Ваш баланс: {balance}",
+    "cta": {
+      "topup": "Пополнить баланс",
+      "signup": "Записаться",
+      "pay": "Оплатить"
+    },
+    "toast": {
+      "booked": "Вы записаны!",
+      "alreadyBooked": "Вы уже записаны на эту практику",
+      "purchaseFailed": "Не удалось оформить бронирование",
+      "bookingError": "Ошибка при бронировании",
+      "promoFailed": "Не удалось проверить промокод"
+    }
+  },
+  "practice": {
+    "status": {
+      "draft": "Черновик",
+      "completed": "Завершена",
+      "cancelled": "Отменена"
+    },
+    "offer": {
+      "awaiting_verification": "Ожидает проверки мастера",
+      "awaiting_answer": "Ожидает ответа участника"
+    },
+    "regular": "Регулярная",
+    "remainingSessions": "Осталось {left} из {total} занятий",
+    "placeholderAlt": "Практика",
+    "durationMinutes": "{n} минут",
+    "audience": {
+      "public": "Публичная",
+      "students": "Все ученики",
+      "groups": "Конкретные группы",
+      "curator_groups": "Школы"
+    },
+    "styles": {
+      "silence": "Медитация молчания",
+      "presence": "Медитация присутствия",
+      "sound": "Звуковая медитация",
+      "taoist": "Даосская медитация",
+      "nidra": "Йога-нидра",
+      "yin": "Инь-йога",
+      "hatha": "Хатха-йога",
+      "vinyasa": "Виньяса",
+      "kundalini": "Кундалини-йога",
+      "ashtanga": "Аштанга-йога",
+      "womens": "Женский круг",
+      "mens": "Мужской круг",
+      "sharing": "Круг шеринга"
+    }
+  }
+}

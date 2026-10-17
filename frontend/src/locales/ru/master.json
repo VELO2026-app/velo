@@ -1,0 +1,9 @@
+{
+  "methodPicker": {
+    "custom": "Свой вариант",
+    "directionPlaceholder": "Укажите направление…"
+  },
+  "masterCard": {
+    "profileUnavailable": "Профиль мастера недоступен"
+  }
+}

@@ -22,7 +22,39 @@ import { createI18n } from 'vue-i18n'
 
 import { setRootLang } from '@/platform/dom'
 import { INSTANCE, isSupportedLocale } from '@/platform/instance'
-import ru from './ru.json'
+// Per-domain catalogs (tz-i18n §4.1): split by feature, merged here at
+// startup. The per-domain files are also the seam for phase-4 lazy chunks.
+import admin from './ru/admin.json'
+import auth from './ru/auth.json'
+import chat from './ru/chat.json'
+import common from './ru/common.json'
+import diary from './ru/diary.json'
+import errors from './ru/errors.json'
+import master from './ru/master.json'
+import practice from './ru/practice.json'
+import profile from './ru/profile.json'
+import schools from './ru/schools.json'
+import shared from './ru/shared.json'
+import taxonomy from './ru/taxonomy.json'
+import ui from './ru/ui.json'
+import views from './ru/views.json'
+
+export const ru = {
+  ...common,
+  ...ui,
+  ...taxonomy,
+  ...errors,
+  ...auth,
+  ...practice,
+  ...diary,
+  ...profile,
+  ...schools,
+  ...master,
+  ...admin,
+  ...chat,
+  ...shared,
+  ...views,
+}
 
 /**
  * vue-i18n's built-in plural choice is English-shaped (1 -> first form,
