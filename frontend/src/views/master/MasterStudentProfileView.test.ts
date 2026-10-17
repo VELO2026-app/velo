@@ -1106,7 +1106,7 @@ describe('MasterStudentProfileView', () => {
       expect(reportsApi.createReport).toHaveBeenCalledWith({
         target_type: 'user',
         target_id: 's1',
-        reason: 'Мошенничество — Просил перевести деньги напрямую',
+        reason: 'fraud — Просил перевести деньги напрямую',
       })
       expect(success).toHaveBeenCalledWith('Заявка отправлена в поддержку')
     })
@@ -1142,7 +1142,7 @@ describe('MasterStudentProfileView', () => {
       expect(reportsApi.createReport).toHaveBeenCalledWith({
         target_type: 'user',
         target_id: 's1',
-        reason: 'Сорвал практику, Мошенничество',
+        reason: 'disrupted_practice, fraud',
       })
     })
 

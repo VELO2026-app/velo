@@ -56,7 +56,7 @@
           :active="selection.customEnabled"
           @click="toggleCustom"
         >
-          Свой вариант
+          {{ t('methodPicker.custom') }}
         </VChip>
         <!-- Readonly display of the custom variant (R3/R4 fix, PROMPT №391):
              parseMethods now SURFACES an unmatched string instead of
@@ -95,7 +95,7 @@
     <VInput
       v-if="allowCustom && !readonly && selection.customEnabled"
       v-model="customText"
-      placeholder="Укажите направление…"
+      :placeholder="t('methodPicker.directionPlaceholder')"
       class="mtp__other"
       @focus="onFieldFocus"
     />
@@ -103,6 +103,9 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n({ useScope: 'global' })
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { VCard, VChip, VInput } from '@/components/ui'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'

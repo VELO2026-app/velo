@@ -1,16 +1,57 @@
 // Shared practice form options.
 // Used by CreatePracticeView and EditPracticeView to avoid duplication (W-2).
+//
+// tz-i18n: every label resolves at ACCESS time (getters over the catalogs) --
+// no locale text lives in this module. Values stay canonical codes; the
+// STORED method strings («Направление — Вид») keep the server catalog's
+// labels as their canon (methodTaxonomy.ts consults the catalog FIRST, the
+// live hardcoded labels second), so a non-ru UI parses stored ru data via
+// the catalog and only a cold-cache non-ru session composes localized
+// strings (visible as the custom variant, never lost -- Q3=А).
 
 import type { PracticeDirection, PracticeAudienceKind } from '@/api/types'
 import type { TaxonomyListResponse } from '@/api/taxonomy'
+import i18n from '@/locales'
+
+const { t } = i18n.global
 
 export const DURATION_OPTIONS: { label: string; value: string }[] = [
-  { label: '30 минут', value: '30' },
-  { label: '45 минут', value: '45' },
-  { label: '60 минут', value: '60' },
-  { label: '75 минут', value: '75' },
-  { label: '90 минут', value: '90' },
-  { label: '120 минут', value: '120' },
+  {
+    value: '30',
+    get label(): string {
+      return t('practice.durationMinutes', { n: 30 })
+    },
+  },
+  {
+    value: '45',
+    get label(): string {
+      return t('practice.durationMinutes', { n: 45 })
+    },
+  },
+  {
+    value: '60',
+    get label(): string {
+      return t('practice.durationMinutes', { n: 60 })
+    },
+  },
+  {
+    value: '75',
+    get label(): string {
+      return t('practice.durationMinutes', { n: 75 })
+    },
+  },
+  {
+    value: '90',
+    get label(): string {
+      return t('practice.durationMinutes', { n: 90 })
+    },
+  },
+  {
+    value: '120',
+    get label(): string {
+      return t('practice.durationMinutes', { n: 120 })
+    },
+  },
 ]
 
 // «Для кого практика» (P5, PROMPT №594): audience_kind single-select, shared
@@ -24,9 +65,24 @@ export const DURATION_OPTIONS: { label: string; value: string }[] = [
 // actually target at least one school (FE-24) -- an option without its
 // picker would let a master pick a kind whose targets they cannot set.
 export const AUDIENCE_OPTIONS: { label: string; value: PracticeAudienceKind }[] = [
-  { value: 'public', label: 'Публичная' },
-  { value: 'students', label: 'Все ученики' },
-  { value: 'groups', label: 'Конкретные группы' },
+  {
+    value: 'public',
+    get label(): string {
+      return t('practice.audience.public')
+    },
+  },
+  {
+    value: 'students',
+    get label(): string {
+      return t('practice.audience.students')
+    },
+  },
+  {
+    value: 'groups',
+    get label(): string {
+      return t('practice.audience.groups')
+    },
+  },
 ]
 
 /** FE-24: the option list with the fourth kind added when the master
@@ -37,7 +93,15 @@ export function audienceOptions(
   hasSchools: boolean,
 ): { label: string; value: PracticeAudienceKind }[] {
   if (!hasSchools) return AUDIENCE_OPTIONS
-  return [...AUDIENCE_OPTIONS, { value: 'curator_groups', label: 'Школы' }]
+  return [
+    ...AUDIENCE_OPTIONS,
+    {
+      value: 'curator_groups',
+      get label(): string {
+        return t('practice.audience.curator_groups')
+      },
+    },
+  ]
 }
 
 // -- Timezone options (iOS-style world list, 2026-05-29) ----------------------
@@ -195,23 +259,89 @@ export interface DirectionOption {
   value: PracticeDirection
 }
 
+// Labels reuse the display.direction.* keys (same words as the card display).
 export const DIRECTION_OPTIONS: DirectionOption[] = [
-  { label: 'Медитация', value: 'meditation' },
-  { label: 'Йога', value: 'yoga' },
-  { label: 'Дыхательные практики', value: 'breathwork' },
-  { label: 'Соматика', value: 'somatic' },
-  { label: 'Тантра', value: 'tantra' },
-  { label: 'Круги', value: 'circles' },
-  { label: 'Саундхиллинг', value: 'sound_healing' },
-  { label: 'Арт-практики', value: 'art' },
-  { label: 'Нарративные практики', value: 'narrative' },
-  { label: 'Движение', value: 'movement' },
+  {
+    value: 'meditation',
+    get label(): string {
+      return t('display.direction.meditation')
+    },
+  },
+  {
+    value: 'yoga',
+    get label(): string {
+      return t('display.direction.yoga')
+    },
+  },
+  {
+    value: 'breathwork',
+    get label(): string {
+      return t('display.direction.breathwork')
+    },
+  },
+  {
+    value: 'somatic',
+    get label(): string {
+      return t('display.direction.somatic')
+    },
+  },
+  {
+    value: 'tantra',
+    get label(): string {
+      return t('display.direction.tantra')
+    },
+  },
+  {
+    value: 'circles',
+    get label(): string {
+      return t('display.direction.circles')
+    },
+  },
+  {
+    value: 'sound_healing',
+    get label(): string {
+      return t('display.direction.sound_healing')
+    },
+  },
+  {
+    value: 'art',
+    get label(): string {
+      return t('display.direction.art')
+    },
+  },
+  {
+    value: 'narrative',
+    get label(): string {
+      return t('display.direction.narrative')
+    },
+  },
+  {
+    value: 'movement',
+    get label(): string {
+      return t('display.direction.movement')
+    },
+  },
 ]
 
 export const DIFFICULTY_OPTIONS: { label: string; value: string }[] = [
-  { label: 'Начальная', value: 'beginner' },
-  { label: 'Средняя', value: 'medium' },
-  { label: 'Высокая', value: 'high' },
+  {
+    value: 'beginner',
+    get label(): string {
+      return t('display.difficulty.beginner')
+    },
+  },
+  {
+    value: 'medium',
+    get label(): string {
+      return t('display.difficulty.medium')
+    },
+  },
+  {
+    value: 'high',
+    get label(): string {
+      return t('display.difficulty.high')
+    },
+  },
 ]
 
 export interface StyleOption {
@@ -227,23 +357,88 @@ export interface StyleOption {
 // (handoff §9 B-2).
 export const STYLE_OPTIONS_BY_DIRECTION: Partial<Record<PracticeDirection, StyleOption[]>> = {
   meditation: [
-    { label: 'Медитация молчания', value: 'silence' },
-    { label: 'Медитация присутствия', value: 'presence' },
-    { label: 'Звуковая медитация', value: 'sound' },
-    { label: 'Даосская медитация', value: 'taoist' },
+    {
+      value: 'silence',
+      get label(): string {
+        return t('practice.styles.silence')
+      },
+    },
+    {
+      value: 'presence',
+      get label(): string {
+        return t('practice.styles.presence')
+      },
+    },
+    {
+      value: 'sound',
+      get label(): string {
+        return t('practice.styles.sound')
+      },
+    },
+    {
+      value: 'taoist',
+      get label(): string {
+        return t('practice.styles.taoist')
+      },
+    },
   ],
   yoga: [
-    { label: 'Йога-нидра', value: 'nidra' },
-    { label: 'Инь-йога', value: 'yin' },
-    { label: 'Хатха-йога', value: 'hatha' },
-    { label: 'Виньяса', value: 'vinyasa' },
-    { label: 'Кундалини-йога', value: 'kundalini' },
-    { label: 'Аштанга-йога', value: 'ashtanga' },
+    {
+      value: 'nidra',
+      get label(): string {
+        return t('practice.styles.nidra')
+      },
+    },
+    {
+      value: 'yin',
+      get label(): string {
+        return t('practice.styles.yin')
+      },
+    },
+    {
+      value: 'hatha',
+      get label(): string {
+        return t('practice.styles.hatha')
+      },
+    },
+    {
+      value: 'vinyasa',
+      get label(): string {
+        return t('practice.styles.vinyasa')
+      },
+    },
+    {
+      value: 'kundalini',
+      get label(): string {
+        return t('practice.styles.kundalini')
+      },
+    },
+    {
+      value: 'ashtanga',
+      get label(): string {
+        return t('practice.styles.ashtanga')
+      },
+    },
   ],
   circles: [
-    { label: 'Женский круг', value: 'womens' },
-    { label: 'Мужской круг', value: 'mens' },
-    { label: 'Круг шеринга', value: 'sharing' },
+    {
+      value: 'womens',
+      get label(): string {
+        return t('practice.styles.womens')
+      },
+    },
+    {
+      value: 'mens',
+      get label(): string {
+        return t('practice.styles.mens')
+      },
+    },
+    {
+      value: 'sharing',
+      get label(): string {
+        return t('practice.styles.sharing')
+      },
+    },
   ],
 }
 
@@ -260,15 +455,17 @@ export function directionHasStyles(direction: PracticeDirection | undefined | nu
   return stylesForDirection(direction).length > 0
 }
 
-/** Flat style value -> Russian label, derived from STYLE_OPTIONS_BY_DIRECTION
- *  (single source of truth). Use anywhere a style is held only as its raw
- *  value (e.g. a backend filter value) so it never renders untranslated.
- *  Falls back to the raw value for unknown keys at the call site. */
-export const STYLE_LABEL: Record<string, string> = Object.fromEntries(
-  Object.values(STYLE_OPTIONS_BY_DIRECTION)
-    .flat()
-    .map((opt) => [opt.value, opt.label]),
-)
+/** Flat style value -> localized label (live). Unknown values are the
+ *  caller's fallback (they return the raw key path -- callers must fall
+ *  back to the raw value themselves when the taxonomy may not know it). */
+export function styleLabel(styleValue: string): string {
+  return t(`practice.styles.${styleValue}`)
+}
+
+/** Whether the hardcoded taxonomy knows this style value. */
+export function hasStyleLabel(styleValue: string): boolean {
+  return i18n.global.te(`practice.styles.${styleValue}`, 'ru')
+}
 
 // -- Catalog-first options (T2 stage 2, 2026-07-15) -------------------------
 //

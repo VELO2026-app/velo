@@ -37,7 +37,7 @@
         <!-- Report content -->
         <div class="report-detail__section">
           <div class="report-detail__section-title">Текст жалобы</div>
-          <VCard class="report-detail__reason">{{ report.reason }}</VCard>
+          <VCard class="report-detail__reason">{{ decodedReason }}</VCard>
         </div>
 
         <!-- Meta -->
@@ -152,6 +152,7 @@
 </template>
 
 <script setup lang="ts">
+import { decodeReportReason } from '@/utils/reportReasons'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { RouteLocationRaw } from 'vue-router'
@@ -258,6 +259,10 @@ async function onDismiss(): Promise<void> {
 }
 
 onMounted(loadReport)
+
+// tz-i18n: known reason codes decode to localized labels; legacy free text
+// renders verbatim.
+const decodedReason = computed(() => decodeReportReason(report.value?.reason ?? ''))
 </script>
 
 <style scoped>

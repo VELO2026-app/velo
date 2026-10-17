@@ -179,6 +179,10 @@
     "bannerReplace": "Заменить",
     "bannerRemove": "Убрать"
   },
+  "methodPicker": {
+    "custom": "Свой вариант",
+    "directionPlaceholder": "Укажите направление…"
+  },
   "timePicker": { "title": "Время практики" },
   "curatorGroup": { "offerBadge": "Кураторство" },
   "distribution": {
@@ -464,7 +468,46 @@
     },
     "regular": "Регулярная",
     "remainingSessions": "Осталось {left} из {total} занятий",
-    "placeholderAlt": "Практика"
+    "placeholderAlt": "Практика",
+    "durationMinutes": "{n} минут",
+    "audience": {
+      "public": "Публичная",
+      "students": "Все ученики",
+      "groups": "Конкретные группы",
+      "curator_groups": "Школы"
+    },
+    "styles": {
+      "silence": "Медитация молчания",
+      "presence": "Медитация присутствия",
+      "sound": "Звуковая медитация",
+      "taoist": "Даосская медитация",
+      "nidra": "Йога-нидра",
+      "yin": "Инь-йога",
+      "hatha": "Хатха-йога",
+      "vinyasa": "Виньяса",
+      "kundalini": "Кундалини-йога",
+      "ashtanga": "Аштанга-йога",
+      "womens": "Женский круг",
+      "mens": "Мужской круг",
+      "sharing": "Круг шеринга"
+    }
+  },
+  "report": {
+    "title": "Сообщить о пользователе",
+    "send": "Отправить",
+    "reasonBand": "Причина:",
+    "placeholder": "Опишите, что произошло, это поможет нам разобраться",
+    "note": "Заявка уйдёт в поддержку. Мы можем связаться с вами, чтобы уточнить детали.",
+    "tooLong": "Слишком длинно ({have} из {max} символов) — сократите комментарий",
+    "sent": "Заявка отправлена в поддержку",
+    "sendFailed": "Не удалось отправить заявку",
+    "reasons": {
+      "disrupted_practice": "Сорвал практику",
+      "spam": "Спам или реклама",
+      "abuse": "Оскорбления, неподобающее поведение",
+      "fraud": "Мошенничество",
+      "other": "Другое"
+    }
   },
   "masterCard": { "profileUnavailable": "Профиль мастера недоступен" },
   "admin": {
