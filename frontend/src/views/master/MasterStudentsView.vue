@@ -25,12 +25,10 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        :title="t('masterScreens.masterStudents.ne-udalos-zagruzit-uchenikov')"
+        :title="t('masterScreens.masterStudents.toast.loadFailed')"
         :description="error"
       >
-        <VButton size="sm" variant="outline" @click="load">{{
-          t('masterScreens.masterStudents.povtorit')
-        }}</VButton>
+        <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
       </VEmptyState>
 
       <template v-else>
@@ -41,8 +39,8 @@
           <div class="students__search-field">
             <VInput
               v-model="query"
-              :placeholder="t('masterScreens.masterStudents.iskat')"
-              :aria-label="t('masterScreens.masterStudents.iskat-uchenika')"
+              :placeholder="t('masterScreens.masterStudents.search.placeholder')"
+              :aria-label="t('masterScreens.masterStudents.search.aria')"
               @focus="onFieldFocus"
             />
           </div>
@@ -69,7 +67,7 @@
           </div>
           <button
             class="students__msg"
-            :aria-label="t('masterScreens.masterStudents.napisat-soobshchenie')"
+            :aria-label="t('masterScreens.masterStudents.messageCta')"
             @click.stop="openMessage(student.id, student.name)"
           >
             <IconMessages :size="22" />
@@ -80,7 +78,7 @@
         <VShowMore
           v-if="!expanded && hiddenCount > 0"
           :count="hiddenCount"
-          :noun="t('masterScreens.masterStudents.uchenikov')"
+          :noun="t('masterScreens.masterStudents.studentsWord')"
           @click="expanded = true"
         />
 
@@ -88,14 +86,14 @@
         <VEmptyState
           v-if="students.length === 0"
           icon="group"
-          :title="t('masterScreens.masterStudents.uchenikov-poka-net')"
-          :description="t('masterScreens.masterStudents.oni-poyavyatsya-posle-pervykh')"
+          :title="t('masterScreens.masterStudents.empty.title')"
+          :description="t('masterScreens.masterStudents.empty.text')"
         />
         <VEmptyState
           v-else-if="filtered.length === 0"
           icon="group"
-          :title="t('masterScreens.masterStudents.nikogo-ne-naydeno')"
-          :description="t('masterScreens.masterStudents.poprobuyte-izmenit-zapros')"
+          :title="t('masterScreens.masterStudents.search.noHits')"
+          :description="t('masterScreens.masterStudents.search.changeQueryHint')"
         />
       </template>
     </div>
@@ -141,7 +139,7 @@ async function load(): Promise<void> {
     const res = await getStudents()
     students.value = res.items
   } catch {
-    error.value = t('masterScreens.masterStudents.poprobuyte-eshche-raz')
+    error.value = t('masterScreens.masterStudents.tryAgain')
   } finally {
     loading.value = false
   }

@@ -56,7 +56,7 @@
     <VHeader title="Уведомления" show-back @back="router.back()">
       <template v-if="unread > 0" #action>
         <button type="button" class="master-inbox__read-all" @click="markAll">
-          {{ t('masterScreens.masterInbox.prochitat-vse') }}
+          {{ t('masterScreens.masterInbox.readAll') }}
         </button>
       </template>
     </VHeader>
@@ -71,13 +71,10 @@
           <IconBellPlain :size="48" />
         </template>
       </VEmptyState>
-      <VButton size="sm" @click="load">{{ t('masterScreens.masterInbox.povtorit') }}</VButton>
+      <VButton size="sm" @click="load">{{ t('common.retry') }}</VButton>
     </div>
 
-    <VEmptyState
-      v-else-if="items.length === 0"
-      :title="t('masterScreens.masterInbox.zdes-poyavyatsya-uvedomleniya-o')"
-    >
+    <VEmptyState v-else-if="items.length === 0" :title="t('masterScreens.masterInbox.empty.text')">
       <template #icon>
         <IconBellPlain :size="48" />
       </template>
@@ -92,12 +89,12 @@
         variant="tabs"
         scrollable
         class="master-inbox__filter"
-        :aria-label="t('masterScreens.masterInbox.tip-uvedomleniy')"
+        :aria-label="t('masterScreens.masterInbox.typeFilter.label')"
       />
 
       <div v-if="visibleItems.length === 0" class="master-inbox__center">
         <p class="master-inbox__filter-empty">
-          {{ t('masterScreens.masterInbox.v-etoy-kategorii-poka') }}
+          {{ t('masterScreens.masterInbox.categoryEmpty') }}
         </p>
       </div>
 
@@ -147,10 +144,10 @@ const unread = ref(0)
 // row icons share ONE classifier so a tab and its glyph can never disagree.
 type InboxFilter = 'messages' | 'practices' | 'finance' | 'other'
 const FILTER_OPTIONS: ReadonlyArray<{ value: InboxFilter; label: string }> = [
-  { value: 'messages', label: t('masterScreens.masterInbox.soobshcheniya') },
-  { value: 'practices', label: t('masterScreens.masterInbox.praktiki') },
-  { value: 'finance', label: t('masterScreens.masterInbox.finansy') },
-  { value: 'other', label: t('masterScreens.masterInbox.drugoe') },
+  { value: 'messages', label: t('masterScreens.masterInbox.filter.messages') },
+  { value: 'practices', label: t('masterScreens.masterInbox.filter.practices') },
+  { value: 'finance', label: t('masterScreens.masterInbox.filter.finances') },
+  { value: 'other', label: t('masterScreens.masterInbox.filter.other') },
 ]
 const filter = ref<InboxFilter>('messages')
 
@@ -186,7 +183,7 @@ async function load(): Promise<void> {
     items.value = page.items
     unread.value = page.unread
   } catch (e) {
-    error.value = extractApiError(e, t('masterScreens.masterInbox.poprobuyte-eshche-raz'))
+    error.value = extractApiError(e, t('masterScreens.masterInbox.tryAgain'))
   } finally {
     loading.value = false
   }
@@ -208,7 +205,7 @@ async function markOne(item: NotificationItem): Promise<void> {
   } catch (e) {
     item.read_at = previousReadAt
     unread.value = previousUnread
-    toast.error(extractApiError(e, t('masterScreens.masterInbox.ne-udalos-otmetit-prochitannym')))
+    toast.error(extractApiError(e, t('masterScreens.masterInbox.toast.markReadFailed')))
   }
 }
 
@@ -228,7 +225,7 @@ async function markAll(): Promise<void> {
       i.read_at = previous[idx] ?? null
     })
     unread.value = previousUnread
-    toast.error(extractApiError(e, t('masterScreens.masterInbox.ne-udalos-otmetit-prochitannym')))
+    toast.error(extractApiError(e, t('masterScreens.masterInbox.toast.markReadFailed')))
   }
 }
 

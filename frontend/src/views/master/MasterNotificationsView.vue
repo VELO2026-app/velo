@@ -40,7 +40,7 @@
             <span class="mn-card__title-row">
               <span class="mn-card__title">{{ row.label }}</span>
               <VBadge v-if="isStub(row.key)" variant="muted" class="mn-card__soon">{{
-                t('masterScreens.masterNotifications.skoro')
+                t('masterScreens.masterNotifications.soon')
               }}</VBadge>
             </span>
             <span v-if="row.sub" class="mn-card__sub">{{ row.sub }}</span>
@@ -57,16 +57,16 @@
       <!-- Delivery schedule -->
       <section class="mn-section">
         <h2 class="mn-section__title">
-          {{ t('masterScreens.masterNotifications.grafik-uvedomleniy') }}
+          {{ t('masterScreens.masterNotifications.schedule') }}
         </h2>
         <p class="mn-section__sub">
-          {{ t('masterScreens.masterNotifications.poluchat-uvedomleniya-s') }}
+          {{ t('masterScreens.masterNotifications.receiveFrom') }}
         </p>
         <div class="mn-sched">
           <button type="button" class="mn-sched__field" @click="openTimePicker('from')">
             {{ schedule.from }}
           </button>
-          <span class="mn-sched__sep">{{ t('masterScreens.masterNotifications.do') }}</span>
+          <span class="mn-sched__sep">{{ t('masterScreens.masterNotifications.to') }}</span>
           <button type="button" class="mn-sched__field" @click="openTimePicker('to')">
             {{ schedule.to }}
           </button>
@@ -74,7 +74,7 @@
         <div class="mn-days-card">
           <VDayPicker
             :model-value="schedule.days"
-            :aria-label="t('masterScreens.masterNotifications.dni-dostavki-uvedomleniy')"
+            :aria-label="t('masterScreens.masterNotifications.deliveryDays')"
             @update:model-value="onScheduleDays"
           />
         </div>
@@ -84,7 +84,7 @@
     <TimePickerSheet
       :open="timePickerOpen"
       :model-value="schedule[timePickerEdge]"
-      :title="t('masterScreens.masterNotifications.vremya-uvedomleniy')"
+      :title="t('masterScreens.masterNotifications.deliveryTime')"
       @update:model-value="onTimePicked"
       @close="timePickerOpen = false"
     />
@@ -131,54 +131,54 @@ interface Group {
 
 const GROUPS: Group[] = [
   {
-    title: t('masterScreens.masterNotifications.praktiki'),
+    title: t('masterScreens.masterNotifications.category.practices'),
     rows: [
       {
         key: 'new_booking',
-        label: t('masterScreens.masterNotifications.novoe-bronirovanie'),
-        sub: t('masterScreens.masterNotifications.kto-to-zapisalsya'),
+        label: t('masterScreens.masterNotifications.events.newBooking'),
+        sub: t('masterScreens.masterNotifications.events.someoneBooked'),
       },
       {
         key: 'booking_cancelled',
-        label: t('masterScreens.masterNotifications.otmena-bronirovaniya'),
-        sub: t('masterScreens.masterNotifications.kto-to-otmenil'),
+        label: t('masterScreens.masterNotifications.events.bookingCancelled'),
+        sub: t('masterScreens.masterNotifications.events.someoneCancelled'),
       },
       {
         key: 'reminder',
-        label: t('masterScreens.masterNotifications.napominanie'),
-        sub: t('masterScreens.masterNotifications.za-1-chas-do'),
+        label: t('masterScreens.masterNotifications.events.reminder'),
+        sub: t('masterScreens.masterNotifications.events.reminderText'),
       },
     ],
   },
   {
-    title: t('masterScreens.masterNotifications.uchastniki'),
+    title: t('masterScreens.masterNotifications.category.members'),
     rows: [
       {
         key: 'new_checkin',
-        label: t('masterScreens.masterNotifications.novyy-check-in'),
-        sub: t('masterScreens.masterNotifications.uchastnik-otmetilsya-o-sostoyanii'),
+        label: t('masterScreens.masterNotifications.events.newCheckin'),
+        sub: t('masterScreens.masterNotifications.events.checkinText'),
       },
       {
         key: 'new_feedback',
-        label: t('masterScreens.masterNotifications.novyy-feedback'),
-        sub: t('masterScreens.masterNotifications.uchastnik-ostavil-otzyv'),
+        label: t('masterScreens.masterNotifications.events.newFeedback'),
+        sub: t('masterScreens.masterNotifications.events.feedbackText'),
       },
     ],
   },
   {
-    title: t('masterScreens.masterNotifications.shkoly'),
+    title: t('masterScreens.masterNotifications.category.schools'),
     // FE-67 (BE-25): the curator_groups comms category -- member_joined plus
     // both school-master appointment outcomes (comms-profile/types.yaml).
     rows: [
       {
         key: 'curator_groups',
-        label: t('masterScreens.masterNotifications.sobytiya-shkol'),
-        sub: t('masterScreens.masterNotifications.vstupleniya-i-naznacheniya-masterov'),
+        label: t('masterScreens.masterNotifications.events.schoolEvents'),
+        sub: t('masterScreens.masterNotifications.events.joinsAndAppointments'),
       },
     ],
   },
   {
-    title: t('masterScreens.masterNotifications.soobshcheniya'),
+    title: t('masterScreens.masterNotifications.category.messages'),
     // P-2 (H-T2-UI): labels follow the RECEIVER side of the msg.* axis
     // (comms app/notifier.py:214-232): a thread's OPERATOR -- the master --
     // receives students' chat messages as msg.support_message -> category
@@ -191,28 +191,28 @@ const GROUPS: Group[] = [
     rows: [
       {
         key: 'msg_support',
-        label: t('masterScreens.masterNotifications.soobshcheniya-uchenikov'),
-        sub: t('masterScreens.masterNotifications.novye-soobshcheniya-v-vashikh'),
+        label: t('masterScreens.masterNotifications.events.studentMessages'),
+        sub: t('masterScreens.masterNotifications.events.newMessages'),
       },
       {
         key: 'msg_participants',
-        label: t('masterScreens.masterNotifications.otvety-v-vashikh-obrashcheniyakh'),
-        sub: t('masterScreens.masterNotifications.chaty-gde-vy-avtor'),
+        label: t('masterScreens.masterNotifications.events.supportReplies'),
+        sub: t('masterScreens.masterNotifications.events.chatsYouAuthor'),
       },
     ],
   },
   {
-    title: t('masterScreens.masterNotifications.analitika'),
+    title: t('masterScreens.masterNotifications.category.analytics'),
     rows: [
       {
         key: 'ai_summary',
-        label: t('masterScreens.masterNotifications.ai-sammari'),
-        sub: t('masterScreens.masterNotifications.po-ponedelnikam'),
+        label: t('masterScreens.masterNotifications.events.aiSummary'),
+        sub: t('masterScreens.masterNotifications.mondays'),
       },
       {
         key: 'monthly_report',
-        label: t('masterScreens.masterNotifications.ezhemesyachnyy-otchet'),
-        sub: t('masterScreens.masterNotifications.1-go-chisla-mesyatsa'),
+        label: t('masterScreens.masterNotifications.monthlyReport'),
+        sub: t('masterScreens.masterNotifications.firstOfMonth'),
       },
     ],
   },
@@ -230,7 +230,7 @@ const CATEGORY_BY_KEY: Partial<Record<ToggleKey, string>> = {
 
 // Owner ruling 2026-08-16 (PROMPT №746): a stub row -- no comms category yet
 // -- stays VISIBLE but its switch is DISABLED (VSwitch's own `disabled`, not
-// a moved-then-reverted flip) and carries a short t('masterScreens.masterNotifications.skoro') marker. Not
+// a moved-then-reverted flip) and carries a short t('masterScreens.masterNotifications.soon') marker. Not
 // deleted, not made to persist -- forthcoming controls on an in-progress
 // screen are normal, per his standard on this.
 function isStub(key: ToggleKey): boolean {
@@ -298,7 +298,7 @@ async function loadPrefs(): Promise<void> {
     // H-R2 (3.6): a silent load failure left the screen showing defaults
     // the server never confirmed -- surface it (same tone as the
     // category handler below).
-    toast.error(t('masterScreens.masterNotifications.ne-udalos-zagruzit-nastroyki'))
+    toast.error(t('masterScreens.masterNotifications.toast.loadFailed'))
     console.warn('notification prefs load failed', error)
   }
 }
@@ -310,7 +310,7 @@ function persistSchedule(): void {
   }).catch((error) => {
     // H-R2 (3.6): the schedule save failing silently meant the picker
     // showed a schedule the server never accepted.
-    toast.error(t('masterScreens.masterNotifications.ne-udalos-sokhranit-raspisanie'))
+    toast.error(t('masterScreens.masterNotifications.toast.scheduleSaveFailed'))
     console.warn('schedule save failed', error)
   })
 }
@@ -341,7 +341,7 @@ function onToggle(key: ToggleKey, value: boolean): void {
       toggles.new_booking = prevBookingPair.nb
       toggles.booking_cancelled = prevBookingPair.bc
     }
-    toast.error(t('masterScreens.masterNotifications.ne-udalos-sokhranit-nastroyku'))
+    toast.error(t('masterScreens.masterNotifications.toast.saveFailed'))
     console.warn('preference save failed', error)
   })
 }

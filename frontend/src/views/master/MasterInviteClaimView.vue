@@ -20,7 +20,7 @@ Verified masters never reach here: applyGuard bounces them to the dashboard.
       <template v-if="claiming">
         <VLoader size="lg" />
         <p class="invite-claim__subtitle">
-          {{ t('masterScreens.masterInviteClaim.proveryaem-priglashenie') }}
+          {{ t('masterScreens.masterInviteClaim.verifying') }}
         </p>
       </template>
 
@@ -29,14 +29,14 @@ Verified masters never reach here: applyGuard bounces them to the dashboard.
            the user their invite is dead when it might just be their connection. -->
       <template v-else-if="transientError">
         <h2 class="invite-claim__title">
-          {{ t('masterScreens.masterInviteClaim.ne-udalos-proverit-priglashenie') }}
+          {{ t('masterScreens.masterInviteClaim.verifyFailed') }}
         </h2>
         <p class="invite-claim__subtitle">
           Проблема с соединением. Проверьте интернет и попробуйте ещё раз.
         </p>
         <div class="invite-claim__actions">
           <VButton variant="primary" block :loading="claiming" @click="claim">{{
-            t('masterScreens.masterInviteClaim.povtorit')
+            t('common.retry')
           }}</VButton>
         </div>
       </template>
@@ -82,7 +82,7 @@ async function claim(): Promise<void> {
   try {
     await claimMasterInvite(token)
     // Claimed (one-time, burned) — hand off to the regular apply wizard.
-    toast.success(t('masterScreens.masterInviteClaim.priglashenie-prinyato'))
+    toast.success(t('masterScreens.masterInviteClaim.toast.accepted'))
     void router.replace({ name: 'master-apply' })
   } catch (e) {
     // W11 fix: only a genuine invite_invalid (backend actually looked the
@@ -93,7 +93,7 @@ async function claim(): Promise<void> {
     // errorTitle stays here -- it is this screen's own framing, not a
     // generic error phrase the table is meant to hold one of.
     if (e instanceof ApiResponseError && e.code === 'invite_invalid') {
-      errorTitle.value = t('masterScreens.masterInviteClaim.ssylka-nedeystvitelna')
+      errorTitle.value = t('masterScreens.masterInviteClaim.invalid.title')
       errorDescription.value = errorMessage('invite_invalid')
     } else {
       transientError.value = true

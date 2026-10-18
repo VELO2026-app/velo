@@ -40,9 +40,7 @@
     <!-- Error -->
     <div v-else-if="error" class="checkins__content">
       <VEmptyState icon="warning" title="Не удалось загрузить check-ins" :description="error">
-        <VButton size="sm" variant="outline" @click="load">{{
-          t('masterScreens.attendance.povtorit')
-        }}</VButton>
+        <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
       </VEmptyState>
     </div>
 
@@ -61,8 +59,8 @@
         <VEmptyState
           v-if="attendance.total === 0"
           icon="group"
-          :title="t('masterScreens.attendance.net-zapisavshikhsya')"
-          :description="t('masterScreens.attendance.na-etu-praktiku-eshche')"
+          :title="t('masterScreens.attendance.empty.title')"
+          :description="t('masterScreens.attendance.empty.text')"
         />
 
         <!-- Participants -->
@@ -79,15 +77,15 @@
               {{ item.checkin.comment }}
             </div>
             <div v-else-if="item.status === 'no_show'" class="checkins__meta">
-              {{ t('masterScreens.attendance.ne-prishel') }}
+              {{ t('masterScreens.attendance.noShow') }}
             </div>
             <!-- Checked in (mood submitted) but left no comment: do NOT say
                  «Ожидает check-in» — their mood face already shows they're in. -->
             <div v-else-if="item.checkin" class="checkins__meta">
-              {{ t('masterScreens.attendance.bez-kommentariya') }}
+              {{ t('masterScreens.attendance.noComment') }}
             </div>
             <div v-else class="checkins__meta">
-              {{ t('masterScreens.attendance.ozhidaet-check-in') }}
+              {{ t('masterScreens.attendance.awaitingCheckin') }}
             </div>
           </div>
         </div>
@@ -173,7 +171,7 @@ async function load(): Promise<void> {
     const [attendanceData] = await Promise.all([getAttendance(practiceId), loadPractice()])
     attendance.value = attendanceData
   } catch (e) {
-    error.value = extractApiError(e, t('masterScreens.attendance.oshibka-zagruzki'))
+    error.value = extractApiError(e, t('masterScreens.attendance.error.load'))
   } finally {
     loading.value = false
   }

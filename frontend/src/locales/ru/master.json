@@ -8,50 +8,65 @@
   },
   "masterScreens": {
     "masterMessages": {
-      "zdes-poyavyatsya-perepiski-s": "Здесь появятся переписки с учениками",
-      "ucheniki-pishut-vam-so": "Ученики пишут вам со страницы вашего профиля",
-      "povtorit": "Повторить",
-      "poprobuyte-eshche-raz": "Попробуйте ещё раз",
+      "empty": {
+        "text": "Здесь появятся переписки с учениками",
+        "hint": "Ученики пишут вам со страницы вашего профиля"
+      },
+      "tryAgain": "Попробуйте ещё раз",
       "peerFallback": "Ученик"
     },
     "analytics": {
-      "period-statistiki": "Период статистики",
-      "napisat-soobshchenie": "Написать сообщение",
-      "za-vybrannyy-period-praktik": "За выбранный период практик нет",
-      "praktik": "практик",
-      "obshchaya-statistika": "Общая статистика",
-      "trebuyut-vnimaniya": "Требуют внимания",
-      "proshedshie-praktiki": "Прошедшие практики",
-      "povtorit": "Повторить",
-      "dokhod-za-period": "Доход за период",
-      "tranzaktsii": "Транзакции",
-      "pokazat-eshche": "Показать ещё",
-      "otzyvy": "Отзывы",
-      "platezhi": "Платежи",
-      "nedelya": "Неделя",
-      "mesyats": "Месяц",
-      "oshibka-zagruzki": "Ошибка загрузки",
-      "proshedshie": "Прошедшие",
-      "predstoyashchie": "Предстоящие"
+      "statsPeriod": "Период статистики",
+      "messageCta": "Написать сообщение",
+      "empty": {
+        "noPractices": "За выбранный период практик нет"
+      },
+      "practicesWord": "практик",
+      "sections": {
+        "overall": "Общая статистика",
+        "attention": "Требуют внимания",
+        "past": "Прошедшие практики",
+        "revenue": "Доход за период",
+        "transactions": "Транзакции",
+        "reviews": "Отзывы",
+        "payments": "Платежи"
+      },
+      "period": {
+        "week": "Неделя",
+        "month": "Месяц"
+      },
+      "error": {
+        "load": "Ошибка загрузки"
+      },
+      "tab": {
+        "past": "Прошедшие",
+        "upcoming": "Предстоящие"
+      }
     },
     "attendanceRoster": {
-      "net-dannykh-o-poseshchaemosti": "Нет данных о посещаемости",
-      "na-etoy-praktike-nikto": "На этой практике никто не отмечен",
-      "posmotret-eshche": "посмотреть еще",
-      "posmotret-eshche-2": "посмотреть еще",
-      "povtorit": "Повторить",
-      "prisutstvovali": "Присутствовали",
-      "ne-prishli": "Не пришли",
-      "oshibka-zagruzki": "Ошибка загрузки"
+      "empty": {
+        "title": "Нет данных о посещаемости",
+        "text": "На этой практике никто не отмечен"
+      },
+      "showMore": "посмотреть еще",
+      "showMore2": "посмотреть еще",
+      "attended": "Присутствовали",
+      "missed": "Не пришли",
+      "error": {
+        "load": "Ошибка загрузки"
+      }
     },
     "attendance": {
-      "net-zapisavshikhsya": "Нет записавшихся",
-      "na-etu-praktiku-eshche": "На эту практику ещё никто не записался",
-      "povtorit": "Повторить",
-      "ne-prishel": "Не пришёл",
-      "bez-kommentariya": "Без комментария",
-      "ozhidaet-check-in": "Ожидает check-in",
-      "oshibka-zagruzki": "Ошибка загрузки"
+      "empty": {
+        "title": "Нет записавшихся",
+        "text": "На эту практику ещё никто не записался"
+      },
+      "noShow": "Не пришёл",
+      "noComment": "Без комментария",
+      "awaitingCheckin": "Ожидает check-in",
+      "error": {
+        "load": "Ошибка загрузки"
+      }
     },
     "createPractice": {
       "draft": {
@@ -138,33 +153,52 @@
       "razdely-s-obyazatelnymi-polyami": "— разделы с обязательными полями"
     },
     "curatorGroupJoin": {
-      "vas-priglasili-v-shkolu": "Вас пригласили в школу!",
-      "proveryaem-priglashenie": "Проверяем приглашение…",
-      "ne-udalos-proverit-priglashenie": "Не удалось проверить приглашение",
-      "vstupit": "Вступить",
-      "priglashenie-nedeystvitelno": "Приглашение недействительно",
-      "vozmozhno-ssylka-povrezhdena-ustarela": "Возможно, ссылка повреждена, устарела или была отозвана.",
-      "eto-vasha-shkola": "Это ваша школа",
-      "vy-kurator-etoy-shkoly": "Вы куратор этой школы.",
-      "vy-uzhe-v-shkole": "Вы уже в школе",
-      "vy-uzhe-sostoite-v": "Вы уже состоите в этой школе.",
-      "vstuplenie-nedostupno": "Вступление недоступно",
-      "kurator-ogranichil-vam-dostup": "Куратор ограничил вам доступ в эту школу.",
-      "vstuplenie-nedostupno-2": "Вступление недоступно",
-      "vy-zablokirovany-v-etoy": "Вы заблокированы в этой школе.",
-      "vstuplenie-nedostupno-3": "Вступление недоступно",
-      "ne-udalos-vstupit-v": "Не удалось вступить в школу. Попробуйте ещё раз."
+      "invited": {
+        "title": "Вас пригласили в школу!"
+      },
+      "verifying": "Проверяем приглашение…",
+      "verifyFailed": "Не удалось проверить приглашение",
+      "joinCta": "Вступить",
+      "invalid": {
+        "title": "Приглашение недействительно",
+        "text": "Возможно, ссылка повреждена, устарела или была отозвана."
+      },
+      "alreadyOwner": {
+        "title": "Это ваша школа",
+        "text": "Вы куратор этой школы."
+      },
+      "alreadyMember": {
+        "title": "Вы уже в школе",
+        "text": "Вы уже состоите в этой школе."
+      },
+      "unavailable": "Вступление недоступно",
+      "restricted": {
+        "text": "Куратор ограничил вам доступ в эту школу."
+      },
+      "unavailable2": "Вступление недоступно",
+      "blocked": {
+        "title": "Вы заблокированы в этой школе."
+      },
+      "unavailable3": "Вступление недоступно",
+      "toast": {
+        "joinFailed": "Не удалось вступить в школу. Попробуйте ещё раз."
+      }
     },
     "curatorGroupMasterOffer": {
-      "priglashenie-stat-masterom-shkoly": "Приглашение стать мастером школы!",
-      "proveryaem-priglashenie": "Проверяем приглашение…",
-      "ne-udalos-proverit-priglashenie": "Не удалось проверить приглашение",
-      "povtorit": "Повторить",
-      "priglashenie-nedeystvitelno": "Приглашение недействительно",
-      "nuzhna-verifikatsiya-mastera": "Нужна верификация мастера",
-      "ne-udalos-prinyat-priglashenie": "Не удалось принять приглашение. Попробуйте ещё раз.",
-      "predlozhenie-otkloneno": "Предложение отклонено",
-      "ne-udalos-otkazatsya-poprobuyte": "Не удалось отказаться. Попробуйте ещё раз."
+      "invited": {
+        "title": "Приглашение стать мастером школы!"
+      },
+      "verifying": "Проверяем приглашение…",
+      "verifyFailed": "Не удалось проверить приглашение",
+      "invalid": {
+        "title": "Приглашение недействительно"
+      },
+      "verificationNeeded": "Нужна верификация мастера",
+      "toast": {
+        "acceptFailed": "Не удалось принять приглашение. Попробуйте ещё раз.",
+        "declined": "Предложение отклонено",
+        "declineFailed": "Не удалось отказаться. Попробуйте ещё раз."
+      }
     },
     "editPractice": {
       "fields": {
@@ -221,431 +255,557 @@
       }
     },
     "groupJoin": {
-      "proveryaem-priglashenie": "Проверяем приглашение…",
-      "ne-udalos-proverit-priglashenie": "Не удалось проверить приглашение",
-      "povtorit": "Повторить",
-      "master-ogranichil-vam-dostup": "Мастер ограничил вам доступ",
-      "vy-ne-smozhete-prisoedinitsya": "Вы не сможете присоединиться к этой группе.",
-      "ssylka-nedeystvitelna": "Ссылка недействительна",
-      "vozmozhno-ssylka-povrezhdena-ili": "Возможно, ссылка повреждена или устарела."
+      "verifying": "Проверяем приглашение…",
+      "verifyFailed": "Не удалось проверить приглашение",
+      "restrictedByMaster": "Мастер ограничил вам доступ",
+      "cannotJoin": "Вы не сможете присоединиться к этой группе.",
+      "invalid": {
+        "title": "Ссылка недействительна",
+        "text": "Возможно, ссылка повреждена или устарела."
+      }
     },
     "masterApply": {
-      "imya": "Имя",
-      "opyt-prepodavaniya": "Опыт преподавания *",
-      "o-sebe": "О себе *",
-      "rasskazhite-o-vashem-opyte": "Расскажите о вашем опыте и подходе к практикам…",
-      "shag-2-opyt": "Шаг 2: Опыт ",
-      "napravleniya-praktik": "Направления практик *",
-      "yazyk-provedeniya-praktik": "Язык проведения практик",
-      "pasport-skan-ili-foto": "Паспорт (скан или фото) *",
-      "dlya-verifikatsii-lichnosti-ne": "Для верификации личности. Не публикуется.",
-      "zagruzit-dokument": "Загрузить документ",
-      "sertifikaty": "Сертификаты",
-      "mozhno-zagruzit-neskolko-faylov": "Можно загрузить несколько файлов.",
-      "dobavit-sertifikat": "Добавить сертификат",
-      "foto-profilya": "Фото профиля",
-      "zagruzit-foto": "Загрузить фото",
-      "menee-1-goda": "Менее 1 года",
-      "1-3-goda": "1-3 года",
-      "3-5-let": "3-5 лет",
-      "5-10-let": "5-10 лет",
-      "bolee-10-let": "Более 10 лет",
-      "zagruzka-faylov-poka-nedostupna": "Загрузка файлов пока недоступна",
-      "pozhaluysta-vvedite-imya": "Пожалуйста, введите имя",
-      "neobkhodimo-prinyat-usloviya-ispolzovaniya": "Необходимо принять условия использования",
-      "vyberite-khotya-by-odno": "Выберите хотя бы одно направление",
-      "vyberite-opyt-prepodavaniya": "Выберите опыт преподавания",
-      "pozhaluysta-rasskazhite-o-sebe": "Пожалуйста, расскажите о себе",
-      "neobkhodimo-dat-soglasie-na": "Необходимо дать согласие на обработку документов",
-      "profil-sozdan": "Профиль создан",
-      "zayavka-otpravlena": "Заявка отправлена!",
-      "ne-udalos-otpravit-zayavku": "Не удалось отправить заявку"
+      "fields": {
+        "name": "Имя",
+        "experience": "Опыт преподавания *",
+        "about": "О себе *",
+        "aboutPlaceholder": "Расскажите о вашем опыте и подходе к практикам…",
+        "directions": "Направления практик *",
+        "language": "Язык проведения практик",
+        "passport": "Паспорт (скан или фото) *",
+        "passportHint": "Для верификации личности. Не публикуется.",
+        "certificates": "Сертификаты",
+        "photo": "Фото профиля"
+      },
+      "step2": {
+        "title": "Шаг 2: Опыт "
+      },
+      "upload": {
+        "document": "Загрузить документ",
+        "multiHint": "Можно загрузить несколько файлов.",
+        "addCertificate": "Добавить сертификат",
+        "photo": "Загрузить фото",
+        "unavailable": "Загрузка файлов пока недоступна"
+      },
+      "experience": {
+        "less1": "Менее 1 года",
+        "1_3": "1-3 года",
+        "3_5": "3-5 лет",
+        "5_10": "5-10 лет",
+        "over10": "Более 10 лет"
+      },
+      "validation": {
+        "enterName": "Пожалуйста, введите имя",
+        "acceptTerms": "Необходимо принять условия использования",
+        "chooseDirection": "Выберите хотя бы одно направление",
+        "chooseExperience": "Выберите опыт преподавания",
+        "tellAboutYourself": "Пожалуйста, расскажите о себе",
+        "consentRequired": "Необходимо дать согласие на обработку документов"
+      },
+      "toast": {
+        "profileCreated": "Профиль создан",
+        "applicationSent": "Заявка отправлена!",
+        "applicationFailed": "Не удалось отправить заявку"
+      }
     },
     "masterChat": {
-      "uchenik": "Ученик",
-      "nazad": "Назад"
+      "peerFallback": "Ученик"
     },
     "masterCuratorGroupCreate": {
-      "sozdanie-shkol-nedostupno": "Создание школ недоступно",
-      "zavodit-shkoly-mozhet-master": "Заводить школы может мастер, которому администратор выдал это право.",
-      "nazvanie": "Название",
-      "nazvanie-2": "Название",
-      "opisanie": "Описание",
-      "opisanie-2": "Описание",
-      "polya-obyazatelnye-dlya-zapolneniya": "— поля, обязательные для заполнения",
-      "osnovnoe": "Основное ",
-      "avatar-shkoly": "Аватар школы",
-      "fon-shkoly": "Фон школы",
-      "vvedite-nazvanie-shkoly": "Введите название школы",
-      "u-vas-uzhe-est": "У вас уже есть школа с таким названием",
-      "ne-udalos-sozdat-shkolu": "Не удалось создать школу"
+      "unavailable": "Создание школ недоступно",
+      "unavailableHint": "Заводить школы может мастер, которому администратор выдал это право.",
+      "fields": {
+        "name": "Название",
+        "description": "Описание",
+        "avatar": "Аватар школы",
+        "background": "Фон школы"
+      },
+      "legend": {
+        "required": "— поля, обязательные для заполнения"
+      },
+      "section": {
+        "basics": "Основное "
+      },
+      "validation": {
+        "enterName": "Введите название школы"
+      },
+      "toast": {
+        "nameTaken": "У вас уже есть школа с таким названием",
+        "createFailed": "Не удалось создать школу"
+      }
     },
     "masterCuratorGroups": {
-      "novaya-shkola": "Новая школа",
-      "ne-udalos-zagruzit-shkoly": "Не удалось загрузить школы",
-      "proverte-soedinenie-i-poprobuyte": "Проверьте соединение и попробуйте ещё раз.",
-      "poka-net-shkol": "Пока нет школ",
-      "sozdayte-shkolu-ili-vstupite": "Создайте школу или вступите по ссылке от куратора.",
-      "poka-net-shkol-2": "Пока нет школ",
-      "vstupite-po-ssylke-ot": "Вступите по ссылке от куратора. Создавать школы может мастер, которому администратор выдал это право.",
-      "povtorit": "Повторить",
-      "ya-kurator": "Я куратор",
-      "ya-uchastnik": "Я участник"
+      "createCta": "Новая школа",
+      "toast": {
+        "loadFailed": "Не удалось загрузить школы"
+      },
+      "loadFailedHint": "Проверьте соединение и попробуйте ещё раз.",
+      "empty": {
+        "title": "Пока нет школ",
+        "text": "Создайте школу или вступите по ссылке от куратора.",
+        "title2": "Пока нет школ",
+        "joinHint": "Вступите по ссылке от куратора. Создавать школы может мастер, которому администратор выдал это право."
+      },
+      "tab": {
+        "curator": "Я куратор",
+        "member": "Я участник"
+      }
     },
     "masterDashboard": {
-      "period-statistiki": "Период статистики",
-      "uvedomleniya": "Уведомления",
-      "praktik": "Практик",
-      "uchastnikov": "Участников",
-      "nedelya": "Неделя",
-      "mesyats": "Месяц",
-      "kvartal": "Квартал",
-      "zavtra-07-00-45": "Завтра, 07:00 • 45 мин",
-      "vstrecha-zoom-eshche-gotovitsya": "Встреча Zoom ещё готовится",
-      "povtorit": "Повторить",
-      "vstrecha-zoom-sozdana": "Встреча Zoom создана",
-      "vse-eshche-ne-udalos": "Всё ещё не удалось создать встречу. Попробуйте позже",
-      "status-vstrechi-uzhe-obnovilsya": "Статус встречи уже обновился",
-      "ne-udalos-povtorit-popytku": "Не удалось повторить попытку"
+      "statsPeriod": "Период статистики",
+      "notifications": "Уведомления",
+      "statPractices": "Практик",
+      "statMembers": "Участников",
+      "period": {
+        "week": "Неделя",
+        "month": "Месяц",
+        "quarter": "Квартал"
+      },
+      "nextSession": {
+        "example": "Завтра, 07:00 • 45 мин"
+      },
+      "zoom": {
+        "preparing": "Встреча Zoom ещё готовится"
+      },
+      "toast": {
+        "zoomCreated": "Встреча Zoom создана",
+        "zoomStillFailed": "Всё ещё не удалось создать встречу. Попробуйте позже",
+        "zoomAlreadyUpdated": "Статус встречи уже обновился",
+        "retryFailed": "Не удалось повторить попытку"
+      }
     },
     "masterFinance": {
-      "udalit-sposob-vyplaty": "Удалить способ выплаты",
-      "imya-vladeltsa-scheta": "Имя владельца счёта",
-      "bic-swift-neobyazatelno": "BIC / SWIFT (необязательно)",
-      "revolut-tag-ili-telefon": "Revolut Tag или телефон *",
-      "username-ili-49123456789": "{'@'}username или +49123456789",
-      "nomer-karty": "Номер карты",
-      "dostupno-k-vyvodu": "Доступно к выводу",
-      "metod-oplaty": "Метод оплаты",
-      "summa-vyvoda": "Сумма вывода ",
-      "istoriya-vyvodov": "История выводов",
-      "bankovskiy-perevod-iban": "Банковский перевод (IBAN)",
-      "perevod-po-nomeru-karty": "Перевод по номеру карты",
-      "iban-obyazatelen": "IBAN обязателен",
-      "vvedite-korrektnyy-email": "Введите корректный email",
-      "ukazhite-revolut-tag-ili": "Укажите Revolut tag или телефон",
-      "vvedite-korrektnyy-nomer-karty": "Введите корректный номер карты",
-      "rekvizity-sokhraneny": "Реквизиты сохранены",
-      "ne-udalos-sokhranit-rekvizity": "Не удалось сохранить реквизиты",
-      "iban-nastroen": "IBAN настроен",
-      "email-nastroen": "Email настроен",
-      "nastroeno": "Настроено",
-      "karta-nastroena": "Карта настроена",
-      "nastroeno-2": "Настроено",
-      "sposob-vyplaty-udalen": "Способ выплаты удалён",
-      "ne-udalos-udalit-sposob": "Не удалось удалить способ выплаты",
-      "vvedite-korrektnuyu-summu": "Введите корректную сумму",
-      "nedostatochno-sredstv": "Недостаточно средств",
-      "zapros-na-vyvod-otpravlen": "Запрос на вывод отправлен. Ожидайте решения администратора.",
-      "ne-udalos-sozdat-zapros": "Не удалось создать запрос",
-      "ne-udalos-zagruzit-istoriyu": "Не удалось загрузить историю выводов",
-      "ne-udalos-zagruzit-istoriyu-2": "Не удалось загрузить историю выводов",
-      "na-rassmotrenii": "На рассмотрении",
-      "odobren": "Одобрен",
-      "otklonen": "Отклонён"
+      "removeMethod": "Удалить способ выплаты",
+      "fields": {
+        "holderName": "Имя владельца счёта",
+        "bicOptional": "BIC / SWIFT (необязательно)",
+        "revolutTag": "Revolut Tag или телефон *",
+        "revolutPlaceholder": "{'@'}username или +49123456789",
+        "cardNumber": "Номер карты",
+        "amount": "Сумма вывода "
+      },
+      "availableToWithdraw": "Доступно к выводу",
+      "method": {
+        "label": "Метод оплаты",
+        "iban": "Банковский перевод (IBAN)",
+        "card": "Перевод по номеру карты"
+      },
+      "withdrawalHistory": "История выводов",
+      "validation": {
+        "ibanRequired": "IBAN обязателен",
+        "emailInvalid": "Введите корректный email",
+        "revolutRequired": "Укажите Revolut tag или телефон",
+        "cardInvalid": "Введите корректный номер карты",
+        "amountInvalid": "Введите корректную сумму",
+        "insufficientFunds": "Недостаточно средств"
+      },
+      "toast": {
+        "detailsSaved": "Реквизиты сохранены",
+        "detailsSaveFailed": "Не удалось сохранить реквизиты",
+        "ibanConfigured": "IBAN настроен",
+        "emailConfigured": "Email настроен",
+        "configured": "Настроено",
+        "cardConfigured": "Карта настроена",
+        "configured2": "Настроено",
+        "methodRemoved": "Способ выплаты удалён",
+        "methodRemoveFailed": "Не удалось удалить способ выплаты",
+        "withdrawalSent": "Запрос на вывод отправлен. Ожидайте решения администратора.",
+        "withdrawalFailed": "Не удалось создать запрос",
+        "historyLoadFailed": "Не удалось загрузить историю выводов",
+        "historyLoadFailed2": "Не удалось загрузить историю выводов"
+      },
+      "status": {
+        "pending": "На рассмотрении",
+        "approved": "Одобрен",
+        "rejected": "Отклонён"
+      }
     },
     "masterGroupCreate": {
-      "nazvanie": "Название",
-      "nazvanie-2": "Название",
-      "opisanie": "Описание",
-      "opisanie-2": "Описание",
-      "polya-obyazatelnye-dlya-zapolneniya": "— поля, обязательные для заполнения",
-      "osnovnoe": "Основное ",
-      "vvedite-nazvanie-gruppy": "Введите название группы",
-      "vvedite-nazvanie-gruppy-2": "Введите название группы",
-      "gruppa-sozdana": "Группа создана",
-      "ne-udalos-sozdat-gruppu": "Не удалось создать группу",
-      "ne-tak-silno-dvigaetsya": "не так сильно двигается"
+      "fields": {
+        "name": "Название",
+        "description": "Описание"
+      },
+      "legend": {
+        "required": "— поля, обязательные для заполнения"
+      },
+      "section": {
+        "basics": "Основное "
+      },
+      "validation": {
+        "enterName": "Введите название группы",
+        "enterName2": "Введите название группы"
+      },
+      "toast": {
+        "created": "Группа создана",
+        "createFailed": "Не удалось создать группу"
+      },
+      "debug": {
+        "moveHint": "не так сильно двигается"
+      }
     },
     "masterGroupDetail": {
-      "priglasit-v-gruppu": "Пригласить в группу",
-      "udalit-gruppu": "Удалить группу",
-      "iskat-uchenika": "Искать ученика...",
-      "iskat-uchenika-2": "Искать ученика",
-      "ne-udalos-zagruzit-uchastnikov": "Не удалось загрузить участников",
-      "izmenit-nazvanie-i-opisanie": "Изменить название и описание",
-      "sokhranit": "Сохранить",
-      "opisanie": "Описание",
-      "opisanie-2": "Описание",
-      "udalit": "Удалить",
-      "povtorit": "Повторить",
-      "gruppa-ne-naydena": "Группа не найдена",
-      "poprobuyte-eshche-raz": "Попробуйте ещё раз",
-      "ssylka-skopirovana": "Ссылка скопирована",
-      "ne-udalos-sozdat-ssylku": "Не удалось создать ссылку",
-      "ne-udalos-pereimenovat-gruppu": "Не удалось переименовать группу",
-      "ne-udalos-udalit-gruppu": "Не удалось удалить группу"
+      "inviteCta": "Пригласить в группу",
+      "deleteCta": "Удалить группу",
+      "search": {
+        "placeholder": "Искать ученика...",
+        "aria": "Искать ученика"
+      },
+      "toast": {
+        "loadMembersFailed": "Не удалось загрузить участников",
+        "linkCopied": "Ссылка скопирована",
+        "linkCreateFailed": "Не удалось создать ссылку",
+        "renameFailed": "Не удалось переименовать группу",
+        "deleteFailed": "Не удалось удалить группу"
+      },
+      "renameCta": "Изменить название и описание",
+      "=ui:save": "Сохранить",
+      "fields": {
+        "description": "Описание"
+      },
+      "deleteCta2": "Удалить",
+      "notFound": "Группа не найдена",
+      "tryAgain": "Попробуйте ещё раз"
     },
     "masterGroups": {
-      "iskat": "Искать...",
-      "iskat-po-gruppam-i": "Искать по группам и участникам",
-      "ne-udalos-vypolnit-poisk": "Не удалось выполнить поиск",
-      "nikogo-ne-naydeno": "Никого не найдено",
-      "poprobuyte-izmenit-zapros": "Попробуйте изменить запрос",
-      "ne-udalos-zagruzit-gruppy": "Не удалось загрузить группы",
-      "grupp-poka-net": "Групп пока нет",
-      "sozdayte-pervuyu-gruppu-uchenikov": "Создайте первую группу учеников",
-      "gruppy": "Группы",
-      "povtorit": "Повторить",
-      "uchastniki": "Участники",
-      "povtorit-2": "Повторить",
-      "poprobuyte-eshche-raz": "Попробуйте ещё раз",
-      "poprobuyte-eshche-raz-2": "Попробуйте ещё раз",
-      "eshche-n-grupp": "+ ещё N групп"
+      "search": {
+        "placeholder": "Искать...",
+        "aria": "Искать по группам и участникам",
+        "noHits": "Никого не найдено",
+        "changeQueryHint": "Попробуйте изменить запрос"
+      },
+      "toast": {
+        "searchFailed": "Не удалось выполнить поиск",
+        "loadFailed": "Не удалось загрузить группы"
+      },
+      "empty": {
+        "title": "Групп пока нет",
+        "text": "Создайте первую группу учеников"
+      },
+      "tabs": {
+        "groups": "Группы",
+        "members": "Участники"
+      },
+      "tryAgain": "Попробуйте ещё раз",
+      "showMoreGroups": "+ ещё N групп"
     },
     "masterInbox": {
-      "zdes-poyavyatsya-uvedomleniya-o": "Здесь появятся уведомления о записях, сообщениях и операциях",
-      "tip-uvedomleniy": "Тип уведомлений",
-      "prochitat-vse": "Прочитать всё",
-      "povtorit": "Повторить",
-      "v-etoy-kategorii-poka": "В этой категории пока нет уведомлений",
-      "soobshcheniya": "Сообщения",
-      "praktiki": "Практики",
-      "finansy": "Финансы",
-      "drugoe": "Другое",
-      "poprobuyte-eshche-raz": "Попробуйте ещё раз",
-      "ne-udalos-otmetit-prochitannym": "Не удалось отметить прочитанным",
-      "ne-udalos-otmetit-prochitannym-2": "Не удалось отметить прочитанным"
+      "empty": {
+        "text": "Здесь появятся уведомления о записях, сообщениях и операциях"
+      },
+      "typeFilter": {
+        "label": "Тип уведомлений"
+      },
+      "readAll": "Прочитать всё",
+      "categoryEmpty": "В этой категории пока нет уведомлений",
+      "filter": {
+        "messages": "Сообщения",
+        "practices": "Практики",
+        "finances": "Финансы",
+        "other": "Другое"
+      },
+      "tryAgain": "Попробуйте ещё раз",
+      "toast": {
+        "markReadFailed": "Не удалось отметить прочитанным"
+      }
     },
     "masterInviteClaim": {
-      "proveryaem-priglashenie": "Проверяем приглашение…",
-      "ne-udalos-proverit-priglashenie": "Не удалось проверить приглашение",
-      "povtorit": "Повторить",
-      "priglashenie-prinyato": "Приглашение принято!",
-      "ssylka-nedeystvitelna": "Ссылка недействительна"
+      "verifying": "Проверяем приглашение…",
+      "verifyFailed": "Не удалось проверить приглашение",
+      "toast": {
+        "accepted": "Приглашение принято!"
+      },
+      "invalid": {
+        "title": "Ссылка недействительна"
+      }
     },
     "masterNewPromocode": {
-      "limit-ispolzovaniy": "Лимит использований",
-      "deystvuet-do": "Действует до",
-      "polya-obyazatelnye-dlya-zapolneniya": "— поля, обязательные для заполнения",
-      "deystvuet-do-2": "Действует до",
-      "27-iyun-2026": "27 июн. 2026",
-      "vvedite-kod-promokoda": "Введите код промокода",
-      "vvedite-kod-promokoda-2": "Введите код промокода",
-      "ukazhite-datu-okonchaniya-deystviya": "Укажите дату окончания действия",
-      "ukazhite-datu-okonchaniya-deystviya-2": "Укажите дату окончания действия",
-      "promokod-sozdan": "Промокод создан",
-      "ne-udalos-sozdat-promokod": "Не удалось создать промокод"
+      "fields": {
+        "usageLimit": "Лимит использований",
+        "validUntil": "Действует до"
+      },
+      "legend": {
+        "required": "— поля, обязательные для заполнения"
+      },
+      "=COMMENT": "27 июн. 2026",
+      "validation": {
+        "enterCode": "Введите код промокода",
+        "enterEndDate": "Укажите дату окончания действия"
+      },
+      "toast": {
+        "created": "Промокод создан",
+        "createFailed": "Не удалось создать промокод"
+      }
     },
     "masterNotifications": {
-      "dni-dostavki-uvedomleniy": "Дни доставки уведомлений",
-      "vremya-uvedomleniy": "Время уведомлений",
-      "skoro": "Скоро",
-      "grafik-uvedomleniy": "График уведомлений",
-      "poluchat-uvedomleniya-s": "Получать уведомления с",
-      "do": "до",
-      "praktiki": "Практики",
-      "novoe-bronirovanie": "Новое бронирование",
-      "kto-to-zapisalsya": "Кто-то записался",
-      "otmena-bronirovaniya": "Отмена бронирования",
-      "kto-to-otmenil": "Кто-то отменил",
-      "napominanie": "Напоминание",
-      "za-1-chas-do": "За 1 час до начала",
-      "uchastniki": "Участники",
-      "novyy-check-in": "Новый check-in",
-      "uchastnik-otmetilsya-o-sostoyanii": "Участник отметился о состоянии перед практикой",
-      "novyy-feedback": "Новый feedback",
-      "uchastnik-ostavil-otzyv": "Участник оставил отзыв",
-      "shkoly": "Школы",
-      "sobytiya-shkol": "События школ",
-      "vstupleniya-i-naznacheniya-masterov": "Вступления и назначения мастеров",
-      "soobshcheniya": "Сообщения",
-      "soobshcheniya-uchenikov": "Сообщения учеников",
-      "novye-soobshcheniya-v-vashikh": "Новые сообщения в ваших чатах",
-      "otvety-v-vashikh-obrashcheniyakh": "Ответы в ваших обращениях",
-      "chaty-gde-vy-avtor": "Чаты, где вы — автор",
-      "analitika": "Аналитика",
-      "ai-sammari": "AI-саммари",
-      "po-ponedelnikam": "По понедельникам",
-      "ezhemesyachnyy-otchet": "Ежемесячный отчет",
-      "1-go-chisla-mesyatsa": "1-го числа месяца",
-      "skoro-2": "Скоро",
-      "ne-udalos-zagruzit-nastroyki": "Не удалось загрузить настройки уведомлений",
-      "ne-udalos-sokhranit-raspisanie": "Не удалось сохранить расписание",
-      "ne-udalos-sokhranit-nastroyku": "Не удалось сохранить настройку"
+      "deliveryDays": "Дни доставки уведомлений",
+      "deliveryTime": "Время уведомлений",
+      "soon": "Скоро",
+      "schedule": "График уведомлений",
+      "receiveFrom": "Получать уведомления с",
+      "to": "до",
+      "category": {
+        "practices": "Практики",
+        "members": "Участники",
+        "schools": "Школы",
+        "messages": "Сообщения",
+        "analytics": "Аналитика"
+      },
+      "events": {
+        "newBooking": "Новое бронирование",
+        "someoneBooked": "Кто-то записался",
+        "bookingCancelled": "Отмена бронирования",
+        "someoneCancelled": "Кто-то отменил",
+        "reminder": "Напоминание",
+        "reminderText": "За 1 час до начала",
+        "newCheckin": "Новый check-in",
+        "checkinText": "Участник отметился о состоянии перед практикой",
+        "newFeedback": "Новый feedback",
+        "feedbackText": "Участник оставил отзыв",
+        "schoolEvents": "События школ",
+        "joinsAndAppointments": "Вступления и назначения мастеров",
+        "studentMessages": "Сообщения учеников",
+        "newMessages": "Новые сообщения в ваших чатах",
+        "supportReplies": "Ответы в ваших обращениях",
+        "chatsYouAuthor": "Чаты, где вы — автор",
+        "aiSummary": "AI-саммари"
+      },
+      "mondays": "По понедельникам",
+      "monthlyReport": "Ежемесячный отчет",
+      "firstOfMonth": "1-го числа месяца",
+      "soon2": "Скоро",
+      "toast": {
+        "loadFailed": "Не удалось загрузить настройки уведомлений",
+        "scheduleSaveFailed": "Не удалось сохранить расписание",
+        "saveFailed": "Не удалось сохранить настройку"
+      }
     },
     "masterOnboarding": {
-      "propustit": "Пропустить",
-      "dobro-pozhalovat": "Добро пожаловать",
-      "vy-chast-soobshchestva-masterov": "Вы — часть сообщества мастеров VELO",
-      "vashe-prostranstvo": "Ваше пространство",
-      "personalnoe-prostranstvo-s-vashim": "Персональное пространство с вашим профилем, описанием метода, расписанием и записями практик",
-      "ai-analitika-o-sostoyanii": "AI-аналитика о состоянии группы",
-      "emotsionalnyy-landshaft-uchastnikov-do": "Эмоциональный ландшафт участников до и после практики"
+      "welcome": {
+        "title": "Добро пожаловать",
+        "text": "Вы — часть сообщества мастеров VELO"
+      },
+      "space": {
+        "title": "Ваше пространство",
+        "text": "Персональное пространство с вашим профилем, описанием метода, расписанием и записями практик"
+      },
+      "analytics": {
+        "title": "AI-аналитика о состоянии группы",
+        "text": "Эмоциональный ландшафт участников до и после практики"
+      }
     },
     "masterPending": {
-      "otozvat-zayavku-vy-vernetes": "Отозвать заявку? Вы вернётесь к обычному аккаунту пользователя. Подать новую заявку можно в любой момент.",
-      "otozvat": "Отозвать",
-      "ne-udalos-obnovit-status": "Не удалось обновить статус заявки",
-      "proverte-soedinenie-i-poprobuyte": "Проверьте соединение и попробуйте ещё раз.",
-      "povtorit": "Повторить",
-      "vasha-zayavka-odobrena": "Ваша заявка одобрена!",
-      "spasibo-za-zayavku": "Спасибо за заявку!",
-      "k-sozhaleniyu-my-poka": "К сожалению, мы пока не можем одобрить вашу заявку.",
-      "prichina": "Причина:",
-      "zayavka-otpravlena": "Заявка отправлена!",
-      "zayavka-na-proverke-u": "Заявка на проверке у администратора.",
-      "obnovit-status": "Обновить статус",
-      "zayavka-ne-proshla-verifikatsiyu": "Заявка не прошла верификацию. Свяжитесь с поддержкой для повторной заявки.",
-      "ne-udalos-pereklyuchitsya-v": "Не удалось переключиться в режим мастера",
-      "zayavka-otozvana": "Заявка отозвана",
-      "ne-udalos-otozvat-zayavku": "Не удалось отозвать заявку"
+      "withdrawConfirm": "Отозвать заявку? Вы вернётесь к обычному аккаунту пользователя. Подать новую заявку можно в любой момент.",
+      "withdrawCta": "Отозвать",
+      "toast": {
+        "statusUpdateFailed": "Не удалось обновить статус заявки",
+        "sent": "Заявка отправлена!",
+        "switchFailed": "Не удалось переключиться в режим мастера",
+        "withdrawn": "Заявка отозвана",
+        "withdrawFailed": "Не удалось отозвать заявку"
+      },
+      "connectionHint": "Проверьте соединение и попробуйте ещё раз.",
+      "approved": {
+        "title": "Ваша заявка одобрена!"
+      },
+      "thanksForApplying": "Спасибо за заявку!",
+      "rejected": {
+        "text": "К сожалению, мы пока не можем одобрить вашу заявку.",
+        "contactSupport": "Заявка не прошла верификацию. Свяжитесь с поддержкой для повторной заявки."
+      },
+      "reasonLabel": "Причина:",
+      "underReview": "Заявка на проверке у администратора.",
+      "refreshStatus": "Обновить статус"
     },
     "masterPracticeDetail": {
-      "redaktirovat": "Редактировать",
-      "uchastnikov": "участников",
-      "posmotret-eshche": "посмотреть еще",
-      "udalit-chernovik-praktiki-eto": "Удалить черновик практики? Это действие необратимо.",
-      "udalit": "Удалить",
-      "povtorit": "Повторить",
-      "ssylka-na-praktiku-dlya": "Ссылка на практику — для канала и гостей",
-      "zapisalis": "Записались",
-      "opisanie": "Описание",
-      "protivopokazaniya": "Противопоказания",
-      "chto-podgotovit": "Что подготовить",
-      "otzyvy-uchastnikov": "Отзывы участников",
-      "pokazat-eshche": "Показать ещё",
-      "poseshchaemost": "Посещаемость",
-      "proshedshaya-praktika": "Прошедшая практика",
-      "praktika": "Практика",
-      "udalit-2": "Удалить",
-      "otmenit-praktiku": "Отменить практику",
-      "regulyarnaya": "Регулярная",
-      "ssylka-skopirovana": "Ссылка скопирована",
-      "ne-udalos-skopirovat-ssylku": "Не удалось скопировать ссылку",
-      "praktika-otmenena": "Практика отменена",
-      "ne-udalos-otmenit-praktiku": "Не удалось отменить практику",
-      "chernovik-udalen": "Черновик удалён",
-      "ne-udalos-udalit-praktiku": "Не удалось удалить практику",
-      "oshibka-zagruzki": "Ошибка загрузки"
+      "edit": "Редактировать",
+      "participantsWord": "участников",
+      "draft": {
+        "deleteConfirm": "Удалить черновик практики? Это действие необратимо."
+      },
+      "deleteCta": "Удалить",
+      "shareLinkHint": "Ссылка на практику — для канала и гостей",
+      "bookedCount": "Записались",
+      "sections": {
+        "description": "Описание",
+        "contraindications": "Противопоказания",
+        "whatToBring": "Что подготовить",
+        "reviews": "Отзывы участников",
+        "attendance": "Посещаемость"
+      },
+      "pastTitle": "Прошедшая практика",
+      "practiceWord": "Практика",
+      "cancelCta": "Отменить практику",
+      "regular": "Регулярная",
+      "toast": {
+        "linkCopied": "Ссылка скопирована",
+        "linkCopyFailed": "Не удалось скопировать ссылку",
+        "cancelled": "Практика отменена",
+        "cancelFailed": "Не удалось отменить практику",
+        "draftDeleted": "Черновик удалён",
+        "deleteFailed": "Не удалось удалить практику"
+      },
+      "error": {
+        "load": "Ошибка загрузки"
+      },
+      "common": {
+        "showMoreLower": "посмотреть еще",
+        "showMorePager": "Показать ещё"
+      },
+      "showMoreLower": "посмотреть еще"
     },
     "masterPractices": {
-      "net-predstoyashchikh-praktik": "Нет предстоящих практик",
-      "sozdayte-pervuyu-praktiku": "Создайте первую практику",
-      "net-proshedshikh-praktik": "Нет прошедших практик",
-      "zdes-poyavyatsya-zavershennye-praktiki": "Здесь появятся завершённые практики",
-      "sozdat": "Создать",
-      "predstoyashchie": "Предстоящие",
-      "predstoyashchie-2": "Предстоящие",
-      "predstoyashchie-3": "Предстоящие",
-      "proshedshie": "Прошедшие",
-      "segodnya": "Сегодня",
-      "zavtra": "Завтра",
-      "25-yanv": "25 янв.",
-      "uchastnik": "участник",
-      "uchastnika": "участника",
-      "uchastnikov": "участников",
-      "predstoyashchie-4": "Предстоящие",
-      "proshedshie-2": "Прошедшие",
-      "proshedshie-3": "Прошедшие"
+      "upcoming": {
+        "empty": {
+          "title": "Нет предстоящих практик",
+          "text": "Создайте первую практику"
+        }
+      },
+      "past": {
+        "empty": {
+          "title": "Нет прошедших практик",
+          "text": "Здесь появятся завершённые практики"
+        }
+      },
+      "createCta": "Создать",
+      "tab": {
+        "upcoming": "Предстоящие",
+        "past": "Прошедшие"
+      },
+      "today": "Сегодня",
+      "tomorrow": "Завтра",
+      "dateExample": "25 янв.",
+      "participants": {
+        "one": "участник",
+        "few": "участника",
+        "many": "участников"
+      }
     },
     "masterProfile": {
-      "vyyti": "Выйти",
-      "akkaunt": "Аккаунт",
-      "nastroyki": "Настройки",
-      "pomoshch": "Помощь",
-      "vyyti-iz-akkaunta": "Выйти из аккаунта?",
-      "da": "Да",
-      "master": "Мастер"
+      "logoutCta": "Выйти",
+      "account": "Аккаунт",
+      "settings": "Настройки",
+      "help": "Помощь",
+      "logoutConfirm": "Выйти из аккаунта?",
+      "yes": "Да",
+      "masterWord": "Мастер"
     },
     "masterPromocodes": {
-      "promokodov-poka-net": "Промокодов пока нет",
-      "sozdayte-pervyy-promokod-dlya": "Создайте первый промокод для участников",
-      "promokody-dlya-uchastnikov-kotorye": "Промокоды для участников, которые уже оплатили вне платформы",
-      "povtorit": "Повторить",
-      "sozdat": "Создать",
-      "kopirovat": "Копировать",
-      "bessrochno": "бессрочно",
-      "promokod-skopirovan": "Промокод скопирован",
-      "ne-udalos-skopirovat": "Не удалось скопировать",
-      "promokod-deaktivirovan": "Промокод деактивирован",
-      "ne-udalos-deaktivirovat-promokod": "Не удалось деактивировать промокод"
+      "empty": {
+        "title": "Промокодов пока нет",
+        "text": "Создайте первый промокод для участников"
+      },
+      "description": "Промокоды для участников, которые уже оплатили вне платформы",
+      "createCta": "Создать",
+      "copyCta": "Копировать",
+      "noExpiry": "бессрочно",
+      "toast": {
+        "copied": "Промокод скопирован",
+        "copyFailed": "Не удалось скопировать",
+        "deactivated": "Промокод деактивирован",
+        "deactivateFailed": "Не удалось деактивировать промокод"
+      }
     },
     "masterStudentProfile": {
-      "dobavit-v-gruppu": "Добавить в группу",
-      "udalit-iz-gruppy": "Удалить из группы",
-      "zablokirovat": "Заблокировать",
-      "ne-udalos-zagruzit-profil": "Не удалось загрузить профиль",
-      "posmotret-eshche": "посмотреть еще",
-      "posmotret-eshche-2": "посмотреть еще",
-      "zablokirovat-polzovatelya": "Заблокировать пользователя?",
-      "polzovatel-peremestitsya-v-gruppu": "Пользователь переместится в группу «Удаленные». Он больше не сможет видеть и бронировать ваши практики и перестанет получать ваши уведомления. Вы сможете разблокировать его в любой момент.",
-      "zablokirovat-2": "Заблокировать",
-      "polzovatel-zablokirovan": "Пользователь заблокирован",
-      "polzovatel-peremeshchen-v-udalennye": "Пользователь перемещен в «Удаленные». Если он нарушал правила — например, сорвал практику или вел себя неподобающе, — вы можете сообщить об этом в поддержку.",
-      "v-podderzhku": "В поддержку",
-      "ne-seychas": "Не сейчас",
-      "razblokirovat": "Разблокировать",
-      "povtorit": "Повторить",
-      "poslednie-check-ins": "Последние check-ins",
-      "poka-net-check-ins": "Пока нет check-ins",
-      "poka-net-otzyvov": "Пока нет отзывов",
-      "poprobuyte-eshche-raz": "Попробуйте ещё раз",
-      "napisat-soobshchenie": "Написать сообщение",
-      "polzovatel-zablokirovan-2": "Пользователь заблокирован",
-      "ne-udalos-zablokirovat": "Не удалось заблокировать",
-      "razblokirovat-polzovatelya": "Разблокировать пользователя",
-      "zablokirovat-polzovatelya-2": "Заблокировать пользователя",
-      "polzovatel-razblokirovan": "Пользователь разблокирован",
-      "zablokirovat-polzovatelya-3": "Заблокировать пользователя",
-      "ne-udalos-razblokirovat": "Не удалось разблокировать"
+      "addToGroup": "Добавить в группу",
+      "removeFromGroup": "Удалить из группы",
+      "blockCta": "Заблокировать",
+      "toast": {
+        "loadFailed": "Не удалось загрузить профиль",
+        "blocked": "Пользователь заблокирован",
+        "blocked2": "Пользователь заблокирован",
+        "blockFailed": "Не удалось заблокировать",
+        "unblocked": "Пользователь разблокирован",
+        "unblockFailed": "Не удалось разблокировать"
+      },
+      "showMore": "посмотреть еще",
+      "blockConfirm": "Заблокировать пользователя?",
+      "blockMoveText": "Пользователь переместится в группу «Удаленные». Он больше не сможет видеть и бронировать ваши практики и перестанет получать ваши уведомления. Вы сможете разблокировать его в любой момент.",
+      "blockedBanner": "Пользователь перемещен в «Удаленные». Если он нарушал правила — например, сорвал практику или вел себя неподобающе, — вы можете сообщить об этом в поддержку.",
+      "toSupport": "В поддержку",
+      "notNow": "Не сейчас",
+      "unblockCta": "Разблокировать",
+      "sections": {
+        "recentCheckins": "Последние check-ins"
+      },
+      "empty": {
+        "checkins": "Пока нет check-ins",
+        "reviews": "Пока нет отзывов"
+      },
+      "tryAgain": "Попробуйте ещё раз",
+      "messageCta": "Написать сообщение",
+      "unblockConfirm": "Разблокировать пользователя",
+      "unblockConfirmTitle": "Заблокировать пользователя",
+      "blockMenuAria": "Заблокировать"
     },
     "masterStudents": {
-      "ne-udalos-zagruzit-uchenikov": "Не удалось загрузить учеников",
-      "iskat": "Искать…",
-      "iskat-uchenika": "Искать ученика",
-      "napisat-soobshchenie": "Написать сообщение",
-      "uchenikov": "учеников",
-      "uchenikov-poka-net": "Учеников пока нет",
-      "oni-poyavyatsya-posle-pervykh": "Они появятся после первых практик",
-      "nikogo-ne-naydeno": "Никого не найдено",
-      "poprobuyte-izmenit-zapros": "Попробуйте изменить запрос",
-      "povtorit": "Повторить",
-      "poprobuyte-eshche-raz": "Попробуйте ещё раз"
+      "toast": {
+        "loadFailed": "Не удалось загрузить учеников"
+      },
+      "search": {
+        "placeholder": "Искать…",
+        "aria": "Искать ученика",
+        "noHits": "Никого не найдено",
+        "changeQueryHint": "Попробуйте изменить запрос"
+      },
+      "messageCta": "Написать сообщение",
+      "studentsWord": "учеников",
+      "empty": {
+        "title": "Учеников пока нет",
+        "text": "Они появятся после первых практик"
+      },
+      "tryAgain": "Попробуйте ещё раз"
     },
     "masterSummary": {
-      "ne-udalos-zagruzit": "Не удалось загрузить",
-      "otzyvy-poyavyatsya-zdes-kogda": "Отзывы появятся здесь, когда будут собраны",
-      "ne-udalos-zagruzit-2": "Не удалось загрузить",
-      "napisat-soobshchenie": "Написать сообщение",
-      "vse-ucheniki-v-poryadke": "Все ученики в порядке",
-      "zdes-poyavyatsya-te-komu": "Здесь появятся те, кому нужно внимание",
-      "ai-insayty-za-nedelyu": "AI-инсайты за неделю",
-      "klyuchevye-otzyvy": "Ключевые отзывы",
-      "povtorit": "Повторить",
-      "trebuyut-vnimaniya": "Требуют внимания",
-      "povtorit-2": "Повторить",
-      "trebuet-vnimaniya": "Требует внимания",
-      "svodka-poyavitsya-kogda-podklyuchitsya": "Сводка появится, когда подключится аналитика",
-      "poprobuyte-eshche-raz": "Попробуйте ещё раз",
-      "poprobuyte-eshche-raz-2": "Попробуйте ещё раз"
+      "error": {
+        "load": "Не удалось загрузить",
+        "load2": "Не удалось загрузить"
+      },
+      "reviewsAppearWhen": "Отзывы появятся здесь, когда будут собраны",
+      "messageCta": "Написать сообщение",
+      "allWell": "Все ученики в порядке",
+      "attentionAppearHere": "Здесь появятся те, кому нужно внимание",
+      "aiWeeklyInsights": "AI-инсайты за неделю",
+      "keyReviews": "Ключевые отзывы",
+      "needsAttention": "Требуют внимания",
+      "needsAttentionSingular": "Требует внимания",
+      "summaryAfterConnect": "Сводка появится, когда подключится аналитика",
+      "tryAgain": "Попробуйте ещё раз"
     },
     "masterSupport": {
-      "ukazhite-vash-variant": "Укажите ваш вариант",
-      "svoy-variant-temy": "Свой вариант темы",
-      "opishite-vashu-problemu-ili": "Опишите вашу проблему или вопрос...",
-      "prikrepit-fayl": "Прикрепить файл",
-      "udalit-fayl": "Удалить файл",
-      "spasibo-za-obrashchenie": "Спасибо за обращение",
-      "my-poluchili-vashe-obrashchenie": "Мы получили ваше обращение и ответим здесь же, в приложении.",
-      "kak-my-mozhem-pomoch": "Как мы можем помочь?",
-      "obychno-otvechaem-v-techenie": "Обычно отвечаем в течение 24 часов",
-      "tema": "Тема",
-      "soobshchenie": "Сообщение",
-      "prikrepit-fayl-2": "Прикрепить файл",
-      "dobavit-fayl-5mb": "+ Добавить файл (5MB)",
-      "ne-dozhdalis-otveta-napishite": "Не дождались ответа? Напишите на support{'@'}velo.app",
-      "problema-s-vyvodom": "Проблема с выводом",
-      "vopros-po-praktikam": "Вопрос по практикам",
-      "tekhnicheskie-problemy": "Технические проблемы",
-      "dobavit-napravlenie-praktiki": "Добавить направление практики",
-      "drugoe": "Другое",
-      "ne-udalos-otpravit-obrashchenie": "Не удалось отправить обращение"
+      "custom": {
+        "placeholder": "Укажите ваш вариант",
+        "title": "Свой вариант темы"
+      },
+      "message": {
+        "placeholder": "Опишите вашу проблему или вопрос...",
+        "label": "Сообщение"
+      },
+      "attachFile": "Прикрепить файл",
+      "removeFile": "Удалить файл",
+      "toast": {
+        "thanks": "Спасибо за обращение",
+        "sendFailed": "Не удалось отправить обращение"
+      },
+      "thanks": {
+        "text": "Мы получили ваше обращение и ответим здесь же, в приложении."
+      },
+      "title": "Как мы можем помочь?",
+      "responseHint": "Обычно отвечаем в течение 24 часов",
+      "topic": {
+        "label": "Тема",
+        "withdrawal": "Проблема с выводом",
+        "practices": "Вопрос по практикам",
+        "tech": "Технические проблемы",
+        "addDirection": "Добавить направление практики",
+        "other": "Другое"
+      },
+      "attachFile2": "Прикрепить файл",
+      "addFile5mb": "+ Добавить файл (5MB)",
+      "supportEmailHint": "Не дождались ответа? Напишите на support{'@'}velo.app"
     },
     "practiceReviews": {
-      "poprobuyte-eshche-raz": "Попробуйте ещё раз",
-      "ne-udalos-zagruzit-eshche": "Не удалось загрузить ещё",
-      "ne-udalos-zagruzit-eshche-2": "Не удалось загрузить ещё"
+      "tryAgain": "Попробуйте ещё раз",
+      "loadMoreFailed": "Не удалось загрузить ещё"
     }
   }
 }

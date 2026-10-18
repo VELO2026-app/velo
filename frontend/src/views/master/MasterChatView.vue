@@ -25,14 +25,14 @@
           <IconMessages :size="48" />
         </template>
       </VEmptyState>
-      <VButton size="sm" @click="router.back()">{{ t('masterScreens.masterChat.nazad') }}</VButton>
+      <VButton size="sm" @click="router.back()">{{ t('ui.back') }}</VButton>
     </div>
 
     <ChatThreadScreen
       v-else
       :thread-id="threadId"
       :peer="peer"
-      :peer-fallback="t('masterScreens.masterChat.uchenik')"
+      :peer-fallback="t('masterScreens.masterChat.peerFallback')"
       @back="router.back()"
     />
   </div>

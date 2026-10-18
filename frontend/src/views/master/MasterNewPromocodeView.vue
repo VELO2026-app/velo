@@ -18,7 +18,7 @@
       <!--
       <div class="new-promo__legend">
         <IconRequired class="new-promo__legend-seal" :size="22" />
-        <span>{{ t('masterScreens.masterNewPromocode.polya-obyazatelnye-dlya-zapolneniya') }}</span>
+        <span>{{ t('masterScreens.masterNewPromocode.legend.required') }}</span>
       </div>
       -->
 
@@ -40,7 +40,7 @@
       <div class="cp-req-label">
         <div class="new-promo__field">
           <label class="new-promo__label">{{
-            t('masterScreens.masterNewPromocode.deystvuet-do')
+            t('masterScreens.masterNewPromocode.fields.validUntil')
           }}</label>
           <div class="new-promo__field-row">
             <button
@@ -61,7 +61,7 @@
       </div>
       <VInput
         v-model="form.limit"
-        :label="t('masterScreens.masterNewPromocode.limit-ispolzovaniy')"
+        :label="t('masterScreens.masterNewPromocode.fields.usageLimit')"
         type="number"
         min="1"
         placeholder="10"
@@ -83,7 +83,7 @@
       :open="showDate"
       :model-value="form.until"
       :min="todayISO"
-      :title="t('masterScreens.masterNewPromocode.deystvuet-do')"
+      :title="t('masterScreens.masterNewPromocode.fields.validUntil')"
       @update:model-value="form.until = $event"
       @close="showDate = false"
     />
@@ -146,7 +146,7 @@ const form = reactive({
 // (not UTC) so it doesn't drift a day near midnight for east/west-of-UTC testers.
 const todayISO = computed((): string => todayLocalISO())
 
-// Shared calendar sheet state + the friendly trigger label, e.g. t('masterScreens.masterNewPromocode.27-iyun-2026').
+// Shared calendar sheet state + the friendly trigger label, e.g. t('masterScreens.masterNewPromocode.=COMMENT').
 const showDate = ref(false)
 const untilDisplay = computed((): string =>
   form.until ? `${formatShortDate(`${form.until}T12:00:00`)} ${form.until.slice(0, 4)}` : '',
@@ -166,16 +166,16 @@ async function onCreate(): Promise<void> {
   if (creating.value) return
   if (!form.code.trim()) {
     await showFieldError(() => {
-      codeError.value = t('masterScreens.masterNewPromocode.vvedite-kod-promokoda')
+      codeError.value = t('masterScreens.masterNewPromocode.validation.enterCode')
     })
-    toast.error(t('masterScreens.masterNewPromocode.vvedite-kod-promokoda'))
+    toast.error(t('masterScreens.masterNewPromocode.validation.enterCode'))
     return
   }
   if (!form.until) {
     await showFieldError(() => {
-      untilError.value = t('masterScreens.masterNewPromocode.ukazhite-datu-okonchaniya-deystviya')
+      untilError.value = t('masterScreens.masterNewPromocode.validation.enterEndDate')
     })
-    toast.error(t('masterScreens.masterNewPromocode.ukazhite-datu-okonchaniya-deystviya'))
+    toast.error(t('masterScreens.masterNewPromocode.validation.enterEndDate'))
     return
   }
   creating.value = true
@@ -191,10 +191,10 @@ async function onCreate(): Promise<void> {
       valid_until: new Date(`${form.until}T23:59:59+00:00`).toISOString(),
       max_uses: form.limit ? Number(form.limit) : null,
     })
-    toast.success(t('masterScreens.masterNewPromocode.promokod-sozdan'))
+    toast.success(t('masterScreens.masterNewPromocode.toast.created'))
     void router.push({ name: 'master-promocodes' })
   } catch (e) {
-    toast.error(extractApiError(e, t('masterScreens.masterNewPromocode.ne-udalos-sozdat-promokod')))
+    toast.error(extractApiError(e, t('masterScreens.masterNewPromocode.toast.createFailed')))
   } finally {
     creating.value = false
   }

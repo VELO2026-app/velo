@@ -33,9 +33,7 @@
     <!-- Error -->
     <div v-else-if="error" class="roster__content">
       <VEmptyState icon="warning" title="Не удалось загрузить посещаемость" :description="error">
-        <VButton size="sm" variant="outline" @click="load">{{
-          t('masterScreens.attendanceRoster.povtorit')
-        }}</VButton>
+        <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
       </VEmptyState>
     </div>
 
@@ -73,14 +71,14 @@
         <VEmptyState
           v-if="attendedItems.length === 0 && noShowItems.length === 0"
           icon="group"
-          :title="t('masterScreens.attendanceRoster.net-dannykh-o-poseshchaemosti')"
-          :description="t('masterScreens.attendanceRoster.na-etoy-praktike-nikto')"
+          :title="t('masterScreens.attendanceRoster.empty.title')"
+          :description="t('masterScreens.attendanceRoster.empty.text')"
         />
 
         <!-- Присутствовали -->
         <section v-if="attendedItems.length > 0" class="roster__section">
           <h2 class="velo-section-title">
-            {{ t('masterScreens.attendanceRoster.prisutstvovali') }}
+            {{ t('masterScreens.attendanceRoster.attended') }}
           </h2>
           <div v-for="item in visibleAttended" :key="item.booking_id" class="roster__row">
             <IconCheck :size="24" class="roster__ic roster__ic--ok" />
@@ -88,21 +86,21 @@
           </div>
           <VShowMore
             v-if="hiddenAttended > 0"
-            :label="t('masterScreens.attendanceRoster.posmotret-eshche')"
+            :label="t('masterScreens.attendanceRoster.showMore')"
             @click="attendedExpanded = true"
           />
         </section>
 
         <!-- Не пришли -->
         <section v-if="noShowItems.length > 0" class="roster__section">
-          <h2 class="velo-section-title">{{ t('masterScreens.attendanceRoster.ne-prishli') }}</h2>
+          <h2 class="velo-section-title">{{ t('masterScreens.attendanceRoster.missed') }}</h2>
           <div v-for="item in visibleNoShow" :key="item.booking_id" class="roster__row">
             <IconClose :size="24" class="roster__ic roster__ic--no" />
             <span class="roster__name">{{ displayName(item) }}</span>
           </div>
           <VShowMore
             v-if="hiddenNoShow > 0"
-            :label="t('masterScreens.attendanceRoster.posmotret-eshche')"
+            :label="t('masterScreens.attendanceRoster.showMore')"
             @click="noShowExpanded = true"
           />
         </section>
@@ -197,7 +195,7 @@ async function load(): Promise<void> {
     ])
     attendance.value = attendanceData
   } catch (e) {
-    error.value = extractApiError(e, t('masterScreens.attendanceRoster.oshibka-zagruzki'))
+    error.value = extractApiError(e, t('masterScreens.attendanceRoster.error.load'))
   } finally {
     loading.value = false
   }

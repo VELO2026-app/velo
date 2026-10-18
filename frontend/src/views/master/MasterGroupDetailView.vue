@@ -40,13 +40,13 @@
           <template #default="{ close }">
             <VMenuItem
               :icon="IconShare"
-              :ariaLabel="t('masterScreens.masterGroupDetail.priglasit-v-gruppu')"
+              :ariaLabel="t('masterScreens.masterGroupDetail.inviteCta')"
               @click="onHeaderInviteClick(close)"
             />
             <VMenuItem :icon="IconPen" ariaLabel="Изменить" @click="onRenameClick(close)" />
             <VMenuItem
               :icon="IconTrash"
-              :ariaLabel="t('masterScreens.masterGroupDetail.udalit-gruppu')"
+              :ariaLabel="t('masterScreens.masterGroupDetail.deleteCta')"
               danger
               @click="onDeleteClick(close)"
             />
@@ -65,8 +65,8 @@
         <div class="group-detail__search-field">
           <VInput
             v-model="search"
-            :placeholder="t('masterScreens.masterGroupDetail.iskat-uchenika')"
-            :aria-label="t('masterScreens.masterGroupDetail.iskat-uchenika-2')"
+            :placeholder="t('masterScreens.masterGroupDetail.search.placeholder')"
+            :aria-label="t('masterScreens.masterGroupDetail.search.aria')"
             @focus="onFieldFocus"
           />
         </div>
@@ -81,12 +81,10 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        :title="t('masterScreens.masterGroupDetail.ne-udalos-zagruzit-uchastnikov')"
+        :title="t('masterScreens.masterGroupDetail.toast.loadMembersFailed')"
         :description="error"
       >
-        <VButton size="sm" variant="outline" @click="retry">{{
-          t('masterScreens.masterGroupDetail.povtorit')
-        }}</VButton>
+        <VButton size="sm" variant="outline" @click="retry">{{ t('common.retry') }}</VButton>
       </VEmptyState>
 
       <template v-else>
@@ -142,17 +140,17 @@
          prop, and was missed when this dialog was built. -->
     <VBottomSheet
       :open="renameOpen"
-      :title="t('masterScreens.masterGroupDetail.izmenit-nazvanie-i-opisanie')"
+      :title="t('masterScreens.masterGroupDetail.renameCta')"
       compact-title
-      :save-label="t('masterScreens.masterGroupDetail.sokhranit')"
+      :save-label="t('masterScreens.masterGroupDetail.=ui:save')"
       @save="onRenameSave"
       @close="renameOpen = false"
     >
       <VInput v-model="renameName" label="Название" placeholder="Название группы" />
       <VTextarea
         v-model="renameDescription"
-        :label="t('masterScreens.masterGroupDetail.opisanie')"
-        :placeholder="t('masterScreens.masterGroupDetail.opisanie')"
+        :label="t('masterScreens.masterGroupDetail.fields.description')"
+        :placeholder="t('masterScreens.masterGroupDetail.fields.description')"
         :rows="3"
         autogrow
       />
@@ -162,7 +160,7 @@
     <VConfirmDialog
       :open="deleteConfirmOpen"
       :message="deleteMessage"
-      :confirm-label="t('masterScreens.masterGroupDetail.udalit')"
+      :confirm-label="t('masterScreens.masterGroupDetail.deleteCta2')"
       danger
       :loading="deleting"
       @confirm="onDeleteConfirm"
@@ -270,7 +268,7 @@ async function loadGroups(): Promise<void> {
       // being absent means genuinely gone or invalid -- reuse this
       // screen's own existing error state rather than leaving a blank
       // header (owner Q12's own explicit warning).
-      error.value = t('masterScreens.masterGroupDetail.gruppa-ne-naydena')
+      error.value = t('masterScreens.masterGroupDetail.notFound')
     }
   } catch {
     // Best-effort: load() below (members) has its own independent error
@@ -286,7 +284,7 @@ async function load(): Promise<void> {
     const res = await getGroupMembers(groupId.value, search.value)
     members.value = res.items
   } catch (e) {
-    error.value = extractApiError(e, t('masterScreens.masterGroupDetail.poprobuyte-eshche-raz'))
+    error.value = extractApiError(e, t('masterScreens.masterGroupDetail.tryAgain'))
   } finally {
     loading.value = false
   }
@@ -346,9 +344,9 @@ async function onInviteClick(): Promise<void> {
     // Clipboard needs no backend — write the link straight to the
     // clipboard (B2, same pattern as MasterGroupsView's row invite).
     await navigator.clipboard.writeText(res.invite_url)
-    toast.success(t('masterScreens.masterGroupDetail.ssylka-skopirovana'))
+    toast.success(t('masterScreens.masterGroupDetail.toast.linkCopied'))
   } catch (e) {
-    toast.error(extractApiError(e, t('masterScreens.masterGroupDetail.ne-udalos-sozdat-ssylku')))
+    toast.error(extractApiError(e, t('masterScreens.masterGroupDetail.toast.linkCreateFailed')))
   } finally {
     inviting.value = false
   }
@@ -383,9 +381,7 @@ async function onRenameSave(): Promise<void> {
     // rewriting the URL, same source of truth loadGroups() already is.
     await loadGroups()
   } catch (e) {
-    toast.error(
-      extractApiError(e, t('masterScreens.masterGroupDetail.ne-udalos-pereimenovat-gruppu')),
-    )
+    toast.error(extractApiError(e, t('masterScreens.masterGroupDetail.toast.renameFailed')))
   }
 }
 
@@ -416,7 +412,7 @@ async function onDeleteConfirm(): Promise<void> {
     if (e instanceof ApiResponseError && e.code === 'group_in_use') {
       toast.error(errorMessage('group_in_use'))
     } else {
-      toast.error(extractApiError(e, t('masterScreens.masterGroupDetail.ne-udalos-udalit-gruppu')))
+      toast.error(extractApiError(e, t('masterScreens.masterGroupDetail.toast.deleteFailed')))
     }
   } finally {
     deleting.value = false

@@ -45,14 +45,14 @@ so the order is invitation -> join -> onboarding (skippable) -> school.
       <template v-if="loading">
         <VLoader size="lg" />
         <p class="cg-join__subtitle">
-          {{ t('masterScreens.curatorGroupJoin.proveryaem-priglashenie') }}
+          {{ t('masterScreens.curatorGroupJoin.verifying') }}
         </p>
       </template>
 
       <!-- Transient (network/timeout): offer a retry, not a dead-link verdict. -->
       <template v-else-if="transientError">
         <h2 class="cg-join__title">
-          {{ t('masterScreens.curatorGroupJoin.ne-udalos-proverit-priglashenie') }}
+          {{ t('masterScreens.curatorGroupJoin.verifyFailed') }}
         </h2>
         <p class="cg-join__subtitle">
           Проблема с соединением. Проверьте интернет и попробуйте ещё раз.
@@ -90,11 +90,11 @@ so the order is invitation -> join -> onboarding (skippable) -> school.
           :masters-count="preview.group.masters_count"
           :description="preview.group.description"
           :curator-name="preview.group.curator_name"
-          :heading="t('masterScreens.curatorGroupJoin.vas-priglasili-v-shkolu')"
+          :heading="t('masterScreens.curatorGroupJoin.invited.title')"
         />
         <div class="cg-join__actions">
           <VButton variant="primary" block :loading="joining" @click="join">{{
-            t('masterScreens.curatorGroupJoin.vstupit')
+            t('masterScreens.curatorGroupJoin.joinCta')
           }}</VButton>
           <VButton variant="outline" block :disabled="joining" @click="decline">
             Отказаться
@@ -170,8 +170,8 @@ interface RefusalView {
 const blocked = computed<RefusalView | null>(() => {
   if (notFound.value) {
     return {
-      title: t('masterScreens.curatorGroupJoin.priglashenie-nedeystvitelno'),
-      description: t('masterScreens.curatorGroupJoin.vozmozhno-ssylka-povrezhdena-ustarela'),
+      title: t('masterScreens.curatorGroupJoin.invalid.title'),
+      description: t('masterScreens.curatorGroupJoin.invalid.text'),
       open: false,
     }
   }
@@ -180,35 +180,35 @@ const blocked = computed<RefusalView | null>(() => {
   switch (p.reason) {
     case 'own_group':
       return {
-        title: t('masterScreens.curatorGroupJoin.eto-vasha-shkola'),
-        description: t('masterScreens.curatorGroupJoin.vy-kurator-etoy-shkoly'),
+        title: t('masterScreens.curatorGroupJoin.alreadyOwner.title'),
+        description: t('masterScreens.curatorGroupJoin.alreadyOwner.text'),
         open: true,
       }
     case 'already_member':
       return {
-        title: t('masterScreens.curatorGroupJoin.vy-uzhe-v-shkole'),
-        description: t('masterScreens.curatorGroupJoin.vy-uzhe-sostoite-v'),
+        title: t('masterScreens.curatorGroupJoin.alreadyMember.title'),
+        description: t('masterScreens.curatorGroupJoin.alreadyMember.text'),
         open: true,
       }
     case 'blocked_by_curator':
       return {
-        title: t('masterScreens.curatorGroupJoin.vstuplenie-nedostupno'),
-        description: t('masterScreens.curatorGroupJoin.kurator-ogranichil-vam-dostup'),
+        title: t('masterScreens.curatorGroupJoin.unavailable'),
+        description: t('masterScreens.curatorGroupJoin.restricted.text'),
         open: false,
       }
     // BE-79 (DRAFT wording): blocked by the curator IN this school -- the
     // preview says so, and a join refused 403 re-reads the preview (below).
     case 'blocked_in_group':
       return {
-        title: t('masterScreens.curatorGroupJoin.vstuplenie-nedostupno'),
-        description: t('masterScreens.curatorGroupJoin.vy-zablokirovany-v-etoy'),
+        title: t('masterScreens.curatorGroupJoin.unavailable'),
+        description: t('masterScreens.curatorGroupJoin.blocked.title'),
         open: false,
       }
     default:
       // can_join=false with no reason is not a contract shape; stay honest
       // rather than guessing — same title as blocked, no invented details.
       return {
-        title: t('masterScreens.curatorGroupJoin.vstuplenie-nedostupno'),
+        title: t('masterScreens.curatorGroupJoin.unavailable'),
         description: '',
         open: false,
       }
@@ -276,7 +276,7 @@ async function join(): Promise<void> {
         return
       }
     }
-    toast.error(extractApiError(e, t('masterScreens.curatorGroupJoin.ne-udalos-vstupit-v')))
+    toast.error(extractApiError(e, t('masterScreens.curatorGroupJoin.toast.joinFailed')))
   } finally {
     joining.value = false
   }

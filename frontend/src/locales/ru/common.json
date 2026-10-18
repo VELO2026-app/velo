@@ -22,7 +22,8 @@
     "backHome": "На главную",
     "backToSchools": "К моим школам",
     "submitSend": "Отправить",
-    "missedYou": "Вы не пришли"
+    "missedYou": "Вы не пришли",
+    "tryAgain": "Попробуйте ещё раз"
   },
   "tabs": {
     "dashboard": "Дашборд",

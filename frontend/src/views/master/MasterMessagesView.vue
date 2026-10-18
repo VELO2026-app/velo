@@ -26,13 +26,13 @@
           <IconMessages :size="48" />
         </template>
       </VEmptyState>
-      <VButton size="sm" @click="load">{{ t('masterScreens.masterMessages.povtorit') }}</VButton>
+      <VButton size="sm" @click="load">{{ t('common.retry') }}</VButton>
     </div>
 
     <VEmptyState
       v-else-if="threads.length === 0"
-      :title="t('masterScreens.masterMessages.zdes-poyavyatsya-perepiski-s')"
-      :description="t('masterScreens.masterMessages.ucheniki-pishut-vam-so')"
+      :title="t('masterScreens.masterMessages.empty.text')"
+      :description="t('masterScreens.masterMessages.empty.hint')"
     >
       <template #icon>
         <IconMessages :size="48" />
@@ -80,7 +80,7 @@ async function load(): Promise<void> {
   try {
     threads.value = (await listChats()).threads
   } catch (e) {
-    error.value = extractApiError(e, t('masterScreens.masterMessages.poprobuyte-eshche-raz'))
+    error.value = extractApiError(e, t('masterScreens.masterMessages.tryAgain'))
   }
   loading.value = false
 }

@@ -118,11 +118,11 @@
         <VEmptyState
           v-else
           icon="calendar"
-          :title="t('masterScreens.masterPractices.net-predstoyashchikh-praktik')"
-          :description="t('masterScreens.masterPractices.sozdayte-pervuyu-praktiku')"
+          :title="t('masterScreens.masterPractices.upcoming.empty.title')"
+          :description="t('masterScreens.masterPractices.upcoming.empty.text')"
         >
           <VButton size="sm" variant="outline" @click="goNew">{{
-            t('masterScreens.masterPractices.sozdat')
+            t('masterScreens.masterPractices.createCta')
           }}</VButton>
         </VEmptyState>
       </template>
@@ -160,8 +160,8 @@
         <VEmptyState
           v-else
           icon="list"
-          :title="t('masterScreens.masterPractices.net-proshedshikh-praktik')"
-          :description="t('masterScreens.masterPractices.zdes-poyavyatsya-zavershennye-praktiki')"
+          :title="t('masterScreens.masterPractices.past.empty.title')"
+          :description="t('masterScreens.masterPractices.past.empty.text')"
         />
       </template>
 
@@ -223,14 +223,14 @@ const activeTab = ref<'upcoming' | 'past'>(route.query.tab === 'past' ? 'past' :
 // backend transitions a practice scheduled/live -> completed BY WALL CLOCK
 // (the autofinalize worker, practices/service.py's state machine), not on
 // request. Without a local time check, a class that ended five minutes ago
-// stays rendered under t('masterScreens.masterPractices.predstoyashchie') until something else (an edit,
+// stays rendered under t('masterScreens.masterPractices.tab.upcoming') until something else (an edit,
 // create, cancel elsewhere) happens to call refreshMyPractices(), or a hard
 // reload. Mirrors MasterDashboardView's own 60s clock + practiceHasEnded
 // filter (nearestPractices) exactly -- same fix, same idiom, applied to
 // the full list instead of the dashboard's top-2 preview. Draft is
 // deliberately EXCLUDED from this filter (unlike Dashboard's narrower
 // widget): a draft's scheduled_at can be stale from the moment it was
-// created and still legitimately belongs in t('masterScreens.masterPractices.predstoyashchie') until the
+// created and still legitimately belongs in t('masterScreens.masterPractices.tab.upcoming') until the
 // master publishes or deletes it -- it is not something the clock auto-
 // finalizes away.
 const now = ref(Date.now())
@@ -264,13 +264,13 @@ const currentHasMore = computed(() =>
 )
 
 const tabOptions = [
-  { value: 'upcoming' as const, label: t('masterScreens.masterPractices.predstoyashchie') },
-  { value: 'past' as const, label: t('masterScreens.masterPractices.proshedshie') },
+  { value: 'upcoming' as const, label: t('masterScreens.masterPractices.tab.upcoming') },
+  { value: 'past' as const, label: t('masterScreens.masterPractices.tab.past') },
 ]
 
 // -- Card subtitle helpers --------------------------------------------------
 
-/** Relative t('masterScreens.masterPractices.segodnya')/t('masterScreens.masterPractices.zavtra'), else compact t('masterScreens.masterPractices.25-yanv') (timezone-safe). */
+/** Relative t('masterScreens.masterPractices.today')/t('masterScreens.masterPractices.tomorrow'), else compact t('masterScreens.masterPractices.dateExample') (timezone-safe). */
 function whenLabel(p: PracticeResponse): string {
   const rel = formatDateShort(p.scheduled_at, p.timezone)
   return rel === 'Сегодня' || rel === 'Завтра' ? rel : formatShortDate(p.scheduled_at, p.timezone)
@@ -285,7 +285,7 @@ function participantsLabel(p: PracticeResponse): string {
 /** «N участников» with Russian plural agreement — past-card sub-line (PL-E1). */
 function participantsCount(p: PracticeResponse): string {
   const n = p.current_participants
-  return `${n} ${plural(n, t('masterScreens.masterPractices.uchastnik'), t('masterScreens.masterPractices.uchastnika'), t('masterScreens.masterPractices.uchastnikov'))}`
+  return `${n} ${plural(n, t('masterScreens.masterPractices.participants.one'), t('masterScreens.masterPractices.participants.few'), t('masterScreens.masterPractices.participants.many'))}`
 }
 
 // -- Insights-derived (REAL) ------------------------------------------------
@@ -308,9 +308,9 @@ function ratingPcts(id: string): Record<MoodScaleKey, number> {
 }
 
 /** Eager-load insights for the visible tab (idempotent: cached ids are skipped).
- *  E12 swap (PROMPT №419): the t('masterScreens.masterPractices.predstoyashchie') tab's check-in badge now reads
+ *  E12 swap (PROMPT №419): the t('masterScreens.masterPractices.tab.upcoming') tab's check-in badge now reads
  *  checkin_count straight off the practice, not insights -- so insights are
- *  only fetched for t('masterScreens.masterPractices.proshedshie') (rating badges). Upcoming skips the round-trip
+ *  only fetched for t('masterScreens.masterPractices.tab.past') (rating badges). Upcoming skips the round-trip
  *  entirely. */
 function loadTabInsights(): Promise<void[]> {
   if (activeTab.value !== 'past') return Promise.resolve([])
@@ -333,7 +333,7 @@ function goDetail(id: string): void {
 }
 
 /** Lazily fetch the bucket a tab needs -- each tab paginates independently
- *  and fetches on activation (T22-3/T22-5): t('masterScreens.masterPractices.proshedshie') is never fetched
+ *  and fetches on activation (T22-3/T22-5): t('masterScreens.masterPractices.tab.past') is never fetched
  *  until the master actually switches to it. No-op if already loaded. */
 async function ensureBucketLoaded(tab: 'upcoming' | 'past'): Promise<void> {
   if (tab === 'past') await masterStore.fetchPastPractices()

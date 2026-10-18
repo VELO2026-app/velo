@@ -67,12 +67,12 @@
             <VMenuItem :icon="IconTag" ariaLabel="Добавить тег" @click="onTagClick(close)" />
             <VMenuItem
               :icon="IconPen"
-              :ariaLabel="t('masterScreens.masterStudentProfile.dobavit-v-gruppu')"
+              :ariaLabel="t('masterScreens.masterStudentProfile.addToGroup')"
               @click="onAddToGroupClick(close)"
             />
             <VMenuItem
               :icon="IconTrash"
-              :ariaLabel="t('masterScreens.masterStudentProfile.udalit-iz-gruppy')"
+              :ariaLabel="t('masterScreens.masterStudentProfile.removeFromGroup')"
               danger
               @click="onRemoveFromGroupClick(close)"
             />
@@ -84,7 +84,7 @@
                  earned its own menu entry instead of borrowing the trash. -->
             <VMenuItem
               :icon="IconLock"
-              :ariaLabel="t('masterScreens.masterStudentProfile.zablokirovat')"
+              :ariaLabel="t('masterScreens.masterStudentProfile.blockMenuAria')"
               danger
               @click="onBlockMenuClick(close)"
             />
@@ -103,12 +103,10 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        :title="t('masterScreens.masterStudentProfile.ne-udalos-zagruzit-profil')"
+        :title="t('masterScreens.masterStudentProfile.toast.loadFailed')"
         :description="error"
       >
-        <VButton size="sm" variant="outline" @click="load">{{
-          t('masterScreens.masterStudentProfile.povtorit')
-        }}</VButton>
+        <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
       </VEmptyState>
 
       <template v-else>
@@ -131,10 +129,10 @@
 
         <!-- Recent check-ins (cap 3; rest behind «посмотреть еще» — PROMPT №157) -->
         <h2 class="velo-section-title">
-          {{ t('masterScreens.masterStudentProfile.poslednie-check-ins') }}
+          {{ t('masterScreens.masterStudentProfile.sections.recentCheckins') }}
         </h2>
         <div v-if="checkinRows.length === 0" class="profile__empty">
-          {{ t('masterScreens.masterStudentProfile.poka-net-check-ins') }}
+          {{ t('masterScreens.masterStudentProfile.empty.checkins') }}
         </div>
         <div v-for="(ci, i) in visibleCheckins" :key="`ci-${i}`" class="profile__ci">
           <MoodAvatar :mood="ci.mood" :size="46" />
@@ -145,14 +143,14 @@
         </div>
         <VShowMore
           v-if="!ciExpanded && hiddenCheckins > 0"
-          :label="t('masterScreens.masterStudentProfile.posmotret-eshche')"
+          :label="t('masterScreens.masterStudentProfile.showMore')"
           @click="ciExpanded = true"
         />
 
         <!-- Feedbacks (cap 3; rest behind «посмотреть еще» — PROMPT №157) -->
         <h2 class="velo-section-title">Feedbacks</h2>
         <div v-if="feedbackRows.length === 0" class="profile__empty">
-          {{ t('masterScreens.masterStudentProfile.poka-net-otzyvov') }}
+          {{ t('masterScreens.masterStudentProfile.empty.reviews') }}
         </div>
         <div v-for="(fb, i) in visibleFeedbacks" :key="`fb-${i}`" class="profile__fb">
           <span class="profile__fb-ic">
@@ -168,7 +166,7 @@
         </div>
         <VShowMore
           v-if="!fbExpanded && hiddenFeedbacks > 0"
-          :label="t('masterScreens.masterStudentProfile.posmotret-eshche')"
+          :label="t('masterScreens.masterStudentProfile.showMore')"
           @click="fbExpanded = true"
         />
 
@@ -199,9 +197,9 @@
          that dialog deliberately has none). -->
     <VConfirmDialog
       :open="blockConfirmOpen"
-      :title="t('masterScreens.masterStudentProfile.zablokirovat-polzovatelya')"
-      :message="t('masterScreens.masterStudentProfile.polzovatel-peremestitsya-v-gruppu')"
-      :confirm-label="t('masterScreens.masterStudentProfile.zablokirovat')"
+      :title="t('masterScreens.masterStudentProfile.blockConfirm')"
+      :message="t('masterScreens.masterStudentProfile.blockMoveText')"
+      :confirm-label="t('masterScreens.masterStudentProfile.blockCta')"
       danger
       warning-panel
       cancel-variant="primary"
@@ -219,10 +217,10 @@
          for the measured fit with the new label. -->
     <VConfirmDialog
       :open="reportOfferOpen"
-      :title="t('masterScreens.masterStudentProfile.polzovatel-zablokirovan')"
-      :message="t('masterScreens.masterStudentProfile.polzovatel-peremeshchen-v-udalennye')"
-      :confirm-label="t('masterScreens.masterStudentProfile.v-podderzhku')"
-      :cancel-label="t('masterScreens.masterStudentProfile.ne-seychas')"
+      :title="t('masterScreens.masterStudentProfile.toast.blocked')"
+      :message="t('masterScreens.masterStudentProfile.blockedBanner')"
+      :confirm-label="t('masterScreens.masterStudentProfile.toSupport')"
+      :cancel-label="t('masterScreens.masterStudentProfile.notNow')"
       compact-actions
       warning-panel
       :warning-panel-icon="false"
@@ -254,7 +252,7 @@
       :open="unblockConfirmOpen"
       :title="`Разблокировать?`"
       :message="`${name} вернется в группу «Ученики» и снова сможет видеть и бронировать ваши практики.`"
-      :confirm-label="t('masterScreens.masterStudentProfile.razblokirovat')"
+      :confirm-label="t('masterScreens.masterStudentProfile.unblockCta')"
       warning-panel
       cancel-variant="primary"
       title-strong
@@ -365,7 +363,7 @@ async function load(): Promise<void> {
   try {
     detail.value = await getStudent(String(route.params.id))
   } catch {
-    error.value = t('masterScreens.masterStudentProfile.poprobuyte-eshche-raz')
+    error.value = t('masterScreens.masterStudentProfile.tryAgain')
   } finally {
     loading.value = false
   }
@@ -459,7 +457,7 @@ const visibleFeedbacks = computed(() =>
 const hiddenCheckins = computed((): number => Math.max(0, checkinRows.value.length - PREVIEW_CAP))
 const hiddenFeedbacks = computed((): number => Math.max(0, feedbackRows.value.length - PREVIEW_CAP))
 
-// t('masterScreens.masterStudentProfile.napisat-soobshchenie') — posts into the eternal DM with THIS student (T3).
+// t('masterScreens.masterStudentProfile.messageCta') — posts into the eternal DM with THIS student (T3).
 const msgOpen = ref(false)
 
 // -- Block -> report-offer -> report form (P3, PROMPT №592) --
@@ -471,7 +469,7 @@ async function onBlockConfirm(): Promise<void> {
   blocking.value = true
   try {
     await blockStudent(String(route.params.id))
-    toast.success(t('masterScreens.masterStudentProfile.polzovatel-zablokirovan'))
+    toast.success(t('masterScreens.masterStudentProfile.toast.blocked'))
     blockConfirmOpen.value = false
     // T24-20: refresh detail.blocked so the "..." menu hides and the bottom
     // button relabels itself if the master dismisses the report-offer below
@@ -479,7 +477,7 @@ async function onBlockConfirm(): Promise<void> {
     await load()
     reportOfferOpen.value = true
   } catch (e) {
-    toast.error(extractApiError(e, t('masterScreens.masterStudentProfile.ne-udalos-zablokirovat')))
+    toast.error(extractApiError(e, t('masterScreens.masterStudentProfile.toast.blockFailed')))
   } finally {
     blocking.value = false
   }
@@ -499,8 +497,8 @@ const reportFormOpen = ref(false)
 // of a clicked row.
 const blockActionLabel = computed((): string =>
   detail.value?.blocked
-    ? t('masterScreens.masterStudentProfile.razblokirovat-polzovatelya')
-    : t('masterScreens.masterStudentProfile.zablokirovat-polzovatelya-2'),
+    ? t('masterScreens.masterStudentProfile.unblockConfirm')
+    : t('masterScreens.masterStudentProfile.unblockConfirmTitle'),
 )
 function onBlockActionClick(): void {
   if (detail.value?.blocked) unblockConfirmOpen.value = true
@@ -521,13 +519,13 @@ async function onUnblockConfirm(): Promise<void> {
   unblocking.value = true
   try {
     await unblockStudent(String(route.params.id))
-    toast.success(t('masterScreens.masterStudentProfile.polzovatel-razblokirovan'))
+    toast.success(t('masterScreens.masterStudentProfile.toast.unblocked'))
     unblockConfirmOpen.value = false
     // Restores detail.blocked=false -- the "..." menu reappears and the
-    // bottom button relabels back to t('masterScreens.masterStudentProfile.zablokirovat-polzovatelya-2').
+    // bottom button relabels back to t('masterScreens.masterStudentProfile.unblockConfirmTitle').
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, t('masterScreens.masterStudentProfile.ne-udalos-razblokirovat')))
+    toast.error(extractApiError(e, t('masterScreens.masterStudentProfile.toast.unblockFailed')))
   } finally {
     unblocking.value = false
   }

@@ -28,21 +28,21 @@ design, mirroring MasterInviteClaimView's own state machine exactly:
       <template v-if="joining">
         <VLoader size="lg" />
         <p class="group-join__subtitle">
-          {{ t('masterScreens.groupJoin.proveryaem-priglashenie') }}
+          {{ t('masterScreens.groupJoin.verifying') }}
         </p>
       </template>
 
       <!-- Transient (network/timeout) -- offer a retry, not a dead-link verdict. -->
       <template v-else-if="transientError">
         <h2 class="group-join__title">
-          {{ t('masterScreens.groupJoin.ne-udalos-proverit-priglashenie') }}
+          {{ t('masterScreens.groupJoin.verifyFailed') }}
         </h2>
         <p class="group-join__subtitle">
           Проблема с соединением. Проверьте интернет и попробуйте ещё раз.
         </p>
         <div class="group-join__actions">
           <VButton variant="primary" block :loading="joining" @click="join">{{
-            t('masterScreens.groupJoin.povtorit')
+            t('common.retry')
           }}</VButton>
         </div>
       </template>
@@ -90,11 +90,11 @@ async function join(): Promise<void> {
     void router.replace({ name: 'root' })
   } catch (e) {
     if (e instanceof ApiResponseError && e.status === 403) {
-      errorTitle.value = t('masterScreens.groupJoin.master-ogranichil-vam-dostup')
-      errorDescription.value = t('masterScreens.groupJoin.vy-ne-smozhete-prisoedinitsya')
+      errorTitle.value = t('masterScreens.groupJoin.restrictedByMaster')
+      errorDescription.value = t('masterScreens.groupJoin.cannotJoin')
     } else if (e instanceof ApiResponseError && e.status === 404) {
-      errorTitle.value = t('masterScreens.groupJoin.ssylka-nedeystvitelna')
-      errorDescription.value = t('masterScreens.groupJoin.vozmozhno-ssylka-povrezhdena-ili')
+      errorTitle.value = t('masterScreens.groupJoin.invalid.title')
+      errorDescription.value = t('masterScreens.groupJoin.invalid.text')
     } else {
       transientError.value = true
     }

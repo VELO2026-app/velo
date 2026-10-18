@@ -34,7 +34,7 @@
     <div class="master-profile__menus">
       <!-- Аккаунт -->
       <div class="master-profile__menu-section">
-        <div class="master-profile__menu-title">{{ t('masterScreens.masterProfile.akkaunt') }}</div>
+        <div class="master-profile__menu-title">{{ t('masterScreens.masterProfile.account') }}</div>
         <div class="master-profile__menu-list">
           <VMenuRow label="Редактировать профиль" @click="onEditProfile">
             <template #icon><IconPen :size="20" /></template>
@@ -54,7 +54,7 @@
       <!-- Настройки -->
       <div class="master-profile__menu-section">
         <div class="master-profile__menu-title">
-          {{ t('masterScreens.masterProfile.nastroyki') }}
+          {{ t('masterScreens.masterProfile.settings') }}
         </div>
         <div class="master-profile__menu-list">
           <VMenuRow label="Уведомления" @click="onNotifications">
@@ -71,7 +71,7 @@
            как пользователь» uiMode-preview row was removed (batch L, L8). -->
       <div class="master-profile__menu-section">
         <div class="master-profile__menu-title">
-          {{ t('masterScreens.masterProfile.pomoshch') }}
+          {{ t('masterScreens.masterProfile.help') }}
         </div>
         <div class="master-profile__menu-list">
           <VMenuRow label="Поддержка" @click="onSupport">
@@ -87,7 +87,7 @@
       <div class="master-profile__menu-section">
         <div class="master-profile__menu-list">
           <VMenuRow
-            :label="t('masterScreens.masterProfile.vyyti')"
+            :label="t('masterScreens.masterProfile.logoutCta')"
             variant="danger"
             :show-arrow="false"
             @click="showLogoutModal = true"
@@ -102,11 +102,11 @@
     <VModal :open="showLogoutModal" @close="showLogoutModal = false">
       <div class="master-profile__logout-modal">
         <h2 class="master-profile__logout-title">
-          {{ t('masterScreens.masterProfile.vyyti-iz-akkaunta') }}
+          {{ t('masterScreens.masterProfile.logoutConfirm') }}
         </h2>
         <div class="master-profile__logout-actions">
           <button type="button" class="master-profile__logout-btn" @click="onLogout">
-            {{ t('masterScreens.masterProfile.da') }}
+            {{ t('masterScreens.masterProfile.yes') }}
           </button>
           <button type="button" class="master-profile__logout-btn" @click="showLogoutModal = false">
             Нет
@@ -145,7 +145,7 @@ const displayName = computed(
   () =>
     masterStore.profile?.display_name ??
     authStore.user?.first_name ??
-    t('masterScreens.masterProfile.master'),
+    t('masterScreens.masterProfile.masterWord'),
 )
 const avatarUrl = computed(() => authStore.user?.avatar_url ?? undefined)
 

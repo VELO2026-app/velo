@@ -34,14 +34,12 @@
       </template>
       <VCard v-else-if="statusError" class="pending-view__card">
         <h2 class="pending-view__title">
-          {{ t('masterScreens.masterPending.ne-udalos-obnovit-status') }}
+          {{ t('masterScreens.masterPending.toast.statusUpdateFailed') }}
         </h2>
         <p class="pending-view__subtitle">
-          {{ t('masterScreens.masterPending.proverte-soedinenie-i-poprobuyte') }}
+          {{ t('masterScreens.masterPending.connectionHint') }}
         </p>
-        <VButton variant="primary" block @click="refreshStatus">{{
-          t('masterScreens.masterPending.povtorit')
-        }}</VButton>
+        <VButton variant="primary" block @click="refreshStatus">{{ t('common.retry') }}</VButton>
       </VCard>
 
       <!-- ================= APPROVED (verified) =================
@@ -56,7 +54,7 @@
             class="pending-view__illu pending-view__illu--lg"
           />
           <h2 class="pending-view__title">
-            {{ t('masterScreens.masterPending.vasha-zayavka-odobrena') }}
+            {{ t('masterScreens.masterPending.approved.title') }}
           </h2>
           <p class="pending-view__subtitle">
             Переключитесь в режим мастера, чтобы открыть кабинет. Вернуться в режим пользователя
@@ -79,15 +77,15 @@
             class="pending-view__illu pending-view__illu--lg"
           />
           <h2 class="pending-view__title">
-            {{ t('masterScreens.masterPending.spasibo-za-zayavku') }}
+            {{ t('masterScreens.masterPending.thanksForApplying') }}
           </h2>
           <p class="pending-view__subtitle">
-            {{ t('masterScreens.masterPending.k-sozhaleniyu-my-poka') }}
+            {{ t('masterScreens.masterPending.rejected.text') }}
           </p>
 
           <div class="pending-view__reason">
             <div class="pending-view__reason-label">
-              {{ t('masterScreens.masterPending.prichina') }}
+              {{ t('masterScreens.masterPending.reasonLabel') }}
             </div>
             <div class="pending-view__reason-text">{{ rejectionReason }}</div>
           </div>
@@ -112,14 +110,14 @@
         <VCard class="pending-view__card">
           <img src="/onboarding/master-verdict-sent.svg" alt="" class="pending-view__illu" />
           <h2 class="pending-view__title">
-            {{ t('masterScreens.masterPending.zayavka-otpravlena') }}
+            {{ t('masterScreens.masterPending.toast.sent') }}
           </h2>
           <p class="pending-view__subtitle">
-            {{ t('masterScreens.masterPending.zayavka-na-proverke-u') }}
+            {{ t('masterScreens.masterPending.underReview') }}
           </p>
           <div class="pending-view__actions">
             <VButton variant="outline" block @click="refreshStatus">{{
-              t('masterScreens.masterPending.obnovit-status')
+              t('masterScreens.masterPending.refreshStatus')
             }}</VButton>
             <VButton variant="ghost" block @click="router.push({ name: 'user-dashboard' })">
               На главную
@@ -138,8 +136,8 @@
 
     <VConfirmDialog
       :open="confirmWithdrawOpen"
-      :message="t('masterScreens.masterPending.otozvat-zayavku-vy-vernetes')"
-      :confirm-label="t('masterScreens.masterPending.otozvat')"
+      :message="t('masterScreens.masterPending.withdrawConfirm')"
+      :confirm-label="t('masterScreens.masterPending.withdrawCta')"
       danger
       :loading="withdrawing"
       @confirm="onWithdraw"
@@ -210,7 +208,7 @@ const rejectionReason = computed((): string => {
   return (
     masterStore.profile?.rejection_reason ??
     authStore.masterApplication?.rejection_reason ??
-    t('masterScreens.masterPending.zayavka-ne-proshla-verifikatsiyu')
+    t('masterScreens.masterPending.rejected.contactSupport')
   )
 })
 
@@ -269,7 +267,7 @@ async function enterMasterMode(): Promise<void> {
     }
     void router.push({ name: 'master-dashboard' })
   } catch {
-    toast.error(t('masterScreens.masterPending.ne-udalos-pereklyuchitsya-v'))
+    toast.error(t('masterScreens.masterPending.toast.switchFailed'))
   } finally {
     switching.value = false
   }
@@ -289,13 +287,13 @@ async function onWithdraw(): Promise<void> {
     // guard) doesn't mistake a stale session for a still-pending applicant.
     sessionStorage.removeItem(MASTER_APPLIED_KEY)
     await authStore.fetchMe()
-    toast.success(t('masterScreens.masterPending.zayavka-otozvana'))
+    toast.success(t('masterScreens.masterPending.toast.withdrawn'))
     void router.replace({ name: 'user-dashboard' })
   } catch (e) {
     // 409 means someone else (e.g. an admin) already acted on it between
     // opening this dialog and confirming -- a generic message covers both
     // that race and any other failure without guessing which happened.
-    toast.error(extractApiError(e, t('masterScreens.masterPending.ne-udalos-otozvat-zayavku')))
+    toast.error(extractApiError(e, t('masterScreens.masterPending.toast.withdrawFailed')))
   } finally {
     withdrawing.value = false
     confirmWithdrawOpen.value = false
