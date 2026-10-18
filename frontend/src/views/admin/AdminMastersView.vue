@@ -49,7 +49,7 @@
       v-else-if="error"
       icon="warning"
       :title="t('adminScreens.adminMasters.ne-udalos-zagruzit-masterov')"
-      :description="t('adminScreens.adminMasters.proverte-soedinenie-i-poprobuyte')"
+      :description="t('adminScreens.adminMasters.checkConnectionAndRetry')"
     >
       <template #action
         ><VButton variant="primary" @click="load">{{

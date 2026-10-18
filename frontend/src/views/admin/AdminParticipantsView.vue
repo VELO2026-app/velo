@@ -48,7 +48,7 @@
 
       <div v-if="hasMore" class="admin-list__more">
         <VButton variant="outline" @click="loadMore">{{
-          t('adminScreens.adminParticipants.pokazat-eshche')
+          t('adminScreens.adminParticipants.showMore')
         }}</VButton>
       </div>
     </template>
@@ -59,8 +59,8 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminParticipants.ne-udalos-zagruzit-uchastnikov')"
-      :description="t('adminScreens.adminParticipants.proverte-soedinenie-i-poprobuyte')"
+      :title="t('adminScreens.adminParticipants.toast.loadMembersFailed')"
+      :description="t('adminScreens.adminParticipants.checkConnectionAndRetry')"
     >
       <template #action
         ><VButton variant="primary" @click="load(true)">{{
@@ -70,7 +70,7 @@
     </VEmptyState>
 
     <VCard v-else-if="!loading">
-      <p class="admin-list__empty">{{ t('adminScreens.adminParticipants.dannykh-poka-net') }}</p>
+      <p class="admin-list__empty">{{ t('adminScreens.adminParticipants.noData') }}</p>
     </VCard>
   </div>
 </template>
@@ -132,10 +132,10 @@ async function load(reset: boolean): Promise<void> {
     total.value = res.total
     participants.value = reset ? res.items : [...participants.value, ...res.items]
   } catch {
-    toast.error(t('adminScreens.adminParticipants.ne-udalos-zagruzit-uchastnikov'))
+    toast.error(t('adminScreens.adminParticipants.toast.loadMembersFailed'))
     // A failed initial/filter load (reset) means the list below is genuinely
     // unknown, not empty -- render the real error state (W12) instead of
-    // falling through to t('adminScreens.adminParticipants.dannykh-poka-net'). A failed loadMore leaves the
+    // falling through to t('adminScreens.adminParticipants.noData'). A failed loadMore leaves the
     // already-loaded page visible; the toast is enough there.
     if (reset) error.value = true
   } finally {

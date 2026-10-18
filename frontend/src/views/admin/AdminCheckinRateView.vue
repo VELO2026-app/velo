@@ -42,14 +42,14 @@
       <VBarChart :bars="weekBars" />
 
       <h3 class="admin-detail__section">
-        {{ t('adminScreens.adminCheckinRate.nizkiy-check-in-praktiki') }}
+        {{ t('adminScreens.adminCheckinRate.lowCheckinTitle') }}
       </h3>
       <template v-if="lowPractices.length">
         <VListRow v-for="p in lowPractices" :key="p.id" :title="p.title" :subtitle="p.subtitle" />
       </template>
       <VCard v-else
         ><p class="admin-detail__empty">
-          {{ t('adminScreens.adminCheckinRate.dannykh-poka-net') }}
+          {{ t('adminScreens.adminCheckinRate.noData') }}
         </p></VCard
       >
     </template>
@@ -109,7 +109,7 @@ async function load(): Promise<void> {
   try {
     data.value = await getCheckinMetric(period, offset)
   } catch (e) {
-    error.value = extractApiError(e, t('adminScreens.adminCheckinRate.oshibka-zagruzki'))
+    error.value = extractApiError(e, t('adminScreens.adminCheckinRate.loadError'))
   } finally {
     loading.value = false
   }

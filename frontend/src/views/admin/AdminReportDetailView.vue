@@ -135,7 +135,7 @@
               <VTextarea
                 v-model="dismissNote"
                 :label="t('adminScreens.adminReportDetail.primechanie-neobyazatelno')"
-                :placeholder="t('adminScreens.adminReportDetail.prichina-otkloneniya')"
+                :placeholder="t('adminScreens.adminReportDetail.rejectionReason')"
                 :rows="2"
               />
               <VButton
@@ -260,7 +260,7 @@ async function onResolve(): Promise<void> {
     // S-1/S-2: push to list instead of back() -- guarantees fresh loadInitial().
     void router.push({ name: 'admin-reports' })
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminReportDetail.oshibka-pri-obrabotke')))
+    toast.error(extractApiError(e, t('adminScreens.adminReportDetail.processError')))
   } finally {
     resolving.value = false
   }
@@ -275,7 +275,7 @@ async function onDismiss(): Promise<void> {
     // S-1/S-2: push to list instead of back() -- guarantees fresh loadInitial().
     void router.push({ name: 'admin-reports' })
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminReportDetail.oshibka-pri-obrabotke')))
+    toast.error(extractApiError(e, t('adminScreens.adminReportDetail.processError')))
   } finally {
     dismissing.value = false
   }

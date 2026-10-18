@@ -40,8 +40,8 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminSupport.ne-udalos-zagruzit')"
-      :description="t('adminScreens.adminSupport.proverte-soedinenie-i-poprobuyte')"
+      :title="t('adminScreens.adminSupport.loadFailed')"
+      :description="t('adminScreens.adminSupport.checkConnectionAndRetry')"
     >
       <template #action
         ><VButton variant="primary" @click="loadInitial">{{
@@ -53,8 +53,8 @@
     <VEmptyState
       v-else-if="items.length === 0"
       icon="empty"
-      :title="t('adminScreens.adminSupport.obrashcheniy-net')"
-      :description="t('adminScreens.adminSupport.syuda-popadut-vse-obrashcheniya')"
+      :title="t('adminScreens.adminSupport.empty.title')"
+      :description="t('adminScreens.adminSupport.empty.text')"
     />
 
     <template v-else>
@@ -126,9 +126,10 @@ function triageBadge(item: SupportThread): {
 } {
   if (item.status === 'resolved') return { variant: 'success', label: 'Решено' }
   if (item.status === 'closed') return { variant: 'info', label: 'Закрыто' }
-  if (!item.assignee) return { variant: 'warning', label: t('adminScreens.adminSupport.ne-vzyato') }
+  if (!item.assignee)
+    return { variant: 'warning', label: t('adminScreens.adminSupport.status.unclaimed') }
   if (item.assignee === authStore.user?.id)
-    return { variant: 'success', label: t('adminScreens.adminSupport.u-menya') }
+    return { variant: 'success', label: t('adminScreens.adminSupport.status.mine') }
   return { variant: 'info', label: t('adminScreens.adminSupport.zanyato') }
 }
 
@@ -143,7 +144,7 @@ async function loadInitial(): Promise<void> {
     nextCursor.value = res.next_cursor
   } catch (e) {
     error.value = true
-    toast.error(extractApiError(e, t('adminScreens.adminSupport.oshibka-zagruzki-obrashcheniy')))
+    toast.error(extractApiError(e, t('adminScreens.adminSupport.ticketsLoadError')))
   } finally {
     loading.value = false
   }
@@ -157,7 +158,7 @@ async function loadMore(): Promise<void> {
     items.value.push(...res.threads)
     nextCursor.value = res.next_cursor
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminSupport.oshibka-zagruzki')))
+    toast.error(extractApiError(e, t('adminScreens.adminSupport.loadError')))
   } finally {
     loadingMore.value = false
   }

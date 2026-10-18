@@ -40,7 +40,7 @@
       <VEmptyState
         v-else-if="threadError"
         icon="warning"
-        :title="t('adminScreens.adminSupportDetail.oshibka-zagruzki')"
+        :title="t('adminScreens.adminSupportDetail.loadError')"
         :description="threadError"
       >
         <VButton size="sm" variant="outline" @click="loadThread">{{
@@ -199,19 +199,19 @@ const triageBadge = computed<{ variant: 'warning' | 'success' | 'info'; label: s
     return { variant: 'info', label: t('admin.supportTicket.closed') }
   }
   if (!threadItem.assignee) {
-    return { variant: 'warning', label: t('adminScreens.adminSupportDetail.ne-vzyato') }
+    return { variant: 'warning', label: t('adminScreens.adminSupportDetail.status.unclaimed') }
   }
   if (threadItem.assignee === myId.value) {
-    return { variant: 'success', label: t('adminScreens.adminSupportDetail.u-menya') }
+    return { variant: 'success', label: t('adminScreens.adminSupportDetail.status.mine') }
   }
   return { variant: 'info', label: t('adminScreens.adminSupportDetail.zanyato') }
 })
 
 const claimPanelText = computed(() => {
   if (!thread.value?.assignee) {
-    return t('adminScreens.adminSupportDetail.obrashchenie-ne-zakrepleno-vozmite')
+    return t('adminScreens.adminSupportDetail.unclaimedHint')
   }
-  return t('adminScreens.adminSupportDetail.obrashchenie-uzhe-zakrepleno-za')
+  return t('adminScreens.adminSupportDetail.claimedByOtherHint')
 })
 
 function formatTime(iso: string): string {
@@ -237,10 +237,7 @@ async function loadThread(): Promise<void> {
     const page = await listAdminSupportThreads(100)
     thread.value = page.threads.find((t) => t.id === threadId) ?? null
   } catch (e) {
-    threadError.value = extractApiError(
-      e,
-      t('adminScreens.adminSupportDetail.oshibka-zagruzki-obrashcheniya'),
-    )
+    threadError.value = extractApiError(e, t('adminScreens.adminSupportDetail.ticketLoadError'))
   } finally {
     loadingThread.value = false
   }
@@ -253,10 +250,7 @@ async function loadMessages(): Promise<void> {
     const page = await getAdminSupportMessages(threadId)
     messages.value = [...page.messages].reverse()
   } catch (e) {
-    messagesError.value = extractApiError(
-      e,
-      t('adminScreens.adminSupportDetail.poprobuyte-eshche-raz'),
-    )
+    messagesError.value = extractApiError(e, t('adminScreens.adminSupportDetail.tryAgain'))
   } finally {
     loadingMessages.value = false
   }
@@ -267,13 +261,10 @@ async function onClaim(): Promise<void> {
   try {
     const result = await claimSupportThread(threadId)
     if (thread.value) thread.value = { ...thread.value, assignee: result.thread.assignee }
-    if (result.claimed)
-      toast.success(t('adminScreens.adminSupportDetail.obrashchenie-zakrepleno-za-vami'))
-    else toast.error(t('adminScreens.adminSupportDetail.uzhe-vzyato-drugim-administratorom'))
+    if (result.claimed) toast.success(t('adminScreens.adminSupportDetail.toast.claimedByYou'))
+    else toast.error(t('adminScreens.adminSupportDetail.toast.claimedByOther'))
   } catch (e) {
-    toast.error(
-      extractApiError(e, t('adminScreens.adminSupportDetail.ne-udalos-zakrepit-obrashchenie')),
-    )
+    toast.error(extractApiError(e, t('adminScreens.adminSupportDetail.toast.claimFailed')))
   } finally {
     claiming.value = false
   }
@@ -288,7 +279,7 @@ async function onSend(): Promise<void> {
     messages.value = [...messages.value, sent]
     draft.value = ''
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminSupportDetail.ne-udalos-otpravit-otvet')))
+    toast.error(extractApiError(e, t('adminScreens.adminSupportDetail.toast.replyFailed')))
   } finally {
     sending.value = false
   }

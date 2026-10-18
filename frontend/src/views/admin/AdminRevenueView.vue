@@ -24,7 +24,7 @@
       compact
       :model-value="period"
       :options="periodOptions"
-      :aria-label="t('adminScreens.adminRevenue.period-vyruchki')"
+      :aria-label="t('adminScreens.adminRevenue.revenuePeriod')"
       @update:model-value="selectPeriod"
     />
 
@@ -33,7 +33,7 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminRevenue.ne-udalos-zagruzit-vyruchku')"
+      :title="t('adminScreens.adminRevenue.revenueLoadFailed')"
       :description="error"
     >
       <VButton size="sm" variant="outline" @click="load">{{
@@ -51,7 +51,7 @@
         <VStatCard :value="payoutLabel" label="Выплачено" />
       </div>
 
-      <h3 class="admin-detail__section">{{ t('adminScreens.adminRevenue.po-masteram') }}</h3>
+      <h3 class="admin-detail__section">{{ t('adminScreens.adminRevenue.byMasters') }}</h3>
       <div v-if="data.per_master.length" class="admin-detail__items">
         <VListRow
           v-for="m in data.per_master"
@@ -66,7 +66,7 @@
       </div>
       <VCard v-else
         ><p class="admin-detail__empty">
-          {{ t('adminScreens.adminRevenue.dannykh-poka-net') }}
+          {{ t('adminScreens.adminRevenue.noData') }}
         </p></VCard
       >
     </template>
@@ -134,7 +134,7 @@ async function load(): Promise<void> {
   try {
     data.value = await getAdminRevenue(period.value)
   } catch (e) {
-    error.value = extractApiError(e, t('adminScreens.adminRevenue.oshibka-zagruzki'))
+    error.value = extractApiError(e, t('adminScreens.adminRevenue.loadError'))
   } finally {
     loading.value = false
   }

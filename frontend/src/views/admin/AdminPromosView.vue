@@ -37,7 +37,7 @@
       v-else-if="error"
       icon="warning"
       :title="t('adminScreens.adminPromos.ne-udalos-zagruzit-promokody')"
-      :description="t('adminScreens.adminPromos.proverte-soedinenie-i-poprobuyte')"
+      :description="t('adminScreens.adminPromos.checkConnectionAndRetry')"
     >
       <template #action
         ><VButton variant="primary" @click="loadInitial">{{
@@ -160,7 +160,7 @@ const emptyTitle = computed<string>(() => {
   if (filter.value === 'master') return 'Нет промокодов мастеров'
   if (filter.value === 'company') return 'Нет промокодов компании'
   if (filter.value === 'inactive') return 'Нет деактивированных промокодов'
-  return t('adminScreens.adminPromos.promokodov-poka-net')
+  return t('adminScreens.adminPromos.empty.title')
 })
 
 /** Query params for the current tab -- server-side filtered (type/is_active),
@@ -209,7 +209,7 @@ async function loadInitial(): Promise<void> {
   } catch (e) {
     if (myGeneration !== generation) return
     error.value = true
-    toast.error(extractApiError(e, t('adminScreens.adminPromos.oshibka-zagruzki-promokodov')))
+    toast.error(extractApiError(e, t('adminScreens.adminPromos.promocodesLoadError')))
   } finally {
     if (myGeneration === generation) loading.value = false
   }
@@ -223,7 +223,7 @@ async function loadMore(): Promise<void> {
     items.value.push(...res.items)
     hasMore.value = items.value.length < res.total
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminPromos.oshibka-zagruzki')))
+    toast.error(extractApiError(e, t('adminScreens.adminPromos.loadError')))
   } finally {
     loadingMore.value = false
   }

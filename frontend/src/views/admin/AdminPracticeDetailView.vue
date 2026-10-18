@@ -100,7 +100,7 @@
         </div>
         <VCard v-else
           ><p class="admin-detail__empty">
-            {{ t('adminScreens.adminPracticeDetail.dannykh-poka-net') }}
+            {{ t('adminScreens.adminPracticeDetail.noData') }}
           </p></VCard
         >
       </template>
@@ -122,7 +122,7 @@
         </div>
         <VCard v-else
           ><p class="admin-detail__empty">
-            {{ t('adminScreens.adminPracticeDetail.dannykh-poka-net') }}
+            {{ t('adminScreens.adminPracticeDetail.noData') }}
           </p></VCard
         >
 
@@ -229,7 +229,7 @@ const ZOOM_STATUS_BADGES: Record<
     variant: 'muted',
   },
   create_failed: {
-    label: t('adminScreens.adminPracticeDetail.oshibka-sozdaniya'),
+    label: t('adminScreens.adminPracticeDetail.creationError'),
     variant: 'error',
   },
   deleted: { label: t('adminScreens.adminPracticeDetail.udalena'), variant: 'muted' },
@@ -257,7 +257,7 @@ async function load(): Promise<void> {
   try {
     practice.value = await getAdminPracticeDetail(practiceId)
   } catch (e) {
-    error.value = extractApiError(e, t('adminScreens.adminPracticeDetail.oshibka-zagruzki'))
+    error.value = extractApiError(e, t('adminScreens.adminPracticeDetail.loadError'))
   } finally {
     loading.value = false
   }

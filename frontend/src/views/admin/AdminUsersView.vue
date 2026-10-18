@@ -34,8 +34,8 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminUsers.ne-udalos-zagruzit-polzovateley')"
-      :description="t('adminScreens.adminUsers.proverte-soedinenie-i-poprobuyte')"
+      :title="t('adminScreens.adminUsers.usersLoadFailed')"
+      :description="t('adminScreens.adminUsers.checkConnectionAndRetry')"
     >
       <template #action
         ><VButton variant="primary" @click="load(true)">{{
@@ -65,7 +65,7 @@
 
       <div v-if="hasMore" class="admin-users__more">
         <VButton variant="outline" :loading="loadingMore" @click="loadMore">{{
-          t('adminScreens.adminUsers.pokazat-eshche')
+          t('adminScreens.adminUsers.showMore')
         }}</VButton>
       </div>
     </template>
@@ -121,7 +121,7 @@ const hasMore = computed<boolean>(() => users.value.length < total.value)
 
 function nameOf(u: UserResponse): string {
   const name = [u.first_name, u.last_name].filter(Boolean).join(' ').trim()
-  return name || t('adminScreens.adminUsers.bez-imeni')
+  return name || t('adminScreens.adminUsers.noName')
 }
 
 const headerCount = computed<string>(() => (total.value ? String(total.value) : '—'))
@@ -140,8 +140,8 @@ const filtered = computed<UserResponse[]>(() => {
 
 const emptyText = computed<string>(() =>
   search.value.trim()
-    ? t('adminScreens.adminUsers.nikogo-ne-naydeno')
-    : t('adminScreens.adminUsers.polzovateley-poka-net'),
+    ? t('adminScreens.adminUsers.search.noHits')
+    : t('adminScreens.adminUsers.empty.title'),
 )
 
 function roleLabel(role: string): string {
@@ -171,7 +171,7 @@ async function load(reset: boolean): Promise<void> {
     total.value = res.total
   } catch (e) {
     error.value = true
-    toast.error(extractApiError(e, t('adminScreens.adminUsers.oshibka-zagruzki-polzovateley')))
+    toast.error(extractApiError(e, t('adminScreens.adminUsers.usersLoadError')))
   } finally {
     loading.value = false
     loadingMore.value = false
@@ -212,12 +212,12 @@ async function doMakeMaster(): Promise<void> {
   confirm.loading = true
   try {
     await makeMaster(confirm.target.id)
-    toast.success(t('adminScreens.adminUsers.polzovatel-naznachen-masterom'))
+    toast.success(t('adminScreens.adminUsers.toast.promotedToMaster'))
     confirm.open = false
     confirm.target = null
     await load(true)
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminUsers.ne-udalos-naznachit-masterom')))
+    toast.error(extractApiError(e, t('adminScreens.adminUsers.toast.promoteFailed')))
   } finally {
     confirm.loading = false
   }

@@ -72,7 +72,7 @@
           compact
           :model-value="period"
           :options="periodOptions"
-          :aria-label="t('adminScreens.adminDashboard.period-statistiki')"
+          :aria-label="t('adminScreens.adminDashboard.statsPeriod')"
           @update:model-value="selectPeriod"
         />
       </div>
@@ -108,7 +108,7 @@
       <div class="admin-dashboard__week">
         <button
           class="admin-dashboard__week-nav admin-dashboard__week-nav--prev"
-          :aria-label="t('adminScreens.adminDashboard.predydushchiy-period')"
+          :aria-label="t('adminScreens.adminDashboard.prevPeriod')"
           @click="stepPrev"
         >
           <IconArrowRight :size="20" />
@@ -116,7 +116,7 @@
         <span class="admin-dashboard__week-range">{{ periodRange }}</span>
         <button
           class="admin-dashboard__week-nav"
-          :aria-label="t('adminScreens.adminDashboard.sleduyushchiy-period')"
+          :aria-label="t('adminScreens.adminDashboard.nextPeriod')"
           :disabled="!canStepNext"
           @click="stepNext"
         >
@@ -137,7 +137,7 @@
       <VMoreLink label="Баланс по мастерам" @click="router.push({ name: 'admin-revenue' })" />
       <VListRow
         :title="t('adminScreens.adminDashboard.vyplaty')"
-        :subtitle="t('adminScreens.adminDashboard.zaprosy-masterov-na-vyvod')"
+        :subtitle="t('adminScreens.adminDashboard.withdrawalRequestsLink')"
         clickable
         @click="router.push({ name: 'admin-withdrawals' })"
       >
@@ -145,7 +145,7 @@
       </VListRow>
       <VListRow
         :title="t('adminScreens.adminDashboard.promokody')"
-        :subtitle="t('adminScreens.adminDashboard.vse-promokody-platformy-i')"
+        :subtitle="t('adminScreens.adminDashboard.promocodesLink')"
         clickable
         @click="router.push({ name: 'admin-promos' })"
       >
@@ -185,15 +185,15 @@
       </div>
       <VListRow
         :title="t('adminScreens.adminDashboard.polzovateli')"
-        :subtitle="t('adminScreens.adminDashboard.vse-polzovateli-naznachenie-masterov')"
+        :subtitle="t('adminScreens.adminDashboard.usersLink')"
         clickable
         @click="router.push({ name: 'admin-users' })"
       >
         <template #trailing><IconArrowRight :size="20" /></template>
       </VListRow>
       <VListRow
-        :title="t('adminScreens.adminDashboard.zayavki-na-smenu-metodov')"
-        :subtitle="t('adminScreens.adminDashboard.mastera-menyayut-svoi-napravleniya')"
+        :title="t('adminScreens.adminDashboard.methodRequestsLink')"
+        :subtitle="t('adminScreens.adminDashboard.methodRequestsHint')"
         clickable
         @click="router.push({ name: 'admin-method-requests' })"
       >
@@ -207,8 +207,8 @@
         </template>
       </VListRow>
       <VListRow
-        :title="t('adminScreens.adminDashboard.katalog-praktik')"
-        :subtitle="t('adminScreens.adminDashboard.napravleniya-i-vidy-praktik')"
+        :title="t('adminScreens.adminDashboard.catalogLink')"
+        :subtitle="t('adminScreens.adminDashboard.catalogHint')"
         clickable
         @click="router.push({ name: 'admin-catalog' })"
       >
@@ -216,7 +216,7 @@
       </VListRow>
       <VListRow
         :title="t('adminScreens.adminDashboard.podderzhka')"
-        :subtitle="t('adminScreens.adminDashboard.obrashcheniya-polzovateley-i-masterov')"
+        :subtitle="t('adminScreens.adminDashboard.supportLink')"
         clickable
         @click="router.push({ name: 'admin-support' })"
       >

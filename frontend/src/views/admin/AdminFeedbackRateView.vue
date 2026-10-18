@@ -125,7 +125,7 @@ async function load(): Promise<void> {
   try {
     data.value = await getFeedbackMetric(period, offset)
   } catch (e) {
-    error.value = extractApiError(e, t('adminScreens.adminFeedbackRate.oshibka-zagruzki'))
+    error.value = extractApiError(e, t('adminScreens.adminFeedbackRate.loadError'))
   } finally {
     loading.value = false
   }

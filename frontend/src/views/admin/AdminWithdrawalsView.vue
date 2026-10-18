@@ -34,8 +34,8 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminWithdrawals.ne-udalos-zagruzit')"
-      :description="t('adminScreens.adminWithdrawals.proverte-soedinenie-i-poprobuyte')"
+      :title="t('adminScreens.adminWithdrawals.loadFailed')"
+      :description="t('adminScreens.adminWithdrawals.checkConnectionAndRetry')"
     >
       <template #action
         ><VButton variant="primary" @click="loadInitial">{{
@@ -48,8 +48,8 @@
     <VEmptyState
       v-else-if="items.length === 0"
       icon="success"
-      :title="t('adminScreens.adminWithdrawals.zaprosov-na-vyvod-net')"
-      :description="t('adminScreens.adminWithdrawals.novye-zaprosy-masterov-poyavyatsya')"
+      :title="t('adminScreens.adminWithdrawals.empty.title')"
+      :description="t('adminScreens.adminWithdrawals.empty.text')"
     />
 
     <template v-else>
@@ -127,7 +127,7 @@ function statusIcon(s: WithdrawalStatus): Component {
   return STATUS_ICON[s]
 }
 const STATUS_LABEL: Record<WithdrawalStatus, string> = {
-  pending: t('adminScreens.adminWithdrawals.na-rassmotrenii'),
+  pending: t('adminScreens.adminWithdrawals.status.pending'),
   approved: t('adminScreens.adminWithdrawals.odobren'),
   rejected: t('adminScreens.adminWithdrawals.otklonen'),
 }
@@ -192,7 +192,7 @@ async function loadInitial(): Promise<void> {
   } catch (e) {
     if (myGeneration !== generation) return
     error.value = true
-    toast.error(extractApiError(e, t('adminScreens.adminWithdrawals.oshibka-zagruzki-vyplat')))
+    toast.error(extractApiError(e, t('adminScreens.adminWithdrawals.withdrawalsLoadError')))
   } finally {
     if (myGeneration === generation) loading.value = false
   }
@@ -205,7 +205,7 @@ async function loadMore(): Promise<void> {
     items.value.push(...res.items)
     hasMore.value = items.value.length < res.total
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminWithdrawals.oshibka-zagruzki')))
+    toast.error(extractApiError(e, t('adminScreens.adminWithdrawals.loadError')))
   } finally {
     loadingMore.value = false
   }

@@ -40,14 +40,14 @@
       </div>
 
       <h3 class="admin-detail__section">
-        {{ t('adminScreens.adminReturnRate.top-loyalnykh-yuzerov') }}
+        {{ t('adminScreens.adminReturnRate.topLoyalUsers') }}
       </h3>
       <template v-if="loyalUsers.length">
         <VListRow v-for="u in loyalUsers" :key="u.id" :title="u.title" :subtitle="u.subtitle" />
       </template>
       <VCard v-else
         ><p class="admin-detail__empty">
-          {{ t('adminScreens.adminReturnRate.dannykh-poka-net') }}
+          {{ t('adminScreens.adminReturnRate.noData') }}
         </p></VCard
       >
     </template>
@@ -107,7 +107,7 @@ async function load(): Promise<void> {
   try {
     data.value = await getReturnMetric(period, offset)
   } catch (e) {
-    error.value = extractApiError(e, t('adminScreens.adminReturnRate.oshibka-zagruzki'))
+    error.value = extractApiError(e, t('adminScreens.adminReturnRate.loadError'))
   } finally {
     loading.value = false
   }

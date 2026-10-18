@@ -19,7 +19,7 @@
     <header class="amr__top">
       <VBackButton @click="router.back()" />
       <h1 class="amr__title">
-        {{ t('adminScreens.adminMethodRequests.zayavki-na-smenu-metodov') }}
+        {{ t('adminScreens.adminMethodRequests.methodRequestsLink') }}
       </h1>
       <span class="amr__count">{{ headerCount }}</span>
     </header>
@@ -33,8 +33,8 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminMethodRequests.ne-udalos-zagruzit')"
-      :description="t('adminScreens.adminMethodRequests.proverte-soedinenie-i-poprobuyte')"
+      :title="t('adminScreens.adminMethodRequests.loadFailed')"
+      :description="t('adminScreens.adminMethodRequests.checkConnectionAndRetry')"
     >
       <template #action>
         <VButton variant="primary" @click="loadInitial">{{
@@ -104,7 +104,7 @@
     <VBottomSheet
       :open="!!rejectTarget"
       :title="t('adminScreens.adminMethodRequests.prichina-otkaza')"
-      :save-label="t('adminScreens.adminMethodRequests.otklonit-zayavku')"
+      :save-label="t('adminScreens.adminMethodRequests.rejectCta')"
       @save="onReject"
       @close="closeReject"
     >
@@ -120,8 +120,8 @@
     <VConfirmDialog
       :open="!!promoteTarget"
       :message="promoteMessage"
-      :confirm-label="t('adminScreens.adminMethodRequests.dobavit-v-katalog')"
-      :cancel-label="t('adminScreens.adminMethodRequests.tolko-etomu-masteru')"
+      :confirm-label="t('adminScreens.adminMethodRequests.addToCatalog')"
+      :cancel-label="t('adminScreens.adminMethodRequests.thisMasterOnly')"
       :loading="!!promoteTarget && busyId === promoteTarget.user_id"
       @confirm="onPromoteConfirm"
       @cancel="onPromoteCancel"
@@ -228,7 +228,7 @@ async function loadMore(): Promise<void> {
     items.value.push(...res.items)
     hasMore.value = items.value.length < res.total
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.oshibka-zagruzki')))
+    toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.loadError')))
   } finally {
     loadingMore.value = false
   }
@@ -268,7 +268,7 @@ async function doApprove(
     toast.success(t('adminScreens.adminMethodRequests.metody-obnovleny'))
     removeItem(item.user_id)
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.oshibka-pri-odobrenii')))
+    toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.approveError')))
   } finally {
     busyId.value = null
     promoteTarget.value = null
@@ -309,17 +309,17 @@ async function onReject(): Promise<void> {
   if (!target || busyId.value) return
   rejectError.value = ''
   if (!rejectReason.value.trim()) {
-    rejectError.value = t('adminScreens.adminMethodRequests.ukazhite-prichinu-otkaza')
+    rejectError.value = t('adminScreens.adminMethodRequests.rejectionReasonHint')
     return
   }
   busyId.value = target.user_id
   try {
     await rejectMethodChange(target.user_id, rejectReason.value.trim())
-    toast.success(t('adminScreens.adminMethodRequests.zayavka-otklonena'))
+    toast.success(t('adminScreens.adminMethodRequests.toast.requestRejected'))
     removeItem(target.user_id)
     rejectTarget.value = null
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.oshibka-pri-otklonenii')))
+    toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.toast.rejectFailed')))
   } finally {
     busyId.value = null
   }

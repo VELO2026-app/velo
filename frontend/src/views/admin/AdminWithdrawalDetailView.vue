@@ -20,7 +20,7 @@
   <div class="wd">
     <header class="wd__top">
       <VBackButton @click="router.back()" />
-      <h1 class="wd__title">{{ t('adminScreens.adminWithdrawalDetail.zapros-na-vyvod') }}</h1>
+      <h1 class="wd__title">{{ t('adminScreens.adminWithdrawalDetail.requestTitle') }}</h1>
     </header>
 
     <template v-if="w">
@@ -38,13 +38,11 @@
           <span class="wd__v">{{ bankLabel }}</span>
         </div>
         <div class="wd__row">
-          <span class="wd__k">{{
-            t('adminScreens.adminWithdrawalDetail.komissiya-provaydera')
-          }}</span>
+          <span class="wd__k">{{ t('adminScreens.adminWithdrawalDetail.providerFee') }}</span>
           <span class="wd__v">{{ feeLabel }}</span>
         </div>
         <div class="wd__row">
-          <span class="wd__k">{{ t('adminScreens.adminWithdrawalDetail.k-polucheniyu') }}</span>
+          <span class="wd__k">{{ t('adminScreens.adminWithdrawalDetail.netAmount') }}</span>
           <span class="wd__v">{{ netLabel }}</span>
         </div>
       </VCard>
@@ -65,15 +63,15 @@
 
     <VCard v-else
       ><p class="wd__empty">
-        {{ t('adminScreens.adminWithdrawalDetail.zapros-nedostupen') }}
+        {{ t('adminScreens.adminWithdrawalDetail.unavailable') }}
       </p></VCard
     >
 
     <!-- Reject reason -->
     <VBottomSheet
       :open="showReject"
-      :title="t('adminScreens.adminWithdrawalDetail.prichina-otkloneniya')"
-      :save-label="t('adminScreens.adminWithdrawalDetail.otklonit-vyplatu')"
+      :title="t('adminScreens.adminWithdrawalDetail.rejectionReason')"
+      :save-label="t('adminScreens.adminWithdrawalDetail.rejectCta')"
       @save="onReject"
       @close="showReject = false"
     >
@@ -192,13 +190,11 @@ async function onApprove(): Promise<void> {
   approving.value = true
   try {
     await approveWithdrawal(w.value.id)
-    toast.success(t('adminScreens.adminWithdrawalDetail.vyplata-odobrena'))
+    toast.success(t('adminScreens.adminWithdrawalDetail.toast.approved'))
     showConfirm.value = false
     router.back()
   } catch (e) {
-    toast.error(
-      extractApiError(e, t('adminScreens.adminWithdrawalDetail.oshibka-odobreniya-vyplaty')),
-    )
+    toast.error(extractApiError(e, t('adminScreens.adminWithdrawalDetail.toast.approveFailed')))
   } finally {
     approving.value = false
   }
@@ -214,13 +210,11 @@ async function onReject(): Promise<void> {
   rejecting.value = true
   try {
     await rejectWithdrawal(w.value.id, rejectReason.value.trim())
-    toast.success(t('adminScreens.adminWithdrawalDetail.vyplata-otklonena'))
+    toast.success(t('adminScreens.adminWithdrawalDetail.toast.rejected'))
     showReject.value = false
     router.back()
   } catch (e) {
-    toast.error(
-      extractApiError(e, t('adminScreens.adminWithdrawalDetail.oshibka-otkloneniya-vyplaty')),
-    )
+    toast.error(extractApiError(e, t('adminScreens.adminWithdrawalDetail.toast.rejectFailed')))
   } finally {
     rejecting.value = false
   }

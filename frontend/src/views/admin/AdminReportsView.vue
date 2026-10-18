@@ -43,8 +43,8 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminReports.ne-udalos-zagruzit')"
-      :description="t('adminScreens.adminReports.proverte-soedinenie-i-poprobuyte')"
+      :title="t('adminScreens.adminReports.loadFailed')"
+      :description="t('adminScreens.adminReports.checkConnectionAndRetry')"
     >
       <template #action
         ><VButton variant="primary" @click="loadInitial">{{
@@ -57,8 +57,8 @@
     <VEmptyState
       v-else-if="items.length === 0"
       icon="success"
-      :title="t('adminScreens.adminReports.obrashcheniy-net')"
-      :description="t('adminScreens.adminReports.po-vybrannym-filtram-nichego')"
+      :title="t('adminScreens.adminReports.empty.title')"
+      :description="t('adminScreens.adminReports.filterNoHits')"
     />
 
     <template v-else>
@@ -197,7 +197,7 @@ async function loadInitial(): Promise<void> {
   } catch (e) {
     if (myGeneration !== generation) return
     error.value = true
-    toast.error(extractApiError(e, t('adminScreens.adminReports.oshibka-zagruzki-obrashcheniy')))
+    toast.error(extractApiError(e, t('adminScreens.adminReports.ticketsLoadError')))
   } finally {
     if (myGeneration === generation) loading.value = false
   }
@@ -210,7 +210,7 @@ async function loadMore(): Promise<void> {
     items.value.push(...res.items)
     hasMore.value = items.value.length < res.total
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminReports.oshibka-zagruzki')))
+    toast.error(extractApiError(e, t('adminScreens.adminReports.loadError')))
   } finally {
     loadingMore.value = false
   }

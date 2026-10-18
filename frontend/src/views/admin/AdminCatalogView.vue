@@ -29,7 +29,7 @@
   <div class="admin-catalog">
     <header class="admin-catalog__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-catalog__title">{{ t('adminScreens.adminCatalog.katalog-praktik') }}</h1>
+      <h1 class="admin-catalog__title">{{ t('adminScreens.adminCatalog.catalogLink') }}</h1>
     </header>
 
     <VCard class="admin-catalog__note" padding="none">
@@ -40,7 +40,7 @@
     <VCard class="admin-catalog__add" padding="none">
       <VInput
         v-model="newDirectionLabel"
-        :placeholder="t('adminScreens.adminCatalog.novoe-napravlenie')"
+        :placeholder="t('adminScreens.adminCatalog.newDirectionPlaceholder')"
         class="admin-catalog__add-input"
       />
       <VButton
@@ -59,8 +59,8 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminCatalog.ne-udalos-zagruzit-katalog')"
-      :description="t('adminScreens.adminCatalog.proverte-soedinenie-i-poprobuyte')"
+      :title="t('adminScreens.adminCatalog.catalogLoadFailed')"
+      :description="t('adminScreens.adminCatalog.checkConnectionAndRetry')"
     >
       <template #action
         ><VButton variant="primary" @click="load">{{
@@ -142,12 +142,12 @@
             {{ st.label }} {{ st.is_active ? '✕' : '· Активировать' }}
           </VChip>
         </div>
-        <div v-else class="admin-catalog__none">{{ t('adminScreens.adminCatalog.bez-vidov') }}</div>
+        <div v-else class="admin-catalog__none">{{ t('adminScreens.adminCatalog.noStyles') }}</div>
 
         <div class="admin-catalog__add-style">
           <VInput
             v-model="newStyleLabel[dir.id]"
-            :placeholder="t('adminScreens.adminCatalog.novyy-vid')"
+            :placeholder="t('adminScreens.adminCatalog.newStylePlaceholder')"
             class="admin-catalog__add-style-input"
           />
           <VButton
@@ -233,7 +233,7 @@ async function addDirection(): Promise<void> {
   try {
     await createTaxonomyDirection({ value: genSlug(), label })
     newDirectionLabel.value = ''
-    toast.success(t('adminScreens.adminCatalog.napravlenie-dobavleno'))
+    toast.success(t('adminScreens.adminCatalog.directionAdded'))
     await load()
   } catch (e) {
     toast.error(extractApiError(e, t('adminScreens.adminCatalog.ne-udalos-dobavit-napravlenie')))
@@ -253,7 +253,7 @@ async function addStyle(dir: TaxonomyDirectionItem): Promise<void> {
   try {
     await createTaxonomyStyle(dir.id, { value: genSlug(), label })
     newStyleLabel[dir.id] = ''
-    toast.success(t('adminScreens.adminCatalog.vid-dobavlen'))
+    toast.success(t('adminScreens.adminCatalog.styleAdded'))
     await load()
   } catch (e) {
     toast.error(extractApiError(e, t('adminScreens.adminCatalog.ne-udalos-dobavit-vid')))

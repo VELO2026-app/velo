@@ -59,7 +59,7 @@
     </div>
 
     <VCard v-else>
-      <p class="admin-list__empty">{{ t('adminScreens.adminPractices.dannykh-poka-net') }}</p>
+      <p class="admin-list__empty">{{ t('adminScreens.adminPractices.noData') }}</p>
     </VCard>
   </div>
 </template>
@@ -131,7 +131,7 @@ async function load(): Promise<void> {
     practices.value = res.items
     total.value = res.total
   } catch (e) {
-    error.value = extractApiError(e, t('adminScreens.adminPractices.oshibka-zagruzki'))
+    error.value = extractApiError(e, t('adminScreens.adminPractices.loadError'))
   } finally {
     loading.value = false
   }
