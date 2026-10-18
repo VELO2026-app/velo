@@ -21,7 +21,7 @@
   <div class="admin-withdrawals">
     <header class="admin-withdrawals__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-withdrawals__title">{{ t('adminScreens.adminWithdrawals.m5') }}</h1>
+      <h1 class="admin-withdrawals__title">{{ t('adminScreens.adminWithdrawals.vyplaty') }}</h1>
       <span class="admin-withdrawals__count">{{ headerCount }}</span>
     </header>
 
@@ -34,12 +34,12 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminWithdrawals.m1')"
-      :description="t('adminScreens.adminWithdrawals.m2')"
+      :title="t('adminScreens.adminWithdrawals.ne-udalos-zagruzit')"
+      :description="t('adminScreens.adminWithdrawals.proverte-soedinenie-i-poprobuyte')"
     >
       <template #action
         ><VButton variant="primary" @click="loadInitial">{{
-          t('adminScreens.adminWithdrawals.m6')
+          t('adminScreens.adminWithdrawals.povtorit')
         }}</VButton></template
       >
     </VEmptyState>
@@ -48,8 +48,8 @@
     <VEmptyState
       v-else-if="items.length === 0"
       icon="success"
-      :title="t('adminScreens.adminWithdrawals.m3')"
-      :description="t('adminScreens.adminWithdrawals.m4')"
+      :title="t('adminScreens.adminWithdrawals.zaprosov-na-vyvod-net')"
+      :description="t('adminScreens.adminWithdrawals.novye-zaprosy-masterov-poyavyatsya')"
     />
 
     <template v-else>
@@ -127,9 +127,9 @@ function statusIcon(s: WithdrawalStatus): Component {
   return STATUS_ICON[s]
 }
 const STATUS_LABEL: Record<WithdrawalStatus, string> = {
-  pending: t('adminScreens.adminWithdrawals.m7'),
-  approved: t('adminScreens.adminWithdrawals.m8'),
-  rejected: t('adminScreens.adminWithdrawals.m9'),
+  pending: t('adminScreens.adminWithdrawals.na-rassmotrenii'),
+  approved: t('adminScreens.adminWithdrawals.odobren'),
+  rejected: t('adminScreens.adminWithdrawals.otklonen'),
 }
 function statusLabel(s: WithdrawalStatus): string {
   return STATUS_LABEL[s] ?? s
@@ -153,7 +153,7 @@ function str(v: unknown): string {
 function methodLabel(p: PayoutDetails): string {
   const d = p.details ?? {}
   if (p.method === 'bank_transfer') {
-    const bank = str(d.bank_name) || t('adminScreens.adminWithdrawals.m10')
+    const bank = str(d.bank_name) || t('adminScreens.adminWithdrawals.bank')
     const acc = (str(d.iban) || str(d.account)).replace(/\s+/g, '')
     const tail = acc ? acc.slice(-4) : ''
     return tail ? `${bank} •••• ${tail}` : bank
@@ -192,7 +192,7 @@ async function loadInitial(): Promise<void> {
   } catch (e) {
     if (myGeneration !== generation) return
     error.value = true
-    toast.error(extractApiError(e, t('adminScreens.adminWithdrawals.m11')))
+    toast.error(extractApiError(e, t('adminScreens.adminWithdrawals.oshibka-zagruzki-vyplat')))
   } finally {
     if (myGeneration === generation) loading.value = false
   }
@@ -205,7 +205,7 @@ async function loadMore(): Promise<void> {
     items.value.push(...res.items)
     hasMore.value = items.value.length < res.total
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminWithdrawals.m12')))
+    toast.error(extractApiError(e, t('adminScreens.adminWithdrawals.oshibka-zagruzki')))
   } finally {
     loadingMore.value = false
   }

@@ -25,11 +25,11 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        :title="t('masterScreens.masterStudents.m1')"
+        :title="t('masterScreens.masterStudents.ne-udalos-zagruzit-uchenikov')"
         :description="error"
       >
         <VButton size="sm" variant="outline" @click="load">{{
-          t('masterScreens.masterStudents.m10')
+          t('masterScreens.masterStudents.povtorit')
         }}</VButton>
       </VEmptyState>
 
@@ -41,8 +41,8 @@
           <div class="students__search-field">
             <VInput
               v-model="query"
-              :placeholder="t('masterScreens.masterStudents.m2')"
-              :aria-label="t('masterScreens.masterStudents.m3')"
+              :placeholder="t('masterScreens.masterStudents.iskat')"
+              :aria-label="t('masterScreens.masterStudents.iskat-uchenika')"
               @focus="onFieldFocus"
             />
           </div>
@@ -69,7 +69,7 @@
           </div>
           <button
             class="students__msg"
-            :aria-label="t('masterScreens.masterStudents.m4')"
+            :aria-label="t('masterScreens.masterStudents.napisat-soobshchenie')"
             @click.stop="openMessage(student.id, student.name)"
           >
             <IconMessages :size="22" />
@@ -80,7 +80,7 @@
         <VShowMore
           v-if="!expanded && hiddenCount > 0"
           :count="hiddenCount"
-          :noun="t('masterScreens.masterStudents.m5')"
+          :noun="t('masterScreens.masterStudents.uchenikov')"
           @click="expanded = true"
         />
 
@@ -88,14 +88,14 @@
         <VEmptyState
           v-if="students.length === 0"
           icon="group"
-          :title="t('masterScreens.masterStudents.m6')"
-          :description="t('masterScreens.masterStudents.m7')"
+          :title="t('masterScreens.masterStudents.uchenikov-poka-net')"
+          :description="t('masterScreens.masterStudents.oni-poyavyatsya-posle-pervykh')"
         />
         <VEmptyState
           v-else-if="filtered.length === 0"
           icon="group"
-          :title="t('masterScreens.masterStudents.m8')"
-          :description="t('masterScreens.masterStudents.m9')"
+          :title="t('masterScreens.masterStudents.nikogo-ne-naydeno')"
+          :description="t('masterScreens.masterStudents.poprobuyte-izmenit-zapros')"
         />
       </template>
     </div>
@@ -141,7 +141,7 @@ async function load(): Promise<void> {
     const res = await getStudents()
     students.value = res.items
   } catch {
-    error.value = t('masterScreens.masterStudents.m11')
+    error.value = t('masterScreens.masterStudents.poprobuyte-eshche-raz')
   } finally {
     loading.value = false
   }

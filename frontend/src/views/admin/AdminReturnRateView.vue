@@ -21,11 +21,11 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminReturnRate.m1')"
+      :title="t('adminScreens.adminReturnRate.ne-udalos-zagruzit-metriku')"
       :description="error"
     >
       <VButton size="sm" variant="outline" @click="load">{{
-        t('adminScreens.adminReturnRate.m2')
+        t('adminScreens.adminReturnRate.povtorit')
       }}</VButton>
     </VEmptyState>
 
@@ -39,12 +39,16 @@
         <VStatCard :value="returning" label="Повторно" />
       </div>
 
-      <h3 class="admin-detail__section">{{ t('adminScreens.adminReturnRate.m3') }}</h3>
+      <h3 class="admin-detail__section">
+        {{ t('adminScreens.adminReturnRate.top-loyalnykh-yuzerov') }}
+      </h3>
       <template v-if="loyalUsers.length">
         <VListRow v-for="u in loyalUsers" :key="u.id" :title="u.title" :subtitle="u.subtitle" />
       </template>
       <VCard v-else
-        ><p class="admin-detail__empty">{{ t('adminScreens.adminReturnRate.m4') }}</p></VCard
+        ><p class="admin-detail__empty">
+          {{ t('adminScreens.adminReturnRate.dannykh-poka-net') }}
+        </p></VCard
       >
     </template>
   </div>
@@ -103,7 +107,7 @@ async function load(): Promise<void> {
   try {
     data.value = await getReturnMetric(period, offset)
   } catch (e) {
-    error.value = extractApiError(e, t('adminScreens.adminReturnRate.m5'))
+    error.value = extractApiError(e, t('adminScreens.adminReturnRate.oshibka-zagruzki'))
   } finally {
     loading.value = false
   }

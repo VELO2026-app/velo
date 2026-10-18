@@ -81,7 +81,9 @@
         >
           {{ masterPracticeBadge(practice.status)!.label }}
         </VBadge>
-        <span class="edit-practice__readonly-text">{{ t('masterScreens.editPractice.m8') }}</span>
+        <span class="edit-practice__readonly-text">{{
+          t('masterScreens.editPractice.editLocked')
+        }}</span>
       </div>
 
       <div class="edit-practice__content">
@@ -101,7 +103,7 @@
           <!-- Направление — options catalog-first (T2 stage 2), см. CreatePracticeView. -->
           <VSelect
             v-model="form.direction"
-            :label="t('masterScreens.editPractice.m1')"
+            :label="t('masterScreens.editPractice.fields.direction')"
             :options="directionOptions"
             :error="errors.direction"
             @update:modelValue="onDirectionChange"
@@ -117,7 +119,7 @@
                норм. операция; нативный type=date заменён на брендовый пикер). -->
           <div class="edit-practice__field">
             <label class="edit-practice__field-label">{{
-              t('masterScreens.editPractice.m9')
+              t('masterScreens.editPractice.fields.date')
             }}</label>
             <button
               type="button"
@@ -132,7 +134,7 @@
           <!-- Время — DS-пикер (24ч, шаг 5 мин). -->
           <div class="edit-practice__field">
             <label class="edit-practice__field-label">{{
-              t('masterScreens.editPractice.m10')
+              t('masterScreens.editPractice.fields.time')
             }}</label>
             <button
               type="button"
@@ -146,13 +148,13 @@
 
           <VSelect
             v-model="form.duration_minutes"
-            :label="t('masterScreens.editPractice.m2')"
+            :label="t('masterScreens.editPractice.fields.duration')"
             :options="DURATION_OPTIONS"
           />
 
           <VInput
             v-model="form.max_participants_raw"
-            :label="t('masterScreens.editPractice.m3')"
+            :label="t('masterScreens.editPractice.fields.maxParticipants')"
             type="number"
             :error="errors.max_participants"
           />
@@ -166,7 +168,7 @@
                ================================================================ -->
           <div class="edit-practice__field edit-practice__audience">
             <label class="edit-practice__field-label">{{
-              t('masterScreens.editPractice.m11')
+              t('masterScreens.editPractice.fields.audience')
             }}</label>
             <!-- BE-74: a practice of a school keeps its school for good
                  (practice_school_immutable), and the backend allows such a
@@ -207,16 +209,16 @@
 
           <VTextarea
             v-model="form.contraindications"
-            :label="t('masterScreens.editPractice.m4')"
-            :placeholder="t('masterScreens.editPractice.m5')"
+            :label="t('masterScreens.editPractice.fields.contraindications')"
+            :placeholder="t('masterScreens.editPractice.placeholder.healthConditions')"
             :rows="2"
             autogrow
           />
 
           <VTextarea
             v-model="form.what_to_prepare"
-            :label="t('masterScreens.editPractice.m6')"
-            :placeholder="t('masterScreens.editPractice.m7')"
+            :label="t('masterScreens.editPractice.fields.whatToBring')"
+            :placeholder="t('masterScreens.editPractice.placeholder.whatToBring')"
             :rows="3"
             autogrow
           />
@@ -427,7 +429,7 @@ const anyLoading = computed(
 const confirmDialog = reactive({
   visible: false,
   message: '',
-  confirmLabel: t('masterScreens.editPractice.m12'),
+  confirmLabel: t('masterScreens.editPractice.confirm.submit'),
   danger: false,
   loading: false,
   onConfirm: (): void => {
@@ -439,7 +441,7 @@ const confirmDialog = reactive({
 // (not UTC) so it doesn't drift a day near midnight for east/west-of-UTC users.
 const todayDate = computed(() => todayLocalISO())
 
-// Friendly date for the picker trigger, e.g. t('masterScreens.editPractice.m13') (mirrors Create).
+// Friendly date for the picker trigger, e.g. «25 янв. 2026» (mirrors Create).
 const dateDisplay = computed((): string =>
   form.date ? `${formatShortDate(`${form.date}T12:00:00`)} ${form.date.slice(0, 4)}` : '',
 )
@@ -653,7 +655,7 @@ onMounted(async () => {
     practice.value = p
     populateForm(p)
   } catch (e) {
-    toast.error(extractApiError(e, t('masterScreens.editPractice.m14')))
+    toast.error(extractApiError(e, t('masterScreens.editPractice.error.load')))
   } finally {
     loading.value = false
   }
@@ -668,22 +670,22 @@ function validate(): boolean {
   errors.audience_group_ids = ''
 
   if (!form.title.trim()) {
-    errors.title = t('masterScreens.editPractice.m15')
+    errors.title = t('masterScreens.editPractice.validation.enterTitle')
     ok = false
   }
   if (!form.direction) {
-    errors.direction = t('masterScreens.editPractice.m16')
+    errors.direction = t('masterScreens.editPractice.validation.chooseDirection')
     ok = false
   }
   if (form.max_participants_raw) {
     const n = parseInt(form.max_participants_raw, 10)
     if (isNaN(n) || n < 1) {
-      errors.max_participants = t('masterScreens.editPractice.m17')
+      errors.max_participants = t('masterScreens.editPractice.validation.positiveNumber')
       ok = false
     }
   }
   if (form.audience_kind === 'groups' && form.audience_group_ids.length === 0) {
-    errors.audience_group_ids = t('masterScreens.editPractice.m18')
+    errors.audience_group_ids = t('masterScreens.editPractice.validation.chooseGroup')
     ok = false
   }
   return ok
@@ -730,7 +732,7 @@ async function save(): Promise<void> {
       })
     } catch (e) {
       saving.value = false
-      toast.error(extractApiError(e, t('masterScreens.editPractice.m19')))
+      toast.error(extractApiError(e, t('masterScreens.editPractice.error.checkAudience')))
       return
     }
     saving.value = false
@@ -744,7 +746,7 @@ async function save(): Promise<void> {
       // canonical Russian pluralizer, already used app-wide for counts)
       // covers the NOUN's 1 / 2-4 / 5+ forms -- but «записавшийся» is a
       // substantivized participle, where the 2-4 and 5+ forms happen to be
-      // IDENTICAL (t('masterScreens.editPractice.m20') either way), so plural()'s 3-way split
+      // IDENTICAL (t('masterScreens.editPractice.plural.booked.many') either way), so plural()'s 3-way split
       // collapses to a binary one here. That same one-vs-rest split also
       // governs the sentence's verb/pronoun agreement (попадёт/попадут,
       // он/они, его/их, сможет/смогут), which plural() only ever returns a
@@ -754,17 +756,17 @@ async function save(): Promise<void> {
       const n = preview.stranded_count
       const noun = plural(
         n,
-        t('masterScreens.editPractice.m21'),
-        t('masterScreens.editPractice.m22'),
-        t('masterScreens.editPractice.m23'),
+        t('masterScreens.editPractice.plural.booked.one'),
+        t('masterScreens.editPractice.plural.booked.many'),
+        t('masterScreens.editPractice.plural.booked.many'),
       )
       confirmDialog.message =
         n === 1
           ? `${n} ${noun} не попадёт на эту практику — он не входит в выбранную аудиторию. ` +
-            t('masterScreens.editPractice.m24')
+            t('masterScreens.editPractice.confirm.single')
           : `${n} ${noun} не попадут на эту практику — они не входят в выбранную аудиторию. ` +
-            t('masterScreens.editPractice.m25')
-      confirmDialog.confirmLabel = t('masterScreens.editPractice.m26')
+            t('masterScreens.editPractice.confirm.plural')
+      confirmDialog.confirmLabel = t('masterScreens.editPractice.saveAnyway')
       confirmDialog.danger = false
       confirmDialog.onConfirm = () => {
         void commitSave()
@@ -791,7 +793,7 @@ async function commitSave(): Promise<void> {
         zone: form.timezone,
       })
       if (!dt.isValid) {
-        toast.error(t('masterScreens.editPractice.m27'))
+        toast.error(t('masterScreens.editPractice.validation.invalidDateTime'))
         return
       }
       scheduledAt = dt.toUTC().toISO() ?? undefined
@@ -820,7 +822,7 @@ async function commitSave(): Promise<void> {
     })
     practice.value = updated
     confirmDialog.visible = false
-    toast.success(t('masterScreens.editPractice.m28'))
+    toast.success(t('masterScreens.editPractice.toast.saved'))
     await masterStore.refreshMyPractices()
   } catch (e) {
     // A4 V3 (PROMPT №571): _assert_master_confirmed_taxonomy's rejection is a
@@ -833,7 +835,7 @@ async function commitSave(): Promise<void> {
     } else if (e instanceof ApiResponseError && e.code === 'style_not_confirmed') {
       toast.error(errorMessage('style_not_confirmed'))
     } else {
-      toast.error(extractApiError(e, t('masterScreens.editPractice.m29')))
+      toast.error(extractApiError(e, t('masterScreens.editPractice.toast.saveFailed')))
     }
   } finally {
     saving.value = false
@@ -848,11 +850,11 @@ async function publish(): Promise<void> {
   try {
     const updated = await updatePractice(practiceId, { status: 'scheduled' })
     practice.value = updated
-    toast.success(t('masterScreens.editPractice.m30'))
+    toast.success(t('masterScreens.editPractice.toast.published'))
     await masterStore.refreshMyPractices()
     void router.push({ name: 'master-practices' })
   } catch (e) {
-    toast.error(extractApiError(e, t('masterScreens.editPractice.m31')))
+    toast.error(extractApiError(e, t('masterScreens.editPractice.toast.publishFailed')))
   } finally {
     transitioning.value = false
   }
@@ -872,11 +874,11 @@ async function cancel(scope: 'this' | 'this_and_future'): Promise<void> {
     const updated = await cancelPractice(practiceId, scope)
     practice.value = updated
     cancelModalOpen.value = false
-    toast.success(t('masterScreens.editPractice.m32'))
+    toast.success(t('masterScreens.editPractice.toast.cancelledRefunded'))
     await masterStore.refreshMyPractices()
     void router.push({ name: 'master-practices' })
   } catch (e) {
-    toast.error(extractApiError(e, t('masterScreens.editPractice.m33')))
+    toast.error(extractApiError(e, t('masterScreens.editPractice.toast.cancelFailed')))
   } finally {
     cancelling.value = false
   }
@@ -884,8 +886,8 @@ async function cancel(scope: 'this' | 'this_and_future'): Promise<void> {
 
 // -- Confirm delete --
 function confirmDelete(): void {
-  confirmDialog.message = t('masterScreens.editPractice.m34')
-  confirmDialog.confirmLabel = t('masterScreens.editPractice.m35')
+  confirmDialog.message = t('masterScreens.editPractice.draft.deleteConfirm')
+  confirmDialog.confirmLabel = t('masterScreens.editPractice.draft.deleteCta')
   confirmDialog.danger = true
   confirmDialog.visible = true
   confirmDialog.onConfirm = () => {
@@ -900,11 +902,11 @@ async function remove(): Promise<void> {
   try {
     await deletePractice(practiceId)
     confirmDialog.visible = false
-    toast.success(t('masterScreens.editPractice.m36'))
+    toast.success(t('masterScreens.editPractice.toast.draftDeleted'))
     await masterStore.refreshMyPractices()
     void router.push({ name: 'master-practices' })
   } catch (e) {
-    toast.error(extractApiError(e, t('masterScreens.editPractice.m37')))
+    toast.error(extractApiError(e, t('masterScreens.editPractice.toast.deleteFailed')))
   } finally {
     confirmDialog.loading = false
   }

@@ -40,11 +40,11 @@
       <VEmptyState
         v-else-if="threadError"
         icon="warning"
-        :title="t('adminScreens.adminSupportDetail.m1')"
+        :title="t('adminScreens.adminSupportDetail.oshibka-zagruzki')"
         :description="threadError"
       >
         <VButton size="sm" variant="outline" @click="loadThread">{{
-          t('adminScreens.adminSupportDetail.m6')
+          t('adminScreens.adminSupportDetail.povtorit')
         }}</VButton>
       </VEmptyState>
 
@@ -76,11 +76,11 @@
         <VEmptyState
           v-else-if="messagesError"
           icon="warning"
-          :title="t('adminScreens.adminSupportDetail.m2')"
+          :title="t('adminScreens.adminSupportDetail.ne-udalos-zagruzit-soobshcheniya')"
           :description="messagesError"
         >
           <VButton size="sm" variant="outline" @click="loadMessages">{{
-            t('adminScreens.adminSupportDetail.m7')
+            t('adminScreens.adminSupportDetail.povtorit')
           }}</VButton>
         </VEmptyState>
         <template v-else>
@@ -112,7 +112,7 @@
             <div class="support-detail__input">
               <VTextarea
                 v-model="draft"
-                :placeholder="t('adminScreens.adminSupportDetail.m3')"
+                :placeholder="t('adminScreens.adminSupportDetail.otvet')"
                 :rows="1"
                 autogrow
                 maxlength="4000"
@@ -135,11 +135,11 @@
       <div v-else class="support-detail__not-found">
         <VEmptyState
           icon="notfound"
-          :title="t('adminScreens.adminSupportDetail.m4')"
-          :description="t('adminScreens.adminSupportDetail.m5')"
+          :title="t('adminScreens.adminSupportDetail.obrashchenie-ne-naydeno')"
+          :description="t('adminScreens.adminSupportDetail.vernites-k-spisku-obrashcheniy')"
         />
         <VButton variant="outline" block @click="router.back()">{{
-          t('adminScreens.adminSupportDetail.m8')
+          t('adminScreens.adminSupportDetail.nazad')
         }}</VButton>
       </div>
     </div>
@@ -185,7 +185,7 @@ const sending = ref(false)
 const claiming = ref(false)
 
 const headerTitle = computed(
-  () => thread.value?.opener?.name ?? t('adminScreens.adminSupportDetail.m9'),
+  () => thread.value?.opener?.name ?? t('adminScreens.adminSupportDetail.obrashchenie'),
 )
 const canReply = computed(() => !!thread.value && thread.value.assignee === myId.value)
 
@@ -199,19 +199,19 @@ const triageBadge = computed<{ variant: 'warning' | 'success' | 'info'; label: s
     return { variant: 'info', label: t('admin.supportTicket.closed') }
   }
   if (!threadItem.assignee) {
-    return { variant: 'warning', label: t('adminScreens.adminSupportDetail.m10') }
+    return { variant: 'warning', label: t('adminScreens.adminSupportDetail.ne-vzyato') }
   }
   if (threadItem.assignee === myId.value) {
-    return { variant: 'success', label: t('adminScreens.adminSupportDetail.m11') }
+    return { variant: 'success', label: t('adminScreens.adminSupportDetail.u-menya') }
   }
-  return { variant: 'info', label: t('adminScreens.adminSupportDetail.m12') }
+  return { variant: 'info', label: t('adminScreens.adminSupportDetail.zanyato') }
 })
 
 const claimPanelText = computed(() => {
   if (!thread.value?.assignee) {
-    return t('adminScreens.adminSupportDetail.m13')
+    return t('adminScreens.adminSupportDetail.obrashchenie-ne-zakrepleno-vozmite')
   }
-  return t('adminScreens.adminSupportDetail.m14')
+  return t('adminScreens.adminSupportDetail.obrashchenie-uzhe-zakrepleno-za')
 })
 
 function formatTime(iso: string): string {
@@ -237,7 +237,10 @@ async function loadThread(): Promise<void> {
     const page = await listAdminSupportThreads(100)
     thread.value = page.threads.find((t) => t.id === threadId) ?? null
   } catch (e) {
-    threadError.value = extractApiError(e, t('adminScreens.adminSupportDetail.m15'))
+    threadError.value = extractApiError(
+      e,
+      t('adminScreens.adminSupportDetail.oshibka-zagruzki-obrashcheniya'),
+    )
   } finally {
     loadingThread.value = false
   }
@@ -250,7 +253,10 @@ async function loadMessages(): Promise<void> {
     const page = await getAdminSupportMessages(threadId)
     messages.value = [...page.messages].reverse()
   } catch (e) {
-    messagesError.value = extractApiError(e, t('adminScreens.adminSupportDetail.m16'))
+    messagesError.value = extractApiError(
+      e,
+      t('adminScreens.adminSupportDetail.poprobuyte-eshche-raz'),
+    )
   } finally {
     loadingMessages.value = false
   }
@@ -261,10 +267,13 @@ async function onClaim(): Promise<void> {
   try {
     const result = await claimSupportThread(threadId)
     if (thread.value) thread.value = { ...thread.value, assignee: result.thread.assignee }
-    if (result.claimed) toast.success(t('adminScreens.adminSupportDetail.m17'))
-    else toast.error(t('adminScreens.adminSupportDetail.m18'))
+    if (result.claimed)
+      toast.success(t('adminScreens.adminSupportDetail.obrashchenie-zakrepleno-za-vami'))
+    else toast.error(t('adminScreens.adminSupportDetail.uzhe-vzyato-drugim-administratorom'))
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminSupportDetail.m19')))
+    toast.error(
+      extractApiError(e, t('adminScreens.adminSupportDetail.ne-udalos-zakrepit-obrashchenie')),
+    )
   } finally {
     claiming.value = false
   }
@@ -279,7 +288,7 @@ async function onSend(): Promise<void> {
     messages.value = [...messages.value, sent]
     draft.value = ''
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminSupportDetail.m20')))
+    toast.error(extractApiError(e, t('adminScreens.adminSupportDetail.ne-udalos-otpravit-otvet')))
   } finally {
     sending.value = false
   }

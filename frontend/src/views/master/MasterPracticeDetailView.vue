@@ -49,7 +49,7 @@
                  отменяет, с подтверждением). -->
             <VMenuItem
               :icon="IconPen"
-              :ariaLabel="t('masterScreens.masterPracticeDetail.m1')"
+              :ariaLabel="t('masterScreens.masterPracticeDetail.redaktirovat')"
               @click="
                 () => {
                   goEdit()
@@ -82,7 +82,7 @@
     <div v-else-if="error" class="practice-detail__content">
       <VEmptyState icon="warning" title="Не удалось загрузить практику" :description="error">
         <VButton size="sm" variant="outline" @click="load">{{
-          t('masterScreens.masterPracticeDetail.m6')
+          t('masterScreens.masterPracticeDetail.povtorit')
         }}</VButton>
       </VEmptyState>
     </div>
@@ -131,7 +131,7 @@
              practice, never the meeting. -->
         <div v-if="publicLink" class="pd-shared-link">
           <span class="pd-shared-link__label">{{
-            t('masterScreens.masterPracticeDetail.m7')
+            t('masterScreens.masterPracticeDetail.ssylka-na-praktiku-dlya')
           }}</span>
           <VButton size="sm" variant="outline" :loading="copyingShared" @click="onCopySharedLink">
             Копировать
@@ -146,7 +146,9 @@
 
         <!-- Записались (roster; первые 5 + раскрытие — operator 2026-06-18) -->
         <section v-if="rosterItems.length > 0" class="practice-detail__section">
-          <h2 class="velo-section-title">{{ t('masterScreens.masterPracticeDetail.m8') }}</h2>
+          <h2 class="velo-section-title">
+            {{ t('masterScreens.masterPracticeDetail.zapisalis') }}
+          </h2>
           <div v-for="item in visibleRoster" :key="item.booking_id" class="pd-prow">
             <span class="pd-prow__ava">
               <img
@@ -163,7 +165,7 @@
           <VShowMore
             v-if="!rosterExpanded && hiddenRosterCount > 0"
             :count="hiddenRosterCount"
-            :noun="t('masterScreens.masterPracticeDetail.m2')"
+            :noun="t('masterScreens.masterPracticeDetail.uchastnikov')"
             @click="rosterExpanded = true"
           />
         </section>
@@ -181,7 +183,9 @@
               :aria-label="descOpen ? 'Свернуть' : 'Развернуть'"
               @click="descOpen = !descOpen"
             >
-              <span class="pd-acc__title">{{ t('masterScreens.masterPracticeDetail.m9') }}</span>
+              <span class="pd-acc__title">{{
+                t('masterScreens.masterPracticeDetail.opisanie')
+              }}</span>
               <svg
                 class="pd-acc__chev"
                 viewBox="0 0 24 24"
@@ -206,7 +210,9 @@
               :aria-label="contraOpen ? 'Свернуть' : 'Развернуть'"
               @click="contraOpen = !contraOpen"
             >
-              <span class="pd-acc__title">{{ t('masterScreens.masterPracticeDetail.m10') }}</span>
+              <span class="pd-acc__title">{{
+                t('masterScreens.masterPracticeDetail.protivopokazaniya')
+              }}</span>
               <svg
                 class="pd-acc__chev"
                 viewBox="0 0 24 24"
@@ -227,7 +233,9 @@
               :aria-label="prepOpen ? 'Свернуть' : 'Развернуть'"
               @click="prepOpen = !prepOpen"
             >
-              <span class="pd-acc__title">{{ t('masterScreens.masterPracticeDetail.m11') }}</span>
+              <span class="pd-acc__title">{{
+                t('masterScreens.masterPracticeDetail.chto-podgotovit')
+              }}</span>
               <svg
                 class="pd-acc__chev"
                 viewBox="0 0 24 24"
@@ -270,7 +278,9 @@
 
         <!-- Отзывы участников (E1 named reviews — getPracticeReviews) -->
         <section class="practice-detail__section">
-          <h2 class="velo-section-title">{{ t('masterScreens.masterPracticeDetail.m12') }}</h2>
+          <h2 class="velo-section-title">
+            {{ t('masterScreens.masterPracticeDetail.otzyvy-uchastnikov') }}
+          </h2>
           <div v-if="reviewsLoading && reviews.length === 0" class="practice-detail__rloader">
             <VLoader />
           </div>
@@ -287,12 +297,12 @@
             <!-- Первые 10 + раскрытие «посмотреть еще» (operator PROMPT №160). -->
             <VShowMore
               v-if="!reviewsExpanded && hiddenReviewsCount > 0"
-              :label="t('masterScreens.masterPracticeDetail.m3')"
+              :label="t('masterScreens.masterPracticeDetail.posmotret-eshche')"
               @click="expandReviews"
             />
             <div v-else-if="reviewsExpanded && hasMoreReviews" class="practice-detail__more">
               <VButton variant="ghost" @click="loadMoreReviews">{{
-                t('masterScreens.masterPracticeDetail.m13')
+                t('masterScreens.masterPracticeDetail.pokazat-eshche')
               }}</VButton>
             </div>
           </template>
@@ -303,7 +313,7 @@
         <div class="practice-detail__actions">
           <VButton variant="primary" block @click="goCheckins">Check-ins</VButton>
           <VButton variant="outline" block @click="goRoster">{{
-            t('masterScreens.masterPracticeDetail.m14')
+            t('masterScreens.masterPracticeDetail.poseshchaemost')
           }}</VButton>
         </div>
       </div>
@@ -321,8 +331,8 @@
     <!-- Delete a draft practice. -->
     <VConfirmDialog
       :open="showDelete"
-      :message="t('masterScreens.masterPracticeDetail.m4')"
-      :confirm-label="t('masterScreens.masterPracticeDetail.m5')"
+      :message="t('masterScreens.masterPracticeDetail.udalit-chernovik-praktiki-eto')"
+      :confirm-label="t('masterScreens.masterPracticeDetail.udalit')"
       :loading="deleting"
       @confirm="doDelete"
       @cancel="showDelete = false"
@@ -397,13 +407,13 @@ const isUpcoming = computed((): boolean => practice.value != null && !isPast.val
 const isDraft = computed((): boolean => practice.value?.status === 'draft')
 const headerTitle = computed((): string =>
   isPast.value
-    ? t('masterScreens.masterPracticeDetail.m15')
-    : t('masterScreens.masterPracticeDetail.m16'),
+    ? t('masterScreens.masterPracticeDetail.proshedshaya-praktika')
+    : t('masterScreens.masterPracticeDetail.praktika'),
 )
 const destructiveLabel = computed((): string =>
   isDraft.value
-    ? t('masterScreens.masterPracticeDetail.m17')
-    : t('masterScreens.masterPracticeDetail.m18'),
+    ? t('masterScreens.masterPracticeDetail.udalit')
+    : t('masterScreens.masterPracticeDetail.otmenit-praktiku'),
 )
 
 // Reactive insights cache (shared with Analytics / Practices — often warm).
@@ -429,7 +439,7 @@ const recurrenceLabel = computed((): string | null => {
   if (practice.value?.practice_type !== 'series') return null
   return (
     recurrenceDaysLabel(practice.value.recurrence_days) ??
-    t('masterScreens.masterPracticeDetail.m19')
+    t('masterScreens.masterPracticeDetail.regulyarnaya')
   )
 })
 
@@ -447,9 +457,11 @@ async function onCopySharedLink(): Promise<void> {
     // Clipboard needs no backend -- same pattern as MasterGroupDetailView's
     // group-invite copy.
     await navigator.clipboard.writeText(publicLink.value)
-    toast.success(t('masterScreens.masterPracticeDetail.m20'))
+    toast.success(t('masterScreens.masterPracticeDetail.ssylka-skopirovana'))
   } catch (e) {
-    toast.error(extractApiError(e, t('masterScreens.masterPracticeDetail.m21')))
+    toast.error(
+      extractApiError(e, t('masterScreens.masterPracticeDetail.ne-udalos-skopirovat-ssylku')),
+    )
   } finally {
     copyingShared.value = false
   }
@@ -597,11 +609,13 @@ async function doCancel(scope: 'this' | 'this_and_future'): Promise<void> {
   cancelling.value = true
   try {
     await cancelPractice(practiceId, scope)
-    toast.success(t('masterScreens.masterPracticeDetail.m22'))
+    toast.success(t('masterScreens.masterPracticeDetail.praktika-otmenena'))
     await masterStore.refreshMyPractices()
     router.back()
   } catch (e) {
-    toast.error(extractApiError(e, t('masterScreens.masterPracticeDetail.m23')))
+    toast.error(
+      extractApiError(e, t('masterScreens.masterPracticeDetail.ne-udalos-otmenit-praktiku')),
+    )
   } finally {
     cancelling.value = false
     showCancel.value = false
@@ -613,11 +627,13 @@ async function doDelete(): Promise<void> {
   deleting.value = true
   try {
     await deletePractice(practiceId)
-    toast.success(t('masterScreens.masterPracticeDetail.m24'))
+    toast.success(t('masterScreens.masterPracticeDetail.chernovik-udalen'))
     await masterStore.refreshMyPractices()
     router.back()
   } catch (e) {
-    toast.error(extractApiError(e, t('masterScreens.masterPracticeDetail.m25')))
+    toast.error(
+      extractApiError(e, t('masterScreens.masterPracticeDetail.ne-udalos-udalit-praktiku')),
+    )
   } finally {
     deleting.value = false
     showDelete.value = false
@@ -643,7 +659,7 @@ async function load(): Promise<void> {
     // Named reviews only exist for finished practices; non-fatal alongside the load.
     if (isPast.value) void loadReviews()
   } catch (e) {
-    error.value = extractApiError(e, t('masterScreens.masterPracticeDetail.m26'))
+    error.value = extractApiError(e, t('masterScreens.masterPracticeDetail.oshibka-zagruzki'))
   } finally {
     loading.value = false
   }

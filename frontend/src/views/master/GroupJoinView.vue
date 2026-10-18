@@ -27,18 +27,22 @@ design, mirroring MasterInviteClaimView's own state machine exactly:
       <!-- Joining -->
       <template v-if="joining">
         <VLoader size="lg" />
-        <p class="group-join__subtitle">{{ t('masterScreens.groupJoin.m1') }}</p>
+        <p class="group-join__subtitle">
+          {{ t('masterScreens.groupJoin.proveryaem-priglashenie') }}
+        </p>
       </template>
 
       <!-- Transient (network/timeout) -- offer a retry, not a dead-link verdict. -->
       <template v-else-if="transientError">
-        <h2 class="group-join__title">{{ t('masterScreens.groupJoin.m2') }}</h2>
+        <h2 class="group-join__title">
+          {{ t('masterScreens.groupJoin.ne-udalos-proverit-priglashenie') }}
+        </h2>
         <p class="group-join__subtitle">
           Проблема с соединением. Проверьте интернет и попробуйте ещё раз.
         </p>
         <div class="group-join__actions">
           <VButton variant="primary" block :loading="joining" @click="join">{{
-            t('masterScreens.groupJoin.m3')
+            t('masterScreens.groupJoin.povtorit')
           }}</VButton>
         </div>
       </template>
@@ -86,11 +90,11 @@ async function join(): Promise<void> {
     void router.replace({ name: 'root' })
   } catch (e) {
     if (e instanceof ApiResponseError && e.status === 403) {
-      errorTitle.value = t('masterScreens.groupJoin.m4')
-      errorDescription.value = t('masterScreens.groupJoin.m5')
+      errorTitle.value = t('masterScreens.groupJoin.master-ogranichil-vam-dostup')
+      errorDescription.value = t('masterScreens.groupJoin.vy-ne-smozhete-prisoedinitsya')
     } else if (e instanceof ApiResponseError && e.status === 404) {
-      errorTitle.value = t('masterScreens.groupJoin.m6')
-      errorDescription.value = t('masterScreens.groupJoin.m7')
+      errorTitle.value = t('masterScreens.groupJoin.ssylka-nedeystvitelna')
+      errorDescription.value = t('masterScreens.groupJoin.vozmozhno-ssylka-povrezhdena-ili')
     } else {
       transientError.value = true
     }

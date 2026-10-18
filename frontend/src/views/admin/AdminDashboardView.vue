@@ -30,7 +30,7 @@
       <h1 class="admin-dashboard__title">Admin</h1>
       <button
         class="admin-dashboard__eye"
-        :aria-label="t('adminScreens.adminDashboard.m1')"
+        :aria-label="t('adminScreens.adminDashboard.profil')"
         @click="router.push({ name: 'admin-profile' })"
       >
         <IconProfile :size="22" />
@@ -66,13 +66,13 @@
       <!-- Статистика: title + period toggle -->
       <div class="admin-dashboard__section">
         <span class="admin-dashboard__section-title">{{
-          t('adminScreens.adminDashboard.m20')
+          t('adminScreens.adminDashboard.statistika')
         }}</span>
         <VSegment
           compact
           :model-value="period"
           :options="periodOptions"
-          :aria-label="t('adminScreens.adminDashboard.m2')"
+          :aria-label="t('adminScreens.adminDashboard.period-statistiki')"
           @update:model-value="selectPeriod"
         />
       </div>
@@ -80,7 +80,7 @@
       <div class="admin-dashboard__stats">
         <VStatCard
           :value="practicesValue"
-          :label="t('adminScreens.adminDashboard.m3')"
+          :label="t('adminScreens.adminDashboard.praktik')"
           :delta="practicesDelta"
           :delta-tone="practicesDeltaTone"
           clickable
@@ -88,7 +88,7 @@
         />
         <VStatCard
           :value="mastersValue"
-          :label="t('adminScreens.adminDashboard.m4')"
+          :label="t('adminScreens.adminDashboard.masterov')"
           :delta="mastersDelta"
           :delta-tone="mastersDeltaTone"
           clickable
@@ -96,7 +96,7 @@
         />
         <VStatCard
           :value="participantsValue"
-          :label="t('adminScreens.adminDashboard.m5')"
+          :label="t('adminScreens.adminDashboard.uchastnikov')"
           :delta="participantsDelta"
           :delta-tone="participantsDeltaTone"
           clickable
@@ -108,7 +108,7 @@
       <div class="admin-dashboard__week">
         <button
           class="admin-dashboard__week-nav admin-dashboard__week-nav--prev"
-          :aria-label="t('adminScreens.adminDashboard.m6')"
+          :aria-label="t('adminScreens.adminDashboard.predydushchiy-period')"
           @click="stepPrev"
         >
           <IconArrowRight :size="20" />
@@ -116,7 +116,7 @@
         <span class="admin-dashboard__week-range">{{ periodRange }}</span>
         <button
           class="admin-dashboard__week-nav"
-          :aria-label="t('adminScreens.adminDashboard.m7')"
+          :aria-label="t('adminScreens.adminDashboard.sleduyushchiy-period')"
           :disabled="!canStepNext"
           @click="stepNext"
         >
@@ -127,7 +127,7 @@
       <!-- Выручка -->
       <div class="admin-dashboard__section">
         <span class="admin-dashboard__section-title">{{
-          t('adminScreens.adminDashboard.m21')
+          t('adminScreens.adminDashboard.vyruchka')
         }}</span>
       </div>
       <VCard class="admin-dashboard__revenue">
@@ -136,16 +136,16 @@
       </VCard>
       <VMoreLink label="Баланс по мастерам" @click="router.push({ name: 'admin-revenue' })" />
       <VListRow
-        :title="t('adminScreens.adminDashboard.m8')"
-        :subtitle="t('adminScreens.adminDashboard.m9')"
+        :title="t('adminScreens.adminDashboard.vyplaty')"
+        :subtitle="t('adminScreens.adminDashboard.zaprosy-masterov-na-vyvod')"
         clickable
         @click="router.push({ name: 'admin-withdrawals' })"
       >
         <template #trailing><IconArrowRight :size="20" /></template>
       </VListRow>
       <VListRow
-        :title="t('adminScreens.adminDashboard.m10')"
-        :subtitle="t('adminScreens.adminDashboard.m11')"
+        :title="t('adminScreens.adminDashboard.promokody')"
+        :subtitle="t('adminScreens.adminDashboard.vse-promokody-platformy-i')"
         clickable
         @click="router.push({ name: 'admin-promos' })"
       >
@@ -180,20 +180,20 @@
       <!-- Система: пользователи + заявки на смену методов -->
       <div class="admin-dashboard__section">
         <span class="admin-dashboard__section-title">{{
-          t('adminScreens.adminDashboard.m22')
+          t('adminScreens.adminDashboard.sistema')
         }}</span>
       </div>
       <VListRow
-        :title="t('adminScreens.adminDashboard.m12')"
-        :subtitle="t('adminScreens.adminDashboard.m13')"
+        :title="t('adminScreens.adminDashboard.polzovateli')"
+        :subtitle="t('adminScreens.adminDashboard.vse-polzovateli-naznachenie-masterov')"
         clickable
         @click="router.push({ name: 'admin-users' })"
       >
         <template #trailing><IconArrowRight :size="20" /></template>
       </VListRow>
       <VListRow
-        :title="t('adminScreens.adminDashboard.m14')"
-        :subtitle="t('adminScreens.adminDashboard.m15')"
+        :title="t('adminScreens.adminDashboard.zayavki-na-smenu-metodov')"
+        :subtitle="t('adminScreens.adminDashboard.mastera-menyayut-svoi-napravleniya')"
         clickable
         @click="router.push({ name: 'admin-method-requests' })"
       >
@@ -207,16 +207,16 @@
         </template>
       </VListRow>
       <VListRow
-        :title="t('adminScreens.adminDashboard.m16')"
-        :subtitle="t('adminScreens.adminDashboard.m17')"
+        :title="t('adminScreens.adminDashboard.katalog-praktik')"
+        :subtitle="t('adminScreens.adminDashboard.napravleniya-i-vidy-praktik')"
         clickable
         @click="router.push({ name: 'admin-catalog' })"
       >
         <template #trailing><IconArrowRight :size="20" /></template>
       </VListRow>
       <VListRow
-        :title="t('adminScreens.adminDashboard.m18')"
-        :subtitle="t('adminScreens.adminDashboard.m19')"
+        :title="t('adminScreens.adminDashboard.podderzhka')"
+        :subtitle="t('adminScreens.adminDashboard.obrashcheniya-polzovateley-i-masterov')"
         clickable
         @click="router.push({ name: 'admin-support' })"
       >
@@ -259,8 +259,8 @@ const period = ref<'week' | 'month'>('week')
 const periodOffset = ref(0)
 
 const periodOptions: SegmentOption[] = [
-  { value: 'week', label: t('adminScreens.adminDashboard.m23') },
-  { value: 'month', label: t('adminScreens.adminDashboard.m24') },
+  { value: 'week', label: t('adminScreens.adminDashboard.nedelya') },
+  { value: 'month', label: t('adminScreens.adminDashboard.mesyats') },
 ]
 
 // VSegment emits a plain string; narrow it back to the period union.
@@ -286,11 +286,11 @@ const pendingMethodChanges = computed((): number => adminStore.pendingMethodChan
 
 const verificationTitle = computed(
   (): string =>
-    `${pendingVerifications.value} ${plural(pendingVerifications.value, t('adminScreens.adminDashboard.m25'), t('adminScreens.adminDashboard.m26'), t('adminScreens.adminDashboard.m27'))} на верификации`,
+    `${pendingVerifications.value} ${plural(pendingVerifications.value, t('adminScreens.adminDashboard.master'), t('adminScreens.adminDashboard.mastera'), t('adminScreens.adminDashboard.masterov-2'))} на верификации`,
 )
 const moderationTitle = computed(
   (): string =>
-    `${pendingModeration.value} ${plural(pendingModeration.value, t('adminScreens.adminDashboard.m28'), t('adminScreens.adminDashboard.m29'), t('adminScreens.adminDashboard.m30'))} на модерации`,
+    `${pendingModeration.value} ${plural(pendingModeration.value, t('adminScreens.adminDashboard.obrashchenie'), t('adminScreens.adminDashboard.obrashcheniya'), t('adminScreens.adminDashboard.obrashcheniy'))} на модерации`,
 )
 
 // =========================================================================

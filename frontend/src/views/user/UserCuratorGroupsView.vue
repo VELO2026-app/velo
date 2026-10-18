@@ -23,12 +23,12 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        :title="t('user.screens.userCuratorGroups.m1')"
-        :description="t('user.screens.userCuratorGroups.m2')"
+        :title="t('user.screens.userCuratorGroups.toast.loadFailed')"
+        :description="t('user.screens.userCuratorGroups.loadFailedHint')"
       >
         <template #action>
           <VButton variant="outline" @click="load">{{
-            t('user.screens.userCuratorGroups.m5')
+            t('user.screens.userCuratorGroups.=common:retry')
           }}</VButton>
         </template>
       </VEmptyState>
@@ -36,8 +36,8 @@
       <VEmptyState
         v-else-if="!groups.length"
         icon="group"
-        :title="t('user.screens.userCuratorGroups.m3')"
-        :description="t('user.screens.userCuratorGroups.m4')"
+        :title="t('user.screens.userCuratorGroups.empty.title')"
+        :description="t('user.screens.userCuratorGroups.empty.text')"
       />
 
       <template v-else>

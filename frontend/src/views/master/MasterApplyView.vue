@@ -49,7 +49,7 @@
         <VInput
           v-model="form.display_name"
           floating-label
-          :label="t('masterScreens.masterApply.m1')"
+          :label="t('masterScreens.masterApply.imya')"
           :error="errors.display_name"
         />
         <VInput v-model="form.email" floating-label label="E-mail" type="email" />
@@ -77,7 +77,7 @@
            ================================================================ -->
       <template v-else-if="step === 2">
         <h3 class="apply-view__step-title">
-          {{ t('masterScreens.masterApply.m5') }}<span class="apply-view__req">*</span>
+          {{ t('masterScreens.masterApply.shag-2-opyt') }}<span class="apply-view__req">*</span>
         </h3>
 
         <!-- Направления практик — TWO-LEVEL taxonomy, extracted into the shared
@@ -86,7 +86,9 @@
              chips, the per-direction style cards and «Свой вариант». v-model is
              the flat `methods: string[]` payload (unchanged schema). -->
         <div class="apply-view__field">
-          <label class="apply-view__label">{{ t('masterScreens.masterApply.m6') }}</label>
+          <label class="apply-view__label">{{
+            t('masterScreens.masterApply.napravleniya-praktik')
+          }}</label>
           <MethodTaxonomyPicker v-model="methods" />
           <p
             class="apply-view__field-error"
@@ -98,15 +100,15 @@
 
         <VSelect
           v-model="experienceLabel"
-          :label="t('masterScreens.masterApply.m2')"
+          :label="t('masterScreens.masterApply.opyt-prepodavaniya')"
           :options="EXPERIENCE_OPTIONS"
           :error="errors.experience_years"
         />
 
         <VTextarea
           v-model="form.bio"
-          :label="t('masterScreens.masterApply.m3')"
-          :placeholder="t('masterScreens.masterApply.m4')"
+          :label="t('masterScreens.masterApply.o-sebe')"
+          :placeholder="t('masterScreens.masterApply.rasskazhite-o-vashem-opyte')"
           :rows="4"
           :error="errors.bio"
         />
@@ -114,7 +116,9 @@
         <!-- Язык проведения практик (E16): sent with the application as
              experience.languages (selectedLanguages). -->
         <div class="apply-view__field">
-          <label class="apply-view__label">{{ t('masterScreens.masterApply.m7') }}</label>
+          <label class="apply-view__label">{{
+            t('masterScreens.masterApply.yazyk-provedeniya-praktik')
+          }}</label>
           <VCard class="apply-view__langs" padding="none">
             <VCheckbox v-model="langRu" label="Русский" />
             <VCheckbox v-model="langEn" label="English" />
@@ -152,20 +156,28 @@
 
         <!-- Passport -->
         <div class="apply-view__field">
-          <label class="apply-view__label">{{ t('masterScreens.masterApply.m8') }}</label>
-          <p class="apply-view__hint">{{ t('masterScreens.masterApply.m9') }}</p>
+          <label class="apply-view__label">{{
+            t('masterScreens.masterApply.pasport-skan-ili-foto')
+          }}</label>
+          <p class="apply-view__hint">
+            {{ t('masterScreens.masterApply.dlya-verifikatsii-lichnosti-ne') }}
+          </p>
           <VCard class="apply-view__upload-card" padding="sm">
             <button type="button" class="apply-view__upload" @click="onUpload">
               <IconFile :size="26" class="apply-view__upload-icon" />
-              <span class="apply-view__upload-text">{{ t('masterScreens.masterApply.m10') }}</span>
+              <span class="apply-view__upload-text">{{
+                t('masterScreens.masterApply.zagruzit-dokument')
+              }}</span>
             </button>
           </VCard>
         </div>
 
         <!-- Certificates (multi-file UI; chip list renders once E13 stores files) -->
         <div class="apply-view__field">
-          <label class="apply-view__label">{{ t('masterScreens.masterApply.m11') }}</label>
-          <p class="apply-view__hint">{{ t('masterScreens.masterApply.m12') }}</p>
+          <label class="apply-view__label">{{ t('masterScreens.masterApply.sertifikaty') }}</label>
+          <p class="apply-view__hint">
+            {{ t('masterScreens.masterApply.mozhno-zagruzit-neskolko-faylov') }}
+          </p>
           <div v-for="cert in uploadedCerts" :key="cert" class="apply-view__filechip">
             <IconCheck :size="18" />
             <span class="apply-view__filechip-name">{{ cert }}</span>
@@ -173,21 +185,27 @@
           <VCard class="apply-view__upload-card" padding="sm">
             <button type="button" class="apply-view__upload" @click="onUpload">
               <IconFile :size="26" class="apply-view__upload-icon" />
-              <span class="apply-view__upload-text">{{ t('masterScreens.masterApply.m13') }}</span>
+              <span class="apply-view__upload-text">{{
+                t('masterScreens.masterApply.dobavit-sertifikat')
+              }}</span>
             </button>
           </VCard>
         </div>
 
         <!-- Profile photo -->
         <div class="apply-view__field">
-          <label class="apply-view__label">{{ t('masterScreens.masterApply.m14') }}</label>
+          <label class="apply-view__label">{{
+            t('masterScreens.masterApply.foto-profilya')
+          }}</label>
           <p class="apply-view__hint">
             Будет использовано на платформе в открытом доступе для участников.
           </p>
           <VCard class="apply-view__upload-card" padding="sm">
             <button type="button" class="apply-view__upload" @click="onUpload">
               <IconFile :size="26" class="apply-view__upload-icon" />
-              <span class="apply-view__upload-text">{{ t('masterScreens.masterApply.m15') }}</span>
+              <span class="apply-view__upload-text">{{
+                t('masterScreens.masterApply.zagruzit-foto')
+              }}</span>
             </button>
           </VCard>
         </div>
@@ -281,11 +299,11 @@ watch(step, () => {
 
 // -- Experience years options: label -> integer value mapping --
 const EXPERIENCE_OPTIONS = [
-  { label: t('masterScreens.masterApply.m16'), value: '0' },
-  { label: t('masterScreens.masterApply.m17'), value: '2' },
-  { label: t('masterScreens.masterApply.m18'), value: '4' },
-  { label: t('masterScreens.masterApply.m19'), value: '7' },
-  { label: t('masterScreens.masterApply.m20'), value: '11' },
+  { label: t('masterScreens.masterApply.menee-1-goda'), value: '0' },
+  { label: t('masterScreens.masterApply.1-3-goda'), value: '2' },
+  { label: t('masterScreens.masterApply.3-5-let'), value: '4' },
+  { label: t('masterScreens.masterApply.5-10-let'), value: '7' },
+  { label: t('masterScreens.masterApply.bolee-10-let'), value: '11' },
 ]
 
 // -- Form state --
@@ -342,7 +360,7 @@ const experienceYears = computed((): number => {
 
 // -- Upload stub (Zod E13: no file storage yet) --
 function onUpload(): void {
-  toast.info(t('masterScreens.masterApply.m21'))
+  toast.info(t('masterScreens.masterApply.zagruzka-faylov-poka-nedostupna'))
 }
 
 // -- Navigation --
@@ -359,11 +377,11 @@ function goToStep2(): void {
   errors.display_name = ''
   errors.privacy = ''
   if (!form.display_name.trim()) {
-    errors.display_name = t('masterScreens.masterApply.m22')
+    errors.display_name = t('masterScreens.masterApply.pozhaluysta-vvedite-imya')
     return
   }
   if (!form.privacyAccepted) {
-    errors.privacy = t('masterScreens.masterApply.m23')
+    errors.privacy = t('masterScreens.masterApply.neobkhodimo-prinyat-usloviya-ispolzovaniya')
     return
   }
   step.value = 2
@@ -375,15 +393,15 @@ function goToStep3(): void {
   errors.experience_years = ''
   errors.bio = ''
   if (methods.value.length === 0) {
-    errors.methods = t('masterScreens.masterApply.m24')
+    errors.methods = t('masterScreens.masterApply.vyberite-khotya-by-odno')
     return
   }
   if (!experienceLabel.value) {
-    errors.experience_years = t('masterScreens.masterApply.m25')
+    errors.experience_years = t('masterScreens.masterApply.vyberite-opyt-prepodavaniya')
     return
   }
   if (!form.bio.trim()) {
-    errors.bio = t('masterScreens.masterApply.m26')
+    errors.bio = t('masterScreens.masterApply.pozhaluysta-rasskazhite-o-sebe')
     return
   }
   step.value = 3
@@ -406,7 +424,7 @@ async function submit(skipDocuments = false): Promise<void> {
 
   errors.docs = ''
   if (!skipDocuments && !form.docsConsent) {
-    errors.docs = t('masterScreens.masterApply.m27')
+    errors.docs = t('masterScreens.masterApply.neobkhodimo-dat-soglasie-na')
     return
   }
 
@@ -435,7 +453,7 @@ async function submit(skipDocuments = false): Promise<void> {
       // Refresh the store so masterNoProfileGuard sees the fresh profile
       // instead of the stale profileMissing from the earlier 403.
       await masterStore.fetchMyProfile(true)
-      toast.success(t('masterScreens.masterApply.m28'))
+      toast.success(t('masterScreens.masterApply.profil-sozdan'))
       void router.push({ name: 'master-dashboard' })
     } else {
       // Normal application (role='user') -> pending verdict flow. Mark this
@@ -453,11 +471,11 @@ async function submit(skipDocuments = false): Promise<void> {
       if (authStore.user?.id) {
         localStorage.removeItem(masterRejectionSeenKey(authStore.user.id))
       }
-      toast.success(t('masterScreens.masterApply.m29'))
+      toast.success(t('masterScreens.masterApply.zayavka-otpravlena'))
       void router.push({ name: 'master-pending' })
     }
   } catch (e) {
-    toast.error(extractApiError(e, t('masterScreens.masterApply.m30')))
+    toast.error(extractApiError(e, t('masterScreens.masterApply.ne-udalos-otpravit-zayavku')))
   } finally {
     submitting.value = false
   }

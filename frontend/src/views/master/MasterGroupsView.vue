@@ -49,8 +49,8 @@
         <div class="groups__search-field">
           <VInput
             v-model="search"
-            :placeholder="t('masterScreens.masterGroups.m1')"
-            :aria-label="t('masterScreens.masterGroups.m2')"
+            :placeholder="t('masterScreens.masterGroups.iskat')"
+            :aria-label="t('masterScreens.masterGroups.iskat-po-gruppam-i')"
             @focus="onFieldFocus"
           />
         </div>
@@ -60,7 +60,7 @@
         <!-- Group-name matches: instant, client-side over already-loaded groups. -->
         <template v-if="matchingGroups.length">
           <h2 class="velo-section-title groups__search-heading">
-            {{ t('masterScreens.masterGroups.m9') }}
+            {{ t('masterScreens.masterGroups.gruppy') }}
           </h2>
           <div
             v-for="group in matchingGroups"
@@ -83,17 +83,17 @@
         <VEmptyState
           v-else-if="searchError"
           icon="warning"
-          :title="t('masterScreens.masterGroups.m3')"
+          :title="t('masterScreens.masterGroups.ne-udalos-vypolnit-poisk')"
           :description="searchError"
         >
           <VButton size="sm" variant="outline" @click="loadSearch">{{
-            t('masterScreens.masterGroups.m10')
+            t('masterScreens.masterGroups.povtorit')
           }}</VButton>
         </VEmptyState>
 
         <template v-else-if="searchResults.length">
           <h2 class="velo-section-title groups__search-heading">
-            {{ t('masterScreens.masterGroups.m11') }}
+            {{ t('masterScreens.masterGroups.uchastniki') }}
           </h2>
           <VListRow
             v-for="row in searchResults"
@@ -118,8 +118,8 @@
             searchResults.length === 0
           "
           icon="group"
-          :title="t('masterScreens.masterGroups.m4')"
-          :description="t('masterScreens.masterGroups.m5')"
+          :title="t('masterScreens.masterGroups.nikogo-ne-naydeno')"
+          :description="t('masterScreens.masterGroups.poprobuyte-izmenit-zapros')"
         />
       </template>
 
@@ -132,11 +132,11 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        :title="t('masterScreens.masterGroups.m6')"
+        :title="t('masterScreens.masterGroups.ne-udalos-zagruzit-gruppy')"
         :description="error"
       >
         <VButton size="sm" variant="outline" @click="load">{{
-          t('masterScreens.masterGroups.m12')
+          t('masterScreens.masterGroups.povtorit')
         }}</VButton>
       </VEmptyState>
 
@@ -163,8 +163,8 @@
         <VEmptyState
           v-if="groups.length === 0"
           icon="group"
-          :title="t('masterScreens.masterGroups.m7')"
-          :description="t('masterScreens.masterGroups.m8')"
+          :title="t('masterScreens.masterGroups.grupp-poka-net')"
+          :description="t('masterScreens.masterGroups.sozdayte-pervuyu-gruppu-uchenikov')"
         />
       </template>
     </div>
@@ -199,7 +199,7 @@ async function load(): Promise<void> {
     const res = await getGroups()
     groups.value = res.items
   } catch (e) {
-    error.value = extractApiError(e, t('masterScreens.masterGroups.m13'))
+    error.value = extractApiError(e, t('masterScreens.masterGroups.poprobuyte-eshche-raz'))
   } finally {
     loading.value = false
   }
@@ -225,7 +225,7 @@ async function loadSearch(): Promise<void> {
     const res = await searchGroupMemberships(search.value)
     searchResults.value = res.items
   } catch (e) {
-    searchError.value = extractApiError(e, t('masterScreens.masterGroups.m14'))
+    searchError.value = extractApiError(e, t('masterScreens.masterGroups.poprobuyte-eshche-raz'))
   } finally {
     searchLoading.value = false
   }
@@ -245,7 +245,7 @@ watch(search, (value) => {
 })
 
 // Show the first 5 (owner Q7, PROMPT №610 -- was 10); the rest hide behind
-// the outlined t('masterScreens.masterGroups.m15') pill (VShowMore already built this exact
+// the outlined t('masterScreens.masterGroups.eshche-n-grupp') pill (VShowMore already built this exact
 // recipe -- primary stroke + primary text, see that file -- no visual
 // change needed there, only this constant). Never applies while a search
 // query is active: that's a structurally separate branch above

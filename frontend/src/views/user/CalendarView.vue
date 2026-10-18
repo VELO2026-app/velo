@@ -72,7 +72,7 @@
     <div v-if="!masterMode && !schoolMode" class="calendar__selector">
       <!-- Collapsed: pill + funnel -->
       <button v-if="!expanded" type="button" class="calendar__select-pill" @click="expanded = true">
-        <span class="calendar__select-label">{{ t('user.screens.calendar.m3') }}</span>
+        <span class="calendar__select-label">{{ t('user.screens.calendar.pickPractices') }}</span>
         <span class="calendar__funnel" @click.stop="showFilter = true">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
             <path
@@ -119,7 +119,7 @@
         <button
           type="button"
           class="calendar__collapse"
-          :aria-label="t('user.screens.calendar.m1')"
+          :aria-label="t('ui.collapse')"
           @click="expanded = false"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -144,10 +144,10 @@
     <VEmptyState
       v-else-if="store.error"
       icon="warning"
-      :title="t('user.screens.calendar.m2')"
+      :title="t('user.screens.calendar.loadFailed')"
       :description="store.error"
     >
-      <VButton size="sm" @click="store.loadWeek()">{{ t('user.screens.calendar.m4') }}</VButton>
+      <VButton size="sm" @click="store.loadWeek()">{{ t('common.retry') }}</VButton>
     </VEmptyState>
 
     <!-- Empty: no practices on the selected day -->
@@ -285,7 +285,7 @@ function openFilter(): void {
 // Practices on the selected day (already sorted by the store).
 const dayPractices = computed<PracticeResponse[]>(() => store.selectedDayPractices)
 
-// Section header for the selected day (t('user.screens.calendar.m5') / t('user.screens.calendar.m6') / t('user.screens.calendar.m7')),
+// Section header for the selected day (t('user.screens.calendar.today') / t('user.screens.calendar.tomorrow') / «28 января»),
 // derived from the VIEWER's profile timezone (SW2) -- matching the store's
 // own viewer-tz bucketing (store.ts selectedDayPractices) and the cards'
 // rendered time, never the first practice's own timezone. dayLabel is only
@@ -308,9 +308,9 @@ interface ActiveChip {
 
 const TYPE_LABEL: Record<string, string> = {
   live: 'Live',
-  series: t('user.screens.calendar.m8'),
-  one_on_one: t('user.screens.calendar.m9'),
-  replay: t('user.screens.calendar.m10'),
+  series: t('user.screens.calendar.chip.series'),
+  one_on_one: t('user.screens.calendar.chip.personal'),
+  replay: t('user.screens.calendar.chip.bookings'),
 }
 
 const activeChips = computed<ActiveChip[]>(() => {

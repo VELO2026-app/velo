@@ -28,7 +28,7 @@
     <!-- Skip: dismisses the carousel from any step. -->
     <div class="master-onboarding__skip-row">
       <button type="button" class="master-onboarding__skip" @click="skip">
-        {{ t('masterScreens.masterOnboarding.m1') }}
+        {{ t('masterScreens.masterOnboarding.propustit') }}
       </button>
     </div>
 
@@ -66,18 +66,18 @@ const emit = defineEmits<{
 const SLIDES = [
   {
     image: '/onboarding/master-welcome.svg',
-    title: t('masterScreens.masterOnboarding.m2'),
-    text: t('masterScreens.masterOnboarding.m3'),
+    title: t('masterScreens.masterOnboarding.dobro-pozhalovat'),
+    text: t('masterScreens.masterOnboarding.vy-chast-soobshchestva-masterov'),
   },
   {
     image: '/onboarding/master-space.svg',
-    title: t('masterScreens.masterOnboarding.m4'),
-    text: t('masterScreens.masterOnboarding.m5'),
+    title: t('masterScreens.masterOnboarding.vashe-prostranstvo'),
+    text: t('masterScreens.masterOnboarding.personalnoe-prostranstvo-s-vashim'),
   },
   {
     image: '/onboarding/master-analytics.svg',
-    title: t('masterScreens.masterOnboarding.m6'),
-    text: t('masterScreens.masterOnboarding.m7'),
+    title: t('masterScreens.masterOnboarding.ai-analitika-o-sostoyanii'),
+    text: t('masterScreens.masterOnboarding.emotsionalnyy-landshaft-uchastnikov-do'),
   },
 ] as const
 

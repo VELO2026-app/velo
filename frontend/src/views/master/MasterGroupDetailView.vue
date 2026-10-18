@@ -40,13 +40,13 @@
           <template #default="{ close }">
             <VMenuItem
               :icon="IconShare"
-              :ariaLabel="t('masterScreens.masterGroupDetail.m1')"
+              :ariaLabel="t('masterScreens.masterGroupDetail.priglasit-v-gruppu')"
               @click="onHeaderInviteClick(close)"
             />
             <VMenuItem :icon="IconPen" ariaLabel="Изменить" @click="onRenameClick(close)" />
             <VMenuItem
               :icon="IconTrash"
-              :ariaLabel="t('masterScreens.masterGroupDetail.m2')"
+              :ariaLabel="t('masterScreens.masterGroupDetail.udalit-gruppu')"
               danger
               @click="onDeleteClick(close)"
             />
@@ -65,8 +65,8 @@
         <div class="group-detail__search-field">
           <VInput
             v-model="search"
-            :placeholder="t('masterScreens.masterGroupDetail.m3')"
-            :aria-label="t('masterScreens.masterGroupDetail.m4')"
+            :placeholder="t('masterScreens.masterGroupDetail.iskat-uchenika')"
+            :aria-label="t('masterScreens.masterGroupDetail.iskat-uchenika-2')"
             @focus="onFieldFocus"
           />
         </div>
@@ -81,11 +81,11 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        :title="t('masterScreens.masterGroupDetail.m5')"
+        :title="t('masterScreens.masterGroupDetail.ne-udalos-zagruzit-uchastnikov')"
         :description="error"
       >
         <VButton size="sm" variant="outline" @click="retry">{{
-          t('masterScreens.masterGroupDetail.m11')
+          t('masterScreens.masterGroupDetail.povtorit')
         }}</VButton>
       </VEmptyState>
 
@@ -142,17 +142,17 @@
          prop, and was missed when this dialog was built. -->
     <VBottomSheet
       :open="renameOpen"
-      :title="t('masterScreens.masterGroupDetail.m6')"
+      :title="t('masterScreens.masterGroupDetail.izmenit-nazvanie-i-opisanie')"
       compact-title
-      :save-label="t('masterScreens.masterGroupDetail.m7')"
+      :save-label="t('masterScreens.masterGroupDetail.sokhranit')"
       @save="onRenameSave"
       @close="renameOpen = false"
     >
       <VInput v-model="renameName" label="Название" placeholder="Название группы" />
       <VTextarea
         v-model="renameDescription"
-        :label="t('masterScreens.masterGroupDetail.m8')"
-        :placeholder="t('masterScreens.masterGroupDetail.m9')"
+        :label="t('masterScreens.masterGroupDetail.opisanie')"
+        :placeholder="t('masterScreens.masterGroupDetail.opisanie')"
         :rows="3"
         autogrow
       />
@@ -162,7 +162,7 @@
     <VConfirmDialog
       :open="deleteConfirmOpen"
       :message="deleteMessage"
-      :confirm-label="t('masterScreens.masterGroupDetail.m10')"
+      :confirm-label="t('masterScreens.masterGroupDetail.udalit')"
       danger
       :loading="deleting"
       @confirm="onDeleteConfirm"
@@ -270,7 +270,7 @@ async function loadGroups(): Promise<void> {
       // being absent means genuinely gone or invalid -- reuse this
       // screen's own existing error state rather than leaving a blank
       // header (owner Q12's own explicit warning).
-      error.value = t('masterScreens.masterGroupDetail.m12')
+      error.value = t('masterScreens.masterGroupDetail.gruppa-ne-naydena')
     }
   } catch {
     // Best-effort: load() below (members) has its own independent error
@@ -286,7 +286,7 @@ async function load(): Promise<void> {
     const res = await getGroupMembers(groupId.value, search.value)
     members.value = res.items
   } catch (e) {
-    error.value = extractApiError(e, t('masterScreens.masterGroupDetail.m13'))
+    error.value = extractApiError(e, t('masterScreens.masterGroupDetail.poprobuyte-eshche-raz'))
   } finally {
     loading.value = false
   }
@@ -346,9 +346,9 @@ async function onInviteClick(): Promise<void> {
     // Clipboard needs no backend — write the link straight to the
     // clipboard (B2, same pattern as MasterGroupsView's row invite).
     await navigator.clipboard.writeText(res.invite_url)
-    toast.success(t('masterScreens.masterGroupDetail.m14'))
+    toast.success(t('masterScreens.masterGroupDetail.ssylka-skopirovana'))
   } catch (e) {
-    toast.error(extractApiError(e, t('masterScreens.masterGroupDetail.m15')))
+    toast.error(extractApiError(e, t('masterScreens.masterGroupDetail.ne-udalos-sozdat-ssylku')))
   } finally {
     inviting.value = false
   }
@@ -383,7 +383,9 @@ async function onRenameSave(): Promise<void> {
     // rewriting the URL, same source of truth loadGroups() already is.
     await loadGroups()
   } catch (e) {
-    toast.error(extractApiError(e, t('masterScreens.masterGroupDetail.m16')))
+    toast.error(
+      extractApiError(e, t('masterScreens.masterGroupDetail.ne-udalos-pereimenovat-gruppu')),
+    )
   }
 }
 
@@ -414,7 +416,7 @@ async function onDeleteConfirm(): Promise<void> {
     if (e instanceof ApiResponseError && e.code === 'group_in_use') {
       toast.error(errorMessage('group_in_use'))
     } else {
-      toast.error(extractApiError(e, t('masterScreens.masterGroupDetail.m17')))
+      toast.error(extractApiError(e, t('masterScreens.masterGroupDetail.ne-udalos-udalit-gruppu')))
     }
   } finally {
     deleting.value = false

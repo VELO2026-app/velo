@@ -26,7 +26,7 @@
     <!-- Error -->
     <VEmptyState v-else-if="error" icon="warning" title="Не удалось загрузить промокоды">
       <VButton size="sm" variant="outline" @click="load">{{
-        t('masterScreens.masterPromocodes.m4')
+        t('masterScreens.masterPromocodes.povtorit')
       }}</VButton>
     </VEmptyState>
 
@@ -34,11 +34,11 @@
     <VEmptyState
       v-else-if="activePromos.length === 0"
       icon="list"
-      :title="t('masterScreens.masterPromocodes.m1')"
-      :description="t('masterScreens.masterPromocodes.m2')"
+      :title="t('masterScreens.masterPromocodes.promokodov-poka-net')"
+      :description="t('masterScreens.masterPromocodes.sozdayte-pervyy-promokod-dlya')"
     >
       <VButton size="sm" variant="outline" @click="onNew">{{
-        t('masterScreens.masterPromocodes.m5')
+        t('masterScreens.masterPromocodes.sozdat')
       }}</VButton>
     </VEmptyState>
 
@@ -59,7 +59,7 @@
         </div>
         <div class="promo__actions">
           <VButton variant="primary" @click="onCopy(p.code)">{{
-            t('masterScreens.masterPromocodes.m6')
+            t('masterScreens.masterPromocodes.kopirovat')
           }}</VButton>
           <VButton variant="danger" :loading="deactivatingId === p.id" @click="onDelete(p)">
             Удалить
@@ -68,7 +68,11 @@
       </div>
     </div>
 
-    <Banner variant="warning" :body="t('masterScreens.masterPromocodes.m3')" class="promo__note">
+    <Banner
+      variant="warning"
+      :body="t('masterScreens.masterPromocodes.promokody-dlya-uchastnikov-kotorye')"
+      class="promo__note"
+    >
       <template #icon><IconHint :size="22" /></template>
     </Banner>
   </div>
@@ -116,7 +120,9 @@ function usedLabel(p: PromoResponse): string {
   return `${p.used_count} из ${p.max_uses ?? '∞'}`
 }
 function untilLabel(p: PromoResponse): string {
-  return p.valid_until ? formatShortDate(p.valid_until) : t('masterScreens.masterPromocodes.m7')
+  return p.valid_until
+    ? formatShortDate(p.valid_until)
+    : t('masterScreens.masterPromocodes.bessrochno')
 }
 
 function onNew(): void {
@@ -126,9 +132,9 @@ function onNew(): void {
 async function onCopy(code: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(code)
-    toast.success(t('masterScreens.masterPromocodes.m8'))
+    toast.success(t('masterScreens.masterPromocodes.promokod-skopirovan'))
   } catch {
-    toast.error(t('masterScreens.masterPromocodes.m9'))
+    toast.error(t('masterScreens.masterPromocodes.ne-udalos-skopirovat'))
   }
 }
 // Soft-deactivate (no hard-delete endpoint): drops the code from the active list.
@@ -138,9 +144,9 @@ async function onDelete(p: PromoResponse): Promise<void> {
   try {
     await deactivatePromo(p.id)
     p.is_active = false
-    toast.success(t('masterScreens.masterPromocodes.m10'))
+    toast.success(t('masterScreens.masterPromocodes.promokod-deaktivirovan'))
   } catch {
-    toast.error(t('masterScreens.masterPromocodes.m11'))
+    toast.error(t('masterScreens.masterPromocodes.ne-udalos-deaktivirovat-promokod'))
   } finally {
     deactivatingId.value = null
   }

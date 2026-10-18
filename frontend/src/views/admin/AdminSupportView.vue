@@ -29,7 +29,7 @@
   <div class="admin-support">
     <header class="admin-support__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-support__title">{{ t('adminScreens.adminSupport.m5') }}</h1>
+      <h1 class="admin-support__title">{{ t('adminScreens.adminSupport.podderzhka') }}</h1>
       <span v-if="items.length" class="admin-support__count">{{ items.length }}</span>
     </header>
 
@@ -40,12 +40,12 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminSupport.m1')"
-      :description="t('adminScreens.adminSupport.m2')"
+      :title="t('adminScreens.adminSupport.ne-udalos-zagruzit')"
+      :description="t('adminScreens.adminSupport.proverte-soedinenie-i-poprobuyte')"
     >
       <template #action
         ><VButton variant="primary" @click="loadInitial">{{
-          t('adminScreens.adminSupport.m6')
+          t('adminScreens.adminSupport.povtorit')
         }}</VButton></template
       >
     </VEmptyState>
@@ -53,8 +53,8 @@
     <VEmptyState
       v-else-if="items.length === 0"
       icon="empty"
-      :title="t('adminScreens.adminSupport.m3')"
-      :description="t('adminScreens.adminSupport.m4')"
+      :title="t('adminScreens.adminSupport.obrashcheniy-net')"
+      :description="t('adminScreens.adminSupport.syuda-popadut-vse-obrashcheniya')"
     />
 
     <template v-else>
@@ -117,7 +117,7 @@ const loadingMore = ref(false)
 const error = ref(false)
 
 function openerName(item: SupportThread): string {
-  return item.opener?.name ?? t('adminScreens.adminSupport.m7')
+  return item.opener?.name ?? t('adminScreens.adminSupport.polzovatel')
 }
 
 function triageBadge(item: SupportThread): {
@@ -126,10 +126,10 @@ function triageBadge(item: SupportThread): {
 } {
   if (item.status === 'resolved') return { variant: 'success', label: 'Решено' }
   if (item.status === 'closed') return { variant: 'info', label: 'Закрыто' }
-  if (!item.assignee) return { variant: 'warning', label: t('adminScreens.adminSupport.m8') }
+  if (!item.assignee) return { variant: 'warning', label: t('adminScreens.adminSupport.ne-vzyato') }
   if (item.assignee === authStore.user?.id)
-    return { variant: 'success', label: t('adminScreens.adminSupport.m9') }
-  return { variant: 'info', label: t('adminScreens.adminSupport.m10') }
+    return { variant: 'success', label: t('adminScreens.adminSupport.u-menya') }
+  return { variant: 'info', label: t('adminScreens.adminSupport.zanyato') }
 }
 
 async function loadInitial(): Promise<void> {
@@ -143,7 +143,7 @@ async function loadInitial(): Promise<void> {
     nextCursor.value = res.next_cursor
   } catch (e) {
     error.value = true
-    toast.error(extractApiError(e, t('adminScreens.adminSupport.m11')))
+    toast.error(extractApiError(e, t('adminScreens.adminSupport.oshibka-zagruzki-obrashcheniy')))
   } finally {
     loading.value = false
   }
@@ -157,7 +157,7 @@ async function loadMore(): Promise<void> {
     items.value.push(...res.threads)
     nextCursor.value = res.next_cursor
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminSupport.m12')))
+    toast.error(extractApiError(e, t('adminScreens.adminSupport.oshibka-zagruzki')))
   } finally {
     loadingMore.value = false
   }

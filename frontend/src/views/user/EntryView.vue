@@ -32,14 +32,14 @@
     <!-- Header -->
     <header class="entry__header">
       <VBackButton aria-label="Назад" @click="goBack" />
-      <h1 class="entry__title-bar">{{ t('user.screens.entry.m7') }}</h1>
+      <h1 class="entry__title-bar">{{ t('user.screens.entry.titleFallback') }}</h1>
 
       <!-- "..." menu (view mode only): edit + delete. -->
       <VMenu v-if="mode === 'view'">
         <template #default="{ close }">
           <VMenuItem
             :icon="IconPen"
-            :ariaLabel="t('user.screens.entry.m1')"
+            :ariaLabel="t('user.screens.entry.edit')"
             @click="
               () => {
                 startEdit()
@@ -49,7 +49,7 @@
           />
           <VMenuItem
             :icon="IconTrash"
-            :ariaLabel="t('user.screens.entry.m2')"
+            :ariaLabel="t('user.screens.entry.delete')"
             danger
             @click="
               () => {
@@ -73,11 +73,13 @@
       <VEmptyState
         v-else-if="loadError"
         icon="warning"
-        :title="t('user.screens.entry.m3')"
+        :title="t('user.screens.entry.loadFailed')"
         :description="loadError"
       >
         <template #action>
-          <VButton variant="primary" @click="reload">{{ t('user.screens.entry.m8') }}</VButton>
+          <VButton variant="primary" @click="reload">{{
+            t('user.screens.entry.common.retry')
+          }}</VButton>
         </template>
       </VEmptyState>
 
@@ -109,8 +111,8 @@
               v-model="editTitle"
               class="entry__edit-title"
               type="text"
-              :placeholder="t('user.screens.entry.m4')"
-              :aria-label="t('user.screens.entry.m5')"
+              :placeholder="t('user.screens.entry.titlePlaceholder')"
+              :aria-label="t('user.screens.entry.titleAria')"
               :maxlength="MAX_TITLE_LEN"
               :disabled="saving"
             />
@@ -118,7 +120,7 @@
               ref="editEl"
               v-model="editContent"
               class="entry__edit-content"
-              :aria-label="t('user.screens.entry.m6')"
+              :aria-label="t('user.screens.entry.textAria')"
               rows="3"
               :maxlength="MAX_CONTENT_LEN"
               :disabled="saving"
@@ -207,7 +209,7 @@ const practiceDuration = computed(() =>
 // Muted context line linking the note to its practice (if any).
 const contextLine = computed(() => {
   if (!practice.value) return ''
-  const name = practice.value.master_name ?? t('user.screens.entry.m9')
+  const name = practice.value.master_name ?? t('user.screens.entry.shared.form.hostFallback')
   return `Связано с практикой: ${practice.value.title} с ${name}`
 })
 

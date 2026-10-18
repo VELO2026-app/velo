@@ -41,7 +41,7 @@
     <div v-else-if="error" class="checkins__content">
       <VEmptyState icon="warning" title="Не удалось загрузить check-ins" :description="error">
         <VButton size="sm" variant="outline" @click="load">{{
-          t('masterScreens.attendance.m3')
+          t('masterScreens.attendance.povtorit')
         }}</VButton>
       </VEmptyState>
     </div>
@@ -61,8 +61,8 @@
         <VEmptyState
           v-if="attendance.total === 0"
           icon="group"
-          :title="t('masterScreens.attendance.m1')"
-          :description="t('masterScreens.attendance.m2')"
+          :title="t('masterScreens.attendance.net-zapisavshikhsya')"
+          :description="t('masterScreens.attendance.na-etu-praktiku-eshche')"
         />
 
         <!-- Participants -->
@@ -79,14 +79,16 @@
               {{ item.checkin.comment }}
             </div>
             <div v-else-if="item.status === 'no_show'" class="checkins__meta">
-              {{ t('masterScreens.attendance.m4') }}
+              {{ t('masterScreens.attendance.ne-prishel') }}
             </div>
             <!-- Checked in (mood submitted) but left no comment: do NOT say
                  «Ожидает check-in» — their mood face already shows they're in. -->
             <div v-else-if="item.checkin" class="checkins__meta">
-              {{ t('masterScreens.attendance.m5') }}
+              {{ t('masterScreens.attendance.bez-kommentariya') }}
             </div>
-            <div v-else class="checkins__meta">{{ t('masterScreens.attendance.m6') }}</div>
+            <div v-else class="checkins__meta">
+              {{ t('masterScreens.attendance.ozhidaet-check-in') }}
+            </div>
           </div>
         </div>
 
@@ -171,7 +173,7 @@ async function load(): Promise<void> {
     const [attendanceData] = await Promise.all([getAttendance(practiceId), loadPractice()])
     attendance.value = attendanceData
   } catch (e) {
-    error.value = extractApiError(e, t('masterScreens.attendance.m7'))
+    error.value = extractApiError(e, t('masterScreens.attendance.oshibka-zagruzki'))
   } finally {
     loading.value = false
   }

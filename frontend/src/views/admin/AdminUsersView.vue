@@ -21,7 +21,7 @@
   <div class="admin-users">
     <header class="admin-users__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-users__title">{{ t('adminScreens.adminUsers.m4') }}</h1>
+      <h1 class="admin-users__title">{{ t('adminScreens.adminUsers.polzovateli') }}</h1>
       <span class="admin-users__count">{{ headerCount }}</span>
     </header>
 
@@ -34,12 +34,12 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminUsers.m1')"
-      :description="t('adminScreens.adminUsers.m2')"
+      :title="t('adminScreens.adminUsers.ne-udalos-zagruzit-polzovateley')"
+      :description="t('adminScreens.adminUsers.proverte-soedinenie-i-poprobuyte')"
     >
       <template #action
         ><VButton variant="primary" @click="load(true)">{{
-          t('adminScreens.adminUsers.m5')
+          t('adminScreens.adminUsers.povtorit')
         }}</VButton></template
       >
     </VEmptyState>
@@ -65,7 +65,7 @@
 
       <div v-if="hasMore" class="admin-users__more">
         <VButton variant="outline" :loading="loadingMore" @click="loadMore">{{
-          t('adminScreens.adminUsers.m6')
+          t('adminScreens.adminUsers.pokazat-eshche')
         }}</VButton>
       </div>
     </template>
@@ -78,7 +78,7 @@
     <VConfirmDialog
       :open="confirm.open"
       :message="confirm.message"
-      :confirm-label="t('adminScreens.adminUsers.m3')"
+      :confirm-label="t('adminScreens.adminUsers.naznachit')"
       :loading="confirm.loading"
       @confirm="doMakeMaster"
       @cancel="closeConfirm"
@@ -121,7 +121,7 @@ const hasMore = computed<boolean>(() => users.value.length < total.value)
 
 function nameOf(u: UserResponse): string {
   const name = [u.first_name, u.last_name].filter(Boolean).join(' ').trim()
-  return name || t('adminScreens.adminUsers.m7')
+  return name || t('adminScreens.adminUsers.bez-imeni')
 }
 
 const headerCount = computed<string>(() => (total.value ? String(total.value) : '—'))
@@ -139,13 +139,15 @@ const filtered = computed<UserResponse[]>(() => {
 })
 
 const emptyText = computed<string>(() =>
-  search.value.trim() ? t('adminScreens.adminUsers.m8') : t('adminScreens.adminUsers.m9'),
+  search.value.trim()
+    ? t('adminScreens.adminUsers.nikogo-ne-naydeno')
+    : t('adminScreens.adminUsers.polzovateley-poka-net'),
 )
 
 function roleLabel(role: string): string {
   if (role === 'admin') return 'Админ'
   if (role === 'master') return 'Мастер'
-  return t('adminScreens.adminUsers.m10')
+  return t('adminScreens.adminUsers.polzovatel')
 }
 
 function roleVariant(role: string): 'success' | 'warning' | 'info' {
@@ -169,7 +171,7 @@ async function load(reset: boolean): Promise<void> {
     total.value = res.total
   } catch (e) {
     error.value = true
-    toast.error(extractApiError(e, t('adminScreens.adminUsers.m11')))
+    toast.error(extractApiError(e, t('adminScreens.adminUsers.oshibka-zagruzki-polzovateley')))
   } finally {
     loading.value = false
     loadingMore.value = false
@@ -210,12 +212,12 @@ async function doMakeMaster(): Promise<void> {
   confirm.loading = true
   try {
     await makeMaster(confirm.target.id)
-    toast.success(t('adminScreens.adminUsers.m12'))
+    toast.success(t('adminScreens.adminUsers.polzovatel-naznachen-masterom'))
     confirm.open = false
     confirm.target = null
     await load(true)
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminUsers.m13')))
+    toast.error(extractApiError(e, t('adminScreens.adminUsers.ne-udalos-naznachit-masterom')))
   } finally {
     confirm.loading = false
   }

@@ -32,8 +32,8 @@
       <div class="support__ok-circle">
         <IconSupportChat :size="48" />
       </div>
-      <h2 class="support__ok-title">{{ t('user.screens.support.m4') }}</h2>
-      <p class="support__ok-text">{{ t('user.screens.support.m5') }}</p>
+      <h2 class="support__ok-title">{{ t('user.screens.support.toast.thanks') }}</h2>
+      <p class="support__ok-text">{{ t('user.screens.support.thanks.text') }}</p>
       <VButton variant="primary" block class="support__ok-cta" @click="goHome">
         На главную
       </VButton>
@@ -43,13 +43,13 @@
     <div v-else class="support__content">
       <div class="support__hero">
         <IconSupportChat :size="56" class="support__hero-ic" />
-        <div class="support__hero-title">{{ t('user.screens.support.m6') }}</div>
-        <div class="support__hero-sub">{{ t('user.screens.support.m7') }}</div>
+        <div class="support__hero-title">{{ t('user.screens.support.title') }}</div>
+        <div class="support__hero-sub">{{ t('user.screens.support.responseHint') }}</div>
       </div>
 
       <!-- Topic -->
       <section class="support__section">
-        <h2 class="support__title">{{ t('user.screens.support.m8') }}</h2>
+        <h2 class="support__title">{{ t('user.screens.support.topic.label') }}</h2>
         <div class="support__card">
           <VRadioGroup v-model="topic" :options="topicOptions" />
           <div v-if="topic === 'other'" class="support__other">
@@ -57,8 +57,8 @@
               v-model="otherText"
               type="text"
               class="support__other-input"
-              :placeholder="t('user.screens.support.m1')"
-              :aria-label="t('user.screens.support.m2')"
+              :placeholder="t('user.screens.support.custom.placeholder')"
+              :aria-label="t('user.screens.support.custom.title')"
               @focus="onFieldFocus"
             />
           </div>
@@ -67,16 +67,16 @@
 
       <!-- Message -->
       <section class="support__section">
-        <h2 class="support__title">{{ t('user.screens.support.m9') }}</h2>
+        <h2 class="support__title">{{ t('user.screens.support.message.label') }}</h2>
         <VTextarea
           v-model="message"
           :rows="5"
-          :placeholder="t('user.screens.support.m3')"
+          :placeholder="t('user.screens.support.message.placeholder')"
           @focus="onFieldFocus"
         />
       </section>
 
-      <a class="support__email" :href="emailHref">{{ t('user.screens.support.m10') }}</a>
+      <a class="support__email" :href="emailHref">{{ t('user.screens.support.supportEmail') }}</a>
 
       <VButton
         variant="primary"
@@ -119,11 +119,15 @@ interface SupportTopic {
   priority: SupportPriority
 }
 const TOPICS: SupportTopic[] = [
-  { value: 'payment', label: t('user.screens.support.m11'), priority: 'P1' },
-  { value: 'complaint_master', label: t('user.screens.support.m12'), priority: 'P0' },
-  { value: 'practice', label: t('user.screens.support.m13'), priority: 'P1' },
-  { value: 'technical', label: t('user.screens.support.m14'), priority: 'P2' },
-  { value: 'other', label: t('user.screens.support.m15'), priority: 'P2' },
+  { value: 'payment', label: t('user.screens.support.topic.payments'), priority: 'P1' },
+  {
+    value: 'complaint_master',
+    label: t('user.screens.support.topic.masterComplaint'),
+    priority: 'P0',
+  },
+  { value: 'practice', label: t('user.screens.support.topic.practice'), priority: 'P1' },
+  { value: 'technical', label: t('user.screens.support.topic.tech'), priority: 'P2' },
+  { value: 'other', label: t('user.screens.support.topic.other'), priority: 'P2' },
 ]
 // VRadioGroup only needs {value,label}; priority stays off the rendered options.
 const topicOptions = TOPICS.map((t) => ({ value: t.value, label: t.label }))
@@ -163,7 +167,7 @@ async function onSubmit(): Promise<void> {
     await sendSupportMessage(topicLabel, text)
     submitted.value = true
   } catch (e) {
-    toast.error(extractApiError(e, t('user.screens.support.m16')))
+    toast.error(extractApiError(e, t('user.screens.support.toast.sendFailed')))
   } finally {
     submitting.value = false
   }

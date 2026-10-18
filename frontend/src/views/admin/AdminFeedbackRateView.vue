@@ -22,11 +22,11 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminFeedbackRate.m1')"
+      :title="t('adminScreens.adminFeedbackRate.ne-udalos-zagruzit-metriku')"
       :description="error"
     >
       <VButton size="sm" variant="outline" @click="load">{{
-        t('adminScreens.adminFeedbackRate.m2')
+        t('adminScreens.adminFeedbackRate.povtorit')
       }}</VButton>
     </VEmptyState>
 
@@ -40,7 +40,9 @@
         <VStatCard :value="leftReview" label="Оставили отзыв" />
       </div>
 
-      <h3 class="admin-detail__section">{{ t('adminScreens.adminFeedbackRate.m3') }}</h3>
+      <h3 class="admin-detail__section">
+        {{ t('adminScreens.adminFeedbackRate.raspredelenie-otsenok') }}
+      </h3>
       <VCard class="admin-detail__rating">
         <VRatingBar
           v-for="row in ratingRows"
@@ -123,7 +125,7 @@ async function load(): Promise<void> {
   try {
     data.value = await getFeedbackMetric(period, offset)
   } catch (e) {
-    error.value = extractApiError(e, t('adminScreens.adminFeedbackRate.m4'))
+    error.value = extractApiError(e, t('adminScreens.adminFeedbackRate.oshibka-zagruzki'))
   } finally {
     loading.value = false
   }

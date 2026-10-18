@@ -49,20 +49,20 @@
           <template #default="{ close }">
             <VMenuItem
               :icon="IconMessages"
-              :ariaLabel="t('user.screens.schoolStudentProfile.m1')"
+              :ariaLabel="t('user.screens.schoolStudentProfile.message.cta')"
               @click="onMessageClick(close)"
             />
             <VMenuItem
               v-if="!masterOffer"
               :icon="IconPen"
-              :ariaLabel="t('user.screens.schoolStudentProfile.m2')"
+              :ariaLabel="t('user.screens.schoolStudentProfile.role.switchCta')"
               @click="onRoleClick(close)"
             />
             <!-- The lock opens the block confirm (owner ruling 2026-09-30 --
                  blocking replaced the removed exclusion); BE-79 (2) wired it. -->
             <VMenuItem
               :icon="IconLock"
-              :ariaLabel="t('user.screens.schoolStudentProfile.m3')"
+              :ariaLabel="t('user.screens.schoolStudentProfile.block.cta')"
               danger
               @click="onBlockClick(close)"
             />
@@ -77,12 +77,12 @@
       <VEmptyState
         v-if="profileNotFound"
         icon="notfound"
-        :title="t('user.screens.schoolStudentProfile.m4')"
-        :description="t('user.screens.schoolStudentProfile.m5')"
+        :title="t('user.screens.schoolStudentProfile.unavailable')"
+        :description="t('user.screens.schoolStudentProfile.unavailableHint')"
       >
         <template #action>
           <VButton variant="primary" @click="goBack">{{
-            t('user.screens.schoolStudentProfile.m17')
+            t('user.screens.schoolStudentProfile.backToStudents')
           }}</VButton>
         </template>
       </VEmptyState>
@@ -90,12 +90,12 @@
       <VEmptyState
         v-else-if="profileError"
         icon="warning"
-        :title="t('user.screens.schoolStudentProfile.m6')"
-        :description="t('user.screens.schoolStudentProfile.m7')"
+        :title="t('user.screens.schoolStudentProfile.loadFailed')"
+        :description="t('user.screens.schoolStudentProfile.loadFailedHint')"
       >
         <template #action>
           <VButton variant="outline" @click="load">{{
-            t('user.screens.schoolStudentProfile.m18')
+            t('user.screens.schoolStudentProfile.=common:retry')
           }}</VButton>
         </template>
       </VEmptyState>
@@ -141,16 +141,16 @@
          is a disabled button, never a silent no-op request. -->
     <VModal :open="roleOpen" :show-close="false" @close="onRoleClose">
       <div class="ssp__role">
-        <h2 class="ssp__role-title">{{ t('user.screens.schoolStudentProfile.m19') }}</h2>
+        <h2 class="ssp__role-title">{{ t('user.screens.schoolStudentProfile.role.switchCta') }}</h2>
         <TargetUserCard :name="studentName" :avatar-url="studentAvatar || null" />
-        <p class="ssp__role-sub">{{ t('user.screens.schoolStudentProfile.m20') }}</p>
+        <p class="ssp__role-sub">{{ t('user.screens.schoolStudentProfile.role.chooseTitle') }}</p>
         <VRadioGroup v-model="roleKind" :options="roleOptions" :disabled="roleBusy" />
         <template v-if="kindError">
           <p class="ssp__offer-text" role="alert">
-            {{ t('user.screens.schoolStudentProfile.m21') }}
+            {{ t('user.screens.schoolStudentProfile.role.checkFailed') }}
           </p>
           <VButton variant="outline" @click="resolveCurrentKind">{{
-            t('user.screens.schoolStudentProfile.m22')
+            t('user.screens.schoolStudentProfile.=common:retry')
           }}</VButton>
         </template>
         <p v-else-if="roleKind === 'master' && currentKind === 'student'" class="ssp__offer-text">
@@ -176,9 +176,9 @@
 
     <VConfirmDialog
       :open="cancelOfferOpen"
-      :title="t('user.screens.schoolStudentProfile.m8')"
-      :message="t('user.screens.schoolStudentProfile.m9')"
-      :confirm-label="t('user.screens.schoolStudentProfile.m10')"
+      :title="t('user.screens.schoolStudentProfile.offer.cancelTitle')"
+      :message="t('user.screens.schoolStudentProfile.offer.cancelText')"
+      :confirm-label="t('user.screens.schoolStudentProfile.offer.cancelCta')"
       :loading="cancellingOffer"
       @confirm="onCancelOffer"
       @cancel="cancelOfferOpen = false"
@@ -197,9 +197,9 @@
          opens only on the server's 204. -->
     <VConfirmDialog
       :open="blockConfirmOpen"
-      :title="t('user.screens.schoolStudentProfile.m11')"
+      :title="t('user.screens.schoolStudentProfile.block.confirmTitle')"
       :message="blockCopy"
-      :confirm-label="t('user.screens.schoolStudentProfile.m12')"
+      :confirm-label="t('user.screens.schoolStudentProfile.block.cta')"
       danger
       warning-panel
       cancel-variant="primary"
@@ -218,10 +218,10 @@
          + compact pills. Shown after the server's 204 (BE-79 (2)). -->
     <VConfirmDialog
       :open="blockedDialogOpen"
-      :title="t('user.screens.schoolStudentProfile.m13')"
-      :message="t('user.screens.schoolStudentProfile.m14')"
-      :confirm-label="t('user.screens.schoolStudentProfile.m15')"
-      :cancel-label="t('user.screens.schoolStudentProfile.m16')"
+      :title="t('user.screens.schoolStudentProfile.toast.blocked')"
+      :message="t('user.screens.schoolStudentProfile.toast.blockedHint')"
+      :confirm-label="t('user.screens.schoolStudentProfile.report.cta')"
+      :cancel-label="t('user.screens.schoolStudentProfile.report.dismiss')"
       compact-actions
       warning-panel
       :warning-panel-icon="false"
@@ -292,7 +292,7 @@ const userId = computed(() => String(route.params.userId ?? ''))
 const studentName = computed(
   () =>
     profile.value?.display_name ??
-    String(route.query.name ?? t('user.screens.schoolStudentProfile.m23')),
+    String(route.query.name ?? t('user.screens.schoolStudentProfile.role.student')),
 )
 const studentAvatar = computed(() => profile.value?.avatar_url ?? String(route.query.avatar ?? ''))
 
@@ -402,10 +402,10 @@ const roleBusy = computed(() => rolePending.value || kindResolving.value)
 // «Изменить» disabled -- the popup never offers a demotion it does not send.
 const roleOptions = computed(() =>
   currentKind.value === 'master'
-    ? [{ value: 'master', label: t('user.screens.schoolStudentProfile.m24') }]
+    ? [{ value: 'master', label: t('user.screens.schoolStudentProfile.role.master') }]
     : [
-        { value: 'student', label: t('user.screens.schoolStudentProfile.m25') },
-        { value: 'master', label: t('user.screens.schoolStudentProfile.m26') },
+        { value: 'student', label: t('user.screens.schoolStudentProfile.role.student') },
+        { value: 'master', label: t('user.screens.schoolStudentProfile.role.master') },
       ],
 )
 
@@ -467,11 +467,11 @@ async function onRoleConfirm(): Promise<void> {
   rolePending.value = true
   try {
     await offerCuratorGroupMaster(groupId.value, userId.value)
-    toast.success(t('user.screens.schoolStudentProfile.m27'))
+    toast.success(t('user.screens.schoolStudentProfile.toast.offerSent'))
     roleOpen.value = false
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, t('user.screens.schoolStudentProfile.m28')))
+    toast.error(extractApiError(e, t('user.screens.schoolStudentProfile.toast.offerFailed')))
   } finally {
     rolePending.value = false
   }
@@ -485,11 +485,11 @@ async function onCancelOffer(): Promise<void> {
   cancellingOffer.value = true
   try {
     await cancelCuratorGroupMasterOffer(groupId.value, userId.value)
-    toast.success(t('user.screens.schoolStudentProfile.m29'))
+    toast.success(t('user.screens.schoolStudentProfile.toast.offerCancelled'))
     cancelOfferOpen.value = false
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, t('user.screens.schoolStudentProfile.m30')))
+    toast.error(extractApiError(e, t('user.screens.schoolStudentProfile.toast.offerCancelFailed')))
   } finally {
     cancellingOffer.value = false
   }
@@ -531,11 +531,11 @@ async function onBlockConfirm(): Promise<void> {
   } catch (e) {
     blockConfirmOpen.value = false
     if (e instanceof ApiResponseError && e.status === 404) {
-      toast.error(t('user.screens.schoolStudentProfile.m31'))
+      toast.error(t('user.screens.schoolStudentProfile.toast.alreadyLeftSchool'))
       void router.push(rosterRoute.value)
       return
     }
-    toast.error(extractApiError(e, t('user.screens.schoolStudentProfile.m32')))
+    toast.error(extractApiError(e, t('user.screens.schoolStudentProfile.toast.blockFailed')))
   } finally {
     blocking.value = false
   }

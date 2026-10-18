@@ -40,9 +40,9 @@
       </p>
       <template v-else>
         <section class="ai-conn__block" data-test="connect-block">
-          <h2 class="ai-conn__heading">{{ t('user.screens.aiConnections.m5') }}</h2>
+          <h2 class="ai-conn__heading">{{ t('user.screens.aiConnections.dev.howTo') }}</h2>
           <template v-if="mcpUrl">
-            <p class="ai-conn__text">{{ t('user.screens.aiConnections.m6') }}</p>
+            <p class="ai-conn__text">{{ t('user.screens.aiConnections.dev.addressLabel') }}</p>
             <code class="ai-conn__token" data-test="mcp-url">{{ mcpUrl }}</code>
             <VButton block variant="secondary" data-test="copy-url" @click="onCopyUrl">
               <IconCopy :size="18" /> Скопировать
@@ -61,7 +61,9 @@
         </section>
 
         <section class="ai-conn__block" data-test="connections-block">
-          <h2 class="ai-conn__heading">{{ t('user.screens.aiConnections.m7') }}</h2>
+          <h2 class="ai-conn__heading">
+            {{ t('user.screens.aiConnections.section.connections') }}
+          </h2>
           <p v-if="tokens.length === 0" class="ai-conn__empty" data-test="empty">
             Подключений пока нет.
           </p>
@@ -81,19 +83,21 @@
                   velo_pat_{{ token.prefix }}…
                 </div>
                 <div v-else class="ai-conn__item-prefix" data-test="oauth-kind">
-                  { t('user.screens.aiConnections.m25') }
+                  { t('user.screens.aiConnections.oauthConnected') }
                 </div>
                 <div class="ai-conn__item-meta">{{ scopeSummary(token.scopes) }}</div>
                 <div class="ai-conn__item-meta">
-                  {{ t('user.screens.aiConnections.m24', { created: fmt(token.created_at) }) }}
+                  {{
+                    t('user.screens.aiConnections.createdAt', { created: fmt(token.created_at) })
+                  }}
                   {{
                     token.last_used_at
-                      ? t('user.screens.aiConnections.m22', { at: fmt(token.last_used_at) })
-                      : t('user.screens.aiConnections.m23')
+                      ? t('user.screens.aiConnections.used.at', { at: fmt(token.last_used_at) })
+                      : t('user.screens.aiConnections.neverUsed')
                   }}
                 </div>
                 <div v-if="token.revoked_at" class="ai-conn__item-revoked">
-                  {{ t('user.screens.aiConnections.m26', { at: fmt(token.revoked_at) }) }}
+                  {{ t('user.screens.aiConnections.revokedAt', { at: fmt(token.revoked_at) }) }}
                 </div>
               </div>
               <VButton
@@ -117,7 +121,7 @@
                 людям; ненужный — отзовите.
               </p>
               <VButton block data-test="open-create" @click="openCreate">{{
-                t('user.screens.aiConnections.m8')
+                t('user.screens.aiConnections.create.cta')
               }}</VButton>
             </div>
           </VAccordion>
@@ -127,11 +131,11 @@
     <!-- Create, then the token shown once -- one dialog, two faces. -->
     <VModal :open="createOpen" :close-on-overlay="!createdToken" @close="closeCreate">
       <div v-if="!createdToken" class="ai-conn__form" data-test="create-form">
-        <h2 class="ai-conn__title">{{ t('user.screens.aiConnections.m9') }}</h2>
+        <h2 class="ai-conn__title">{{ t('user.screens.aiConnections.create.title') }}</h2>
         <VInput
           v-model="name"
-          :label="t('user.screens.aiConnections.m1')"
-          :placeholder="t('user.screens.aiConnections.m2')"
+          :label="t('user.screens.aiConnections.form.name')"
+          :placeholder="t('user.screens.aiConnections.form.namePlaceholder')"
           :maxlength="100"
         />
         <div class="ai-conn__scopes">
@@ -156,8 +160,8 @@
       </div>
 
       <div v-else class="ai-conn__once" data-test="token-once">
-        <h2 class="ai-conn__title">{{ t('user.screens.aiConnections.m10') }}</h2>
-        <p class="ai-conn__warning">{{ t('user.screens.aiConnections.m11') }}</p>
+        <h2 class="ai-conn__title">{{ t('user.screens.aiConnections.toast.created') }}</h2>
+        <p class="ai-conn__warning">{{ t('user.screens.aiConnections.create.copyHint') }}</p>
         <code class="ai-conn__token" data-test="token-text">{{ createdToken }}</code>
         <VButton block variant="secondary" data-test="copy" @click="onCopy">
           <IconCopy :size="18" /> Скопировать
@@ -166,16 +170,16 @@
           <IconCopy :size="18" /> Скопировать как заголовок
         </VButton>
         <VButton block data-test="done" @click="closeCreate">{{
-          t('user.screens.aiConnections.m12')
+          t('user.screens.aiConnections.create.done')
         }}</VButton>
       </div>
     </VModal>
 
     <VConfirmDialog
       :open="revokeTarget !== null"
-      :title="t('user.screens.aiConnections.m3')"
+      :title="t('user.screens.aiConnections.revoke.confirmTitle')"
       :message="revokeMessage"
-      :confirm-label="t('user.screens.aiConnections.m4')"
+      :confirm-label="t('user.screens.aiConnections.revoke.cta')"
       danger
       :loading="revoking"
       @confirm="onRevoke"
@@ -292,7 +296,7 @@ async function onCreate(): Promise<void> {
     createdToken.value = res.token
     tokens.value = [res.item, ...tokens.value]
   } catch (e) {
-    toast.error(extractApiError(e, t('user.screens.aiConnections.m13')))
+    toast.error(extractApiError(e, t('user.screens.aiConnections.toast.createFailed')))
   } finally {
     creating.value = false
   }
@@ -311,8 +315,8 @@ async function onCopy(): Promise<void> {
   if (!createdToken.value) return
   await copy(
     createdToken.value,
-    t('user.screens.aiConnections.m14'),
-    t('user.screens.aiConnections.m15'),
+    t('user.screens.aiConnections.toast.copied'),
+    t('user.screens.aiConnections.copy.entityToken'),
   )
 }
 
@@ -321,14 +325,18 @@ async function onCopyHeader(): Promise<void> {
   if (!createdToken.value) return
   await copy(
     bearerHeaderValue(createdToken.value),
-    t('user.screens.aiConnections.m16'),
-    t('user.screens.aiConnections.m17'),
+    t('user.screens.aiConnections.copy.headerValue'),
+    t('user.screens.aiConnections.copy.entityToken'),
   )
 }
 
 async function onCopyUrl(): Promise<void> {
   if (!mcpUrl) return
-  await copy(mcpUrl, t('user.screens.aiConnections.m18'), t('user.screens.aiConnections.m19'))
+  await copy(
+    mcpUrl,
+    t('user.screens.aiConnections.toast.addressCopied'),
+    t('user.screens.aiConnections.copy.entityAddress'),
+  )
 }
 
 function askRevoke(t: McpTokenItem): void {
@@ -342,10 +350,10 @@ async function onRevoke(): Promise<void> {
   try {
     const updated = await revokeMcpToken(target.id)
     tokens.value = tokens.value.map((t) => (t.id === updated.id ? updated : t))
-    toast.success(t('user.screens.aiConnections.m20'))
+    toast.success(t('user.screens.aiConnections.toast.revoked'))
     revokeTarget.value = null
   } catch (e) {
-    toast.error(extractApiError(e, t('user.screens.aiConnections.m21')))
+    toast.error(extractApiError(e, t('user.screens.aiConnections.toast.revokeFailed')))
   } finally {
     revoking.value = false
   }

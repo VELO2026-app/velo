@@ -19,20 +19,24 @@ Verified masters never reach here: applyGuard bounces them to the dashboard.
       <!-- Claiming -->
       <template v-if="claiming">
         <VLoader size="lg" />
-        <p class="invite-claim__subtitle">{{ t('masterScreens.masterInviteClaim.m1') }}</p>
+        <p class="invite-claim__subtitle">
+          {{ t('masterScreens.masterInviteClaim.proveryaem-priglashenie') }}
+        </p>
       </template>
 
       <!-- W11 fix (PROMPT №409): a network blip / timeout is not the same claim
            as "this one-time link is burned" -- offer a retry instead of telling
            the user their invite is dead when it might just be their connection. -->
       <template v-else-if="transientError">
-        <h2 class="invite-claim__title">{{ t('masterScreens.masterInviteClaim.m2') }}</h2>
+        <h2 class="invite-claim__title">
+          {{ t('masterScreens.masterInviteClaim.ne-udalos-proverit-priglashenie') }}
+        </h2>
         <p class="invite-claim__subtitle">
           Проблема с соединением. Проверьте интернет и попробуйте ещё раз.
         </p>
         <div class="invite-claim__actions">
           <VButton variant="primary" block :loading="claiming" @click="claim">{{
-            t('masterScreens.masterInviteClaim.m3')
+            t('masterScreens.masterInviteClaim.povtorit')
           }}</VButton>
         </div>
       </template>
@@ -78,7 +82,7 @@ async function claim(): Promise<void> {
   try {
     await claimMasterInvite(token)
     // Claimed (one-time, burned) — hand off to the regular apply wizard.
-    toast.success(t('masterScreens.masterInviteClaim.m4'))
+    toast.success(t('masterScreens.masterInviteClaim.priglashenie-prinyato'))
     void router.replace({ name: 'master-apply' })
   } catch (e) {
     // W11 fix: only a genuine invite_invalid (backend actually looked the
@@ -89,7 +93,7 @@ async function claim(): Promise<void> {
     // errorTitle stays here -- it is this screen's own framing, not a
     // generic error phrase the table is meant to hold one of.
     if (e instanceof ApiResponseError && e.code === 'invite_invalid') {
-      errorTitle.value = t('masterScreens.masterInviteClaim.m5')
+      errorTitle.value = t('masterScreens.masterInviteClaim.ssylka-nedeystvitelna')
       errorDescription.value = errorMessage('invite_invalid')
     } else {
       transientError.value = true

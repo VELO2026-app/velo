@@ -18,7 +18,11 @@
     "loading": "Загружаем…",
     "hide": "Скрыть",
     "all": "Все",
-    "reset": "Сбросить"
+    "reset": "Сбросить",
+    "backHome": "На главную",
+    "backToSchools": "К моим школам",
+    "submitSend": "Отправить",
+    "missedYou": "Вы не пришли"
   },
   "tabs": {
     "dashboard": "Дашборд",

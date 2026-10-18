@@ -64,7 +64,7 @@
     <Banner
       v-if="checkinAlert"
       variant="warning"
-      :title="t('user.screens.userDashboard.m1')"
+      :title="t('user.screens.userDashboard.checkinBanner.title')"
       :body="`${checkinAlert.practice.title}${checkinAlertTime}`"
       :clickable="true"
       class="dashboard__alert"
@@ -77,7 +77,9 @@
          NEAREST PRACTICE
          ================================================================ -->
     <section class="dashboard__section">
-      <h3 class="dashboard__section-title">{{ t('user.screens.userDashboard.m2') }}</h3>
+      <h3 class="dashboard__section-title">
+        {{ t('user.screens.userDashboard.sections.upcoming') }}
+      </h3>
 
       <!-- Loading -->
       <div
@@ -89,7 +91,7 @@
 
       <!-- Empty -->
       <div v-else-if="nearestBookings.length === 0" class="dashboard__empty">
-        <p class="dashboard__empty-text">{{ t('user.screens.userDashboard.m3') }}</p>
+        <p class="dashboard__empty-text">{{ t('user.screens.userDashboard.upcoming.empty') }}</p>
         <VButton size="sm" variant="outline" @click="router.push({ name: 'user-calendar' })">
           Найти практику
         </VButton>
@@ -112,11 +114,9 @@
               <VBadge v-if="isLive(b)" variant="success">
                 <span class="dashboard__live-dot" /> В эфире
               </VBadge>
-              <VBadge v-else-if="isFree(b)" variant="blue">{{
-                t('user.screens.userDashboard.m4')
-              }}</VBadge>
+              <VBadge v-else-if="isFree(b)" variant="blue">{{ t('common.free') }}</VBadge>
               <VBadge v-else variant="blue">
-                <IconCheck :size="12" />{{ t('user.screens.userDashboard.m5') }}</VBadge
+                <IconCheck :size="12" />{{ t('user.screens.userDashboard.paidBadge') }}</VBadge
               >
             </template>
           </PracticeListCard>
@@ -171,7 +171,9 @@
          user mode keeps the quick access, curator capability or not.
          ================================================================ -->
     <section class="dashboard__section">
-      <h3 class="dashboard__section-title">{{ t('user.screens.userDashboard.m6') }}</h3>
+      <h3 class="dashboard__section-title">
+        {{ t('user.screens.userDashboard.quickAccess.title') }}
+      </h3>
       <div class="dashboard__quick">
         <button
           type="button"
@@ -179,7 +181,9 @@
           @click="router.push({ name: 'user-diary-activity-new' })"
         >
           <IconMeditation class="dashboard__quick-lead" :size="22" />
-          <span class="dashboard__quick-label">{{ t('user.screens.userDashboard.m7') }}</span>
+          <span class="dashboard__quick-label">{{
+            t('user.screens.userDashboard.quickAccess.addActivity')
+          }}</span>
           <!-- Short chevron of the layout reference (no shaft) -- the long
                IconArrowRight glyph is a different silhouette. -->
           <svg class="dashboard__quick-chevron" viewBox="0 0 9 14" aria-hidden="true">
@@ -193,7 +197,7 @@
          PROGRESS
          ================================================================ -->
     <section class="dashboard__section">
-      <h3 class="dashboard__section-title">{{ t('user.screens.userDashboard.m8') }}</h3>
+      <h3 class="dashboard__section-title">{{ t('user.screens.userDashboard.progress.title') }}</h3>
       <div class="dashboard__stats-grid">
         <VStatCard class="dashboard__stat" :value="attendedCount" label="Практик пройдено" />
         <VStatCard class="dashboard__stat" :value="practiceHours" label="Часов в практике" />
@@ -271,7 +275,7 @@ const checkinAlertTime = computed((): string => {
   if (!checkinAlert.value) return ''
   const diffMs = new Date(checkinAlert.value.practice.scheduled_at).getTime() - now.value
   const diffMinutes = Math.round(diffMs / 60_000)
-  if (diffMinutes <= 0) return t('user.screens.userDashboard.m9')
+  if (diffMinutes <= 0) return t('user.screens.userDashboard.liveNow')
   if (diffMinutes < 60) return ` • через ${diffMinutes} мин`
   const hours = Math.floor(diffMinutes / 60)
   return ` • через ${hours} ч`
@@ -327,9 +331,9 @@ function isLive(b: BookingWithPracticeResponse): boolean {
 }
 
 /**
- * Practice title without a trailing t('user.screens.userDashboard.m10') marker. Some seeded / manually
- * created practices include t('user.screens.userDashboard.m11') in their title (see seed.py); since the
- * card already shows a t('user.screens.userDashboard.m12') badge for live practices, the suffix in the
+ * Practice title without a trailing «(эфир)» marker. Some seeded / manually
+ * created practices include «(эфир)» in their title (see seed.py); since the
+ * card already shows a t('user.screens.userDashboard.liveBadge') badge for live practices, the suffix in the
  * title is redundant — strip it on the client.
  */
 function practiceTitle(b: BookingWithPracticeResponse): string {
@@ -357,7 +361,7 @@ function zoomStateFor(b: BookingWithPracticeResponse): ZoomEntryStateKind {
 function onZoomClick(b: BookingWithPracticeResponse): void {
   if (zoomStateFor(b) !== 'ready') {
     // Backstop only — the button is disabled in this state (R1).
-    toast.info(t('user.screens.userDashboard.m13'))
+    toast.info(t('user.screens.userDashboard.zoomPreparing'))
     return
   }
   void router.push({ name: 'practice-live', params: { practiceId: b.practice_id } })
@@ -384,14 +388,14 @@ function openBooking(b: BookingWithPracticeResponse): void {
 }
 
 /**
- * t('user.screens.userDashboard.m14') / t('user.screens.userDashboard.m15')
+ * «Завтра, 07:00» / «5 янв, 10:00»
  * F5: rendered in the VIEWER'S own profile timezone (the profile decides),
  * not the practice's timezone. format helpers apply their own neutral
  * default if the profile timezone is somehow absent.
  */
 const viewerTz = useViewerTimezone()
 
-// Dashboard t('user.screens.userDashboard.m16'): show BOTH the day (relative «Сегодня»/«Завтра»
+// Dashboard t('user.screens.userDashboard.sections.nearestCard'): show BOTH the day (relative «Сегодня»/«Завтра»
 // or the date «10 июня») AND the time, stacked as two lines in the card — so the
 // time is never lost on a future-day card (operator 2026-06-09).
 function practiceDate(b: BookingWithPracticeResponse): string {

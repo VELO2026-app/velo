@@ -21,11 +21,11 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminCheckinRate.m1')"
+      :title="t('adminScreens.adminCheckinRate.ne-udalos-zagruzit-metriku')"
       :description="error"
     >
       <VButton size="sm" variant="outline" @click="load">{{
-        t('adminScreens.adminCheckinRate.m2')
+        t('adminScreens.adminCheckinRate.povtorit')
       }}</VButton>
     </VEmptyState>
 
@@ -41,12 +41,16 @@
 
       <VBarChart :bars="weekBars" />
 
-      <h3 class="admin-detail__section">{{ t('adminScreens.adminCheckinRate.m3') }}</h3>
+      <h3 class="admin-detail__section">
+        {{ t('adminScreens.adminCheckinRate.nizkiy-check-in-praktiki') }}
+      </h3>
       <template v-if="lowPractices.length">
         <VListRow v-for="p in lowPractices" :key="p.id" :title="p.title" :subtitle="p.subtitle" />
       </template>
       <VCard v-else
-        ><p class="admin-detail__empty">{{ t('adminScreens.adminCheckinRate.m4') }}</p></VCard
+        ><p class="admin-detail__empty">
+          {{ t('adminScreens.adminCheckinRate.dannykh-poka-net') }}
+        </p></VCard
       >
     </template>
   </div>
@@ -105,7 +109,7 @@ async function load(): Promise<void> {
   try {
     data.value = await getCheckinMetric(period, offset)
   } catch (e) {
-    error.value = extractApiError(e, t('adminScreens.adminCheckinRate.m5'))
+    error.value = extractApiError(e, t('adminScreens.adminCheckinRate.oshibka-zagruzki'))
   } finally {
     loading.value = false
   }

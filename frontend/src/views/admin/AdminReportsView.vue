@@ -20,7 +20,7 @@
   <div class="admin-reports">
     <header class="admin-reports__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-reports__title">{{ t('adminScreens.adminReports.m5') }}</h1>
+      <h1 class="admin-reports__title">{{ t('adminScreens.adminReports.moderatsiya') }}</h1>
       <span class="admin-reports__count">{{ headerCount }}</span>
     </header>
 
@@ -31,7 +31,7 @@
     </button>
 
     <div v-if="!filter.categories.length" class="admin-reports__active">
-      {{ t('adminScreens.adminReports.m6') }}
+      {{ t('adminScreens.adminReports.vse') }}
     </div>
 
     <!-- Loading: initial -->
@@ -43,12 +43,12 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminReports.m1')"
-      :description="t('adminScreens.adminReports.m2')"
+      :title="t('adminScreens.adminReports.ne-udalos-zagruzit')"
+      :description="t('adminScreens.adminReports.proverte-soedinenie-i-poprobuyte')"
     >
       <template #action
         ><VButton variant="primary" @click="loadInitial">{{
-          t('adminScreens.adminReports.m7')
+          t('adminScreens.adminReports.povtorit')
         }}</VButton></template
       >
     </VEmptyState>
@@ -57,8 +57,8 @@
     <VEmptyState
       v-else-if="items.length === 0"
       icon="success"
-      :title="t('adminScreens.adminReports.m3')"
-      :description="t('adminScreens.adminReports.m4')"
+      :title="t('adminScreens.adminReports.obrashcheniy-net')"
+      :description="t('adminScreens.adminReports.po-vybrannym-filtram-nichego')"
     />
 
     <template v-else>
@@ -142,9 +142,9 @@ const filter = ref<ModerationFilter>({
 })
 
 const CATEGORY_LABELS: Record<string, string> = {
-  tickets: t('adminScreens.adminReports.m8'),
-  complaints: t('adminScreens.adminReports.m9'),
-  payments: t('adminScreens.adminReports.m10'),
+  tickets: t('adminScreens.adminReports.tikety'),
+  complaints: t('adminScreens.adminReports.zhaloby'),
+  payments: t('adminScreens.adminReports.platezhi'),
 }
 
 const headerCount = computed<string>(() => (total.value ? String(total.value) : '—'))
@@ -153,14 +153,14 @@ const headerCount = computed<string>(() => (total.value ? String(total.value) : 
 // backend yet, so this is a display-only echo of the chosen chips).
 const categoryLabel = computed<string>(() => {
   const cats = filter.value.categories
-  if (cats.length === 0) return t('adminScreens.adminReports.m11')
+  if (cats.length === 0) return t('adminScreens.adminReports.vse')
   return cats.map((c) => CATEGORY_LABELS[c] ?? c).join(', ')
 })
 
 // The filter pill echoes the active category (operator «payments»/«complaints»
 // variants); the «Платежи» selection swaps the card glyph to the payment $.
 const pillLabel = computed<string>(() =>
-  filter.value.categories.length ? categoryLabel.value : t('adminScreens.adminReports.m12'),
+  filter.value.categories.length ? categoryLabel.value : t('adminScreens.adminReports.filtr'),
 )
 const isPayments = computed<boolean>(() => filter.value.categories.includes('payments'))
 
@@ -197,7 +197,7 @@ async function loadInitial(): Promise<void> {
   } catch (e) {
     if (myGeneration !== generation) return
     error.value = true
-    toast.error(extractApiError(e, t('adminScreens.adminReports.m13')))
+    toast.error(extractApiError(e, t('adminScreens.adminReports.oshibka-zagruzki-obrashcheniy')))
   } finally {
     if (myGeneration === generation) loading.value = false
   }
@@ -210,7 +210,7 @@ async function loadMore(): Promise<void> {
     items.value.push(...res.items)
     hasMore.value = items.value.length < res.total
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminReports.m14')))
+    toast.error(extractApiError(e, t('adminScreens.adminReports.oshibka-zagruzki')))
   } finally {
     loadingMore.value = false
   }

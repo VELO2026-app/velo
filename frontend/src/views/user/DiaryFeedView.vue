@@ -73,7 +73,7 @@
           <!-- Filter (funnel) + Search (magnifier). "Связи" (Relationships)
                is an AI feature outside the MVP and is intentionally omitted. -->
           <VMenuItem
-            :ariaLabel="t('user.screens.diaryFeed.m1')"
+            :ariaLabel="t('user.screens.diaryFeed.filter.title')"
             @click="
               () => {
                 openFilter()
@@ -95,7 +95,7 @@
             </svg>
           </VMenuItem>
           <VMenuItem
-            :ariaLabel="t('user.screens.diaryFeed.m2')"
+            :ariaLabel="t('user.screens.diaryFeed.search.title')"
             @click="
               () => {
                 toggleSearch()
@@ -196,11 +196,13 @@
       <VEmptyState
         v-else-if="feedError && items.length === 0"
         icon="warning"
-        :title="t('user.screens.diaryFeed.m3')"
-        :description="t('user.screens.diaryFeed.m4')"
+        :title="t('user.screens.diaryFeed.loadFailed')"
+        :description="t('user.screens.diaryFeed.loadFailedHint')"
       >
         <template #action>
-          <VButton variant="primary" @click="reload">{{ t('user.screens.diaryFeed.m8') }}</VButton>
+          <VButton variant="primary" @click="reload">{{
+            t('user.screens.diaryFeed.common.retry')
+          }}</VButton>
         </template>
       </VEmptyState>
 
@@ -215,7 +217,7 @@
            a jump window is open (the thread rung owns the screen then). -->
       <VEmptyState
         v-else-if="searchActive && !jumpActive && items.length === 0"
-        :title="t('user.screens.diaryFeed.m5')"
+        :title="t('user.screens.diaryFeed.search.noHits')"
         :description="`По запросу «${feedFilters.search}» записей нет`"
       >
         <template #icon>
@@ -231,7 +233,7 @@
         </template>
         <template #action>
           <VButton variant="primary" @click="onResetSearch">{{
-            t('user.screens.diaryFeed.m9')
+            t('user.screens.diaryFeed.search.reset')
           }}</VButton>
         </template>
       </VEmptyState>
@@ -263,8 +265,8 @@
       <!-- Empty -->
       <VEmptyState
         v-else-if="items.length === 0"
-        :title="t('user.screens.diaryFeed.m6')"
-        :description="t('user.screens.diaryFeed.m7')"
+        :title="t('user.screens.diaryFeed.empty.title')"
+        :description="t('user.screens.diaryFeed.empty.text')"
       >
         <template #icon><IconDiaryBook :size="64" /></template>
       </VEmptyState>
@@ -320,7 +322,7 @@
 
     <!-- Undo bar: shown after deleting an entry (Figma screen 58) -->
     <div v-if="deletedEntryId" class="diary-feed__undo">
-      <span class="diary-feed__undo-text">{{ t('user.screens.diaryFeed.m10') }}</span>
+      <span class="diary-feed__undo-text">{{ t('user.screens.diaryFeed.toast.deleted') }}</span>
       <button type="button" class="diary-feed__undo-btn" :disabled="undoing" @click="onUndoDelete">
         Отменить
       </button>
@@ -742,7 +744,7 @@ async function clearFilter(): Promise<void> {
 // -- Undo bar (after deleting an entry on EntryView) -------------------------
 //
 // EntryView soft-deletes then navigates back here with ?deleted=<entryId>.
-// We surface an t('user.screens.diaryFeed.m11') bar (Figma screen 58); tapping
+// We surface an «Запись удалена / Отменить» bar (Figma screen 58); tapping
 // Отменить restores the entry. The bar auto-dismisses after a few seconds.
 
 const UNDO_DURATION_MS = 6000
@@ -1282,7 +1284,7 @@ onBeforeUnmount(() => {
   padding-bottom: var(--space-6);
 }
 
-/* -- Search scrim: RETIRED (owner 2026-09-09: t('user.screens.diaryFeed.m12'))
+/* -- Search scrim: RETIRED (owner 2026-09-09: «блюр и затемнение убираем»)
    -- no dim, no soft blur; the screen behind the search stays fully visible
    and crisp. Closing the search is the bar's OUTER x. */
 
@@ -1416,7 +1418,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
-  /* Deletion tone (Figma t('user.screens.diaryFeed.m13')): pink fill + pink border +
+  /* Deletion tone (Figma «запись удалена.svg»): pink fill + pink border +
      rose text, distinct from the neutral glass chrome. */
   background: var(--velo-glass-pink-40);
   border: 1px solid var(--velo-pink-300);

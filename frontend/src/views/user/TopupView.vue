@@ -20,15 +20,15 @@
          screen ("Ваш баланс" / "Выберите сумму" are section-level labels, not a
          page title) -- sr-only heading so screen-reader users navigating by
          heading still get a page label for this screen. -->
-    <h1 class="velo-sr-only">{{ t('user.screens.topup.m1') }}</h1>
+    <h1 class="velo-sr-only">{{ t('user.screens.topup.title') }}</h1>
     <!-- Balance -->
     <div class="topup__balance">
-      <span class="topup__balance-label">{{ t('user.screens.topup.m2') }}</span>
+      <span class="topup__balance-label">{{ t('user.screens.topup.balanceLabel') }}</span>
       <span class="topup__balance-value">{{ balanceStore.formattedBalance }}</span>
     </div>
 
     <!-- Preset amounts -->
-    <div class="topup__section-title">{{ t('user.screens.topup.m3') }}</div>
+    <div class="topup__section-title">{{ t('user.screens.topup.amount.title') }}</div>
     <div class="topup__presets">
       <button
         v-for="preset in PRESETS"
@@ -140,8 +140,8 @@ const effectiveCents = computed(() => (customMode.value ? customCents.value : se
 const validationError = computed(() => {
   if (!customMode.value) return ''
   if (!customValue.value) return ''
-  if (customCents.value < MIN_CENTS) return t('user.screens.topup.m4')
-  if (customCents.value > MAX_CENTS) return t('user.screens.topup.m5')
+  if (customCents.value < MIN_CENTS) return t('user.screens.topup.amount.min')
+  if (customCents.value > MAX_CENTS) return t('user.screens.topup.amount.max')
   return ''
 })
 
@@ -195,14 +195,14 @@ async function onTopup(): Promise<void> {
 
     // C-1: Validate redirect URL before navigating.
     if (!isAllowedRedirectUrl(response.checkout_url)) {
-      toast.error(t('user.screens.topup.m6'))
+      toast.error(t('user.screens.topup.error.invalidUrl'))
       return
     }
 
     // Redirect to Stripe checkout (or success URL in stub mode).
     host.location.href = response.checkout_url
   } catch (e) {
-    toast.error(extractApiError(e, t('user.screens.topup.m7')))
+    toast.error(extractApiError(e, t('user.screens.topup.error.paymentFailed')))
   } finally {
     loading.value = false
   }

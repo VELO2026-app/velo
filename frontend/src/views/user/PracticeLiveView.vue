@@ -67,8 +67,8 @@
       <VEmptyState
         v-if="resolveFailed"
         icon="warning"
-        :title="t('user.screens.practiceLive.m1')"
-        :description="t('user.screens.practiceLive.m2')"
+        :title="t('user.screens.practiceLive.notFound.title')"
+        :description="t('user.screens.practiceLive.notFound.text')"
       />
 
       <!-- F4: the server has no Meeting SDK keys (or runs the Zoom stub).
@@ -76,15 +76,15 @@
       <VEmptyState
         v-else-if="sdkNotConfigured"
         icon="warning"
-        :title="t('user.screens.practiceLive.m3')"
-        :description="t('user.screens.practiceLive.m4')"
+        :title="t('user.screens.practiceLive.zoomNotConfigured')"
+        :description="t('user.screens.practiceLive.zoomServerBroken')"
       />
 
       <VEmptyState
         v-else-if="zoomEntry?.kind === 'cancelled'"
         icon="warning"
-        :title="t('user.screens.practiceLive.m5')"
-        :description="t('user.screens.practiceLive.m6')"
+        :title="t('user.screens.practiceLive.cancelled.title')"
+        :description="t('user.screens.practiceLive.cancelled.text')"
       />
 
       <!-- Links (3 October): 'unavailable' -- the meeting exists and this
@@ -94,8 +94,8 @@
       <VEmptyState
         v-else-if="zoomEntry?.kind === 'unavailable'"
         icon="warning"
-        :title="t('user.screens.practiceLive.m7')"
-        :description="t('user.screens.practiceLive.m8')"
+        :title="t('user.screens.practiceLive.entryUnavailable')"
+        :description="t('user.screens.practiceLive.registrationFailed')"
       />
 
       <!-- F4, owner decision 12: no guest entry from inside the app. A person
@@ -104,10 +104,12 @@
       <VEmptyState
         v-else-if="zoomEntry?.kind === 'guest'"
         icon="calendar"
-        :title="t('user.screens.practiceLive.m9')"
-        :description="t('user.screens.practiceLive.m10')"
+        :title="t('user.screens.practiceLive.notBooked')"
+        :description="t('user.screens.practiceLive.notBookedHint')"
       >
-        <VButton size="sm" @click="goToPractice">{{ t('user.screens.practiceLive.m11') }}</VButton>
+        <VButton size="sm" @click="goToPractice">{{
+          t('user.screens.practiceLive.toPractice')
+        }}</VButton>
       </VEmptyState>
 
       <!-- The practice's own master: he starts the meeting as host, inside
@@ -146,12 +148,12 @@
           @click="onEnter"
         >
           <template v-if="zoomEntry?.kind === 'failed'">{{
-            t('user.screens.practiceLive.m12')
+            t('user.screens.practiceLive.entryPreparing')
           }}</template>
           <template v-else-if="zoomEntry?.kind === 'pending'">{{
-            t('user.screens.practiceLive.m13')
+            t('user.screens.practiceLive.entryPreparing2')
           }}</template>
-          <template v-else>{{ t('user.screens.practiceLive.m14') }}</template>
+          <template v-else>{{ t('user.screens.practiceLive.join') }}</template>
         </VButton>
       </template>
 
@@ -167,7 +169,9 @@
           :disabled="alreadyCheckedIn"
           @click="onCheckin"
         >
-          <template v-if="alreadyCheckedIn">{{ t('user.screens.practiceLive.m15') }}</template>
+          <template v-if="alreadyCheckedIn">{{
+            t('user.screens.practiceLive.checkinDone')
+          }}</template>
           <template v-else>Check-in</template>
         </VButton>
 
@@ -203,7 +207,7 @@ import { ApiResponseError } from '@/api/client'
 import type { ZoomEntryResolveResponse } from '@/api/types'
 
 /** Owner decision 11, verbatim. */
-const CAMERA_HINT = t('user.screens.practiceLive.m16')
+const CAMERA_HINT = t('user.screens.practiceLive.desktopCameraHint')
 
 const route = useRoute()
 const router = useRouter()
@@ -288,11 +292,11 @@ async function enterThroughSdk(): Promise<void> {
       return
     }
     if (e instanceof ApiResponseError && e.code === 'zoom_entry_not_joinable') {
-      toast.info(t('user.screens.practiceLive.m17'))
+      toast.info(t('user.screens.practiceLive.toast.stateChanged'))
       await loadEntry()
       return
     }
-    toast.error(extractApiError(e, t('user.screens.practiceLive.m18')))
+    toast.error(extractApiError(e, t('user.screens.practiceLive.toast.zoomOpenFailed')))
     return
   }
   // The student leaves to his feedback screen; the master to his dashboard
@@ -309,7 +313,7 @@ async function enterThroughSdk(): Promise<void> {
   } catch {
     // enterZoomMeeting has already taken its style off again.
     inMeeting = false
-    toast.error(t('user.screens.practiceLive.m19'))
+    toast.error(t('user.screens.practiceLive.toast.zoomOpenFailed'))
   }
 }
 
@@ -374,7 +378,7 @@ function goBack(): void {
 }
 
 /**
- * t('user.screens.practiceLive.m20'): always returns to the dashboard. We only call the
+ * t('user.screens.practiceLive.leave'): always returns to the dashboard. We only call the
  * leave API if the user had actually joined (otherwise the backend returns
  * 400 "Cannot leave without joining first").
  */
@@ -477,7 +481,7 @@ onMounted(async () => {
   color: var(--velo-text-secondary);
 }
 
-/* t('user.screens.practiceLive.m21') badge */
+/* t('user.screens.practiceLive.liveBadge') badge */
 .live__badge {
   display: inline-flex;
   align-items: center;

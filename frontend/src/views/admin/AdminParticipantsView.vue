@@ -17,7 +17,7 @@
   <div class="admin-list">
     <header class="admin-list__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-list__title">{{ t('adminScreens.adminParticipants.m3') }}</h1>
+      <h1 class="admin-list__title">{{ t('adminScreens.adminParticipants.uchastniki') }}</h1>
       <span class="admin-list__count">{{ headerCount }}</span>
     </header>
 
@@ -48,7 +48,7 @@
 
       <div v-if="hasMore" class="admin-list__more">
         <VButton variant="outline" @click="loadMore">{{
-          t('adminScreens.adminParticipants.m4')
+          t('adminScreens.adminParticipants.pokazat-eshche')
         }}</VButton>
       </div>
     </template>
@@ -59,18 +59,18 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminParticipants.m1')"
-      :description="t('adminScreens.adminParticipants.m2')"
+      :title="t('adminScreens.adminParticipants.ne-udalos-zagruzit-uchastnikov')"
+      :description="t('adminScreens.adminParticipants.proverte-soedinenie-i-poprobuyte')"
     >
       <template #action
         ><VButton variant="primary" @click="load(true)">{{
-          t('adminScreens.adminParticipants.m5')
+          t('adminScreens.adminParticipants.povtorit')
         }}</VButton></template
       >
     </VEmptyState>
 
     <VCard v-else-if="!loading">
-      <p class="admin-list__empty">{{ t('adminScreens.adminParticipants.m6') }}</p>
+      <p class="admin-list__empty">{{ t('adminScreens.adminParticipants.dannykh-poka-net') }}</p>
     </VCard>
   </div>
 </template>
@@ -115,11 +115,11 @@ const headerCount = computed<string>(() =>
 const segOptions = computed<SegmentOption[]>(() => [
   {
     value: 'all',
-    label: t('adminScreens.adminParticipants.m7'),
+    label: t('adminScreens.adminParticipants.vse'),
     badge: totalCount.value ?? undefined,
   },
-  { value: 'new', label: t('adminScreens.adminParticipants.m8') },
-  { value: 'active', label: t('adminScreens.adminParticipants.m9') },
+  { value: 'new', label: t('adminScreens.adminParticipants.novye') },
+  { value: 'active', label: t('adminScreens.adminParticipants.aktivnye') },
 ])
 
 async function load(reset: boolean): Promise<void> {
@@ -132,10 +132,10 @@ async function load(reset: boolean): Promise<void> {
     total.value = res.total
     participants.value = reset ? res.items : [...participants.value, ...res.items]
   } catch {
-    toast.error(t('adminScreens.adminParticipants.m10'))
+    toast.error(t('adminScreens.adminParticipants.ne-udalos-zagruzit-uchastnikov'))
     // A failed initial/filter load (reset) means the list below is genuinely
     // unknown, not empty -- render the real error state (W12) instead of
-    // falling through to t('adminScreens.adminParticipants.m11'). A failed loadMore leaves the
+    // falling through to t('adminScreens.adminParticipants.dannykh-poka-net'). A failed loadMore leaves the
     // already-loaded page visible; the toast is enough there.
     if (reset) error.value = true
   } finally {
@@ -150,7 +150,7 @@ function loadMore(): void {
   void load(false)
 }
 
-// t('adminScreens.adminParticipants.m12') — registration month, from created_at (UTC).
+// t('adminScreens.adminParticipants.dek-2025') — registration month, from created_at (UTC).
 function joinedLabel(iso: string): string {
   const d = new Date(iso)
   const month = new Intl.DateTimeFormat('ru-RU', { month: 'short', timeZone: 'UTC' })
@@ -159,14 +159,14 @@ function joinedLabel(iso: string): string {
   return `${month.charAt(0).toUpperCase()}${month.slice(1)} ${d.getUTCFullYear()}`
 }
 
-// t('adminScreens.adminParticipants.m13') / t('adminScreens.adminParticipants.m14') / t('adminScreens.adminParticipants.m15') — last app-open, from last_login_at.
+// t('adminScreens.adminParticipants.segodnya') / t('adminScreens.adminParticipants.vchera') / t('adminScreens.adminParticipants.24-yanvarya') — last app-open, from last_login_at.
 function lastActiveLabel(iso: string): string {
   return dayLabelOf(iso)
 }
 
 // No admin->user messaging endpoint yet -> stub toast (build-full-design).
 function messageStub(): void {
-  toast.info(t('adminScreens.adminParticipants.m16'))
+  toast.info(t('adminScreens.adminParticipants.soobshcheniya-poka-nedostupny'))
 }
 </script>
 

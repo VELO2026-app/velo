@@ -21,7 +21,7 @@
   <div class="admin-list">
     <header class="admin-list__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-list__title">{{ t('adminScreens.adminPractices.m2') }}</h1>
+      <h1 class="admin-list__title">{{ t('adminScreens.adminPractices.praktiki') }}</h1>
       <span class="admin-list__count">{{ headerCount }}</span>
     </header>
 
@@ -32,11 +32,11 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminPractices.m1')"
+      :title="t('adminScreens.adminPractices.ne-udalos-zagruzit-praktiki')"
       :description="error"
     >
       <VButton size="sm" variant="outline" @click="load">{{
-        t('adminScreens.adminPractices.m3')
+        t('adminScreens.adminPractices.povtorit')
       }}</VButton>
     </VEmptyState>
 
@@ -59,7 +59,7 @@
     </div>
 
     <VCard v-else>
-      <p class="admin-list__empty">{{ t('adminScreens.adminPractices.m4') }}</p>
+      <p class="admin-list__empty">{{ t('adminScreens.adminPractices.dannykh-poka-net') }}</p>
     </VCard>
   </div>
 </template>
@@ -95,11 +95,11 @@ const headerCount = computed<string>(() => (total.value !== null ? String(total.
 const segOptions = computed<SegmentOption[]>(() => [
   {
     value: 'all',
-    label: t('adminScreens.adminPractices.m5'),
+    label: t('adminScreens.adminPractices.vse'),
     badge: totalCount.value ?? undefined,
   },
-  { value: 'upcoming', label: t('adminScreens.adminPractices.m6') },
-  { value: 'past', label: t('adminScreens.adminPractices.m7') },
+  { value: 'upcoming', label: t('adminScreens.adminPractices.predstoyashchie') },
+  { value: 'past', label: t('adminScreens.adminPractices.proshedshie') },
 ])
 
 function whenLabel(p: AdminPracticeListItem): string {
@@ -131,7 +131,7 @@ async function load(): Promise<void> {
     practices.value = res.items
     total.value = res.total
   } catch (e) {
-    error.value = extractApiError(e, t('adminScreens.adminPractices.m8'))
+    error.value = extractApiError(e, t('adminScreens.adminPractices.oshibka-zagruzki'))
   } finally {
     loading.value = false
   }

@@ -18,7 +18,9 @@
   <div class="amr">
     <header class="amr__top">
       <VBackButton @click="router.back()" />
-      <h1 class="amr__title">{{ t('adminScreens.adminMethodRequests.m10') }}</h1>
+      <h1 class="amr__title">
+        {{ t('adminScreens.adminMethodRequests.zayavki-na-smenu-metodov') }}
+      </h1>
       <span class="amr__count">{{ headerCount }}</span>
     </header>
 
@@ -31,12 +33,12 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminMethodRequests.m1')"
-      :description="t('adminScreens.adminMethodRequests.m2')"
+      :title="t('adminScreens.adminMethodRequests.ne-udalos-zagruzit')"
+      :description="t('adminScreens.adminMethodRequests.proverte-soedinenie-i-poprobuyte')"
     >
       <template #action>
         <VButton variant="primary" @click="loadInitial">{{
-          t('adminScreens.adminMethodRequests.m11')
+          t('adminScreens.adminMethodRequests.povtorit')
         }}</VButton>
       </template>
     </VEmptyState>
@@ -45,8 +47,8 @@
     <VEmptyState
       v-else-if="items.length === 0"
       icon="success"
-      :title="t('adminScreens.adminMethodRequests.m3')"
-      :description="t('adminScreens.adminMethodRequests.m4')"
+      :title="t('adminScreens.adminMethodRequests.zayavok-net')"
+      :description="t('adminScreens.adminMethodRequests.mastera-ne-zaprashivali-smenu')"
     />
 
     <template v-else>
@@ -61,7 +63,7 @@
           </div>
 
           <div class="mrq__block">
-            <div class="mrq__blabel">{{ t('adminScreens.adminMethodRequests.m12') }}</div>
+            <div class="mrq__blabel">{{ t('adminScreens.adminMethodRequests.seychas') }}</div>
             <div class="mrq__chips">
               <VChip v-for="m in item.current_methods ?? []" :key="m" size="sm">{{ m }}</VChip>
               <span v-if="!item.current_methods?.length" class="mrq__empty">—</span>
@@ -69,7 +71,7 @@
           </div>
 
           <div class="mrq__block">
-            <div class="mrq__blabel">{{ t('adminScreens.adminMethodRequests.m13') }}</div>
+            <div class="mrq__blabel">{{ t('adminScreens.adminMethodRequests.predlozheno') }}</div>
             <div class="mrq__chips">
               <VChip v-for="m in item.proposed_methods ?? []" :key="m" size="sm">{{ m }}</VChip>
             </div>
@@ -101,14 +103,14 @@
     <!-- Reject reason (bottom-sheet, mirrors AdminMasterReview) -->
     <VBottomSheet
       :open="!!rejectTarget"
-      :title="t('adminScreens.adminMethodRequests.m5')"
-      :save-label="t('adminScreens.adminMethodRequests.m6')"
+      :title="t('adminScreens.adminMethodRequests.prichina-otkaza')"
+      :save-label="t('adminScreens.adminMethodRequests.otklonit-zayavku')"
       @save="onReject"
       @close="closeReject"
     >
       <VTextarea
         v-model="rejectReason"
-        :placeholder="t('adminScreens.adminMethodRequests.m7')"
+        :placeholder="t('adminScreens.adminMethodRequests.ukazhite-prichinu-otkloneniya-zaprosa')"
         :rows="3"
         :error="rejectError"
       />
@@ -118,8 +120,8 @@
     <VConfirmDialog
       :open="!!promoteTarget"
       :message="promoteMessage"
-      :confirm-label="t('adminScreens.adminMethodRequests.m8')"
-      :cancel-label="t('adminScreens.adminMethodRequests.m9')"
+      :confirm-label="t('adminScreens.adminMethodRequests.dobavit-v-katalog')"
+      :cancel-label="t('adminScreens.adminMethodRequests.tolko-etomu-masteru')"
       :loading="!!promoteTarget && busyId === promoteTarget.user_id"
       @confirm="onPromoteConfirm"
       @cancel="onPromoteCancel"
@@ -213,7 +215,7 @@ async function loadInitial(): Promise<void> {
     hasMore.value = res.items.length < res.total
   } catch (e) {
     error.value = true
-    toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.m14')))
+    toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.oshibka-zagruzki-zayavok')))
   } finally {
     loading.value = false
   }
@@ -226,7 +228,7 @@ async function loadMore(): Promise<void> {
     items.value.push(...res.items)
     hasMore.value = items.value.length < res.total
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.m15')))
+    toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.oshibka-zagruzki')))
   } finally {
     loadingMore.value = false
   }
@@ -238,7 +240,7 @@ function removeItem(userId: string): void {
   total.value = Math.max(0, total.value - 1)
 }
 
-/** Tap t('adminScreens.adminMethodRequests.m16'): pause on a confirm if any proposed method doesn't match
+/** Tap t('adminScreens.adminMethodRequests.odobrit'): pause on a confirm if any proposed method doesn't match
  *  the taxonomy (custom/unmatched), else approve immediately (unchanged).
  *  FE-89: the unmatched labels travel SEPARATELY (parsed.custom) -- the old
  *  joined customText string scoped ONE direction named «A, B» and glued the
@@ -263,10 +265,10 @@ async function doApprove(
   busyId.value = item.user_id
   try {
     await approveMethodChange(item.user_id, promote, masterOnly)
-    toast.success(t('adminScreens.adminMethodRequests.m17'))
+    toast.success(t('adminScreens.adminMethodRequests.metody-obnovleny'))
     removeItem(item.user_id)
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.m18')))
+    toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.oshibka-pri-odobrenii')))
   } finally {
     busyId.value = null
     promoteTarget.value = null
@@ -307,17 +309,17 @@ async function onReject(): Promise<void> {
   if (!target || busyId.value) return
   rejectError.value = ''
   if (!rejectReason.value.trim()) {
-    rejectError.value = t('adminScreens.adminMethodRequests.m19')
+    rejectError.value = t('adminScreens.adminMethodRequests.ukazhite-prichinu-otkaza')
     return
   }
   busyId.value = target.user_id
   try {
     await rejectMethodChange(target.user_id, rejectReason.value.trim())
-    toast.success(t('adminScreens.adminMethodRequests.m20'))
+    toast.success(t('adminScreens.adminMethodRequests.zayavka-otklonena'))
     removeItem(target.user_id)
     rejectTarget.value = null
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.m21')))
+    toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.oshibka-pri-otklonenii')))
   } finally {
     busyId.value = null
   }

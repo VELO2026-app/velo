@@ -19,7 +19,9 @@
   <div class="admin-detail">
     <header class="admin-detail__top">
       <VBackButton @click="router.back()" />
-      <span class="admin-detail__title">{{ t('adminScreens.adminPracticeDetail.m2') }}</span>
+      <span class="admin-detail__title">{{
+        t('adminScreens.adminPracticeDetail.detali-praktiki')
+      }}</span>
     </header>
 
     <div v-if="loading" class="admin-detail__loader"><VLoader size="lg" /></div>
@@ -27,11 +29,11 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminPracticeDetail.m1')"
+      :title="t('adminScreens.adminPracticeDetail.ne-udalos-zagruzit-praktiku')"
       :description="error"
     >
       <VButton size="sm" variant="outline" @click="load">{{
-        t('adminScreens.adminPracticeDetail.m3')
+        t('adminScreens.adminPracticeDetail.povtorit')
       }}</VButton>
     </VEmptyState>
 
@@ -62,13 +64,13 @@
         <h3 class="admin-detail__section admin-detail__section--first">Zoom</h3>
         <div class="admin-detail__zoom-row">
           <span class="admin-detail__zoom-label">{{
-            t('adminScreens.adminPracticeDetail.m4')
+            t('adminScreens.adminPracticeDetail.status-vstrechi')
           }}</span>
           <VBadge :variant="zoomStatusBadge.variant">{{ zoomStatusBadge.label }}</VBadge>
         </div>
         <div class="admin-detail__zoom-row">
           <span class="admin-detail__zoom-label">{{
-            t('adminScreens.adminPracticeDetail.m5')
+            t('adminScreens.adminPracticeDetail.neraspoznannye-uchastniki')
           }}</span>
           <VBadge :variant="zoomAttendance.unmatched_count > 0 ? 'warning' : 'muted'">
             {{ zoomAttendance.unmatched_count }}
@@ -80,7 +82,7 @@
              translation layer exists for developer-facing error text (B8). -->
         <div v-if="zoomAttendance.last_sync_error" class="admin-detail__zoom-error-row">
           <span class="admin-detail__zoom-label">{{
-            t('adminScreens.adminPracticeDetail.m6')
+            t('adminScreens.adminPracticeDetail.prichina-oshibki')
           }}</span>
           <span class="admin-detail__zoom-error">{{ zoomAttendance.last_sync_error }}</span>
         </div>
@@ -98,7 +100,7 @@
         </div>
         <VCard v-else
           ><p class="admin-detail__empty">
-            {{ t('adminScreens.adminPracticeDetail.m7') }}
+            {{ t('adminScreens.adminPracticeDetail.dannykh-poka-net') }}
           </p></VCard
         >
       </template>
@@ -120,7 +122,7 @@
         </div>
         <VCard v-else
           ><p class="admin-detail__empty">
-            {{ t('adminScreens.adminPracticeDetail.m8') }}
+            {{ t('adminScreens.adminPracticeDetail.dannykh-poka-net') }}
           </p></VCard
         >
 
@@ -139,14 +141,16 @@
         </div>
         <VCard v-else
           ><p class="admin-detail__empty">
-            {{ t('adminScreens.adminPracticeDetail.m9') }}
+            {{ t('adminScreens.adminPracticeDetail.net-dannykh') }}
           </p></VCard
         >
       </template>
     </template>
 
     <VCard v-else>
-      <p class="admin-detail__empty">{{ t('adminScreens.adminPracticeDetail.m10') }}</p>
+      <p class="admin-detail__empty">
+        {{ t('adminScreens.adminPracticeDetail.praktika-nedostupna') }}
+      </p>
     </VCard>
   </div>
 </template>
@@ -188,7 +192,7 @@ const isPast = computed<boolean>(() => practice.value?.status === 'past')
 
 const masterInitial = computed<string>(() =>
   (
-    practice.value?.master_name.trim().charAt(0) || t('adminScreens.adminPracticeDetail.m11')
+    practice.value?.master_name.trim().charAt(0) || t('adminScreens.adminPracticeDetail.m')
   ).toUpperCase(),
 )
 
@@ -219,16 +223,22 @@ const ZOOM_STATUS_BADGES: Record<
   string,
   { label: string; variant: 'success' | 'error' | 'muted' }
 > = {
-  active: { label: t('adminScreens.adminPracticeDetail.m12'), variant: 'success' },
-  pending_creation: { label: t('adminScreens.adminPracticeDetail.m13'), variant: 'muted' },
-  create_failed: { label: t('adminScreens.adminPracticeDetail.m14'), variant: 'error' },
-  deleted: { label: t('adminScreens.adminPracticeDetail.m15'), variant: 'muted' },
+  active: { label: t('adminScreens.adminPracticeDetail.aktivna'), variant: 'success' },
+  pending_creation: {
+    label: t('adminScreens.adminPracticeDetail.ozhidaet-sozdaniya'),
+    variant: 'muted',
+  },
+  create_failed: {
+    label: t('adminScreens.adminPracticeDetail.oshibka-sozdaniya'),
+    variant: 'error',
+  },
+  deleted: { label: t('adminScreens.adminPracticeDetail.udalena'), variant: 'muted' },
 }
 const zoomStatusBadge = computed<{ label: string; variant: 'success' | 'error' | 'muted' }>(() => {
   const status = zoomAttendance.value?.zoom_meeting_status
   return status
     ? (ZOOM_STATUS_BADGES[status] ?? { label: status, variant: 'muted' })
-    : { label: t('adminScreens.adminPracticeDetail.m16'), variant: 'muted' }
+    : { label: t('adminScreens.adminPracticeDetail.ne-sozdana'), variant: 'muted' }
 })
 
 // Roster from the detail response. Past practices bucket by booking status.
@@ -247,7 +257,7 @@ async function load(): Promise<void> {
   try {
     practice.value = await getAdminPracticeDetail(practiceId)
   } catch (e) {
-    error.value = extractApiError(e, t('adminScreens.adminPracticeDetail.m17'))
+    error.value = extractApiError(e, t('adminScreens.adminPracticeDetail.oshibka-zagruzki'))
   } finally {
     loading.value = false
   }

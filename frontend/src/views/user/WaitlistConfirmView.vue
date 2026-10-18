@@ -31,11 +31,13 @@
     <VEmptyState
       v-else-if="!entry"
       icon="warning"
-      :title="t('user.screens.waitlistConfirm.m1')"
-      :description="t('user.screens.waitlistConfirm.m2')"
+      :title="t('user.screens.waitlistConfirm.notFound.title')"
+      :description="t('user.screens.waitlistConfirm.notFound.text')"
     >
       <template #action>
-        <VButton size="sm" @click="goHome">{{ t('user.screens.waitlistConfirm.m3') }}</VButton>
+        <VButton size="sm" @click="goHome">{{
+          t('user.screens.waitlistConfirm.common.backHome')
+        }}</VButton>
       </template>
     </VEmptyState>
 
@@ -55,14 +57,14 @@
           >.
         </p>
         <VButton block :loading="confirming" @click="onConfirm">{{
-          t('user.screens.waitlistConfirm.m4')
+          t('user.screens.waitlistConfirm.confirm.cta')
         }}</VButton>
       </div>
 
       <div v-else class="waitlist-confirm__body">
         <p class="waitlist-confirm__lead" data-state>{{ STATE_TEXT[state] }}</p>
         <VButton block variant="secondary" @click="openPractice">{{
-          t('user.screens.waitlistConfirm.m5')
+          t('user.screens.waitlistConfirm.openPractice')
         }}</VButton>
       </div>
     </template>
@@ -85,10 +87,10 @@ import { formatFeedDateTime } from '@/utils/format'
 type State = 'open' | 'expired' | 'converted' | 'waiting' | 'gone'
 
 const STATE_TEXT: Record<Exclude<State, 'open'>, string> = {
-  expired: t('user.screens.waitlistConfirm.m6'),
-  converted: t('user.screens.waitlistConfirm.m7'),
-  waiting: t('user.screens.waitlistConfirm.m8'),
-  gone: t('user.screens.waitlistConfirm.m9'),
+  expired: t('user.screens.waitlistConfirm.state.expired'),
+  converted: t('user.screens.waitlistConfirm.state.confirmed'),
+  waiting: t('user.screens.waitlistConfirm.state.pending'),
+  gone: t('user.screens.waitlistConfirm.state.unavailable'),
 }
 
 const route = useRoute()
@@ -124,7 +126,7 @@ async function load(): Promise<void> {
     entry.value = page.items.find((item) => item.id === waitlistId.value) ?? null
   } catch (e) {
     entry.value = null
-    toast.error(extractApiError(e, t('user.screens.waitlistConfirm.m10')))
+    toast.error(extractApiError(e, t('user.screens.waitlistConfirm.toast.loadFailed')))
   } finally {
     loading.value = false
   }
@@ -135,7 +137,7 @@ async function onConfirm(): Promise<void> {
   confirming.value = true
   try {
     await confirmWaitlist(waitlistId.value)
-    toast.success(t('user.screens.waitlistConfirm.m11'))
+    toast.success(t('user.screens.waitlistConfirm.toast.confirmed'))
     openPractice()
   } catch (e) {
     if (e instanceof ApiResponseError && e.status === 400) {
@@ -146,7 +148,7 @@ async function onConfirm(): Promise<void> {
       entry.value = null
       return
     }
-    toast.error(extractApiError(e, t('user.screens.waitlistConfirm.m12')))
+    toast.error(extractApiError(e, t('user.screens.waitlistConfirm.toast.confirmFailed')))
   } finally {
     confirming.value = false
   }

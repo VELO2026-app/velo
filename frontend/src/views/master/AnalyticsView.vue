@@ -49,7 +49,7 @@
           v-model="period"
           :options="PERIOD_OPTIONS"
           variant="toggle"
-          :aria-label="t('masterScreens.analytics.m1')"
+          :aria-label="t('masterScreens.analytics.period-statistiki')"
         />
       </template>
     </VHeader>
@@ -76,7 +76,7 @@
 
       <!-- Общая статистика -->
       <section class="analytics__section">
-        <h2 class="velo-section-title">{{ t('masterScreens.analytics.m5') }}</h2>
+        <h2 class="velo-section-title">{{ t('masterScreens.analytics.obshchaya-statistika') }}</h2>
         <VRatingDistribution :counts="ratingTotals" />
       </section>
 
@@ -85,7 +85,7 @@
            Тап по карточке → профиль ученика (E1: user_id на MasterReviewItem);
            кнопка сообщения — @click.stop, шлёт сообщение, не навигируя (PROMPT №229). -->
       <section v-if="attentionItems.length > 0" class="analytics__section">
-        <h2 class="velo-section-title">{{ t('masterScreens.analytics.m6') }}</h2>
+        <h2 class="velo-section-title">{{ t('masterScreens.analytics.trebuyut-vnimaniya') }}</h2>
         <div
           v-for="(item, i) in attentionItems"
           :key="i"
@@ -105,7 +105,7 @@
           </div>
           <button
             class="analytics__attention-msg"
-            :aria-label="t('masterScreens.analytics.m2')"
+            :aria-label="t('masterScreens.analytics.napisat-soobshchenie')"
             @click.stop="openMessage(item.user_id, item.reviewer_name)"
           >
             <IconMessages :size="22" />
@@ -115,7 +115,7 @@
 
       <!-- Прошедшие практики -->
       <section class="analytics__section">
-        <h2 class="velo-section-title">{{ t('masterScreens.analytics.m7') }}</h2>
+        <h2 class="velo-section-title">{{ t('masterScreens.analytics.proshedshie-praktiki') }}</h2>
 
         <div
           v-if="masterStore.practicesPastLoading && pastPractices.length === 0"
@@ -127,7 +127,7 @@
         <VEmptyState
           v-else-if="periodPractices.length === 0"
           variant="note"
-          :title="t('masterScreens.analytics.m3')"
+          :title="t('masterScreens.analytics.za-vybrannyy-period-praktik')"
         />
 
         <template v-else>
@@ -163,7 +163,7 @@
           <VShowMore
             v-if="!pastExpanded && hiddenPastCount > 0"
             :count="hiddenPastCount"
-            :noun="t('masterScreens.analytics.m4')"
+            :noun="t('masterScreens.analytics.praktik')"
             @click="pastExpanded = true"
           />
           <div v-else-if="pastExpanded && masterStore.practicesPastHasMore" class="analytics__more">
@@ -188,7 +188,7 @@
       <VCard v-else-if="paymentsError" class="analytics__pay-error">
         <p class="analytics__empty">{{ paymentsError }}</p>
         <VButton size="sm" variant="outline" @click="loadPayments">{{
-          t('masterScreens.analytics.m8')
+          t('masterScreens.analytics.povtorit')
         }}</VButton>
       </VCard>
 
@@ -196,7 +196,9 @@
         <!-- Income (E2: getIncome by period; delta_pct vs previous period). -->
         <div class="analytics__income">
           <div class="analytics__income-value">{{ income }}</div>
-          <div class="analytics__income-label">{{ t('masterScreens.analytics.m9') }}</div>
+          <div class="analytics__income-label">
+            {{ t('masterScreens.analytics.dokhod-za-period') }}
+          </div>
           <div
             v-if="incomeDelta"
             class="analytics__income-delta"
@@ -210,7 +212,7 @@
 
         <!-- Транзакции (E2: getTransactions — signed title-tagged ledger rows). -->
         <section class="analytics__section">
-          <h2 class="velo-section-title">{{ t('masterScreens.analytics.m10') }}</h2>
+          <h2 class="velo-section-title">{{ t('masterScreens.analytics.tranzaktsii') }}</h2>
           <div v-if="transactions.length > 0" class="analytics__txns">
             <div v-for="(tx, i) in transactions" :key="i" class="analytics__txn">
               <div class="analytics__txn-info">
@@ -229,7 +231,7 @@
             </div>
             <div v-if="hasMoreTx" class="analytics__more">
               <VButton variant="ghost" @click="loadMoreTx">{{
-                t('masterScreens.analytics.m11')
+                t('masterScreens.analytics.pokazat-eshche')
               }}</VButton>
             </div>
           </div>
@@ -301,16 +303,16 @@ const PAYMENTS_TAB_ENABLED: boolean = false
 
 const activeTab = ref<'reviews' | 'payments'>('reviews')
 const TAB_OPTIONS: Array<{ value: 'reviews' | 'payments'; label: string }> = [
-  { value: 'reviews', label: t('masterScreens.analytics.m12') },
-  { value: 'payments', label: t('masterScreens.analytics.m13') },
+  { value: 'reviews', label: t('masterScreens.analytics.otzyvy') },
+  { value: 'payments', label: t('masterScreens.analytics.platezhi') },
 ]
 
 // Period scoping has no backend yet -> the toggle only moves the active pill
 // (mirrors the master-dashboard pattern). Roadmap: period-scoped summary API.
 const period = ref<'week' | 'month'>('week')
 const PERIOD_OPTIONS: ReadonlyArray<{ value: 'week' | 'month'; label: string }> = [
-  { value: 'week', label: t('masterScreens.analytics.m14') },
-  { value: 'month', label: t('masterScreens.analytics.m15') },
+  { value: 'week', label: t('masterScreens.analytics.nedelya') },
+  { value: 'month', label: t('masterScreens.analytics.mesyats') },
 ]
 
 // =========================================================================
@@ -501,7 +503,7 @@ async function loadPayments(): Promise<void> {
     transactions.value = txRes.items
     txTotal.value = txRes.total
   } catch (e) {
-    paymentsError.value = extractApiError(e, t('masterScreens.analytics.m16'))
+    paymentsError.value = extractApiError(e, t('masterScreens.analytics.oshibka-zagruzki'))
   } finally {
     paymentsLoading.value = false
   }
@@ -553,8 +555,8 @@ function openReviews(practiceId: string): void {
 onMounted(async () => {
   if (PAYMENTS_TAB_ENABLED) void loadPayments()
   void loadReviews()
-  // T22-5 (PROMPT №561): this tab only ever needs t('masterScreens.analytics.m17') -- fetching the
-  // combined bucket here would warm t('masterScreens.analytics.m18') for no reason.
+  // T22-5 (PROMPT №561): this tab only ever needs t('masterScreens.analytics.proshedshie') -- fetching the
+  // combined bucket here would warm t('masterScreens.analytics.predstoyashchie') for no reason.
   await masterStore.fetchPastPractices()
   await loadVisibleInsights()
 })

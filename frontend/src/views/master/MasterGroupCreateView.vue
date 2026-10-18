@@ -52,12 +52,12 @@
       <!--
       <div class="new-group__legend">
         <IconRequired class="new-group__legend-seal" :size="22" />
-        <span>{{ t('masterScreens.masterGroupCreate.m5') }}</span>
+        <span>{{ t('masterScreens.masterGroupCreate.polya-obyazatelnye-dlya-zapolneniya') }}</span>
       </div>
       -->
 
       <h2 class="velo-section-title">
-        {{ t('masterScreens.masterGroupCreate.m6') }}<span class="new-group__req">*</span>
+        {{ t('masterScreens.masterGroupCreate.osnovnoe') }}<span class="new-group__req">*</span>
       </h2>
 
       <!-- T24-5/6 (PROMPT №639): the placeholder alone carries the visible
@@ -68,8 +68,8 @@
            announced the way a label is) without rendering it visibly. -->
       <VInput
         v-model="name"
-        :label="t('masterScreens.masterGroupCreate.m1')"
-        :placeholder="t('masterScreens.masterGroupCreate.m2')"
+        :label="t('masterScreens.masterGroupCreate.nazvanie')"
+        :placeholder="t('masterScreens.masterGroupCreate.nazvanie')"
         hide-label
         :error="fieldError"
         @focus="onFieldFocus"
@@ -84,8 +84,8 @@
 
       <VTextarea
         v-model="description"
-        :label="t('masterScreens.masterGroupCreate.m3')"
-        :placeholder="t('masterScreens.masterGroupCreate.m4')"
+        :label="t('masterScreens.masterGroupCreate.opisanie')"
+        :placeholder="t('masterScreens.masterGroupCreate.opisanie')"
         hide-label
         :rows="3"
         autogrow
@@ -131,23 +131,23 @@ async function onCreate(): Promise<void> {
   if (!name.value.trim()) {
     // Inline slot + scroll (owner 2026-10-01 canon, same as the practice
     // create form); the toast stays for the case when the slot is off-screen.
-    fieldError.value = t('masterScreens.masterGroupCreate.m7')
+    fieldError.value = t('masterScreens.masterGroupCreate.vvedite-nazvanie-gruppy')
     await nextTick()
     queryDocument('.new-group__field-error--show')?.scrollIntoView({
       behavior: 'smooth',
       block: 'center',
     })
-    toast.error(t('masterScreens.masterGroupCreate.m8'))
+    toast.error(t('masterScreens.masterGroupCreate.vvedite-nazvanie-gruppy'))
     return
   }
   creating.value = true
   fieldError.value = ''
   try {
     await createGroup(name.value.trim(), description.value.trim())
-    toast.success(t('masterScreens.masterGroupCreate.m9'))
+    toast.success(t('masterScreens.masterGroupCreate.gruppa-sozdana'))
     void router.push({ name: 'master-groups' })
   } catch (e) {
-    const message = extractApiError(e, t('masterScreens.masterGroupCreate.m10'))
+    const message = extractApiError(e, t('masterScreens.masterGroupCreate.ne-udalos-sozdat-gruppu'))
     fieldError.value = message
     toast.error(message)
   } finally {
@@ -189,7 +189,7 @@ async function onCreate(): Promise<void> {
   display: none;
 }
 
-/* [FE-45 follow-up, owner: t('masterScreens.masterGroupCreate.m11')] While typing, the
+/* [FE-45 follow-up, owner: t('masterScreens.masterGroupCreate.ne-tak-silno-dvigaetsya')] While typing, the
    scroll region (.velo-kbd-scroll main) correctly shrinks to the visible
    area -- but this form pins its submit via margin-top:auto inside a
    min-height:100% column, so the whole form used to compress and the button

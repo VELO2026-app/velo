@@ -25,7 +25,7 @@
           v-if="canCreate"
           type="button"
           class="mcg__add-btn"
-          :aria-label="t('masterScreens.masterCuratorGroups.m1')"
+          :aria-label="t('masterScreens.masterCuratorGroups.novaya-shkola')"
           @click="router.push({ name: 'master-curator-group-create' })"
         >
           <IconPlusFilled :size="20" />
@@ -41,12 +41,12 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        :title="t('masterScreens.masterCuratorGroups.m2')"
-        :description="t('masterScreens.masterCuratorGroups.m3')"
+        :title="t('masterScreens.masterCuratorGroups.ne-udalos-zagruzit-shkoly')"
+        :description="t('masterScreens.masterCuratorGroups.proverte-soedinenie-i-poprobuyte')"
       >
         <template #action>
           <VButton variant="outline" @click="load">{{
-            t('masterScreens.masterCuratorGroups.m8')
+            t('masterScreens.masterCuratorGroups.povtorit')
           }}</VButton>
         </template>
       </VEmptyState>
@@ -54,8 +54,8 @@
       <VEmptyState
         v-else-if="!groups.length && canCreate"
         icon="group"
-        :title="t('masterScreens.masterCuratorGroups.m4')"
-        :description="t('masterScreens.masterCuratorGroups.m5')"
+        :title="t('masterScreens.masterCuratorGroups.poka-net-shkol')"
+        :description="t('masterScreens.masterCuratorGroups.sozdayte-shkolu-ili-vstupite')"
       >
         <template #action>
           <VButton variant="primary" @click="router.push({ name: 'master-curator-group-create' })">
@@ -70,14 +70,14 @@
       <VEmptyState
         v-else-if="!groups.length"
         icon="group"
-        :title="t('masterScreens.masterCuratorGroups.m6')"
-        :description="t('masterScreens.masterCuratorGroups.m7')"
+        :title="t('masterScreens.masterCuratorGroups.poka-net-shkol')"
+        :description="t('masterScreens.masterCuratorGroups.vstupite-po-ssylke-ot')"
       />
 
       <template v-else>
         <template v-if="curated.length">
           <h2 class="velo-section-title mcg__section">
-            {{ t('masterScreens.masterCuratorGroups.m9') }}
+            {{ t('masterScreens.masterCuratorGroups.ya-kurator') }}
           </h2>
           <CuratorGroupRow
             v-for="g in curated"
@@ -89,7 +89,7 @@
 
         <template v-if="memberOnly.length">
           <h2 class="velo-section-title mcg__section">
-            {{ t('masterScreens.masterCuratorGroups.m10') }}
+            {{ t('masterScreens.masterCuratorGroups.ya-uchastnik') }}
           </h2>
           <CuratorGroupRow
             v-for="g in memberOnly"

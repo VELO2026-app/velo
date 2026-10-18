@@ -91,7 +91,7 @@ async function load(): Promise<void> {
     reviews.value = r.items
   } catch (e) {
     summary.value = null
-    error.value = extractApiError(e, t('masterScreens.practiceReviews.m1'))
+    error.value = extractApiError(e, t('masterScreens.practiceReviews.poprobuyte-eshche-raz'))
   } finally {
     loading.value = false
   }
@@ -104,7 +104,7 @@ async function loadMorePairs(): Promise<void> {
     const page = await getPracticeAnalyticsPairs(practiceId.value, PAGE, pairs.value.length)
     pairs.value = [...pairs.value, ...page.items]
   } catch (e) {
-    toast.error(extractApiError(e, t('masterScreens.practiceReviews.m2')))
+    toast.error(extractApiError(e, t('masterScreens.practiceReviews.ne-udalos-zagruzit-eshche')))
   } finally {
     loadingMorePairs.value = false
   }
@@ -117,7 +117,7 @@ async function loadMoreReviews(): Promise<void> {
     const page = await getPracticeAnalyticsReviews(practiceId.value, PAGE, reviews.value.length)
     reviews.value = [...reviews.value, ...page.items]
   } catch (e) {
-    toast.error(extractApiError(e, t('masterScreens.practiceReviews.m3')))
+    toast.error(extractApiError(e, t('masterScreens.practiceReviews.ne-udalos-zagruzit-eshche')))
   } finally {
     loadingMoreReviews.value = false
   }

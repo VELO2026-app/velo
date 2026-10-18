@@ -41,8 +41,12 @@
       <div class="support__ok-circle">
         <IconSupportChat :size="48" />
       </div>
-      <h2 class="support__ok-title">{{ t('masterScreens.masterSupport.m6') }}</h2>
-      <p class="support__ok-text">{{ t('masterScreens.masterSupport.m7') }}</p>
+      <h2 class="support__ok-title">
+        {{ t('masterScreens.masterSupport.spasibo-za-obrashchenie') }}
+      </h2>
+      <p class="support__ok-text">
+        {{ t('masterScreens.masterSupport.my-poluchili-vashe-obrashchenie') }}
+      </p>
       <VButton variant="primary" block class="support__ok-cta" @click="onGoHome">
         На главную
       </VButton>
@@ -52,13 +56,17 @@
     <div v-else class="support__content">
       <div class="support__hero">
         <IconSupportChat :size="56" class="support__hero-ic" />
-        <div class="support__hero-title">{{ t('masterScreens.masterSupport.m8') }}</div>
-        <div class="support__hero-sub">{{ t('masterScreens.masterSupport.m9') }}</div>
+        <div class="support__hero-title">
+          {{ t('masterScreens.masterSupport.kak-my-mozhem-pomoch') }}
+        </div>
+        <div class="support__hero-sub">
+          {{ t('masterScreens.masterSupport.obychno-otvechaem-v-techenie') }}
+        </div>
       </div>
 
       <!-- Topic -->
       <section class="support__section">
-        <h2 class="support__title">{{ t('masterScreens.masterSupport.m10') }}</h2>
+        <h2 class="support__title">{{ t('masterScreens.masterSupport.tema') }}</h2>
         <div class="support__card">
           <VRadioGroup v-model="topic" :options="topicOptions" />
           <div v-if="topic === 'other'" class="support__other">
@@ -66,8 +74,8 @@
               v-model="otherText"
               type="text"
               class="support__other-input"
-              :placeholder="t('masterScreens.masterSupport.m1')"
-              :aria-label="t('masterScreens.masterSupport.m2')"
+              :placeholder="t('masterScreens.masterSupport.ukazhite-vash-variant')"
+              :aria-label="t('masterScreens.masterSupport.svoy-variant-temy')"
               @focus="onFieldFocus"
             />
             <IconArrowRight :size="18" class="support__other-arrow" />
@@ -77,29 +85,29 @@
 
       <!-- Message -->
       <section class="support__section">
-        <h2 class="support__title">{{ t('masterScreens.masterSupport.m11') }}</h2>
+        <h2 class="support__title">{{ t('masterScreens.masterSupport.soobshchenie') }}</h2>
         <VTextarea
           v-model="message"
           :rows="5"
-          :placeholder="t('masterScreens.masterSupport.m3')"
+          :placeholder="t('masterScreens.masterSupport.opishite-vashu-problemu-ili')"
           @focus="onFieldFocus"
         />
       </section>
 
       <!-- Attachments (UI built; files captured locally, NOT uploaded — stub) -->
       <section class="support__section">
-        <h2 class="support__title">{{ t('masterScreens.masterSupport.m12') }}</h2>
+        <h2 class="support__title">{{ t('masterScreens.masterSupport.prikrepit-fayl') }}</h2>
         <div class="support__upload">
           <button type="button" class="support__drop" @click="openFilePicker">
             <IconFile :size="26" />
-            <span>{{ t('masterScreens.masterSupport.m13') }}</span>
+            <span>{{ t('masterScreens.masterSupport.dobavit-fayl-5mb') }}</span>
           </button>
           <input
             ref="fileInput"
             type="file"
             multiple
             class="support__file-input"
-            :aria-label="t('masterScreens.masterSupport.m4')"
+            :aria-label="t('masterScreens.masterSupport.prikrepit-fayl')"
             @change="onFilesPicked"
           />
           <div v-if="attachments.length" class="support__thumbs">
@@ -109,7 +117,7 @@
               type="button"
               class="support__thumb"
               :title="file.name"
-              :aria-label="t('masterScreens.masterSupport.m5')"
+              :aria-label="t('masterScreens.masterSupport.udalit-fayl')"
               @click="removeAttachment(i)"
             >
               <IconClose :size="12" />
@@ -118,7 +126,9 @@
         </div>
       </section>
 
-      <a class="support__email" :href="emailHref">{{ t('masterScreens.masterSupport.m14') }}</a>
+      <a class="support__email" :href="emailHref">{{
+        t('masterScreens.masterSupport.ne-dozhdalis-otveta-napishite')
+      }}</a>
 
       <VButton
         variant="primary"
@@ -164,11 +174,27 @@ interface SupportTopic {
   priority: SupportPriority
 }
 const TOPICS: SupportTopic[] = [
-  { value: 'withdrawal', label: t('masterScreens.masterSupport.m15'), priority: 'P0' },
-  { value: 'practices', label: t('masterScreens.masterSupport.m16'), priority: 'P1' },
-  { value: 'technical', label: t('masterScreens.masterSupport.m17'), priority: 'P2' },
-  { value: 'add_direction', label: t('masterScreens.masterSupport.m18'), priority: 'P2' },
-  { value: 'other', label: t('masterScreens.masterSupport.m19'), priority: 'P2' },
+  {
+    value: 'withdrawal',
+    label: t('masterScreens.masterSupport.problema-s-vyvodom'),
+    priority: 'P0',
+  },
+  {
+    value: 'practices',
+    label: t('masterScreens.masterSupport.vopros-po-praktikam'),
+    priority: 'P1',
+  },
+  {
+    value: 'technical',
+    label: t('masterScreens.masterSupport.tekhnicheskie-problemy'),
+    priority: 'P2',
+  },
+  {
+    value: 'add_direction',
+    label: t('masterScreens.masterSupport.dobavit-napravlenie-praktiki'),
+    priority: 'P2',
+  },
+  { value: 'other', label: t('masterScreens.masterSupport.drugoe'), priority: 'P2' },
 ]
 // VRadioGroup only needs {value,label}; priority stays off the rendered options.
 const topicOptions = TOPICS.map((t) => ({ value: t.value, label: t.label }))
@@ -228,7 +254,9 @@ async function onSubmit(): Promise<void> {
     await sendSupportMessage(topicLabel, text)
     submitted.value = true
   } catch (e) {
-    toast.error(extractApiError(e, t('masterScreens.masterSupport.m20')))
+    toast.error(
+      extractApiError(e, t('masterScreens.masterSupport.ne-udalos-otpravit-obrashchenie')),
+    )
   } finally {
     submitting.value = false
   }

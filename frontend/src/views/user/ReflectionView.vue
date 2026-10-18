@@ -22,7 +22,7 @@
 <template>
   <FormShell
     v-model:comment="comment"
-    :back-label="t('user.screens.reflection.m1')"
+    :back-label="t('user.screens.reflection.practiceFallback')"
     :practice="practice"
     :practice-loading="practiceLoading"
     :load-error="practiceLoadError"
@@ -30,11 +30,11 @@
     :question-subtitle="variant.screenSubtitle"
     :submitting="diaryStore.reflectionSubmitting"
     :submit-disabled="false"
-    :submit-label="t('user.screens.reflection.m2')"
+    :submit-label="t('user.screens.reflection.=chat:send')"
     :submitted="submitted"
     success-icon=""
-    :success-title="t('user.screens.reflection.m3')"
-    :success-text="t('user.screens.reflection.m4')"
+    :success-title="t('user.screens.reflection.toast.thanks')"
+    :success-text="t('user.screens.reflection.takeCare')"
     @back="onBack"
     @retry="loadPractice"
     @submit="onSubmit"
@@ -48,7 +48,7 @@
         с {{ practice?.master_name ?? 'Мастером' }}
       </span>
       <span class="form-shell__practice-meta-cell">
-        <IconCalendar :size="14" />{{ t('user.screens.reflection.m5') }}</span
+        <IconCalendar :size="14" />{{ t('user.screens.reflection.=common:missedYou') }}</span
       >
     </template>
 
@@ -62,7 +62,7 @@
     </template>
     <template #success-actions>
       <VButton variant="primary" size="lg" block @click="goToDashboard">{{
-        t('user.screens.reflection.m6')
+        t('user.screens.reflection.common.backHome')
       }}</VButton>
     </template>
   </FormShell>

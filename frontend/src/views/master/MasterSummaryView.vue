@@ -28,25 +28,27 @@
     <div class="summary__content">
       <!-- AI insight (honest placeholder — no AI provider exists in this
            project yet; Zod builds this once the infra lands). -->
-      <h2 class="velo-section-title">{{ t('masterScreens.masterSummary.m7') }}</h2>
+      <h2 class="velo-section-title">
+        {{ t('masterScreens.masterSummary.ai-insayty-za-nedelyu') }}
+      </h2>
       <VCard>
         <p class="summary__insight">{{ insight }}</p>
       </VCard>
 
       <!-- Key feedbacks (REAL: GET /masters/me/reviews, cross-practice named
            feed, E1's user_id makes each card navigable). -->
-      <h2 class="velo-section-title">{{ t('masterScreens.masterSummary.m8') }}</h2>
+      <h2 class="velo-section-title">{{ t('masterScreens.masterSummary.klyuchevye-otzyvy') }}</h2>
       <div v-if="feedbacksLoading" class="summary__attn-state">
         <VLoader />
       </div>
       <VEmptyState
         v-else-if="feedbacksError"
         icon="warning"
-        :title="t('masterScreens.masterSummary.m1')"
+        :title="t('masterScreens.masterSummary.ne-udalos-zagruzit')"
         :description="feedbacksError"
       >
         <VButton size="sm" variant="outline" @click="loadFeedbacks">{{
-          t('masterScreens.masterSummary.m9')
+          t('masterScreens.masterSummary.povtorit')
         }}</VButton>
       </VEmptyState>
       <template v-else>
@@ -69,25 +71,25 @@
         <VEmptyState
           v-if="keyFeedbacks.length === 0"
           variant="note"
-          :title="t('masterScreens.masterSummary.m2')"
+          :title="t('masterScreens.masterSummary.otzyvy-poyavyatsya-zdes-kogda')"
         />
       </template>
 
       <!-- Needs attention (REAL: the master's students with needs_attention).
            Each row taps through to the real student profile; the message button
            is @click.stop so it does not navigate. -->
-      <h2 class="velo-section-title">{{ t('masterScreens.masterSummary.m10') }}</h2>
+      <h2 class="velo-section-title">{{ t('masterScreens.masterSummary.trebuyut-vnimaniya') }}</h2>
       <div v-if="attnLoading" class="summary__attn-state">
         <VLoader />
       </div>
       <VEmptyState
         v-else-if="attnError"
         icon="warning"
-        :title="t('masterScreens.masterSummary.m3')"
+        :title="t('masterScreens.masterSummary.ne-udalos-zagruzit')"
         :description="attnError"
       >
         <VButton size="sm" variant="outline" @click="loadStudents">{{
-          t('masterScreens.masterSummary.m11')
+          t('masterScreens.masterSummary.povtorit')
         }}</VButton>
       </VEmptyState>
       <template v-else>
@@ -105,12 +107,14 @@
             <div class="summary__attn-name">{{ student.name }}</div>
             <div class="summary__attn-meta">Практик: {{ student.practices_count }}</div>
             <span class="summary__attn-badge"
-              ><IconWarning :size="14" />{{ t('masterScreens.masterSummary.m12') }}</span
+              ><IconWarning :size="14" />{{
+                t('masterScreens.masterSummary.trebuet-vnimaniya')
+              }}</span
             >
           </div>
           <button
             class="summary__msg"
-            :aria-label="t('masterScreens.masterSummary.m4')"
+            :aria-label="t('masterScreens.masterSummary.napisat-soobshchenie')"
             @click.stop="openMessage(student.id, student.name)"
           >
             <IconMessages :size="22" />
@@ -119,8 +123,8 @@
         <VEmptyState
           v-if="needsAttention.length === 0"
           icon="group"
-          :title="t('masterScreens.masterSummary.m5')"
-          :description="t('masterScreens.masterSummary.m6')"
+          :title="t('masterScreens.masterSummary.vse-ucheniki-v-poryadke')"
+          :description="t('masterScreens.masterSummary.zdes-poyavyatsya-te-komu')"
         />
       </template>
     </div>
@@ -151,7 +155,7 @@ const router = useRouter()
 // -- HONEST STUB: no AI provider exists in this project (backend/app/
 //    modules/ai/ is a Protocol + MockAIService, explicitly out-of-MVP-scope)
 //    -- operator 2026-07-15: AI work is Zod's, once that infra lands. --
-const insight = ref(t('masterScreens.masterSummary.m13'))
+const insight = ref(t('masterScreens.masterSummary.svodka-poyavitsya-kogda-podklyuchitsya'))
 
 // -- Key feedbacks — REAL (E6, PROMPT №420): GET /masters/me/reviews, same
 //    cross-practice named feed AnalyticsView's «Требуют внимания» uses, but
@@ -170,7 +174,7 @@ async function loadFeedbacks(): Promise<void> {
     const res = await getMasterReviews(FEEDBACKS_PAGE, 0, false)
     keyFeedbacks.value = res.items
   } catch {
-    feedbacksError.value = t('masterScreens.masterSummary.m14')
+    feedbacksError.value = t('masterScreens.masterSummary.poprobuyte-eshche-raz')
   } finally {
     feedbacksLoading.value = false
   }
@@ -199,7 +203,7 @@ async function loadStudents(): Promise<void> {
     const res = await getStudents()
     students.value = res.items
   } catch {
-    attnError.value = t('masterScreens.masterSummary.m15')
+    attnError.value = t('masterScreens.masterSummary.poprobuyte-eshche-raz')
   } finally {
     attnLoading.value = false
   }
