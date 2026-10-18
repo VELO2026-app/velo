@@ -236,7 +236,7 @@ async function addDirection(): Promise<void> {
     toast.success(t('adminScreens.adminCatalog.directionAdded'))
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminCatalog.ne-udalos-dobavit-napravlenie')))
+    toast.error(extractApiError(e, t('adminScreens.adminCatalog.cannotcompletedadddirection')))
   } finally {
     addingDirection.value = false
   }
@@ -256,7 +256,7 @@ async function addStyle(dir: TaxonomyDirectionItem): Promise<void> {
     toast.success(t('adminScreens.adminCatalog.styleAdded'))
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminCatalog.ne-udalos-dobavit-vid')))
+    toast.error(extractApiError(e, t('adminScreens.adminCatalog.cannotcompletedaddstyle')))
   } finally {
     addingStyleFor.value = null
   }
@@ -287,7 +287,7 @@ async function saveDirectionLabel(dir: TaxonomyDirectionItem): Promise<void> {
     toast.success(t('adminScreens.adminCatalog.sokhraneno'))
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminCatalog.ne-udalos-sokhranit')))
+    toast.error(extractApiError(e, t('adminScreens.adminCatalog.cannotcompletedsave')))
   } finally {
     savingDirectionId.value = null
   }
@@ -303,7 +303,7 @@ async function toggleDirectionActive(dir: TaxonomyDirectionItem): Promise<void> 
     await updateTaxonomyDirection(dir.id, { is_active: !dir.is_active })
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminCatalog.ne-udalos-izmenit-status')))
+    toast.error(extractApiError(e, t('adminScreens.adminCatalog.cannotcompletedchangestatus')))
   } finally {
     togglingId.value = null
   }
@@ -316,7 +316,7 @@ async function toggleStyleActive(st: TaxonomyStyleItem): Promise<void> {
     await updateTaxonomyStyle(st.id, { is_active: !st.is_active })
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminCatalog.ne-udalos-izmenit-status')))
+    toast.error(extractApiError(e, t('adminScreens.adminCatalog.cannotcompletedchangestatus')))
   } finally {
     togglingId.value = null
   }

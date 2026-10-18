@@ -26,7 +26,7 @@
     <!-- Switch to user mode -->
     <VCard class="admin-profile__section">
       <div class="admin-profile__section-title">
-        {{ t('adminScreens.adminProfile.rezhim-prosmotra') }}
+        {{ t('adminScreens.adminProfile.RezhimProsmotra') }}
       </div>
       <p class="admin-profile__section-desc">
         Перейдите в интерфейс пользователя, чтобы просматривать каталог и бронировать практики.

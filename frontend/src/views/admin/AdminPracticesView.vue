@@ -32,7 +32,7 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminPractices.ne-udalos-zagruzit-praktiki')"
+      :title="t('adminScreens.adminPractices.cannotcompletedloadpractices')"
       :description="error"
     >
       <VButton size="sm" variant="outline" @click="load">{{

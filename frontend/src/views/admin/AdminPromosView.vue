@@ -36,7 +36,7 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminPromos.ne-udalos-zagruzit-promokody')"
+      :title="t('adminScreens.adminPromos.cannotcompletedloadPromokody')"
       :description="t('adminScreens.adminPromos.checkConnectionAndRetry')"
     >
       <template #action
@@ -254,9 +254,11 @@ async function onConfirmDeactivate(): Promise<void> {
     // The "inactive" tab is server-filtered on is_active=false -- a promo
     // deactivated while that tab is open already satisfies the filter, so no
     // removal needed there. Any other tab just flips the badge in place.
-    toast.success(t('adminScreens.adminPromos.promokod-deaktivirovan'))
+    toast.success(t('adminScreens.adminPromos.PromokodDeaktivirovan'))
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminPromos.ne-udalos-deaktivirovat-promokod')))
+    toast.error(
+      extractApiError(e, t('adminScreens.adminPromos.cannotcompletedDeaktivirovatPromokod')),
+    )
   } finally {
     deactivatingId.value = null
     confirmTarget.value = null

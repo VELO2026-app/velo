@@ -556,14 +556,14 @@
     <!-- Reject reason (bottom-sheet, fork п.1=А) -->
     <VBottomSheet
       :open="showReject"
-      :title="t('adminScreens.adminMasterReview.prichina-otkaza')"
+      :title="t('adminScreens.adminMasterReview.reasonrejection')"
       :save-label="t('adminScreens.adminMasterReview.rejectCta')"
       @save="onReject"
       @close="closeReject"
     >
       <VTextarea
         v-model="rejectReason"
-        :placeholder="t('adminScreens.adminMasterReview.ukazhite-prichinu-otkloneniya-zayavki')"
+        :placeholder="t('adminScreens.adminMasterReview.providereasonrejectionZayavki')"
         :rows="3"
         :error="rejectError"
       />
@@ -914,7 +914,7 @@ async function saveProfile(patch: AdminMasterProfileUpdate): Promise<void> {
     editing.value = null
     toast.success(t('adminScreens.adminMasterReview.sokhraneno'))
   } catch (e) {
-    fieldError.value = extractApiError(e, t('adminScreens.adminMasterReview.ne-udalos-sokhranit'))
+    fieldError.value = extractApiError(e, t('adminScreens.adminMasterReview.cannotcompletedsave'))
   } finally {
     savingField.value = false
   }
@@ -1024,7 +1024,7 @@ async function onToggleRight(): Promise<void> {
         : t('adminScreens.adminMasterReview.toast.schoolRightRevoked'),
     )
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminMasterReview.ne-udalos-izmenit-pravo')))
+    toast.error(extractApiError(e, t('adminScreens.adminMasterReview.cannotcompletedchangePravo')))
   } finally {
     togglingRight.value = false
   }

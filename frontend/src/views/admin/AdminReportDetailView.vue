@@ -39,7 +39,7 @@
         <!-- Report content -->
         <div class="report-detail__section">
           <div class="report-detail__section-title">
-            {{ t('adminScreens.adminReportDetail.tekst-zhaloby') }}
+            {{ t('adminScreens.adminReportDetail.TekstZhaloby') }}
           </div>
           <VCard class="report-detail__reason">{{ decodedReason }}</VCard>
         </div>
@@ -52,13 +52,13 @@
           <VCard class="report-detail__meta-list" padding="none">
             <div class="report-detail__meta-row">
               <span class="report-detail__meta-key">{{
-                t('adminScreens.adminReportDetail.tip-tseli')
+                t('adminScreens.adminReportDetail.TipTseli')
               }}</span>
               <span class="report-detail__meta-val">{{ report.target_type }}</span>
             </div>
             <div class="report-detail__meta-row">
               <span class="report-detail__meta-key">{{
-                t('adminScreens.adminReportDetail.id-tseli')
+                t('adminScreens.adminReportDetail.IdTseli')
               }}</span>
               <button
                 v-if="targetRoute"
@@ -105,13 +105,13 @@
         <template v-if="currentStatus === 'pending'">
           <div class="report-detail__section">
             <div class="report-detail__section-title">
-              {{ t('adminScreens.adminReportDetail.reshit-zhalobu') }}
+              {{ t('adminScreens.adminReportDetail.ReshitZhalobu') }}
             </div>
             <div class="report-detail__action-form">
               <VTextarea
                 v-model="resolveNote"
-                :label="t('adminScreens.adminReportDetail.primechanie-k-resheniyu')"
-                :placeholder="t('adminScreens.adminReportDetail.opishite-kakie-mery-prinyaty')"
+                :label="t('adminScreens.adminReportDetail.PrimechanieKResheniyu')"
+                :placeholder="t('adminScreens.adminReportDetail.OpishiteKakieMeryPrinyaty')"
                 :rows="3"
                 :error="resolveError"
               />
@@ -129,12 +129,12 @@
 
           <div class="report-detail__section">
             <div class="report-detail__section-title">
-              {{ t('adminScreens.adminReportDetail.otklonit-zhalobu') }}
+              {{ t('adminScreens.adminReportDetail.rejectZhalobu') }}
             </div>
             <div class="report-detail__action-form">
               <VTextarea
                 v-model="dismissNote"
-                :label="t('adminScreens.adminReportDetail.primechanie-neobyazatelno')"
+                :label="t('adminScreens.adminReportDetail.PrimechanieNeobyazatelno')"
                 :placeholder="t('adminScreens.adminReportDetail.rejectionReason')"
                 :rows="2"
               />
@@ -162,8 +162,8 @@
       <div v-else class="report-detail__not-found">
         <VEmptyState
           icon="notfound"
-          :title="t('adminScreens.adminReportDetail.zhaloba-ne-naydena')"
-          :description="t('adminScreens.adminReportDetail.vernites-k-spisku-zhalob')"
+          :title="t('adminScreens.adminReportDetail.ZhalobacannotNaydena')"
+          :description="t('adminScreens.adminReportDetail.VernitesKSpiskuZhalob')"
         />
         <VButton variant="outline" block @click="router.back()">{{
           t('adminScreens.adminReportDetail.nazad')
@@ -240,7 +240,7 @@ async function loadReport(): Promise<void> {
     currentStatus.value = fetched.status
   } catch (e) {
     // SW8: own error rung + retry, distinct from "not found".
-    error.value = extractApiError(e, t('adminScreens.adminReportDetail.oshibka-zagruzki-zhaloby'))
+    error.value = extractApiError(e, t('adminScreens.adminReportDetail.errorZagruzkiZhaloby'))
   } finally {
     loading.value = false
   }
@@ -249,14 +249,14 @@ async function loadReport(): Promise<void> {
 async function onResolve(): Promise<void> {
   resolveError.value = ''
   if (!resolveNote.value.trim()) {
-    resolveError.value = t('adminScreens.adminReportDetail.vvedite-primechanie-k-resheniyu')
+    resolveError.value = t('adminScreens.adminReportDetail.VveditePrimechanieKResheniyu')
     return
   }
   if (anyLoading.value) return
   resolving.value = true
   try {
     await resolveReport(reportId, resolveNote.value.trim())
-    toast.success(t('adminScreens.adminReportDetail.zhaloba-reshena'))
+    toast.success(t('adminScreens.adminReportDetail.ZhalobaReshena'))
     // S-1/S-2: push to list instead of back() -- guarantees fresh loadInitial().
     void router.push({ name: 'admin-reports' })
   } catch (e) {
@@ -271,7 +271,7 @@ async function onDismiss(): Promise<void> {
   dismissing.value = true
   try {
     await dismissReport(reportId, dismissNote.value.trim() || undefined)
-    toast.success(t('adminScreens.adminReportDetail.zhaloba-otklonena'))
+    toast.success(t('adminScreens.adminReportDetail.ZhalobaOtklonena'))
     // S-1/S-2: push to list instead of back() -- guarantees fresh loadInitial().
     void router.push({ name: 'admin-reports' })
   } catch (e) {

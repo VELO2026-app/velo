@@ -47,8 +47,8 @@
     <VEmptyState
       v-else-if="items.length === 0"
       icon="success"
-      :title="t('adminScreens.adminMethodRequests.zayavok-net')"
-      :description="t('adminScreens.adminMethodRequests.mastera-ne-zaprashivali-smenu')"
+      :title="t('adminScreens.adminMethodRequests.Zayavokno')"
+      :description="t('adminScreens.adminMethodRequests.mastercannotZaprashivaliSmenu')"
     />
 
     <template v-else>
@@ -103,14 +103,14 @@
     <!-- Reject reason (bottom-sheet, mirrors AdminMasterReview) -->
     <VBottomSheet
       :open="!!rejectTarget"
-      :title="t('adminScreens.adminMethodRequests.prichina-otkaza')"
+      :title="t('adminScreens.adminMethodRequests.reasonrejection')"
       :save-label="t('adminScreens.adminMethodRequests.rejectCta')"
       @save="onReject"
       @close="closeReject"
     >
       <VTextarea
         v-model="rejectReason"
-        :placeholder="t('adminScreens.adminMethodRequests.ukazhite-prichinu-otkloneniya-zaprosa')"
+        :placeholder="t('adminScreens.adminMethodRequests.providereasonrejectionZaprosa')"
         :rows="3"
         :error="rejectError"
       />
@@ -215,7 +215,7 @@ async function loadInitial(): Promise<void> {
     hasMore.value = res.items.length < res.total
   } catch (e) {
     error.value = true
-    toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.oshibka-zagruzki-zayavok')))
+    toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.errorZagruzkiZayavok')))
   } finally {
     loading.value = false
   }
@@ -265,7 +265,7 @@ async function doApprove(
   busyId.value = item.user_id
   try {
     await approveMethodChange(item.user_id, promote, masterOnly)
-    toast.success(t('adminScreens.adminMethodRequests.metody-obnovleny'))
+    toast.success(t('adminScreens.adminMethodRequests.MetodyObnovleny'))
     removeItem(item.user_id)
   } catch (e) {
     toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.approveError')))

@@ -77,7 +77,7 @@
     >
       <VTextarea
         v-model="rejectReason"
-        :placeholder="t('adminScreens.adminWithdrawalDetail.ukazhite-prichinu-otkloneniya-vyplaty')"
+        :placeholder="t('adminScreens.adminWithdrawalDetail.providereasonrejectionVyplaty')"
         :rows="3"
         :error="rejectError"
       />
@@ -204,7 +204,7 @@ async function onReject(): Promise<void> {
   if (!w.value || rejecting.value) return
   rejectError.value = ''
   if (!rejectReason.value.trim()) {
-    rejectError.value = t('adminScreens.adminWithdrawalDetail.ukazhite-prichinu-otkloneniya')
+    rejectError.value = t('adminScreens.adminWithdrawalDetail.providereasonrejection')
     return
   }
   rejecting.value = true

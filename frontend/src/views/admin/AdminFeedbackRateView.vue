@@ -22,7 +22,7 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminFeedbackRate.ne-udalos-zagruzit-metriku')"
+      :title="t('adminScreens.adminFeedbackRate.cannotcompletedloadMetriku')"
       :description="error"
     >
       <VButton size="sm" variant="outline" @click="load">{{
@@ -41,7 +41,7 @@
       </div>
 
       <h3 class="admin-detail__section">
-        {{ t('adminScreens.adminFeedbackRate.raspredelenie-otsenok') }}
+        {{ t('adminScreens.adminFeedbackRate.distributionratings') }}
       </h3>
       <VCard class="admin-detail__rating">
         <VRatingBar

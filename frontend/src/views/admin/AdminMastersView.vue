@@ -48,7 +48,7 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminMasters.ne-udalos-zagruzit-masterov')"
+      :title="t('adminScreens.adminMasters.cannotcompletedloadMasterov')"
       :description="t('adminScreens.adminMasters.checkConnectionAndRetry')"
     >
       <template #action
@@ -95,7 +95,7 @@
             </VChip>
           </template>
           <span v-else class="mcard__muted">{{
-            t('adminScreens.adminMasters.napravleniya-ne-ukazany')
+            t('adminScreens.adminMasters.directionscannotUkazany')
           }}</span>
         </div>
 
@@ -112,7 +112,7 @@
             <span class="mcard__stat-val">{{ statVal(m.students_count) }}</span>
           </div>
           <div class="mcard__stat">
-            <span class="mcard__stat-key">{{ t('adminScreens.adminMasters.k-vyvodu') }}</span>
+            <span class="mcard__stat-key">{{ t('adminScreens.adminMasters.KVyvodu') }}</span>
             <span class="mcard__stat-val">{{ payoutVal(m.available_cents) }}</span>
           </div>
         </div>
@@ -252,13 +252,13 @@ const filtered = computed<AdminMasterListItem[]>(() =>
 
 const emptyText = computed<string>(() => {
   const byFilter: Record<string, string> = {
-    pending: t('adminScreens.adminMasters.net-masterov-na-proverke'),
-    verified: t('adminScreens.adminMasters.net-verifitsirovannykh-masterov'),
-    rejected: t('adminScreens.adminMasters.net-otklonennykh-masterov'),
-    suspended: t('adminScreens.adminMasters.net-zablokirovannykh-masterov'),
-    cancelled_by_user: t('adminScreens.adminMasters.net-udalennykh-akkauntov'),
+    pending: t('adminScreens.adminMasters.noMasterovNaProverke'),
+    verified: t('adminScreens.adminMasters.noVerifitsirovannykhMasterov'),
+    rejected: t('adminScreens.adminMasters.noOtklonennykhMasterov'),
+    suspended: t('adminScreens.adminMasters.noZablokirovannykhMasterov'),
+    cancelled_by_user: t('adminScreens.adminMasters.noUdalennykhAkkauntov'),
   }
-  return byFilter[filter.value] ?? t('adminScreens.adminMasters.masterov-poka-net')
+  return byFilter[filter.value] ?? t('adminScreens.adminMasters.Masterovyetno')
 })
 
 // Status badge labels match the operator SVG (the shared helper uses shorter ones).
@@ -296,7 +296,7 @@ async function load(): Promise<void> {
     total.value = res.total
   } catch (e) {
     error.value = true
-    toast.error(extractApiError(e, t('adminScreens.adminMasters.oshibka-zagruzki-masterov')))
+    toast.error(extractApiError(e, t('adminScreens.adminMasters.errorZagruzkiMasterov')))
   } finally {
     loading.value = false
   }

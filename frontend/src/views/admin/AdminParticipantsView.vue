@@ -159,14 +159,14 @@ function joinedLabel(iso: string): string {
   return `${month.charAt(0).toUpperCase()}${month.slice(1)} ${d.getUTCFullYear()}`
 }
 
-// t('adminScreens.adminParticipants.segodnya') / t('adminScreens.adminParticipants.vchera') / t('adminScreens.adminParticipants.24-yanvarya') — last app-open, from last_login_at.
+// t('adminScreens.adminParticipants.segodnya') / t('adminScreens.adminParticipants.vchera') / t('adminScreens.adminParticipants.24Yanvarya') — last app-open, from last_login_at.
 function lastActiveLabel(iso: string): string {
   return dayLabelOf(iso)
 }
 
 // No admin->user messaging endpoint yet -> stub toast (build-full-design).
 function messageStub(): void {
-  toast.info(t('adminScreens.adminParticipants.soobshcheniya-poka-nedostupny'))
+  toast.info(t('adminScreens.adminParticipants.SoobshcheniyayetNedostupny'))
 }
 </script>
 

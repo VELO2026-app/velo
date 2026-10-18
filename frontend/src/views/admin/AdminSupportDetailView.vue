@@ -76,7 +76,7 @@
         <VEmptyState
           v-else-if="messagesError"
           icon="warning"
-          :title="t('adminScreens.adminSupportDetail.ne-udalos-zagruzit-soobshcheniya')"
+          :title="t('adminScreens.adminSupportDetail.cannotcompletedloadSoobshcheniya')"
           :description="messagesError"
         >
           <VButton size="sm" variant="outline" @click="loadMessages">{{
@@ -135,8 +135,8 @@
       <div v-else class="support-detail__not-found">
         <VEmptyState
           icon="notfound"
-          :title="t('adminScreens.adminSupportDetail.obrashchenie-ne-naydeno')"
-          :description="t('adminScreens.adminSupportDetail.vernites-k-spisku-obrashcheniy')"
+          :title="t('adminScreens.adminSupportDetail.ObrashcheniecannotNaydeno')"
+          :description="t('adminScreens.adminSupportDetail.VernitesKSpiskuObrashcheniy')"
         />
         <VButton variant="outline" block @click="router.back()">{{
           t('adminScreens.adminSupportDetail.nazad')
