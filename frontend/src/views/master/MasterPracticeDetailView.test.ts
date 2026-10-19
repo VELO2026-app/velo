@@ -722,7 +722,7 @@ describe('MasterPracticeDetailView', () => {
       await flush()
 
       expect(host?.querySelectorAll('.pd-prow')).toHaveLength(5)
-      expect(text()).toContain('+ ещё 3 участников')
+      expect(text()).toContain('+ ещё 3 участника')
       expect(text()).toContain('Участник 5')
       expect(text()).not.toContain('Участник 6')
     })

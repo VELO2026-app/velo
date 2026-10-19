@@ -162,8 +162,7 @@
           <!-- Первые 3 + раскрытие «+ ещё N практик» (#5). -->
           <VShowMore
             v-if="!pastExpanded && hiddenPastCount > 0"
-            :count="hiddenPastCount"
-            :noun="t('masterScreens.analytics.practicesWord')"
+            :label="t('masterScreens.analytics.morePractices', hiddenPastCount)"
             @click="pastExpanded = true"
           />
           <div v-else-if="pastExpanded && masterStore.practicesPastHasMore" class="analytics__more">

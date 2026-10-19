@@ -162,8 +162,7 @@
           </div>
           <VShowMore
             v-if="!rosterExpanded && hiddenRosterCount > 0"
-            :count="hiddenRosterCount"
-            :noun="t('masterScreens.masterPracticeDetail.participantsWord')"
+            :label="t('masterScreens.masterPracticeDetail.moreParticipants', hiddenRosterCount)"
             @click="rosterExpanded = true"
           />
         </section>

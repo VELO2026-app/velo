@@ -826,14 +826,14 @@ describe('AnalyticsView', () => {
       practice('a5', { title: 'Практика E', scheduled_at: '2026-07-15T12:00:00Z' }),
     ]
 
-    it('caps the list at 3 and offers «+ ещё 2 практик»', async () => {
+    it('caps the list at 3 and offers «+ ещё 2 практики»', async () => {
       mockBucketedPractices(FIVE)
       mount()
       await flush()
 
       expect(pcards()).toHaveLength(3)
       expect(pcardTitles()).toEqual(['Практика A', 'Практика B', 'Практика C'])
-      expect(paneText(reviewsPane())).toContain('+ ещё 2 практик')
+      expect(paneText(reviewsPane())).toContain('+ ещё 2 практики')
     })
 
     it('the reveal expands to the whole period', async () => {
@@ -841,11 +841,11 @@ describe('AnalyticsView', () => {
       mount()
       await flush()
 
-      buttonIn(reviewsPane(), '+ ещё 2 практик')?.click()
+      buttonIn(reviewsPane(), '+ ещё 2 практики')?.click()
       await flush()
 
       expect(pcards()).toHaveLength(5)
-      expect(paneText(reviewsPane())).not.toContain('+ ещё 2 практик')
+      expect(paneText(reviewsPane())).not.toContain('+ ещё 2 практики')
     })
 
     it('offers no reveal when the period fits in the preview', async () => {
@@ -864,7 +864,7 @@ describe('AnalyticsView', () => {
       vi.mocked(mastersApi.getMyPractices).mockResolvedValue(practicesPage(FIVE, 6, 0))
       mount()
       await flush()
-      buttonIn(reviewsPane(), '+ ещё 2 практик')?.click()
+      buttonIn(reviewsPane(), '+ ещё 2 практики')?.click()
       await flush()
 
       const NEXT = practice('a6', { title: 'Практика F', scheduled_at: '2026-07-14T12:00:00Z' })
@@ -886,7 +886,7 @@ describe('AnalyticsView', () => {
       mockBucketedPractices(FIVE)
       mount()
       await flush()
-      buttonIn(reviewsPane(), '+ ещё 2 практик')?.click()
+      buttonIn(reviewsPane(), '+ ещё 2 практики')?.click()
       await flush()
       expect(pcards()).toHaveLength(5)
 
@@ -894,7 +894,7 @@ describe('AnalyticsView', () => {
       await flush()
 
       expect(pcards()).toHaveLength(3)
-      expect(paneText(reviewsPane())).toContain('+ ещё 2 практик')
+      expect(paneText(reviewsPane())).toContain('+ ещё 2 практики')
     })
   })
 

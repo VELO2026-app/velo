@@ -10,26 +10,29 @@
   Self-centres with a --space-1 top margin — drop it straight into a flex-column
   section (no wrapper needed); the roster's old centring wrapper is removed.
 
+  tz-i18n contract (label-only): the component renders NO locale text of its
+  own -- the caller passes the fully localized label. Count callers use the
+  CLDR pipe form with the plural overload, t('...more', hiddenCount) (see
+  masterScreens.*.more* keys, same recipe as shared.analytics.pairsMore); the
+  old count+noun props pinned ONE genitive-plural noun form, which read wrong
+  for 2-4 («+ ещё 2 практик») and left Russian fragments in every caller.
+  aria-expanded and other attrs fall through to the root button.
+
   Usage:
-    <VShowMore :count="hiddenCount" noun="практик" @click="expand" />
-    <VShowMore label="посмотреть еще" @click="expand" />   (verbatim override)
+    <VShowMore :label="t('masterScreens.analytics.morePractices', hiddenPastCount)" @click="expand" />
+    <VShowMore :label="t('common.showMore')" @click="expand" />
 -->
 
 <template>
   <button type="button" class="v-show-more" @click="$emit('click')">
-    <template v-if="label">{{ label }}</template>
-    <template v-else>+ ещё {{ count }} {{ noun }}</template>
+    {{ label }}
   </button>
 </template>
 
 <script setup lang="ts">
 defineProps<{
-  /** Hidden-items count shown in the default label. Omit when `label` is set. */
-  count?: number
-  /** Trailing noun, already in the correct case ("практик" / "участников" / "отзывов"). Omit when `label` is set. */
-  noun?: string
-  /** Verbatim label override; when set, replaces the «+ ещё {count} {noun}» default. */
-  label?: string
+  /** Fully localized label (caller-owned: pluralized t() or any verbatim string). */
+  label: string
 }>()
 
 defineEmits<{ click: [] }>()

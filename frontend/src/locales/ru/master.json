@@ -21,7 +21,7 @@
       "empty": {
         "noPractices": "За выбранный период практик нет"
       },
-      "practicesWord": "практик",
+      "morePractices": "+ ещё {count} практика | + ещё {count} практики | + ещё {count} практик",
       "sections": {
         "overall": "Общая статистика",
         "attention": "Требуют внимания",
@@ -481,6 +481,7 @@
       "deleteConfirm": "Удалить группу «{name}»? Участники вернутся в группу «Ученики»."
     },
     "masterGroups": {
+      "moreGroups": "+ ещё {count} группа | + ещё {count} группы | + ещё {count} групп",
       "search": {
         "placeholder": "Искать...",
         "aria": "Искать по группам и участникам",
@@ -632,7 +633,7 @@
     },
     "masterPracticeDetail": {
       "edit": "Редактировать",
-      "participantsWord": "участников",
+      "moreParticipants": "+ ещё {count} участник | + ещё {count} участника | + ещё {count} участников",
       "draft": {
         "deleteConfirm": "Удалить черновик практики? Это действие необратимо."
       },
@@ -764,7 +765,7 @@
         "changeQueryHint": "Попробуйте изменить запрос"
       },
       "messageCta": "Написать сообщение",
-      "studentsWord": "учеников",
+      "moreStudents": "+ ещё {count} ученик | + ещё {count} ученика | + ещё {count} учеников",
       "empty": {
         "title": "Учеников пока нет",
         "text": "Они появятся после первых практик"

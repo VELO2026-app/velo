@@ -151,8 +151,7 @@
 
         <VShowMore
           v-if="!expanded && hiddenCount > 0"
-          :count="hiddenCount"
-          :noun="plural(hiddenCount, 'группа', 'группы', 'групп')"
+          :label="t('masterScreens.masterGroups.moreGroups', hiddenCount)"
           @click="expanded = true"
         />
 
@@ -178,7 +177,6 @@ import VShowMore from '@/components/shared/VShowMore.vue'
 import { getGroups, searchGroupMemberships } from '@/api/groups'
 import { extractApiError } from '@/composables/useApiError'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
-import { plural } from '@/utils/plural'
 import type { GroupListItem, GroupSearchMemberItem } from '@/api/groups'
 
 const router = useRouter()
