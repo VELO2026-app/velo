@@ -498,7 +498,7 @@ const reportFormOpen = ref(false)
 const blockActionLabel = computed((): string =>
   detail.value?.blocked
     ? t('masterScreens.masterStudentProfile.unblockConfirm')
-    : t('masterScreens.masterStudentProfile.unblockConfirmTitle'),
+    : t('masterScreens.masterStudentProfile.blockAction'),
 )
 function onBlockActionClick(): void {
   if (detail.value?.blocked) unblockConfirmOpen.value = true
@@ -522,7 +522,7 @@ async function onUnblockConfirm(): Promise<void> {
     toast.success(t('masterScreens.masterStudentProfile.toast.unblocked'))
     unblockConfirmOpen.value = false
     // Restores detail.blocked=false -- the "..." menu reappears and the
-    // bottom button relabels back to t('masterScreens.masterStudentProfile.unblockConfirmTitle').
+    // bottom button relabels back to t('masterScreens.masterStudentProfile.blockAction').
     await load()
   } catch (e) {
     toast.error(extractApiError(e, t('masterScreens.masterStudentProfile.toast.unblockFailed')))
