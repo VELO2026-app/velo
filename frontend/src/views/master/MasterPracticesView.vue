@@ -195,7 +195,7 @@ import { useToast } from '@/composables/useToast'
 import { practiceIconFor } from '@/utils/displayHelpers'
 import { zonePercents, zoneTotal, type MoodScaleKey } from '@/utils/moodScale'
 import { checkinLabel, recurrenceLabel, remainingSessionsLabel } from '@/utils/practiceCardMeta'
-import { formatDateShort, formatShortDate, formatTime } from '@/utils/format'
+import { relativeDayCode, formatShortDate, formatTime } from '@/utils/format'
 import { practiceHasEnded } from '@/utils/practiceStatus'
 import { plural } from '@/utils/plural'
 import type { PracticeResponse } from '@/api/types'
@@ -272,8 +272,11 @@ const tabOptions = [
 
 /** Relative t('masterScreens.masterPractices.today')/t('masterScreens.masterPractices.tomorrow'), else compact t('masterScreens.masterPractices.dateExample') (timezone-safe). */
 function whenLabel(p: PracticeResponse): string {
-  const rel = formatDateShort(p.scheduled_at, p.timezone)
-  return rel === 'Сегодня' || rel === 'Завтра' ? rel : formatShortDate(p.scheduled_at, p.timezone)
+  // tz-i18n §3.1 item 2: branch on the day CODE, never on rendered labels.
+  const code = relativeDayCode(p.scheduled_at, p.timezone)
+  if (code === 'today') return t('common.today')
+  if (code === 'tomorrow') return t('common.tomorrow')
+  return formatShortDate(p.scheduled_at, p.timezone)
 }
 
 function participantsLabel(p: PracticeResponse): string {

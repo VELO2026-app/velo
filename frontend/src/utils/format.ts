@@ -78,6 +78,32 @@ export function formatDateShort(
   timezone = 'UTC',
   locale: string = getLocale(),
 ): string {
+  const code = relativeDayCode(isoString, timezone)
+  if (code === 'today') return t('common.today')
+  if (code === 'tomorrow') return t('common.tomorrow')
+
+  const date = new Date(isoString)
+  return new Intl.DateTimeFormat(locale, {
+    day: 'numeric',
+    month: 'long',
+    timeZone: timezone,
+  }).format(date)
+}
+
+/**
+ * Calendar-day code for an ISO datetime against now, in the target timezone:
+ * 'today' | 'tomorrow' | null. tz-i18n §3.1 item 2 — callers branch on this
+ * CODE, never by comparing rendered labels (formatDateShort's «Сегодня»
+ * strings are locale output, not operands).
+ *
+ * SW9: +24h on the epoch, NOT Date.setDate() -- setDate mutates in the
+ * DEVICE's own local timezone (whatever the runner's OS is set to), which
+ * is unrelated to the `timezone` param this function renders in. On a day
+ * the device's own timezone crosses a DST transition, setDate(getDate()+1)
+ * does not land exactly +24h later, which can resolve to the wrong
+ * calendar day once reformatted.
+ */
+export function relativeDayCode(isoString: string, timezone = 'UTC'): 'today' | 'tomorrow' | null {
   const date = new Date(isoString)
   const now = new Date()
 
@@ -92,22 +118,11 @@ export function formatDateShort(
 
   const dateStr = fmt(date)
   const todayStr = fmt(now)
-  // SW9: +24h on the epoch, NOT Date.setDate() -- setDate mutates in the
-  // DEVICE's own local timezone (whatever the runner's OS is set to), which
-  // is unrelated to the `timezone` param this function renders in. On a day
-  // the device's own timezone crosses a DST transition, setDate(getDate()+1)
-  // does not land exactly +24h later, which can resolve to the wrong
-  // calendar day once reformatted here.
   const tomorrowStr = fmt(new Date(now.getTime() + 24 * 60 * 60 * 1000))
 
-  if (dateStr === todayStr) return t('common.today')
-  if (dateStr === tomorrowStr) return t('common.tomorrow')
-
-  return new Intl.DateTimeFormat(locale, {
-    day: 'numeric',
-    month: 'long',
-    timeZone: timezone,
-  }).format(date)
+  if (dateStr === todayStr) return 'today'
+  if (dateStr === tomorrowStr) return 'tomorrow'
+  return null
 }
 
 /**

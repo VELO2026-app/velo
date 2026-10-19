@@ -193,7 +193,10 @@
             <p class="edit-profile__del-confirm-hint">
               {{ t('user.screens.editProfile.delete.typeConfirm') }}
             </p>
-            <VInput v-model="delConfirmText" placeholder="УДАЛИТЬ" />
+            <VInput
+              v-model="delConfirmText"
+              :placeholder="t('user.screens.editProfile.delete.confirmWord')"
+            />
           </div>
         </template>
 
@@ -201,9 +204,9 @@
           <VButton variant="secondary" @click="closeDeleteModal">{{
             t('user.screens.editProfile.delete.cancel')
           }}</VButton>
-          <VButton variant="danger" :disabled="!canDelete" @click="onConfirmDelete">
-            Удалить навсегда
-          </VButton>
+          <VButton variant="danger" :disabled="!canDelete" @click="onConfirmDelete">{{
+            t('user.screens.editProfile.delete.confirmButton')
+          }}</VButton>
         </div>
       </div>
     </VModal>
@@ -468,10 +471,13 @@ const formattedBalance = computed(() => formatMoney(balanceCents.value, 'EUR', '
 // «Удалить навсегда» unlocks once any balance is consented to and the user
 // typed the confirmation word.
 // Confirmation word accepted in any case — «удалить» / «УДАЛИТЬ» both unlock (C7).
+// tz-i18n §3.1 item 2: the word is the delete.confirmWord key (locale-owned);
+// which word a non-ru locale asks the user to type stays an owner ruling --
+// switching the key's text switches both the prompt and the comparison.
 const canDelete = computed(
   () =>
     (!hasBalance.value || delConsent.value) &&
-    delConfirmText.value.trim().toUpperCase() === 'УДАЛИТЬ',
+    delConfirmText.value.trim().toUpperCase() === t('user.screens.editProfile.delete.confirmWord'),
 )
 
 // The «УДАЛИТЬ» confirm field sits below the balance / withdraw / consent block, so
