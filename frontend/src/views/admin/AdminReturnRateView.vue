@@ -97,7 +97,7 @@ const loyalUsers = computed(() =>
   (data.value?.top_users ?? []).map((u) => ({
     id: u.id,
     title: u.name,
-    subtitle: `${u.practices_count} практик`,
+    subtitle: t('adminScreens.adminReturnRate.practicesCount', { n: u.practices_count }),
   })),
 )
 

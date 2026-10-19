@@ -276,9 +276,9 @@ const checkinAlertTime = computed((): string => {
   const diffMs = new Date(checkinAlert.value.practice.scheduled_at).getTime() - now.value
   const diffMinutes = Math.round(diffMs / 60_000)
   if (diffMinutes <= 0) return t('user.screens.userDashboard.liveNow')
-  if (diffMinutes < 60) return ` • через ${diffMinutes} мин`
+  if (diffMinutes < 60) return t('user.screens.userDashboard.inMinutes', { n: diffMinutes })
   const hours = Math.floor(diffMinutes / 60)
-  return ` • через ${hours} ч`
+  return t('user.screens.userDashboard.inHours', { n: hours })
 })
 
 // [FE-13] feedbackAlert/reflectionAlert lived here. Removed: the dashboard

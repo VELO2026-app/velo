@@ -111,7 +111,7 @@ function whenTime(p: AdminPracticeListItem): string {
   return formatTime(p.scheduled_at, p.timezone)
 }
 function durationLabel(p: AdminPracticeListItem): string {
-  return `${p.duration_minutes} мин`
+  return t('adminScreens.adminPractices.durationMinutes', { n: p.duration_minutes })
 }
 function capacityText(p: AdminPracticeListItem): string {
   return p.capacity != null ? String(p.capacity) : '∞'

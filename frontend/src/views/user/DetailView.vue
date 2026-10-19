@@ -157,7 +157,7 @@ const contextLine = computed(() => {
   if (!practice.value) return ''
   const name = practice.value.master_name ?? t('shared.form.hostFallback')
   const rel = detailType.value === 'checkin' ? 'Перед практикой' : 'После практики'
-  return `${rel}: ${practice.value.title} с ${name}`
+  return t('user.screens.detail.relatedLine', { rel, title: practice.value.title, name })
 })
 
 // -- load --------------------------------------------------------------------

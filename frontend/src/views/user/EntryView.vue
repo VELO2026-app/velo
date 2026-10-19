@@ -210,7 +210,7 @@ const practiceDuration = computed(() =>
 const contextLine = computed(() => {
   if (!practice.value) return ''
   const name = practice.value.master_name ?? t('user.screens.entry.shared.form.hostFallback')
-  return `Связано с практикой: ${practice.value.title} с ${name}`
+  return t('user.screens.entry.relatedLine', { title: practice.value.title, name })
 })
 
 // -- entry date line ---------------------------------------------------------

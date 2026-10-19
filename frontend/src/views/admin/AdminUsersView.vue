@@ -197,7 +197,7 @@ const confirm = reactive<{
 
 function askMakeMaster(u: UserResponse): void {
   confirm.target = u
-  confirm.message = `Назначить пользователя «${nameOf(u)}» мастером?`
+  confirm.message = t('adminScreens.adminUsers.promoteConfirm', { name: nameOf(u) })
   confirm.open = true
 }
 

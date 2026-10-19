@@ -115,7 +115,7 @@ async function load(): Promise<void> {
 }
 
 function usedLabel(p: PromoResponse): string {
-  return `${p.used_count} из ${p.max_uses ?? '∞'}`
+  return t('adminScreens.adminPromos.usedOf', { used: p.used_count, max: p.max_uses ?? '∞' })
 }
 function untilLabel(p: PromoResponse): string {
   return p.valid_until

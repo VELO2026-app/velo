@@ -427,7 +427,7 @@ const whenLabel = computed((): string => {
 })
 
 const durationLabel = computed((): string =>
-  practice.value ? `${practice.value.duration_minutes} мин` : '',
+  practice.value ? t('practice.durationMinutes', { n: practice.value.duration_minutes }) : '',
 )
 
 // -- Upcoming hero extras --

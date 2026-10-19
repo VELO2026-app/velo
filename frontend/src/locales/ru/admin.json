@@ -80,7 +80,8 @@
       "povtorit": "Повторить",
       "lowCheckinTitle": "Низкий check-in (практики)",
       "noData": "Данных пока нет",
-      "loadError": "Ошибка загрузки"
+      "loadError": "Ошибка загрузки",
+      "subtitle": "{pct}% · {total} записей"
     },
     "adminCuratorGroups": {
       "loadSchoolsFailed": "Не удалось загрузить школы",
@@ -224,7 +225,14 @@
       "documentViewUnavailable": "Просмотр документа пока недоступен",
       "cannotcompletedchangePravo": "Не удалось изменить право",
       "verificationError": "Ошибка верификации",
-      "rejectionReasonHint": "Укажите причину отказа"
+      "rejectionReasonHint": "Укажите причину отказа",
+      "experienceYears": "{n} лет",
+      "methodSingle": "Метода «{label}» нет в каталоге — добавить для всех мастеров?",
+      "methodPlural": "Методов {labels} нет в каталоге — добавить для всех мастеров?",
+      "revokeMessage": "Мастер {name} снова станет обычным пользователем. Все данные (профиль, практики, история) сохраняются — доступ можно вернуть кнопкой «Сделать мастером».",
+      "revokeWarning": "{base} Внимание: {warns} — отзыв не блокируется, данные останутся.",
+      "warnSchedule": "{n} практик(и) в расписании",
+      "warnWithdrawals": "{n} выплат(ы) в ожидании"
     },
     "adminMasters": {
       "cannotcompletedloadMasterov": "Не удалось загрузить мастеров",
@@ -272,7 +280,9 @@
       "toast": {
         "requestRejected": "Заявка отклонена",
         "rejectFailed": "Ошибка при отклонении"
-      }
+      },
+      "methodSingle": "Метода «{label}» нет в каталоге — добавить для всех мастеров?",
+      "methodPlural": "Методов {labels} нет в каталоге — добавить для всех мастеров?"
     },
     "adminParticipants": {
       "toast": {
@@ -321,7 +331,8 @@
       "vse": "Все",
       "predstoyashchie": "Предстоящие",
       "proshedshie": "Прошедшие",
-      "loadError": "Ошибка загрузки"
+      "loadError": "Ошибка загрузки",
+      "durationMinutes": "{n} мин"
     },
     "adminProfile": {
       "administrator": "Администратор",
@@ -349,7 +360,9 @@
       "promocodesLoadError": "Ошибка загрузки промокодов",
       "loadError": "Ошибка загрузки",
       "PromokodDeaktivirovan": "Промокод деактивирован",
-      "cannotcompletedDeaktivirovatPromokod": "Не удалось деактивировать промокод"
+      "cannotcompletedDeaktivirovatPromokod": "Не удалось деактивировать промокод",
+      "deactivateConfirm": "Деактивировать промокод {code}? Мастер и участники больше не смогут им воспользоваться.",
+      "usedOf": "{used} из {max}"
     },
     "adminReportDetail": {
       "PrimechanieKResheniyu": "Примечание к решению *",
@@ -399,7 +412,8 @@
       "povtorit": "Повторить",
       "topLoyalUsers": "Топ лояльных юзеров",
       "noData": "Данных пока нет",
-      "loadError": "Ошибка загрузки"
+      "loadError": "Ошибка загрузки",
+      "practicesCount": "{n} практик"
     },
     "adminRevenue": {
       "revenuePeriod": "Период выручки",
@@ -411,7 +425,8 @@
       "nedelya": "Неделя",
       "mesyats": "Месяц",
       "besplatno": "Бесплатно",
-      "loadError": "Ошибка загрузки"
+      "loadError": "Ошибка загрузки",
+      "paidAmount": "Выплачено: {amount}"
     },
     "adminSupportDetail": {
       "loadError": "Ошибка загрузки",
@@ -478,7 +493,8 @@
       "toast": {
         "promotedToMaster": "Пользователь назначен мастером",
         "promoteFailed": "Не удалось назначить мастером"
-      }
+      },
+      "promoteConfirm": "Назначить пользователя «{name}» мастером?"
     },
     "adminWithdrawalDetail": {
       "rejectionReason": "Причина отклонения",
@@ -520,6 +536,7 @@
       "bank": "Банк",
       "withdrawalsLoadError": "Ошибка загрузки выплат",
       "loadError": "Ошибка загрузки"
-    }
+    },
+    "AdminUsersView": {}
   }
 }

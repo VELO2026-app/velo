@@ -185,9 +185,11 @@ const promoteLabels = ref<string[]>([])
 const promoteMessage = computed((): string => {
   const labels = promoteLabels.value
   if (labels.length <= 1) {
-    return `Метода «${labels[0] ?? ''}» нет в каталоге — добавить для всех мастеров?`
+    return t('adminScreens.adminMethodRequests.methodSingle', { label: labels[0] ?? '' })
   }
-  return `Методов ${labels.map((l) => `«${l}»`).join(', ')} нет в каталоге — добавить для всех мастеров?`
+  return t('adminScreens.adminMethodRequests.methodPlural', {
+    labels: labels.map((l) => `«${l}»`).join(', '),
+  })
 })
 
 const headerCount = computed<string>(() => (total.value ? String(total.value) : '—'))

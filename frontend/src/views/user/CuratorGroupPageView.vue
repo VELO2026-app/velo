@@ -447,7 +447,7 @@ function advisoryLine(count: number | null): string {
       : count < 5
         ? t('user.screens.curatorGroupPage.plural.few')
         : t('user.screens.curatorGroupPage.plural.many')
-  return ` ${count} предстоящих ${word} для этой школы станут скрыты.`
+  return t('user.screens.curatorGroupPage.hiddenCount', { count, word })
 }
 
 // -- Leave (student / master) --
@@ -463,7 +463,10 @@ const leaveMessage = computed(() => {
   if (notFound.value) {
     return t('user.screens.curatorGroupPage.leave.warning')
   }
-  return `Вы покинете школу «${page.value?.name ?? ''}».${advisoryLine(leaveAdvisory.value)}`
+  return t('user.screens.curatorGroupPage.leaveText', {
+    name: page.value?.name ?? '',
+    advisory: advisoryLine(leaveAdvisory.value),
+  })
 })
 
 function onLeaveClick(): void {
@@ -541,7 +544,7 @@ async function onEditSave(): Promise<void> {
     // trailing slash, punycode) -- what returns is not what was typed, and
     // a silent difference reads as "the link got corrupted". Say it.
     if (typeof avatar === 'string' && (res.avatar_url ?? '') !== avatar && res.avatar_url) {
-      toast.info(`Ссылка на аватар сохранена как ${res.avatar_url}`)
+      toast.info(t('user.screens.curatorGroupPage.toast.avatarSaved', { url: res.avatar_url }))
     }
   } catch (e) {
     toast.error(extractApiError(e, t('user.screens.curatorGroupPage.toast.updateFailed')))

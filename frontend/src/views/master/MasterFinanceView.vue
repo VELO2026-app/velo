@@ -254,6 +254,7 @@ import { VHeader } from '@/components/layout'
 import { VButton, VLoader, VInput, VSelect } from '@/components/ui'
 import { IconCheck, IconClose, IconPending } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
+import { getLocale } from '@/locales'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import { useMasterStore } from '@/stores/master'
 import {
@@ -442,7 +443,9 @@ function maskedDetails(payout: PayoutDetails): string {
     case 'card': {
       const num = (d['card_number'] ?? '').replace(/\s/g, '')
       const last4 = num.slice(-4)
-      return last4 ? `Карта ···· ${last4}` : t('masterScreens.masterFinance.toast.cardConfigured')
+      return last4
+        ? t('masterScreens.masterFinance.cardMasked', { last4 })
+        : t('masterScreens.masterFinance.toast.cardConfigured')
     }
     default:
       return t('masterScreens.masterFinance.toast.configured')
@@ -495,7 +498,9 @@ const amountError = computed((): string => {
   const cents = amountCents.value
   if (cents <= 0) return t('masterScreens.masterFinance.validation.amountInvalid')
   if (cents < MIN_WITHDRAWAL_EUROS * 100) {
-    return `Минимальная сумма вывода ${formatMoney(MIN_WITHDRAWAL_EUROS * 100, 'EUR', 'ru', true)}`
+    return t('masterScreens.masterFinance.minWithdrawal', {
+      amount: formatMoney(MIN_WITHDRAWAL_EUROS * 100, 'EUR', getLocale(), true),
+    })
   }
   if (cents > availableCents.value) {
     return t('masterScreens.masterFinance.validation.insufficientFunds')

@@ -99,7 +99,10 @@ const lowPractices = computed(() =>
   (data.value?.low_practices ?? []).map((p) => ({
     id: p.id,
     title: p.title,
-    subtitle: `${Math.round(p.checkin_rate_pct)}% · ${p.total} записей`,
+    subtitle: t('adminScreens.adminCheckinRate.subtitle', {
+      pct: Math.round(p.checkin_rate_pct),
+      total: p.total,
+    }),
   })),
 )
 

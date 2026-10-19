@@ -218,7 +218,7 @@
       <VEmptyState
         v-else-if="searchActive && !jumpActive && items.length === 0"
         :title="t('user.screens.diaryFeed.search.noHits')"
-        :description="`По запросу «${feedFilters.search}» записей нет`"
+        :description="t('user.screens.diaryFeed.searchNoHits', { query: feedFilters.search })"
       >
         <template #icon>
           <svg width="64" height="64" viewBox="0 0 24 24" fill="none" aria-hidden="true">

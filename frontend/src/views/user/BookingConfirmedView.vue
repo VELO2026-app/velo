@@ -135,7 +135,11 @@ function composeRequest(body: string): string {
   const p = practice.value
   if (!p) return body
   const when = formatDate(p.scheduled_at, viewerTz.value)
-  return `Практика: ${cleanPracticeTitle(p.title)}, ${when}\n\n${body}`
+  return t('user.screens.bookingConfirmed.practiceLine', {
+    title: cleanPracticeTitle(p.title),
+    when,
+    body,
+  })
 }
 
 async function onSendRequest(): Promise<void> {

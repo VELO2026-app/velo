@@ -685,7 +685,9 @@ const hasParsedMethods = computed<boolean>(
   () => flattenMethods(parseMethods(methods.value)).length > 0,
 )
 const experience = computed<string>(() =>
-  master.value ? `${master.value.experience_years ?? 0} лет` : PLACEHOLDER,
+  master.value
+    ? t('adminScreens.adminMasterReview.experienceYears', { n: master.value.experience_years ?? 0 })
+    : PLACEHOLDER,
 )
 const bio = computed<string>(() => master.value?.bio || PLACEHOLDER)
 
@@ -713,22 +715,21 @@ const revoking = ref(false)
 const revokeAdvisory = ref<RevokeMasterAdvisory | null>(null)
 
 const revokeMessage = computed<string>(() => {
-  const base =
-    `Мастер ${displayName.value} снова станет обычным пользователем. Все данные ` +
-    `(профиль, практики, история) сохраняются — доступ можно вернуть кнопкой ` +
-    `«Сделать мастером».`
+  const base = t('adminScreens.adminMasterReview.revokeMessage', { name: displayName.value })
   const a = revokeAdvisory.value
   if (!a || !a.has_warnings) return base
   const warns: string[] = []
   if (a.scheduled_or_live_practices > 0) {
-    warns.push(`${a.scheduled_or_live_practices} практик(и) в расписании`)
+    warns.push(
+      t('adminScreens.adminMasterReview.warnSchedule', { n: a.scheduled_or_live_practices }),
+    )
   }
   if (a.available_cents > 0 || a.frozen_cents > 0)
     warns.push(t('adminScreens.adminMasterReview.nonZeroBalance'))
   if (a.pending_withdrawals > 0) {
-    warns.push(`${a.pending_withdrawals} выплат(ы) в ожидании`)
+    warns.push(t('adminScreens.adminMasterReview.warnWithdrawals', { n: a.pending_withdrawals }))
   }
-  return `${base} Внимание: ${warns.join(', ')} — отзыв не блокируется, данные останутся.`
+  return t('adminScreens.adminMasterReview.revokeWarning', { base, warns: warns.join(', ') })
 })
 
 async function openRevoke(): Promise<void> {
@@ -997,9 +998,11 @@ const promoteLabels = ref<string[]>([])
 const promoteMessage = computed((): string => {
   const labels = promoteLabels.value
   if (labels.length <= 1) {
-    return `Метода «${labels[0] ?? ''}» нет в каталоге — добавить для всех мастеров?`
+    return t('adminScreens.adminMasterReview.methodSingle', { label: labels[0] ?? '' })
   }
-  return `Методов ${labels.map((l) => `«${l}»`).join(', ')} нет в каталоге — добавить для всех мастеров?`
+  return t('adminScreens.adminMasterReview.methodPlural', {
+    labels: labels.map((l) => `«${l}»`).join(', '),
+  })
 })
 
 /** BE-18: the verify-dialog tick for the school-founding right.

@@ -29,7 +29,8 @@
           "copied": "Токен скопирован",
           "addressCopied": "Адрес скопирован",
           "revoked": "Токен отозван",
-          "revokeFailed": "Не удалось отозвать токен"
+          "revokeFailed": "Не удалось отозвать токен",
+          "copyFailedHint": "Не удалось скопировать — выделите {what} и скопируйте вручную"
         },
         "copy": {
           "entityToken": "токен",
@@ -42,7 +43,9 @@
         "neverUsed": "ещё не использовался",
         "createdAt": "Создан {created} ·",
         "oauthConnected": "Подключено кнопкой в ИИ-клиенте",
-        "revokedAt": "Отозван {at}"
+        "revokedAt": "Отозван {at}",
+        "revokeConfirmText": "Нейросеть с токеном «{name}» сразу потеряет доступ. Отменить это нельзя.",
+        "toast.copyFailedHint": "Не удалось скопировать — выделите {what} и скопируйте вручную"
       },
       "aiSummary": {
         "inDevelopment": "Этот раздел в разработке"
@@ -55,7 +58,8 @@
           "sent": "Запрос отправлен мастеру",
           "sendFailed": "Не удалось отправить запрос"
         },
-        "title": "Практика забронирована!"
+        "title": "Практика забронирована!",
+        "practiceLine": "Практика: {title}, {when}\n\n{body}"
       },
       "calendar": {
         "loadFailed": "Не удалось загрузить",
@@ -89,7 +93,8 @@
         },
         "banner": {
           "checkinTime": "Пора на check-in"
-        }
+        },
+        "restrictGroupNames": "Вы не состоите в группе «{names}»"
       },
       "curatorGroupPage": {
         "notFound": {
@@ -130,8 +135,11 @@
           "leaveFailed": "Не удалось покинуть школу",
           "updated": "Школа обновлена",
           "updateFailed": "Не удалось обновить школу",
-          "transferredToYou": "Школа передана вам"
-        }
+          "transferredToYou": "Школа передана вам",
+          "avatarSaved": "Ссылка на аватар сохранена как {url}"
+        },
+        "hiddenCount": " {count} предстоящих {word} для этой школы станут скрыты.",
+        "leaveText": "Вы покинете школу «{name}».{advisory}"
       },
       "detail": {
         "loadFailed": "Не удалось загрузить запись",
@@ -139,7 +147,8 @@
         "noComment": "Без комментария",
         "beforeLine": "Перед практикой: X с Y",
         "afterLine": "После практики: X с Y",
-        "notFound": "Запись не найдена"
+        "notFound": "Запись не найдена",
+        "relatedLine": "{rel}: {title} с {name}"
       },
       "diaryFeed": {
         "filter": {
@@ -161,7 +170,8 @@
         },
         "toast": {
           "deleted": "Запись удалена"
-        }
+        },
+        "searchNoHits": "По запросу «{query}» записей нет"
       },
       "editProfile": {
         "about": {
@@ -223,7 +233,8 @@
           "form": {
             "hostFallback": "Мастером"
           }
-        }
+        },
+        "relatedLine": "Связано с практикой: {title} с {name}"
       },
       "externalActivityCreate": {
         "custom": {
@@ -560,7 +571,8 @@
         "=dup:role": {
           "student": "Ученик",
           "master": "Мастер"
-        }
+        },
+        "blockText": "Участник больше не сможет видеть эту школу и записываться на её практики, а также перестанет получать её уведомления."
       },
       "schools": {
         "create": {
@@ -676,7 +688,9 @@
         },
         "liveNow": "• Сейчас",
         "liveBadge": "В эфире",
-        "zoomPreparing": "Вход в Zoom ещё готовится"
+        "zoomPreparing": "Вход в Zoom ещё готовится",
+        "inMinutes": " • через {n} мин",
+        "inHours": " • через {n} ч"
       },
       "userInbox": {
         "empty": {

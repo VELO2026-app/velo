@@ -191,7 +191,7 @@ function closedPracticeMessage(code: string | undefined): string | null {
   if (code === 'not_in_audience') {
     const names = practice.value?.audience_group_names ?? []
     return names.length
-      ? `Вы не состоите в группе «${names.join('», «')}»`
+      ? t('user.screens.checkin.restrictGroupNames', { names: names.join('», «') })
       : t('user.screens.checkin.restrict.groupOnly')
   }
   return null

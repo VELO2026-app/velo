@@ -509,10 +509,7 @@ const blockConfirmOpen = ref(false)
 const blockedDialogOpen = ref(false)
 const reportOpen = ref(false)
 
-const blockCopy = computed(
-  () =>
-    `Участник больше не сможет видеть эту школу и записываться на её практики, а также перестанет получать её уведомления. Вы сможете разблокировать его в любой момент.`,
-)
+const blockCopy = computed(() => t('user.screens.schoolStudentProfile.blockText'))
 
 function onBlockClick(close: () => void): void {
   close()

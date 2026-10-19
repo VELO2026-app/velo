@@ -182,7 +182,7 @@ function ownerName(p: AdminPromoResponse): string {
 }
 
 function usedLabel(p: AdminPromoResponse): string {
-  return `${p.used_count} из ${p.max_uses ?? '∞'}`
+  return t('adminScreens.adminPromos.usedOf', { used: p.used_count, max: p.max_uses ?? '∞' })
 }
 function untilLabel(p: AdminPromoResponse): string {
   return p.valid_until ? formatShortDate(p.valid_until) : t('adminScreens.adminPromos.bessrochno')
@@ -235,7 +235,7 @@ const deactivatingId = ref<string | null>(null)
 
 const confirmMessage = computed<string>(() =>
   confirmTarget.value
-    ? `Деактивировать промокод ${confirmTarget.value.code}? Мастер и участники больше не смогут им воспользоваться.`
+    ? t('adminScreens.adminPromos.deactivateConfirm', { code: confirmTarget.value.code })
     : '',
 )
 

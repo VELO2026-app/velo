@@ -250,8 +250,8 @@
          it). The MESSAGE keeps the name on purpose. -->
     <VConfirmDialog
       :open="unblockConfirmOpen"
-      :title="`Разблокировать?`"
-      :message="`${name} вернется в группу «Ученики» и снова сможет видеть и бронировать ваши практики.`"
+      :title="t('masterScreens.masterStudentProfile.unblockConfirmTitle')"
+      :message="t('masterScreens.masterStudentProfile.unblockText', { name })"
       :confirm-label="t('masterScreens.masterStudentProfile.unblockCta')"
       warning-panel
       cancel-variant="primary"

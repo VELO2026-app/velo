@@ -57,7 +57,7 @@
           v-for="m in data.per_master"
           :key="m.master_id"
           :title="m.name"
-          :subtitle="`Выплачено: ${money(m.payout_cents)}`"
+          :subtitle="t('adminScreens.adminRevenue.paidAmount', { amount: money(m.payout_cents) })"
         >
           <template #trailing>
             <span class="admin-revenue__earned">{{ money(m.earned_cents) }}</span>

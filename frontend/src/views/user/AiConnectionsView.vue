@@ -239,7 +239,7 @@ const revoking = ref(false)
 const canCreate = computed(() => name.value.trim().length > 0 && scopes.value.length > 0)
 const revokeMessage = computed(() =>
   revokeTarget.value
-    ? `Нейросеть с токеном «${revokeTarget.value.name}» сразу потеряет доступ. Отменить это нельзя.`
+    ? t('user.screens.aiConnections.revokeConfirmText', { name: revokeTarget.value.name })
     : '',
 )
 
@@ -307,7 +307,7 @@ async function copy(text: string, done: string, what: string): Promise<void> {
     await navigator.clipboard.writeText(text)
     toast.success(done)
   } catch {
-    toast.error(`Не удалось скопировать — выделите ${what} и скопируйте вручную`)
+    toast.error(t('user.screens.aiConnections.toast.copyFailedHint', { what }))
   }
 }
 
