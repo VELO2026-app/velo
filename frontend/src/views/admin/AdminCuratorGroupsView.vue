@@ -48,13 +48,26 @@
           <div class="sg-card__head">
             <span class="sg-card__name">{{ g.name }}</span>
             <VBadge :variant="g.is_active ? 'success' : 'muted'">
-              {{ g.is_active ? 'Активна' : 'Заморожена' }}
+              {{
+                g.is_active
+                  ? t('adminScreens.adminCuratorGroups.active')
+                  : t('adminScreens.adminCuratorGroups.frozen')
+              }}
             </VBadge>
           </div>
-          <span class="sg-card__curator">Куратор: {{ g.curator.display_name || '—' }}</span>
+          <span class="sg-card__curator">{{
+            t('adminScreens.adminCuratorGroups.curatorLine', {
+              name: g.curator.display_name || '—',
+            })
+          }}</span>
           <span class="sg-card__meta">
-            Мастеров: {{ g.masters_count }} • Учеников: {{ g.students_count }} • с
-            {{ createdLabel(g.created_at) }}
+            {{
+              t('adminScreens.adminCuratorGroups.countsLine', {
+                masters: g.masters_count,
+                students: g.students_count,
+                since: createdLabel(g.created_at),
+              })
+            }}
           </span>
         </button>
       </div>
@@ -68,8 +81,7 @@
 
     <VCard v-else>
       <p class="admin-list__empty">
-        Школ пока нет. Школу создаёт сам верифицированный мастер — отдельной выдачи прав не
-        предусмотрено (рычаг админа — верификация мастера).
+        {{ t('adminScreens.adminCuratorGroups.emptyNote') }}
       </p>
     </VCard>
   </div>

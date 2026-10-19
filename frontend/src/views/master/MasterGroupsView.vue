@@ -26,13 +26,22 @@
 
 <template>
   <div class="groups">
-    <VHeader title="Мои группы" show-back @back="router.push({ name: 'master-dashboard' })">
+    <VHeader
+      :title="t('masterScreens.masterGroups.title')"
+      show-back
+      @back="router.push({ name: 'master-dashboard' })"
+    >
       <!-- G3 (PROMPT №609): top-right, same row as the title (measured
            from the owner's SVG: 40px circle, right-aligned to the cards'
            own right edge -- VHeader's #action slot already sits flush
            with the header row's right side, same rail). -->
       <template #action>
-        <button type="button" class="groups__add-btn" aria-label="Новая группа" @click="onCreate">
+        <button
+          type="button"
+          class="groups__add-btn"
+          :aria-label="t('masterScreens.masterGroups.newAria')"
+          @click="onCreate"
+        >
           <IconPlusFilled :size="20" />
         </button>
       </template>
@@ -71,7 +80,10 @@
             @click="openDetail(group)"
             @keydown.enter.space.prevent="openDetail(group)"
           >
-            <VListRow :title="group.name" :subtitle="`Участников: ${group.members_count}`" />
+            <VListRow
+              :title="group.name"
+              :subtitle="t('masterScreens.masterGroups.membersCount', { n: group.members_count })"
+            />
           </div>
         </template>
 
@@ -146,7 +158,10 @@
           @click="openDetail(group)"
           @keydown.enter.space.prevent="openDetail(group)"
         >
-          <VListRow :title="group.name" :subtitle="`Участников: ${group.members_count}`" />
+          <VListRow
+            :title="group.name"
+            :subtitle="t('masterScreens.masterGroups.membersCount', { n: group.members_count })"
+          />
         </div>
 
         <VShowMore

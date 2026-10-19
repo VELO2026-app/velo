@@ -30,13 +30,13 @@
     </VEmptyState>
 
     <template v-else>
-      <VMetricHero :value="avgRate" label="Средний check-in rate">
+      <VMetricHero :value="avgRate" :label="t('adminScreens.adminCheckinRate.avgRate')">
         <template #icon><IconCheck :size="30" /></template>
       </VMetricHero>
 
       <div class="admin-detail__stats2">
-        <VStatCard :value="totalRecords" label="Всего записей" />
-        <VStatCard :value="checkedIn" label="Отметились" />
+        <VStatCard :value="totalRecords" :label="t('adminScreens.adminCheckinRate.totalRecords')" />
+        <VStatCard :value="checkedIn" :label="t('adminScreens.adminCheckinRate.checkedIn')" />
       </div>
 
       <VBarChart :bars="weekBars" />

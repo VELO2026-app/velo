@@ -35,7 +35,11 @@
             v-if="masterMode || schoolMode"
             type="button"
             class="calendar__back"
-            :aria-label="masterMode ? 'Назад к профилю мастера' : 'Назад к школе'"
+            :aria-label="
+              masterMode
+                ? t('user.screens.calendar.backToMaster')
+                : t('user.screens.calendar.backToSchool')
+            "
             @click="goBack"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -49,7 +53,13 @@
             </svg>
           </button>
           <h1 class="calendar__heading">
-            {{ masterMode ? 'Практики мастера' : schoolMode ? 'Практики школы' : 'Календарь' }}
+            {{
+              masterMode
+                ? t('user.screens.calendar.titleMaster')
+                : schoolMode
+                  ? t('user.screens.calendar.titleSchool')
+                  : t('user.screens.calendar.titlePlain')
+            }}
           </h1>
         </div>
 
@@ -97,7 +107,7 @@
                 stroke-linejoin="round"
               />
             </svg>
-            Фильтр
+            {{ t('user.screens.calendar.filter') }}
           </button>
 
           <button
@@ -112,7 +122,7 @@
           </button>
 
           <span v-if="activeChips.length === 0" class="calendar__chips-empty">
-            Фильтры не выбраны
+            {{ t('user.screens.calendar.noFilters') }}
           </span>
         </div>
 
@@ -153,13 +163,17 @@
     <!-- Empty: no practices on the selected day -->
     <VEmptyState
       v-else-if="dayPractices.length === 0"
-      :title="masterMode || schoolMode ? 'Практик нет' : 'Нет практик'"
+      :title="
+        masterMode || schoolMode
+          ? t('user.screens.calendar.emptyMode')
+          : t('user.screens.calendar.emptyPlain')
+      "
       :description="
         masterMode
-          ? 'У мастера пока нет практик на этот день. Выберите другой день.'
+          ? t('user.screens.calendar.emptyDesc.master')
           : schoolMode
-            ? 'У школы пока нет практик на этот день. Выберите другой день.'
-            : 'На этот день практик нет. Выберите другой день или измените фильтры.'
+            ? t('user.screens.calendar.emptyDesc.school')
+            : t('user.screens.calendar.emptyDesc.plain')
       "
     >
       <template #icon><IconClock :size="48" /></template>

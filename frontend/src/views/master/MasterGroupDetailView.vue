@@ -36,14 +36,18 @@
   <div class="group-detail">
     <VHeader :title="headerTitle" show-back @back="router.push({ name: 'master-groups' })">
       <template v-if="kind === 'custom'" #action>
-        <VMenu ariaLabel="Меню группы">
+        <VMenu :ariaLabel="t('masterScreens.masterGroupDetail.menuAria')">
           <template #default="{ close }">
             <VMenuItem
               :icon="IconShare"
               :ariaLabel="t('masterScreens.masterGroupDetail.inviteCta')"
               @click="onHeaderInviteClick(close)"
             />
-            <VMenuItem :icon="IconPen" ariaLabel="Изменить" @click="onRenameClick(close)" />
+            <VMenuItem
+              :icon="IconPen"
+              :ariaLabel="t('masterScreens.masterGroupDetail.editAria')"
+              @click="onRenameClick(close)"
+            />
             <VMenuItem
               :icon="IconTrash"
               :ariaLabel="t('masterScreens.masterGroupDetail.deleteCta')"
@@ -119,8 +123,14 @@
         <VEmptyState
           v-if="members.length === 0"
           icon="group"
-          :title="search ? 'Никого не найдено' : 'Участников пока нет'"
-          :description="search ? 'Попробуйте изменить запрос' : emptyDescription"
+          :title="
+            search
+              ? t('masterScreens.masterGroupDetail.empty.noHits')
+              : t('masterScreens.masterGroupDetail.empty.noMembers')
+          "
+          :description="
+            search ? t('masterScreens.masterGroupDetail.empty.searchHint') : emptyDescription
+          "
         />
         <!-- Empty-group invite CTA REMOVED here (owner Q8, PROMPT №610): the
              header's own «⋯» menu (line ~30 above, kind==='custom') is now
@@ -146,7 +156,11 @@
       @save="onRenameSave"
       @close="renameOpen = false"
     >
-      <VInput v-model="renameName" label="Название" placeholder="Название группы" />
+      <VInput
+        v-model="renameName"
+        :label="t('masterScreens.masterGroupDetail.fields.name')"
+        :placeholder="t('masterScreens.masterGroupDetail.fields.namePlaceholder')"
+      />
       <VTextarea
         v-model="renameDescription"
         :label="t('masterScreens.masterGroupDetail.fields.description')"
@@ -222,7 +236,9 @@ const groupMeta = ref<GroupListItem | null>(null)
 const groupName = computed(() =>
   groupMeta.value ? groupMeta.value.name : String(route.query.name ?? ''),
 )
-const headerTitle = computed(() => `Группа "${groupName.value}"`)
+const headerTitle = computed(() =>
+  t('masterScreens.masterGroupDetail.rename.title', { name: groupName.value }),
+)
 const groupDescription = computed(() =>
   groupMeta.value ? (groupMeta.value.description ?? '') : String(route.query.description ?? ''),
 )
@@ -236,7 +252,9 @@ const kind = computed((): GroupKind => {
 })
 
 const emptyDescription = computed(() =>
-  kind.value === 'deleted' ? 'Никого не заблокировали' : 'Добавьте первого ученика',
+  kind.value === 'deleted'
+    ? t('masterScreens.masterGroupDetail.empty.deletedEmpty')
+    : t('masterScreens.masterGroupDetail.empty.addFirst'),
 )
 
 const members = ref<GroupMemberItem[]>([])
@@ -388,8 +406,8 @@ async function onRenameSave(): Promise<void> {
 // -- Delete (G2, PROMPT №609 -- moved from MasterGroupsView's card menu) --
 const deleteConfirmOpen = ref(false)
 const deleting = ref(false)
-const deleteMessage = computed(
-  () => `Удалить группу «${groupName.value}»? Участники вернутся в группу «Ученики».`,
+const deleteMessage = computed(() =>
+  t('masterScreens.masterGroupDetail.rename.deleteConfirm', { name: groupName.value }),
 )
 function onDeleteClick(close: () => void): void {
   deleteConfirmOpen.value = true

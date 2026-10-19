@@ -134,7 +134,10 @@
         <div class="admin-dashboard__revenue-amount">{{ revenueValue }}</div>
         <div v-if="revenueDelta" class="admin-dashboard__revenue-delta">{{ revenueDelta }}</div>
       </VCard>
-      <VMoreLink label="Баланс по мастерам" @click="router.push({ name: 'admin-revenue' })" />
+      <VMoreLink
+        :label="t('adminScreens.adminDashboard.mastersBalance')"
+        @click="router.push({ name: 'admin-revenue' })"
+      />
       <VListRow
         :title="t('adminScreens.adminDashboard.vyplaty')"
         :subtitle="t('adminScreens.adminDashboard.withdrawalRequestsLink')"
@@ -247,7 +250,6 @@ import { useAdminStore } from '@/stores/admin'
 import { getCheckinMetric, getFeedbackMetric, getReturnMetric, getAdminRevenue } from '@/api/admin'
 import { formatMoney } from '@/utils/format'
 import { formatPeriodRange } from '@/utils/periodRange'
-import { plural } from '@/utils/plural'
 import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
@@ -284,13 +286,11 @@ const pendingModeration = computed((): number => adminStore.pendingModeration)
 // A2: unread indicator for incoming master method-change requests.
 const pendingMethodChanges = computed((): number => adminStore.pendingMethodChanges)
 
-const verificationTitle = computed(
-  (): string =>
-    `${pendingVerifications.value} ${plural(pendingVerifications.value, t('adminScreens.adminDashboard.master'), t('adminScreens.adminDashboard.mastera'), t('adminScreens.adminDashboard.masterov-2'))} на верификации`,
+const verificationTitle = computed(() =>
+  t('adminScreens.adminDashboard.verificationBanner', pendingVerifications.value),
 )
-const moderationTitle = computed(
-  (): string =>
-    `${pendingModeration.value} ${plural(pendingModeration.value, t('adminScreens.adminDashboard.obrashchenie'), t('adminScreens.adminDashboard.obrashcheniya'), t('adminScreens.adminDashboard.obrashcheniy'))} на модерации`,
+const moderationTitle = computed(() =>
+  t('adminScreens.adminDashboard.moderationBanner', pendingModeration.value),
 )
 
 // =========================================================================

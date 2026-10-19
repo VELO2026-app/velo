@@ -20,7 +20,7 @@
     <VAvatar :url="avatarUrl ?? ''" :name="masterName ?? t('booking.masterFallback')" size="xl" />
     <div class="master-card__info">
       <div class="master-card__name">
-        {{ masterName ?? 'Мастер' }}
+        {{ masterName ?? t('shared.components.masterFallback') }}
       </div>
       <div v-if="methods?.length" class="master-card__tags">
         <VTag

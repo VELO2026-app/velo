@@ -33,20 +33,29 @@
 
 <template>
   <div class="edit-profile">
-    <VHeader title="Редактировать профиль" show-back @back="router.back()" />
+    <VHeader :title="t('user.screens.editProfile.title')" show-back @back="router.back()" />
 
     <div class="edit-profile__content">
       <!-- Avatar + change photo (stub) -->
       <div class="edit-profile__avatar-block">
         <VAvatar :name="displayName" :url="user?.avatar_url ?? undefined" size="xl" />
         <button type="button" class="edit-profile__change-photo" @click="onChangePhoto">
-          Изменить фото
+          {{ t('user.screens.editProfile.changePhoto') }}
         </button>
       </div>
 
       <!-- Name + surname (two explicit fields — operator Q C2=Б) -->
-      <VInput v-model="form.firstName" label="Имя" placeholder="Имя" />
-      <VInput v-model="form.lastName" label="Фамилия" placeholder="Фамилия" @focus="onFieldFocus" />
+      <VInput
+        v-model="form.firstName"
+        :label="t('user.screens.editProfile.fields.firstName')"
+        :placeholder="t('user.screens.editProfile.fields.firstName')"
+      />
+      <VInput
+        v-model="form.lastName"
+        :label="t('user.screens.editProfile.fields.lastName')"
+        :placeholder="t('user.screens.editProfile.fields.lastName')"
+        @focus="onFieldFocus"
+      />
 
       <!-- E-mail (E11: captured here — Telegram provides none) -->
       <VInput
@@ -91,7 +100,7 @@
         <template v-else>
           <MethodTaxonomyPicker v-model="selectedMethods" />
           <p v-if="methodRejectReason" class="edit-profile__methods-reject">
-            Прошлый запрос отклонён: {{ methodRejectReason }}
+            {{ t('user.screens.editProfile.methodRejectReason', { reason: methodRejectReason }) }}
           </p>
           <p class="edit-profile__methods-note">{{ METHOD_CHANGE_NOTE }}</p>
           <VButton
@@ -101,7 +110,7 @@
             :loading="submittingMethods"
             @click="onSubmitMethods"
           >
-            Отправить на проверку
+            {{ t('user.screens.editProfile.submitForReview') }}
           </VButton>
         </template>
       </div>
@@ -130,7 +139,7 @@
           :loading="savingLanguages"
           @click="onSaveLanguages"
         >
-          Сохранить языки
+          {{ t('user.screens.editProfile.saveLanguages') }}
         </VButton>
       </div>
 
@@ -151,7 +160,7 @@
 
       <!-- Delete account (opens modal D) -->
       <button type="button" class="edit-profile__delete" @click="showDeleteModal = true">
-        Удалить аккаунт
+        {{ t('user.screens.editProfile.deleteCta') }}
       </button>
     </div>
 
@@ -177,9 +186,11 @@
         </ul>
 
         <template v-if="hasBalance">
-          <div class="edit-profile__del-balance">На вашем балансе {{ formattedBalance }}</div>
+          <div class="edit-profile__del-balance">
+            {{ t('user.screens.editProfile.balanceLine', { amount: formattedBalance }) }}
+          </div>
           <VButton variant="primary" block @click="onWithdrawFirst">
-            Сначала вывести средства
+            {{ t('user.screens.editProfile.withdrawFirst') }}
           </VButton>
           <VCheckbox
             v-model="delConsent"

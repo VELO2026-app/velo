@@ -19,7 +19,11 @@
 
 <template>
   <div class="mcg">
-    <VHeader title="Школы" show-back @back="router.push({ name: 'master-dashboard' })">
+    <VHeader
+      :title="t('masterScreens.masterCuratorGroups.title')"
+      show-back
+      @back="router.push({ name: 'master-dashboard' })"
+    >
       <template #action>
         <button
           v-if="canCreate"
@@ -57,7 +61,7 @@
       >
         <template #action>
           <VButton variant="primary" @click="router.push({ name: 'master-curator-group-create' })">
-            Создать школу
+            {{ t('masterScreens.masterCuratorGroups.create') }}
           </VButton>
         </template>
       </VEmptyState>
@@ -101,7 +105,7 @@
       <!-- Membership is untouched by the right -- rows render either way;
            only the founding offer is gated (BE-18). -->
       <p v-if="!loading && !error && groups.length && !canCreate" class="mcg__hint">
-        Создавать школы может мастер, которому администратор выдал это право.
+        {{ t('masterScreens.masterCuratorGroups.masterOnlyNote') }}
       </p>
     </div>
   </div>

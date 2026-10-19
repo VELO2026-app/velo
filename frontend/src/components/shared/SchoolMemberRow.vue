@@ -28,6 +28,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed } from 'vue'
 import type { CuratorGroupMemberItem, CuratorGroupRosterItem } from '@/api/types'
 import { masterOfferLabel } from '@/utils/masterOffers'
@@ -47,7 +48,7 @@ const subtitle = computed((): string | undefined => {
   if (!('is_visible' in member)) return undefined
   return (
     masterOfferLabel(member.master_offer) ??
-    (member.is_visible ? undefined : 'Временно недоступен')
+    (member.is_visible ? undefined : t('shared.components.temporarilyHidden'))
   )
 })
 </script>

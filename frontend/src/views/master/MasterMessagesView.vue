@@ -14,14 +14,14 @@
 
 <template>
   <div class="messages">
-    <VHeader title="Сообщения" show-back @back="router.back()" />
+    <VHeader :title="t('masterScreens.masterMessages.title')" show-back @back="router.back()" />
 
     <div v-if="loading" class="messages__center">
       <VLoader size="lg" />
     </div>
 
     <div v-else-if="error" class="messages__center">
-      <VEmptyState title="Не удалось загрузить" :description="error">
+      <VEmptyState :title="t('masterScreens.masterMessages.loadFailed')" :description="error">
         <template #icon>
           <IconMessages :size="48" />
         </template>

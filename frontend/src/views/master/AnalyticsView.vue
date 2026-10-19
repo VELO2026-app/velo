@@ -43,7 +43,7 @@
          the header line (owner 2026-10-01): title left, Неделя/Месяц right --
          with the tab slider parked there is no second control row to reserve.
          Visual-only until a period-scoped analytics API exists. -->
-    <VHeader title="Аналитика">
+    <VHeader :title="t('masterScreens.analytics.title')">
       <template #action>
         <VSegmentTrack
           v-model="period"
@@ -71,7 +71,10 @@
       <div class="analytics__stats">
         <VStatCard :value="aggregateCheckinPct" label="Check-in" />
         <VStatCard :value="aggregateFeedbackPct" label="Feedback" />
-        <VStatCard :value="aggregateTotalFeedbacks" label="Отзывов" />
+        <VStatCard
+          :value="aggregateTotalFeedbacks"
+          :label="t('masterScreens.analytics.feedbacksStat')"
+        />
       </div>
 
       <!-- Общая статистика -->
@@ -146,7 +149,9 @@
                 <div class="analytics__pcard-title">{{ p.title }}</div>
                 <div class="analytics__pcard-meta">
                   {{ formatShortDate(p.scheduled_at, p.timezone) }} ·
-                  {{ p.current_participants }} участников
+                  {{
+                    t('masterScreens.analytics.participantsShort', { n: p.current_participants })
+                  }}
                 </div>
               </div>
             </div>
@@ -171,7 +176,7 @@
               :loading="masterStore.practicesPastLoading"
               @click="onLoadMore"
             >
-              Показать ещё
+              {{ t('common.showMore') }}
             </VButton>
           </div>
         </template>
@@ -232,7 +237,7 @@
               <VButton variant="ghost" @click="loadMoreTx">{{ t('common.showMore') }}</VButton>
             </div>
           </div>
-          <VEmptyState v-else variant="note" title="Данных пока нет" />
+          <VEmptyState v-else variant="note" :title="t('masterScreens.analytics.noData')" />
         </section>
       </template>
     </div>

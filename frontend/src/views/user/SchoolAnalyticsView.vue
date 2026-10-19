@@ -27,7 +27,7 @@
 
 <template>
   <div class="school-analytics" :aria-busy="loading || refetching">
-    <VHeader title="Аналитика школы" show-back @back="goBack" />
+    <VHeader :title="t('user.screens.schoolAnalytics.title')" show-back @back="goBack" />
 
     <div class="school-analytics__content">
       <!-- Loading (first load only; a period switch refetches in place) -->
@@ -95,7 +95,7 @@
               {{ data.engagement?.attendees ?? 0 }}
             </span>
             <span class="school-analytics__stat-label">
-              Человек приходило из {{ data.members.students }} в школе
+              {{ t('user.screens.schoolAnalytics.membersLine', { n: data.members.students }) }}
             </span>
           </div>
           <div class="school-analytics__stat">
@@ -103,8 +103,12 @@
               {{ data.engagement?.repeat_pct ?? 0 }}%
             </span>
             <span class="school-analytics__stat-label">
-              Пришли еще раз, {{ data.engagement?.repeat_attendees ?? 0 }} из
-              {{ data.engagement?.attendees ?? 0 }}
+              {{
+                t('user.screens.schoolAnalytics.repeatLine', {
+                  n: data.engagement?.repeat_attendees ?? 0,
+                  total: data.engagement?.attendees ?? 0,
+                })
+              }}
             </span>
           </div>
           <div class="school-analytics__stat">
@@ -158,8 +162,12 @@
               </div>
               <div class="school-analytics__practice-counts">
                 <span>{{ formatShortDate(p.scheduled_at, p.timezone) }}</span>
-                <span>Ученики: {{ p.attendees_count }}</span>
-                <span>Фидбеки: {{ p.reviews_count }}</span>
+                <span>{{
+                  t('user.screens.schoolAnalytics.studentsLine', { n: p.attendees_count })
+                }}</span>
+                <span>{{
+                  t('user.screens.schoolAnalytics.feedbacksLine', { n: p.reviews_count })
+                }}</span>
               </div>
               <!-- Bare five-color strip: proportional fills only. -->
               <div
@@ -231,7 +239,11 @@ const PERIOD_OPTIONS: ReadonlyArray<{ value: SchoolAnalyticsPeriod; label: strin
 //    distribution carries. --
 const feedbackCountLabel = computed((): string => {
   const e = data.value?.engagement
-  return `${e?.reviews_pct ?? 0}% · ${e?.reviews ?? 0} из ${e?.visits ?? 0}`
+  return t('user.screens.schoolAnalytics.conversion', {
+    pct: e?.reviews_pct ?? 0,
+    reviews: e?.reviews ?? 0,
+    visits: e?.visits ?? 0,
+  })
 })
 const feedbackBars = computed(() => moodStripBars(data.value?.engagement?.rating))
 

@@ -43,9 +43,9 @@
 
 <template>
   <div class="ssp">
-    <VHeader title="Ученик" show-back @back="goBack">
+    <VHeader :title="t('user.screens.schoolStudentProfile.title')" show-back @back="goBack">
       <template v-if="loaded && isCurator" #action>
-        <VMenu aria-label="Действия с учеником">
+        <VMenu :aria-label="t('user.screens.schoolStudentProfile.actionsAria')">
           <template #default="{ close }">
             <VMenuItem
               :icon="IconMessages"
@@ -113,23 +113,31 @@
 
         <!-- §1.13.2: two equal cards in one row -- «Практик» / «Часов». -->
         <div class="ssp__stats">
-          <VStatCard layout="row" :value="practicesLabel" label="Практик" />
-          <VStatCard layout="row" :value="hoursLabel" label="Часов" />
+          <VStatCard
+            layout="row"
+            :value="practicesLabel"
+            :label="t('user.screens.schoolStudentProfile.practicesStat')"
+          />
+          <VStatCard
+            layout="row"
+            :value="hoursLabel"
+            :label="t('user.screens.schoolStudentProfile.hoursStat')"
+          />
         </div>
         <VCard v-if="isCurator && masterOffer" class="ssp__offer">
           <h2 class="ssp__offer-title">{{ masterOfferLabel(masterOffer) }}</h2>
           <p class="ssp__offer-text">
             {{
               masterOffer === 'awaiting_verification'
-                ? 'Участнику нужно пройти проверку мастера платформы. После одобрения он сможет принять предложение школы.'
-                : 'Участник подтверждён как мастер платформы. Он станет мастером школы, когда примет предложение.'
+                ? t('user.screens.schoolStudentProfile.masterOffer.awaitingVerification')
+                : t('user.screens.schoolStudentProfile.masterOffer.verified')
             }}
           </p>
           <p class="ssp__offer-text">
-            До принятия предложения он остаётся учеником. Срок не ограничен.
+            {{ t('user.screens.schoolStudentProfile.masterOffer.awaitingNote') }}
           </p>
           <VButton variant="outline" block @click="cancelOfferOpen = true">
-            Отменить предложение
+            {{ t('user.screens.schoolStudentProfile.masterOffer.cancel') }}
           </VButton>
         </VCard>
       </template>
@@ -154,12 +162,11 @@
           }}</VButton>
         </template>
         <p v-else-if="roleKind === 'master' && currentKind === 'student'" class="ssp__offer-text">
-          Участник получит предложение. Для назначения нужны подтверждение мастера платформы и его
-          согласие.
+          {{ t('user.screens.schoolStudentProfile.masterOffer.assignNote') }}
         </p>
         <div class="ssp__role-actions">
           <VButton variant="danger" block :disabled="rolePending" @click="onRoleClose">
-            Отмена
+            {{ t('user.screens.schoolStudentProfile.cancel') }}
           </VButton>
           <VButton
             variant="primary"
@@ -168,7 +175,7 @@
             :disabled="roleConfirmDisabled"
             @click="onRoleConfirm"
           >
-            Изменить
+            {{ t('user.screens.schoolStudentProfile.change') }}
           </VButton>
         </div>
       </div>

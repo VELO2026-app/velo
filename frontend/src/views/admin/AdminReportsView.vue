@@ -92,7 +92,7 @@
 
       <div v-if="hasMore" class="admin-reports__more">
         <VButton variant="outline" block :loading="loadingMore" @click="loadMore">
-          Показать ещё
+          {{ t('common.showMore') }}
         </VButton>
       </div>
     </template>

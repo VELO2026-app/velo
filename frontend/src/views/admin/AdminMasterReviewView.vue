@@ -40,7 +40,12 @@
     <div v-if="loading" class="mreview__loader"><VLoader size="lg" /></div>
 
     <!-- Error (SW7): distinct from "not found" -- retry, not a dead end. -->
-    <VEmptyState v-else-if="error" icon="warning" title="Ошибка загрузки" :description="error">
+    <VEmptyState
+      v-else-if="error"
+      icon="warning"
+      :title="t('adminScreens.adminMasterReview.loadFailed')"
+      :description="error"
+    >
       <VButton size="sm" variant="outline" @click="loadMaster">{{
         t('adminScreens.adminMasterReview.povtorit')
       }}</VButton>
@@ -107,8 +112,14 @@
           <div class="mreview__k">{{ t('adminScreens.adminMasterReview.accountNameTitle') }}</div>
           <template v-if="editing === 'account_name'">
             <div class="mreview__edit">
-              <VInput v-model="draftFirst" placeholder="Имя" />
-              <VInput v-model="draftLast" placeholder="Фамилия" />
+              <VInput
+                v-model="draftFirst"
+                :placeholder="t('adminScreens.adminMasterReview.fields.firstNamePlaceholder')"
+              />
+              <VInput
+                v-model="draftLast"
+                :placeholder="t('adminScreens.adminMasterReview.fields.lastNamePlaceholder')"
+              />
               <p v-if="fieldError" class="mreview__edit-err">{{ fieldError }}</p>
               <div class="mreview__edit-actions">
                 <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
@@ -142,7 +153,11 @@
           <div class="mreview__k">{{ t('adminScreens.adminMasterReview.fields.about') }}</div>
           <template v-if="editing === 'bio'">
             <div class="mreview__edit">
-              <VTextarea v-model="draftText" placeholder="О себе" :rows="3" />
+              <VTextarea
+                v-model="draftText"
+                :placeholder="t('adminScreens.adminMasterReview.fields.aboutPlaceholder')"
+                :rows="3"
+              />
               <p v-if="fieldError" class="mreview__edit-err">{{ fieldError }}</p>
               <div class="mreview__edit-actions">
                 <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
@@ -331,10 +346,10 @@
             <p v-if="methodsError" class="mreview__methods-err">{{ methodsError }}</p>
             <div class="mreview__methods-actions">
               <VButton variant="ghost" size="sm" :disabled="savingMethods" @click="cancelMethods">
-                Отмена
+                {{ t('adminScreens.adminMasterReview.cancel') }}
               </VButton>
               <VButton variant="primary" size="sm" :loading="savingMethods" @click="saveMethods">
-                Сохранить
+                {{ t('adminScreens.adminMasterReview.save') }}
               </VButton>
             </div>
           </div>
@@ -454,7 +469,7 @@
 
       <!-- История заявок -->
       <VCard class="mreview__hist" padding="none">
-        <VAccordion title="История заявок">
+        <VAccordion :title="t('adminScreens.adminMasterReview.historyTitle')">
           <template #icon><IconClock :size="20" /></template>
           <template #chevron="{ open }">
             <svg
@@ -501,12 +516,13 @@
           t('adminScreens.adminMasterReview.otklonit')
         }}</VButton>
         <VButton variant="primary" :loading="verifying" :disabled="anyLoading" @click="onVerify">
-          Одобрить
+          {{ t('adminScreens.adminMasterReview.approve') }}
         </VButton>
       </div>
       <template v-else>
         <VCard class="mreview__processed">
-          Заявка уже обработана — статус: <strong>{{ statusLabel }}</strong>
+          {{ t('adminScreens.adminMasterReview.alreadyProcessed') }}
+          <strong>{{ statusLabel }}</strong>
         </VCard>
         <!-- A1: revoke a verified master (soft-freeze, data preserved) -->
         <div v-if="isVerified" class="mreview__foot">
@@ -521,7 +537,11 @@
                 {{ t('adminScreens.adminMasterReview.schoolCreationRight') }}
               </div>
               <div class="mreview__v">
-                {{ master.can_create_groups ? 'Выдано' : 'Не выдано' }}
+                {{
+                  master.can_create_groups
+                    ? t('adminScreens.adminMasterReview.granted')
+                    : t('adminScreens.adminMasterReview.notGranted')
+                }}
               </div>
             </div>
             <VButton
@@ -531,15 +551,18 @@
               :disabled="anyLoading"
               @click="onToggleRight"
             >
-              {{ master.can_create_groups ? 'Отозвать право' : 'Выдать право' }}
+              {{
+                master.can_create_groups
+                  ? t('adminScreens.adminMasterReview.revokeGrant')
+                  : t('adminScreens.adminMasterReview.grantAction')
+              }}
             </VButton>
           </div>
           <p class="mreview__grant-note">
-            Отзыв верификации замораживает все школы этого куратора — участники перестанут их
-            видеть; данные сохранятся и оживут при повторной верификации.
+            {{ t('adminScreens.adminMasterReview.revokeWarning') }}
           </p>
           <VButton variant="danger" :loading="revoking" :disabled="anyLoading" @click="openRevoke">
-            Отозвать мастера
+            {{ t('adminScreens.adminMasterReview.revokeMaster') }}
           </VButton>
         </div>
       </template>

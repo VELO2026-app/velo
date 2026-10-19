@@ -18,6 +18,10 @@
     "micDenied": "Доступ к микрофону запрещён",
     "micUnavailable": "Микрофон недоступен на этом устройстве",
     "tooShort": "Запись слишком короткая",
-    "notRecognized": "Не удалось распознать речь"
+    "notRecognized": "Не удалось распознать речь",
+    "dreamPlaceholder": "Запишите сон...",
+    "notePlaceholder": "Начните писать...",
+    "searchCloseAria": "Закрыть поиск",
+    "pickDate": "Выбрать дату"
   }
 }

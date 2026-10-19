@@ -7,6 +7,7 @@
 
 import { generateParams, type SchoolBrandingParams } from './params'
 import { mixHex } from './noise'
+import { defaultMonogram } from './defaultMonogram'
 
 export { fnv1a, mulberry32, schoolHashFromName } from './hash'
 export { PALETTES, type Palette } from './palettes'
@@ -28,7 +29,7 @@ export function brandingParams(hash: string): SchoolBrandingParams {
 
 /** Первая буква названия для монограммы (как в прототипе: без кавычек). */
 export function schoolLetter(name: string): string {
-  return (name.replace(/^["«'«]*/, '')[0] || 'Ш').toUpperCase()
+  return (name.replace(/^["«'«]*/, '')[0] || defaultMonogram()).toUpperCase()
 }
 
 /**

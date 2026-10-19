@@ -15,8 +15,15 @@
 // =============================================================================
 
 import i18n, { getLocale } from '@/locales'
+// The ru seed catalog carries the VELO short-month table -- RUSSIAN typography
+// (see dates.json), not per-locale UI copy; same seed-import pattern as
+// methodTaxonomy.ts's display seed.
+import datesSeed from '@/locales/ru/dates.json'
 
 const { t } = i18n.global
+
+const VELO_SHORT_MONTHS: readonly string[] =
+  (datesSeed as { dates?: { shortMonths?: string[] } }).dates?.shortMonths ?? []
 
 /**
  * Format cents into a currency string using Intl.NumberFormat.
@@ -134,20 +141,6 @@ export function relativeDayCode(isoString: string, timezone = 'UTC'): 'today' | 
  * авг. / сент. / окт. / нояб. / дек.). Day + month only (no year, no time).
  * Timezone-safe (Intl with timeZone, no Date mutation).
  */
-const VELO_SHORT_MONTHS = [
-  'янв.',
-  'февр.',
-  'мар.',
-  'апр.',
-  'мая',
-  'июня',
-  'июля',
-  'авг.',
-  'сент.',
-  'окт.',
-  'нояб.',
-  'дек.',
-] as const
 
 export function formatShortDate(isoString: string, timezone = 'UTC'): string {
   const date = new Date(isoString)

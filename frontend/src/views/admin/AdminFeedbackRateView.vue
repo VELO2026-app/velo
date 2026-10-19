@@ -31,13 +31,13 @@
     </VEmptyState>
 
     <template v-else>
-      <VMetricHero :value="leaveRate" label="Оставляют отзыв">
+      <VMetricHero :value="leaveRate" :label="t('adminScreens.adminFeedbackRate.leaveRate')">
         <template #icon><IconFeedback :size="28" /></template>
       </VMetricHero>
 
       <div class="admin-detail__stats2">
-        <VStatCard :value="visited" label="Посетили" />
-        <VStatCard :value="leftReview" label="Оставили отзыв" />
+        <VStatCard :value="visited" :label="t('adminScreens.adminFeedbackRate.visited')" />
+        <VStatCard :value="leftReview" :label="t('adminScreens.adminFeedbackRate.leftReview')" />
       </div>
 
       <h3 class="admin-detail__section">

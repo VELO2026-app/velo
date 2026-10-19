@@ -39,7 +39,10 @@
 <template>
   <div class="ea">
     <header class="ea__header">
-      <VBackButton aria-label="Назад на главную" @click="goBack" />
+      <VBackButton
+        :aria-label="t('user.screens.externalActivityCreate.backAria')"
+        @click="goBack"
+      />
       <h1 class="ea__title">{{ t('user.screens.externalActivityCreate.title') }}</h1>
     </header>
 
@@ -67,7 +70,7 @@
             :class="{ 'ea__picker--empty': !date, 'ea__picker--error': !!errors.date }"
             @click="showDate = true"
           >
-            {{ date ? dateDisplay : 'Дата' }}
+            {{ date ? dateDisplay : t('user.screens.externalActivityCreate.pickers.date') }}
           </button>
           <span class="ea__field-error" :class="{ 'ea__field-error--show': !!errors.date }">{{
             errors.date
@@ -84,7 +87,7 @@
             }"
             @click="showTime = true"
           >
-            {{ time || 'Время' }}
+            {{ time || t('user.screens.externalActivityCreate.pickers.time') }}
           </button>
           <span
             class="ea__field-error"
@@ -426,7 +429,9 @@ function validate(): boolean {
     ? ''
     : t('user.screens.externalActivityCreate.picker.activity')
   errors.value.custom =
-    selectedActivity.value === 'custom' && customChip.value === null ? 'Укажите ваш вариант' : ''
+    selectedActivity.value === 'custom' && customChip.value === null
+      ? t('user.screens.externalActivityCreate.customRequired')
+      : ''
   // The mood never blocks: the slider stands on the visible default, so
   // errors.state exists only as the sink for a backend mood 422
   // (applyFieldErrors) -- no interaction on this screen can set it.

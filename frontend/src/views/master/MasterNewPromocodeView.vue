@@ -9,7 +9,7 @@
 
 <template>
   <div class="new-promo">
-    <VHeader title="Новый промокод" show-back @back="router.back()" />
+    <VHeader :title="t('masterScreens.masterNewPromocode.title')" show-back @back="router.back()" />
 
     <div class="new-promo__content">
       <!-- Required-fields legend: HIDDEN for now (owner 2026-10-01) -- the
@@ -25,7 +25,11 @@
       <!-- .cp-req-label injects the red * after the field's visible label
            (owner 2026-10-01 canon, see the CSS below). -->
       <div class="cp-req-label">
-        <VInput v-model="form.code" label="Код промокода" placeholder="Латиница, цифры, дефис" />
+        <VInput
+          v-model="form.code"
+          :label="t('masterScreens.masterNewPromocode.fields.code')"
+          :placeholder="t('masterScreens.masterNewPromocode.fields.codePlaceholder')"
+        />
         <span
           class="new-promo__field-error"
           :class="{ 'new-promo__field-error--show': !!codeError }"
@@ -33,7 +37,11 @@
         >
       </div>
       <div class="cp-req-label">
-        <VSelect v-model="form.discount" label="Скидка" :options="DISCOUNT_OPTIONS" />
+        <VSelect
+          v-model="form.discount"
+          :label="t('masterScreens.masterNewPromocode.fields.discount')"
+          :options="DISCOUNT_OPTIONS"
+        />
       </div>
       <!-- «Действует до»: opens the shared DatePickerSheet (consistent in-app picker;
            future-only via :min) instead of the OS-native date input. -->
@@ -49,7 +57,7 @@
               :class="{ 'new-promo__picker--empty': !form.until }"
               @click="showDate = true"
             >
-              {{ form.until ? untilDisplay : 'Выберите дату' }}
+              {{ form.until ? untilDisplay : t('masterScreens.masterNewPromocode.pickDate') }}
             </button>
           </div>
           <span
@@ -75,7 +83,7 @@
         :loading="creating"
         @click="onCreate"
       >
-        Создать промокод
+        {{ t('masterScreens.masterNewPromocode.submit') }}
       </VButton>
     </div>
 

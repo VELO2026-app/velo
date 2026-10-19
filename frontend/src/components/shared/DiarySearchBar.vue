@@ -107,7 +107,7 @@
     <button
       type="button"
       class="diary-search__close"
-      aria-label="Закрыть поиск"
+      :aria-label="t('composer.searchCloseAria')"
       @click="emit('cancel')"
     >
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none">

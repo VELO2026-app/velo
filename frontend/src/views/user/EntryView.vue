@@ -31,7 +31,7 @@
   <div class="entry">
     <!-- Header -->
     <header class="entry__header">
-      <VBackButton aria-label="Назад" @click="goBack" />
+      <VBackButton :aria-label="t('user.screens.entry.backAria')" @click="goBack" />
       <h1 class="entry__title-bar">{{ t('user.screens.entry.titleFallback') }}</h1>
 
       <!-- "..." menu (view mode only): edit + delete. -->
@@ -141,7 +141,7 @@
         :loading="saving"
         @click="onSave"
       >
-        Сохранить
+        {{ t('ui.save') }}
       </VButton>
     </div>
   </div>

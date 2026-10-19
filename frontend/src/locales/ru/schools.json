@@ -42,5 +42,17 @@
     "countLabel": "{n}% · {m} из {total}",
     "emptyText": "Пока нет отзывов",
     "breakdown": "Расшифровка"
+  },
+  "branding": {
+    "_comment": "VELO Frontend -- school branding seeds (utils/schoolBranding). Palette display names are catalog data (the hex roles are golden-SVG, untouched); defaultMonogram is the fallback school initial.",
+    "defaultMonogram": "Ш",
+    "palettes": {
+      "eucalyptus": "эвкалипт",
+      "dustyAzure": "пыльная лазурь",
+      "lavender": "лаванда",
+      "sage": "шалфей",
+      "terracotta": "терракота",
+      "mistAndLotus": "лотос и туман"
+    }
   }
 }

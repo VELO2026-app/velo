@@ -57,12 +57,11 @@
             {{ t('masterScreens.masterPending.approved.title') }}
           </h2>
           <p class="pending-view__subtitle">
-            Переключитесь в режим мастера, чтобы открыть кабинет. Вернуться в режим пользователя
-            можно в любой момент из настроек.
+            {{ t('masterScreens.masterPending.switchHint') }}
           </p>
           <div class="pending-view__actions">
             <VButton variant="primary" block :loading="switching" @click="enterMasterMode">
-              Войти в кабинет
+              {{ t('masterScreens.masterPending.enterCabinet') }}
             </VButton>
           </div>
         </VCard>
@@ -92,10 +91,10 @@
 
           <div class="pending-view__actions">
             <VButton variant="primary" block @click="router.push({ name: 'master-support' })">
-              Написать в поддержку
+              {{ t('masterScreens.masterPending.contactSupport') }}
             </VButton>
             <VButton variant="outline" block @click="router.push({ name: 'master-apply' })">
-              Подать новую заявку
+              {{ t('masterScreens.masterPending.reapply') }}
             </VButton>
           </div>
         </VCard>
@@ -120,7 +119,7 @@
               t('masterScreens.masterPending.refreshStatus')
             }}</VButton>
             <VButton variant="ghost" block @click="router.push({ name: 'user-dashboard' })">
-              На главную
+              {{ t('common.backHome') }}
             </VButton>
           </div>
           <button
@@ -128,7 +127,7 @@
             class="pending-view__withdraw-link"
             @click="confirmWithdrawOpen = true"
           >
-            Отозвать заявку
+            {{ t('masterScreens.masterPending.revoke') }}
           </button>
         </VCard>
       </template>

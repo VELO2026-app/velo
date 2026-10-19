@@ -33,7 +33,7 @@
     </header>
 
     <VCard class="admin-catalog__note" padding="none">
-      Управление каталогом. Изменения видны мастерам сразу при выборе методов.
+      {{ t('adminScreens.adminCatalog.intro') }}
     </VCard>
 
     <!-- Add direction -->
@@ -50,7 +50,7 @@
         :disabled="!newDirectionLabel.trim()"
         @click="addDirection"
       >
-        + Добавить
+        {{ t('adminScreens.adminCatalog.add') }}
       </VButton>
     </VCard>
 
@@ -115,7 +115,7 @@
             :loading="togglingId === dir.id"
             @click="toggleDirectionActive(dir)"
           >
-            Деактивировать
+            {{ t('adminScreens.adminCatalog.deactivate') }}
           </VButton>
           <VButton
             v-else
@@ -124,7 +124,7 @@
             :loading="togglingId === dir.id"
             @click="toggleDirectionActive(dir)"
           >
-            Активировать
+            {{ t('adminScreens.adminCatalog.activate') }}
           </VButton>
         </template>
       </div>
@@ -139,7 +139,7 @@
             clickable
             @click="toggleStyleActive(st)"
           >
-            {{ st.label }} {{ st.is_active ? '✕' : '· Активировать' }}
+            {{ st.label }} {{ st.is_active ? '✕' : t('adminScreens.adminCatalog.styleActivate') }}
           </VChip>
         </div>
         <div v-else class="admin-catalog__none">{{ t('adminScreens.adminCatalog.noStyles') }}</div>
@@ -162,7 +162,7 @@
         </div>
       </template>
       <div v-else class="admin-catalog__none">
-        Неактивно — скрыто у мастеров, старые методы сохраняются
+        {{ t('adminScreens.adminCatalog.inactiveNote') }}
       </div>
     </VCard>
   </div>

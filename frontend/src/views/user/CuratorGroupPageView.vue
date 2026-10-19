@@ -36,7 +36,7 @@
           :disabled="leaving"
           @click="onLeaveClick"
         >
-          Покинуть школу
+          {{ t('user.screens.curatorGroupPage.leaveCta') }}
         </VButton>
       </template>
     </VHeader>
@@ -63,7 +63,7 @@
                honest path left; DELETE /membership is idempotent, and for a
                mistyped or deleted id it changes nothing. -->
           <VButton variant="ghost" size="sm" :disabled="leaving" @click="onLeaveClick">
-            Я состою в этой школе — покинуть её
+            {{ t('user.screens.curatorGroupPage.leaveNote') }}
           </VButton>
         </template>
       </VEmptyState>
@@ -173,7 +173,7 @@
             })
           "
         >
-          Создать практику
+          {{ t('user.screens.curatorGroupPage.createPractice') }}
         </VButton>
 
         <!-- §1.6 item 7 + owner 2026-09-19: «Ближайшие практики» is the
@@ -192,7 +192,7 @@
             @click="router.push({ name: 'practice-detail', params: { id: $event } })"
           />
         </template>
-        <VEmptyState v-else variant="note" title="Ближайших практик нет" />
+        <VEmptyState v-else variant="note" :title="t('user.screens.curatorGroupPage.noUpcoming')" />
       </template>
     </div>
 
@@ -207,7 +207,11 @@
       @save="onEditSave"
       @close="editOpen = false"
     >
-      <VInput v-model="editName" label="Название" placeholder="Название" />
+      <VInput
+        v-model="editName"
+        :label="t('user.screens.curatorGroupPage.fields.name')"
+        :placeholder="t('user.screens.curatorGroupPage.fields.namePlaceholder')"
+      />
       <VTextarea
         v-model="editDescription"
         :label="t('user.screens.curatorGroupPage.edit.description')"
@@ -226,7 +230,7 @@
         inputmode="url"
       />
       <p class="cgp__edit-hint">
-        Ссылка на картинку школы. Оставьте поле пустым, чтобы убрать аватар.
+        {{ t('user.screens.curatorGroupPage.imageHint') }}
       </p>
     </VBottomSheet>
 

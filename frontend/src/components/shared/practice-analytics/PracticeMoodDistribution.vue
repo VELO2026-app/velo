@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed } from 'vue'
 import DistributionCard from '@/components/shared/DistributionCard.vue'
 import { MOOD_SCALE_KEYS, MOOD_SCALE_LABELS } from '@/utils/moodScale'
@@ -25,7 +26,9 @@ const bars = computed(() =>
     icon: MOOD_SCALE_ICON[key],
   })),
 )
-const countLabel = computed(() => `${moodTotal(props.counts)} из ${props.participants}`)
+const countLabel = computed(() =>
+  t('shared.components.moodOf', { n: moodTotal(props.counts), total: props.participants }),
+)
 </script>
 
 <template>
@@ -33,7 +36,7 @@ const countLabel = computed(() => `${moodTotal(props.counts)} из ${props.parti
     :title="title"
     :count-label="countLabel"
     :bars="bars"
-    empty-text="Пока нет отметок"
+    :empty-text="t('shared.components.moodEmpty')"
     :initially-expanded="initiallyExpanded"
   />
 </template>

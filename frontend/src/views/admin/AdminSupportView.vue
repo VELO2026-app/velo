@@ -83,7 +83,7 @@
 
       <div v-if="nextCursor" class="admin-support__more">
         <VButton variant="outline" block :loading="loadingMore" @click="loadMore">
-          Показать ещё
+          {{ t('common.showMore') }}
         </VButton>
       </div>
     </template>
@@ -124,8 +124,10 @@ function triageBadge(item: SupportThread): {
   variant: 'warning' | 'success' | 'info'
   label: string
 } {
-  if (item.status === 'resolved') return { variant: 'success', label: 'Решено' }
-  if (item.status === 'closed') return { variant: 'info', label: 'Закрыто' }
+  if (item.status === 'resolved')
+    return { variant: 'success', label: t('adminScreens.adminSupport.resolved') }
+  if (item.status === 'closed')
+    return { variant: 'info', label: t('adminScreens.adminSupport.closed') }
   if (!item.assignee)
     return { variant: 'warning', label: t('adminScreens.adminSupport.status.unclaimed') }
   if (item.assignee === authStore.user?.id)

@@ -79,7 +79,7 @@
 
           <div class="mrq__actions">
             <VButton variant="ghost" :disabled="busyId === item.user_id" @click="openReject(item)">
-              Отклонить
+              {{ t('adminScreens.adminMethodRequests.reject') }}
             </VButton>
             <VButton
               variant="primary"
@@ -87,7 +87,7 @@
               :disabled="busyId === item.user_id"
               @click="onApprove(item)"
             >
-              Одобрить
+              {{ t('adminScreens.adminMethodRequests.approve') }}
             </VButton>
           </div>
         </VCard>
@@ -95,7 +95,7 @@
 
       <div v-if="hasMore" class="amr__more">
         <VButton variant="outline" block :loading="loadingMore" @click="loadMore">
-          Показать ещё
+          {{ t('common.showMore') }}
         </VButton>
       </div>
     </template>

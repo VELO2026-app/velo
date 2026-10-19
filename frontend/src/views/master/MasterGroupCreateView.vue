@@ -43,7 +43,7 @@
 
 <template>
   <div class="new-group">
-    <VHeader title="Новая группа" show-back @back="router.back()" />
+    <VHeader :title="t('masterScreens.masterGroupCreate.title')" show-back @back="router.back()" />
 
     <div class="new-group__content">
       <!-- Required-fields legend: HIDDEN for now (owner 2026-10-01) -- the
@@ -100,7 +100,7 @@
         :loading="creating"
         @click="onCreate"
       >
-        Создать группу
+        {{ t('masterScreens.masterGroupCreate.submit') }}
       </VButton>
     </div>
   </div>

@@ -16,7 +16,7 @@
 
 <template>
   <div class="bookings">
-    <VHeader title="Мои бронирования" show-back @back="router.back()" />
+    <VHeader :title="t('user.screens.myBookings.title')" show-back @back="router.back()" />
 
     <!-- Loading (initial) -->
     <div v-if="store.loading && store.bookings.length === 0" class="bookings__loader">
@@ -78,7 +78,7 @@
            double-tap; the button hides once every page is loaded. -->
       <div v-if="store.hasMore" class="bookings__more">
         <VButton variant="ghost" block :loading="store.loading" @click="onLoadMore">
-          Показать ещё
+          {{ t('common.showMore') }}
         </VButton>
       </div>
     </div>
@@ -211,8 +211,9 @@ const past = computed(() => {
 // -- Badge logic (lives here -- it depends on the section / status) --
 function badgeFor(b: BookingWithPracticeResponse): BookingBadge | null {
   // Past statuses -> status badge.
-  if (b.status === 'attended') return { label: 'Завершена', variant: 'done' }
-  if (b.status === 'cancelled') return { label: 'Отменена', variant: 'cancelled' }
+  if (b.status === 'attended') return { label: t('user.screens.myBookings.done'), variant: 'done' }
+  if (b.status === 'cancelled')
+    return { label: t('user.screens.myBookings.cancelled'), variant: 'cancelled' }
   // B30 (PROMPT №746, owner wording): was t('user.screens.myBookings.status.notHeld') -- false, the
   // practice DID happen, the person missed it. t('user.screens.myBookings.status.noShow') is the owner's
   // literal word, used identically on PracticeDetailView's status row.

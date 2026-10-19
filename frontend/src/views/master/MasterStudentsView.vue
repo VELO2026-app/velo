@@ -13,7 +13,11 @@
 
 <template>
   <div class="students">
-    <VHeader title="Мои ученики" show-back @back="router.push({ name: 'master-dashboard' })" />
+    <VHeader
+      :title="t('masterScreens.masterStudents.title')"
+      show-back
+      @back="router.push({ name: 'master-dashboard' })"
+    />
 
     <div class="students__content">
       <!-- Loading -->
@@ -60,9 +64,11 @@
           <VAvatar :name="student.name" size="md" />
           <div class="students__body">
             <div class="students__name">{{ student.name }}</div>
-            <div class="students__meta">Практик: {{ student.practices_count }}</div>
+            <div class="students__meta">
+              {{ t('masterScreens.masterStudents.practicesCount', { n: student.practices_count }) }}
+            </div>
             <span v-if="student.needs_attention" class="students__attn">
-              <IconWarning :size="14" />Требует внимания
+              <IconWarning :size="14" />{{ t('masterScreens.masterStudents.needsAttention') }}
             </span>
           </div>
           <button

@@ -30,13 +30,13 @@
     </VEmptyState>
 
     <template v-else>
-      <VMetricHero :value="returnRate" label="Возвращаются повторно">
+      <VMetricHero :value="returnRate" :label="t('adminScreens.adminReturnRate.returnRate')">
         <template #icon><IconRepeat :size="28" /></template>
       </VMetricHero>
 
       <div class="admin-detail__stats2">
-        <VStatCard :value="totalUsers" label="Всего пользователей" />
-        <VStatCard :value="returning" label="Повторно" />
+        <VStatCard :value="totalUsers" :label="t('adminScreens.adminReturnRate.totalUsers')" />
+        <VStatCard :value="returning" :label="t('adminScreens.adminReturnRate.returning')" />
       </div>
 
       <h3 class="admin-detail__section">

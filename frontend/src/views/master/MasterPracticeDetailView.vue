@@ -42,7 +42,7 @@
   <div class="practice-detail">
     <VHeader :title="headerTitle" show-back @back="router.back()">
       <template v-if="isUpcoming" #action>
-        <VMenu aria-label="Меню">
+        <VMenu :aria-label="t('masterScreens.masterPracticeDetail.menuAria')">
           <template #default="{ close }">
             <!-- Карандаш → редактирование, корзина → удаление/отмена (Q1=А,
                  openDestructive контекстный: черновик удаляет, запланированную
@@ -80,7 +80,11 @@
 
     <!-- Error -->
     <div v-else-if="error" class="practice-detail__content">
-      <VEmptyState icon="warning" title="Не удалось загрузить практику" :description="error">
+      <VEmptyState
+        icon="warning"
+        :title="t('masterScreens.masterPracticeDetail.loadFailed')"
+        :description="error"
+      >
         <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
       </VEmptyState>
     </div>
@@ -100,7 +104,7 @@
              on the edit screen -- so there is nothing there to change. -->
         <div v-if="practice.audience_unavailable" class="pd-audience-warn">
           <span class="pd-audience-warn__text">
-            Школа недоступна — практику не видит никто, кроме вас и уже записавшихся.
+            {{ t('masterScreens.masterPracticeDetail.audienceUnavailable') }}
           </span>
         </div>
 
@@ -132,14 +136,20 @@
             t('masterScreens.masterPracticeDetail.shareLinkHint')
           }}</span>
           <VButton size="sm" variant="outline" :loading="copyingShared" @click="onCopySharedLink">
-            Копировать
+            {{ t('masterScreens.masterPracticeDetail.copy') }}
           </VButton>
         </div>
 
         <!-- Записалось / Мест (карточка «Цена» убрана — operator 2026-06-18) -->
         <div class="practice-detail__stats">
-          <VStatCard :value="enrolledStat" label="Записалось" />
-          <VStatCard :value="capacityStat" label="Мест" />
+          <VStatCard
+            :value="enrolledStat"
+            :label="t('masterScreens.masterPracticeDetail.stats.enrolled')"
+          />
+          <VStatCard
+            :value="capacityStat"
+            :label="t('masterScreens.masterPracticeDetail.stats.capacity')"
+          />
         </div>
 
         <!-- Записались (roster; первые 5 + раскрытие — operator 2026-06-18) -->
@@ -177,7 +187,7 @@
             <button
               class="pd-acc__hd"
               :aria-expanded="descOpen"
-              :aria-label="descOpen ? 'Свернуть' : 'Развернуть'"
+              :aria-label="descOpen ? t('ui.collapse') : t('ui.expand')"
               @click="descOpen = !descOpen"
             >
               <span class="pd-acc__title">{{
@@ -204,7 +214,7 @@
             <button
               class="pd-acc__hd"
               :aria-expanded="contraOpen"
-              :aria-label="contraOpen ? 'Свернуть' : 'Развернуть'"
+              :aria-label="contraOpen ? t('ui.collapse') : t('ui.expand')"
               @click="contraOpen = !contraOpen"
             >
               <span class="pd-acc__title">{{
@@ -227,7 +237,7 @@
             <button
               class="pd-acc__hd"
               :aria-expanded="prepOpen"
-              :aria-label="prepOpen ? 'Свернуть' : 'Развернуть'"
+              :aria-label="prepOpen ? t('ui.collapse') : t('ui.expand')"
               @click="prepOpen = !prepOpen"
             >
               <span class="pd-acc__title">{{
@@ -269,8 +279,16 @@
 
         <!-- Stats -->
         <div class="practice-detail__stats">
-          <VStatCard :value="attendedValue" label="Присутствовало" value-tone="teal" />
-          <VStatCard :value="noShowValue" label="Не пришли" value-tone="rose" />
+          <VStatCard
+            :value="attendedValue"
+            :label="t('masterScreens.masterPracticeDetail.rosterStats.attended')"
+            value-tone="teal"
+          />
+          <VStatCard
+            :value="noShowValue"
+            :label="t('masterScreens.masterPracticeDetail.rosterStats.noShow')"
+            value-tone="rose"
+          />
         </div>
 
         <!-- Отзывы участников (E1 named reviews — getPracticeReviews) -->
@@ -303,7 +321,11 @@
               }}</VButton>
             </div>
           </template>
-          <VEmptyState v-else variant="note" title="Отзывов пока нет" />
+          <VEmptyState
+            v-else
+            variant="note"
+            :title="t('masterScreens.masterPracticeDetail.noReviewsYet')"
+          />
         </section>
 
         <!-- CTAs -->

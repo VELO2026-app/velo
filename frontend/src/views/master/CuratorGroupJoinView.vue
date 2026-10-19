@@ -55,11 +55,11 @@ so the order is invitation -> join -> onboarding (skippable) -> school.
           {{ t('masterScreens.curatorGroupJoin.verifyFailed') }}
         </h2>
         <p class="cg-join__subtitle">
-          Проблема с соединением. Проверьте интернет и попробуйте ещё раз.
+          {{ t('masterScreens.curatorGroupJoin.loadFailed') }}
         </p>
         <div class="cg-join__actions">
           <VButton variant="primary" block :loading="loading" @click="loadPreview">
-            Повторить
+            {{ t('common.retry') }}
           </VButton>
         </div>
       </template>
@@ -70,10 +70,10 @@ so the order is invitation -> join -> onboarding (skippable) -> school.
         <p v-if="blocked.description" class="cg-join__subtitle">{{ blocked.description }}</p>
         <div class="cg-join__actions">
           <VButton v-if="blocked.open" variant="primary" block @click="openSchool">
-            Открыть
+            {{ t('masterScreens.curatorGroupJoin.open') }}
           </VButton>
           <VButton v-else variant="primary" block @click="router.replace({ name: 'root' })">
-            На главную
+            {{ t('common.backHome') }}
           </VButton>
         </div>
       </template>
@@ -97,7 +97,7 @@ so the order is invitation -> join -> onboarding (skippable) -> school.
             t('masterScreens.curatorGroupJoin.joinCta')
           }}</VButton>
           <VButton variant="outline" block :disabled="joining" @click="decline">
-            Отказаться
+            {{ t('masterScreens.curatorGroupJoin.decline') }}
           </VButton>
         </div>
       </template>
@@ -246,7 +246,9 @@ async function join(): Promise<void> {
   joining.value = true
   try {
     const res = await joinCuratorGroup(String(route.params.token ?? ''))
-    toast.success(`Вы вступили в школу «${preview.value.group.name}»`)
+    toast.success(
+      t('masterScreens.curatorGroupJoin.joinedToast', { name: preview.value.group.name }),
+    )
     // The hub probe may have settled BEFORE this join (the account's first
     // school): without a fresh read the dock tab stays hidden until a full
     // reload (FE-88). ensureCurator swallows its own probe failures -- the

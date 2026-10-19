@@ -21,7 +21,7 @@
 
 <template>
   <div class="schools">
-    <VHeader title="Школы">
+    <VHeader :title="t('user.screens.schools.title')">
       <template #action>
         <!-- BE-18: the «+» is the admin-issued founding right; false is the
              honest default on a failed flag fetch (no «+» beats a 403 «+»). -->
@@ -65,7 +65,7 @@
           block
           @click="router.push({ name: 'master-curator-group-create' })"
         >
-          Создать школу
+          {{ t('user.screens.schools.create') }}
         </VButton>
       </div>
 

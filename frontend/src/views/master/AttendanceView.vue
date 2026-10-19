@@ -39,7 +39,11 @@
 
     <!-- Error -->
     <div v-else-if="error" class="checkins__content">
-      <VEmptyState icon="warning" title="Не удалось загрузить check-ins" :description="error">
+      <VEmptyState
+        icon="warning"
+        :title="t('masterScreens.attendance.loadFailed')"
+        :description="error"
+      >
         <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
       </VEmptyState>
     </div>

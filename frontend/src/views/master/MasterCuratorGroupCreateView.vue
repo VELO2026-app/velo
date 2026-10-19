@@ -21,7 +21,11 @@
 
 <template>
   <div class="ncg">
-    <VHeader title="Новая школа" show-back @back="router.back()" />
+    <VHeader
+      :title="t('masterScreens.masterCuratorGroupCreate.title')"
+      show-back
+      @back="router.back()"
+    />
 
     <div class="ncg__content">
       <!-- BE-18: 403 group_creation_not_allowed -- the right itself is
@@ -35,7 +39,7 @@
       >
         <template #action>
           <VButton variant="outline" @click="router.replace({ name: 'master-curator-groups' })">
-            К моим школам
+            {{ t('masterScreens.masterCuratorGroupCreate.backToSchools') }}
           </VButton>
         </template>
       </VEmptyState>
@@ -90,21 +94,27 @@
             {{ t('masterScreens.masterCuratorGroupCreate.fields.avatar') }}
           </h2>
           <p class="ncg__media-hint">
-            Фото будет использовано на платформе в открытом доступе для участников
+            {{ t('masterScreens.masterCuratorGroupCreate.photoNote') }}
           </p>
-          <SchoolAvatarPicker v-model="avatarUrl" aria-label="Аватар школы" />
+          <SchoolAvatarPicker
+            v-model="avatarUrl"
+            :aria-label="t('masterScreens.masterCuratorGroupCreate.avatarAria')"
+          />
 
           <h2 class="velo-section-title">
             {{ t('masterScreens.masterCuratorGroupCreate.fields.background') }}
           </h2>
           <p class="ncg__media-hint">
-            Фото будет использовано на платформе в открытом доступе для участников
+            {{ t('masterScreens.masterCuratorGroupCreate.photoNote') }}
           </p>
-          <SchoolBannerPicker v-model="bannerUrl" aria-label="Фон школы" />
+          <SchoolBannerPicker
+            v-model="bannerUrl"
+            :aria-label="t('masterScreens.masterCuratorGroupCreate.bannerAria')"
+          />
         </template>
 
         <VButton class="ncg__submit" variant="primary" block :loading="creating" @click="onCreate">
-          Создать школу
+          {{ t('masterScreens.masterCuratorGroupCreate.submit') }}
         </VButton>
       </template>
     </div>
@@ -169,7 +179,7 @@ async function onCreate(): Promise<void> {
     // "never store ''" rule is the belt to this suspend (same as groups).
     const desc = description.value.trim()
     const created = await createCuratorGroup(trimmed, desc || undefined)
-    toast.success(`Школа «${trimmed}» создана`)
+    toast.success(t('masterScreens.masterCuratorGroupCreate.createdToast', { name: trimmed }))
     // §1.6 (owner): after creating, the school PAGE is the destination -- one
     // page component for both zones; this master-zone route keeps the guard
     // chain the creator just passed.

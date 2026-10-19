@@ -27,7 +27,7 @@
   <div class="detail">
     <!-- Header: arrow-only back-pill (63×35) + left-aligned title (Figma "View entry") -->
     <header class="detail__header">
-      <VBackButton aria-label="Назад" @click="goBack" />
+      <VBackButton :aria-label="t('user.screens.entry.backAria')" @click="goBack" />
       <h1 class="detail__title-bar">{{ t('user.screens.detail.title') }}</h1>
     </header>
 

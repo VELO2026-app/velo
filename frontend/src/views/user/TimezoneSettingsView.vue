@@ -25,7 +25,7 @@
 -->
 <template>
   <div class="tz-settings">
-    <VHeader title="Часовой пояс" show-back @back="router.back()" />
+    <VHeader :title="t('user.screens.timezoneSettings.title')" show-back @back="router.back()" />
 
     <div class="tz-settings__content">
       <!-- Timezone (UNCHANGED — existing onboarding picker, shared with the user) -->
@@ -34,7 +34,7 @@
           {{ t('user.screens.timezoneSettings.timezone.label') }}
         </h2>
         <p class="tz-settings__subtitle">
-          Время практик будет отображаться в выбранном часовом поясе
+          {{ t('user.screens.timezoneSettings.note') }}
         </p>
         <TimezoneCityPicker :model-value="selectedTimezone" @update:modelValue="onTimezoneChange" />
       </section>

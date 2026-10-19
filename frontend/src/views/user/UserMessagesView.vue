@@ -19,14 +19,14 @@
 
 <template>
   <div class="user-messages">
-    <VHeader title="Сообщения" show-back @back="router.back()" />
+    <VHeader :title="t('user.screens.userMessages.title')" show-back @back="router.back()" />
 
     <div v-if="loading" class="user-messages__center">
       <VLoader size="lg" />
     </div>
 
     <div v-else-if="error" class="user-messages__center">
-      <VEmptyState title="Не удалось загрузить" :description="error">
+      <VEmptyState :title="t('user.screens.userMessages.loadFailed')" :description="error">
         <template #icon>
           <IconMessages :size="48" />
         </template>

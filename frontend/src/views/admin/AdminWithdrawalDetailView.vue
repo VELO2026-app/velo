@@ -53,11 +53,12 @@
           t('adminScreens.adminWithdrawalDetail.otklonit')
         }}</VButton>
         <VButton variant="primary" :disabled="anyLoading" @click="showConfirm = true">
-          Подтвердить
+          {{ t('adminScreens.adminWithdrawalDetail.confirm') }}
         </VButton>
       </div>
       <VCard v-else class="wd__processed">
-        Запрос уже обработан — статус: <strong>{{ statusLabel }}</strong>
+        {{ t('adminScreens.adminWithdrawalDetail.alreadyProcessed') }}
+        <strong>{{ statusLabel }}</strong>
       </VCard>
     </template>
 

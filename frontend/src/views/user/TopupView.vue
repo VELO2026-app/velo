@@ -48,7 +48,7 @@
         :class="{ 'topup__custom-toggle--active': customMode }"
         @click="enableCustom"
       >
-        Другая сумма
+        {{ t('user.screens.topup.otherAmount') }}
       </div>
       <VInput
         v-if="customMode"
@@ -81,7 +81,7 @@
         :disabled="!canSubmit"
         @click="onTopup"
       >
-        Пополнить {{ selectedLabel }}
+        {{ t('user.screens.topup.topupCta', { label: selectedLabel }) }}
       </VButton>
     </div>
   </div>

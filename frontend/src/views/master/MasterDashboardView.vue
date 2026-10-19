@@ -96,7 +96,7 @@
       <!-- ================================================================
            МОИ ГРУППЫ (P2, PROMPT №591 -- was «Мои ученики» / master-students)
            ================================================================ -->
-      <VMenuRow label="Мои группы" @click="onGroups">
+      <VMenuRow :label="t('masterScreens.masterDashboard.myGroups')" @click="onGroups">
         <template #icon><IconGroup :size="24" /></template>
       </VMenuRow>
 
@@ -111,14 +111,18 @@
         block
         @click="router.push({ name: 'master-practice-new' })"
       >
-        Создать практику
+        {{ t('masterScreens.masterDashboard.createPractice') }}
       </VButton>
 
       <!-- ================================================================
            БЛИЖАЙШИЕ ПРАКТИКИ (up to 2)
            ================================================================ -->
       <h2 class="velo-section-title">
-        {{ nearestPractices.length > 1 ? 'Ближайшие практики' : 'Ближайшая практика' }}
+        {{
+          nearestPractices.length > 1
+            ? t('masterScreens.masterDashboard.nearest')
+            : t('masterScreens.masterDashboard.nearestOne')
+        }}
       </h2>
 
       <template v-if="masterStore.practicesUpcomingLoading && nearestPractices.length === 0">
@@ -194,7 +198,7 @@
               :disabled="retryingId === practice.id"
               @click="onRetryZoom(practice)"
             >
-              Повторить
+              {{ t('common.retry') }}
             </VButton>
             <VButton
               v-else
@@ -218,7 +222,7 @@
             variant="error"
             class="master-dashboard__zoom-note"
           >
-            Не удалось создать встречу Zoom
+            {{ t('masterScreens.masterDashboard.zoomCreateFailed') }}
           </VBadge>
         </div>
       </template>
@@ -227,7 +231,9 @@
         <VCard>
           <p class="master-dashboard__empty-text">
             {{
-              isNewMaster ? 'Данных пока нет — создайте первую практику' : 'Нет предстоящих практик'
+              isNewMaster
+                ? t('masterScreens.masterDashboard.emptyNewMaster')
+                : t('masterScreens.masterDashboard.emptyUpcoming')
             }}
           </p>
         </VCard>

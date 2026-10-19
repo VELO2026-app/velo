@@ -29,14 +29,14 @@
 
 <template>
   <div class="ai-conn">
-    <VHeader title="Подключения ИИ" show-back @back="router.back()" />
+    <VHeader :title="t('user.screens.aiConnections.title')" show-back @back="router.back()" />
     <div class="ai-conn__content">
       <VLoader v-if="state === 'loading'" />
       <p v-else-if="state === 'unavailable'" class="ai-conn__notice" data-test="unavailable">
-        Подключения ИИ сейчас недоступны.
+        {{ t('user.screens.aiConnections.unavailable') }}
       </p>
       <p v-else-if="state === 'error'" class="ai-conn__notice" data-test="load-error">
-        Не удалось загрузить подключения. Попробуйте позже.
+        {{ t('user.screens.aiConnections.loadFailed') }}
       </p>
       <template v-else>
         <section class="ai-conn__block" data-test="connect-block">
@@ -45,18 +45,17 @@
             <p class="ai-conn__text">{{ t('user.screens.aiConnections.dev.addressLabel') }}</p>
             <code class="ai-conn__token" data-test="mcp-url">{{ mcpUrl }}</code>
             <VButton block variant="secondary" data-test="copy-url" @click="onCopyUrl">
-              <IconCopy :size="18" /> Скопировать
+              <IconCopy :size="18" /> {{ t('user.screens.aiConnections.copy') }}
             </VButton>
             <p v-if="oauthAvailable" class="ai-conn__text" data-test="connect-howto">
-              В claude.ai: Настройки → Коннекторы → Добавить свой коннектор → вставьте адрес →
-              Подключить, затем войдите через Telegram.
+              {{ t('user.screens.aiConnections.connectHowto') }}
             </p>
             <p v-else class="ai-conn__notice" data-test="no-button-connect">
-              Подключение кнопкой на этом сервере не настроено — используйте личный токен (ниже).
+              {{ t('user.screens.aiConnections.noButtonConnect') }}
             </p>
           </template>
           <p v-else class="ai-conn__notice" data-test="no-base-url">
-            Адрес сервера не настроен — подключение недоступно.
+            {{ t('user.screens.aiConnections.noBaseUrl') }}
           </p>
         </section>
 
@@ -65,7 +64,7 @@
             {{ t('user.screens.aiConnections.section.connections') }}
           </h2>
           <p v-if="tokens.length === 0" class="ai-conn__empty" data-test="empty">
-            Подключений пока нет.
+            {{ t('user.screens.aiConnections.empty') }}
           </p>
           <ul v-else class="ai-conn__list">
             <li
@@ -107,18 +106,17 @@
                 data-test="revoke"
                 @click="askRevoke(token)"
               >
-                Отозвать
+                {{ t('user.screens.aiConnections.revoke') }}
               </VButton>
             </li>
           </ul>
         </section>
 
         <section class="ai-conn__block" data-test="dev-block">
-          <VAccordion title="Для разработчиков: личный токен">
+          <VAccordion :title="t('user.screens.aiConnections.devTitle')">
             <div class="ai-conn__dev" data-test="dev-body">
               <p class="ai-conn__text">
-                Для Claude Code, скриптов и клиентов без входа кнопкой. Не передавайте токен другим
-                людям; ненужный — отзовите.
+                {{ t('user.screens.aiConnections.devNote') }}
               </p>
               <VButton block data-test="open-create" @click="openCreate">{{
                 t('user.screens.aiConnections.create.cta')
@@ -155,7 +153,7 @@
           data-test="create"
           @click="onCreate"
         >
-          Создать
+          {{ t('user.screens.aiConnections.createSubmit') }}
         </VButton>
       </div>
 
@@ -164,10 +162,10 @@
         <p class="ai-conn__warning">{{ t('user.screens.aiConnections.create.copyHint') }}</p>
         <code class="ai-conn__token" data-test="token-text">{{ createdToken }}</code>
         <VButton block variant="secondary" data-test="copy" @click="onCopy">
-          <IconCopy :size="18" /> Скопировать
+          <IconCopy :size="18" /> {{ t('user.screens.aiConnections.copy') }}
         </VButton>
         <VButton block variant="secondary" data-test="copy-header" @click="onCopyHeader">
-          <IconCopy :size="18" /> Скопировать как заголовок
+          <IconCopy :size="18" /> {{ t('user.screens.aiConnections.copyAsHeader') }}
         </VButton>
         <VButton block data-test="done" @click="closeCreate">{{
           t('user.screens.aiConnections.create.done')

@@ -65,7 +65,7 @@
             :loading="claiming"
             @click="onClaim"
           >
-            Взять в работу
+            {{ t('adminScreens.adminSupportDetail.take') }}
           </VButton>
         </div>
 
@@ -86,7 +86,7 @@
         <template v-else>
           <div class="support-detail__feed">
             <div v-if="messages.length === 0" class="support-detail__empty">
-              Сообщений пока нет.
+              {{ t('adminScreens.adminSupportDetail.noMessages') }}
             </div>
             <div
               v-for="m in messages"
@@ -103,7 +103,7 @@
               </div>
             </div>
             <button type="button" class="support-detail__refresh" @click="loadMessages">
-              Обновить
+              {{ t('adminScreens.adminSupportDetail.refresh') }}
             </button>
           </div>
 
@@ -126,7 +126,7 @@
               :loading="sending"
               @click="onSend"
             >
-              Отправить
+              {{ t('adminScreens.adminSupportDetail.send') }}
             </VButton>
           </div>
         </template>

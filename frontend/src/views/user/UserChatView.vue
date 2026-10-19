@@ -23,8 +23,11 @@
     </div>
 
     <div v-else-if="notFound" class="user-chat__center">
-      <VHeader title="Сообщения" show-back @back="router.back()" />
-      <VEmptyState title="Переписка не найдена" description="Возможно, ссылка устарела">
+      <VHeader :title="t('user.screens.userChat.title')" show-back @back="router.back()" />
+      <VEmptyState
+        :title="t('user.screens.userChat.notFound')"
+        :description="t('user.screens.userChat.notFoundHint')"
+      >
         <template #icon>
           <IconMessages :size="48" />
         </template>

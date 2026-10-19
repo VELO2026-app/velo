@@ -159,7 +159,7 @@ async function onSave(): Promise<void> {
       await removeGroupMember(props.currentGroupId, props.studentId)
     } else if (mode.value === 'selected') {
       if (selected.value.size === 0) {
-        toast.error('Выберите хотя бы одну группу')
+        toast.error(t('shared.components.pickGroup'))
         return
       }
       await Promise.all(
@@ -168,11 +168,11 @@ async function onSave(): Promise<void> {
     } else {
       await Promise.all(props.customGroups.map((g) => removeGroupMember(g.id, props.studentId)))
     }
-    toast.success('Удалено')
+    toast.success(t('shared.components.removed'))
     emit('saved')
     emit('close')
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось удалить из группы'))
+    toast.error(extractApiError(e, t('shared.components.removeFailed')))
   }
 }
 </script>

@@ -33,12 +33,12 @@
 
     <!-- Batch-INVITE (№258): entry to the one-time invite link screen. -->
     <VButton variant="secondary" block @click="router.push({ name: 'admin-master-invite' })">
-      Пригласить мастера
+      {{ t('adminScreens.adminMasters.inviteCta') }}
     </VButton>
 
     <!-- FE-23 (GT P4): all schools incl. frozen, read-only. -->
     <VButton variant="outline" block @click="router.push({ name: 'admin-curator-groups' })">
-      Школы
+      {{ t('adminScreens.adminMasters.schoolsTab') }}
     </VButton>
 
     <!-- Loading -->
@@ -73,7 +73,7 @@
                  alike (revocation does not dissolve them, and the admin
                  needs to see what is still attached to the person). -->
             <VBadge v-if="(m.curator_groups_count ?? 0) > 0" variant="blue" class="mcard__badge">
-              Куратор
+              {{ t('adminScreens.adminMasters.curatorRole') }}
             </VBadge>
           </div>
         </div>
@@ -263,11 +263,11 @@ const emptyText = computed<string>(() => {
 
 // Status badge labels match the operator SVG (the shared helper uses shorter ones).
 function badgeLabel(status: string): string {
-  if (status === 'verified') return 'Верифицирован'
-  if (status === 'pending') return 'Ожидает верификации'
-  if (status === 'rejected') return 'Отклонён'
-  if (status === 'suspended') return 'Заблокирован'
-  if (status === 'cancelled_by_user') return 'Аккаунт удалён'
+  if (status === 'verified') return t('adminScreens.adminMasters.status.verified')
+  if (status === 'pending') return t('adminScreens.adminMasters.status.pending')
+  if (status === 'rejected') return t('adminScreens.adminMasters.status.rejected')
+  if (status === 'suspended') return t('adminScreens.adminMasters.status.suspended')
+  if (status === 'cancelled_by_user') return t('adminScreens.adminMasters.status.cancelled_by_user')
   return status
 }
 

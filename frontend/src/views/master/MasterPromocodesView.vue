@@ -10,9 +10,14 @@
 
 <template>
   <div class="promo">
-    <VHeader title="Промокоды" show-back @back="router.back()">
+    <VHeader :title="t('masterScreens.masterPromocodes.title')" show-back @back="router.back()">
       <template #action>
-        <button type="button" class="promo__add" aria-label="Новый промокод" @click="onNew">
+        <button
+          type="button"
+          class="promo__add"
+          :aria-label="t('masterScreens.masterPromocodes.newAria')"
+          @click="onNew"
+        >
           <IconPlus :size="20" />
         </button>
       </template>
@@ -24,7 +29,11 @@
     </div>
 
     <!-- Error -->
-    <VEmptyState v-else-if="error" icon="warning" title="Не удалось загрузить промокоды">
+    <VEmptyState
+      v-else-if="error"
+      icon="warning"
+      :title="t('masterScreens.masterPromocodes.loadFailed')"
+    >
       <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
     </VEmptyState>
 
@@ -49,9 +58,11 @@
           <div class="promo__info">
             <div class="promo__code">{{ p.code }}</div>
             <div class="promo__meta">
-              <div>Скидка: {{ p.discount_percent }}%</div>
-              <div>Использовано: {{ usedLabel(p) }}</div>
-              <div>Действует до: {{ untilLabel(p) }}</div>
+              <div>
+                {{ t('masterScreens.masterPromocodes.discount', { n: p.discount_percent }) }}
+              </div>
+              <div>{{ t('masterScreens.masterPromocodes.used', { label: usedLabel(p) }) }}</div>
+              <div>{{ t('masterScreens.masterPromocodes.until', { label: untilLabel(p) }) }}</div>
             </div>
           </div>
         </div>
@@ -60,7 +71,7 @@
             t('masterScreens.masterPromocodes.copyCta')
           }}</VButton>
           <VButton variant="danger" :loading="deactivatingId === p.id" @click="onDelete(p)">
-            Удалить
+            {{ t('masterScreens.masterPromocodes.delete') }}
           </VButton>
         </div>
       </div>

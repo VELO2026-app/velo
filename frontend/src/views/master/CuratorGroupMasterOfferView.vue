@@ -57,7 +57,7 @@ lines — counts only, by the same ruling.
           {{ t('masterScreens.curatorGroupMasterOffer.verifyFailed') }}
         </h2>
         <p class="master-offer__subtitle">
-          Проблема с соединением. Проверьте интернет и попробуйте ещё раз.
+          {{ t('masterScreens.curatorGroupMasterOffer.loadFailed') }}
         </p>
         <div class="master-offer__actions">
           <VButton variant="primary" block :loading="loading" @click="load">{{
@@ -72,11 +72,11 @@ lines — counts only, by the same ruling.
           {{ t('masterScreens.curatorGroupMasterOffer.invalid.title') }}
         </h2>
         <p class="master-offer__subtitle">
-          Возможно, школа недоступна или приглашение было отменено.
+          {{ t('masterScreens.curatorGroupMasterOffer.unavailable') }}
         </p>
         <div class="master-offer__actions">
           <VButton variant="primary" block @click="router.replace({ name: 'root' })">
-            На главную
+            {{ t('common.backHome') }}
           </VButton>
         </div>
       </template>
@@ -86,7 +86,7 @@ lines — counts only, by the same ruling.
         <h2 class="master-offer__title">{{ offerGoneTitle }}</h2>
         <div class="master-offer__actions">
           <VButton variant="primary" block @click="router.replace({ name: 'root' })">
-            На главную
+            {{ t('common.backHome') }}
           </VButton>
         </div>
       </template>
@@ -97,12 +97,11 @@ lines — counts only, by the same ruling.
           {{ t('masterScreens.curatorGroupMasterOffer.verificationNeeded') }}
         </h2>
         <p class="master-offer__subtitle">
-          Чтобы принять предложение школы, нужно подтверждение мастера платформы. Подайте заявку или
-          дождитесь решения по уже поданной. Предложение школы сохранится.
+          {{ t('masterScreens.curatorGroupMasterOffer.verifyingNote') }}
         </p>
         <div class="master-offer__actions">
           <VButton variant="primary" block @click="router.replace({ name: 'master-apply' })">
-            Подать заявку
+            {{ t('masterScreens.curatorGroupMasterOffer.apply') }}
           </VButton>
         </div>
       </template>
@@ -127,7 +126,7 @@ lines — counts only, by the same ruling.
             :disabled="declining"
             @click="accept"
           >
-            Принять
+            {{ t('masterScreens.curatorGroupMasterOffer.accept') }}
           </VButton>
           <VButton
             variant="outline"
@@ -136,7 +135,7 @@ lines — counts only, by the same ruling.
             :disabled="accepting"
             @click="decline"
           >
-            Отказаться
+            {{ t('masterScreens.curatorGroupMasterOffer.decline') }}
           </VButton>
         </div>
       </template>
@@ -208,7 +207,9 @@ async function accept(): Promise<void> {
   accepting.value = true
   try {
     await acceptCuratorGroupMasterOffer(page.value.id)
-    toast.success(`Вы теперь мастер школы «${page.value.name}»`)
+    toast.success(
+      t('masterScreens.curatorGroupMasterOffer.acceptedToast', { name: page.value.name }),
+    )
     void router.replace(schoolRoute(page.value.id))
   } catch (e) {
     if (e instanceof ApiResponseError) {

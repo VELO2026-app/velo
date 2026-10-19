@@ -19,7 +19,7 @@
     :question-subtitle="t('user.screens.checkin.question.subtitle')"
     :submitting="diaryStore.checkinSubmitting"
     :submit-disabled="windowClosed"
-    :disabled-hint="practice && windowClosed ? 'Check-in закрыт — практика уже началась' : ''"
+    :disabled-hint="practice && windowClosed ? t('user.screens.checkin.windowClosedHint') : ''"
     :submit-label="t('user.screens.checkin.chat.send')"
     :show-skip="true"
     :submitted="submitted"
@@ -33,7 +33,11 @@
     <!-- Practice meta — две колонки (Figma 2266:716): мастер | дата. -->
     <template #practice-meta>
       <span class="form-shell__practice-meta-cell">
-        с {{ practice?.master_name ?? 'Мастером' }}
+        {{
+          t('shared.form.hostLine', {
+            name: practice?.master_name ?? t('shared.form.hostFallback'),
+          })
+        }}
       </span>
       <span class="form-shell__practice-meta-cell">
         <IconCalendar :size="14" /> {{ formattedDate }}
@@ -62,7 +66,7 @@
     <!-- Success actions -->
     <template #success-actions>
       <VButton variant="primary" size="lg" block @click="goToPracticeLive">
-        Начать практику
+        {{ t('user.screens.checkin.start') }}
       </VButton>
       <VButton variant="ghost" block @click="goToDashboard">{{ t('common.backHome') }}</VButton>
     </template>

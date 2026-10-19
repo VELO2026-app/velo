@@ -49,9 +49,17 @@
       </PracticeHeroCard>
 
       <div class="admin-detail__stats2">
-        <VStatCard :value="bookedLabel" label="Записалось" />
-        <VStatCard v-if="isPast" :value="attendedLabel" label="Пришли" />
-        <VStatCard v-else :value="freeLabel" label="Свободно" />
+        <VStatCard :value="bookedLabel" :label="t('adminScreens.adminPracticeDetail.bookedStat')" />
+        <VStatCard
+          v-if="isPast"
+          :value="attendedLabel"
+          :label="t('adminScreens.adminPracticeDetail.attendedStat')"
+        />
+        <VStatCard
+          v-else
+          :value="freeLabel"
+          :label="t('adminScreens.adminPracticeDetail.freeStat')"
+        />
       </div>
 
       <!-- T21-1 (PROMPT №541): Zoom meeting status + the unmatched bucket,
@@ -90,7 +98,14 @@
 
       <!-- Upcoming: who registered -->
       <template v-if="!isPast">
-        <h3 class="admin-detail__section">Записались ({{ practice.booked }}/{{ capacityText }})</h3>
+        <h3 class="admin-detail__section">
+          {{
+            t('adminScreens.adminPracticeDetail.bookedSection', {
+              booked: practice.booked,
+              capacity: capacityText,
+            })
+          }}
+        </h3>
         <div v-if="registered.length" class="admin-detail__items">
           <VListRow v-for="r in registered" :key="r.user_id" :title="r.name">
             <template #lead>
@@ -107,7 +122,9 @@
 
       <!-- Past: who attended / who didn't -->
       <template v-else>
-        <h3 class="admin-detail__section">Присутствовали ({{ present.length }})</h3>
+        <h3 class="admin-detail__section">
+          {{ t('adminScreens.adminPracticeDetail.presentSection', { n: present.length }) }}
+        </h3>
         <div v-if="present.length" class="admin-detail__items">
           <VListRow v-for="r in present" :key="r.user_id" :title="r.name">
             <template #lead>
@@ -126,7 +143,9 @@
           </p></VCard
         >
 
-        <h3 class="admin-detail__section">Не пришли ({{ absent.length }})</h3>
+        <h3 class="admin-detail__section">
+          {{ t('adminScreens.adminPracticeDetail.absentSection', { n: absent.length }) }}
+        </h3>
         <div v-if="absent.length" class="admin-detail__items">
           <VListRow v-for="r in absent" :key="r.user_id" :title="r.name">
             <template #lead>

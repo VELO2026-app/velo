@@ -30,7 +30,11 @@
 -->
 <template>
   <div class="master-notifications">
-    <VHeader title="Уведомления" show-back @back="router.back()" />
+    <VHeader
+      :title="t('masterScreens.masterNotifications.title')"
+      show-back
+      @back="router.back()"
+    />
 
     <div class="master-notifications__content">
       <section v-for="group in GROUPS" :key="group.title" class="mn-section">

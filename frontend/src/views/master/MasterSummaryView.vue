@@ -23,7 +23,11 @@
 
 <template>
   <div class="summary">
-    <VHeader title="Саммари недели" show-back @back="router.push({ name: 'master-dashboard' })" />
+    <VHeader
+      :title="t('masterScreens.masterSummary.title')"
+      show-back
+      @back="router.push({ name: 'master-dashboard' })"
+    />
 
     <div class="summary__content">
       <!-- AI insight (honest placeholder — no AI provider exists in this
@@ -103,7 +107,9 @@
           <VAvatar :name="student.name" size="md" />
           <div class="summary__attn-body">
             <div class="summary__attn-name">{{ student.name }}</div>
-            <div class="summary__attn-meta">Практик: {{ student.practices_count }}</div>
+            <div class="summary__attn-meta">
+              {{ t('masterScreens.masterSummary.practicesCount', { n: student.practices_count }) }}
+            </div>
             <span class="summary__attn-badge"
               ><IconWarning :size="14" />{{
                 t('masterScreens.masterSummary.needsAttentionSingular')

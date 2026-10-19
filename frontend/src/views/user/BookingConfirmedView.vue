@@ -38,7 +38,7 @@
       v-else-if="store.selectedError || !practice"
       icon="warning"
       :title="t('user.screens.bookingConfirmed.notFound')"
-      :description="store.selectedError ?? 'Не удалось загрузить практику'"
+      :description="store.selectedError ?? t('user.screens.bookingConfirmed.loadFailed')"
     >
       <VButton size="sm" @click="goToDashboard">{{ t('common.backHome') }}</VButton>
     </VEmptyState>
@@ -52,7 +52,7 @@
         </span>
         <h1 class="booking-confirmed__title">{{ t('user.screens.bookingConfirmed.title') }}</h1>
         <p class="booking-confirmed__text">
-          Войти в Zoom можно будет прямо в VELO — на экране практики.
+          {{ t('user.screens.bookingConfirmed.zoomNote') }}
         </p>
       </VCard>
 
@@ -82,7 +82,7 @@
           :disabled="sending || !masterRequest.trim()"
           @click="onSendRequest"
         >
-          Отправить запрос
+          {{ t('user.screens.bookingConfirmed.sendRequest') }}
         </VButton>
       </div>
     </div>

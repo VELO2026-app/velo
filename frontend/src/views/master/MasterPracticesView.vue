@@ -33,9 +33,13 @@
 <template>
   <div class="master-practices">
     <!-- Header -->
-    <VHeader title="Практики">
+    <VHeader :title="t('masterScreens.masterPractices.title')">
       <template #action>
-        <button class="master-practices__add-btn" aria-label="Создать практику" @click="goNew">
+        <button
+          class="master-practices__add-btn"
+          :aria-label="t('masterScreens.masterPractices.createAria')"
+          @click="goNew"
+        >
           <IconPlus :size="22" />
         </button>
       </template>
@@ -56,9 +60,13 @@
          must not replace the pages already on screen; mirrors the loading rung
          above and MyBookingsView.vue:28) -->
     <div v-else-if="currentError && currentItems.length === 0" class="master-practices__content">
-      <VEmptyState icon="warning" title="Не удалось загрузить практики" :description="currentError">
+      <VEmptyState
+        icon="warning"
+        :title="t('masterScreens.masterPractices.loadFailed')"
+        :description="currentError"
+      >
         <VButton size="sm" variant="outline" @click="masterStore.refreshMyPractices()">
-          Повторить
+          {{ t('common.retry') }}
         </VButton>
       </VEmptyState>
     </div>
@@ -83,7 +91,7 @@
                 <div class="mp-card__title">{{ p.title }}</div>
                 <div class="mp-card__sub">
                   {{ whenLabel(p) }}, {{ formatTime(p.scheduled_at, p.timezone) }} •
-                  {{ p.duration_minutes }} мин
+                  {{ p.duration_minutes }} {{ t('masterScreens.masterPractices.durationMin') }}
                 </div>
               </div>
             </div>
@@ -109,8 +117,8 @@
                  the mark is a tap on the card. -->
             <div v-if="p.audience_unavailable" class="mp-card__meta mp-card__meta--row2">
               <span class="mp-stat mp-stat--warn">
-                <IconWarning :size="16" /> Школа недоступна — практику не видит никто, кроме вас и
-                уже записавшихся
+                <IconWarning :size="16" />
+                {{ t('masterScreens.masterPractices.schoolUnavailable') }}
               </span>
             </div>
           </article>
@@ -168,7 +176,7 @@
       <!-- Load more -->
       <div v-if="currentHasMore" class="master-practices__load-more">
         <VButton variant="ghost" block :loading="currentLoading" @click="onLoadMore">
-          Показать ещё
+          {{ t('common.showMore') }}
         </VButton>
       </div>
     </div>

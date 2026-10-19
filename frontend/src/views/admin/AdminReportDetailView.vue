@@ -10,7 +10,11 @@
 
 <template>
   <div class="report-detail">
-    <VHeader title="Жалоба" :show-back="true" @back="router.back()" />
+    <VHeader
+      :title="t('adminScreens.adminReportDetail.title')"
+      :show-back="true"
+      @back="router.back()"
+    />
 
     <div class="report-detail__content">
       <!-- Loading -->
@@ -19,7 +23,12 @@
       </div>
 
       <!-- Error (SW8): distinct from "not found" -- retry, not a dead end. -->
-      <VEmptyState v-else-if="error" icon="warning" title="Ошибка загрузки" :description="error">
+      <VEmptyState
+        v-else-if="error"
+        icon="warning"
+        :title="t('adminScreens.adminReportDetail.loadFailed')"
+        :description="error"
+      >
         <VButton size="sm" variant="outline" @click="loadReport">{{
           t('adminScreens.adminReportDetail.povtorit')
         }}</VButton>
@@ -122,7 +131,7 @@
                 :disabled="anyLoading"
                 @click="onResolve"
               >
-                Решить
+                {{ t('adminScreens.adminReportDetail.resolve') }}
               </VButton>
             </div>
           </div>
@@ -145,7 +154,7 @@
                 :disabled="anyLoading"
                 @click="onDismiss"
               >
-                Отклонить
+                {{ t('adminScreens.adminReportDetail.reject') }}
               </VButton>
             </div>
           </div>
@@ -153,7 +162,7 @@
 
         <!-- Already processed -->
         <VCard v-else class="report-detail__processed">
-          Жалоба уже обработана — статус:
+          {{ t('adminScreens.adminReportDetail.alreadyProcessed') }}
           <strong>{{ reportStatusLabel(currentStatus) }}</strong>
         </VCard>
       </template>

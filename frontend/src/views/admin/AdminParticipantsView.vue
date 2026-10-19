@@ -34,13 +34,25 @@
             <span class="prow__name">{{ p.name }}</span>
             <span v-if="p.telegram_id" class="prow__sub">ID {{ p.telegram_id }}</span>
             <span class="prow__meta">
-              Практик: {{ p.practices_count }} • с {{ joinedLabel(p.created_at) }}
+              {{
+                t('adminScreens.adminParticipants.joinedLine', {
+                  n: p.practices_count,
+                  since: joinedLabel(p.created_at),
+                })
+              }}
             </span>
-            <span v-if="p.last_login_at" class="prow__meta"
-              >Последняя: {{ lastActiveLabel(p.last_login_at) }}</span
-            >
+            <span v-if="p.last_login_at" class="prow__meta">{{
+              t('adminScreens.adminParticipants.lastSeen', {
+                label: lastActiveLabel(p.last_login_at),
+              })
+            }}</span>
           </span>
-          <button type="button" class="prow__msg" aria-label="Написать" @click="messageStub">
+          <button
+            type="button"
+            class="prow__msg"
+            :aria-label="t('adminScreens.adminParticipants.messageAria')"
+            @click="messageStub"
+          >
             <IconMessages :size="22" />
           </button>
         </div>

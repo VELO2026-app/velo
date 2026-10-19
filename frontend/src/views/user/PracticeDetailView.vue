@@ -50,9 +50,17 @@
          it belongs to -- the two managers the backend accepts on PATCH -- and
          routes them straight to the master-zone edit screen. Editable statuses
          only, mirroring the master hub; see canManage below. -->
-    <VHeader :title="hasAnyBooking ? 'Моя практика' : 'Практика'" show-back @back="router.back()">
+    <VHeader
+      :title="
+        hasAnyBooking
+          ? t('user.screens.practiceDetail.titleBooked')
+          : t('user.screens.practiceDetail.titlePlain')
+      "
+      show-back
+      @back="router.back()"
+    >
       <template v-if="canManage" #action>
-        <VMenu aria-label="Меню">
+        <VMenu :aria-label="t('user.screens.practiceDetail.menuAria')">
           <template #default="{ close }">
             <VMenuItem
               :icon="IconPen"
@@ -99,12 +107,18 @@
       </VCard>
 
       <!-- О практике accordion -->
-      <VAccordion v-if="practice.description" title="О практике">
+      <VAccordion
+        v-if="practice.description"
+        :title="t('user.screens.practiceDetail.aboutSection')"
+      >
         <p class="detail__accordion-text">{{ practice.description }}</p>
       </VAccordion>
 
       <!-- Что подготовить accordion -->
-      <VAccordion v-if="practice.what_to_prepare" title="Что подготовить">
+      <VAccordion
+        v-if="practice.what_to_prepare"
+        :title="t('user.screens.practiceDetail.prepareSection')"
+      >
         <p class="detail__accordion-text">{{ practice.what_to_prepare }}</p>
       </VAccordion>
 
@@ -127,7 +141,7 @@
       <section v-if="showZoom" class="detail__section">
         <h3 class="detail__section-title">ZOOM</h3>
         <VCard class="detail__zoom-card">
-          Ссылка на Zoom доступна после записи — на главном экране и в практике
+          {{ t('user.screens.practiceDetail.zoomAfterBooking') }}
         </VCard>
       </section>
 
@@ -166,7 +180,7 @@
         block
         @click="onCheckin"
       >
-        Check-in перед практикой
+        {{ t('user.screens.practiceDetail.checkinCta') }}
       </VButton>
 
       <!-- F9.1: Feedback button (attended booking in feedback window) -->
@@ -177,7 +191,7 @@
         block
         @click="onFeedback"
       >
-        Оставить feedback
+        {{ t('user.screens.practiceDetail.feedbackCta') }}
       </VButton>
 
       <!-- REC-1: watch-recording button. Shown ONLY when the API has
@@ -197,7 +211,7 @@
            already re-derives its own eligibility before ever setting this ref. -->
       <template v-else-if="recordingUrl">
         <VButton variant="primary" size="lg" block @click="onWatchRecording">
-          Посмотреть запись
+          {{ t('user.screens.practiceDetail.recordingCta') }}
         </VButton>
         <!-- Proposal only -- NOT owner-approved (PROMPT №620 task d). 7 days
              is the real Zoom-side retention (owner-set in the console);
@@ -213,7 +227,7 @@
            the recording, and the owner wants both buttons -- recording
            first, this one second. -->
       <VButton v-if="canReflect" variant="secondary" size="lg" block @click="onReflect">
-        Поделиться, как вы
+        {{ t('user.screens.practiceDetail.shareMood') }}
       </VButton>
 
       <!-- Booked but no active window: NO CTA here. The "записан" state is
@@ -247,7 +261,7 @@
         :loading="cancelling"
         @click="onCancelBooking"
       >
-        Отменить бронирование
+        {{ t('user.screens.practiceDetail.cancelBooking') }}
       </VButton>
     </div>
 

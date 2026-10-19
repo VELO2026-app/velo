@@ -98,7 +98,7 @@
       <div v-else-if="nearestBookings.length === 0" class="dashboard__empty">
         <p class="dashboard__empty-text">{{ t('user.screens.userDashboard.upcoming.empty') }}</p>
         <VButton size="sm" variant="outline" @click="router.push({ name: 'user-calendar' })">
-          Найти практику
+          {{ t('user.screens.userDashboard.findPractice') }}
         </VButton>
       </div>
 
@@ -117,7 +117,8 @@
           >
             <template #badge>
               <VBadge v-if="isLive(b)" variant="success">
-                <span class="dashboard__live-dot" /> В эфире
+                <span class="dashboard__live-dot" />
+                {{ t('user.screens.userDashboard.liveBadge') }}
               </VBadge>
               <VBadge v-else-if="isFree(b)" variant="blue">{{ t('common.free') }}</VBadge>
               <VBadge v-else variant="blue">
@@ -160,7 +161,7 @@
                from "still preparing" -- see PracticeLiveView's identical
                badge for the full rationale. -->
           <VBadge v-if="zoomStateFor(b) === 'failed'" variant="error" class="dashboard__zoom-note">
-            Не удалось создать встречу — обратитесь к мастеру
+            {{ t('user.screens.userDashboard.zoomFailed') }}
           </VBadge>
         </div>
       </template>

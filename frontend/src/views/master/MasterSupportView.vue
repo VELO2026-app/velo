@@ -29,7 +29,12 @@
   <div class="support">
     <!-- Header hidden on the success screen — it's a terminal state with no back
          (operator 2026-06-19); «На главную» is the only exit. -->
-    <VHeader v-if="!submitted" title="Поддержка" show-back @back="router.back()" />
+    <VHeader
+      v-if="!submitted"
+      :title="t('masterScreens.masterSupport.title')"
+      show-back
+      @back="router.back()"
+    />
 
     <!-- ===================== TERMINAL (delivery HAS happened) ================
          Mirrors the user SupportView. Reached only after both calls resolved,
@@ -48,7 +53,7 @@
         {{ t('masterScreens.masterSupport.thanks.text') }}
       </p>
       <VButton variant="primary" block class="support__ok-cta" @click="onGoHome">
-        На главную
+        {{ t('common.backHome') }}
       </VButton>
     </div>
 
@@ -138,7 +143,7 @@
         class="support__submit"
         @click="onSubmit"
       >
-        Отправить
+        {{ t('masterScreens.masterSupport.submit') }}
       </VButton>
     </div>
   </div>

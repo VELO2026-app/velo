@@ -179,7 +179,7 @@ watch(
 )
 
 const dateLabel = computed<string>(() =>
-  draftDate.value ? formatRelative(`${draftDate.value}T12:00:00`) : 'Выбрать дату',
+  draftDate.value ? formatRelative(`${draftDate.value}T12:00:00`) : t('composer.pickDate'),
 )
 
 function toggle(list: string[], v: string): void {

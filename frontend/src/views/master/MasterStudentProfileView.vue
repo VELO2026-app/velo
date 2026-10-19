@@ -37,9 +37,9 @@
 
 <template>
   <div class="profile">
-    <VHeader title="Профиль ученика" show-back @back="router.back()">
+    <VHeader :title="t('masterScreens.masterStudentProfile.title')" show-back @back="router.back()">
       <template v-if="detail && !detail.blocked" #action>
-        <VMenu ariaLabel="Меню ученика">
+        <VMenu :ariaLabel="t('masterScreens.masterStudentProfile.menuAria')">
           <!-- T24-9: horizontal at rest, rotates to vertical open -- the
                OPPOSITE resting orientation of the diary's own dots override
                (DiaryFeedView.vue: vertical at rest, rotates to horizontal).
@@ -64,7 +64,11 @@
             </svg>
           </template>
           <template #default="{ close }">
-            <VMenuItem :icon="IconTag" ariaLabel="Добавить тег" @click="onTagClick(close)" />
+            <VMenuItem
+              :icon="IconTag"
+              :ariaLabel="t('masterScreens.masterStudentProfile.tagAria')"
+              @click="onTagClick(close)"
+            />
             <VMenuItem
               :icon="IconPen"
               :ariaLabel="t('masterScreens.masterStudentProfile.addToGroup')"
@@ -123,8 +127,11 @@
 
         <!-- Stats (% card removed — PROMPT №157; two cards widen under the hero) -->
         <div class="profile__stats">
-          <VStatCard :value="practicesCount" label="Практик" />
-          <VStatCard :value="hours" label="Часов" />
+          <VStatCard
+            :value="practicesCount"
+            :label="t('masterScreens.masterStudentProfile.practicesStat')"
+          />
+          <VStatCard :value="hours" :label="t('masterScreens.masterStudentProfile.hoursStat')" />
         </div>
 
         <!-- Recent check-ins (cap 3; rest behind «посмотреть еще» — PROMPT №157) -->
@@ -172,7 +179,7 @@
 
         <!-- Action: posts into the eternal DM with THIS student (T3). -->
         <VButton variant="primary" block class="profile__cta" @click="msgOpen = true">
-          Написать сообщение
+          {{ t('masterScreens.masterStudentProfile.messageCta') }}
         </VButton>
 
         <!-- P3 (PROMPT №592): destructive, bottom of the screen (design variant 3).
@@ -348,7 +355,11 @@ const router = useRouter()
 // never the unconditional placeholder.
 const name = computed((): string => {
   const q = route.query.name
-  return detail.value?.name || (typeof q === 'string' && q) || 'Ученик'
+  return (
+    detail.value?.name ||
+    (typeof q === 'string' && q) ||
+    t('masterScreens.masterStudentProfile.studentFallback')
+  )
 })
 const avatarUrl = computed((): string => detail.value?.avatar_url ?? '')
 

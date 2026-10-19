@@ -13,7 +13,11 @@
 
 <template>
   <div class="ucg">
-    <VHeader title="Мои школы" show-back @back="router.push({ name: 'user-profile' })" />
+    <VHeader
+      :title="t('user.screens.userCuratorGroups.title')"
+      show-back
+      @back="router.push({ name: 'user-profile' })"
+    />
 
     <div class="ucg__content">
       <div v-if="loading" class="ucg__state">

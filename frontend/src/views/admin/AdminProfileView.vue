@@ -12,7 +12,7 @@
 
 <template>
   <div class="admin-profile">
-    <VHeader title="Профиль" show-back @back="router.back()" />
+    <VHeader :title="t('adminScreens.adminProfile.title')" show-back @back="router.back()" />
 
     <!-- Header -->
     <VCard class="admin-profile__header">
@@ -29,10 +29,11 @@
         {{ t('adminScreens.adminProfile.RezhimProsmotra') }}
       </div>
       <p class="admin-profile__section-desc">
-        Перейдите в интерфейс пользователя, чтобы просматривать каталог и бронировать практики.
+        {{ t('adminScreens.adminProfile.switchNote') }}
       </p>
       <VButton variant="secondary" @click="switchToUserMode">
-        Открыть как пользователь<IconArrowRight
+        {{ t('adminScreens.adminProfile.switchCta')
+        }}<IconArrowRight
           :size="18"
           :style="{ marginLeft: 'var(--space-2)', verticalAlign: 'middle' }"
         />

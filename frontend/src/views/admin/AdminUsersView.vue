@@ -25,7 +25,7 @@
       <span class="admin-users__count">{{ headerCount }}</span>
     </header>
 
-    <VInput v-model="search" placeholder="Поиск по имени или Telegram ID" />
+    <VInput v-model="search" :placeholder="t('adminScreens.adminUsers.searchPlaceholder')" />
 
     <!-- Loading -->
     <div v-if="loading" class="admin-users__loader"><VLoader size="lg" /></div>
@@ -58,7 +58,7 @@
           </div>
 
           <VButton v-if="u.role === 'user'" variant="secondary" block @click="askMakeMaster(u)">
-            Сделать мастером
+            {{ t('adminScreens.adminUsers.makeMaster') }}
           </VButton>
         </div>
       </div>
@@ -145,8 +145,8 @@ const emptyText = computed<string>(() =>
 )
 
 function roleLabel(role: string): string {
-  if (role === 'admin') return 'Админ'
-  if (role === 'master') return 'Мастер'
+  if (role === 'admin') return t('adminScreens.adminUsers.roleAdmin')
+  if (role === 'master') return t('adminScreens.adminUsers.roleMaster')
   return t('adminScreens.adminUsers.polzovatel')
 }
 

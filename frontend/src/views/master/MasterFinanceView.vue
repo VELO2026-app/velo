@@ -25,7 +25,7 @@
 
 <template>
   <div class="finance-view">
-    <VHeader title="Вывод средств" show-back @back="router.back()" />
+    <VHeader :title="t('masterScreens.masterFinance.title')" show-back @back="router.back()" />
 
     <!-- ===================== BALANCE ===================== -->
     <div class="finance-view__balance">
@@ -35,7 +35,7 @@
       <div class="finance-view__balance-value">{{ formattedAvailable }}</div>
       <!-- frozen kept beyond the SVG: real «in review» money the master should see -->
       <div v-if="frozenCents > 0" class="finance-view__balance-frozen">
-        На рассмотрении: {{ formattedFrozen }}
+        {{ t('masterScreens.masterFinance.inReview', { amount: formattedFrozen }) }}
       </div>
     </div>
 
@@ -63,11 +63,11 @@
           </button>
         </div>
         <p v-else class="finance-view__hint">
-          Способ выплаты не настроен. Добавьте карту, чтобы выводить средства.
+          {{ t('masterScreens.masterFinance.method.notConfiguredHint') }}
         </p>
 
         <VButton variant="outline" class="finance-view__add" @click="openPayoutForm(hasPayout)">
-          + Добавить метод оплаты
+          {{ t('masterScreens.masterFinance.method.add') }}
         </VButton>
       </template>
 
@@ -129,7 +129,11 @@
             placeholder="0000 0000 0000 0000"
             :error="formErrors.card"
           />
-          <VInput v-model="payoutForm.cardHolder" label="Имя владельца" placeholder="IVAN IVANOV" />
+          <VInput
+            v-model="payoutForm.cardHolder"
+            :label="t('masterScreens.masterFinance.fields.cardHolderDisplay')"
+            placeholder="IVAN IVANOV"
+          />
         </template>
 
         <div class="finance-view__form-actions">
@@ -139,10 +143,10 @@
             :disabled="savingPayout"
             @click="savePayout"
           >
-            Сохранить
+            {{ t('ui.save') }}
           </VButton>
           <VButton variant="ghost" :disabled="savingPayout" @click="closePayoutForm">
-            Отмена
+            {{ t('ui.cancel') }}
           </VButton>
         </div>
       </div>
@@ -154,8 +158,7 @@
         {{ t('masterScreens.masterFinance.fields.amount') }}<span class="finance-view__req">*</span>
       </h2>
       <p class="finance-view__hint">
-        Срок зачисления: 1-3 рабочих дня. Комиссия платёжного провайдера будет удержана из суммы
-        вывода.
+        {{ t('masterScreens.masterFinance.fields.timingHint') }}
       </p>
 
       <template v-if="hasPayout">
@@ -174,13 +177,17 @@
           {{ amountError }}
         </p>
         <p v-if="!amountError && amountCents > 0" class="finance-view__hint">
-          Минимум {{ formatMoney(MIN_WITHDRAWAL_EUROS * 100, 'EUR', 'ru', true) }} · Комиссия
-          {{ formatMoney(WITHDRAWAL_FEE_EUROS * 100, 'EUR', 'ru', true) }} · Вы получите
-          {{ formattedNetAmount }}
+          {{
+            t('masterScreens.masterFinance.fields.feeBreakdown', {
+              min: formatMoney(MIN_WITHDRAWAL_EUROS * 100, 'EUR', 'ru', true),
+              fee: formatMoney(WITHDRAWAL_FEE_EUROS * 100, 'EUR', 'ru', true),
+              net: formattedNetAmount,
+            })
+          }}
         </p>
 
         <VButton variant="ghost" size="sm" class="finance-view__all" @click="fillMaxAmount">
-          Вывести все
+          {{ t('masterScreens.masterFinance.fields.withdrawAll') }}
         </VButton>
 
         <VButton
@@ -191,12 +198,12 @@
           class="finance-view__cta"
           @click="submitWithdrawal"
         >
-          Запросить вывод
+          {{ t('masterScreens.masterFinance.fields.requestWithdrawal') }}
         </VButton>
       </template>
 
       <p v-else class="finance-view__warning-text">
-        Сначала добавьте способ выплаты в разделе «Метод оплаты» выше.
+        {{ t('masterScreens.masterFinance.method.needMethodFirst') }}
       </p>
     </section>
 
@@ -209,7 +216,7 @@
       </div>
 
       <p v-else-if="!historyLoading && withdrawals.length === 0" class="finance-view__empty-text">
-        Выводов ещё не было
+        {{ t('masterScreens.masterFinance.historyEmpty') }}
       </p>
 
       <div v-else class="finance-view__history">
@@ -240,7 +247,7 @@
         class="finance-view__load-more"
         @click="loadMoreWithdrawals"
       >
-        Показать ещё
+        {{ t('common.showMore') }}
       </VButton>
     </section>
   </div>

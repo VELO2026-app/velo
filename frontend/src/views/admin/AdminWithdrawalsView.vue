@@ -75,14 +75,16 @@
           </div>
           <div class="wrow__right">
             <span class="wrow__time">{{ formatRelative(w.created_at) }}</span>
-            <span class="wrow__net">К получению {{ net(w) }}</span>
+            <span class="wrow__net">{{
+              t('adminScreens.adminWithdrawals.toReceive', { amount: net(w) })
+            }}</span>
           </div>
         </VCard>
       </div>
 
       <div v-if="hasMore" class="admin-withdrawals__more">
         <VButton variant="outline" block :loading="loadingMore" @click="loadMore">
-          Показать ещё
+          {{ t('common.showMore') }}
         </VButton>
       </div>
     </template>

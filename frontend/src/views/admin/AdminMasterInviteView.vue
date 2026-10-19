@@ -27,12 +27,11 @@
         t('adminScreens.adminMasterInvite.oneTimeLinkLabel')
       }}</span>
       <p class="invite__desc">
-        Создайте ссылку и отправьте её будущему мастеру. Она одноразовая: сработает у первого, кто
-        её откроет, — после этого погашается. Срок действия — 7 дней.
+        {{ t('adminScreens.adminMasterInvite.intro') }}
       </p>
 
       <VButton variant="primary" block :loading="creating" @click="onCreate">
-        Создать ссылку
+        {{ t('adminScreens.adminMasterInvite.create') }}
       </VButton>
     </VCard>
 

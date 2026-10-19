@@ -48,7 +48,7 @@
           class="welcome__button welcome__button--primary"
           @click="$emit('enter')"
         >
-          Войти
+          {{ t('auth.enter') }}
         </button>
       </div>
     </div>

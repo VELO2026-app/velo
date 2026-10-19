@@ -14,10 +14,10 @@
     <p class="topup-result__text">{{ t('user.screens.topupCancel.text') }}</p>
     <div class="topup-result__actions">
       <VButton variant="primary" size="lg" block @click="router.push({ name: 'user-topup' })">
-        Попробовать снова
+        {{ t('user.screens.topupCancel.retry') }}
       </VButton>
       <VButton variant="ghost" block @click="router.push({ name: 'user-dashboard' })">
-        На главную
+        {{ t('common.backHome') }}
       </VButton>
     </div>
   </div>

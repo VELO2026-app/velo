@@ -16,7 +16,7 @@
 
 <template>
   <div class="ai-summary">
-    <VHeader title="AI-саммари" show-back @back="router.back()" />
+    <VHeader :title="t('user.screens.aiSummary.title')" show-back @back="router.back()" />
 
     <div class="ai-summary__body">
       <span class="ai-summary__icon">
@@ -24,7 +24,7 @@
       </span>
       <h1 class="ai-summary__title">{{ t('user.screens.aiSummary.inDevelopment') }}</h1>
       <p class="ai-summary__text">
-        Скоро здесь появится ваше персональное саммари недели с рекомендациями.
+        {{ t('user.screens.aiSummary.stub') }}
       </p>
       <VButton variant="primary" size="lg" @click="goToDashboard">{{
         t('common.backHome')

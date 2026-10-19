@@ -25,7 +25,12 @@
 <template>
   <div class="support">
     <!-- Header hidden on the terminal screen (no back — «На главную» is the exit). -->
-    <VHeader v-if="!submitted" title="Поддержка" show-back @back="router.back()" />
+    <VHeader
+      v-if="!submitted"
+      :title="t('user.screens.support.title')"
+      show-back
+      @back="router.back()"
+    />
 
     <!-- ===================== TERMINAL (honest) ===================== -->
     <div v-if="submitted" class="support__done">
@@ -35,7 +40,7 @@
       <h2 class="support__ok-title">{{ t('user.screens.support.toast.thanks') }}</h2>
       <p class="support__ok-text">{{ t('user.screens.support.thanks.text') }}</p>
       <VButton variant="primary" block class="support__ok-cta" @click="goHome">
-        На главную
+        {{ t('common.backHome') }}
       </VButton>
     </div>
 
@@ -86,7 +91,7 @@
         class="support__submit"
         @click="onSubmit"
       >
-        Отправить
+        {{ t('user.screens.support.submit') }}
       </VButton>
     </div>
   </div>

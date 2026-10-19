@@ -35,7 +35,7 @@
 
 <template>
   <div class="school-members">
-    <VHeader title="Участники" show-back @back="goBack" />
+    <VHeader :title="t('user.screens.schoolMembers.title')" show-back @back="goBack" />
 
     <div class="school-members__content">
       <!-- The glass switcher (§1.11): the merged screen's tab strip. Hidden
@@ -103,8 +103,15 @@
             <div class="school-members__blocked-text">
               <span class="school-members__blocked-name">{{ person.name }}</span>
               <span class="school-members__blocked-meta">
-                {{ person.kind === 'master' ? 'Мастер' : 'Ученик' }} · заблокирован
-                {{ formatShortDate(person.blocked_at) }}
+                {{
+                  t('user.screens.schoolMembers.blockedMeta', {
+                    kind:
+                      person.kind === 'master'
+                        ? t('user.screens.schoolMembers.roleMaster')
+                        : t('user.screens.schoolMembers.roleStudent'),
+                    date: formatShortDate(person.blocked_at),
+                  })
+                }}
               </span>
             </div>
             <VButton
@@ -113,7 +120,7 @@
               :loading="unblocking === person.user_id"
               @click="onUnblock(person)"
             >
-              Разблокировать
+              {{ t('user.screens.schoolMembers.unblock') }}
             </VButton>
           </div>
         </template>
@@ -131,8 +138,10 @@
         <VEmptyState
           v-if="items.length === 0"
           icon="group"
-          :title="trimmedSearch ? 'Никого не найдено' : emptyTitle"
-          :description="trimmedSearch ? 'Попробуйте изменить запрос' : emptyDescription"
+          :title="trimmedSearch ? t('user.screens.schoolMembers.noHits') : emptyTitle"
+          :description="
+            trimmedSearch ? t('user.screens.schoolMembers.searchHint') : emptyDescription
+          "
         >
           <template v-if="kind === 'blocked'" #icon>
             <IconLock :size="48" />
@@ -140,7 +149,11 @@
         </VEmptyState>
 
         <VLoader v-if="loading && items.length > 0" size="sm" />
-        <VShowMore v-if="hasMore && !loading" label="Показать ещё" @click="loadMore" />
+        <VShowMore
+          v-if="hasMore && !loading"
+          :label="t('user.screens.schoolMembers.showMore')"
+          @click="loadMore"
+        />
       </template>
     </div>
 
@@ -260,11 +273,15 @@ function kindFromQuery(): MemberTab {
 const kind = ref<MemberTab>(kindFromQuery())
 
 const searchPlaceholder = computed(() =>
-  kind.value === 'master' ? 'Искать мастера...' : 'Искать ученика...',
+  kind.value === 'master'
+    ? t('user.screens.schoolMembers.empty.searchMaster')
+    : t('user.screens.schoolMembers.empty.searchStudent'),
 )
 const emptyTitle = computed(() => {
-  if (kind.value === 'blocked') return 'Пока нет заблокированных'
-  return kind.value === 'master' ? 'В школе пока нет мастеров' : 'В школе пока нет учеников'
+  if (kind.value === 'blocked') return t('user.screens.schoolMembers.empty.blocked')
+  return kind.value === 'master'
+    ? t('user.screens.schoolMembers.empty.masters')
+    : t('user.screens.schoolMembers.empty.students')
 })
 const emptyDescription = computed(() => {
   if (kind.value === 'blocked') {
@@ -275,8 +292,10 @@ const emptyDescription = computed(() => {
     : t('user.screens.schoolMembers.students.empty')
 })
 const errorTitle = computed(() => {
-  if (kind.value === 'blocked') return 'Не удалось загрузить заблокированных'
-  return kind.value === 'master' ? 'Не удалось загрузить мастеров' : 'Не удалось загрузить учеников'
+  if (kind.value === 'blocked') return t('user.screens.schoolMembers.loadFailed.blocked')
+  return kind.value === 'master'
+    ? t('user.screens.schoolMembers.loadFailed.masters')
+    : t('user.screens.schoolMembers.loadFailed.students')
 })
 
 // FE-93: this screen mounts in the master zone only.

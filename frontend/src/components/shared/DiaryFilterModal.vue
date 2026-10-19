@@ -368,7 +368,7 @@ function isInRange(key: string | null): boolean {
 }
 
 const dateSummary = computed(() => {
-  if (!draftFrom.value) return 'Выбрать дату'
+  if (!draftFrom.value) return t('composer.pickDate')
   if (!draftTo.value) return draftFrom.value
   return `${draftFrom.value} — ${draftTo.value}`
 })

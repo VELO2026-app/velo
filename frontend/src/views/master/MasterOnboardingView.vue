@@ -46,7 +46,11 @@
       <VPaginationDots :total="TOTAL_STEPS" :active="step" />
 
       <button type="button" class="master-onboarding__button" @click="onPrimaryAction">
-        {{ isLastStep ? 'Войти в кабинет' : 'Далее' }}
+        {{
+          isLastStep
+            ? t('masterScreens.masterOnboarding.enterCabinet')
+            : t('masterScreens.masterOnboarding.next')
+        }}
       </button>
     </div>
   </div>

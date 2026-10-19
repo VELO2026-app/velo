@@ -40,8 +40,16 @@
 
     <!-- Stats: practices + hours -->
     <div class="profile__stats">
-      <VStatCard class="profile__stat" :value="practicesAttended" label="Практик" />
-      <VStatCard class="profile__stat" :value="hoursLabel" label="Часов" />
+      <VStatCard
+        class="profile__stat"
+        :value="practicesAttended"
+        :label="t('user.screens.userProfile.practicesStat')"
+      />
+      <VStatCard
+        class="profile__stat"
+        :value="hoursLabel"
+        :label="t('user.screens.userProfile.hoursStat')"
+      />
     </div>
 
     <!-- Menu sections -->
@@ -50,10 +58,13 @@
       <div class="profile__menu-section">
         <div class="profile__menu-title">{{ t('user.screens.userProfile.section.account') }}</div>
         <div class="profile__menu-list">
-          <VMenuRow label="Редактировать профиль" @click="onEditProfile">
+          <VMenuRow :label="t('user.screens.userProfile.menu.editProfile')" @click="onEditProfile">
             <template #icon><IconPen :size="20" /></template>
           </VMenuRow>
-          <VMenuRow label="Мои бронирования" @click="router.push({ name: 'user-bookings' })">
+          <VMenuRow
+            :label="t('user.screens.userProfile.menu.bookings')"
+            @click="router.push({ name: 'user-bookings' })"
+          >
             <template #icon><IconBookings :size="20" /></template>
           </VMenuRow>
           <VMenuRow
@@ -63,12 +74,19 @@
           >
             <template #icon><IconPen :size="20" /></template>
           </VMenuRow>
-          <VMenuRow label="Сообщения" :dot="hasUnreadMessages" @click="onMessages">
+          <VMenuRow
+            :label="t('user.screens.userProfile.menu.messages')"
+            :dot="hasUnreadMessages"
+            @click="onMessages"
+          >
             <template #icon><IconMessages :size="20" /></template>
           </VMenuRow>
           <!-- FE-19 (GT P3): schools. The only "groups" concept a plain user
                meets -- the master's student groups are invisible to them. -->
-          <VMenuRow label="Мои группы" @click="router.push({ name: 'user-curator-groups' })">
+          <VMenuRow
+            :label="t('user.screens.userProfile.menu.groups')"
+            @click="router.push({ name: 'user-curator-groups' })"
+          >
             <template #icon><IconGroup :size="20" /></template>
           </VMenuRow>
         </div>
@@ -78,15 +96,24 @@
       <div class="profile__menu-section">
         <div class="profile__menu-title">{{ t('user.screens.userProfile.section.settings') }}</div>
         <div class="profile__menu-list">
-          <VMenuRow label="Уведомления" @click="onNotifications">
+          <VMenuRow
+            :label="t('user.screens.userProfile.menu.notifications')"
+            @click="onNotifications"
+          >
             <template #icon><IconBell :size="20" /></template>
           </VMenuRow>
-          <VMenuRow label="Часовой пояс" @click="onTimezoneSettings">
+          <VMenuRow
+            :label="t('user.screens.userProfile.menu.timezone')"
+            @click="onTimezoneSettings"
+          >
             <template #icon><IconGlobe :size="20" /></template>
           </VMenuRow>
           <!-- BE-138: tokens for the user's AI (MCP) clients. Always shown:
                with MCP switched off the screen itself says "unavailable". -->
-          <VMenuRow label="Подключения ИИ" @click="onAiConnections">
+          <VMenuRow
+            :label="t('user.screens.userProfile.menu.aiConnections')"
+            @click="onAiConnections"
+          >
             <template #icon><IconBrain :size="20" /></template>
           </VMenuRow>
         </div>
@@ -96,10 +123,10 @@
       <div class="profile__menu-section">
         <div class="profile__menu-title">{{ t('user.screens.userProfile.section.help') }}</div>
         <div class="profile__menu-list">
-          <VMenuRow label="Поддержка" @click="onSupport">
+          <VMenuRow :label="t('user.screens.userProfile.menu.support')" @click="onSupport">
             <template #icon><IconSupport :size="20" /></template>
           </VMenuRow>
-          <VMenuRow label="Поделиться" @click="onShare">
+          <VMenuRow :label="t('user.screens.userProfile.menu.share')" @click="onShare">
             <template #icon><IconShare :size="20" /></template>
           </VMenuRow>
         </div>
@@ -115,8 +142,8 @@
             variant="primary"
             :label="
               authStore.role === 'admin'
-                ? 'Вернуться в режим администратора'
-                : 'Вернуться в режим мастера'
+                ? t('user.screens.userProfile.backToAdmin')
+                : t('user.screens.userProfile.backToMaster')
             "
             @click="returnToNativeMode"
           />
@@ -129,7 +156,12 @@
       <!-- Logout -->
       <div class="profile__menu-section">
         <div class="profile__menu-list">
-          <VMenuRow label="Выйти" variant="danger" :show-arrow="false" @click="onLogout">
+          <VMenuRow
+            :label="t('user.screens.userProfile.menu.logout')"
+            variant="danger"
+            :show-arrow="false"
+            @click="onLogout"
+          >
             <template #icon><IconLogout :size="20" /></template>
           </VMenuRow>
         </div>

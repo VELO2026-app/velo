@@ -45,7 +45,11 @@
          PracticeDetailView carried before №746). -->
     <template #practice-meta>
       <span class="form-shell__practice-meta-cell">
-        с {{ practice?.master_name ?? 'Мастером' }}
+        {{
+          t('shared.form.hostLine', {
+            name: practice?.master_name ?? t('shared.form.hostFallback'),
+          })
+        }}
       </span>
       <span class="form-shell__practice-meta-cell">
         <IconCalendar :size="14" />{{ t('user.screens.reflection.=common:missedYou') }}</span

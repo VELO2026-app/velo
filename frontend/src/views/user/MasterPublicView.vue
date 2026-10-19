@@ -34,14 +34,14 @@
 
 <template>
   <div class="master-public">
-    <VHeader title="Мастер" show-back @back="router.back()">
+    <VHeader :title="t('user.screens.masterPublic.title')" show-back @back="router.back()">
       <!-- The ⋯ menu: «Написать сообщение» for EVERY visitor (owner
            2026-09-30 -- replaced the «Задать вопрос» button). In the
            curator's school context (the roster's master rows navigate here
            with ?groupId=) it also carries the curator's actions: «Изменить
            роль» (BE-59 demote) and «Заблокировать» (BE-79 (2) block). -->
       <template #action>
-        <VMenu aria-label="Действия с мастером">
+        <VMenu :aria-label="t('user.screens.masterPublic.actionsAria')">
           <template #default="{ close }">
             <VMenuItem
               :icon="IconMessages"
@@ -112,7 +112,9 @@
 
         <div v-if="profile.experience_years != null" class="master-public__pills">
           <span class="master-public__pill">
-            {{ profile.experience_years }} {{ pluralYears(profile.experience_years) }} опыта
+            {{ profile.experience_years }}
+            {{ pluralYears(profile.experience_years) }}
+            {{ t('user.screens.masterPublic.experienceSuffix') }}
           </span>
         </div>
 
@@ -137,7 +139,7 @@
            «Ближайшие», the section never disappears; default-open, an empty
            profile gets the honest note, the header stays as the entry
            point). -->
-      <VAccordion title="Методы" default-open>
+      <VAccordion :title="t('user.screens.masterPublic.methodsSection')" default-open>
         <div v-if="profile.methods?.length" class="master-public__chips">
           <VTag
             v-for="(chip, i) in methodChips"
@@ -165,9 +167,9 @@
            PLACEHOLDER until the curator-analytics contract exists (same
            pattern as the Блок tab) -- no endpoint serves a member master's
            figures to the school curator yet. -->
-      <VAccordion v-if="schoolContext" title="Аналитика">
+      <VAccordion v-if="schoolContext" :title="t('user.screens.masterPublic.analyticsSection')">
         <p class="master-public__note">
-          Аналитика мастера появится здесь после подключения данных.
+          {{ t('user.screens.masterPublic.analyticsStub') }}
         </p>
       </VAccordion>
 
@@ -205,7 +207,7 @@
          school page: master AND school go to the create flow (FE-92). -->
     <div v-if="schoolContext" class="master-public__cta">
       <VButton variant="primary" block size="lg" @click="goCreatePractice">
-        Создать практику
+        {{ t('user.screens.masterPublic.createPractice') }}
       </VButton>
     </div>
 
@@ -243,7 +245,7 @@
             :disabled="roleConfirmDisabled"
             @click="onRoleConfirm"
           >
-            Изменить
+            {{ t('user.screens.masterPublic.change') }}
           </VButton>
         </div>
       </div>

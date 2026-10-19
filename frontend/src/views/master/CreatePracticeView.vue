@@ -39,7 +39,7 @@
 <template>
   <div class="create-practice">
     <!-- Header -->
-    <VHeader title="Новая практика" show-back @back="onBack" />
+    <VHeader :title="t('masterScreens.createPractice.title')" show-back @back="onBack" />
 
     <div class="create-practice__content">
       <!-- Draft restore prompt (B2): a stored draft is NOT auto-filled — the
@@ -120,7 +120,11 @@
           {{ t('masterScreens.createPractice.sections.basics') }}<span class="cp-req">*</span>
         </h2>
 
-        <VInput v-model="form.title" placeholder="Название" :error="errors.title" />
+        <VInput
+          v-model="form.title"
+          :placeholder="t('masterScreens.createPractice.titlePlaceholder')"
+          :error="errors.title"
+        />
         <span
           class="create-practice__field-error"
           :class="{ 'create-practice__field-error--show': !!errors.title }"
@@ -145,7 +149,11 @@
         <!-- Вид практики = style. Показываем только если у направления есть виды
              (Q4=А: без явного «Без вида», не выбрано = null, необязательное). -->
         <div v-if="styleOptionsForForm.length > 0">
-          <VSelect v-model="form.style" placeholder="Вид практики" :options="styleOptionsForForm" />
+          <VSelect
+            v-model="form.style"
+            :placeholder="t('masterScreens.createPractice.stylePlaceholder')"
+            :options="styleOptionsForForm"
+          />
           <!-- Rhythm reserve (owner 2026-10-05): style never errors (optional),
                but every other plate in a section is followed by the constant
                17px error slot — without it «Вид практики» sat 2px off
@@ -188,7 +196,7 @@
               }"
               @click="showDate = true"
             >
-              {{ form.date ? dateDisplay : 'Дата' }}
+              {{ form.date ? dateDisplay : t('masterScreens.createPractice.pickers.date') }}
             </button>
           </div>
           <span
@@ -210,7 +218,7 @@
               }"
               @click="showTime = true"
             >
-              {{ form.time || 'Время' }}
+              {{ form.time || t('masterScreens.createPractice.pickers.time') }}
             </button>
           </div>
           <span
@@ -248,7 +256,10 @@
 
         <div>
           <VCard class="create-practice__repeat" padding="none">
-            <VCheckbox v-model="form.is_recurring" label="Сделать регулярной" />
+            <VCheckbox
+              v-model="form.is_recurring"
+              :label="t('masterScreens.createPractice.recurring.toggle')"
+            />
           </VCard>
         </div>
 
@@ -269,7 +280,10 @@
           <template v-if="form.recurrence !== 'daily'">
             <div class="create-practice__seal-row">
               <div class="create-practice__days create-practice__grow">
-                <VDayPicker v-model="form.recurrence_days" aria-label="Дни недели для повтора" />
+                <VDayPicker
+                  v-model="form.recurrence_days"
+                  :aria-label="t('masterScreens.createPractice.recurring.daysAria')"
+                />
               </div>
             </div>
             <span
@@ -295,7 +309,11 @@
                 :class="{ 'create-practice__picker--empty': !form.recurrence_end_date }"
                 @click="showEndDate = true"
               >
-                {{ form.recurrence_end_date ? endDateDisplay : 'Дата окончания' }}
+                {{
+                  form.recurrence_end_date
+                    ? endDateDisplay
+                    : t('masterScreens.createPractice.pickers.endDate')
+                }}
               </button>
 
               <!-- После числа повторений: ручной ввод количества (#11). -->
@@ -430,7 +448,7 @@
 
       <!-- Submit -->
       <VButton variant="primary" block size="lg" :loading="submitting" @click="submit">
-        Создать практику
+        {{ t('masterScreens.createPractice.submit') }}
       </VButton>
 
       <!-- Picker sheets (teleport to body; open on field tap). -->

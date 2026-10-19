@@ -18,10 +18,10 @@
     </div>
     <div class="topup-result__actions">
       <VButton variant="primary" size="lg" block @click="router.push({ name: 'user-dashboard' })">
-        На главную
+        {{ t('common.backHome') }}
       </VButton>
       <VButton variant="ghost" block @click="router.push({ name: 'user-topup' })">
-        Пополнить ещё
+        {{ t('user.screens.topupSuccess.topupAgain') }}
       </VButton>
     </div>
   </div>

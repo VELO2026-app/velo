@@ -50,11 +50,19 @@
 
     <!-- Info card -->
     <VCard class="live__info">
-      <h2 class="live__title">{{ practice?.title ?? 'Практика' }}</h2>
-      <p class="live__master">с {{ practice?.master_name ?? 'Мастером' }}</p>
+      <h2 class="live__title">
+        {{ practice?.title ?? t('user.screens.practiceLive.titleFallback') }}
+      </h2>
+      <p class="live__master">
+        {{
+          t('user.screens.practiceLive.withMaster', {
+            name: practice?.master_name ?? t('shared.form.hostFallback'),
+          })
+        }}
+      </p>
       <span class="live__badge">
         <span class="live__badge-dot" />
-        В эфире
+        {{ t('user.screens.practiceLive.liveBadge') }}
       </span>
     </VCard>
 
@@ -125,7 +133,7 @@
           :loading="entering"
           @click="onStart"
         >
-          Начать
+          {{ t('user.screens.practiceLive.start') }}
         </VButton>
       </template>
 
@@ -134,7 +142,7 @@
              "still preparing". A participant has no retry action (only the
              master does, MasterDashboardView) -- this just tells the truth. -->
         <VBadge v-if="zoomEntry?.kind === 'failed'" variant="error" class="live__zoom-note">
-          Не удалось создать встречу — обратитесь к мастеру
+          {{ t('user.screens.practiceLive.zoomFailed') }}
         </VBadge>
 
         <p v-if="cameraHint" class="live__camera-hint">{{ CAMERA_HINT }}</p>
@@ -176,7 +184,7 @@
         </VButton>
 
         <VButton variant="danger" size="lg" block :loading="leaving" @click="onLeave">
-          Покинуть практику
+          {{ t('user.screens.practiceLive.leave') }}
         </VButton>
       </template>
     </div>

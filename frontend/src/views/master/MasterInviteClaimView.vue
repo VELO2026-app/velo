@@ -32,7 +32,7 @@ Verified masters never reach here: applyGuard bounces them to the dashboard.
           {{ t('masterScreens.masterInviteClaim.verifyFailed') }}
         </h2>
         <p class="invite-claim__subtitle">
-          Проблема с соединением. Проверьте интернет и попробуйте ещё раз.
+          {{ t('masterScreens.masterInviteClaim.loadFailed') }}
         </p>
         <div class="invite-claim__actions">
           <VButton variant="primary" block :loading="claiming" @click="claim">{{
@@ -47,7 +47,7 @@ Verified masters never reach here: applyGuard bounces them to the dashboard.
         <p class="invite-claim__subtitle">{{ errorDescription }}</p>
         <div class="invite-claim__actions">
           <VButton variant="primary" block @click="router.replace({ name: 'user-dashboard' })">
-            На главную
+            {{ t('common.backHome') }}
           </VButton>
         </div>
       </template>

@@ -54,7 +54,7 @@
          Deep-link-safe: pop the existing detail entry (router.back) instead of
          PUSHing a new one — pushing grew history and ping-ponged edit<->detail
          (the back-loop, operator 2026-06-24). Mirror of CreatePracticeView.onBack. -->
-    <VHeader title="Редактировать" show-back @back="onBack" />
+    <VHeader :title="t('masterScreens.editPractice.title')" show-back @back="onBack" />
 
     <!-- Loading -->
     <div v-if="loading" class="edit-practice__loader">
@@ -63,9 +63,9 @@
 
     <!-- Error / not found -->
     <div v-else-if="!practice" class="edit-practice__content">
-      <VEmptyState icon="warning" title="Практика не найдена">
+      <VEmptyState icon="warning" :title="t('masterScreens.editPractice.notFound')">
         <VButton size="sm" variant="outline" @click="router.push({ name: 'master-practices' })">
-          Назад
+          {{ t('ui.back') }}
         </VButton>
       </VEmptyState>
     </div>
@@ -98,7 +98,11 @@
                ДОБАВЛЕНЫ (operator, T2, 2026-07-15 — override навигатора: не
                отдельным батчем позже, а прямо в этом). Дата и Zoom возвращены
                по логике (см. комментарии ниже). -->
-          <VInput v-model="form.title" label="Название" :error="errors.title" />
+          <VInput
+            v-model="form.title"
+            :label="t('masterScreens.editPractice.fields.name')"
+            :error="errors.title"
+          />
 
           <!-- Направление — options catalog-first (T2 stage 2), см. CreatePracticeView. -->
           <VSelect
@@ -112,7 +116,11 @@
           <!-- Вид практики — показываем только если у направления есть виды
                (Q4=А, mirrors CreatePracticeView: без явного «Без вида»). -->
           <div v-if="styleOptionsForForm.length > 0">
-            <VSelect v-model="form.style" label="Вид практики" :options="styleOptionsForForm" />
+            <VSelect
+              v-model="form.style"
+              :label="t('masterScreens.editPractice.fields.style')"
+              :options="styleOptionsForForm"
+            />
           </div>
 
           <!-- Дата — DS-пикер (реш. В: возвращена по логике — перенос практики
@@ -127,7 +135,7 @@
               :class="{ 'edit-practice__picker--empty': !form.date }"
               @click="showDate = true"
             >
-              {{ form.date ? dateDisplay : 'Выберите дату' }}
+              {{ form.date ? dateDisplay : t('masterScreens.editPractice.pickers.date') }}
             </button>
           </div>
 
@@ -142,7 +150,7 @@
               :class="{ 'edit-practice__picker--empty': !form.time }"
               @click="showTime = true"
             >
-              {{ form.time || 'Выберите время' }}
+              {{ form.time || t('masterScreens.editPractice.pickers.time') }}
             </button>
           </div>
 
@@ -205,7 +213,12 @@
             />
           </div>
 
-          <VTextarea v-model="form.description" label="Описание" :rows="4" autogrow />
+          <VTextarea
+            v-model="form.description"
+            :label="t('masterScreens.editPractice.fields.description')"
+            :rows="4"
+            autogrow
+          />
 
           <VTextarea
             v-model="form.contraindications"
@@ -232,7 +245,7 @@
             :disabled="anyLoading"
             @click="save"
           >
-            Сохранить
+            {{ t('ui.save') }}
           </VButton>
         </fieldset>
 
@@ -255,7 +268,7 @@
             :disabled="anyLoading"
             @click="publish"
           >
-            Опубликовать практику
+            {{ t('masterScreens.editPractice.actions.publish') }}
           </VButton>
 
           <!-- «Начать эфир» (scheduled->live) removed (operator 2026-06-24): it
@@ -278,7 +291,7 @@
             :disabled="anyLoading"
             @click="confirmDelete"
           >
-            Удалить черновик
+            {{ t('masterScreens.editPractice.actions.deleteDraft') }}
           </VButton>
 
           <!-- scheduled / live -> cancelled -->
@@ -290,7 +303,7 @@
             :disabled="anyLoading"
             @click="confirmCancel"
           >
-            Отменить практику
+            {{ t('masterScreens.editPractice.actions.cancelPractice') }}
           </VButton>
         </div>
       </div>
@@ -762,9 +775,9 @@ async function save(): Promise<void> {
       )
       confirmDialog.message =
         n === 1
-          ? `${n} ${noun} не попадёт на эту практику — он не входит в выбранную аудиторию. ` +
+          ? t('masterScreens.editPractice.confirm.strandedHeadOne', { n, noun }) +
             t('masterScreens.editPractice.confirm.single')
-          : `${n} ${noun} не попадут на эту практику — они не входят в выбранную аудиторию. ` +
+          : t('masterScreens.editPractice.confirm.strandedHeadMany', { n, noun }) +
             t('masterScreens.editPractice.confirm.plural')
       confirmDialog.confirmLabel = t('masterScreens.editPractice.saveAnyway')
       confirmDialog.danger = false

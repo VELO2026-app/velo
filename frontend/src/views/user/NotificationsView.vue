@@ -47,7 +47,7 @@
 
 <template>
   <div class="notifications">
-    <VHeader title="Уведомления" show-back @back="router.back()" />
+    <VHeader :title="t('user.screens.notifications.title')" show-back @back="router.back()" />
 
     <div class="notifications__content">
       <div class="notifications__row">

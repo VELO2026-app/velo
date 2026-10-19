@@ -61,12 +61,18 @@
             <VAvatar :name="ownerName(p)" size="md" />
             <div class="pcard__owner">
               <span class="pcard__owner-label">{{
-                p.type === 'company' ? 'Компания' : 'Мастер'
+                p.type === 'company'
+                  ? t('adminScreens.adminPromos.typeCompany')
+                  : t('adminScreens.adminPromos.typeMaster')
               }}</span>
               <span class="pcard__owner-name">{{ ownerName(p) }}</span>
             </div>
             <VBadge :variant="p.is_active ? 'success' : 'muted'">
-              {{ p.is_active ? 'Активен' : 'Деактивирован' }}
+              {{
+                p.is_active
+                  ? t('adminScreens.adminPromos.active')
+                  : t('adminScreens.adminPromos.inactive')
+              }}
             </VBadge>
           </div>
 
@@ -76,15 +82,20 @@
             <div class="pcard__info">
               <div class="pcard__code">{{ p.code }}</div>
               <div class="pcard__meta">
-                Скидка: {{ p.discount_percent }}% · Использовано: {{ usedLabel(p) }}<br />
-                Действует до: {{ untilLabel(p) }}
+                {{
+                  t('adminScreens.adminPromos.discountLine', {
+                    n: p.discount_percent,
+                    used: usedLabel(p),
+                  })
+                }}<br />
+                {{ t('adminScreens.adminPromos.untilLine', { label: untilLabel(p) }) }}
               </div>
             </div>
           </div>
 
           <div v-if="p.is_active" class="pcard__actions">
             <VButton variant="outline" :loading="deactivatingId === p.id" @click="askDeactivate(p)">
-              Деактивировать
+              {{ t('adminScreens.adminPromos.deactivate') }}
             </VButton>
           </div>
         </VCard>
@@ -92,7 +103,7 @@
 
       <div v-if="hasMore" class="admin-promos__more">
         <VButton variant="outline" block :loading="loadingMore" @click="loadMore">
-          Показать ещё
+          {{ t('common.showMore') }}
         </VButton>
       </div>
     </template>
@@ -157,9 +168,9 @@ const error = ref(false)
 const headerCount = computed<string>(() => (total.value ? String(total.value) : '—'))
 
 const emptyTitle = computed<string>(() => {
-  if (filter.value === 'master') return 'Нет промокодов мастеров'
-  if (filter.value === 'company') return 'Нет промокодов компании'
-  if (filter.value === 'inactive') return 'Нет деактивированных промокодов'
+  if (filter.value === 'master') return t('adminScreens.adminPromos.empty.master')
+  if (filter.value === 'company') return t('adminScreens.adminPromos.empty.company')
+  if (filter.value === 'inactive') return t('adminScreens.adminPromos.empty.inactive')
   return t('adminScreens.adminPromos.empty.title')
 })
 

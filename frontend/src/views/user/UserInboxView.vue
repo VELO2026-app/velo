@@ -37,7 +37,7 @@
 
 <template>
   <div class="user-inbox">
-    <VHeader title="Уведомления" show-back @back="router.back()">
+    <VHeader :title="t('user.screens.userInbox.title')" show-back @back="router.back()">
       <template v-if="unread > 0" #action>
         <button type="button" class="user-inbox__read-all" @click="markAll">
           {{ t('user.screens.userInbox.readAll') }}
@@ -50,7 +50,7 @@
     </div>
 
     <div v-else-if="error" class="user-inbox__center">
-      <VEmptyState title="Не удалось загрузить" :description="error">
+      <VEmptyState :title="t('user.screens.userInbox.loadFailed')" :description="error">
         <template #icon>
           <IconBellPlain :size="48" />
         </template>

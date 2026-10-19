@@ -43,7 +43,11 @@
       <VBackButton
         class="diary-feed__back"
         variant="glass"
-        :aria-label="filterActive ? 'Сбросить фильтр' : 'Выйти из дневника'"
+        :aria-label="
+          filterActive
+            ? t('user.screens.diaryFeed.resetFilterAria')
+            : t('user.screens.diaryFeed.exitAria')
+        "
         @click="onBack"
       />
       <!-- «...» на одной строке со стрелкой, у правого рельса (owner
@@ -122,7 +126,11 @@
                TARGET view (what tapping switches to). -->
           <VMenuItem
             v-if="SHOW_VIEW_TOGGLE"
-            :ariaLabel="viewMode === 'list' ? 'Показать картой' : 'Показать списком'"
+            :ariaLabel="
+              viewMode === 'list'
+                ? t('user.screens.diaryFeed.showMapAria')
+                : t('user.screens.diaryFeed.showListAria')
+            "
             @click="
               () => {
                 toggleView()
@@ -324,7 +332,7 @@
     <div v-if="deletedEntryId" class="diary-feed__undo">
       <span class="diary-feed__undo-text">{{ t('user.screens.diaryFeed.toast.deleted') }}</span>
       <button type="button" class="diary-feed__undo-btn" :disabled="undoing" @click="onUndoDelete">
-        Отменить
+        {{ t('user.screens.diaryFeed.cancel') }}
       </button>
     </div>
 

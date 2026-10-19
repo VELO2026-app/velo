@@ -127,7 +127,7 @@ function toggle(groupId: string): void {
 
 async function onSave(): Promise<void> {
   if (selected.value.size === 0) {
-    toast.error('Выберите хотя бы одну группу')
+    toast.error(t('shared.components.pickGroup'))
     return
   }
   try {
@@ -137,11 +137,11 @@ async function onSave(): Promise<void> {
     if (removeFromCurrent.value && props.currentGroupId) {
       await removeGroupMember(props.currentGroupId, props.studentId)
     }
-    toast.success('Добавлено')
+    toast.success(t('shared.components.added'))
     emit('saved')
     emit('close')
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось добавить в группу'))
+    toast.error(extractApiError(e, t('shared.components.addFailed')))
   }
 }
 </script>

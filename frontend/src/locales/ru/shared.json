@@ -59,6 +59,18 @@
       "pairsMore": "+ ещё {count} пару | + ещё {count} пары | + ещё {count} пар",
       "reviews": "Отзывы",
       "noReviews": "Отзывов пока нет"
+    },
+    "components": {
+      "pickGroup": "Выберите хотя бы одну группу",
+      "added": "Добавлено",
+      "addFailed": "Не удалось добавить в группу",
+      "removed": "Удалено",
+      "removeFailed": "Не удалось удалить из группы",
+      "moodEmpty": "Пока нет отметок",
+      "moodOf": "{n} из {total}",
+      "masterFallback": "Мастер",
+      "temporarilyHidden": "Временно недоступен",
+      "menuAria": "Меню"
     }
   }
 }

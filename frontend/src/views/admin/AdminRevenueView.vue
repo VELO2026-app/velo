@@ -47,8 +47,11 @@
       </VMetricHero>
 
       <div class="admin-detail__stats2">
-        <VStatCard :value="commissionLabel" label="Комиссия" />
-        <VStatCard :value="payoutLabel" label="Выплачено" />
+        <VStatCard
+          :value="commissionLabel"
+          :label="t('adminScreens.adminRevenue.commissionStat')"
+        />
+        <VStatCard :value="payoutLabel" :label="t('adminScreens.adminRevenue.payoutStat')" />
       </div>
 
       <h3 class="admin-detail__section">{{ t('adminScreens.adminRevenue.byMasters') }}</h3>
@@ -108,7 +111,9 @@ const periodOptions: SegmentOption[] = [
   { value: 'month', label: t('adminScreens.adminRevenue.mesyats') },
 ]
 const revenueHeroLabel = computed<string>(() =>
-  period.value === 'week' ? 'Выручка за неделю' : 'Выручка за месяц',
+  period.value === 'week'
+    ? t('adminScreens.adminRevenue.titleWeek')
+    : t('adminScreens.adminRevenue.titleMonth'),
 )
 
 // VSegment emits a plain string; narrow it back to the period union.

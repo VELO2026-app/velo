@@ -24,7 +24,7 @@
 
 <template>
   <div class="waitlist-confirm">
-    <VHeader title="Место в практике" show-back @back="goBack" />
+    <VHeader :title="t('user.screens.waitlistConfirm.title')" show-back @back="goBack" />
 
     <div v-if="loading" class="waitlist-confirm__state" role="status"><VLoader /></div>
 
@@ -52,7 +52,7 @@
 
       <div v-if="state === 'open'" class="waitlist-confirm__body">
         <p class="waitlist-confirm__lead">
-          Освободилось место. Подтвердите участие до
+          {{ t('user.screens.waitlistConfirm.leadLine') }}
           <b>{{ formatFeedDateTime(entry.expires_at!, entry.practice.timezone) }}</b
           >.
         </p>

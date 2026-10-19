@@ -23,7 +23,7 @@
 
 <template>
   <div class="roster">
-    <VHeader title="Посещаемость" show-back @back="router.back()" />
+    <VHeader :title="t('masterScreens.attendanceRoster.title')" show-back @back="router.back()" />
 
     <!-- Loading -->
     <div v-if="loading" class="roster__loader">
@@ -32,7 +32,11 @@
 
     <!-- Error -->
     <div v-else-if="error" class="roster__content">
-      <VEmptyState icon="warning" title="Не удалось загрузить посещаемость" :description="error">
+      <VEmptyState
+        icon="warning"
+        :title="t('masterScreens.attendanceRoster.loadFailed')"
+        :description="error"
+      >
         <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
       </VEmptyState>
     </div>
@@ -51,8 +55,16 @@
 
         <!-- Stats -->
         <div class="roster__stats">
-          <VStatCard :value="attendance.attended" label="Присутствовало" value-tone="teal" />
-          <VStatCard :value="attendance.no_show" label="Не пришли" value-tone="rose" />
+          <VStatCard
+            :value="attendance.attended"
+            :label="t('masterScreens.attendanceRoster.attendedStat')"
+            value-tone="teal"
+          />
+          <VStatCard
+            :value="attendance.no_show"
+            :label="t('masterScreens.attendanceRoster.noShowStat')"
+            value-tone="rose"
+          />
         </div>
 
         <!-- T21-1 (PROMPT №541): the unmatched bucket, made VISIBLE here too --
@@ -64,7 +76,7 @@
           variant="warning"
           class="roster__unmatched-note"
         >
-          {{ attendance.unmatched_count }} участник(а) Zoom не удалось сопоставить с записью
+          {{ t('masterScreens.attendanceRoster.unmatchedZoom', { n: attendance.unmatched_count }) }}
         </VBadge>
 
         <!-- Empty (no bookings at all) -->

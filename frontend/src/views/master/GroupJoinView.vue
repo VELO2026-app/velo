@@ -38,7 +38,7 @@ design, mirroring MasterInviteClaimView's own state machine exactly:
           {{ t('masterScreens.groupJoin.verifyFailed') }}
         </h2>
         <p class="group-join__subtitle">
-          Проблема с соединением. Проверьте интернет и попробуйте ещё раз.
+          {{ t('masterScreens.groupJoin.loadFailed') }}
         </p>
         <div class="group-join__actions">
           <VButton variant="primary" block :loading="joining" @click="join">{{
@@ -53,7 +53,7 @@ design, mirroring MasterInviteClaimView's own state machine exactly:
         <p class="group-join__subtitle">{{ errorDescription }}</p>
         <div class="group-join__actions">
           <VButton variant="primary" block @click="router.replace({ name: 'root' })">
-            На главную
+            {{ t('common.backHome') }}
           </VButton>
         </div>
       </template>
@@ -86,7 +86,7 @@ async function join(): Promise<void> {
   const token = String(route.params.token ?? '')
   try {
     const res = await joinGroup(token)
-    toast.success(`Вы добавлены в группу "${res.group_name}"`)
+    toast.success(t('masterScreens.groupJoin.addedToast', { name: res.group_name }))
     void router.replace({ name: 'root' })
   } catch (e) {
     if (e instanceof ApiResponseError && e.status === 403) {

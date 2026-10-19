@@ -36,16 +36,23 @@
       <div class="master-profile__menu-section">
         <div class="master-profile__menu-title">{{ t('masterScreens.masterProfile.account') }}</div>
         <div class="master-profile__menu-list">
-          <VMenuRow label="Редактировать профиль" @click="onEditProfile">
+          <VMenuRow
+            :label="t('masterScreens.masterProfile.menu.editProfile')"
+            @click="onEditProfile"
+          >
             <template #icon><IconPen :size="20" /></template>
           </VMenuRow>
-          <VMenuRow label="Сообщения" :badge="messagesCount || undefined" @click="onMessages">
+          <VMenuRow
+            :label="t('masterScreens.masterProfile.menu.messages')"
+            :badge="messagesCount || undefined"
+            @click="onMessages"
+          >
             <template #icon><IconMessages :size="20" /></template>
           </VMenuRow>
-          <VMenuRow label="Мои промокоды" @click="onPromocodes">
+          <VMenuRow :label="t('masterScreens.masterProfile.menu.promocodes')" @click="onPromocodes">
             <template #icon><IconPromo :size="20" /></template>
           </VMenuRow>
-          <VMenuRow label="Вывод средств" @click="onWithdraw">
+          <VMenuRow :label="t('masterScreens.masterProfile.menu.withdraw')" @click="onWithdraw">
             <template #icon><IconFinance :size="20" /></template>
           </VMenuRow>
         </div>
@@ -57,10 +64,16 @@
           {{ t('masterScreens.masterProfile.settings') }}
         </div>
         <div class="master-profile__menu-list">
-          <VMenuRow label="Уведомления" @click="onNotifications">
+          <VMenuRow
+            :label="t('masterScreens.masterProfile.menu.notifications')"
+            @click="onNotifications"
+          >
             <template #icon><IconBell :size="20" /></template>
           </VMenuRow>
-          <VMenuRow label="Часовой пояс" @click="onTimezoneSettings">
+          <VMenuRow
+            :label="t('masterScreens.masterProfile.menu.timezone')"
+            @click="onTimezoneSettings"
+          >
             <template #icon><IconGlobe :size="20" /></template>
           </VMenuRow>
         </div>
@@ -74,7 +87,7 @@
           {{ t('masterScreens.masterProfile.help') }}
         </div>
         <div class="master-profile__menu-list">
-          <VMenuRow label="Поддержка" @click="onSupport">
+          <VMenuRow :label="t('masterScreens.masterProfile.menu.support')" @click="onSupport">
             <template #icon><IconSupport :size="20" /></template>
           </VMenuRow>
         </div>
@@ -109,7 +122,7 @@
             {{ t('masterScreens.masterProfile.yes') }}
           </button>
           <button type="button" class="master-profile__logout-btn" @click="showLogoutModal = false">
-            Нет
+            {{ t('masterScreens.masterProfile.logoutNo') }}
           </button>
         </div>
       </div>
