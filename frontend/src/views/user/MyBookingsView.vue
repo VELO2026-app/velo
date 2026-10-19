@@ -216,7 +216,8 @@ function badgeFor(b: BookingWithPracticeResponse): BookingBadge | null {
   // B30 (PROMPT №746, owner wording): was t('user.screens.myBookings.status.notHeld') -- false, the
   // practice DID happen, the person missed it. t('user.screens.myBookings.status.noShow') is the owner's
   // literal word, used identically on PracticeDetailView's status row.
-  if (b.status === 'no_show') return { label: 'Вы не пришли', variant: 'no_show' }
+  if (b.status === 'no_show')
+    return { label: t('user.screens.myBookings.status.noShow'), variant: 'no_show' }
   // AT-2: confirmed AND already ended -> a Zoom-tracked practice awaiting its
   // attendance report (bookings/service.py deliberately leaves it CONFIRMED
   // until the report ripens or the deadline fallback fires). Distinguish

@@ -152,11 +152,15 @@ const practiceDuration = computed(() =>
 )
 
 // Context line under the comment: relates this check-in / feedback to the
-// linked practice (t('user.screens.detail.beforeLine') / t('user.screens.detail.afterLine')).
+// linked practice (t('user.screens.detail.relatedLine'); the rel head comes
+// from detail.rel.*).
 const contextLine = computed(() => {
   if (!practice.value) return ''
   const name = practice.value.master_name ?? t('shared.form.hostFallback')
-  const rel = detailType.value === 'checkin' ? 'Перед практикой' : 'После практики'
+  const rel =
+    detailType.value === 'checkin'
+      ? t('user.screens.detail.rel.checkin')
+      : t('user.screens.detail.rel.feedback')
   return t('user.screens.detail.relatedLine', { rel, title: practice.value.title, name })
 })
 

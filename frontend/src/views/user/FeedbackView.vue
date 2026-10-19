@@ -43,8 +43,8 @@
       :title="t('user.screens.feedback.unavailable')"
       :description="
         feedbackGate === 'not_attended'
-          ? 'Zoom не подтвердил ваше участие в этой практике'
-          : 'Запись на эту практику отменена'
+          ? t('user.screens.feedback.gate.notAttended')
+          : t('user.screens.feedback.gate.cancelled')
       "
     >
       <VButton size="sm" @click="goToDashboard">{{ t('common.backHome') }}</VButton>
@@ -73,7 +73,11 @@
     <!-- Practice meta — две колонки (Figma 2266:2988): мастер | статус. -->
     <template #practice-meta>
       <span class="form-shell__practice-meta-cell">
-        с {{ practice?.master_name ?? 'Мастером' }}
+        {{
+          t('shared.form.hostLine', {
+            name: practice?.master_name ?? t('shared.form.hostFallback'),
+          })
+        }}
       </span>
       <span class="form-shell__practice-meta-cell">
         <IconCalendar :size="14" />{{ t('user.screens.feedback.state.completed') }}</span
@@ -105,7 +109,7 @@
         t('user.screens.feedback.toDiary')
       }}</VButton>
       <button type="button" class="feedback__success-link" @click="goToDashboard">
-        На главную
+        {{ t('common.backHome') }}
       </button>
     </template>
   </FormShell>

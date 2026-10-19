@@ -96,7 +96,7 @@
            approximation, not re-measured for this screen). -->
       <div class="chat-thread__composer">
         <Composer
-          placeholder="Написать сообщение…"
+          :placeholder="t('chat.threadPlaceholder')"
           :max-length="4000"
           :send="handleSend"
           :grow-cap="growCap"
@@ -312,7 +312,7 @@ async function reload(): Promise<void> {
     // [owner pass] keep-bottom: the wrap is mounted only now (v-else branch).
     attachKeepBottom()
   } catch (e) {
-    error.value = extractApiError(e, 'Попробуйте ещё раз')
+    error.value = extractApiError(e, t('common.tryAgain'))
     loading.value = false
   }
 }
@@ -369,7 +369,7 @@ async function handleSend(body: string): Promise<ComposerSendResult> {
     await scrollToBottom()
     return { ok: true }
   } catch (e) {
-    return { ok: false, error: extractApiError(e, 'Не удалось отправить сообщение') }
+    return { ok: false, error: extractApiError(e, t('chat.sendFailed')) }
   } finally {
     sendInFlight.value = false
   }

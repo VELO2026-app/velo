@@ -47,9 +47,14 @@
          VHeader teleports into MobileLayout's island; the fog dissolves
          scrolling content under it. Presence-only dot (FE-11 ruling: never
          a number). -->
-    <VHeader title="Главная">
+    <VHeader :title="t('user.screens.userDashboard.headerTitle')">
       <template #action>
-        <button class="dashboard__bell" type="button" aria-label="Уведомления" @click="onBell">
+        <button
+          class="dashboard__bell"
+          type="button"
+          :aria-label="t('user.screens.userDashboard.notificationsAria')"
+          @click="onBell"
+        >
           <span class="dashboard__bell-icon">
             <IconBellPlain :size="17" />
             <span v-if="notifications.unread > 0" class="dashboard__bell-dot" aria-hidden="true" />
@@ -199,8 +204,16 @@
     <section class="dashboard__section">
       <h3 class="dashboard__section-title">{{ t('user.screens.userDashboard.progress.title') }}</h3>
       <div class="dashboard__stats-grid">
-        <VStatCard class="dashboard__stat" :value="attendedCount" label="Практик пройдено" />
-        <VStatCard class="dashboard__stat" :value="practiceHours" label="Часов в практике" />
+        <VStatCard
+          class="dashboard__stat"
+          :value="attendedCount"
+          :label="t('user.screens.userDashboard.progress.practicesDone')"
+        />
+        <VStatCard
+          class="dashboard__stat"
+          :value="practiceHours"
+          :label="t('user.screens.userDashboard.progress.hours')"
+        />
       </div>
     </section>
   </div>
