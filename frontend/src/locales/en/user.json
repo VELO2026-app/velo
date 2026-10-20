@@ -657,8 +657,13 @@
           "saved": "Time zone saved",
           "saveFailed": "Failed to save the time zone"
         },
-        "title": "Time zone",
-        "note": "Practice times will be shown in the selected time zone"
+        "title": "Language and time zone",
+        "note": "Practice times will be shown in the selected time zone",
+        "language": {
+          "title": "Interface language",
+          "toastSaved": "Language saved",
+          "toastSaveFailed": "Failed to save the language"
+        }
       },
       "topupCancel": {
         "title": "Payment cancelled",
@@ -774,7 +779,7 @@
           "messages": "Messages",
           "groups": "My schools",
           "notifications": "Notifications",
-          "timezone": "Time zone",
+          "timezone": "Language and time zone",
           "aiConnections": "AI connections",
           "support": "Support",
           "share": "Share",

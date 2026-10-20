@@ -338,7 +338,7 @@ describe('MasterProfileView', () => {
       ['Мои промокоды', { name: 'master-promocodes' }],
       ['Вывод средств', { name: 'master-finance' }],
       ['Уведомления', { name: 'master-notifications' }],
-      ['Часовой пояс', { name: 'master-timezone' }],
+      ['Язык и часовой пояс', { name: 'master-timezone' }],
       ['Поддержка', { name: 'master-support' }],
     ] as const)('%s pushes %o', async (label, target) => {
       mount()

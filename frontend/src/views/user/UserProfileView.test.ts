@@ -348,7 +348,7 @@ describe('UserProfileView', () => {
       ['Редактировать профиль', 'user-edit-profile'],
       ['Сообщения', 'user-messages'],
       ['Уведомления', 'user-notifications'],
-      ['Часовой пояс', 'user-timezone'],
+      ['Язык и часовой пояс', 'user-timezone'],
       ['Поддержка', 'user-support'],
     ]
 

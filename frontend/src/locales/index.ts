@@ -21,7 +21,7 @@
 import { createI18n } from 'vue-i18n'
 
 import { setRootLang } from '@/platform/dom'
-import { INSTANCE, isSupportedLocale } from '@/platform/instance'
+import { INSTANCE, isSupportedLocale, SUPPORTED_LOCALES } from '@/platform/instance'
 // Per-domain catalogs (tz-i18n §4.1): one FOLDER per locale, one FILE per
 // domain. Adding a language = adding a folder; adding a domain = adding a
 // file. No per-language import chains.
@@ -142,6 +142,22 @@ export async function setLocale(locale: string): Promise<void> {
   }
   i18n.global.locale.value = locale
   setRootLang(locale)
+}
+
+/**
+ * Locales that actually have catalog folders (default included), in
+ * SUPPORTED_LOCALES order. The language switcher offers exactly these -- a
+ * locale without a catalog would render fallback forever, and setLocale
+ * no-ops on it. The list grows automatically when de/es catalogs land.
+ */
+export function availableLocales(): string[] {
+  const withCatalogs = new Set(
+    Object.keys(lazyLoaders)
+      .map((p) => p.split('/')[1])
+      .filter((l): l is string => Boolean(l)),
+  )
+  withCatalogs.add(INSTANCE.defaultLocale)
+  return SUPPORTED_LOCALES.filter((l) => withCatalogs.has(l))
 }
 
 /**

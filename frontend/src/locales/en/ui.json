@@ -37,6 +37,10 @@
     "deactivate": "Deactivate",
     "pickerDate": "Date",
     "pickerTime": "Time",
-    "pickerChooseDate": "Choose a date"
+    "pickerChooseDate": "Choose a date",
+    "languageNames": {
+      "ru": "Русский",
+      "en": "English"
+    }
   }
 }
