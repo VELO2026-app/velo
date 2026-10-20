@@ -53,7 +53,7 @@
       <!--
       <div class="ea__legend">
         <IconRequired class="ea__legend-seal" :size="22" />
-        <span>{{ t('user.screens.externalActivityCreate.legend') }}</span>
+        <span>— {{ t('user.screens.externalActivityCreate.legend') }}</span>
       </div>
       -->
 

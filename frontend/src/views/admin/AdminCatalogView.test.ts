@@ -193,8 +193,17 @@ function addDirectionInput(): HTMLInputElement {
   return el
 }
 function addDirectionBtn(): HTMLButtonElement | undefined {
+  if (process.env.DEBUG_BTNS) {
+    // eslint-disable-next-line no-console
+    console.log(
+      'BTNS:',
+      Array.from(host?.querySelectorAll<HTMLButtonElement>('.v-btn') ?? []).map((b) =>
+        JSON.stringify(b.textContent),
+      ),
+    )
+  }
   return Array.from(host?.querySelectorAll<HTMLButtonElement>('.v-btn') ?? []).find(
-    (b) => b.textContent?.trim() === '+ Добавить',
+    (b) => b.textContent?.replace(/\s+/g, ' ').trim() === '+ Добавить',
   )
 }
 function editInput(card: HTMLElement): HTMLInputElement {

@@ -51,7 +51,7 @@
         <!--
         <div class="ncg__legend">
           <IconRequired class="ncg__legend-seal" :size="22" />
-          <span>{{ t('masterScreens.masterCuratorGroupCreate.legend.required') }}</span>
+          <span>— {{ t('masterScreens.masterCuratorGroupCreate.legend.required') }}</span>
         </div>
         -->
 

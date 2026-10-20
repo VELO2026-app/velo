@@ -48,7 +48,7 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminMasters.cannotcompletedloadMasterov')"
+      :title="t('adminScreens.adminMasters.loadFailed')"
       :description="t('adminScreens.adminMasters.checkConnectionAndRetry')"
     >
       <template #action
@@ -95,7 +95,7 @@
             </VChip>
           </template>
           <span v-else class="mcard__muted">{{
-            t('adminScreens.adminMasters.directionscannotUkazany')
+            t('adminScreens.adminMasters.directionsMissing')
           }}</span>
         </div>
 
@@ -104,15 +104,15 @@
              (honest stub; should not happen for a master in this page). -->
         <div class="mcard__stats">
           <div class="mcard__stat">
-            <span class="mcard__stat-key">{{ t('adminScreens.adminMasters.praktik') }}</span>
+            <span class="mcard__stat-key">{{ t('adminScreens.adminMasters.practicesStat') }}</span>
             <span class="mcard__stat-val">{{ statVal(m.practices_count) }}</span>
           </div>
           <div class="mcard__stat">
-            <span class="mcard__stat-key">{{ t('adminScreens.adminMasters.ucheniki') }}</span>
+            <span class="mcard__stat-key">{{ t('adminScreens.adminMasters.studentsStat') }}</span>
             <span class="mcard__stat-val">{{ statVal(m.students_count) }}</span>
           </div>
           <div class="mcard__stat">
-            <span class="mcard__stat-key">{{ t('adminScreens.adminMasters.KVyvodu') }}</span>
+            <span class="mcard__stat-key">{{ t('adminScreens.adminMasters.toWithdrawStat') }}</span>
             <span class="mcard__stat-val">{{ payoutVal(m.available_cents) }}</span>
           </div>
         </div>
@@ -239,7 +239,7 @@ const segOptions = computed<SegmentOption[]>(() => [
   },
   {
     value: 'cancelled_by_user',
-    label: t('adminScreens.adminMasters.udaleny'),
+    label: t('adminScreens.adminMasters.filterDeleted'),
     badge: statusCount('cancelled_by_user'),
   },
 ])
@@ -252,13 +252,13 @@ const filtered = computed<AdminMasterListItem[]>(() =>
 
 const emptyText = computed<string>(() => {
   const byFilter: Record<string, string> = {
-    pending: t('adminScreens.adminMasters.noMasterovNaProverke'),
-    verified: t('adminScreens.adminMasters.noVerifitsirovannykhMasterov'),
-    rejected: t('adminScreens.adminMasters.noOtklonennykhMasterov'),
-    suspended: t('adminScreens.adminMasters.noZablokirovannykhMasterov'),
-    cancelled_by_user: t('adminScreens.adminMasters.noUdalennykhAkkauntov'),
+    pending: t('adminScreens.adminMasters.emptyPending'),
+    verified: t('adminScreens.adminMasters.emptyVerified'),
+    rejected: t('adminScreens.adminMasters.emptyRejected'),
+    suspended: t('adminScreens.adminMasters.emptySuspended'),
+    cancelled_by_user: t('adminScreens.adminMasters.emptyCancelled'),
   }
-  return byFilter[filter.value] ?? t('adminScreens.adminMasters.Masterovyetno')
+  return byFilter[filter.value] ?? t('adminScreens.adminMasters.emptyFallback')
 })
 
 // Status badge labels match the operator SVG (the shared helper uses shorter ones).
@@ -296,7 +296,7 @@ async function load(): Promise<void> {
     total.value = res.total
   } catch (e) {
     error.value = true
-    toast.error(extractApiError(e, t('adminScreens.adminMasters.errorZagruzkiMasterov')))
+    toast.error(extractApiError(e, t('adminScreens.adminMasters.loadFailedToast')))
   } finally {
     loading.value = false
   }

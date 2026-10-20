@@ -36,7 +36,7 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminPromos.cannotcompletedloadPromokody')"
+      :title="t('adminScreens.adminPromos.loadFailed')"
       :description="t('adminScreens.adminPromos.checkConnectionAndRetry')"
     >
       <template #action
@@ -153,7 +153,7 @@ const filter = ref<Filter>('all')
 
 const segOptions: SegmentOption[] = [
   { value: 'all', label: t('adminScreens.adminPromos.vse') },
-  { value: 'master', label: t('adminScreens.adminPromos.masterov') },
+  { value: 'master', label: t('adminScreens.adminPromos.filterMasters') },
   { value: 'company', label: t('adminScreens.adminPromos.kompanii') },
   { value: 'inactive', label: t('adminScreens.adminPromos.deaktivir') },
 ]
@@ -184,12 +184,12 @@ function currentParams(): { type?: AdminPromoTypeFilter; isActive?: boolean } {
   return {}
 }
 
-/** Owner display: master's "First Last" (falls back to t('adminScreens.adminPromos.polzovatel') like
+/** Owner display: master's "First Last" (falls back to t('adminScreens.adminPromos.ownerFallback') like
  *  masterDisplayName), or "VELO" for a company promo (master_id=null). */
 function ownerName(p: AdminPromoResponse): string {
   if (p.type === 'company') return 'VELO'
   const parts = [p.master_first_name, p.master_last_name].filter(Boolean)
-  return parts.length > 0 ? parts.join(' ') : t('adminScreens.adminPromos.polzovatel')
+  return parts.length > 0 ? parts.join(' ') : t('adminScreens.adminPromos.ownerFallback')
 }
 
 function usedLabel(p: AdminPromoResponse): string {
@@ -267,9 +267,7 @@ async function onConfirmDeactivate(): Promise<void> {
     // removal needed there. Any other tab just flips the badge in place.
     toast.success(t('adminScreens.adminPromos.PromokodDeaktivirovan'))
   } catch (e) {
-    toast.error(
-      extractApiError(e, t('adminScreens.adminPromos.cannotcompletedDeaktivirovatPromokod')),
-    )
+    toast.error(extractApiError(e, t('adminScreens.adminPromos.deactivateFailedToast')))
   } finally {
     deactivatingId.value = null
     confirmTarget.value = null

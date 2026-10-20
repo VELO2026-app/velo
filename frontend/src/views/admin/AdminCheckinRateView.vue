@@ -21,7 +21,7 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminCheckinRate.cannotcompletedloadMetriku')"
+      :title="t('adminScreens.adminCheckinRate.loadFailed')"
       :description="error"
     >
       <VButton size="sm" variant="outline" @click="load">{{

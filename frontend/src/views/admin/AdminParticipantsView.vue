@@ -17,7 +17,7 @@
   <div class="admin-list">
     <header class="admin-list__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-list__title">{{ t('adminScreens.adminParticipants.uchastniki') }}</h1>
+      <h1 class="admin-list__title">{{ t('adminScreens.adminParticipants.title') }}</h1>
       <span class="admin-list__count">{{ headerCount }}</span>
     </header>
 
@@ -171,7 +171,7 @@ function joinedLabel(iso: string): string {
   return `${month.charAt(0).toUpperCase()}${month.slice(1)} ${d.getUTCFullYear()}`
 }
 
-// t('adminScreens.adminParticipants.segodnya') / t('adminScreens.adminParticipants.vchera') / t('adminScreens.adminParticipants.24Yanvarya') — last app-open, from last_login_at.
+// t('adminScreens.adminParticipants.joinedToday') / t('adminScreens.adminParticipants.vchera') / t('adminScreens.adminParticipants.dateExample') — last app-open, from last_login_at.
 function lastActiveLabel(iso: string): string {
   return dayLabelOf(iso)
 }

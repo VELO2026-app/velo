@@ -18,7 +18,7 @@
       <!--
       <div class="new-promo__legend">
         <IconRequired class="new-promo__legend-seal" :size="22" />
-        <span>{{ t('masterScreens.masterNewPromocode.legend.required') }}</span>
+        <span>— {{ t('masterScreens.masterNewPromocode.legend.required') }}</span>
       </div>
       -->
 

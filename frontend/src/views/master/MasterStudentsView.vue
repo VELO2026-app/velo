@@ -83,6 +83,7 @@
         <!-- Reveal the rest when there are more than the preview cap. -->
         <VShowMore
           v-if="!expanded && hiddenCount > 0"
+          plus
           :label="t('masterScreens.masterStudents.moreStudents', hiddenCount)"
           @click="expanded = true"
         />

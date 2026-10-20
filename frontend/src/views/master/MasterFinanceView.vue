@@ -67,7 +67,7 @@
         </p>
 
         <VButton variant="outline" class="finance-view__add" @click="openPayoutForm(hasPayout)">
-          {{ t('masterScreens.masterFinance.method.add') }}
+          + {{ t('masterScreens.masterFinance.method.add') }}
         </VButton>
       </template>
 

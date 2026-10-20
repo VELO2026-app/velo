@@ -82,7 +82,7 @@
               />
               <div class="mreview__edit-actions">
                 <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
-                  t('adminScreens.adminMasterReview.otmena')
+                  t('adminScreens.adminMasterReview.cancel')
                 }}</VButton>
                 <VButton
                   variant="primary"
@@ -123,7 +123,7 @@
               <p v-if="fieldError" class="mreview__edit-err">{{ fieldError }}</p>
               <div class="mreview__edit-actions">
                 <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
-                  t('adminScreens.adminMasterReview.otmena')
+                  t('adminScreens.adminMasterReview.cancel')
                 }}</VButton>
                 <VButton
                   variant="primary"
@@ -161,7 +161,7 @@
               <p v-if="fieldError" class="mreview__edit-err">{{ fieldError }}</p>
               <div class="mreview__edit-actions">
                 <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
-                  t('adminScreens.adminMasterReview.otmena')
+                  t('adminScreens.adminMasterReview.cancel')
                 }}</VButton>
                 <VButton variant="primary" size="sm" :loading="savingField" @click="saveBio">{{
                   t('adminScreens.adminMasterReview.sokhranit')
@@ -195,7 +195,7 @@
               />
               <div class="mreview__edit-actions">
                 <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
-                  t('adminScreens.adminMasterReview.otmena')
+                  t('adminScreens.adminMasterReview.cancel')
                 }}</VButton>
                 <VButton variant="primary" size="sm" :loading="savingField" @click="saveEmail">{{
                   t('adminScreens.adminMasterReview.sokhranit')
@@ -224,7 +224,7 @@
               <VInput v-model="draftText" placeholder="+7…" :error="fieldError" />
               <div class="mreview__edit-actions">
                 <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
-                  t('adminScreens.adminMasterReview.otmena')
+                  t('adminScreens.adminMasterReview.cancel')
                 }}</VButton>
                 <VButton variant="primary" size="sm" :loading="savingField" @click="savePhone">{{
                   t('adminScreens.adminMasterReview.sokhranit')
@@ -258,7 +258,7 @@
               />
               <div class="mreview__edit-actions">
                 <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
-                  t('adminScreens.adminMasterReview.otmena')
+                  t('adminScreens.adminMasterReview.cancel')
                 }}</VButton>
                 <VButton
                   variant="primary"
@@ -303,7 +303,7 @@
               <p v-if="fieldError" class="mreview__edit-err">{{ fieldError }}</p>
               <div class="mreview__edit-actions">
                 <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
-                  t('adminScreens.adminMasterReview.otmena')
+                  t('adminScreens.adminMasterReview.cancel')
                 }}</VButton>
                 <VButton
                   variant="primary"
@@ -399,13 +399,13 @@
                   @keydown.enter.prevent="addCert"
                 />
                 <VButton variant="ghost" size="sm" :disabled="!certInput.trim()" @click="addCert">{{
-                  t('adminScreens.adminMasterReview.dobavit')
+                  t('adminScreens.adminMasterReview.add')
                 }}</VButton>
               </div>
               <p v-if="fieldError" class="mreview__edit-err">{{ fieldError }}</p>
               <div class="mreview__edit-actions">
                 <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
-                  t('adminScreens.adminMasterReview.otmena')
+                  t('adminScreens.adminMasterReview.cancel')
                 }}</VButton>
                 <VButton
                   variant="primary"
@@ -579,14 +579,14 @@
     <!-- Reject reason (bottom-sheet, fork п.1=А) -->
     <VBottomSheet
       :open="showReject"
-      :title="t('adminScreens.adminMasterReview.reasonrejection')"
+      :title="t('adminScreens.adminMasterReview.rejectionReason')"
       :save-label="t('adminScreens.adminMasterReview.rejectCta')"
       @save="onReject"
       @close="closeReject"
     >
       <VTextarea
         v-model="rejectReason"
-        :placeholder="t('adminScreens.adminMasterReview.providereasonrejectionZayavki')"
+        :placeholder="t('adminScreens.adminMasterReview.rejectionReasonPlaceholder')"
         :rows="3"
         :error="rejectError"
       />
@@ -938,7 +938,7 @@ async function saveProfile(patch: AdminMasterProfileUpdate): Promise<void> {
     editing.value = null
     toast.success(t('adminScreens.adminMasterReview.sokhraneno'))
   } catch (e) {
-    fieldError.value = extractApiError(e, t('adminScreens.adminMasterReview.cannotcompletedsave'))
+    fieldError.value = extractApiError(e, t('adminScreens.adminMasterReview.saveFailed'))
   } finally {
     savingField.value = false
   }
@@ -1050,7 +1050,7 @@ async function onToggleRight(): Promise<void> {
         : t('adminScreens.adminMasterReview.toast.schoolRightRevoked'),
     )
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminMasterReview.cannotcompletedchangePravo')))
+    toast.error(extractApiError(e, t('adminScreens.adminMasterReview.grantChangeFailed')))
   } finally {
     togglingRight.value = false
   }

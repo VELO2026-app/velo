@@ -83,7 +83,7 @@
             </div>
             <div class="report-detail__meta-row">
               <span class="report-detail__meta-key">{{
-                t('adminScreens.adminReportDetail.sozdana')
+                t('adminScreens.adminReportDetail.createdLabel')
               }}</span>
               <span class="report-detail__meta-val">
                 {{ formatDateTime(report.created_at) }}
@@ -171,7 +171,7 @@
       <div v-else class="report-detail__not-found">
         <VEmptyState
           icon="notfound"
-          :title="t('adminScreens.adminReportDetail.ZhalobacannotNaydena')"
+          :title="t('adminScreens.adminReportDetail.notFoundTitle')"
           :description="t('adminScreens.adminReportDetail.VernitesKSpiskuZhalob')"
         />
         <VButton variant="outline" block @click="router.back()">{{

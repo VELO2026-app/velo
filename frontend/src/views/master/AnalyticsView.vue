@@ -167,6 +167,7 @@
           <!-- Первые 3 + раскрытие «+ ещё N практик» (#5). -->
           <VShowMore
             v-if="!pastExpanded && hiddenPastCount > 0"
+            plus
             :label="t('masterScreens.analytics.morePractices', hiddenPastCount)"
             @click="pastExpanded = true"
           />

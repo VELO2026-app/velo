@@ -4,13 +4,19 @@
 // TEXT NODES / attribute values, after stripping comments. Excluded:
 //   - locales/  (the catalogs themselves are the point of the rule)
 //   - *.test.ts (tests pin rendered Russian copy on purpose, tz-i18n §4.5)
+//   - utils/schoolBranding/ -- the GOLDEN PORT of the school branding
+//     generator (tz-curator.md §5.1/§5.3: «перенесён как есть», same hash
+//     must yield the same SVG). Its 'Ш' monogram fallback is a prototype
+//     constant, not UI copy; palette DISPLAY NAMES live in locales/ru/
+//     schools.json (branding.palettes), hex roles stay in code.
 // Data that is locale-independent lives in locales/ru/* seed files
-// (timezones.json, dates.json, languages.json, schools.json branding.*) --
-// move literals there, never back into code. Exit 1 on any hit.
+// (timezones.json, dates.json, languages.json) -- move literals there,
+// never back into code. Exit 1 on any hit.
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 const CYR = /[А-Яа-яЁё]/
+const EXEMPT_DIRS = ['src/utils/schoolBranding']
 const LINE_COMMENT = /\/\/.*/g
 const BLOCK_COMMENT = /\/\*.*?\*\//gs
 const HTML_COMMENT = /<!--.*?-->/gs
@@ -28,7 +34,8 @@ function walk(dir) {
       if (p === 'src/locales') continue
       walk(p)
     } else if (/\.(ts|vue)$/.test(name) && !name.includes('.test.')) {
-      files.push(p)
+      const normalized = p.replaceAll('\\', '/')
+      if (!EXEMPT_DIRS.some((dir) => normalized.startsWith(dir))) files.push(p)
     }
   }
 }

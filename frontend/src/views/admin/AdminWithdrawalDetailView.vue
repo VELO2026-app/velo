@@ -26,7 +26,7 @@
     <template v-if="w">
       <!-- Hero -->
       <div class="wd__hero">
-        <div class="wd__hero-label">{{ t('adminScreens.adminWithdrawalDetail.vyplata') }}</div>
+        <div class="wd__hero-label">{{ t('adminScreens.adminWithdrawalDetail.title') }}</div>
         <div class="wd__hero-amount">{{ grossLabel }}</div>
         <div class="wd__hero-master">{{ masterName }}</div>
       </div>
@@ -78,7 +78,7 @@
     >
       <VTextarea
         v-model="rejectReason"
-        :placeholder="t('adminScreens.adminWithdrawalDetail.providereasonrejectionVyplaty')"
+        :placeholder="t('adminScreens.adminWithdrawalDetail.rejectionReasonPlaceholder')"
         :rows="3"
         :error="rejectError"
       />
@@ -205,7 +205,7 @@ async function onReject(): Promise<void> {
   if (!w.value || rejecting.value) return
   rejectError.value = ''
   if (!rejectReason.value.trim()) {
-    rejectError.value = t('adminScreens.adminWithdrawalDetail.providereasonrejection')
+    rejectError.value = t('adminScreens.adminWithdrawalDetail.rejectionReasonRequired')
     return
   }
   rejecting.value = true

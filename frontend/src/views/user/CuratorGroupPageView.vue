@@ -451,7 +451,8 @@ function advisoryLine(count: number | null): string {
       : count < 5
         ? t('user.screens.curatorGroupPage.plural.few')
         : t('user.screens.curatorGroupPage.plural.many')
-  return t('user.screens.curatorGroupPage.hiddenCount', { count, word })
+  // the joining space lives here, not in the catalog (no leading-space values)
+  return ` ${t('user.screens.curatorGroupPage.hiddenCount', { count, word })}`
 }
 
 // -- Leave (student / master) --

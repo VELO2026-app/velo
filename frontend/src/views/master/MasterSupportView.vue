@@ -105,7 +105,7 @@
         <div class="support__upload">
           <button type="button" class="support__drop" @click="openFilePicker">
             <IconFile :size="26" />
-            <span>{{ t('masterScreens.masterSupport.addFile5mb') }}</span>
+            <span>{{ t('masterScreens.masterSupport.addFile') }}</span>
           </button>
           <input
             ref="fileInput"

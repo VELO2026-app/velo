@@ -29,7 +29,7 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminPracticeDetail.cannotcompletedloadPraktiku')"
+      :title="t('adminScreens.adminPracticeDetail.loadFailed')"
       :description="error"
     >
       <VButton size="sm" variant="outline" @click="load">{{
@@ -78,7 +78,7 @@
         </div>
         <div class="admin-detail__zoom-row">
           <span class="admin-detail__zoom-label">{{
-            t('adminScreens.adminPracticeDetail.NeraspoznannyeUchastniki')
+            t('adminScreens.adminPracticeDetail.unmatchedTitle')
           }}</span>
           <VBadge :variant="zoomAttendance.unmatched_count > 0 ? 'warning' : 'muted'">
             {{ zoomAttendance.unmatched_count }}
@@ -168,7 +168,7 @@
 
     <VCard v-else>
       <p class="admin-detail__empty">
-        {{ t('adminScreens.adminPracticeDetail.PraktikaNedostupna') }}
+        {{ t('adminScreens.adminPracticeDetail.unavailable') }}
       </p>
     </VCard>
   </div>
@@ -251,13 +251,13 @@ const ZOOM_STATUS_BADGES: Record<
     label: t('adminScreens.adminPracticeDetail.creationError'),
     variant: 'error',
   },
-  deleted: { label: t('adminScreens.adminPracticeDetail.udalena'), variant: 'muted' },
+  deleted: { label: t('adminScreens.adminPracticeDetail.deletedLabel'), variant: 'muted' },
 }
 const zoomStatusBadge = computed<{ label: string; variant: 'success' | 'error' | 'muted' }>(() => {
   const status = zoomAttendance.value?.zoom_meeting_status
   return status
     ? (ZOOM_STATUS_BADGES[status] ?? { label: status, variant: 'muted' })
-    : { label: t('adminScreens.adminPracticeDetail.cannotSozdana'), variant: 'muted' }
+    : { label: t('adminScreens.adminPracticeDetail.notCreatedLabel'), variant: 'muted' }
 })
 
 // Roster from the detail response. Past practices bucket by booking status.

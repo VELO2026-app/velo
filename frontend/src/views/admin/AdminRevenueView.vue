@@ -107,8 +107,8 @@ const error = ref<string | null>(null)
 // Период (Неделя/Месяц), default 'week' matches the backend default.
 const period = ref<'week' | 'month'>('week')
 const periodOptions: SegmentOption[] = [
-  { value: 'week', label: t('adminScreens.adminRevenue.nedelya') },
-  { value: 'month', label: t('adminScreens.adminRevenue.mesyats') },
+  { value: 'week', label: t('adminScreens.adminRevenue.periodWeek') },
+  { value: 'month', label: t('adminScreens.adminRevenue.periodMonth') },
 ]
 const revenueHeroLabel = computed<string>(() =>
   period.value === 'week'

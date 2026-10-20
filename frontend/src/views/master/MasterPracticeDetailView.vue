@@ -172,6 +172,7 @@
           </div>
           <VShowMore
             v-if="!rosterExpanded && hiddenRosterCount > 0"
+            plus
             :label="t('masterScreens.masterPracticeDetail.moreParticipants', hiddenRosterCount)"
             @click="rosterExpanded = true"
           />

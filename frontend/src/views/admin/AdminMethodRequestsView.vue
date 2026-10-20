@@ -47,8 +47,8 @@
     <VEmptyState
       v-else-if="items.length === 0"
       icon="success"
-      :title="t('adminScreens.adminMethodRequests.Zayavokno')"
-      :description="t('adminScreens.adminMethodRequests.mastercannotZaprashivaliSmenu')"
+      :title="t('adminScreens.adminMethodRequests.emptyTitle')"
+      :description="t('adminScreens.adminMethodRequests.noChangeRequests')"
     />
 
     <template v-else>
@@ -103,14 +103,14 @@
     <!-- Reject reason (bottom-sheet, mirrors AdminMasterReview) -->
     <VBottomSheet
       :open="!!rejectTarget"
-      :title="t('adminScreens.adminMethodRequests.reasonrejection')"
+      :title="t('adminScreens.adminMethodRequests.rejectionReason')"
       :save-label="t('adminScreens.adminMethodRequests.rejectCta')"
       @save="onReject"
       @close="closeReject"
     >
       <VTextarea
         v-model="rejectReason"
-        :placeholder="t('adminScreens.adminMethodRequests.providereasonrejectionZaprosa')"
+        :placeholder="t('adminScreens.adminMethodRequests.rejectionReasonPlaceholder')"
         :rows="3"
         :error="rejectError"
       />
@@ -217,7 +217,7 @@ async function loadInitial(): Promise<void> {
     hasMore.value = res.items.length < res.total
   } catch (e) {
     error.value = true
-    toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.errorZagruzkiZayavok')))
+    toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.loadFailedToast')))
   } finally {
     loading.value = false
   }

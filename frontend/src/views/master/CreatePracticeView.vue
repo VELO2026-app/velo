@@ -71,7 +71,7 @@
       <!--
       <div class="create-practice__legend">
         <span class="cp-req">*</span>
-        <span>{{ t('masterScreens.createPractice.razdely-s-obyazatelnymi-polyami') }}</span>
+        <span>— {{ t('masterScreens.createPractice.legendSections') }}</span>
       </div>
       -->
 

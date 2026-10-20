@@ -20,7 +20,7 @@
   <div class="admin-reports">
     <header class="admin-reports__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-reports__title">{{ t('adminScreens.adminReports.moderatsiya') }}</h1>
+      <h1 class="admin-reports__title">{{ t('adminScreens.adminReports.moderationTab') }}</h1>
       <span class="admin-reports__count">{{ headerCount }}</span>
     </header>
 

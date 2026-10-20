@@ -70,7 +70,7 @@
       v-if="checkinAlert"
       variant="warning"
       :title="t('user.screens.userDashboard.checkinBanner.title')"
-      :body="`${checkinAlert.practice.title}${checkinAlertTime}`"
+      :body="`${checkinAlert.practice.title} • ${checkinAlertTime}`"
       :clickable="true"
       class="dashboard__alert"
       @click="goToCheckin(checkinAlert.practice_id)"

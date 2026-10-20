@@ -21,7 +21,7 @@
   <div class="admin-list">
     <header class="admin-list__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-list__title">{{ t('adminScreens.adminPractices.praktiki') }}</h1>
+      <h1 class="admin-list__title">{{ t('adminScreens.adminPractices.title') }}</h1>
       <span class="admin-list__count">{{ headerCount }}</span>
     </header>
 
@@ -32,7 +32,7 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminPractices.cannotcompletedloadpractices')"
+      :title="t('adminScreens.adminPractices.loadFailed')"
       :description="error"
     >
       <VButton size="sm" variant="outline" @click="load">{{

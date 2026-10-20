@@ -166,6 +166,7 @@
 
         <VShowMore
           v-if="!expanded && hiddenCount > 0"
+          plus
           :label="t('masterScreens.masterGroups.moreGroups', hiddenCount)"
           @click="expanded = true"
         />
@@ -254,7 +255,7 @@ watch(search, (value) => {
 })
 
 // Show the first 5 (owner Q7, PROMPT №610 -- was 10); the rest hide behind
-// the outlined t('masterScreens.masterGroups.showMoreGroups') pill (VShowMore already built this exact
+// the outlined t('masterScreens.masterGroups.moreGroups') pill (VShowMore already built this exact
 // recipe -- primary stroke + primary text, see that file -- no visual
 // change needed there, only this constant). Never applies while a search
 // query is active: that's a structurally separate branch above

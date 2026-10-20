@@ -29,7 +29,7 @@
   <div class="admin-support">
     <header class="admin-support__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-support__title">{{ t('adminScreens.adminSupport.podderzhka') }}</h1>
+      <h1 class="admin-support__title">{{ t('adminScreens.adminSupport.title') }}</h1>
       <span v-if="items.length" class="admin-support__count">{{ items.length }}</span>
     </header>
 
@@ -117,7 +117,7 @@ const loadingMore = ref(false)
 const error = ref(false)
 
 function openerName(item: SupportThread): string {
-  return item.opener?.name ?? t('adminScreens.adminSupport.polzovatel')
+  return item.opener?.name ?? t('adminScreens.adminSupport.userFallback')
 }
 
 function triageBadge(item: SupportThread): {

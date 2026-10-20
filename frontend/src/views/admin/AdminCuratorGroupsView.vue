@@ -126,7 +126,7 @@ async function load(reset: boolean): Promise<void> {
   }
 }
 
-// t('adminScreens.adminCuratorGroups.avg-2026') — school creation month, from created_at (UTC).
+// school creation month, from created_at (UTC).
 function createdLabel(iso: string): string {
   const d = new Date(iso)
   const month = new Intl.DateTimeFormat('ru-RU', { month: 'short', timeZone: 'UTC' })

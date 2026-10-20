@@ -21,7 +21,7 @@
   <div class="admin-users">
     <header class="admin-users__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-users__title">{{ t('adminScreens.adminUsers.polzovateli') }}</h1>
+      <h1 class="admin-users__title">{{ t('adminScreens.adminUsers.title') }}</h1>
       <span class="admin-users__count">{{ headerCount }}</span>
     </header>
 
@@ -147,7 +147,7 @@ const emptyText = computed<string>(() =>
 function roleLabel(role: string): string {
   if (role === 'admin') return t('adminScreens.adminUsers.roleAdmin')
   if (role === 'master') return t('adminScreens.adminUsers.roleMaster')
-  return t('adminScreens.adminUsers.polzovatel')
+  return t('adminScreens.adminUsers.roleUser')
 }
 
 function roleVariant(role: string): 'success' | 'warning' | 'info' {

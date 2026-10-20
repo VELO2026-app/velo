@@ -66,7 +66,7 @@
       <!-- Статистика: title + period toggle -->
       <div class="admin-dashboard__section">
         <span class="admin-dashboard__section-title">{{
-          t('adminScreens.adminDashboard.statistika')
+          t('adminScreens.adminDashboard.statistics')
         }}</span>
         <VSegment
           compact
@@ -80,7 +80,7 @@
       <div class="admin-dashboard__stats">
         <VStatCard
           :value="practicesValue"
-          :label="t('adminScreens.adminDashboard.praktik')"
+          :label="t('adminScreens.adminDashboard.practicesStat')"
           :delta="practicesDelta"
           :delta-tone="practicesDeltaTone"
           clickable
@@ -88,7 +88,7 @@
         />
         <VStatCard
           :value="mastersValue"
-          :label="t('adminScreens.adminDashboard.masterov')"
+          :label="t('adminScreens.adminDashboard.mastersStat')"
           :delta="mastersDelta"
           :delta-tone="mastersDeltaTone"
           clickable
@@ -96,7 +96,7 @@
         />
         <VStatCard
           :value="participantsValue"
-          :label="t('adminScreens.adminDashboard.uchastnikov')"
+          :label="t('adminScreens.adminDashboard.participantsStat')"
           :delta="participantsDelta"
           :delta-tone="participantsDeltaTone"
           clickable
@@ -139,7 +139,7 @@
         @click="router.push({ name: 'admin-revenue' })"
       />
       <VListRow
-        :title="t('adminScreens.adminDashboard.vyplaty')"
+        :title="t('adminScreens.adminDashboard.payoutsSection')"
         :subtitle="t('adminScreens.adminDashboard.withdrawalRequestsLink')"
         clickable
         @click="router.push({ name: 'admin-withdrawals' })"
@@ -187,7 +187,7 @@
         }}</span>
       </div>
       <VListRow
-        :title="t('adminScreens.adminDashboard.polzovateli')"
+        :title="t('adminScreens.adminDashboard.usersSection')"
         :subtitle="t('adminScreens.adminDashboard.usersLink')"
         clickable
         @click="router.push({ name: 'admin-users' })"
@@ -218,7 +218,7 @@
         <template #trailing><IconArrowRight :size="20" /></template>
       </VListRow>
       <VListRow
-        :title="t('adminScreens.adminDashboard.podderzhka')"
+        :title="t('adminScreens.adminDashboard.supportSection')"
         :subtitle="t('adminScreens.adminDashboard.supportLink')"
         clickable
         @click="router.push({ name: 'admin-support' })"
@@ -261,8 +261,8 @@ const period = ref<'week' | 'month'>('week')
 const periodOffset = ref(0)
 
 const periodOptions: SegmentOption[] = [
-  { value: 'week', label: t('adminScreens.adminDashboard.nedelya') },
-  { value: 'month', label: t('adminScreens.adminDashboard.mesyats') },
+  { value: 'week', label: t('adminScreens.adminDashboard.periodWeek') },
+  { value: 'month', label: t('adminScreens.adminDashboard.periodMonth') },
 ]
 
 // VSegment emits a plain string; narrow it back to the period union.

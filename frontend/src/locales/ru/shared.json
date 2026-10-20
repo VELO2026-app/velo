@@ -56,7 +56,7 @@
       "cameLeft": "Пришел → ушел",
       "outOf": "{a} из {b}",
       "noPairs": "Пока нет пар для сравнения",
-      "pairsMore": "+ ещё {count} пару | + ещё {count} пары | + ещё {count} пар",
+      "pairsMore": "ещё {count} пару | ещё {count} пары | ещё {count} пар",
       "reviews": "Отзывы",
       "noReviews": "Отзывов пока нет"
     },

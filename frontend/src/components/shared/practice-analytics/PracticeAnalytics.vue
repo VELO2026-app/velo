@@ -193,6 +193,7 @@ const showPairsPager = computed(
         </ul>
         <VShowMore
           v-if="hiddenPairs > 0 && !pairsExpanded"
+          plus
           :label="hiddenPairsLabel"
           @click="pairsExpanded = true"
         />

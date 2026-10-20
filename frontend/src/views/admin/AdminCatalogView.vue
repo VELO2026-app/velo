@@ -50,7 +50,7 @@
         :disabled="!newDirectionLabel.trim()"
         @click="addDirection"
       >
-        {{ t('adminScreens.adminCatalog.add') }}
+        + {{ t('adminScreens.adminCatalog.add') }}
       </VButton>
     </VCard>
 
@@ -91,7 +91,7 @@
           <button
             type="button"
             class="admin-catalog__icon-btn"
-            :aria-label="t('adminScreens.adminCatalog.otmena')"
+            :aria-label="t('adminScreens.adminCatalog.cancelAria')"
             @click="cancelEdit"
           >
             <IconClose :size="18" />
@@ -139,7 +139,7 @@
             clickable
             @click="toggleStyleActive(st)"
           >
-            {{ st.label }} {{ st.is_active ? '✕' : t('adminScreens.adminCatalog.styleActivate') }}
+            {{ st.label }} {{ st.is_active ? '✕' : '· ' + t('adminScreens.adminCatalog.activate') }}
           </VChip>
         </div>
         <div v-else class="admin-catalog__none">{{ t('adminScreens.adminCatalog.noStyles') }}</div>
@@ -236,7 +236,7 @@ async function addDirection(): Promise<void> {
     toast.success(t('adminScreens.adminCatalog.directionAdded'))
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminCatalog.cannotcompletedadddirection')))
+    toast.error(extractApiError(e, t('adminScreens.adminCatalog.addDirectionFailed')))
   } finally {
     addingDirection.value = false
   }
@@ -256,7 +256,7 @@ async function addStyle(dir: TaxonomyDirectionItem): Promise<void> {
     toast.success(t('adminScreens.adminCatalog.styleAdded'))
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminCatalog.cannotcompletedaddstyle')))
+    toast.error(extractApiError(e, t('adminScreens.adminCatalog.addStyleFailed')))
   } finally {
     addingStyleFor.value = null
   }
@@ -287,7 +287,7 @@ async function saveDirectionLabel(dir: TaxonomyDirectionItem): Promise<void> {
     toast.success(t('adminScreens.adminCatalog.sokhraneno'))
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminCatalog.cannotcompletedsave')))
+    toast.error(extractApiError(e, t('adminScreens.adminCatalog.saveFailed')))
   } finally {
     savingDirectionId.value = null
   }
@@ -303,7 +303,7 @@ async function toggleDirectionActive(dir: TaxonomyDirectionItem): Promise<void> 
     await updateTaxonomyDirection(dir.id, { is_active: !dir.is_active })
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminCatalog.cannotcompletedchangestatus')))
+    toast.error(extractApiError(e, t('adminScreens.adminCatalog.statusChangeFailed')))
   } finally {
     togglingId.value = null
   }
@@ -316,7 +316,7 @@ async function toggleStyleActive(st: TaxonomyStyleItem): Promise<void> {
     await updateTaxonomyStyle(st.id, { is_active: !st.is_active })
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminCatalog.cannotcompletedchangestatus')))
+    toast.error(extractApiError(e, t('adminScreens.adminCatalog.statusChangeFailed')))
   } finally {
     togglingId.value = null
   }
@@ -368,7 +368,7 @@ onMounted(load)
   align-items: center;
   /* T21-9 (PROMPT №546): the input can shrink to 0 (min-width:0 below) but
      VButton is white-space:nowrap with no min-width override, so on a narrow
-     card it cannot shrink below t('adminScreens.adminCatalog.dobavit')'s full width and pokes out past
+     card it cannot shrink below t('adminScreens.adminCatalog.add')'s full width and pokes out past
      the card edge. Same escape hatch already used at .admin-catalog__dir-head
      (Bug 6b, PROMPT №408) -- let the button drop to its own line instead. */
   flex-wrap: wrap;

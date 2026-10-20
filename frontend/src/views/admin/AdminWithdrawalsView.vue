@@ -21,7 +21,7 @@
   <div class="admin-withdrawals">
     <header class="admin-withdrawals__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-withdrawals__title">{{ t('adminScreens.adminWithdrawals.vyplaty') }}</h1>
+      <h1 class="admin-withdrawals__title">{{ t('adminScreens.adminWithdrawals.title') }}</h1>
       <span class="admin-withdrawals__count">{{ headerCount }}</span>
     </header>
 

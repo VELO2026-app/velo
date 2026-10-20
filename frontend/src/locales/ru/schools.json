@@ -27,10 +27,10 @@
     "curator": "Куратор: {name}",
     "students": "{n} ученик | {n} ученика | {n} учеников",
     "masters": "{n} мастер | {n} мастера | {n} мастеров",
-    "upload": "+ Загрузить фото",
+    "upload": "Загрузить фото",
     "replace": "Заменить",
     "remove": "Убрать",
-    "bannerUpload": "+ Загрузить фото",
+    "bannerUpload": "Загрузить фото",
     "bannerReplace": "Заменить",
     "bannerRemove": "Убрать"
   },
@@ -44,8 +44,7 @@
     "breakdown": "Расшифровка"
   },
   "branding": {
-    "_comment": "VELO Frontend -- school branding seeds (utils/schoolBranding). Palette display names are catalog data (the hex roles are golden-SVG, untouched); defaultMonogram is the fallback school initial.",
-    "defaultMonogram": "Ш",
+    "_comment": "VELO Frontend -- school branding display seeds (utils/schoolBranding). Palette display names are catalog data; the hex roles are the golden-SVG port (untouched). The monogram fallback letter is a golden constant in logo.ts, deliberately NOT here.",
     "palettes": {
       "eucalyptus": "эвкалипт",
       "dustyAzure": "пыльная лазурь",

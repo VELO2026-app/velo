@@ -76,7 +76,7 @@
         <VEmptyState
           v-else-if="messagesError"
           icon="warning"
-          :title="t('adminScreens.adminSupportDetail.cannotcompletedloadSoobshcheniya')"
+          :title="t('adminScreens.adminSupportDetail.messagesLoadFailed')"
           :description="messagesError"
         >
           <VButton size="sm" variant="outline" @click="loadMessages">{{
@@ -135,8 +135,8 @@
       <div v-else class="support-detail__not-found">
         <VEmptyState
           icon="notfound"
-          :title="t('adminScreens.adminSupportDetail.ObrashcheniecannotNaydeno')"
-          :description="t('adminScreens.adminSupportDetail.VernitesKSpiskuObrashcheniy')"
+          :title="t('adminScreens.adminSupportDetail.notFoundTitle')"
+          :description="t('adminScreens.adminSupportDetail.backToList')"
         />
         <VButton variant="outline" block @click="router.back()">{{
           t('adminScreens.adminSupportDetail.nazad')
@@ -185,7 +185,7 @@ const sending = ref(false)
 const claiming = ref(false)
 
 const headerTitle = computed(
-  () => thread.value?.opener?.name ?? t('adminScreens.adminSupportDetail.obrashchenie'),
+  () => thread.value?.opener?.name ?? t('adminScreens.adminSupportDetail.threadFallback'),
 )
 const canReply = computed(() => !!thread.value && thread.value.assignee === myId.value)
 
