@@ -39,7 +39,9 @@
     "periodMonth": "Месяц",
     "block": "Заблокировать",
     "writeMessage": "Написать сообщение",
-    "statsPeriod": "Период статистики"
+    "statsPeriod": "Период статистики",
+    "untilLabel": "Действует до: {label}",
+    "supportEmailHint": "Не дождались ответа? Напишите на support{'@'}velo.app"
   },
   "tabs": {
     "dashboard": "Дашборд",

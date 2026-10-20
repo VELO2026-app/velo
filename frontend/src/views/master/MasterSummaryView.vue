@@ -108,7 +108,7 @@
           <div class="summary__attn-body">
             <div class="summary__attn-name">{{ student.name }}</div>
             <div class="summary__attn-meta">
-              {{ t('masterScreens.masterSummary.practicesCount', { n: student.practices_count }) }}
+              {{ t('masterScreens.masterCommon.practicesCount', { n: student.practices_count }) }}
             </div>
             <span class="summary__attn-badge"
               ><IconWarning :size="14" />{{

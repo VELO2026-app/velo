@@ -12,6 +12,9 @@
 //   3. COLLISION-- the same ROOT key contributed by two locale files: the
 //                  shallow merge silently drops one (the 'composer' incident).
 //                  Fails the gate.
+//   4. FLAT-DOTTED-- a key whose NAME contains '.': string-collides with the
+//                  nested path of the same name in usage audits, and vue-i18n
+//                  flat-vs-nested resolution is ambiguous. Fails the gate.
 //
 // Dynamic keys are legal (t(`report.reasons.${code}`)); the audit collects
 // every ${...} prefix in source and treats catalog paths under them as used.
@@ -171,6 +174,21 @@ for (const f of files) {
   walkUnused(JSON.parse(readFileSync(join(localesDir, f), 'utf8')), '')
 }
 
+// -- 2b. flat-dotted key names -------------------------------------------------
+const flatDotted = []
+function walkFlat(node, path) {
+  if (node != null && typeof node === 'object') {
+    for (const k of Object.keys(node)) {
+      if (k.includes('.')) flatDotted.push(`${path ? `${path}.` : ''}${k} = ${String(node[k]).slice(0, 50)}`)
+      else walkFlat(node[k], path ? `${path}.${k}` : k)
+    }
+  }
+}
+for (const f of files) {
+  if (SEED_FILES.has(f)) continue
+  walkFlat(JSON.parse(readFileSync(join(localesDir, f), 'utf8')), '')
+}
+
 // -- 3. root collisions -------------------------------------------------------
 const collisions = []
 for (const [root, fs] of rootsByFile) {
@@ -192,6 +210,11 @@ if (unused.length > 0) {
   failed = true
   console.error(`\nkey-audit: ${unused.length} UNUSED leaf(s) -- delete or reference:\n`)
   for (const k of unused) console.error(`   ${k}`)
+}
+if (flatDotted.length > 0) {
+  failed = true
+  console.error(`\nkey-audit: ${flatDotted.length} FLAT-DOTTED key(s) -- rename to nested:\n`)
+  for (const k of flatDotted) console.error(`   ${k}`)
 }
 if (collisions.length > 0) {
   failed = true

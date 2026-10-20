@@ -54,7 +54,7 @@
          Deep-link-safe: pop the existing detail entry (router.back) instead of
          PUSHing a new one — pushing grew history and ping-ponged edit<->detail
          (the back-loop, operator 2026-06-24). Mirror of CreatePracticeView.onBack. -->
-    <VHeader :title="t('ui.edit')" show-back @back="onBack" />
+    <VHeader :title="t('masterScreens.editPractice.title')" show-back @back="onBack" />
 
     <!-- Loading -->
     <div v-if="loading" class="edit-practice__loader">

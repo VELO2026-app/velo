@@ -26,7 +26,7 @@
             <span>{{ practiceWhen }}</span>
             <span class="cpd__pcount"
               ><IconGroup :size="15" />
-              {{ t('practiceCancel.participants', { n: practice.current_participants }) }}</span
+              {{ t('practice.participantsShort', { n: practice.current_participants }) }}</span
             >
           </div>
         </div>

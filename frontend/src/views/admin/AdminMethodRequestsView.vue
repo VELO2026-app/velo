@@ -183,9 +183,9 @@ const promoteLabels = ref<string[]>([])
 const promoteMessage = computed((): string => {
   const labels = promoteLabels.value
   if (labels.length <= 1) {
-    return t('adminScreens.adminMethodRequests.methodSingle', { label: labels[0] ?? '' })
+    return t('adminScreens.adminCommon.methodSingle', { label: labels[0] ?? '' })
   }
-  return t('adminScreens.adminMethodRequests.methodPlural', {
+  return t('adminScreens.adminCommon.methodPlural', {
     labels: labels.map((l) => `«${l}»`).join(', '),
   })
 })

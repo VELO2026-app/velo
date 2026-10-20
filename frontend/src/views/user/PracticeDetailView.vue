@@ -479,7 +479,7 @@ const STATUS_LABEL: Record<BookingStatus, string> = {
   attended: t('user.screens.practiceDetail.state.completed'),
   // B30 (PROMPT №746, owner wording): was «Неявка», inconsistent with
   // MyBookingsView's «Не состоялась» for the same status -- now identical to it there too.
-  no_show: t('common.missedYou'),
+  no_show: t('user.screens.practiceDetail.state.noShow'),
   cancelled: t('user.screens.practiceDetail.state.cancelled'),
 }
 

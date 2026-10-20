@@ -86,7 +86,7 @@
                     used: usedLabel(p),
                   })
                 }}<br />
-                {{ t('adminScreens.adminPromos.untilLine', { label: untilLabel(p) }) }}
+                {{ t('common.untilLabel', { label: untilLabel(p) }) }}
               </div>
             </div>
           </div>

@@ -55,7 +55,7 @@
       </h2>
       <p class="live__master">
         {{
-          t('user.screens.practiceLive.withMaster', {
+          t('shared.form.hostLine', {
             name: practice?.master_name ?? t('shared.form.hostFallback'),
           })
         }}

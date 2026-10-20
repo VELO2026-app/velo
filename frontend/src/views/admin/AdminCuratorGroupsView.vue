@@ -54,7 +54,7 @@
             </VBadge>
           </div>
           <span class="sg-card__curator">{{
-            t('adminScreens.adminCuratorGroups.curatorLine', {
+            t('school.curator', {
               name: g.curator.display_name || '—',
             })
           }}</span>

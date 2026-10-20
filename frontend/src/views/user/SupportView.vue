@@ -81,7 +81,7 @@
         />
       </section>
 
-      <a class="support__email" :href="emailHref">{{ t('user.screens.support.supportEmail') }}</a>
+      <a class="support__email" :href="emailHref">{{ t('common.supportEmailHint') }}</a>
 
       <VButton
         variant="primary"

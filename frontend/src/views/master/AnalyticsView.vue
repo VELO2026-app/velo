@@ -149,9 +149,7 @@
                 <div class="analytics__pcard-title">{{ p.title }}</div>
                 <div class="analytics__pcard-meta">
                   {{ formatShortDate(p.scheduled_at, p.timezone) }} ·
-                  {{
-                    t('masterScreens.analytics.participantsShort', { n: p.current_participants })
-                  }}
+                  {{ t('practice.participantsShort', { n: p.current_participants }) }}
                 </div>
               </div>
             </div>

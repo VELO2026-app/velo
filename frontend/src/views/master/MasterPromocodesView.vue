@@ -62,7 +62,7 @@
                 {{ t('masterScreens.masterPromocodes.discount', { n: p.discount_percent }) }}
               </div>
               <div>{{ t('masterScreens.masterPromocodes.used', { label: usedLabel(p) }) }}</div>
-              <div>{{ t('masterScreens.masterPromocodes.until', { label: untilLabel(p) }) }}</div>
+              <div>{{ t('common.untilLabel', { label: untilLabel(p) }) }}</div>
             </div>
           </div>
         </div>

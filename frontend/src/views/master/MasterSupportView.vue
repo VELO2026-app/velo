@@ -131,9 +131,7 @@
         </div>
       </section>
 
-      <a class="support__email" :href="emailHref">{{
-        t('masterScreens.masterSupport.supportEmailHint')
-      }}</a>
+      <a class="support__email" :href="emailHref">{{ t('common.supportEmailHint') }}</a>
 
       <VButton
         variant="primary"

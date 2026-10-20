@@ -65,7 +65,7 @@
           <div class="students__body">
             <div class="students__name">{{ student.name }}</div>
             <div class="students__meta">
-              {{ t('masterScreens.masterStudents.practicesCount', { n: student.practices_count }) }}
+              {{ t('masterScreens.masterCommon.practicesCount', { n: student.practices_count }) }}
             </div>
             <span v-if="student.needs_attention" class="students__attn">
               <IconWarning :size="14" />{{ t('masterScreens.masterStudents.needsAttention') }}

@@ -83,7 +83,7 @@ function walk(dir) {
       walk(p)
     } else if (/\.(ts|vue)$/.test(name) && !name.includes('.test.')) {
       const normalized = p.replaceAll('\\', '/')
-      if (!EXEMPT_DIRS.some((dir) => normalized.startsWith(dir))) files.push(p)
+      if (!EXEMPT_DIRS.some((dir) => normalized.startsWith(dir + '/'))) files.push(p)
     }
   }
 }

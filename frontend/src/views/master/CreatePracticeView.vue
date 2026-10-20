@@ -1155,7 +1155,7 @@ function validate(): boolean {
     ok = false
   }
   if (!form.date) {
-    errors.date = t('ui.pickerChooseDate')
+    errors.date = t('masterScreens.createPractice.validation.chooseDate')
     ok = false
   }
   if (!form.time) {

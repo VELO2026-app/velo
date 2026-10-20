@@ -30,8 +30,7 @@
         "payments": "Платежи"
       },
       "title": "Аналитика",
-      "feedbacksStat": "Отзывов",
-      "participantsShort": "{n} участников"
+      "feedbacksStat": "Отзывов"
     },
     "attendanceRoster": {
       "empty": {
@@ -127,7 +126,8 @@
         "repeatMin1": "Укажите число повторений (не меньше 1)",
         "chooseGroup": "Выберите хотя бы одну группу",
         "chooseSchool": "Выберите школу",
-        "invalidDateTime": "Некорректные дата или время"
+        "invalidDateTime": "Некорректные дата или время",
+        "chooseDate": "Выберите дату"
       },
       "toast": {
         "created": "Практика создана!",
@@ -260,7 +260,8 @@
         "publish": "Опубликовать практику",
         "deleteDraft": "Удалить черновик",
         "cancelPractice": "Отменить практику"
-      }
+      },
+      "title": "Редактировать"
     },
     "groupJoin": {
       "restrictedByMaster": "Мастер ограничил вам доступ",
@@ -772,8 +773,7 @@
       "newAria": "Новый промокод",
       "loadFailed": "Не удалось загрузить промокоды",
       "discount": "Скидка: {n}%",
-      "used": "Использовано: {label}",
-      "until": "Действует до: {label}"
+      "used": "Использовано: {label}"
     },
     "masterStudentProfile": {
       "addToGroup": "Добавить в группу",
@@ -824,7 +824,6 @@
         "text": "Они появятся после первых практик"
       },
       "title": "Мои ученики",
-      "practicesCount": "Практик: {n}",
       "needsAttention": "Требует внимания"
     },
     "masterSummary": {
@@ -836,8 +835,7 @@
       "needsAttention": "Требуют внимания",
       "needsAttentionSingular": "Требует внимания",
       "summaryAfterConnect": "Сводка появится, когда подключится аналитика",
-      "title": "Саммари недели",
-      "practicesCount": "Практик: {n}"
+      "title": "Саммари недели"
     },
     "masterSupport": {
       "custom": {
@@ -865,11 +863,13 @@
         "tech": "Технические проблемы",
         "addDirection": "Добавить направление практики"
       },
-      "supportEmailHint": "Не дождались ответа? Напишите на support{'@'}velo.app",
       "addFile": "Добавить файл (5MB)"
     },
     "practiceReviews": {
       "loadMoreFailed": "Не удалось загрузить ещё"
+    },
+    "masterCommon": {
+      "practicesCount": "Практик: {n}"
     }
   }
 }
