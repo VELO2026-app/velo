@@ -108,9 +108,7 @@
 
         <div v-if="profile.experience_years != null" class="master-public__pills">
           <span class="master-public__pill">
-            {{ profile.experience_years }}
-            {{ pluralYears(profile.experience_years) }}
-            {{ t('user.screens.masterPublic.experienceSuffix') }}
+            {{ t('user.screens.masterPublic.experienceLine', profile.experience_years) }}
           </span>
         </div>
 
@@ -122,12 +120,12 @@
         <VStatCard
           layout="row"
           :value="profile.practices_count"
-          :label="pluralPractices(profile.practices_count)"
+          :label="t('user.screens.masterPublic.practicesLabel', profile.practices_count)"
         />
         <VStatCard
           layout="row"
           :value="profile.reviews_count"
-          :label="pluralReviews(profile.reviews_count)"
+          :label="t('user.screens.masterPublic.reviewsLabel', profile.reviews_count)"
         />
       </div>
 
@@ -294,7 +292,6 @@ import { blockCuratorGroupMember, demoteCuratorGroupMaster } from '@/api/curator
 import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
-import { plural } from '@/utils/plural'
 import { methodChipFor } from '@/utils/methodChips'
 import type { MasterPublicResponse, PracticeResponse } from '@/api/types'
 
@@ -417,32 +414,6 @@ function onMessageClick(close: () => void): void {
 // embedded in a style label («Медитация молчания») is stripped so a pill
 // never says the word twice (FE-64) — see utils/methodChips.ts.
 const methodChips = computed(() => (profile.value?.methods ?? []).map(methodChipFor))
-
-// -- Russian pluralization helpers (SW14: canonical impl in utils/plural.ts) --
-function pluralYears(n: number): string {
-  return plural(
-    n,
-    t('user.screens.masterPublic.experience.year'),
-    t('user.screens.masterPublic.experience.few'),
-    t('user.screens.masterPublic.experience.many'),
-  )
-}
-function pluralPractices(n: number): string {
-  return plural(
-    n,
-    t('user.screens.masterPublic.plural.practice.one'),
-    t('user.screens.masterPublic.plural.practice.few'),
-    t('user.screens.masterPublic.plural.practice.many'),
-  )
-}
-function pluralReviews(n: number): string {
-  return plural(
-    n,
-    t('user.screens.masterPublic.plural.review.one'),
-    t('user.screens.masterPublic.plural.review.few'),
-    t('user.screens.masterPublic.plural.review.many'),
-  )
-}
 
 function goToPractice(id: string): void {
   void router.push({ name: 'practice-detail', params: { id } })

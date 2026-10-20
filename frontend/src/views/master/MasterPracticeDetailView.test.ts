@@ -1159,7 +1159,7 @@ describe('MasterPracticeDetailView', () => {
       await openDestructive()
 
       expect(dialogText()).toContain('Утренняя йога')
-      expect(dialogText()).toContain('4 участников')
+      expect(dialogText()).toContain('4 участника')
       expect(dialogText()).toContain('Оплаты вернутся автоматически')
     })
 

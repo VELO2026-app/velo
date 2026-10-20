@@ -445,14 +445,10 @@ async function advisoryCount(
 function advisoryLine(count: number | null): string {
   // 0 -> no line at all (nothing would change -- saying so is noise).
   if (count === null || count === 0) return ''
-  const word =
-    count === 1
-      ? t('user.screens.curatorGroupPage.plural.one')
-      : count < 5
-        ? t('user.screens.curatorGroupPage.plural.few')
-        : t('user.screens.curatorGroupPage.plural.many')
-  // the joining space lives here, not in the catalog (no leading-space values)
-  return ` ${t('user.screens.curatorGroupPage.hiddenCount', { count, word })}`
+  // hiddenCount is a CLDR pipe key: the whole sentence agrees per form
+  // (предстанет/станут), so no noun-fragment threading is needed.
+  // The joining space lives here, not in the catalog (no leading-space values).
+  return ` ${t('user.screens.curatorGroupPage.hiddenCount', count)}`
 }
 
 // -- Leave (student / master) --

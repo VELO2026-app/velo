@@ -380,7 +380,6 @@ import {
 import { getGroups } from '@/api/groups'
 import { formatShortDate, todayLocalISO } from '@/utils/format'
 import { masterPracticeBadge } from '@/utils/practiceStatus'
-import { plural } from '@/utils/plural'
 import { ApiResponseError } from '@/api/client'
 import { errorMessage, extractApiError } from '@/composables/useApiError'
 import {
@@ -755,24 +754,16 @@ async function save(): Promise<void> {
     if (preview.stranded_count > 0) {
       // Owner-picked wording (PROMPT №614, wording B): three facts -- how
       // many, why, and that the booking survives (the fact that stops the
-      // master over-panicking). `plural()` (@/utils/plural, the repo's one
-      // canonical Russian pluralizer, already used app-wide for counts)
-      // covers the NOUN's 1 / 2-4 / 5+ forms -- but «записавшийся» is a
-      // substantivized participle, where the 2-4 and 5+ forms happen to be
-      // IDENTICAL (t('masterScreens.editPractice.plural.booked.many') either way), so plural()'s 3-way split
-      // collapses to a binary one here. That same one-vs-rest split also
-      // governs the sentence's verb/pronoun agreement (попадёт/попадут,
-      // он/они, его/их, сможет/смогут), which plural() only ever returns a
-      // single word for and can't cover -- so the SENTENCE branches on
-      // count === 1 directly rather than threading three template
-      // variants through one helper call.
+      // master over-panicking). The NOUN's forms come from the CLDR pipe
+      // key plural.bookedNoun («записавшийся | записавшихся») -- a
+      // substantivized participle whose 2-4 and 5+ forms are IDENTICAL, so
+      // the 3-way split collapses to a binary one there. That same
+      // one-vs-rest split also governs the sentence's verb/pronoun
+      // agreement (попадёт/попадут, он/они), which no noun triple covers --
+      // so the SENTENCE branches on count === 1 directly (strandedHeadOne /
+      // strandedHeadMany) rather than threading variants through a helper.
       const n = preview.stranded_count
-      const noun = plural(
-        n,
-        t('masterScreens.editPractice.plural.booked.one'),
-        t('masterScreens.editPractice.plural.booked.many'),
-        t('masterScreens.editPractice.plural.booked.many'),
-      )
+      const noun = t('masterScreens.editPractice.plural.bookedNoun', n)
       confirmDialog.message =
         n === 1
           ? t('masterScreens.editPractice.confirm.strandedHeadOne', { n, noun }) +

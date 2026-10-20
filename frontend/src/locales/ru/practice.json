@@ -103,6 +103,6 @@
     },
     "loadFailed": "Не удалось загрузить практику",
     "customVariant": "Укажите ваш вариант",
-    "participantsShort": "{n} участников"
+    "participantsShort": "{n} участник | {n} участника | {n} участников"
   }
 }

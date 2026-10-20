@@ -375,7 +375,7 @@ describe('CuratorGroupPageView -- leave', () => {
     await flush()
 
     expect(cgApi.getCuratorGroupLeavePreview).toHaveBeenCalledWith('g1')
-    expect(text()).toContain('2 предстоящих практики для этой школы станут скрыты')
+    expect(text()).toContain('2 предстоящие практики для этой школы станут скрыты')
   })
 
   it('preview 404 while the page loads: the advisory stays silent and the leave still works', async () => {

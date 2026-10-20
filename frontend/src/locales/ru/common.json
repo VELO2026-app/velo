@@ -40,7 +40,7 @@
     "block": "Заблокировать",
     "writeMessage": "Написать сообщение",
     "supportEmailHint": "Не дождались ответа? Напишите на support{'@'}velo.app",
-    "_comment": "VELO Frontend -- common: zone-neutral UI vocabulary and cross-screen formulas referenced from 3+ screens in different feature domains (verbs, load/empty/search formulas, period labels). Feature-owned formulas live in their feature file (promos.json, analytics.json, practice.json, schools.json); entities, titles and independent state-machine statuses stay per-screen."
+    "_comment": "VELO Frontend -- common: zone-neutral UI vocabulary and cross-screen formulas referenced from 3+ screens in different feature domains (verbs, load/empty/search formulas, period labels). Feature-owned formulas live in their feature file (promos.json, analytics.json, practice.json, schools.json); entities, titles and independent state-machine statuses stay per-screen. Pluralization: NUMBER is CLDR pipe-forms inside the key (chosen by Intl.PluralRules via cldrPluralChoice); CASE/ROLE is a separate key per context; fractional counts are never pluralized (format separately)."
   },
   "tabs": {
     "dashboard": "Дашборд",

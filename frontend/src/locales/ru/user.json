@@ -144,11 +144,6 @@
         "field": {
           "schoolFallback": "Школа"
         },
-        "plural": {
-          "one": "практика",
-          "few": "практики",
-          "many": "практик"
-        },
         "toast": {
           "left": "Вы покинули школу",
           "leaveFailed": "Не удалось покинуть школу",
@@ -157,7 +152,7 @@
           "transferredToYou": "Школа передана вам",
           "avatarSaved": "Ссылка на аватар сохранена как {url}"
         },
-        "hiddenCount": "{count} предстоящих {word} для этой школы станут скрыты.",
+        "hiddenCount": "{count} предстоящая практика для этой школы станет скрыта | {count} предстоящие практики для этой школы станут скрыты | {count} предстоящих практик для этой школы станут скрыты.",
         "leaveText": "Вы покинете школу «{name}».{advisory}",
         "leaveNote": "Я состою в этой школе — покинуть её",
         "createPractice": "Создать практику",
@@ -371,33 +366,18 @@
           "alreadyLeftSchool": "Участник уже не в школе",
           "blockFailed": "Не удалось заблокировать участника"
         },
-        "experience": {
-          "year": "год",
-          "few": "года",
-          "many": "лет"
-        },
-        "plural": {
-          "practice": {
-            "one": "Практика",
-            "few": "Практики",
-            "many": "Практик"
-          },
-          "review": {
-            "one": "Отзыв",
-            "few": "Отзыва",
-            "many": "Отзывов"
-          }
-        },
         "profileUnavailable": "Профиль недоступен",
         "tryLater": "Попробуйте позже",
         "title": "Мастер",
         "actionsAria": "Действия с мастером",
-        "experienceSuffix": "опыта",
         "methodsSection": "Методы",
         "analyticsSection": "Аналитика",
         "analyticsStub": "Аналитика мастера появится здесь после подключения данных.",
         "createPractice": "Создать практику",
-        "change": "Изменить"
+        "change": "Изменить",
+        "experienceLine": "{n} год опыта | {n} года опыта | {n} лет опыта",
+        "practicesLabel": "Практика | Практики | Практик",
+        "reviewsLabel": "Отзыв | Отзыва | Отзывов"
       },
       "myBookings": {
         "empty": {

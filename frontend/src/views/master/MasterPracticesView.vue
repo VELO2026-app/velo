@@ -205,7 +205,6 @@ import { zonePercents, zoneTotal, type MoodScaleKey } from '@/utils/moodScale'
 import { checkinLabel, recurrenceLabel, remainingSessionsLabel } from '@/utils/practiceCardMeta'
 import { relativeDayCode, formatShortDate, formatTime } from '@/utils/format'
 import { practiceHasEnded } from '@/utils/practiceStatus'
-import { plural } from '@/utils/plural'
 import type { PracticeResponse } from '@/api/types'
 
 const route = useRoute()
@@ -295,8 +294,7 @@ function participantsLabel(p: PracticeResponse): string {
 
 /** «N участников» with Russian plural agreement — past-card sub-line (PL-E1). */
 function participantsCount(p: PracticeResponse): string {
-  const n = p.current_participants
-  return `${n} ${plural(n, t('masterScreens.masterPractices.participants.one'), t('masterScreens.masterPractices.participants.few'), t('masterScreens.masterPractices.participants.many'))}`
+  return t('masterScreens.masterPractices.participantsLine', p.current_participants)
 }
 
 // -- Insights-derived (REAL) ------------------------------------------------

@@ -677,7 +677,7 @@ describe('EditPracticeView', () => {
       expect(modal).toContain('Отменить практику?')
       expect(modal).toContain('Вечерняя йога')
       expect(modal).toContain('Оплаты вернутся автоматически')
-      expect(modal).toContain('3 участников')
+      expect(modal).toContain('3 участника')
       // Rendered in the practice's own zone: 10:00Z = 13:00 Moscow, 22 July.
       expect(modal).toContain('22 июля, 13:00')
     })
