@@ -57,39 +57,27 @@
     "adminCatalog": {
       "newDirectionPlaceholder": "Новое направление…",
       "catalogLoadFailed": "Не удалось загрузить каталог",
-      "checkConnectionAndRetry": "Проверьте соединение и попробуйте ещё раз",
-      "redaktirovat": "Редактировать",
       "newStylePlaceholder": "Новый вид…",
       "catalogLink": "Каталог практик",
       "noStyles": "Без видов",
       "directionAdded": "Направление добавлено",
       "styleAdded": "Вид добавлен",
       "intro": "Управление каталогом. Изменения видны мастерам сразу при выборе методов.",
-      "add": "Добавить",
-      "deactivate": "Деактивировать",
       "activate": "Активировать",
       "inactiveNote": "Неактивно — скрыто у мастеров, старые методы сохраняются",
-      "cancelAria": "Отмена",
       "addDirectionFailed": "Не удалось добавить направление",
       "addStyleFailed": "Не удалось добавить вид",
       "saveFailed": "Не удалось сохранить",
-      "statusChangeFailed": "Не удалось изменить статус",
-      "savedToast": "Сохранено"
+      "statusChangeFailed": "Не удалось изменить статус"
     },
     "adminCheckinRate": {
       "lowCheckinTitle": "Низкий check-in (практики)",
-      "noData": "Данных пока нет",
-      "loadError": "Ошибка загрузки",
       "subtitle": "{pct}% · {total} записей",
       "avgRate": "Средний check-in rate",
       "totalRecords": "Всего записей",
-      "checkedIn": "Отметились",
-      "loadFailed": "Не удалось загрузить метрику"
+      "checkedIn": "Отметились"
     },
     "adminCuratorGroups": {
-      "loadSchoolsFailed": "Не удалось загрузить школы",
-      "checkConnectionAndRetry": "Проверьте соединение и попробуйте ещё раз",
-      "showMore": "Показать ещё",
       "active": "Активна",
       "frozen": "Заморожена",
       "curatorLine": "Куратор: {name}",
@@ -98,7 +86,6 @@
       "title": "Школы"
     },
     "adminDashboard": {
-      "statsPeriod": "Период статистики",
       "prevPeriod": "Предыдущий период",
       "nextPeriod": "Следующий период",
       "withdrawalRequestsLink": "Запросы мастеров на вывод",
@@ -121,18 +108,14 @@
       "usersSection": "Пользователи",
       "supportSection": "Поддержка",
       "statistics": "Статистика",
-      "periodWeek": "Неделя",
-      "periodMonth": "Месяц",
       "profileAria": "Профиль",
       "promocodesSection": "Промокоды"
     },
     "adminFeedbackRate": {
       "distributionratings": "Распределение оценок",
-      "loadError": "Ошибка загрузки",
       "leaveRate": "Оставляют отзыв",
       "visited": "Посетили",
-      "leftReview": "Оставили отзыв",
-      "loadFailed": "Не удалось загрузить метрику"
+      "leftReview": "Оставили отзыв"
     },
     "adminMasterInvite": {
       "title": "Пригласить мастера",
@@ -142,7 +125,6 @@
       "oneTimeLinkExpiryHint": "Одноразовая · 7 дней с момента создания",
       "toast": {
         "linkCreateFailed": "Не удалось создать ссылку",
-        "linkCopied": "Ссылка скопирована",
         "copyFailed": "Не удалось скопировать"
       },
       "intro": "Создайте ссылку и отправьте её будущему мастеру. Она одноразовая: сработает у первого, кто её откроет, — после этого погашается. Срок действия — 7 дней.",
@@ -208,7 +190,6 @@
         "enterDisplayName": "Введите имя-визитку",
         "experienceRange": "Опыт: целое число 0–50"
       },
-      "sokhraneno": "Сохранено",
       "documentViewUnavailable": "Просмотр документа пока недоступен",
       "verificationError": "Ошибка верификации",
       "rejectionReasonHint": "Укажите причину отказа",
@@ -219,8 +200,6 @@
       "revokeWarning": "{base} Внимание: {warns} — отзыв не блокируется, данные останутся.",
       "warnSchedule": "{n} практик(и) в расписании",
       "warnWithdrawals": "{n} выплат(ы) в ожидании",
-      "loadFailed": "Ошибка загрузки",
-      "cancel": "Отмена",
       "save": "Сохранить",
       "historyTitle": "История заявок",
       "approve": "Одобрить",
@@ -231,16 +210,13 @@
       "grantAction": "Выдать право",
       "revokeMaster": "Отозвать мастера",
       "rejectionReasonPlaceholder": "Укажите причину отклонения заявки",
-      "add": "Добавить",
       "rejectionReason": "Причина отказа",
       "saveFailed": "Не удалось сохранить",
       "grantChangeFailed": "Не удалось изменить право",
       "rejectAction": "Отклонить"
     },
     "adminMasters": {
-      "checkConnectionAndRetry": "Проверьте соединение и попробуйте ещё раз",
       "mastera": "Мастера",
-      "vse": "Все",
       "proverka": "Проверка",
       "zablok": "Заблок.",
       "inviteCta": "Пригласить мастера",
@@ -270,15 +246,12 @@
       "filterRejected": "Отклонены"
     },
     "adminMethodRequests": {
-      "loadFailed": "Не удалось загрузить",
-      "checkConnectionAndRetry": "Проверьте соединение и попробуйте ещё раз",
       "rejectCta": "Отклонить заявку",
       "addToCatalog": "Добавить в каталог",
       "thisMasterOnly": "Только этому мастеру",
       "methodRequestsLink": "Заявки на смену методов",
       "seychas": "Сейчас",
       "predlozheno": "Предложено",
-      "loadError": "Ошибка загрузки",
       "MetodyObnovleny": "Методы обновлены",
       "approveError": "Ошибка при одобрении",
       "rejectionReasonHint": "Укажите причину отказа",
@@ -300,10 +273,6 @@
       "toast": {
         "loadMembersFailed": "Не удалось загрузить участников"
       },
-      "checkConnectionAndRetry": "Проверьте соединение и попробуйте ещё раз",
-      "showMore": "Показать ещё",
-      "noData": "Данных пока нет",
-      "vse": "Все",
       "novye": "Новые",
       "aktivnye": "Активные",
       "joinedLine": "Практик: {n} • с {since}",
@@ -315,20 +284,17 @@
     "adminPracticeDetail": {
       "Detalipractices": "Детали практики",
       "statusVstrechi": "Статус встречи",
-      "noData": "Данных пока нет",
       "nodata": "Нет данных",
       "m": "М",
       "aktivna": "Активна",
       "Ozhidaetcreation": "Ожидает создания",
       "creationError": "Ошибка создания",
-      "loadError": "Ошибка загрузки",
       "bookedStat": "Записалось",
       "attendedStat": "Пришли",
       "freeStat": "Свободно",
       "bookedSection": "Записались ({booked}/{capacity})",
       "presentSection": "Присутствовали ({n})",
       "absentSection": "Не пришли ({n})",
-      "loadFailed": "Не удалось загрузить практику",
       "unmatchedTitle": "Нераспознанные участники",
       "unavailable": "Практика недоступна",
       "deletedLabel": "Удалена",
@@ -336,11 +302,8 @@
       "errorReasonLabel": "Причина ошибки"
     },
     "adminPractices": {
-      "noData": "Данных пока нет",
-      "vse": "Все",
       "predstoyashchie": "Предстоящие",
       "proshedshie": "Прошедшие",
-      "loadError": "Ошибка загрузки",
       "durationMinutes": "{n} мин",
       "loadFailed": "Не удалось загрузить практики",
       "title": "Практики"
@@ -354,9 +317,6 @@
       "readOnlyBadge": "РЕЖИМ ПРОСМОТРА"
     },
     "adminPromos": {
-      "checkConnectionAndRetry": "Проверьте соединение и попробуйте ещё раз",
-      "deaktivirovat": "Деактивировать",
-      "vse": "Все",
       "kompanii": "Компании",
       "deaktivir": "Деактивир.",
       "empty": {
@@ -367,7 +327,6 @@
       },
       "bessrochno": "бессрочно",
       "promocodesLoadError": "Ошибка загрузки промокодов",
-      "loadError": "Ошибка загрузки",
       "PromokodDeaktivirovan": "Промокод деактивирован",
       "deactivateConfirm": "Деактивировать промокод {code}? Мастер и участники больше не смогут им воспользоваться.",
       "usedOf": "{used} из {max}",
@@ -377,7 +336,6 @@
       "inactive": "Деактивирован",
       "discountLine": "Скидка: {n}% · Использовано: {used}",
       "untilLine": "Действует до: {label}",
-      "deactivate": "Деактивировать",
       "loadFailed": "Не удалось загрузить промокоды",
       "deactivateFailedToast": "Не удалось деактивировать промокод",
       "filterMasters": "Мастеров",
@@ -393,11 +351,9 @@
       "IdTseli": "ID цели",
       "obrabotana": "Обработана",
       "primechanie": "Примечание",
-      "nazad": "Назад",
       "VveditePrimechanieKResheniyu": "Введите примечание к решению",
       "processError": "Ошибка при обработке",
       "title": "Жалоба",
-      "loadFailed": "Ошибка загрузки",
       "resolve": "Решить",
       "reject": "Отклонить",
       "alreadyProcessed": "Жалоба уже обработана — статус: ",
@@ -413,50 +369,37 @@
       "rejectedToast": "Жалоба отклонена"
     },
     "adminReports": {
-      "loadFailed": "Не удалось загрузить",
-      "checkConnectionAndRetry": "Проверьте соединение и попробуйте ещё раз",
       "empty": {
         "title": "Обращений нет"
       },
       "filterNoHits": "По выбранным фильтрам ничего не найдено",
-      "vse": "Все",
       "tikety": "Тикеты",
       "platezhi": "Платежи",
       "filtr": "Фильтр",
       "ticketsLoadError": "Ошибка загрузки обращений",
-      "loadError": "Ошибка загрузки",
       "moderationTab": "Модерация",
       "tabComplaints": "Жалобы"
     },
     "adminReturnRate": {
       "topLoyalUsers": "Топ лояльных юзеров",
-      "noData": "Данных пока нет",
-      "loadError": "Ошибка загрузки",
       "practicesCount": "{n} практик",
       "returnRate": "Возвращаются повторно",
       "totalUsers": "Всего пользователей",
-      "returning": "Повторно",
-      "loadFailed": "Не удалось загрузить метрику"
+      "returning": "Повторно"
     },
     "adminRevenue": {
       "revenuePeriod": "Период выручки",
       "revenueLoadFailed": "Не удалось загрузить выручку",
       "vyruchka": "Выручка",
       "byMasters": "По мастерам",
-      "noData": "Данных пока нет",
-      "loadError": "Ошибка загрузки",
       "paidAmount": "Выплачено: {amount}",
       "commissionStat": "Комиссия",
       "payoutStat": "Выплачено",
       "titleWeek": "Выручка за неделю",
-      "titleMonth": "Выручка за месяц",
-      "periodWeek": "Неделя",
-      "periodMonth": "Месяц"
+      "titleMonth": "Выручка за месяц"
     },
     "adminSupportDetail": {
-      "loadError": "Ошибка загрузки",
       "otvet": "Ответ…",
-      "nazad": "Назад",
       "status": {
         "unclaimed": "Не взято",
         "mine": "У меня"
@@ -475,15 +418,12 @@
       "take": "Взять в работу",
       "noMessages": "Сообщений пока нет.",
       "refresh": "Обновить",
-      "send": "Отправить",
       "messagesLoadFailed": "Не удалось загрузить сообщения",
       "notFoundTitle": "Обращение не найдено",
       "backToList": "Вернитесь к списку обращений",
       "threadFallback": "Обращение"
     },
     "adminSupport": {
-      "loadFailed": "Не удалось загрузить",
-      "checkConnectionAndRetry": "Проверьте соединение и попробуйте ещё раз",
       "empty": {
         "title": "Обращений нет",
         "text": "Сюда попадут все обращения в поддержку"
@@ -494,7 +434,6 @@
       },
       "zanyato": "Занято",
       "ticketsLoadError": "Ошибка загрузки обращений",
-      "loadError": "Ошибка загрузки",
       "resolved": "Решено",
       "closed": "Закрыто",
       "title": "Поддержка",
@@ -502,13 +441,8 @@
     },
     "adminUsers": {
       "usersLoadFailed": "Не удалось загрузить пользователей",
-      "checkConnectionAndRetry": "Проверьте соединение и попробуйте ещё раз",
       "naznachit": "Назначить",
-      "showMore": "Показать ещё",
       "noName": "Без имени",
-      "search": {
-        "noHits": "Никого не найдено"
-      },
       "empty": {
         "title": "Пользователей пока нет"
       },
@@ -541,7 +475,6 @@
         "rejected": "Выплата отклонена",
         "rejectFailed": "Ошибка отклонения выплаты"
       },
-      "confirm": "Подтвердить",
       "alreadyProcessed": "Запрос уже обработан — статус: ",
       "rejectionReasonPlaceholder": "Укажите причину отклонения выплаты",
       "rejectionReasonRequired": "Укажите причину отклонения",
@@ -550,8 +483,6 @@
       "openReject": "Отклонить"
     },
     "adminWithdrawals": {
-      "loadFailed": "Не удалось загрузить",
-      "checkConnectionAndRetry": "Проверьте соединение и попробуйте ещё раз",
       "empty": {
         "title": "Запросов на вывод нет",
         "text": "Новые запросы мастеров появятся здесь"
@@ -562,10 +493,12 @@
       "odobren": "Одобрен",
       "bank": "Банк",
       "withdrawalsLoadError": "Ошибка загрузки выплат",
-      "loadError": "Ошибка загрузки",
       "toReceive": "К получению {amount}",
       "title": "Выплаты",
       "statusRejected": "Отклонён"
+    },
+    "adminCommon": {
+      "loadMetricFailed": "Не удалось загрузить метрику"
     }
   }
 }

@@ -64,7 +64,7 @@
           <template #default="{ close }">
             <VMenuItem
               :icon="IconPen"
-              :ariaLabel="t('user.screens.practiceDetail.edit')"
+              :ariaLabel="t('ui.edit')"
               @click="
                 () => {
                   goEdit()
@@ -479,7 +479,7 @@ const STATUS_LABEL: Record<BookingStatus, string> = {
   attended: t('user.screens.practiceDetail.state.completed'),
   // B30 (PROMPT №746, owner wording): was «Неявка», inconsistent with
   // MyBookingsView's «Не состоялась» for the same status -- now identical to it there too.
-  no_show: t('user.screens.practiceDetail.state.noShow'),
+  no_show: t('common.missedYou'),
   cancelled: t('user.screens.practiceDetail.state.cancelled'),
 }
 

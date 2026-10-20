@@ -175,7 +175,7 @@ async function load(): Promise<void> {
     const [attendanceData] = await Promise.all([getAttendance(practiceId), loadPractice()])
     attendance.value = attendanceData
   } catch (e) {
-    error.value = extractApiError(e, t('masterScreens.attendance.error.load'))
+    error.value = extractApiError(e, t('common.loadError'))
   } finally {
     loading.value = false
   }

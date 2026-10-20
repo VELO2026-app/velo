@@ -71,7 +71,7 @@
           class="school-analytics__period"
           :options="PERIOD_OPTIONS"
           variant="tabs"
-          :aria-label="t('user.screens.schoolAnalytics.statsPeriod')"
+          :aria-label="t('common.statsPeriod')"
         />
 
         <!-- Interim scaffold (owner 2026-10-02: «бек доедет»): every
@@ -221,8 +221,8 @@ const inMasterZone = computed(() => String(route.name ?? '').startsWith('master'
 //    own calendar, the slider only names it. --
 const period = ref<SchoolAnalyticsPeriod>('week')
 const PERIOD_OPTIONS: ReadonlyArray<{ value: SchoolAnalyticsPeriod; label: string }> = [
-  { value: 'week', label: t('user.screens.schoolAnalytics.period.week') },
-  { value: 'month', label: t('user.screens.schoolAnalytics.period.month') },
+  { value: 'week', label: t('common.periodWeek') },
+  { value: 'month', label: t('common.periodMonth') },
   { value: 'quarter', label: t('user.screens.schoolAnalytics.period.quarter') },
 ]
 

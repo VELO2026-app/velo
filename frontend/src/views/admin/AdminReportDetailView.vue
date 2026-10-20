@@ -26,7 +26,7 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        :title="t('adminScreens.adminReportDetail.loadFailed')"
+        :title="t('common.loadError')"
         :description="error"
       >
         <VButton size="sm" variant="outline" @click="loadReport">{{ t('common.retry') }}</VButton>
@@ -172,9 +172,7 @@
           :title="t('adminScreens.adminReportDetail.notFoundTitle')"
           :description="t('adminScreens.adminReportDetail.backToList')"
         />
-        <VButton variant="outline" block @click="router.back()">{{
-          t('adminScreens.adminReportDetail.nazad')
-        }}</VButton>
+        <VButton variant="outline" block @click="router.back()">{{ t('ui.back') }}</VButton>
       </div>
     </div>
   </div>

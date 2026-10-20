@@ -49,7 +49,7 @@
       v-else-if="error"
       icon="warning"
       :title="t('adminScreens.adminMasters.loadFailed')"
-      :description="t('adminScreens.adminMasters.checkConnectionAndRetry')"
+      :description="t('common.checkConnection')"
     >
       <template #action
         ><VButton variant="primary" @click="load">{{ t('common.retry') }}</VButton></template
@@ -214,7 +214,7 @@ const headerCount = computed<string>(() => (total.value ? String(total.value) : 
 // `cancelled_by_user` (the tab exists, count 0 — expected). F5: short labels;
 // the strip is compact + horizontally scrollable (VSegment scrollable).
 const segOptions = computed<SegmentOption[]>(() => [
-  { value: 'all', label: t('adminScreens.adminMasters.vse'), badge: total.value || undefined },
+  { value: 'all', label: t('common.all'), badge: total.value || undefined },
   {
     value: 'pending',
     label: t('adminScreens.adminMasters.proverka'),

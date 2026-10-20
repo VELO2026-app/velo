@@ -38,7 +38,7 @@
       v-else-if="store.selectedError || !practice"
       icon="warning"
       :title="t('user.screens.bookingConfirmed.notFound')"
-      :description="store.selectedError ?? t('user.screens.bookingConfirmed.loadFailed')"
+      :description="store.selectedError ?? t('practice.loadFailed')"
     >
       <VButton size="sm" @click="goToDashboard">{{ t('common.backHome') }}</VButton>
     </VEmptyState>

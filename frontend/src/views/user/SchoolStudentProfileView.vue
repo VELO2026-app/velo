@@ -49,7 +49,7 @@
           <template #default="{ close }">
             <VMenuItem
               :icon="IconMessages"
-              :ariaLabel="t('user.screens.schoolStudentProfile.message.cta')"
+              :ariaLabel="t('common.writeMessage')"
               @click="onMessageClick(close)"
             />
             <VMenuItem
@@ -62,7 +62,7 @@
                  blocking replaced the removed exclusion); BE-79 (2) wired it. -->
             <VMenuItem
               :icon="IconLock"
-              :ariaLabel="t('user.screens.schoolStudentProfile.block.cta')"
+              :ariaLabel="t('common.block')"
               danger
               @click="onBlockClick(close)"
             />
@@ -162,7 +162,7 @@
         </p>
         <div class="ssp__role-actions">
           <VButton variant="danger" block :disabled="rolePending" @click="onRoleClose">
-            {{ t('user.screens.schoolStudentProfile.cancel') }}
+            {{ t('ui.cancel') }}
           </VButton>
           <VButton
             variant="primary"
@@ -202,7 +202,7 @@
       :open="blockConfirmOpen"
       :title="t('user.screens.schoolStudentProfile.block.confirmTitle')"
       :message="blockCopy"
-      :confirm-label="t('user.screens.schoolStudentProfile.block.cta')"
+      :confirm-label="t('common.block')"
       danger
       warning-panel
       cancel-variant="primary"

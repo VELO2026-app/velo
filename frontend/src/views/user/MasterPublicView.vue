@@ -45,7 +45,7 @@
           <template #default="{ close }">
             <VMenuItem
               :icon="IconMessages"
-              :ariaLabel="t('user.screens.masterPublic.message.cta')"
+              :ariaLabel="t('common.writeMessage')"
               @click="onMessageClick(close)"
             />
             <VMenuItem
@@ -57,7 +57,7 @@
             <VMenuItem
               v-if="schoolContext"
               :icon="IconLock"
-              :ariaLabel="t('user.screens.masterPublic.block.cta')"
+              :ariaLabel="t('common.block')"
               danger
               @click="onBlockClick(close)"
             />
@@ -78,9 +78,7 @@
       :title="t('user.screens.masterPublic.notFound')"
       :description="error ?? undefined"
     >
-      <VButton size="sm" @click="router.back()">{{
-        t('user.screens.masterPublic.ui.back')
-      }}</VButton>
+      <VButton size="sm" @click="router.back()">{{ t('ui.back') }}</VButton>
     </VEmptyState>
 
     <!-- Server/network error (B11 item 2): distinct from "not found" -- this
@@ -88,12 +86,10 @@
     <VEmptyState
       v-else-if="error || !profile"
       icon="warning"
-      :title="t('user.screens.masterPublic.loadFailed')"
+      :title="t('common.loadFailed')"
       :description="error ?? undefined"
     >
-      <VButton size="sm" @click="loadMaster(masterId)">{{
-        t('user.screens.masterPublic.common.retry')
-      }}</VButton>
+      <VButton size="sm" @click="loadMaster(masterId)">{{ t('common.retry') }}</VButton>
     </VEmptyState>
 
     <!-- Content -->
@@ -256,7 +252,7 @@
       :open="blockConfirmOpen"
       :title="t('user.screens.masterPublic.block.confirmTitle')"
       :message="blockCopy"
-      :confirm-label="t('user.screens.masterPublic.block.confirmLabel')"
+      :confirm-label="t('common.block')"
       danger
       warning-panel
       cancel-variant="primary"

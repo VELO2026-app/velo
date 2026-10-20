@@ -49,7 +49,7 @@
           v-model="period"
           :options="PERIOD_OPTIONS"
           variant="toggle"
-          :aria-label="t('masterScreens.analytics.statsPeriod')"
+          :aria-label="t('common.statsPeriod')"
         />
       </template>
     </VHeader>
@@ -108,7 +108,7 @@
           </div>
           <button
             class="analytics__attention-msg"
-            :aria-label="t('masterScreens.analytics.messageCta')"
+            :aria-label="t('common.writeMessage')"
             @click.stop="openMessage(item.user_id, item.reviewer_name)"
           >
             <IconMessages :size="22" />
@@ -238,7 +238,7 @@
               <VButton variant="ghost" @click="loadMoreTx">{{ t('common.showMore') }}</VButton>
             </div>
           </div>
-          <VEmptyState v-else variant="note" :title="t('masterScreens.analytics.noData')" />
+          <VEmptyState v-else variant="note" :title="t('common.noData')" />
         </section>
       </template>
     </div>
@@ -314,8 +314,8 @@ const TAB_OPTIONS: Array<{ value: 'reviews' | 'payments'; label: string }> = [
 // (mirrors the master-dashboard pattern). Roadmap: period-scoped summary API.
 const period = ref<'week' | 'month'>('week')
 const PERIOD_OPTIONS: ReadonlyArray<{ value: 'week' | 'month'; label: string }> = [
-  { value: 'week', label: t('masterScreens.analytics.period.week') },
-  { value: 'month', label: t('masterScreens.analytics.period.month') },
+  { value: 'week', label: t('common.periodWeek') },
+  { value: 'month', label: t('common.periodMonth') },
 ]
 
 // =========================================================================
@@ -506,7 +506,7 @@ async function loadPayments(): Promise<void> {
     transactions.value = txRes.items
     txTotal.value = txRes.total
   } catch (e) {
-    paymentsError.value = extractApiError(e, t('masterScreens.analytics.error.load'))
+    paymentsError.value = extractApiError(e, t('common.loadError'))
   } finally {
     paymentsLoading.value = false
   }

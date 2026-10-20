@@ -34,7 +34,7 @@
         <span class="popup__value">{{ practice.title }}</span>
       </div>
       <div class="popup__row">
-        <span class="popup__label">{{ t('booking.labels.date') }}</span>
+        <span class="popup__label">{{ t('ui.pickerDate') }}</span>
         <span class="popup__value">{{ formattedDate }}</span>
       </div>
       <div class="popup__row">

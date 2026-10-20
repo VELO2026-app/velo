@@ -48,7 +48,7 @@
       <VEmptyState
         v-else-if="feedbacksError"
         icon="warning"
-        :title="t('masterScreens.masterSummary.error.load')"
+        :title="t('common.loadFailed')"
         :description="feedbacksError"
       >
         <VButton size="sm" variant="outline" @click="loadFeedbacks">{{
@@ -89,7 +89,7 @@
       <VEmptyState
         v-else-if="attnError"
         icon="warning"
-        :title="t('masterScreens.masterSummary.error.load')"
+        :title="t('common.loadFailed')"
         :description="attnError"
       >
         <VButton size="sm" variant="outline" @click="loadStudents">{{ t('common.retry') }}</VButton>
@@ -118,7 +118,7 @@
           </div>
           <button
             class="summary__msg"
-            :aria-label="t('masterScreens.masterSummary.messageCta')"
+            :aria-label="t('common.writeMessage')"
             @click.stop="openMessage(student.id, student.name)"
           >
             <IconMessages :size="22" />
@@ -178,7 +178,7 @@ async function loadFeedbacks(): Promise<void> {
     const res = await getMasterReviews(FEEDBACKS_PAGE, 0, false)
     keyFeedbacks.value = res.items
   } catch {
-    feedbacksError.value = t('masterScreens.masterSummary.tryAgain')
+    feedbacksError.value = t('common.tryAgain')
   } finally {
     feedbacksLoading.value = false
   }
@@ -207,7 +207,7 @@ async function loadStudents(): Promise<void> {
     const res = await getStudents()
     students.value = res.items
   } catch {
-    attnError.value = t('masterScreens.masterSummary.tryAgain')
+    attnError.value = t('common.tryAgain')
   } finally {
     attnLoading.value = false
   }

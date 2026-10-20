@@ -21,7 +21,7 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminCheckinRate.loadFailed')"
+      :title="t('adminScreens.adminCommon.loadMetricFailed')"
       :description="error"
     >
       <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
@@ -47,7 +47,7 @@
       </template>
       <VCard v-else
         ><p class="admin-detail__empty">
-          {{ t('adminScreens.adminCheckinRate.noData') }}
+          {{ t('common.noData') }}
         </p></VCard
       >
     </template>
@@ -110,7 +110,7 @@ async function load(): Promise<void> {
   try {
     data.value = await getCheckinMetric(period, offset)
   } catch (e) {
-    error.value = extractApiError(e, t('adminScreens.adminCheckinRate.loadError'))
+    error.value = extractApiError(e, t('common.loadError'))
   } finally {
     loading.value = false
   }

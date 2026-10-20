@@ -67,7 +67,7 @@
       <VEmptyState
         v-if="loadError"
         icon="warning"
-        :title="t('shared.form.loadFailed')"
+        :title="t('practice.loadFailed')"
         :description="loadError"
       >
         <VButton size="sm" @click="emit('retry')">{{ t('common.retry') }}</VButton>

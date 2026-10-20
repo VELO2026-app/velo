@@ -34,8 +34,8 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminWithdrawals.loadFailed')"
-      :description="t('adminScreens.adminWithdrawals.checkConnectionAndRetry')"
+      :title="t('common.loadFailed')"
+      :description="t('common.checkConnection')"
     >
       <template #action
         ><VButton variant="primary" @click="loadInitial">{{ t('common.retry') }}</VButton></template
@@ -205,7 +205,7 @@ async function loadMore(): Promise<void> {
     items.value.push(...res.items)
     hasMore.value = items.value.length < res.total
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminWithdrawals.loadError')))
+    toast.error(extractApiError(e, t('common.loadError')))
   } finally {
     loadingMore.value = false
   }

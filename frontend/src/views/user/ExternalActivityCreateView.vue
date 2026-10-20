@@ -53,7 +53,7 @@
       <!--
       <div class="ea__legend">
         <IconRequired class="ea__legend-seal" :size="22" />
-        <span>— {{ t('user.screens.externalActivityCreate.legend') }}</span>
+        <span>— {{ t('ui.legendRequired') }}</span>
       </div>
       -->
 
@@ -70,7 +70,7 @@
             :class="{ 'ea__picker--empty': !date, 'ea__picker--error': !!errors.date }"
             @click="showDate = true"
           >
-            {{ date ? dateDisplay : t('user.screens.externalActivityCreate.pickers.date') }}
+            {{ date ? dateDisplay : t('ui.pickerDate') }}
           </button>
           <span class="ea__field-error" :class="{ 'ea__field-error--show': !!errors.date }">{{
             errors.date
@@ -87,7 +87,7 @@
             }"
             @click="showTime = true"
           >
-            {{ time || t('user.screens.externalActivityCreate.pickers.time') }}
+            {{ time || t('ui.pickerTime') }}
           </button>
           <span
             class="ea__field-error"
@@ -146,7 +146,7 @@
               v-model="customInput"
               class="ea__custom-input"
               type="text"
-              :placeholder="t('user.screens.externalActivityCreate.custom.placeholder')"
+              :placeholder="t('practice.customVariant')"
               :maxlength="CUSTOM_NAME_MAX"
               :aria-label="t('user.screens.externalActivityCreate.custom.title')"
               :disabled="!!customChip"
@@ -381,7 +381,7 @@ function onCustomInput(): void {
 function commitCustom(): void {
   const name = customInput.value.trim()
   if (name.length === 0) {
-    errors.value.custom = t('user.screens.externalActivityCreate.custom.placeholder2')
+    errors.value.custom = t('practice.customVariant')
     return
   }
   customChip.value = name
@@ -423,14 +423,14 @@ function fieldHasError(key: (typeof FIELD_ORDER)[number]): boolean {
 }
 
 function validate(): boolean {
-  errors.value.date = date.value ? '' : t('user.screens.externalActivityCreate.picker.date')
+  errors.value.date = date.value ? '' : t('ui.pickerChooseDate')
   errors.value.time = time.value ? '' : t('user.screens.externalActivityCreate.picker.time')
   errors.value.activity = selectedActivity.value
     ? ''
     : t('user.screens.externalActivityCreate.picker.activity')
   errors.value.custom =
     selectedActivity.value === 'custom' && customChip.value === null
-      ? t('user.screens.externalActivityCreate.customRequired')
+      ? t('practice.customVariant')
       : ''
   // The mood never blocks: the slider stands on the visible default, so
   // errors.state exists only as the sink for a backend mood 422

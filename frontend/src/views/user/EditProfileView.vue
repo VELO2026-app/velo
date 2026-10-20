@@ -212,9 +212,7 @@
         </template>
 
         <div class="edit-profile__del-actions">
-          <VButton variant="secondary" @click="closeDeleteModal">{{
-            t('user.screens.editProfile.delete.cancel')
-          }}</VButton>
+          <VButton variant="secondary" @click="closeDeleteModal">{{ t('ui.cancel') }}</VButton>
           <VButton variant="danger" :disabled="!canDelete" @click="onConfirmDelete">{{
             t('user.screens.editProfile.delete.confirmButton')
           }}</VButton>

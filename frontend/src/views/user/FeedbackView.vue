@@ -33,9 +33,7 @@
       :title="t('user.screens.feedback.waiting.title')"
       :description="t('user.screens.feedback.waiting.text')"
     >
-      <VButton size="sm" @click="goToDashboard">{{
-        t('user.screens.feedback.common.backHome')
-      }}</VButton>
+      <VButton size="sm" @click="goToDashboard">{{ t('common.backHome') }}</VButton>
     </VEmptyState>
     <VEmptyState
       v-else

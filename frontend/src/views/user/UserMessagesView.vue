@@ -26,7 +26,7 @@
     </div>
 
     <div v-else-if="error" class="user-messages__center">
-      <VEmptyState :title="t('user.screens.userMessages.loadFailed')" :description="error">
+      <VEmptyState :title="t('common.loadFailed')" :description="error">
         <template #icon>
           <IconMessages :size="48" />
         </template>
@@ -83,7 +83,7 @@ async function load(): Promise<void> {
   try {
     threads.value = (await listChats()).threads
   } catch (e) {
-    error.value = extractApiError(e, t('user.screens.userMessages.tryAgain'))
+    error.value = extractApiError(e, t('common.tryAgain'))
   }
   loading.value = false
 }

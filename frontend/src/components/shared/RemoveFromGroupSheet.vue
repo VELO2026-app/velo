@@ -43,7 +43,7 @@
     :title="t('shared.groups.removeTitle')"
     compact-title
     title-strong
-    :save-label="t('shared.groups.removeSave')"
+    :save-label="t('ui.delete')"
     :cancel-label="t('ui.cancel')"
     @save="onSave"
     @close="$emit('close')"

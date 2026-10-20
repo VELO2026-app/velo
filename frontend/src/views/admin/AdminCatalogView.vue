@@ -50,7 +50,7 @@
         :disabled="!newDirectionLabel.trim()"
         @click="addDirection"
       >
-        + {{ t('adminScreens.adminCatalog.add') }}
+        + {{ t('ui.add') }}
       </VButton>
     </VCard>
 
@@ -60,7 +60,7 @@
       v-else-if="error"
       icon="warning"
       :title="t('adminScreens.adminCatalog.catalogLoadFailed')"
-      :description="t('adminScreens.adminCatalog.checkConnectionAndRetry')"
+      :description="t('common.checkConnection')"
     >
       <template #action
         ><VButton variant="primary" @click="load">{{ t('common.retry') }}</VButton></template
@@ -89,7 +89,7 @@
           <button
             type="button"
             class="admin-catalog__icon-btn"
-            :aria-label="t('adminScreens.adminCatalog.cancelAria')"
+            :aria-label="t('ui.cancel')"
             @click="cancelEdit"
           >
             <IconClose :size="18" />
@@ -101,7 +101,7 @@
           <button
             type="button"
             class="admin-catalog__icon-btn"
-            :aria-label="t('adminScreens.adminCatalog.redaktirovat')"
+            :aria-label="t('ui.edit')"
             @click="startEditDirection(dir)"
           >
             <IconPen :size="18" />
@@ -113,7 +113,7 @@
             :loading="togglingId === dir.id"
             @click="toggleDirectionActive(dir)"
           >
-            {{ t('adminScreens.adminCatalog.deactivate') }}
+            {{ t('ui.deactivate') }}
           </VButton>
           <VButton
             v-else
@@ -282,7 +282,7 @@ async function saveDirectionLabel(dir: TaxonomyDirectionItem): Promise<void> {
   try {
     await updateTaxonomyDirection(dir.id, { label })
     editingDirectionId.value = null
-    toast.success(t('adminScreens.adminCatalog.savedToast'))
+    toast.success(t('ui.saved'))
     await load()
   } catch (e) {
     toast.error(extractApiError(e, t('adminScreens.adminCatalog.saveFailed')))
@@ -366,7 +366,7 @@ onMounted(load)
   align-items: center;
   /* T21-9 (PROMPT №546): the input can shrink to 0 (min-width:0 below) but
      VButton is white-space:nowrap with no min-width override, so on a narrow
-     card it cannot shrink below t('adminScreens.adminCatalog.add')'s full width and pokes out past
+     card it cannot shrink below t('ui.add')'s full width and pokes out past
      the card edge. Same escape hatch already used at .admin-catalog__dir-head
      (Bug 6b, PROMPT №408) -- let the button drop to its own line instead. */
   flex-wrap: wrap;

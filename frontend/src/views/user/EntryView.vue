@@ -31,7 +31,7 @@
   <div class="entry">
     <!-- Header -->
     <header class="entry__header">
-      <VBackButton :aria-label="t('user.screens.entry.backAria')" @click="goBack" />
+      <VBackButton :aria-label="t('ui.back')" @click="goBack" />
       <h1 class="entry__title-bar">{{ t('user.screens.entry.titleFallback') }}</h1>
 
       <!-- "..." menu (view mode only): edit + delete. -->
@@ -39,7 +39,7 @@
         <template #default="{ close }">
           <VMenuItem
             :icon="IconPen"
-            :ariaLabel="t('user.screens.entry.edit')"
+            :ariaLabel="t('ui.edit')"
             @click="
               () => {
                 startEdit()
@@ -49,7 +49,7 @@
           />
           <VMenuItem
             :icon="IconTrash"
-            :ariaLabel="t('user.screens.entry.delete')"
+            :ariaLabel="t('ui.delete')"
             danger
             @click="
               () => {
@@ -77,9 +77,7 @@
         :description="loadError"
       >
         <template #action>
-          <VButton variant="primary" @click="reload">{{
-            t('user.screens.entry.common.retry')
-          }}</VButton>
+          <VButton variant="primary" @click="reload">{{ t('common.retry') }}</VButton>
         </template>
       </VEmptyState>
 

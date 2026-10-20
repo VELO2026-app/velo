@@ -28,17 +28,17 @@ design, mirroring MasterInviteClaimView's own state machine exactly:
       <template v-if="joining">
         <VLoader size="lg" />
         <p class="group-join__subtitle">
-          {{ t('masterScreens.groupJoin.verifying') }}
+          {{ t('common.inviteChecking') }}
         </p>
       </template>
 
       <!-- Transient (network/timeout) -- offer a retry, not a dead-link verdict. -->
       <template v-else-if="transientError">
         <h2 class="group-join__title">
-          {{ t('masterScreens.groupJoin.verifyFailed') }}
+          {{ t('common.inviteCheckFailed') }}
         </h2>
         <p class="group-join__subtitle">
-          {{ t('masterScreens.groupJoin.loadFailed') }}
+          {{ t('common.connProblem') }}
         </p>
         <div class="group-join__actions">
           <VButton variant="primary" block :loading="joining" @click="join">{{

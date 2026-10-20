@@ -35,7 +35,7 @@
       v-else-if="error"
       icon="warning"
       :title="t('adminScreens.adminUsers.usersLoadFailed')"
-      :description="t('adminScreens.adminUsers.checkConnectionAndRetry')"
+      :description="t('common.checkConnection')"
     >
       <template #action
         ><VButton variant="primary" @click="load(true)">{{ t('common.retry') }}</VButton></template
@@ -63,7 +63,7 @@
 
       <div v-if="hasMore" class="admin-users__more">
         <VButton variant="outline" :loading="loadingMore" @click="loadMore">{{
-          t('adminScreens.adminUsers.showMore')
+          t('common.showMore')
         }}</VButton>
       </div>
     </template>
@@ -137,9 +137,7 @@ const filtered = computed<UserResponse[]>(() => {
 })
 
 const emptyText = computed<string>(() =>
-  search.value.trim()
-    ? t('adminScreens.adminUsers.search.noHits')
-    : t('adminScreens.adminUsers.empty.title'),
+  search.value.trim() ? t('common.searchNoHits') : t('adminScreens.adminUsers.empty.title'),
 )
 
 function roleLabel(role: string): string {

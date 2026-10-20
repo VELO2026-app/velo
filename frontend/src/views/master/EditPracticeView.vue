@@ -54,7 +54,7 @@
          Deep-link-safe: pop the existing detail entry (router.back) instead of
          PUSHing a new one — pushing grew history and ping-ponged edit<->detail
          (the back-loop, operator 2026-06-24). Mirror of CreatePracticeView.onBack. -->
-    <VHeader :title="t('masterScreens.editPractice.title')" show-back @back="onBack" />
+    <VHeader :title="t('ui.edit')" show-back @back="onBack" />
 
     <!-- Loading -->
     <div v-if="loading" class="edit-practice__loader">
@@ -126,24 +126,20 @@
           <!-- Дата — DS-пикер (реш. В: возвращена по логике — перенос практики
                норм. операция; нативный type=date заменён на брендовый пикер). -->
           <div class="edit-practice__field">
-            <label class="edit-practice__field-label">{{
-              t('masterScreens.editPractice.fields.date')
-            }}</label>
+            <label class="edit-practice__field-label">{{ t('ui.pickerDate') }}</label>
             <button
               type="button"
               class="edit-practice__picker"
               :class="{ 'edit-practice__picker--empty': !form.date }"
               @click="showDate = true"
             >
-              {{ form.date ? dateDisplay : t('masterScreens.editPractice.pickers.date') }}
+              {{ form.date ? dateDisplay : t('ui.pickerChooseDate') }}
             </button>
           </div>
 
           <!-- Время — DS-пикер (24ч, шаг 5 мин). -->
           <div class="edit-practice__field">
-            <label class="edit-practice__field-label">{{
-              t('masterScreens.editPractice.fields.time')
-            }}</label>
+            <label class="edit-practice__field-label">{{ t('ui.pickerTime') }}</label>
             <button
               type="button"
               class="edit-practice__picker"
@@ -442,7 +438,7 @@ const anyLoading = computed(
 const confirmDialog = reactive({
   visible: false,
   message: '',
-  confirmLabel: t('masterScreens.editPractice.confirm.submit'),
+  confirmLabel: t('ui.confirm'),
   danger: false,
   loading: false,
   onConfirm: (): void => {
@@ -668,7 +664,7 @@ onMounted(async () => {
     practice.value = p
     populateForm(p)
   } catch (e) {
-    toast.error(extractApiError(e, t('masterScreens.editPractice.error.load')))
+    toast.error(extractApiError(e, t('practice.loadFailed')))
   } finally {
     loading.value = false
   }
@@ -835,7 +831,7 @@ async function commitSave(): Promise<void> {
     })
     practice.value = updated
     confirmDialog.visible = false
-    toast.success(t('masterScreens.editPractice.toast.saved'))
+    toast.success(t('ui.saved'))
     await masterStore.refreshMyPractices()
   } catch (e) {
     // A4 V3 (PROMPT №571): _assert_master_confirmed_taxonomy's rejection is a
@@ -900,7 +896,7 @@ async function cancel(scope: 'this' | 'this_and_future'): Promise<void> {
 // -- Confirm delete --
 function confirmDelete(): void {
   confirmDialog.message = t('masterScreens.editPractice.draft.deleteConfirm')
-  confirmDialog.confirmLabel = t('masterScreens.editPractice.draft.deleteCta')
+  confirmDialog.confirmLabel = t('ui.delete')
   confirmDialog.danger = true
   confirmDialog.visible = true
   confirmDialog.onConfirm = () => {

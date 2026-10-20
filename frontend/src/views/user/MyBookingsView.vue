@@ -27,7 +27,7 @@
     <VEmptyState
       v-else-if="store.error && store.bookings.length === 0"
       icon="warning"
-      :title="t('user.screens.myBookings.loadError')"
+      :title="t('common.loadError')"
       :description="store.error"
     >
       <VButton size="sm" @click="store.refreshBookings()">{{

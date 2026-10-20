@@ -17,7 +17,7 @@
     <div class="auth-error__card">
       <div class="auth-error__icon">⏱️</div>
 
-      <h1 class="auth-error__title">{{ t('auth.loadFailedTitle') }}</h1>
+      <h1 class="auth-error__title">{{ t('common.loadFailed') }}</h1>
 
       <p class="auth-error__body">
         {{ t('auth.loadFailedText') }}

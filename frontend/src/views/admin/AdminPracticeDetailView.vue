@@ -29,7 +29,7 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminPracticeDetail.loadFailed')"
+      :title="t('practice.loadFailed')"
       :description="error"
     >
       <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
@@ -113,7 +113,7 @@
         </div>
         <VCard v-else
           ><p class="admin-detail__empty">
-            {{ t('adminScreens.adminPracticeDetail.noData') }}
+            {{ t('common.noData') }}
           </p></VCard
         >
       </template>
@@ -137,7 +137,7 @@
         </div>
         <VCard v-else
           ><p class="admin-detail__empty">
-            {{ t('adminScreens.adminPracticeDetail.noData') }}
+            {{ t('common.noData') }}
           </p></VCard
         >
 
@@ -274,7 +274,7 @@ async function load(): Promise<void> {
   try {
     practice.value = await getAdminPracticeDetail(practiceId)
   } catch (e) {
-    error.value = extractApiError(e, t('adminScreens.adminPracticeDetail.loadError'))
+    error.value = extractApiError(e, t('common.loadError'))
   } finally {
     loading.value = false
   }

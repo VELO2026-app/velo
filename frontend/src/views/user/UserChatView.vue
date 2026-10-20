@@ -32,7 +32,7 @@
           <IconMessages :size="48" />
         </template>
       </VEmptyState>
-      <VButton size="sm" @click="router.back()">{{ t('user.screens.userChat.back') }}</VButton>
+      <VButton size="sm" @click="router.back()">{{ t('ui.back') }}</VButton>
     </div>
 
     <ChatThreadScreen

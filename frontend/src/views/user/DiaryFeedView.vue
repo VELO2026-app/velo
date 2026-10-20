@@ -205,12 +205,10 @@
         v-else-if="feedError && items.length === 0"
         icon="warning"
         :title="t('user.screens.diaryFeed.loadFailed')"
-        :description="t('user.screens.diaryFeed.loadFailedHint')"
+        :description="t('common.checkConnection')"
       >
         <template #action>
-          <VButton variant="primary" @click="reload">{{
-            t('user.screens.diaryFeed.common.retry')
-          }}</VButton>
+          <VButton variant="primary" @click="reload">{{ t('common.retry') }}</VButton>
         </template>
       </VEmptyState>
 

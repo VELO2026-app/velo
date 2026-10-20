@@ -35,9 +35,7 @@
       :description="t('user.screens.waitlistConfirm.notFound.text')"
     >
       <template #action>
-        <VButton size="sm" @click="goHome">{{
-          t('user.screens.waitlistConfirm.common.backHome')
-        }}</VButton>
+        <VButton size="sm" @click="goHome">{{ t('common.backHome') }}</VButton>
       </template>
     </VEmptyState>
 

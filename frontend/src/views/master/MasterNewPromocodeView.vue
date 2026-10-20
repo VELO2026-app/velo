@@ -18,7 +18,7 @@
       <!--
       <div class="new-promo__legend">
         <IconRequired class="new-promo__legend-seal" :size="22" />
-        <span>— {{ t('masterScreens.masterNewPromocode.legend.required') }}</span>
+        <span>— {{ t('ui.legendRequired') }}</span>
       </div>
       -->
 
@@ -57,7 +57,7 @@
               :class="{ 'new-promo__picker--empty': !form.until }"
               @click="showDate = true"
             >
-              {{ form.until ? untilDisplay : t('masterScreens.masterNewPromocode.pickDate') }}
+              {{ form.until ? untilDisplay : t('ui.pickerChooseDate') }}
             </button>
           </div>
           <span

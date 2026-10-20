@@ -59,9 +59,7 @@
       </div>
 
       <div v-if="hasMore" class="admin-list__more">
-        <VButton variant="outline" @click="loadMore">{{
-          t('adminScreens.adminParticipants.showMore')
-        }}</VButton>
+        <VButton variant="outline" @click="loadMore">{{ t('common.showMore') }}</VButton>
       </div>
     </template>
 
@@ -72,7 +70,7 @@
       v-else-if="error"
       icon="warning"
       :title="t('adminScreens.adminParticipants.toast.loadMembersFailed')"
-      :description="t('adminScreens.adminParticipants.checkConnectionAndRetry')"
+      :description="t('common.checkConnection')"
     >
       <template #action
         ><VButton variant="primary" @click="load(true)">{{ t('common.retry') }}</VButton></template
@@ -80,7 +78,7 @@
     </VEmptyState>
 
     <VCard v-else-if="!loading">
-      <p class="admin-list__empty">{{ t('adminScreens.adminParticipants.noData') }}</p>
+      <p class="admin-list__empty">{{ t('common.noData') }}</p>
     </VCard>
   </div>
 </template>
@@ -125,7 +123,7 @@ const headerCount = computed<string>(() =>
 const segOptions = computed<SegmentOption[]>(() => [
   {
     value: 'all',
-    label: t('adminScreens.adminParticipants.vse'),
+    label: t('common.all'),
     badge: totalCount.value ?? undefined,
   },
   { value: 'new', label: t('adminScreens.adminParticipants.novye') },
@@ -145,7 +143,7 @@ async function load(reset: boolean): Promise<void> {
     toast.error(t('adminScreens.adminParticipants.toast.loadMembersFailed'))
     // A failed initial/filter load (reset) means the list below is genuinely
     // unknown, not empty -- render the real error state (W12) instead of
-    // falling through to t('adminScreens.adminParticipants.noData'). A failed loadMore leaves the
+    // falling through to t('common.noData'). A failed loadMore leaves the
     // already-loaded page visible; the toast is enough there.
     if (reset) error.value = true
   } finally {

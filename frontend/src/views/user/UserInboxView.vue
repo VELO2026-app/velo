@@ -50,7 +50,7 @@
     </div>
 
     <div v-else-if="error" class="user-inbox__center">
-      <VEmptyState :title="t('user.screens.userInbox.loadFailed')" :description="error">
+      <VEmptyState :title="t('common.loadFailed')" :description="error">
         <template #icon>
           <IconBellPlain :size="48" />
         </template>
@@ -134,10 +134,10 @@ const unread = ref(0)
 // = practice life; «Другое» = everything else (finance, future kinds).
 type InboxFilter = 'all' | 'messages' | 'events' | 'other'
 const FILTER_OPTIONS: ReadonlyArray<{ value: InboxFilter; label: string }> = [
-  { value: 'all', label: t('user.screens.userInbox.filter.all') },
+  { value: 'all', label: t('common.all') },
   { value: 'messages', label: t('user.screens.userInbox.filter.messages') },
   { value: 'events', label: t('user.screens.userInbox.filter.events') },
-  { value: 'other', label: t('user.screens.userInbox.filter.other') },
+  { value: 'other', label: t('common.other') },
 ]
 const filter = ref<InboxFilter>('all')
 
@@ -169,7 +169,7 @@ async function load(): Promise<void> {
     unread.value = page.unread
     notifications.applyUnread(page.unread)
   } catch (e) {
-    error.value = extractApiError(e, t('user.screens.userInbox.tryAgain'))
+    error.value = extractApiError(e, t('common.tryAgain'))
   } finally {
     loading.value = false
   }

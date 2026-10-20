@@ -72,7 +72,7 @@
           compact
           :model-value="period"
           :options="periodOptions"
-          :aria-label="t('adminScreens.adminDashboard.statsPeriod')"
+          :aria-label="t('common.statsPeriod')"
           @update:model-value="selectPeriod"
         />
       </div>
@@ -261,8 +261,8 @@ const period = ref<'week' | 'month'>('week')
 const periodOffset = ref(0)
 
 const periodOptions: SegmentOption[] = [
-  { value: 'week', label: t('adminScreens.adminDashboard.periodWeek') },
-  { value: 'month', label: t('adminScreens.adminDashboard.periodMonth') },
+  { value: 'week', label: t('common.periodWeek') },
+  { value: 'month', label: t('common.periodMonth') },
 ]
 
 // VSegment emits a plain string; narrow it back to the period union.

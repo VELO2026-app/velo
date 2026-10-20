@@ -196,7 +196,7 @@
               }"
               @click="showDate = true"
             >
-              {{ form.date ? dateDisplay : t('masterScreens.createPractice.pickers.date') }}
+              {{ form.date ? dateDisplay : t('ui.pickerDate') }}
             </button>
           </div>
           <span
@@ -218,7 +218,7 @@
               }"
               @click="showTime = true"
             >
-              {{ form.time || t('masterScreens.createPractice.pickers.time') }}
+              {{ form.time || t('ui.pickerTime') }}
             </button>
           </div>
           <span
@@ -1155,7 +1155,7 @@ function validate(): boolean {
     ok = false
   }
   if (!form.date) {
-    errors.date = t('masterScreens.createPractice.validation.chooseDate')
+    errors.date = t('ui.pickerChooseDate')
     ok = false
   }
   if (!form.time) {

@@ -73,7 +73,7 @@
           </div>
           <button
             class="students__msg"
-            :aria-label="t('masterScreens.masterStudents.messageCta')"
+            :aria-label="t('common.writeMessage')"
             @click.stop="openMessage(student.id, student.name)"
           >
             <IconMessages :size="22" />
@@ -98,8 +98,8 @@
         <VEmptyState
           v-else-if="filtered.length === 0"
           icon="group"
-          :title="t('masterScreens.masterStudents.search.noHits')"
-          :description="t('masterScreens.masterStudents.search.changeQueryHint')"
+          :title="t('common.searchNoHits')"
+          :description="t('common.searchHint')"
         />
       </template>
     </div>
@@ -145,7 +145,7 @@ async function load(): Promise<void> {
     const res = await getStudents()
     students.value = res.items
   } catch {
-    error.value = t('masterScreens.masterStudents.tryAgain')
+    error.value = t('common.tryAgain')
   } finally {
     loading.value = false
   }

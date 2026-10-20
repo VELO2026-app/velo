@@ -45,7 +45,7 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        :title="t('masterScreens.masterCuratorGroups.toast.loadFailed')"
+        :title="t('school.loadFailed')"
         :description="t('masterScreens.masterCuratorGroups.loadFailedHint')"
       >
         <template #action>

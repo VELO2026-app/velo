@@ -22,7 +22,7 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminFeedbackRate.loadFailed')"
+      :title="t('adminScreens.adminCommon.loadMetricFailed')"
       :description="error"
     >
       <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
@@ -123,7 +123,7 @@ async function load(): Promise<void> {
   try {
     data.value = await getFeedbackMetric(period, offset)
   } catch (e) {
-    error.value = extractApiError(e, t('adminScreens.adminFeedbackRate.loadError'))
+    error.value = extractApiError(e, t('common.loadError'))
   } finally {
     loading.value = false
   }

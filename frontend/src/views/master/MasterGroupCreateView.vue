@@ -52,7 +52,7 @@
       <!--
       <div class="new-group__legend">
         <IconRequired class="new-group__legend-seal" :size="22" />
-        <span>— {{ t('masterScreens.masterGroupCreate.legend.required') }}</span>
+        <span>— {{ t('ui.legendRequired') }}</span>
       </div>
       -->
 

@@ -136,10 +136,8 @@
         <VEmptyState
           v-if="items.length === 0"
           icon="group"
-          :title="trimmedSearch ? t('user.screens.schoolMembers.noHits') : emptyTitle"
-          :description="
-            trimmedSearch ? t('user.screens.schoolMembers.searchHint') : emptyDescription
-          "
+          :title="trimmedSearch ? t('common.searchNoHits') : emptyTitle"
+          :description="trimmedSearch ? t('common.searchHint') : emptyDescription"
         >
           <template v-if="kind === 'blocked'" #icon>
             <IconLock :size="48" />
@@ -147,11 +145,7 @@
         </VEmptyState>
 
         <VLoader v-if="loading && items.length > 0" size="sm" />
-        <VShowMore
-          v-if="hasMore && !loading"
-          :label="t('user.screens.schoolMembers.showMore')"
-          @click="loadMore"
-        />
+        <VShowMore v-if="hasMore && !loading" :label="t('common.showMore')" @click="loadMore" />
       </template>
     </div>
 

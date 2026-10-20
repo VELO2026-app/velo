@@ -57,7 +57,7 @@
     </div>
 
     <VCard v-else>
-      <p class="admin-list__empty">{{ t('adminScreens.adminPractices.noData') }}</p>
+      <p class="admin-list__empty">{{ t('common.noData') }}</p>
     </VCard>
   </div>
 </template>
@@ -93,7 +93,7 @@ const headerCount = computed<string>(() => (total.value !== null ? String(total.
 const segOptions = computed<SegmentOption[]>(() => [
   {
     value: 'all',
-    label: t('adminScreens.adminPractices.vse'),
+    label: t('common.all'),
     badge: totalCount.value ?? undefined,
   },
   { value: 'upcoming', label: t('adminScreens.adminPractices.predstoyashchie') },
@@ -129,7 +129,7 @@ async function load(): Promise<void> {
     practices.value = res.items
     total.value = res.total
   } catch (e) {
-    error.value = extractApiError(e, t('adminScreens.adminPractices.loadError'))
+    error.value = extractApiError(e, t('common.loadError'))
   } finally {
     loading.value = false
   }

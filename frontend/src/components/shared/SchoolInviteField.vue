@@ -122,7 +122,7 @@ async function onCopy(): Promise<void> {
       inviteUrl.value = res.invite_url
     }
     await navigator.clipboard.writeText(inviteUrl.value)
-    toast.success(t('school.copied'))
+    toast.success(t('common.linkCopied'))
   } catch (e) {
     toast.error(extractApiError(e, t('school.copyFailed')))
   } finally {

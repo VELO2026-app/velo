@@ -124,13 +124,9 @@
           v-if="members.length === 0"
           icon="group"
           :title="
-            search
-              ? t('masterScreens.masterGroupDetail.empty.noHits')
-              : t('masterScreens.masterGroupDetail.empty.noMembers')
+            search ? t('common.searchNoHits') : t('masterScreens.masterGroupDetail.empty.noMembers')
           "
-          :description="
-            search ? t('masterScreens.masterGroupDetail.empty.searchHint') : emptyDescription
-          "
+          :description="search ? t('common.searchHint') : emptyDescription"
         />
         <!-- Empty-group invite CTA REMOVED here (owner Q8, PROMPT №610): the
              header's own «⋯» menu (line ~30 above, kind==='custom') is now
@@ -174,7 +170,7 @@
     <VConfirmDialog
       :open="deleteConfirmOpen"
       :message="deleteMessage"
-      :confirm-label="t('masterScreens.masterGroupDetail.deleteCta2')"
+      :confirm-label="t('ui.delete')"
       danger
       :loading="deleting"
       @confirm="onDeleteConfirm"
@@ -302,7 +298,7 @@ async function load(): Promise<void> {
     const res = await getGroupMembers(groupId.value, search.value)
     members.value = res.items
   } catch (e) {
-    error.value = extractApiError(e, t('masterScreens.masterGroupDetail.tryAgain'))
+    error.value = extractApiError(e, t('common.tryAgain'))
   } finally {
     loading.value = false
   }
@@ -362,7 +358,7 @@ async function onInviteClick(): Promise<void> {
     // Clipboard needs no backend — write the link straight to the
     // clipboard (B2, same pattern as MasterGroupsView's row invite).
     await navigator.clipboard.writeText(res.invite_url)
-    toast.success(t('masterScreens.masterGroupDetail.toast.linkCopied'))
+    toast.success(t('common.linkCopied'))
   } catch (e) {
     toast.error(extractApiError(e, t('masterScreens.masterGroupDetail.toast.linkCreateFailed')))
   } finally {

@@ -154,7 +154,7 @@
     <VEmptyState
       v-else-if="store.error"
       icon="warning"
-      :title="t('user.screens.calendar.loadFailed')"
+      :title="t('common.loadFailed')"
       :description="store.error"
     >
       <VButton size="sm" @click="store.loadWeek()">{{ t('common.retry') }}</VButton>

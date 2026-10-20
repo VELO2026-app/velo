@@ -89,7 +89,7 @@ async function onCreate(): Promise<void> {
 async function onCopy(): Promise<void> {
   try {
     await navigator.clipboard.writeText(inviteLink.value)
-    toast.success(t('adminScreens.adminMasterInvite.toast.linkCopied'))
+    toast.success(t('common.linkCopied'))
   } catch {
     toast.error(t('adminScreens.adminMasterInvite.toast.copyFailed'))
   }

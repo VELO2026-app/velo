@@ -92,7 +92,7 @@
         <button
           type="button"
           class="composer__btn"
-          :aria-label="t('chat.send')"
+          :aria-label="t('common.submitSend')"
           :data-testid="sendTestId"
           :disabled="submitting"
           @pointerdown.prevent

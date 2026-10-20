@@ -66,7 +66,7 @@
     </template>
     <template #success-actions>
       <VButton variant="primary" size="lg" block @click="goToDashboard">{{
-        t('user.screens.reflection.common.backHome')
+        t('common.backHome')
       }}</VButton>
     </template>
   </FormShell>

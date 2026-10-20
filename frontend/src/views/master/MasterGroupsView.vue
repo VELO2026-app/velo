@@ -128,8 +128,8 @@
             searchResults.length === 0
           "
           icon="group"
-          :title="t('masterScreens.masterGroups.search.noHits')"
-          :description="t('masterScreens.masterGroups.search.changeQueryHint')"
+          :title="t('common.searchNoHits')"
+          :description="t('common.searchHint')"
         />
       </template>
 
@@ -209,7 +209,7 @@ async function load(): Promise<void> {
     const res = await getGroups()
     groups.value = res.items
   } catch (e) {
-    error.value = extractApiError(e, t('masterScreens.masterGroups.tryAgain'))
+    error.value = extractApiError(e, t('common.tryAgain'))
   } finally {
     loading.value = false
   }
@@ -235,7 +235,7 @@ async function loadSearch(): Promise<void> {
     const res = await searchGroupMemberships(search.value)
     searchResults.value = res.items
   } catch (e) {
-    searchError.value = extractApiError(e, t('masterScreens.masterGroups.tryAgain'))
+    searchError.value = extractApiError(e, t('common.tryAgain'))
   } finally {
     searchLoading.value = false
   }

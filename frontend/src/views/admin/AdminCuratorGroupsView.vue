@@ -26,8 +26,8 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminCuratorGroups.loadSchoolsFailed')"
-      :description="t('adminScreens.adminCuratorGroups.checkConnectionAndRetry')"
+      :title="t('school.loadFailed')"
+      :description="t('common.checkConnection')"
     >
       <template #action
         ><VButton variant="primary" @click="load(true)">{{ t('common.retry') }}</VButton></template
@@ -72,7 +72,7 @@
 
       <div v-if="hasMore" class="admin-list__more">
         <VButton variant="outline" :loading="loading" @click="load(false)">{{
-          t('adminScreens.adminCuratorGroups.showMore')
+          t('common.showMore')
         }}</VButton>
       </div>
     </template>
@@ -115,7 +115,7 @@ async function load(reset: boolean): Promise<void> {
     total.value = res.total
     groups.value = reset ? res.items : [...groups.value, ...res.items]
   } catch {
-    toast.error(t('adminScreens.adminCuratorGroups.loadSchoolsFailed'))
+    toast.error(t('school.loadFailed'))
     // W12 discipline: only a failed FIRST page is an error state; a failed
     // loadMore keeps the loaded page and toasts.
     if (reset) error.value = true

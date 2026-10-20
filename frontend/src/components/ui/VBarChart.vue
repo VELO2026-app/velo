@@ -26,7 +26,7 @@
         <span class="v-bar-chart__label">{{ bar.label }}</span>
       </div>
     </div>
-    <p v-else class="v-bar-chart__empty">{{ emptyText ?? t('ui.emptyChart') }}</p>
+    <p v-else class="v-bar-chart__empty">{{ emptyText ?? t('common.noData') }}</p>
   </div>
 </template>
 

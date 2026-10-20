@@ -66,7 +66,7 @@
     </div>
 
     <div v-else-if="error" class="master-inbox__center">
-      <VEmptyState :title="t('masterScreens.masterInbox.loadFailed')" :description="error">
+      <VEmptyState :title="t('common.loadFailed')" :description="error">
         <template #icon>
           <IconBellPlain :size="48" />
         </template>
@@ -147,7 +147,7 @@ const FILTER_OPTIONS: ReadonlyArray<{ value: InboxFilter; label: string }> = [
   { value: 'messages', label: t('masterScreens.masterInbox.filter.messages') },
   { value: 'practices', label: t('masterScreens.masterInbox.filter.practices') },
   { value: 'finance', label: t('masterScreens.masterInbox.filter.finances') },
-  { value: 'other', label: t('masterScreens.masterInbox.filter.other') },
+  { value: 'other', label: t('common.other') },
 ]
 const filter = ref<InboxFilter>('messages')
 
@@ -183,7 +183,7 @@ async function load(): Promise<void> {
     items.value = page.items
     unread.value = page.unread
   } catch (e) {
-    error.value = extractApiError(e, t('masterScreens.masterInbox.tryAgain'))
+    error.value = extractApiError(e, t('common.tryAgain'))
   } finally {
     loading.value = false
   }

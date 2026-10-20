@@ -45,17 +45,17 @@ so the order is invitation -> join -> onboarding (skippable) -> school.
       <template v-if="loading">
         <VLoader size="lg" />
         <p class="cg-join__subtitle">
-          {{ t('masterScreens.curatorGroupJoin.verifying') }}
+          {{ t('common.inviteChecking') }}
         </p>
       </template>
 
       <!-- Transient (network/timeout): offer a retry, not a dead-link verdict. -->
       <template v-else-if="transientError">
         <h2 class="cg-join__title">
-          {{ t('masterScreens.curatorGroupJoin.verifyFailed') }}
+          {{ t('common.inviteCheckFailed') }}
         </h2>
         <p class="cg-join__subtitle">
-          {{ t('masterScreens.curatorGroupJoin.loadFailed') }}
+          {{ t('common.connProblem') }}
         </p>
         <div class="cg-join__actions">
           <VButton variant="primary" block :loading="loading" @click="loadPreview">

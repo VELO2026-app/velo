@@ -40,7 +40,7 @@
       <VEmptyState
         v-else-if="threadError"
         icon="warning"
-        :title="t('adminScreens.adminSupportDetail.loadError')"
+        :title="t('common.loadError')"
         :description="threadError"
       >
         <VButton size="sm" variant="outline" @click="loadThread">{{ t('common.retry') }}</VButton>
@@ -124,7 +124,7 @@
               :loading="sending"
               @click="onSend"
             >
-              {{ t('adminScreens.adminSupportDetail.send') }}
+              {{ t('common.submitSend') }}
             </VButton>
           </div>
         </template>
@@ -136,9 +136,7 @@
           :title="t('adminScreens.adminSupportDetail.notFoundTitle')"
           :description="t('adminScreens.adminSupportDetail.backToList')"
         />
-        <VButton variant="outline" block @click="router.back()">{{
-          t('adminScreens.adminSupportDetail.nazad')
-        }}</VButton>
+        <VButton variant="outline" block @click="router.back()">{{ t('ui.back') }}</VButton>
       </div>
     </div>
   </div>

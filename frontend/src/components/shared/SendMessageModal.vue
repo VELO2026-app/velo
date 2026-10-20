@@ -38,7 +38,7 @@
           {{ t('ui.cancel') }}
         </VButton>
         <VButton variant="primary" block :loading="sending" @click="onSend">
-          {{ t('chat.send') }}
+          {{ t('common.submitSend') }}
         </VButton>
       </div>
     </div>

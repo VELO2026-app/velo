@@ -144,7 +144,7 @@
 
       <!-- Время (single-select) -->
       <section class="cal-filter__group">
-        <h3 class="cal-filter__label">{{ t('filters.timeOfDay') }}</h3>
+        <h3 class="cal-filter__label">{{ t('ui.pickerTime') }}</h3>
         <div class="cal-filter__chips">
           <VChip
             size="md"

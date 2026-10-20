@@ -207,7 +207,7 @@ async function load(): Promise<void> {
     ])
     attendance.value = attendanceData
   } catch (e) {
-    error.value = extractApiError(e, t('masterScreens.attendanceRoster.error.load'))
+    error.value = extractApiError(e, t('common.loadError'))
   } finally {
     loading.value = false
   }

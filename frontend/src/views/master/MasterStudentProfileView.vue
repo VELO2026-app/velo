@@ -88,7 +88,7 @@
                  earned its own menu entry instead of borrowing the trash. -->
             <VMenuItem
               :icon="IconLock"
-              :ariaLabel="t('masterScreens.masterStudentProfile.blockMenuAria')"
+              :ariaLabel="t('common.block')"
               danger
               @click="onBlockMenuClick(close)"
             />
@@ -179,7 +179,7 @@
 
         <!-- Action: posts into the eternal DM with THIS student (T3). -->
         <VButton variant="primary" block class="profile__cta" @click="msgOpen = true">
-          {{ t('masterScreens.masterStudentProfile.messageCta') }}
+          {{ t('common.writeMessage') }}
         </VButton>
 
         <!-- P3 (PROMPT №592): destructive, bottom of the screen (design variant 3).
@@ -206,7 +206,7 @@
       :open="blockConfirmOpen"
       :title="t('masterScreens.masterStudentProfile.blockConfirm')"
       :message="t('masterScreens.masterStudentProfile.blockMoveText')"
-      :confirm-label="t('masterScreens.masterStudentProfile.blockCta')"
+      :confirm-label="t('common.block')"
       danger
       warning-panel
       cancel-variant="primary"
@@ -374,7 +374,7 @@ async function load(): Promise<void> {
   try {
     detail.value = await getStudent(String(route.params.id))
   } catch {
-    error.value = t('masterScreens.masterStudentProfile.tryAgain')
+    error.value = t('common.tryAgain')
   } finally {
     loading.value = false
   }
@@ -468,7 +468,7 @@ const visibleFeedbacks = computed(() =>
 const hiddenCheckins = computed((): number => Math.max(0, checkinRows.value.length - PREVIEW_CAP))
 const hiddenFeedbacks = computed((): number => Math.max(0, feedbackRows.value.length - PREVIEW_CAP))
 
-// t('masterScreens.masterStudentProfile.messageCta') — posts into the eternal DM with THIS student (T3).
+// t('common.writeMessage') — posts into the eternal DM with THIS student (T3).
 const msgOpen = ref(false)
 
 // -- Block -> report-offer -> report form (P3, PROMPT №592) --

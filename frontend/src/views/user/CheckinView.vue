@@ -20,7 +20,7 @@
     :submitting="diaryStore.checkinSubmitting"
     :submit-disabled="windowClosed"
     :disabled-hint="practice && windowClosed ? t('user.screens.checkin.windowClosedHint') : ''"
-    :submit-label="t('user.screens.checkin.chat.send')"
+    :submit-label="t('common.submitSend')"
     :show-skip="true"
     :submitted="submitted"
     :success-title="t('user.screens.checkin.toast.sent')"

@@ -7,7 +7,7 @@
     <IconSearch :size="64" class="not-found__icon" />
     <h1 class="not-found__title">404</h1>
     <p class="not-found__text">{{ t('auth.notFoundText') }}</p>
-    <button class="not-found__btn" @click="router.push('/')">{{ t('auth.notFoundHome') }}</button>
+    <button class="not-found__btn" @click="router.push('/')">{{ t('common.backHome') }}</button>
   </div>
 </template>
 

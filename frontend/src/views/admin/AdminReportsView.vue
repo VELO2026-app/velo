@@ -31,7 +31,7 @@
     </button>
 
     <div v-if="!filter.categories.length" class="admin-reports__active">
-      {{ t('adminScreens.adminReports.vse') }}
+      {{ t('common.all') }}
     </div>
 
     <!-- Loading: initial -->
@@ -43,8 +43,8 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminReports.loadFailed')"
-      :description="t('adminScreens.adminReports.checkConnectionAndRetry')"
+      :title="t('common.loadFailed')"
+      :description="t('common.checkConnection')"
     >
       <template #action
         ><VButton variant="primary" @click="loadInitial">{{ t('common.retry') }}</VButton></template
@@ -151,7 +151,7 @@ const headerCount = computed<string>(() => (total.value ? String(total.value) : 
 // backend yet, so this is a display-only echo of the chosen chips).
 const categoryLabel = computed<string>(() => {
   const cats = filter.value.categories
-  if (cats.length === 0) return t('adminScreens.adminReports.vse')
+  if (cats.length === 0) return t('common.all')
   return cats.map((c) => CATEGORY_LABELS[c] ?? c).join(', ')
 })
 
@@ -208,7 +208,7 @@ async function loadMore(): Promise<void> {
     items.value.push(...res.items)
     hasMore.value = items.value.length < res.total
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminReports.loadError')))
+    toast.error(extractApiError(e, t('common.loadError')))
   } finally {
     loadingMore.value = false
   }

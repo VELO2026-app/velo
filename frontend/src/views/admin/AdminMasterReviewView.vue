@@ -43,7 +43,7 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      :title="t('adminScreens.adminMasterReview.loadFailed')"
+      :title="t('common.loadError')"
       :description="error"
     >
       <VButton size="sm" variant="outline" @click="loadMaster">{{ t('common.retry') }}</VButton>
@@ -80,7 +80,7 @@
               />
               <div class="mreview__edit-actions">
                 <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
-                  t('adminScreens.adminMasterReview.cancel')
+                  t('ui.cancel')
                 }}</VButton>
                 <VButton
                   variant="primary"
@@ -121,7 +121,7 @@
               <p v-if="fieldError" class="mreview__edit-err">{{ fieldError }}</p>
               <div class="mreview__edit-actions">
                 <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
-                  t('adminScreens.adminMasterReview.cancel')
+                  t('ui.cancel')
                 }}</VButton>
                 <VButton
                   variant="primary"
@@ -159,7 +159,7 @@
               <p v-if="fieldError" class="mreview__edit-err">{{ fieldError }}</p>
               <div class="mreview__edit-actions">
                 <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
-                  t('adminScreens.adminMasterReview.cancel')
+                  t('ui.cancel')
                 }}</VButton>
                 <VButton variant="primary" size="sm" :loading="savingField" @click="saveBio">{{
                   t('ui.save')
@@ -193,7 +193,7 @@
               />
               <div class="mreview__edit-actions">
                 <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
-                  t('adminScreens.adminMasterReview.cancel')
+                  t('ui.cancel')
                 }}</VButton>
                 <VButton variant="primary" size="sm" :loading="savingField" @click="saveEmail">{{
                   t('ui.save')
@@ -222,7 +222,7 @@
               <VInput v-model="draftText" placeholder="+7…" :error="fieldError" />
               <div class="mreview__edit-actions">
                 <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
-                  t('adminScreens.adminMasterReview.cancel')
+                  t('ui.cancel')
                 }}</VButton>
                 <VButton variant="primary" size="sm" :loading="savingField" @click="savePhone">{{
                   t('ui.save')
@@ -256,7 +256,7 @@
               />
               <div class="mreview__edit-actions">
                 <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
-                  t('adminScreens.adminMasterReview.cancel')
+                  t('ui.cancel')
                 }}</VButton>
                 <VButton
                   variant="primary"
@@ -301,7 +301,7 @@
               <p v-if="fieldError" class="mreview__edit-err">{{ fieldError }}</p>
               <div class="mreview__edit-actions">
                 <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
-                  t('adminScreens.adminMasterReview.cancel')
+                  t('ui.cancel')
                 }}</VButton>
                 <VButton
                   variant="primary"
@@ -344,7 +344,7 @@
             <p v-if="methodsError" class="mreview__methods-err">{{ methodsError }}</p>
             <div class="mreview__methods-actions">
               <VButton variant="ghost" size="sm" :disabled="savingMethods" @click="cancelMethods">
-                {{ t('adminScreens.adminMasterReview.cancel') }}
+                {{ t('ui.cancel') }}
               </VButton>
               <VButton variant="primary" size="sm" :loading="savingMethods" @click="saveMethods">
                 {{ t('adminScreens.adminMasterReview.save') }}
@@ -397,13 +397,13 @@
                   @keydown.enter.prevent="addCert"
                 />
                 <VButton variant="ghost" size="sm" :disabled="!certInput.trim()" @click="addCert">{{
-                  t('adminScreens.adminMasterReview.add')
+                  t('ui.add')
                 }}</VButton>
               </div>
               <p v-if="fieldError" class="mreview__edit-err">{{ fieldError }}</p>
               <div class="mreview__edit-actions">
                 <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
-                  t('adminScreens.adminMasterReview.cancel')
+                  t('ui.cancel')
                 }}</VButton>
                 <VButton
                   variant="primary"
@@ -934,7 +934,7 @@ async function saveProfile(patch: AdminMasterProfileUpdate): Promise<void> {
     await editMasterProfile(masterId, patch)
     if (master.value) Object.assign(master.value, patch)
     editing.value = null
-    toast.success(t('adminScreens.adminMasterReview.sokhraneno'))
+    toast.success(t('ui.saved'))
   } catch (e) {
     fieldError.value = extractApiError(e, t('adminScreens.adminMasterReview.saveFailed'))
   } finally {

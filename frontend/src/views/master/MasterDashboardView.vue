@@ -59,7 +59,7 @@
           v-model="period"
           :options="PERIOD_OPTIONS"
           variant="toggle"
-          :aria-label="t('masterScreens.masterDashboard.statsPeriod')"
+          :aria-label="t('common.statsPeriod')"
         />
         <button
           class="master-dashboard__bell"
@@ -304,8 +304,8 @@ const toast = useToast()
 //    would silently keep the WEEK figures under a «Квартал» label). --
 const period = ref<'week' | 'month' | 'quarter'>('week')
 const PERIOD_OPTIONS: ReadonlyArray<{ value: 'week' | 'month' | 'quarter'; label: string }> = [
-  { value: 'week', label: t('masterScreens.masterDashboard.period.week') },
-  { value: 'month', label: t('masterScreens.masterDashboard.period.month') },
+  { value: 'week', label: t('common.periodWeek') },
+  { value: 'month', label: t('common.periodMonth') },
   { value: 'quarter', label: t('masterScreens.masterDashboard.period.quarter') },
 ]
 

@@ -91,7 +91,7 @@ async function load(): Promise<void> {
     reviews.value = r.items
   } catch (e) {
     summary.value = null
-    error.value = extractApiError(e, t('masterScreens.practiceReviews.tryAgain'))
+    error.value = extractApiError(e, t('common.tryAgain'))
   } finally {
     loading.value = false
   }

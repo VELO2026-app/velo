@@ -45,7 +45,7 @@
     :title="t('report.title')"
     compact-title
     :cancel-label="t('ui.cancel')"
-    :save-label="t('report.send')"
+    :save-label="t('common.submitSend')"
     :save-disabled="selectedReasons.size === 0"
     @save="onSend"
     @close="$emit('close')"

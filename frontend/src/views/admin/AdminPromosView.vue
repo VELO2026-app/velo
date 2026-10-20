@@ -37,7 +37,7 @@
       v-else-if="error"
       icon="warning"
       :title="t('adminScreens.adminPromos.loadFailed')"
-      :description="t('adminScreens.adminPromos.checkConnectionAndRetry')"
+      :description="t('common.checkConnection')"
     >
       <template #action
         ><VButton variant="primary" @click="loadInitial">{{ t('common.retry') }}</VButton></template
@@ -93,7 +93,7 @@
 
           <div v-if="p.is_active" class="pcard__actions">
             <VButton variant="outline" :loading="deactivatingId === p.id" @click="askDeactivate(p)">
-              {{ t('adminScreens.adminPromos.deactivate') }}
+              {{ t('ui.deactivate') }}
             </VButton>
           </div>
         </VCard>
@@ -109,7 +109,7 @@
     <VConfirmDialog
       :open="confirmTarget !== null"
       :message="confirmMessage"
-      :confirm-label="t('adminScreens.adminPromos.deaktivirovat')"
+      :confirm-label="t('ui.deactivate')"
       danger
       :loading="deactivatingId !== null"
       @confirm="onConfirmDeactivate"
@@ -150,7 +150,7 @@ type Filter = 'all' | 'master' | 'company' | 'inactive'
 const filter = ref<Filter>('all')
 
 const segOptions: SegmentOption[] = [
-  { value: 'all', label: t('adminScreens.adminPromos.vse') },
+  { value: 'all', label: t('common.all') },
   { value: 'master', label: t('adminScreens.adminPromos.filterMasters') },
   { value: 'company', label: t('adminScreens.adminPromos.kompanii') },
   { value: 'inactive', label: t('adminScreens.adminPromos.deaktivir') },
@@ -232,7 +232,7 @@ async function loadMore(): Promise<void> {
     items.value.push(...res.items)
     hasMore.value = items.value.length < res.total
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminPromos.loadError')))
+    toast.error(extractApiError(e, t('common.loadError')))
   } finally {
     loadingMore.value = false
   }

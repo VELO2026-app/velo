@@ -79,7 +79,7 @@
               v-model="otherText"
               type="text"
               class="support__other-input"
-              :placeholder="t('masterScreens.masterSupport.custom.placeholder')"
+              :placeholder="t('practice.customVariant')"
               :aria-label="t('masterScreens.masterSupport.custom.title')"
               @focus="onFieldFocus"
             />
@@ -143,7 +143,7 @@
         class="support__submit"
         @click="onSubmit"
       >
-        {{ t('masterScreens.masterSupport.submit') }}
+        {{ t('common.submitSend') }}
       </VButton>
     </div>
   </div>
@@ -199,7 +199,7 @@ const TOPICS: SupportTopic[] = [
     label: t('masterScreens.masterSupport.topic.addDirection'),
     priority: 'P2',
   },
-  { value: 'other', label: t('masterScreens.masterSupport.topic.other'), priority: 'P2' },
+  { value: 'other', label: t('common.other'), priority: 'P2' },
 ]
 // VRadioGroup only needs {value,label}; priority stays off the rendered options.
 const topicOptions = TOPICS.map((t) => ({ value: t.value, label: t.label }))

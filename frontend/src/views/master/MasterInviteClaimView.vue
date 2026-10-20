@@ -20,7 +20,7 @@ Verified masters never reach here: applyGuard bounces them to the dashboard.
       <template v-if="claiming">
         <VLoader size="lg" />
         <p class="invite-claim__subtitle">
-          {{ t('masterScreens.masterInviteClaim.verifying') }}
+          {{ t('common.inviteChecking') }}
         </p>
       </template>
 
@@ -29,10 +29,10 @@ Verified masters never reach here: applyGuard bounces them to the dashboard.
            the user their invite is dead when it might just be their connection. -->
       <template v-else-if="transientError">
         <h2 class="invite-claim__title">
-          {{ t('masterScreens.masterInviteClaim.verifyFailed') }}
+          {{ t('common.inviteCheckFailed') }}
         </h2>
         <p class="invite-claim__subtitle">
-          {{ t('masterScreens.masterInviteClaim.loadFailed') }}
+          {{ t('common.connProblem') }}
         </p>
         <div class="invite-claim__actions">
           <VButton variant="primary" block :loading="claiming" @click="claim">{{

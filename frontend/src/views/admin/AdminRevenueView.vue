@@ -67,7 +67,7 @@
       </div>
       <VCard v-else
         ><p class="admin-detail__empty">
-          {{ t('adminScreens.adminRevenue.noData') }}
+          {{ t('common.noData') }}
         </p></VCard
       >
     </template>
@@ -105,8 +105,8 @@ const error = ref<string | null>(null)
 // Период (Неделя/Месяц), default 'week' matches the backend default.
 const period = ref<'week' | 'month'>('week')
 const periodOptions: SegmentOption[] = [
-  { value: 'week', label: t('adminScreens.adminRevenue.periodWeek') },
-  { value: 'month', label: t('adminScreens.adminRevenue.periodMonth') },
+  { value: 'week', label: t('common.periodWeek') },
+  { value: 'month', label: t('common.periodMonth') },
 ]
 const revenueHeroLabel = computed<string>(() =>
   period.value === 'week'
@@ -137,7 +137,7 @@ async function load(): Promise<void> {
   try {
     data.value = await getAdminRevenue(period.value)
   } catch (e) {
-    error.value = extractApiError(e, t('adminScreens.adminRevenue.loadError'))
+    error.value = extractApiError(e, t('common.loadError'))
   } finally {
     loading.value = false
   }

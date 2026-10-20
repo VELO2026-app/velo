@@ -71,7 +71,7 @@
             t('masterScreens.masterPromocodes.copyCta')
           }}</VButton>
           <VButton variant="danger" :loading="deactivatingId === p.id" @click="onDelete(p)">
-            {{ t('masterScreens.masterPromocodes.delete') }}
+            {{ t('ui.delete') }}
           </VButton>
         </div>
       </div>

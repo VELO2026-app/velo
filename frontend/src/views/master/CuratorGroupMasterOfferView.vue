@@ -47,17 +47,17 @@ lines — counts only, by the same ruling.
       <template v-if="loading">
         <VLoader size="lg" />
         <p class="master-offer__subtitle">
-          {{ t('masterScreens.curatorGroupMasterOffer.verifying') }}
+          {{ t('common.inviteChecking') }}
         </p>
       </template>
 
       <!-- Transient (network/timeout): a retry, not a verdict. -->
       <template v-else-if="transientError">
         <h2 class="master-offer__title">
-          {{ t('masterScreens.curatorGroupMasterOffer.verifyFailed') }}
+          {{ t('common.inviteCheckFailed') }}
         </h2>
         <p class="master-offer__subtitle">
-          {{ t('masterScreens.curatorGroupMasterOffer.loadFailed') }}
+          {{ t('common.connProblem') }}
         </p>
         <div class="master-offer__actions">
           <VButton variant="primary" block :loading="loading" @click="load">{{

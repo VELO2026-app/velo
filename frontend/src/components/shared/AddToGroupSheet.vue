@@ -30,7 +30,7 @@
     :title="t('shared.groups.addTitle')"
     compact-title
     title-strong
-    :save-label="t('shared.groups.addSave')"
+    :save-label="t('ui.add')"
     :cancel-label="t('ui.cancel')"
     cancel-variant="danger"
     save-variant="primary"

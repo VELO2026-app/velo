@@ -49,7 +49,7 @@
                  отменяет, с подтверждением). -->
             <VMenuItem
               :icon="IconPen"
-              :ariaLabel="t('masterScreens.masterPracticeDetail.edit')"
+              :ariaLabel="t('ui.edit')"
               @click="
                 () => {
                   goEdit()
@@ -80,11 +80,7 @@
 
     <!-- Error -->
     <div v-else-if="error" class="practice-detail__content">
-      <VEmptyState
-        icon="warning"
-        :title="t('masterScreens.masterPracticeDetail.loadFailed')"
-        :description="error"
-      >
+      <VEmptyState icon="warning" :title="t('practice.loadFailed')" :description="error">
         <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
       </VEmptyState>
     </div>
@@ -317,9 +313,7 @@
               @click="expandReviews"
             />
             <div v-else-if="reviewsExpanded && hasMoreReviews" class="practice-detail__more">
-              <VButton variant="ghost" @click="loadMoreReviews">{{
-                t('masterScreens.masterPracticeDetail.common.showMorePager')
-              }}</VButton>
+              <VButton variant="ghost" @click="loadMoreReviews">{{ t('common.showMore') }}</VButton>
             </div>
           </template>
           <VEmptyState
@@ -352,7 +346,7 @@
     <VConfirmDialog
       :open="showDelete"
       :message="t('masterScreens.masterPracticeDetail.draft.deleteConfirm')"
-      :confirm-label="t('masterScreens.masterPracticeDetail.deleteCta')"
+      :confirm-label="t('ui.delete')"
       :loading="deleting"
       @confirm="doDelete"
       @cancel="showDelete = false"
@@ -431,9 +425,7 @@ const headerTitle = computed((): string =>
     : t('masterScreens.masterPracticeDetail.practiceWord'),
 )
 const destructiveLabel = computed((): string =>
-  isDraft.value
-    ? t('masterScreens.masterPracticeDetail.deleteCta')
-    : t('masterScreens.masterPracticeDetail.cancelCta'),
+  isDraft.value ? t('ui.delete') : t('masterScreens.masterPracticeDetail.cancelCta'),
 )
 
 // Reactive insights cache (shared with Analytics / Practices — often warm).
@@ -477,7 +469,7 @@ async function onCopySharedLink(): Promise<void> {
     // Clipboard needs no backend -- same pattern as MasterGroupDetailView's
     // group-invite copy.
     await navigator.clipboard.writeText(publicLink.value)
-    toast.success(t('masterScreens.masterPracticeDetail.toast.linkCopied'))
+    toast.success(t('common.linkCopied'))
   } catch (e) {
     toast.error(extractApiError(e, t('masterScreens.masterPracticeDetail.toast.linkCopyFailed')))
   } finally {
@@ -673,7 +665,7 @@ async function load(): Promise<void> {
     // Named reviews only exist for finished practices; non-fatal alongside the load.
     if (isPast.value) void loadReviews()
   } catch (e) {
-    error.value = extractApiError(e, t('masterScreens.masterPracticeDetail.error.load'))
+    error.value = extractApiError(e, t('common.loadError'))
   } finally {
     loading.value = false
   }

@@ -53,7 +53,7 @@
           t('adminScreens.adminWithdrawalDetail.openReject')
         }}</VButton>
         <VButton variant="primary" :disabled="anyLoading" @click="showConfirm = true">
-          {{ t('adminScreens.adminWithdrawalDetail.confirm') }}
+          {{ t('ui.confirm') }}
         </VButton>
       </div>
       <VCard v-else class="wd__processed">
