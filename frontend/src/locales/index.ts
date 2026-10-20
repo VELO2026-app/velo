@@ -23,26 +23,21 @@ import { createI18n } from 'vue-i18n'
 import { setRootLang } from '@/platform/dom'
 import { INSTANCE, isSupportedLocale } from '@/platform/instance'
 // Per-domain catalogs (tz-i18n §4.1): one FOLDER per locale, one FILE per
-// domain, composed generically below. Adding a language = adding a folder;
-// adding a domain = adding a file. No per-language import chains.
-// Non-default locales reuse the same folders via dynamic import in
-// setLocale (phase 4 lazy chunks).
-// Eager today (the default locale must be in the main bundle anyway);
-// phase 4 flips this to lazy per-locale dynamic imports over the SAME glob.
-const catalogs = import.meta.glob('./*/*.json', { eager: true })
+// domain. Adding a language = adding a folder; adding a domain = adding a
+// file. No per-language import chains.
+// The DEFAULT locale is eager (it must be in the main bundle); every other
+// locale is a set of lazy loaders over the same glob, merged into the
+// instance on first setLocale (phase 4 lazy chunks -- the bundle carries
+// only ru, non-default locales pay one chunk per locale on switch).
+const eagerDefault = import.meta.glob('./ru/*.json', { eager: true })
+const lazyLoaders = import.meta.glob('./*/*.json')
 
-const LOCALE_MESSAGES: Record<string, Record<string, unknown>> = {}
-for (const [path, mod] of Object.entries(catalogs)) {
-  // './ru/common.json' -> locale 'ru'
-  const locale = path.split('/')[1]
-  if (!locale) continue
-  LOCALE_MESSAGES[locale] = {
-    ...(LOCALE_MESSAGES[locale] ?? {}),
-    ...(mod as { default: Record<string, unknown> }).default,
-  }
+const ruCatalog: Record<string, unknown> = {}
+for (const mod of Object.values(eagerDefault)) {
+  Object.assign(ruCatalog, (mod as { default: Record<string, unknown> }).default)
 }
 
-export const ru = LOCALE_MESSAGES[INSTANCE.defaultLocale] ?? LOCALE_MESSAGES.ru ?? {}
+export const ru = ruCatalog
 
 /**
  * vue-i18n's built-in plural choice is English-shaped (1 -> first form,
@@ -123,18 +118,25 @@ export function applyInstanceOverrides(
   }
 }
 
-const loadedLocales = new Set<string>(['ru'])
+const loadedLocales = new Set<string>([INSTANCE.defaultLocale])
 
 /**
- * Switch the UI language. Without a merged catalog for the requested locale
- * this is a no-op (fallback keeps rendering); the language switcher UI
- * (tz-i18n phase 5) only ever offers locales that have catalogs.
+ * Switch the UI language. Non-default locales load their catalog chunk on
+ * first switch; a locale with no folder is a no-op (fallback keeps
+ * rendering). The language switcher UI (tz-i18n phase 5) only ever offers
+ * locales that have catalogs.
  */
-export function setLocale(locale: string): void {
+export async function setLocale(locale: string): Promise<void> {
   if (!isSupportedLocale(locale) || locale === i18n.global.locale.value) return
   if (!loadedLocales.has(locale)) {
-    const messages = LOCALE_MESSAGES[locale]
-    if (!messages) return
+    const prefix = `./${locale}/`
+    const loaders = Object.entries(lazyLoaders).filter(([p]) => p.startsWith(prefix))
+    if (loaders.length === 0) return
+    const messages: Record<string, unknown> = {}
+    for (const [, loader] of loaders) {
+      const mod = (await loader()) as { default: Record<string, unknown> }
+      Object.assign(messages, mod.default)
+    }
     i18n.global.setLocaleMessage(locale, messages)
     loadedLocales.add(locale)
   }

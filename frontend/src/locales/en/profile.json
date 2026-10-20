@@ -1,0 +1,22 @@
+{
+  "roleSwitch": {
+    "title": "Role switch",
+    "user": "User mode",
+    "master": "Master mode",
+    "admin": "Admin mode",
+    "failed": "Failed to switch the role"
+  },
+  "timezone": {
+    "notFound": "City not found, check the spelling.",
+    "placeholder": "Your city (Berlin, London)…"
+  },
+  "mood": {
+    "bad": "Bad",
+    "low": "Not great",
+    "neutral": "Okay",
+    "good": "Good",
+    "fire": "On fire",
+    "valueText": "{score} out of {max} — {label}",
+    "ariaScale": "Rate your state from 1 to 10"
+  }
+}

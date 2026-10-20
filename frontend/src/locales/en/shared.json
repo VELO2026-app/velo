@@ -1,0 +1,73 @@
+{
+  "shared": {
+    "datePicker": {
+      "title": "Practice date"
+    },
+    "monthsShort": {
+      "1": "Jan",
+      "2": "Feb",
+      "3": "Mar",
+      "4": "Apr",
+      "5": "May",
+      "6": "Jun",
+      "7": "Jul",
+      "8": "Aug",
+      "9": "Sep",
+      "10": "Oct",
+      "11": "Nov",
+      "12": "Dec"
+    },
+    "soldOut": {
+      "title": "Sold out",
+      "text": "Unfortunately, all spots for this practice have been taken",
+      "findOther": "Find another practice"
+    },
+    "heroCard": {
+      "difficulty": "Difficulty"
+    },
+    "groups": {
+      "addTitle": "Add to a group",
+      "choose": "Choose a group",
+      "empty": "No groups yet",
+      "removeToggle": "Remove from the current group",
+      "removeTitle": "Remove from a group",
+      "removeCurrent": "Remove from the current group",
+      "removeSelected": "Remove from the selected groups",
+      "removeAll": "Remove from all groups",
+      "autoMove": "The member is moved to the \"Students\" group automatically"
+    },
+    "form": {
+      "hostLine": "with {name}",
+      "hostFallback": "the master",
+      "commentPlaceholder": "Add a comment..."
+    },
+    "analytics": {
+      "title": "Practice analytics",
+      "loading": "Loading analytics…",
+      "loadFailed": "Failed to load analytics",
+      "unavailable": "Analytics data is unavailable",
+      "attended": "Attended:",
+      "checkins": "Check-ins:",
+      "before": "Before the practice",
+      "after": "After the practice",
+      "cameLeft": "Came → left",
+      "outOf": "{a} of {b}",
+      "noPairs": "No pairs to compare yet",
+      "pairsMore": "{count} more pair | {count} more pairs",
+      "reviews": "Reviews",
+      "noReviews": "No reviews yet"
+    },
+    "components": {
+      "pickGroup": "Choose at least one group",
+      "added": "Added",
+      "addFailed": "Failed to add to the group",
+      "removed": "Removed",
+      "removeFailed": "Failed to remove from the group",
+      "moodEmpty": "No marks yet",
+      "moodOf": "{n} of {total}",
+      "masterFallback": "Master",
+      "temporarilyHidden": "Temporarily hidden",
+      "menuAria": "Menu"
+    }
+  }
+}

@@ -1,0 +1,811 @@
+{
+  "user": {
+    "screens": {
+      "aiConnections": {
+        "form": {
+          "name": "Name",
+          "namePlaceholder": "For example, Claude at home"
+        },
+        "revoke": {
+          "confirmTitle": "Revoke the token?",
+          "cta": "Revoke"
+        },
+        "dev": {
+          "howTo": "How to connect",
+          "addressLabel": "The VELO address for your AI client:"
+        },
+        "section": {
+          "connections": "Connections"
+        },
+        "create": {
+          "cta": "Create a token",
+          "title": "New token",
+          "copyHint": "Copy the token now — we will never show it again.",
+          "done": "Done"
+        },
+        "toast": {
+          "created": "Token created",
+          "createFailed": "Failed to create the token",
+          "copied": "Token copied",
+          "addressCopied": "Address copied",
+          "revoked": "Token revoked",
+          "revokeFailed": "Failed to revoke the token",
+          "copyFailedHint": "Failed to copy — select {what} and copy it manually"
+        },
+        "copy": {
+          "entityToken": "token",
+          "headerValue": "Copied as a header",
+          "entityAddress": "address"
+        },
+        "used": {
+          "at": "used {at}"
+        },
+        "neverUsed": "never used",
+        "createdAt": "Created {created} ·",
+        "oauthConnected": "Connected via a button in the AI client",
+        "revokedAt": "Revoked {at}",
+        "revokeConfirmText": "The AI client with the token \"{name}\" will immediately lose access. This cannot be undone.",
+        "title": "AI connections",
+        "unavailable": "AI connections are unavailable right now.",
+        "loadFailed": "Failed to load the connections. Try again later.",
+        "copyAsHeader": "Copy as a header",
+        "connectHowto": "In claude.ai: Settings → Connectors → Add a custom connector → paste the address → Connect, then log in via Telegram.",
+        "noButtonConnect": "Button sign-in is not set up on this server — use a personal token (below).",
+        "noBaseUrl": "The server address is not configured — connection is unavailable.",
+        "empty": "No connections yet.",
+        "devTitle": "For developers: personal token",
+        "devNote": "For Claude Code, scripts and clients without button sign-in. Do not share the token with others; revoke it when it's no longer needed.",
+        "createSubmit": "Create"
+      },
+      "aiSummary": {
+        "inDevelopment": "This section is in development",
+        "title": "AI summary",
+        "stub": "Your personal weekly summary with recommendations will appear here soon."
+      },
+      "bookingConfirmed": {
+        "notFound": "Practice not found",
+        "request": {
+          "placeholder": "Your request to the master (optional)",
+          "hint": "Leaving a request helps the master prepare the practice with your wishes in mind",
+          "sent": "The request has been sent to the master",
+          "sendFailed": "Failed to send the request"
+        },
+        "title": "The practice is booked!",
+        "practiceLine": "Practice: {title}, {when}\n\n{body}",
+        "zoomNote": "You will be able to join Zoom right in VELO — on the practice screen.",
+        "sendRequest": "Send a request"
+      },
+      "calendar": {
+        "pickPractices": "Choose practices",
+        "chip": {
+          "series": "Series",
+          "personal": "Personal",
+          "bookings": "Bookings"
+        },
+        "backToMaster": "Back to the master's profile",
+        "backToSchool": "Back to the school",
+        "titleMaster": "The master's practices",
+        "titleSchool": "The school's practices",
+        "titlePlain": "Calendar",
+        "filter": "Filter",
+        "noFilters": "No filters selected",
+        "emptyMode": "No practices",
+        "emptyPlain": "No practices",
+        "emptyDesc": {
+          "master": "The master has no practices on this day yet. Choose another day.",
+          "school": "The school has no practices on this day yet. Choose another day.",
+          "plain": "No practices on this day. Choose another day or change the filters."
+        }
+      },
+      "checkin": {
+        "question": {
+          "title": "How are you feeling?",
+          "subtitle": "Rate your state before the practice"
+        },
+        "toast": {
+          "sent": "Check-in sent",
+          "recorded": "Your state has been recorded. Have a great practice!",
+          "skipped": "Check-in skipped"
+        },
+        "restrict": {
+          "blockedByMaster": "The master has restricted your access to this practice",
+          "studentsOnly": "This practice is only available to the master's students",
+          "groupOnly": "You are not in the group this practice is open to"
+        },
+        "restrictGroupNames": "You are not in the \"{names}\" group",
+        "windowClosedHint": "Check-in is closed — the practice has already started",
+        "start": "Start the practice"
+      },
+      "curatorGroupPage": {
+        "notFound": {
+          "title": "School not found",
+          "text": "It may have been deleted, or you are not a member."
+        },
+        "loadFailed": "Failed to load the school",
+        "loadFailedHint": "Check your connection and try again.",
+        "edit": {
+          "title": "Edit the school",
+          "nameAndDescription": "Edit the name and description",
+          "description": "Description",
+          "avatarLink": "Avatar link",
+          "descriptionPlaceholder": "Description"
+        },
+        "tabs": {
+          "members": "Members",
+          "upcoming": "Upcoming practices",
+          "analytics": "Analytics",
+          "upcoming2": "Nearest practices"
+        },
+        "leave": {
+          "confirmTitle": "Leave the school?",
+          "confirmCta": "Leave",
+          "warning": "If you are a member of this school, you will leave it. Leaving works even while the school is inactive."
+        },
+        "field": {
+          "schoolFallback": "School"
+        },
+        "toast": {
+          "left": "You have left the school",
+          "leaveFailed": "Failed to leave the school",
+          "updated": "The school has been updated",
+          "updateFailed": "Failed to update the school",
+          "transferredToYou": "The school has been transferred to you",
+          "avatarSaved": "The avatar link has been saved as {url}"
+        },
+        "hiddenCount": "{count} upcoming practice of this school will become hidden | {count} upcoming practices of this school will become hidden.",
+        "leaveText": "You will leave the school \"{name}\".{advisory}",
+        "leaveNote": "I am a member of this school — leave it",
+        "createPractice": "Create a practice",
+        "noUpcoming": "No upcoming practices",
+        "fields": {
+          "name": "Name",
+          "namePlaceholder": "Name"
+        },
+        "imageHint": "A link to the school picture. Leave the field empty to remove the avatar.",
+        "leaveCta": "Leave the school"
+      },
+      "detail": {
+        "loadFailed": "Failed to load the entry",
+        "title": "Entry",
+        "noComment": "No comment",
+        "rel": {
+          "checkin": "Before the practice",
+          "feedback": "After the practice"
+        },
+        "notFound": "Entry not found",
+        "relatedLine": "{rel}: {title} with {name}"
+      },
+      "diaryFeed": {
+        "filter": {
+          "title": "Filter"
+        },
+        "search": {
+          "title": "Search",
+          "noHits": "Nothing found",
+          "reset": "Reset the search"
+        },
+        "loadFailed": "Failed to load the diary",
+        "empty": {
+          "title": "The diary is empty",
+          "text": "Your entries, practices, check-ins and feedback will appear here"
+        },
+        "toast": {
+          "deleted": "Entry deleted"
+        },
+        "searchNoHits": "No entries for the query \"{query}\"",
+        "resetFilterAria": "Reset the filter",
+        "exitAria": "Leave the diary",
+        "showMapAria": "Show as a map",
+        "showListAria": "Show as a list",
+        "cancel": "Cancel"
+      },
+      "editProfile": {
+        "about": {
+          "label": "About",
+          "placeholder": "Tell a little about yourself"
+        },
+        "spendRemainderConsent": "I agree to spend the remainder",
+        "methods": {
+          "title": "Methods",
+          "pending": "Awaiting confirmation",
+          "adminNote": "Changing practice methods requires administrator confirmation.",
+          "autoNote1": "The request is sent automatically. Processing usually takes",
+          "autoNote2": "no more than 3 business days."
+        },
+        "languages": {
+          "title": "Practice languages"
+        },
+        "delete": {
+          "confirmTitle": "Delete the account?",
+          "irreversible": "This action is irreversible!",
+          "consequencesLead": "Upon deletion:",
+          "consequencePractices": "All your practices will be cancelled",
+          "consequenceHistory": "The history will be deleted",
+          "consequenceStats": "Access to statistics will be lost",
+          "typeConfirm": "Type \"DELETE\" to confirm",
+          "confirmWord": "DELETE",
+          "confirmButton": "Delete forever"
+        },
+        "toast": {
+          "methodsSent": "The method change request has been sent for review",
+          "methodsFailed": "Failed to send the request",
+          "languagesSaved": "Languages saved",
+          "languagesFailed": "Failed to save the languages",
+          "noChanges": "No changes",
+          "saved": "Profile saved",
+          "saveFailed": "Failed to save the profile",
+          "deleteUnavailable": "Account deletion is not available yet, coming later"
+        },
+        "fallback": {
+          "user": "User"
+        },
+        "bioMax": "No more than 2000 characters",
+        "emailInvalid": "Enter a valid e-mail",
+        "optionUnavailable": "The option is temporarily unavailable",
+        "validationSummary": "Check the entered fields",
+        "title": "Edit profile",
+        "changePhoto": "Change photo",
+        "fields": {
+          "firstName": "First name",
+          "lastName": "Last name"
+        },
+        "methodRejectReason": "The previous request was rejected: {reason}",
+        "submitForReview": "Submit for review",
+        "saveLanguages": "Save languages",
+        "deleteCta": "Delete account",
+        "balanceLine": "Your balance is {amount}",
+        "withdrawFirst": "Withdraw the funds first"
+      },
+      "entry": {
+        "loadFailed": "Failed to load the entry",
+        "titlePlaceholder": "Title (optional)",
+        "titleAria": "Entry title",
+        "textAria": "Entry text",
+        "titleFallback": "Entry",
+        "shared": {
+          "form": {
+            "hostFallback": "the master"
+          }
+        },
+        "relatedLine": "Related to the practice: {title} with {name}"
+      },
+      "externalActivityCreate": {
+        "custom": {
+          "remove": "Remove your variant",
+          "title": "Custom activity",
+          "pick": "Choose your variant"
+        },
+        "thoughts": {
+          "label": "Thoughts",
+          "hint": "Write what it was and what happened to you. You can return to the reflection later"
+        },
+        "fields": {
+          "date": "Event date",
+          "time": "Event time"
+        },
+        "title": "New event",
+        "section": {
+          "when": "When it happened ",
+          "activity": "Choosing an activity ",
+          "moodAfter": "My state afterwards",
+          "thoughts": "Thoughts"
+        },
+        "activity": {
+          "vocal": "Vocal practice",
+          "nailStanding": "Nail standing",
+          "meditation": "Meditation",
+          "massage": "Massage",
+          "yoga": "Yoga",
+          "dance": "Dance"
+        },
+        "picker": {
+          "time": "Choose a time",
+          "activity": "Choose an activity"
+        },
+        "validation": {
+          "future": "The event cannot be in the future"
+        },
+        "toast": {
+          "saved": "The event has been added",
+          "saveFailed": "Failed to save the event"
+        },
+        "backAria": "Back to home",
+        "moodAria": "Rate your state from 1 to 10"
+      },
+      "feedback": {
+        "waiting": {
+          "title": "Waiting for attendance confirmation",
+          "text": "Feedback can be left once Zoom confirms your attendance"
+        },
+        "unavailable": "Feedback is unavailable",
+        "gate": {
+          "notAttended": "Zoom did not confirm your attendance at this practice",
+          "cancelled": "The booking for this practice has been cancelled"
+        },
+        "question": {
+          "title": "How was the practice?",
+          "subtitle": "Rate your state afterwards"
+        },
+        "submit": "Send feedback",
+        "toast": {
+          "thanks": "Thanks for the feedback!"
+        },
+        "thanks": {
+          "text": "Your feedback helps us improve the practices"
+        },
+        "state": {
+          "completed": "Completed"
+        },
+        "toDiary": "To the diary",
+        "moodAria": "Rate the practice from 1 to 10"
+      },
+      "masterPublic": {
+        "role": {
+          "switchCta": "Switch role",
+          "chooseTitle": "Choose a role",
+          "master": "Master",
+          "student": "Student"
+        },
+        "block": {
+          "confirmTitle": "Block this school member?",
+          "warning": "The member will lose access to the school and its practices. You can unblock them at any time."
+        },
+        "notFound": "Master not found",
+        "methods": {
+          "empty": "No methods specified yet."
+        },
+        "sections": {
+          "upcoming": "Upcoming practices",
+          "nearest": "Nearest practices",
+          "nonePlanned": "No practices planned yet."
+        },
+        "toast": {
+          "roleChanged": "Role changed: the member is now a student of the school",
+          "roleFailed": "Failed to change the role",
+          "blocked": "The member has been blocked",
+          "alreadyLeftSchool": "The member has already left the school",
+          "blockFailed": "Failed to block the member"
+        },
+        "profileUnavailable": "Profile unavailable",
+        "tryLater": "Try again later",
+        "title": "Master",
+        "actionsAria": "Actions for the master",
+        "methodsSection": "Methods",
+        "analyticsSection": "Analytics",
+        "analyticsStub": "The master's analytics will appear here once the data is connected.",
+        "createPractice": "Create a practice",
+        "change": "Change",
+        "experienceLine": "{n} year of experience | {n} years of experience",
+        "practicesLabel": "Practice | Practices",
+        "reviewsLabel": "Feedback | Feedback"
+      },
+      "myBookings": {
+        "empty": {
+          "title": "No bookings",
+          "text": "Your bookings will appear here after you book a practice"
+        },
+        "tabs": {
+          "upcoming": "Upcoming",
+          "past": "Past"
+        },
+        "status": {
+          "tomorrow": "Tomorrow",
+          "today": "Today",
+          "live": "Live",
+          "noShow": "You didn't show up",
+          "counting": "Counting"
+        },
+        "retry": "Try again",
+        "title": "My bookings",
+        "done": "Completed",
+        "cancelled": "Cancelled"
+      },
+      "notifications": {
+        "practiceReminders": "Practice reminders",
+        "practiceRemindersHint": "A day, an hour and 10 minutes before; a feedback request",
+        "bookings": "Bookings and changes",
+        "bookingsHint": "Confirmations, cancellations, a spot opened up",
+        "messages": "Messages",
+        "messagesHint": "New messages in your chats",
+        "wallet": "Wallet",
+        "walletHint": "Top-ups and payouts",
+        "title": "Notifications",
+        "muteHint": "Turn off to receive nothing",
+        "whatToSend": "What to send",
+        "toast": {
+          "loadFailed": "Failed to load the notification settings",
+          "saveFailed": "Failed to save the setting"
+        }
+      },
+      "practiceDetail": {
+        "notFound": "Practice not found",
+        "contraindications": "CONTRAINDICATIONS",
+        "fields": {
+          "status": "Status",
+          "master": "Master",
+          "price": "Price"
+        },
+        "bookingWindow": "Booking is available within 7 days after the practice",
+        "cta": {
+          "book": "Book",
+          "bookFree": "Book for free"
+        },
+        "state": {
+          "booked": "You are booked",
+          "pending": "Pending",
+          "completed": "Completed",
+          "cancelled": "Cancelled",
+          "counting": "Attendance is being counted",
+          "soldOut": "Sold out",
+          "noShow": "You didn't show up"
+        },
+        "cancelledToast": "The booking has been cancelled",
+        "titleBooked": "My practice",
+        "titlePlain": "Practice",
+        "menuAria": "Menu",
+        "aboutSection": "About the practice",
+        "prepareSection": "What to prepare",
+        "zoomAfterBooking": "The Zoom link is available after booking — on the home screen and in the practice",
+        "checkinCta": "Check-in before the practice",
+        "feedbackCta": "Leave feedback",
+        "recordingCta": "Watch the recording",
+        "shareMood": "Share how you feel",
+        "cancelBooking": "Cancel the booking"
+      },
+      "practiceLive": {
+        "notFound": {
+          "title": "Practice not found",
+          "text": "It may have been deleted, or the link was copied incompletely"
+        },
+        "zoomNotConfigured": "Zoom inside the app is not configured",
+        "zoomServerBroken": "Zoom sign-in does not work on this server yet. Contact support.",
+        "cancelled": {
+          "title": "The practice has been cancelled",
+          "text": "Its entry will no longer open"
+        },
+        "entryUnavailable": "Zoom entry is unavailable",
+        "registrationFailed": "Your personal meeting registration could not be created, and there will be no retry. Contact support.",
+        "notBooked": "You are not booked",
+        "notBookedHint": "Book the practice — after booking, the Zoom entry will open here",
+        "toPractice": "To the practice",
+        "entryPreparing": "Entry is unavailable",
+        "entryPreparing2": "The entry is being prepared",
+        "join": "Join",
+        "checkinDone": "Check-in done",
+        "desktopCameraHint": "To turn the camera on, open VELO from a desktop",
+        "toast": {
+          "stateChanged": "The practice state has changed",
+          "zoomOpenFailed": "Failed to open Zoom. Try again"
+        },
+        "leave": "Leave the practice",
+        "liveBadge": "Live",
+        "titleFallback": "Practice",
+        "start": "Start",
+        "zoomFailed": "Failed to create the meeting — contact the master"
+      },
+      "reflection": {
+        "practiceFallback": "Practice",
+        "toast": {
+          "thanks": "Thanks for sharing"
+        },
+        "takeCare": "Take care. Come back when you are ready."
+      },
+      "schoolAnalytics": {
+        "unavailable": "The school is unavailable",
+        "unavailableHint": "It may have been deleted, or you are no longer its curator.",
+        "loadFailed": "Failed to load the analytics",
+        "loadFailedHint": "Check your connection and try again.",
+        "feedbackPercent": "Feedback percentage",
+        "noFeedbacks": "No feedback yet",
+        "noPractices": "No practices in this period yet",
+        "cardsAfterFirst": "The cards will appear after the first practice is held.",
+        "backToSchool": "To the school",
+        "practicesHeld": "Practices held",
+        "joinedAndMissed": "Joined and didn't show up",
+        "period": {
+          "quarter": "Quarter"
+        },
+        "practicesOfWeek": "Practices of the week",
+        "practicesOfMonth": "Practices of the month",
+        "practicesOfQuarter": "Practices of the quarter",
+        "title": "School analytics",
+        "membersLine": "People came, out of {n} in the school",
+        "repeatLine": "Came again: {n} of {total}",
+        "studentsLine": "Students: {n}",
+        "feedbacksLine": "Feedbacks: {n}",
+        "conversion": "{pct}% · {reviews} of {visits}"
+      },
+      "schoolMembers": {
+        "tabsAria": "Member list tabs",
+        "unavailable": "The school is unavailable",
+        "unavailableHint": "It may have been deleted, or you are not a member.",
+        "common": {
+          "backToSchool": "To the school"
+        },
+        "tabs": {
+          "masters": "Masters",
+          "students": "Students",
+          "blocked": "Blocked"
+        },
+        "blocked": {
+          "empty": "A member will appear here when you block them via the menu on their profile page."
+        },
+        "masters": {
+          "empty": "A member becomes a master of the school after accepting the curator's offer."
+        },
+        "students": {
+          "empty": "Students appear in the school after joining via the invite link."
+        },
+        "toast": {
+          "unblocked": "The member has been unblocked",
+          "unblockFailed": "Failed to unblock the member"
+        },
+        "title": "Members",
+        "roleMaster": "Master",
+        "roleStudent": "Student",
+        "blockedMeta": "{kind} · blocked {date}",
+        "unblock": "Unblock",
+        "empty": {
+          "searchMaster": "Search masters...",
+          "searchStudent": "Search students...",
+          "blocked": "No blocked members yet",
+          "masters": "No masters in the school yet",
+          "students": "No students in the school yet"
+        },
+        "loadFailed": {
+          "blocked": "Failed to load the blocked members",
+          "masters": "Failed to load the masters",
+          "students": "Failed to load the students"
+        }
+      },
+      "schoolStudentProfile": {
+        "role": {
+          "switchCta": "Switch role",
+          "chooseTitle": "Choose a role",
+          "checkFailed": "Failed to check the member's role.",
+          "student": "Student",
+          "master": "Master"
+        },
+        "block": {
+          "confirmTitle": "Block this school member?"
+        },
+        "unavailable": "The student is unavailable",
+        "unavailableHint": "They may have left the school or been removed.",
+        "loadFailed": "Failed to load the profile",
+        "loadFailedHint": "Check your connection and try again.",
+        "offer": {
+          "cancelTitle": "Cancel the offer?",
+          "cancelText": "The member will remain a student of the school. You can offer them the master role again.",
+          "cancelCta": "Cancel the offer"
+        },
+        "toast": {
+          "blocked": "The user has been blocked",
+          "blockedHint": "The user has been moved to the \"Blocked\" tab of the school members. If they broke the rules — for example, missed a practice or behaved inappropriately — you can report it to support.",
+          "offerSent": "The offer has been sent",
+          "offerFailed": "Failed to send the offer",
+          "offerCancelled": "The offer has been cancelled",
+          "offerCancelFailed": "Failed to cancel the offer",
+          "alreadyLeftSchool": "The member has already left the school",
+          "blockFailed": "Failed to block the member"
+        },
+        "report": {
+          "cta": "To support",
+          "dismiss": "Not now"
+        },
+        "backToStudents": "To the students list",
+        "blockText": "The member will no longer be able to see this school or book its practices, and will stop receiving its notifications.",
+        "title": "Student",
+        "actionsAria": "Actions for the student",
+        "practicesStat": "Practices",
+        "hoursStat": "Hours",
+        "masterOffer": {
+          "awaitingVerification": "The member needs to pass the platform master review. Once approved, they will be able to accept the school's offer.",
+          "verified": "The member is confirmed as a platform master. They will become a master of the school when they accept the offer.",
+          "awaitingNote": "Until the offer is accepted, they remain a student. There is no deadline.",
+          "cancel": "Cancel the offer",
+          "assignNote": "The member will receive the offer. The appointment requires platform master confirmation and their consent."
+        },
+        "change": "Change"
+      },
+      "schools": {
+        "create": {
+          "title": "Create a school"
+        },
+        "loadFailedHint": "Check your connection and try again.",
+        "empty": {
+          "title": "No schools yet",
+          "text": "Join via a link from a curator. A master granted this right by the administrator can create schools."
+        },
+        "title": "Schools"
+      },
+      "support": {
+        "custom": {
+          "title": "Custom topic"
+        },
+        "message": {
+          "placeholder": "Describe your problem or question...",
+          "label": "Message"
+        },
+        "toast": {
+          "thanks": "Thanks for the request",
+          "sendFailed": "Failed to send the request"
+        },
+        "thanks": {
+          "text": "We have received your request and will reply right here in the app."
+        },
+        "title": "How can we help?",
+        "responseHint": "We usually reply within 24 hours",
+        "topic": {
+          "label": "Topic",
+          "payments": "A problem with a payment / transaction",
+          "masterComplaint": "A complaint about a master",
+          "practice": "A problem with a practice",
+          "tech": "A technical question"
+        }
+      },
+      "timezoneSettings": {
+        "timezone": {
+          "label": "Time zone"
+        },
+        "dateFormat": {
+          "label": "Date format",
+          "dmy": "DD.MM.YYYY",
+          "ymd": "YYYY-MM-DD",
+          "mdy": "MM/DD/YYYY"
+        },
+        "toast": {
+          "saved": "Time zone saved",
+          "saveFailed": "Failed to save the time zone"
+        },
+        "title": "Time zone",
+        "note": "Practice times will be shown in the selected time zone"
+      },
+      "topupCancel": {
+        "title": "Payment cancelled",
+        "text": "Your balance has not changed. You can try again.",
+        "retry": "Try again"
+      },
+      "topupSuccess": {
+        "title": "The balance has been topped up!",
+        "balanceLabel": "Your current balance:",
+        "topupAgain": "Top up again"
+      },
+      "topup": {
+        "title": "Top up the balance",
+        "balanceLabel": "Your balance",
+        "amount": {
+          "title": "Choose an amount",
+          "min": "The minimum amount is €1",
+          "max": "The maximum amount is €500"
+        },
+        "error": {
+          "invalidUrl": "Invalid payment system URL",
+          "paymentFailed": "Failed to create the payment"
+        },
+        "otherAmount": "Another amount",
+        "topupCta": "Top up {label}"
+      },
+      "userChat": {
+        "peerFallback": "Master",
+        "title": "Messages",
+        "notFound": "Conversation not found",
+        "notFoundHint": "The link may be outdated"
+      },
+      "userCuratorGroups": {
+        "loadFailedHint": "Check your connection and try again.",
+        "empty": {
+          "title": "No schools yet",
+          "text": "You can join a school via a link from a curator."
+        },
+        "title": "My schools"
+      },
+      "userDashboard": {
+        "checkinBanner": {
+          "title": "Time for a check-in!"
+        },
+        "sections": {
+          "upcoming": "Upcoming practices"
+        },
+        "upcoming": {
+          "empty": "No upcoming practices"
+        },
+        "paidBadge": "Paid",
+        "headerTitle": "Home",
+        "notificationsAria": "Notifications",
+        "quickAccess": {
+          "title": "Quick access",
+          "addActivity": "Log an activity"
+        },
+        "progress": {
+          "title": "Your progress",
+          "practicesDone": "Practices completed",
+          "hours": "Hours in practice"
+        },
+        "liveNow": "Now",
+        "liveBadge": "Live",
+        "zoomPreparing": "The Zoom entry is still being prepared",
+        "inMinutes": "in {n} min",
+        "inHours": "in {n} h",
+        "findPractice": "Find a practice",
+        "zoomFailed": "Failed to create the meeting — contact the master"
+      },
+      "userInbox": {
+        "empty": {
+          "text": "Notifications about bookings, messages and operations will appear here"
+        },
+        "typeFilter": {
+          "label": "Notification type"
+        },
+        "readAll": "Mark all as read",
+        "categoryEmpty": "No notifications in this category yet",
+        "filter": {
+          "messages": "Messages",
+          "events": "Events"
+        },
+        "toast": {
+          "markReadFailed": "Failed to mark as read"
+        },
+        "title": "Notifications"
+      },
+      "userMessages": {
+        "empty": {
+          "text": "Your conversations with masters will appear here",
+          "hint": "Open a master's profile and ask a question"
+        },
+        "peerFallback": "Master",
+        "title": "Messages"
+      },
+      "userProfile": {
+        "masterApplication": "Master application",
+        "section": {
+          "account": "Account",
+          "settings": "Settings",
+          "help": "Help"
+        },
+        "fallback": {
+          "user": "User"
+        },
+        "shareUnavailable": "Sharing will be available in the next update",
+        "practicesStat": "Practices",
+        "hoursStat": "Hours",
+        "menu": {
+          "editProfile": "Edit profile",
+          "bookings": "My bookings",
+          "messages": "Messages",
+          "groups": "My schools",
+          "notifications": "Notifications",
+          "timezone": "Time zone",
+          "aiConnections": "AI connections",
+          "support": "Support",
+          "share": "Share",
+          "logout": "Log out"
+        },
+        "backToAdmin": "Back to the administrator mode",
+        "backToMaster": "Back to the master mode"
+      },
+      "waitlistConfirm": {
+        "notFound": {
+          "title": "Booking not found",
+          "text": "The spot may have already been confirmed, or the booking was deleted."
+        },
+        "confirm": {
+          "cta": "Confirm the spot"
+        },
+        "openPractice": "Open the practice",
+        "state": {
+          "expired": "The confirmation window has expired — the spot was offered to the next person in the queue.",
+          "confirmed": "The spot is already confirmed — you are booked for the practice.",
+          "pending": "You are in the queue — the spot has not opened up, or it has been taken.",
+          "unavailable": "The booking is no longer available."
+        },
+        "toast": {
+          "loadFailed": "Failed to load the booking",
+          "confirmed": "The spot has been confirmed",
+          "confirmFailed": "Failed to confirm the spot"
+        },
+        "title": "A spot in the practice",
+        "leadLine": "A spot opened up. Confirm your attendance by"
+      }
+    }
+  }
+}

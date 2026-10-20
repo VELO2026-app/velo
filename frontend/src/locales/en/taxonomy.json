@@ -1,0 +1,67 @@
+{
+  "display": {
+    "direction": {
+      "meditation": "Meditation",
+      "yoga": "Yoga",
+      "breathwork": "Breathwork",
+      "somatic": "Somatics",
+      "tantra": "Tantra",
+      "circles": "Circles",
+      "sound_healing": "Sound healing",
+      "art": "Art practices",
+      "narrative": "Narrative practices",
+      "movement": "Movement"
+    },
+    "difficulty": {
+      "beginner": "Beginner",
+      "medium": "Intermediate",
+      "high": "Advanced"
+    },
+    "durationBucket": {
+      "short": "Under 1 hour",
+      "long": "1 hour and more"
+    },
+    "timeOfDay": {
+      "night": "Night",
+      "morning": "Morning",
+      "day": "Day",
+      "evening": "Evening"
+    },
+    "feedKind": {
+      "booking_confirmed": "You booked",
+      "booking_cancelled_by_user": "You cancelled the booking",
+      "practice_rescheduled": "The master rescheduled the practice",
+      "practice_cancelled_by_master": "The practice was cancelled",
+      "practice_outcome": "",
+      "checkin": "Check-in",
+      "feedback": "Feedback",
+      "note": "Diary",
+      "dream": "Dreams",
+      "thread_started": "You started a conversation",
+      "external_activity": ""
+    },
+    "externalActivity": {
+      "vocal": "Vocal practice",
+      "nail_standing": "Nail standing",
+      "meditation": "Meditation",
+      "massage": "Massage",
+      "yoga": "Yoga",
+      "dance": "Dance",
+      "custom": ""
+    },
+    "outcome": {
+      "attended": "Done",
+      "no_show": "You didn't show up"
+    },
+    "weekdayAbbr": {
+      "1": "Mo",
+      "2": "Tu",
+      "3": "We",
+      "4": "Th",
+      "5": "Fr",
+      "6": "Sa",
+      "7": "Su"
+    },
+    "recurrenceDaily": "Daily"
+  }
+}

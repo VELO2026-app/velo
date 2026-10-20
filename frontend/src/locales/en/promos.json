@@ -1,0 +1,6 @@
+{
+  "promos": {
+    "_comment": "Promocode vocabulary shared across the admin and master zones.",
+    "untilLabel": "Valid until: {label}"
+  }
+}

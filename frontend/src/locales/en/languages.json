@@ -1,0 +1,9 @@
+{
+  "languages": {
+    "_comment": "Endonyms -- storage canon, identical in every locale.",
+    "list": [
+      "Русский",
+      "English"
+    ]
+  }
+}

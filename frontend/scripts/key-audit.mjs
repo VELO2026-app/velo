@@ -26,20 +26,23 @@ import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
 const { createI18n } = require('vue-i18n')
 
-const localesDir = 'src/locales/ru'
 const srcRoot = 'src'
-
-// -- compose the catalog (sorted file order == import.meta.glob order) --------
-const files = readdirSync(localesDir).filter((f) => f.endsWith('.json')).sort()
-const catalog = {}
-const rootsByFile = new Map()
-for (const f of files) {
-  const data = JSON.parse(readFileSync(join(localesDir, f), 'utf8'))
-  for (const k of Object.keys(data)) {
-    rootsByFile.set(k, (rootsByFile.get(k) ?? new Set()).add(f))
-  }
-  Object.assign(catalog, data)
+const DEFAULT_LOCALE = 'ru'
+// every locale folder under src/locales (ru canonical; others must keep
+// key parity with it -- fallbackLocale covers gaps, but the gate reports
+// them so the translation progress is measurable and can only grow)
+const localeDirs = readdirSync('src/locales').filter((name) => {
+  const p = join('src/locales', name)
+  return statSync(p).isDirectory() && readdirSync(p).some((f) => f.endsWith('.json'))
+}).sort()
+const filesFor = (locale) => readdirSync(join('src/locales', locale)).filter((f) => f.endsWith('.json')).sort()
+const catalogOf = (locale) => {
+  const catalog = {}
+  for (const f of filesFor(locale)) Object.assign(catalog, JSON.parse(readFileSync(join('src/locales', locale, f), 'utf8')))
+  return catalog
 }
+const catalog = catalogOf(DEFAULT_LOCALE)
+const files = filesFor(DEFAULT_LOCALE)
 
 // -- collect source files ------------------------------------------------------
 const srcFiles = []
@@ -156,7 +159,7 @@ for (const path of usedExact) {
 const DATA_ROOTS = new Set(['errors', 'storeErrors', 'transcription'])
 const SEED_FILES = new Set(['timezones.json', 'dates.json', 'languages.json', 'taxonomy.json'])
 const unusedSkippedFiles = new Set(
-  files.filter((f) => SEED_FILES.has(f)).map((f) => Object.keys(JSON.parse(readFileSync(join(localesDir, f), 'utf8')))[0]),
+  files.filter((f) => SEED_FILES.has(f)).map((f) => Object.keys(JSON.parse(readFileSync(join('src/locales', DEFAULT_LOCALE, f), 'utf8')))[0]),
 )
 const isDynUsed = (path) => {
   for (const pre of dynamicPrefixes) {
@@ -176,7 +179,7 @@ function walkUnused(node, path) {
 }
 for (const f of files) {
   if (SEED_FILES.has(f)) continue
-  walkUnused(JSON.parse(readFileSync(join(localesDir, f), 'utf8')), '')
+  walkUnused(JSON.parse(readFileSync(join('src/locales', DEFAULT_LOCALE, f), 'utf8')), '')
 }
 
 // -- 2b. flat-dotted key names -------------------------------------------------
@@ -191,7 +194,7 @@ function walkFlat(node, path) {
 }
 for (const f of files) {
   if (SEED_FILES.has(f)) continue
-  walkFlat(JSON.parse(readFileSync(join(localesDir, f), 'utf8')), '')
+  walkFlat(JSON.parse(readFileSync(join('src/locales', DEFAULT_LOCALE, f), 'utf8')), '')
 }
 
 // -- 2c. message compilation ---------------------------------------------------
@@ -221,6 +224,69 @@ function walkCompile(node, path) {
   }
 }
 walkCompile(catalog, '')
+
+// -- 2d. non-default locales: parity, compile, flat-dotted ---------------------
+const parityMissing = {}
+const foreignCompileFails = []
+const foreignFlatDotted = []
+for (const locale of localeDirs) {
+  if (locale === DEFAULT_LOCALE) continue
+  const cat = catalogOf(locale)
+  // parity: every canonical (referenced-or-not) ru path must exist here
+  const ruPaths = []
+  function walkRu(node, path) {
+    if (node != null && typeof node === 'object') { for (const k of Object.keys(node)) walkRu(node[k], path ? `${path}.${k}` : k); return }
+    ruPaths.push(path)
+  }
+  walkRu(catalog, '')
+  const missing = ruPaths.filter((p) => !p.includes('_comment') && resolveLocale(cat, p) === undefined)
+  if (missing.length > 0) parityMissing[locale] = missing
+  // compile every message the locale actually has
+  function walkCompileLocale(node, path) {
+    if (node != null && typeof node === 'object') { for (const k of Object.keys(node)) walkCompileLocale(node[k], path ? `${path}.${k}` : k); return }
+    if (typeof node !== 'string' || path.includes('_comment')) return
+    try { compileI18n.global.t(path) } catch (e) { foreignCompileFails.push(`${locale}: ${path} :: ${String(e.message).slice(0, 90)}`) }
+  }
+  walkCompileLocale(cat, '')
+  function walkFlatLocale(node, path) {
+    if (node != null && typeof node === 'object') {
+      for (const k of Object.keys(node)) {
+        if (k.includes('.')) foreignFlatDotted.push(`${locale}: ${path ? `${path}.` : ''}${k}`)
+        else walkFlatLocale(node[k], path ? `${path}.${k}` : k)
+      }
+    }
+  }
+  walkFlatLocale(cat, '')
+}
+function resolveLocale(catalog, path) {
+  let node = catalog
+  for (const part of path.split('.')) {
+    if (node == null || typeof node !== 'object' || !(part in node)) return undefined
+    node = node[part]
+  }
+  return node
+}
+// ru compile uses the shared instance; re-point it per foreign locale above
+// is done through compileI18n message swaps per locale:
+for (const locale of localeDirs) {
+  if (locale === DEFAULT_LOCALE) continue
+  compileI18n.global.setLocaleMessage(DEFAULT_LOCALE, catalogOf(locale))
+  const cat = catalogOf(locale)
+  function walkC(node, path) {
+    if (node != null && typeof node === 'object') { for (const k of Object.keys(node)) walkC(node[k], path ? `${path}.${k}` : k); return }
+    if (typeof node !== 'string' || path.includes('_comment')) return
+    try { compileI18n.global.t(path) } catch { /* counted above */ }
+  }
+  walkC(cat, '')
+  compileI18n.global.setLocaleMessage(DEFAULT_LOCALE, catalog)
+}
+
+// -- 3. root collisions (per locale dir) ---------------------------------------
+const rootsByFile = new Map()
+for (const f of filesFor(DEFAULT_LOCALE)) {
+  const data = JSON.parse(readFileSync(join('src/locales', DEFAULT_LOCALE, f), 'utf8'))
+  for (const k of Object.keys(data)) rootsByFile.set(k, (rootsByFile.get(k) ?? new Set()).add(f))
+}
 
 // -- 3. root collisions -------------------------------------------------------
 const collisions = []
@@ -258,6 +324,21 @@ if (collisions.length > 0) {
   failed = true
   console.error(`\nkey-audit: ${collisions.length} ROOT collision(s) -- shallow merge drops one file's section:\n`)
   for (const k of collisions) console.error(`   ${k}`)
+}
+// Parity is a REPORT, not a failure: fallbackLocale covers gaps, and the
+// translation may legally trail the ru catalog (incremental rollout).
+for (const [locale, missing] of Object.entries(parityMissing)) {
+  console.error(`key-audit: ${locale} trails ${DEFAULT_LOCALE} by ${missing.length} key(s) (fallback covers)`)
+}
+if (foreignCompileFails.length > 0) {
+  failed = true
+  console.error(`\nkey-audit: ${foreignCompileFails.length} non-ru message(s) fail to COMPILE:\n`)
+  for (const k of foreignCompileFails) console.error(`   ${k}`)
+}
+if (foreignFlatDotted.length > 0) {
+  failed = true
+  console.error(`\nkey-audit: ${foreignFlatDotted.length} non-ru FLAT-DOTTED key(s):\n`)
+  for (const k of foreignFlatDotted) console.error(`   ${k}`)
 }
 if (failed) process.exit(1)
 console.log(`key-audit: clean (${files.length} catalogs, ${usedExact.size} referenced keys, ${dynamicPrefixes.size} dynamic prefixes)`)
