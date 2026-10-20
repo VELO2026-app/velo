@@ -46,9 +46,7 @@
       :title="t('adminScreens.adminMasterReview.loadFailed')"
       :description="error"
     >
-      <VButton size="sm" variant="outline" @click="loadMaster">{{
-        t('adminScreens.adminMasterReview.povtorit')
-      }}</VButton>
+      <VButton size="sm" variant="outline" @click="loadMaster">{{ t('common.retry') }}</VButton>
     </VEmptyState>
 
     <template v-else-if="master">
@@ -89,7 +87,7 @@
                   size="sm"
                   :loading="savingField"
                   @click="saveDisplayName"
-                  >{{ t('adminScreens.adminMasterReview.sokhranit') }}</VButton
+                  >{{ t('ui.save') }}</VButton
                 >
               </div>
             </div>
@@ -130,7 +128,7 @@
                   size="sm"
                   :loading="savingField"
                   @click="saveAccountName"
-                  >{{ t('adminScreens.adminMasterReview.sokhranit') }}</VButton
+                  >{{ t('ui.save') }}</VButton
                 >
               </div>
             </div>
@@ -164,7 +162,7 @@
                   t('adminScreens.adminMasterReview.cancel')
                 }}</VButton>
                 <VButton variant="primary" size="sm" :loading="savingField" @click="saveBio">{{
-                  t('adminScreens.adminMasterReview.sokhranit')
+                  t('ui.save')
                 }}</VButton>
               </div>
             </div>
@@ -198,7 +196,7 @@
                   t('adminScreens.adminMasterReview.cancel')
                 }}</VButton>
                 <VButton variant="primary" size="sm" :loading="savingField" @click="saveEmail">{{
-                  t('adminScreens.adminMasterReview.sokhranit')
+                  t('ui.save')
                 }}</VButton>
               </div>
             </div>
@@ -227,7 +225,7 @@
                   t('adminScreens.adminMasterReview.cancel')
                 }}</VButton>
                 <VButton variant="primary" size="sm" :loading="savingField" @click="savePhone">{{
-                  t('adminScreens.adminMasterReview.sokhranit')
+                  t('ui.save')
                 }}</VButton>
               </div>
             </div>
@@ -265,7 +263,7 @@
                   size="sm"
                   :loading="savingField"
                   @click="saveExperience"
-                  >{{ t('adminScreens.adminMasterReview.sokhranit') }}</VButton
+                  >{{ t('ui.save') }}</VButton
                 >
               </div>
             </div>
@@ -310,7 +308,7 @@
                   size="sm"
                   :loading="savingField"
                   @click="saveLanguages"
-                  >{{ t('adminScreens.adminMasterReview.sokhranit') }}</VButton
+                  >{{ t('ui.save') }}</VButton
                 >
               </div>
             </div>
@@ -412,7 +410,7 @@
                   size="sm"
                   :loading="savingField"
                   @click="saveCertifications"
-                  >{{ t('adminScreens.adminMasterReview.sokhranit') }}</VButton
+                  >{{ t('ui.save') }}</VButton
                 >
               </div>
             </div>
@@ -513,7 +511,7 @@
           :label="t('adminScreens.adminMasterReview.allowSchoolCreation')"
         />
         <VButton variant="ghost" :disabled="anyLoading" @click="openReject">{{
-          t('adminScreens.adminMasterReview.otklonit')
+          t('adminScreens.adminMasterReview.rejectAction')
         }}</VButton>
         <VButton variant="primary" :loading="verifying" :disabled="anyLoading" @click="onVerify">
           {{ t('adminScreens.adminMasterReview.approve') }}

@@ -52,9 +52,7 @@
       :description="t('adminScreens.adminMasters.checkConnectionAndRetry')"
     >
       <template #action
-        ><VButton variant="primary" @click="load">{{
-          t('adminScreens.adminMasters.povtorit')
-        }}</VButton></template
+        ><VButton variant="primary" @click="load">{{ t('common.retry') }}</VButton></template
       >
     </VEmptyState>
 
@@ -127,7 +125,7 @@
 </template>
 
 <script setup lang="ts">
-import { t } from '@/locales'
+import { t, getLocale } from '@/locales'
 import { toHistoryState } from '@/utils/historySnapshot'
 import { ref, computed, onMounted, type Component } from 'vue'
 import { useRouter } from 'vue-router'
@@ -187,7 +185,7 @@ function statVal(n: number | null | undefined): string {
 }
 
 function payoutVal(cents: number | null | undefined): string {
-  return cents === null || cents === undefined ? '—' : formatMoney(cents, 'EUR', 'ru', true)
+  return cents === null || cents === undefined ? '—' : formatMoney(cents, 'EUR', getLocale(), true)
 }
 
 const router = useRouter()
@@ -224,12 +222,12 @@ const segOptions = computed<SegmentOption[]>(() => [
   },
   {
     value: 'verified',
-    label: t('adminScreens.adminMasters.verifits'),
+    label: t('adminScreens.adminMasters.verifiedShort'),
     badge: statusCount('verified'),
   },
   {
     value: 'rejected',
-    label: t('adminScreens.adminMasters.otkloneny'),
+    label: t('adminScreens.adminMasters.filterRejected'),
     badge: statusCount('rejected'),
   },
   {

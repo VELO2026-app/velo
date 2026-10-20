@@ -36,7 +36,7 @@ const VELO_SHORT_MONTHS: readonly string[] =
  * Examples:
  *   formatMoney(1500, 'EUR')              -> "15,00 €"  (in ru locale)
  *   formatMoney(0, 'EUR')                 -> "Бесплатно"
- *   formatMoney(0, 'EUR', 'ru', true)     -> "0,00 €"
+ *   formatMoney(0, 'EUR', getLocale(), true)     -> "0,00 €"
  */
 export function formatMoney(
   cents: number,

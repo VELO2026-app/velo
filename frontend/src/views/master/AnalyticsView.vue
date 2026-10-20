@@ -254,7 +254,7 @@
 </template>
 
 <script setup lang="ts">
-import { t } from '@/locales'
+import { t, getLocale } from '@/locales'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMasterStore } from '@/stores/master'
@@ -469,7 +469,7 @@ const hasMoreTx = computed((): boolean => transactions.value.length < txTotal.va
 
 // Income value + signed period delta. Currency canon = EUR; €0.00 while free seed.
 const income = computed((): string =>
-  incomeData.value ? formatMoney(incomeData.value.income_cents, 'EUR', 'ru', true) : '—',
+  incomeData.value ? formatMoney(incomeData.value.income_cents, 'EUR', getLocale(), true) : '—',
 )
 const incomeDeltaPositive = computed((): boolean => (incomeData.value?.delta_pct ?? 0) >= 0)
 // delta_pct is null when the previous period had no net-positive turnover -> hidden.
@@ -482,7 +482,7 @@ const incomeDelta = computed((): string => {
 
 function formatTxnAmount(cents: number): string {
   const sign = cents >= 0 ? '+' : '−'
-  return `${sign}${formatMoney(Math.abs(cents), 'EUR', 'ru', true)}`
+  return `${sign}${formatMoney(Math.abs(cents), 'EUR', getLocale(), true)}`
 }
 
 // M5: show the practice NAME instead of the generic stored label («Оплата за

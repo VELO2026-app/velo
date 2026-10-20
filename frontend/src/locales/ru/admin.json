@@ -58,15 +58,12 @@
       "newDirectionPlaceholder": "Новое направление…",
       "catalogLoadFailed": "Не удалось загрузить каталог",
       "checkConnectionAndRetry": "Проверьте соединение и попробуйте ещё раз",
-      "sokhranit": "Сохранить",
       "redaktirovat": "Редактировать",
       "newStylePlaceholder": "Новый вид…",
       "catalogLink": "Каталог практик",
-      "povtorit": "Повторить",
       "noStyles": "Без видов",
       "directionAdded": "Направление добавлено",
       "styleAdded": "Вид добавлен",
-      "sokhraneno": "Сохранено",
       "intro": "Управление каталогом. Изменения видны мастерам сразу при выборе методов.",
       "add": "Добавить",
       "deactivate": "Деактивировать",
@@ -76,10 +73,10 @@
       "addDirectionFailed": "Не удалось добавить направление",
       "addStyleFailed": "Не удалось добавить вид",
       "saveFailed": "Не удалось сохранить",
-      "statusChangeFailed": "Не удалось изменить статус"
+      "statusChangeFailed": "Не удалось изменить статус",
+      "savedToast": "Сохранено"
     },
     "adminCheckinRate": {
-      "povtorit": "Повторить",
       "lowCheckinTitle": "Низкий check-in (практики)",
       "noData": "Данных пока нет",
       "loadError": "Ошибка загрузки",
@@ -92,23 +89,19 @@
     "adminCuratorGroups": {
       "loadSchoolsFailed": "Не удалось загрузить школы",
       "checkConnectionAndRetry": "Проверьте соединение и попробуйте ещё раз",
-      "shkoly": "Школы",
-      "povtorit": "Повторить",
       "showMore": "Показать ещё",
-      "loadSchoolsFailed2": "Не удалось загрузить школы",
       "active": "Активна",
       "frozen": "Заморожена",
       "curatorLine": "Куратор: {name}",
       "countsLine": "Мастеров: {masters} • Учеников: {students} • с {since}",
-      "emptyNote": "Школ пока нет. Школу создаёт сам верифицированный мастер — отдельной выдачи прав не предусмотрено (рычаг админа — верификация мастера)."
+      "emptyNote": "Школ пока нет. Школу создаёт сам верифицированный мастер — отдельной выдачи прав не предусмотрено (рычаг админа — верификация мастера).",
+      "title": "Школы"
     },
     "adminDashboard": {
-      "profil": "Профиль",
       "statsPeriod": "Период статистики",
       "prevPeriod": "Предыдущий период",
       "nextPeriod": "Следующий период",
       "withdrawalRequestsLink": "Запросы мастеров на вывод",
-      "promokody": "Промокоды",
       "promocodesLink": "Все промокоды: платформы и мастеров",
       "usersLink": "Все пользователи · назначение мастеров",
       "methodRequestsLink": "Заявки на смену методов",
@@ -129,10 +122,11 @@
       "supportSection": "Поддержка",
       "statistics": "Статистика",
       "periodWeek": "Неделя",
-      "periodMonth": "Месяц"
+      "periodMonth": "Месяц",
+      "profileAria": "Профиль",
+      "promocodesSection": "Промокоды"
     },
     "adminFeedbackRate": {
-      "povtorit": "Повторить",
       "distributionratings": "Распределение оценок",
       "loadError": "Ошибка загрузки",
       "leaveRate": "Оставляют отзыв",
@@ -186,25 +180,15 @@
       "addToCatalog": "Добавить в каталог",
       "thisMasterOnly": "Только этому мастеру",
       "applicationTitle": "Заявка мастера",
-      "povtorit": "Повторить",
       "informatsiya": "Информация",
       "displayNameTitle": "Имя-визитка",
-      "sokhranit": "Сохранить",
       "accountNameTitle": "Имя аккаунта",
-      "sokhranit-2": "Сохранить",
-      "sokhranit-3": "Сохранить",
-      "sokhranit-4": "Сохранить",
       "telefon": "Телефон",
-      "sokhranit-5": "Сохранить",
       "opyt": "Опыт",
-      "sokhranit-6": "Сохранить",
-      "sokhranit-7": "Сохранить",
       "sertifikaty": "Сертификаты",
-      "sokhranit-8": "Сохранить",
       "dokumenty": "Документы",
       "noDocuments": "Документы не приложены",
       "firstApplication": "Заявка подаётся впервые.",
-      "otklonit": "Отклонить",
       "schoolCreationRight": "Право создавать школы",
       "nonZeroBalance": "ненулевой баланс",
       "revokedToUser": "Мастер отозван — аккаунт стал пользователем",
@@ -250,16 +234,14 @@
       "add": "Добавить",
       "rejectionReason": "Причина отказа",
       "saveFailed": "Не удалось сохранить",
-      "grantChangeFailed": "Не удалось изменить право"
+      "grantChangeFailed": "Не удалось изменить право",
+      "rejectAction": "Отклонить"
     },
     "adminMasters": {
       "checkConnectionAndRetry": "Проверьте соединение и попробуйте ещё раз",
       "mastera": "Мастера",
-      "povtorit": "Повторить",
       "vse": "Все",
       "proverka": "Проверка",
-      "verifits": "Верифиц.",
-      "otkloneny": "Отклонены",
       "zablok": "Заблок.",
       "inviteCta": "Пригласить мастера",
       "schoolsTab": "Школы",
@@ -283,7 +265,9 @@
       "emptySuspended": "Нет заблокированных мастеров",
       "emptyCancelled": "Нет удалённых аккаунтов",
       "emptyFallback": "Мастеров пока нет",
-      "loadFailedToast": "Ошибка загрузки мастеров"
+      "loadFailedToast": "Ошибка загрузки мастеров",
+      "verifiedShort": "Верифиц.",
+      "filterRejected": "Отклонены"
     },
     "adminMethodRequests": {
       "loadFailed": "Не удалось загрузить",
@@ -292,11 +276,9 @@
       "addToCatalog": "Добавить в каталог",
       "thisMasterOnly": "Только этому мастеру",
       "methodRequestsLink": "Заявки на смену методов",
-      "povtorit": "Повторить",
       "seychas": "Сейчас",
       "predlozheno": "Предложено",
       "loadError": "Ошибка загрузки",
-      "odobrit": "Одобрить",
       "MetodyObnovleny": "Методы обновлены",
       "approveError": "Ошибка при одобрении",
       "rejectionReasonHint": "Укажите причину отказа",
@@ -320,30 +302,20 @@
       },
       "checkConnectionAndRetry": "Проверьте соединение и попробуйте ещё раз",
       "showMore": "Показать ещё",
-      "povtorit": "Повторить",
       "noData": "Данных пока нет",
       "vse": "Все",
       "novye": "Новые",
       "aktivnye": "Активные",
-      "noData2": "Данных пока нет",
-      "dek-2025": "Дек 2025",
-      "vchera": "Вчера",
-      "SoobshcheniyayetNedostupny": "Сообщения пока недоступны",
       "joinedLine": "Практик: {n} • с {since}",
       "lastSeen": "Последняя: {label}",
       "messageAria": "Написать",
       "title": "Участники",
-      "loadFailed": "Не удалось загрузить участников",
-      "joinedToday": "Сегодня",
-      "dateExample": "24 января"
+      "messagesUnavailable": "Сообщения пока недоступны"
     },
     "adminPracticeDetail": {
       "Detalipractices": "Детали практики",
-      "povtorit": "Повторить",
       "statusVstrechi": "Статус встречи",
-      "reasonOshibki": "Причина ошибки",
       "noData": "Данных пока нет",
-      "noData2": "Данных пока нет",
       "nodata": "Нет данных",
       "m": "М",
       "aktivna": "Активна",
@@ -360,10 +332,10 @@
       "unmatchedTitle": "Нераспознанные участники",
       "unavailable": "Практика недоступна",
       "deletedLabel": "Удалена",
-      "notCreatedLabel": "Не создана"
+      "notCreatedLabel": "Не создана",
+      "errorReasonLabel": "Причина ошибки"
     },
     "adminPractices": {
-      "povtorit": "Повторить",
       "noData": "Данных пока нет",
       "vse": "Все",
       "predstoyashchie": "Предстоящие",
@@ -375,19 +347,15 @@
     },
     "adminProfile": {
       "administrator": "Администратор",
-      "RezhimProsmotra": "РЕЖИМ ПРОСМОТРА",
       "vyyti": "Выйти",
-      "administrator-2": "Администратор",
-      "administrator-3": "Администратор",
       "title": "Профиль",
       "switchNote": "Перейдите в интерфейс пользователя, чтобы просматривать каталог и бронировать практики.",
-      "switchCta": "Открыть как пользователь"
+      "switchCta": "Открыть как пользователь",
+      "readOnlyBadge": "РЕЖИМ ПРОСМОТРА"
     },
     "adminPromos": {
       "checkConnectionAndRetry": "Проверьте соединение и попробуйте ещё раз",
       "deaktivirovat": "Деактивировать",
-      "promokody": "Промокоды",
-      "povtorit": "Повторить",
       "vse": "Все",
       "kompanii": "Компании",
       "deaktivir": "Деактивир.",
@@ -413,37 +381,36 @@
       "loadFailed": "Не удалось загрузить промокоды",
       "deactivateFailedToast": "Не удалось деактивировать промокод",
       "filterMasters": "Мастеров",
-      "ownerFallback": "Пользователь"
+      "ownerFallback": "Пользователь",
+      "title": "Промокоды"
     },
     "adminReportDetail": {
       "PrimechanieKResheniyu": "Примечание к решению *",
-      "OpishiteKakieMeryPrinyaty": "Опишите, какие меры приняты",
       "PrimechanieNeobyazatelno": "Примечание (необязательно)",
       "rejectionReason": "Причина отклонения",
-      "VernitesKSpiskuZhalob": "Вернитесь к списку жалоб",
-      "povtorit": "Повторить",
-      "TekstZhaloby": "Текст жалобы",
       "detali": "Детали",
       "TipTseli": "Тип цели",
       "IdTseli": "ID цели",
       "obrabotana": "Обработана",
       "primechanie": "Примечание",
-      "ReshitZhalobu": "Решить жалобу",
-      "rejectZhalobu": "Отклонить жалобу",
       "nazad": "Назад",
-      "errorZagruzkiZhaloby": "Ошибка загрузки жалобы",
       "VveditePrimechanieKResheniyu": "Введите примечание к решению",
-      "ZhalobaReshena": "Жалоба решена",
       "processError": "Ошибка при обработке",
-      "ZhalobaOtklonena": "Жалоба отклонена",
-      "processError2": "Ошибка при обработке",
       "title": "Жалоба",
       "loadFailed": "Ошибка загрузки",
       "resolve": "Решить",
       "reject": "Отклонить",
       "alreadyProcessed": "Жалоба уже обработана — статус: ",
       "notFoundTitle": "Жалоба не найдена",
-      "createdLabel": "Создана"
+      "createdLabel": "Создана",
+      "resolutionPlaceholder": "Опишите, какие меры приняты",
+      "backToList": "Вернитесь к списку жалоб",
+      "loadFailedToast": "Ошибка загрузки жалобы",
+      "reportTextLabel": "Текст жалобы",
+      "resolveCta": "Решить жалобу",
+      "rejectCta": "Отклонить жалобу",
+      "resolvedToast": "Жалоба решена",
+      "rejectedToast": "Жалоба отклонена"
     },
     "adminReports": {
       "loadFailed": "Не удалось загрузить",
@@ -453,19 +420,15 @@
       },
       "filterNoHits": "По выбранным фильтрам ничего не найдено",
       "vse": "Все",
-      "povtorit": "Повторить",
       "tikety": "Тикеты",
-      "zhaloby": "Жалобы",
       "platezhi": "Платежи",
-      "vse-2": "Все",
       "filtr": "Фильтр",
       "ticketsLoadError": "Ошибка загрузки обращений",
       "loadError": "Ошибка загрузки",
-      "loadMore": "Показать ещё",
-      "moderationTab": "Модерация"
+      "moderationTab": "Модерация",
+      "tabComplaints": "Жалобы"
     },
     "adminReturnRate": {
-      "povtorit": "Повторить",
       "topLoyalUsers": "Топ лояльных юзеров",
       "noData": "Данных пока нет",
       "loadError": "Ошибка загрузки",
@@ -479,10 +442,8 @@
       "revenuePeriod": "Период выручки",
       "revenueLoadFailed": "Не удалось загрузить выручку",
       "vyruchka": "Выручка",
-      "povtorit": "Повторить",
       "byMasters": "По мастерам",
       "noData": "Данных пока нет",
-      "besplatno": "Бесплатно",
       "loadError": "Ошибка загрузки",
       "paidAmount": "Выплачено: {amount}",
       "commissionStat": "Комиссия",
@@ -495,8 +456,6 @@
     "adminSupportDetail": {
       "loadError": "Ошибка загрузки",
       "otvet": "Ответ…",
-      "povtorit": "Повторить",
-      "povtorit-2": "Повторить",
       "nazad": "Назад",
       "status": {
         "unclaimed": "Не взято",
@@ -513,8 +472,6 @@
         "claimFailed": "Не удалось закрепить обращение",
         "replyFailed": "Не удалось отправить ответ"
       },
-      "ticketResolved": "Решено",
-      "ticketClosed": "Закрыто",
       "take": "Взять в работу",
       "noMessages": "Сообщений пока нет.",
       "refresh": "Обновить",
@@ -531,7 +488,6 @@
         "title": "Обращений нет",
         "text": "Сюда попадут все обращения в поддержку"
       },
-      "povtorit": "Повторить",
       "status": {
         "unclaimed": "Не взято",
         "mine": "У меня"
@@ -548,7 +504,6 @@
       "usersLoadFailed": "Не удалось загрузить пользователей",
       "checkConnectionAndRetry": "Проверьте соединение и попробуйте ещё раз",
       "naznachit": "Назначить",
-      "povtorit": "Повторить",
       "showMore": "Показать ещё",
       "noName": "Без имени",
       "search": {
@@ -577,12 +532,9 @@
       "bank": "Банк",
       "providerFee": "Комиссия провайдера",
       "netAmount": "К получению",
-      "otklonit": "Отклонить",
       "unavailable": "Запрос недоступен",
-      "bank-2": "Банк",
       "ozhidaet": "Ожидает",
       "odobren": "Одобрен",
-      "otklonen": "Отклонён",
       "toast": {
         "approved": "Выплата одобрена",
         "approveFailed": "Ошибка одобрения выплаты",
@@ -593,7 +545,9 @@
       "alreadyProcessed": "Запрос уже обработан — статус: ",
       "rejectionReasonPlaceholder": "Укажите причину отклонения выплаты",
       "rejectionReasonRequired": "Укажите причину отклонения",
-      "title": "Выплата"
+      "title": "Выплата",
+      "statusRejected": "Отклонён",
+      "openReject": "Отклонить"
     },
     "adminWithdrawals": {
       "loadFailed": "Не удалось загрузить",
@@ -602,18 +556,16 @@
         "title": "Запросов на вывод нет",
         "text": "Новые запросы мастеров появятся здесь"
       },
-      "povtorit": "Повторить",
       "status": {
         "pending": "На рассмотрении"
       },
       "odobren": "Одобрен",
-      "otklonen": "Отклонён",
       "bank": "Банк",
       "withdrawalsLoadError": "Ошибка загрузки выплат",
       "loadError": "Ошибка загрузки",
       "toReceive": "К получению {amount}",
-      "title": "Выплаты"
-    },
-    "AdminUsersView": {}
+      "title": "Выплаты",
+      "statusRejected": "Отклонён"
+    }
   }
 }

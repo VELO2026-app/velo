@@ -26,7 +26,7 @@
     <!-- Switch to user mode -->
     <VCard class="admin-profile__section">
       <div class="admin-profile__section-title">
-        {{ t('adminScreens.adminProfile.RezhimProsmotra') }}
+        {{ t('adminScreens.adminProfile.readOnlyBadge') }}
       </div>
       <p class="admin-profile__section-desc">
         {{ t('adminScreens.adminProfile.switchNote') }}

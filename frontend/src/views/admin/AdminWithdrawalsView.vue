@@ -38,9 +38,7 @@
       :description="t('adminScreens.adminWithdrawals.checkConnectionAndRetry')"
     >
       <template #action
-        ><VButton variant="primary" @click="loadInitial">{{
-          t('adminScreens.adminWithdrawals.povtorit')
-        }}</VButton></template
+        ><VButton variant="primary" @click="loadInitial">{{ t('common.retry') }}</VButton></template
       >
     </VEmptyState>
 
@@ -131,7 +129,7 @@ function statusIcon(s: WithdrawalStatus): Component {
 const STATUS_LABEL: Record<WithdrawalStatus, string> = {
   pending: t('adminScreens.adminWithdrawals.status.pending'),
   approved: t('adminScreens.adminWithdrawals.odobren'),
-  rejected: t('adminScreens.adminWithdrawals.otklonen'),
+  rejected: t('adminScreens.adminWithdrawals.statusRejected'),
 }
 function statusLabel(s: WithdrawalStatus): string {
   return STATUS_LABEL[s] ?? s

@@ -35,9 +35,7 @@
       :title="t('adminScreens.adminPractices.loadFailed')"
       :description="error"
     >
-      <VButton size="sm" variant="outline" @click="load">{{
-        t('adminScreens.adminPractices.povtorit')
-      }}</VButton>
+      <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
     </VEmptyState>
 
     <div v-else-if="practices.length" class="admin-list__items">

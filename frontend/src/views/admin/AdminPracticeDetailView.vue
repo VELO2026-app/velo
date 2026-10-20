@@ -32,9 +32,7 @@
       :title="t('adminScreens.adminPracticeDetail.loadFailed')"
       :description="error"
     >
-      <VButton size="sm" variant="outline" @click="load">{{
-        t('adminScreens.adminPracticeDetail.povtorit')
-      }}</VButton>
+      <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
     </VEmptyState>
 
     <template v-else-if="practice">
@@ -90,7 +88,7 @@
              translation layer exists for developer-facing error text (B8). -->
         <div v-if="zoomAttendance.last_sync_error" class="admin-detail__zoom-error-row">
           <span class="admin-detail__zoom-label">{{
-            t('adminScreens.adminPracticeDetail.reasonOshibki')
+            t('adminScreens.adminPracticeDetail.errorReasonLabel')
           }}</span>
           <span class="admin-detail__zoom-error">{{ zoomAttendance.last_sync_error }}</span>
         </div>

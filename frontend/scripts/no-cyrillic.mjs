@@ -24,6 +24,54 @@ const TAG = /<[^>]+>/g
 const STRING_LIT = /(`[^`\n]*`|'[^'\n]*'|"[^"\n]*")/g
 const ATTR = /([\w:-]+)="([^"]*[А-Яа-яЁё][^"]*)"/g
 
+
+// Quote-aware comment stripper: removes // and /* */ only OUTSIDE string
+// literals (regex comment-stripping once ate half a file because the HTML
+// header comment contained "/api/v1/admin/taxonomy/*" -- the gate then read
+// the template as code). Keeps string contents byte-identical.
+function stripJsComments(src) {
+  let out = ''
+  let i = 0
+  let quote = null
+  while (i < src.length) {
+    const ch = src[i]
+    if (quote) {
+      out += ch
+      if (ch === '\\') {
+        out += src[i + 1] ?? ''
+        i += 2
+        continue
+      }
+      if (ch === quote) quote = null
+      i++
+      continue
+    }
+    if (ch === "'" || ch === '"' || ch === '`') {
+      quote = ch
+      out += ch
+      i++
+      continue
+    }
+    if (ch === '/' && src[i + 1] === '/') {
+      while (i < src.length && src[i] !== '\n') i++
+      continue
+    }
+    if (ch === '/' && src[i + 1] === '*') {
+      i += 2
+      while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i++
+      i += 2
+      continue
+    }
+    out += ch
+    i++
+  }
+  return out
+}
+
+function stripHtmlComments(src) {
+  return src.replace(/<!--[\s\S]*?-->/g, '')
+}
+
 const roots = ['src']
 const files = []
 function walk(dir) {
@@ -43,14 +91,17 @@ for (const r of roots) walk(r)
 
 const hits = []
 for (const p of files) {
-  const src = readFileSync(p, 'utf8')
-  // Vue: template text nodes + attribute values; script: string literals.
-  const tplMatch = src.match(/<template>([\s\S]*)<\/template>\s*(<script|$)/)
-  const scriptMatch = src.match(/<script[^>]*>([\s\S]*)<\/script>/)
-  const tpl = tplMatch ? tplMatch[1] : ''
-  const script = scriptMatch ? scriptMatch[1] : ''
+  const raw = readFileSync(p, 'utf8')
+  // .vue: the template gets only HTML-comment stripping (a "/*" inside an
+  // HTML comment once swallowed the whole template under JS rules); the
+  // script block gets the quote-aware JS stripper.
+  const tplMatch = // order-agnostic: some SFCs put <script> first
+  raw.match(/<template>[\s\S]*<\/template>/)
+  const scriptMatch = raw.match(/<script[^>]*>([\s\S]*?)<\/script>/)
+  const tpl = tplMatch ? stripHtmlComments(tplMatch[0]) : ''
+  const script = scriptMatch ? stripJsComments(scriptMatch[1]) : stripJsComments(raw)
 
-  const cleanTpl = tpl.replace(HTML_COMMENT, (m) => '\n'.repeat(m.split('\n').length - 1))
+  const cleanTpl = tpl
   cleanTpl.split('\n').forEach((line, i) => {
     const noTags = line.replace(TAG, ' ')
     for (const seg of noTags.split('>')) {
@@ -60,7 +111,7 @@ for (const p of files) {
     for (const m of cleanTpl ? line.matchAll(ATTR) : []) hits.push(`${p}:~${i + 1} attr ${m[1]}="${m[2].slice(0, 80)}"`)
   })
 
-  const cleanScript = script.replace(BLOCK_COMMENT, '')
+  const cleanScript = script
   cleanScript.split('\n').forEach((line, i) => {
     const l2 = line.replace(LINE_COMMENT, '')
     for (const m of l2.matchAll(STRING_LIT)) {

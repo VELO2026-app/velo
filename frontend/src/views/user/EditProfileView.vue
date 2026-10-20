@@ -155,7 +155,7 @@
 
       <!-- Save -->
       <VButton variant="primary" block :loading="saving" @click="onSave">{{
-        t('user.screens.editProfile.=ui:save')
+        t('ui.save')
       }}</VButton>
 
       <!-- Delete account (opens modal D) -->
@@ -225,7 +225,7 @@
 </template>
 
 <script setup lang="ts">
-import { t } from '@/locales'
+import { t, getLocale } from '@/locales'
 import { computed, reactive, ref, onMounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -477,7 +477,7 @@ const delConfirmText = ref('')
 // Balance to forfeit -- master earnings (0 / section hidden for plain users).
 const balanceCents = computed(() => masterStore.profile?.available_cents ?? 0)
 const hasBalance = computed(() => balanceCents.value > 0)
-const formattedBalance = computed(() => formatMoney(balanceCents.value, 'EUR', 'ru', true))
+const formattedBalance = computed(() => formatMoney(balanceCents.value, 'EUR', getLocale(), true))
 
 // «Удалить навсегда» unlocks once any balance is consented to and the user
 // typed the confirmation word.

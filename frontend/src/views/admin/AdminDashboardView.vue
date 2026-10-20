@@ -30,7 +30,7 @@
       <h1 class="admin-dashboard__title">Admin</h1>
       <button
         class="admin-dashboard__eye"
-        :aria-label="t('adminScreens.adminDashboard.profil')"
+        :aria-label="t('adminScreens.adminDashboard.profileAria')"
         @click="router.push({ name: 'admin-profile' })"
       >
         <IconProfile :size="22" />
@@ -147,7 +147,7 @@
         <template #trailing><IconArrowRight :size="20" /></template>
       </VListRow>
       <VListRow
-        :title="t('adminScreens.adminDashboard.promokody')"
+        :title="t('adminScreens.adminDashboard.promocodesSection')"
         :subtitle="t('adminScreens.adminDashboard.promocodesLink')"
         clickable
         @click="router.push({ name: 'admin-promos' })"
@@ -230,7 +230,7 @@
 </template>
 
 <script setup lang="ts">
-import { t } from '@/locales'
+import { t, getLocale } from '@/locales'
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -325,7 +325,7 @@ const participantsDeltaTone = computed(() => pctTone(overview.value?.new_users_d
 // needs E7 (not delivered) -> blank.
 const revenueCents = ref<number | null>(null)
 const revenueValue = computed((): string =>
-  revenueCents.value !== null ? formatMoney(revenueCents.value, 'EUR', 'ru', true) : '—',
+  revenueCents.value !== null ? formatMoney(revenueCents.value, 'EUR', getLocale(), true) : '—',
 )
 const revenueDelta = computed((): string => '')
 

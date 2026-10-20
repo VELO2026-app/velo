@@ -30,7 +30,7 @@
     :question-subtitle="variant.screenSubtitle"
     :submitting="diaryStore.reflectionSubmitting"
     :submit-disabled="false"
-    :submit-label="t('user.screens.reflection.=chat:send')"
+    :submit-label="t('common.submitSend')"
     :submitted="submitted"
     success-icon=""
     :success-title="t('user.screens.reflection.toast.thanks')"
@@ -52,7 +52,7 @@
         }}
       </span>
       <span class="form-shell__practice-meta-cell">
-        <IconCalendar :size="14" />{{ t('user.screens.reflection.=common:missedYou') }}</span
+        <IconCalendar :size="14" />{{ t('common.missedYou') }}</span
       >
     </template>
 

@@ -43,9 +43,7 @@
         :title="t('adminScreens.adminSupportDetail.loadError')"
         :description="threadError"
       >
-        <VButton size="sm" variant="outline" @click="loadThread">{{
-          t('adminScreens.adminSupportDetail.povtorit')
-        }}</VButton>
+        <VButton size="sm" variant="outline" @click="loadThread">{{ t('common.retry') }}</VButton>
       </VEmptyState>
 
       <template v-else-if="thread">
@@ -80,7 +78,7 @@
           :description="messagesError"
         >
           <VButton size="sm" variant="outline" @click="loadMessages">{{
-            t('adminScreens.adminSupportDetail.povtorit')
+            t('common.retry')
           }}</VButton>
         </VEmptyState>
         <template v-else>

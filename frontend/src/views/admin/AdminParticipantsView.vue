@@ -75,9 +75,7 @@
       :description="t('adminScreens.adminParticipants.checkConnectionAndRetry')"
     >
       <template #action
-        ><VButton variant="primary" @click="load(true)">{{
-          t('adminScreens.adminParticipants.povtorit')
-        }}</VButton></template
+        ><VButton variant="primary" @click="load(true)">{{ t('common.retry') }}</VButton></template
       >
     </VEmptyState>
 
@@ -178,7 +176,7 @@ function lastActiveLabel(iso: string): string {
 
 // No admin->user messaging endpoint yet -> stub toast (build-full-design).
 function messageStub(): void {
-  toast.info(t('adminScreens.adminParticipants.SoobshcheniyayetNedostupny'))
+  toast.info(t('adminScreens.adminParticipants.messagesUnavailable'))
 }
 </script>
 

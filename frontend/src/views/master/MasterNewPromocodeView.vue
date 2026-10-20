@@ -154,7 +154,7 @@ const form = reactive({
 // (not UTC) so it doesn't drift a day near midnight for east/west-of-UTC testers.
 const todayISO = computed((): string => todayLocalISO())
 
-// Shared calendar sheet state + the friendly trigger label, e.g. t('masterScreens.masterNewPromocode.=COMMENT').
+// Shared calendar sheet state + the friendly trigger label, e.g. the catalog's calendar-trigger label.
 const showDate = ref(false)
 const untilDisplay = computed((): string =>
   form.until ? `${formatShortDate(`${form.until}T12:00:00`)} ${form.until.slice(0, 4)}` : '',

@@ -55,7 +55,7 @@
           <IconBellPlain :size="48" />
         </template>
       </VEmptyState>
-      <VButton size="sm" @click="load">{{ t('user.screens.userInbox.=common:retry') }}</VButton>
+      <VButton size="sm" @click="load">{{ t('common.retry') }}</VButton>
     </div>
 
     <VEmptyState v-else-if="items.length === 0" :title="t('user.screens.userInbox.empty.text')">

@@ -19,7 +19,7 @@
   cards) = card storage + card payouts; ₽ currency if wanted; per-period income /
   ledger (still «—», same gap as Screens 7/12).
 
-  Money: formatMoney(cents, 'EUR', 'ru', true). MIN_WITHDRAWAL_EUROS=50,
+  Money: formatMoney(cents, 'EUR', getLocale(), true). MIN_WITHDRAWAL_EUROS=50,
   WITHDRAWAL_FEE_EUROS=2 (mirror backend config).
 -->
 
@@ -179,8 +179,8 @@
         <p v-if="!amountError && amountCents > 0" class="finance-view__hint">
           {{
             t('masterScreens.masterFinance.fields.feeBreakdown', {
-              min: formatMoney(MIN_WITHDRAWAL_EUROS * 100, 'EUR', 'ru', true),
-              fee: formatMoney(WITHDRAWAL_FEE_EUROS * 100, 'EUR', 'ru', true),
+              min: formatMoney(MIN_WITHDRAWAL_EUROS * 100, 'EUR', getLocale(), true),
+              fee: formatMoney(WITHDRAWAL_FEE_EUROS * 100, 'EUR', getLocale(), true),
               net: formattedNetAmount,
             })
           }}
@@ -230,7 +230,7 @@
           </span>
           <div class="finance-view__htext">
             <span class="finance-view__hamt">
-              {{ formatMoney(w.amount_cents, 'EUR', 'ru', true) }}
+              {{ formatMoney(w.amount_cents, 'EUR', getLocale(), true) }}
             </span>
             <span class="finance-view__hmeta">
               {{ withdrawalDate(w) }} • {{ maskedDetails(w.payout_details) }}
@@ -295,9 +295,11 @@ const availableCents = computed(() => masterStore.profile?.available_cents ?? 0)
 const frozenCents = computed(() => masterStore.profile?.frozen_cents ?? 0)
 const hasPayout = computed(() => masterStore.profile?.payout != null)
 
-const formattedAvailable = computed(() => formatMoney(availableCents.value, 'EUR', 'ru', true))
+const formattedAvailable = computed(() =>
+  formatMoney(availableCents.value, 'EUR', getLocale(), true),
+)
 
-const formattedFrozen = computed(() => formatMoney(frozenCents.value, 'EUR', 'ru', true))
+const formattedFrozen = computed(() => formatMoney(frozenCents.value, 'EUR', getLocale(), true))
 
 // ---------------------------------------------------------------------------
 // Payout method ("saved card" = configured payout, Б — working backend kept)
@@ -518,9 +520,9 @@ const amountError = computed((): string => {
 /** Net amount master receives after fee deduction. */
 const formattedNetAmount = computed((): string => {
   const cents = amountCents.value
-  if (cents <= 0) return formatMoney(0, 'EUR', 'ru', true)
+  if (cents <= 0) return formatMoney(0, 'EUR', getLocale(), true)
   const net = Math.max(0, cents - WITHDRAWAL_FEE_EUROS * 100)
-  return formatMoney(net, 'EUR', 'ru', true)
+  return formatMoney(net, 'EUR', getLocale(), true)
 })
 
 async function submitWithdrawal(): Promise<void> {

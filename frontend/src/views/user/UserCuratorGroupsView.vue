@@ -31,9 +31,7 @@
         :description="t('user.screens.userCuratorGroups.loadFailedHint')"
       >
         <template #action>
-          <VButton variant="outline" @click="load">{{
-            t('user.screens.userCuratorGroups.=common:retry')
-          }}</VButton>
+          <VButton variant="outline" @click="load">{{ t('common.retry') }}</VButton>
         </template>
       </VEmptyState>
 

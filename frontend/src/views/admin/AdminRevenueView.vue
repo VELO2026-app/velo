@@ -7,7 +7,7 @@
   WIRED (E9, 2026-06-16): GET /api/v1/admin/revenue?period=week|month — revenue
   (GMV), commission, payout + per-master breakdown (loading/error/empty states).
   Неделя/Месяц toggle (mirrors AdminDashboardView's period segment), default
-  'week' to match the backend default. Money via formatMoney(..., 'EUR', 'ru',
+  'week' to match the backend default. Money via formatMoney(..., 'EUR', getLocale(),
   true) so €0.00 renders honestly: seed practices are currently free, so totals
   read 0 until priced templates land (seed-pricing task, operator D2=В, queued
   next). No fabricated figures.
@@ -36,9 +36,7 @@
       :title="t('adminScreens.adminRevenue.revenueLoadFailed')"
       :description="error"
     >
-      <VButton size="sm" variant="outline" @click="load">{{
-        t('adminScreens.adminRevenue.povtorit')
-      }}</VButton>
+      <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
     </VEmptyState>
 
     <template v-else-if="data">
@@ -77,7 +75,7 @@
 </template>
 
 <script setup lang="ts">
-import { t } from '@/locales'
+import { t, getLocale } from '@/locales'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -124,7 +122,7 @@ function selectPeriod(p: string): void {
 
 // allowZero=true: free-seed totals must show €0.00, not t('adminScreens.adminRevenue.besplatno').
 function money(cents: number): string {
-  return formatMoney(cents, 'EUR', 'ru', true)
+  return formatMoney(cents, 'EUR', getLocale(), true)
 }
 
 const revenueLabel = computed<string>(() => (data.value ? money(data.value.revenue_cents) : '—'))

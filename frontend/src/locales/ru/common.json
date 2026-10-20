@@ -15,15 +15,15 @@
     "retry": "Повторить",
     "skip": "Пропустить",
     "showMore": "Показать ещё",
-    "loading": "Загружаем…",
     "hide": "Скрыть",
     "all": "Все",
     "reset": "Сбросить",
     "backHome": "На главную",
     "backToSchools": "К моим школам",
     "submitSend": "Отправить",
+    "tryAgain": "Попробуйте ещё раз",
     "missedYou": "Вы не пришли",
-    "tryAgain": "Попробуйте ещё раз"
+    "loading": "Загружаем…"
   },
   "tabs": {
     "dashboard": "Дашборд",

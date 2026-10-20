@@ -31,7 +31,7 @@
           <IconMessages :size="48" />
         </template>
       </VEmptyState>
-      <VButton size="sm" @click="load">{{ t('user.screens.userMessages.=common:retry') }}</VButton>
+      <VButton size="sm" @click="load">{{ t('common.retry') }}</VButton>
     </div>
 
     <VEmptyState

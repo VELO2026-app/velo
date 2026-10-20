@@ -25,9 +25,7 @@
       :title="t('adminScreens.adminFeedbackRate.loadFailed')"
       :description="error"
     >
-      <VButton size="sm" variant="outline" @click="load">{{
-        t('adminScreens.adminFeedbackRate.povtorit')
-      }}</VButton>
+      <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
     </VEmptyState>
 
     <template v-else>

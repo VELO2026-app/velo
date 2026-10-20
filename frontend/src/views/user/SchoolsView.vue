@@ -49,9 +49,7 @@
         :description="t('user.screens.schools.loadFailedHint')"
       >
         <template #action>
-          <VButton variant="outline" @click="load">{{
-            t('user.screens.schools.=common:retry')
-          }}</VButton>
+          <VButton variant="outline" @click="load">{{ t('common.retry') }}</VButton>
         </template>
       </VEmptyState>
 
@@ -65,7 +63,7 @@
           block
           @click="router.push({ name: 'master-curator-group-create' })"
         >
-          {{ t('user.screens.schools.create') }}
+          {{ t('user.screens.schools.create.title') }}
         </VButton>
       </div>
 

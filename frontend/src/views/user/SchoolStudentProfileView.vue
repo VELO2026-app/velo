@@ -94,9 +94,7 @@
         :description="t('user.screens.schoolStudentProfile.loadFailedHint')"
       >
         <template #action>
-          <VButton variant="outline" @click="load">{{
-            t('user.screens.schoolStudentProfile.=common:retry')
-          }}</VButton>
+          <VButton variant="outline" @click="load">{{ t('common.retry') }}</VButton>
         </template>
       </VEmptyState>
 
@@ -157,9 +155,7 @@
           <p class="ssp__offer-text" role="alert">
             {{ t('user.screens.schoolStudentProfile.role.checkFailed') }}
           </p>
-          <VButton variant="outline" @click="resolveCurrentKind">{{
-            t('user.screens.schoolStudentProfile.=common:retry')
-          }}</VButton>
+          <VButton variant="outline" @click="resolveCurrentKind">{{ t('common.retry') }}</VButton>
         </template>
         <p v-else-if="roleKind === 'master' && currentKind === 'student'" class="ssp__offer-text">
           {{ t('user.screens.schoolStudentProfile.masterOffer.assignNote') }}

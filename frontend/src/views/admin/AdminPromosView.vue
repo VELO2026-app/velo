@@ -21,7 +21,7 @@
   <div class="admin-promos">
     <header class="admin-promos__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-promos__title">{{ t('adminScreens.adminPromos.promokody') }}</h1>
+      <h1 class="admin-promos__title">{{ t('adminScreens.adminPromos.title') }}</h1>
       <span class="admin-promos__count">{{ headerCount }}</span>
     </header>
 
@@ -40,9 +40,7 @@
       :description="t('adminScreens.adminPromos.checkConnectionAndRetry')"
     >
       <template #action
-        ><VButton variant="primary" @click="loadInitial">{{
-          t('adminScreens.adminPromos.povtorit')
-        }}</VButton></template
+        ><VButton variant="primary" @click="loadInitial">{{ t('common.retry') }}</VButton></template
       >
     </VEmptyState>
 

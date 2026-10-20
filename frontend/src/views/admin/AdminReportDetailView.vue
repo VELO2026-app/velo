@@ -29,9 +29,7 @@
         :title="t('adminScreens.adminReportDetail.loadFailed')"
         :description="error"
       >
-        <VButton size="sm" variant="outline" @click="loadReport">{{
-          t('adminScreens.adminReportDetail.povtorit')
-        }}</VButton>
+        <VButton size="sm" variant="outline" @click="loadReport">{{ t('common.retry') }}</VButton>
       </VEmptyState>
 
       <template v-else-if="report">
@@ -48,7 +46,7 @@
         <!-- Report content -->
         <div class="report-detail__section">
           <div class="report-detail__section-title">
-            {{ t('adminScreens.adminReportDetail.TekstZhaloby') }}
+            {{ t('adminScreens.adminReportDetail.reportTextLabel') }}
           </div>
           <VCard class="report-detail__reason">{{ decodedReason }}</VCard>
         </div>
@@ -114,13 +112,13 @@
         <template v-if="currentStatus === 'pending'">
           <div class="report-detail__section">
             <div class="report-detail__section-title">
-              {{ t('adminScreens.adminReportDetail.ReshitZhalobu') }}
+              {{ t('adminScreens.adminReportDetail.resolveCta') }}
             </div>
             <div class="report-detail__action-form">
               <VTextarea
                 v-model="resolveNote"
                 :label="t('adminScreens.adminReportDetail.PrimechanieKResheniyu')"
-                :placeholder="t('adminScreens.adminReportDetail.OpishiteKakieMeryPrinyaty')"
+                :placeholder="t('adminScreens.adminReportDetail.resolutionPlaceholder')"
                 :rows="3"
                 :error="resolveError"
               />
@@ -138,7 +136,7 @@
 
           <div class="report-detail__section">
             <div class="report-detail__section-title">
-              {{ t('adminScreens.adminReportDetail.rejectZhalobu') }}
+              {{ t('adminScreens.adminReportDetail.rejectCta') }}
             </div>
             <div class="report-detail__action-form">
               <VTextarea
@@ -172,7 +170,7 @@
         <VEmptyState
           icon="notfound"
           :title="t('adminScreens.adminReportDetail.notFoundTitle')"
-          :description="t('adminScreens.adminReportDetail.VernitesKSpiskuZhalob')"
+          :description="t('adminScreens.adminReportDetail.backToList')"
         />
         <VButton variant="outline" block @click="router.back()">{{
           t('adminScreens.adminReportDetail.nazad')
@@ -249,7 +247,7 @@ async function loadReport(): Promise<void> {
     currentStatus.value = fetched.status
   } catch (e) {
     // SW8: own error rung + retry, distinct from "not found".
-    error.value = extractApiError(e, t('adminScreens.adminReportDetail.errorZagruzkiZhaloby'))
+    error.value = extractApiError(e, t('adminScreens.adminReportDetail.loadFailedToast'))
   } finally {
     loading.value = false
   }
@@ -265,7 +263,7 @@ async function onResolve(): Promise<void> {
   resolving.value = true
   try {
     await resolveReport(reportId, resolveNote.value.trim())
-    toast.success(t('adminScreens.adminReportDetail.ZhalobaReshena'))
+    toast.success(t('adminScreens.adminReportDetail.resolvedToast'))
     // S-1/S-2: push to list instead of back() -- guarantees fresh loadInitial().
     void router.push({ name: 'admin-reports' })
   } catch (e) {
@@ -280,7 +278,7 @@ async function onDismiss(): Promise<void> {
   dismissing.value = true
   try {
     await dismissReport(reportId, dismissNote.value.trim() || undefined)
-    toast.success(t('adminScreens.adminReportDetail.ZhalobaOtklonena'))
+    toast.success(t('adminScreens.adminReportDetail.rejectedToast'))
     // S-1/S-2: push to list instead of back() -- guarantees fresh loadInitial().
     void router.push({ name: 'admin-reports' })
   } catch (e) {

@@ -63,9 +63,7 @@
       :description="t('adminScreens.adminCatalog.checkConnectionAndRetry')"
     >
       <template #action
-        ><VButton variant="primary" @click="load">{{
-          t('adminScreens.adminCatalog.povtorit')
-        }}</VButton></template
+        ><VButton variant="primary" @click="load">{{ t('common.retry') }}</VButton></template
       >
     </VEmptyState>
 
@@ -83,7 +81,7 @@
           <button
             type="button"
             class="admin-catalog__icon-btn"
-            :aria-label="t('adminScreens.adminCatalog.sokhranit')"
+            :aria-label="t('ui.save')"
             @click="saveDirectionLabel(dir)"
           >
             <IconCheck :size="18" />
@@ -284,7 +282,7 @@ async function saveDirectionLabel(dir: TaxonomyDirectionItem): Promise<void> {
   try {
     await updateTaxonomyDirection(dir.id, { label })
     editingDirectionId.value = null
-    toast.success(t('adminScreens.adminCatalog.sokhraneno'))
+    toast.success(t('adminScreens.adminCatalog.savedToast'))
     await load()
   } catch (e) {
     toast.error(extractApiError(e, t('adminScreens.adminCatalog.saveFailed')))

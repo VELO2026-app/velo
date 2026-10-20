@@ -192,7 +192,7 @@
         <div class="ea__state-block" data-field="state">
           <MoodSlider
             v-model="moodScore"
-            :aria-label="t('user.screens.externalActivityCreate.=mood:ariaScale')"
+            :aria-label="t('user.screens.externalActivityCreate.moodAria')"
             :disabled="diaryStore.externalActivitySubmitting"
           />
         </div>
@@ -237,7 +237,7 @@
           class="ea__save-spinner"
           aria-hidden="true"
         />
-        <span class="ea__save-label">{{ t('user.screens.externalActivityCreate.=ui:save') }}</span>
+        <span class="ea__save-label">{{ t('ui.save') }}</span>
       </button>
     </div>
 

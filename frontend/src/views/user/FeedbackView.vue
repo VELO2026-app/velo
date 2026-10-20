@@ -90,7 +90,7 @@
       <div class="feedback__rating">
         <MoodSlider
           v-model="ratingScore"
-          :aria-label="t('user.screens.feedback.=mood:ariaScale')"
+          :aria-label="t('user.screens.feedback.moodAria')"
           :disabled="diaryStore.feedbackSubmitting"
         />
       </div>

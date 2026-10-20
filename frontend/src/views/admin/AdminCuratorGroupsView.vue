@@ -17,7 +17,7 @@
   <div class="admin-list">
     <header class="admin-list__top">
       <VBackButton @click="router.push({ name: 'admin-masters' })" />
-      <h1 class="admin-list__title">{{ t('adminScreens.adminCuratorGroups.shkoly') }}</h1>
+      <h1 class="admin-list__title">{{ t('adminScreens.adminCuratorGroups.title') }}</h1>
       <span class="admin-list__count">{{ total || '—' }}</span>
     </header>
 
@@ -30,9 +30,7 @@
       :description="t('adminScreens.adminCuratorGroups.checkConnectionAndRetry')"
     >
       <template #action
-        ><VButton variant="primary" @click="load(true)">{{
-          t('adminScreens.adminCuratorGroups.povtorit')
-        }}</VButton></template
+        ><VButton variant="primary" @click="load(true)">{{ t('common.retry') }}</VButton></template
       >
     </VEmptyState>
 

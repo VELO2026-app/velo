@@ -47,9 +47,7 @@
       :description="t('adminScreens.adminReports.checkConnectionAndRetry')"
     >
       <template #action
-        ><VButton variant="primary" @click="loadInitial">{{
-          t('adminScreens.adminReports.povtorit')
-        }}</VButton></template
+        ><VButton variant="primary" @click="loadInitial">{{ t('common.retry') }}</VButton></template
       >
     </VEmptyState>
 
@@ -143,7 +141,7 @@ const filter = ref<ModerationFilter>({
 
 const CATEGORY_LABELS: Record<string, string> = {
   tickets: t('adminScreens.adminReports.tikety'),
-  complaints: t('adminScreens.adminReports.zhaloby'),
+  complaints: t('adminScreens.adminReports.tabComplaints'),
   payments: t('adminScreens.adminReports.platezhi'),
 }
 

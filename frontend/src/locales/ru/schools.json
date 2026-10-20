@@ -38,20 +38,6 @@
     "offerBadge": "Кураторство"
   },
   "distribution": {
-    "title": "Процент фидбеков",
-    "countLabel": "{n}% · {m} из {total}",
-    "emptyText": "Пока нет отзывов",
     "breakdown": "Расшифровка"
-  },
-  "branding": {
-    "_comment": "VELO Frontend -- school branding display seeds (utils/schoolBranding). Palette display names are catalog data; the hex roles are the golden-SVG port (untouched). The monogram fallback letter is a golden constant in logo.ts, deliberately NOT here.",
-    "palettes": {
-      "eucalyptus": "эвкалипт",
-      "dustyAzure": "пыльная лазурь",
-      "lavender": "лаванда",
-      "sage": "шалфей",
-      "terracotta": "терракота",
-      "mistAndLotus": "лотос и туман"
-    }
   }
 }

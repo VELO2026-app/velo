@@ -50,7 +50,7 @@
       <!-- Actions (pending only) -->
       <div v-if="isPending" class="wd__foot">
         <VButton variant="danger" :disabled="anyLoading" @click="openReject">{{
-          t('adminScreens.adminWithdrawalDetail.otklonit')
+          t('adminScreens.adminWithdrawalDetail.openReject')
         }}</VButton>
         <VButton variant="primary" :disabled="anyLoading" @click="showConfirm = true">
           {{ t('adminScreens.adminWithdrawalDetail.confirm') }}
@@ -176,7 +176,7 @@ const bankLabel = computed<string>(() => {
 const STATUS_LABELS: Record<string, string> = {
   pending: t('adminScreens.adminWithdrawalDetail.ozhidaet'),
   approved: t('adminScreens.adminWithdrawalDetail.odobren'),
-  rejected: t('adminScreens.adminWithdrawalDetail.otklonen'),
+  rejected: t('adminScreens.adminWithdrawalDetail.statusRejected'),
 }
 const statusLabel = computed<string>(() => STATUS_LABELS[w.value?.status ?? ''] ?? '')
 

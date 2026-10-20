@@ -235,9 +235,7 @@
         <p class="master-public__role-sub">{{ t('user.screens.masterPublic.role.chooseTitle') }}</p>
         <VRadioGroup v-model="roleKind" :options="roleOptions" />
         <div class="master-public__role-actions">
-          <VButton variant="danger" block @click="onRoleClose">{{
-            t('user.screens.masterPublic.=ui:cancel')
-          }}</VButton>
+          <VButton variant="danger" block @click="onRoleClose">{{ t('ui.cancel') }}</VButton>
           <VButton
             variant="primary"
             block

@@ -90,9 +90,7 @@
         :description="error ?? undefined"
       >
         <template #action>
-          <VButton variant="outline" @click="retry">{{
-            t('user.screens.schoolMembers.=common:retry')
-          }}</VButton>
+          <VButton variant="outline" @click="retry">{{ t('common.retry') }}</VButton>
         </template>
       </VEmptyState>
 

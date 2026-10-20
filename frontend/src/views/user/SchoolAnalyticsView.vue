@@ -58,9 +58,7 @@
         :description="t('user.screens.schoolAnalytics.loadFailedHint')"
       >
         <template #action>
-          <VButton variant="outline" @click="refresh">{{
-            t('user.screens.schoolAnalytics.=common:retry')
-          }}</VButton>
+          <VButton variant="outline" @click="refresh">{{ t('common.retry') }}</VButton>
         </template>
       </VEmptyState>
 

@@ -37,9 +37,7 @@
       :description="t('adminScreens.adminMethodRequests.checkConnectionAndRetry')"
     >
       <template #action>
-        <VButton variant="primary" @click="loadInitial">{{
-          t('adminScreens.adminMethodRequests.povtorit')
-        }}</VButton>
+        <VButton variant="primary" @click="loadInitial">{{ t('common.retry') }}</VButton>
       </template>
     </VEmptyState>
 

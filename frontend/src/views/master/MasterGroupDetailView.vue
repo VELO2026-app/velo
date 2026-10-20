@@ -152,7 +152,7 @@
       :open="renameOpen"
       :title="t('masterScreens.masterGroupDetail.renameCta')"
       compact-title
-      :save-label="t('masterScreens.masterGroupDetail.=ui:save')"
+      :save-label="t('ui.save')"
       @save="onRenameSave"
       @close="renameOpen = false"
     >
