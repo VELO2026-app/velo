@@ -41,8 +41,11 @@ import type { PracticeDirection } from '@/api/types'
 import i18n from '@/locales'
 // Storage-canon seed: the SERVER catalog's labels are the canon; the ru seed
 // catalogs cover a cold cache (the historic storage vocabulary).
-import taxonomySeed from '@/locales/ru/taxonomy.json'
-import practiceSeed from '@/locales/ru/practice.json'
+// ?raw + JSON.parse: VueI18nPlugin precompiles every plain locales/**/*.json
+// import into message ASTs; these seeds are DATA (storage-canon labels read
+// here, not through t()), so their leaves must stay plain strings.
+import taxonomySeedRaw from '@/locales/ru/taxonomy.json?raw'
+import practiceSeedRaw from '@/locales/ru/practice.json?raw'
 import {
   DIRECTION_OPTIONS,
   stylesForDirection,
@@ -60,16 +63,18 @@ import { getActiveTaxonomy, type TaxonomyListResponse } from '@/api/taxonomy'
 //               from the server catalog's labels, or the ru seed when the
 //               cache is cold) -- a non-ru UI never forks the stored
 //               vocabulary.
+const taxonomySeed = JSON.parse(taxonomySeedRaw) as unknown as {
+  display?: { direction?: Record<string, string> }
+}
+const practiceSeed = JSON.parse(practiceSeedRaw) as unknown as {
+  practice?: { styles?: Record<string, string> }
+}
 const ruSeed = {
   display: {
-    direction:
-      (taxonomySeed as unknown as { display?: { direction?: Record<string, string> } }).display
-        ?.direction ?? {},
+    direction: taxonomySeed.display?.direction ?? {},
   },
   practice: {
-    styles:
-      (practiceSeed as unknown as { practice?: { styles?: Record<string, string> } }).practice
-        ?.styles ?? {},
+    styles: practiceSeed.practice?.styles ?? {},
   },
 }
 

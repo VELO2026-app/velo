@@ -73,7 +73,8 @@
 import { onMounted, ref, watch } from 'vue'
 import { useAuth, isSchoolInviteStartParam } from '@/composables/useAuth'
 import { useAuthStore } from '@/stores/auth'
-import { applyUserLanguage } from '@/locales'
+import { applyUserLanguage, availableLocales, clearLocaleHint, setLocale } from '@/locales'
+import { INSTANCE } from '@/platform/instance'
 import { platform } from '@/platform'
 import { useBackgroundStabilizer } from '@/composables/useBackgroundStabilizer'
 import { useViewportGeometry } from '@/composables/useViewportGeometry'
@@ -99,8 +100,27 @@ const inTelegram = platform.name === 'telegram'
 // arrives or changes (profile edit, phase-5 switcher).
 watch(
   () => authStore.user?.language,
-  (language) => applyUserLanguage(language),
+  (language) => {
+    // Logout (user -> null): drop the boot hint and return to the default
+    // locale -- a signed-out device must not keep the personal language.
+    if (language == null) {
+      clearLocaleHint()
+      void setLocale(INSTANCE.defaultLocale)
+      return
+    }
+    applyUserLanguage(language)
+  },
 )
+
+// Prefetch the other catalog locales shortly after mount (tz-i18n phase 5):
+// warms the lazy chunk cache in the background so a switch is an instant
+// same-frame flip, not a network wait. A plain timeout -- idle enough not
+// to compete with the boot requests, soon enough to warm before a tap.
+onMounted(() => {
+  setTimeout(() => {
+    for (const locale of availableLocales()) void setLocale(locale)
+  }, 2000)
+})
 
 // Pin the fixed photo-background against the iOS/Telegram keyboard viewport
 // shift (the "dancing background"). Mounted once here, on the app root.

@@ -117,10 +117,12 @@ async function onSelectLanguage(code: string): Promise<void> {
   const previous = selectedLanguage.value
   // Optimistic: switch the UI NOW (live re-render of every t() call); the
   // App.vue watcher's later applyUserLanguage is a same-locale no-op.
+  // setLocale is INSIDE the try (review P1): a rejected chunk load used to
+  // leave the row flipped with no revert and an unhandled rejection.
   selectedLanguage.value = code
-  await setLocale(code)
   savingLanguage.value = true
   try {
+    await setLocale(code)
     await authStore.updateProfile({ language: code })
     toast.info(t('user.screens.timezoneSettings.language.toastSaved'))
   } catch (error) {
@@ -239,6 +241,11 @@ async function onTimezoneChange(value: string): Promise<void> {
   transition:
     background-color var(--transition-base),
     color var(--transition-base);
+}
+
+.tz-settings__lang:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .tz-settings__lang--active {

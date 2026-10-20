@@ -18,12 +18,15 @@ import i18n, { getLocale } from '@/locales'
 // The ru seed catalog carries the VELO short-month table -- RUSSIAN typography
 // (see dates.json), not per-locale UI copy; same seed-import pattern as
 // methodTaxonomy.ts's display seed.
-import datesSeed from '@/locales/ru/dates.json'
+// ?raw + JSON.parse: VueI18nPlugin precompiles every plain locales/**/*.json
+// import into message ASTs; this seed is DATA (ru typography tables), so its
+// leaves must stay plain strings.
+import datesSeedRaw from '@/locales/ru/dates.json?raw'
 
 const { t } = i18n.global
 
-const VELO_SHORT_MONTHS: readonly string[] =
-  (datesSeed as { dates?: { shortMonths?: string[] } }).dates?.shortMonths ?? []
+const datesSeed = JSON.parse(datesSeedRaw) as { dates?: { shortMonths?: string[] } }
+const VELO_SHORT_MONTHS: readonly string[] = datesSeed.dates?.shortMonths ?? []
 
 /**
  * Format cents into a currency string using Intl.NumberFormat.

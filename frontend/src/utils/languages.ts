@@ -12,7 +12,11 @@
 // locales/ru/languages.json seed for the same reason taxonomy.json does.
 // =============================================================================
 
-import languagesSeed from '@/locales/ru/languages.json'
+// ?raw + JSON.parse: VueI18nPlugin precompiles every plain locales/**/*.json
+// import into message ASTs; this seed is DATA (endonym list), so its leaves
+// must stay plain strings.
+import languagesSeedRaw from '@/locales/ru/languages.json?raw'
 
-const seedList = (languagesSeed as { languages?: { list?: string[] } }).languages!.list!
+const languagesSeed = JSON.parse(languagesSeedRaw) as { languages?: { list?: string[] } }
+const seedList = languagesSeed.languages!.list!
 export const LANGUAGES: readonly [string, string] = [seedList[0]!, seedList[1]!]

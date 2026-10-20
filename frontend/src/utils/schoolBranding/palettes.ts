@@ -9,7 +9,10 @@
   NOT locale material. The id list here mirrors that catalog's key order.
 */
 
-import schoolsSeed from '@/locales/ru/schools.json'
+// ?raw + JSON.parse: VueI18nPlugin precompiles every plain locales/**/*.json
+// import into message ASTs; this seed is DATA (branding.palettes names), so
+// its leaves must stay plain strings.
+import schoolsSeedRaw from '@/locales/ru/schools.json?raw'
 
 export interface Palette {
   id: string
@@ -22,8 +25,11 @@ export interface Palette {
   faint: string
 }
 
-const paletteNames = (): Record<string, string> =>
-  (schoolsSeed as { branding?: { palettes?: Record<string, string> } }).branding?.palettes ?? {}
+const schoolsSeed = JSON.parse(schoolsSeedRaw) as {
+  branding?: { palettes?: Record<string, string> }
+}
+
+const paletteNames = (): Record<string, string> => schoolsSeed.branding?.palettes ?? {}
 
 function makePalette(id: string, roles: Omit<Palette, 'id' | 'name'>): Palette {
   return { id, name: paletteNames()[id] ?? id, ...roles }

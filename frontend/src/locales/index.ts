@@ -120,28 +120,58 @@ export function applyInstanceOverrides(
 
 const loadedLocales = new Set<string>([INSTANCE.defaultLocale])
 
+// Boot hint (tz-i18n phase 5): the last locale the user CHOSE, persisted so
+// a reopen renders in it immediately instead of flashing the default while
+// the auth round-trip + catalog chunk load. Cleared on logout (a signed-out
+// device shows the default locale). Guarded -- storage may be unavailable.
+const LOCALE_HINT_KEY = 'velo.locale'
+export function readLocaleHint(): string | null {
+  try {
+    return localStorage.getItem(LOCALE_HINT_KEY)
+  } catch {
+    return null
+  }
+}
+export function clearLocaleHint(): void {
+  try {
+    localStorage.removeItem(LOCALE_HINT_KEY)
+  } catch {
+    /* storage unavailable -- the hint simply won't persist */
+  }
+}
+
 /**
- * Switch the UI language. Non-default locales load their catalog chunk on
- * first switch; a locale with no folder is a no-op (fallback keeps
- * rendering). The language switcher UI (tz-i18n phase 5) only ever offers
- * locales that have catalogs.
+ * Switch the UI language. Non-default locales load their catalog chunks on
+ * first switch -- PARALLEL (a sequential await waterfall here was the 1-2s
+ * dead switch and the 5-10s late flip on reopen: ~20 tiny JSON chunks, one
+ * round-trip each, serialized). A locale with no folder is a no-op (fallback
+ * keeps rendering). The language switcher UI (tz-i18n phase 5) only ever
+ * offers locales that have catalogs.
  */
 export async function setLocale(locale: string): Promise<void> {
   if (!isSupportedLocale(locale) || locale === i18n.global.locale.value) return
   if (!loadedLocales.has(locale)) {
     const prefix = `./${locale}/`
-    const loaders = Object.entries(lazyLoaders).filter(([p]) => p.startsWith(prefix))
+    const loaders = Object.entries(lazyLoaders)
+      .filter(([p]) => p.startsWith(prefix))
+      .map(([, loader]) => loader)
     if (loaders.length === 0) return
+    const modules = (await Promise.all(loaders.map((load) => load()))) as unknown as {
+      default: Record<string, unknown>
+    }[]
     const messages: Record<string, unknown> = {}
-    for (const [, loader] of loaders) {
-      const mod = (await loader()) as { default: Record<string, unknown> }
-      Object.assign(messages, mod.default)
-    }
+    for (const mod of modules) Object.assign(messages, mod.default)
+
     i18n.global.setLocaleMessage(locale, messages)
     loadedLocales.add(locale)
   }
   i18n.global.locale.value = locale
   setRootLang(locale)
+  try {
+    localStorage.setItem(LOCALE_HINT_KEY, locale)
+  } catch {
+    /* storage unavailable -- the hint simply won't persist */
+  }
 }
 
 /**

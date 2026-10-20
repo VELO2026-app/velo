@@ -27,7 +27,10 @@
 // offset) -- see utils/practiceOptions.ts. This bigger list is for the city search.
 // =============================================================================
 
-import citySeed from '@/locales/ru/timezones.json'
+// ?raw + JSON.parse: VueI18nPlugin precompiles every plain locales/**/*.json
+// import into message ASTs; this seed is DATA, so its leaves must stay plain
+// strings (a plain import renders picker rows as JSON dumps).
+import citySeedRaw from '@/locales/ru/timezones.json?raw'
 
 export interface TimezoneCity {
   city: string
@@ -40,13 +43,15 @@ export interface TimezoneCity {
 // display names are DATA, not UI copy (tz-i18n §3.1 item 6 -- a non-ru UI
 // needs a localized city catalog, backend param or seed per locale, not
 // translation keys). The import keeps types + logic here, data there.
-const CURATED: TimezoneCity[] =
-  (citySeed as { curated?: TimezoneCity[]; aliases?: TimezoneCity[] }).curated ?? []
+const citySeed = JSON.parse(citySeedRaw) as {
+  curated?: TimezoneCity[]
+  aliases?: TimezoneCity[]
+}
 
 // Famous cities that SHARE a zone with another city, so a search by their
 // own name still resolves (e.g. Рио-де-Жанейро → America/Sao_Paulo).
-const ALIASES: TimezoneCity[] =
-  (citySeed as { curated?: TimezoneCity[]; aliases?: TimezoneCity[] }).aliases ?? []
+const CURATED: TimezoneCity[] = citySeed.curated ?? []
+const ALIASES: TimezoneCity[] = citySeed.aliases ?? []
 
 /** The curated rows: shown first, and win over the catalog for their zones. */
 export const CURATED_CITIES: readonly TimezoneCity[] = [...CURATED, ...ALIASES]
