@@ -46,7 +46,8 @@
     "labels": {
       "practice": "Практика",
       "master": "Мастер",
-      "total": "Итого"
+      "total": "Итого",
+      "date": "Дата"
     },
     "masterFallback": "Мастер",
     "promoPlaceholder": "Промокод",

@@ -21,6 +21,10 @@
 // Interpolation params are fine -- only the KEY PATH is audited.
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { createRequire } from 'node:module'
+
+const require = createRequire(import.meta.url)
+const { createI18n } = require('vue-i18n')
 
 const localesDir = 'src/locales/ru'
 const srcRoot = 'src'
@@ -166,6 +170,7 @@ function walkUnused(node, path) {
     for (const k of Object.keys(node)) walkUnused(node[k], path ? `${path}.${k}` : k)
     return
   }
+  if (path.endsWith('._comment') || path === '_comment') return
   if (DATA_ROOTS.has(path.split('.')[0]) || unusedSkippedFiles.has(path.split('.')[0])) return
   if (!usedExact.has(path) && !isDynUsed(path)) unused.push(path)
 }
@@ -188,6 +193,34 @@ for (const f of files) {
   if (SEED_FILES.has(f)) continue
   walkFlat(JSON.parse(readFileSync(join(localesDir, f), 'utf8')), '')
 }
+
+// -- 2c. message compilation ---------------------------------------------------
+// Every leaf must COMPILE: broken vue-i18n syntax (wrong literal escape,
+// unbalanced braces) crashes the whole screen's render at runtime, and no
+// test is guaranteed to render that exact message (the {'@'} incident).
+const compileI18n = createI18n({
+  legacy: false,
+  locale: 'ru',
+  fallbackLocale: 'ru',
+  missingWarn: false,
+  fallbackWarn: false,
+  warnHtmlMessage: false,
+})
+compileI18n.global.setLocaleMessage('ru', catalog)
+const compileFails = []
+function walkCompile(node, path) {
+  if (node != null && typeof node === 'object') {
+    for (const k of Object.keys(node)) walkCompile(node[k], path ? `${path}.${k}` : k)
+    return
+  }
+  if (typeof node !== 'string' || path.includes('_comment')) return
+  try {
+    compileI18n.global.t(path)
+  } catch (e) {
+    compileFails.push(`${path} :: ${String(e.message).slice(0, 100)}`)
+  }
+}
+walkCompile(catalog, '')
 
 // -- 3. root collisions -------------------------------------------------------
 const collisions = []
@@ -215,6 +248,11 @@ if (flatDotted.length > 0) {
   failed = true
   console.error(`\nkey-audit: ${flatDotted.length} FLAT-DOTTED key(s) -- rename to nested:\n`)
   for (const k of flatDotted) console.error(`   ${k}`)
+}
+if (compileFails.length > 0) {
+  failed = true
+  console.error(`\nkey-audit: ${compileFails.length} message(s) fail to COMPILE -- screen render would crash:\n`)
+  for (const k of compileFails) console.error(`   ${k}`)
 }
 if (collisions.length > 0) {
   failed = true

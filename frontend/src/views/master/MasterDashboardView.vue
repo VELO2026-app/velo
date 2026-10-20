@@ -59,7 +59,7 @@
           v-model="period"
           :options="PERIOD_OPTIONS"
           variant="toggle"
-          :aria-label="t('common.statsPeriod')"
+          :aria-label="t('analytics.statsPeriod')"
         />
         <button
           class="master-dashboard__bell"

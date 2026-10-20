@@ -71,7 +71,7 @@
           class="school-analytics__period"
           :options="PERIOD_OPTIONS"
           variant="tabs"
-          :aria-label="t('common.statsPeriod')"
+          :aria-label="t('analytics.statsPeriod')"
         />
 
         <!-- Interim scaffold (owner 2026-10-02: «бек доедет»): every

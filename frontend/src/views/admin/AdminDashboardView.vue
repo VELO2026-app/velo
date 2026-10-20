@@ -72,7 +72,7 @@
           compact
           :model-value="period"
           :options="periodOptions"
-          :aria-label="t('common.statsPeriod')"
+          :aria-label="t('analytics.statsPeriod')"
           @update:model-value="selectPeriod"
         />
       </div>

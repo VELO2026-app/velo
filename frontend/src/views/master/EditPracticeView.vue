@@ -126,7 +126,9 @@
           <!-- Дата — DS-пикер (реш. В: возвращена по логике — перенос практики
                норм. операция; нативный type=date заменён на брендовый пикер). -->
           <div class="edit-practice__field">
-            <label class="edit-practice__field-label">{{ t('ui.pickerDate') }}</label>
+            <label class="edit-practice__field-label">{{
+              t('masterScreens.editPractice.fields.date')
+            }}</label>
             <button
               type="button"
               class="edit-practice__picker"
@@ -139,7 +141,9 @@
 
           <!-- Время — DS-пикер (24ч, шаг 5 мин). -->
           <div class="edit-practice__field">
-            <label class="edit-practice__field-label">{{ t('ui.pickerTime') }}</label>
+            <label class="edit-practice__field-label">{{
+              t('masterScreens.editPractice.fields.time')
+            }}</label>
             <button
               type="button"
               class="edit-practice__picker"

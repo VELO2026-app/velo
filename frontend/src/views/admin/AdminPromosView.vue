@@ -86,7 +86,7 @@
                     used: usedLabel(p),
                   })
                 }}<br />
-                {{ t('common.untilLabel', { label: untilLabel(p) }) }}
+                {{ t('promos.untilLabel', { label: untilLabel(p) }) }}
               </div>
             </div>
           </div>
