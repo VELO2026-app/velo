@@ -15,7 +15,10 @@
 # =============================================================================
 
 # Languages the product supports for user identity ("en-US" -> "en").
-SUPPORTED_LANGUAGES = frozenset({"en", "de", "es", "ru"})
+# uk: the frontend interface switcher (tz-i18n) PATCHes User.language='uk'
+# directly; registering it here makes registration-time normalization
+# (Telegram language_code 'uk'/'uk-UA') land on 'uk' instead of 'en'.
+SUPPORTED_LANGUAGES = frozenset({"en", "de", "es", "ru", "uk"})
 
 # Default fallback language.
 DEFAULT_LANGUAGE = "en"
