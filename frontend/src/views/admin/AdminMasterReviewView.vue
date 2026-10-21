@@ -34,14 +34,19 @@
   <div class="mreview">
     <header class="mreview__top">
       <VBackButton @click="router.back()" />
-      <h1 class="mreview__title">Заявка мастера</h1>
+      <h1 class="mreview__title">{{ t('adminScreens.adminMasterReview.applicationTitle') }}</h1>
     </header>
 
     <div v-if="loading" class="mreview__loader"><VLoader size="lg" /></div>
 
     <!-- Error (SW7): distinct from "not found" -- retry, not a dead end. -->
-    <VEmptyState v-else-if="error" icon="warning" title="Ошибка загрузки" :description="error">
-      <VButton size="sm" variant="outline" @click="loadMaster">Повторить</VButton>
+    <VEmptyState
+      v-else-if="error"
+      icon="warning"
+      :title="t('common.loadError')"
+      :description="error"
+    >
+      <VButton size="sm" variant="outline" @click="loadMaster">{{ t('common.retry') }}</VButton>
     </VEmptyState>
 
     <template v-else-if="master">
@@ -61,24 +66,28 @@
       <!-- Информация — every master-authored field is admin-editable (batch H).
            TWO distinct names: «Имя-визитка» (data.profile.display_name, shown to
            users) vs «Имя аккаунта» (User.first/last, shown in admin lists). -->
-      <div class="mreview__seclabel">Информация</div>
+      <div class="mreview__seclabel">{{ t('adminScreens.adminMasterReview.information') }}</div>
       <VCard class="mreview__info" padding="none">
         <!-- Имя-визитка = data.profile.display_name (text) -->
         <div class="mreview__row">
-          <div class="mreview__k">Имя-визитка</div>
+          <div class="mreview__k">{{ t('adminScreens.adminMasterReview.displayNameTitle') }}</div>
           <template v-if="editing === 'display_name'">
             <div class="mreview__edit">
               <VInput
                 v-model="draftText"
-                placeholder="Имя, видимое пользователям"
+                :placeholder="t('adminScreens.adminMasterReview.fields.displayName')"
                 :error="fieldError"
               />
               <div class="mreview__edit-actions">
-                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField"
-                  >Отмена</VButton
-                >
-                <VButton variant="primary" size="sm" :loading="savingField" @click="saveDisplayName"
-                  >Сохранить</VButton
+                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
+                  t('ui.cancel')
+                }}</VButton>
+                <VButton
+                  variant="primary"
+                  size="sm"
+                  :loading="savingField"
+                  @click="saveDisplayName"
+                  >{{ t('ui.save') }}</VButton
                 >
               </div>
             </div>
@@ -88,7 +97,7 @@
             <button
               type="button"
               class="mreview__pen"
-              aria-label="Изменить имя-визитку"
+              :aria-label="t('adminScreens.adminMasterReview.edit.displayName')"
               @click="startField('display_name')"
             >
               <IconPen :size="22" />
@@ -98,18 +107,28 @@
 
         <!-- Имя аккаунта = User.first_name / last_name (two-part text) -->
         <div class="mreview__row">
-          <div class="mreview__k">Имя аккаунта</div>
+          <div class="mreview__k">{{ t('adminScreens.adminMasterReview.accountNameTitle') }}</div>
           <template v-if="editing === 'account_name'">
             <div class="mreview__edit">
-              <VInput v-model="draftFirst" placeholder="Имя" />
-              <VInput v-model="draftLast" placeholder="Фамилия" />
+              <VInput
+                v-model="draftFirst"
+                :placeholder="t('adminScreens.adminMasterReview.fields.firstNamePlaceholder')"
+              />
+              <VInput
+                v-model="draftLast"
+                :placeholder="t('adminScreens.adminMasterReview.fields.lastNamePlaceholder')"
+              />
               <p v-if="fieldError" class="mreview__edit-err">{{ fieldError }}</p>
               <div class="mreview__edit-actions">
-                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField"
-                  >Отмена</VButton
-                >
-                <VButton variant="primary" size="sm" :loading="savingField" @click="saveAccountName"
-                  >Сохранить</VButton
+                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
+                  t('ui.cancel')
+                }}</VButton>
+                <VButton
+                  variant="primary"
+                  size="sm"
+                  :loading="savingField"
+                  @click="saveAccountName"
+                  >{{ t('ui.save') }}</VButton
                 >
               </div>
             </div>
@@ -119,7 +138,7 @@
             <button
               type="button"
               class="mreview__pen"
-              aria-label="Изменить имя аккаунта"
+              :aria-label="t('adminScreens.adminMasterReview.edit.accountName')"
               @click="startField('account_name')"
             >
               <IconPen :size="22" />
@@ -129,18 +148,22 @@
 
         <!-- О себе = bio (textarea) -->
         <div class="mreview__row">
-          <div class="mreview__k">О себе</div>
+          <div class="mreview__k">{{ t('adminScreens.adminMasterReview.fields.about') }}</div>
           <template v-if="editing === 'bio'">
             <div class="mreview__edit">
-              <VTextarea v-model="draftText" placeholder="О себе" :rows="3" />
+              <VTextarea
+                v-model="draftText"
+                :placeholder="t('adminScreens.adminMasterReview.fields.aboutPlaceholder')"
+                :rows="3"
+              />
               <p v-if="fieldError" class="mreview__edit-err">{{ fieldError }}</p>
               <div class="mreview__edit-actions">
-                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField"
-                  >Отмена</VButton
-                >
-                <VButton variant="primary" size="sm" :loading="savingField" @click="saveBio"
-                  >Сохранить</VButton
-                >
+                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
+                  t('ui.cancel')
+                }}</VButton>
+                <VButton variant="primary" size="sm" :loading="savingField" @click="saveBio">{{
+                  t('ui.save')
+                }}</VButton>
               </div>
             </div>
           </template>
@@ -149,7 +172,7 @@
             <button
               type="button"
               class="mreview__pen"
-              aria-label="Изменить о себе"
+              :aria-label="t('adminScreens.adminMasterReview.edit.about')"
               @click="startField('bio')"
             >
               <IconPen :size="22" />
@@ -169,12 +192,12 @@
                 :error="fieldError"
               />
               <div class="mreview__edit-actions">
-                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField"
-                  >Отмена</VButton
-                >
-                <VButton variant="primary" size="sm" :loading="savingField" @click="saveEmail"
-                  >Сохранить</VButton
-                >
+                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
+                  t('ui.cancel')
+                }}</VButton>
+                <VButton variant="primary" size="sm" :loading="savingField" @click="saveEmail">{{
+                  t('ui.save')
+                }}</VButton>
               </div>
             </div>
           </template>
@@ -183,7 +206,7 @@
             <button
               type="button"
               class="mreview__pen"
-              aria-label="Изменить email"
+              :aria-label="t('adminScreens.adminMasterReview.edit.email')"
               @click="startField('email')"
             >
               <IconPen :size="22" />
@@ -193,17 +216,17 @@
 
         <!-- Телефон (text) -->
         <div class="mreview__row">
-          <div class="mreview__k">Телефон</div>
+          <div class="mreview__k">{{ t('adminScreens.adminMasterReview.phone') }}</div>
           <template v-if="editing === 'phone'">
             <div class="mreview__edit">
               <VInput v-model="draftText" placeholder="+7…" :error="fieldError" />
               <div class="mreview__edit-actions">
-                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField"
-                  >Отмена</VButton
-                >
-                <VButton variant="primary" size="sm" :loading="savingField" @click="savePhone"
-                  >Сохранить</VButton
-                >
+                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
+                  t('ui.cancel')
+                }}</VButton>
+                <VButton variant="primary" size="sm" :loading="savingField" @click="savePhone">{{
+                  t('ui.save')
+                }}</VButton>
               </div>
             </div>
           </template>
@@ -212,7 +235,7 @@
             <button
               type="button"
               class="mreview__pen"
-              aria-label="Изменить телефон"
+              :aria-label="t('adminScreens.adminMasterReview.edit.phone')"
               @click="startField('phone')"
             >
               <IconPen :size="22" />
@@ -222,21 +245,25 @@
 
         <!-- Опыт = experience_years (number) -->
         <div class="mreview__row">
-          <div class="mreview__k">Опыт</div>
+          <div class="mreview__k">{{ t('adminScreens.adminMasterReview.experience') }}</div>
           <template v-if="editing === 'experience_years'">
             <div class="mreview__edit">
               <VInput
                 v-model="draftText"
                 type="number"
-                placeholder="Лет опыта (0–50)"
+                :placeholder="t('adminScreens.adminMasterReview.fields.experienceYears')"
                 :error="fieldError"
               />
               <div class="mreview__edit-actions">
-                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField"
-                  >Отмена</VButton
-                >
-                <VButton variant="primary" size="sm" :loading="savingField" @click="saveExperience"
-                  >Сохранить</VButton
+                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
+                  t('ui.cancel')
+                }}</VButton>
+                <VButton
+                  variant="primary"
+                  size="sm"
+                  :loading="savingField"
+                  @click="saveExperience"
+                  >{{ t('ui.save') }}</VButton
                 >
               </div>
             </div>
@@ -246,7 +273,7 @@
             <button
               type="button"
               class="mreview__pen"
-              aria-label="Изменить опыт"
+              :aria-label="t('adminScreens.adminMasterReview.edit.experience')"
               @click="startField('experience_years')"
             >
               <IconPen :size="22" />
@@ -256,7 +283,7 @@
 
         <!-- Язык практик = languages (chip toggle, fixed set + custom) -->
         <div class="mreview__row">
-          <div class="mreview__k">Язык практик</div>
+          <div class="mreview__k">{{ t('adminScreens.adminMasterReview.fields.languages') }}</div>
           <template v-if="editing === 'languages'">
             <div class="mreview__edit">
               <div class="mreview__chips">
@@ -273,11 +300,15 @@
               </div>
               <p v-if="fieldError" class="mreview__edit-err">{{ fieldError }}</p>
               <div class="mreview__edit-actions">
-                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField"
-                  >Отмена</VButton
-                >
-                <VButton variant="primary" size="sm" :loading="savingField" @click="saveLanguages"
-                  >Сохранить</VButton
+                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
+                  t('ui.cancel')
+                }}</VButton>
+                <VButton
+                  variant="primary"
+                  size="sm"
+                  :loading="savingField"
+                  @click="saveLanguages"
+                  >{{ t('ui.save') }}</VButton
                 >
               </div>
             </div>
@@ -290,7 +321,7 @@
             <button
               type="button"
               class="mreview__pen"
-              aria-label="Изменить языки"
+              :aria-label="t('adminScreens.adminMasterReview.edit.languages')"
               @click="startField('languages')"
             >
               <IconPen :size="22" />
@@ -300,7 +331,9 @@
 
         <!-- Направления практик = methods (chip toggle, own endpoint, unchanged) -->
         <div class="mreview__row">
-          <div class="mreview__k">Направления практик</div>
+          <div class="mreview__k">
+            {{ t('adminScreens.adminMasterReview.fields.directions') }}
+          </div>
           <div v-if="editingMethods" class="mreview__methods-edit">
             <!-- T4/F2-F6 (PROMPT №409): swapped the flat legacy AVAILABLE_METHODS
                  toggle for the writable two-level picker, mirroring the swap
@@ -311,10 +344,10 @@
             <p v-if="methodsError" class="mreview__methods-err">{{ methodsError }}</p>
             <div class="mreview__methods-actions">
               <VButton variant="ghost" size="sm" :disabled="savingMethods" @click="cancelMethods">
-                Отмена
+                {{ t('ui.cancel') }}
               </VButton>
               <VButton variant="primary" size="sm" :loading="savingMethods" @click="saveMethods">
-                Сохранить
+                {{ t('adminScreens.adminMasterReview.save') }}
               </VButton>
             </div>
           </div>
@@ -333,7 +366,7 @@
             <button
               type="button"
               class="mreview__pen"
-              aria-label="Изменить направления"
+              :aria-label="t('adminScreens.adminMasterReview.edit.directions')"
               @click="startMethods"
             >
               <IconPen :size="22" />
@@ -343,7 +376,7 @@
 
         <!-- Сертификаты = certifications (free-text add/remove chips) -->
         <div class="mreview__row">
-          <div class="mreview__k">Сертификаты</div>
+          <div class="mreview__k">{{ t('adminScreens.adminMasterReview.certificates') }}</div>
           <template v-if="editing === 'certifications'">
             <div class="mreview__edit">
               <div v-if="draftCerts.length" class="mreview__chips">
@@ -360,24 +393,24 @@
               <div class="mreview__cert-add">
                 <VInput
                   v-model="certInput"
-                  placeholder="Добавить сертификат + Enter"
+                  :placeholder="t('adminScreens.adminMasterReview.certificateEnter')"
                   @keydown.enter.prevent="addCert"
                 />
-                <VButton variant="ghost" size="sm" :disabled="!certInput.trim()" @click="addCert"
-                  >Добавить</VButton
-                >
+                <VButton variant="ghost" size="sm" :disabled="!certInput.trim()" @click="addCert">{{
+                  t('ui.add')
+                }}</VButton>
               </div>
               <p v-if="fieldError" class="mreview__edit-err">{{ fieldError }}</p>
               <div class="mreview__edit-actions">
-                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField"
-                  >Отмена</VButton
-                >
+                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
+                  t('ui.cancel')
+                }}</VButton>
                 <VButton
                   variant="primary"
                   size="sm"
                   :loading="savingField"
                   @click="saveCertifications"
-                  >Сохранить</VButton
+                  >{{ t('ui.save') }}</VButton
                 >
               </div>
             </div>
@@ -390,7 +423,7 @@
             <button
               type="button"
               class="mreview__pen"
-              aria-label="Изменить сертификаты"
+              :aria-label="t('adminScreens.adminMasterReview.edit.certificates')"
               @click="startField('certifications')"
             >
               <IconPen :size="22" />
@@ -400,7 +433,7 @@
       </VCard>
 
       <!-- Документы -->
-      <div class="mreview__seclabel">Документы</div>
+      <div class="mreview__seclabel">{{ t('adminScreens.adminMasterReview.documents') }}</div>
       <VCard v-if="documents.length" class="mreview__docs" padding="none">
         <div v-for="d in documents" :key="d.name" class="mreview__doc">
           <span class="mreview__doc-chk">
@@ -419,18 +452,22 @@
           <button
             type="button"
             class="mreview__doc-eye"
-            aria-label="Посмотреть документ"
+            :aria-label="t('adminScreens.adminMasterReview.viewDocument')"
             @click="viewDoc"
           >
             <IconView :size="22" />
           </button>
         </div>
       </VCard>
-      <VCard v-else><p class="mreview__empty">Документы не приложены</p></VCard>
+      <VCard v-else
+        ><p class="mreview__empty">
+          {{ t('adminScreens.adminMasterReview.noDocuments') }}
+        </p></VCard
+      >
 
       <!-- История заявок -->
       <VCard class="mreview__hist" padding="none">
-        <VAccordion title="История заявок">
+        <VAccordion :title="t('adminScreens.adminMasterReview.historyTitle')">
           <template #icon><IconClock :size="20" /></template>
           <template #chevron="{ open }">
             <svg
@@ -455,7 +492,9 @@
             <div class="mreview__hist-title">{{ h.title }}</div>
             <div v-if="h.comment" class="mreview__hist-q">«{{ h.comment }}»</div>
           </div>
-          <p v-if="!history.length" class="mreview__first">Заявка подаётся впервые.</p>
+          <p v-if="!history.length" class="mreview__first">
+            {{ t('adminScreens.adminMasterReview.firstApplication') }}
+          </p>
         </VAccordion>
       </VCard>
 
@@ -469,16 +508,19 @@
         <VCheckbox
           v-model="grantSchools"
           class="mreview__grant-check"
-          label="Разрешить создавать школы (кураторские группы)"
+          :label="t('adminScreens.adminMasterReview.allowSchoolCreation')"
         />
-        <VButton variant="ghost" :disabled="anyLoading" @click="openReject">Отклонить</VButton>
+        <VButton variant="ghost" :disabled="anyLoading" @click="openReject">{{
+          t('adminScreens.adminMasterReview.rejectAction')
+        }}</VButton>
         <VButton variant="primary" :loading="verifying" :disabled="anyLoading" @click="onVerify">
-          Одобрить
+          {{ t('adminScreens.adminMasterReview.approve') }}
         </VButton>
       </div>
       <template v-else>
         <VCard class="mreview__processed">
-          Заявка уже обработана — статус: <strong>{{ statusLabel }}</strong>
+          {{ t('adminScreens.adminMasterReview.alreadyProcessed') }}
+          <strong>{{ statusLabel }}</strong>
         </VCard>
         <!-- A1: revoke a verified master (soft-freeze, data preserved) -->
         <div v-if="isVerified" class="mreview__foot">
@@ -489,9 +531,15 @@
                keeps living (that lever is «Отозвать мастера» below). -->
           <div class="mreview__right">
             <div>
-              <div class="mreview__k">Право создавать школы</div>
+              <div class="mreview__k">
+                {{ t('adminScreens.adminMasterReview.schoolCreationRight') }}
+              </div>
               <div class="mreview__v">
-                {{ master.can_create_groups ? 'Выдано' : 'Не выдано' }}
+                {{
+                  master.can_create_groups
+                    ? t('adminScreens.adminMasterReview.granted')
+                    : t('adminScreens.adminMasterReview.notGranted')
+                }}
               </div>
             </div>
             <VButton
@@ -501,15 +549,18 @@
               :disabled="anyLoading"
               @click="onToggleRight"
             >
-              {{ master.can_create_groups ? 'Отозвать право' : 'Выдать право' }}
+              {{
+                master.can_create_groups
+                  ? t('adminScreens.adminMasterReview.revokeGrant')
+                  : t('adminScreens.adminMasterReview.grantAction')
+              }}
             </VButton>
           </div>
           <p class="mreview__grant-note">
-            Отзыв верификации замораживает все школы этого куратора — участники перестанут их
-            видеть; данные сохранятся и оживут при повторной верификации.
+            {{ t('adminScreens.adminMasterReview.grantNote') }}
           </p>
           <VButton variant="danger" :loading="revoking" :disabled="anyLoading" @click="openRevoke">
-            Отозвать мастера
+            {{ t('adminScreens.adminMasterReview.revokeMaster') }}
           </VButton>
         </div>
       </template>
@@ -519,21 +570,21 @@
     <VEmptyState
       v-else
       icon="notfound"
-      title="Заявка не найдена"
-      description="Возможно, она была удалена или уже обработана"
+      :title="t('adminScreens.adminMasterReview.notFound')"
+      :description="t('adminScreens.adminMasterReview.notFoundHint')"
     />
 
     <!-- Reject reason (bottom-sheet, fork п.1=А) -->
     <VBottomSheet
       :open="showReject"
-      title="Причина отказа"
-      save-label="Отклонить заявку"
+      :title="t('adminScreens.adminMasterReview.rejectionReason')"
+      :save-label="t('adminScreens.adminMasterReview.rejectCta')"
       @save="onReject"
       @close="closeReject"
     >
       <VTextarea
         v-model="rejectReason"
-        placeholder="Укажите причину отклонения заявки"
+        :placeholder="t('adminScreens.adminMasterReview.rejectionReasonPlaceholder')"
         :rows="3"
         :error="rejectError"
       />
@@ -543,7 +594,7 @@
     <VConfirmDialog
       :open="showRevoke"
       :message="revokeMessage"
-      confirm-label="Отозвать"
+      :confirm-label="t('adminScreens.adminMasterReview.revoke')"
       danger
       :loading="revoking"
       @confirm="onRevoke"
@@ -556,8 +607,8 @@
     <VConfirmDialog
       :open="showPromote"
       :message="promoteMessage"
-      confirm-label="Добавить в каталог"
-      cancel-label="Только этому мастеру"
+      :confirm-label="t('adminScreens.adminMasterReview.addToCatalog')"
+      :cancel-label="t('adminScreens.adminMasterReview.thisMasterOnly')"
       :loading="verifying"
       @confirm="onPromoteConfirm"
       @cancel="onPromoteCancel"
@@ -566,6 +617,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { host } from '@/platform/host'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -654,7 +706,9 @@ const hasParsedMethods = computed<boolean>(
   () => flattenMethods(parseMethods(methods.value)).length > 0,
 )
 const experience = computed<string>(() =>
-  master.value ? `${master.value.experience_years ?? 0} лет` : PLACEHOLDER,
+  master.value
+    ? t('adminScreens.adminMasterReview.experienceYears', { n: master.value.experience_years ?? 0 })
+    : PLACEHOLDER,
 )
 const bio = computed<string>(() => master.value?.bio || PLACEHOLDER)
 
@@ -682,21 +736,21 @@ const revoking = ref(false)
 const revokeAdvisory = ref<RevokeMasterAdvisory | null>(null)
 
 const revokeMessage = computed<string>(() => {
-  const base =
-    `Мастер ${displayName.value} снова станет обычным пользователем. Все данные ` +
-    `(профиль, практики, история) сохраняются — доступ можно вернуть кнопкой ` +
-    `«Сделать мастером».`
+  const base = t('adminScreens.adminMasterReview.revokeMessage', { name: displayName.value })
   const a = revokeAdvisory.value
   if (!a || !a.has_warnings) return base
   const warns: string[] = []
   if (a.scheduled_or_live_practices > 0) {
-    warns.push(`${a.scheduled_or_live_practices} практик(и) в расписании`)
+    warns.push(
+      t('adminScreens.adminMasterReview.warnSchedule', { n: a.scheduled_or_live_practices }),
+    )
   }
-  if (a.available_cents > 0 || a.frozen_cents > 0) warns.push('ненулевой баланс')
+  if (a.available_cents > 0 || a.frozen_cents > 0)
+    warns.push(t('adminScreens.adminMasterReview.nonZeroBalance'))
   if (a.pending_withdrawals > 0) {
-    warns.push(`${a.pending_withdrawals} выплат(ы) в ожидании`)
+    warns.push(t('adminScreens.adminMasterReview.warnWithdrawals', { n: a.pending_withdrawals }))
   }
-  return `${base} Внимание: ${warns.join(', ')} — отзыв не блокируется, данные останутся.`
+  return t('adminScreens.adminMasterReview.revokeWarning', { base, warns: warns.join(', ') })
 })
 
 async function openRevoke(): Promise<void> {
@@ -717,9 +771,9 @@ async function onRevoke(): Promise<void> {
     await revokeMaster(masterId)
     if (master.value) master.value.master_status = 'suspended'
     showRevoke.value = false
-    toast.success('Мастер отозван — аккаунт стал пользователем')
+    toast.success(t('adminScreens.adminMasterReview.revokedToUser'))
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось отозвать мастера'))
+    toast.error(extractApiError(e, t('adminScreens.adminMasterReview.toast.revokeFailed')))
   } finally {
     revoking.value = false
   }
@@ -743,7 +797,7 @@ async function loadMaster(): Promise<void> {
     const [detail] = await Promise.all([getMasterById(masterId), primeMethodTaxonomyCatalog()])
     master.value = detail
   } catch (e) {
-    const msg = extractApiError(e, 'Ошибка загрузки данных')
+    const msg = extractApiError(e, t('adminScreens.adminMasterReview.dataLoadError'))
     // SW7: a cold deep-link (no handed router-state, nothing on screen yet)
     // gets its own error rung with a retry, distinct from "not found" -- a
     // refresh failing on top of already-handed data stays toast-only
@@ -776,7 +830,7 @@ async function saveMethods(): Promise<void> {
   if (savingMethods.value) return
   methodsError.value = ''
   if (methodsDraft.value.length === 0) {
-    methodsError.value = 'Выберите хотя бы одно направление'
+    methodsError.value = t('adminScreens.adminMasterReview.validation.chooseDirection')
     return
   }
   savingMethods.value = true
@@ -784,9 +838,9 @@ async function saveMethods(): Promise<void> {
     await editMasterMethods(masterId, methodsDraft.value)
     if (master.value) master.value.methods = [...methodsDraft.value]
     editingMethods.value = false
-    toast.success('Направления обновлены')
+    toast.success(t('adminScreens.adminMasterReview.toast.directionsUpdated'))
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось сохранить направления'))
+    toast.error(extractApiError(e, t('adminScreens.adminMasterReview.toast.directionsSaveFailed')))
   } finally {
     savingMethods.value = false
   }
@@ -880,9 +934,9 @@ async function saveProfile(patch: AdminMasterProfileUpdate): Promise<void> {
     await editMasterProfile(masterId, patch)
     if (master.value) Object.assign(master.value, patch)
     editing.value = null
-    toast.success('Сохранено')
+    toast.success(t('ui.saved'))
   } catch (e) {
-    fieldError.value = extractApiError(e, 'Не удалось сохранить')
+    fieldError.value = extractApiError(e, t('adminScreens.adminMasterReview.saveFailed'))
   } finally {
     savingField.value = false
   }
@@ -891,7 +945,7 @@ async function saveProfile(patch: AdminMasterProfileUpdate): Promise<void> {
 async function saveDisplayName(): Promise<void> {
   const v = draftText.value.trim()
   if (!v) {
-    fieldError.value = 'Введите имя-визитку'
+    fieldError.value = t('adminScreens.adminMasterReview.validation.enterDisplayName')
     return
   }
   await saveProfile({ display_name: v })
@@ -912,7 +966,7 @@ async function savePhone(): Promise<void> {
 async function saveExperience(): Promise<void> {
   const n = Number(draftText.value)
   if (!Number.isInteger(n) || n < 0 || n > 50) {
-    fieldError.value = 'Опыт: целое число 0–50'
+    fieldError.value = t('adminScreens.adminMasterReview.validation.experienceRange')
     return
   }
   await saveProfile({ experience_years: n })
@@ -935,7 +989,7 @@ async function saveCertifications(): Promise<void> {
 
 // Stub: document viewing has no backend yet → Zod (documents are empty until then).
 function viewDoc(): void {
-  toast.info('Просмотр документа пока недоступен')
+  toast.info(t('adminScreens.adminMasterReview.documentViewUnavailable'))
 }
 
 function openReject(): void {
@@ -965,9 +1019,11 @@ const promoteLabels = ref<string[]>([])
 const promoteMessage = computed((): string => {
   const labels = promoteLabels.value
   if (labels.length <= 1) {
-    return `Метода «${labels[0] ?? ''}» нет в каталоге — добавить для всех мастеров?`
+    return t('adminScreens.adminCommon.methodSingle', { label: labels[0] ?? '' })
   }
-  return `Методов ${labels.map((l) => `«${l}»`).join(', ')} нет в каталоге — добавить для всех мастеров?`
+  return t('adminScreens.adminCommon.methodPlural', {
+    labels: labels.map((l) => `«${l}»`).join(', '),
+  })
 })
 
 /** BE-18: the verify-dialog tick for the school-founding right.
@@ -987,10 +1043,12 @@ async function onToggleRight(): Promise<void> {
     const res = await setMasterGroupRight(masterId, !master.value.can_create_groups)
     master.value = { ...master.value, can_create_groups: res.can_create_groups }
     toast.success(
-      res.can_create_groups ? 'Право создавать школы выдано' : 'Право создавать школы отозвано',
+      res.can_create_groups
+        ? t('adminScreens.adminMasterReview.toast.schoolRightGranted')
+        : t('adminScreens.adminMasterReview.toast.schoolRightRevoked'),
     )
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось изменить право'))
+    toast.error(extractApiError(e, t('adminScreens.adminMasterReview.grantChangeFailed')))
   } finally {
     togglingRight.value = false
   }
@@ -1013,11 +1071,11 @@ async function doVerify(promote?: string[], masterOnly?: string[]): Promise<void
   verifying.value = true
   try {
     await verifyMaster(masterId, promote, masterOnly, grantSchools.value)
-    toast.success('Мастер верифицирован')
+    toast.success(t('adminScreens.adminMasterReview.toast.verified'))
     // S-1/S-2: push to the list (fresh mount) instead of back().
     void router.push({ name: 'admin-masters' })
   } catch (e) {
-    toast.error(extractApiError(e, 'Ошибка верификации'))
+    toast.error(extractApiError(e, t('adminScreens.adminMasterReview.verificationError')))
   } finally {
     verifying.value = false
     showPromote.value = false
@@ -1041,18 +1099,18 @@ async function onReject(): Promise<void> {
   if (anyLoading.value) return
   rejectError.value = ''
   if (!rejectReason.value.trim()) {
-    rejectError.value = 'Укажите причину отказа'
+    rejectError.value = t('adminScreens.adminMasterReview.rejectionReasonHint')
     return
   }
   rejecting.value = true
   try {
     await rejectMaster(masterId, rejectReason.value.trim())
-    toast.success('Заявка отклонена')
+    toast.success(t('adminScreens.adminMasterReview.toast.requestRejected'))
     showReject.value = false
     // S-1/S-2: push to the list (fresh mount) instead of back().
     void router.push({ name: 'admin-masters' })
   } catch (e) {
-    toast.error(extractApiError(e, 'Ошибка при отклонении'))
+    toast.error(extractApiError(e, t('adminScreens.adminMasterReview.toast.rejectFailed')))
   } finally {
     rejecting.value = false
   }

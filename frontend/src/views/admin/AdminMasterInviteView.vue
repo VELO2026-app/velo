@@ -18,33 +18,37 @@
   <div class="invite">
     <header class="invite__top">
       <VBackButton @click="router.back()" />
-      <h1 class="invite__title">Пригласить мастера</h1>
+      <h1 class="invite__title">{{ t('adminScreens.adminMasterInvite.title') }}</h1>
     </header>
 
     <!-- Form card -->
     <VCard class="invite__card">
-      <span class="invite__section-title">ОДНОРАЗОВАЯ ССЫЛКА</span>
+      <span class="invite__section-title">{{
+        t('adminScreens.adminMasterInvite.oneTimeLinkLabel')
+      }}</span>
       <p class="invite__desc">
-        Создайте ссылку и отправьте её будущему мастеру. Она одноразовая: сработает у первого, кто
-        её откроет, — после этого погашается. Срок действия — 7 дней.
+        {{ t('adminScreens.adminMasterInvite.intro') }}
       </p>
 
       <VButton variant="primary" block :loading="creating" @click="onCreate">
-        Создать ссылку
+        {{ t('adminScreens.adminMasterInvite.create') }}
       </VButton>
     </VCard>
 
     <!-- Result card (replaced in place on re-generate) -->
     <VCard v-if="inviteLink" class="invite__card">
-      <span class="invite__section-title">ССЫЛКА ГОТОВА</span>
+      <span class="invite__section-title">{{ t('adminScreens.adminMasterInvite.linkReady') }}</span>
       <p class="invite__link">{{ inviteLink }}</p>
-      <VButton variant="secondary" block @click="onCopy">Скопировать</VButton>
-      <p class="invite__caption">Одноразовая · 7 дней с момента создания</p>
+      <VButton variant="secondary" block @click="onCopy">{{
+        t('adminScreens.adminMasterInvite.copy')
+      }}</VButton>
+      <p class="invite__caption">{{ t('adminScreens.adminMasterInvite.oneTimeLinkExpiryHint') }}</p>
     </VCard>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VBackButton, VCard, VButton } from '@/components/ui'
@@ -74,7 +78,7 @@ async function onCreate(): Promise<void> {
       // B8 (PROMPT №746): phrase now lives in errorMessages.ts, not here.
       toast.error(errorMessage('bot_url_not_configured'))
     } else {
-      toast.error(extractApiError(e, 'Не удалось создать ссылку'))
+      toast.error(extractApiError(e, t('adminScreens.adminMasterInvite.toast.linkCreateFailed')))
     }
   } finally {
     creating.value = false
@@ -85,9 +89,9 @@ async function onCreate(): Promise<void> {
 async function onCopy(): Promise<void> {
   try {
     await navigator.clipboard.writeText(inviteLink.value)
-    toast.success('Ссылка скопирована')
+    toast.success(t('common.linkCopied'))
   } catch {
-    toast.error('Не удалось скопировать')
+    toast.error(t('adminScreens.adminMasterInvite.toast.copyFailed'))
   }
 }
 </script>

@@ -1,0 +1,47 @@
+{
+  "ui": {
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "close": "Close",
+    "back": "Back",
+    "save": "Save",
+    "more": "Details",
+    "collapse": "Collapse",
+    "expand": "Expand",
+    "weekdays": "Days of the week",
+    "prevMonth": "Previous month",
+    "nextMonth": "Next month",
+    "dayShort": {
+      "mon": "MO",
+      "tue": "TU",
+      "wed": "WE",
+      "thu": "TH",
+      "fri": "FR",
+      "sat": "SA",
+      "sun": "SU"
+    },
+    "dayFull": {
+      "mon": "Monday",
+      "tue": "Tuesday",
+      "wed": "Wednesday",
+      "thu": "Thursday",
+      "fri": "Friday",
+      "sat": "Saturday",
+      "sun": "Sunday"
+    },
+    "legendRequired": "fields are required",
+    "saved": "Saved",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "deactivate": "Deactivate",
+    "pickerDate": "Date",
+    "pickerTime": "Time",
+    "pickerChooseDate": "Choose a date",
+    "languageNames": {
+      "ru": "Русский",
+      "en": "English",
+      "uk": "Українська"
+    }
+  }
+}

@@ -36,12 +36,12 @@
 
     <!-- Load failure: the thread may well exist -- offer a retry. -->
     <div v-else-if="error" class="chat-thread__center">
-      <VEmptyState title="Не удалось загрузить переписку" :description="error">
+      <VEmptyState :title="t('chat.loadFailed')" :description="error">
         <template #icon>
           <IconMessages :size="48" />
         </template>
       </VEmptyState>
-      <VButton size="sm" @click="reload"> Повторить </VButton>
+      <VButton size="sm" @click="reload">{{ t('common.retry') }}</VButton>
     </div>
 
     <template v-else>
@@ -60,7 +60,7 @@
         >
           <!-- Empty thread: an honest invitation, not a fake history. -->
           <div v-if="messages.length === 0" class="chat-thread__empty">
-            Сообщений пока нет — напишите первое.
+            {{ t('chat.empty') }}
           </div>
 
           <div
@@ -96,7 +96,7 @@
            approximation, not re-measured for this screen). -->
       <div class="chat-thread__composer">
         <Composer
-          placeholder="Написать сообщение…"
+          :placeholder="t('chat.threadPlaceholder')"
           :max-length="4000"
           :send="handleSend"
           :grow-cap="growCap"
@@ -110,6 +110,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import {
   onDocumentEvent,
   offDocumentEvent,
@@ -133,6 +134,8 @@ import {
 import { useAuthStore } from '@/stores/auth'
 import { extractApiError } from '@/composables/useApiError'
 import { useComposerGrowCap } from '@/composables/useComposerGrowCap'
+
+// tz-i18n 2.2b: load-failed/empty states via chat.* / common.retry.
 
 const props = defineProps<{
   threadId: string
@@ -309,7 +312,7 @@ async function reload(): Promise<void> {
     // [owner pass] keep-bottom: the wrap is mounted only now (v-else branch).
     attachKeepBottom()
   } catch (e) {
-    error.value = extractApiError(e, 'Попробуйте ещё раз')
+    error.value = extractApiError(e, t('common.tryAgain'))
     loading.value = false
   }
 }
@@ -366,7 +369,7 @@ async function handleSend(body: string): Promise<ComposerSendResult> {
     await scrollToBottom()
     return { ok: true }
   } catch (e) {
-    return { ok: false, error: extractApiError(e, 'Не удалось отправить сообщение') }
+    return { ok: false, error: extractApiError(e, t('chat.sendFailed')) }
   } finally {
     sendInFlight.value = false
   }

@@ -11,32 +11,24 @@
 //   } catch (e) {
 //     return { ok: false, error: extractApiError(e, 'Не удалось выполнить действие') }
 //   }
+//
+// tz-i18n 1.2: a known code resolves through the `errors` catalog
+// (locales/ru/errors.json, was the ERROR_MESSAGES table); the caller fallback is
+// still a plain string -- stores use storeErrors.* keys, views migrate in
+// their phase-3 batches.
 // =============================================================================
 
 import { ApiResponseError } from '@/api/client'
-import { ERROR_MESSAGES, GENERIC_ERROR_MESSAGE } from '@/api/errorMessages'
+import i18n from '@/locales'
+import { hasErrorMessage } from '@/api/errorMessages'
 
-/**
- * Look up a known backend error code's Russian phrase directly, with no
- * caught exception and no caller-supplied fallback.
- *
- * PROMPT №747: replaces the `ERROR_MESSAGES.some_code!` non-null-assertion
- * pattern the 7 migrated point-branches used -- that assertion SILENCED
- * `noUncheckedIndexedAccess` instead of answering it. This function answers
- * it: a code with a table entry returns its phrase; anything else (a typo,
- * a future code the table hasn't caught up with yet) returns
- * GENERIC_ERROR_MESSAGE, never `undefined`, so the type is `string`
- * everywhere without an assertion at any call site.
- */
-export function errorMessage(code: string): string {
-  return ERROR_MESSAGES[code] || GENERIC_ERROR_MESSAGE
-}
+export { errorMessage } from '@/api/errorMessages'
 
 /**
  * Extract a human-readable error message from a caught exception.
  *
- * - ApiResponseError whose code has a table entry (errorMessages.ts):
- *   returns that Russian phrase. If a code has a phrase, it wins.
+ * - ApiResponseError whose code has a catalog entry (locales errors.*):
+ *   returns that phrase. If a code has a phrase, it wins.
  * - Anything else (an unmapped code, or not an ApiResponseError at all):
  *   returns the caller-provided fallback string.
  *
@@ -48,16 +40,11 @@ export function errorMessage(code: string): string {
  * read here at all: a known code shows its phrase, an unknown one shows the
  * caller's own fallback, which is already Russian at every existing call
  * site -- so nothing downstream needed to change to stop leaking English.
- *
- * B3 (Батч 3, PROMPT №580, historical): the empty-detail fallback was
- * previously duplicated inline at several call sites (`e.detail || fallback`,
- * not just `e.detail`) -- folded in here so every caller gets it. That
- * concern is now subsumed: an empty detail and an unmapped code both land on
- * the caller's fallback the same way.
  */
 export function extractApiError(e: unknown, fallback: string): string {
   if (e instanceof ApiResponseError) {
-    return ERROR_MESSAGES[e.code] || fallback
+    const key = `errors.${e.code}`
+    if (hasErrorMessage(e.code)) return i18n.global.t(key)
   }
   return fallback
 }

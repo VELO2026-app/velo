@@ -18,7 +18,9 @@
   <div class="amr">
     <header class="amr__top">
       <VBackButton @click="router.back()" />
-      <h1 class="amr__title">Заявки на смену методов</h1>
+      <h1 class="amr__title">
+        {{ t('adminScreens.adminMethodRequests.methodRequestsLink') }}
+      </h1>
       <span class="amr__count">{{ headerCount }}</span>
     </header>
 
@@ -31,11 +33,11 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      title="Не удалось загрузить"
-      description="Проверьте соединение и попробуйте ещё раз"
+      :title="t('common.loadFailed')"
+      :description="t('common.checkConnection')"
     >
       <template #action>
-        <VButton variant="primary" @click="loadInitial">Повторить</VButton>
+        <VButton variant="primary" @click="loadInitial">{{ t('common.retry') }}</VButton>
       </template>
     </VEmptyState>
 
@@ -43,8 +45,8 @@
     <VEmptyState
       v-else-if="items.length === 0"
       icon="success"
-      title="Заявок нет"
-      description="Мастера не запрашивали смену методов"
+      :title="t('adminScreens.adminMethodRequests.emptyTitle')"
+      :description="t('adminScreens.adminMethodRequests.noChangeRequests')"
     />
 
     <template v-else>
@@ -59,7 +61,7 @@
           </div>
 
           <div class="mrq__block">
-            <div class="mrq__blabel">Сейчас</div>
+            <div class="mrq__blabel">{{ t('adminScreens.adminMethodRequests.now') }}</div>
             <div class="mrq__chips">
               <VChip v-for="m in item.current_methods ?? []" :key="m" size="sm">{{ m }}</VChip>
               <span v-if="!item.current_methods?.length" class="mrq__empty">—</span>
@@ -67,7 +69,7 @@
           </div>
 
           <div class="mrq__block">
-            <div class="mrq__blabel">Предложено</div>
+            <div class="mrq__blabel">{{ t('adminScreens.adminMethodRequests.offered') }}</div>
             <div class="mrq__chips">
               <VChip v-for="m in item.proposed_methods ?? []" :key="m" size="sm">{{ m }}</VChip>
             </div>
@@ -75,7 +77,7 @@
 
           <div class="mrq__actions">
             <VButton variant="ghost" :disabled="busyId === item.user_id" @click="openReject(item)">
-              Отклонить
+              {{ t('adminScreens.adminMethodRequests.reject') }}
             </VButton>
             <VButton
               variant="primary"
@@ -83,7 +85,7 @@
               :disabled="busyId === item.user_id"
               @click="onApprove(item)"
             >
-              Одобрить
+              {{ t('adminScreens.adminMethodRequests.approve') }}
             </VButton>
           </div>
         </VCard>
@@ -91,7 +93,7 @@
 
       <div v-if="hasMore" class="amr__more">
         <VButton variant="outline" block :loading="loadingMore" @click="loadMore">
-          Показать ещё
+          {{ t('common.showMore') }}
         </VButton>
       </div>
     </template>
@@ -99,14 +101,14 @@
     <!-- Reject reason (bottom-sheet, mirrors AdminMasterReview) -->
     <VBottomSheet
       :open="!!rejectTarget"
-      title="Причина отказа"
-      save-label="Отклонить заявку"
+      :title="t('adminScreens.adminMethodRequests.rejectionReason')"
+      :save-label="t('adminScreens.adminMethodRequests.rejectCta')"
       @save="onReject"
       @close="closeReject"
     >
       <VTextarea
         v-model="rejectReason"
-        placeholder="Укажите причину отклонения запроса"
+        :placeholder="t('adminScreens.adminMethodRequests.rejectionReasonPlaceholder')"
         :rows="3"
         :error="rejectError"
       />
@@ -116,8 +118,8 @@
     <VConfirmDialog
       :open="!!promoteTarget"
       :message="promoteMessage"
-      confirm-label="Добавить в каталог"
-      cancel-label="Только этому мастеру"
+      :confirm-label="t('adminScreens.adminMethodRequests.addToCatalog')"
+      :cancel-label="t('adminScreens.adminMethodRequests.thisMasterOnly')"
       :loading="!!promoteTarget && busyId === promoteTarget.user_id"
       @confirm="onPromoteConfirm"
       @cancel="onPromoteCancel"
@@ -126,6 +128,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -180,9 +183,11 @@ const promoteLabels = ref<string[]>([])
 const promoteMessage = computed((): string => {
   const labels = promoteLabels.value
   if (labels.length <= 1) {
-    return `Метода «${labels[0] ?? ''}» нет в каталоге — добавить для всех мастеров?`
+    return t('adminScreens.adminCommon.methodSingle', { label: labels[0] ?? '' })
   }
-  return `Методов ${labels.map((l) => `«${l}»`).join(', ')} нет в каталоге — добавить для всех мастеров?`
+  return t('adminScreens.adminCommon.methodPlural', {
+    labels: labels.map((l) => `«${l}»`).join(', '),
+  })
 })
 
 const headerCount = computed<string>(() => (total.value ? String(total.value) : '—'))
@@ -210,7 +215,7 @@ async function loadInitial(): Promise<void> {
     hasMore.value = res.items.length < res.total
   } catch (e) {
     error.value = true
-    toast.error(extractApiError(e, 'Ошибка загрузки заявок'))
+    toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.loadFailedToast')))
   } finally {
     loading.value = false
   }
@@ -223,7 +228,7 @@ async function loadMore(): Promise<void> {
     items.value.push(...res.items)
     hasMore.value = items.value.length < res.total
   } catch (e) {
-    toast.error(extractApiError(e, 'Ошибка загрузки'))
+    toast.error(extractApiError(e, t('common.loadError')))
   } finally {
     loadingMore.value = false
   }
@@ -235,7 +240,7 @@ function removeItem(userId: string): void {
   total.value = Math.max(0, total.value - 1)
 }
 
-/** Tap "Одобрить": pause on a confirm if any proposed method doesn't match
+/** Tap t('adminScreens.adminMethodRequests.odobrit'): pause on a confirm if any proposed method doesn't match
  *  the taxonomy (custom/unmatched), else approve immediately (unchanged).
  *  FE-89: the unmatched labels travel SEPARATELY (parsed.custom) -- the old
  *  joined customText string scoped ONE direction named «A, B» and glued the
@@ -260,10 +265,10 @@ async function doApprove(
   busyId.value = item.user_id
   try {
     await approveMethodChange(item.user_id, promote, masterOnly)
-    toast.success('Методы обновлены')
+    toast.success(t('adminScreens.adminMethodRequests.methodsUpdated'))
     removeItem(item.user_id)
   } catch (e) {
-    toast.error(extractApiError(e, 'Ошибка при одобрении'))
+    toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.approveError')))
   } finally {
     busyId.value = null
     promoteTarget.value = null
@@ -304,17 +309,17 @@ async function onReject(): Promise<void> {
   if (!target || busyId.value) return
   rejectError.value = ''
   if (!rejectReason.value.trim()) {
-    rejectError.value = 'Укажите причину отказа'
+    rejectError.value = t('adminScreens.adminMethodRequests.rejectionReasonHint')
     return
   }
   busyId.value = target.user_id
   try {
     await rejectMethodChange(target.user_id, rejectReason.value.trim())
-    toast.success('Заявка отклонена')
+    toast.success(t('adminScreens.adminMethodRequests.toast.requestRejected'))
     removeItem(target.user_id)
     rejectTarget.value = null
   } catch (e) {
-    toast.error(extractApiError(e, 'Ошибка при отклонении'))
+    toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.toast.rejectFailed')))
   } finally {
     busyId.value = null
   }

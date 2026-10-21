@@ -1,0 +1,19 @@
+{
+  "dates": {
+    "_comment": "VELO Frontend -- en seed calendar tables. The VELO short-month table is a RUSSIAN typographic rule; en renders ICU's own short month, so this array is only parity filler -- formatShortDate ignores it for non-ru locales.",
+    "shortMonths": [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec"
+    ]
+  }
+}

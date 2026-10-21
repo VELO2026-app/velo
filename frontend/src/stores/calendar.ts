@@ -40,6 +40,9 @@ import { ref, reactive, computed } from 'vue'
 import { getCuratorGroupPractices } from '@/api/curatorGroups'
 import { getPractices } from '@/api/practices'
 import { extractApiError } from '@/composables/useApiError'
+import i18n from '@/locales'
+
+const { t } = i18n.global
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import type { PracticeFilters, PracticeResponse } from '@/api/types'
 
@@ -315,7 +318,7 @@ export const useCalendarStore = defineStore('calendar', () => {
         })
       } catch (e) {
         if (token !== loadToken) return // superseded -- keep the newer truth
-        error.value = extractApiError(e, 'Не удалось загрузить практики школы')
+        error.value = extractApiError(e, t('storeErrors.calendar.schoolPractices'))
         weekPractices.value = []
       } finally {
         if (token === loadToken) loading.value = false
@@ -348,7 +351,7 @@ export const useCalendarStore = defineStore('calendar', () => {
           : res.items
     } catch (e) {
       if (token !== loadToken) return // superseded -- keep the newer truth
-      error.value = extractApiError(e, 'Не удалось загрузить календарь')
+      error.value = extractApiError(e, t('storeErrors.calendar.calendar'))
       weekPractices.value = []
     } finally {
       if (token === loadToken) loading.value = false

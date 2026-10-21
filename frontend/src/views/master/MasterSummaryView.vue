@@ -23,29 +23,37 @@
 
 <template>
   <div class="summary">
-    <VHeader title="Саммари недели" show-back @back="router.push({ name: 'master-dashboard' })" />
+    <VHeader
+      :title="t('masterScreens.masterSummary.title')"
+      show-back
+      @back="router.push({ name: 'master-dashboard' })"
+    />
 
     <div class="summary__content">
       <!-- AI insight (honest placeholder — no AI provider exists in this
            project yet; Zod builds this once the infra lands). -->
-      <h2 class="velo-section-title">AI-инсайты за неделю</h2>
+      <h2 class="velo-section-title">
+        {{ t('masterScreens.masterSummary.aiWeeklyInsights') }}
+      </h2>
       <VCard>
         <p class="summary__insight">{{ insight }}</p>
       </VCard>
 
       <!-- Key feedbacks (REAL: GET /masters/me/reviews, cross-practice named
            feed, E1's user_id makes each card navigable). -->
-      <h2 class="velo-section-title">Ключевые отзывы</h2>
+      <h2 class="velo-section-title">{{ t('masterScreens.masterSummary.keyReviews') }}</h2>
       <div v-if="feedbacksLoading" class="summary__attn-state">
         <VLoader />
       </div>
       <VEmptyState
         v-else-if="feedbacksError"
         icon="warning"
-        title="Не удалось загрузить"
+        :title="t('common.loadFailed')"
         :description="feedbacksError"
       >
-        <VButton size="sm" variant="outline" @click="loadFeedbacks">Повторить</VButton>
+        <VButton size="sm" variant="outline" @click="loadFeedbacks">{{
+          t('common.retry')
+        }}</VButton>
       </VEmptyState>
       <template v-else>
         <div
@@ -67,24 +75,24 @@
         <VEmptyState
           v-if="keyFeedbacks.length === 0"
           variant="note"
-          title="Отзывы появятся здесь, когда будут собраны"
+          :title="t('masterScreens.masterSummary.reviewsAppearWhen')"
         />
       </template>
 
       <!-- Needs attention (REAL: the master's students with needs_attention).
            Each row taps through to the real student profile; the message button
            is @click.stop so it does not navigate. -->
-      <h2 class="velo-section-title">Требуют внимания</h2>
+      <h2 class="velo-section-title">{{ t('masterScreens.masterSummary.needsAttention') }}</h2>
       <div v-if="attnLoading" class="summary__attn-state">
         <VLoader />
       </div>
       <VEmptyState
         v-else-if="attnError"
         icon="warning"
-        title="Не удалось загрузить"
+        :title="t('common.loadFailed')"
         :description="attnError"
       >
-        <VButton size="sm" variant="outline" @click="loadStudents">Повторить</VButton>
+        <VButton size="sm" variant="outline" @click="loadStudents">{{ t('common.retry') }}</VButton>
       </VEmptyState>
       <template v-else>
         <div
@@ -99,12 +107,18 @@
           <VAvatar :name="student.name" size="md" />
           <div class="summary__attn-body">
             <div class="summary__attn-name">{{ student.name }}</div>
-            <div class="summary__attn-meta">Практик: {{ student.practices_count }}</div>
-            <span class="summary__attn-badge"><IconWarning :size="14" />Требует внимания</span>
+            <div class="summary__attn-meta">
+              {{ t('masterScreens.masterCommon.practicesCount', { n: student.practices_count }) }}
+            </div>
+            <span class="summary__attn-badge"
+              ><IconWarning :size="14" />{{
+                t('masterScreens.masterSummary.needsAttentionSingular')
+              }}</span
+            >
           </div>
           <button
             class="summary__msg"
-            aria-label="Написать сообщение"
+            :aria-label="t('common.writeMessage')"
             @click.stop="openMessage(student.id, student.name)"
           >
             <IconMessages :size="22" />
@@ -113,8 +127,8 @@
         <VEmptyState
           v-if="needsAttention.length === 0"
           icon="group"
-          title="Все ученики в порядке"
-          description="Здесь появятся те, кому нужно внимание"
+          :title="t('masterScreens.masterSummary.allWell')"
+          :description="t('masterScreens.masterSummary.attentionAppearHere')"
         />
       </template>
     </div>
@@ -129,6 +143,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -144,7 +159,7 @@ const router = useRouter()
 // -- HONEST STUB: no AI provider exists in this project (backend/app/
 //    modules/ai/ is a Protocol + MockAIService, explicitly out-of-MVP-scope)
 //    -- operator 2026-07-15: AI work is Zod's, once that infra lands. --
-const insight = ref('Сводка появится, когда подключится аналитика')
+const insight = ref(t('masterScreens.masterSummary.summaryAfterConnect'))
 
 // -- Key feedbacks — REAL (E6, PROMPT №420): GET /masters/me/reviews, same
 //    cross-practice named feed AnalyticsView's «Требуют внимания» uses, but
@@ -163,7 +178,7 @@ async function loadFeedbacks(): Promise<void> {
     const res = await getMasterReviews(FEEDBACKS_PAGE, 0, false)
     keyFeedbacks.value = res.items
   } catch {
-    feedbacksError.value = 'Попробуйте ещё раз'
+    feedbacksError.value = t('common.tryAgain')
   } finally {
     feedbacksLoading.value = false
   }
@@ -192,7 +207,7 @@ async function loadStudents(): Promise<void> {
     const res = await getStudents()
     students.value = res.items
   } catch {
-    attnError.value = 'Попробуйте ещё раз'
+    attnError.value = t('common.tryAgain')
   } finally {
     attnLoading.value = false
   }

@@ -43,6 +43,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, ref } from 'vue'
 import Composer, { type ComposerSendResult } from './Composer.vue'
 import { useDiaryStore } from '@/stores/diary'
@@ -68,7 +69,7 @@ const emit = defineEmits<{
 const diaryStore = useDiaryStore()
 
 const placeholder = computed(() =>
-  props.entryType === 'dream' ? 'Запишите сон...' : 'Начните писать...',
+  props.entryType === 'dream' ? t('composer.dreamPlaceholder') : t('composer.notePlaceholder'),
 )
 
 // (b): diary keeps its existing per-target localStorage key, unchanged shape.

@@ -22,7 +22,7 @@
 <template>
   <FormShell
     v-model:comment="comment"
-    back-label="Практика"
+    :back-label="t('user.screens.reflection.practiceFallback')"
     :practice="practice"
     :practice-loading="practiceLoading"
     :load-error="practiceLoadError"
@@ -30,11 +30,11 @@
     :question-subtitle="variant.screenSubtitle"
     :submitting="diaryStore.reflectionSubmitting"
     :submit-disabled="false"
-    submit-label="Отправить"
+    :submit-label="t('common.submitSend')"
     :submitted="submitted"
     success-icon=""
-    success-title="Спасибо, что поделились"
-    success-text="Бережно к себе. Возвращайтесь, когда будете готовы."
+    :success-title="t('user.screens.reflection.toast.thanks')"
+    :success-text="t('user.screens.reflection.takeCare')"
     @back="onBack"
     @retry="loadPractice"
     @submit="onSubmit"
@@ -45,9 +45,15 @@
          PracticeDetailView carried before №746). -->
     <template #practice-meta>
       <span class="form-shell__practice-meta-cell">
-        с {{ practice?.master_name ?? 'Мастером' }}
+        {{
+          t('shared.form.hostLine', {
+            name: practice?.master_name ?? t('shared.form.hostFallback'),
+          })
+        }}
       </span>
-      <span class="form-shell__practice-meta-cell"> <IconCalendar :size="14" /> Вы не пришли </span>
+      <span class="form-shell__practice-meta-cell">
+        <IconCalendar :size="14" />{{ t('common.missedYou') }}</span
+      >
     </template>
 
     <!-- No #selection slot: a no-show reflection has no rating slider. -->
@@ -59,12 +65,15 @@
       </span>
     </template>
     <template #success-actions>
-      <VButton variant="primary" size="lg" block @click="goToDashboard"> На главную </VButton>
+      <VButton variant="primary" size="lg" block @click="goToDashboard">{{
+        t('common.backHome')
+      }}</VButton>
     </template>
   </FormShell>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { historyHasBack } from '@/platform/history'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'

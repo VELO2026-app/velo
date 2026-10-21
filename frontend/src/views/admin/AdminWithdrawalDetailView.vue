@@ -20,13 +20,13 @@
   <div class="wd">
     <header class="wd__top">
       <VBackButton @click="router.back()" />
-      <h1 class="wd__title">Запрос на вывод</h1>
+      <h1 class="wd__title">{{ t('adminScreens.adminWithdrawalDetail.requestTitle') }}</h1>
     </header>
 
     <template v-if="w">
       <!-- Hero -->
       <div class="wd__hero">
-        <div class="wd__hero-label">Выплата</div>
+        <div class="wd__hero-label">{{ t('adminScreens.adminWithdrawalDetail.title') }}</div>
         <div class="wd__hero-amount">{{ grossLabel }}</div>
         <div class="wd__hero-master">{{ masterName }}</div>
       </div>
@@ -34,44 +34,51 @@
       <!-- Breakdown -->
       <VCard class="wd__rows" padding="none">
         <div class="wd__row">
-          <span class="wd__k">Банк</span>
+          <span class="wd__k">{{ t('adminScreens.adminWithdrawalDetail.bank') }}</span>
           <span class="wd__v">{{ bankLabel }}</span>
         </div>
         <div class="wd__row">
-          <span class="wd__k">Комиссия провайдера</span>
+          <span class="wd__k">{{ t('adminScreens.adminWithdrawalDetail.providerFee') }}</span>
           <span class="wd__v">{{ feeLabel }}</span>
         </div>
         <div class="wd__row">
-          <span class="wd__k">К получению</span>
+          <span class="wd__k">{{ t('adminScreens.adminWithdrawalDetail.netAmount') }}</span>
           <span class="wd__v">{{ netLabel }}</span>
         </div>
       </VCard>
 
       <!-- Actions (pending only) -->
       <div v-if="isPending" class="wd__foot">
-        <VButton variant="danger" :disabled="anyLoading" @click="openReject">Отклонить</VButton>
+        <VButton variant="danger" :disabled="anyLoading" @click="openReject">{{
+          t('adminScreens.adminWithdrawalDetail.openReject')
+        }}</VButton>
         <VButton variant="primary" :disabled="anyLoading" @click="showConfirm = true">
-          Подтвердить
+          {{ t('ui.confirm') }}
         </VButton>
       </div>
       <VCard v-else class="wd__processed">
-        Запрос уже обработан — статус: <strong>{{ statusLabel }}</strong>
+        {{ t('adminScreens.adminWithdrawalDetail.alreadyProcessed') }}
+        <strong>{{ statusLabel }}</strong>
       </VCard>
     </template>
 
-    <VCard v-else><p class="wd__empty">Запрос недоступен</p></VCard>
+    <VCard v-else
+      ><p class="wd__empty">
+        {{ t('adminScreens.adminWithdrawalDetail.unavailable') }}
+      </p></VCard
+    >
 
     <!-- Reject reason -->
     <VBottomSheet
       :open="showReject"
-      title="Причина отклонения"
-      save-label="Отклонить выплату"
+      :title="t('adminScreens.adminWithdrawalDetail.rejectionReason')"
+      :save-label="t('adminScreens.adminWithdrawalDetail.rejectCta')"
       @save="onReject"
       @close="showReject = false"
     >
       <VTextarea
         v-model="rejectReason"
-        placeholder="Укажите причину отклонения выплаты"
+        :placeholder="t('adminScreens.adminWithdrawalDetail.rejectionReasonPlaceholder')"
         :rows="3"
         :error="rejectError"
       />
@@ -93,6 +100,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { host } from '@/platform/host'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
@@ -155,7 +163,7 @@ const bankLabel = computed<string>(() => {
   if (!p) return '—'
   const d = payoutDetails.value
   if (p.method === 'bank_transfer') {
-    const bank = str(d.bank_name) || 'Банк'
+    const bank = str(d.bank_name) || t('adminScreens.adminWithdrawalDetail.bank')
     const acc = (str(d.iban) || str(d.account)).replace(/\s+/g, '')
     const tail = acc ? acc.slice(-4) : ''
     return tail ? `${bank} •••• ${tail}` : bank
@@ -166,9 +174,9 @@ const bankLabel = computed<string>(() => {
 })
 
 const STATUS_LABELS: Record<string, string> = {
-  pending: 'Ожидает',
-  approved: 'Одобрен',
-  rejected: 'Отклонён',
+  pending: t('adminScreens.adminWithdrawalDetail.pending'),
+  approved: t('adminScreens.adminWithdrawalDetail.approved'),
+  rejected: t('adminScreens.adminWithdrawalDetail.statusRejected'),
 }
 const statusLabel = computed<string>(() => STATUS_LABELS[w.value?.status ?? ''] ?? '')
 
@@ -183,11 +191,11 @@ async function onApprove(): Promise<void> {
   approving.value = true
   try {
     await approveWithdrawal(w.value.id)
-    toast.success('Выплата одобрена')
+    toast.success(t('adminScreens.adminWithdrawalDetail.toast.approved'))
     showConfirm.value = false
     router.back()
   } catch (e) {
-    toast.error(extractApiError(e, 'Ошибка одобрения выплаты'))
+    toast.error(extractApiError(e, t('adminScreens.adminWithdrawalDetail.toast.approveFailed')))
   } finally {
     approving.value = false
   }
@@ -197,17 +205,17 @@ async function onReject(): Promise<void> {
   if (!w.value || rejecting.value) return
   rejectError.value = ''
   if (!rejectReason.value.trim()) {
-    rejectError.value = 'Укажите причину отклонения'
+    rejectError.value = t('adminScreens.adminWithdrawalDetail.rejectionReasonRequired')
     return
   }
   rejecting.value = true
   try {
     await rejectWithdrawal(w.value.id, rejectReason.value.trim())
-    toast.success('Выплата отклонена')
+    toast.success(t('adminScreens.adminWithdrawalDetail.toast.rejected'))
     showReject.value = false
     router.back()
   } catch (e) {
-    toast.error(extractApiError(e, 'Ошибка отклонения выплаты'))
+    toast.error(extractApiError(e, t('adminScreens.adminWithdrawalDetail.toast.rejectFailed')))
   } finally {
     rejecting.value = false
   }

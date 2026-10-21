@@ -53,9 +53,11 @@
 
 <template>
   <div class="master-inbox">
-    <VHeader title="Уведомления" show-back @back="router.back()">
+    <VHeader :title="t('masterScreens.masterInbox.title')" show-back @back="router.back()">
       <template v-if="unread > 0" #action>
-        <button type="button" class="master-inbox__read-all" @click="markAll">Прочитать всё</button>
+        <button type="button" class="master-inbox__read-all" @click="markAll">
+          {{ t('masterScreens.masterInbox.readAll') }}
+        </button>
       </template>
     </VHeader>
 
@@ -64,18 +66,15 @@
     </div>
 
     <div v-else-if="error" class="master-inbox__center">
-      <VEmptyState title="Не удалось загрузить" :description="error">
+      <VEmptyState :title="t('common.loadFailed')" :description="error">
         <template #icon>
           <IconBellPlain :size="48" />
         </template>
       </VEmptyState>
-      <VButton size="sm" @click="load">Повторить</VButton>
+      <VButton size="sm" @click="load">{{ t('common.retry') }}</VButton>
     </div>
 
-    <VEmptyState
-      v-else-if="items.length === 0"
-      title="Здесь появятся уведомления о записях, сообщениях и операциях"
-    >
+    <VEmptyState v-else-if="items.length === 0" :title="t('masterScreens.masterInbox.empty.text')">
       <template #icon>
         <IconBellPlain :size="48" />
       </template>
@@ -90,11 +89,13 @@
         variant="tabs"
         scrollable
         class="master-inbox__filter"
-        aria-label="Тип уведомлений"
+        :aria-label="t('masterScreens.masterInbox.typeFilter.label')"
       />
 
       <div v-if="visibleItems.length === 0" class="master-inbox__center">
-        <p class="master-inbox__filter-empty">В этой категории пока нет уведомлений</p>
+        <p class="master-inbox__filter-empty">
+          {{ t('masterScreens.masterInbox.categoryEmpty') }}
+        </p>
       </div>
 
       <div v-else class="master-inbox__list">
@@ -114,6 +115,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -142,10 +144,10 @@ const unread = ref(0)
 // row icons share ONE classifier so a tab and its glyph can never disagree.
 type InboxFilter = 'messages' | 'practices' | 'finance' | 'other'
 const FILTER_OPTIONS: ReadonlyArray<{ value: InboxFilter; label: string }> = [
-  { value: 'messages', label: 'Сообщения' },
-  { value: 'practices', label: 'Практики' },
-  { value: 'finance', label: 'Финансы' },
-  { value: 'other', label: 'Другое' },
+  { value: 'messages', label: t('masterScreens.masterInbox.filter.messages') },
+  { value: 'practices', label: t('masterScreens.masterInbox.filter.practices') },
+  { value: 'finance', label: t('masterScreens.masterInbox.filter.finances') },
+  { value: 'other', label: t('common.other') },
 ]
 const filter = ref<InboxFilter>('messages')
 
@@ -181,7 +183,7 @@ async function load(): Promise<void> {
     items.value = page.items
     unread.value = page.unread
   } catch (e) {
-    error.value = extractApiError(e, 'Попробуйте ещё раз')
+    error.value = extractApiError(e, t('common.tryAgain'))
   } finally {
     loading.value = false
   }
@@ -203,7 +205,7 @@ async function markOne(item: NotificationItem): Promise<void> {
   } catch (e) {
     item.read_at = previousReadAt
     unread.value = previousUnread
-    toast.error(extractApiError(e, 'Не удалось отметить прочитанным'))
+    toast.error(extractApiError(e, t('masterScreens.masterInbox.toast.markReadFailed')))
   }
 }
 
@@ -223,7 +225,7 @@ async function markAll(): Promise<void> {
       i.read_at = previous[idx] ?? null
     })
     unread.value = previousUnread
-    toast.error(extractApiError(e, 'Не удалось отметить прочитанным'))
+    toast.error(extractApiError(e, t('masterScreens.masterInbox.toast.markReadFailed')))
   }
 }
 

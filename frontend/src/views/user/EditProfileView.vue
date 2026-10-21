@@ -33,20 +33,29 @@
 
 <template>
   <div class="edit-profile">
-    <VHeader title="Редактировать профиль" show-back @back="router.back()" />
+    <VHeader :title="t('user.screens.editProfile.title')" show-back @back="router.back()" />
 
     <div class="edit-profile__content">
       <!-- Avatar + change photo (stub) -->
       <div class="edit-profile__avatar-block">
         <VAvatar :name="displayName" :url="user?.avatar_url ?? undefined" size="xl" />
         <button type="button" class="edit-profile__change-photo" @click="onChangePhoto">
-          Изменить фото
+          {{ t('user.screens.editProfile.changePhoto') }}
         </button>
       </div>
 
       <!-- Name + surname (two explicit fields — operator Q C2=Б) -->
-      <VInput v-model="form.firstName" label="Имя" placeholder="Имя" />
-      <VInput v-model="form.lastName" label="Фамилия" placeholder="Фамилия" @focus="onFieldFocus" />
+      <VInput
+        v-model="form.firstName"
+        :label="t('user.screens.editProfile.fields.firstName')"
+        :placeholder="t('user.screens.editProfile.fields.firstName')"
+      />
+      <VInput
+        v-model="form.lastName"
+        :label="t('user.screens.editProfile.fields.lastName')"
+        :placeholder="t('user.screens.editProfile.fields.lastName')"
+        @focus="onFieldFocus"
+      />
 
       <!-- E-mail (E11: captured here — Telegram provides none) -->
       <VInput
@@ -61,7 +70,9 @@
       <!-- Методы практик (мастер): flat set + admin-approved change-request (M3).
            Order (L2): below Имя/Фамилия/E-mail, above Языки/О себе. -->
       <div v-if="isMaster" class="edit-profile__methods">
-        <label class="edit-profile__methods-label">Методы</label>
+        <label class="edit-profile__methods-label">{{
+          t('user.screens.editProfile.methods.title')
+        }}</label>
 
         <!-- Pending: the proposed set is locked while an admin reviews it —
              shown in the SAME направление→вид white cards (batch L, readonly
@@ -70,7 +81,7 @@
         <template v-if="methodRequestPending">
           <MethodTaxonomyPicker :model-value="pendingProposedMethods" readonly />
           <div class="edit-profile__methods-status">
-            <VBadge variant="warning">Ожидает подтверждения</VBadge>
+            <VBadge variant="warning">{{ t('user.screens.editProfile.methods.pending') }}</VBadge>
           </div>
           <p class="edit-profile__methods-note">{{ METHOD_CHANGE_NOTE }}</p>
         </template>
@@ -89,7 +100,7 @@
         <template v-else>
           <MethodTaxonomyPicker v-model="selectedMethods" />
           <p v-if="methodRejectReason" class="edit-profile__methods-reject">
-            Прошлый запрос отклонён: {{ methodRejectReason }}
+            {{ t('user.screens.editProfile.methodRejectReason', { reason: methodRejectReason }) }}
           </p>
           <p class="edit-profile__methods-note">{{ METHOD_CHANGE_NOTE }}</p>
           <VButton
@@ -99,14 +110,16 @@
             :loading="submittingMethods"
             @click="onSubmitMethods"
           >
-            Отправить на проверку
+            {{ t('user.screens.editProfile.submitForReview') }}
           </VButton>
         </template>
       </div>
 
       <!-- Языки практик (мастер): freely editable, no moderation (E16, Q2=А). -->
       <div v-if="isMaster" class="edit-profile__methods">
-        <label class="edit-profile__methods-label">Языки практик</label>
+        <label class="edit-profile__methods-label">{{
+          t('user.screens.editProfile.languages.title')
+        }}</label>
         <div class="edit-profile__methods-chips">
           <VChip
             v-for="l in LANGUAGES"
@@ -126,70 +139,83 @@
           :loading="savingLanguages"
           @click="onSaveLanguages"
         >
-          Сохранить языки
+          {{ t('user.screens.editProfile.saveLanguages') }}
         </VButton>
       </div>
 
       <!-- About -->
       <VTextarea
         v-model="form.bio"
-        label="О себе"
+        :label="t('user.screens.editProfile.about.label')"
         :rows="4"
-        placeholder="Расскажите немного о себе"
+        :placeholder="t('user.screens.editProfile.about.placeholder')"
         :error="bioError"
         @focus="onFieldFocus"
       />
 
       <!-- Save -->
-      <VButton variant="primary" block :loading="saving" @click="onSave"> Сохранить </VButton>
+      <VButton variant="primary" block :loading="saving" @click="onSave">{{
+        t('ui.save')
+      }}</VButton>
 
       <!-- Delete account (opens modal D) -->
       <button type="button" class="edit-profile__delete" @click="showDeleteModal = true">
-        Удалить аккаунт
+        {{ t('user.screens.editProfile.deleteCta') }}
       </button>
     </div>
 
     <!-- ===== Screen D: delete account modal (design «Delete account») ===== -->
     <VModal :open="showDeleteModal" @close="closeDeleteModal">
       <div class="edit-profile__del">
-        <h2 class="edit-profile__del-title">Удалить аккаунт?</h2>
+        <h2 class="edit-profile__del-title">
+          {{ t('user.screens.editProfile.delete.confirmTitle') }}
+        </h2>
 
         <div class="edit-profile__del-warning">
           <IconWarning :size="20" />
-          <span>Это действие необратимо!</span>
+          <span>{{ t('user.screens.editProfile.delete.irreversible') }}</span>
         </div>
 
-        <p class="edit-profile__del-intro">При удалении:</p>
+        <p class="edit-profile__del-intro">
+          {{ t('user.screens.editProfile.delete.consequencesLead') }}
+        </p>
         <ul class="edit-profile__del-list">
-          <li>Все ваши практики будут отменены</li>
-          <li>История будет удалена</li>
-          <li>Доступ к статистике будет потерян</li>
+          <li>{{ t('user.screens.editProfile.delete.consequencePractices') }}</li>
+          <li>{{ t('user.screens.editProfile.delete.consequenceHistory') }}</li>
+          <li>{{ t('user.screens.editProfile.delete.consequenceStats') }}</li>
         </ul>
 
         <template v-if="hasBalance">
-          <div class="edit-profile__del-balance">На вашем балансе {{ formattedBalance }}</div>
+          <div class="edit-profile__del-balance">
+            {{ t('user.screens.editProfile.balanceLine', { amount: formattedBalance }) }}
+          </div>
           <VButton variant="primary" block @click="onWithdrawFirst">
-            Сначала вывести средства
+            {{ t('user.screens.editProfile.withdrawFirst') }}
           </VButton>
           <VCheckbox
             v-model="delConsent"
-            label="Согласен на списание остатка"
+            :label="t('user.screens.editProfile.spendRemainderConsent')"
             class="edit-profile__del-consent"
           />
         </template>
 
         <template v-if="showConfirmField">
           <div ref="confirmFieldEl">
-            <p class="edit-profile__del-confirm-hint">Введите «УДАЛИТЬ» для подтверждения</p>
-            <VInput v-model="delConfirmText" placeholder="УДАЛИТЬ" />
+            <p class="edit-profile__del-confirm-hint">
+              {{ t('user.screens.editProfile.delete.typeConfirm') }}
+            </p>
+            <VInput
+              v-model="delConfirmText"
+              :placeholder="t('user.screens.editProfile.delete.confirmWord')"
+            />
           </div>
         </template>
 
         <div class="edit-profile__del-actions">
-          <VButton variant="secondary" @click="closeDeleteModal">Отмена</VButton>
-          <VButton variant="danger" :disabled="!canDelete" @click="onConfirmDelete">
-            Удалить навсегда
-          </VButton>
+          <VButton variant="secondary" @click="closeDeleteModal">{{ t('ui.cancel') }}</VButton>
+          <VButton variant="danger" :disabled="!canDelete" @click="onConfirmDelete">{{
+            t('user.screens.editProfile.delete.confirmButton')
+          }}</VButton>
         </div>
       </div>
     </VModal>
@@ -197,6 +223,7 @@
 </template>
 
 <script setup lang="ts">
+import { t, getLocale } from '@/locales'
 import { computed, reactive, ref, onMounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -239,9 +266,9 @@ const isMaster = computed(() => authStore.role === 'master')
 // shared MethodTaxonomyPicker emits; the change-request payload/schema is
 // unchanged (still a flat string[] to submitMethodChangeRequest).
 const METHOD_CHANGE_NOTE =
-  'Изменение методов практики требует подтверждения администратора. ' +
-  'Запрос отправляется автоматически. Обработка запроса обычно занимает ' +
-  'не более 3 рабочих дней.'
+  t('user.screens.editProfile.methods.adminNote') +
+  t('user.screens.editProfile.methods.autoNote1') +
+  t('user.screens.editProfile.methods.autoNote2')
 
 // The master's current live methods (from the profile).
 const currentMethods = computed((): string[] => masterStore.profile?.methods ?? [])
@@ -292,9 +319,9 @@ async function onSubmitMethods(): Promise<void> {
     await submitMethodChangeRequest([...selectedMethods.value])
     // Refetch so the pending badge appears (method_change_request now set).
     await masterStore.fetchMyProfile(true)
-    toast.info('Запрос на смену методов отправлен на проверку')
+    toast.info(t('user.screens.editProfile.toast.methodsSent'))
   } catch (error) {
-    toast.error(extractApiError(error, 'Не удалось отправить запрос'))
+    toast.error(extractApiError(error, t('user.screens.editProfile.toast.methodsFailed')))
   } finally {
     submittingMethods.value = false
   }
@@ -333,9 +360,9 @@ async function onSaveLanguages(): Promise<void> {
   try {
     await updateMasterLanguages([...selectedLanguages.value])
     await masterStore.fetchMyProfile(true)
-    toast.info('Языки сохранены')
+    toast.info(t('user.screens.editProfile.toast.languagesSaved'))
   } catch (error) {
-    toast.error(extractApiError(error, 'Не удалось сохранить языки'))
+    toast.error(extractApiError(error, t('user.screens.editProfile.toast.languagesFailed')))
   } finally {
     savingLanguages.value = false
   }
@@ -356,7 +383,7 @@ const displayName = computed(() => {
   const u = user.value
   if (!u) return ''
   const parts = [u.first_name, u.last_name].filter(Boolean)
-  return parts.length > 0 ? parts.join(' ') : 'Пользователь'
+  return parts.length > 0 ? parts.join(' ') : t('user.screens.editProfile.fallback.user')
 })
 
 // Editable form, initialised from the current profile. Phone + bio restored to
@@ -370,20 +397,22 @@ const form = reactive({
 })
 
 // -- Validation (mirrors backend soft rules) --------------------------------
-const bioError = computed((): string => (form.bio.length > 2000 ? 'Не более 2000 символов' : ''))
+const bioError = computed((): string =>
+  form.bio.length > 2000 ? t('user.screens.editProfile.bioMax') : '',
+)
 
 // Soft email check (backend also 422s). Empty is allowed (clears the field).
 const emailError = computed((): string => {
   const v = form.email.trim()
   if (v === '') return ''
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? '' : 'Введите корректный e-mail'
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? '' : t('user.screens.editProfile.emailInvalid')
 })
 
 const hasErrors = computed(() => !!bioError.value || !!emailError.value)
 
 // -- Actions ----------------------------------------------------------------
 function onChangePhoto(): void {
-  toast.info('Опция временно недоступна')
+  toast.info(t('user.screens.editProfile.optionUnavailable'))
 }
 
 const saving = ref(false)
@@ -391,7 +420,7 @@ const saving = ref(false)
 async function onSave(): Promise<void> {
   if (saving.value) return
   if (hasErrors.value) {
-    toast.error('Проверьте правильность заполнения полей')
+    toast.error(t('user.screens.editProfile.validationSummary'))
     return
   }
 
@@ -418,17 +447,17 @@ async function onSave(): Promise<void> {
   }
 
   if (Object.keys(body).length === 0) {
-    toast.info('Нет изменений')
+    toast.info(t('user.screens.editProfile.toast.noChanges'))
     return
   }
 
   saving.value = true
   try {
     await authStore.updateProfile(body)
-    toast.info('Профиль сохранён')
+    toast.info(t('user.screens.editProfile.toast.saved'))
     router.back()
   } catch (error) {
-    toast.error(extractApiError(error, 'Не удалось сохранить профиль'))
+    toast.error(extractApiError(error, t('user.screens.editProfile.toast.saveFailed')))
   } finally {
     saving.value = false
   }
@@ -446,15 +475,18 @@ const delConfirmText = ref('')
 // Balance to forfeit -- master earnings (0 / section hidden for plain users).
 const balanceCents = computed(() => masterStore.profile?.available_cents ?? 0)
 const hasBalance = computed(() => balanceCents.value > 0)
-const formattedBalance = computed(() => formatMoney(balanceCents.value, 'EUR', 'ru', true))
+const formattedBalance = computed(() => formatMoney(balanceCents.value, 'EUR', getLocale(), true))
 
 // «Удалить навсегда» unlocks once any balance is consented to and the user
 // typed the confirmation word.
 // Confirmation word accepted in any case — «удалить» / «УДАЛИТЬ» both unlock (C7).
+// tz-i18n §3.1 item 2: the word is the delete.confirmWord key (locale-owned);
+// which word a non-ru locale asks the user to type stays an owner ruling --
+// switching the key's text switches both the prompt and the comparison.
 const canDelete = computed(
   () =>
     (!hasBalance.value || delConsent.value) &&
-    delConfirmText.value.trim().toUpperCase() === 'УДАЛИТЬ',
+    delConfirmText.value.trim().toUpperCase() === t('user.screens.editProfile.delete.confirmWord'),
 )
 
 // The «УДАЛИТЬ» confirm field sits below the balance / withdraw / consent block, so
@@ -487,7 +519,7 @@ function onWithdrawFirst(): void {
 
 function onConfirmDelete(): void {
   // Stub per the operator rule -- real deletion isn't implemented (see note).
-  toast.info('Удаление аккаунта пока недоступно, добавим позже')
+  toast.info(t('user.screens.editProfile.toast.deleteUnavailable'))
 }
 </script>
 

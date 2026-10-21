@@ -1,0 +1,6 @@
+{
+  "languages": {
+    "_comment": "VELO Frontend -- practice-language vocabulary (utils/languages.ts). ENDONYMS stored verbatim on the master profile (data.profile.languages, mirrors the methods string[]): every UI locale shows the same 'Русский' / 'English' list, so this is storage-canon data under locales/, not per-locale UI copy.",
+    "list": ["Русский", "English"]
+  }
+}

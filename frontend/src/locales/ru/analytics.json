@@ -1,0 +1,6 @@
+{
+  "analytics": {
+    "_comment": "Analytics vocabulary shared across zones (dashboard + rate screens).",
+    "statsPeriod": "Период статистики"
+  }
+}

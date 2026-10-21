@@ -3,6 +3,7 @@
 // requests and the paging; every number here is the server's -- zones
 // included (ScoreZone, BE-24: never a raw 1..10). Every "X из N" uses
 // N = summary.attended.
+import { t } from '@/locales'
 import { computed, ref, watch } from 'vue'
 import { VAvatar, VButton, VCard, VEmptyState, VLoader } from '@/components/ui'
 import { VHeader } from '@/components/layout'
@@ -18,6 +19,9 @@ import type {
   PracticeAnalyticsReview,
 } from '@/api/types'
 import PracticeMoodDistribution from './PracticeMoodDistribution.vue'
+
+// tz-i18n 2.2a: headers/labels via shared.analytics.*; the pairs " ещё N"
+// ladder is the built-in plural (Intl.PluralRules) now.
 import { moodTotal, personTarget, type AnalyticsPerson } from './analytics'
 
 const props = withDefaults(
@@ -83,16 +87,10 @@ const visiblePairs = computed(() =>
 )
 const hiddenPairs = computed(() => Math.max(0, props.pairs.length - PAIRS_VISIBLE))
 const hiddenPairsLabel = computed(() => {
-  const n = hiddenPairs.value
-  const noun =
-    n % 100 >= 11 && n % 100 <= 14
-      ? 'пар'
-      : n % 10 === 1
-        ? 'пару'
-        : n % 10 >= 2 && n % 10 <= 4
-          ? 'пары'
-          : 'пар'
-  return `+ ещё ${n} ${noun}`
+  // tz-i18n 2.2a: was the manual RU ladder (11-14 -> пар, %10==1 -> пару,
+  // %10 2-4 -> пары, else пар) -- exactly Intl.PluralRules one/few/many,
+  // which is what the built-in plural picks now.
+  return t('shared.analytics.pairsMore', hiddenPairs.value)
 })
 const showPairsPager = computed(
   () => hasMorePairs.value && (pairsExpanded.value || hiddenPairs.value === 0),
@@ -101,15 +99,15 @@ const showPairsPager = computed(
 
 <template>
   <div class="practice-analytics" :aria-busy="loading">
-    <VHeader title="Аналитика по практике" show-back @back="$emit('back')" />
+    <VHeader :title="t('shared.analytics.title')" show-back @back="$emit('back')" />
 
     <div v-if="loading" class="practice-analytics__loading" role="status">
-      <VLoader /> <span>Загружаем аналитику…</span>
+      <VLoader /> <span>{{ t('shared.analytics.loading') }}</span>
     </div>
 
-    <VEmptyState v-else-if="error" icon="warning" title="Не удалось загрузить аналитику">
+    <VEmptyState v-else-if="error" icon="warning" :title="t('shared.analytics.loadFailed')">
       <p>{{ error }}</p>
-      <VButton type="button" size="sm" @click="$emit('retry')">Повторить</VButton>
+      <VButton type="button" size="sm" @click="$emit('retry')">{{ t('common.retry') }}</VButton>
     </VEmptyState>
 
     <template v-else-if="summary">
@@ -133,20 +131,26 @@ const showPairsPager = computed(
             ><IconCalendar :size="16" aria-hidden="true" />
             {{ formatShortDate(summary.scheduled_at, summary.timezone) }}
           </span>
-          <span><IconGroup :size="16" aria-hidden="true" />Пришли: {{ summary.attended }}</span>
-          <span><IconCheckin :size="16" aria-hidden="true" />Чек-ины: {{ checkedIn }}</span>
+          <span
+            ><IconGroup :size="16" aria-hidden="true" />{{ t('shared.analytics.attended') }}
+            {{ summary.attended }}</span
+          >
+          <span
+            ><IconCheckin :size="16" aria-hidden="true" />{{ t('shared.analytics.checkins') }}
+            {{ checkedIn }}</span
+          >
         </div>
       </VCard>
 
       <PracticeMoodDistribution
         :key="`${summary.practice_id}-before`"
-        title="До практики"
+        :title="t('shared.analytics.before')"
         :counts="summary.before"
         :participants="summary.attended"
       />
       <PracticeMoodDistribution
         :key="`${summary.practice_id}-after`"
-        title="После практики"
+        :title="t('shared.analytics.after')"
         :counts="summary.after"
         :participants="summary.attended"
         initially-expanded
@@ -154,13 +158,16 @@ const showPairsPager = computed(
 
       <VCard class="practice-analytics__pairs">
         <div class="practice-analytics__heading">
-          <h2>Пришел → ушел</h2>
+          <h2>{{ t('shared.analytics.cameLeft') }}</h2>
           <span
-            ><IconGroup :size="18" aria-hidden="true" />{{ summary.pairs_total }} из
-            {{ summary.attended }}</span
+            ><IconGroup :size="18" aria-hidden="true" />{{
+              t('shared.analytics.outOf', { a: summary.pairs_total, b: summary.attended })
+            }}</span
           >
         </div>
-        <p v-if="!pairs.length" class="practice-analytics__empty">Пока нет пар для сравнения</p>
+        <p v-if="!pairs.length" class="practice-analytics__empty">
+          {{ t('shared.analytics.noPairs') }}
+        </p>
         <ul v-else class="practice-analytics__pair-list">
           <li
             v-for="pair in visiblePairs"
@@ -186,23 +193,29 @@ const showPairsPager = computed(
         </ul>
         <VShowMore
           v-if="hiddenPairs > 0 && !pairsExpanded"
+          plus
           :label="hiddenPairsLabel"
           @click="pairsExpanded = true"
         />
-        <VShowMore v-else-if="pairsExpanded" label="Скрыть" @click="pairsExpanded = false" />
+        <VShowMore
+          v-else-if="pairsExpanded"
+          :label="t('common.hide')"
+          @click="pairsExpanded = false"
+        />
         <VShowMore
           v-if="showPairsPager"
-          :label="loadingMorePairs ? 'Загружаем…' : 'Показать ещё'"
+          :label="loadingMorePairs ? t('common.loading') : t('common.showMore')"
           @click="!loadingMorePairs && $emit('morePairs')"
         />
       </VCard>
 
-      <section class="practice-analytics__reviews" aria-label="Отзывы">
+      <section class="practice-analytics__reviews" :aria-label="t('shared.analytics.reviews')">
         <div class="practice-analytics__heading">
-          <h2>Отзывы</h2>
+          <h2>{{ t('shared.analytics.reviews') }}</h2>
           <span
-            ><IconGroup :size="18" aria-hidden="true" />{{ summary.reviews_total }} из
-            {{ summary.attended }}</span
+            ><IconGroup :size="18" aria-hidden="true" />{{
+              t('shared.analytics.outOf', { a: summary.reviews_total, b: summary.attended })
+            }}</span
           >
         </div>
         <VCard
@@ -226,17 +239,17 @@ const showPairsPager = computed(
           <p>«{{ review.comment.trim() }}»</p>
         </VCard>
         <VCard v-if="!reviews.length"
-          ><p class="practice-analytics__empty">Отзывов пока нет</p></VCard
+          ><p class="practice-analytics__empty">{{ t('shared.analytics.noReviews') }}</p></VCard
         >
         <VShowMore
           v-if="hasMoreReviews"
-          :label="loadingMoreReviews ? 'Загружаем…' : 'Показать ещё'"
+          :label="loadingMoreReviews ? t('common.loading') : t('common.showMore')"
           @click="!loadingMoreReviews && $emit('moreReviews')"
         />
       </section>
     </template>
 
-    <VEmptyState v-else variant="note" title="Данные аналитики недоступны" />
+    <VEmptyState v-else variant="note" :title="t('shared.analytics.unavailable')" />
   </div>
 </template>
 

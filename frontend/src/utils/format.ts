@@ -9,7 +9,24 @@
 //
 // F4.2: formatMoney gains allowZero param for balance display.
 // F5 review: S-24 -- minimumFractionDigits: 2 for consistent money format.
+// tz-i18n 1.1: labels come from the active locale's catalog; the Intl
+// locale parameter defaults to it too (getLocale()). cleanPracticeTitle is
+// NOT i18n scope -- "(эфир)" is a DATA suffix from the seed/backend.
 // =============================================================================
+
+import i18n, { getLocale } from '@/locales'
+// The ru seed catalog carries the VELO short-month table -- RUSSIAN typography
+// (see dates.json), not per-locale UI copy; same seed-import pattern as
+// methodTaxonomy.ts's display seed.
+// ?raw + JSON.parse: VueI18nPlugin precompiles every plain locales/**/*.json
+// import into message ASTs; this seed is DATA (ru typography tables), so its
+// leaves must stay plain strings.
+import datesSeedRaw from '@/locales/ru/dates.json?raw'
+
+const { t } = i18n.global
+
+const datesSeed = JSON.parse(datesSeedRaw) as { dates?: { shortMonths?: string[] } }
+const VELO_SHORT_MONTHS: readonly string[] = datesSeed.dates?.shortMonths ?? []
 
 /**
  * Format cents into a currency string using Intl.NumberFormat.
@@ -22,15 +39,15 @@
  * Examples:
  *   formatMoney(1500, 'EUR')              -> "15,00 €"  (in ru locale)
  *   formatMoney(0, 'EUR')                 -> "Бесплатно"
- *   formatMoney(0, 'EUR', 'ru', true)     -> "0,00 €"
+ *   formatMoney(0, 'EUR', getLocale(), true)     -> "0,00 €"
  */
 export function formatMoney(
   cents: number,
   currency: string,
-  locale = 'ru',
+  locale: string = getLocale(),
   allowZero = false,
 ): string {
-  if (cents === 0 && !allowZero) return 'Бесплатно'
+  if (cents === 0 && !allowZero) return t('common.free')
   return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency,
@@ -46,7 +63,11 @@ export function formatMoney(
  *   formatDate('2026-02-28T07:00:00Z') -> "28 февраля, 10:00" (in Europe/Moscow)
  *   formatDate('2026-02-28T07:00:00Z', 'UTC') -> "28 февраля, 07:00"
  */
-export function formatDate(isoString: string, timezone = 'UTC', locale = 'ru'): string {
+export function formatDate(
+  isoString: string,
+  timezone = 'UTC',
+  locale: string = getLocale(),
+): string {
   const date = new Date(isoString)
   return new Intl.DateTimeFormat(locale, {
     day: 'numeric',
@@ -62,7 +83,37 @@ export function formatDate(isoString: string, timezone = 'UTC', locale = 'ru'): 
  *
  * Returns relative labels for today/tomorrow, otherwise "28 февраля".
  */
-export function formatDateShort(isoString: string, timezone = 'UTC', locale = 'ru'): string {
+export function formatDateShort(
+  isoString: string,
+  timezone = 'UTC',
+  locale: string = getLocale(),
+): string {
+  const code = relativeDayCode(isoString, timezone)
+  if (code === 'today') return t('common.today')
+  if (code === 'tomorrow') return t('common.tomorrow')
+
+  const date = new Date(isoString)
+  return new Intl.DateTimeFormat(locale, {
+    day: 'numeric',
+    month: 'long',
+    timeZone: timezone,
+  }).format(date)
+}
+
+/**
+ * Calendar-day code for an ISO datetime against now, in the target timezone:
+ * 'today' | 'tomorrow' | null. tz-i18n §3.1 item 2 — callers branch on this
+ * CODE, never by comparing rendered labels (formatDateShort's «Сегодня»
+ * strings are locale output, not operands).
+ *
+ * SW9: +24h on the epoch, NOT Date.setDate() -- setDate mutates in the
+ * DEVICE's own local timezone (whatever the runner's OS is set to), which
+ * is unrelated to the `timezone` param this function renders in. On a day
+ * the device's own timezone crosses a DST transition, setDate(getDate()+1)
+ * does not land exactly +24h later, which can resolve to the wrong
+ * calendar day once reformatted.
+ */
+export function relativeDayCode(isoString: string, timezone = 'UTC'): 'today' | 'tomorrow' | null {
   const date = new Date(isoString)
   const now = new Date()
 
@@ -77,22 +128,11 @@ export function formatDateShort(isoString: string, timezone = 'UTC', locale = 'r
 
   const dateStr = fmt(date)
   const todayStr = fmt(now)
-  // SW9: +24h on the epoch, NOT Date.setDate() -- setDate mutates in the
-  // DEVICE's own local timezone (whatever the runner's OS is set to), which
-  // is unrelated to the `timezone` param this function renders in. On a day
-  // the device's own timezone crosses a DST transition, setDate(getDate()+1)
-  // does not land exactly +24h later, which can resolve to the wrong
-  // calendar day once reformatted here.
   const tomorrowStr = fmt(new Date(now.getTime() + 24 * 60 * 60 * 1000))
 
-  if (dateStr === todayStr) return 'Сегодня'
-  if (dateStr === tomorrowStr) return 'Завтра'
-
-  return new Intl.DateTimeFormat(locale, {
-    day: 'numeric',
-    month: 'long',
-    timeZone: timezone,
-  }).format(date)
+  if (dateStr === todayStr) return 'today'
+  if (dateStr === tomorrowStr) return 'tomorrow'
+  return null
 }
 
 /**
@@ -104,23 +144,10 @@ export function formatDateShort(isoString: string, timezone = 'UTC', locale = 'r
  * авг. / сент. / окт. / нояб. / дек.). Day + month only (no year, no time).
  * Timezone-safe (Intl with timeZone, no Date mutation).
  */
-const VELO_SHORT_MONTHS = [
-  'янв.',
-  'февр.',
-  'мар.',
-  'апр.',
-  'мая',
-  'июня',
-  'июля',
-  'авг.',
-  'сент.',
-  'окт.',
-  'нояб.',
-  'дек.',
-] as const
 
 export function formatShortDate(isoString: string, timezone = 'UTC'): string {
   const date = new Date(isoString)
+  const locale = getLocale()
   const parts = new Intl.DateTimeFormat('en-CA', {
     day: 'numeric',
     month: 'numeric',
@@ -135,7 +162,13 @@ export function formatShortDate(isoString: string, timezone = 'UTC'): string {
   const dayRaw = parts.find((p) => p.type === 'day')?.value ?? ''
   const day = dayRaw === '' ? '' : String(Number(dayRaw))
   const monthNum = Number(parts.find((p) => p.type === 'month')?.value ?? '1')
-  const month = VELO_SHORT_MONTHS[monthNum - 1] ?? ''
+  // The agreed VELO short-month table is a RUSSIAN typographic rule (a
+  // genitive <= 4 letters in full, otherwise abbreviated + dot); other
+  // locales render ICU's own short month.
+  const month =
+    locale === 'ru'
+      ? (VELO_SHORT_MONTHS[monthNum - 1] ?? '')
+      : new Intl.DateTimeFormat(locale, { month: 'short', timeZone: timezone }).format(date)
   return `${day} ${month}`.trim()
 }
 
@@ -185,9 +218,9 @@ export function dayLabelOf(isoString: string, timezone = 'UTC'): string {
     new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString(),
     timezone,
   )
-  if (key === todayKey) return 'Сегодня'
-  if (key === yesterdayKey) return 'Вчера'
-  return new Intl.DateTimeFormat('ru-RU', {
+  if (key === todayKey) return t('common.today')
+  if (key === yesterdayKey) return t('common.yesterday')
+  return new Intl.DateTimeFormat(getLocale(), {
     day: 'numeric',
     month: 'long',
     timeZone: timezone,
@@ -212,7 +245,11 @@ export function todayLocalISO(): string {
 /**
  * Format an ISO datetime string into time only: "07:00".
  */
-export function formatTime(isoString: string, timezone = 'UTC', locale = 'ru'): string {
+export function formatTime(
+  isoString: string,
+  timezone = 'UTC',
+  locale: string = getLocale(),
+): string {
   const date = new Date(isoString)
   return new Intl.DateTimeFormat(locale, {
     hour: '2-digit',
@@ -269,7 +306,11 @@ export function localSortKey(isoString: string, timezone = 'UTC'): number {
  * Used by DiaryFeedCard. Defaults to the user's timezone (the diary is a
  * personal timeline -- "when it happened in my time").
  */
-export function formatFeedDateTime(isoString: string, timezone = 'UTC', locale = 'ru'): string {
+export function formatFeedDateTime(
+  isoString: string,
+  timezone = 'UTC',
+  locale: string = getLocale(),
+): string {
   const date = new Date(isoString)
   const dayMonth = new Intl.DateTimeFormat(locale, {
     day: 'numeric',
@@ -303,18 +344,18 @@ export function formatFeedDateTime(isoString: string, timezone = 'UTC', locale =
  *   formatDuration(120) -> "2 ч"       (exact multi-hour, no plural declension)
  */
 export function formatDuration(minutes: number): string {
-  if (minutes < 60) return `${minutes} мин`
+  if (minutes < 60) return `${minutes} ${t('common.duration.min')}`
   const h = Math.floor(minutes / 60)
   const m = minutes % 60
-  if (m === 0) return h === 1 ? '1 час' : `${h} ч`
-  return `${h} ч ${m} м`
+  if (m === 0) return h === 1 ? `1 ${t('common.duration.hour')}` : `${h} ${t('common.duration.h')}`
+  return `${h} ${t('common.duration.h')} ${m} ${t('common.duration.m')}`
 }
 
 /**
  * Format participants count: "5/20" or "N участн." when unlimited.
  */
 export function formatParticipants(current: number, max: number | null): string {
-  if (max === null) return `${current} участн.`
+  if (max === null) return t('common.participantsAbbr', { n: current })
   // No trailing «мест» — the group icon already conveys it; the design shows a
   // bare «N/M» (operator 2026-06-17).
   return `${current}/${max}`

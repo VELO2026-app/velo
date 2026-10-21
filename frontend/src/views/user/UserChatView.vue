@@ -23,26 +23,30 @@
     </div>
 
     <div v-else-if="notFound" class="user-chat__center">
-      <VHeader title="Сообщения" show-back @back="router.back()" />
-      <VEmptyState title="Переписка не найдена" description="Возможно, ссылка устарела">
+      <VHeader :title="t('user.screens.userChat.title')" show-back @back="router.back()" />
+      <VEmptyState
+        :title="t('user.screens.userChat.notFound')"
+        :description="t('user.screens.userChat.notFoundHint')"
+      >
         <template #icon>
           <IconMessages :size="48" />
         </template>
       </VEmptyState>
-      <VButton size="sm" @click="router.back()"> Назад </VButton>
+      <VButton size="sm" @click="router.back()">{{ t('ui.back') }}</VButton>
     </div>
 
     <ChatThreadScreen
       v-else
       :thread-id="threadId"
       :peer="peer"
-      peer-fallback="Мастер"
+      :peer-fallback="t('user.screens.userChat.peerFallback')"
       @back="router.back()"
     />
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'

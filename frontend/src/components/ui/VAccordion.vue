@@ -19,7 +19,7 @@
   <div class="v-accordion" :class="{ 'v-accordion--open': open }">
     <button
       class="v-accordion__header"
-      :aria-label="open ? 'Свернуть' : 'Развернуть'"
+      :aria-label="open ? t('ui.collapse') : t('ui.expand')"
       :aria-expanded="open"
       @click="open = !open"
     >
@@ -42,7 +42,10 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref } from 'vue'
+
+// tz-i18n 1.3: aria labels from the ui.* catalog.
 
 const props = withDefaults(
   defineProps<{

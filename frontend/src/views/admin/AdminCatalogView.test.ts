@@ -71,6 +71,7 @@
 // never a shell heredoc.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import AdminCatalogView from '@/views/admin/AdminCatalogView.vue'
@@ -156,7 +157,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminCatalogView)
+  app = createApp(AdminCatalogView).use(createTestI18n())
   app.mount(host)
   return host
 }
@@ -192,8 +193,17 @@ function addDirectionInput(): HTMLInputElement {
   return el
 }
 function addDirectionBtn(): HTMLButtonElement | undefined {
+  if (process.env.DEBUG_BTNS) {
+    // eslint-disable-next-line no-console
+    console.log(
+      'BTNS:',
+      Array.from(host?.querySelectorAll<HTMLButtonElement>('.v-btn') ?? []).map((b) =>
+        JSON.stringify(b.textContent),
+      ),
+    )
+  }
   return Array.from(host?.querySelectorAll<HTMLButtonElement>('.v-btn') ?? []).find(
-    (b) => b.textContent?.trim() === '+ Добавить',
+    (b) => b.textContent?.replace(/\s+/g, ' ').trim() === '+ Добавить',
   )
 }
 function editInput(card: HTMLElement): HTMLInputElement {

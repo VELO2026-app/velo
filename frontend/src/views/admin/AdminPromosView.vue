@@ -21,7 +21,7 @@
   <div class="admin-promos">
     <header class="admin-promos__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-promos__title">Промокоды</h1>
+      <h1 class="admin-promos__title">{{ t('adminScreens.adminPromos.title') }}</h1>
       <span class="admin-promos__count">{{ headerCount }}</span>
     </header>
 
@@ -36,11 +36,11 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      title="Не удалось загрузить промокоды"
-      description="Проверьте соединение и попробуйте ещё раз"
+      :title="t('adminScreens.adminPromos.loadFailed')"
+      :description="t('common.checkConnection')"
     >
       <template #action
-        ><VButton variant="primary" @click="loadInitial">Повторить</VButton></template
+        ><VButton variant="primary" @click="loadInitial">{{ t('common.retry') }}</VButton></template
       >
     </VEmptyState>
 
@@ -59,12 +59,18 @@
             <VAvatar :name="ownerName(p)" size="md" />
             <div class="pcard__owner">
               <span class="pcard__owner-label">{{
-                p.type === 'company' ? 'Компания' : 'Мастер'
+                p.type === 'company'
+                  ? t('adminScreens.adminPromos.typeCompany')
+                  : t('adminScreens.adminPromos.typeMaster')
               }}</span>
               <span class="pcard__owner-name">{{ ownerName(p) }}</span>
             </div>
             <VBadge :variant="p.is_active ? 'success' : 'muted'">
-              {{ p.is_active ? 'Активен' : 'Деактивирован' }}
+              {{
+                p.is_active
+                  ? t('adminScreens.adminPromos.active')
+                  : t('adminScreens.adminPromos.inactive')
+              }}
             </VBadge>
           </div>
 
@@ -74,15 +80,20 @@
             <div class="pcard__info">
               <div class="pcard__code">{{ p.code }}</div>
               <div class="pcard__meta">
-                Скидка: {{ p.discount_percent }}% · Использовано: {{ usedLabel(p) }}<br />
-                Действует до: {{ untilLabel(p) }}
+                {{
+                  t('adminScreens.adminPromos.discountLine', {
+                    n: p.discount_percent,
+                    used: usedLabel(p),
+                  })
+                }}<br />
+                {{ t('promos.untilLabel', { label: untilLabel(p) }) }}
               </div>
             </div>
           </div>
 
           <div v-if="p.is_active" class="pcard__actions">
             <VButton variant="outline" :loading="deactivatingId === p.id" @click="askDeactivate(p)">
-              Деактивировать
+              {{ t('ui.deactivate') }}
             </VButton>
           </div>
         </VCard>
@@ -90,7 +101,7 @@
 
       <div v-if="hasMore" class="admin-promos__more">
         <VButton variant="outline" block :loading="loadingMore" @click="loadMore">
-          Показать ещё
+          {{ t('common.showMore') }}
         </VButton>
       </div>
     </template>
@@ -98,7 +109,7 @@
     <VConfirmDialog
       :open="confirmTarget !== null"
       :message="confirmMessage"
-      confirm-label="Деактивировать"
+      :confirm-label="t('ui.deactivate')"
       danger
       :loading="deactivatingId !== null"
       @confirm="onConfirmDeactivate"
@@ -108,6 +119,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -138,10 +150,10 @@ type Filter = 'all' | 'master' | 'company' | 'inactive'
 const filter = ref<Filter>('all')
 
 const segOptions: SegmentOption[] = [
-  { value: 'all', label: 'Все' },
-  { value: 'master', label: 'Мастеров' },
-  { value: 'company', label: 'Компании' },
-  { value: 'inactive', label: 'Деактивир.' },
+  { value: 'all', label: t('common.all') },
+  { value: 'master', label: t('adminScreens.adminPromos.filterMasters') },
+  { value: 'company', label: t('adminScreens.adminPromos.companies') },
+  { value: 'inactive', label: t('adminScreens.adminPromos.deactivatedShort') },
 ]
 
 const items = ref<AdminPromoResponse[]>([])
@@ -154,10 +166,10 @@ const error = ref(false)
 const headerCount = computed<string>(() => (total.value ? String(total.value) : '—'))
 
 const emptyTitle = computed<string>(() => {
-  if (filter.value === 'master') return 'Нет промокодов мастеров'
-  if (filter.value === 'company') return 'Нет промокодов компании'
-  if (filter.value === 'inactive') return 'Нет деактивированных промокодов'
-  return 'Промокодов пока нет'
+  if (filter.value === 'master') return t('adminScreens.adminPromos.empty.master')
+  if (filter.value === 'company') return t('adminScreens.adminPromos.empty.company')
+  if (filter.value === 'inactive') return t('adminScreens.adminPromos.empty.inactive')
+  return t('adminScreens.adminPromos.empty.title')
 })
 
 /** Query params for the current tab -- server-side filtered (type/is_active),
@@ -170,19 +182,19 @@ function currentParams(): { type?: AdminPromoTypeFilter; isActive?: boolean } {
   return {}
 }
 
-/** Owner display: master's "First Last" (falls back to "Пользователь" like
+/** Owner display: master's "First Last" (falls back to t('adminScreens.adminPromos.ownerFallback') like
  *  masterDisplayName), or "VELO" for a company promo (master_id=null). */
 function ownerName(p: AdminPromoResponse): string {
   if (p.type === 'company') return 'VELO'
   const parts = [p.master_first_name, p.master_last_name].filter(Boolean)
-  return parts.length > 0 ? parts.join(' ') : 'Пользователь'
+  return parts.length > 0 ? parts.join(' ') : t('adminScreens.adminPromos.ownerFallback')
 }
 
 function usedLabel(p: AdminPromoResponse): string {
-  return `${p.used_count} из ${p.max_uses ?? '∞'}`
+  return t('adminScreens.adminPromos.usedOf', { used: p.used_count, max: p.max_uses ?? '∞' })
 }
 function untilLabel(p: AdminPromoResponse): string {
-  return p.valid_until ? formatShortDate(p.valid_until) : 'бессрочно'
+  return p.valid_until ? formatShortDate(p.valid_until) : t('adminScreens.adminPromos.noExpiry')
 }
 
 // -- Fetch (generation counter discards stale responses on rapid tab-switch,
@@ -206,7 +218,7 @@ async function loadInitial(): Promise<void> {
   } catch (e) {
     if (myGeneration !== generation) return
     error.value = true
-    toast.error(extractApiError(e, 'Ошибка загрузки промокодов'))
+    toast.error(extractApiError(e, t('adminScreens.adminPromos.promocodesLoadError')))
   } finally {
     if (myGeneration === generation) loading.value = false
   }
@@ -220,7 +232,7 @@ async function loadMore(): Promise<void> {
     items.value.push(...res.items)
     hasMore.value = items.value.length < res.total
   } catch (e) {
-    toast.error(extractApiError(e, 'Ошибка загрузки'))
+    toast.error(extractApiError(e, t('common.loadError')))
   } finally {
     loadingMore.value = false
   }
@@ -232,7 +244,7 @@ const deactivatingId = ref<string | null>(null)
 
 const confirmMessage = computed<string>(() =>
   confirmTarget.value
-    ? `Деактивировать промокод ${confirmTarget.value.code}? Мастер и участники больше не смогут им воспользоваться.`
+    ? t('adminScreens.adminPromos.deactivateConfirm', { code: confirmTarget.value.code })
     : '',
 )
 
@@ -251,9 +263,9 @@ async function onConfirmDeactivate(): Promise<void> {
     // The "inactive" tab is server-filtered on is_active=false -- a promo
     // deactivated while that tab is open already satisfies the filter, so no
     // removal needed there. Any other tab just flips the badge in place.
-    toast.success('Промокод деактивирован')
+    toast.success(t('adminScreens.adminPromos.promocodeDeactivated'))
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось деактивировать промокод'))
+    toast.error(extractApiError(e, t('adminScreens.adminPromos.deactivateFailedToast')))
   } finally {
     deactivatingId.value = null
     confirmTarget.value = null

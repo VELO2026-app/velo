@@ -10,26 +10,31 @@
   Self-centres with a --space-1 top margin — drop it straight into a flex-column
   section (no wrapper needed); the roster's old centring wrapper is removed.
 
+  tz-i18n contract (label-only): the component renders NO locale text of its
+  own -- the caller passes the fully localized label. Count callers use the
+  CLDR pipe form with the plural overload, t('...more', hiddenCount) (see
+  masterScreens.*.more* keys, same recipe as shared.analytics.pairsMore) and
+  set `plus` -- the «+» glyph is markup, not copy, so it lives here and the
+  catalogs carry «ещё {count} …» without a leading symbol. aria-expanded and
+  other attrs fall through to the root button.
+
   Usage:
-    <VShowMore :count="hiddenCount" noun="практик" @click="expand" />
-    <VShowMore label="посмотреть еще" @click="expand" />   (verbatim override)
+    <VShowMore plus :label="t('masterScreens.analytics.morePractices', hiddenPastCount)" @click="expand" />
+    <VShowMore :label="t('common.showMore')" @click="expand" />
 -->
 
 <template>
   <button type="button" class="v-show-more" @click="$emit('click')">
-    <template v-if="label">{{ label }}</template>
-    <template v-else>+ ещё {{ count }} {{ noun }}</template>
+    <span v-if="plus" class="v-show-more__plus">+ </span>{{ label }}
   </button>
 </template>
 
 <script setup lang="ts">
 defineProps<{
-  /** Hidden-items count shown in the default label. Omit when `label` is set. */
-  count?: number
-  /** Trailing noun, already in the correct case ("практик" / "участников" / "отзывов"). Omit when `label` is set. */
-  noun?: string
-  /** Verbatim label override; when set, replaces the «+ ещё {count} {noun}» default. */
-  label?: string
+  /** Fully localized label (caller-owned: pluralized t() or any verbatim string). */
+  label: string
+  /** Render the «+» reveal glyph before the label (count pills). */
+  plus?: boolean
 }>()
 
 defineEmits<{ click: [] }>()
@@ -50,5 +55,9 @@ defineEmits<{ click: [] }>()
   border: 1.5px solid var(--velo-primary);
   border-radius: var(--radius-full);
   cursor: pointer;
+}
+
+.v-show-more__plus {
+  white-space: pre;
 }
 </style>

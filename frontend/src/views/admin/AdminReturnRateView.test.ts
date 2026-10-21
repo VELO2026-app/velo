@@ -36,6 +36,7 @@
 // never a shell heredoc.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import AdminReturnRateView from '@/views/admin/AdminReturnRateView.vue'
@@ -82,7 +83,7 @@ function mount(query: Record<string, string> = {}): HTMLElement {
   routeQuery = query
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminReturnRateView)
+  app = createApp(AdminReturnRateView).use(createTestI18n())
   app.mount(host)
   return host
 }

@@ -1,0 +1,501 @@
+{
+  "moderation": {
+    "reportDate": "Дата заявки",
+    "category": "Категория",
+    "priority": "Приоритет",
+    "status": "Статус заявки",
+    "cats": {
+      "tickets": "Тикеты",
+      "complaints": "Жалобы",
+      "payments": "Платежи"
+    },
+    "statuses": {
+      "open": "Открытая",
+      "closed": "Закрытая"
+    }
+  },
+  "payout": {
+    "title": "Подтвердить выплату",
+    "sub": "Средства уйдут мастеру через провайдера",
+    "amount": "Сумма",
+    "fee": "Комиссия провайдера",
+    "net": "К получению",
+    "bank": "Банк",
+    "master": "Мастер",
+    "approve": "Одобрить выплату"
+  },
+  "admin": {
+    "fallbackUserName": "Пользователь",
+    "masterStatus": {
+      "pending": "Ожидает",
+      "verified": "Верифицирован",
+      "rejected": "Отклонён",
+      "suspended": "Заблокирован",
+      "cancelled_by_user": "Аккаунт удалён"
+    },
+    "reportStatus": {
+      "pending": "Ожидает",
+      "resolved": "Решена",
+      "dismissed": "Отклонена"
+    },
+    "reportTarget": {
+      "user": "Юзер",
+      "master": "Мастер",
+      "practice": "Практика"
+    },
+    "relative": {
+      "justNow": "только что",
+      "minutesAgo": "{n} мин назад",
+      "hoursAgo": "{n} ч назад"
+    },
+    "supportTicket": {
+      "resolved": "Решено",
+      "closed": "Закрыто"
+    }
+  },
+  "adminScreens": {
+    "adminCatalog": {
+      "newDirectionPlaceholder": "Новое направление…",
+      "catalogLoadFailed": "Не удалось загрузить каталог",
+      "newStylePlaceholder": "Новый вид…",
+      "catalogLink": "Каталог практик",
+      "noStyles": "Без видов",
+      "directionAdded": "Направление добавлено",
+      "styleAdded": "Вид добавлен",
+      "intro": "Управление каталогом. Изменения видны мастерам сразу при выборе методов.",
+      "activate": "Активировать",
+      "inactiveNote": "Неактивно — скрыто у мастеров, старые методы сохраняются",
+      "addDirectionFailed": "Не удалось добавить направление",
+      "addStyleFailed": "Не удалось добавить вид",
+      "saveFailed": "Не удалось сохранить",
+      "statusChangeFailed": "Не удалось изменить статус"
+    },
+    "adminCheckinRate": {
+      "lowCheckinTitle": "Низкий check-in (практики)",
+      "subtitle": "{pct}% · {total} записей",
+      "avgRate": "Средний check-in rate",
+      "totalRecords": "Всего записей",
+      "checkedIn": "Отметились"
+    },
+    "adminCuratorGroups": {
+      "active": "Активна",
+      "frozen": "Заморожена",
+      "countsLine": "Мастеров: {masters} • Учеников: {students} • с {since}",
+      "emptyNote": "Школ пока нет. Школу создаёт сам верифицированный мастер — отдельной выдачи прав не предусмотрено (рычаг админа — верификация мастера).",
+      "title": "Школы"
+    },
+    "adminDashboard": {
+      "prevPeriod": "Предыдущий период",
+      "nextPeriod": "Следующий период",
+      "withdrawalRequestsLink": "Запросы мастеров на вывод",
+      "promocodesLink": "Все промокоды: платформы и мастеров",
+      "usersLink": "Все пользователи · назначение мастеров",
+      "methodRequestsLink": "Заявки на смену методов",
+      "methodRequestsHint": "Мастера меняют свои направления",
+      "catalogLink": "Каталог практик",
+      "catalogHint": "Направления и виды практик",
+      "supportLink": "Обращения пользователей и мастеров",
+      "revenue": "Выручка",
+      "system": "Система",
+      "mastersBalance": "Баланс по мастерам",
+      "verificationBanner": "{n} мастер на верификации | {n} мастера на верификации | {n} мастеров на верификации",
+      "moderationBanner": "{n} обращение на модерации | {n} обращения на модерации | {n} обращений на модерации",
+      "practicesStat": "Практик",
+      "mastersStat": "Мастеров",
+      "participantsStat": "Участников",
+      "payoutsSection": "Выплаты",
+      "usersSection": "Пользователи",
+      "supportSection": "Поддержка",
+      "statistics": "Статистика",
+      "profileAria": "Профиль",
+      "promocodesSection": "Промокоды"
+    },
+    "adminFeedbackRate": {
+      "distributionratings": "Распределение оценок",
+      "leaveRate": "Оставляют отзыв",
+      "visited": "Посетили",
+      "leftReview": "Оставили отзыв"
+    },
+    "adminMasterInvite": {
+      "title": "Пригласить мастера",
+      "oneTimeLinkLabel": "ОДНОРАЗОВАЯ ССЫЛКА",
+      "linkReady": "ССЫЛКА ГОТОВА",
+      "copy": "Скопировать",
+      "oneTimeLinkExpiryHint": "Одноразовая · 7 дней с момента создания",
+      "toast": {
+        "linkCreateFailed": "Не удалось создать ссылку",
+        "copyFailed": "Не удалось скопировать"
+      },
+      "intro": "Создайте ссылку и отправьте её будущему мастеру. Она одноразовая: сработает у первого, кто её откроет, — после этого погашается. Срок действия — 7 дней.",
+      "create": "Создать ссылку"
+    },
+    "adminMasterReview": {
+      "fields": {
+        "displayName": "Имя, видимое пользователям",
+        "experienceYears": "Лет опыта (0–50)",
+        "about": "О себе",
+        "languages": "Язык практик",
+        "directions": "Направления практик",
+        "firstNamePlaceholder": "Имя",
+        "lastNamePlaceholder": "Фамилия",
+        "aboutPlaceholder": "О себе"
+      },
+      "edit": {
+        "displayName": "Изменить имя-визитку",
+        "accountName": "Изменить имя аккаунта",
+        "about": "Изменить о себе",
+        "email": "Изменить email",
+        "phone": "Изменить телефон",
+        "experience": "Изменить опыт",
+        "languages": "Изменить языки",
+        "directions": "Изменить направления",
+        "certificates": "Изменить сертификаты"
+      },
+      "certificateEnter": "Добавить сертификат + Enter",
+      "viewDocument": "Посмотреть документ",
+      "allowSchoolCreation": "Разрешить создавать школы (кураторские группы)",
+      "notFound": "Заявка не найдена",
+      "notFoundHint": "Возможно, она была удалена или уже обработана",
+      "rejectCta": "Отклонить заявку",
+      "revoke": "Отозвать",
+      "addToCatalog": "Добавить в каталог",
+      "thisMasterOnly": "Только этому мастеру",
+      "applicationTitle": "Заявка мастера",
+      "information": "Информация",
+      "displayNameTitle": "Имя-визитка",
+      "accountNameTitle": "Имя аккаунта",
+      "phone": "Телефон",
+      "experience": "Опыт",
+      "certificates": "Сертификаты",
+      "documents": "Документы",
+      "noDocuments": "Документы не приложены",
+      "firstApplication": "Заявка подаётся впервые.",
+      "schoolCreationRight": "Право создавать школы",
+      "nonZeroBalance": "ненулевой баланс",
+      "revokedToUser": "Мастер отозван — аккаунт стал пользователем",
+      "toast": {
+        "revokeFailed": "Не удалось отозвать мастера",
+        "directionsUpdated": "Направления обновлены",
+        "directionsSaveFailed": "Не удалось сохранить направления",
+        "schoolRightGranted": "Право создавать школы выдано",
+        "schoolRightRevoked": "Право создавать школы отозвано",
+        "verified": "Мастер верифицирован",
+        "requestRejected": "Заявка отклонена",
+        "rejectFailed": "Ошибка при отклонении"
+      },
+      "dataLoadError": "Ошибка загрузки данных",
+      "validation": {
+        "chooseDirection": "Выберите хотя бы одно направление",
+        "enterDisplayName": "Введите имя-визитку",
+        "experienceRange": "Опыт: целое число 0–50"
+      },
+      "documentViewUnavailable": "Просмотр документа пока недоступен",
+      "verificationError": "Ошибка верификации",
+      "rejectionReasonHint": "Укажите причину отказа",
+      "experienceYears": "{n} лет",
+      "revokeMessage": "Мастер {name} снова станет обычным пользователем. Все данные (профиль, практики, история) сохраняются — доступ можно вернуть кнопкой «Сделать мастером».",
+      "revokeWarning": "{base} Внимание: {warns} — отзыв не блокируется, данные останутся.",
+      "grantNote": "Отзыв верификации замораживает все школы этого куратора — участники перестанут их видеть; данные сохранятся и оживут при повторной верификации.",
+      "warnSchedule": "{n} практик(и) в расписании",
+      "warnWithdrawals": "{n} выплат(ы) в ожидании",
+      "save": "Сохранить",
+      "historyTitle": "История заявок",
+      "approve": "Одобрить",
+      "alreadyProcessed": "Заявка уже обработана — статус: ",
+      "granted": "Выдано",
+      "notGranted": "Не выдано",
+      "revokeGrant": "Отозвать право",
+      "grantAction": "Выдать право",
+      "revokeMaster": "Отозвать мастера",
+      "rejectionReasonPlaceholder": "Укажите причину отклонения заявки",
+      "rejectionReason": "Причина отказа",
+      "saveFailed": "Не удалось сохранить",
+      "grantChangeFailed": "Не удалось изменить право",
+      "rejectAction": "Отклонить"
+    },
+    "adminMasters": {
+      "masters": "Мастера",
+      "review": "Проверка",
+      "blockedShort": "Заблок.",
+      "inviteCta": "Пригласить мастера",
+      "schoolsTab": "Школы",
+      "curatorRole": "Куратор",
+      "status": {
+        "verified": "Верифицирован",
+        "pending": "Ожидает верификации",
+        "rejected": "Отклонён",
+        "suspended": "Заблокирован",
+        "cancelled_by_user": "Аккаунт удалён"
+      },
+      "loadFailed": "Не удалось загрузить мастеров",
+      "directionsMissing": "Направления не указаны",
+      "practicesStat": "Практик",
+      "studentsStat": "Ученики",
+      "toWithdrawStat": "К выводу",
+      "filterDeleted": "Удалены",
+      "emptyPending": "Нет мастеров на проверке",
+      "emptyVerified": "Нет верифицированных мастеров",
+      "emptyRejected": "Нет отклонённых мастеров",
+      "emptySuspended": "Нет заблокированных мастеров",
+      "emptyCancelled": "Нет удалённых аккаунтов",
+      "emptyFallback": "Мастеров пока нет",
+      "loadFailedToast": "Ошибка загрузки мастеров",
+      "verifiedShort": "Верифиц.",
+      "filterRejected": "Отклонены"
+    },
+    "adminMethodRequests": {
+      "rejectCta": "Отклонить заявку",
+      "addToCatalog": "Добавить в каталог",
+      "thisMasterOnly": "Только этому мастеру",
+      "methodRequestsLink": "Заявки на смену методов",
+      "now": "Сейчас",
+      "offered": "Предложено",
+      "methodsUpdated": "Методы обновлены",
+      "approveError": "Ошибка при одобрении",
+      "rejectionReasonHint": "Укажите причину отказа",
+      "toast": {
+        "requestRejected": "Заявка отклонена",
+        "rejectFailed": "Ошибка при отклонении"
+      },
+      "reject": "Отклонить",
+      "approve": "Одобрить",
+      "emptyTitle": "Заявок нет",
+      "rejectionReasonPlaceholder": "Укажите причину отклонения запроса",
+      "loadFailedToast": "Ошибка загрузки заявок",
+      "noChangeRequests": "Мастера не запрашивали смену методов",
+      "rejectionReason": "Причина отказа"
+    },
+    "adminParticipants": {
+      "toast": {
+        "loadMembersFailed": "Не удалось загрузить участников"
+      },
+      "new": "Новые",
+      "active": "Активные",
+      "joinedLine": "Практик: {n} • с {since}",
+      "lastSeen": "Последняя: {label}",
+      "messageAria": "Написать",
+      "title": "Участники",
+      "messagesUnavailable": "Сообщения пока недоступны"
+    },
+    "adminPracticeDetail": {
+      "practiceDetails": "Детали практики",
+      "meetingStatus": "Статус встречи",
+      "noData": "Нет данных",
+      "m": "М",
+      "active": "Активна",
+      "awaitingCreation": "Ожидает создания",
+      "creationError": "Ошибка создания",
+      "bookedStat": "Записалось",
+      "attendedStat": "Пришли",
+      "freeStat": "Свободно",
+      "bookedSection": "Записались ({booked}/{capacity})",
+      "presentSection": "Присутствовали ({n})",
+      "absentSection": "Не пришли ({n})",
+      "unmatchedTitle": "Нераспознанные участники",
+      "unavailable": "Практика недоступна",
+      "deletedLabel": "Удалена",
+      "notCreatedLabel": "Не создана",
+      "errorReasonLabel": "Причина ошибки"
+    },
+    "adminPractices": {
+      "upcoming": "Предстоящие",
+      "past": "Прошедшие",
+      "durationMinutes": "{n} мин",
+      "loadFailed": "Не удалось загрузить практики",
+      "title": "Практики"
+    },
+    "adminProfile": {
+      "administrator": "Администратор",
+      "logout": "Выйти",
+      "title": "Профиль",
+      "switchNote": "Перейдите в интерфейс пользователя, чтобы просматривать каталог и бронировать практики.",
+      "switchCta": "Открыть как пользователь",
+      "readOnlyBadge": "РЕЖИМ ПРОСМОТРА"
+    },
+    "adminPromos": {
+      "companies": "Компании",
+      "deactivatedShort": "Деактивир.",
+      "empty": {
+        "title": "Промокодов пока нет",
+        "master": "Нет промокодов мастеров",
+        "company": "Нет промокодов компании",
+        "inactive": "Нет деактивированных промокодов"
+      },
+      "noExpiry": "бессрочно",
+      "promocodesLoadError": "Ошибка загрузки промокодов",
+      "promocodeDeactivated": "Промокод деактивирован",
+      "deactivateConfirm": "Деактивировать промокод {code}? Мастер и участники больше не смогут им воспользоваться.",
+      "usedOf": "{used} из {max}",
+      "typeCompany": "Компания",
+      "typeMaster": "Мастер",
+      "active": "Активен",
+      "inactive": "Деактивирован",
+      "discountLine": "Скидка: {n}% · Использовано: {used}",
+      "loadFailed": "Не удалось загрузить промокоды",
+      "deactivateFailedToast": "Не удалось деактивировать промокод",
+      "filterMasters": "Мастеров",
+      "ownerFallback": "Пользователь",
+      "title": "Промокоды"
+    },
+    "adminReportDetail": {
+      "resolutionNote": "Примечание к решению *",
+      "noteOptional": "Примечание (необязательно)",
+      "rejectionReason": "Причина отклонения",
+      "details": "Детали",
+      "targetType": "Тип цели",
+      "targetId": "ID цели",
+      "processed": "Обработана",
+      "note": "Примечание",
+      "resolutionNotePlaceholder": "Введите примечание к решению",
+      "processError": "Ошибка при обработке",
+      "title": "Жалоба",
+      "resolve": "Решить",
+      "reject": "Отклонить",
+      "alreadyProcessed": "Жалоба уже обработана — статус: ",
+      "notFoundTitle": "Жалоба не найдена",
+      "createdLabel": "Создана",
+      "resolutionPlaceholder": "Опишите, какие меры приняты",
+      "backToList": "Вернитесь к списку жалоб",
+      "loadFailedToast": "Ошибка загрузки жалобы",
+      "reportTextLabel": "Текст жалобы",
+      "resolveCta": "Решить жалобу",
+      "rejectCta": "Отклонить жалобу",
+      "resolvedToast": "Жалоба решена",
+      "rejectedToast": "Жалоба отклонена"
+    },
+    "adminReports": {
+      "empty": {
+        "title": "Обращений нет"
+      },
+      "filterNoHits": "По выбранным фильтрам ничего не найдено",
+      "tickets": "Тикеты",
+      "payments": "Платежи",
+      "filter": "Фильтр",
+      "ticketsLoadError": "Ошибка загрузки обращений",
+      "moderationTab": "Модерация",
+      "tabComplaints": "Жалобы"
+    },
+    "adminReturnRate": {
+      "topLoyalUsers": "Топ лояльных юзеров",
+      "practicesCount": "{n} практик",
+      "returnRate": "Возвращаются повторно",
+      "totalUsers": "Всего пользователей",
+      "returning": "Повторно"
+    },
+    "adminRevenue": {
+      "revenuePeriod": "Период выручки",
+      "revenueLoadFailed": "Не удалось загрузить выручку",
+      "revenue": "Выручка",
+      "byMasters": "По мастерам",
+      "paidAmount": "Выплачено: {amount}",
+      "commissionStat": "Комиссия",
+      "payoutStat": "Выплачено",
+      "titleWeek": "Выручка за неделю",
+      "titleMonth": "Выручка за месяц"
+    },
+    "adminSupportDetail": {
+      "reply": "Ответ…",
+      "status": {
+        "unclaimed": "Не взято",
+        "mine": "У меня"
+      },
+      "taken": "Занято",
+      "unclaimedHint": "Обращение не закреплено. Возьмите его в работу, чтобы отвечать.",
+      "claimedByOtherHint": "Обращение уже закреплено за другим администратором — ответить может только он.",
+      "ticketLoadError": "Ошибка загрузки обращения",
+      "tryAgain": "Попробуйте ещё раз",
+      "toast": {
+        "claimedByYou": "Обращение закреплено за вами",
+        "claimedByOther": "Уже взято другим администратором",
+        "claimFailed": "Не удалось закрепить обращение",
+        "replyFailed": "Не удалось отправить ответ"
+      },
+      "take": "Взять в работу",
+      "noMessages": "Сообщений пока нет.",
+      "refresh": "Обновить",
+      "messagesLoadFailed": "Не удалось загрузить сообщения",
+      "notFoundTitle": "Обращение не найдено",
+      "backToList": "Вернитесь к списку обращений",
+      "threadFallback": "Обращение"
+    },
+    "adminSupport": {
+      "empty": {
+        "title": "Обращений нет",
+        "text": "Сюда попадут все обращения в поддержку"
+      },
+      "status": {
+        "unclaimed": "Не взято",
+        "mine": "У меня"
+      },
+      "taken": "Занято",
+      "ticketsLoadError": "Ошибка загрузки обращений",
+      "resolved": "Решено",
+      "closed": "Закрыто",
+      "title": "Поддержка",
+      "userFallback": "Пользователь"
+    },
+    "adminUsers": {
+      "usersLoadFailed": "Не удалось загрузить пользователей",
+      "appoint": "Назначить",
+      "noName": "Без имени",
+      "empty": {
+        "title": "Пользователей пока нет"
+      },
+      "usersLoadError": "Ошибка загрузки пользователей",
+      "toast": {
+        "promotedToMaster": "Пользователь назначен мастером",
+        "promoteFailed": "Не удалось назначить мастером"
+      },
+      "promoteConfirm": "Назначить пользователя «{name}» мастером?",
+      "searchPlaceholder": "Поиск по имени или Telegram ID",
+      "makeMaster": "Сделать мастером",
+      "roleAdmin": "Админ",
+      "roleMaster": "Мастер",
+      "title": "Пользователи",
+      "roleUser": "Пользователь"
+    },
+    "adminWithdrawalDetail": {
+      "rejectionReason": "Причина отклонения",
+      "rejectCta": "Отклонить выплату",
+      "requestTitle": "Запрос на вывод",
+      "bank": "Банк",
+      "providerFee": "Комиссия провайдера",
+      "netAmount": "К получению",
+      "unavailable": "Запрос недоступен",
+      "pending": "Ожидает",
+      "approved": "Одобрен",
+      "toast": {
+        "approved": "Выплата одобрена",
+        "approveFailed": "Ошибка одобрения выплаты",
+        "rejected": "Выплата отклонена",
+        "rejectFailed": "Ошибка отклонения выплаты"
+      },
+      "alreadyProcessed": "Запрос уже обработан — статус: ",
+      "rejectionReasonPlaceholder": "Укажите причину отклонения выплаты",
+      "rejectionReasonRequired": "Укажите причину отклонения",
+      "title": "Выплата",
+      "statusRejected": "Отклонён",
+      "openReject": "Отклонить"
+    },
+    "adminWithdrawals": {
+      "empty": {
+        "title": "Запросов на вывод нет",
+        "text": "Новые запросы мастеров появятся здесь"
+      },
+      "status": {
+        "pending": "На рассмотрении"
+      },
+      "approved": "Одобрен",
+      "bank": "Банк",
+      "withdrawalsLoadError": "Ошибка загрузки выплат",
+      "toReceive": "К получению {amount}",
+      "title": "Выплаты",
+      "statusRejected": "Отклонён"
+    },
+    "adminCommon": {
+      "loadMetricFailed": "Не удалось загрузить метрику",
+      "methodSingle": "Метода «{label}» нет в каталоге — добавить для всех мастеров?",
+      "methodPlural": "Методов {labels} нет в каталоге — добавить для всех мастеров?"
+    }
+  }
+}

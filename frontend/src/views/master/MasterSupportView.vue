@@ -29,7 +29,12 @@
   <div class="support">
     <!-- Header hidden on the success screen — it's a terminal state with no back
          (operator 2026-06-19); «На главную» is the only exit. -->
-    <VHeader v-if="!submitted" title="Поддержка" show-back @back="router.back()" />
+    <VHeader
+      v-if="!submitted"
+      :title="t('masterScreens.masterSupport.title')"
+      show-back
+      @back="router.back()"
+    />
 
     <!-- ===================== TERMINAL (delivery HAS happened) ================
          Mirrors the user SupportView. Reached only after both calls resolved,
@@ -41,10 +46,14 @@
       <div class="support__ok-circle">
         <IconSupportChat :size="48" />
       </div>
-      <h2 class="support__ok-title">Спасибо за обращение</h2>
-      <p class="support__ok-text">Мы получили ваше обращение и ответим здесь же, в приложении.</p>
+      <h2 class="support__ok-title">
+        {{ t('masterScreens.masterSupport.toast.thanks') }}
+      </h2>
+      <p class="support__ok-text">
+        {{ t('masterScreens.masterSupport.thanks.text') }}
+      </p>
       <VButton variant="primary" block class="support__ok-cta" @click="onGoHome">
-        На главную
+        {{ t('common.backHome') }}
       </VButton>
     </div>
 
@@ -52,13 +61,17 @@
     <div v-else class="support__content">
       <div class="support__hero">
         <IconSupportChat :size="56" class="support__hero-ic" />
-        <div class="support__hero-title">Как мы можем помочь?</div>
-        <div class="support__hero-sub">Обычно отвечаем в течение 24 часов</div>
+        <div class="support__hero-title">
+          {{ t('masterScreens.masterSupport.title') }}
+        </div>
+        <div class="support__hero-sub">
+          {{ t('masterScreens.masterSupport.responseHint') }}
+        </div>
       </div>
 
       <!-- Topic -->
       <section class="support__section">
-        <h2 class="support__title">Тема</h2>
+        <h2 class="support__title">{{ t('masterScreens.masterSupport.topic.label') }}</h2>
         <div class="support__card">
           <VRadioGroup v-model="topic" :options="topicOptions" />
           <div v-if="topic === 'other'" class="support__other">
@@ -66,8 +79,8 @@
               v-model="otherText"
               type="text"
               class="support__other-input"
-              placeholder="Укажите ваш вариант"
-              aria-label="Свой вариант темы"
+              :placeholder="t('practice.customVariant')"
+              :aria-label="t('masterScreens.masterSupport.custom.title')"
               @focus="onFieldFocus"
             />
             <IconArrowRight :size="18" class="support__other-arrow" />
@@ -77,29 +90,29 @@
 
       <!-- Message -->
       <section class="support__section">
-        <h2 class="support__title">Сообщение</h2>
+        <h2 class="support__title">{{ t('masterScreens.masterSupport.message.label') }}</h2>
         <VTextarea
           v-model="message"
           :rows="5"
-          placeholder="Опишите вашу проблему или вопрос..."
+          :placeholder="t('masterScreens.masterSupport.message.placeholder')"
           @focus="onFieldFocus"
         />
       </section>
 
       <!-- Attachments (UI built; files captured locally, NOT uploaded — stub) -->
       <section class="support__section">
-        <h2 class="support__title">Прикрепить файл</h2>
+        <h2 class="support__title">{{ t('masterScreens.masterSupport.attachFile') }}</h2>
         <div class="support__upload">
           <button type="button" class="support__drop" @click="openFilePicker">
             <IconFile :size="26" />
-            <span>+ Добавить файл (5MB)</span>
+            <span>{{ t('masterScreens.masterSupport.addFile') }}</span>
           </button>
           <input
             ref="fileInput"
             type="file"
             multiple
             class="support__file-input"
-            aria-label="Прикрепить файл"
+            :aria-label="t('masterScreens.masterSupport.attachFile')"
             @change="onFilesPicked"
           />
           <div v-if="attachments.length" class="support__thumbs">
@@ -109,7 +122,7 @@
               type="button"
               class="support__thumb"
               :title="file.name"
-              aria-label="Удалить файл"
+              :aria-label="t('masterScreens.masterSupport.removeFile')"
               @click="removeAttachment(i)"
             >
               <IconClose :size="12" />
@@ -118,9 +131,7 @@
         </div>
       </section>
 
-      <a class="support__email" :href="emailHref"
-        >Не дождались ответа? Напишите на support@velo.app</a
-      >
+      <a class="support__email" :href="emailHref">{{ t('common.supportEmailHint') }}</a>
 
       <VButton
         variant="primary"
@@ -130,13 +141,14 @@
         class="support__submit"
         @click="onSubmit"
       >
-        Отправить
+        {{ t('common.submitSend') }}
       </VButton>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -165,11 +177,27 @@ interface SupportTopic {
   priority: SupportPriority
 }
 const TOPICS: SupportTopic[] = [
-  { value: 'withdrawal', label: 'Проблема с выводом', priority: 'P0' },
-  { value: 'practices', label: 'Вопрос по практикам', priority: 'P1' },
-  { value: 'technical', label: 'Технические проблемы', priority: 'P2' },
-  { value: 'add_direction', label: 'Добавить направление практики', priority: 'P2' },
-  { value: 'other', label: 'Другое', priority: 'P2' },
+  {
+    value: 'withdrawal',
+    label: t('masterScreens.masterSupport.topic.withdrawal'),
+    priority: 'P0',
+  },
+  {
+    value: 'practices',
+    label: t('masterScreens.masterSupport.topic.practices'),
+    priority: 'P1',
+  },
+  {
+    value: 'technical',
+    label: t('masterScreens.masterSupport.topic.tech'),
+    priority: 'P2',
+  },
+  {
+    value: 'add_direction',
+    label: t('masterScreens.masterSupport.topic.addDirection'),
+    priority: 'P2',
+  },
+  { value: 'other', label: t('common.other'), priority: 'P2' },
 ]
 // VRadioGroup only needs {value,label}; priority stays off the rendered options.
 const topicOptions = TOPICS.map((t) => ({ value: t.value, label: t.label }))
@@ -229,7 +257,7 @@ async function onSubmit(): Promise<void> {
     await sendSupportMessage(topicLabel, text)
     submitted.value = true
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось отправить обращение'))
+    toast.error(extractApiError(e, t('masterScreens.masterSupport.toast.sendFailed')))
   } finally {
     submitting.value = false
   }

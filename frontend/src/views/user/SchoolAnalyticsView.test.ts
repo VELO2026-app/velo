@@ -12,6 +12,7 @@
 // route table is pinned in router/routes.test.ts.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import SchoolAnalyticsView from '@/views/user/SchoolAnalyticsView.vue'
@@ -38,7 +39,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(SchoolAnalyticsView)
+  app = createApp(SchoolAnalyticsView).use(createTestI18n())
   app.mount(host)
   return host
 }

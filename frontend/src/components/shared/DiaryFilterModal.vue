@@ -43,7 +43,7 @@
             />
           </svg>
         </span>
-        <h2 class="diary-filter__heading">Фильтр</h2>
+        <h2 class="diary-filter__heading">{{ t('filters.title') }}</h2>
       </div>
 
       <!-- Date range (screen 43): collapsible header + month grid -->
@@ -67,7 +67,7 @@
             <button
               type="button"
               class="diary-filter__cal-nav"
-              aria-label="Предыдущий месяц"
+              :aria-label="t('ui.prevMonth')"
               @click="prevMonth"
             >
               <IconArrowRight :size="18" class="diary-filter__cal-nav-prev" />
@@ -76,7 +76,7 @@
             <button
               type="button"
               class="diary-filter__cal-nav"
-              aria-label="Следующий месяц"
+              :aria-label="t('ui.nextMonth')"
               @click="nextMonth"
             >
               <IconArrowRight :size="18" />
@@ -115,7 +115,7 @@
             class="diary-filter__date-clear"
             @click="clearDates"
           >
-            Сбросить даты
+            {{ t('filters.resetDates') }}
           </button>
         </div>
       </section>
@@ -124,7 +124,9 @@
       <section class="diary-filter__group">
         <div class="diary-filter__chips">
           <!-- "Все" -- active when nothing else is selected. -->
-          <VChip size="md" clickable :active="draft.length === 0" @click="selectAll"> Все </VChip>
+          <VChip size="md" clickable :active="draft.length === 0" @click="selectAll">
+            {{ t('common.all') }}
+          </VChip>
           <VChip
             v-for="opt in CATEGORY_CHIPS"
             :key="opt.value"
@@ -139,8 +141,8 @@
       </section>
 
       <div class="diary-filter__actions">
-        <VButton variant="secondary" block @click="onReset">Сбросить</VButton>
-        <VButton variant="primary" block @click="onApply">Применить</VButton>
+        <VButton variant="secondary" block @click="onReset">{{ t('common.reset') }}</VButton>
+        <VButton variant="primary" block @click="onApply">{{ t('filters.apply') }}</VButton>
       </div>
     </div>
   </VModal>
@@ -148,6 +150,8 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { getLocale, t } from '@/locales'
+import { weekdayAbbrUpper } from '@/utils/displayHelpers'
 import {
   dayKeyOf,
   daysInMonth,
@@ -158,6 +162,9 @@ import {
 import { VModal, VButton, VChip } from '@/components/ui'
 import { IconArrowRight } from '@/components/icons'
 import type { DiaryFeedCategory } from '@/api/types'
+
+// tz-i18n 2.2a: heading/chips/actions via filters.*/diary.categories/common.*;
+// calendar month+weekday names via Intl/display keys.
 
 const props = defineProps<{
   open: boolean
@@ -180,12 +187,38 @@ const emit = defineEmits<{
 
 // Chip option list (label + value). Labels match the design (screen 42);
 // "Все" is rendered separately above (it is the empty selection).
+// Labels resolve at ACCESS time (getters) -- tz-i18n 1.1.
 const CATEGORY_CHIPS: { value: DiaryFeedCategory; label: string }[] = [
-  { value: 'entries', label: 'Дневник' },
-  { value: 'dreams', label: 'Сонник' },
-  { value: 'feedbacks', label: 'Feedbacks' },
-  { value: 'checkins', label: 'Check-ins' },
-  { value: 'practices', label: 'Практики' },
+  {
+    value: 'entries',
+    get label(): string {
+      return t('diary.categories.entries')
+    },
+  },
+  {
+    value: 'dreams',
+    get label(): string {
+      return t('diary.categories.dreams')
+    },
+  },
+  {
+    value: 'feedbacks',
+    get label(): string {
+      return t('diary.categories.feedbacks')
+    },
+  },
+  {
+    value: 'checkins',
+    get label(): string {
+      return t('diary.categories.checkins')
+    },
+  },
+  {
+    value: 'practices',
+    get label(): string {
+      return t('diary.categories.practices')
+    },
+  },
 ]
 
 // Local draft -- the working copy until "Применить".
@@ -263,21 +296,16 @@ function nextDayKey(dayKey: string): string {
   return t.toISOString().slice(0, 10)
 }
 
-const MONTH_LABELS = [
-  'Январь',
-  'Февраль',
-  'Март',
-  'Апрель',
-  'Май',
-  'Июнь',
-  'Июль',
-  'Август',
-  'Сентябрь',
-  'Октябрь',
-  'Ноябрь',
-  'Декабрь',
-]
-const WEEKDAY_LABELS = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС']
+// tz-i18n 2.2a: month names from Intl (nominative, capitalized as the design
+// shows) instead of a fixed Russian array; weekday abbreviations from the
+// shared display.weekdayAbbr keys, upper-cased like the design grid.
+const MONTH_LABELS = Array.from({ length: 12 }, (_, m) => {
+  const name = new Intl.DateTimeFormat(getLocale(), { month: 'long' }).format(
+    new Date(Date.UTC(2026, m, 1)),
+  )
+  return name.charAt(0).toUpperCase() + name.slice(1)
+})
+const WEEKDAY_LABELS = [1, 2, 3, 4, 5, 6, 7].map(weekdayAbbrUpper)
 
 const monthTitle = computed(
   () => `${MONTH_LABELS[viewMonth.value.getMonth()]} ${viewMonth.value.getFullYear()}`,
@@ -341,7 +369,7 @@ function isInRange(key: string | null): boolean {
 }
 
 const dateSummary = computed(() => {
-  if (!draftFrom.value) return 'Выбрать дату'
+  if (!draftFrom.value) return t('composer.pickDate')
   if (!draftTo.value) return draftFrom.value
   return `${draftFrom.value} — ${draftTo.value}`
 })

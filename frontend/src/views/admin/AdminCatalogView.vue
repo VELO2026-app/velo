@@ -29,18 +29,18 @@
   <div class="admin-catalog">
     <header class="admin-catalog__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-catalog__title">Каталог практик</h1>
+      <h1 class="admin-catalog__title">{{ t('adminScreens.adminCatalog.catalogLink') }}</h1>
     </header>
 
     <VCard class="admin-catalog__note" padding="none">
-      Управление каталогом. Изменения видны мастерам сразу при выборе методов.
+      {{ t('adminScreens.adminCatalog.intro') }}
     </VCard>
 
     <!-- Add direction -->
     <VCard class="admin-catalog__add" padding="none">
       <VInput
         v-model="newDirectionLabel"
-        placeholder="Новое направление…"
+        :placeholder="t('adminScreens.adminCatalog.newDirectionPlaceholder')"
         class="admin-catalog__add-input"
       />
       <VButton
@@ -50,7 +50,7 @@
         :disabled="!newDirectionLabel.trim()"
         @click="addDirection"
       >
-        + Добавить
+        + {{ t('ui.add') }}
       </VButton>
     </VCard>
 
@@ -59,10 +59,12 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      title="Не удалось загрузить каталог"
-      description="Проверьте соединение и попробуйте ещё раз"
+      :title="t('adminScreens.adminCatalog.catalogLoadFailed')"
+      :description="t('common.checkConnection')"
     >
-      <template #action><VButton variant="primary" @click="load">Повторить</VButton></template>
+      <template #action
+        ><VButton variant="primary" @click="load">{{ t('common.retry') }}</VButton></template
+      >
     </VEmptyState>
 
     <VCard
@@ -79,7 +81,7 @@
           <button
             type="button"
             class="admin-catalog__icon-btn"
-            aria-label="Сохранить"
+            :aria-label="t('ui.save')"
             @click="saveDirectionLabel(dir)"
           >
             <IconCheck :size="18" />
@@ -87,7 +89,7 @@
           <button
             type="button"
             class="admin-catalog__icon-btn"
-            aria-label="Отмена"
+            :aria-label="t('ui.cancel')"
             @click="cancelEdit"
           >
             <IconClose :size="18" />
@@ -99,7 +101,7 @@
           <button
             type="button"
             class="admin-catalog__icon-btn"
-            aria-label="Редактировать"
+            :aria-label="t('ui.edit')"
             @click="startEditDirection(dir)"
           >
             <IconPen :size="18" />
@@ -111,7 +113,7 @@
             :loading="togglingId === dir.id"
             @click="toggleDirectionActive(dir)"
           >
-            Деактивировать
+            {{ t('ui.deactivate') }}
           </VButton>
           <VButton
             v-else
@@ -120,7 +122,7 @@
             :loading="togglingId === dir.id"
             @click="toggleDirectionActive(dir)"
           >
-            Активировать
+            {{ t('adminScreens.adminCatalog.activate') }}
           </VButton>
         </template>
       </div>
@@ -135,15 +137,15 @@
             clickable
             @click="toggleStyleActive(st)"
           >
-            {{ st.label }} {{ st.is_active ? '✕' : '· Активировать' }}
+            {{ st.label }} {{ st.is_active ? '✕' : '· ' + t('adminScreens.adminCatalog.activate') }}
           </VChip>
         </div>
-        <div v-else class="admin-catalog__none">Без видов</div>
+        <div v-else class="admin-catalog__none">{{ t('adminScreens.adminCatalog.noStyles') }}</div>
 
         <div class="admin-catalog__add-style">
           <VInput
             v-model="newStyleLabel[dir.id]"
-            placeholder="Новый вид…"
+            :placeholder="t('adminScreens.adminCatalog.newStylePlaceholder')"
             class="admin-catalog__add-style-input"
           />
           <VButton
@@ -158,13 +160,14 @@
         </div>
       </template>
       <div v-else class="admin-catalog__none">
-        Неактивно — скрыто у мастеров, старые методы сохраняются
+        {{ t('adminScreens.adminCatalog.inactiveNote') }}
       </div>
     </VCard>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -228,10 +231,10 @@ async function addDirection(): Promise<void> {
   try {
     await createTaxonomyDirection({ value: genSlug(), label })
     newDirectionLabel.value = ''
-    toast.success('Направление добавлено')
+    toast.success(t('adminScreens.adminCatalog.directionAdded'))
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось добавить направление'))
+    toast.error(extractApiError(e, t('adminScreens.adminCatalog.addDirectionFailed')))
   } finally {
     addingDirection.value = false
   }
@@ -248,10 +251,10 @@ async function addStyle(dir: TaxonomyDirectionItem): Promise<void> {
   try {
     await createTaxonomyStyle(dir.id, { value: genSlug(), label })
     newStyleLabel[dir.id] = ''
-    toast.success('Вид добавлен')
+    toast.success(t('adminScreens.adminCatalog.styleAdded'))
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось добавить вид'))
+    toast.error(extractApiError(e, t('adminScreens.adminCatalog.addStyleFailed')))
   } finally {
     addingStyleFor.value = null
   }
@@ -279,10 +282,10 @@ async function saveDirectionLabel(dir: TaxonomyDirectionItem): Promise<void> {
   try {
     await updateTaxonomyDirection(dir.id, { label })
     editingDirectionId.value = null
-    toast.success('Сохранено')
+    toast.success(t('ui.saved'))
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось сохранить'))
+    toast.error(extractApiError(e, t('adminScreens.adminCatalog.saveFailed')))
   } finally {
     savingDirectionId.value = null
   }
@@ -298,7 +301,7 @@ async function toggleDirectionActive(dir: TaxonomyDirectionItem): Promise<void> 
     await updateTaxonomyDirection(dir.id, { is_active: !dir.is_active })
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось изменить статус'))
+    toast.error(extractApiError(e, t('adminScreens.adminCatalog.statusChangeFailed')))
   } finally {
     togglingId.value = null
   }
@@ -311,7 +314,7 @@ async function toggleStyleActive(st: TaxonomyStyleItem): Promise<void> {
     await updateTaxonomyStyle(st.id, { is_active: !st.is_active })
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось изменить статус'))
+    toast.error(extractApiError(e, t('adminScreens.adminCatalog.statusChangeFailed')))
   } finally {
     togglingId.value = null
   }
@@ -363,7 +366,7 @@ onMounted(load)
   align-items: center;
   /* T21-9 (PROMPT №546): the input can shrink to 0 (min-width:0 below) but
      VButton is white-space:nowrap with no min-width override, so on a narrow
-     card it cannot shrink below "+ Добавить"'s full width and pokes out past
+     card it cannot shrink below t('ui.add')'s full width and pokes out past
      the card edge. Same escape hatch already used at .admin-catalog__dir-head
      (Bug 6b, PROMPT №408) -- let the button drop to its own line instead. */
   flex-wrap: wrap;

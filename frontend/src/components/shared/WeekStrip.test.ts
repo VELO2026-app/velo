@@ -18,6 +18,7 @@
 // (~700ms worst case), comfortably inside the 5s per-test budget.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import WeekStrip from './WeekStrip.vue'
@@ -48,7 +49,7 @@ function mount(maxBackDays = 7, days: Date[] = DAYS): void {
     maxBackDays,
     onShiftDays: shiftDays,
     onSelectDay: selectDay,
-  })
+  }).use(createTestI18n())
   app.mount(host)
 }
 

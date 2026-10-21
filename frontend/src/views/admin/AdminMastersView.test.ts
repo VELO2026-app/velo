@@ -50,6 +50,7 @@
 // every test mounts its own app.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import AdminMastersView from '@/views/admin/AdminMastersView.vue'
@@ -176,7 +177,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminMastersView)
+  app = createApp(AdminMastersView).use(createTestI18n())
   app.mount(host)
   return host
 }

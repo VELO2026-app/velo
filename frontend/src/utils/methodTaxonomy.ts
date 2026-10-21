@@ -38,8 +38,45 @@
 
 import { ref, shallowRef } from 'vue'
 import type { PracticeDirection } from '@/api/types'
-import { DIRECTION_OPTIONS, STYLE_OPTIONS_BY_DIRECTION, STYLE_LABEL } from '@/utils/practiceOptions'
+import i18n from '@/locales'
+// Storage-canon seed: the SERVER catalog's labels are the canon; the ru seed
+// catalogs cover a cold cache (the historic storage vocabulary).
+// ?raw + JSON.parse: VueI18nPlugin precompiles every plain locales/**/*.json
+// import into message ASTs; these seeds are DATA (storage-canon labels read
+// here, not through t()), so their leaves must stay plain strings.
+import taxonomySeedRaw from '@/locales/ru/taxonomy.json?raw'
+import practiceSeedRaw from '@/locales/ru/practice.json?raw'
+import {
+  DIRECTION_OPTIONS,
+  stylesForDirection,
+  hasStyleLabel,
+  styleLabel,
+} from '@/utils/practiceOptions'
 import { getActiveTaxonomy, type TaxonomyListResponse } from '@/api/taxonomy'
+
+// tz-i18n: the hardcoded labels above are LIVE getters (active locale), so
+// this module splits LABEL by purpose:
+//   display  -- directionLabel/resolveStyleLabel: active locale, hardcoded
+//               keys first, server catalog second, raw value last;
+//   canonical-- canonicalDirectionLabel/canonicalStyleLabel: the STORAGE
+//               canon for flattenMethods («Направление — Вид» keeps composing
+//               from the server catalog's labels, or the ru seed when the
+//               cache is cold) -- a non-ru UI never forks the stored
+//               vocabulary.
+const taxonomySeed = JSON.parse(taxonomySeedRaw) as unknown as {
+  display?: { direction?: Record<string, string> }
+}
+const practiceSeed = JSON.parse(practiceSeedRaw) as unknown as {
+  practice?: { styles?: Record<string, string> }
+}
+const ruSeed = {
+  display: {
+    direction: taxonomySeed.display?.direction ?? {},
+  },
+  practice: {
+    styles: practiceSeed.practice?.styles ?? {},
+  },
+}
 
 /** The two-level picker's selection state. Mirrors the fields the wizard held
  *  inline (selectedDirections / selectedStyles / otherMethod*). */
@@ -59,26 +96,6 @@ export interface MethodSelection {
 /** « — » = space + U+2014 (em dash) + space. MUST match the wizard's flatten
  *  byte-for-byte so the stored payload is unchanged. */
 const SEP = ' — '
-
-// direction value -> Russian label (for the level-2 heading + flat payload).
-const DIRECTION_LABEL: Record<string, string> = Object.fromEntries(
-  DIRECTION_OPTIONS.map((o) => [o.value, o.label]),
-)
-
-// Russian label -> direction value (reverse, for parsing stored strings).
-const DIRECTION_VALUE_BY_LABEL: Record<string, PracticeDirection> = Object.fromEntries(
-  DIRECTION_OPTIONS.map((o) => [o.label, o.value]),
-)
-
-// Per direction: style label -> style value (reverse, scoped per direction so
-// an identical style label under a different direction can't cross-match).
-const STYLE_VALUE_BY_LABEL: Partial<Record<PracticeDirection, Record<string, string>>> =
-  Object.fromEntries(
-    Object.entries(STYLE_OPTIONS_BY_DIRECTION).map(([dir, opts]) => [
-      dir,
-      Object.fromEntries((opts ?? []).map((o) => [o.label, o.value])),
-    ]),
-  )
 
 // -- R5-stage-4 catalog cache (bug 2 fix, PROMPT №405; made reactive PROMPT
 // №503 commit 1) -------------------------------------------------------------
@@ -204,27 +221,28 @@ export async function ensureTaxonomyCatalog(): Promise<TaxonomyListResponse | nu
   }
 }
 
-/** Direction label -> value, hardcoded first, catalog second (bug 2 fix). A
- *  catalog-only value (e.g. a promoted custom direction's synthetic slug) is
- *  not a member of the closed PracticeDirection union -- the cast mirrors
- *  the SAME tolerance MethodTaxonomyPicker.vue's catalog-first options list
- *  already applies (`allDirectionOptions()`, `d.value as PracticeDirection`). */
+/** Direction label -> value: the server catalog FIRST (its labels are the
+ *  stored canon -- a non-ru UI parses stored ru strings through it), then the
+ *  live hardcoded labels (so a same-locale round-trip works with a cold
+ *  cache). A catalog-only value is not a member of the closed
+ *  PracticeDirection union -- the cast mirrors the SAME tolerance
+ *  MethodTaxonomyPicker.vue's catalog-first options list already applies. */
 function resolveDirectionValue(label: string): PracticeDirection | undefined {
-  return (
-    DIRECTION_VALUE_BY_LABEL[label] ??
-    (catalogDirectionValueByLabel.value?.[label] as PracticeDirection | undefined)
-  )
+  const viaCatalog = catalogDirectionValueByLabel.value?.[label] as PracticeDirection | undefined
+  if (viaCatalog) return viaCatalog
+  return DIRECTION_OPTIONS.find((o) => o.label === label)?.value
 }
 
-/** Style label -> value under a resolved direction, hardcoded first, catalog second. */
+/** Style label -> value under a resolved direction: catalog first, then the
+ *  live hardcoded labels (same order rationale as resolveDirectionValue). */
 function resolveStyleValue(dirValue: PracticeDirection, label: string): string | undefined {
-  return (
-    STYLE_VALUE_BY_LABEL[dirValue]?.[label] ?? catalogStyleValueByLabel.value?.[dirValue]?.[label]
-  )
+  const viaCatalog = catalogStyleValueByLabel.value?.[dirValue]?.[label]
+  if (viaCatalog) return viaCatalog
+  return stylesForDirection(dirValue).find((o) => o.label === label)?.value
 }
 
-/** Style value -> label under a direction, hardcoded first, catalog second
- *  (bug 5 leak 2 fix), falling back to the raw value if neither knows it.
+/** Style value -> label under a direction, for DISPLAY: the hardcoded key
+ *  first (live locale), the server catalog second, the raw value last.
  *  Exported (T21-10, PROMPT №546): AdminMastersView's collapsed master card
  *  had no catalog-aware style helper available and hand-rolled a
  *  hardcoded-only version (STYLE_LABEL[st] ?? st) -- a catalog-only style
@@ -232,17 +250,33 @@ function resolveStyleValue(dirValue: PracticeDirection, label: string): string |
  *  unlike directionLabel (already exported) which the same card uses
  *  correctly for the direction half of each chip. */
 export function resolveStyleLabel(dirValue: string, styleValue: string): string {
-  return (
-    STYLE_LABEL[styleValue] ??
-    catalogStyleLabelByValue.value?.[dirValue]?.[styleValue] ??
-    styleValue
-  )
+  if (hasStyleLabel(styleValue)) return styleLabel(styleValue)
+  return catalogStyleLabelByValue.value?.[dirValue]?.[styleValue] ?? styleValue
 }
 
-/** direction value -> Russian label, hardcoded first, catalog second (bug 2
- *  fix), falling back to the raw value if neither knows it. */
+/** direction value -> label for DISPLAY: hardcoded key (live locale) first,
+ *  server catalog second, raw value last. */
 export function directionLabel(dir: string): string {
-  return DIRECTION_LABEL[dir] ?? catalogDirectionLabelByValue.value?.[dir] ?? dir
+  if (i18n.global.te(`display.direction.${dir}`, 'ru')) {
+    return i18n.global.t(`display.direction.${dir}`)
+  }
+  return catalogDirectionLabelByValue.value?.[dir] ?? dir
+}
+
+/** direction value -> label for STORAGE (flattenMethods): the server
+ *  catalog's label is the canon, the ru seed covers a cold cache (the
+ *  historic storage vocabulary), the raw value is the last resort. */
+function canonicalDirectionLabel(dir: string): string {
+  return catalogDirectionLabelByValue.value?.[dir] ?? ruSeed.display?.direction?.[dir] ?? dir
+}
+
+/** style value -> label for STORAGE under a direction (same canon chain). */
+function canonicalStyleLabel(dirValue: string, styleValue: string): string {
+  return (
+    catalogStyleLabelByValue.value?.[dirValue]?.[styleValue] ??
+    ruSeed.practice?.styles?.[styleValue] ??
+    styleValue
+  )
 }
 
 /**
@@ -254,10 +288,10 @@ export function directionLabel(dir: string): string {
 export function flattenMethods(sel: MethodSelection): string[] {
   const result: string[] = []
   for (const dir of sel.directions) {
-    const label = directionLabel(dir)
+    const label = canonicalDirectionLabel(dir)
     const styles = sel.styles[dir] ?? []
     if (styles.length > 0) {
-      for (const st of styles) result.push(`${label}${SEP}${resolveStyleLabel(dir, st)}`)
+      for (const st of styles) result.push(`${label}${SEP}${canonicalStyleLabel(dir, st)}`)
     } else {
       result.push(label)
     }

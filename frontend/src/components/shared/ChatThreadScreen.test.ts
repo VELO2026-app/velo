@@ -21,6 +21,7 @@
 //   5. Bubble alignment: sender===me -> mine, else peer.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
@@ -98,7 +99,7 @@ function mount(): HTMLElement {
     threadId: THREAD_ID,
     peer: { user_id: 'peer-1', name: 'Анна Петрова', avatar_url: null },
     peerFallback: 'Мастер',
-  })
+  }).use(createTestI18n())
   app.use(pinia)
   app.mount(host)
   return host

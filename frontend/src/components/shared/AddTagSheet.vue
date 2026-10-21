@@ -15,27 +15,27 @@
 <template>
   <VBottomSheet
     :open="open"
-    title="Добавить тег"
-    save-label="Сохранить"
+    :title="t('tags.title')"
+    :save-label="t('ui.save')"
     @save="onSave"
     @close="$emit('close')"
   >
     <p class="add-tag__name">{{ studentName }}</p>
 
-    <VInput v-model="tag" label="Новый тег" placeholder="Введите тег" />
+    <VInput v-model="tag" :label="t('tags.newLabel')" :placeholder="t('tags.newPlaceholder')" />
 
     <template v-if="palette.length">
-      <p class="add-tag__label">Существующие теги</p>
+      <p class="add-tag__label">{{ t('tags.existing') }}</p>
       <div class="add-tag__chips">
         <VChip
-          v-for="t in palette"
-          :key="t"
+          v-for="existing in palette"
+          :key="existing"
           size="md"
           clickable
-          :active="tag.trim() === t"
-          @click="tag = t"
+          :active="tag.trim() === existing"
+          @click="tag = existing"
         >
-          {{ t }}
+          {{ existing }}
         </VChip>
       </div>
     </template>
@@ -43,11 +43,15 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, watch } from 'vue'
 import { VBottomSheet, VInput, VChip } from '@/components/ui'
 import { setStudentTag, getMyTags } from '@/api/groups'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
+
+// tz-i18n 2.2b: sheet copy via tags.* (ui.save); the palette loop var is
+// `existing` so it never shadows the i18n `t`.
 
 const props = defineProps<{
   open: boolean
@@ -80,11 +84,11 @@ watch(
 async function onSave(): Promise<void> {
   try {
     await setStudentTag(props.studentId, tag.value.trim() || null)
-    toast.success('Тег сохранён')
+    toast.success(t('tags.saved'))
     emit('saved')
     emit('close')
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось сохранить тег'))
+    toast.error(extractApiError(e, t('tags.saveFailed')))
   }
 }
 </script>

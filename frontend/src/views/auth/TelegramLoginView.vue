@@ -20,36 +20,51 @@
       <VeloLogo :size="120" />
     </div>
     <h1 class="login__title">VELΘ</h1>
-    <p class="login__message">Пространство для практики<br />и внутреннего развития</p>
-    <button
-      type="button"
-      class="login__button"
-      :disabled="starting"
-      @click="onLogin"
-    >
-      {{ starting ? 'Открываем Telegram…' : 'Войти через Telegram' }}
+    <p class="login__message">{{ t('auth.tagline1') }}<br />{{ t('auth.tagline2') }}</p>
+    <button type="button" class="login__button" :disabled="starting" @click="onLogin">
+      {{ starting ? t('auth.loginOpening') : t('auth.loginCta') }}
     </button>
     <p v-if="notice" class="login__notice" role="alert">{{ notice }}</p>
-    <p v-else class="login__hint">Тот же аккаунт, что в приложении VELO в Telegram</p>
+    <p v-else class="login__hint">{{ t('auth.sameAccount') }}</p>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, ref } from 'vue'
 import { VeloLogo } from '@/components/ui'
 import { useAuthStore } from '@/stores/auth'
 import { loginNotice, loginNoticeFor, type LoginNotice } from '@/composables/useAuth'
 
+// tz-i18n: phrases resolve per notice code from auth.notice.*.
 const PHRASES: Record<LoginNotice, string> = {
-  cancelled: 'Вход отменён.',
-  foreign: 'Вход начат в другом окне. Начните вход заново — здесь.',
-  expired: 'Ссылка входа устарела. Начните вход заново.',
-  telegram_failed: 'Telegram не подтвердил вход. Попробуйте ещё раз.',
-  not_configured: 'Вход через браузер на этом сервере не настроен.',
-  deactivated: 'Аккаунт отключён.',
-  rate_limited: 'Слишком много попыток. Подождите минуту.',
-  unavailable: 'Сервис временно недоступен. Попробуйте через минуту.',
-  network: 'Нет связи с сервером. Проверьте интернет и попробуйте снова.',
+  get cancelled(): string {
+    return t('auth.notice.cancelled')
+  },
+  get foreign(): string {
+    return t('auth.notice.foreign')
+  },
+  get expired(): string {
+    return t('auth.notice.expired')
+  },
+  get telegram_failed(): string {
+    return t('auth.notice.telegram_failed')
+  },
+  get not_configured(): string {
+    return t('auth.notice.not_configured')
+  },
+  get deactivated(): string {
+    return t('auth.notice.deactivated')
+  },
+  get rate_limited(): string {
+    return t('auth.notice.rate_limited')
+  },
+  get unavailable(): string {
+    return t('auth.notice.unavailable')
+  },
+  get network(): string {
+    return t('auth.notice.network')
+  },
 }
 
 const authStore = useAuthStore()

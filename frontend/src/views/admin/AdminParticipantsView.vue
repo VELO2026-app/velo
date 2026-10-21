@@ -17,7 +17,7 @@
   <div class="admin-list">
     <header class="admin-list__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-list__title">Участники</h1>
+      <h1 class="admin-list__title">{{ t('adminScreens.adminParticipants.title') }}</h1>
       <span class="admin-list__count">{{ headerCount }}</span>
     </header>
 
@@ -34,20 +34,32 @@
             <span class="prow__name">{{ p.name }}</span>
             <span v-if="p.telegram_id" class="prow__sub">ID {{ p.telegram_id }}</span>
             <span class="prow__meta">
-              Практик: {{ p.practices_count }} • с {{ joinedLabel(p.created_at) }}
+              {{
+                t('adminScreens.adminParticipants.joinedLine', {
+                  n: p.practices_count,
+                  since: joinedLabel(p.created_at),
+                })
+              }}
             </span>
-            <span v-if="p.last_login_at" class="prow__meta"
-              >Последняя: {{ lastActiveLabel(p.last_login_at) }}</span
-            >
+            <span v-if="p.last_login_at" class="prow__meta">{{
+              t('adminScreens.adminParticipants.lastSeen', {
+                label: lastActiveLabel(p.last_login_at),
+              })
+            }}</span>
           </span>
-          <button type="button" class="prow__msg" aria-label="Написать" @click="messageStub">
+          <button
+            type="button"
+            class="prow__msg"
+            :aria-label="t('adminScreens.adminParticipants.messageAria')"
+            @click="messageStub"
+          >
             <IconMessages :size="22" />
           </button>
         </div>
       </div>
 
       <div v-if="hasMore" class="admin-list__more">
-        <VButton variant="outline" @click="loadMore">Показать ещё</VButton>
+        <VButton variant="outline" @click="loadMore">{{ t('common.showMore') }}</VButton>
       </div>
     </template>
 
@@ -57,21 +69,22 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      title="Не удалось загрузить участников"
-      description="Проверьте соединение и попробуйте ещё раз"
+      :title="t('adminScreens.adminParticipants.toast.loadMembersFailed')"
+      :description="t('common.checkConnection')"
     >
       <template #action
-        ><VButton variant="primary" @click="load(true)">Повторить</VButton></template
+        ><VButton variant="primary" @click="load(true)">{{ t('common.retry') }}</VButton></template
       >
     </VEmptyState>
 
     <VCard v-else-if="!loading">
-      <p class="admin-list__empty">Данных пока нет</p>
+      <p class="admin-list__empty">{{ t('common.noData') }}</p>
     </VCard>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { VBackButton, VSegment, VButton, VCard, VEmptyState } from '@/components/ui'
@@ -108,9 +121,13 @@ const headerCount = computed<string>(() =>
 )
 
 const segOptions = computed<SegmentOption[]>(() => [
-  { value: 'all', label: 'Все', badge: totalCount.value ?? undefined },
-  { value: 'new', label: 'Новые' },
-  { value: 'active', label: 'Активные' },
+  {
+    value: 'all',
+    label: t('common.all'),
+    badge: totalCount.value ?? undefined,
+  },
+  { value: 'new', label: t('adminScreens.adminParticipants.new') },
+  { value: 'active', label: t('adminScreens.adminParticipants.active') },
 ])
 
 async function load(reset: boolean): Promise<void> {
@@ -123,10 +140,10 @@ async function load(reset: boolean): Promise<void> {
     total.value = res.total
     participants.value = reset ? res.items : [...participants.value, ...res.items]
   } catch {
-    toast.error('Не удалось загрузить участников')
+    toast.error(t('adminScreens.adminParticipants.toast.loadMembersFailed'))
     // A failed initial/filter load (reset) means the list below is genuinely
     // unknown, not empty -- render the real error state (W12) instead of
-    // falling through to "Данных пока нет". A failed loadMore leaves the
+    // falling through to t('common.noData'). A failed loadMore leaves the
     // already-loaded page visible; the toast is enough there.
     if (reset) error.value = true
   } finally {
@@ -141,7 +158,7 @@ function loadMore(): void {
   void load(false)
 }
 
-// "Дек 2025" — registration month, from created_at (UTC).
+// t('adminScreens.adminParticipants.dek-2025') — registration month, from created_at (UTC).
 function joinedLabel(iso: string): string {
   const d = new Date(iso)
   const month = new Intl.DateTimeFormat('ru-RU', { month: 'short', timeZone: 'UTC' })
@@ -150,14 +167,14 @@ function joinedLabel(iso: string): string {
   return `${month.charAt(0).toUpperCase()}${month.slice(1)} ${d.getUTCFullYear()}`
 }
 
-// "Сегодня" / "Вчера" / "24 января" — last app-open, from last_login_at.
+// t('adminScreens.adminParticipants.joinedToday') / t('adminScreens.adminParticipants.vchera') / t('adminScreens.adminParticipants.dateExample') — last app-open, from last_login_at.
 function lastActiveLabel(iso: string): string {
   return dayLabelOf(iso)
 }
 
 // No admin->user messaging endpoint yet -> stub toast (build-full-design).
 function messageStub(): void {
-  toast.info('Сообщения пока недоступны')
+  toast.info(t('adminScreens.adminParticipants.messagesUnavailable'))
 }
 </script>
 

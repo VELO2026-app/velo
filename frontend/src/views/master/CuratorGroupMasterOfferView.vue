@@ -46,29 +46,37 @@ lines — counts only, by the same ruling.
       <!-- School page in flight -->
       <template v-if="loading">
         <VLoader size="lg" />
-        <p class="master-offer__subtitle">Проверяем приглашение…</p>
+        <p class="master-offer__subtitle">
+          {{ t('common.inviteChecking') }}
+        </p>
       </template>
 
       <!-- Transient (network/timeout): a retry, not a verdict. -->
       <template v-else-if="transientError">
-        <h2 class="master-offer__title">Не удалось проверить приглашение</h2>
+        <h2 class="master-offer__title">
+          {{ t('common.inviteCheckFailed') }}
+        </h2>
         <p class="master-offer__subtitle">
-          Проблема с соединением. Проверьте интернет и попробуйте ещё раз.
+          {{ t('common.connProblem') }}
         </p>
         <div class="master-offer__actions">
-          <VButton variant="primary" block :loading="loading" @click="load"> Повторить </VButton>
+          <VButton variant="primary" block :loading="loading" @click="load">{{
+            t('common.retry')
+          }}</VButton>
         </div>
       </template>
 
       <!-- The school is dark/gone, or the reader is no longer a member. -->
       <template v-else-if="gone">
-        <h2 class="master-offer__title">Приглашение недействительно</h2>
+        <h2 class="master-offer__title">
+          {{ t('masterScreens.curatorGroupMasterOffer.invalid.title') }}
+        </h2>
         <p class="master-offer__subtitle">
-          Возможно, школа недоступна или приглашение было отменено.
+          {{ t('masterScreens.curatorGroupMasterOffer.unavailable') }}
         </p>
         <div class="master-offer__actions">
           <VButton variant="primary" block @click="router.replace({ name: 'root' })">
-            На главную
+            {{ t('common.backHome') }}
           </VButton>
         </div>
       </template>
@@ -78,21 +86,22 @@ lines — counts only, by the same ruling.
         <h2 class="master-offer__title">{{ offerGoneTitle }}</h2>
         <div class="master-offer__actions">
           <VButton variant="primary" block @click="router.replace({ name: 'root' })">
-            На главную
+            {{ t('common.backHome') }}
           </VButton>
         </div>
       </template>
 
       <!-- The caller's master verification lapsed since the offer. -->
       <template v-else-if="verificationRequired">
-        <h2 class="master-offer__title">Нужна верификация мастера</h2>
+        <h2 class="master-offer__title">
+          {{ t('masterScreens.curatorGroupMasterOffer.verificationNeeded') }}
+        </h2>
         <p class="master-offer__subtitle">
-          Чтобы принять предложение школы, нужно подтверждение мастера платформы. Подайте заявку или
-          дождитесь решения по уже поданной. Предложение школы сохранится.
+          {{ t('masterScreens.curatorGroupMasterOffer.verifyingNote') }}
         </p>
         <div class="master-offer__actions">
           <VButton variant="primary" block @click="router.replace({ name: 'master-apply' })">
-            Подать заявку
+            {{ t('masterScreens.curatorGroupMasterOffer.apply') }}
           </VButton>
         </div>
       </template>
@@ -107,7 +116,7 @@ lines — counts only, by the same ruling.
           :masters-count="page.masters_count"
           :description="page.description"
           :curator-name="page.curator.display_name"
-          heading="Приглашение стать мастером школы!"
+          :heading="t('masterScreens.curatorGroupMasterOffer.invited.title')"
         />
         <div class="master-offer__actions">
           <VButton
@@ -117,7 +126,7 @@ lines — counts only, by the same ruling.
             :disabled="declining"
             @click="accept"
           >
-            Принять
+            {{ t('masterScreens.curatorGroupMasterOffer.accept') }}
           </VButton>
           <VButton
             variant="outline"
@@ -126,7 +135,7 @@ lines — counts only, by the same ruling.
             :disabled="accepting"
             @click="decline"
           >
-            Отказаться
+            {{ t('masterScreens.curatorGroupMasterOffer.decline') }}
           </VButton>
         </div>
       </template>
@@ -135,6 +144,7 @@ lines — counts only, by the same ruling.
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -197,7 +207,9 @@ async function accept(): Promise<void> {
   accepting.value = true
   try {
     await acceptCuratorGroupMasterOffer(page.value.id)
-    toast.success(`Вы теперь мастер школы «${page.value.name}»`)
+    toast.success(
+      t('masterScreens.curatorGroupMasterOffer.acceptedToast', { name: page.value.name }),
+    )
     void router.replace(schoolRoute(page.value.id))
   } catch (e) {
     if (e instanceof ApiResponseError) {
@@ -215,7 +227,7 @@ async function accept(): Promise<void> {
         return
       }
     }
-    toast.error(extractApiError(e, 'Не удалось принять приглашение. Попробуйте ещё раз.'))
+    toast.error(extractApiError(e, t('masterScreens.curatorGroupMasterOffer.toast.acceptFailed')))
   } finally {
     accepting.value = false
   }
@@ -226,14 +238,14 @@ async function decline(): Promise<void> {
   declining.value = true
   try {
     await declineCuratorGroupMasterOffer(page.value.id)
-    toast.success('Предложение отклонено')
+    toast.success(t('masterScreens.curatorGroupMasterOffer.toast.declined'))
     // FE-67: BOTH decisions end on the school page — the decliner stays a
     // member of the school they were just offered a role in.
     void router.replace(schoolRoute(page.value.id))
   } catch (e) {
     // Decline answers 204 even when it was not yours — anything here is a
     // transport problem, so the screen stays and the toast says what happened.
-    toast.error(extractApiError(e, 'Не удалось отказаться. Попробуйте ещё раз.'))
+    toast.error(extractApiError(e, t('masterScreens.curatorGroupMasterOffer.toast.declineFailed')))
   } finally {
     declining.value = false
   }

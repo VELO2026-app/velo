@@ -48,6 +48,7 @@
 //    test; the single-click path is what's covered.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
@@ -122,7 +123,7 @@ let pinia: Pinia
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(MasterProfileView)
+  app = createApp(MasterProfileView).use(createTestI18n())
   app.use(pinia)
   app.mount(host)
   return host
@@ -337,7 +338,7 @@ describe('MasterProfileView', () => {
       ['Мои промокоды', { name: 'master-promocodes' }],
       ['Вывод средств', { name: 'master-finance' }],
       ['Уведомления', { name: 'master-notifications' }],
-      ['Часовой пояс', { name: 'master-timezone' }],
+      ['Язык и часовой пояс', { name: 'master-timezone' }],
       ['Поддержка', { name: 'master-support' }],
     ] as const)('%s pushes %o', async (label, target) => {
       mount()

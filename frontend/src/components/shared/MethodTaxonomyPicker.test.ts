@@ -20,6 +20,7 @@
 // @vue/test-utils usage; plugin-vue (vitest.config) compiles the .vue for us.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import MethodTaxonomyPicker from '@/components/shared/MethodTaxonomyPicker.vue'
@@ -41,7 +42,7 @@ function mount(modelValue: string[]): HTMLElement {
   app = createApp(MethodTaxonomyPicker, {
     modelValue,
     'onUpdate:modelValue': () => {},
-  })
+  }).use(createTestI18n())
   app.mount(host)
   return host
 }

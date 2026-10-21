@@ -21,7 +21,7 @@
   <div class="admin-withdrawals">
     <header class="admin-withdrawals__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-withdrawals__title">Выплаты</h1>
+      <h1 class="admin-withdrawals__title">{{ t('adminScreens.adminWithdrawals.title') }}</h1>
       <span class="admin-withdrawals__count">{{ headerCount }}</span>
     </header>
 
@@ -34,11 +34,11 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      title="Не удалось загрузить"
-      description="Проверьте соединение и попробуйте ещё раз"
+      :title="t('common.loadFailed')"
+      :description="t('common.checkConnection')"
     >
       <template #action
-        ><VButton variant="primary" @click="loadInitial">Повторить</VButton></template
+        ><VButton variant="primary" @click="loadInitial">{{ t('common.retry') }}</VButton></template
       >
     </VEmptyState>
 
@@ -46,8 +46,8 @@
     <VEmptyState
       v-else-if="items.length === 0"
       icon="success"
-      title="Запросов на вывод нет"
-      description="Новые запросы мастеров появятся здесь"
+      :title="t('adminScreens.adminWithdrawals.empty.title')"
+      :description="t('adminScreens.adminWithdrawals.empty.text')"
     />
 
     <template v-else>
@@ -73,14 +73,16 @@
           </div>
           <div class="wrow__right">
             <span class="wrow__time">{{ formatRelative(w.created_at) }}</span>
-            <span class="wrow__net">К получению {{ net(w) }}</span>
+            <span class="wrow__net">{{
+              t('adminScreens.adminWithdrawals.toReceive', { amount: net(w) })
+            }}</span>
           </div>
         </VCard>
       </div>
 
       <div v-if="hasMore" class="admin-withdrawals__more">
         <VButton variant="outline" block :loading="loadingMore" @click="loadMore">
-          Показать ещё
+          {{ t('common.showMore') }}
         </VButton>
       </div>
     </template>
@@ -88,6 +90,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { toHistoryState } from '@/utils/historySnapshot'
 import { ref, computed, onMounted, type Component } from 'vue'
 import { useRouter } from 'vue-router'
@@ -124,9 +127,9 @@ function statusIcon(s: WithdrawalStatus): Component {
   return STATUS_ICON[s]
 }
 const STATUS_LABEL: Record<WithdrawalStatus, string> = {
-  pending: 'На рассмотрении',
-  approved: 'Одобрен',
-  rejected: 'Отклонён',
+  pending: t('adminScreens.adminWithdrawals.status.pending'),
+  approved: t('adminScreens.adminWithdrawals.approved'),
+  rejected: t('adminScreens.adminWithdrawals.statusRejected'),
 }
 function statusLabel(s: WithdrawalStatus): string {
   return STATUS_LABEL[s] ?? s
@@ -150,7 +153,7 @@ function str(v: unknown): string {
 function methodLabel(p: PayoutDetails): string {
   const d = p.details ?? {}
   if (p.method === 'bank_transfer') {
-    const bank = str(d.bank_name) || 'Банк'
+    const bank = str(d.bank_name) || t('adminScreens.adminWithdrawals.bank')
     const acc = (str(d.iban) || str(d.account)).replace(/\s+/g, '')
     const tail = acc ? acc.slice(-4) : ''
     return tail ? `${bank} •••• ${tail}` : bank
@@ -189,7 +192,7 @@ async function loadInitial(): Promise<void> {
   } catch (e) {
     if (myGeneration !== generation) return
     error.value = true
-    toast.error(extractApiError(e, 'Ошибка загрузки выплат'))
+    toast.error(extractApiError(e, t('adminScreens.adminWithdrawals.withdrawalsLoadError')))
   } finally {
     if (myGeneration === generation) loading.value = false
   }
@@ -202,7 +205,7 @@ async function loadMore(): Promise<void> {
     items.value.push(...res.items)
     hasMore.value = items.value.length < res.total
   } catch (e) {
-    toast.error(extractApiError(e, 'Ошибка загрузки'))
+    toast.error(extractApiError(e, t('common.loadError')))
   } finally {
     loadingMore.value = false
   }

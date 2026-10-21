@@ -39,6 +39,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -90,7 +91,7 @@ async function load(): Promise<void> {
     reviews.value = r.items
   } catch (e) {
     summary.value = null
-    error.value = extractApiError(e, 'Попробуйте ещё раз')
+    error.value = extractApiError(e, t('common.tryAgain'))
   } finally {
     loading.value = false
   }
@@ -103,7 +104,7 @@ async function loadMorePairs(): Promise<void> {
     const page = await getPracticeAnalyticsPairs(practiceId.value, PAGE, pairs.value.length)
     pairs.value = [...pairs.value, ...page.items]
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось загрузить ещё'))
+    toast.error(extractApiError(e, t('masterScreens.practiceReviews.loadMoreFailed')))
   } finally {
     loadingMorePairs.value = false
   }
@@ -116,7 +117,7 @@ async function loadMoreReviews(): Promise<void> {
     const page = await getPracticeAnalyticsReviews(practiceId.value, PAGE, reviews.value.length)
     reviews.value = [...reviews.value, ...page.items]
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось загрузить ещё'))
+    toast.error(extractApiError(e, t('masterScreens.practiceReviews.loadMoreFailed')))
   } finally {
     loadingMoreReviews.value = false
   }

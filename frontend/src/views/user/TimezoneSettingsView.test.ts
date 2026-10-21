@@ -73,11 +73,13 @@
 // `Intl.DateTimeFormat`) falls back to FALLBACK_TIMEZONE 'UTC', and 'UTC' --
 // no curated row, no catalog row -- renders as its own active row.
 //
-// LANGUAGE SECTION -- REMOVED (operator 2026-09-17): the one-option «Русский»
-// stub advertised a switch that cannot happen (no i18n, none planned yet), so
-// the section, its handler and its tests are gone from this screen. A switcher
-// returns together with real i18n; until then `user.language` is never written
-// from here. TIMEZONE + DATE FORMAT behaviour is unchanged.
+// LANGUAGE SECTION -- RETURNED (tz-i18n phase 5): rows from availableLocales()
+// (ru + en today), optimistic switch via the REAL module setLocale + PATCH
+// user.language through updateProfile, revert + toast on failure -- the same
+// optimistic/revert contract as the timezone row. NB: the view calls setLocale
+// on the REAL @/locales singleton (the app itself mounts on createTestI18n),
+// so the language tests reset the singleton back to ru in afterEach to keep
+// the rest of this file's Russian text assertions stable.
 //
 // MONEY: none on this screen. Nothing to NBSP-guard.
 //
@@ -87,7 +89,9 @@
 // fresh Pinia.
 // =============================================================================
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { createTestI18n } from '@/locales/testing'
+import { setLocale } from '@/locales'
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import TimezoneSettingsView from '@/views/user/TimezoneSettingsView.vue'
@@ -148,7 +152,7 @@ let pinia: Pinia
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(TimezoneSettingsView)
+  app = createApp(TimezoneSettingsView).use(createTestI18n())
   app.use(pinia)
   app.mount(host)
   return host
@@ -190,7 +194,8 @@ beforeEach(() => {
   toastInfo.mockReset()
 })
 
-afterEach(() => {
+afterEach(async () => {
+  await setLocale('ru') // the real-module singleton the view switches (see banner)
   app?.unmount()
   host?.remove()
   app = null
@@ -338,5 +343,84 @@ describe('TimezoneSettingsView', () => {
       expect(active).toHaveLength(1)
       expect(active[0]?.textContent).toContain('UTC')
     })
+  })
+})
+
+// =============================================================================
+// Language section (returned, tz-i18n phase 5)
+// =============================================================================
+function langRow(label: string): HTMLButtonElement | undefined {
+  return Array.from(host?.querySelectorAll<HTMLButtonElement>('.tz-settings__lang') ?? []).find(
+    (r) => r.querySelector('.tz-settings__lang-label')?.textContent?.trim() === label,
+  )
+}
+
+describe('language: optimistic switch with revert on failure', () => {
+  // The FIRST lazy locale load resolves through macro tasks (vite dynamic
+  // JSON imports), which a nextTick-only flush never waits for. Warm the
+  // module once (loaders resolve, loadedLocales caches) so the handlers'
+  // setLocale calls settle in microtasks like the rest of the suite.
+  beforeAll(async () => {
+    await setLocale('en')
+    await setLocale('ru')
+  })
+
+  async function flushLang(): Promise<void> {
+    for (let i = 0; i < 60; i++) await nextTick()
+  }
+  it('renders exactly the catalog-backed locales (ru + en + uk today, no de/es stubs)', async () => {
+    mount()
+    await flush()
+
+    const labels = Array.from(host?.querySelectorAll('.tz-settings__lang-label') ?? []).map((l) =>
+      l.textContent?.trim(),
+    )
+    expect(labels).toEqual(['Русский', 'English', 'Українська'])
+    // de/es have no catalogs -- the switcher never advertises fallback-only
+    // locales (the old «появится позже» stub pattern is deliberately gone).
+    expect(labels).not.toContain('Deutsch')
+    expect(labels).not.toContain('Español')
+    expect(langRow('Русский')?.classList.contains('tz-settings__lang--active')).toBe(true)
+  })
+
+  it('success: tapping English switches optimistically, PATCHes user.language, toasts, marks the row active', async () => {
+    mount()
+    await flush()
+
+    langRow('English')?.click()
+    await flushLang()
+
+    expect(usersApi.updateMe).toHaveBeenCalledWith({ language: 'en' })
+    // The optimistic switch runs BEFORE the toast -- the whole screen (this
+    // toast included) is already in the NEW locale: 'Language saved', not
+    // «Язык сохранён». The failure twin below toasts in the OLD locale
+    // because the revert precedes its toast.
+    expect(toastInfo).toHaveBeenCalledWith('Language saved')
+    expect(langRow('English')?.classList.contains('tz-settings__lang--active')).toBe(true)
+    expect(langRow('Русский')?.classList.contains('tz-settings__lang--active')).toBe(false)
+  })
+
+  it('failure: reverts the row AND the locale, toasts the error', async () => {
+    vi.mocked(usersApi.updateMe).mockRejectedValue(new Error('ECONNRESET'))
+    mount()
+    await flush()
+
+    langRow('English')?.click()
+    await flushLang()
+
+    expect(toastError).toHaveBeenCalledWith('Не удалось сохранить язык')
+    expect(langRow('Русский')?.classList.contains('tz-settings__lang--active')).toBe(true)
+    expect(langRow('English')?.classList.contains('tz-settings__lang--active')).toBe(false)
+  })
+
+  it('re-tapping the already-active language is a no-op: no PATCH, no toast', async () => {
+    mount()
+    await flush()
+
+    langRow('Русский')?.click()
+    await flushLang()
+
+    expect(usersApi.updateMe).not.toHaveBeenCalled()
+    expect(toastInfo).not.toHaveBeenCalled()
   })
 })

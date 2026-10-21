@@ -1,0 +1,122 @@
+{
+  "errors": {
+    "bot_url_not_configured": "Invite links are temporarily unavailable. Please contact support.",
+    "direction_not_confirmed": "This direction has not been confirmed in your profile yet",
+    "style_not_confirmed": "This practice style has not been confirmed in your profile yet",
+    "group_in_use": "This group is the only audience of one of your practices. Change the practice audience first, then delete the group.",
+    "invite_invalid": "The invite is single-use: it may have been used already or the link is broken. Request a new link from the administrator.",
+    "insufficient_balance": "Not enough funds on your balance",
+    "zoom_sdk_not_configured": "Zoom sign-in is not set up on this server yet",
+    "zoom_entry_not_joinable": "This practice cannot be joined right now",
+    "zoom_unavailable": "Zoom did not respond. Try again in a minute",
+    "zoom_host_token_unavailable": "Zoom did not let the meeting start. Try again; if it repeats, contact support",
+    "already_master": "You are already a master",
+    "master_offer_not_found": "The appointment is invalid or has been cancelled",
+    "blocked_by_master": "The master of this practice has blocked you",
+    "master_profile_not_found": "Master profile not found",
+    "master_profile_not_verified": "The master profile has not been verified yet",
+    "method_change_pending": "A method change request is already under review",
+    "not_a_student": "This practice is only available to the master's students",
+    "not_in_audience": "This practice is not available for your group",
+    "practice_completed": "This practice has already completed — the booking cannot be cancelled",
+    "practice_not_found": "Practice not found",
+    "role_not_allowed": "This role is not available for your account",
+    "no_active_booking": "You have no confirmed booking for this practice",
+    "checkin_window_closed": "Check-in is closed — the practice has already started",
+    "checkin_window_not_open": "Check-in is not open yet — it opens closer to the practice start",
+    "curator_group_name_taken": "You already have a school with this name",
+    "group_creation_not_allowed": "Only a master granted this right by the administrator can create schools",
+    "curator_cannot_leave": "A curator cannot leave their own school. Transfer it to another master or delete it.",
+    "own_group": "This is your own school",
+    "master_required": "Only a verified master can be appointed as a school's master",
+    "blocked_by_curator": "Joining this school is not available",
+    "blocked_in_group": "You are blocked in this school",
+    "cannot_block_curator": "A school's curator cannot be blocked",
+    "master_id_requires_school": "Choose the school the practice is created in",
+    "master_not_in_school": "This master is not in the school or is not verified",
+    "curator_only": "Only a school's curator can create a practice on the master's behalf",
+    "curator_cannot_add_occurrence": "A curator cannot add a session to a master's series",
+    "curator_group_not_usable": "The school is unavailable: it is disabled or you are no longer a member",
+    "transfer_pending": "The offer has already been sent. Cancel it first, then invite another master.",
+    "invite_not_found": "The invite is invalid",
+    "transfer_not_found": "The transfer offer was not found",
+    "transfer_target_not_member": "A school can only be transferred to a master who is a member of it",
+    "reflection_not_available": "You can only share after a missed practice",
+    "reflection_already_submitted": "You have already shared — thank you",
+    "mcp_token_limit_reached": "There are already 10 active tokens — revoke an unneeded one to create a new",
+    "mcp_token_not_found": "Token not found — refresh the list",
+    "mcp_token_name_taken": "A token with this name already exists — choose another",
+    "unauthorized": "Your session has expired — log in again",
+    "not_found": "The requested resource was not found",
+    "forbidden": "The action is not available",
+    "conflict": "Conflict with the current state — try refreshing the page",
+    "bad_request": "Invalid request",
+    "internal_error": "Internal server error. Try again",
+    "validation_error": "Check the entered data",
+    "generic": "Something went wrong. Try again."
+  },
+  "transcription": {
+    "generic": "The transcription service is unavailable",
+    "transcription_not_configured": "Voice input is unavailable",
+    "transcription_unavailable": "The transcription service is unavailable",
+    "transcription_failed": "The transcription service is unavailable",
+    "speech_not_recognized": "Could not recognize the speech",
+    "audio_too_large": "The recording is too long",
+    "audio_invalid": "Could not process the recording",
+    "unauthorized": "Your session has expired, log in again"
+  },
+  "storeErrors": {
+    "admin": {
+      "dashboard": "Failed to load the statistics",
+      "overview": "Failed to load the period statistics"
+    },
+    "bookings": {
+      "selected": "Failed to load the booking",
+      "upcoming": "Failed to load the nearest practice",
+      "cancel": "Failed to cancel the booking",
+      "join": "Failed to join the practice",
+      "leave": "Failed to leave the practice",
+      "skipCheckin": "Failed to skip the check-in"
+    },
+    "master": {
+      "profile": "Failed to load the master profile"
+    },
+    "calendar": {
+      "schoolPractices": "Failed to load the school's practices",
+      "calendar": "Failed to load the calendar"
+    },
+    "practices": {
+      "selected": "Failed to load the practice"
+    },
+    "diary": {
+      "sendCheckin": "Failed to send the check-in",
+      "sendFeedback": "Failed to send the feedback",
+      "send": "Failed to send",
+      "saveEvent": "Failed to save the event",
+      "jump": "Failed to open the entry",
+      "loadEntries": "Failed to load the entries",
+      "entryNotFound": "Entry not found",
+      "create": "Failed to create the entry",
+      "update": "Failed to update the entry",
+      "delete": "Failed to delete the entry",
+      "restore": "Failed to restore the entry",
+      "insights": "Failed to load the analytics"
+    }
+  },
+  "report": {
+    "title": "Report a user",
+    "reasonBand": "Reason:",
+    "placeholder": "Describe what happened — it helps us understand the situation",
+    "note": "The report goes to support. We may contact you to clarify the details.",
+    "tooLong": "Too long ({have} of {max} characters) — shorten the comment",
+    "sent": "The report has been sent to support",
+    "sendFailed": "Failed to send the report",
+    "reasons": {
+      "disrupted_practice": "Missed the practice",
+      "spam": "Spam or advertising",
+      "abuse": "Insults, inappropriate behavior",
+      "fraud": "Fraud",
+      "other": "Other"
+    }
+  }
+}

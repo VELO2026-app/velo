@@ -42,17 +42,17 @@
 <template>
   <VBottomSheet
     :open="open"
-    title="Сообщить о пользователе"
+    :title="t('report.title')"
     compact-title
-    cancel-label="Отмена"
-    save-label="Отправить"
+    :cancel-label="t('ui.cancel')"
+    :save-label="t('common.submitSend')"
     :save-disabled="selectedReasons.size === 0"
     @save="onSend"
     @close="$emit('close')"
   >
     <TargetUserCard :name="studentName" :avatar-url="studentAvatarUrl" class="report-user__card" />
 
-    <div class="report-user__reason-band">Причина:</div>
+    <div class="report-user__reason-band">{{ t('report.reasonBand') }}</div>
     <div class="report-user__reasons">
       <button
         v-for="r in REASONS"
@@ -69,25 +69,24 @@
         >
           <IconCheck v-if="selectedReasons.has(r)" class="report-user__reason-check" :size="12" />
         </span>
-        <span class="report-user__reason-label">{{ r }}</span>
+        <span class="report-user__reason-label">{{ t(`report.reasons.${r}`) }}</span>
       </button>
     </div>
 
     <VTextarea
       v-model="comment"
-      placeholder="Опишите, что произошло, это поможет нам разобраться"
+      :placeholder="t('report.placeholder')"
       :rows="4"
       bordered-at-rest
       class="report-user__textarea"
     />
 
-    <p class="report-user__note">
-      Заявка уйдёт в поддержку. Мы можем связаться с вами, чтобы уточнить детали.
-    </p>
+    <p class="report-user__note">{{ t('report.note') }}</p>
   </VBottomSheet>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, watch } from 'vue'
 import { VBottomSheet, VTextarea } from '@/components/ui'
 import { IconCheck } from '@/components/icons'
@@ -95,6 +94,14 @@ import TargetUserCard from '@/components/shared/TargetUserCard.vue'
 import { createReport } from '@/api/reports'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
+import { REASON_CODES, type ReportReasonCode } from '@/utils/reportReasons'
+
+// tz-i18n (owner ruling: no locale literals in code): reasons are CODES --
+// the selection Set and the backend payload carry codes, the visible labels
+// come from report.reasons.*. The admin detail view decodes known codes back
+// to localized labels; legacy records (free text) render verbatim.
+// Codes themselves live in utils/reportReasons.ts (shared with the admin
+// decoder).
 
 const props = defineProps<{
   open: boolean
@@ -107,13 +114,9 @@ const emit = defineEmits<{ close: []; sent: [] }>()
 
 const toast = useToast()
 
-const REASONS = [
-  'Сорвал практику',
-  'Спам или реклама',
-  'Оскорбления, неподобающее поведение',
-  'Мошенничество',
-  'Другое',
-] as const
+const REASONS = REASON_CODES
+
+type ReasonCode = ReportReasonCode
 
 // Backend cap (reports/schemas.py, Navigator-verified): reason: str =
 // Field(min_length=1, max_length=2000). Several selected reasons joined
@@ -121,7 +124,7 @@ const REASONS = [
 // silently truncated.
 const REASON_MAX_LENGTH = 2000
 
-const selectedReasons = ref<Set<string>>(new Set())
+const selectedReasons = ref<Set<ReasonCode>>(new Set())
 const comment = ref('')
 
 watch(
@@ -134,7 +137,7 @@ watch(
   },
 )
 
-function toggleReason(r: string): void {
+function toggleReason(r: ReasonCode): void {
   const next = new Set(selectedReasons.value)
   if (next.has(r)) next.delete(r)
   else next.add(r)
@@ -147,18 +150,16 @@ async function onSend(): Promise<void> {
   const trimmedComment = comment.value.trim()
   const reason = trimmedComment ? `${reasonList} — ${trimmedComment}` : reasonList
   if (reason.length > REASON_MAX_LENGTH) {
-    toast.error(
-      `Слишком длинно (${reason.length} из ${REASON_MAX_LENGTH} символов) — сократите комментарий`,
-    )
+    toast.error(t('report.tooLong', { have: reason.length, max: REASON_MAX_LENGTH }))
     return
   }
   try {
     await createReport({ target_type: 'user', target_id: props.studentId, reason })
-    toast.success('Заявка отправлена в поддержку')
+    toast.success(t('report.sent'))
     emit('sent')
     emit('close')
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось отправить заявку'))
+    toast.error(extractApiError(e, t('report.sendFailed')))
   }
 }
 </script>

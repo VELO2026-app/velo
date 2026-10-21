@@ -27,19 +27,24 @@
       <img v-if="modelValue" :src="modelValue" class="sbp__img" alt="" />
       <span v-else class="sbp__zone">
         <IconCamera :size="22" />
-        <span>+ Загрузить фото</span>
+        <span>{{ t('school.bannerUpload') }}</span>
       </span>
       <span v-if="modelValue" class="sbp__actions">
         <!-- .stop keeps the inner buttons from re-triggering the label's
              file dialog; each button drives the input explicitly. -->
-        <button type="button" class="sbp__action" @click.stop="inputEl?.click()">Заменить</button>
-        <button type="button" class="sbp__action" @click.stop="onRemove">Убрать</button>
+        <button type="button" class="sbp__action" @click.stop="inputEl?.click()">
+          {{ t('school.bannerReplace') }}
+        </button>
+        <button type="button" class="sbp__action" @click.stop="onRemove">
+          {{ t('school.bannerRemove') }}
+        </button>
       </span>
     </span>
   </label>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { onBeforeUnmount, ref } from 'vue'
 import { IconCamera } from '@/components/icons'
 

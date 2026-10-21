@@ -12,8 +12,8 @@
 <template>
   <VBottomSheet
     :open="open"
-    :title="title"
-    save-label="Сохранить"
+    :title="title ?? t('timePicker.title')"
+    :save-label="t('ui.save')"
     @save="save"
     @close="$emit('close')"
   >
@@ -25,6 +25,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, watch } from 'vue'
 import { VBottomSheet, VWheel } from '@/components/ui'
 
@@ -35,7 +36,7 @@ const props = withDefaults(
     /** Sheet heading — defaults to the practice-form label; override for reuse. */
     title?: string
   }>(),
-  { modelValue: '', title: 'Время практики' },
+  { modelValue: '' },
 )
 
 const emit = defineEmits<{

@@ -20,10 +20,11 @@
 -->
 
 <template>
-  <img class="ph" :src="art" :alt="title ?? 'Практика'" />
+  <img class="ph" :src="art" :alt="title ?? t('practice.placeholderAlt')" />
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed } from 'vue'
 import meditation from '@/assets/practice-cards/meditation.svg'
 import yoga from '@/assets/practice-cards/yoga.svg'

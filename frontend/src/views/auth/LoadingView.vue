@@ -14,7 +14,7 @@
     <!-- A11Y-AUDIT-20260810 P1: no visible title (the logo carries the wordmark) --
          sr-only heading so screen-reader users navigating by heading still get a
          page label for this screen. -->
-    <h1 class="velo-sr-only">Загрузка</h1>
+    <h1 class="velo-sr-only">{{ t('auth.loading') }}</h1>
     <div class="loading__logo">
       <VeloLogo variant="white" :size="440" spin />
     </div>
@@ -27,6 +27,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { VeloLogo } from '@/components/ui'
 </script>
 

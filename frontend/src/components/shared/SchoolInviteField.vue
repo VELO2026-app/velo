@@ -47,7 +47,7 @@
     <button
       type="button"
       class="sif__copy"
-      aria-label="Скопировать ссылку-приглашение"
+      :aria-label="t('school.inviteCopyAria')"
       :disabled="copying"
       @click="onCopy"
     >
@@ -64,7 +64,7 @@
 
       <span class="sif__label">
         <IconLink :size="20" class="sif__glyph" />
-        Ссылка-приглашение
+        {{ t('school.inviteLabel') }}
       </span>
 
       <!-- The mock's disc: the bubble's own lobe painted PRIMARY, the
@@ -77,9 +77,12 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { onMounted, ref } from 'vue'
 import { createCuratorGroupInvite } from '@/api/curatorGroups'
 import { extractApiError } from '@/composables/useApiError'
+
+// tz-i18n 2.2b: chip label/copy-aria + result toasts via school.*.
 import { useToast } from '@/composables/useToast'
 import { IconCopy, IconLink } from '@/components/icons'
 
@@ -103,7 +106,7 @@ async function load(): Promise<void> {
     const res = await createCuratorGroupInvite(props.groupId)
     inviteUrl.value = res.invite_url
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось получить ссылку'))
+    toast.error(extractApiError(e, t('school.inviteFetchFailed')))
   }
 }
 
@@ -119,9 +122,9 @@ async function onCopy(): Promise<void> {
       inviteUrl.value = res.invite_url
     }
     await navigator.clipboard.writeText(inviteUrl.value)
-    toast.success('Ссылка скопирована')
+    toast.success(t('common.linkCopied'))
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось скопировать ссылку'))
+    toast.error(extractApiError(e, t('school.copyFailed')))
   } finally {
     copying.value = false
   }

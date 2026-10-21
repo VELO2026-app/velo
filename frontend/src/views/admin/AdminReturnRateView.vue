@@ -21,32 +21,39 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      title="Не удалось загрузить метрику"
+      :title="t('adminScreens.adminCommon.loadMetricFailed')"
       :description="error"
     >
-      <VButton size="sm" variant="outline" @click="load">Повторить</VButton>
+      <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
     </VEmptyState>
 
     <template v-else>
-      <VMetricHero :value="returnRate" label="Возвращаются повторно">
+      <VMetricHero :value="returnRate" :label="t('adminScreens.adminReturnRate.returnRate')">
         <template #icon><IconRepeat :size="28" /></template>
       </VMetricHero>
 
       <div class="admin-detail__stats2">
-        <VStatCard :value="totalUsers" label="Всего пользователей" />
-        <VStatCard :value="returning" label="Повторно" />
+        <VStatCard :value="totalUsers" :label="t('adminScreens.adminReturnRate.totalUsers')" />
+        <VStatCard :value="returning" :label="t('adminScreens.adminReturnRate.returning')" />
       </div>
 
-      <h3 class="admin-detail__section">Топ лояльных юзеров</h3>
+      <h3 class="admin-detail__section">
+        {{ t('adminScreens.adminReturnRate.topLoyalUsers') }}
+      </h3>
       <template v-if="loyalUsers.length">
         <VListRow v-for="u in loyalUsers" :key="u.id" :title="u.title" :subtitle="u.subtitle" />
       </template>
-      <VCard v-else><p class="admin-detail__empty">Данных пока нет</p></VCard>
+      <VCard v-else
+        ><p class="admin-detail__empty">
+          {{ t('common.noData') }}
+        </p></VCard
+      >
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -88,7 +95,7 @@ const loyalUsers = computed(() =>
   (data.value?.top_users ?? []).map((u) => ({
     id: u.id,
     title: u.name,
-    subtitle: `${u.practices_count} практик`,
+    subtitle: t('adminScreens.adminReturnRate.practicesCount', { n: u.practices_count }),
   })),
 )
 
@@ -98,7 +105,7 @@ async function load(): Promise<void> {
   try {
     data.value = await getReturnMetric(period, offset)
   } catch (e) {
-    error.value = extractApiError(e, 'Ошибка загрузки')
+    error.value = extractApiError(e, t('common.loadError'))
   } finally {
     loading.value = false
   }

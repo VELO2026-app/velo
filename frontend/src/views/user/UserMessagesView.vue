@@ -19,25 +19,25 @@
 
 <template>
   <div class="user-messages">
-    <VHeader title="Сообщения" show-back @back="router.back()" />
+    <VHeader :title="t('user.screens.userMessages.title')" show-back @back="router.back()" />
 
     <div v-if="loading" class="user-messages__center">
       <VLoader size="lg" />
     </div>
 
     <div v-else-if="error" class="user-messages__center">
-      <VEmptyState title="Не удалось загрузить" :description="error">
+      <VEmptyState :title="t('common.loadFailed')" :description="error">
         <template #icon>
           <IconMessages :size="48" />
         </template>
       </VEmptyState>
-      <VButton size="sm" @click="load"> Повторить </VButton>
+      <VButton size="sm" @click="load">{{ t('common.retry') }}</VButton>
     </div>
 
     <VEmptyState
       v-else-if="threads.length === 0"
-      title="Здесь появятся ваши переписки с мастерами"
-      description="Откройте профиль мастера и задайте вопрос"
+      :title="t('user.screens.userMessages.empty.text')"
+      :description="t('user.screens.userMessages.empty.hint')"
     >
       <template #icon>
         <IconMessages :size="48" />
@@ -46,18 +46,19 @@
 
     <div v-else class="user-messages__list">
       <ChatListRow
-        v-for="t in threads"
-        :key="t.id"
-        :peer="t.peer"
-        peer-fallback="Мастер"
-        :unread="t.unread ?? 0"
-        @open="openThread(t.id)"
+        v-for="thread in threads"
+        :key="thread.id"
+        :peer="thread.peer"
+        :peer-fallback="t('user.screens.userMessages.peerFallback')"
+        :unread="thread.unread ?? 0"
+        @open="openThread(thread.id)"
       />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -82,7 +83,7 @@ async function load(): Promise<void> {
   try {
     threads.value = (await listChats()).threads
   } catch (e) {
-    error.value = extractApiError(e, 'Попробуйте ещё раз')
+    error.value = extractApiError(e, t('common.tryAgain'))
   }
   loading.value = false
 }

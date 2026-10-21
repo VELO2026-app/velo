@@ -7,7 +7,7 @@
   WIRED (E9, 2026-06-16): GET /api/v1/admin/revenue?period=week|month — revenue
   (GMV), commission, payout + per-master breakdown (loading/error/empty states).
   Неделя/Месяц toggle (mirrors AdminDashboardView's period segment), default
-  'week' to match the backend default. Money via formatMoney(..., 'EUR', 'ru',
+  'week' to match the backend default. Money via formatMoney(..., 'EUR', getLocale(),
   true) so €0.00 renders honestly: seed practices are currently free, so totals
   read 0 until priced templates land (seed-pricing task, operator D2=В, queued
   next). No fabricated figures.
@@ -17,14 +17,14 @@
   <div class="admin-detail">
     <header class="admin-detail__top">
       <VBackButton @click="router.back()" />
-      <span class="admin-detail__title">Выручка</span>
+      <span class="admin-detail__title">{{ t('adminScreens.adminRevenue.revenue') }}</span>
     </header>
 
     <VSegment
       compact
       :model-value="period"
       :options="periodOptions"
-      aria-label="Период выручки"
+      :aria-label="t('adminScreens.adminRevenue.revenuePeriod')"
       @update:model-value="selectPeriod"
     />
 
@@ -33,10 +33,10 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      title="Не удалось загрузить выручку"
+      :title="t('adminScreens.adminRevenue.revenueLoadFailed')"
       :description="error"
     >
-      <VButton size="sm" variant="outline" @click="load">Повторить</VButton>
+      <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
     </VEmptyState>
 
     <template v-else-if="data">
@@ -45,29 +45,37 @@
       </VMetricHero>
 
       <div class="admin-detail__stats2">
-        <VStatCard :value="commissionLabel" label="Комиссия" />
-        <VStatCard :value="payoutLabel" label="Выплачено" />
+        <VStatCard
+          :value="commissionLabel"
+          :label="t('adminScreens.adminRevenue.commissionStat')"
+        />
+        <VStatCard :value="payoutLabel" :label="t('adminScreens.adminRevenue.payoutStat')" />
       </div>
 
-      <h3 class="admin-detail__section">По мастерам</h3>
+      <h3 class="admin-detail__section">{{ t('adminScreens.adminRevenue.byMasters') }}</h3>
       <div v-if="data.per_master.length" class="admin-detail__items">
         <VListRow
           v-for="m in data.per_master"
           :key="m.master_id"
           :title="m.name"
-          :subtitle="`Выплачено: ${money(m.payout_cents)}`"
+          :subtitle="t('adminScreens.adminRevenue.paidAmount', { amount: money(m.payout_cents) })"
         >
           <template #trailing>
             <span class="admin-revenue__earned">{{ money(m.earned_cents) }}</span>
           </template>
         </VListRow>
       </div>
-      <VCard v-else><p class="admin-detail__empty">Данных пока нет</p></VCard>
+      <VCard v-else
+        ><p class="admin-detail__empty">
+          {{ t('common.noData') }}
+        </p></VCard
+      >
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t, getLocale } from '@/locales'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -97,11 +105,13 @@ const error = ref<string | null>(null)
 // Период (Неделя/Месяц), default 'week' matches the backend default.
 const period = ref<'week' | 'month'>('week')
 const periodOptions: SegmentOption[] = [
-  { value: 'week', label: 'Неделя' },
-  { value: 'month', label: 'Месяц' },
+  { value: 'week', label: t('common.periodWeek') },
+  { value: 'month', label: t('common.periodMonth') },
 ]
 const revenueHeroLabel = computed<string>(() =>
-  period.value === 'week' ? 'Выручка за неделю' : 'Выручка за месяц',
+  period.value === 'week'
+    ? t('adminScreens.adminRevenue.titleWeek')
+    : t('adminScreens.adminRevenue.titleMonth'),
 )
 
 // VSegment emits a plain string; narrow it back to the period union.
@@ -110,9 +120,9 @@ function selectPeriod(p: string): void {
   period.value = p
 }
 
-// allowZero=true: free-seed totals must show €0.00, not "Бесплатно".
+// allowZero=true: free-seed totals must show €0.00, not t('adminScreens.adminRevenue.besplatno').
 function money(cents: number): string {
-  return formatMoney(cents, 'EUR', 'ru', true)
+  return formatMoney(cents, 'EUR', getLocale(), true)
 }
 
 const revenueLabel = computed<string>(() => (data.value ? money(data.value.revenue_cents) : '—'))
@@ -127,7 +137,7 @@ async function load(): Promise<void> {
   try {
     data.value = await getAdminRevenue(period.value)
   } catch (e) {
-    error.value = extractApiError(e, 'Ошибка загрузки')
+    error.value = extractApiError(e, t('common.loadError'))
   } finally {
     loading.value = false
   }

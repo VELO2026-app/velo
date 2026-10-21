@@ -27,7 +27,9 @@
   <div class="master-onboarding">
     <!-- Skip: dismisses the carousel from any step. -->
     <div class="master-onboarding__skip-row">
-      <button type="button" class="master-onboarding__skip" @click="skip">Пропустить</button>
+      <button type="button" class="master-onboarding__skip" @click="skip">
+        {{ t('common.skip') }}
+      </button>
     </div>
 
     <div class="master-onboarding__body">
@@ -44,13 +46,18 @@
       <VPaginationDots :total="TOTAL_STEPS" :active="step" />
 
       <button type="button" class="master-onboarding__button" @click="onPrimaryAction">
-        {{ isLastStep ? 'Войти в кабинет' : 'Далее' }}
+        {{
+          isLastStep
+            ? t('masterScreens.masterOnboarding.enterCabinet')
+            : t('masterScreens.masterOnboarding.next')
+        }}
       </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed } from 'vue'
 import { VPaginationDots } from '@/components/ui'
 
@@ -63,18 +70,18 @@ const emit = defineEmits<{
 const SLIDES = [
   {
     image: '/onboarding/master-welcome.svg',
-    title: 'Добро пожаловать',
-    text: 'Вы — часть сообщества мастеров VELO',
+    title: t('masterScreens.masterOnboarding.welcome.title'),
+    text: t('masterScreens.masterOnboarding.welcome.text'),
   },
   {
     image: '/onboarding/master-space.svg',
-    title: 'Ваше пространство',
-    text: 'Персональное пространство с вашим профилем, описанием метода, расписанием и записями практик',
+    title: t('masterScreens.masterOnboarding.space.title'),
+    text: t('masterScreens.masterOnboarding.space.text'),
   },
   {
     image: '/onboarding/master-analytics.svg',
-    title: 'AI-аналитика о состоянии группы',
-    text: 'Эмоциональный ландшафт участников до и после практики',
+    title: t('masterScreens.masterOnboarding.analytics.title'),
+    text: t('masterScreens.masterOnboarding.analytics.text'),
   },
 ] as const
 

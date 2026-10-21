@@ -33,9 +33,13 @@
 <template>
   <div class="master-practices">
     <!-- Header -->
-    <VHeader title="Практики">
+    <VHeader :title="t('masterScreens.masterPractices.title')">
       <template #action>
-        <button class="master-practices__add-btn" aria-label="Создать практику" @click="goNew">
+        <button
+          class="master-practices__add-btn"
+          :aria-label="t('masterScreens.masterPractices.createAria')"
+          @click="goNew"
+        >
           <IconPlus :size="22" />
         </button>
       </template>
@@ -56,9 +60,13 @@
          must not replace the pages already on screen; mirrors the loading rung
          above and MyBookingsView.vue:28) -->
     <div v-else-if="currentError && currentItems.length === 0" class="master-practices__content">
-      <VEmptyState icon="warning" title="Не удалось загрузить практики" :description="currentError">
+      <VEmptyState
+        icon="warning"
+        :title="t('masterScreens.masterPractices.loadFailed')"
+        :description="currentError"
+      >
         <VButton size="sm" variant="outline" @click="masterStore.refreshMyPractices()">
-          Повторить
+          {{ t('common.retry') }}
         </VButton>
       </VEmptyState>
     </div>
@@ -83,7 +91,7 @@
                 <div class="mp-card__title">{{ p.title }}</div>
                 <div class="mp-card__sub">
                   {{ whenLabel(p) }}, {{ formatTime(p.scheduled_at, p.timezone) }} •
-                  {{ p.duration_minutes }} мин
+                  {{ p.duration_minutes }} {{ t('masterScreens.masterPractices.durationMin') }}
                 </div>
               </div>
             </div>
@@ -109,8 +117,8 @@
                  the mark is a tap on the card. -->
             <div v-if="p.audience_unavailable" class="mp-card__meta mp-card__meta--row2">
               <span class="mp-stat mp-stat--warn">
-                <IconWarning :size="16" /> Школа недоступна — практику не видит никто, кроме вас и
-                уже записавшихся
+                <IconWarning :size="16" />
+                {{ t('masterScreens.masterPractices.schoolUnavailable') }}
               </span>
             </div>
           </article>
@@ -118,10 +126,12 @@
         <VEmptyState
           v-else
           icon="calendar"
-          title="Нет предстоящих практик"
-          description="Создайте первую практику"
+          :title="t('masterScreens.masterPractices.upcoming.empty.title')"
+          :description="t('masterScreens.masterPractices.upcoming.empty.text')"
         >
-          <VButton size="sm" variant="outline" @click="goNew">Создать</VButton>
+          <VButton size="sm" variant="outline" @click="goNew">{{
+            t('masterScreens.masterPractices.createCta')
+          }}</VButton>
         </VEmptyState>
       </template>
 
@@ -158,15 +168,15 @@
         <VEmptyState
           v-else
           icon="list"
-          title="Нет прошедших практик"
-          description="Здесь появятся завершённые практики"
+          :title="t('masterScreens.masterPractices.past.empty.title')"
+          :description="t('masterScreens.masterPractices.past.empty.text')"
         />
       </template>
 
       <!-- Load more -->
       <div v-if="currentHasMore" class="master-practices__load-more">
         <VButton variant="ghost" block :loading="currentLoading" @click="onLoadMore">
-          Показать ещё
+          {{ t('common.showMore') }}
         </VButton>
       </div>
     </div>
@@ -174,6 +184,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -192,9 +203,8 @@ import { useToast } from '@/composables/useToast'
 import { practiceIconFor } from '@/utils/displayHelpers'
 import { zonePercents, zoneTotal, type MoodScaleKey } from '@/utils/moodScale'
 import { checkinLabel, recurrenceLabel, remainingSessionsLabel } from '@/utils/practiceCardMeta'
-import { formatDateShort, formatShortDate, formatTime } from '@/utils/format'
+import { relativeDayCode, formatShortDate, formatTime } from '@/utils/format'
 import { practiceHasEnded } from '@/utils/practiceStatus'
-import { plural } from '@/utils/plural'
 import type { PracticeResponse } from '@/api/types'
 
 const route = useRoute()
@@ -220,14 +230,14 @@ const activeTab = ref<'upcoming' | 'past'>(route.query.tab === 'past' ? 'past' :
 // backend transitions a practice scheduled/live -> completed BY WALL CLOCK
 // (the autofinalize worker, practices/service.py's state machine), not on
 // request. Without a local time check, a class that ended five minutes ago
-// stays rendered under "Предстоящие" until something else (an edit,
+// stays rendered under t('masterScreens.masterPractices.tab.upcoming') until something else (an edit,
 // create, cancel elsewhere) happens to call refreshMyPractices(), or a hard
 // reload. Mirrors MasterDashboardView's own 60s clock + practiceHasEnded
 // filter (nearestPractices) exactly -- same fix, same idiom, applied to
 // the full list instead of the dashboard's top-2 preview. Draft is
 // deliberately EXCLUDED from this filter (unlike Dashboard's narrower
 // widget): a draft's scheduled_at can be stale from the moment it was
-// created and still legitimately belongs in "Предстоящие" until the
+// created and still legitimately belongs in t('masterScreens.masterPractices.tab.upcoming') until the
 // master publishes or deletes it -- it is not something the clock auto-
 // finalizes away.
 const now = ref(Date.now())
@@ -261,16 +271,19 @@ const currentHasMore = computed(() =>
 )
 
 const tabOptions = [
-  { value: 'upcoming' as const, label: 'Предстоящие' },
-  { value: 'past' as const, label: 'Прошедшие' },
+  { value: 'upcoming' as const, label: t('masterScreens.masterPractices.tab.upcoming') },
+  { value: 'past' as const, label: t('masterScreens.masterPractices.tab.past') },
 ]
 
 // -- Card subtitle helpers --------------------------------------------------
 
-/** Relative "Сегодня"/"Завтра", else compact "25 янв." (timezone-safe). */
+/** Relative t('masterScreens.masterPractices.today')/t('masterScreens.masterPractices.tomorrow'), else compact t('masterScreens.masterPractices.dateExample') (timezone-safe). */
 function whenLabel(p: PracticeResponse): string {
-  const rel = formatDateShort(p.scheduled_at, p.timezone)
-  return rel === 'Сегодня' || rel === 'Завтра' ? rel : formatShortDate(p.scheduled_at, p.timezone)
+  // tz-i18n §3.1 item 2: branch on the day CODE, never on rendered labels.
+  const code = relativeDayCode(p.scheduled_at, p.timezone)
+  if (code === 'today') return t('common.today')
+  if (code === 'tomorrow') return t('common.tomorrow')
+  return formatShortDate(p.scheduled_at, p.timezone)
 }
 
 function participantsLabel(p: PracticeResponse): string {
@@ -281,8 +294,7 @@ function participantsLabel(p: PracticeResponse): string {
 
 /** «N участников» with Russian plural agreement — past-card sub-line (PL-E1). */
 function participantsCount(p: PracticeResponse): string {
-  const n = p.current_participants
-  return `${n} ${plural(n, 'участник', 'участника', 'участников')}`
+  return t('masterScreens.masterPractices.participantsLine', p.current_participants)
 }
 
 // -- Insights-derived (REAL) ------------------------------------------------
@@ -305,9 +317,9 @@ function ratingPcts(id: string): Record<MoodScaleKey, number> {
 }
 
 /** Eager-load insights for the visible tab (idempotent: cached ids are skipped).
- *  E12 swap (PROMPT №419): the "Предстоящие" tab's check-in badge now reads
+ *  E12 swap (PROMPT №419): the t('masterScreens.masterPractices.tab.upcoming') tab's check-in badge now reads
  *  checkin_count straight off the practice, not insights -- so insights are
- *  only fetched for "Прошедшие" (rating badges). Upcoming skips the round-trip
+ *  only fetched for t('masterScreens.masterPractices.tab.past') (rating badges). Upcoming skips the round-trip
  *  entirely. */
 function loadTabInsights(): Promise<void[]> {
   if (activeTab.value !== 'past') return Promise.resolve([])
@@ -330,7 +342,7 @@ function goDetail(id: string): void {
 }
 
 /** Lazily fetch the bucket a tab needs -- each tab paginates independently
- *  and fetches on activation (T22-3/T22-5): "Прошедшие" is never fetched
+ *  and fetches on activation (T22-3/T22-5): t('masterScreens.masterPractices.tab.past') is never fetched
  *  until the master actually switches to it. No-op if already loaded. */
 async function ensureBucketLoaded(tab: 'upcoming' | 'past'): Promise<void> {
   if (tab === 'past') await masterStore.fetchPastPractices()

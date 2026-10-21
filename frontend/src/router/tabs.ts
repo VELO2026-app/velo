@@ -13,6 +13,7 @@
 // =============================================================================
 
 import type { Component } from 'vue'
+import i18n from '@/locales'
 import {
   IconHome,
   IconCalendar,
@@ -23,6 +24,10 @@ import {
   IconSchool,
   IconWarning,
 } from '@/components/icons'
+
+// Labels resolve at ACCESS time (getters), not at module import: the tab bar
+// re-reads them on locale switch (tz-i18n 1.1).
+const { t } = i18n.global
 
 /** One tab of the role tab bar. Lives HERE, not in VTabBar.vue: types exported
  * from .vue SFCs are invisible to tooling without the vue language plugin
@@ -43,38 +48,118 @@ export interface TabItem {
 }
 
 export const USER_TABS: TabItem[] = [
-  { icon: IconHome, label: 'Дашборд', to: '/user/dashboard' },
-  { icon: IconCalendar, label: 'Календарь', to: '/user/calendar' },
+  {
+    icon: IconHome,
+    get label(): string {
+      return t('tabs.dashboard')
+    },
+    to: '/user/dashboard',
+  },
+  {
+    icon: IconCalendar,
+    get label(): string {
+      return t('tabs.calendar')
+    },
+    to: '/user/calendar',
+  },
   // Owner 2026-10-12 (restores 2026-10-02's 77a98d04, supersedes 2026-10-04's
   // 99809765): the user zone's surface set follows the ACTIVE INTERFACE ROLE
   // only -- every account in user mode keeps «Дневник» (and the dashboard's
   // quick access), curator capability or not. An unconditional tab cannot
   // flash, so the 2026-10-04 first-paint hold is gone with the gate.
-  { icon: IconDiary, label: 'Дневник', to: '/user/diary' },
+  {
+    icon: IconDiary,
+    get label(): string {
+      return t('tabs.diary')
+    },
+    to: '/user/diary',
+  },
   // tz-curator.md §1.2 (owner 2026-09-22): «Школы» sits between «Дневник»
   // and «Я», shown to anyone who BELONGS to at least one school (the shell
   // filters by the schoolsHub store) -- curators, masters of, and plain
   // students in somebody's school alike.
-  { icon: IconSchool, label: 'Школы', to: '/user/schools', requires: 'schools' },
-  { icon: IconProfile, label: 'Я', to: '/user/profile' },
+  {
+    icon: IconSchool,
+    get label(): string {
+      return t('tabs.schools')
+    },
+    to: '/user/schools',
+    requires: 'schools',
+  },
+  {
+    icon: IconProfile,
+    get label(): string {
+      return t('tabs.profile')
+    },
+    to: '/user/profile',
+  },
 ]
 
 export const MASTER_TABS: TabItem[] = [
-  { icon: IconHome, label: 'Дашборд', to: '/master/dashboard' },
-  { icon: IconCalendar, label: 'Практики', to: '/master/practices' },
-  { icon: IconAnalytics, label: 'Аналитика', to: '/master/analytics' },
+  {
+    icon: IconHome,
+    get label(): string {
+      return t('tabs.dashboard')
+    },
+    to: '/master/dashboard',
+  },
+  {
+    icon: IconCalendar,
+    get label(): string {
+      return t('tabs.practices')
+    },
+    to: '/master/practices',
+  },
+  {
+    icon: IconAnalytics,
+    get label(): string {
+      return t('tabs.analytics')
+    },
+    to: '/master/analytics',
+  },
   // tz-curator.md §1.2 (owner 2026-09-22: «только при наличии хотя бы одной
   // школы», право основания сохраняет вход): четвёртым, перед «Я» —
   // зеркально юзер-зоне. Same membership condition as the user zone's, PLUS
   // the founding right: a can_create_groups holder with zero schools keeps
   // the tab -- the empty hub's «Создать школу» is their only entrance.
   // Target is the master zone's own sectioned schools list.
-  { icon: IconSchool, label: 'Школы', to: '/master/curator-groups', requires: 'schools' },
-  { icon: IconProfile, label: 'Я', to: '/master/profile' },
+  {
+    icon: IconSchool,
+    get label(): string {
+      return t('tabs.schools')
+    },
+    to: '/master/curator-groups',
+    requires: 'schools',
+  },
+  {
+    icon: IconProfile,
+    get label(): string {
+      return t('tabs.profile')
+    },
+    to: '/master/profile',
+  },
 ]
 
 export const ADMIN_TABS: TabItem[] = [
-  { icon: IconHome, label: 'Дашборд', to: '/admin/dashboard' },
-  { icon: IconGroup, label: 'Мастера', to: '/admin/masters' },
-  { icon: IconWarning, label: 'Модерация', to: '/admin/reports' },
+  {
+    icon: IconHome,
+    get label(): string {
+      return t('tabs.dashboard')
+    },
+    to: '/admin/dashboard',
+  },
+  {
+    icon: IconGroup,
+    get label(): string {
+      return t('tabs.masters')
+    },
+    to: '/admin/masters',
+  },
+  {
+    icon: IconWarning,
+    get label(): string {
+      return t('tabs.moderation')
+    },
+    to: '/admin/reports',
+  },
 ]

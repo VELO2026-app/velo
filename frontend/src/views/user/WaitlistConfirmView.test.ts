@@ -8,6 +8,7 @@
 // so the screen re-reads the entry and shows its state.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { createPinia } from 'pinia'
@@ -68,7 +69,7 @@ let host: HTMLElement | null = null
 function mount(): void {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(WaitlistConfirmView)
+  app = createApp(WaitlistConfirmView).use(createTestI18n())
   app.use(createPinia())
   app.mount(host)
 }

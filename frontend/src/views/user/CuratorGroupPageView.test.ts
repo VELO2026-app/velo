@@ -15,6 +15,7 @@
 // zone only picks the route family.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, reactive, type App } from 'vue'
 import CuratorGroupPageView from '@/views/user/CuratorGroupPageView.vue'
@@ -54,7 +55,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(CuratorGroupPageView)
+  app = createApp(CuratorGroupPageView).use(createTestI18n())
   app.mount(host)
   return host
 }
@@ -374,7 +375,7 @@ describe('CuratorGroupPageView -- leave', () => {
     await flush()
 
     expect(cgApi.getCuratorGroupLeavePreview).toHaveBeenCalledWith('g1')
-    expect(text()).toContain('2 предстоящих практики для этой школы станут скрыты')
+    expect(text()).toContain('2 предстоящие практики для этой школы станут скрыты')
   })
 
   it('preview 404 while the page loads: the advisory stays silent and the leave still works', async () => {

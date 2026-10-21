@@ -10,9 +10,14 @@
 
 <template>
   <div class="promo">
-    <VHeader title="Промокоды" show-back @back="router.back()">
+    <VHeader :title="t('masterScreens.masterPromocodes.title')" show-back @back="router.back()">
       <template #action>
-        <button type="button" class="promo__add" aria-label="Новый промокод" @click="onNew">
+        <button
+          type="button"
+          class="promo__add"
+          :aria-label="t('masterScreens.masterPromocodes.newAria')"
+          @click="onNew"
+        >
           <IconPlus :size="20" />
         </button>
       </template>
@@ -24,18 +29,24 @@
     </div>
 
     <!-- Error -->
-    <VEmptyState v-else-if="error" icon="warning" title="Не удалось загрузить промокоды">
-      <VButton size="sm" variant="outline" @click="load">Повторить</VButton>
+    <VEmptyState
+      v-else-if="error"
+      icon="warning"
+      :title="t('masterScreens.masterPromocodes.loadFailed')"
+    >
+      <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
     </VEmptyState>
 
     <!-- Empty -->
     <VEmptyState
       v-else-if="activePromos.length === 0"
       icon="list"
-      title="Промокодов пока нет"
-      description="Создайте первый промокод для участников"
+      :title="t('masterScreens.masterPromocodes.empty.title')"
+      :description="t('masterScreens.masterPromocodes.empty.text')"
     >
-      <VButton size="sm" variant="outline" @click="onNew">Создать</VButton>
+      <VButton size="sm" variant="outline" @click="onNew">{{
+        t('masterScreens.masterPromocodes.createCta')
+      }}</VButton>
     </VEmptyState>
 
     <!-- List -->
@@ -47,16 +58,20 @@
           <div class="promo__info">
             <div class="promo__code">{{ p.code }}</div>
             <div class="promo__meta">
-              <div>Скидка: {{ p.discount_percent }}%</div>
-              <div>Использовано: {{ usedLabel(p) }}</div>
-              <div>Действует до: {{ untilLabel(p) }}</div>
+              <div>
+                {{ t('masterScreens.masterPromocodes.discount', { n: p.discount_percent }) }}
+              </div>
+              <div>{{ t('masterScreens.masterPromocodes.used', { label: usedLabel(p) }) }}</div>
+              <div>{{ t('promos.untilLabel', { label: untilLabel(p) }) }}</div>
             </div>
           </div>
         </div>
         <div class="promo__actions">
-          <VButton variant="primary" @click="onCopy(p.code)">Копировать</VButton>
+          <VButton variant="primary" @click="onCopy(p.code)">{{
+            t('masterScreens.masterPromocodes.copyCta')
+          }}</VButton>
           <VButton variant="danger" :loading="deactivatingId === p.id" @click="onDelete(p)">
-            Удалить
+            {{ t('ui.delete') }}
           </VButton>
         </div>
       </div>
@@ -64,7 +79,7 @@
 
     <Banner
       variant="warning"
-      body="Промокоды для участников, которые уже оплатили вне платформы"
+      :body="t('masterScreens.masterPromocodes.description')"
       class="promo__note"
     >
       <template #icon><IconHint :size="22" /></template>
@@ -73,6 +88,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -110,10 +126,12 @@ async function load(): Promise<void> {
 }
 
 function usedLabel(p: PromoResponse): string {
-  return `${p.used_count} из ${p.max_uses ?? '∞'}`
+  return t('adminScreens.adminPromos.usedOf', { used: p.used_count, max: p.max_uses ?? '∞' })
 }
 function untilLabel(p: PromoResponse): string {
-  return p.valid_until ? formatShortDate(p.valid_until) : 'бессрочно'
+  return p.valid_until
+    ? formatShortDate(p.valid_until)
+    : t('masterScreens.masterPromocodes.noExpiry')
 }
 
 function onNew(): void {
@@ -123,9 +141,9 @@ function onNew(): void {
 async function onCopy(code: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(code)
-    toast.success('Промокод скопирован')
+    toast.success(t('masterScreens.masterPromocodes.toast.copied'))
   } catch {
-    toast.error('Не удалось скопировать')
+    toast.error(t('masterScreens.masterPromocodes.toast.copyFailed'))
   }
 }
 // Soft-deactivate (no hard-delete endpoint): drops the code from the active list.
@@ -135,9 +153,9 @@ async function onDelete(p: PromoResponse): Promise<void> {
   try {
     await deactivatePromo(p.id)
     p.is_active = false
-    toast.success('Промокод деактивирован')
+    toast.success(t('masterScreens.masterPromocodes.toast.deactivated'))
   } catch {
-    toast.error('Не удалось деактивировать промокод')
+    toast.error(t('masterScreens.masterPromocodes.toast.deactivateFailed'))
   } finally {
     deactivatingId.value = null
   }

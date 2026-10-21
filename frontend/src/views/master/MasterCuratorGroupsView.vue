@@ -19,13 +19,17 @@
 
 <template>
   <div class="mcg">
-    <VHeader title="Школы" show-back @back="router.push({ name: 'master-dashboard' })">
+    <VHeader
+      :title="t('masterScreens.masterCuratorGroups.title')"
+      show-back
+      @back="router.push({ name: 'master-dashboard' })"
+    >
       <template #action>
         <button
           v-if="canCreate"
           type="button"
           class="mcg__add-btn"
-          aria-label="Новая школа"
+          :aria-label="t('masterScreens.masterCuratorGroups.createCta')"
           @click="router.push({ name: 'master-curator-group-create' })"
         >
           <IconPlusFilled :size="20" />
@@ -41,23 +45,23 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        title="Не удалось загрузить школы"
-        description="Проверьте соединение и попробуйте ещё раз."
+        :title="t('school.loadFailed')"
+        :description="t('masterScreens.masterCuratorGroups.loadFailedHint')"
       >
         <template #action>
-          <VButton variant="outline" @click="load">Повторить</VButton>
+          <VButton variant="outline" @click="load">{{ t('common.retry') }}</VButton>
         </template>
       </VEmptyState>
 
       <VEmptyState
         v-else-if="!groups.length && canCreate"
         icon="group"
-        title="Пока нет школ"
-        description="Создайте школу или вступите по ссылке от куратора."
+        :title="t('masterScreens.masterCuratorGroups.empty.title')"
+        :description="t('masterScreens.masterCuratorGroups.empty.text')"
       >
         <template #action>
           <VButton variant="primary" @click="router.push({ name: 'master-curator-group-create' })">
-            Создать школу
+            {{ t('masterScreens.masterCuratorGroups.create') }}
           </VButton>
         </template>
       </VEmptyState>
@@ -68,13 +72,15 @@
       <VEmptyState
         v-else-if="!groups.length"
         icon="group"
-        title="Пока нет школ"
-        description="Вступите по ссылке от куратора. Создавать школы может мастер, которому администратор выдал это право."
+        :title="t('masterScreens.masterCuratorGroups.empty.title')"
+        :description="t('masterScreens.masterCuratorGroups.empty.joinHint')"
       />
 
       <template v-else>
         <template v-if="curated.length">
-          <h2 class="velo-section-title mcg__section">Я куратор</h2>
+          <h2 class="velo-section-title mcg__section">
+            {{ t('masterScreens.masterCuratorGroups.tab.curator') }}
+          </h2>
           <CuratorGroupRow
             v-for="g in curated"
             :key="g.id"
@@ -84,7 +90,9 @@
         </template>
 
         <template v-if="memberOnly.length">
-          <h2 class="velo-section-title mcg__section">Я участник</h2>
+          <h2 class="velo-section-title mcg__section">
+            {{ t('masterScreens.masterCuratorGroups.tab.member') }}
+          </h2>
           <CuratorGroupRow
             v-for="g in memberOnly"
             :key="g.id"
@@ -97,13 +105,14 @@
       <!-- Membership is untouched by the right -- rows render either way;
            only the founding offer is gated (BE-18). -->
       <p v-if="!loading && !error && groups.length && !canCreate" class="mcg__hint">
-        Создавать школы может мастер, которому администратор выдал это право.
+        {{ t('masterScreens.masterCuratorGroups.masterOnlyNote') }}
       </p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getCuratorGroups, getMyCuratorGroups } from '@/api/curatorGroups'

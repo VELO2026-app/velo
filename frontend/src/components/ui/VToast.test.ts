@@ -13,6 +13,7 @@
 // mocked) so VToast reacts to real state pushes.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import VToast from '@/components/ui/VToast.vue'
@@ -24,7 +25,7 @@ let host: HTMLElement | null = null
 async function render(): Promise<HTMLElement> {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(VToast)
+  app = createApp(VToast).use(createTestI18n())
   app.mount(host)
   await nextTick()
   return document.body

@@ -50,11 +50,19 @@
 
     <!-- Info card -->
     <VCard class="live__info">
-      <h2 class="live__title">{{ practice?.title ?? 'Практика' }}</h2>
-      <p class="live__master">с {{ practice?.master_name ?? 'Мастером' }}</p>
+      <h2 class="live__title">
+        {{ practice?.title ?? t('user.screens.practiceLive.titleFallback') }}
+      </h2>
+      <p class="live__master">
+        {{
+          t('shared.form.hostLine', {
+            name: practice?.master_name ?? t('shared.form.hostFallback'),
+          })
+        }}
+      </p>
       <span class="live__badge">
         <span class="live__badge-dot" />
-        В эфире
+        {{ t('user.screens.practiceLive.liveBadge') }}
       </span>
     </VCard>
 
@@ -67,8 +75,8 @@
       <VEmptyState
         v-if="resolveFailed"
         icon="warning"
-        title="Практика не найдена"
-        description="Возможно, её удалили или ссылка скопирована не полностью"
+        :title="t('user.screens.practiceLive.notFound.title')"
+        :description="t('user.screens.practiceLive.notFound.text')"
       />
 
       <!-- F4: the server has no Meeting SDK keys (or runs the Zoom stub).
@@ -76,15 +84,15 @@
       <VEmptyState
         v-else-if="sdkNotConfigured"
         icon="warning"
-        title="Zoom внутри приложения не настроен"
-        description="На этом сервере вход в Zoom пока не работает. Напишите в поддержку."
+        :title="t('user.screens.practiceLive.zoomNotConfigured')"
+        :description="t('user.screens.practiceLive.zoomServerBroken')"
       />
 
       <VEmptyState
         v-else-if="zoomEntry?.kind === 'cancelled'"
         icon="warning"
-        title="Практика отменена"
-        description="Вход в неё больше не откроется"
+        :title="t('user.screens.practiceLive.cancelled.title')"
+        :description="t('user.screens.practiceLive.cancelled.text')"
       />
 
       <!-- Links (3 October): 'unavailable' -- the meeting exists and this
@@ -94,8 +102,8 @@
       <VEmptyState
         v-else-if="zoomEntry?.kind === 'unavailable'"
         icon="warning"
-        title="Вход в Zoom недоступен"
-        description="Вашу личную регистрацию во встрече создать не удалось, и повторной попытки не будет. Напишите в поддержку."
+        :title="t('user.screens.practiceLive.entryUnavailable')"
+        :description="t('user.screens.practiceLive.registrationFailed')"
       />
 
       <!-- F4, owner decision 12: no guest entry from inside the app. A person
@@ -104,10 +112,12 @@
       <VEmptyState
         v-else-if="zoomEntry?.kind === 'guest'"
         icon="calendar"
-        title="Вы не записаны"
-        description="Запишитесь на практику — после записи вход в Zoom откроется здесь"
+        :title="t('user.screens.practiceLive.notBooked')"
+        :description="t('user.screens.practiceLive.notBookedHint')"
       >
-        <VButton size="sm" @click="goToPractice">К практике</VButton>
+        <VButton size="sm" @click="goToPractice">{{
+          t('user.screens.practiceLive.toPractice')
+        }}</VButton>
       </VEmptyState>
 
       <!-- The practice's own master: he starts the meeting as host, inside
@@ -123,7 +133,7 @@
           :loading="entering"
           @click="onStart"
         >
-          Начать
+          {{ t('user.screens.practiceLive.start') }}
         </VButton>
       </template>
 
@@ -132,7 +142,7 @@
              "still preparing". A participant has no retry action (only the
              master does, MasterDashboardView) -- this just tells the truth. -->
         <VBadge v-if="zoomEntry?.kind === 'failed'" variant="error" class="live__zoom-note">
-          Не удалось создать встречу — обратитесь к мастеру
+          {{ t('user.screens.practiceLive.zoomFailed') }}
         </VBadge>
 
         <p v-if="cameraHint" class="live__camera-hint">{{ CAMERA_HINT }}</p>
@@ -145,9 +155,13 @@
           :loading="entering"
           @click="onEnter"
         >
-          <template v-if="zoomEntry?.kind === 'failed'">Вход недоступен</template>
-          <template v-else-if="zoomEntry?.kind === 'pending'">Вход готовится</template>
-          <template v-else>Войти</template>
+          <template v-if="zoomEntry?.kind === 'failed'">{{
+            t('user.screens.practiceLive.entryPreparing')
+          }}</template>
+          <template v-else-if="zoomEntry?.kind === 'pending'">{{
+            t('user.screens.practiceLive.entryPreparing2')
+          }}</template>
+          <template v-else>{{ t('user.screens.practiceLive.join') }}</template>
         </VButton>
       </template>
 
@@ -163,12 +177,14 @@
           :disabled="alreadyCheckedIn"
           @click="onCheckin"
         >
-          <template v-if="alreadyCheckedIn">Check-in сделан</template>
+          <template v-if="alreadyCheckedIn">{{
+            t('user.screens.practiceLive.checkinDone')
+          }}</template>
           <template v-else>Check-in</template>
         </VButton>
 
         <VButton variant="danger" size="lg" block :loading="leaving" @click="onLeave">
-          Покинуть практику
+          {{ t('user.screens.practiceLive.leave') }}
         </VButton>
       </template>
     </div>
@@ -176,6 +192,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'
@@ -198,7 +215,7 @@ import { ApiResponseError } from '@/api/client'
 import type { ZoomEntryResolveResponse } from '@/api/types'
 
 /** Owner decision 11, verbatim. */
-const CAMERA_HINT = 'Чтобы включить камеру, откройте VELO с рабочего стола'
+const CAMERA_HINT = t('user.screens.practiceLive.desktopCameraHint')
 
 const route = useRoute()
 const router = useRouter()
@@ -283,11 +300,11 @@ async function enterThroughSdk(): Promise<void> {
       return
     }
     if (e instanceof ApiResponseError && e.code === 'zoom_entry_not_joinable') {
-      toast.info('Состояние практики изменилось')
+      toast.info(t('user.screens.practiceLive.toast.stateChanged'))
       await loadEntry()
       return
     }
-    toast.error(extractApiError(e, 'Не удалось открыть Zoom. Попробуйте ещё раз'))
+    toast.error(extractApiError(e, t('user.screens.practiceLive.toast.zoomOpenFailed')))
     return
   }
   // The student leaves to his feedback screen; the master to his dashboard
@@ -304,7 +321,7 @@ async function enterThroughSdk(): Promise<void> {
   } catch {
     // enterZoomMeeting has already taken its style off again.
     inMeeting = false
-    toast.error('Не удалось открыть Zoom. Попробуйте ещё раз')
+    toast.error(t('user.screens.practiceLive.toast.zoomOpenFailed'))
   }
 }
 
@@ -369,7 +386,7 @@ function goBack(): void {
 }
 
 /**
- * "Покинуть практику": always returns to the dashboard. We only call the
+ * t('user.screens.practiceLive.leave'): always returns to the dashboard. We only call the
  * leave API if the user had actually joined (otherwise the backend returns
  * 400 "Cannot leave without joining first").
  */
@@ -472,7 +489,7 @@ onMounted(async () => {
   color: var(--velo-text-secondary);
 }
 
-/* "В эфире" badge */
+/* t('user.screens.practiceLive.liveBadge') badge */
 .live__badge {
   display: inline-flex;
   align-items: center;

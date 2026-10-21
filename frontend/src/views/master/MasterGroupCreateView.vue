@@ -43,7 +43,7 @@
 
 <template>
   <div class="new-group">
-    <VHeader title="Новая группа" show-back @back="router.back()" />
+    <VHeader :title="t('masterScreens.masterGroupCreate.title')" show-back @back="router.back()" />
 
     <div class="new-group__content">
       <!-- Required-fields legend: HIDDEN for now (owner 2026-10-01) -- the
@@ -52,11 +52,14 @@
       <!--
       <div class="new-group__legend">
         <IconRequired class="new-group__legend-seal" :size="22" />
-        <span>— поля, обязательные для заполнения</span>
+        <span>— {{ t('ui.legendRequired') }}</span>
       </div>
       -->
 
-      <h2 class="velo-section-title">Основное <span class="new-group__req">*</span></h2>
+      <h2 class="velo-section-title">
+        {{ t('masterScreens.masterGroupCreate.section.basics')
+        }}<span class="new-group__req">*</span>
+      </h2>
 
       <!-- T24-5/6 (PROMPT №639): the placeholder alone carries the visible
            hint now -- it already matched `label` before this batch
@@ -66,8 +69,8 @@
            announced the way a label is) without rendering it visibly. -->
       <VInput
         v-model="name"
-        label="Название"
-        placeholder="Название"
+        :label="t('masterScreens.masterGroupCreate.fields.name')"
+        :placeholder="t('masterScreens.masterGroupCreate.fields.name')"
         hide-label
         :error="fieldError"
         @focus="onFieldFocus"
@@ -82,8 +85,8 @@
 
       <VTextarea
         v-model="description"
-        label="Описание"
-        placeholder="Описание"
+        :label="t('masterScreens.masterGroupCreate.fields.description')"
+        :placeholder="t('masterScreens.masterGroupCreate.fields.description')"
         hide-label
         :rows="3"
         autogrow
@@ -97,13 +100,14 @@
         :loading="creating"
         @click="onCreate"
       >
-        Создать группу
+        {{ t('masterScreens.masterGroupCreate.submit') }}
       </VButton>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { nextTick, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -128,23 +132,23 @@ async function onCreate(): Promise<void> {
   if (!name.value.trim()) {
     // Inline slot + scroll (owner 2026-10-01 canon, same as the practice
     // create form); the toast stays for the case when the slot is off-screen.
-    fieldError.value = 'Введите название группы'
+    fieldError.value = t('masterScreens.masterGroupCreate.validation.enterName')
     await nextTick()
     queryDocument('.new-group__field-error--show')?.scrollIntoView({
       behavior: 'smooth',
       block: 'center',
     })
-    toast.error('Введите название группы')
+    toast.error(t('masterScreens.masterGroupCreate.validation.enterName'))
     return
   }
   creating.value = true
   fieldError.value = ''
   try {
     await createGroup(name.value.trim(), description.value.trim())
-    toast.success('Группа создана')
+    toast.success(t('masterScreens.masterGroupCreate.toast.created'))
     void router.push({ name: 'master-groups' })
   } catch (e) {
-    const message = extractApiError(e, 'Не удалось создать группу')
+    const message = extractApiError(e, t('masterScreens.masterGroupCreate.toast.createFailed'))
     fieldError.value = message
     toast.error(message)
   } finally {
@@ -186,7 +190,7 @@ async function onCreate(): Promise<void> {
   display: none;
 }
 
-/* [FE-45 follow-up, owner: "не так сильно двигается"] While typing, the
+/* [FE-45 follow-up, owner: t('masterScreens.masterGroupCreate.debug.moveHint')] While typing, the
    scroll region (.velo-kbd-scroll main) correctly shrinks to the visible
    area -- but this form pins its submit via margin-top:auto inside a
    min-height:100% column, so the whole form used to compress and the button

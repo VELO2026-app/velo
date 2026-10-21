@@ -16,6 +16,7 @@
 // BEFORE mount (the screen reads it during setup).
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import AdminSupportDetailView from '@/views/admin/AdminSupportDetailView.vue'
@@ -94,7 +95,7 @@ function mount(id: string, stateThread: SupportThread | null = null): HTMLElemen
   window.history.replaceState(stateThread ? { thread: stateThread } : {}, '')
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminSupportDetailView)
+  app = createApp(AdminSupportDetailView).use(createTestI18n())
   app.mount(host)
   return host
 }

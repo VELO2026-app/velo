@@ -73,6 +73,7 @@
 // gap rather than prove anything); flagged in the report instead.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import MasterInviteClaimView from '@/views/master/MasterInviteClaimView.vue'
@@ -100,7 +101,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(MasterInviteClaimView)
+  app = createApp(MasterInviteClaimView).use(createTestI18n())
   app.mount(host)
   return host
 }

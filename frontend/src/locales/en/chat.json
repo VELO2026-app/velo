@@ -1,0 +1,26 @@
+{
+  "voice": {
+    "cancelAria": "Cancel recording",
+    "transcribing": "Transcribing…",
+    "stopAria": "Finish recording"
+  },
+  "chat": {
+    "messagePlaceholder": "Message…",
+    "threadPlaceholder": "Write a message…",
+    "sent": "Message sent",
+    "sendFailed": "Failed to send the message",
+    "loadFailed": "Failed to load the conversation",
+    "empty": "No messages yet — write the first one."
+  },
+  "composer": {
+    "voiceAria": "Voice input",
+    "micDenied": "Microphone access is denied",
+    "micUnavailable": "The microphone is unavailable on this device",
+    "tooShort": "The recording is too short",
+    "notRecognized": "Could not recognize the speech",
+    "dreamPlaceholder": "Record a dream…",
+    "notePlaceholder": "Start writing…",
+    "searchCloseAria": "Close search",
+    "pickDate": "Pick a date"
+  }
+}

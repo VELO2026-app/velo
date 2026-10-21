@@ -20,15 +20,15 @@
          screen ("Ваш баланс" / "Выберите сумму" are section-level labels, not a
          page title) -- sr-only heading so screen-reader users navigating by
          heading still get a page label for this screen. -->
-    <h1 class="velo-sr-only">Пополнение баланса</h1>
+    <h1 class="velo-sr-only">{{ t('user.screens.topup.title') }}</h1>
     <!-- Balance -->
     <div class="topup__balance">
-      <span class="topup__balance-label">Ваш баланс</span>
+      <span class="topup__balance-label">{{ t('user.screens.topup.balanceLabel') }}</span>
       <span class="topup__balance-value">{{ balanceStore.formattedBalance }}</span>
     </div>
 
     <!-- Preset amounts -->
-    <div class="topup__section-title">Выберите сумму</div>
+    <div class="topup__section-title">{{ t('user.screens.topup.amount.title') }}</div>
     <div class="topup__presets">
       <button
         v-for="preset in PRESETS"
@@ -48,7 +48,7 @@
         :class="{ 'topup__custom-toggle--active': customMode }"
         @click="enableCustom"
       >
-        Другая сумма
+        {{ t('user.screens.topup.otherAmount') }}
       </div>
       <VInput
         v-if="customMode"
@@ -81,13 +81,14 @@
         :disabled="!canSubmit"
         @click="onTopup"
       >
-        Пополнить {{ selectedLabel }}
+        {{ t('user.screens.topup.topupCta', { label: selectedLabel }) }}
       </VButton>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { host } from '@/platform/host'
 import { ref, computed, nextTick, onMounted } from 'vue'
 import { VButton, VInput } from '@/components/ui'
@@ -139,8 +140,8 @@ const effectiveCents = computed(() => (customMode.value ? customCents.value : se
 const validationError = computed(() => {
   if (!customMode.value) return ''
   if (!customValue.value) return ''
-  if (customCents.value < MIN_CENTS) return 'Минимальная сумма — €1'
-  if (customCents.value > MAX_CENTS) return 'Максимальная сумма — €500'
+  if (customCents.value < MIN_CENTS) return t('user.screens.topup.amount.min')
+  if (customCents.value > MAX_CENTS) return t('user.screens.topup.amount.max')
   return ''
 })
 
@@ -194,14 +195,14 @@ async function onTopup(): Promise<void> {
 
     // C-1: Validate redirect URL before navigating.
     if (!isAllowedRedirectUrl(response.checkout_url)) {
-      toast.error('Некорректный URL платёжной системы')
+      toast.error(t('user.screens.topup.error.invalidUrl'))
       return
     }
 
     // Redirect to Stripe checkout (or success URL in stub mode).
     host.location.href = response.checkout_url
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось создать платёж'))
+    toast.error(extractApiError(e, t('user.screens.topup.error.paymentFailed')))
   } finally {
     loading.value = false
   }

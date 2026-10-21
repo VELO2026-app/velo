@@ -25,6 +25,7 @@
 // optional in the shared type and IS absent on the student list.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import MasterMessagesView from '@/views/master/MasterMessagesView.vue'
@@ -67,7 +68,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(MasterMessagesView)
+  app = createApp(MasterMessagesView).use(createTestI18n())
   app.mount(host)
   return host
 }

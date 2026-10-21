@@ -37,10 +37,10 @@
     <VEmptyState
       v-else-if="store.selectedError || !practice"
       icon="warning"
-      title="Практика не найдена"
-      :description="store.selectedError ?? 'Не удалось загрузить практику'"
+      :title="t('user.screens.bookingConfirmed.notFound')"
+      :description="store.selectedError ?? t('practice.loadFailed')"
     >
-      <VButton size="sm" @click="goToDashboard">На главную</VButton>
+      <VButton size="sm" @click="goToDashboard">{{ t('common.backHome') }}</VButton>
     </VEmptyState>
 
     <!-- Content -->
@@ -50,9 +50,9 @@
         <span class="booking-confirmed__icon">
           <IconSuccess :size="56" />
         </span>
-        <h1 class="booking-confirmed__title">Практика забронирована!</h1>
+        <h1 class="booking-confirmed__title">{{ t('user.screens.bookingConfirmed.title') }}</h1>
         <p class="booking-confirmed__text">
-          Войти в Zoom можно будет прямо в VELO — на экране практики.
+          {{ t('user.screens.bookingConfirmed.zoomNote') }}
         </p>
       </VCard>
 
@@ -66,15 +66,12 @@
       <div class="booking-confirmed__ask">
         <VTextarea
           v-model="masterRequest"
-          label="Ваш запрос мастеру (по желанию)"
+          :label="t('user.screens.bookingConfirmed.request.placeholder')"
           :rows="2"
           maxlength="4000"
           :disabled="sending"
         />
-        <Banner
-          variant="info"
-          body="Оставляя запрос, вы помогаете мастеру подготовить практику с учётом ваших пожеланий"
-        >
+        <Banner variant="info" :body="t('user.screens.bookingConfirmed.request.hint')">
           <template #icon><IconSupport :size="28" /></template>
         </Banner>
         <VButton
@@ -85,7 +82,7 @@
           :disabled="sending || !masterRequest.trim()"
           @click="onSendRequest"
         >
-          Отправить запрос
+          {{ t('user.screens.bookingConfirmed.sendRequest') }}
         </VButton>
       </div>
     </div>
@@ -93,6 +90,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'
@@ -137,7 +135,11 @@ function composeRequest(body: string): string {
   const p = practice.value
   if (!p) return body
   const when = formatDate(p.scheduled_at, viewerTz.value)
-  return `Практика: ${cleanPracticeTitle(p.title)}, ${when}\n\n${body}`
+  return t('user.screens.bookingConfirmed.practiceLine', {
+    title: cleanPracticeTitle(p.title),
+    when,
+    body,
+  })
 }
 
 async function onSendRequest(): Promise<void> {
@@ -154,7 +156,7 @@ async function onSendRequest(): Promise<void> {
     const thread = await openChat(masterId)
     await sendChatMessage(thread.id, composeRequest(body))
     masterRequest.value = ''
-    toast.success('Запрос отправлен мастеру')
+    toast.success(t('user.screens.bookingConfirmed.request.sent'))
     // [FE-1] Requirement: post-send navigation (capability: user-booking)
     // After a successful send the app SHALL NOT open the chat thread; it
     // SHALL show the «Запрос отправлен мастеру» toast and land the user on
@@ -184,7 +186,7 @@ async function onSendRequest(): Promise<void> {
       await router.replace({ name: 'practice-detail', params: { id: practiceId } })
     }
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось отправить запрос'))
+    toast.error(extractApiError(e, t('user.screens.bookingConfirmed.request.sendFailed')))
   } finally {
     sending.value = false
   }

@@ -147,6 +147,7 @@
 // NO ORDER DEPENDENCE. Declaration order is execution order; nothing relies on it.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import DetailView from '@/views/user/DetailView.vue'
@@ -254,7 +255,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(DetailView)
+  app = createApp(DetailView).use(createTestI18n())
   // NO app.use(pinia), deliberately -- nothing under this mount resolves a
   // store. See the banner; this was grepped, not assumed.
   app.mount(host)

@@ -90,7 +90,7 @@
         :disabled="loading"
         @click="$emit('cancel')"
       >
-        {{ cancelLabel }}
+        {{ cancelLabel ?? t('ui.cancel') }}
       </VButton>
       <VButton
         :variant="danger ? 'danger' : 'primary'"
@@ -98,16 +98,21 @@
         :loading="loading"
         @click="$emit('confirm')"
       >
-        {{ confirmLabel }}
+        {{ confirmLabel ?? t('ui.confirm') }}
       </VButton>
     </div>
   </VModal>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import VModal from './VModal.vue'
 import VButton from './VButton.vue'
 import { IconWarning } from '@/components/icons'
+
+// tz-i18n 1.3: label defaults resolve at render time (?? t() in the
+// template), so a locale switch re-renders them; withDefaults factories
+// would freeze the label at instance creation.
 
 withDefaults(
   defineProps<{
@@ -139,8 +144,6 @@ withDefaults(
   }>(),
   {
     title: '',
-    confirmLabel: 'Подтвердить',
-    cancelLabel: 'Отмена',
     danger: false,
     loading: false,
     compactActions: false,

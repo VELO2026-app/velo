@@ -14,7 +14,7 @@
 // idiom as MasterProfileView's logout test: mock the API boundary, keep the
 // store real). `done` is a root-level emit with no router involved (App.vue
 // owns what happens after) -- captured via `onDone` passed as a root prop to
-// createApp(OnboardingView, { onDone }), which Vue treats identically to a
+// createApp(OnboardingView, { onDone }).use(createTestI18n()), which Vue treats identically to a
 // parent's `@done` listener (emit() reads `vnode.props.onDone`).
 //
 // The device timezone is proven through the SUBMITTED PAYLOAD -- the only
@@ -36,6 +36,7 @@
 // submitted" -- not by reading the refs (they are not exposed).
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
@@ -96,7 +97,7 @@ let pinia: Pinia
 function mount(onDone: () => void = () => {}): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(OnboardingView, { onDone })
+  app = createApp(OnboardingView, { onDone }).use(createTestI18n())
   app.use(pinia)
   app.mount(host)
   return host

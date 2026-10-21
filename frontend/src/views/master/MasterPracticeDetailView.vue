@@ -42,14 +42,14 @@
   <div class="practice-detail">
     <VHeader :title="headerTitle" show-back @back="router.back()">
       <template v-if="isUpcoming" #action>
-        <VMenu aria-label="Меню">
+        <VMenu :aria-label="t('masterScreens.masterPracticeDetail.menuAria')">
           <template #default="{ close }">
             <!-- Карандаш → редактирование, корзина → удаление/отмена (Q1=А,
                  openDestructive контекстный: черновик удаляет, запланированную
                  отменяет, с подтверждением). -->
             <VMenuItem
               :icon="IconPen"
-              ariaLabel="Редактировать"
+              :ariaLabel="t('ui.edit')"
               @click="
                 () => {
                   goEdit()
@@ -80,8 +80,8 @@
 
     <!-- Error -->
     <div v-else-if="error" class="practice-detail__content">
-      <VEmptyState icon="warning" title="Не удалось загрузить практику" :description="error">
-        <VButton size="sm" variant="outline" @click="load">Повторить</VButton>
+      <VEmptyState icon="warning" :title="t('practice.loadFailed')" :description="error">
+        <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
       </VEmptyState>
     </div>
 
@@ -100,7 +100,7 @@
              on the edit screen -- so there is nothing there to change. -->
         <div v-if="practice.audience_unavailable" class="pd-audience-warn">
           <span class="pd-audience-warn__text">
-            Школа недоступна — практику не видит никто, кроме вас и уже записавшихся.
+            {{ t('masterScreens.masterPracticeDetail.audienceUnavailable') }}
           </span>
         </div>
 
@@ -128,21 +128,31 @@
              it keeps working after a reschedule, because it names the
              practice, never the meeting. -->
         <div v-if="publicLink" class="pd-shared-link">
-          <span class="pd-shared-link__label">Ссылка на практику — для канала и гостей</span>
+          <span class="pd-shared-link__label">{{
+            t('masterScreens.masterPracticeDetail.shareLinkHint')
+          }}</span>
           <VButton size="sm" variant="outline" :loading="copyingShared" @click="onCopySharedLink">
-            Копировать
+            {{ t('masterScreens.masterPracticeDetail.copy') }}
           </VButton>
         </div>
 
         <!-- Записалось / Мест (карточка «Цена» убрана — operator 2026-06-18) -->
         <div class="practice-detail__stats">
-          <VStatCard :value="enrolledStat" label="Записалось" />
-          <VStatCard :value="capacityStat" label="Мест" />
+          <VStatCard
+            :value="enrolledStat"
+            :label="t('masterScreens.masterPracticeDetail.stats.enrolled')"
+          />
+          <VStatCard
+            :value="capacityStat"
+            :label="t('masterScreens.masterPracticeDetail.stats.capacity')"
+          />
         </div>
 
         <!-- Записались (roster; первые 5 + раскрытие — operator 2026-06-18) -->
         <section v-if="rosterItems.length > 0" class="practice-detail__section">
-          <h2 class="velo-section-title">Записались</h2>
+          <h2 class="velo-section-title">
+            {{ t('masterScreens.masterPracticeDetail.bookedCount') }}
+          </h2>
           <div v-for="item in visibleRoster" :key="item.booking_id" class="pd-prow">
             <span class="pd-prow__ava">
               <img
@@ -158,8 +168,8 @@
           </div>
           <VShowMore
             v-if="!rosterExpanded && hiddenRosterCount > 0"
-            :count="hiddenRosterCount"
-            noun="участников"
+            plus
+            :label="t('masterScreens.masterPracticeDetail.moreParticipants', hiddenRosterCount)"
             @click="rosterExpanded = true"
           />
         </section>
@@ -174,10 +184,12 @@
             <button
               class="pd-acc__hd"
               :aria-expanded="descOpen"
-              :aria-label="descOpen ? 'Свернуть' : 'Развернуть'"
+              :aria-label="descOpen ? t('ui.collapse') : t('ui.expand')"
               @click="descOpen = !descOpen"
             >
-              <span class="pd-acc__title">Описание</span>
+              <span class="pd-acc__title">{{
+                t('masterScreens.masterPracticeDetail.sections.description')
+              }}</span>
               <svg
                 class="pd-acc__chev"
                 viewBox="0 0 24 24"
@@ -199,10 +211,12 @@
             <button
               class="pd-acc__hd"
               :aria-expanded="contraOpen"
-              :aria-label="contraOpen ? 'Свернуть' : 'Развернуть'"
+              :aria-label="contraOpen ? t('ui.collapse') : t('ui.expand')"
               @click="contraOpen = !contraOpen"
             >
-              <span class="pd-acc__title">Противопоказания</span>
+              <span class="pd-acc__title">{{
+                t('masterScreens.masterPracticeDetail.sections.contraindications')
+              }}</span>
               <svg
                 class="pd-acc__chev"
                 viewBox="0 0 24 24"
@@ -220,10 +234,12 @@
             <button
               class="pd-acc__hd"
               :aria-expanded="prepOpen"
-              :aria-label="prepOpen ? 'Свернуть' : 'Развернуть'"
+              :aria-label="prepOpen ? t('ui.collapse') : t('ui.expand')"
               @click="prepOpen = !prepOpen"
             >
-              <span class="pd-acc__title">Что подготовить</span>
+              <span class="pd-acc__title">{{
+                t('masterScreens.masterPracticeDetail.sections.whatToBring')
+              }}</span>
               <svg
                 class="pd-acc__chev"
                 viewBox="0 0 24 24"
@@ -254,22 +270,29 @@
           :direction="practice.direction"
         >
           <template v-if="hasRating" #extra>
-            <VRatingBadges
-              size="lg"
-              :pcts="ratingPcts"
-            />
+            <VRatingBadges size="lg" :pcts="ratingPcts" />
           </template>
         </PracticeHeroCard>
 
         <!-- Stats -->
         <div class="practice-detail__stats">
-          <VStatCard :value="attendedValue" label="Присутствовало" value-tone="teal" />
-          <VStatCard :value="noShowValue" label="Не пришли" value-tone="rose" />
+          <VStatCard
+            :value="attendedValue"
+            :label="t('masterScreens.masterPracticeDetail.rosterStats.attended')"
+            value-tone="teal"
+          />
+          <VStatCard
+            :value="noShowValue"
+            :label="t('masterScreens.masterPracticeDetail.rosterStats.noShow')"
+            value-tone="rose"
+          />
         </div>
 
         <!-- Отзывы участников (E1 named reviews — getPracticeReviews) -->
         <section class="practice-detail__section">
-          <h2 class="velo-section-title">Отзывы участников</h2>
+          <h2 class="velo-section-title">
+            {{ t('masterScreens.masterPracticeDetail.sections.reviews') }}
+          </h2>
           <div v-if="reviewsLoading && reviews.length === 0" class="practice-detail__rloader">
             <VLoader />
           </div>
@@ -286,20 +309,26 @@
             <!-- Первые 10 + раскрытие «посмотреть еще» (operator PROMPT №160). -->
             <VShowMore
               v-if="!reviewsExpanded && hiddenReviewsCount > 0"
-              label="посмотреть еще"
+              :label="t('masterScreens.masterPracticeDetail.common.showMoreLower')"
               @click="expandReviews"
             />
             <div v-else-if="reviewsExpanded && hasMoreReviews" class="practice-detail__more">
-              <VButton variant="ghost" @click="loadMoreReviews">Показать ещё</VButton>
+              <VButton variant="ghost" @click="loadMoreReviews">{{ t('common.showMore') }}</VButton>
             </div>
           </template>
-          <VEmptyState v-else variant="note" title="Отзывов пока нет" />
+          <VEmptyState
+            v-else
+            variant="note"
+            :title="t('masterScreens.masterPracticeDetail.noReviewsYet')"
+          />
         </section>
 
         <!-- CTAs -->
         <div class="practice-detail__actions">
           <VButton variant="primary" block @click="goCheckins">Check-ins</VButton>
-          <VButton variant="outline" block @click="goRoster">Посещаемость</VButton>
+          <VButton variant="outline" block @click="goRoster">{{
+            t('masterScreens.masterPracticeDetail.sections.attendance')
+          }}</VButton>
         </div>
       </div>
     </template>
@@ -316,8 +345,8 @@
     <!-- Delete a draft practice. -->
     <VConfirmDialog
       :open="showDelete"
-      message="Удалить черновик практики? Это действие необратимо."
-      confirm-label="Удалить"
+      :message="t('masterScreens.masterPracticeDetail.draft.deleteConfirm')"
+      :confirm-label="t('ui.delete')"
       :loading="deleting"
       @confirm="doDelete"
       @cancel="showDelete = false"
@@ -326,6 +355,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDiaryStore } from '@/stores/diary'
@@ -358,11 +388,7 @@ import { zonePercents, zoneTotal, type MoodScaleKey } from '@/utils/moodScale'
 // IconTrash is not re-exported from the icons barrel; import the component
 // directly (same as EntryView).
 import { IconTrash } from '@/components/icons'
-import {
-  DIFFICULTY_DOTS,
-  DIFFICULTY_LABEL,
-  recurrenceDaysLabel,
-} from '@/utils/displayHelpers'
+import { DIFFICULTY_DOTS, DIFFICULTY_LABEL, recurrenceDaysLabel } from '@/utils/displayHelpers'
 import { formatDateShort, formatTime } from '@/utils/format'
 import { useToast } from '@/composables/useToast'
 import type {
@@ -393,8 +419,14 @@ const isPast = computed(
 )
 const isUpcoming = computed((): boolean => practice.value != null && !isPast.value)
 const isDraft = computed((): boolean => practice.value?.status === 'draft')
-const headerTitle = computed((): string => (isPast.value ? 'Прошедшая практика' : 'Практика'))
-const destructiveLabel = computed((): string => (isDraft.value ? 'Удалить' : 'Отменить практику'))
+const headerTitle = computed((): string =>
+  isPast.value
+    ? t('masterScreens.masterPracticeDetail.pastTitle')
+    : t('masterScreens.masterPracticeDetail.practiceWord'),
+)
+const destructiveLabel = computed((): string =>
+  isDraft.value ? t('ui.delete') : t('masterScreens.masterPracticeDetail.cancelCta'),
+)
 
 // Reactive insights cache (shared with Analytics / Practices — often warm).
 const insightsCache = diaryStore.insightsCache
@@ -409,7 +441,7 @@ const whenLabel = computed((): string => {
 })
 
 const durationLabel = computed((): string =>
-  practice.value ? `${practice.value.duration_minutes} мин` : '',
+  practice.value ? t('practice.durationMinutes', { n: practice.value.duration_minutes }) : '',
 )
 
 // -- Upcoming hero extras --
@@ -417,7 +449,10 @@ const durationLabel = computed((): string =>
 // for a series, «Регулярная» when the day list is empty; null hides the chip.
 const recurrenceLabel = computed((): string | null => {
   if (practice.value?.practice_type !== 'series') return null
-  return recurrenceDaysLabel(practice.value.recurrence_days) ?? 'Регулярная'
+  return (
+    recurrenceDaysLabel(practice.value.recurrence_days) ??
+    t('masterScreens.masterPracticeDetail.regular')
+  )
 })
 
 // T-35: OUR public link for this practice ({PUBLIC_LINK_BASE}/z/{code}),
@@ -434,9 +469,9 @@ async function onCopySharedLink(): Promise<void> {
     // Clipboard needs no backend -- same pattern as MasterGroupDetailView's
     // group-invite copy.
     await navigator.clipboard.writeText(publicLink.value)
-    toast.success('Ссылка скопирована')
+    toast.success(t('common.linkCopied'))
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось скопировать ссылку'))
+    toast.error(extractApiError(e, t('masterScreens.masterPracticeDetail.toast.linkCopyFailed')))
   } finally {
     copyingShared.value = false
   }
@@ -584,11 +619,11 @@ async function doCancel(scope: 'this' | 'this_and_future'): Promise<void> {
   cancelling.value = true
   try {
     await cancelPractice(practiceId, scope)
-    toast.success('Практика отменена')
+    toast.success(t('masterScreens.masterPracticeDetail.toast.cancelled'))
     await masterStore.refreshMyPractices()
     router.back()
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось отменить практику'))
+    toast.error(extractApiError(e, t('masterScreens.masterPracticeDetail.toast.cancelFailed')))
   } finally {
     cancelling.value = false
     showCancel.value = false
@@ -600,11 +635,11 @@ async function doDelete(): Promise<void> {
   deleting.value = true
   try {
     await deletePractice(practiceId)
-    toast.success('Черновик удалён')
+    toast.success(t('masterScreens.masterPracticeDetail.toast.draftDeleted'))
     await masterStore.refreshMyPractices()
     router.back()
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось удалить практику'))
+    toast.error(extractApiError(e, t('masterScreens.masterPracticeDetail.toast.deleteFailed')))
   } finally {
     deleting.value = false
     showDelete.value = false
@@ -630,7 +665,7 @@ async function load(): Promise<void> {
     // Named reviews only exist for finished practices; non-fatal alongside the load.
     if (isPast.value) void loadReviews()
   } catch (e) {
-    error.value = extractApiError(e, 'Ошибка загрузки')
+    error.value = extractApiError(e, t('common.loadError'))
   } finally {
     loading.value = false
   }

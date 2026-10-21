@@ -101,6 +101,7 @@
 //    try/catch besides. Left real on purpose.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
@@ -257,7 +258,7 @@ let pinia: Pinia
 function mount(): void {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(CheckinView)
+  app = createApp(CheckinView).use(createTestI18n())
   app.use(pinia)
   app.mount(host)
 }

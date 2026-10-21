@@ -13,7 +13,11 @@
 
 <template>
   <div class="students">
-    <VHeader title="Мои ученики" show-back @back="router.push({ name: 'master-dashboard' })" />
+    <VHeader
+      :title="t('masterScreens.masterStudents.title')"
+      show-back
+      @back="router.push({ name: 'master-dashboard' })"
+    />
 
     <div class="students__content">
       <!-- Loading -->
@@ -25,10 +29,10 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        title="Не удалось загрузить учеников"
+        :title="t('masterScreens.masterStudents.toast.loadFailed')"
         :description="error"
       >
-        <VButton size="sm" variant="outline" @click="load">Повторить</VButton>
+        <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
       </VEmptyState>
 
       <template v-else>
@@ -39,8 +43,8 @@
           <div class="students__search-field">
             <VInput
               v-model="query"
-              placeholder="Искать…"
-              aria-label="Искать ученика"
+              :placeholder="t('masterScreens.masterStudents.search.placeholder')"
+              :aria-label="t('masterScreens.masterStudents.search.aria')"
               @focus="onFieldFocus"
             />
           </div>
@@ -60,14 +64,16 @@
           <VAvatar :name="student.name" size="md" />
           <div class="students__body">
             <div class="students__name">{{ student.name }}</div>
-            <div class="students__meta">Практик: {{ student.practices_count }}</div>
+            <div class="students__meta">
+              {{ t('masterScreens.masterCommon.practicesCount', { n: student.practices_count }) }}
+            </div>
             <span v-if="student.needs_attention" class="students__attn">
-              <IconWarning :size="14" />Требует внимания
+              <IconWarning :size="14" />{{ t('masterScreens.masterStudents.needsAttention') }}
             </span>
           </div>
           <button
             class="students__msg"
-            aria-label="Написать сообщение"
+            :aria-label="t('common.writeMessage')"
             @click.stop="openMessage(student.id, student.name)"
           >
             <IconMessages :size="22" />
@@ -77,8 +83,8 @@
         <!-- Reveal the rest when there are more than the preview cap. -->
         <VShowMore
           v-if="!expanded && hiddenCount > 0"
-          :count="hiddenCount"
-          noun="учеников"
+          plus
+          :label="t('masterScreens.masterStudents.moreStudents', hiddenCount)"
           @click="expanded = true"
         />
 
@@ -86,14 +92,14 @@
         <VEmptyState
           v-if="students.length === 0"
           icon="group"
-          title="Учеников пока нет"
-          description="Они появятся после первых практик"
+          :title="t('masterScreens.masterStudents.empty.title')"
+          :description="t('masterScreens.masterStudents.empty.text')"
         />
         <VEmptyState
           v-else-if="filtered.length === 0"
           icon="group"
-          title="Никого не найдено"
-          description="Попробуйте изменить запрос"
+          :title="t('common.searchNoHits')"
+          :description="t('common.searchHint')"
         />
       </template>
     </div>
@@ -108,6 +114,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -138,7 +145,7 @@ async function load(): Promise<void> {
     const res = await getStudents()
     students.value = res.items
   } catch {
-    error.value = 'Попробуйте ещё раз'
+    error.value = t('common.tryAgain')
   } finally {
     loading.value = false
   }

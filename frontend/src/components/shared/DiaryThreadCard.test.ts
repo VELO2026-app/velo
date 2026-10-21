@@ -17,6 +17,7 @@
 // identity mapping itself is pinned in useDiaryCardModel.test.ts.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, afterEach } from 'vitest'
 import { createApp, defineComponent, h, type App } from 'vue'
 import DiaryThreadCard from '@/components/shared/DiaryThreadCard.vue'
@@ -57,7 +58,7 @@ function mountCard(item: DiaryFeedItem, timezone = 'UTC'): HTMLElement {
         })
     },
   })
-  app = createApp(Wrapper)
+  app = createApp(Wrapper).use(createTestI18n())
   app.mount(host)
   return host
 }

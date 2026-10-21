@@ -21,34 +21,41 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      title="Не удалось загрузить метрику"
+      :title="t('adminScreens.adminCommon.loadMetricFailed')"
       :description="error"
     >
-      <VButton size="sm" variant="outline" @click="load">Повторить</VButton>
+      <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
     </VEmptyState>
 
     <template v-else>
-      <VMetricHero :value="avgRate" label="Средний check-in rate">
+      <VMetricHero :value="avgRate" :label="t('adminScreens.adminCheckinRate.avgRate')">
         <template #icon><IconCheck :size="30" /></template>
       </VMetricHero>
 
       <div class="admin-detail__stats2">
-        <VStatCard :value="totalRecords" label="Всего записей" />
-        <VStatCard :value="checkedIn" label="Отметились" />
+        <VStatCard :value="totalRecords" :label="t('adminScreens.adminCheckinRate.totalRecords')" />
+        <VStatCard :value="checkedIn" :label="t('adminScreens.adminCheckinRate.checkedIn')" />
       </div>
 
       <VBarChart :bars="weekBars" />
 
-      <h3 class="admin-detail__section">Низкий check-in (практики)</h3>
+      <h3 class="admin-detail__section">
+        {{ t('adminScreens.adminCheckinRate.lowCheckinTitle') }}
+      </h3>
       <template v-if="lowPractices.length">
         <VListRow v-for="p in lowPractices" :key="p.id" :title="p.title" :subtitle="p.subtitle" />
       </template>
-      <VCard v-else><p class="admin-detail__empty">Данных пока нет</p></VCard>
+      <VCard v-else
+        ><p class="admin-detail__empty">
+          {{ t('common.noData') }}
+        </p></VCard
+      >
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -90,7 +97,10 @@ const lowPractices = computed(() =>
   (data.value?.low_practices ?? []).map((p) => ({
     id: p.id,
     title: p.title,
-    subtitle: `${Math.round(p.checkin_rate_pct)}% · ${p.total} записей`,
+    subtitle: t('adminScreens.adminCheckinRate.subtitle', {
+      pct: Math.round(p.checkin_rate_pct),
+      total: p.total,
+    }),
   })),
 )
 
@@ -100,7 +110,7 @@ async function load(): Promise<void> {
   try {
     data.value = await getCheckinMetric(period, offset)
   } catch (e) {
-    error.value = extractApiError(e, 'Ошибка загрузки')
+    error.value = extractApiError(e, t('common.loadError'))
   } finally {
     loading.value = false
   }

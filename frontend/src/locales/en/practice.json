@@ -1,0 +1,108 @@
+{
+  "filters": {
+    "title": "Filter",
+    "direction": "Practice direction",
+    "style": "Practice style",
+    "difficulty": "Difficulty",
+    "duration": "Duration",
+    "durationChips": {
+      "short": "30 - 45 min",
+      "long": "1 hour and more"
+    },
+    "apply": "Apply",
+    "resetDates": "Reset dates",
+    "timeOfDay": "Time of day"
+  },
+  "calendarCard": {
+    "paid": "Paid"
+  },
+  "audience": {
+    "noGroups": "No groups yet. Create a group on the \"My groups\" screen.",
+    "noSchools": "No schools available to choose from."
+  },
+  "useTemplate": {
+    "head": "You created earlier…",
+    "empty": "No data yet…"
+  },
+  "practiceCancel": {
+    "title": "Cancel the practice?",
+    "notify": "Participants will be notified. Payments are refunded automatically.",
+    "recurring": "This is a recurring practice",
+    "keep": "Don't cancel",
+    "cancel": "Cancel",
+    "scopeOne": "Only this one",
+    "scopeFuture": "This and future ones"
+  },
+  "timePicker": {
+    "title": "Practice time"
+  },
+  "bookingCancel": {
+    "title": "Cancel the booking?",
+    "keep": "No, keep it",
+    "confirm": "Yes, cancel"
+  },
+  "booking": {
+    "title": "Booking",
+    "labels": {
+      "practice": "Practice",
+      "master": "Master",
+      "total": "Total",
+      "date": "Date"
+    },
+    "masterFallback": "Master",
+    "promoPlaceholder": "Promo code",
+    "discount": "{n}% discount",
+    "insufficientBalance": "Not enough funds. Your balance: {balance}",
+    "cta": {
+      "topup": "Top up your balance",
+      "signup": "Book",
+      "pay": "Pay"
+    },
+    "toast": {
+      "booked": "You're booked!",
+      "alreadyBooked": "You are already booked for this practice",
+      "purchaseFailed": "Failed to complete the booking",
+      "bookingError": "Booking error",
+      "promoFailed": "Failed to verify the promo code"
+    }
+  },
+  "practice": {
+    "status": {
+      "draft": "Draft",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    },
+    "offer": {
+      "awaiting_verification": "Awaiting master review",
+      "awaiting_answer": "Awaiting the participant's answer"
+    },
+    "regular": "Recurring",
+    "remainingSessions": "{left} of {total} sessions left",
+    "placeholderAlt": "Practice",
+    "durationMinutes": "{n} minutes",
+    "audience": {
+      "public": "Public",
+      "students": "All students",
+      "groups": "Selected groups",
+      "curator_groups": "Schools"
+    },
+    "styles": {
+      "silence": "Silence meditation",
+      "presence": "Presence meditation",
+      "sound": "Sound meditation",
+      "taoist": "Taoist meditation",
+      "nidra": "Yoga nidra",
+      "yin": "Yin yoga",
+      "hatha": "Hatha yoga",
+      "vinyasa": "Vinyasa",
+      "kundalini": "Kundalini yoga",
+      "ashtanga": "Ashtanga yoga",
+      "womens": "Women's circle",
+      "mens": "Men's circle",
+      "sharing": "Sharing circle"
+    },
+    "loadFailed": "Failed to load the practice",
+    "customVariant": "Specify your own",
+    "participantsShort": "{n} participant | {n} participants"
+  }
+}

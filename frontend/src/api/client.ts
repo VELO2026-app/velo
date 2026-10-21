@@ -17,6 +17,7 @@
 // =============================================================================
 
 import type { ApiError } from './types'
+import i18n from '@/locales'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 const REQUEST_TIMEOUT_MS = 15_000
@@ -211,8 +212,11 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 // -- the log line carries the full id, so a prefix match finds it with one
 // grep. No header (network/timeout failures, which never reach this
 // function) -> no suffix; never render an empty or placeholder code.
+// tz-i18n 1.2: the word «код» comes from common.traceSuffix.
 function suffixWithTraceId(message: string, traceId: string | null): string {
-  return traceId ? `${message} · код ${traceId.slice(0, 6)}` : message
+  return traceId
+    ? i18n.global.t('common.traceSuffix', { message, code: traceId.slice(0, 6) })
+    : message
 }
 
 // -- Public API --

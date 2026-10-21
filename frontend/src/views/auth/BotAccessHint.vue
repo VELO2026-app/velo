@@ -15,19 +15,21 @@
 <template>
   <div class="bot-hint" role="status">
     <p class="bot-hint__text">
-      Чтобы получать уведомления о записях, откройте бота VELO и нажмите «Запустить» —
-      если ещё не сделали этого.
+      {{ t('auth.botHint.text') }}
     </p>
     <div class="bot-hint__actions">
       <a :href="botUrl" class="bot-hint__open" rel="noopener" @click="$emit('close')">
-        Открыть бота
+        {{ t('auth.botHint.open') }}
       </a>
-      <button type="button" class="bot-hint__close" @click="$emit('close')">Понятно</button>
+      <button type="button" class="bot-hint__close" @click="$emit('close')">
+        {{ t('auth.botHint.dismiss') }}
+      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 defineEmits<{ close: [] }>()
 
 // Same link and same fallback as TelegramStubView (a universal link: same

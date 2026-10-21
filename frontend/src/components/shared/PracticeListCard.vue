@@ -77,9 +77,12 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed } from 'vue'
 import { IconClock } from '@/components/icons'
 import { practiceIconFor } from '@/utils/displayHelpers'
+
+// tz-i18n 2.2b: master-name fallback via booking.masterFallback.
 
 interface PracticeLike {
   /** Direction picks the icon. */
@@ -122,13 +125,14 @@ const icon = computed(() => practiceIconFor(props.practice))
 // Title: explicit prop > practice.title > empty
 const titleText = computed(() => props.title ?? props.practice.title ?? '')
 
-// Master name with sensible fallback
-const masterName = computed(() => props.practice.master_name ?? 'Мастер')
+// Master name with sensible fallback (the fallback word/initial is the
+// localized «Мастер» -- tz-i18n 2.2b)
+const masterName = computed(() => props.practice.master_name ?? t('booking.masterFallback'))
 
 // First letter of master name for the avatar placeholder
 const masterInitial = computed(() => {
-  const name = (props.practice.master_name ?? 'М').trim()
-  return (name.charAt(0) || 'М').toUpperCase()
+  const name = props.practice.master_name ?? t('booking.masterFallback')
+  return name.trim().charAt(0).toUpperCase()
 })
 </script>
 

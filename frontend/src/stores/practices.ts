@@ -16,6 +16,9 @@ import { ref } from 'vue'
 import { getPractice } from '@/api/practices'
 import { extractApiError } from '@/composables/useApiError'
 import type { PracticeResponse } from '@/api/types'
+import i18n from '@/locales'
+
+const { t } = i18n.global
 
 export const usePracticesStore = defineStore('practices', () => {
   // -- Single practice detail --
@@ -49,7 +52,7 @@ export const usePracticesStore = defineStore('practices', () => {
       }
     } catch (e) {
       if (_currentFetchId === id) {
-        selectedError.value = extractApiError(e, 'Не удалось загрузить практику')
+        selectedError.value = extractApiError(e, t('storeErrors.practices.selected'))
         selected.value = null
       }
     } finally {

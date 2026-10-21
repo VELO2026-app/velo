@@ -40,11 +40,11 @@
 <template>
   <VBottomSheet
     :open="open"
-    title="Удалить из группы"
+    :title="t('shared.groups.removeTitle')"
     compact-title
     title-strong
-    save-label="Удалить"
-    cancel-label="Отмена"
+    :save-label="t('ui.delete')"
+    :cancel-label="t('ui.cancel')"
     @save="onSave"
     @close="$emit('close')"
   >
@@ -68,12 +68,13 @@
     </template>
 
     <p v-if="mode === 'all'" class="remove-from-group__note">
-      Участник автоматически переносится в группу «Ученики»
+      {{ t('shared.groups.autoMove') }}
     </p>
   </VBottomSheet>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, ref, watch } from 'vue'
 import { VBottomSheet, VRadioGroup, VChip } from '@/components/ui'
 import TargetUserCard from './TargetUserCard.vue'
@@ -99,10 +100,27 @@ const emit = defineEmits<{ close: []; saved: [] }>()
 
 const toast = useToast()
 
+// tz-i18n 2.2b: sheet copy + radio options via shared.groups.*.
+
 const ALL_MODE_OPTIONS = [
-  { value: 'current', label: 'Удалить из текущей группы' },
-  { value: 'selected', label: 'Удалить из выбранных групп' },
-  { value: 'all', label: 'Удалить из всех групп' },
+  {
+    value: 'current',
+    get label(): string {
+      return t('shared.groups.removeCurrent')
+    },
+  },
+  {
+    value: 'selected',
+    get label(): string {
+      return t('shared.groups.removeSelected')
+    },
+  },
+  {
+    value: 'all',
+    get label(): string {
+      return t('shared.groups.removeAll')
+    },
+  },
 ]
 
 // No currentGroupId (profile menu, T24-10) -- drop the "current" option,
@@ -141,7 +159,7 @@ async function onSave(): Promise<void> {
       await removeGroupMember(props.currentGroupId, props.studentId)
     } else if (mode.value === 'selected') {
       if (selected.value.size === 0) {
-        toast.error('Выберите хотя бы одну группу')
+        toast.error(t('shared.components.pickGroup'))
         return
       }
       await Promise.all(
@@ -150,11 +168,11 @@ async function onSave(): Promise<void> {
     } else {
       await Promise.all(props.customGroups.map((g) => removeGroupMember(g.id, props.studentId)))
     }
-    toast.success('Удалено')
+    toast.success(t('shared.components.removed'))
     emit('saved')
     emit('close')
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось удалить из группы'))
+    toast.error(extractApiError(e, t('shared.components.removeFailed')))
   }
 }
 </script>

@@ -21,7 +21,11 @@
 
 <template>
   <div class="ncg">
-    <VHeader title="Новая школа" show-back @back="router.back()" />
+    <VHeader
+      :title="t('masterScreens.masterCuratorGroupCreate.title')"
+      show-back
+      @back="router.back()"
+    />
 
     <div class="ncg__content">
       <!-- BE-18: 403 group_creation_not_allowed -- the right itself is
@@ -30,12 +34,12 @@
       <VEmptyState
         v-if="refused"
         icon="warning"
-        title="Создание школ недоступно"
-        description="Заводить школы может мастер, которому администратор выдал это право."
+        :title="t('masterScreens.masterCuratorGroupCreate.unavailable')"
+        :description="t('masterScreens.masterCuratorGroupCreate.unavailableHint')"
       >
         <template #action>
           <VButton variant="outline" @click="router.replace({ name: 'master-curator-groups' })">
-            К моим школам
+            {{ t('masterScreens.masterCuratorGroupCreate.backToSchools') }}
           </VButton>
         </template>
       </VEmptyState>
@@ -47,16 +51,19 @@
         <!--
         <div class="ncg__legend">
           <IconRequired class="ncg__legend-seal" :size="22" />
-          <span>— поля, обязательные для заполнения</span>
+          <span>— {{ t('ui.legendRequired') }}</span>
         </div>
         -->
 
-        <h2 class="velo-section-title">Основное <span class="ncg__req">*</span></h2>
+        <h2 class="velo-section-title">
+          {{ t('masterScreens.masterCuratorGroupCreate.section.basics')
+          }}<span class="ncg__req">*</span>
+        </h2>
 
         <VInput
           v-model="name"
-          label="Название"
-          placeholder="Название"
+          :label="t('masterScreens.masterCuratorGroupCreate.fields.name')"
+          :placeholder="t('masterScreens.masterCuratorGroupCreate.fields.name')"
           hide-label
           :error="fieldError"
           @focus="onFieldFocus"
@@ -69,8 +76,8 @@
 
         <VTextarea
           v-model="description"
-          label="Описание"
-          placeholder="Описание"
+          :label="t('masterScreens.masterCuratorGroupCreate.fields.description')"
+          :placeholder="t('masterScreens.masterCuratorGroupCreate.fields.description')"
           hide-label
           :rows="3"
           autogrow
@@ -83,21 +90,31 @@
              ride NOTHING to the server (createCuratorGroup takes
              name/description only). -->
         <template v-if="SCHOOL_MEDIA_UPLOAD_ENABLED">
-          <h2 class="velo-section-title">Аватар школы</h2>
+          <h2 class="velo-section-title">
+            {{ t('masterScreens.masterCuratorGroupCreate.fields.avatar') }}
+          </h2>
           <p class="ncg__media-hint">
-            Фото будет использовано на платформе в открытом доступе для участников
+            {{ t('masterScreens.masterCuratorGroupCreate.photoNote') }}
           </p>
-          <SchoolAvatarPicker v-model="avatarUrl" aria-label="Аватар школы" />
+          <SchoolAvatarPicker
+            v-model="avatarUrl"
+            :aria-label="t('masterScreens.masterCuratorGroupCreate.avatarAria')"
+          />
 
-          <h2 class="velo-section-title">Фон школы</h2>
+          <h2 class="velo-section-title">
+            {{ t('masterScreens.masterCuratorGroupCreate.fields.background') }}
+          </h2>
           <p class="ncg__media-hint">
-            Фото будет использовано на платформе в открытом доступе для участников
+            {{ t('masterScreens.masterCuratorGroupCreate.photoNote') }}
           </p>
-          <SchoolBannerPicker v-model="bannerUrl" aria-label="Фон школы" />
+          <SchoolBannerPicker
+            v-model="bannerUrl"
+            :aria-label="t('masterScreens.masterCuratorGroupCreate.bannerAria')"
+          />
         </template>
 
         <VButton class="ncg__submit" variant="primary" block :loading="creating" @click="onCreate">
-          Создать школу
+          {{ t('masterScreens.masterCuratorGroupCreate.submit') }}
         </VButton>
       </template>
     </div>
@@ -105,6 +122,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { nextTick, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { createCuratorGroup } from '@/api/curatorGroups'
@@ -151,7 +169,7 @@ async function onCreate(): Promise<void> {
   fieldError.value = ''
 
   if (!trimmed) {
-    await showFieldError('Введите название школы')
+    await showFieldError(t('masterScreens.masterCuratorGroupCreate.validation.enterName'))
     return
   }
 
@@ -161,14 +179,14 @@ async function onCreate(): Promise<void> {
     // "never store ''" rule is the belt to this suspend (same as groups).
     const desc = description.value.trim()
     const created = await createCuratorGroup(trimmed, desc || undefined)
-    toast.success(`Школа «${trimmed}» создана`)
+    toast.success(t('masterScreens.masterCuratorGroupCreate.createdToast', { name: trimmed }))
     // §1.6 (owner): after creating, the school PAGE is the destination -- one
     // page component for both zones; this master-zone route keeps the guard
     // chain the creator just passed.
     void router.replace({ name: 'master-curator-group', params: { id: created.id } })
   } catch (e) {
     if (e instanceof ApiResponseError && e.code === 'curator_group_name_taken') {
-      await showFieldError('У вас уже есть школа с таким названием')
+      await showFieldError(t('masterScreens.masterCuratorGroupCreate.toast.nameTaken'))
     }
     if (e instanceof ApiResponseError && e.code === 'group_creation_not_allowed') {
       // Not a field error and not a retryable failure -- the RIGHT is
@@ -176,7 +194,7 @@ async function onCreate(): Promise<void> {
       // phrase errorMessages.ts already carries.
       refused.value = true
     }
-    toast.error(extractApiError(e, 'Не удалось создать школу'))
+    toast.error(extractApiError(e, t('masterScreens.masterCuratorGroupCreate.toast.createFailed')))
   } finally {
     creating.value = false
   }

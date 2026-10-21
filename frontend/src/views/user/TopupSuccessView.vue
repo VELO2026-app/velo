@@ -10,24 +10,25 @@
 <template>
   <div class="topup-result">
     <IconSuccess :size="64" class="topup-result__icon" />
-    <h1 class="topup-result__title">Баланс пополнен!</h1>
-    <p class="topup-result__text">Ваш текущий баланс:</p>
+    <h1 class="topup-result__title">{{ t('user.screens.topupSuccess.title') }}</h1>
+    <p class="topup-result__text">{{ t('user.screens.topupSuccess.balanceLabel') }}</p>
     <div class="topup-result__balance">
       <VLoader v-if="loading" size="sm" />
       <span v-else>{{ balanceStore.formattedBalance }}</span>
     </div>
     <div class="topup-result__actions">
       <VButton variant="primary" size="lg" block @click="router.push({ name: 'user-dashboard' })">
-        На главную
+        {{ t('common.backHome') }}
       </VButton>
       <VButton variant="ghost" block @click="router.push({ name: 'user-topup' })">
-        Пополнить ещё
+        {{ t('user.screens.topupSuccess.topupAgain') }}
       </VButton>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { VButton, VLoader } from '@/components/ui'

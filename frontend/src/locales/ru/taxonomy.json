@@ -1,0 +1,67 @@
+{
+  "display": {
+    "direction": {
+      "meditation": "Медитация",
+      "yoga": "Йога",
+      "breathwork": "Дыхательные практики",
+      "somatic": "Соматика",
+      "tantra": "Тантра",
+      "circles": "Круги",
+      "sound_healing": "Саундхиллинг",
+      "art": "Арт-практики",
+      "narrative": "Нарративные практики",
+      "movement": "Движение"
+    },
+    "difficulty": {
+      "beginner": "Начальная",
+      "medium": "Средняя",
+      "high": "Высокая"
+    },
+    "durationBucket": {
+      "short": "До 1 часа",
+      "long": "1 час и больше"
+    },
+    "timeOfDay": {
+      "night": "Ночь",
+      "morning": "Утро",
+      "day": "День",
+      "evening": "Вечер"
+    },
+    "feedKind": {
+      "booking_confirmed": "Вы записались",
+      "booking_cancelled_by_user": "Вы отменили запись",
+      "practice_rescheduled": "Мастер перенёс практику",
+      "practice_cancelled_by_master": "Практика отменена",
+      "practice_outcome": "",
+      "checkin": "Check-in",
+      "feedback": "Feedback",
+      "note": "Дневник",
+      "dream": "Сонник",
+      "thread_started": "Вы начали диалог",
+      "external_activity": ""
+    },
+    "externalActivity": {
+      "vocal": "Вокал",
+      "nail_standing": "Гвоздестояние",
+      "meditation": "Медитация",
+      "massage": "Массаж",
+      "yoga": "Йога",
+      "dance": "Танцы",
+      "custom": ""
+    },
+    "outcome": {
+      "attended": "Done",
+      "no_show": "Вы не пришли"
+    },
+    "weekdayAbbr": {
+      "1": "Пн",
+      "2": "Вт",
+      "3": "Ср",
+      "4": "Чт",
+      "5": "Пт",
+      "6": "Сб",
+      "7": "Вс"
+    },
+    "recurrenceDaily": "Ежедневно"
+  }
+}

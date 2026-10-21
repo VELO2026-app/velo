@@ -18,10 +18,7 @@
 -->
 
 <template>
-  <ResultScreen
-    title="Места закончились"
-    text="К сожалению, на эту практику все места уже разобрали"
-  >
+  <ResultScreen :title="t('shared.soldOut.title')" :text="t('shared.soldOut.text')">
     <template #icon>
       <svg
         class="sold-out__art"
@@ -56,16 +53,22 @@
 
     <template #actions>
       <VButton variant="primary" size="lg" block class="sold-out__cta" @click="$emit('find-other')">
-        Найти другую практику
+        {{ t('shared.soldOut.findOther') }}
       </VButton>
-      <button type="button" class="sold-out__close" @click="$emit('close')">Закрыть</button>
+      <button type="button" class="sold-out__close" @click="$emit('close')">
+        {{ t('ui.close') }}
+      </button>
     </template>
   </ResultScreen>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { VButton } from '@/components/ui'
 import ResultScreen from '@/components/shared/ResultScreen.vue'
+
+// tz-i18n 2.2b: sold-out copy via shared.soldOut.*; the text-link «Закрыть»
+// reuses ui.close.
 
 defineEmits<{
   'find-other': []

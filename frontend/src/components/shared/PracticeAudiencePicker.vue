@@ -48,7 +48,7 @@
         </VChip>
       </div>
       <p v-else class="pap__empty">
-        Пока нет ни одной группы. Создайте группу на экране «Мои группы».
+        {{ t('audience.noGroups') }}
       </p>
     </template>
 
@@ -69,7 +69,7 @@
            is reachable only if the list emptied AFTER the kind was chosen
            (left the school in another tab). Honest text, no invented targets.
            (schoolLocked never reaches this branch -- see the props below.) -->
-      <p v-else class="pap__empty">Нет школ, доступных для выбора.</p>
+      <p v-else class="pap__empty">{{ t('audience.noSchools') }}</p>
     </template>
 
     <!-- Review fix: the error belongs to the ACTIVE targeted kind only --
@@ -84,6 +84,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed } from 'vue'
 import type { GroupListItem } from '@/api/groups'
 import type { PracticeAudienceKind } from '@/api/types'

@@ -1,0 +1,19 @@
+{
+  "dates": {
+    "_comment": "VELO Frontend -- uk seed calendar tables. The VELO short-month table is a RUSSIAN typographic rule; uk renders ICU's own short month, so this array is only parity filler -- formatShortDate ignores it for non-ru locales.",
+    "shortMonths": [
+      "січ.",
+      "лют.",
+      "бер.",
+      "кві.",
+      "тра.",
+      "чер.",
+      "лип.",
+      "сер.",
+      "вер.",
+      "жов.",
+      "лис.",
+      "гру."
+    ]
+  }
+}

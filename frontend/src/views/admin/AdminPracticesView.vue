@@ -21,7 +21,7 @@
   <div class="admin-list">
     <header class="admin-list__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-list__title">Практики</h1>
+      <h1 class="admin-list__title">{{ t('adminScreens.adminPractices.title') }}</h1>
       <span class="admin-list__count">{{ headerCount }}</span>
     </header>
 
@@ -32,10 +32,10 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      title="Не удалось загрузить практики"
+      :title="t('adminScreens.adminPractices.loadFailed')"
       :description="error"
     >
-      <VButton size="sm" variant="outline" @click="load">Повторить</VButton>
+      <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
     </VEmptyState>
 
     <div v-else-if="practices.length" class="admin-list__items">
@@ -57,12 +57,13 @@
     </div>
 
     <VCard v-else>
-      <p class="admin-list__empty">Данных пока нет</p>
+      <p class="admin-list__empty">{{ t('common.noData') }}</p>
     </VCard>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { VBackButton, VSegment, VCard, VLoader, VEmptyState, VButton } from '@/components/ui'
@@ -90,9 +91,13 @@ const totalCount = computed<number | null>(() => adminStore.stats?.practices_cou
 const headerCount = computed<string>(() => (total.value !== null ? String(total.value) : '—'))
 
 const segOptions = computed<SegmentOption[]>(() => [
-  { value: 'all', label: 'Все', badge: totalCount.value ?? undefined },
-  { value: 'upcoming', label: 'Предстоящие' },
-  { value: 'past', label: 'Прошедшие' },
+  {
+    value: 'all',
+    label: t('common.all'),
+    badge: totalCount.value ?? undefined,
+  },
+  { value: 'upcoming', label: t('adminScreens.adminPractices.upcoming') },
+  { value: 'past', label: t('adminScreens.adminPractices.past') },
 ])
 
 function whenLabel(p: AdminPracticeListItem): string {
@@ -104,7 +109,7 @@ function whenTime(p: AdminPracticeListItem): string {
   return formatTime(p.scheduled_at, p.timezone)
 }
 function durationLabel(p: AdminPracticeListItem): string {
-  return `${p.duration_minutes} мин`
+  return t('adminScreens.adminPractices.durationMinutes', { n: p.duration_minutes })
 }
 function capacityText(p: AdminPracticeListItem): string {
   return p.capacity != null ? String(p.capacity) : '∞'
@@ -124,7 +129,7 @@ async function load(): Promise<void> {
     practices.value = res.items
     total.value = res.total
   } catch (e) {
-    error.value = extractApiError(e, 'Ошибка загрузки')
+    error.value = extractApiError(e, t('common.loadError'))
   } finally {
     loading.value = false
   }

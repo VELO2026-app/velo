@@ -45,11 +45,11 @@
 <template>
   <VModal :open="open" @close="$emit('close')">
     <div class="cal-filter">
-      <h2 class="cal-filter__heading">Фильтр</h2>
+      <h2 class="cal-filter__heading">{{ t('filters.title') }}</h2>
 
       <!-- Направление практики (single-select) -->
       <section class="cal-filter__group">
-        <h3 class="cal-filter__label">Направление практики</h3>
+        <h3 class="cal-filter__label">{{ t('filters.direction') }}</h3>
         <div class="cal-filter__chips">
           <VChip
             size="md"
@@ -57,7 +57,7 @@
             :active="selectedDirection === undefined"
             @click="clearDirection"
           >
-            Все
+            {{ t('common.all') }}
           </VChip>
           <VChip
             v-for="opt in DIRECTION_CHIPS"
@@ -74,10 +74,10 @@
 
       <!-- Вид практики (direction-dependent multi-select chips) -->
       <section v-if="styleOptions.length > 0" class="cal-filter__group">
-        <h3 class="cal-filter__label">Вид практики</h3>
+        <h3 class="cal-filter__label">{{ t('filters.style') }}</h3>
         <div class="cal-filter__chips">
           <VChip size="md" clickable :active="draft.style.length === 0" @click="clearStyle">
-            Все
+            {{ t('common.all') }}
           </VChip>
           <VChip
             v-for="opt in styleOptions"
@@ -94,7 +94,7 @@
 
       <!-- Сложность -->
       <section class="cal-filter__group">
-        <h3 class="cal-filter__label">Сложность</h3>
+        <h3 class="cal-filter__label">{{ t('filters.difficulty') }}</h3>
         <div class="cal-filter__chips">
           <VChip
             size="md"
@@ -102,7 +102,7 @@
             :active="draft.difficulty.length === 0"
             @click="clearDifficulty"
           >
-            Все
+            {{ t('common.all') }}
           </VChip>
           <VChip
             v-for="opt in DIFFICULTY_CHIPS"
@@ -119,7 +119,7 @@
 
       <!-- Длительность (single-select) -->
       <section class="cal-filter__group">
-        <h3 class="cal-filter__label">Длительность</h3>
+        <h3 class="cal-filter__label">{{ t('filters.duration') }}</h3>
         <div class="cal-filter__chips">
           <VChip
             size="md"
@@ -127,7 +127,7 @@
             :active="draft.duration_bucket === undefined"
             @click="clearSingle('duration_bucket')"
           >
-            Все
+            {{ t('common.all') }}
           </VChip>
           <VChip
             v-for="opt in DURATION_CHIPS"
@@ -144,7 +144,7 @@
 
       <!-- Время (single-select) -->
       <section class="cal-filter__group">
-        <h3 class="cal-filter__label">Время</h3>
+        <h3 class="cal-filter__label">{{ t('filters.timeOfDay') }}</h3>
         <div class="cal-filter__chips">
           <VChip
             size="md"
@@ -152,7 +152,7 @@
             :active="draft.time_of_day === undefined"
             @click="clearSingle('time_of_day')"
           >
-            Все
+            {{ t('common.all') }}
           </VChip>
           <VChip
             v-for="opt in TIME_CHIPS"
@@ -170,13 +170,14 @@
       <!-- F-8: Только «Сбросить». «Применить» удалён — каждое нажатие на
            чип уже эмитит apply. Закрыть модалку = X в VModal-шапке. -->
       <div class="cal-filter__actions">
-        <VButton variant="secondary" block @click="onReset">Сбросить</VButton>
+        <VButton variant="secondary" block @click="onReset">{{ t('common.reset') }}</VButton>
       </div>
     </div>
   </VModal>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { reactive, watch, computed, onMounted, ref } from 'vue'
 import { VModal, VButton, VChip } from '@/components/ui'
 import { DIFFICULTY_LABEL, TIME_OF_DAY_LABEL } from '@/utils/displayHelpers'
@@ -185,6 +186,8 @@ import { ensureTaxonomyCatalog } from '@/utils/methodTaxonomy'
 import type { TaxonomyListResponse } from '@/api/taxonomy'
 import type { CalendarFacetFilters } from '@/stores/calendar'
 import type { PracticeDirection, PracticeDifficulty, DurationBucket, TimeOfDay } from '@/api/types'
+
+// tz-i18n 2.2a: heading/section labels/all-chips/reset via filters.*/common.*.
 
 const props = defineProps<{
   open: boolean
@@ -214,10 +217,21 @@ const DIFFICULTY_CHIPS: { value: PracticeDifficulty; label: string }[] = (
 
 // Duration labels are LOCAL here (per the filter mock: "30 - 45 мин" /
 // "1 час и более"). The global DURATION_BUCKET_LABEL is left untouched so
-// other surfaces (cards / detail) keep their wording.
+// other surfaces (cards / detail) keep their wording. Labels resolve at
+// ACCESS time (getters) -- tz-i18n 1.1.
 const DURATION_CHIPS: { value: DurationBucket; label: string }[] = [
-  { value: 'short', label: '30 - 45 мин' },
-  { value: 'long', label: '1 час и более' },
+  {
+    value: 'short',
+    get label(): string {
+      return t('filters.durationChips.short')
+    },
+  },
+  {
+    value: 'long',
+    get label(): string {
+      return t('filters.durationChips.long')
+    },
+  },
 ]
 
 const TIME_CHIPS: { value: TimeOfDay; label: string }[] = (

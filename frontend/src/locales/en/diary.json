@@ -1,0 +1,38 @@
+{
+  "diary": {
+    "categories": {
+      "entries": "Diary",
+      "dreams": "Dreams",
+      "feedbacks": "Feedbacks",
+      "checkins": "Check-ins",
+      "practices": "Practices"
+    },
+    "search": {
+      "placeholder": "Search...",
+      "aria": "Search the diary",
+      "clearAria": "Clear",
+      "recent": "You recently searched for:",
+      "found": "Found: {n}"
+    },
+    "bannerConfirmedTitle": "You booked",
+    "bannerConfirmedRef": "[{title} with {master}]",
+    "bannerConfirmedRefNoMaster": "[{title}]"
+  },
+  "reflection": {
+    "v1": {
+      "bannerTitle": "How are you feeling?",
+      "screenTitle": "We noticed you missed today",
+      "screenSubtitle": "How are you feeling?"
+    },
+    "v2": {
+      "bannerTitle": "How was your day?",
+      "screenTitle": "We missed you",
+      "screenSubtitle": "Tell us how your day went"
+    },
+    "v3": {
+      "bannerTitle": "Share how you feel",
+      "screenTitle": "Sometimes the body asks for a pause",
+      "screenSubtitle": "What did you need more of today?"
+    }
+  }
+}

@@ -10,7 +10,11 @@
 
 <template>
   <div class="report-detail">
-    <VHeader title="Жалоба" :show-back="true" @back="router.back()" />
+    <VHeader
+      :title="t('adminScreens.adminReportDetail.title')"
+      :show-back="true"
+      @back="router.back()"
+    />
 
     <div class="report-detail__content">
       <!-- Loading -->
@@ -19,8 +23,13 @@
       </div>
 
       <!-- Error (SW8): distinct from "not found" -- retry, not a dead end. -->
-      <VEmptyState v-else-if="error" icon="warning" title="Ошибка загрузки" :description="error">
-        <VButton size="sm" variant="outline" @click="loadReport">Повторить</VButton>
+      <VEmptyState
+        v-else-if="error"
+        icon="warning"
+        :title="t('common.loadError')"
+        :description="error"
+      >
+        <VButton size="sm" variant="outline" @click="loadReport">{{ t('common.retry') }}</VButton>
       </VEmptyState>
 
       <template v-else-if="report">
@@ -36,20 +45,28 @@
 
         <!-- Report content -->
         <div class="report-detail__section">
-          <div class="report-detail__section-title">Текст жалобы</div>
-          <VCard class="report-detail__reason">{{ report.reason }}</VCard>
+          <div class="report-detail__section-title">
+            {{ t('adminScreens.adminReportDetail.reportTextLabel') }}
+          </div>
+          <VCard class="report-detail__reason">{{ decodedReason }}</VCard>
         </div>
 
         <!-- Meta -->
         <div class="report-detail__section">
-          <div class="report-detail__section-title">Детали</div>
+          <div class="report-detail__section-title">
+            {{ t('adminScreens.adminReportDetail.details') }}
+          </div>
           <VCard class="report-detail__meta-list" padding="none">
             <div class="report-detail__meta-row">
-              <span class="report-detail__meta-key">Тип цели</span>
+              <span class="report-detail__meta-key">{{
+                t('adminScreens.adminReportDetail.targetType')
+              }}</span>
               <span class="report-detail__meta-val">{{ report.target_type }}</span>
             </div>
             <div class="report-detail__meta-row">
-              <span class="report-detail__meta-key">ID цели</span>
+              <span class="report-detail__meta-key">{{
+                t('adminScreens.adminReportDetail.targetId')
+              }}</span>
               <button
                 v-if="targetRoute"
                 type="button"
@@ -63,14 +80,18 @@
               </span>
             </div>
             <div class="report-detail__meta-row">
-              <span class="report-detail__meta-key">Создана</span>
+              <span class="report-detail__meta-key">{{
+                t('adminScreens.adminReportDetail.createdLabel')
+              }}</span>
               <span class="report-detail__meta-val">
                 {{ formatDateTime(report.created_at) }}
               </span>
             </div>
             <template v-if="report.resolved_at">
               <div class="report-detail__meta-row">
-                <span class="report-detail__meta-key">Обработана</span>
+                <span class="report-detail__meta-key">{{
+                  t('adminScreens.adminReportDetail.processed')
+                }}</span>
                 <span class="report-detail__meta-val">
                   {{ formatDateTime(report.resolved_at) }}
                 </span>
@@ -78,7 +99,9 @@
             </template>
             <template v-if="report.resolution_note">
               <div class="report-detail__meta-row report-detail__meta-row--column">
-                <span class="report-detail__meta-key">Примечание</span>
+                <span class="report-detail__meta-key">{{
+                  t('adminScreens.adminReportDetail.note')
+                }}</span>
                 <span class="report-detail__meta-note">{{ report.resolution_note }}</span>
               </div>
             </template>
@@ -88,12 +111,14 @@
         <!-- Actions: only for pending -->
         <template v-if="currentStatus === 'pending'">
           <div class="report-detail__section">
-            <div class="report-detail__section-title">Решить жалобу</div>
+            <div class="report-detail__section-title">
+              {{ t('adminScreens.adminReportDetail.resolveCta') }}
+            </div>
             <div class="report-detail__action-form">
               <VTextarea
                 v-model="resolveNote"
-                label="Примечание к решению *"
-                placeholder="Опишите, какие меры приняты"
+                :label="t('adminScreens.adminReportDetail.resolutionNote')"
+                :placeholder="t('adminScreens.adminReportDetail.resolutionPlaceholder')"
                 :rows="3"
                 :error="resolveError"
               />
@@ -104,18 +129,20 @@
                 :disabled="anyLoading"
                 @click="onResolve"
               >
-                Решить
+                {{ t('adminScreens.adminReportDetail.resolve') }}
               </VButton>
             </div>
           </div>
 
           <div class="report-detail__section">
-            <div class="report-detail__section-title">Отклонить жалобу</div>
+            <div class="report-detail__section-title">
+              {{ t('adminScreens.adminReportDetail.rejectCta') }}
+            </div>
             <div class="report-detail__action-form">
               <VTextarea
                 v-model="dismissNote"
-                label="Примечание (необязательно)"
-                placeholder="Причина отклонения"
+                :label="t('adminScreens.adminReportDetail.noteOptional')"
+                :placeholder="t('adminScreens.adminReportDetail.rejectionReason')"
                 :rows="2"
               />
               <VButton
@@ -125,7 +152,7 @@
                 :disabled="anyLoading"
                 @click="onDismiss"
               >
-                Отклонить
+                {{ t('adminScreens.adminReportDetail.reject') }}
               </VButton>
             </div>
           </div>
@@ -133,7 +160,7 @@
 
         <!-- Already processed -->
         <VCard v-else class="report-detail__processed">
-          Жалоба уже обработана — статус:
+          {{ t('adminScreens.adminReportDetail.alreadyProcessed') }}
           <strong>{{ reportStatusLabel(currentStatus) }}</strong>
         </VCard>
       </template>
@@ -142,16 +169,18 @@
       <div v-else class="report-detail__not-found">
         <VEmptyState
           icon="notfound"
-          title="Жалоба не найдена"
-          description="Вернитесь к списку жалоб"
+          :title="t('adminScreens.adminReportDetail.notFoundTitle')"
+          :description="t('adminScreens.adminReportDetail.backToList')"
         />
-        <VButton variant="outline" block @click="router.back()">Назад</VButton>
+        <VButton variant="outline" block @click="router.back()">{{ t('ui.back') }}</VButton>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
+import { decodeReportReason } from '@/utils/reportReasons'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { RouteLocationRaw } from 'vue-router'
@@ -216,7 +245,7 @@ async function loadReport(): Promise<void> {
     currentStatus.value = fetched.status
   } catch (e) {
     // SW8: own error rung + retry, distinct from "not found".
-    error.value = extractApiError(e, 'Ошибка загрузки жалобы')
+    error.value = extractApiError(e, t('adminScreens.adminReportDetail.loadFailedToast'))
   } finally {
     loading.value = false
   }
@@ -225,18 +254,18 @@ async function loadReport(): Promise<void> {
 async function onResolve(): Promise<void> {
   resolveError.value = ''
   if (!resolveNote.value.trim()) {
-    resolveError.value = 'Введите примечание к решению'
+    resolveError.value = t('adminScreens.adminReportDetail.resolutionNotePlaceholder')
     return
   }
   if (anyLoading.value) return
   resolving.value = true
   try {
     await resolveReport(reportId, resolveNote.value.trim())
-    toast.success('Жалоба решена')
+    toast.success(t('adminScreens.adminReportDetail.resolvedToast'))
     // S-1/S-2: push to list instead of back() -- guarantees fresh loadInitial().
     void router.push({ name: 'admin-reports' })
   } catch (e) {
-    toast.error(extractApiError(e, 'Ошибка при обработке'))
+    toast.error(extractApiError(e, t('adminScreens.adminReportDetail.processError')))
   } finally {
     resolving.value = false
   }
@@ -247,17 +276,21 @@ async function onDismiss(): Promise<void> {
   dismissing.value = true
   try {
     await dismissReport(reportId, dismissNote.value.trim() || undefined)
-    toast.success('Жалоба отклонена')
+    toast.success(t('adminScreens.adminReportDetail.rejectedToast'))
     // S-1/S-2: push to list instead of back() -- guarantees fresh loadInitial().
     void router.push({ name: 'admin-reports' })
   } catch (e) {
-    toast.error(extractApiError(e, 'Ошибка при обработке'))
+    toast.error(extractApiError(e, t('adminScreens.adminReportDetail.processError')))
   } finally {
     dismissing.value = false
   }
 }
 
 onMounted(loadReport)
+
+// tz-i18n: known reason codes decode to localized labels; legacy free text
+// renders verbatim.
+const decodedReason = computed(() => decodeReportReason(report.value?.reason ?? ''))
 </script>
 
 <style scoped>

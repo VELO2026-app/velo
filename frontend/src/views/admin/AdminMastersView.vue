@@ -25,7 +25,7 @@
   <div class="admin-list">
     <header class="admin-list__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-list__title">Мастера</h1>
+      <h1 class="admin-list__title">{{ t('adminScreens.adminMasters.masters') }}</h1>
       <span class="admin-list__count">{{ headerCount }}</span>
     </header>
 
@@ -33,12 +33,12 @@
 
     <!-- Batch-INVITE (№258): entry to the one-time invite link screen. -->
     <VButton variant="secondary" block @click="router.push({ name: 'admin-master-invite' })">
-      Пригласить мастера
+      {{ t('adminScreens.adminMasters.inviteCta') }}
     </VButton>
 
     <!-- FE-23 (GT P4): all schools incl. frozen, read-only. -->
     <VButton variant="outline" block @click="router.push({ name: 'admin-curator-groups' })">
-      Школы
+      {{ t('adminScreens.adminMasters.schoolsTab') }}
     </VButton>
 
     <!-- Loading -->
@@ -48,10 +48,12 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      title="Не удалось загрузить мастеров"
-      description="Проверьте соединение и попробуйте ещё раз"
+      :title="t('adminScreens.adminMasters.loadFailed')"
+      :description="t('common.checkConnection')"
     >
-      <template #action><VButton variant="primary" @click="load">Повторить</VButton></template>
+      <template #action
+        ><VButton variant="primary" @click="load">{{ t('common.retry') }}</VButton></template
+      >
     </VEmptyState>
 
     <!-- List -->
@@ -69,7 +71,7 @@
                  alike (revocation does not dissolve them, and the admin
                  needs to see what is still attached to the person). -->
             <VBadge v-if="(m.curator_groups_count ?? 0) > 0" variant="blue" class="mcard__badge">
-              Куратор
+              {{ t('adminScreens.adminMasters.curatorRole') }}
             </VBadge>
           </div>
         </div>
@@ -90,7 +92,9 @@
               {{ c.label }}
             </VChip>
           </template>
-          <span v-else class="mcard__muted">Направления не указаны</span>
+          <span v-else class="mcard__muted">{{
+            t('adminScreens.adminMasters.directionsMissing')
+          }}</span>
         </div>
 
         <!-- R8: stats footer -- Практик / Ученики / К выводу, real backend
@@ -98,15 +102,15 @@
              (honest stub; should not happen for a master in this page). -->
         <div class="mcard__stats">
           <div class="mcard__stat">
-            <span class="mcard__stat-key">Практик</span>
+            <span class="mcard__stat-key">{{ t('adminScreens.adminMasters.practicesStat') }}</span>
             <span class="mcard__stat-val">{{ statVal(m.practices_count) }}</span>
           </div>
           <div class="mcard__stat">
-            <span class="mcard__stat-key">Ученики</span>
+            <span class="mcard__stat-key">{{ t('adminScreens.adminMasters.studentsStat') }}</span>
             <span class="mcard__stat-val">{{ statVal(m.students_count) }}</span>
           </div>
           <div class="mcard__stat">
-            <span class="mcard__stat-key">К выводу</span>
+            <span class="mcard__stat-key">{{ t('adminScreens.adminMasters.toWithdrawStat') }}</span>
             <span class="mcard__stat-val">{{ payoutVal(m.available_cents) }}</span>
           </div>
         </div>
@@ -121,6 +125,7 @@
 </template>
 
 <script setup lang="ts">
+import { t, getLocale } from '@/locales'
 import { toHistoryState } from '@/utils/historySnapshot'
 import { ref, computed, onMounted, type Component } from 'vue'
 import { useRouter } from 'vue-router'
@@ -180,7 +185,7 @@ function statVal(n: number | null | undefined): string {
 }
 
 function payoutVal(cents: number | null | undefined): string {
-  return cents === null || cents === undefined ? '—' : formatMoney(cents, 'EUR', 'ru', true)
+  return cents === null || cents === undefined ? '—' : formatMoney(cents, 'EUR', getLocale(), true)
 }
 
 const router = useRouter()
@@ -209,12 +214,32 @@ const headerCount = computed<string>(() => (total.value ? String(total.value) : 
 // `cancelled_by_user` (the tab exists, count 0 — expected). F5: short labels;
 // the strip is compact + horizontally scrollable (VSegment scrollable).
 const segOptions = computed<SegmentOption[]>(() => [
-  { value: 'all', label: 'Все', badge: total.value || undefined },
-  { value: 'pending', label: 'Проверка', badge: statusCount('pending') },
-  { value: 'verified', label: 'Верифиц.', badge: statusCount('verified') },
-  { value: 'rejected', label: 'Отклонены', badge: statusCount('rejected') },
-  { value: 'suspended', label: 'Заблок.', badge: statusCount('suspended') },
-  { value: 'cancelled_by_user', label: 'Удалены', badge: statusCount('cancelled_by_user') },
+  { value: 'all', label: t('common.all'), badge: total.value || undefined },
+  {
+    value: 'pending',
+    label: t('adminScreens.adminMasters.review'),
+    badge: statusCount('pending'),
+  },
+  {
+    value: 'verified',
+    label: t('adminScreens.adminMasters.verifiedShort'),
+    badge: statusCount('verified'),
+  },
+  {
+    value: 'rejected',
+    label: t('adminScreens.adminMasters.filterRejected'),
+    badge: statusCount('rejected'),
+  },
+  {
+    value: 'suspended',
+    label: t('adminScreens.adminMasters.blockedShort'),
+    badge: statusCount('suspended'),
+  },
+  {
+    value: 'cancelled_by_user',
+    label: t('adminScreens.adminMasters.filterDeleted'),
+    badge: statusCount('cancelled_by_user'),
+  },
 ])
 
 const filtered = computed<AdminMasterListItem[]>(() =>
@@ -225,22 +250,22 @@ const filtered = computed<AdminMasterListItem[]>(() =>
 
 const emptyText = computed<string>(() => {
   const byFilter: Record<string, string> = {
-    pending: 'Нет мастеров на проверке',
-    verified: 'Нет верифицированных мастеров',
-    rejected: 'Нет отклонённых мастеров',
-    suspended: 'Нет заблокированных мастеров',
-    cancelled_by_user: 'Нет удалённых аккаунтов',
+    pending: t('adminScreens.adminMasters.emptyPending'),
+    verified: t('adminScreens.adminMasters.emptyVerified'),
+    rejected: t('adminScreens.adminMasters.emptyRejected'),
+    suspended: t('adminScreens.adminMasters.emptySuspended'),
+    cancelled_by_user: t('adminScreens.adminMasters.emptyCancelled'),
   }
-  return byFilter[filter.value] ?? 'Мастеров пока нет'
+  return byFilter[filter.value] ?? t('adminScreens.adminMasters.emptyFallback')
 })
 
 // Status badge labels match the operator SVG (the shared helper uses shorter ones).
 function badgeLabel(status: string): string {
-  if (status === 'verified') return 'Верифицирован'
-  if (status === 'pending') return 'Ожидает верификации'
-  if (status === 'rejected') return 'Отклонён'
-  if (status === 'suspended') return 'Заблокирован'
-  if (status === 'cancelled_by_user') return 'Аккаунт удалён'
+  if (status === 'verified') return t('adminScreens.adminMasters.status.verified')
+  if (status === 'pending') return t('adminScreens.adminMasters.status.pending')
+  if (status === 'rejected') return t('adminScreens.adminMasters.status.rejected')
+  if (status === 'suspended') return t('adminScreens.adminMasters.status.suspended')
+  if (status === 'cancelled_by_user') return t('adminScreens.adminMasters.status.cancelled_by_user')
   return status
 }
 
@@ -269,7 +294,7 @@ async function load(): Promise<void> {
     total.value = res.total
   } catch (e) {
     error.value = true
-    toast.error(extractApiError(e, 'Ошибка загрузки мастеров'))
+    toast.error(extractApiError(e, t('adminScreens.adminMasters.loadFailedToast')))
   } finally {
     loading.value = false
   }

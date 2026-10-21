@@ -26,6 +26,7 @@
 // update:modelValue -> form wiring are still genuinely exercised.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { createRouter, createMemoryHistory, type Router } from 'vue-router'
@@ -94,7 +95,7 @@ let pinia: Pinia
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(ExternalActivityCreateView)
+  app = createApp(ExternalActivityCreateView).use(createTestI18n())
   app.use(pinia)
   app.mount(host)
   return host
@@ -741,7 +742,7 @@ describe('ExternalActivityCreateView', () => {
 
       const shellHost = document.createElement('div')
       document.body.appendChild(shellHost)
-      const shellApp = createApp(UserShell)
+      const shellApp = createApp(UserShell).use(createTestI18n())
       // Settle the dock's «Школы» probe as "no schools" (FE-88) so the shell
       // mount stays network-free.
       curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({ items: [] })

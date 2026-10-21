@@ -30,7 +30,7 @@
     <button
       type="button"
       class="voice-panel__ghost"
-      aria-label="Отменить запись"
+      :aria-label="t('voice.cancelAria')"
       :disabled="!recording"
       data-testid="voice-cancel"
       @click="emit('cancel')"
@@ -45,14 +45,14 @@
       </span>
     </div>
     <div v-else class="voice-panel__indicators" data-testid="voice-busy">
-      <span class="voice-panel__busy">Транскрибация…</span>
+      <span class="voice-panel__busy">{{ t('voice.transcribing') }}</span>
       <VLoader size="sm" />
     </div>
 
     <button
       type="button"
       class="voice-panel__disc"
-      aria-label="Завершить запись"
+      :aria-label="t('voice.stopAria')"
       :disabled="!recording"
       data-testid="voice-stop"
       @click="emit('stop')"
@@ -63,6 +63,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed } from 'vue'
 import { IconClose, IconStop } from '@/components/icons'
 import { VLoader } from '@/components/ui'

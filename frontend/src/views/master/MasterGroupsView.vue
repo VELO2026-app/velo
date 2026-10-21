@@ -26,13 +26,22 @@
 
 <template>
   <div class="groups">
-    <VHeader title="Мои группы" show-back @back="router.push({ name: 'master-dashboard' })">
+    <VHeader
+      :title="t('masterScreens.masterGroups.title')"
+      show-back
+      @back="router.push({ name: 'master-dashboard' })"
+    >
       <!-- G3 (PROMPT №609): top-right, same row as the title (measured
            from the owner's SVG: 40px circle, right-aligned to the cards'
            own right edge -- VHeader's #action slot already sits flush
            with the header row's right side, same rail). -->
       <template #action>
-        <button type="button" class="groups__add-btn" aria-label="Новая группа" @click="onCreate">
+        <button
+          type="button"
+          class="groups__add-btn"
+          :aria-label="t('masterScreens.masterGroups.newAria')"
+          @click="onCreate"
+        >
           <IconPlusFilled :size="20" />
         </button>
       </template>
@@ -49,8 +58,8 @@
         <div class="groups__search-field">
           <VInput
             v-model="search"
-            placeholder="Искать..."
-            aria-label="Искать по группам и участникам"
+            :placeholder="t('masterScreens.masterGroups.search.placeholder')"
+            :aria-label="t('masterScreens.masterGroups.search.aria')"
             @focus="onFieldFocus"
           />
         </div>
@@ -59,7 +68,9 @@
       <template v-if="search.trim()">
         <!-- Group-name matches: instant, client-side over already-loaded groups. -->
         <template v-if="matchingGroups.length">
-          <h2 class="velo-section-title groups__search-heading">Группы</h2>
+          <h2 class="velo-section-title groups__search-heading">
+            {{ t('masterScreens.masterGroups.tabs.groups') }}
+          </h2>
           <div
             v-for="group in matchingGroups"
             :key="group.id"
@@ -69,7 +80,10 @@
             @click="openDetail(group)"
             @keydown.enter.space.prevent="openDetail(group)"
           >
-            <VListRow :title="group.name" :subtitle="`Участников: ${group.members_count}`" />
+            <VListRow
+              :title="group.name"
+              :subtitle="t('masterScreens.masterGroups.membersCount', { n: group.members_count })"
+            />
           </div>
         </template>
 
@@ -81,14 +95,16 @@
         <VEmptyState
           v-else-if="searchError"
           icon="warning"
-          title="Не удалось выполнить поиск"
+          :title="t('masterScreens.masterGroups.toast.searchFailed')"
           :description="searchError"
         >
-          <VButton size="sm" variant="outline" @click="loadSearch">Повторить</VButton>
+          <VButton size="sm" variant="outline" @click="loadSearch">{{ t('common.retry') }}</VButton>
         </VEmptyState>
 
         <template v-else-if="searchResults.length">
-          <h2 class="velo-section-title groups__search-heading">Участники</h2>
+          <h2 class="velo-section-title groups__search-heading">
+            {{ t('masterScreens.masterGroups.tabs.members') }}
+          </h2>
           <VListRow
             v-for="row in searchResults"
             :key="`${row.student_user_id}-${row.group_id}`"
@@ -112,8 +128,8 @@
             searchResults.length === 0
           "
           icon="group"
-          title="Никого не найдено"
-          description="Попробуйте изменить запрос"
+          :title="t('common.searchNoHits')"
+          :description="t('common.searchHint')"
         />
       </template>
 
@@ -126,10 +142,10 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        title="Не удалось загрузить группы"
+        :title="t('masterScreens.masterGroups.toast.loadFailed')"
         :description="error"
       >
-        <VButton size="sm" variant="outline" @click="load">Повторить</VButton>
+        <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
       </VEmptyState>
 
       <template v-else>
@@ -142,21 +158,24 @@
           @click="openDetail(group)"
           @keydown.enter.space.prevent="openDetail(group)"
         >
-          <VListRow :title="group.name" :subtitle="`Участников: ${group.members_count}`" />
+          <VListRow
+            :title="group.name"
+            :subtitle="t('masterScreens.masterGroups.membersCount', { n: group.members_count })"
+          />
         </div>
 
         <VShowMore
           v-if="!expanded && hiddenCount > 0"
-          :count="hiddenCount"
-          :noun="plural(hiddenCount, 'группа', 'группы', 'групп')"
+          plus
+          :label="t('masterScreens.masterGroups.moreGroups', hiddenCount)"
           @click="expanded = true"
         />
 
         <VEmptyState
           v-if="groups.length === 0"
           icon="group"
-          title="Групп пока нет"
-          description="Создайте первую группу учеников"
+          :title="t('masterScreens.masterGroups.empty.title')"
+          :description="t('masterScreens.masterGroups.empty.text')"
         />
       </template>
     </div>
@@ -164,6 +183,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -173,7 +193,6 @@ import VShowMore from '@/components/shared/VShowMore.vue'
 import { getGroups, searchGroupMemberships } from '@/api/groups'
 import { extractApiError } from '@/composables/useApiError'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
-import { plural } from '@/utils/plural'
 import type { GroupListItem, GroupSearchMemberItem } from '@/api/groups'
 
 const router = useRouter()
@@ -190,7 +209,7 @@ async function load(): Promise<void> {
     const res = await getGroups()
     groups.value = res.items
   } catch (e) {
-    error.value = extractApiError(e, 'Попробуйте ещё раз')
+    error.value = extractApiError(e, t('common.tryAgain'))
   } finally {
     loading.value = false
   }
@@ -216,7 +235,7 @@ async function loadSearch(): Promise<void> {
     const res = await searchGroupMemberships(search.value)
     searchResults.value = res.items
   } catch (e) {
-    searchError.value = extractApiError(e, 'Попробуйте ещё раз')
+    searchError.value = extractApiError(e, t('common.tryAgain'))
   } finally {
     searchLoading.value = false
   }
@@ -236,7 +255,7 @@ watch(search, (value) => {
 })
 
 // Show the first 5 (owner Q7, PROMPT №610 -- was 10); the rest hide behind
-// the outlined "+ ещё N групп" pill (VShowMore already built this exact
+// the outlined t('masterScreens.masterGroups.moreGroups') pill (VShowMore already built this exact
 // recipe -- primary stroke + primary text, see that file -- no visual
 // change needed there, only this constant). Never applies while a search
 // query is active: that's a structurally separate branch above

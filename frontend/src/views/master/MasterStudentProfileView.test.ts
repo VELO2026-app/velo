@@ -65,6 +65,7 @@
 // too, same reasoning SendMessageModal already established for this screen).
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import MasterStudentProfileView from '@/views/master/MasterStudentProfileView.vue'
@@ -136,7 +137,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(MasterStudentProfileView)
+  app = createApp(MasterStudentProfileView).use(createTestI18n())
   app.mount(host)
   return host
 }
@@ -1105,7 +1106,7 @@ describe('MasterStudentProfileView', () => {
       expect(reportsApi.createReport).toHaveBeenCalledWith({
         target_type: 'user',
         target_id: 's1',
-        reason: 'Мошенничество — Просил перевести деньги напрямую',
+        reason: 'fraud — Просил перевести деньги напрямую',
       })
       expect(success).toHaveBeenCalledWith('Заявка отправлена в поддержку')
     })
@@ -1141,7 +1142,7 @@ describe('MasterStudentProfileView', () => {
       expect(reportsApi.createReport).toHaveBeenCalledWith({
         target_type: 'user',
         target_id: 's1',
-        reason: 'Сорвал практику, Мошенничество',
+        reason: 'disrupted_practice, fraud',
       })
     })
 

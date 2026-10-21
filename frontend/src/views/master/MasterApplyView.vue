@@ -29,7 +29,7 @@
     <!-- Non-scrolling top block: «Заявка» header + step dots float ABOVE the
          fogged feed, so scrolling body text can never ride up over them (J2g). -->
     <div class="apply-view__top">
-      <VHeader title="Заявка" show-back @back="onBack" />
+      <VHeader :title="t('masterScreens.masterApply.title')" show-back @back="onBack" />
       <!-- Canonical step dots, top-left (operator 2026-06-27). -->
       <VPaginationDots :total="3" :active="step - 1" class="apply-view__dots" />
     </div>
@@ -43,21 +43,26 @@
            ================================================================ -->
       <template v-if="step === 1">
         <h3 class="apply-view__step-title">
-          Шаг 1: Профиль <span class="apply-view__req">*</span>
+          {{ t('masterScreens.masterApply.step1.title') }}<span class="apply-view__req">*</span>
         </h3>
 
         <VInput
           v-model="form.display_name"
           floating-label
-          label="Имя"
+          :label="t('masterScreens.masterApply.fields.name')"
           :error="errors.display_name"
         />
         <VInput v-model="form.email" floating-label label="E-mail" type="email" />
-        <VInput v-model="form.phone" floating-label label="Телефон" type="tel" />
+        <VInput
+          v-model="form.phone"
+          floating-label
+          :label="t('masterScreens.masterApply.fields.phone')"
+          type="tel"
+        />
 
         <VCard class="apply-view__consent" padding="none">
           <VCheckbox v-model="form.privacyAccepted" size="sm">
-            Я принимаю Условия использования и ознакомлен(а) с Политикой конфиденциальности
+            {{ t('masterScreens.masterApply.step1.privacyConsent') }}
           </VCheckbox>
         </VCard>
         <p
@@ -68,7 +73,7 @@
         </p>
 
         <VButton variant="primary" block size="lg" class="apply-view__next" @click="goToStep2">
-          Далее
+          {{ t('masterScreens.masterApply.next') }}
         </VButton>
       </template>
 
@@ -76,7 +81,9 @@
            STEP 2: Опыт
            ================================================================ -->
       <template v-else-if="step === 2">
-        <h3 class="apply-view__step-title">Шаг 2: Опыт <span class="apply-view__req">*</span></h3>
+        <h3 class="apply-view__step-title">
+          {{ t('masterScreens.masterApply.step2.title') }}<span class="apply-view__req">*</span>
+        </h3>
 
         <!-- Направления практик — TWO-LEVEL taxonomy, extracted into the shared
              MethodTaxonomyPicker (batch L, single source of truth). The outer
@@ -84,7 +91,9 @@
              chips, the per-direction style cards and «Свой вариант». v-model is
              the flat `methods: string[]` payload (unchanged schema). -->
         <div class="apply-view__field">
-          <label class="apply-view__label">Направления практик *</label>
+          <label class="apply-view__label">{{
+            t('masterScreens.masterApply.fields.directions')
+          }}</label>
           <MethodTaxonomyPicker v-model="methods" />
           <p
             class="apply-view__field-error"
@@ -96,15 +105,15 @@
 
         <VSelect
           v-model="experienceLabel"
-          label="Опыт преподавания *"
+          :label="t('masterScreens.masterApply.fields.experience')"
           :options="EXPERIENCE_OPTIONS"
           :error="errors.experience_years"
         />
 
         <VTextarea
           v-model="form.bio"
-          label="О себе *"
-          placeholder="Расскажите о вашем опыте и подходе к практикам…"
+          :label="t('masterScreens.masterApply.fields.about')"
+          :placeholder="t('masterScreens.masterApply.fields.aboutPlaceholder')"
           :rows="4"
           :error="errors.bio"
         />
@@ -112,15 +121,17 @@
         <!-- Язык проведения практик (E16): sent with the application as
              experience.languages (selectedLanguages). -->
         <div class="apply-view__field">
-          <label class="apply-view__label">Язык проведения практик</label>
+          <label class="apply-view__label">{{
+            t('masterScreens.masterApply.fields.language')
+          }}</label>
           <VCard class="apply-view__langs" padding="none">
-            <VCheckbox v-model="langRu" label="Русский" />
-            <VCheckbox v-model="langEn" label="English" />
+            <VCheckbox v-model="langRu" :label="LANGUAGES[0]" />
+            <VCheckbox v-model="langEn" :label="LANGUAGES[1]" />
           </VCard>
         </div>
 
         <VButton variant="primary" block size="lg" class="apply-view__next" @click="goToStep3">
-          Далее
+          {{ t('masterScreens.masterApply.next') }}
         </VButton>
       </template>
 
@@ -129,12 +140,10 @@
            ================================================================ -->
       <template v-else>
         <h3 class="apply-view__step-title">
-          Шаг 3: Документы <span class="apply-view__req">*</span>
+          {{ t('masterScreens.masterApply.step3.title') }}<span class="apply-view__req">*</span>
         </h3>
         <p class="apply-view__intro">
-          Сертификаты хранятся в зашифрованном виде и используются для внутренней верификации вашей
-          квалификации. Удостоверение личности используется только для подтверждения личности и
-          автоматически удаляется через 30 дней после верификации.
+          {{ t('masterScreens.masterApply.step3.privacyNote') }}
         </p>
 
         <!-- Documents are OPTIONAL right now: file upload/storage is not built
@@ -144,26 +153,35 @@
              nobody can become a master. «Пропустить» below submits with an
              empty documents list (the backend already accepts that). -->
         <VCard class="apply-view__skip-note" padding="none">
-          Загрузка документов пока недоступна. Вы можете отправить заявку без документов и пройти
-          верификацию позже — нажмите «Пропустить».
+          {{ t('masterScreens.masterApply.step3.docsUnavailable') }}
         </VCard>
 
         <!-- Passport -->
         <div class="apply-view__field">
-          <label class="apply-view__label">Паспорт (скан или фото) *</label>
-          <p class="apply-view__hint">Для верификации личности. Не публикуется.</p>
+          <label class="apply-view__label">{{
+            t('masterScreens.masterApply.fields.passport')
+          }}</label>
+          <p class="apply-view__hint">
+            {{ t('masterScreens.masterApply.fields.passportHint') }}
+          </p>
           <VCard class="apply-view__upload-card" padding="sm">
             <button type="button" class="apply-view__upload" @click="onUpload">
               <IconFile :size="26" class="apply-view__upload-icon" />
-              <span class="apply-view__upload-text">Загрузить документ</span>
+              <span class="apply-view__upload-text">{{
+                t('masterScreens.masterApply.upload.document')
+              }}</span>
             </button>
           </VCard>
         </div>
 
         <!-- Certificates (multi-file UI; chip list renders once E13 stores files) -->
         <div class="apply-view__field">
-          <label class="apply-view__label">Сертификаты</label>
-          <p class="apply-view__hint">Можно загрузить несколько файлов.</p>
+          <label class="apply-view__label">{{
+            t('masterScreens.masterApply.fields.certificates')
+          }}</label>
+          <p class="apply-view__hint">
+            {{ t('masterScreens.masterApply.upload.multiHint') }}
+          </p>
           <div v-for="cert in uploadedCerts" :key="cert" class="apply-view__filechip">
             <IconCheck :size="18" />
             <span class="apply-view__filechip-name">{{ cert }}</span>
@@ -171,28 +189,32 @@
           <VCard class="apply-view__upload-card" padding="sm">
             <button type="button" class="apply-view__upload" @click="onUpload">
               <IconFile :size="26" class="apply-view__upload-icon" />
-              <span class="apply-view__upload-text">Добавить сертификат</span>
+              <span class="apply-view__upload-text">{{
+                t('masterScreens.masterApply.upload.addCertificate')
+              }}</span>
             </button>
           </VCard>
         </div>
 
         <!-- Profile photo -->
         <div class="apply-view__field">
-          <label class="apply-view__label">Фото профиля</label>
+          <label class="apply-view__label">{{ t('masterScreens.masterApply.fields.photo') }}</label>
           <p class="apply-view__hint">
-            Будет использовано на платформе в открытом доступе для участников.
+            {{ t('masterScreens.masterApply.step3.photoNote') }}
           </p>
           <VCard class="apply-view__upload-card" padding="sm">
             <button type="button" class="apply-view__upload" @click="onUpload">
               <IconFile :size="26" class="apply-view__upload-icon" />
-              <span class="apply-view__upload-text">Загрузить фото</span>
+              <span class="apply-view__upload-text">{{
+                t('masterScreens.masterApply.upload.photo')
+              }}</span>
             </button>
           </VCard>
         </div>
 
         <VCard class="apply-view__consent" padding="none">
           <VCheckbox v-model="form.docsConsent">
-            Я даю согласие на обработку загруженных документов для верификации
+            {{ t('masterScreens.masterApply.step3.docsConsent') }}
           </VCheckbox>
         </VCard>
         <p
@@ -210,7 +232,7 @@
           :loading="submitting"
           @click="submit()"
         >
-          Отправить
+          {{ t('common.submitSend') }}
         </VButton>
 
         <!-- Skip the (currently unavailable) document upload. Submits with an
@@ -225,7 +247,7 @@
           :disabled="submitting"
           @click="submit(true)"
         >
-          Пропустить
+          {{ t('common.skip') }}
         </VButton>
       </template>
     </div>
@@ -233,6 +255,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, reactive, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -278,11 +301,11 @@ watch(step, () => {
 
 // -- Experience years options: label -> integer value mapping --
 const EXPERIENCE_OPTIONS = [
-  { label: 'Менее 1 года', value: '0' },
-  { label: '1-3 года', value: '2' },
-  { label: '3-5 лет', value: '4' },
-  { label: '5-10 лет', value: '7' },
-  { label: 'Более 10 лет', value: '11' },
+  { label: t('masterScreens.masterApply.experience.less1'), value: '0' },
+  { label: t('masterScreens.masterApply.experience.1_3'), value: '2' },
+  { label: t('masterScreens.masterApply.experience.3_5'), value: '4' },
+  { label: t('masterScreens.masterApply.experience.5_10'), value: '7' },
+  { label: t('masterScreens.masterApply.experience.over10'), value: '11' },
 ]
 
 // -- Form state --
@@ -339,7 +362,7 @@ const experienceYears = computed((): number => {
 
 // -- Upload stub (Zod E13: no file storage yet) --
 function onUpload(): void {
-  toast.info('Загрузка файлов пока недоступна')
+  toast.info(t('masterScreens.masterApply.upload.unavailable'))
 }
 
 // -- Navigation --
@@ -356,11 +379,11 @@ function goToStep2(): void {
   errors.display_name = ''
   errors.privacy = ''
   if (!form.display_name.trim()) {
-    errors.display_name = 'Пожалуйста, введите имя'
+    errors.display_name = t('masterScreens.masterApply.validation.enterName')
     return
   }
   if (!form.privacyAccepted) {
-    errors.privacy = 'Необходимо принять условия использования'
+    errors.privacy = t('masterScreens.masterApply.validation.acceptTerms')
     return
   }
   step.value = 2
@@ -372,15 +395,15 @@ function goToStep3(): void {
   errors.experience_years = ''
   errors.bio = ''
   if (methods.value.length === 0) {
-    errors.methods = 'Выберите хотя бы одно направление'
+    errors.methods = t('masterScreens.masterApply.validation.chooseDirection')
     return
   }
   if (!experienceLabel.value) {
-    errors.experience_years = 'Выберите опыт преподавания'
+    errors.experience_years = t('masterScreens.masterApply.validation.chooseExperience')
     return
   }
   if (!form.bio.trim()) {
-    errors.bio = 'Пожалуйста, расскажите о себе'
+    errors.bio = t('masterScreens.masterApply.validation.tellAboutYourself')
     return
   }
   step.value = 3
@@ -403,7 +426,7 @@ async function submit(skipDocuments = false): Promise<void> {
 
   errors.docs = ''
   if (!skipDocuments && !form.docsConsent) {
-    errors.docs = 'Необходимо дать согласие на обработку документов'
+    errors.docs = t('masterScreens.masterApply.validation.consentRequired')
     return
   }
 
@@ -432,7 +455,7 @@ async function submit(skipDocuments = false): Promise<void> {
       // Refresh the store so masterNoProfileGuard sees the fresh profile
       // instead of the stale profileMissing from the earlier 403.
       await masterStore.fetchMyProfile(true)
-      toast.success('Профиль создан')
+      toast.success(t('masterScreens.masterApply.toast.profileCreated'))
       void router.push({ name: 'master-dashboard' })
     } else {
       // Normal application (role='user') -> pending verdict flow. Mark this
@@ -450,11 +473,11 @@ async function submit(skipDocuments = false): Promise<void> {
       if (authStore.user?.id) {
         localStorage.removeItem(masterRejectionSeenKey(authStore.user.id))
       }
-      toast.success('Заявка отправлена!')
+      toast.success(t('masterScreens.masterApply.toast.applicationSent'))
       void router.push({ name: 'master-pending' })
     }
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось отправить заявку'))
+    toast.error(extractApiError(e, t('masterScreens.masterApply.toast.applicationFailed')))
   } finally {
     submitting.value = false
   }

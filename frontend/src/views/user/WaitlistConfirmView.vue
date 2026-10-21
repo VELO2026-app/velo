@@ -24,18 +24,18 @@
 
 <template>
   <div class="waitlist-confirm">
-    <VHeader title="Место в практике" show-back @back="goBack" />
+    <VHeader :title="t('user.screens.waitlistConfirm.title')" show-back @back="goBack" />
 
     <div v-if="loading" class="waitlist-confirm__state" role="status"><VLoader /></div>
 
     <VEmptyState
       v-else-if="!entry"
       icon="warning"
-      title="Запись не найдена"
-      description="Возможно, место уже подтверждено или запись удалена."
+      :title="t('user.screens.waitlistConfirm.notFound.title')"
+      :description="t('user.screens.waitlistConfirm.notFound.text')"
     >
       <template #action>
-        <VButton size="sm" @click="goHome">На главную</VButton>
+        <VButton size="sm" @click="goHome">{{ t('common.backHome') }}</VButton>
       </template>
     </VEmptyState>
 
@@ -50,22 +50,27 @@
 
       <div v-if="state === 'open'" class="waitlist-confirm__body">
         <p class="waitlist-confirm__lead">
-          Освободилось место. Подтвердите участие до
+          {{ t('user.screens.waitlistConfirm.leadLine') }}
           <b>{{ formatFeedDateTime(entry.expires_at!, entry.practice.timezone) }}</b
           >.
         </p>
-        <VButton block :loading="confirming" @click="onConfirm">Подтвердить место</VButton>
+        <VButton block :loading="confirming" @click="onConfirm">{{
+          t('user.screens.waitlistConfirm.confirm.cta')
+        }}</VButton>
       </div>
 
       <div v-else class="waitlist-confirm__body">
         <p class="waitlist-confirm__lead" data-state>{{ STATE_TEXT[state] }}</p>
-        <VButton block variant="secondary" @click="openPractice">Открыть практику</VButton>
+        <VButton block variant="secondary" @click="openPractice">{{
+          t('user.screens.waitlistConfirm.openPractice')
+        }}</VButton>
       </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { confirmWaitlist, getMyWaitlist } from '@/api/waitlist'
@@ -80,10 +85,10 @@ import { formatFeedDateTime } from '@/utils/format'
 type State = 'open' | 'expired' | 'converted' | 'waiting' | 'gone'
 
 const STATE_TEXT: Record<Exclude<State, 'open'>, string> = {
-  expired: 'Срок подтверждения истёк — место предложено следующему в очереди.',
-  converted: 'Место уже подтверждено — вы записаны на практику.',
-  waiting: 'Вы в очереди — место пока не освободилось или его уже заняли.',
-  gone: 'Запись больше недоступна.',
+  expired: t('user.screens.waitlistConfirm.state.expired'),
+  converted: t('user.screens.waitlistConfirm.state.confirmed'),
+  waiting: t('user.screens.waitlistConfirm.state.pending'),
+  gone: t('user.screens.waitlistConfirm.state.unavailable'),
 }
 
 const route = useRoute()
@@ -119,7 +124,7 @@ async function load(): Promise<void> {
     entry.value = page.items.find((item) => item.id === waitlistId.value) ?? null
   } catch (e) {
     entry.value = null
-    toast.error(extractApiError(e, 'Не удалось загрузить запись'))
+    toast.error(extractApiError(e, t('user.screens.waitlistConfirm.toast.loadFailed')))
   } finally {
     loading.value = false
   }
@@ -130,7 +135,7 @@ async function onConfirm(): Promise<void> {
   confirming.value = true
   try {
     await confirmWaitlist(waitlistId.value)
-    toast.success('Место подтверждено')
+    toast.success(t('user.screens.waitlistConfirm.toast.confirmed'))
     openPractice()
   } catch (e) {
     if (e instanceof ApiResponseError && e.status === 400) {
@@ -141,7 +146,7 @@ async function onConfirm(): Promise<void> {
       entry.value = null
       return
     }
-    toast.error(extractApiError(e, 'Не удалось подтвердить место'))
+    toast.error(extractApiError(e, t('user.screens.waitlistConfirm.toast.confirmFailed')))
   } finally {
     confirming.value = false
   }

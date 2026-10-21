@@ -44,18 +44,22 @@ so the order is invitation -> join -> onboarding (skippable) -> school.
       <!-- Preview in flight -->
       <template v-if="loading">
         <VLoader size="lg" />
-        <p class="cg-join__subtitle">Проверяем приглашение…</p>
+        <p class="cg-join__subtitle">
+          {{ t('common.inviteChecking') }}
+        </p>
       </template>
 
       <!-- Transient (network/timeout): offer a retry, not a dead-link verdict. -->
       <template v-else-if="transientError">
-        <h2 class="cg-join__title">Не удалось проверить приглашение</h2>
+        <h2 class="cg-join__title">
+          {{ t('common.inviteCheckFailed') }}
+        </h2>
         <p class="cg-join__subtitle">
-          Проблема с соединением. Проверьте интернет и попробуйте ещё раз.
+          {{ t('common.connProblem') }}
         </p>
         <div class="cg-join__actions">
           <VButton variant="primary" block :loading="loading" @click="loadPreview">
-            Повторить
+            {{ t('common.retry') }}
           </VButton>
         </div>
       </template>
@@ -66,10 +70,10 @@ so the order is invitation -> join -> onboarding (skippable) -> school.
         <p v-if="blocked.description" class="cg-join__subtitle">{{ blocked.description }}</p>
         <div class="cg-join__actions">
           <VButton v-if="blocked.open" variant="primary" block @click="openSchool">
-            Открыть
+            {{ t('masterScreens.curatorGroupJoin.open') }}
           </VButton>
           <VButton v-else variant="primary" block @click="router.replace({ name: 'root' })">
-            На главную
+            {{ t('common.backHome') }}
           </VButton>
         </div>
       </template>
@@ -86,12 +90,14 @@ so the order is invitation -> join -> onboarding (skippable) -> school.
           :masters-count="preview.group.masters_count"
           :description="preview.group.description"
           :curator-name="preview.group.curator_name"
-          heading="Вас пригласили в школу!"
+          :heading="t('masterScreens.curatorGroupJoin.invited.title')"
         />
         <div class="cg-join__actions">
-          <VButton variant="primary" block :loading="joining" @click="join">Вступить</VButton>
+          <VButton variant="primary" block :loading="joining" @click="join">{{
+            t('masterScreens.curatorGroupJoin.joinCta')
+          }}</VButton>
           <VButton variant="outline" block :disabled="joining" @click="decline">
-            Отказаться
+            {{ t('masterScreens.curatorGroupJoin.decline') }}
           </VButton>
         </div>
       </template>
@@ -115,6 +121,7 @@ so the order is invitation -> join -> onboarding (skippable) -> school.
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getCuratorGroupInvitePreview, joinCuratorGroup } from '@/api/curatorGroups'
@@ -163,8 +170,8 @@ interface RefusalView {
 const blocked = computed<RefusalView | null>(() => {
   if (notFound.value) {
     return {
-      title: 'Приглашение недействительно',
-      description: 'Возможно, ссылка повреждена, устарела или была отозвана.',
+      title: t('masterScreens.curatorGroupJoin.invalid.title'),
+      description: t('masterScreens.curatorGroupJoin.invalid.text'),
       open: false,
     }
   }
@@ -172,27 +179,39 @@ const blocked = computed<RefusalView | null>(() => {
   if (!p || p.can_join) return null
   switch (p.reason) {
     case 'own_group':
-      return { title: 'Это ваша школа', description: 'Вы куратор этой школы.', open: true }
+      return {
+        title: t('masterScreens.curatorGroupJoin.alreadyOwner.title'),
+        description: t('masterScreens.curatorGroupJoin.alreadyOwner.text'),
+        open: true,
+      }
     case 'already_member':
-      return { title: 'Вы уже в школе', description: 'Вы уже состоите в этой школе.', open: true }
+      return {
+        title: t('masterScreens.curatorGroupJoin.alreadyMember.title'),
+        description: t('masterScreens.curatorGroupJoin.alreadyMember.text'),
+        open: true,
+      }
     case 'blocked_by_curator':
       return {
-        title: 'Вступление недоступно',
-        description: 'Куратор ограничил вам доступ в эту школу.',
+        title: t('masterScreens.curatorGroupJoin.unavailable'),
+        description: t('masterScreens.curatorGroupJoin.restricted.text'),
         open: false,
       }
     // BE-79 (DRAFT wording): blocked by the curator IN this school -- the
     // preview says so, and a join refused 403 re-reads the preview (below).
     case 'blocked_in_group':
       return {
-        title: 'Вступление недоступно',
-        description: 'Вы заблокированы в этой школе.',
+        title: t('masterScreens.curatorGroupJoin.unavailable'),
+        description: t('masterScreens.curatorGroupJoin.blocked.title'),
         open: false,
       }
     default:
       // can_join=false with no reason is not a contract shape; stay honest
       // rather than guessing — same title as blocked, no invented details.
-      return { title: 'Вступление недоступно', description: '', open: false }
+      return {
+        title: t('masterScreens.curatorGroupJoin.unavailable'),
+        description: '',
+        open: false,
+      }
   }
 })
 
@@ -227,7 +246,9 @@ async function join(): Promise<void> {
   joining.value = true
   try {
     const res = await joinCuratorGroup(String(route.params.token ?? ''))
-    toast.success(`Вы вступили в школу «${preview.value.group.name}»`)
+    toast.success(
+      t('masterScreens.curatorGroupJoin.joinedToast', { name: preview.value.group.name }),
+    )
     // The hub probe may have settled BEFORE this join (the account's first
     // school): without a fresh read the dock tab stays hidden until a full
     // reload (FE-88). ensureCurator swallows its own probe failures -- the
@@ -257,7 +278,7 @@ async function join(): Promise<void> {
         return
       }
     }
-    toast.error(extractApiError(e, 'Не удалось вступить в школу. Попробуйте ещё раз.'))
+    toast.error(extractApiError(e, t('masterScreens.curatorGroupJoin.toast.joinFailed')))
   } finally {
     joining.value = false
   }

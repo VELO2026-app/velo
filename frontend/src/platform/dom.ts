@@ -75,6 +75,11 @@ export function setRootStyleProperty(prop: string, value: string): void {
   document.documentElement.style.setProperty(prop, value)
 }
 
+/** document.documentElement.lang = value (язык интерфейса, tz-i18n 0.3). */
+export function setRootLang(lang: string): void {
+  document.documentElement.lang = lang
+}
+
 /** document.documentElement.classList.add. */
 export function addRootClass(cls: string): void {
   document.documentElement.classList.add(cls)

@@ -70,6 +70,7 @@
 // never a shell heredoc.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import AdminPracticeDetailView from '@/views/admin/AdminPracticeDetailView.vue'
@@ -155,7 +156,7 @@ function mount(id: string): HTMLElement {
   routeParams.id = id
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminPracticeDetailView)
+  app = createApp(AdminPracticeDetailView).use(createTestI18n())
   app.mount(host)
   return host
 }

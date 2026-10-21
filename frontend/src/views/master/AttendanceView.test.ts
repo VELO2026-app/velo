@@ -49,6 +49,7 @@
 // never a shell heredoc.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
@@ -148,7 +149,7 @@ function mount(id = 'p_1'): HTMLElement {
   routeParams.id = id
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AttendanceView)
+  app = createApp(AttendanceView).use(createTestI18n())
   app.use(pinia)
   app.mount(host)
   return host

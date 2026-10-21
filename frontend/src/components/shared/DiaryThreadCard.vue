@@ -157,6 +157,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed } from 'vue'
 import { useDiaryCardModel } from '@/composables/useDiaryCardModel'
 import DiaryBubbleShape from '@/components/shared/DiaryBubbleShape.vue'
@@ -230,19 +231,26 @@ const form = computed<ThreadForm>(() => {
 // The confirmed-booking reference copy: "Вы записались на / [Практика с
 // Мастером]" -- the master part drops out cleanly when the snapshot has no
 // name. The other banner kinds keep their existing semantic title+subtitle.
-const BANNER_CONFIRMED_TITLE = 'Вы записались на'
-
-const bannerLine1 = computed(() =>
-  kind.value === 'booking_confirmed' ? BANNER_CONFIRMED_TITLE : baseTitle.value,
+// tz-i18n 2.2b: TWO keys (the design styles line 2 differently): a plain
+// title line and a bracketed reference line; non-locales assemble the
+// title+master pair differently ("... for X with Y").
+const bannerConfirmedTitle = computed(() => t('diary.bannerConfirmedTitle'))
+const bannerConfirmedRef = computed(() =>
+  masterName.value
+    ? t('diary.bannerConfirmedRef', {
+        title: practiceTitle.value,
+        master: masterName.value,
+      })
+    : t('diary.bannerConfirmedRefNoMaster', { title: practiceTitle.value }),
 )
 
-const bannerLine2 = computed(() => {
-  if (kind.value === 'booking_confirmed') {
-    const withMaster = masterName.value ? ` с ${masterName.value}` : ''
-    return `[${practiceTitle.value}${withMaster}]`
-  }
-  return bannerSubtitle.value
-})
+const bannerLine1 = computed(() =>
+  kind.value === 'booking_confirmed' ? bannerConfirmedTitle.value : baseTitle.value,
+)
+
+const bannerLine2 = computed(() =>
+  kind.value === 'booking_confirmed' ? bannerConfirmedRef.value : bannerSubtitle.value,
+)
 
 // -- bubble copy (check-in / feedback) -----------------------------------------
 // Line 2 is the user's comment preview; the mood/rating LABEL is only the

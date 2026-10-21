@@ -14,6 +14,7 @@
 // Inputs are getters so callers pass `() => props.item` and stay reactive.
 
 import { computed, type ComputedRef, type Component } from 'vue'
+import i18n from '@/locales'
 import { IconPen, IconDreamBook, IconDiaryBook, IconMessages } from '@/components/icons'
 import {
   FEED_KIND_TITLE,
@@ -107,7 +108,7 @@ export function useDiaryCardModel(
       // name for custom (verbatim, no dictionary), like practice_outcome
       // reads its title from the snapshot.
       if (activityType.value === 'custom') {
-        return snapStr('custom_activity_name') ?? 'Свой вариант'
+        return snapStr('custom_activity_name') ?? i18n.global.t('methodPicker.custom')
       }
       return activityType.value !== null ? EXTERNAL_ACTIVITY_LABEL[activityType.value] : ''
     }
@@ -169,7 +170,9 @@ export function useDiaryCardModel(
     return snapStr('practice_title')
   })
 
-  const practiceTitle = computed(() => snapStr('practice_title') ?? 'Практика')
+  const practiceTitle = computed(
+    () => snapStr('practice_title') ?? i18n.global.t('practice.placeholderAlt'),
+  )
   const masterName = computed(() => snapStr('master_name') ?? '')
   const masterAvatarUrl = computed(() => snapStr('master_avatar_url'))
   // Practice card shows time + duration (not the full date — the day is in the

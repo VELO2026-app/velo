@@ -11,7 +11,10 @@
 // =============================================================================
 
 import type { AdminMasterListItem } from '@/api/admin'
+import i18n, { getLocale } from '@/locales'
 import { dayKeyOf } from '@/utils/format'
+
+const { t } = i18n.global
 
 // ============================================================================
 // Master helpers
@@ -25,7 +28,7 @@ export function masterDisplayName(
   item: Pick<AdminMasterListItem, 'first_name' | 'last_name'>,
 ): string {
   const parts = [item.first_name, item.last_name].filter(Boolean)
-  return parts.length > 0 ? parts.join(' ') : 'Пользователь'
+  return parts.length > 0 ? parts.join(' ') : t('admin.fallbackUserName')
 }
 
 /**
@@ -48,11 +51,11 @@ export function masterStatusVariant(status: string): 'warning' | 'success' | 'er
  * flow writes it yet, so it renders only once F4 ships).
  */
 export function masterStatusLabel(status: string): string {
-  if (status === 'pending') return 'Ожидает'
-  if (status === 'verified') return 'Верифицирован'
-  if (status === 'rejected') return 'Отклонён'
-  if (status === 'suspended') return 'Заблокирован'
-  if (status === 'cancelled_by_user') return 'Аккаунт удалён'
+  if (status === 'pending') return t('admin.masterStatus.pending')
+  if (status === 'verified') return t('admin.masterStatus.verified')
+  if (status === 'rejected') return t('admin.masterStatus.rejected')
+  if (status === 'suspended') return t('admin.masterStatus.suspended')
+  if (status === 'cancelled_by_user') return t('admin.masterStatus.cancelled_by_user')
   return status
 }
 
@@ -74,9 +77,9 @@ export function reportStatusVariant(status: string): 'warning' | 'success' | 'er
  * Map report status to Russian label.
  */
 export function reportStatusLabel(status: string): string {
-  if (status === 'pending') return 'Ожидает'
-  if (status === 'resolved') return 'Решена'
-  if (status === 'dismissed') return 'Отклонена'
+  if (status === 'pending') return t('admin.reportStatus.pending')
+  if (status === 'resolved') return t('admin.reportStatus.resolved')
+  if (status === 'dismissed') return t('admin.reportStatus.dismissed')
   return status
 }
 
@@ -84,9 +87,9 @@ export function reportStatusLabel(status: string): string {
  * Map report target_type to a Russian label.
  */
 export function reportTargetLabel(type: string): string {
-  if (type === 'user') return 'Юзер'
-  if (type === 'master') return 'Мастер'
-  if (type === 'practice') return 'Практика'
+  if (type === 'user') return t('admin.reportTarget.user')
+  if (type === 'master') return t('admin.reportTarget.master')
+  if (type === 'practice') return t('admin.reportTarget.practice')
   return type
 }
 
@@ -102,7 +105,7 @@ export function reportTargetLabel(type: string): string {
  * see the same absolute time for the same event.
  */
 export function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('ru-RU', {
+  return new Date(iso).toLocaleString(getLocale(), {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -126,13 +129,13 @@ export function formatDateTime(iso: string): string {
 export function formatRelative(iso: string): string {
   const then = new Date(iso).getTime()
   const diffMin = Math.floor((Date.now() - then) / 60000)
-  if (diffMin < 1) return 'только что'
-  if (diffMin < 60) return `${diffMin} мин назад`
+  if (diffMin < 1) return t('admin.relative.justNow')
+  if (diffMin < 60) return t('admin.relative.minutesAgo', { n: diffMin })
   const diffH = Math.floor(diffMin / 60)
-  if (diffH < 24) return `${diffH} ч назад`
+  if (diffH < 24) return t('admin.relative.hoursAgo', { n: diffH })
   const yesterdayKey = dayKeyOf(new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), 'UTC')
-  if (dayKeyOf(iso, 'UTC') === yesterdayKey) return 'Вчера'
-  return new Date(iso).toLocaleDateString('ru-RU', {
+  if (dayKeyOf(iso, 'UTC') === yesterdayKey) return t('common.yesterday')
+  return new Date(iso).toLocaleDateString(getLocale(), {
     day: 'numeric',
     month: 'short',
     timeZone: 'UTC',

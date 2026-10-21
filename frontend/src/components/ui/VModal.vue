@@ -27,7 +27,7 @@
           <button
             v-if="showClose"
             class="v-modal__close"
-            aria-label="Закрыть"
+            :aria-label="t('ui.close')"
             @click="$emit('close')"
           >
             <IconClose :size="16" />
@@ -42,6 +42,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { onDocumentEvent, offDocumentEvent } from '@/platform/dom'
 import { onMounted, onUnmounted, watch } from 'vue'
 import { IconClose } from '@/components/icons'

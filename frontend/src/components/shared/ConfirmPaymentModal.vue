@@ -13,36 +13,44 @@
 <template>
   <VModal :open="open" @close="$emit('close')">
     <div class="cpm">
-      <h2 class="cpm__title">Подтвердить выплату</h2>
-      <p class="cpm__sub">Средства уйдут мастеру через провайдера</p>
+      <h2 class="cpm__title">{{ t('payout.title') }}</h2>
+      <p class="cpm__sub">{{ t('payout.sub') }}</p>
 
       <div class="cpm__box">
         <div class="cpm__row">
-          <span class="cpm__k">Сумма</span><span class="cpm__v">{{ amount }}</span>
+          <span class="cpm__k">{{ t('payout.amount') }}</span
+          ><span class="cpm__v">{{ amount }}</span>
         </div>
         <div class="cpm__row">
-          <span class="cpm__k">Комиссия провайдера</span><span class="cpm__v">{{ fee }}</span>
+          <span class="cpm__k">{{ t('payout.fee') }}</span
+          ><span class="cpm__v">{{ fee }}</span>
         </div>
         <div class="cpm__row">
-          <span class="cpm__k">К получению</span><span class="cpm__v">{{ net }}</span>
+          <span class="cpm__k">{{ t('payout.net') }}</span
+          ><span class="cpm__v">{{ net }}</span>
         </div>
         <div class="cpm__row">
-          <span class="cpm__k">Банк</span><span class="cpm__v">{{ bank }}</span>
+          <span class="cpm__k">{{ t('payout.bank') }}</span
+          ><span class="cpm__v">{{ bank }}</span>
         </div>
         <div class="cpm__row">
-          <span class="cpm__k">Мастер</span><span class="cpm__v">{{ master }}</span>
+          <span class="cpm__k">{{ t('payout.master') }}</span
+          ><span class="cpm__v">{{ master }}</span>
         </div>
       </div>
 
       <VButton variant="primary" block :loading="loading" @click="$emit('confirm')">
-        Одобрить выплату
+        {{ t('payout.approve') }}
       </VButton>
     </div>
   </VModal>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { VModal, VButton } from '@/components/ui'
+
+// tz-i18n 2.2b: payout sheet copy via payout.*.
 
 defineProps<{
   open: boolean

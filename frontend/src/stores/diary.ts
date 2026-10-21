@@ -28,6 +28,9 @@ import { defineStore } from 'pinia'
 import { ref, reactive } from 'vue'
 import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
+import i18n from '@/locales'
+
+const { t } = i18n.global
 import { useCursorPagination } from '@/composables/useCursorPagination'
 import { mergeJumpWindow } from '@/utils/diaryJumpWindow'
 import {
@@ -104,7 +107,7 @@ export const useDiaryStore = defineStore('diary', () => {
       await refreshAfterDiaryMutation()
       return { ok: true, error: '' }
     } catch (e) {
-      const message = extractApiError(e, 'Не удалось отправить check-in')
+      const message = extractApiError(e, t('storeErrors.diary.sendCheckin'))
       const code = e instanceof ApiResponseError ? e.code : undefined
       return { ok: false, error: message, code }
     } finally {
@@ -132,7 +135,7 @@ export const useDiaryStore = defineStore('diary', () => {
       await refreshAfterDiaryMutation()
       return { ok: true, error: '' }
     } catch (e) {
-      const message = extractApiError(e, 'Не удалось отправить feedback')
+      const message = extractApiError(e, t('storeErrors.diary.sendFeedback'))
       return { ok: false, error: message }
     } finally {
       feedbackSubmitting.value = false
@@ -164,7 +167,7 @@ export const useDiaryStore = defineStore('diary', () => {
       await createReflection(practiceId, body)
       return { ok: true, error: '' }
     } catch (e) {
-      const message = extractApiError(e, 'Не удалось отправить')
+      const message = extractApiError(e, t('storeErrors.diary.send'))
       return { ok: false, error: message }
     } finally {
       reflectionSubmitting.value = false
@@ -197,7 +200,7 @@ export const useDiaryStore = defineStore('diary', () => {
       await refreshAfterDiaryMutation()
       return { ok: true, error: '' }
     } catch (e) {
-      const message = extractApiError(e, 'Не удалось сохранить событие')
+      const message = extractApiError(e, t('storeErrors.diary.saveEvent'))
       const code = e instanceof ApiResponseError ? e.code : undefined
       const fieldErrors: ExternalActivityFieldErrors = {}
       if (e instanceof ApiResponseError && e.validation) {
@@ -363,7 +366,7 @@ export const useDiaryStore = defineStore('diary', () => {
       return true
     } catch (e) {
       jumpTargetId.value = null
-      jumpError.value = extractApiError(e, 'Не удалось открыть запись')
+      jumpError.value = extractApiError(e, t('storeErrors.diary.jump'))
       return false
     } finally {
       jumpLoading.value = false
@@ -385,7 +388,7 @@ export const useDiaryStore = defineStore('diary', () => {
       jumpItems.value = [...jumpItems.value, ...result.items]
       jumpCursor.value = result.next_cursor
     } catch (e) {
-      jumpError.value = extractApiError(e, 'Не удалось загрузить записи')
+      jumpError.value = extractApiError(e, t('storeErrors.diary.loadEntries'))
     } finally {
       jumpMoreLoading.value = false
     }
@@ -433,7 +436,7 @@ export const useDiaryStore = defineStore('diary', () => {
     try {
       selectedEntry.value = await getDiaryEntry(id)
     } catch (e) {
-      selectedEntryError.value = extractApiError(e, 'Запись не найдена')
+      selectedEntryError.value = extractApiError(e, t('storeErrors.diary.entryNotFound'))
       selectedEntry.value = null
     } finally {
       selectedEntryLoading.value = false
@@ -463,7 +466,7 @@ export const useDiaryStore = defineStore('diary', () => {
       await feed.refresh()
       return { ok: true, error: '', entry }
     } catch (e) {
-      const message = extractApiError(e, 'Не удалось создать запись')
+      const message = extractApiError(e, t('storeErrors.diary.create'))
       return { ok: false, error: message, entry: null }
     }
   }
@@ -483,7 +486,7 @@ export const useDiaryStore = defineStore('diary', () => {
       }
       return { ok: true, error: '', entry }
     } catch (e) {
-      const message = extractApiError(e, 'Не удалось обновить запись')
+      const message = extractApiError(e, t('storeErrors.diary.update'))
       return { ok: false, error: message, entry: null }
     }
   }
@@ -500,7 +503,7 @@ export const useDiaryStore = defineStore('diary', () => {
       }
       return { ok: true, error: '' }
     } catch (e) {
-      const message = extractApiError(e, 'Не удалось удалить запись')
+      const message = extractApiError(e, t('storeErrors.diary.delete'))
       return { ok: false, error: message }
     }
   }
@@ -515,7 +518,7 @@ export const useDiaryStore = defineStore('diary', () => {
       await feed.refresh()
       return { ok: true, error: '' }
     } catch (e) {
-      const message = extractApiError(e, 'Не удалось восстановить запись')
+      const message = extractApiError(e, t('storeErrors.diary.restore'))
       return { ok: false, error: message }
     }
   }
@@ -553,7 +556,7 @@ export const useDiaryStore = defineStore('diary', () => {
       }
       insightsCache.set(practiceId, data)
     } catch (e) {
-      insightsErrorMap.set(practiceId, extractApiError(e, 'Не удалось загрузить аналитику'))
+      insightsErrorMap.set(practiceId, extractApiError(e, t('storeErrors.diary.insights')))
     } finally {
       insightsLoadingSet.delete(practiceId)
     }

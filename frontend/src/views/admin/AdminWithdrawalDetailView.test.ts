@@ -31,6 +31,7 @@
 // No time pinning needed -- this screen reads no clock.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import AdminWithdrawalDetailView from '@/views/admin/AdminWithdrawalDetailView.vue'
@@ -83,7 +84,7 @@ function mountWith(withdrawal: AdminWithdrawalResponse | null): HTMLElement {
   window.history.replaceState(withdrawal ? { withdrawal } : {}, '')
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminWithdrawalDetailView)
+  app = createApp(AdminWithdrawalDetailView).use(createTestI18n())
   app.mount(host)
   return host
 }

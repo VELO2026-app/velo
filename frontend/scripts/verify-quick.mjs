@@ -55,31 +55,29 @@ const fail = (name, res) => {
 
 if (prettierTargets.length > 0) {
   const t = Date.now()
-  const res = spawnSync(
-    'node_modules/.bin/prettier',
-    ['--check', ...prettierTargets],
-    { stdio: 'inherit' },
+  const res = spawnSync('node_modules/.bin/prettier', ['--check', ...prettierTargets], {
+    stdio: 'inherit',
+  })
+  console.log(
+    `prettier: ${prettierTargets.length} file(s) in ${((Date.now() - t) / 1000).toFixed(1)}s`,
   )
-  console.log(`prettier: ${prettierTargets.length} file(s) in ${((Date.now() - t) / 1000).toFixed(1)}s`)
   if (res.status !== 0) fail('prettier', res)
 }
 
 if (codeTargets.length > 0) {
   const t = Date.now()
-  const res = spawnSync(
-    'node_modules/.bin/eslint',
-    ['--cache', ...codeTargets],
-    { stdio: 'inherit' },
+  const res = spawnSync('node_modules/.bin/eslint', ['--cache', ...codeTargets], {
+    stdio: 'inherit',
+  })
+  console.log(
+    `eslint (cached, type-aware): ${codeTargets.length} file(s) in ${((Date.now() - t) / 1000).toFixed(1)}s`,
   )
-  console.log(`eslint (cached, type-aware): ${codeTargets.length} file(s) in ${((Date.now() - t) / 1000).toFixed(1)}s`)
   if (res.status !== 0) fail('eslint', res)
 
   const t2 = Date.now()
-  const res2 = spawnSync(
-    'node_modules/.bin/vitest',
-    ['related', '--run', ...codeTargets],
-    { stdio: 'inherit' },
-  )
+  const res2 = spawnSync('node_modules/.bin/vitest', ['related', '--run', ...codeTargets], {
+    stdio: 'inherit',
+  })
   console.log(`vitest related: ${((Date.now() - t2) / 1000).toFixed(1)}s`)
   if (res2.status !== 0) fail('vitest related', res2)
 }

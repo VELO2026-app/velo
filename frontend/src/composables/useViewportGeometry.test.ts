@@ -12,6 +12,7 @@
 // NEW formula, which is expected to be green throughout.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, defineComponent, h, nextTick, type App } from 'vue'
 import {
@@ -183,7 +184,7 @@ function mount(): void {
       return () => h('div')
     },
   })
-  app = createApp(Host)
+  app = createApp(Host).use(createTestI18n())
   app.mount(host)
 }
 

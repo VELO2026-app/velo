@@ -27,17 +27,23 @@ design, mirroring MasterInviteClaimView's own state machine exactly:
       <!-- Joining -->
       <template v-if="joining">
         <VLoader size="lg" />
-        <p class="group-join__subtitle">Проверяем приглашение…</p>
+        <p class="group-join__subtitle">
+          {{ t('common.inviteChecking') }}
+        </p>
       </template>
 
       <!-- Transient (network/timeout) -- offer a retry, not a dead-link verdict. -->
       <template v-else-if="transientError">
-        <h2 class="group-join__title">Не удалось проверить приглашение</h2>
+        <h2 class="group-join__title">
+          {{ t('common.inviteCheckFailed') }}
+        </h2>
         <p class="group-join__subtitle">
-          Проблема с соединением. Проверьте интернет и попробуйте ещё раз.
+          {{ t('common.connProblem') }}
         </p>
         <div class="group-join__actions">
-          <VButton variant="primary" block :loading="joining" @click="join"> Повторить </VButton>
+          <VButton variant="primary" block :loading="joining" @click="join">{{
+            t('common.retry')
+          }}</VButton>
         </div>
       </template>
 
@@ -47,7 +53,7 @@ design, mirroring MasterInviteClaimView's own state machine exactly:
         <p class="group-join__subtitle">{{ errorDescription }}</p>
         <div class="group-join__actions">
           <VButton variant="primary" block @click="router.replace({ name: 'root' })">
-            На главную
+            {{ t('common.backHome') }}
           </VButton>
         </div>
       </template>
@@ -56,6 +62,7 @@ design, mirroring MasterInviteClaimView's own state machine exactly:
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { joinGroup } from '@/api/groups'
@@ -79,15 +86,15 @@ async function join(): Promise<void> {
   const token = String(route.params.token ?? '')
   try {
     const res = await joinGroup(token)
-    toast.success(`Вы добавлены в группу "${res.group_name}"`)
+    toast.success(t('masterScreens.groupJoin.addedToast', { name: res.group_name }))
     void router.replace({ name: 'root' })
   } catch (e) {
     if (e instanceof ApiResponseError && e.status === 403) {
-      errorTitle.value = 'Мастер ограничил вам доступ'
-      errorDescription.value = 'Вы не сможете присоединиться к этой группе.'
+      errorTitle.value = t('masterScreens.groupJoin.restrictedByMaster')
+      errorDescription.value = t('masterScreens.groupJoin.cannotJoin')
     } else if (e instanceof ApiResponseError && e.status === 404) {
-      errorTitle.value = 'Ссылка недействительна'
-      errorDescription.value = 'Возможно, ссылка повреждена или устарела.'
+      errorTitle.value = t('masterScreens.groupJoin.invalid.title')
+      errorDescription.value = t('masterScreens.groupJoin.invalid.text')
     } else {
       transientError.value = true
     }

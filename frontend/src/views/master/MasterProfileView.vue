@@ -34,18 +34,25 @@
     <div class="master-profile__menus">
       <!-- Аккаунт -->
       <div class="master-profile__menu-section">
-        <div class="master-profile__menu-title">Аккаунт</div>
+        <div class="master-profile__menu-title">{{ t('masterScreens.masterProfile.account') }}</div>
         <div class="master-profile__menu-list">
-          <VMenuRow label="Редактировать профиль" @click="onEditProfile">
+          <VMenuRow
+            :label="t('masterScreens.masterProfile.menu.editProfile')"
+            @click="onEditProfile"
+          >
             <template #icon><IconPen :size="20" /></template>
           </VMenuRow>
-          <VMenuRow label="Сообщения" :badge="messagesCount || undefined" @click="onMessages">
+          <VMenuRow
+            :label="t('masterScreens.masterProfile.menu.messages')"
+            :badge="messagesCount || undefined"
+            @click="onMessages"
+          >
             <template #icon><IconMessages :size="20" /></template>
           </VMenuRow>
-          <VMenuRow label="Мои промокоды" @click="onPromocodes">
+          <VMenuRow :label="t('masterScreens.masterProfile.menu.promocodes')" @click="onPromocodes">
             <template #icon><IconPromo :size="20" /></template>
           </VMenuRow>
-          <VMenuRow label="Вывод средств" @click="onWithdraw">
+          <VMenuRow :label="t('masterScreens.masterProfile.menu.withdraw')" @click="onWithdraw">
             <template #icon><IconFinance :size="20" /></template>
           </VMenuRow>
         </div>
@@ -53,12 +60,20 @@
 
       <!-- Настройки -->
       <div class="master-profile__menu-section">
-        <div class="master-profile__menu-title">Настройки</div>
+        <div class="master-profile__menu-title">
+          {{ t('masterScreens.masterProfile.settings') }}
+        </div>
         <div class="master-profile__menu-list">
-          <VMenuRow label="Уведомления" @click="onNotifications">
+          <VMenuRow
+            :label="t('masterScreens.masterProfile.menu.notifications')"
+            @click="onNotifications"
+          >
             <template #icon><IconBell :size="20" /></template>
           </VMenuRow>
-          <VMenuRow label="Часовой пояс" @click="onTimezoneSettings">
+          <VMenuRow
+            :label="t('masterScreens.masterProfile.menu.timezone')"
+            @click="onTimezoneSettings"
+          >
             <template #icon><IconGlobe :size="20" /></template>
           </VMenuRow>
         </div>
@@ -68,9 +83,11 @@
            RoleSwitchSection below (a real role switch); the redundant «Открыть
            как пользователь» uiMode-preview row was removed (batch L, L8). -->
       <div class="master-profile__menu-section">
-        <div class="master-profile__menu-title">Помощь</div>
+        <div class="master-profile__menu-title">
+          {{ t('masterScreens.masterProfile.help') }}
+        </div>
         <div class="master-profile__menu-list">
-          <VMenuRow label="Поддержка" @click="onSupport">
+          <VMenuRow :label="t('masterScreens.masterProfile.menu.support')" @click="onSupport">
             <template #icon><IconSupport :size="20" /></template>
           </VMenuRow>
         </div>
@@ -83,7 +100,7 @@
       <div class="master-profile__menu-section">
         <div class="master-profile__menu-list">
           <VMenuRow
-            label="Выйти"
+            :label="t('masterScreens.masterProfile.logoutCta')"
             variant="danger"
             :show-arrow="false"
             @click="showLogoutModal = true"
@@ -97,11 +114,15 @@
     <!-- Log out confirmation (design «Log out») -->
     <VModal :open="showLogoutModal" @close="showLogoutModal = false">
       <div class="master-profile__logout-modal">
-        <h2 class="master-profile__logout-title">Выйти из аккаунта?</h2>
+        <h2 class="master-profile__logout-title">
+          {{ t('masterScreens.masterProfile.logoutConfirm') }}
+        </h2>
         <div class="master-profile__logout-actions">
-          <button type="button" class="master-profile__logout-btn" @click="onLogout">Да</button>
+          <button type="button" class="master-profile__logout-btn" @click="onLogout">
+            {{ t('masterScreens.masterProfile.yes') }}
+          </button>
           <button type="button" class="master-profile__logout-btn" @click="showLogoutModal = false">
-            Нет
+            {{ t('masterScreens.masterProfile.logoutNo') }}
           </button>
         </div>
       </div>
@@ -110,6 +131,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VAvatar, VCard, VMenuRow, VModal } from '@/components/ui'
@@ -133,7 +155,10 @@ const masterStore = useMasterStore()
 const authStore = useAuthStore()
 
 const displayName = computed(
-  () => masterStore.profile?.display_name ?? authStore.user?.first_name ?? 'Мастер',
+  () =>
+    masterStore.profile?.display_name ??
+    authStore.user?.first_name ??
+    t('masterScreens.masterProfile.masterWord'),
 )
 const avatarUrl = computed(() => authStore.user?.avatar_url ?? undefined)
 

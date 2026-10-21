@@ -21,7 +21,7 @@
 
 <template>
   <div class="schools">
-    <VHeader title="Школы">
+    <VHeader :title="t('user.screens.schools.title')">
       <template #action>
         <!-- BE-18: the «+» is the admin-issued founding right; false is the
              honest default on a failed flag fetch (no «+» beats a 403 «+»). -->
@@ -29,7 +29,7 @@
           v-if="canCreate"
           type="button"
           class="schools__add-btn"
-          aria-label="Новая школа"
+          :aria-label="t('user.screens.schools.create.title')"
           @click="router.push({ name: 'master-curator-group-create' })"
         >
           <IconPlusFilled :size="20" />
@@ -45,11 +45,11 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        title="Не удалось загрузить школы"
-        description="Проверьте соединение и попробуйте ещё раз."
+        :title="t('school.loadFailed')"
+        :description="t('user.screens.schools.loadFailedHint')"
       >
         <template #action>
-          <VButton variant="outline" @click="load">Повторить</VButton>
+          <VButton variant="outline" @click="load">{{ t('common.retry') }}</VButton>
         </template>
       </VEmptyState>
 
@@ -63,7 +63,7 @@
           block
           @click="router.push({ name: 'master-curator-group-create' })"
         >
-          Создать школу
+          {{ t('user.screens.schools.create.title') }}
         </VButton>
       </div>
 
@@ -73,8 +73,8 @@
       <VEmptyState
         v-else-if="!schools.length"
         icon="group"
-        title="Пока нет школ"
-        description="Вступите по ссылке от куратора. Создавать школы может мастер, которому администратор выдал это право."
+        :title="t('user.screens.schools.empty.title')"
+        :description="t('user.screens.schools.empty.text')"
       />
 
       <template v-else>
@@ -90,6 +90,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getCuratorGroups, getMyCuratorGroups } from '@/api/curatorGroups'

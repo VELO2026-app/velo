@@ -27,11 +27,11 @@
 <template>
   <VBottomSheet
     :open="open"
-    title="Добавить в группу"
+    :title="t('shared.groups.addTitle')"
     compact-title
     title-strong
-    save-label="Добавить"
-    cancel-label="Отмена"
+    :save-label="t('ui.add')"
+    :cancel-label="t('ui.cancel')"
     cancel-variant="danger"
     save-variant="primary"
     @save="onSave"
@@ -39,7 +39,7 @@
   >
     <TargetUserCard :name="studentName" :avatar-url="avatarUrl" class="add-to-group__card" />
 
-    <p class="add-to-group__label">Выберите группу</p>
+    <p class="add-to-group__label">{{ t('shared.groups.choose') }}</p>
     <div v-if="customGroups.length" class="add-to-group__chips">
       <VChip
         v-for="g in customGroups"
@@ -53,23 +53,26 @@
         {{ g.name }}
       </VChip>
     </div>
-    <p v-else class="add-to-group__empty">Пока нет ни одной группы</p>
+    <p v-else class="add-to-group__empty">{{ t('shared.groups.empty') }}</p>
 
     <VCheckbox
       v-if="showRemoveToggle"
       v-model="removeFromCurrent"
-      label="Удалить из текущей группы"
+      :label="t('shared.groups.removeToggle')"
       class="add-to-group__toggle"
     />
   </VBottomSheet>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed } from 'vue'
 import { VBottomSheet, VChip, VCheckbox } from '@/components/ui'
 import TargetUserCard from './TargetUserCard.vue'
 import { addGroupMember, removeGroupMember } from '@/api/groups'
 import { useToast } from '@/composables/useToast'
+
+// tz-i18n 2.2b: sheet copy via shared.groups.* / ui.*.
 import { extractApiError } from '@/composables/useApiError'
 import type { GroupListItem } from '@/api/groups'
 
@@ -124,7 +127,7 @@ function toggle(groupId: string): void {
 
 async function onSave(): Promise<void> {
   if (selected.value.size === 0) {
-    toast.error('Выберите хотя бы одну группу')
+    toast.error(t('shared.components.pickGroup'))
     return
   }
   try {
@@ -134,11 +137,11 @@ async function onSave(): Promise<void> {
     if (removeFromCurrent.value && props.currentGroupId) {
       await removeGroupMember(props.currentGroupId, props.studentId)
     }
-    toast.success('Добавлено')
+    toast.success(t('shared.components.added'))
     emit('saved')
     emit('close')
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось добавить в группу'))
+    toast.error(extractApiError(e, t('shared.components.addFailed')))
   }
 }
 </script>

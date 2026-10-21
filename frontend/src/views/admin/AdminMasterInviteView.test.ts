@@ -60,6 +60,7 @@
 // never a shell heredoc.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import AdminMasterInviteView from '@/views/admin/AdminMasterInviteView.vue'
@@ -103,7 +104,7 @@ let writeText: ReturnType<typeof vi.fn>
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminMasterInviteView)
+  app = createApp(AdminMasterInviteView).use(createTestI18n())
   app.mount(host)
   return host
 }

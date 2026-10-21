@@ -18,6 +18,9 @@ import { ref, computed } from 'vue'
 import { getAdminStats, getAdminStatsOverview, getReports } from '@/api/admin'
 import type { AdminStatsResponse, AdminStatsOverviewResponse } from '@/api/admin'
 import { extractApiError } from '@/composables/useApiError'
+import i18n from '@/locales'
+
+const { t } = i18n.global
 
 export const useAdminStore = defineStore('admin', () => {
   const stats = ref<AdminStatsResponse | null>(null)
@@ -57,7 +60,7 @@ export const useAdminStore = defineStore('admin', () => {
       // .catch(), so an uncaught error here used to be a completely silent
       // unhandled rejection -- badges/stats just never updated, with nothing
       // telling the admin why. Record it so a caller can surface it.
-      dashboardError.value = extractApiError(e, 'Не удалось загрузить статистику')
+      dashboardError.value = extractApiError(e, t('storeErrors.admin.dashboard'))
     } finally {
       loading.value = false
     }
@@ -71,7 +74,7 @@ export const useAdminStore = defineStore('admin', () => {
       overview.value = await getAdminStatsOverview(period, offset)
     } catch (e) {
       // W14 fix: same silent-unhandled-rejection issue as fetchDashboard above.
-      overviewError.value = extractApiError(e, 'Не удалось загрузить статистику за период')
+      overviewError.value = extractApiError(e, t('storeErrors.admin.overview'))
     } finally {
       overviewLoading.value = false
     }

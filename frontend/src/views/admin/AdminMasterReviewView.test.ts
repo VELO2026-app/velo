@@ -113,6 +113,7 @@
 // never a shell heredoc.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import AdminMasterReviewView from '@/views/admin/AdminMasterReviewView.vue'
@@ -234,7 +235,7 @@ function mount(id: string, stateMaster: AdminMasterListItem | null = null): HTML
   window.history.replaceState(stateMaster ? { master: stateMaster } : {}, '')
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminMasterReviewView)
+  app = createApp(AdminMasterReviewView).use(createTestI18n())
   app.mount(host)
   return host
 }

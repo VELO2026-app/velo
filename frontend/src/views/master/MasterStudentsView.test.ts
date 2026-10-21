@@ -22,6 +22,7 @@
 // No time pinning needed -- this screen reads no clock.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import MasterStudentsView from '@/views/master/MasterStudentsView.vue'
@@ -56,7 +57,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(MasterStudentsView)
+  app = createApp(MasterStudentsView).use(createTestI18n())
   app.mount(host)
   return host
 }

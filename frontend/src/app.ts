@@ -29,12 +29,15 @@ import { createPinia } from 'pinia'
 
 import App from './App.vue'
 import router from './router'
+import i18n from './locales'
 
 // Global styles (order matters: variables first, then reset/base).
 import './styles/variables.css'
 import './styles/global.css'
 
 import { initTelegramSdk } from './platform/telegram-sdk'
+import { readLocaleHint, setLocale } from './locales'
+import { isSupportedLocale } from './platform/instance'
 
 // Initialize the Telegram SDK (best-effort) before mounting. Safe outside
 // Telegram: it detects the environment and no-ops on failure.
@@ -45,8 +48,22 @@ const app = createApp(App)
 // Pinia = state manager (like a global dict of reactive objects).
 app.use(createPinia())
 
+// i18n (tz-i18n phase 0): the ru catalog is verbatim the previously
+// hardcoded strings, so this changes no rendered text. The UI language
+// follows authStore.user.language (App.vue watches it).
+app.use(i18n)
+
 // Router = URL -> component mapping (like FastAPI include_router).
 app.use(router)
+
+// Boot locale hint (tz-i18n phase 5): apply the last CHOSEN locale BEFORE the
+// first render -- without this, a reopen shows the default locale for the
+// whole auth round-trip and then flips (the "5-10s of Russian" report). The
+// catalog chunk loads in parallel here (~tens of ms), so the splash grows by
+// roughly nothing; the server value later corrects a stale hint via the
+// App.vue watcher (same-locale no-op when they agree).
+const localeHint = readLocaleHint()
+if (localeHint && isSupportedLocale(localeHint)) await setLocale(localeHint)
 
 // Mount into <div id="app"> in index.html.
 app.mount('#app')

@@ -16,7 +16,7 @@
 
 <template>
   <div class="bookings">
-    <VHeader title="Мои бронирования" show-back @back="router.back()" />
+    <VHeader :title="t('user.screens.myBookings.title')" show-back @back="router.back()" />
 
     <!-- Loading (initial) -->
     <div v-if="store.loading && store.bookings.length === 0" class="bookings__loader">
@@ -27,25 +27,27 @@
     <VEmptyState
       v-else-if="store.error && store.bookings.length === 0"
       icon="warning"
-      title="Ошибка загрузки"
+      :title="t('common.loadError')"
       :description="store.error"
     >
-      <VButton size="sm" @click="store.refreshBookings()">Попробовать снова</VButton>
+      <VButton size="sm" @click="store.refreshBookings()">{{
+        t('user.screens.myBookings.retry')
+      }}</VButton>
     </VEmptyState>
 
     <!-- Empty (no bookings at all) -->
     <VEmptyState
       v-else-if="upcoming.length === 0 && past.length === 0"
       icon="list"
-      title="Бронирований нет"
-      description="Здесь появятся ваши бронирования после записи на практику"
+      :title="t('user.screens.myBookings.empty.title')"
+      :description="t('user.screens.myBookings.empty.text')"
     />
 
     <!-- Content -->
     <div v-else class="bookings__content">
       <!-- Upcoming -->
       <section v-if="upcoming.length" class="bookings__section">
-        <h3 class="bookings__section-title">Предстоящие</h3>
+        <h3 class="bookings__section-title">{{ t('user.screens.myBookings.tabs.upcoming') }}</h3>
         <div class="bookings__list">
           <BookingCard
             v-for="booking in upcoming"
@@ -59,7 +61,7 @@
 
       <!-- Past -->
       <section v-if="past.length" class="bookings__section">
-        <h3 class="bookings__section-title">Прошедшие</h3>
+        <h3 class="bookings__section-title">{{ t('user.screens.myBookings.tabs.past') }}</h3>
         <div class="bookings__list">
           <BookingCard
             v-for="booking in past"
@@ -76,7 +78,7 @@
            double-tap; the button hides once every page is loaded. -->
       <div v-if="store.hasMore" class="bookings__more">
         <VButton variant="ghost" block :loading="store.loading" @click="onLoadMore">
-          Показать ещё
+          {{ t('common.showMore') }}
         </VButton>
       </div>
     </div>
@@ -84,6 +86,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { VLoader, VEmptyState, VButton } from '@/components/ui'
@@ -117,7 +120,7 @@ const UPCOMING_STATUSES = ['confirmed', 'pending'] as const
 /**
  * True once the practice has ENDED (scheduled_at + duration < now).
  *
- * A booking whose practice is over belongs in "Прошедшие" even while its status
+ * A booking whose practice is over belongs in t('user.screens.myBookings.tabs.past') even while its status
  * is still confirmed/pending: the backend deliberately keeps that status until
  * the practice is finalized (manually by the master, or by the +24h
  * auto-finalizer) — a settlement grace window, NOT a signal the practice is
@@ -145,7 +148,7 @@ function isLive(b: BookingWithPracticeResponse): boolean {
  * Calendar-date comparison helpers. SW3 (PROMPT №577): dates are compared in
  * the VIEWER's profile timezone (matching BookingCard's own rendered date
  * text), not the practice's own timezone and not the browser's -- otherwise
- * "Завтра" could disagree with the shown date. Same en-CA + timeZone pattern
+ * t('user.screens.myBookings.status.tomorrow') could disagree with the shown date. Same en-CA + timeZone pattern
  * as formatDateShort in utils/format.ts.
  */
 function calendarDate(d: Date, timezone: string): string {
@@ -208,32 +211,34 @@ const past = computed(() => {
 // -- Badge logic (lives here -- it depends on the section / status) --
 function badgeFor(b: BookingWithPracticeResponse): BookingBadge | null {
   // Past statuses -> status badge.
-  if (b.status === 'attended') return { label: 'Завершена', variant: 'done' }
-  if (b.status === 'cancelled') return { label: 'Отменена', variant: 'cancelled' }
-  // B30 (PROMPT №746, owner wording): was 'Не состоялась' -- false, the
-  // practice DID happen, the person missed it. 'Вы не пришли' is the owner's
+  if (b.status === 'attended') return { label: t('user.screens.myBookings.done'), variant: 'done' }
+  if (b.status === 'cancelled')
+    return { label: t('user.screens.myBookings.cancelled'), variant: 'cancelled' }
+  // B30 (PROMPT №746, owner wording): was t('user.screens.myBookings.status.notHeld') -- false, the
+  // practice DID happen, the person missed it. t('user.screens.myBookings.status.noShow') is the owner's
   // literal word, used identically on PracticeDetailView's status row.
-  if (b.status === 'no_show') return { label: 'Вы не пришли', variant: 'no_show' }
+  if (b.status === 'no_show')
+    return { label: t('user.screens.myBookings.status.noShow'), variant: 'no_show' }
   // AT-2: confirmed AND already ended -> a Zoom-tracked practice awaiting its
   // attendance report (bookings/service.py deliberately leaves it CONFIRMED
   // until the report ripens or the deadline fallback fires). Distinguish
   // this from silence so it never reads as indistinguishable from a no-show
   // at a glance -- an honest "still being decided" badge instead.
   if (b.status === 'confirmed' && hasEnded(b)) {
-    return { label: 'Подсчет', variant: 'calculating' }
+    return { label: t('user.screens.myBookings.status.counting'), variant: 'calculating' }
   }
   // Pending but the practice is already over (awaiting backend finalize):
-  // it sits in "Прошедшие" with NO upcoming badge — no misleading
-  // "Сегодня" / "В эфире" on a practice that has ended.
+  // it sits in t('user.screens.myBookings.tabs.past') with NO upcoming badge — no misleading
+  // t('user.screens.myBookings.status.today') / t('user.screens.myBookings.status.live') on a practice that has ended.
   if (hasEnded(b)) return null
   // Upcoming -> live takes priority, then today / tomorrow; later dates none.
-  if (isLive(b)) return { label: 'В эфире', variant: 'live' }
+  if (isLive(b)) return { label: t('user.screens.myBookings.status.live'), variant: 'live' }
   const tz = viewerTz.value ?? 'UTC'
   if (isToday(b.practice.scheduled_at, tz)) {
-    return { label: 'Сегодня', variant: 'today' }
+    return { label: t('user.screens.myBookings.status.today'), variant: 'today' }
   }
   if (isTomorrow(b.practice.scheduled_at, tz)) {
-    return { label: 'Завтра', variant: 'tomorrow' }
+    return { label: t('user.screens.myBookings.status.tomorrow'), variant: 'tomorrow' }
   }
   return null
 }
@@ -247,7 +252,7 @@ function openDetail(b: BookingWithPracticeResponse): void {
 
 onMounted(() => {
   // B30: refreshMyBookings() (not fetchMyBookings()) -- badgeFor() below reads
-  // a "Подсчет" (attendance-pending) state off a cached list that may
+  // a t('user.screens.myBookings.status.counting') (attendance-pending) state off a cached list that may
   // have been fetched before the practice ended; fetchMyBookings() would
   // no-op and the badge would never advance to its real verdict.
   // refreshMyBookings() always re-fetches, without flashing the list empty.

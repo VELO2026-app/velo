@@ -19,19 +19,25 @@ Verified masters never reach here: applyGuard bounces them to the dashboard.
       <!-- Claiming -->
       <template v-if="claiming">
         <VLoader size="lg" />
-        <p class="invite-claim__subtitle">Проверяем приглашение…</p>
+        <p class="invite-claim__subtitle">
+          {{ t('common.inviteChecking') }}
+        </p>
       </template>
 
       <!-- W11 fix (PROMPT №409): a network blip / timeout is not the same claim
            as "this one-time link is burned" -- offer a retry instead of telling
            the user their invite is dead when it might just be their connection. -->
       <template v-else-if="transientError">
-        <h2 class="invite-claim__title">Не удалось проверить приглашение</h2>
+        <h2 class="invite-claim__title">
+          {{ t('common.inviteCheckFailed') }}
+        </h2>
         <p class="invite-claim__subtitle">
-          Проблема с соединением. Проверьте интернет и попробуйте ещё раз.
+          {{ t('common.connProblem') }}
         </p>
         <div class="invite-claim__actions">
-          <VButton variant="primary" block :loading="claiming" @click="claim"> Повторить </VButton>
+          <VButton variant="primary" block :loading="claiming" @click="claim">{{
+            t('common.retry')
+          }}</VButton>
         </div>
       </template>
 
@@ -41,7 +47,7 @@ Verified masters never reach here: applyGuard bounces them to the dashboard.
         <p class="invite-claim__subtitle">{{ errorDescription }}</p>
         <div class="invite-claim__actions">
           <VButton variant="primary" block @click="router.replace({ name: 'user-dashboard' })">
-            На главную
+            {{ t('common.backHome') }}
           </VButton>
         </div>
       </template>
@@ -50,6 +56,7 @@ Verified masters never reach here: applyGuard bounces them to the dashboard.
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { claimMasterInvite } from '@/api/masters'
@@ -75,7 +82,7 @@ async function claim(): Promise<void> {
   try {
     await claimMasterInvite(token)
     // Claimed (one-time, burned) — hand off to the regular apply wizard.
-    toast.success('Приглашение принято!')
+    toast.success(t('masterScreens.masterInviteClaim.toast.accepted'))
     void router.replace({ name: 'master-apply' })
   } catch (e) {
     // W11 fix: only a genuine invite_invalid (backend actually looked the
@@ -86,7 +93,7 @@ async function claim(): Promise<void> {
     // errorTitle stays here -- it is this screen's own framing, not a
     // generic error phrase the table is meant to hold one of.
     if (e instanceof ApiResponseError && e.code === 'invite_invalid') {
-      errorTitle.value = 'Ссылка недействительна'
+      errorTitle.value = t('masterScreens.masterInviteClaim.invalid.title')
       errorDescription.value = errorMessage('invite_invalid')
     } else {
       transientError.value = true

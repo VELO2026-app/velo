@@ -36,7 +36,7 @@
           :disabled="leaving"
           @click="onLeaveClick"
         >
-          Покинуть школу
+          {{ t('user.screens.curatorGroupPage.leaveCta') }}
         </VButton>
       </template>
     </VHeader>
@@ -51,11 +51,11 @@
       <VEmptyState
         v-else-if="notFound"
         icon="notfound"
-        title="Школа не найдена"
-        description="Возможно, она была удалена или вы в ней не состоите."
+        :title="t('user.screens.curatorGroupPage.notFound.title')"
+        :description="t('user.screens.curatorGroupPage.notFound.text')"
       >
         <template #action>
-          <VButton variant="primary" @click="goBack">К моим школам</VButton>
+          <VButton variant="primary" @click="goBack">{{ t('common.backToSchools') }}</VButton>
           <!-- Review P2 / I-5: for a member of a FROZEN school every
                informative surface 404s by design (P-08) -- the page, /mine,
                the preview -- yet the exit itself is deliberately not gated on
@@ -63,18 +63,18 @@
                honest path left; DELETE /membership is idempotent, and for a
                mistyped or deleted id it changes nothing. -->
           <VButton variant="ghost" size="sm" :disabled="leaving" @click="onLeaveClick">
-            Я состою в этой школе — покинуть её
+            {{ t('user.screens.curatorGroupPage.leaveNote') }}
           </VButton>
         </template>
       </VEmptyState>
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        title="Не удалось загрузить школу"
-        description="Проверьте соединение и попробуйте ещё раз."
+        :title="t('user.screens.curatorGroupPage.loadFailed')"
+        :description="t('user.screens.curatorGroupPage.loadFailedHint')"
       >
         <template #action>
-          <VButton variant="outline" @click="load">Повторить</VButton>
+          <VButton variant="outline" @click="load">{{ t('common.retry') }}</VButton>
         </template>
       </VEmptyState>
 
@@ -121,7 +121,7 @@
         <div class="cgp__actions">
           <VMenuRow
             v-if="isCurator"
-            label="Редактировать школу"
+            :label="t('user.screens.curatorGroupPage.edit.title')"
             :show-arrow="false"
             @click="openEdit"
           >
@@ -142,18 +142,18 @@
           <VMenuRow
             v-if="inMasterZone && canOpenRoster"
             class="cgp__nav-row"
-            label="Участники"
+            :label="t('user.screens.curatorGroupPage.tabs.members')"
             @click="openRoster"
           />
           <VMenuRow
             class="cgp__nav-row"
-            label="Предстоящие практики"
+            :label="t('user.screens.curatorGroupPage.tabs.upcoming')"
             @click="openPracticesCalendar"
           />
           <VMenuRow
             v-if="inMasterZone && isCurator"
             class="cgp__nav-row"
-            label="Аналитика"
+            :label="t('user.screens.curatorGroupPage.tabs.analytics')"
             @click="openAnalytics"
           />
         </div>
@@ -173,14 +173,16 @@
             })
           "
         >
-          Создать практику
+          {{ t('user.screens.curatorGroupPage.createPractice') }}
         </VButton>
 
         <!-- §1.6 item 7 + owner 2026-09-19: «Ближайшие практики» is the
              page's LAST element -- nothing renders below it -- and shows at
              most five upcoming school practices. The existing practice-card
              canon, no school-only variant. -->
-        <h2 class="velo-section-title cgp__section">Ближайшие практики</h2>
+        <h2 class="velo-section-title cgp__section">
+          {{ t('user.screens.curatorGroupPage.tabs.upcoming2') }}
+        </h2>
         <template v-if="upcomingPractices.length">
           <CalendarPracticeCard
             v-for="p in upcomingPractices"
@@ -190,7 +192,7 @@
             @click="router.push({ name: 'practice-detail', params: { id: $event } })"
           />
         </template>
-        <VEmptyState v-else variant="note" title="Ближайших практик нет" />
+        <VEmptyState v-else variant="note" :title="t('user.screens.curatorGroupPage.noUpcoming')" />
       </template>
     </div>
 
@@ -198,18 +200,22 @@
          sheet shape MasterGroupDetailView's rename uses. -->
     <VBottomSheet
       :open="editOpen"
-      title="Изменить название и описание"
+      :title="t('user.screens.curatorGroupPage.edit.nameAndDescription')"
       compact-title
-      save-label="Сохранить"
+      :save-label="t('ui.save')"
       :save-disabled="!editName.trim()"
       @save="onEditSave"
       @close="editOpen = false"
     >
-      <VInput v-model="editName" label="Название" placeholder="Название" />
+      <VInput
+        v-model="editName"
+        :label="t('user.screens.curatorGroupPage.fields.name')"
+        :placeholder="t('user.screens.curatorGroupPage.fields.namePlaceholder')"
+      />
       <VTextarea
         v-model="editDescription"
-        label="Описание"
-        placeholder="Описание"
+        :label="t('user.screens.curatorGroupPage.edit.description')"
+        :placeholder="t('user.screens.curatorGroupPage.edit.descriptionPlaceholder')"
         :rows="3"
         autogrow
       />
@@ -219,21 +225,21 @@
            «сохранено как …» when it round-trips differently. -->
       <VInput
         v-model="editAvatar"
-        label="Ссылка на аватар"
+        :label="t('user.screens.curatorGroupPage.edit.avatarLink')"
         placeholder="https://example.com/school.png"
         inputmode="url"
       />
       <p class="cgp__edit-hint">
-        Ссылка на картинку школы. Оставьте поле пустым, чтобы убрать аватар.
+        {{ t('user.screens.curatorGroupPage.imageHint') }}
       </p>
     </VBottomSheet>
 
     <!-- Leave confirm (student/master): advisory from leave-preview. -->
     <VConfirmDialog
       :open="leaveConfirmOpen"
-      title="Покинуть школу?"
+      :title="t('user.screens.curatorGroupPage.leave.confirmTitle')"
       :message="leaveMessage"
-      confirm-label="Покинуть"
+      :confirm-label="t('user.screens.curatorGroupPage.leave.confirmCta')"
       danger
       :loading="leaving"
       @confirm="onLeaveConfirm"
@@ -243,6 +249,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -300,8 +307,10 @@ const canOpenRoster = computed(
 )
 
 // Owner 2026-10-05: the header carries ONLY the school's name (was
-// «Школа «{name}»», §1.6/§1.10 mockup). 'Школа' is the pre-load fallback.
-const pageTitle = computed(() => page.value?.name ?? 'Школа')
+// «Школа «{name}»», §1.6/§1.10 mockup). field.schoolFallback is the pre-load fallback.
+const pageTitle = computed(
+  () => page.value?.name ?? t('user.screens.curatorGroupPage.field.schoolFallback'),
+)
 
 // §5.2: the payload carries no branding_hash yet -- variant A, the client
 // derives it from the name. When the server field lands, this watch is the
@@ -436,8 +445,10 @@ async function advisoryCount(
 function advisoryLine(count: number | null): string {
   // 0 -> no line at all (nothing would change -- saying so is noise).
   if (count === null || count === 0) return ''
-  const word = count === 1 ? 'практика' : count < 5 ? 'практики' : 'практик'
-  return ` ${count} предстоящих ${word} для этой школы станут скрыты.`
+  // hiddenCount is a CLDR pipe key: the whole sentence agrees per form
+  // (предстанет/станут), so no noun-fragment threading is needed.
+  // The joining space lives here, not in the catalog (no leading-space values).
+  return ` ${t('user.screens.curatorGroupPage.hiddenCount', count)}`
 }
 
 // -- Leave (student / master) --
@@ -451,9 +462,12 @@ const leaveMessage = computed(() => {
   // member of an inactive school by design (P-08) -- I-5 still guarantees the
   // exit itself works, so the not-found screen carries the one honest path.
   if (notFound.value) {
-    return 'Если вы состоите в этой школе, вы выйдете из неё. Выход работает, даже если школа сейчас не активна.'
+    return t('user.screens.curatorGroupPage.leave.warning')
   }
-  return `Вы покинете школу «${page.value?.name ?? ''}».${advisoryLine(leaveAdvisory.value)}`
+  return t('user.screens.curatorGroupPage.leaveText', {
+    name: page.value?.name ?? '',
+    advisory: advisoryLine(leaveAdvisory.value),
+  })
 })
 
 function onLeaveClick(): void {
@@ -470,10 +484,10 @@ async function onLeaveConfirm(): Promise<void> {
   try {
     await leaveCuratorGroup(groupId.value)
     leaveConfirmOpen.value = false
-    toast.success('Вы покинули школу')
+    toast.success(t('user.screens.curatorGroupPage.toast.left'))
     void router.replace(listRoute.value)
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось покинуть школу'))
+    toast.error(extractApiError(e, t('user.screens.curatorGroupPage.toast.leaveFailed')))
   } finally {
     leaving.value = false
   }
@@ -526,15 +540,15 @@ async function onEditSave(): Promise<void> {
       }
     }
     editOpen.value = false
-    toast.success('Школа обновлена')
+    toast.success(t('user.screens.curatorGroupPage.toast.updated'))
     // §12 trap: the server stores the URL NORMALIZED (lowercase host,
     // trailing slash, punycode) -- what returns is not what was typed, and
     // a silent difference reads as "the link got corrupted". Say it.
     if (typeof avatar === 'string' && (res.avatar_url ?? '') !== avatar && res.avatar_url) {
-      toast.info(`Ссылка на аватар сохранена как ${res.avatar_url}`)
+      toast.info(t('user.screens.curatorGroupPage.toast.avatarSaved', { url: res.avatar_url }))
     }
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось обновить школу'))
+    toast.error(extractApiError(e, t('user.screens.curatorGroupPage.toast.updateFailed')))
   } finally {
     saving.value = false
   }
@@ -552,7 +566,7 @@ function onTransferAccepted(newPage: CuratorGroupPageResponse): void {
   // The accept response IS the page as the new curator sees it -- replace
   // local state wholesale (relation flips, no reload).
   page.value = newPage
-  toast.success('Школа передана вам')
+  toast.success(t('user.screens.curatorGroupPage.toast.transferredToYou'))
 }
 
 function onTransferDeclined(): void {

@@ -27,8 +27,8 @@
   <div class="detail">
     <!-- Header: arrow-only back-pill (63×35) + left-aligned title (Figma "View entry") -->
     <header class="detail__header">
-      <VBackButton aria-label="Назад" @click="goBack" />
-      <h1 class="detail__title-bar">Запись</h1>
+      <VBackButton :aria-label="t('ui.back')" @click="goBack" />
+      <h1 class="detail__title-bar">{{ t('user.screens.detail.title') }}</h1>
     </header>
 
     <!-- Body -->
@@ -42,11 +42,11 @@
       <VEmptyState
         v-else-if="loadError"
         icon="warning"
-        title="Не удалось загрузить запись"
+        :title="t('user.screens.detail.loadFailed')"
         :description="loadError"
       >
         <template #action>
-          <VButton variant="primary" @click="reload">Повторить</VButton>
+          <VButton variant="primary" @click="reload">{{ t('common.retry') }}</VButton>
         </template>
       </VEmptyState>
 
@@ -72,7 +72,7 @@
         <VCard class="detail__card">
           <p class="detail__date">{{ dateLine }}</p>
           <p v-if="comment" class="detail__content">{{ comment }}</p>
-          <p v-else class="detail__empty">Без комментария</p>
+          <p v-else class="detail__empty">{{ t('user.screens.detail.noComment') }}</p>
           <p v-if="contextLine" class="detail__context">{{ contextLine }}</p>
         </VCard>
       </template>
@@ -81,6 +81,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VLoader, VEmptyState, VButton, VBackButton, VCard } from '@/components/ui'
@@ -151,12 +152,16 @@ const practiceDuration = computed(() =>
 )
 
 // Context line under the comment: relates this check-in / feedback to the
-// linked practice ("Перед практикой: X с Y" / "После практики: X с Y").
+// linked practice (t('user.screens.detail.relatedLine'); the rel head comes
+// from detail.rel.*).
 const contextLine = computed(() => {
   if (!practice.value) return ''
-  const name = practice.value.master_name ?? 'Мастером'
-  const rel = detailType.value === 'checkin' ? 'Перед практикой' : 'После практики'
-  return `${rel}: ${practice.value.title} с ${name}`
+  const name = practice.value.master_name ?? t('shared.form.hostFallback')
+  const rel =
+    detailType.value === 'checkin'
+      ? t('user.screens.detail.rel.checkin')
+      : t('user.screens.detail.rel.feedback')
+  return t('user.screens.detail.relatedLine', { rel, title: practice.value.title, name })
 })
 
 // -- load --------------------------------------------------------------------
@@ -187,7 +192,7 @@ async function reload(): Promise<void> {
       }
     }
   } catch (e) {
-    loadError.value = extractApiError(e, 'Запись не найдена')
+    loadError.value = extractApiError(e, t('user.screens.detail.notFound'))
   } finally {
     loading.value = false
   }

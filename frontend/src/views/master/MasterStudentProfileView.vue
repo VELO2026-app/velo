@@ -37,9 +37,9 @@
 
 <template>
   <div class="profile">
-    <VHeader title="Профиль ученика" show-back @back="router.back()">
+    <VHeader :title="t('masterScreens.masterStudentProfile.title')" show-back @back="router.back()">
       <template v-if="detail && !detail.blocked" #action>
-        <VMenu ariaLabel="Меню ученика">
+        <VMenu :ariaLabel="t('masterScreens.masterStudentProfile.menuAria')">
           <!-- T24-9: horizontal at rest, rotates to vertical open -- the
                OPPOSITE resting orientation of the diary's own dots override
                (DiaryFeedView.vue: vertical at rest, rotates to horizontal).
@@ -64,15 +64,19 @@
             </svg>
           </template>
           <template #default="{ close }">
-            <VMenuItem :icon="IconTag" ariaLabel="Добавить тег" @click="onTagClick(close)" />
+            <VMenuItem
+              :icon="IconTag"
+              :ariaLabel="t('masterScreens.masterStudentProfile.tagAria')"
+              @click="onTagClick(close)"
+            />
             <VMenuItem
               :icon="IconPen"
-              ariaLabel="Добавить в группу"
+              :ariaLabel="t('masterScreens.masterStudentProfile.addToGroup')"
               @click="onAddToGroupClick(close)"
             />
             <VMenuItem
               :icon="IconTrash"
-              ariaLabel="Удалить из группы"
+              :ariaLabel="t('masterScreens.masterStudentProfile.removeFromGroup')"
               danger
               @click="onRemoveFromGroupClick(close)"
             />
@@ -84,7 +88,7 @@
                  earned its own menu entry instead of borrowing the trash. -->
             <VMenuItem
               :icon="IconLock"
-              ariaLabel="Заблокировать"
+              :ariaLabel="t('common.block')"
               danger
               @click="onBlockMenuClick(close)"
             />
@@ -103,10 +107,10 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        title="Не удалось загрузить профиль"
+        :title="t('masterScreens.masterStudentProfile.toast.loadFailed')"
         :description="error"
       >
-        <VButton size="sm" variant="outline" @click="load">Повторить</VButton>
+        <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
       </VEmptyState>
 
       <template v-else>
@@ -123,13 +127,20 @@
 
         <!-- Stats (% card removed — PROMPT №157; two cards widen under the hero) -->
         <div class="profile__stats">
-          <VStatCard :value="practicesCount" label="Практик" />
-          <VStatCard :value="hours" label="Часов" />
+          <VStatCard
+            :value="practicesCount"
+            :label="t('masterScreens.masterStudentProfile.practicesStat')"
+          />
+          <VStatCard :value="hours" :label="t('masterScreens.masterStudentProfile.hoursStat')" />
         </div>
 
         <!-- Recent check-ins (cap 3; rest behind «посмотреть еще» — PROMPT №157) -->
-        <h2 class="velo-section-title">Последние check-ins</h2>
-        <div v-if="checkinRows.length === 0" class="profile__empty">Пока нет check-ins</div>
+        <h2 class="velo-section-title">
+          {{ t('masterScreens.masterStudentProfile.sections.recentCheckins') }}
+        </h2>
+        <div v-if="checkinRows.length === 0" class="profile__empty">
+          {{ t('masterScreens.masterStudentProfile.empty.checkins') }}
+        </div>
         <div v-for="(ci, i) in visibleCheckins" :key="`ci-${i}`" class="profile__ci">
           <MoodAvatar :mood="ci.mood" :size="46" />
           <div class="profile__ci-body">
@@ -139,13 +150,15 @@
         </div>
         <VShowMore
           v-if="!ciExpanded && hiddenCheckins > 0"
-          label="посмотреть еще"
+          :label="t('masterScreens.masterStudentProfile.showMore')"
           @click="ciExpanded = true"
         />
 
         <!-- Feedbacks (cap 3; rest behind «посмотреть еще» — PROMPT №157) -->
         <h2 class="velo-section-title">Feedbacks</h2>
-        <div v-if="feedbackRows.length === 0" class="profile__empty">Пока нет отзывов</div>
+        <div v-if="feedbackRows.length === 0" class="profile__empty">
+          {{ t('masterScreens.masterStudentProfile.empty.reviews') }}
+        </div>
         <div v-for="(fb, i) in visibleFeedbacks" :key="`fb-${i}`" class="profile__fb">
           <span class="profile__fb-ic">
             <component :is="fb.icon" :size="30" />
@@ -160,13 +173,13 @@
         </div>
         <VShowMore
           v-if="!fbExpanded && hiddenFeedbacks > 0"
-          label="посмотреть еще"
+          :label="t('masterScreens.masterStudentProfile.showMore')"
           @click="fbExpanded = true"
         />
 
         <!-- Action: posts into the eternal DM with THIS student (T3). -->
         <VButton variant="primary" block class="profile__cta" @click="msgOpen = true">
-          Написать сообщение
+          {{ t('common.writeMessage') }}
         </VButton>
 
         <!-- P3 (PROMPT №592): destructive, bottom of the screen (design variant 3).
@@ -191,9 +204,9 @@
          that dialog deliberately has none). -->
     <VConfirmDialog
       :open="blockConfirmOpen"
-      title="Заблокировать пользователя?"
-      message="Пользователь переместится в группу «Удаленные». Он больше не сможет видеть и бронировать ваши практики и перестанет получать ваши уведомления. Вы сможете разблокировать его в любой момент."
-      confirm-label="Заблокировать"
+      :title="t('masterScreens.masterStudentProfile.blockConfirm')"
+      :message="t('masterScreens.masterStudentProfile.blockMoveText')"
+      :confirm-label="t('common.block')"
       danger
       warning-panel
       cancel-variant="primary"
@@ -211,10 +224,10 @@
          for the measured fit with the new label. -->
     <VConfirmDialog
       :open="reportOfferOpen"
-      title="Пользователь заблокирован"
-      message="Пользователь перемещен в «Удаленные». Если он нарушал правила — например, сорвал практику или вел себя неподобающе, — вы можете сообщить об этом в поддержку."
-      confirm-label="В поддержку"
-      cancel-label="Не сейчас"
+      :title="t('masterScreens.masterStudentProfile.toast.blocked')"
+      :message="t('masterScreens.masterStudentProfile.blockedBanner')"
+      :confirm-label="t('masterScreens.masterStudentProfile.toSupport')"
+      :cancel-label="t('masterScreens.masterStudentProfile.notNow')"
       compact-actions
       warning-panel
       :warning-panel-icon="false"
@@ -244,9 +257,9 @@
          it). The MESSAGE keeps the name on purpose. -->
     <VConfirmDialog
       :open="unblockConfirmOpen"
-      :title="`Разблокировать?`"
-      :message="`${name} вернется в группу «Ученики» и снова сможет видеть и бронировать ваши практики.`"
-      confirm-label="Разблокировать"
+      :title="t('masterScreens.masterStudentProfile.unblockConfirmTitle')"
+      :message="t('masterScreens.masterStudentProfile.unblockText', { name })"
+      :confirm-label="t('masterScreens.masterStudentProfile.unblockCta')"
       warning-panel
       cancel-variant="primary"
       title-strong
@@ -297,6 +310,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -341,7 +355,11 @@ const router = useRouter()
 // never the unconditional placeholder.
 const name = computed((): string => {
   const q = route.query.name
-  return detail.value?.name || (typeof q === 'string' && q) || 'Ученик'
+  return (
+    detail.value?.name ||
+    (typeof q === 'string' && q) ||
+    t('masterScreens.masterStudentProfile.studentFallback')
+  )
 })
 const avatarUrl = computed((): string => detail.value?.avatar_url ?? '')
 
@@ -356,7 +374,7 @@ async function load(): Promise<void> {
   try {
     detail.value = await getStudent(String(route.params.id))
   } catch {
-    error.value = 'Попробуйте ещё раз'
+    error.value = t('common.tryAgain')
   } finally {
     loading.value = false
   }
@@ -450,7 +468,7 @@ const visibleFeedbacks = computed(() =>
 const hiddenCheckins = computed((): number => Math.max(0, checkinRows.value.length - PREVIEW_CAP))
 const hiddenFeedbacks = computed((): number => Math.max(0, feedbackRows.value.length - PREVIEW_CAP))
 
-// "Написать сообщение" — posts into the eternal DM with THIS student (T3).
+// t('common.writeMessage') — posts into the eternal DM with THIS student (T3).
 const msgOpen = ref(false)
 
 // -- Block -> report-offer -> report form (P3, PROMPT №592) --
@@ -462,7 +480,7 @@ async function onBlockConfirm(): Promise<void> {
   blocking.value = true
   try {
     await blockStudent(String(route.params.id))
-    toast.success('Пользователь заблокирован')
+    toast.success(t('masterScreens.masterStudentProfile.toast.blocked'))
     blockConfirmOpen.value = false
     // T24-20: refresh detail.blocked so the "..." menu hides and the bottom
     // button relabels itself if the master dismisses the report-offer below
@@ -470,7 +488,7 @@ async function onBlockConfirm(): Promise<void> {
     await load()
     reportOfferOpen.value = true
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось заблокировать'))
+    toast.error(extractApiError(e, t('masterScreens.masterStudentProfile.toast.blockFailed')))
   } finally {
     blocking.value = false
   }
@@ -489,7 +507,9 @@ const reportFormOpen = ref(false)
 // action. Same VConfirmDialog copy, targeting this profile's student instead
 // of a clicked row.
 const blockActionLabel = computed((): string =>
-  detail.value?.blocked ? 'Разблокировать пользователя' : 'Заблокировать пользователя',
+  detail.value?.blocked
+    ? t('masterScreens.masterStudentProfile.unblockConfirm')
+    : t('masterScreens.masterStudentProfile.blockAction'),
 )
 function onBlockActionClick(): void {
   if (detail.value?.blocked) unblockConfirmOpen.value = true
@@ -510,13 +530,13 @@ async function onUnblockConfirm(): Promise<void> {
   unblocking.value = true
   try {
     await unblockStudent(String(route.params.id))
-    toast.success('Пользователь разблокирован')
+    toast.success(t('masterScreens.masterStudentProfile.toast.unblocked'))
     unblockConfirmOpen.value = false
     // Restores detail.blocked=false -- the "..." menu reappears and the
-    // bottom button relabels back to "Заблокировать пользователя".
+    // bottom button relabels back to t('masterScreens.masterStudentProfile.blockAction').
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось разблокировать'))
+    toast.error(extractApiError(e, t('masterScreens.masterStudentProfile.toast.unblockFailed')))
   } finally {
     unblocking.value = false
   }

@@ -15,20 +15,21 @@
 
 <template>
   <div v-if="targets.length > 0" class="role-switch">
-    <div class="role-switch__title">Переключение роли</div>
+    <div class="role-switch__title">{{ t('roleSwitch.title') }}</div>
     <div class="role-switch__list">
       <VMenuRow
-        v-for="t in targets"
-        :key="t"
+        v-for="target in targets"
+        :key="target"
         variant="primary"
-        :label="ROLE_LABEL[t]"
-        @click="onSwitch(t)"
+        :label="ROLE_LABEL[target]"
+        @click="onSwitch(target)"
       />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VMenuRow } from '@/components/ui'
@@ -44,9 +45,15 @@ const uiStore = useUiStore()
 const toast = useToast()
 
 const ROLE_LABEL: Record<UserRole, string> = {
-  user: 'Режим пользователя',
-  master: 'Режим мастера',
-  admin: 'Режим администратора',
+  get user(): string {
+    return t('roleSwitch.user')
+  },
+  get master(): string {
+    return t('roleSwitch.master')
+  },
+  get admin(): string {
+    return t('roleSwitch.admin')
+  },
 }
 
 const ROLE_DASHBOARD: Record<UserRole, string> = {
@@ -89,7 +96,7 @@ async function onSwitch(target: UserRole): Promise<void> {
     uiStore.setUiMode('default')
     await router.push({ name: ROLE_DASHBOARD[target] })
   } catch {
-    toast.error('Не удалось переключить роль')
+    toast.error(t('roleSwitch.failed'))
   } finally {
     switching.value = false
   }

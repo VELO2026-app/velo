@@ -27,7 +27,12 @@ export function logoSvg(P: SchoolBrandingParams, opts: LogoOptions = {}): string
   const c = P.style.palette
   const scale = opts.mandalaScale ?? 0.8
   const mono = opts.monogram
-    ? `<text x="100" y="164" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="28" fill="${c.deep}">${(opts.letter || 'Ш').replace(/[<>&]/g, '')}</text>`
+    ? `<text x="100" y="164" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="28" fill="${c.deep}">${
+        // «Ш» -- the prototype's stand-in for «Школа» (golden port 2026-09-19, tz-curator
+        // §5.3: перенесён как есть). Unreachable today: no live component turns the
+        // monogram on; the fallback exists for the golden contract only.
+        (opts.letter || 'Ш').replace(/[<>&]/g, '')
+      }</text>`
     : ''
   const shadow = opts.flat
     ? ''

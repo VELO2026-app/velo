@@ -47,7 +47,7 @@
 
 <template>
   <div class="notifications">
-    <VHeader title="Уведомления" show-back @back="router.back()" />
+    <VHeader :title="t('user.screens.notifications.title')" show-back @back="router.back()" />
 
     <div class="notifications__content">
       <div class="notifications__row">
@@ -83,6 +83,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -103,32 +104,32 @@ const ROWS = [
     // behavioural questions on 2026-08-13 and said nothing about the strings,
     // and silence is not approval. Every label below is a one-line edit; keep
     // it that way and do not treat any of them as final.
-    label: 'Напоминания о практиках',
-    sub: 'За сутки, за час и за 10 минут; просьба оставить отзыв',
+    label: t('user.screens.notifications.practiceReminders'),
+    sub: t('user.screens.notifications.practiceRemindersHint'),
   },
   {
     key: 'bookings',
-    label: 'Записи и переносы',
-    sub: 'Подтверждения, отмены, освободившееся место',
+    label: t('user.screens.notifications.bookings'),
+    sub: t('user.screens.notifications.bookingsHint'),
   },
   {
     key: 'msg_participants',
-    label: 'Сообщения',
-    sub: 'Новые сообщения в ваших чатах',
+    label: t('user.screens.notifications.messages'),
+    sub: t('user.screens.notifications.messagesHint'),
   },
   {
     key: 'finance',
-    label: 'Кошелёк',
-    sub: 'Пополнения и выплаты',
+    label: t('user.screens.notifications.wallet'),
+    sub: t('user.screens.notifications.walletHint'),
   },
 ] as const
 
 type CategoryKey = (typeof ROWS)[number]['key']
 
 // PROVISIONAL WORDING, same standing as the row labels above.
-const MASTER_LABEL = 'Уведомления'
-const MASTER_SUB = 'Выключите, чтобы не приходило ничего'
-const SECTION_TITLE = 'Что присылать'
+const MASTER_LABEL = t('user.screens.notifications.title')
+const MASTER_SUB = t('user.screens.notifications.muteHint')
+const SECTION_TITLE = t('user.screens.notifications.whatToSend')
 
 // Server state. Empty until the first successful load; a category the server
 // does not report is one we cannot honestly control, so its row is disabled
@@ -170,7 +171,7 @@ async function loadPrefs(): Promise<void> {
     // screen was rebuilt to remove. (The master screen leaves its switches
     // live here; that difference is deliberate and was approved.)
     loadFailed.value = true
-    toast.error('Не удалось загрузить настройки уведомлений')
+    toast.error(t('user.screens.notifications.toast.loadFailed'))
     console.warn('notification prefs load failed', error)
   }
 }
@@ -189,7 +190,7 @@ async function persist(
     await updateNotificationPrefs({ categories: next })
   } catch (error) {
     Object.assign(categories, previous)
-    toast.error('Не удалось сохранить настройку')
+    toast.error(t('user.screens.notifications.toast.saveFailed'))
     console.warn('preference save failed', error)
   } finally {
     savingKey.value = ''

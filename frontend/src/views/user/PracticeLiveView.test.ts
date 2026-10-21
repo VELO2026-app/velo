@@ -72,6 +72,7 @@
 // the mocked module loads, before this file's own consts exist.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, ref, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
@@ -273,7 +274,7 @@ let pinia: Pinia
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(PracticeLiveView)
+  app = createApp(PracticeLiveView).use(createTestI18n())
   app.use(pinia)
   app.mount(host)
   return host

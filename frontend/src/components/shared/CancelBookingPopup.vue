@@ -23,7 +23,7 @@
 
 <template>
   <VModal :open="open" @close="onClose">
-    <h2 class="cancel__title">Отменить бронирование?</h2>
+    <h2 class="cancel__title">{{ t('bookingCancel.title') }}</h2>
     <!-- The "Вы уверены…" subtitle (redundant with the title) and the refund /
          money warning were removed — the money theme is temporarily out.
          TODO: re-add the actual refund texts later. -->
@@ -33,7 +33,7 @@
          prominent = safe, subtle/destructive = pink). -->
     <div class="cancel__actions">
       <VButton variant="primary" block :disabled="loading" @click="onClose">
-        Нет, оставить
+        {{ t('bookingCancel.keep') }}
       </VButton>
       <VButton
         variant="danger"
@@ -42,14 +42,17 @@
         :disabled="loading"
         @click="$emit('confirm')"
       >
-        Да, отменить
+        {{ t('bookingCancel.confirm') }}
       </VButton>
     </div>
   </VModal>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { VModal, VButton } from '@/components/ui'
+
+// tz-i18n 2.2b: dialog copy via bookingCancel.*.
 
 // Structural minimum: works with both BookingWithPracticeResponse (list)
 // and BookingDetailResponse (detail) -- the popup only needs the practice

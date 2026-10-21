@@ -23,6 +23,9 @@ import {
 } from '@/api/bookings'
 import { usePagination } from '@/composables/usePagination'
 import { ApiResponseError } from '@/api/client'
+import i18n from '@/locales'
+
+const { t } = i18n.global
 import { extractApiError } from '@/composables/useApiError'
 // One-way dependency: bookings -> diary. Used only inside actions, never at
 // module scope or in the store's setup body -- keep it that way.
@@ -93,7 +96,7 @@ export const useBookingsStore = defineStore('bookings', () => {
       selectedBooking.value = await getBooking(bookingId)
     } catch (e) {
       selectedBooking.value = null
-      selectedError.value = extractApiError(e, 'Не удалось загрузить бронирование')
+      selectedError.value = extractApiError(e, t('storeErrors.bookings.selected'))
     } finally {
       selectedLoading.value = false
     }
@@ -122,7 +125,7 @@ export const useBookingsStore = defineStore('bookings', () => {
       // looks identical to "genuinely nothing upcoming") -- keep the same
       // fallback but record the error so the caller can surface it.
       upcoming.value = []
-      upcomingError.value = extractApiError(e, 'Не удалось загрузить ближайшую практику')
+      upcomingError.value = extractApiError(e, t('storeErrors.bookings.upcoming'))
     } finally {
       upcomingLoading.value = false
     }
@@ -158,7 +161,7 @@ export const useBookingsStore = defineStore('bookings', () => {
       void useDiaryStore().refreshFeed()
       return { ok: true, error: '' }
     } catch (e) {
-      const message = extractApiError(e, 'Не удалось отменить бронирование')
+      const message = extractApiError(e, t('storeErrors.bookings.cancel'))
       return { ok: false, error: message }
     }
   }
@@ -175,7 +178,7 @@ export const useBookingsStore = defineStore('bookings', () => {
       await pagination.refresh()
       return { ok: true, error: '' }
     } catch (e) {
-      const message = extractApiError(e, 'Не удалось войти в практику')
+      const message = extractApiError(e, t('storeErrors.bookings.join'))
       return {
         ok: false,
         error: message,
@@ -194,7 +197,7 @@ export const useBookingsStore = defineStore('bookings', () => {
       await pagination.refresh()
       return { ok: true, error: '' }
     } catch (e) {
-      const message = extractApiError(e, 'Не удалось покинуть практику')
+      const message = extractApiError(e, t('storeErrors.bookings.leave'))
       return { ok: false, error: message }
     }
   }
@@ -210,7 +213,7 @@ export const useBookingsStore = defineStore('bookings', () => {
       await pagination.refresh()
       return { ok: true, error: '' }
     } catch (e) {
-      const message = extractApiError(e, 'Не удалось пропустить check-in')
+      const message = extractApiError(e, t('storeErrors.bookings.skipCheckin'))
       return { ok: false, error: message }
     }
   }

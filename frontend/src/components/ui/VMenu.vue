@@ -46,6 +46,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { onDocumentEvent, offDocumentEvent } from '@/platform/dom'
 import { ref, onBeforeUnmount, watch } from 'vue'
 import { IconDots } from '@/components/icons'
@@ -55,7 +56,7 @@ withDefaults(
     /** Accessible label for the kebab trigger. */
     ariaLabel?: string
   }>(),
-  { ariaLabel: 'Меню' },
+  { ariaLabel: t('shared.components.menuAria') },
 )
 
 const open = ref(false)

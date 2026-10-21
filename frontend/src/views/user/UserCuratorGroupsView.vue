@@ -13,7 +13,11 @@
 
 <template>
   <div class="ucg">
-    <VHeader title="Мои школы" show-back @back="router.push({ name: 'user-profile' })" />
+    <VHeader
+      :title="t('user.screens.userCuratorGroups.title')"
+      show-back
+      @back="router.push({ name: 'user-profile' })"
+    />
 
     <div class="ucg__content">
       <div v-if="loading" class="ucg__state">
@@ -23,19 +27,19 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        title="Не удалось загрузить школы"
-        description="Проверьте соединение и попробуйте ещё раз."
+        :title="t('school.loadFailed')"
+        :description="t('user.screens.userCuratorGroups.loadFailedHint')"
       >
         <template #action>
-          <VButton variant="outline" @click="load">Повторить</VButton>
+          <VButton variant="outline" @click="load">{{ t('common.retry') }}</VButton>
         </template>
       </VEmptyState>
 
       <VEmptyState
         v-else-if="!groups.length"
         icon="group"
-        title="Пока нет школ"
-        description="Вступить в школу можно по ссылке от куратора."
+        :title="t('user.screens.userCuratorGroups.empty.title')"
+        :description="t('user.screens.userCuratorGroups.empty.text')"
       />
 
       <template v-else>
@@ -51,6 +55,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getMyCuratorGroups } from '@/api/curatorGroups'

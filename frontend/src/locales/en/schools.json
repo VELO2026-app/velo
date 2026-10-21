@@ -1,0 +1,44 @@
+{
+  "transfer": {
+    "sentTo": "The offer to transfer the school has been sent to {name}. Until it is accepted, it can be cancelled.",
+    "invite": "You are invited to become the curator of this school. Accepting the offer makes you its owner.",
+    "accept": "Accept",
+    "decline": "Decline",
+    "cancel": "Cancel",
+    "cancelled": "The offer has been cancelled",
+    "acceptFailed": "Failed to accept the school",
+    "declined": "The offer has been declined",
+    "declineFailed": "Failed to decline the offer",
+    "cancelFailed": "Failed to cancel the offer"
+  },
+  "tags": {
+    "title": "Add a tag",
+    "newLabel": "New tag",
+    "newPlaceholder": "Enter a tag",
+    "existing": "Existing tags",
+    "saved": "Tag saved",
+    "saveFailed": "Failed to save the tag"
+  },
+  "school": {
+    "inviteCopyAria": "Copy the invite link",
+    "inviteLabel": "Invite link",
+    "inviteFetchFailed": "Failed to get the link",
+    "copyFailed": "Failed to copy the link",
+    "curator": "Curator: {name}",
+    "students": "{n} student | {n} students",
+    "masters": "{n} master | {n} masters",
+    "upload": "Upload a photo",
+    "replace": "Replace",
+    "remove": "Remove",
+    "bannerUpload": "Upload a photo",
+    "bannerReplace": "Replace",
+    "bannerRemove": "Remove",
+    "loadFailed": "Failed to load the schools"
+  },
+  "curatorGroup": {
+    "offerBadge": "Curatorship"
+  },
+  "distribution": {
+    "breakdown": "Breakdown"
+  }
+}

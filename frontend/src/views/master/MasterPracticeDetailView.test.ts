@@ -66,6 +66,7 @@
 // nothing here relies on it.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, reactive, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
@@ -245,7 +246,7 @@ let writeText: ReturnType<typeof vi.fn>
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(MasterPracticeDetailView)
+  app = createApp(MasterPracticeDetailView).use(createTestI18n())
   app.use(pinia)
   app.mount(host)
   return host
@@ -721,7 +722,7 @@ describe('MasterPracticeDetailView', () => {
       await flush()
 
       expect(host?.querySelectorAll('.pd-prow')).toHaveLength(5)
-      expect(text()).toContain('+ ещё 3 участников')
+      expect(text()).toContain('+ ещё 3 участника')
       expect(text()).toContain('Участник 5')
       expect(text()).not.toContain('Участник 6')
     })
@@ -1158,7 +1159,7 @@ describe('MasterPracticeDetailView', () => {
       await openDestructive()
 
       expect(dialogText()).toContain('Утренняя йога')
-      expect(dialogText()).toContain('4 участников')
+      expect(dialogText()).toContain('4 участника')
       expect(dialogText()).toContain('Оплаты вернутся автоматически')
     })
 

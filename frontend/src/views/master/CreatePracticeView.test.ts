@@ -77,6 +77,7 @@
 // relies on it. localStorage is cleared per test (the draft autosave, :597).
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import CreatePracticeView from '@/views/master/CreatePracticeView.vue'
@@ -222,7 +223,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(CreatePracticeView)
+  app = createApp(CreatePracticeView).use(createTestI18n())
   app.mount(host)
   return host
 }

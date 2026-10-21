@@ -10,20 +10,21 @@
 <template>
   <div class="topup-result">
     <IconClose :size="64" class="topup-result__icon" />
-    <h1 class="topup-result__title">Оплата отменена</h1>
-    <p class="topup-result__text">Ваш баланс не изменился. Вы можете попробовать снова.</p>
+    <h1 class="topup-result__title">{{ t('user.screens.topupCancel.title') }}</h1>
+    <p class="topup-result__text">{{ t('user.screens.topupCancel.text') }}</p>
     <div class="topup-result__actions">
       <VButton variant="primary" size="lg" block @click="router.push({ name: 'user-topup' })">
-        Попробовать снова
+        {{ t('user.screens.topupCancel.retry') }}
       </VButton>
       <VButton variant="ghost" block @click="router.push({ name: 'user-dashboard' })">
-        На главную
+        {{ t('common.backHome') }}
       </VButton>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { useRouter } from 'vue-router'
 import { VButton } from '@/components/ui'
 import { IconClose } from '@/components/icons'

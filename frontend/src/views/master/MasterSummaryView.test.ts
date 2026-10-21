@@ -90,6 +90,7 @@
 // mocks and afterEach unmounts and purges.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import MasterSummaryView from '@/views/master/MasterSummaryView.vue'
@@ -171,7 +172,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(MasterSummaryView)
+  app = createApp(MasterSummaryView).use(createTestI18n())
   app.mount(host)
   return host
 }
@@ -294,7 +295,7 @@ function normFace(html: string): string {
  */
 function faceOf(zone: ScoreZone): string {
   const el = document.createElement('div')
-  const app = createApp(MOOD_SCALE_ICON[zone], { size: 36 })
+  const app = createApp(MOOD_SCALE_ICON[zone], { size: 36 }).use(createTestI18n())
   app.mount(el)
   const html = normFace(el.querySelector('svg')?.outerHTML ?? '')
   app.unmount()

@@ -21,7 +21,11 @@
 
 <template>
   <div class="tz-picker">
-    <VInput v-model="query" :placeholder="placeholder" @focus="onFieldFocus">
+    <VInput
+      v-model="query"
+      :placeholder="placeholder ?? t('timezone.placeholder')"
+      @focus="onFieldFocus"
+    >
       <template #suffix><IconSearch :size="18" /></template>
     </VInput>
 
@@ -47,11 +51,12 @@
         </span>
       </button>
     </div>
-    <p v-else class="tz-picker__empty">Город не найден, уточните написание.</p>
+    <p v-else class="tz-picker__empty">{{ t('timezone.notFound') }}</p>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, ref, watch } from 'vue'
 import { VInput } from '@/components/ui'
 import { IconSearch, IconCheck } from '@/components/icons'
@@ -59,6 +64,9 @@ import { timezoneRows } from '@/utils/timezoneCities'
 import { useTimezoneCatalog } from '@/composables/useTimezoneCatalog'
 import { formatUtcOffset } from '@/utils/practiceOptions'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
+
+// tz-i18n 2.2a: the empty hint and the placeholder are keys; the SEARCH
+// itself stays data-driven (city names + latin aliases are the data, §3.1).
 
 // Lift the city search above the soft keyboard once it settles (shared M5
 // composable) so the field isn't left under the keyboard on focus (K3).
@@ -72,7 +80,7 @@ const props = withDefaults(
   }>(),
   {
     modelValue: '',
-    placeholder: 'Ваш город (Берлин, London)…',
+    placeholder: undefined,
   },
 )
 

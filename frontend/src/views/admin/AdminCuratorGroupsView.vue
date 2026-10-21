@@ -17,7 +17,7 @@
   <div class="admin-list">
     <header class="admin-list__top">
       <VBackButton @click="router.push({ name: 'admin-masters' })" />
-      <h1 class="admin-list__title">Школы</h1>
+      <h1 class="admin-list__title">{{ t('adminScreens.adminCuratorGroups.title') }}</h1>
       <span class="admin-list__count">{{ total || '—' }}</span>
     </header>
 
@@ -26,11 +26,11 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      title="Не удалось загрузить школы"
-      description="Проверьте соединение и попробуйте ещё раз"
+      :title="t('school.loadFailed')"
+      :description="t('common.checkConnection')"
     >
       <template #action
-        ><VButton variant="primary" @click="load(true)">Повторить</VButton></template
+        ><VButton variant="primary" @click="load(true)">{{ t('common.retry') }}</VButton></template
       >
     </VEmptyState>
 
@@ -46,32 +46,47 @@
           <div class="sg-card__head">
             <span class="sg-card__name">{{ g.name }}</span>
             <VBadge :variant="g.is_active ? 'success' : 'muted'">
-              {{ g.is_active ? 'Активна' : 'Заморожена' }}
+              {{
+                g.is_active
+                  ? t('adminScreens.adminCuratorGroups.active')
+                  : t('adminScreens.adminCuratorGroups.frozen')
+              }}
             </VBadge>
           </div>
-          <span class="sg-card__curator">Куратор: {{ g.curator.display_name || '—' }}</span>
+          <span class="sg-card__curator">{{
+            t('school.curator', {
+              name: g.curator.display_name || '—',
+            })
+          }}</span>
           <span class="sg-card__meta">
-            Мастеров: {{ g.masters_count }} • Учеников: {{ g.students_count }} • с
-            {{ createdLabel(g.created_at) }}
+            {{
+              t('adminScreens.adminCuratorGroups.countsLine', {
+                masters: g.masters_count,
+                students: g.students_count,
+                since: createdLabel(g.created_at),
+              })
+            }}
           </span>
         </button>
       </div>
 
       <div v-if="hasMore" class="admin-list__more">
-        <VButton variant="outline" :loading="loading" @click="load(false)">Показать ещё</VButton>
+        <VButton variant="outline" :loading="loading" @click="load(false)">{{
+          t('common.showMore')
+        }}</VButton>
       </div>
     </template>
 
     <VCard v-else>
       <p class="admin-list__empty">
-        Школ пока нет. Школу создаёт сам верифицированный мастер — отдельной выдачи прав не
-        предусмотрено (рычаг админа — верификация мастера).
+        {{ t('adminScreens.adminCuratorGroups.emptyNote') }}
       </p>
     </VCard>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { VBackButton, VBadge, VButton, VCard, VEmptyState, VLoader } from '@/components/ui'
@@ -100,7 +115,7 @@ async function load(reset: boolean): Promise<void> {
     total.value = res.total
     groups.value = reset ? res.items : [...groups.value, ...res.items]
   } catch {
-    toast.error('Не удалось загрузить школы')
+    toast.error(t('school.loadFailed'))
     // W12 discipline: only a failed FIRST page is an error state; a failed
     // loadMore keeps the loaded page and toasts.
     if (reset) error.value = true
@@ -109,7 +124,7 @@ async function load(reset: boolean): Promise<void> {
   }
 }
 
-// "Авг 2026" — school creation month, from created_at (UTC).
+// school creation month, from created_at (UTC).
 function createdLabel(iso: string): string {
   const d = new Date(iso)
   const month = new Intl.DateTimeFormat('ru-RU', { month: 'short', timeZone: 'UTC' })

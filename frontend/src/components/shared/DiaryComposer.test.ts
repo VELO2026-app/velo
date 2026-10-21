@@ -29,6 +29,7 @@
 // rewrite this to dispatch a click on a sibling and expect it to blur anything.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
@@ -100,7 +101,7 @@ function mount(props: { entryType?: 'note' | 'dream' } = {}): HTMLElement {
     onComposingChange: (v: boolean) => {
       composingEvents.push(v)
     },
-  })
+  }).use(createTestI18n())
   app.use(pinia)
   root = app.mount(host) as unknown as InstanceType<typeof DiaryComposer>
   return host
@@ -238,7 +239,7 @@ describe('DiaryComposer -- idle state (1: no chevron, one slot; T24-3: no disabl
       placeholder: 'x',
       voiceInput: true,
       send: async () => ({ ok: true }),
-    })
+    }).use(createTestI18n())
     app2.mount(host2)
 
     const mic = host2.querySelector('.composer__btn--side')
@@ -513,7 +514,7 @@ describe('DiaryComposer -- autogrow (PROMPT №741: viewport-aware growCap resto
       placeholder: 'x',
       growCap: 111,
       send: async () => ({ ok: true }),
-    })
+    }).use(createTestI18n())
     app2.mount(host2)
     const ta = host2.querySelector('textarea') as HTMLTextAreaElement
     expect(ta.style.maxHeight).toBe('111px')

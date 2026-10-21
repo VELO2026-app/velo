@@ -35,7 +35,7 @@
 
 <template>
   <div class="school-members">
-    <VHeader title="Участники" show-back @back="goBack" />
+    <VHeader :title="t('user.screens.schoolMembers.title')" show-back @back="goBack" />
 
     <div class="school-members__content">
       <!-- The glass switcher (§1.11): the merged screen's tab strip. Hidden
@@ -46,7 +46,7 @@
         :model-value="kind"
         :options="kindOptions"
         variant="tabs"
-        aria-label="Вкладки списка участников"
+        :aria-label="t('user.screens.schoolMembers.tabsAria')"
         @update:model-value="switchKind"
       />
 
@@ -72,11 +72,13 @@
       <VEmptyState
         v-else-if="notFound"
         icon="notfound"
-        title="Школа недоступна"
-        description="Возможно, она была удалена или вы в ней не состоите."
+        :title="t('user.screens.schoolMembers.unavailable')"
+        :description="t('user.screens.schoolMembers.unavailableHint')"
       >
         <template #action>
-          <VButton variant="primary" @click="goBack">К школе</VButton>
+          <VButton variant="primary" @click="goBack">{{
+            t('user.screens.schoolMembers.common.backToSchool')
+          }}</VButton>
         </template>
       </VEmptyState>
 
@@ -88,7 +90,7 @@
         :description="error ?? undefined"
       >
         <template #action>
-          <VButton variant="outline" @click="retry">Повторить</VButton>
+          <VButton variant="outline" @click="retry">{{ t('common.retry') }}</VButton>
         </template>
       </VEmptyState>
 
@@ -99,8 +101,15 @@
             <div class="school-members__blocked-text">
               <span class="school-members__blocked-name">{{ person.name }}</span>
               <span class="school-members__blocked-meta">
-                {{ person.kind === 'master' ? 'Мастер' : 'Ученик' }} · заблокирован
-                {{ formatShortDate(person.blocked_at) }}
+                {{
+                  t('user.screens.schoolMembers.blockedMeta', {
+                    kind:
+                      person.kind === 'master'
+                        ? t('user.screens.schoolMembers.roleMaster')
+                        : t('user.screens.schoolMembers.roleStudent'),
+                    date: formatShortDate(person.blocked_at),
+                  })
+                }}
               </span>
             </div>
             <VButton
@@ -109,7 +118,7 @@
               :loading="unblocking === person.user_id"
               @click="onUnblock(person)"
             >
-              Разблокировать
+              {{ t('user.screens.schoolMembers.unblock') }}
             </VButton>
           </div>
         </template>
@@ -127,8 +136,8 @@
         <VEmptyState
           v-if="items.length === 0"
           icon="group"
-          :title="trimmedSearch ? 'Никого не найдено' : emptyTitle"
-          :description="trimmedSearch ? 'Попробуйте изменить запрос' : emptyDescription"
+          :title="trimmedSearch ? t('common.searchNoHits') : emptyTitle"
+          :description="trimmedSearch ? t('common.searchHint') : emptyDescription"
         >
           <template v-if="kind === 'blocked'" #icon>
             <IconLock :size="48" />
@@ -136,7 +145,7 @@
         </VEmptyState>
 
         <VLoader v-if="loading && items.length > 0" size="sm" />
-        <VShowMore v-if="hasMore && !loading" label="Показать ещё" @click="loadMore" />
+        <VShowMore v-if="hasMore && !loading" :label="t('common.showMore')" @click="loadMore" />
       </template>
     </div>
 
@@ -153,6 +162,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, onMounted, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -192,9 +202,9 @@ import { formatShortDate } from '@/utils/format'
 type MemberTab = CuratorGroupMemberKind | 'blocked'
 
 const KIND_OPTIONS: ReadonlyArray<{ value: MemberTab; label: string; icon?: Component }> = [
-  { value: 'master', label: 'Мастера' },
-  { value: 'student', label: 'Ученики' },
-  { value: 'blocked', label: 'Блок', icon: IconLock },
+  { value: 'master', label: t('user.screens.schoolMembers.tabs.masters') },
+  { value: 'student', label: t('user.screens.schoolMembers.tabs.students') },
+  { value: 'blocked', label: t('user.screens.schoolMembers.tabs.blocked'), icon: IconLock },
 ]
 
 const route = useRoute()
@@ -255,23 +265,29 @@ function kindFromQuery(): MemberTab {
 const kind = ref<MemberTab>(kindFromQuery())
 
 const searchPlaceholder = computed(() =>
-  kind.value === 'master' ? 'Искать мастера...' : 'Искать ученика...',
+  kind.value === 'master'
+    ? t('user.screens.schoolMembers.empty.searchMaster')
+    : t('user.screens.schoolMembers.empty.searchStudent'),
 )
 const emptyTitle = computed(() => {
-  if (kind.value === 'blocked') return 'Пока нет заблокированных'
-  return kind.value === 'master' ? 'В школе пока нет мастеров' : 'В школе пока нет учеников'
+  if (kind.value === 'blocked') return t('user.screens.schoolMembers.empty.blocked')
+  return kind.value === 'master'
+    ? t('user.screens.schoolMembers.empty.masters')
+    : t('user.screens.schoolMembers.empty.students')
 })
 const emptyDescription = computed(() => {
   if (kind.value === 'blocked') {
-    return 'Участник появится здесь, когда вы заблокируете его через меню на странице профиля.'
+    return t('user.screens.schoolMembers.blocked.empty')
   }
   return kind.value === 'master'
-    ? 'Мастером школы участник становится после принятия предложения куратора.'
-    : 'Ученики появляются в школе после вступления по ссылке-приглашению.'
+    ? t('user.screens.schoolMembers.masters.empty')
+    : t('user.screens.schoolMembers.students.empty')
 })
 const errorTitle = computed(() => {
-  if (kind.value === 'blocked') return 'Не удалось загрузить заблокированных'
-  return kind.value === 'master' ? 'Не удалось загрузить мастеров' : 'Не удалось загрузить учеников'
+  if (kind.value === 'blocked') return t('user.screens.schoolMembers.loadFailed.blocked')
+  return kind.value === 'master'
+    ? t('user.screens.schoolMembers.loadFailed.masters')
+    : t('user.screens.schoolMembers.loadFailed.students')
 })
 
 // FE-93: this screen mounts in the master zone only.
@@ -401,14 +417,14 @@ async function onUnblock(person: CuratorGroupBlockedItem): Promise<void> {
   unblocking.value = person.user_id
   try {
     await unblockCuratorGroupMember(groupId.value, person.user_id)
-    toast.success('Участник разблокирован')
+    toast.success(t('user.screens.schoolMembers.toast.unblocked'))
     await refresh()
   } catch (e) {
     if (e instanceof ApiResponseError && e.status === 404) {
       await refresh()
       return
     }
-    toast.error(extractApiError(e, 'Не удалось разблокировать участника'))
+    toast.error(extractApiError(e, t('user.screens.schoolMembers.toast.unblockFailed')))
   } finally {
     unblocking.value = null
   }

@@ -40,7 +40,7 @@
          (no layout jump 0↔1). -->
     <div class="onboarding__skip-row" :class="{ 'onboarding__skip-row--last': isFinalStep }">
       <button v-if="!isFinalStep" type="button" class="onboarding__skip" @click="onSkip">
-        Пропустить
+        {{ t('common.skip') }}
       </button>
     </div>
 
@@ -61,13 +61,14 @@
         :disabled="submitting"
         @click="onPrimaryAction"
       >
-        {{ isFinalStep ? 'Готово' : 'Далее' }}
+        {{ isFinalStep ? t('auth.onboarding.done') : t('auth.onboarding.next') }}
       </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed } from 'vue'
 import { VPaginationDots } from '@/components/ui'
 import { useAuthStore } from '@/stores/auth'
@@ -110,18 +111,30 @@ const isFinalStep = computed(() => step.value === FINAL_STEP_INDEX)
 const SLIDES = [
   {
     image: '/onboarding/onboarding-practice.svg',
-    title: 'Найдите свою практику',
-    text: 'Выбирайте из медитаций, дыхательных и других практик с лучшими мастерами',
+    get title(): string {
+      return t('auth.onboarding.find.title')
+    },
+    get text(): string {
+      return t('auth.onboarding.find.text')
+    },
   },
   {
     image: '/onboarding/onboarding-diary.svg',
-    title: 'Ведите дневник',
-    text: 'Отслеживайте свое состояние до и после практик, получайте AI-инсайты',
+    get title(): string {
+      return t('auth.onboarding.diary.title')
+    },
+    get text(): string {
+      return t('auth.onboarding.diary.text')
+    },
   },
   {
     image: '/onboarding/onboarding-masters.svg',
-    title: 'Карта себя',
-    text: 'Живая карта, которая меняется вместе с вами, оставаясь актуальной по мере того, как вы продолжаете исследовать себя',
+    get title(): string {
+      return t('auth.onboarding.map.title')
+    },
+    get text(): string {
+      return t('auth.onboarding.map.text')
+    },
   },
 ] as const
 
@@ -181,7 +194,7 @@ async function enterFinalStep(): Promise<void> {
   finishArmed.value = true
 }
 
-/** "Пропустить" -- finish onboarding outright with the device timezone. */
+/** t('common.skip') -- finish onboarding outright with the device timezone. */
 function onSkip(): void {
   void finish()
 }
@@ -224,7 +237,7 @@ async function finish(): Promise<void> {
     })
     emit('done')
   } catch (error) {
-    toast.error(extractApiError(error, 'Не удалось сохранить. Попробуйте ещё раз.'))
+    toast.error(extractApiError(error, t('auth.onboarding.saveFailed')))
   } finally {
     submitting.value = false
   }

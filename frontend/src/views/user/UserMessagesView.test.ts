@@ -23,6 +23,7 @@
 // own mount; vue-router and useToast mocked at module level.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import UserMessagesView from '@/views/user/UserMessagesView.vue'
@@ -61,7 +62,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(UserMessagesView)
+  app = createApp(UserMessagesView).use(createTestI18n())
   app.mount(host)
   return host
 }

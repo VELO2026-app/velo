@@ -18,7 +18,7 @@
 
 <template>
   <button type="button" class="v-more" @click="$emit('click')">
-    <span class="v-more__text">{{ label }}</span>
+    <span class="v-more__text">{{ label ?? t('ui.more') }}</span>
     <span class="v-more__pill">
       <IconArrowRight :size="18" />
     </span>
@@ -26,15 +26,15 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { IconArrowRight } from '@/components/icons'
 
-withDefaults(
-  defineProps<{
-    /** Текст слева от стрелки. По умолчанию «Подробнее». */
-    label?: string
-  }>(),
-  { label: 'Подробнее' },
-)
+// tz-i18n 1.3: label fallback resolves at render time (?? t() in template).
+
+defineProps<{
+  /** Текст слева от стрелки. По умолчанию «Подробнее» (ui.more). */
+  label?: string
+}>()
 
 defineEmits<{ click: [] }>()
 </script>

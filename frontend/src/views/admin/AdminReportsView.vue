@@ -20,7 +20,7 @@
   <div class="admin-reports">
     <header class="admin-reports__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-reports__title">Модерация</h1>
+      <h1 class="admin-reports__title">{{ t('adminScreens.adminReports.moderationTab') }}</h1>
       <span class="admin-reports__count">{{ headerCount }}</span>
     </header>
 
@@ -30,7 +30,9 @@
       <IconFilter :size="22" />
     </button>
 
-    <div v-if="!filter.categories.length" class="admin-reports__active">Все</div>
+    <div v-if="!filter.categories.length" class="admin-reports__active">
+      {{ t('common.all') }}
+    </div>
 
     <!-- Loading: initial -->
     <div v-if="loading && items.length === 0" class="admin-reports__loader">
@@ -41,11 +43,11 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      title="Не удалось загрузить"
-      description="Проверьте соединение и попробуйте ещё раз"
+      :title="t('common.loadFailed')"
+      :description="t('common.checkConnection')"
     >
       <template #action
-        ><VButton variant="primary" @click="loadInitial">Повторить</VButton></template
+        ><VButton variant="primary" @click="loadInitial">{{ t('common.retry') }}</VButton></template
       >
     </VEmptyState>
 
@@ -53,8 +55,8 @@
     <VEmptyState
       v-else-if="items.length === 0"
       icon="success"
-      title="Обращений нет"
-      description="По выбранным фильтрам ничего не найдено"
+      :title="t('adminScreens.adminReports.empty.title')"
+      :description="t('adminScreens.adminReports.filterNoHits')"
     />
 
     <template v-else>
@@ -88,7 +90,7 @@
 
       <div v-if="hasMore" class="admin-reports__more">
         <VButton variant="outline" block :loading="loadingMore" @click="loadMore">
-          Показать ещё
+          {{ t('common.showMore') }}
         </VButton>
       </div>
     </template>
@@ -103,6 +105,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { VBackButton, VButton, VLoader, VEmptyState, VCard } from '@/components/ui'
@@ -137,9 +140,9 @@ const filter = ref<ModerationFilter>({
 })
 
 const CATEGORY_LABELS: Record<string, string> = {
-  tickets: 'Тикеты',
-  complaints: 'Жалобы',
-  payments: 'Платежи',
+  tickets: t('adminScreens.adminReports.tickets'),
+  complaints: t('adminScreens.adminReports.tabComplaints'),
+  payments: t('adminScreens.adminReports.payments'),
 }
 
 const headerCount = computed<string>(() => (total.value ? String(total.value) : '—'))
@@ -148,14 +151,14 @@ const headerCount = computed<string>(() => (total.value ? String(total.value) : 
 // backend yet, so this is a display-only echo of the chosen chips).
 const categoryLabel = computed<string>(() => {
   const cats = filter.value.categories
-  if (cats.length === 0) return 'Все'
+  if (cats.length === 0) return t('common.all')
   return cats.map((c) => CATEGORY_LABELS[c] ?? c).join(', ')
 })
 
 // The filter pill echoes the active category (operator «payments»/«complaints»
 // variants); the «Платежи» selection swaps the card glyph to the payment $.
 const pillLabel = computed<string>(() =>
-  filter.value.categories.length ? categoryLabel.value : 'Фильтр',
+  filter.value.categories.length ? categoryLabel.value : t('adminScreens.adminReports.filter'),
 )
 const isPayments = computed<boolean>(() => filter.value.categories.includes('payments'))
 
@@ -192,7 +195,7 @@ async function loadInitial(): Promise<void> {
   } catch (e) {
     if (myGeneration !== generation) return
     error.value = true
-    toast.error(extractApiError(e, 'Ошибка загрузки обращений'))
+    toast.error(extractApiError(e, t('adminScreens.adminReports.ticketsLoadError')))
   } finally {
     if (myGeneration === generation) loading.value = false
   }
@@ -205,7 +208,7 @@ async function loadMore(): Promise<void> {
     items.value.push(...res.items)
     hasMore.value = items.value.length < res.total
   } catch (e) {
-    toast.error(extractApiError(e, 'Ошибка загрузки'))
+    toast.error(extractApiError(e, t('common.loadError')))
   } finally {
     loadingMore.value = false
   }

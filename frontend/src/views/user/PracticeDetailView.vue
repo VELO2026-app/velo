@@ -37,10 +37,10 @@
   <VEmptyState
     v-else-if="store.selectedError"
     icon="warning"
-    title="Практика не найдена"
+    :title="t('user.screens.practiceDetail.notFound')"
     :description="store.selectedError"
   >
-    <VButton size="sm" @click="router.back()">Назад</VButton>
+    <VButton size="sm" @click="router.back()">{{ t('ui.back') }}</VButton>
   </VEmptyState>
 
   <!-- Content -->
@@ -50,13 +50,21 @@
          it belongs to -- the two managers the backend accepts on PATCH -- and
          routes them straight to the master-zone edit screen. Editable statuses
          only, mirroring the master hub; see canManage below. -->
-    <VHeader :title="hasAnyBooking ? 'Моя практика' : 'Практика'" show-back @back="router.back()">
+    <VHeader
+      :title="
+        hasAnyBooking
+          ? t('user.screens.practiceDetail.titleBooked')
+          : t('user.screens.practiceDetail.titlePlain')
+      "
+      show-back
+      @back="router.back()"
+    >
       <template v-if="canManage" #action>
-        <VMenu aria-label="Меню">
+        <VMenu :aria-label="t('user.screens.practiceDetail.menuAria')">
           <template #default="{ close }">
             <VMenuItem
               :icon="IconPen"
-              ariaLabel="Редактировать"
+              :ariaLabel="t('ui.edit')"
               @click="
                 () => {
                   goEdit()
@@ -89,7 +97,9 @@
       <!-- Status row (Batch 6: ported from BookingDetailView). Shown when
              the viewer holds a booking for this practice in any status. -->
       <VCard v-if="myAnyBooking" class="detail__status-row" padding="none">
-        <span class="detail__status-label">Статус</span>
+        <span class="detail__status-label">{{
+          t('user.screens.practiceDetail.fields.status')
+        }}</span>
         <VBadge :variant="statusVariant">
           <component :is="statusIcon" v-if="statusIcon" :size="12" />
           {{ statusLabel }}
@@ -97,18 +107,24 @@
       </VCard>
 
       <!-- О практике accordion -->
-      <VAccordion v-if="practice.description" title="О практике">
+      <VAccordion
+        v-if="practice.description"
+        :title="t('user.screens.practiceDetail.aboutSection')"
+      >
         <p class="detail__accordion-text">{{ practice.description }}</p>
       </VAccordion>
 
       <!-- Что подготовить accordion -->
-      <VAccordion v-if="practice.what_to_prepare" title="Что подготовить">
+      <VAccordion
+        v-if="practice.what_to_prepare"
+        :title="t('user.screens.practiceDetail.prepareSection')"
+      >
         <p class="detail__accordion-text">{{ practice.what_to_prepare }}</p>
       </VAccordion>
 
       <!-- Master card (shared component) -->
       <section class="detail__section">
-        <h3 class="detail__section-title">Мастер</h3>
+        <h3 class="detail__section-title">{{ t('user.screens.practiceDetail.fields.master') }}</h3>
         <MasterCard
           :master-name="practice.master_name"
           :methods="practice.master_methods"
@@ -125,7 +141,7 @@
       <section v-if="showZoom" class="detail__section">
         <h3 class="detail__section-title">ZOOM</h3>
         <VCard class="detail__zoom-card">
-          Ссылка на Zoom доступна после записи — на главном экране и в практике
+          {{ t('user.screens.practiceDetail.zoomAfterBooking') }}
         </VCard>
       </section>
 
@@ -133,7 +149,7 @@
       <Banner
         v-if="practice.contraindications"
         variant="warning"
-        title="ПРОТИВОПОКАЗАНИЯ"
+        :title="t('user.screens.practiceDetail.contraindications')"
         :body="practice.contraindications"
         class="detail__contraindications"
       >
@@ -147,7 +163,7 @@
            "Моя практика" view (Figma 15) the practice is already paid for,
            so the price row is hidden. -->
       <VCard v-if="!booked" class="detail__price-row" padding="none">
-        <span class="detail__price-label">Стоимость</span>
+        <span class="detail__price-label">{{ t('user.screens.practiceDetail.fields.price') }}</span>
         <span
           class="detail__price-value"
           :class="{ 'detail__price-value--free': practice.is_free }"
@@ -164,7 +180,7 @@
         block
         @click="onCheckin"
       >
-        Check-in перед практикой
+        {{ t('user.screens.practiceDetail.checkinCta') }}
       </VButton>
 
       <!-- F9.1: Feedback button (attended booking in feedback window) -->
@@ -175,7 +191,7 @@
         block
         @click="onFeedback"
       >
-        Оставить feedback
+        {{ t('user.screens.practiceDetail.feedbackCta') }}
       </VButton>
 
       <!-- REC-1: watch-recording button. Shown ONLY when the API has
@@ -195,13 +211,15 @@
            already re-derives its own eligibility before ever setting this ref. -->
       <template v-else-if="recordingUrl">
         <VButton variant="primary" size="lg" block @click="onWatchRecording">
-          Посмотреть запись
+          {{ t('user.screens.practiceDetail.recordingCta') }}
         </VButton>
         <!-- Proposal only -- NOT owner-approved (PROMPT №620 task d). 7 days
              is the real Zoom-side retention (owner-set in the console);
              phrased as a fact about the recording, not a promise from us --
              our backend does not control when Zoom deletes the file. -->
-        <p class="detail__recording-caption">Запись доступна в течение 7 дней после практики</p>
+        <p class="detail__recording-caption">
+          {{ t('user.screens.practiceDetail.bookingWindow') }}
+        </p>
       </template>
 
       <!-- BE-108: no-show reflection. OUTSIDE the v-if/else-if ladder above
@@ -209,7 +227,7 @@
            the recording, and the owner wants both buttons -- recording
            first, this one second. -->
       <VButton v-if="canReflect" variant="secondary" size="lg" block @click="onReflect">
-        Поделиться, как вы
+        {{ t('user.screens.practiceDetail.shareMood') }}
       </VButton>
 
       <!-- Booked but no active window: NO CTA here. The "записан" state is
@@ -243,7 +261,7 @@
         :loading="cancelling"
         @click="onCancelBooking"
       >
-        Отменить бронирование
+        {{ t('user.screens.practiceDetail.cancelBooking') }}
       </VButton>
     </div>
 
@@ -263,6 +281,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'
@@ -397,14 +416,14 @@ const myBooking = computed(() => {
 })
 
 // =========================================================================
-// Batch 6: merged "Бронирование" screen. The dedicated BookingDetailView is
+// Batch 6: merged «Бронирование» screen. The dedicated BookingDetailView is
 // gone; its unique pieces (a status row + a ZOOM card) live here now.
 //
 // `myAnyBooking` is ANY booking the viewer holds for this practice, in ANY
 // status (including cancelled / no_show) -- so the history (status row, "Моя
 // практика" title) survives for past/cancelled bookings. This is separate
 // from `booked` / `myBooking` above (active-status semantics), which keep
-// driving price / "Забронировать" / "Вы записаны" / check-in / feedback and
+// driving price / t('user.screens.practiceDetail.cta.book') / t('user.screens.practiceDetail.state.booked') / check-in / feedback and
 // must NOT change. Selection: an active booking
 // (confirmed/pending/attended) wins; otherwise the latest by created_at.
 // =========================================================================
@@ -428,10 +447,10 @@ const myAnyBooking = computed((): BookingWithPracticeResponse | null => {
   )
 })
 
-/** Any booking exists (any status) -> show the "Моя практика" framing. */
+/** Any booking exists (any status) -> show the «Моя практика» framing. */
 const hasAnyBooking = computed((): boolean => myAnyBooking.value !== null)
 
-/** A finished booking (attended / no_show) -> hide the "Забронировать" CTA. */
+/** A finished booking (attended / no_show) -> hide the t('user.screens.practiceDetail.cta.book') CTA. */
 const isPastBooking = computed((): boolean => {
   const b = myAnyBooking.value
   return !!b && (b.status === 'attended' || b.status === 'no_show')
@@ -440,7 +459,7 @@ const isPastBooking = computed((): boolean => {
 /**
  * True once the practice has started (scheduled_at <= now). The booking
  * endpoint rejects a started practice (backend create_booking time guard);
- * we hide the "Забронировать" CTA so it never dangles on a past practice
+ * we hide the t('user.screens.practiceDetail.cta.book') CTA so it never dangles on a past practice
  * opened from history / a deep link. Uses the reactive `now` (60s tick) so
  * the button disappears live when the start time passes. The backend stays
  * the source of truth (direct API call / the start-while-open race).
@@ -455,14 +474,13 @@ const practiceStarted = computed((): boolean => {
 // бывшую disabled-кнопку). Глобальный лейбл «Подтверждена» (Мои записи и пр.)
 // живёт в своих местах и не трогается.
 const STATUS_LABEL: Record<BookingStatus, string> = {
-  pending: 'Ожидает',
-  confirmed: 'Вы записаны',
-  attended: 'Завершена',
-  // B30 (PROMPT №746, owner wording): was 'Неявка', inconsistent with
-  // MyBookingsView's 'Не состоялась' for the same status -- now identical
-  // to it there too.
-  no_show: 'Вы не пришли',
-  cancelled: 'Отменена',
+  pending: t('user.screens.practiceDetail.state.pending'),
+  confirmed: t('user.screens.practiceDetail.state.booked'),
+  attended: t('user.screens.practiceDetail.state.completed'),
+  // B30 (PROMPT №746, owner wording): was «Неявка», inconsistent with
+  // MyBookingsView's «Не состоялась» for the same status -- now identical to it there too.
+  no_show: t('user.screens.practiceDetail.state.noShow'),
+  cancelled: t('user.screens.practiceDetail.state.cancelled'),
 }
 
 const STATUS_VARIANT: Record<BookingStatus, 'success' | 'warning' | 'error' | 'info'> = {
@@ -488,7 +506,7 @@ const attendancePending = computed((): boolean => {
 })
 
 const statusLabel = computed(() => {
-  if (attendancePending.value) return 'Посещаемость подсчитывается'
+  if (attendancePending.value) return t('user.screens.practiceDetail.state.counting')
   return myAnyBooking.value ? STATUS_LABEL[myAnyBooking.value.status] : ''
 })
 const statusVariant = computed(() => {
@@ -524,7 +542,7 @@ const showZoom = computed((): boolean => {
 const inCheckinWindow = computed((): boolean => {
   if (!practice.value || !myBooking.value) return false
   if (myBooking.value.status !== 'confirmed') return false
-  // One check-in per booking: once done, drop back to the "Вы записаны" state.
+  // One check-in per booking: once done, drop back to the t('user.screens.practiceDetail.state.booked') state.
   if (myBooking.value.has_checkin) return false
   const scheduledMs = new Date(practice.value.scheduled_at).getTime()
   return isInCheckinWindow(scheduledMs, now.value)
@@ -536,7 +554,7 @@ const inCheckinWindow = computed((): boolean => {
 const inFeedbackWindow = computed((): boolean => {
   if (!practice.value || !myBooking.value) return false
   if (myBooking.value.status !== 'attended') return false
-  // One feedback per booking: once left, drop back to the "Вы записаны" state.
+  // One feedback per booking: once left, drop back to the t('user.screens.practiceDetail.state.booked') state.
   if (myBooking.value.has_feedback) return false
   const scheduledMs = new Date(practice.value.scheduled_at).getTime()
   return isInFeedbackWindow(scheduledMs, practice.value.duration_minutes, now.value)
@@ -652,9 +670,9 @@ const full = computed(() => {
 })
 
 const bookButtonText = computed(() => {
-  if (full.value) return 'Мест нет'
-  if (practice.value?.is_free) return 'Записаться бесплатно'
-  return 'Забронировать'
+  if (full.value) return t('user.screens.practiceDetail.state.soldOut')
+  if (practice.value?.is_free) return t('user.screens.practiceDetail.cta.bookFree')
+  return t('user.screens.practiceDetail.cta.book')
 })
 
 // =========================================================================
@@ -741,7 +759,7 @@ async function onCancelBooking(): Promise<void> {
     toast.error(result.error)
     return
   }
-  toast.success('Бронирование отменено')
+  toast.success(t('user.screens.practiceDetail.cancelledToast'))
   justPurchased.value = false
 }
 
@@ -801,7 +819,7 @@ onUnmounted(() => {
 
 /* Outer container: a plain block — the whole screen scrolls in MobileLayout's
  * single __main scroll. No nested scroll / no pinned footer (operator fix:
- * "скролл на блоке, а не общий"). Hero + body + actions flow top-to-bottom. */
+ * «скролл на блоке, а не общий»). Hero + body + actions flow top-to-bottom. */
 .detail {
   display: flex;
   flex-direction: column;

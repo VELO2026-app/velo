@@ -29,91 +29,98 @@
 
 <template>
   <div class="ai-conn">
-    <VHeader title="Подключения ИИ" show-back @back="router.back()" />
+    <VHeader :title="t('user.screens.aiConnections.title')" show-back @back="router.back()" />
     <div class="ai-conn__content">
       <VLoader v-if="state === 'loading'" />
       <p v-else-if="state === 'unavailable'" class="ai-conn__notice" data-test="unavailable">
-        Подключения ИИ сейчас недоступны.
+        {{ t('user.screens.aiConnections.unavailable') }}
       </p>
       <p v-else-if="state === 'error'" class="ai-conn__notice" data-test="load-error">
-        Не удалось загрузить подключения. Попробуйте позже.
+        {{ t('user.screens.aiConnections.loadFailed') }}
       </p>
       <template v-else>
         <section class="ai-conn__block" data-test="connect-block">
-          <h2 class="ai-conn__heading">Как подключить</h2>
+          <h2 class="ai-conn__heading">{{ t('user.screens.aiConnections.dev.howTo') }}</h2>
           <template v-if="mcpUrl">
-            <p class="ai-conn__text">Адрес VELO для вашей нейросети:</p>
+            <p class="ai-conn__text">{{ t('user.screens.aiConnections.dev.addressLabel') }}</p>
             <code class="ai-conn__token" data-test="mcp-url">{{ mcpUrl }}</code>
             <VButton block variant="secondary" data-test="copy-url" @click="onCopyUrl">
-              <IconCopy :size="18" /> Скопировать
+              <IconCopy :size="18" /> {{ t('user.screens.aiConnections.copy') }}
             </VButton>
             <p v-if="oauthAvailable" class="ai-conn__text" data-test="connect-howto">
-              В claude.ai: Настройки → Коннекторы → Добавить свой коннектор → вставьте адрес →
-              Подключить, затем войдите через Telegram.
+              {{ t('user.screens.aiConnections.connectHowto') }}
             </p>
             <p v-else class="ai-conn__notice" data-test="no-button-connect">
-              Подключение кнопкой на этом сервере не настроено — используйте личный токен
-              (ниже).
+              {{ t('user.screens.aiConnections.noButtonConnect') }}
             </p>
           </template>
           <p v-else class="ai-conn__notice" data-test="no-base-url">
-            Адрес сервера не настроен — подключение недоступно.
+            {{ t('user.screens.aiConnections.noBaseUrl') }}
           </p>
         </section>
 
         <section class="ai-conn__block" data-test="connections-block">
-          <h2 class="ai-conn__heading">Подключения</h2>
+          <h2 class="ai-conn__heading">
+            {{ t('user.screens.aiConnections.section.connections') }}
+          </h2>
           <p v-if="tokens.length === 0" class="ai-conn__empty" data-test="empty">
-            Подключений пока нет.
+            {{ t('user.screens.aiConnections.empty') }}
           </p>
           <ul v-else class="ai-conn__list">
             <li
-              v-for="t in tokens"
-              :key="t.id"
+              v-for="token in tokens"
+              :key="token.id"
               class="ai-conn__item"
-              :class="{ 'ai-conn__item--revoked': t.revoked_at }"
+              :class="{ 'ai-conn__item--revoked': token.revoked_at }"
               data-test="token-row"
             >
               <div class="ai-conn__item-main">
-                <div class="ai-conn__item-name">{{ t.name }}</div>
+                <div class="ai-conn__item-name">{{ token.name }}</div>
                 <!-- BE-141: an OAuth connection's prefix is its refresh token's,
                      rotating and meaningless here -- say what it is instead. -->
-                <div v-if="t.kind === 'personal'" class="ai-conn__item-prefix">
-                  velo_pat_{{ t.prefix }}…
+                <div v-if="token.kind === 'personal'" class="ai-conn__item-prefix">
+                  velo_pat_{{ token.prefix }}…
                 </div>
                 <div v-else class="ai-conn__item-prefix" data-test="oauth-kind">
-                  Подключено кнопкой в ИИ-клиенте
+                  { t('user.screens.aiConnections.oauthConnected') }
                 </div>
-                <div class="ai-conn__item-meta">{{ scopeSummary(t.scopes) }}</div>
+                <div class="ai-conn__item-meta">{{ scopeSummary(token.scopes) }}</div>
                 <div class="ai-conn__item-meta">
-                  Создан {{ fmt(t.created_at) }} ·
-                  {{ t.last_used_at ? `использован ${fmt(t.last_used_at)}` : 'ещё не использовался' }}
+                  {{
+                    t('user.screens.aiConnections.createdAt', { created: fmt(token.created_at) })
+                  }}
+                  {{
+                    token.last_used_at
+                      ? t('user.screens.aiConnections.used.at', { at: fmt(token.last_used_at) })
+                      : t('user.screens.aiConnections.neverUsed')
+                  }}
                 </div>
-                <div v-if="t.revoked_at" class="ai-conn__item-revoked">
-                  Отозван {{ fmt(t.revoked_at) }}
+                <div v-if="token.revoked_at" class="ai-conn__item-revoked">
+                  {{ t('user.screens.aiConnections.revokedAt', { at: fmt(token.revoked_at) }) }}
                 </div>
               </div>
               <VButton
-                v-if="!t.revoked_at"
+                v-if="!token.revoked_at"
                 size="sm"
                 variant="danger"
                 data-test="revoke"
-                @click="askRevoke(t)"
+                @click="askRevoke(token)"
               >
-                Отозвать
+                {{ t('user.screens.aiConnections.revoke') }}
               </VButton>
             </li>
           </ul>
         </section>
 
         <section class="ai-conn__block" data-test="dev-block">
-          <VAccordion title="Для разработчиков: личный токен">
+          <VAccordion :title="t('user.screens.aiConnections.devTitle')">
             <div class="ai-conn__dev" data-test="dev-body">
               <p class="ai-conn__text">
-                Для Claude Code, скриптов и клиентов без входа кнопкой. Не передавайте токен другим
-                людям; ненужный — отзовите.
+                {{ t('user.screens.aiConnections.devNote') }}
               </p>
-              <VButton block data-test="open-create" @click="openCreate">Создать токен</VButton>
+              <VButton block data-test="open-create" @click="openCreate">{{
+                t('user.screens.aiConnections.create.cta')
+              }}</VButton>
             </div>
           </VAccordion>
         </section>
@@ -122,11 +129,11 @@
     <!-- Create, then the token shown once -- one dialog, two faces. -->
     <VModal :open="createOpen" :close-on-overlay="!createdToken" @close="closeCreate">
       <div v-if="!createdToken" class="ai-conn__form" data-test="create-form">
-        <h2 class="ai-conn__title">Новый токен</h2>
+        <h2 class="ai-conn__title">{{ t('user.screens.aiConnections.create.title') }}</h2>
         <VInput
           v-model="name"
-          label="Название"
-          placeholder="Например, Claude дома"
+          :label="t('user.screens.aiConnections.form.name')"
+          :placeholder="t('user.screens.aiConnections.form.namePlaceholder')"
           :maxlength="100"
         />
         <div class="ai-conn__scopes">
@@ -146,29 +153,31 @@
           data-test="create"
           @click="onCreate"
         >
-          Создать
+          {{ t('user.screens.aiConnections.createSubmit') }}
         </VButton>
       </div>
 
       <div v-else class="ai-conn__once" data-test="token-once">
-        <h2 class="ai-conn__title">Токен создан</h2>
-        <p class="ai-conn__warning">Скопируйте токен сейчас — больше мы его не покажем.</p>
+        <h2 class="ai-conn__title">{{ t('user.screens.aiConnections.toast.created') }}</h2>
+        <p class="ai-conn__warning">{{ t('user.screens.aiConnections.create.copyHint') }}</p>
         <code class="ai-conn__token" data-test="token-text">{{ createdToken }}</code>
         <VButton block variant="secondary" data-test="copy" @click="onCopy">
-          <IconCopy :size="18" /> Скопировать
+          <IconCopy :size="18" /> {{ t('user.screens.aiConnections.copy') }}
         </VButton>
         <VButton block variant="secondary" data-test="copy-header" @click="onCopyHeader">
-          <IconCopy :size="18" /> Скопировать как заголовок
+          <IconCopy :size="18" /> {{ t('user.screens.aiConnections.copyAsHeader') }}
         </VButton>
-        <VButton block data-test="done" @click="closeCreate">Готово</VButton>
+        <VButton block data-test="done" @click="closeCreate">{{
+          t('user.screens.aiConnections.create.done')
+        }}</VButton>
       </div>
     </VModal>
 
     <VConfirmDialog
       :open="revokeTarget !== null"
-      title="Отозвать токен?"
+      :title="t('user.screens.aiConnections.revoke.confirmTitle')"
       :message="revokeMessage"
-      confirm-label="Отозвать"
+      :confirm-label="t('user.screens.aiConnections.revoke.cta')"
       danger
       :loading="revoking"
       @confirm="onRevoke"
@@ -178,6 +187,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -227,7 +237,7 @@ const revoking = ref(false)
 const canCreate = computed(() => name.value.trim().length > 0 && scopes.value.length > 0)
 const revokeMessage = computed(() =>
   revokeTarget.value
-    ? `Нейросеть с токеном «${revokeTarget.value.name}» сразу потеряет доступ. Отменить это нельзя.`
+    ? t('user.screens.aiConnections.revokeConfirmText', { name: revokeTarget.value.name })
     : '',
 )
 
@@ -284,7 +294,7 @@ async function onCreate(): Promise<void> {
     createdToken.value = res.token
     tokens.value = [res.item, ...tokens.value]
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось создать токен'))
+    toast.error(extractApiError(e, t('user.screens.aiConnections.toast.createFailed')))
   } finally {
     creating.value = false
   }
@@ -295,24 +305,36 @@ async function copy(text: string, done: string, what: string): Promise<void> {
     await navigator.clipboard.writeText(text)
     toast.success(done)
   } catch {
-    toast.error(`Не удалось скопировать — выделите ${what} и скопируйте вручную`)
+    toast.error(t('user.screens.aiConnections.toast.copyFailedHint', { what }))
   }
 }
 
 async function onCopy(): Promise<void> {
   if (!createdToken.value) return
-  await copy(createdToken.value, 'Токен скопирован', 'токен')
+  await copy(
+    createdToken.value,
+    t('user.screens.aiConnections.toast.copied'),
+    t('user.screens.aiConnections.copy.entityToken'),
+  )
 }
 
 /** For clients where the header value is typed whole (BE-150). */
 async function onCopyHeader(): Promise<void> {
   if (!createdToken.value) return
-  await copy(bearerHeaderValue(createdToken.value), 'Скопировано как заголовок', 'токен')
+  await copy(
+    bearerHeaderValue(createdToken.value),
+    t('user.screens.aiConnections.copy.headerValue'),
+    t('user.screens.aiConnections.copy.entityToken'),
+  )
 }
 
 async function onCopyUrl(): Promise<void> {
   if (!mcpUrl) return
-  await copy(mcpUrl, 'Адрес скопирован', 'адрес')
+  await copy(
+    mcpUrl,
+    t('user.screens.aiConnections.toast.addressCopied'),
+    t('user.screens.aiConnections.copy.entityAddress'),
+  )
 }
 
 function askRevoke(t: McpTokenItem): void {
@@ -326,10 +348,10 @@ async function onRevoke(): Promise<void> {
   try {
     const updated = await revokeMcpToken(target.id)
     tokens.value = tokens.value.map((t) => (t.id === updated.id ? updated : t))
-    toast.success('Токен отозван')
+    toast.success(t('user.screens.aiConnections.toast.revoked'))
     revokeTarget.value = null
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось отозвать токен'))
+    toast.error(extractApiError(e, t('user.screens.aiConnections.toast.revokeFailed')))
   } finally {
     revoking.value = false
   }

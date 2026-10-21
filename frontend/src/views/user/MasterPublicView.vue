@@ -34,30 +34,30 @@
 
 <template>
   <div class="master-public">
-    <VHeader title="Мастер" show-back @back="router.back()">
+    <VHeader :title="t('user.screens.masterPublic.title')" show-back @back="router.back()">
       <!-- The ⋯ menu: «Написать сообщение» for EVERY visitor (owner
            2026-09-30 -- replaced the «Задать вопрос» button). In the
            curator's school context (the roster's master rows navigate here
            with ?groupId=) it also carries the curator's actions: «Изменить
            роль» (BE-59 demote) and «Заблокировать» (BE-79 (2) block). -->
       <template #action>
-        <VMenu aria-label="Действия с мастером">
+        <VMenu :aria-label="t('user.screens.masterPublic.actionsAria')">
           <template #default="{ close }">
             <VMenuItem
               :icon="IconMessages"
-              ariaLabel="Написать сообщение"
+              :ariaLabel="t('common.writeMessage')"
               @click="onMessageClick(close)"
             />
             <VMenuItem
               v-if="schoolContext"
               :icon="IconPen"
-              ariaLabel="Изменить роль"
+              :ariaLabel="t('user.screens.masterPublic.role.switchCta')"
               @click="onRoleClick(close)"
             />
             <VMenuItem
               v-if="schoolContext"
               :icon="IconLock"
-              ariaLabel="Заблокировать"
+              :ariaLabel="t('common.block')"
               danger
               @click="onBlockClick(close)"
             />
@@ -75,10 +75,10 @@
     <VEmptyState
       v-else-if="notFound"
       icon="warning"
-      title="Мастер не найден"
+      :title="t('user.screens.masterPublic.notFound')"
       :description="error ?? undefined"
     >
-      <VButton size="sm" @click="router.back()">Назад</VButton>
+      <VButton size="sm" @click="router.back()">{{ t('ui.back') }}</VButton>
     </VEmptyState>
 
     <!-- Server/network error (B11 item 2): distinct from "not found" -- this
@@ -86,10 +86,10 @@
     <VEmptyState
       v-else-if="error || !profile"
       icon="warning"
-      title="Не удалось загрузить"
+      :title="t('common.loadFailed')"
       :description="error ?? undefined"
     >
-      <VButton size="sm" @click="loadMaster(masterId)">Повторить</VButton>
+      <VButton size="sm" @click="loadMaster(masterId)">{{ t('common.retry') }}</VButton>
     </VEmptyState>
 
     <!-- Content -->
@@ -108,7 +108,7 @@
 
         <div v-if="profile.experience_years != null" class="master-public__pills">
           <span class="master-public__pill">
-            {{ profile.experience_years }} {{ pluralYears(profile.experience_years) }} опыта
+            {{ t('user.screens.masterPublic.experienceLine', profile.experience_years) }}
           </span>
         </div>
 
@@ -120,12 +120,12 @@
         <VStatCard
           layout="row"
           :value="profile.practices_count"
-          :label="pluralPractices(profile.practices_count)"
+          :label="t('user.screens.masterPublic.practicesLabel', profile.practices_count)"
         />
         <VStatCard
           layout="row"
           :value="profile.reviews_count"
-          :label="pluralReviews(profile.reviews_count)"
+          :label="t('user.screens.masterPublic.reviewsLabel', profile.reviews_count)"
         />
       </div>
 
@@ -133,7 +133,7 @@
            «Ближайшие», the section never disappears; default-open, an empty
            profile gets the honest note, the header stays as the entry
            point). -->
-      <VAccordion title="Методы" default-open>
+      <VAccordion :title="t('user.screens.masterPublic.methodsSection')" default-open>
         <div v-if="profile.methods?.length" class="master-public__chips">
           <VTag
             v-for="(chip, i) in methodChips"
@@ -144,14 +144,16 @@
             {{ chip.label }}
           </VTag>
         </div>
-        <p v-else class="master-public__note">Методы пока не указаны.</p>
+        <p v-else class="master-public__note">{{ t('user.screens.masterPublic.methods.empty') }}</p>
       </VAccordion>
 
       <!-- «Предстоящие практики» (owner 2026-09-30): nav row to the stacked
            master-practice calendar. A row, not an accordion -- it only
            navigates. -->
       <button type="button" class="master-public__nav" @click="goToCalendar">
-        <span class="master-public__nav-label">Предстоящие практики</span>
+        <span class="master-public__nav-label">{{
+          t('user.screens.masterPublic.sections.upcoming')
+        }}</span>
         <IconChevronRight :size="16" />
       </button>
 
@@ -159,9 +161,9 @@
            PLACEHOLDER until the curator-analytics contract exists (same
            pattern as the Блок tab) -- no endpoint serves a member master's
            figures to the school curator yet. -->
-      <VAccordion v-if="schoolContext" title="Аналитика">
+      <VAccordion v-if="schoolContext" :title="t('user.screens.masterPublic.analyticsSection')">
         <p class="master-public__note">
-          Аналитика мастера появится здесь после подключения данных.
+          {{ t('user.screens.masterPublic.analyticsStub') }}
         </p>
       </VAccordion>
 
@@ -171,7 +173,9 @@
            accordion from operator 2026-06-05 is retired; the ⋯ menu keeps
            floating above). show-date: практики идут в разные дни. -->
       <section class="master-public__upcoming">
-        <h3 class="master-public__section-title">Ближайшие практики</h3>
+        <h3 class="master-public__section-title">
+          {{ t('user.screens.masterPublic.sections.nearest') }}
+        </h3>
         <div v-if="upcoming.length" class="master-public__practices">
           <CalendarPracticeCard
             v-for="p in upcoming"
@@ -181,7 +185,9 @@
             @click="goToPractice"
           />
         </div>
-        <p v-else class="master-public__note">Пока практик не запланировано.</p>
+        <p v-else class="master-public__note">
+          {{ t('user.screens.masterPublic.sections.nonePlanned') }}
+        </p>
       </section>
 
       <!-- «Написать сообщение» (the ⋯ menu) replaced the «Задать вопрос»
@@ -195,7 +201,7 @@
          school page: master AND school go to the create flow (FE-92). -->
     <div v-if="schoolContext" class="master-public__cta">
       <VButton variant="primary" block size="lg" @click="goCreatePractice">
-        Создать практику
+        {{ t('user.screens.masterPublic.createPractice') }}
       </VButton>
     </div>
 
@@ -216,12 +222,14 @@
          (info toast) and the copy stays a draft. -->
     <VModal :open="roleOpen" :show-close="false" @close="onRoleClose">
       <div class="master-public__role">
-        <h2 class="master-public__role-title">Изменить роль</h2>
+        <h2 class="master-public__role-title">
+          {{ t('user.screens.masterPublic.role.switchCta') }}
+        </h2>
         <TargetUserCard :name="displayName" :avatar-url="profile?.avatar_url ?? null" />
-        <p class="master-public__role-sub">Выберите роль</p>
+        <p class="master-public__role-sub">{{ t('user.screens.masterPublic.role.chooseTitle') }}</p>
         <VRadioGroup v-model="roleKind" :options="roleOptions" />
         <div class="master-public__role-actions">
-          <VButton variant="danger" block @click="onRoleClose">Отмена</VButton>
+          <VButton variant="danger" block @click="onRoleClose">{{ t('ui.cancel') }}</VButton>
           <VButton
             variant="primary"
             block
@@ -229,7 +237,7 @@
             :disabled="roleConfirmDisabled"
             @click="onRoleConfirm"
           >
-            Изменить
+            {{ t('user.screens.masterPublic.change') }}
           </VButton>
         </div>
       </div>
@@ -240,9 +248,9 @@
          DRAFT for the owner's review. -->
     <VConfirmDialog
       :open="blockConfirmOpen"
-      title="Заблокировать участника школы?"
+      :title="t('user.screens.masterPublic.block.confirmTitle')"
       :message="blockCopy"
-      confirm-label="Заблокировать"
+      :confirm-label="t('common.block')"
       danger
       warning-panel
       cancel-variant="primary"
@@ -255,6 +263,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -283,7 +292,6 @@ import { blockCuratorGroupMember, demoteCuratorGroupMaster } from '@/api/curator
 import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
-import { plural } from '@/utils/plural'
 import { methodChipFor } from '@/utils/methodChips'
 import type { MasterPublicResponse, PracticeResponse } from '@/api/types'
 
@@ -297,14 +305,16 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 /** B11 item 2: 404 (master genuinely doesn't exist) is a DIFFERENT state
  *  from a 5xx/network failure (server down, worth retrying) -- collapsing
- *  them both into "Мастер не найден" told the user to give up on a master
+ *  them both into «Мастер не найден» told the user to give up on a master
  *  who might well exist. Derived from the caught error's own status, no
  *  backend field added. */
 const notFound = ref(false)
 
 const masterId = computed(() => String(route.params.id))
 
-const displayName = computed(() => profile.value?.display_name ?? 'Мастер')
+const displayName = computed(
+  () => profile.value?.display_name ?? t('user.screens.masterPublic.role.master'),
+)
 
 // Method tags cycle through three tints (same as MasterCard).
 const TAG_VARIANTS = ['blue', 'pink', 'sand'] as const
@@ -323,8 +333,8 @@ const roleOpen = ref(false)
 type MemberKind = 'student' | 'master'
 const roleKind = ref<MemberKind>('master')
 const roleOptions: { value: MemberKind; label: string }[] = [
-  { value: 'student', label: 'Ученик' },
-  { value: 'master', label: 'Мастер' },
+  { value: 'student', label: t('user.screens.masterPublic.role.student') },
+  { value: 'master', label: t('user.screens.masterPublic.role.master') },
 ]
 const roleConfirmDisabled = computed(() => roleKind.value === 'master')
 
@@ -350,9 +360,9 @@ async function onRoleConfirm(): Promise<void> {
   try {
     await demoteCuratorGroupMaster(groupId.value, masterId.value)
     roleOpen.value = false
-    toast.success('Роль изменена: участник теперь ученик школы')
+    toast.success(t('user.screens.masterPublic.toast.roleChanged'))
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось изменить роль'))
+    toast.error(extractApiError(e, t('user.screens.masterPublic.toast.roleFailed')))
   } finally {
     demoting.value = false
   }
@@ -361,8 +371,7 @@ async function onRoleConfirm(): Promise<void> {
 const composerOpen = ref(false)
 const blockConfirmOpen = ref(false)
 
-const blockCopy =
-  'Участник утратит доступ к школе и её практикам. Вы сможете разблокировать его в любой момент.'
+const blockCopy = t('user.screens.masterPublic.block.warning')
 
 function onBlockClick(close: () => void): void {
   close()
@@ -381,16 +390,16 @@ async function onBlockConfirm(): Promise<void> {
   try {
     await blockCuratorGroupMember(groupId.value, masterId.value)
     blockConfirmOpen.value = false
-    toast.success('Участник заблокирован')
+    toast.success(t('user.screens.masterPublic.toast.blocked'))
     router.back()
   } catch (e) {
     blockConfirmOpen.value = false
     if (e instanceof ApiResponseError && e.status === 404) {
-      toast.error('Участник уже не в школе')
+      toast.error(t('user.screens.masterPublic.toast.alreadyLeftSchool'))
       router.back()
       return
     }
-    toast.error(extractApiError(e, 'Не удалось заблокировать участника'))
+    toast.error(extractApiError(e, t('user.screens.masterPublic.toast.blockFailed')))
   } finally {
     blocking.value = false
   }
@@ -405,17 +414,6 @@ function onMessageClick(close: () => void): void {
 // embedded in a style label («Медитация молчания») is stripped so a pill
 // never says the word twice (FE-64) — see utils/methodChips.ts.
 const methodChips = computed(() => (profile.value?.methods ?? []).map(methodChipFor))
-
-// -- Russian pluralization helpers (SW14: canonical impl in utils/plural.ts) --
-function pluralYears(n: number): string {
-  return plural(n, 'год', 'года', 'лет')
-}
-function pluralPractices(n: number): string {
-  return plural(n, 'Практика', 'Практики', 'Практик')
-}
-function pluralReviews(n: number): string {
-  return plural(n, 'Отзыв', 'Отзыва', 'Отзывов')
-}
 
 function goToPractice(id: string): void {
   void router.push({ name: 'practice-detail', params: { id } })
@@ -480,7 +478,12 @@ async function loadMaster(id: string): Promise<void> {
   } catch (e) {
     const is404 = e instanceof ApiResponseError && e.status === 404
     notFound.value = is404
-    error.value = extractApiError(e, is404 ? 'Профиль недоступен' : 'Попробуйте позже')
+    error.value = extractApiError(
+      e,
+      is404
+        ? t('user.screens.masterPublic.profileUnavailable')
+        : t('user.screens.masterPublic.tryLater'),
+    )
     profile.value = null
   } finally {
     loading.value = false

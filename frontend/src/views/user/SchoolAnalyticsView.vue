@@ -27,7 +27,7 @@
 
 <template>
   <div class="school-analytics" :aria-busy="loading || refetching">
-    <VHeader title="Аналитика школы" show-back @back="goBack" />
+    <VHeader :title="t('user.screens.schoolAnalytics.title')" show-back @back="goBack" />
 
     <div class="school-analytics__content">
       <!-- Loading (first load only; a period switch refetches in place) -->
@@ -40,11 +40,13 @@
       <VEmptyState
         v-else-if="notFound"
         icon="notfound"
-        title="Школа недоступна"
-        description="Возможно, она была удалена или вы больше не её куратор."
+        :title="t('user.screens.schoolAnalytics.unavailable')"
+        :description="t('user.screens.schoolAnalytics.unavailableHint')"
       >
         <template #action>
-          <VButton variant="primary" @click="goBack">К школе</VButton>
+          <VButton variant="primary" @click="goBack">{{
+            t('user.screens.schoolAnalytics.backToSchool')
+          }}</VButton>
         </template>
       </VEmptyState>
 
@@ -52,11 +54,11 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        title="Не удалось загрузить аналитику"
-        description="Проверьте соединение и попробуйте ещё раз."
+        :title="t('user.screens.schoolAnalytics.loadFailed')"
+        :description="t('user.screens.schoolAnalytics.loadFailedHint')"
       >
         <template #action>
-          <VButton variant="outline" @click="refresh">Повторить</VButton>
+          <VButton variant="outline" @click="refresh">{{ t('common.retry') }}</VButton>
         </template>
       </VEmptyState>
 
@@ -69,7 +71,7 @@
           class="school-analytics__period"
           :options="PERIOD_OPTIONS"
           variant="tabs"
-          aria-label="Период статистики"
+          :aria-label="t('analytics.statsPeriod')"
         />
 
         <!-- Interim scaffold (owner 2026-10-02: «бек доедет»): every
@@ -82,14 +84,16 @@
             <span class="school-analytics__stat-value">
               {{ data.engagement?.practices_conducted ?? 0 }}
             </span>
-            <span class="school-analytics__stat-label">Практик проведено</span>
+            <span class="school-analytics__stat-label">{{
+              t('user.screens.schoolAnalytics.practicesHeld')
+            }}</span>
           </div>
           <div class="school-analytics__stat">
             <span class="school-analytics__stat-value">
               {{ data.engagement?.attendees ?? 0 }}
             </span>
             <span class="school-analytics__stat-label">
-              Человек приходило из {{ data.members.students }} в школе
+              {{ t('user.screens.schoolAnalytics.membersLine', { n: data.members.students }) }}
             </span>
           </div>
           <div class="school-analytics__stat">
@@ -97,15 +101,21 @@
               {{ data.engagement?.repeat_pct ?? 0 }}%
             </span>
             <span class="school-analytics__stat-label">
-              Пришли еще раз, {{ data.engagement?.repeat_attendees ?? 0 }} из
-              {{ data.engagement?.attendees ?? 0 }}
+              {{
+                t('user.screens.schoolAnalytics.repeatLine', {
+                  n: data.engagement?.repeat_attendees ?? 0,
+                  total: data.engagement?.attendees ?? 0,
+                })
+              }}
             </span>
           </div>
           <div class="school-analytics__stat">
             <span class="school-analytics__stat-value">
               {{ data.engagement?.joined_never_came ?? 0 }}
             </span>
-            <span class="school-analytics__stat-label">Вступили и не пришли</span>
+            <span class="school-analytics__stat-label">{{
+              t('user.screens.schoolAnalytics.joinedAndMissed')
+            }}</span>
           </div>
         </div>
 
@@ -114,10 +124,10 @@
              numbers (reviews из visits) come ready from the server. -->
         <DistributionCard
           class="school-analytics__feedback"
-          title="Процент фидбеков"
+          :title="t('user.screens.schoolAnalytics.feedbackPercent')"
           :count-label="feedbackCountLabel"
           :bars="feedbackBars"
-          empty-text="Пока нет отзывов"
+          :empty-text="t('user.screens.schoolAnalytics.noFeedbacks')"
         />
 
         <!-- Part 3: every practice of the selected period, newest first --
@@ -150,8 +160,12 @@
               </div>
               <div class="school-analytics__practice-counts">
                 <span>{{ formatShortDate(p.scheduled_at, p.timezone) }}</span>
-                <span>Ученики: {{ p.attendees_count }}</span>
-                <span>Фидбеки: {{ p.reviews_count }}</span>
+                <span>{{
+                  t('user.screens.schoolAnalytics.studentsLine', { n: p.attendees_count })
+                }}</span>
+                <span>{{
+                  t('user.screens.schoolAnalytics.feedbacksLine', { n: p.reviews_count })
+                }}</span>
               </div>
               <!-- Bare five-color strip: proportional fills only. -->
               <div
@@ -170,8 +184,8 @@
           <VEmptyState
             v-else
             variant="note"
-            title="Пока нет практик за этот период"
-            description="Карточки появятся после первой проведённой практики."
+            :title="t('user.screens.schoolAnalytics.noPractices')"
+            :description="t('user.screens.schoolAnalytics.cardsAfterFirst')"
           />
         </section>
       </template>
@@ -180,6 +194,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ApiResponseError } from '@/api/client'
@@ -206,9 +221,9 @@ const inMasterZone = computed(() => String(route.name ?? '').startsWith('master'
 //    own calendar, the slider only names it. --
 const period = ref<SchoolAnalyticsPeriod>('week')
 const PERIOD_OPTIONS: ReadonlyArray<{ value: SchoolAnalyticsPeriod; label: string }> = [
-  { value: 'week', label: 'Неделя' },
-  { value: 'month', label: 'Месяц' },
-  { value: 'quarter', label: 'Квартал' },
+  { value: 'week', label: t('common.periodWeek') },
+  { value: 'month', label: t('common.periodMonth') },
+  { value: 'quarter', label: t('user.screens.schoolAnalytics.period.quarter') },
 ]
 
 // -- The feedback block (part 2). «Процент фидбеков» = the period's reviews
@@ -222,7 +237,11 @@ const PERIOD_OPTIONS: ReadonlyArray<{ value: SchoolAnalyticsPeriod; label: strin
 //    distribution carries. --
 const feedbackCountLabel = computed((): string => {
   const e = data.value?.engagement
-  return `${e?.reviews_pct ?? 0}% · ${e?.reviews ?? 0} из ${e?.visits ?? 0}`
+  return t('user.screens.schoolAnalytics.conversion', {
+    pct: e?.reviews_pct ?? 0,
+    reviews: e?.reviews ?? 0,
+    visits: e?.visits ?? 0,
+  })
 })
 const feedbackBars = computed(() => moodStripBars(data.value?.engagement?.rating))
 
@@ -234,9 +253,9 @@ const feedbackBars = computed(() => moodStripBars(data.value?.engagement?.rating
 const periodSectionTitle = computed(
   (): string =>
     ({
-      week: 'Практики недели',
-      month: 'Практики месяца',
-      quarter: 'Практики квартала',
+      week: t('user.screens.schoolAnalytics.practicesOfWeek'),
+      month: t('user.screens.schoolAnalytics.practicesOfMonth'),
+      quarter: t('user.screens.schoolAnalytics.practicesOfQuarter'),
     })[period.value],
 )
 const periodPractices = computed(() => data.value?.engagement?.conducted_practices ?? [])

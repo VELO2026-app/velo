@@ -90,6 +90,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, ref, watch } from 'vue'
 import { offWindowEvent, onWindowEvent } from '@/platform/dom'
 import {
@@ -117,7 +118,7 @@ const props = withDefaults(
     /** While the form submits, the whole scale is inert and emits nothing (tz §8). */
     disabled?: boolean
   }>(),
-  { ariaLabel: 'Оценка состояния от 1 до 10', disabled: false },
+  { ariaLabel: undefined, disabled: false },
 )
 
 const emit = defineEmits<{
@@ -160,7 +161,7 @@ const EMOTIONS = MOOD_SCALE_KEYS.map((key) => ({
 const clampedScore = computed(() => clampMoodScore(props.modelValue))
 const activeIndex = computed(() => moodIndexFromScore(clampedScore.value))
 const valueText = computed(() => moodValueText(clampedScore.value))
-const resolvedAriaLabel = computed(() => props.ariaLabel ?? 'Оценка состояния от 1 до 10')
+const resolvedAriaLabel = computed(() => props.ariaLabel ?? t('mood.ariaScale'))
 // Thumb position across the track: score 1 -> 0%, score 10 -> 100%.
 const thumbPercent = computed(
   () => ((clampedScore.value - MOOD_SCALE_MIN) / (MOOD_SCALE_MAX - MOOD_SCALE_MIN)) * 100,

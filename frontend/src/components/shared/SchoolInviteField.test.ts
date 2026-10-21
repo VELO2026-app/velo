@@ -15,6 +15,7 @@
 // happy-dom ships no navigator.clipboard, so it is stubbed (B2 pattern).
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import SchoolInviteField from '@/components/shared/SchoolInviteField.vue'
@@ -38,7 +39,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(SchoolInviteField, { groupId: 'g1' })
+  app = createApp(SchoolInviteField, { groupId: 'g1' }).use(createTestI18n())
   app.mount(host)
   return host
 }

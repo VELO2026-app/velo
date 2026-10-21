@@ -57,6 +57,7 @@
 // afterEach purges it unconditionally.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
@@ -194,10 +195,30 @@ function insights(
 // The two periods differ on EVERY figure on purpose -- equal numbers would let a
 // toggle that does nothing pass.
 const INSIGHTS: Record<string, PracticeInsightsResponse> = {
-  p1: insights('p1', 10, { bad: 1, low: 0, neutral: 2, good: 0, fire: 4 }, { bad: 1, low: 0, neutral: 0, good: 1, fire: 3 }),
-  p2: insights('p2', 10, { bad: 0, low: 0, neutral: 1, good: 0, fire: 2 }, { bad: 0, low: 0, neutral: 2, good: 0, fire: 1 }),
-  p3: insights('p3', 5, { bad: 0, low: 0, neutral: 0, good: 0, fire: 5 }, { bad: 1, low: 1, neutral: 0, good: 1, fire: 0 }),
-  p5: insights('p5', 100, { bad: 0, low: 0, neutral: 0, good: 0, fire: 100 }, { bad: 0, low: 0, neutral: 0, good: 0, fire: 100 }),
+  p1: insights(
+    'p1',
+    10,
+    { bad: 1, low: 0, neutral: 2, good: 0, fire: 4 },
+    { bad: 1, low: 0, neutral: 0, good: 1, fire: 3 },
+  ),
+  p2: insights(
+    'p2',
+    10,
+    { bad: 0, low: 0, neutral: 1, good: 0, fire: 2 },
+    { bad: 0, low: 0, neutral: 2, good: 0, fire: 1 },
+  ),
+  p3: insights(
+    'p3',
+    5,
+    { bad: 0, low: 0, neutral: 0, good: 0, fire: 5 },
+    { bad: 1, low: 1, neutral: 0, good: 1, fire: 0 },
+  ),
+  p5: insights(
+    'p5',
+    100,
+    { bad: 0, low: 0, neutral: 0, good: 0, fire: 100 },
+    { bad: 0, low: 0, neutral: 0, good: 0, fire: 100 },
+  ),
 }
 
 function review(overrides: Partial<MasterReviewItem> = {}): MasterReviewItem {
@@ -326,7 +347,7 @@ let pinia: Pinia
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AnalyticsView)
+  app = createApp(AnalyticsView).use(createTestI18n())
   app.use(pinia)
   app.mount(host)
   return host
@@ -780,7 +801,12 @@ describe('AnalyticsView', () => {
       // `totalFeedbacks(p.id) > 0` (.vue:148) -- a practice with check-ins but
       // zero feedback would otherwise show a confident row of 0% badges.
       vi.mocked(diaryApi.getPracticeInsights).mockResolvedValue(
-        insights('p1', 10, { bad: 0, low: 0, neutral: 0, good: 0, fire: 4 }, { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 }),
+        insights(
+          'p1',
+          10,
+          { bad: 0, low: 0, neutral: 0, good: 0, fire: 4 },
+          { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 },
+        ),
       )
       mount()
       await flush()
@@ -800,14 +826,14 @@ describe('AnalyticsView', () => {
       practice('a5', { title: 'Практика E', scheduled_at: '2026-07-15T12:00:00Z' }),
     ]
 
-    it('caps the list at 3 and offers «+ ещё 2 практик»', async () => {
+    it('caps the list at 3 and offers «+ ещё 2 практики»', async () => {
       mockBucketedPractices(FIVE)
       mount()
       await flush()
 
       expect(pcards()).toHaveLength(3)
       expect(pcardTitles()).toEqual(['Практика A', 'Практика B', 'Практика C'])
-      expect(paneText(reviewsPane())).toContain('+ ещё 2 практик')
+      expect(paneText(reviewsPane())).toContain('+ ещё 2 практики')
     })
 
     it('the reveal expands to the whole period', async () => {
@@ -815,11 +841,11 @@ describe('AnalyticsView', () => {
       mount()
       await flush()
 
-      buttonIn(reviewsPane(), '+ ещё 2 практик')?.click()
+      buttonIn(reviewsPane(), '+ ещё 2 практики')?.click()
       await flush()
 
       expect(pcards()).toHaveLength(5)
-      expect(paneText(reviewsPane())).not.toContain('+ ещё 2 практик')
+      expect(paneText(reviewsPane())).not.toContain('+ ещё 2 практики')
     })
 
     it('offers no reveal when the period fits in the preview', async () => {
@@ -838,7 +864,7 @@ describe('AnalyticsView', () => {
       vi.mocked(mastersApi.getMyPractices).mockResolvedValue(practicesPage(FIVE, 6, 0))
       mount()
       await flush()
-      buttonIn(reviewsPane(), '+ ещё 2 практик')?.click()
+      buttonIn(reviewsPane(), '+ ещё 2 практики')?.click()
       await flush()
 
       const NEXT = practice('a6', { title: 'Практика F', scheduled_at: '2026-07-14T12:00:00Z' })
@@ -860,7 +886,7 @@ describe('AnalyticsView', () => {
       mockBucketedPractices(FIVE)
       mount()
       await flush()
-      buttonIn(reviewsPane(), '+ ещё 2 практик')?.click()
+      buttonIn(reviewsPane(), '+ ещё 2 практики')?.click()
       await flush()
       expect(pcards()).toHaveLength(5)
 
@@ -868,7 +894,7 @@ describe('AnalyticsView', () => {
       await flush()
 
       expect(pcards()).toHaveLength(3)
-      expect(paneText(reviewsPane())).toContain('+ ещё 2 практик')
+      expect(paneText(reviewsPane())).toContain('+ ещё 2 практики')
     })
   })
 

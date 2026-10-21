@@ -30,7 +30,7 @@
       <h1 class="admin-dashboard__title">Admin</h1>
       <button
         class="admin-dashboard__eye"
-        aria-label="Профиль"
+        :aria-label="t('adminScreens.adminDashboard.profileAria')"
         @click="router.push({ name: 'admin-profile' })"
       >
         <IconProfile :size="22" />
@@ -65,12 +65,14 @@
 
       <!-- Статистика: title + period toggle -->
       <div class="admin-dashboard__section">
-        <span class="admin-dashboard__section-title">Статистика</span>
+        <span class="admin-dashboard__section-title">{{
+          t('adminScreens.adminDashboard.statistics')
+        }}</span>
         <VSegment
           compact
           :model-value="period"
           :options="periodOptions"
-          aria-label="Период статистики"
+          :aria-label="t('analytics.statsPeriod')"
           @update:model-value="selectPeriod"
         />
       </div>
@@ -78,7 +80,7 @@
       <div class="admin-dashboard__stats">
         <VStatCard
           :value="practicesValue"
-          label="Практик"
+          :label="t('adminScreens.adminDashboard.practicesStat')"
           :delta="practicesDelta"
           :delta-tone="practicesDeltaTone"
           clickable
@@ -86,7 +88,7 @@
         />
         <VStatCard
           :value="mastersValue"
-          label="Мастеров"
+          :label="t('adminScreens.adminDashboard.mastersStat')"
           :delta="mastersDelta"
           :delta-tone="mastersDeltaTone"
           clickable
@@ -94,7 +96,7 @@
         />
         <VStatCard
           :value="participantsValue"
-          label="Участников"
+          :label="t('adminScreens.adminDashboard.participantsStat')"
           :delta="participantsDelta"
           :delta-tone="participantsDeltaTone"
           clickable
@@ -106,7 +108,7 @@
       <div class="admin-dashboard__week">
         <button
           class="admin-dashboard__week-nav admin-dashboard__week-nav--prev"
-          aria-label="Предыдущий период"
+          :aria-label="t('adminScreens.adminDashboard.prevPeriod')"
           @click="stepPrev"
         >
           <IconArrowRight :size="20" />
@@ -114,7 +116,7 @@
         <span class="admin-dashboard__week-range">{{ periodRange }}</span>
         <button
           class="admin-dashboard__week-nav"
-          aria-label="Следующий период"
+          :aria-label="t('adminScreens.adminDashboard.nextPeriod')"
           :disabled="!canStepNext"
           @click="stepNext"
         >
@@ -124,24 +126,29 @@
 
       <!-- Выручка -->
       <div class="admin-dashboard__section">
-        <span class="admin-dashboard__section-title">Выручка</span>
+        <span class="admin-dashboard__section-title">{{
+          t('adminScreens.adminDashboard.revenue')
+        }}</span>
       </div>
       <VCard class="admin-dashboard__revenue">
         <div class="admin-dashboard__revenue-amount">{{ revenueValue }}</div>
         <div v-if="revenueDelta" class="admin-dashboard__revenue-delta">{{ revenueDelta }}</div>
       </VCard>
-      <VMoreLink label="Баланс по мастерам" @click="router.push({ name: 'admin-revenue' })" />
+      <VMoreLink
+        :label="t('adminScreens.adminDashboard.mastersBalance')"
+        @click="router.push({ name: 'admin-revenue' })"
+      />
       <VListRow
-        title="Выплаты"
-        subtitle="Запросы мастеров на вывод"
+        :title="t('adminScreens.adminDashboard.payoutsSection')"
+        :subtitle="t('adminScreens.adminDashboard.withdrawalRequestsLink')"
         clickable
         @click="router.push({ name: 'admin-withdrawals' })"
       >
         <template #trailing><IconArrowRight :size="20" /></template>
       </VListRow>
       <VListRow
-        title="Промокоды"
-        subtitle="Все промокоды: платформы и мастеров"
+        :title="t('adminScreens.adminDashboard.promocodesSection')"
+        :subtitle="t('adminScreens.adminDashboard.promocodesLink')"
         clickable
         @click="router.push({ name: 'admin-promos' })"
       >
@@ -175,19 +182,21 @@
 
       <!-- Система: пользователи + заявки на смену методов -->
       <div class="admin-dashboard__section">
-        <span class="admin-dashboard__section-title">Система</span>
+        <span class="admin-dashboard__section-title">{{
+          t('adminScreens.adminDashboard.system')
+        }}</span>
       </div>
       <VListRow
-        title="Пользователи"
-        subtitle="Все пользователи · назначение мастеров"
+        :title="t('adminScreens.adminDashboard.usersSection')"
+        :subtitle="t('adminScreens.adminDashboard.usersLink')"
         clickable
         @click="router.push({ name: 'admin-users' })"
       >
         <template #trailing><IconArrowRight :size="20" /></template>
       </VListRow>
       <VListRow
-        title="Заявки на смену методов"
-        subtitle="Мастера меняют свои направления"
+        :title="t('adminScreens.adminDashboard.methodRequestsLink')"
+        :subtitle="t('adminScreens.adminDashboard.methodRequestsHint')"
         clickable
         @click="router.push({ name: 'admin-method-requests' })"
       >
@@ -201,16 +210,16 @@
         </template>
       </VListRow>
       <VListRow
-        title="Каталог практик"
-        subtitle="Направления и виды практик"
+        :title="t('adminScreens.adminDashboard.catalogLink')"
+        :subtitle="t('adminScreens.adminDashboard.catalogHint')"
         clickable
         @click="router.push({ name: 'admin-catalog' })"
       >
         <template #trailing><IconArrowRight :size="20" /></template>
       </VListRow>
       <VListRow
-        title="Поддержка"
-        subtitle="Обращения пользователей и мастеров"
+        :title="t('adminScreens.adminDashboard.supportSection')"
+        :subtitle="t('adminScreens.adminDashboard.supportLink')"
         clickable
         @click="router.push({ name: 'admin-support' })"
       >
@@ -221,6 +230,7 @@
 </template>
 
 <script setup lang="ts">
+import { t, getLocale } from '@/locales'
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -240,7 +250,6 @@ import { useAdminStore } from '@/stores/admin'
 import { getCheckinMetric, getFeedbackMetric, getReturnMetric, getAdminRevenue } from '@/api/admin'
 import { formatMoney } from '@/utils/format'
 import { formatPeriodRange } from '@/utils/periodRange'
-import { plural } from '@/utils/plural'
 import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
@@ -252,8 +261,8 @@ const period = ref<'week' | 'month'>('week')
 const periodOffset = ref(0)
 
 const periodOptions: SegmentOption[] = [
-  { value: 'week', label: 'Неделя' },
-  { value: 'month', label: 'Месяц' },
+  { value: 'week', label: t('common.periodWeek') },
+  { value: 'month', label: t('common.periodMonth') },
 ]
 
 // VSegment emits a plain string; narrow it back to the period union.
@@ -277,13 +286,11 @@ const pendingModeration = computed((): number => adminStore.pendingModeration)
 // A2: unread indicator for incoming master method-change requests.
 const pendingMethodChanges = computed((): number => adminStore.pendingMethodChanges)
 
-const verificationTitle = computed(
-  (): string =>
-    `${pendingVerifications.value} ${plural(pendingVerifications.value, 'мастер', 'мастера', 'мастеров')} на верификации`,
+const verificationTitle = computed(() =>
+  t('adminScreens.adminDashboard.verificationBanner', pendingVerifications.value),
 )
-const moderationTitle = computed(
-  (): string =>
-    `${pendingModeration.value} ${plural(pendingModeration.value, 'обращение', 'обращения', 'обращений')} на модерации`,
+const moderationTitle = computed(() =>
+  t('adminScreens.adminDashboard.moderationBanner', pendingModeration.value),
 )
 
 // =========================================================================
@@ -318,7 +325,7 @@ const participantsDeltaTone = computed(() => pctTone(overview.value?.new_users_d
 // needs E7 (not delivered) -> blank.
 const revenueCents = ref<number | null>(null)
 const revenueValue = computed((): string =>
-  revenueCents.value !== null ? formatMoney(revenueCents.value, 'EUR', 'ru', true) : '—',
+  revenueCents.value !== null ? formatMoney(revenueCents.value, 'EUR', getLocale(), true) : '—',
 )
 const revenueDelta = computed((): string => '')
 

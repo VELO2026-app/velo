@@ -31,15 +31,15 @@
   <div class="entry">
     <!-- Header -->
     <header class="entry__header">
-      <VBackButton aria-label="Назад" @click="goBack" />
-      <h1 class="entry__title-bar">Запись</h1>
+      <VBackButton :aria-label="t('ui.back')" @click="goBack" />
+      <h1 class="entry__title-bar">{{ t('user.screens.entry.titleFallback') }}</h1>
 
       <!-- "..." menu (view mode only): edit + delete. -->
       <VMenu v-if="mode === 'view'">
         <template #default="{ close }">
           <VMenuItem
             :icon="IconPen"
-            ariaLabel="Редактировать"
+            :ariaLabel="t('ui.edit')"
             @click="
               () => {
                 startEdit()
@@ -49,7 +49,7 @@
           />
           <VMenuItem
             :icon="IconTrash"
-            ariaLabel="Удалить"
+            :ariaLabel="t('ui.delete')"
             danger
             @click="
               () => {
@@ -73,11 +73,11 @@
       <VEmptyState
         v-else-if="loadError"
         icon="warning"
-        title="Не удалось загрузить запись"
+        :title="t('user.screens.entry.loadFailed')"
         :description="loadError"
       >
         <template #action>
-          <VButton variant="primary" @click="reload">Повторить</VButton>
+          <VButton variant="primary" @click="reload">{{ t('common.retry') }}</VButton>
         </template>
       </VEmptyState>
 
@@ -109,8 +109,8 @@
               v-model="editTitle"
               class="entry__edit-title"
               type="text"
-              placeholder="Заголовок (необязательно)"
-              aria-label="Заголовок записи"
+              :placeholder="t('user.screens.entry.titlePlaceholder')"
+              :aria-label="t('user.screens.entry.titleAria')"
               :maxlength="MAX_TITLE_LEN"
               :disabled="saving"
             />
@@ -118,7 +118,7 @@
               ref="editEl"
               v-model="editContent"
               class="entry__edit-content"
-              aria-label="Текст записи"
+              :aria-label="t('user.screens.entry.textAria')"
               rows="3"
               :maxlength="MAX_CONTENT_LEN"
               :disabled="saving"
@@ -139,13 +139,14 @@
         :loading="saving"
         @click="onSave"
       >
-        Сохранить
+        {{ t('ui.save') }}
       </VButton>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
@@ -206,8 +207,8 @@ const practiceDuration = computed(() =>
 // Muted context line linking the note to its practice (if any).
 const contextLine = computed(() => {
   if (!practice.value) return ''
-  const name = practice.value.master_name ?? 'Мастером'
-  return `Связано с практикой: ${practice.value.title} с ${name}`
+  const name = practice.value.master_name ?? t('user.screens.entry.shared.form.hostFallback')
+  return t('user.screens.entry.relatedLine', { title: practice.value.title, name })
 })
 
 // -- entry date line ---------------------------------------------------------

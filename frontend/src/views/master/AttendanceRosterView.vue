@@ -23,7 +23,7 @@
 
 <template>
   <div class="roster">
-    <VHeader title="Посещаемость" show-back @back="router.back()" />
+    <VHeader :title="t('masterScreens.attendanceRoster.title')" show-back @back="router.back()" />
 
     <!-- Loading -->
     <div v-if="loading" class="roster__loader">
@@ -32,8 +32,12 @@
 
     <!-- Error -->
     <div v-else-if="error" class="roster__content">
-      <VEmptyState icon="warning" title="Не удалось загрузить посещаемость" :description="error">
-        <VButton size="sm" variant="outline" @click="load">Повторить</VButton>
+      <VEmptyState
+        icon="warning"
+        :title="t('masterScreens.attendanceRoster.loadFailed')"
+        :description="error"
+      >
+        <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
       </VEmptyState>
     </div>
 
@@ -51,8 +55,16 @@
 
         <!-- Stats -->
         <div class="roster__stats">
-          <VStatCard :value="attendance.attended" label="Присутствовало" value-tone="teal" />
-          <VStatCard :value="attendance.no_show" label="Не пришли" value-tone="rose" />
+          <VStatCard
+            :value="attendance.attended"
+            :label="t('masterScreens.attendanceRoster.attendedStat')"
+            value-tone="teal"
+          />
+          <VStatCard
+            :value="attendance.no_show"
+            :label="t('masterScreens.attendanceRoster.noShowStat')"
+            value-tone="rose"
+          />
         </div>
 
         <!-- T21-1 (PROMPT №541): the unmatched bucket, made VISIBLE here too --
@@ -64,41 +76,43 @@
           variant="warning"
           class="roster__unmatched-note"
         >
-          {{ attendance.unmatched_count }} участник(а) Zoom не удалось сопоставить с записью
+          {{ t('masterScreens.attendanceRoster.unmatchedZoom', { n: attendance.unmatched_count }) }}
         </VBadge>
 
         <!-- Empty (no bookings at all) -->
         <VEmptyState
           v-if="attendedItems.length === 0 && noShowItems.length === 0"
           icon="group"
-          title="Нет данных о посещаемости"
-          description="На этой практике никто не отмечен"
+          :title="t('masterScreens.attendanceRoster.empty.title')"
+          :description="t('masterScreens.attendanceRoster.empty.text')"
         />
 
         <!-- Присутствовали -->
         <section v-if="attendedItems.length > 0" class="roster__section">
-          <h2 class="velo-section-title">Присутствовали</h2>
+          <h2 class="velo-section-title">
+            {{ t('masterScreens.attendanceRoster.attended') }}
+          </h2>
           <div v-for="item in visibleAttended" :key="item.booking_id" class="roster__row">
             <IconCheck :size="24" class="roster__ic roster__ic--ok" />
             <span class="roster__name">{{ displayName(item) }}</span>
           </div>
           <VShowMore
             v-if="hiddenAttended > 0"
-            label="посмотреть еще"
+            :label="t('masterScreens.attendanceRoster.showMore')"
             @click="attendedExpanded = true"
           />
         </section>
 
         <!-- Не пришли -->
         <section v-if="noShowItems.length > 0" class="roster__section">
-          <h2 class="velo-section-title">Не пришли</h2>
+          <h2 class="velo-section-title">{{ t('masterScreens.attendanceRoster.missed') }}</h2>
           <div v-for="item in visibleNoShow" :key="item.booking_id" class="roster__row">
             <IconClose :size="24" class="roster__ic roster__ic--no" />
             <span class="roster__name">{{ displayName(item) }}</span>
           </div>
           <VShowMore
             v-if="hiddenNoShow > 0"
-            label="посмотреть еще"
+            :label="t('masterScreens.attendanceRoster.showMore')"
             @click="noShowExpanded = true"
           />
         </section>
@@ -108,6 +122,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMasterStore } from '@/stores/master'
@@ -147,7 +162,7 @@ const whenLabel = computed((): string => {
 })
 
 const durationLabel = computed((): string =>
-  practice.value ? `${practice.value.duration_minutes} мин` : '',
+  practice.value ? t('practice.durationMinutes', { n: practice.value.duration_minutes }) : '',
 )
 
 // -- Roster lists (from items, filtered by status) --
@@ -192,7 +207,7 @@ async function load(): Promise<void> {
     ])
     attendance.value = attendanceData
   } catch (e) {
-    error.value = extractApiError(e, 'Ошибка загрузки')
+    error.value = extractApiError(e, t('common.loadError'))
   } finally {
     loading.value = false
   }

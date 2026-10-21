@@ -29,7 +29,7 @@
   <div class="admin-support">
     <header class="admin-support__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-support__title">Поддержка</h1>
+      <h1 class="admin-support__title">{{ t('adminScreens.adminSupport.title') }}</h1>
       <span v-if="items.length" class="admin-support__count">{{ items.length }}</span>
     </header>
 
@@ -40,19 +40,19 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      title="Не удалось загрузить"
-      description="Проверьте соединение и попробуйте ещё раз"
+      :title="t('common.loadFailed')"
+      :description="t('common.checkConnection')"
     >
       <template #action
-        ><VButton variant="primary" @click="loadInitial">Повторить</VButton></template
+        ><VButton variant="primary" @click="loadInitial">{{ t('common.retry') }}</VButton></template
       >
     </VEmptyState>
 
     <VEmptyState
       v-else-if="items.length === 0"
       icon="empty"
-      title="Обращений нет"
-      description="Сюда попадут все обращения в поддержку"
+      :title="t('adminScreens.adminSupport.empty.title')"
+      :description="t('adminScreens.adminSupport.empty.text')"
     />
 
     <template v-else>
@@ -81,7 +81,7 @@
 
       <div v-if="nextCursor" class="admin-support__more">
         <VButton variant="outline" block :loading="loadingMore" @click="loadMore">
-          Показать ещё
+          {{ t('common.showMore') }}
         </VButton>
       </div>
     </template>
@@ -89,6 +89,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { toHistoryState } from '@/utils/historySnapshot'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
@@ -114,18 +115,22 @@ const loadingMore = ref(false)
 const error = ref(false)
 
 function openerName(item: SupportThread): string {
-  return item.opener?.name ?? 'Пользователь'
+  return item.opener?.name ?? t('adminScreens.adminSupport.userFallback')
 }
 
 function triageBadge(item: SupportThread): {
   variant: 'warning' | 'success' | 'info'
   label: string
 } {
-  if (item.status === 'resolved') return { variant: 'success', label: 'Решено' }
-  if (item.status === 'closed') return { variant: 'info', label: 'Закрыто' }
-  if (!item.assignee) return { variant: 'warning', label: 'Не взято' }
-  if (item.assignee === authStore.user?.id) return { variant: 'success', label: 'У меня' }
-  return { variant: 'info', label: 'Занято' }
+  if (item.status === 'resolved')
+    return { variant: 'success', label: t('adminScreens.adminSupport.resolved') }
+  if (item.status === 'closed')
+    return { variant: 'info', label: t('adminScreens.adminSupport.closed') }
+  if (!item.assignee)
+    return { variant: 'warning', label: t('adminScreens.adminSupport.status.unclaimed') }
+  if (item.assignee === authStore.user?.id)
+    return { variant: 'success', label: t('adminScreens.adminSupport.status.mine') }
+  return { variant: 'info', label: t('adminScreens.adminSupport.taken') }
 }
 
 async function loadInitial(): Promise<void> {
@@ -139,7 +144,7 @@ async function loadInitial(): Promise<void> {
     nextCursor.value = res.next_cursor
   } catch (e) {
     error.value = true
-    toast.error(extractApiError(e, 'Ошибка загрузки обращений'))
+    toast.error(extractApiError(e, t('adminScreens.adminSupport.ticketsLoadError')))
   } finally {
     loading.value = false
   }
@@ -153,7 +158,7 @@ async function loadMore(): Promise<void> {
     items.value.push(...res.threads)
     nextCursor.value = res.next_cursor
   } catch (e) {
-    toast.error(extractApiError(e, 'Ошибка загрузки'))
+    toast.error(extractApiError(e, t('common.loadError')))
   } finally {
     loadingMore.value = false
   }

@@ -15,16 +15,16 @@
     :practice="practice"
     :practice-loading="practiceLoading"
     :load-error="practiceLoadError"
-    question-title="Как вы себя чувствуете?"
-    question-subtitle="Оцените своё состояние перед практикой"
+    :question-title="t('user.screens.checkin.question.title')"
+    :question-subtitle="t('user.screens.checkin.question.subtitle')"
     :submitting="diaryStore.checkinSubmitting"
     :submit-disabled="windowClosed"
-    :disabled-hint="practice && windowClosed ? 'Check-in закрыт — практика уже началась' : ''"
-    submit-label="Отправить"
+    :disabled-hint="practice && windowClosed ? t('user.screens.checkin.windowClosedHint') : ''"
+    :submit-label="t('common.submitSend')"
     :show-skip="true"
     :submitted="submitted"
-    success-title="Check-in отправлен"
-    success-text="Ваше состояние записано, хорошей практики!"
+    :success-title="t('user.screens.checkin.toast.sent')"
+    :success-text="t('user.screens.checkin.toast.recorded')"
     @back="onBack"
     @retry="loadPractice"
     @submit="onSubmit"
@@ -33,7 +33,11 @@
     <!-- Practice meta — две колонки (Figma 2266:716): мастер | дата. -->
     <template #practice-meta>
       <span class="form-shell__practice-meta-cell">
-        с {{ practice?.master_name ?? 'Мастером' }}
+        {{
+          t('shared.form.hostLine', {
+            name: practice?.master_name ?? t('shared.form.hostFallback'),
+          })
+        }}
       </span>
       <span class="form-shell__practice-meta-cell">
         <IconCalendar :size="14" /> {{ formattedDate }}
@@ -46,7 +50,7 @@
       <div class="checkin__mood">
         <MoodSlider
           v-model="moodScore"
-          aria-label="Оценка состояния от 1 до 10"
+          :aria-label="t('mood.ariaScale')"
           :disabled="diaryStore.checkinSubmitting"
         />
       </div>
@@ -62,14 +66,15 @@
     <!-- Success actions -->
     <template #success-actions>
       <VButton variant="primary" size="lg" block @click="goToPracticeLive">
-        Начать практику
+        {{ t('user.screens.checkin.start') }}
       </VButton>
-      <VButton variant="ghost" block @click="goToDashboard"> На главную </VButton>
+      <VButton variant="ghost" block @click="goToDashboard">{{ t('common.backHome') }}</VButton>
     </template>
   </FormShell>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'
@@ -119,7 +124,7 @@ const windowClosed = computed<boolean>(() => {
   // deep link whose fetch failed offered a live button for a POST the backend
   // was always going to refuse. The hint is gated on `practice` in the template
   // for the same reason: while we have no data, the button is disabled because
-  // we do not KNOW, and claiming "практика уже началась" would be a guess.
+  // we do not KNOW, and claiming t('user.screens.checkin.restrict.started') would be a guess.
   if (!s) return true
   return nowMs.value > new Date(s).getTime()
 })
@@ -182,22 +187,22 @@ async function onSubmit(): Promise<void> {
 // loaded, no second round-trip) -- never a raw backend string.
 function closedPracticeMessage(code: string | undefined): string | null {
   if (code === 'blocked_by_master') {
-    return 'Мастер ограничил вам доступ к этой практике'
+    return t('user.screens.checkin.restrict.blockedByMaster')
   }
   if (code === 'not_a_student') {
-    return 'Эта практика доступна только ученикам мастера'
+    return t('user.screens.checkin.restrict.studentsOnly')
   }
   if (code === 'not_in_audience') {
     const names = practice.value?.audience_group_names ?? []
     return names.length
-      ? `Вы не состоите в группе «${names.join('», «')}»`
-      : 'Вы не состоите в группе, которой открыта эта практика'
+      ? t('user.screens.checkin.restrictGroupNames', { names: names.join('», «') })
+      : t('user.screens.checkin.restrict.groupOnly')
   }
   return null
 }
 
 function onSkip(): void {
-  // Optimistic: hide the dashboard "Пора на check-in" banner instantly this
+  // Optimistic: hide the dashboard t('user.screens.checkin.banner.checkinTime') banner instantly this
   // session, so navigation feels immediate.
   bookingsStore.dismissCheckin(practiceId)
   // Persist the skip (B2) so the prompt stays hidden across sessions/devices.
@@ -208,7 +213,7 @@ function onSkip(): void {
   if (booking) {
     void bookingsStore.skipCheckin(booking.id)
   }
-  toast.info('Check-in пропущен')
+  toast.info(t('user.screens.checkin.toast.skipped'))
   void router.push({ name: 'user-dashboard' })
 }
 

@@ -19,27 +19,29 @@
   cards) = card storage + card payouts; ₽ currency if wanted; per-period income /
   ledger (still «—», same gap as Screens 7/12).
 
-  Money: formatMoney(cents, 'EUR', 'ru', true). MIN_WITHDRAWAL_EUROS=50,
+  Money: formatMoney(cents, 'EUR', getLocale(), true). MIN_WITHDRAWAL_EUROS=50,
   WITHDRAWAL_FEE_EUROS=2 (mirror backend config).
 -->
 
 <template>
   <div class="finance-view">
-    <VHeader title="Вывод средств" show-back @back="router.back()" />
+    <VHeader :title="t('masterScreens.masterFinance.title')" show-back @back="router.back()" />
 
     <!-- ===================== BALANCE ===================== -->
     <div class="finance-view__balance">
-      <div class="finance-view__balance-label">Доступно к выводу</div>
+      <div class="finance-view__balance-label">
+        {{ t('masterScreens.masterFinance.availableToWithdraw') }}
+      </div>
       <div class="finance-view__balance-value">{{ formattedAvailable }}</div>
       <!-- frozen kept beyond the SVG: real «in review» money the master should see -->
       <div v-if="frozenCents > 0" class="finance-view__balance-frozen">
-        На рассмотрении: {{ formattedFrozen }}
+        {{ t('masterScreens.masterFinance.inReview', { amount: formattedFrozen }) }}
       </div>
     </div>
 
     <!-- ===================== PAYMENT METHOD (= configured payout, Б) ===================== -->
     <section class="finance-view__section">
-      <h2 class="finance-view__title">Метод оплаты</h2>
+      <h2 class="finance-view__title">{{ t('masterScreens.masterFinance.method.label') }}</h2>
 
       <template v-if="!showPayoutForm">
         <div v-if="hasPayout" class="finance-view__card">
@@ -54,18 +56,18 @@
           <button
             type="button"
             class="finance-view__card-x"
-            aria-label="Удалить способ выплаты"
+            :aria-label="t('masterScreens.masterFinance.removeMethod')"
             @click="removePayout"
           >
             <IconClose :size="16" />
           </button>
         </div>
         <p v-else class="finance-view__hint">
-          Способ выплаты не настроен. Добавьте карту, чтобы выводить средства.
+          {{ t('masterScreens.masterFinance.method.notConfiguredHint') }}
         </p>
 
         <VButton variant="outline" class="finance-view__add" @click="openPayoutForm(hasPayout)">
-          + Добавить метод оплаты
+          + {{ t('masterScreens.masterFinance.method.add') }}
         </VButton>
       </template>
 
@@ -87,12 +89,12 @@
           />
           <VInput
             v-model="payoutForm.accountHolder"
-            label="Имя владельца счёта"
+            :label="t('masterScreens.masterFinance.fields.holderName')"
             placeholder="Ivan Ivanov"
           />
           <VInput
             v-model="payoutForm.swift"
-            label="BIC / SWIFT (необязательно)"
+            :label="t('masterScreens.masterFinance.fields.bicOptional')"
             placeholder="COBADEFFXXX"
           />
         </template>
@@ -110,8 +112,8 @@
         <template v-else-if="payoutForm.method === 'revolut'">
           <VInput
             v-model="payoutForm.tag"
-            label="Revolut Tag или телефон *"
-            placeholder="@username или +49123456789"
+            :label="t('masterScreens.masterFinance.fields.revolutTag')"
+            :placeholder="t('masterScreens.masterFinance.fields.revolutPlaceholder')"
             :error="formErrors.tag"
           />
         </template>
@@ -123,11 +125,15 @@
         <template v-else-if="payoutForm.method === 'card'">
           <VInput
             v-model="payoutForm.cardNumber"
-            label="Номер карты"
+            :label="t('masterScreens.masterFinance.fields.cardNumber')"
             placeholder="0000 0000 0000 0000"
             :error="formErrors.card"
           />
-          <VInput v-model="payoutForm.cardHolder" label="Имя владельца" placeholder="IVAN IVANOV" />
+          <VInput
+            v-model="payoutForm.cardHolder"
+            :label="t('masterScreens.masterFinance.fields.cardHolderDisplay')"
+            placeholder="IVAN IVANOV"
+          />
         </template>
 
         <div class="finance-view__form-actions">
@@ -137,10 +143,10 @@
             :disabled="savingPayout"
             @click="savePayout"
           >
-            Сохранить
+            {{ t('ui.save') }}
           </VButton>
           <VButton variant="ghost" :disabled="savingPayout" @click="closePayoutForm">
-            Отмена
+            {{ t('ui.cancel') }}
           </VButton>
         </div>
       </div>
@@ -148,10 +154,11 @@
 
     <!-- ===================== WITHDRAW AMOUNT (always visible) ===================== -->
     <section class="finance-view__section">
-      <h2 class="finance-view__title">Сумма вывода <span class="finance-view__req">*</span></h2>
+      <h2 class="finance-view__title">
+        {{ t('masterScreens.masterFinance.fields.amount') }}<span class="finance-view__req">*</span>
+      </h2>
       <p class="finance-view__hint">
-        Срок зачисления: 1-3 рабочих дня. Комиссия платёжного провайдера будет удержана из суммы
-        вывода.
+        {{ t('masterScreens.masterFinance.fields.timingHint') }}
       </p>
 
       <template v-if="hasPayout">
@@ -170,13 +177,17 @@
           {{ amountError }}
         </p>
         <p v-if="!amountError && amountCents > 0" class="finance-view__hint">
-          Минимум {{ formatMoney(MIN_WITHDRAWAL_EUROS * 100, 'EUR', 'ru', true) }} · Комиссия
-          {{ formatMoney(WITHDRAWAL_FEE_EUROS * 100, 'EUR', 'ru', true) }} · Вы получите
-          {{ formattedNetAmount }}
+          {{
+            t('masterScreens.masterFinance.fields.feeBreakdown', {
+              min: formatMoney(MIN_WITHDRAWAL_EUROS * 100, 'EUR', getLocale(), true),
+              fee: formatMoney(WITHDRAWAL_FEE_EUROS * 100, 'EUR', getLocale(), true),
+              net: formattedNetAmount,
+            })
+          }}
         </p>
 
         <VButton variant="ghost" size="sm" class="finance-view__all" @click="fillMaxAmount">
-          Вывести все
+          {{ t('masterScreens.masterFinance.fields.withdrawAll') }}
         </VButton>
 
         <VButton
@@ -187,25 +198,25 @@
           class="finance-view__cta"
           @click="submitWithdrawal"
         >
-          Запросить вывод
+          {{ t('masterScreens.masterFinance.fields.requestWithdrawal') }}
         </VButton>
       </template>
 
       <p v-else class="finance-view__warning-text">
-        Сначала добавьте способ выплаты в разделе «Метод оплаты» выше.
+        {{ t('masterScreens.masterFinance.method.needMethodFirst') }}
       </p>
     </section>
 
     <!-- ===================== HISTORY ===================== -->
     <section class="finance-view__section">
-      <h2 class="finance-view__title">История выводов</h2>
+      <h2 class="finance-view__title">{{ t('masterScreens.masterFinance.withdrawalHistory') }}</h2>
 
       <div v-if="historyLoading && withdrawals.length === 0" class="finance-view__loader">
         <VLoader size="md" />
       </div>
 
       <p v-else-if="!historyLoading && withdrawals.length === 0" class="finance-view__empty-text">
-        Выводов ещё не было
+        {{ t('masterScreens.masterFinance.historyEmpty') }}
       </p>
 
       <div v-else class="finance-view__history">
@@ -219,7 +230,7 @@
           </span>
           <div class="finance-view__htext">
             <span class="finance-view__hamt">
-              {{ formatMoney(w.amount_cents, 'EUR', 'ru', true) }}
+              {{ formatMoney(w.amount_cents, 'EUR', getLocale(), true) }}
             </span>
             <span class="finance-view__hmeta">
               {{ withdrawalDate(w) }} • {{ maskedDetails(w.payout_details) }}
@@ -236,19 +247,21 @@
         class="finance-view__load-more"
         @click="loadMoreWithdrawals"
       >
-        Показать ещё
+        {{ t('common.showMore') }}
       </VButton>
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, reactive, onMounted, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import { VButton, VLoader, VInput, VSelect } from '@/components/ui'
 import { IconCheck, IconClose, IconPending } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
+import { getLocale } from '@/locales'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import { useMasterStore } from '@/stores/master'
 import {
@@ -282,19 +295,21 @@ const availableCents = computed(() => masterStore.profile?.available_cents ?? 0)
 const frozenCents = computed(() => masterStore.profile?.frozen_cents ?? 0)
 const hasPayout = computed(() => masterStore.profile?.payout != null)
 
-const formattedAvailable = computed(() => formatMoney(availableCents.value, 'EUR', 'ru', true))
+const formattedAvailable = computed(() =>
+  formatMoney(availableCents.value, 'EUR', getLocale(), true),
+)
 
-const formattedFrozen = computed(() => formatMoney(frozenCents.value, 'EUR', 'ru', true))
+const formattedFrozen = computed(() => formatMoney(frozenCents.value, 'EUR', getLocale(), true))
 
 // ---------------------------------------------------------------------------
 // Payout method ("saved card" = configured payout, Б — working backend kept)
 // ---------------------------------------------------------------------------
 
 const METHOD_OPTIONS = [
-  { value: 'bank_transfer', label: 'Банковский перевод (IBAN)' },
+  { value: 'bank_transfer', label: t('masterScreens.masterFinance.method.iban') },
   { value: 'paypal', label: 'PayPal' },
   { value: 'revolut', label: 'Revolut' },
-  { value: 'card', label: 'Перевод по номеру карты' },
+  { value: 'card', label: t('masterScreens.masterFinance.method.card') },
 ]
 
 const showPayoutForm = ref(false)
@@ -363,7 +378,7 @@ function buildPayoutBody(): PayoutDetails | null {
   clearFormErrors()
   if (payoutForm.method === 'bank_transfer') {
     if (!payoutForm.iban.trim()) {
-      formErrors.iban = 'IBAN обязателен'
+      formErrors.iban = t('masterScreens.masterFinance.validation.ibanRequired')
       return null
     }
     const details: Record<string, string> = { iban: payoutForm.iban.trim() }
@@ -373,14 +388,14 @@ function buildPayoutBody(): PayoutDetails | null {
   }
   if (payoutForm.method === 'paypal') {
     if (!payoutForm.email.trim() || !payoutForm.email.includes('@')) {
-      formErrors.email = 'Введите корректный email'
+      formErrors.email = t('masterScreens.masterFinance.validation.emailInvalid')
       return null
     }
     return { method: 'paypal', details: { email: payoutForm.email.trim() } }
   }
   if (payoutForm.method === 'revolut') {
     if (!payoutForm.tag.trim()) {
-      formErrors.tag = 'Укажите Revolut tag или телефон'
+      formErrors.tag = t('masterScreens.masterFinance.validation.revolutRequired')
       return null
     }
     const value = payoutForm.tag.trim()
@@ -391,7 +406,7 @@ function buildPayoutBody(): PayoutDetails | null {
     // В1=А: persist ONLY the card number (no CVV, no expiry). Digits only.
     const digits = payoutForm.cardNumber.replace(/\D/g, '')
     if (digits.length < 12 || digits.length > 19) {
-      formErrors.card = 'Введите корректный номер карты'
+      formErrors.card = t('masterScreens.masterFinance.validation.cardInvalid')
       return null
     }
     return { method: 'card', details: { card_number: digits } }
@@ -408,9 +423,9 @@ async function savePayout(): Promise<void> {
     const result = await updatePayoutDetails(body)
     if (masterStore.profile) masterStore.profile.payout = result
     showPayoutForm.value = false
-    toast.success('Реквизиты сохранены')
+    toast.success(t('masterScreens.masterFinance.toast.detailsSaved'))
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось сохранить реквизиты'))
+    toast.error(extractApiError(e, t('masterScreens.masterFinance.toast.detailsSaveFailed')))
   } finally {
     savingPayout.value = false
   }
@@ -423,22 +438,26 @@ function maskedDetails(payout: PayoutDetails): string {
     case 'bank_transfer': {
       const iban = (d['iban'] ?? '').replace(/\s/g, '')
       const last4 = iban.slice(-4)
-      return last4 ? `IBAN ···· ${last4}` : 'IBAN настроен'
+      return last4 ? `IBAN ···· ${last4}` : t('masterScreens.masterFinance.toast.ibanConfigured')
     }
     case 'paypal': {
       const email = d['email'] ?? ''
       const at = email.indexOf('@')
-      return at > 1 ? email[0] + '···' + email.slice(at) : email || 'Email настроен'
+      return at > 1
+        ? email[0] + '···' + email.slice(at)
+        : email || t('masterScreens.masterFinance.toast.emailConfigured')
     }
     case 'revolut':
-      return d['tag'] ?? d['phone'] ?? 'Настроено'
+      return d['tag'] ?? d['phone'] ?? t('masterScreens.masterFinance.toast.configured')
     case 'card': {
       const num = (d['card_number'] ?? '').replace(/\s/g, '')
       const last4 = num.slice(-4)
-      return last4 ? `Карта ···· ${last4}` : 'Карта настроена'
+      return last4
+        ? t('masterScreens.masterFinance.cardMasked', { last4 })
+        : t('masterScreens.masterFinance.toast.cardConfigured')
     }
     default:
-      return 'Настроено'
+      return t('masterScreens.masterFinance.toast.configured')
   }
 }
 
@@ -457,9 +476,9 @@ async function removePayout(): Promise<void> {
   try {
     await deletePayout()
     if (masterStore.profile) masterStore.profile.payout = null
-    toast.success('Способ выплаты удалён')
+    toast.success(t('masterScreens.masterFinance.toast.methodRemoved'))
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось удалить способ выплаты'))
+    toast.error(extractApiError(e, t('masterScreens.masterFinance.toast.methodRemoveFailed')))
   } finally {
     savingPayout.value = false
   }
@@ -486,12 +505,14 @@ const amountCents = computed((): number => eurStringToCents(amountInput.value))
 const amountError = computed((): string => {
   if (!amountInput.value) return ''
   const cents = amountCents.value
-  if (cents <= 0) return 'Введите корректную сумму'
+  if (cents <= 0) return t('masterScreens.masterFinance.validation.amountInvalid')
   if (cents < MIN_WITHDRAWAL_EUROS * 100) {
-    return `Минимальная сумма вывода ${formatMoney(MIN_WITHDRAWAL_EUROS * 100, 'EUR', 'ru', true)}`
+    return t('masterScreens.masterFinance.minWithdrawal', {
+      amount: formatMoney(MIN_WITHDRAWAL_EUROS * 100, 'EUR', getLocale(), true),
+    })
   }
   if (cents > availableCents.value) {
-    return 'Недостаточно средств'
+    return t('masterScreens.masterFinance.validation.insufficientFunds')
   }
   return ''
 })
@@ -499,9 +520,9 @@ const amountError = computed((): string => {
 /** Net amount master receives after fee deduction. */
 const formattedNetAmount = computed((): string => {
   const cents = amountCents.value
-  if (cents <= 0) return formatMoney(0, 'EUR', 'ru', true)
+  if (cents <= 0) return formatMoney(0, 'EUR', getLocale(), true)
   const net = Math.max(0, cents - WITHDRAWAL_FEE_EUROS * 100)
-  return formatMoney(net, 'EUR', 'ru', true)
+  return formatMoney(net, 'EUR', getLocale(), true)
 })
 
 async function submitWithdrawal(): Promise<void> {
@@ -512,14 +533,14 @@ async function submitWithdrawal(): Promise<void> {
   submitting.value = true
   try {
     await createWithdrawal(amountCents.value)
-    toast.success('Запрос на вывод отправлен. Ожидайте решения администратора.')
+    toast.success(t('masterScreens.masterFinance.toast.withdrawalSent'))
     amountInput.value = ''
     // Refresh profile to update available/frozen balances.
     await masterStore.fetchMyProfile(true)
     // Reload withdrawal history from start.
     await reloadHistory()
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось создать запрос'))
+    toast.error(extractApiError(e, t('masterScreens.masterFinance.toast.withdrawalFailed')))
   } finally {
     submitting.value = false
   }
@@ -548,7 +569,7 @@ async function reloadHistory(): Promise<void> {
     // Surface the failure instead of rendering an empty history as if
     // "no withdrawals yet" -- a master with pending payouts must not be
     // told they have none. Mirrors loadMoreWithdrawals below.
-    toast.error('Не удалось загрузить историю выводов')
+    toast.error(t('masterScreens.masterFinance.toast.historyLoadFailed'))
   } finally {
     historyLoading.value = false
   }
@@ -563,7 +584,7 @@ async function loadMoreWithdrawals(): Promise<void> {
     historyTotal.value = data.total
     historyOffset.value += data.items.length
   } catch {
-    toast.error('Не удалось загрузить историю выводов')
+    toast.error(t('masterScreens.masterFinance.toast.historyLoadFailed'))
   } finally {
     historyLoading.value = false
   }
@@ -574,9 +595,9 @@ async function loadMoreWithdrawals(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 const STATUS_LABEL: Record<WithdrawalStatus, string> = {
-  pending: 'На рассмотрении',
-  approved: 'Одобрен',
-  rejected: 'Отклонён',
+  pending: t('masterScreens.masterFinance.status.pending'),
+  approved: t('masterScreens.masterFinance.status.approved'),
+  rejected: t('masterScreens.masterFinance.status.rejected'),
 }
 
 function statusLabel(s: WithdrawalStatus): string {

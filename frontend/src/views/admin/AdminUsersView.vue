@@ -21,11 +21,11 @@
   <div class="admin-users">
     <header class="admin-users__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-users__title">Пользователи</h1>
+      <h1 class="admin-users__title">{{ t('adminScreens.adminUsers.title') }}</h1>
       <span class="admin-users__count">{{ headerCount }}</span>
     </header>
 
-    <VInput v-model="search" placeholder="Поиск по имени или Telegram ID" />
+    <VInput v-model="search" :placeholder="t('adminScreens.adminUsers.searchPlaceholder')" />
 
     <!-- Loading -->
     <div v-if="loading" class="admin-users__loader"><VLoader size="lg" /></div>
@@ -34,11 +34,11 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      title="Не удалось загрузить пользователей"
-      description="Проверьте соединение и попробуйте ещё раз"
+      :title="t('adminScreens.adminUsers.usersLoadFailed')"
+      :description="t('common.checkConnection')"
     >
       <template #action
-        ><VButton variant="primary" @click="load(true)">Повторить</VButton></template
+        ><VButton variant="primary" @click="load(true)">{{ t('common.retry') }}</VButton></template
       >
     </VEmptyState>
 
@@ -56,13 +56,15 @@
           </div>
 
           <VButton v-if="u.role === 'user'" variant="secondary" block @click="askMakeMaster(u)">
-            Сделать мастером
+            {{ t('adminScreens.adminUsers.makeMaster') }}
           </VButton>
         </div>
       </div>
 
       <div v-if="hasMore" class="admin-users__more">
-        <VButton variant="outline" :loading="loadingMore" @click="loadMore">Показать ещё</VButton>
+        <VButton variant="outline" :loading="loadingMore" @click="loadMore">{{
+          t('common.showMore')
+        }}</VButton>
       </div>
     </template>
 
@@ -74,7 +76,7 @@
     <VConfirmDialog
       :open="confirm.open"
       :message="confirm.message"
-      confirm-label="Назначить"
+      :confirm-label="t('adminScreens.adminUsers.appoint')"
       :loading="confirm.loading"
       @confirm="doMakeMaster"
       @cancel="closeConfirm"
@@ -83,6 +85,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -116,7 +119,7 @@ const hasMore = computed<boolean>(() => users.value.length < total.value)
 
 function nameOf(u: UserResponse): string {
   const name = [u.first_name, u.last_name].filter(Boolean).join(' ').trim()
-  return name || 'Без имени'
+  return name || t('adminScreens.adminUsers.noName')
 }
 
 const headerCount = computed<string>(() => (total.value ? String(total.value) : '—'))
@@ -134,13 +137,13 @@ const filtered = computed<UserResponse[]>(() => {
 })
 
 const emptyText = computed<string>(() =>
-  search.value.trim() ? 'Никого не найдено' : 'Пользователей пока нет',
+  search.value.trim() ? t('common.searchNoHits') : t('adminScreens.adminUsers.empty.title'),
 )
 
 function roleLabel(role: string): string {
-  if (role === 'admin') return 'Админ'
-  if (role === 'master') return 'Мастер'
-  return 'Пользователь'
+  if (role === 'admin') return t('adminScreens.adminUsers.roleAdmin')
+  if (role === 'master') return t('adminScreens.adminUsers.roleMaster')
+  return t('adminScreens.adminUsers.roleUser')
 }
 
 function roleVariant(role: string): 'success' | 'warning' | 'info' {
@@ -164,7 +167,7 @@ async function load(reset: boolean): Promise<void> {
     total.value = res.total
   } catch (e) {
     error.value = true
-    toast.error(extractApiError(e, 'Ошибка загрузки пользователей'))
+    toast.error(extractApiError(e, t('adminScreens.adminUsers.usersLoadError')))
   } finally {
     loading.value = false
     loadingMore.value = false
@@ -190,7 +193,7 @@ const confirm = reactive<{
 
 function askMakeMaster(u: UserResponse): void {
   confirm.target = u
-  confirm.message = `Назначить пользователя «${nameOf(u)}» мастером?`
+  confirm.message = t('adminScreens.adminUsers.promoteConfirm', { name: nameOf(u) })
   confirm.open = true
 }
 
@@ -205,12 +208,12 @@ async function doMakeMaster(): Promise<void> {
   confirm.loading = true
   try {
     await makeMaster(confirm.target.id)
-    toast.success('Пользователь назначен мастером')
+    toast.success(t('adminScreens.adminUsers.toast.promotedToMaster'))
     confirm.open = false
     confirm.target = null
     await load(true)
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось назначить мастером'))
+    toast.error(extractApiError(e, t('adminScreens.adminUsers.toast.promoteFailed')))
   } finally {
     confirm.loading = false
   }

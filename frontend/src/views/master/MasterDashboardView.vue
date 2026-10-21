@@ -59,12 +59,12 @@
           v-model="period"
           :options="PERIOD_OPTIONS"
           variant="toggle"
-          aria-label="Период статистики"
+          :aria-label="t('analytics.statsPeriod')"
         />
         <button
           class="master-dashboard__bell"
           type="button"
-          aria-label="Уведомления"
+          :aria-label="t('masterScreens.masterDashboard.notifications')"
           @click="onBell"
         >
           <span class="master-dashboard__bell-icon">
@@ -81,13 +81,13 @@
       <div class="master-dashboard__stats-grid">
         <VStatCard
           :value="practicesStat"
-          label="Практик"
+          :label="t('masterScreens.masterDashboard.statPractices')"
           :delta="practicesDelta"
           :delta-tone="practicesDeltaTone"
         />
         <VStatCard
           :value="participantsStat"
-          label="Участников"
+          :label="t('masterScreens.masterDashboard.statMembers')"
           :delta="participantsDelta"
           :delta-tone="participantsDeltaTone"
         />
@@ -96,7 +96,7 @@
       <!-- ================================================================
            МОИ ГРУППЫ (P2, PROMPT №591 -- was «Мои ученики» / master-students)
            ================================================================ -->
-      <VMenuRow label="Мои группы" @click="onGroups">
+      <VMenuRow :label="t('masterScreens.masterDashboard.myGroups')" @click="onGroups">
         <template #icon><IconGroup :size="24" /></template>
       </VMenuRow>
 
@@ -111,14 +111,18 @@
         block
         @click="router.push({ name: 'master-practice-new' })"
       >
-        Создать практику
+        {{ t('masterScreens.masterDashboard.createPractice') }}
       </VButton>
 
       <!-- ================================================================
            БЛИЖАЙШИЕ ПРАКТИКИ (up to 2)
            ================================================================ -->
       <h2 class="velo-section-title">
-        {{ nearestPractices.length > 1 ? 'Ближайшие практики' : 'Ближайшая практика' }}
+        {{
+          nearestPractices.length > 1
+            ? t('masterScreens.masterDashboard.nearest')
+            : t('masterScreens.masterDashboard.nearestOne')
+        }}
       </h2>
 
       <template v-if="masterStore.practicesUpcomingLoading && nearestPractices.length === 0">
@@ -194,7 +198,7 @@
               :disabled="retryingId === practice.id"
               @click="onRetryZoom(practice)"
             >
-              Повторить
+              {{ t('common.retry') }}
             </VButton>
             <VButton
               v-else
@@ -218,7 +222,7 @@
             variant="error"
             class="master-dashboard__zoom-note"
           >
-            Не удалось создать встречу Zoom
+            {{ t('masterScreens.masterDashboard.zoomCreateFailed') }}
           </VBadge>
         </div>
       </template>
@@ -227,7 +231,9 @@
         <VCard>
           <p class="master-dashboard__empty-text">
             {{
-              isNewMaster ? 'Данных пока нет — создайте первую практику' : 'Нет предстоящих практик'
+              isNewMaster
+                ? t('masterScreens.masterDashboard.emptyNewMaster')
+                : t('masterScreens.masterDashboard.emptyUpcoming')
             }}
           </p>
         </VCard>
@@ -250,6 +256,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -297,9 +304,9 @@ const toast = useToast()
 //    would silently keep the WEEK figures under a «Квартал» label). --
 const period = ref<'week' | 'month' | 'quarter'>('week')
 const PERIOD_OPTIONS: ReadonlyArray<{ value: 'week' | 'month' | 'quarter'; label: string }> = [
-  { value: 'week', label: 'Неделя' },
-  { value: 'month', label: 'Месяц' },
-  { value: 'quarter', label: 'Квартал' },
+  { value: 'week', label: t('common.periodWeek') },
+  { value: 'month', label: t('common.periodMonth') },
+  { value: 'quarter', label: t('masterScreens.masterDashboard.period.quarter') },
 ]
 
 // True for a brand-new master with no practices at all (zero state).
@@ -401,7 +408,7 @@ const nearestPractices = computed((): PracticeResponse[] =>
     .slice(0, 2),
 )
 
-// "Завтра, 07:00 • 45 мин" — rendered in the practice's own timezone (the master
+// t('masterScreens.masterDashboard.nextSession.example') — rendered in the practice's own timezone (the master
 // set it), matching MasterPracticesView.
 function practiceWhen(p: PracticeResponse): string {
   const day = formatDateShort(p.scheduled_at, p.timezone)
@@ -435,13 +442,13 @@ function zoomStateFor(p: PracticeResponse): ZoomEntryStateKind {
 // there whether he may start it; this button only stays honest.
 function onZoom(p: PracticeResponse): void {
   if (zoomStateFor(p) !== 'ready') {
-    toast.info('Встреча Zoom ещё готовится')
+    toast.info(t('masterScreens.masterDashboard.zoom.preparing'))
     return
   }
   void router.push({ name: 'master-practice-live', params: { practiceId: p.id } })
 }
 
-// A4 V2 (PROMPT №572): "Повторить" on a create_failed meeting. The endpoint
+// A4 V2 (PROMPT №572): t('common.retry') on a create_failed meeting. The endpoint
 // itself never raises for a Zoom-side failure (same "never blocks"
 // contract as publish) -- it resolves 200 either way, so success/failure
 // is read off the RETURNED zoom_meeting_status, not off a thrown error.
@@ -455,18 +462,18 @@ async function onRetryZoom(p: PracticeResponse): Promise<void> {
   try {
     const updated = await retryZoomMeeting(p.id)
     if (updated.zoom_meeting_status === 'active') {
-      toast.success('Встреча Zoom создана')
+      toast.success(t('masterScreens.masterDashboard.toast.zoomCreated'))
     } else {
-      toast.error('Всё ещё не удалось создать встречу. Попробуйте позже')
+      toast.error(t('masterScreens.masterDashboard.toast.zoomStillFailed'))
     }
     await masterStore.refreshMyPractices()
   } catch (e) {
     if (e instanceof ApiResponseError && e.code === 'zoom_meeting_not_failed') {
       // Recovered by itself (poller won the race) -- refresh, no error tone.
-      toast.info('Статус встречи уже обновился')
+      toast.info(t('masterScreens.masterDashboard.toast.zoomAlreadyUpdated'))
       await masterStore.refreshMyPractices()
     } else {
-      toast.error('Не удалось повторить попытку')
+      toast.error(t('masterScreens.masterDashboard.toast.retryFailed'))
     }
   } finally {
     retryingId.value = null

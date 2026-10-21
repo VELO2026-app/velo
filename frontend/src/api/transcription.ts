@@ -24,6 +24,8 @@
  * so Composer.vue keeps consuming exactly what it consumed before.
  */
 
+import i18n from '@/locales'
+
 import { blobToBase64 } from '@/utils/audio'
 
 import { getAuthToken } from './client'
@@ -39,13 +41,13 @@ const TRANSCRIBE_URL = '/api/v1/ai/transcribe'
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 const TIMEOUT_MS = 30000
 
-const GENERIC_ERROR = 'Сервис транскрибации недоступен'
-
 /**
- * Machine code -> the sentence the person reads.
+ * Machine code -> the sentence the person reads. The table lives in
+ * locales/ru/errors.json under `transcription` (tz-i18n 1.2) -- keys
+ * transcription.<code>, phrases verbatim what the JS table carried.
  *
- * Every entry the backend can raise is here; anything unlisted falls back to
- * GENERIC_ERROR rather than showing a raw identifier.
+ * Every entry the backend can raise is there; anything unlisted falls back
+ * to transcription.generic rather than showing a raw identifier.
  *
  * The vendor is deliberately absent from all of them. The old module said
  * «Закончился баланс OpenRouter» on a 402, which told a stranger both who we
@@ -55,14 +57,15 @@ const GENERIC_ERROR = 'Сервис транскрибации недоступ�
  * provider's own rate limit: that limit is on OUR key and counts everyone's
  * requests, so «слишком часто» addressed to this person would be false.
  */
-const MESSAGES: Record<string, string> = {
-  transcription_not_configured: 'Голосовой ввод недоступен',
-  transcription_unavailable: GENERIC_ERROR,
-  transcription_failed: GENERIC_ERROR,
-  speech_not_recognized: 'Не удалось распознать речь',
-  audio_too_large: 'Запись слишком длинная',
-  audio_invalid: 'Не удалось обработать запись',
-  unauthorized: 'Сессия истекла, войдите заново',
+function genericError(): string {
+  return i18n.global.t('transcription.generic')
+}
+
+function transcriptionError(code: string | null): string {
+  if (code && i18n.global.te(`transcription.${code}`, 'ru')) {
+    return i18n.global.t(`transcription.${code}`)
+  }
+  return genericError()
 }
 
 /** Read the machine code out of our own error envelope: {error, message}. */
@@ -77,7 +80,7 @@ export async function transcribeAudio(audio: Blob): Promise<TranscribeResult> {
   try {
     base64 = await blobToBase64(audio)
   } catch {
-    return { ok: false, error: GENERIC_ERROR }
+    return { ok: false, error: genericError() }
   }
 
   const controller = new AbortController()
@@ -97,7 +100,7 @@ export async function transcribeAudio(audio: Blob): Promise<TranscribeResult> {
     })
   } catch {
     clearTimeout(timer)
-    return { ok: false, error: GENERIC_ERROR }
+    return { ok: false, error: genericError() }
   }
   clearTimeout(timer)
 
@@ -105,12 +108,12 @@ export async function transcribeAudio(audio: Blob): Promise<TranscribeResult> {
   try {
     payload = await response.json()
   } catch {
-    return { ok: false, error: GENERIC_ERROR }
+    return { ok: false, error: genericError() }
   }
 
   if (!response.ok) {
     const code = codeOf(payload)
-    return { ok: false, error: (code && MESSAGES[code]) || GENERIC_ERROR }
+    return { ok: false, error: transcriptionError(code) }
   }
 
   const text = (payload as { text?: unknown }).text
@@ -119,7 +122,7 @@ export async function transcribeAudio(audio: Blob): Promise<TranscribeResult> {
   // guard covers a response shape we did not expect -- never a silent paste
   // of nothing into the composer.
   if (typeof text !== 'string' || text.trim() === '') {
-    return { ok: false, error: 'Не удалось распознать речь' }
+    return { ok: false, error: i18n.global.t('transcription.speech_not_recognized') }
   }
   return { ok: true, text }
 }

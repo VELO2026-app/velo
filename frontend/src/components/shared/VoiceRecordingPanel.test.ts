@@ -7,6 +7,7 @@
 // processing contract.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import VoiceRecordingPanel from './VoiceRecordingPanel.vue'
@@ -28,7 +29,7 @@ function mount(
     ...props,
     onCancel: () => events.push('cancel'),
     onStop: () => events.push('stop'),
-  })
+  }).use(createTestI18n())
   app.mount(host)
   return {
     events,

@@ -28,6 +28,7 @@ export function brandingParams(hash: string): SchoolBrandingParams {
 
 /** Первая буква названия для монограммы (как в прототипе: без кавычек). */
 export function schoolLetter(name: string): string {
+  // 'Ш' -- golden-port fallback (see logo.ts); no live caller relies on it.
   return (name.replace(/^["«'«]*/, '')[0] || 'Ш').toUpperCase()
 }
 

@@ -39,8 +39,11 @@
 <template>
   <div class="ea">
     <header class="ea__header">
-      <VBackButton aria-label="Назад на главную" @click="goBack" />
-      <h1 class="ea__title">Новое событие</h1>
+      <VBackButton
+        :aria-label="t('user.screens.externalActivityCreate.backAria')"
+        @click="goBack"
+      />
+      <h1 class="ea__title">{{ t('user.screens.externalActivityCreate.title') }}</h1>
     </header>
 
     <div ref="bodyEl" class="ea__body">
@@ -50,13 +53,15 @@
       <!--
       <div class="ea__legend">
         <IconRequired class="ea__legend-seal" :size="22" />
-        <span>— поля, обязательные для заполнения</span>
+        <span>— {{ t('ui.legendRequired') }}</span>
       </div>
       -->
 
       <!-- ================= Когда произошло событие ================= -->
       <section class="ea__section">
-        <h2 class="velo-section-title">Когда произошло событие <span class="ea__req">*</span></h2>
+        <h2 class="velo-section-title">
+          {{ t('user.screens.externalActivityCreate.section.when') }}<span class="ea__req">*</span>
+        </h2>
 
         <div class="ea__field" data-field="date">
           <button
@@ -65,7 +70,7 @@
             :class="{ 'ea__picker--empty': !date, 'ea__picker--error': !!errors.date }"
             @click="showDate = true"
           >
-            {{ date ? dateDisplay : 'Дата' }}
+            {{ date ? dateDisplay : t('ui.pickerDate') }}
           </button>
           <span class="ea__field-error" :class="{ 'ea__field-error--show': !!errors.date }">{{
             errors.date
@@ -82,7 +87,7 @@
             }"
             @click="showTime = true"
           >
-            {{ time || 'Время' }}
+            {{ time || t('ui.pickerTime') }}
           </button>
           <span
             class="ea__field-error"
@@ -94,7 +99,10 @@
 
       <!-- ================= Выбор активности ================= -->
       <section class="ea__section">
-        <h2 class="velo-section-title">Выбор активности <span class="ea__req">*</span></h2>
+        <h2 class="velo-section-title">
+          {{ t('user.screens.externalActivityCreate.section.activity')
+          }}<span class="ea__req">*</span>
+        </h2>
 
         <div class="ea__activity" data-field="activity">
           <div class="ea__chips">
@@ -119,7 +127,7 @@
               <button
                 type="button"
                 class="ea__chip-remove"
-                aria-label="Убрать свой вариант"
+                :aria-label="t('user.screens.externalActivityCreate.custom.remove')"
                 @click="removeCustomChip"
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -138,9 +146,9 @@
               v-model="customInput"
               class="ea__custom-input"
               type="text"
-              placeholder="Укажите ваш вариант"
+              :placeholder="t('practice.customVariant')"
               :maxlength="CUSTOM_NAME_MAX"
-              aria-label="Свой вариант активности"
+              :aria-label="t('user.screens.externalActivityCreate.custom.title')"
               :disabled="!!customChip"
               @input="onCustomInput"
               @keydown.enter.prevent="commitCustom"
@@ -148,7 +156,7 @@
             <button
               type="button"
               class="ea__custom-commit"
-              aria-label="Выбрать свой вариант"
+              :aria-label="t('user.screens.externalActivityCreate.custom.pick')"
               :disabled="!!customChip"
               @click="commitCustom"
             >
@@ -177,12 +185,14 @@
            backend mood 422 (contract drift), which no interaction on this
            screen can otherwise produce. -->
       <section v-if="!EXTERNAL_ACTIVITY_MOOD_HIDDEN" class="ea__section">
-        <h2 class="velo-section-title">Мое состояние после</h2>
+        <h2 class="velo-section-title">
+          {{ t('user.screens.externalActivityCreate.section.moodAfter') }}
+        </h2>
 
         <div class="ea__state-block" data-field="state">
           <MoodSlider
             v-model="moodScore"
-            aria-label="Оценка состояния от 1 до 10"
+            :aria-label="t('user.screens.externalActivityCreate.moodAria')"
             :disabled="diaryStore.externalActivitySubmitting"
           />
         </div>
@@ -193,10 +203,12 @@
 
       <!-- ================= Мысли ================= -->
       <section class="ea__section">
-        <h2 class="velo-section-title">Мысли</h2>
+        <h2 class="velo-section-title">
+          {{ t('user.screens.externalActivityCreate.section.thoughts') }}
+        </h2>
         <div class="ea__thoughts" data-field="thoughts">
           <VTextarea
-            label="Мысли"
+            :label="t('user.screens.externalActivityCreate.thoughts.label')"
             hide-label
             :rows="5"
             :maxlength="THOUGHTS_MAX"
@@ -225,7 +237,7 @@
           class="ea__save-spinner"
           aria-hidden="true"
         />
-        <span class="ea__save-label">Сохранить</span>
+        <span class="ea__save-label">{{ t('ui.save') }}</span>
       </button>
     </div>
 
@@ -233,14 +245,14 @@
       :open="showDate"
       :model-value="date"
       :max="todayIso"
-      title="Дата события"
+      :title="t('user.screens.externalActivityCreate.fields.date')"
       @update:model-value="onDatePicked"
       @close="showDate = false"
     />
     <TimePickerSheet
       :open="showTime"
       :model-value="time"
-      title="Время события"
+      :title="t('user.screens.externalActivityCreate.fields.time')"
       @update:model-value="onTimePicked"
       @close="showTime = false"
     />
@@ -248,6 +260,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { DateTime } from 'luxon'
@@ -273,12 +286,12 @@ const timezone = useViewerTimezone()
 // "UI key -> backend enum" adapter the task doc planned is this table itself:
 // one place to read, nothing to drift.
 const ACTIVITY_OPTIONS: ReadonlyArray<{ value: ExternalActivityType; label: string }> = [
-  { value: 'vocal', label: 'Вокал' },
-  { value: 'nail_standing', label: 'Гвоздестояние' },
-  { value: 'meditation', label: 'Медитация' },
-  { value: 'massage', label: 'Массаж' },
-  { value: 'yoga', label: 'Йога' },
-  { value: 'dance', label: 'Танцы' },
+  { value: 'vocal', label: t('user.screens.externalActivityCreate.activity.vocal') },
+  { value: 'nail_standing', label: t('user.screens.externalActivityCreate.activity.nailStanding') },
+  { value: 'meditation', label: t('user.screens.externalActivityCreate.activity.meditation') },
+  { value: 'massage', label: t('user.screens.externalActivityCreate.activity.massage') },
+  { value: 'yoga', label: t('user.screens.externalActivityCreate.activity.yoga') },
+  { value: 'dance', label: t('user.screens.externalActivityCreate.activity.dance') },
 ]
 
 // «Мое состояние» is the FE-85 unified MoodSlider (PM-9 branch 1 + the
@@ -292,8 +305,7 @@ const ACTIVITY_OPTIONS: ReadonlyArray<{ value: ExternalActivityType; label: stri
 // thoughts <= 10000. Enforced here so a 422 length error is unreachable.
 const CUSTOM_NAME_MAX = 120
 const THOUGHTS_MAX = 10000
-const THOUGHTS_PLACEHOLDER =
-  'Напишите, что это было и что с вами произошло. Вы можете вернуться к рефлексии позже'
+const THOUGHTS_PLACEHOLDER = t('user.screens.externalActivityCreate.thoughts.hint')
 
 // -- Draft: everything empty at start (no prefilled now / default state) ------
 const date = ref('') // YYYY-MM-DD, the viewer's own calendar
@@ -328,7 +340,7 @@ const bodyEl = ref<HTMLElement | null>(null)
 const zone = computed(() => timezone.value ?? 'UTC')
 const todayIso = computed(() => DateTime.now().setZone(zone.value).toISODate() ?? '')
 
-// Friendly date for the trigger field, e.g. "25 янв. 2026" -- the same recipe
+// Friendly date for the trigger field, e.g. «25 янв. 2026» -- the same recipe
 // CreatePracticeView's own date trigger uses.
 const dateDisplay = computed((): string =>
   date.value ? `${formatShortDate(`${date.value}T12:00:00`)} ${date.value.slice(0, 4)}` : '',
@@ -369,7 +381,7 @@ function onCustomInput(): void {
 function commitCustom(): void {
   const name = customInput.value.trim()
   if (name.length === 0) {
-    errors.value.custom = 'Укажите ваш вариант'
+    errors.value.custom = t('practice.customVariant')
     return
   }
   customChip.value = name
@@ -411,18 +423,22 @@ function fieldHasError(key: (typeof FIELD_ORDER)[number]): boolean {
 }
 
 function validate(): boolean {
-  errors.value.date = date.value ? '' : 'Выберите дату'
-  errors.value.time = time.value ? '' : 'Выберите время'
-  errors.value.activity = selectedActivity.value ? '' : 'Выберите активность'
+  errors.value.date = date.value ? '' : t('ui.pickerChooseDate')
+  errors.value.time = time.value ? '' : t('user.screens.externalActivityCreate.picker.time')
+  errors.value.activity = selectedActivity.value
+    ? ''
+    : t('user.screens.externalActivityCreate.picker.activity')
   errors.value.custom =
-    selectedActivity.value === 'custom' && customChip.value === null ? 'Укажите ваш вариант' : ''
+    selectedActivity.value === 'custom' && customChip.value === null
+      ? t('practice.customVariant')
+      : ''
   // The mood never blocks: the slider stands on the visible default, so
   // errors.state exists only as the sink for a backend mood 422
   // (applyFieldErrors) -- no interaction on this screen can set it.
   errors.value.future = ''
   const ts = occurredAt()
   if (ts && ts > DateTime.now()) {
-    errors.value.future = 'Событие не может быть в будущем'
+    errors.value.future = t('user.screens.externalActivityCreate.validation.future')
   }
   return !FIELD_ORDER.some(fieldHasError)
 }
@@ -491,7 +507,7 @@ async function onSubmit(): Promise<void> {
   })
 
   if (result.ok) {
-    toast.success('Событие добавлено')
+    toast.success(t('user.screens.externalActivityCreate.toast.saved'))
     void router.push({ name: 'user-diary' })
     return
   }
@@ -501,7 +517,7 @@ async function onSubmit(): Promise<void> {
   }
   // Unknown/network failure: stay on the form, keep the draft, one honest
   // toast -- never a success and never a navigation.
-  toast.error('Не удалось сохранить событие')
+  toast.error(t('user.screens.externalActivityCreate.toast.saveFailed'))
 }
 </script>
 

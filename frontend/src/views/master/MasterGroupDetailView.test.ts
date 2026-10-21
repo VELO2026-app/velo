@@ -13,6 +13,7 @@
 // (same pattern as MasterGroupsView.test.ts's writeText mock).
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import MasterGroupDetailView from '@/views/master/MasterGroupDetailView.vue'
@@ -63,7 +64,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(MasterGroupDetailView)
+  app = createApp(MasterGroupDetailView).use(createTestI18n())
   app.mount(host)
   return host
 }

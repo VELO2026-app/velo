@@ -1,0 +1,532 @@
+{
+  "_comment": "VELO Frontend -- en seed for the timezone city picker (utils/timezoneCities.ts). English display names for the same curated rows; the live list is the BACKEND catalog (BE-157). city -> EN display name; iana -> IANA zone id exactly as the backend stores it; q -> lowercase search haystack.",
+  "curated": [
+    {
+      "city": "Moscow",
+      "iana": "Europe/Moscow",
+      "q": "moscow moskva"
+    },
+    {
+      "city": "Saint Petersburg",
+      "iana": "Europe/Moscow",
+      "q": "spb piter saint petersburg sankt"
+    },
+    {
+      "city": "London",
+      "iana": "Europe/London",
+      "q": "london"
+    },
+    {
+      "city": "Manchester",
+      "iana": "Europe/London",
+      "q": "manchester"
+    },
+    {
+      "city": "Edinburgh",
+      "iana": "Europe/London",
+      "q": "edinburgh"
+    },
+    {
+      "city": "Dublin",
+      "iana": "Europe/Dublin",
+      "q": "dublin"
+    },
+    {
+      "city": "Paris",
+      "iana": "Europe/Paris",
+      "q": "paris"
+    },
+    {
+      "city": "Lyon",
+      "iana": "Europe/Paris",
+      "q": "lyon"
+    },
+    {
+      "city": "Marseille",
+      "iana": "Europe/Paris",
+      "q": "marseille"
+    },
+    {
+      "city": "Nice",
+      "iana": "Europe/Paris",
+      "q": "nice nizza"
+    },
+    {
+      "city": "Berlin",
+      "iana": "Europe/Berlin",
+      "q": "berlin"
+    },
+    {
+      "city": "Munich",
+      "iana": "Europe/Berlin",
+      "q": "munich munchen muenchen"
+    },
+    {
+      "city": "Frankfurt",
+      "iana": "Europe/Berlin",
+      "q": "frankfurt"
+    },
+    {
+      "city": "Hamburg",
+      "iana": "Europe/Berlin",
+      "q": "hamburg"
+    },
+    {
+      "city": "Cologne",
+      "iana": "Europe/Berlin",
+      "q": "cologne koln koeln"
+    },
+    {
+      "city": "Amsterdam",
+      "iana": "Europe/Amsterdam",
+      "q": "amsterdam"
+    },
+    {
+      "city": "Rotterdam",
+      "iana": "Europe/Amsterdam",
+      "q": "rotterdam"
+    },
+    {
+      "city": "Brussels",
+      "iana": "Europe/Brussels",
+      "q": "brussels bruxelles"
+    },
+    {
+      "city": "Luxembourg",
+      "iana": "Europe/Luxembourg",
+      "q": "luxembourg"
+    },
+    {
+      "city": "Zurich",
+      "iana": "Europe/Zurich",
+      "q": "zurich"
+    },
+    {
+      "city": "Geneva",
+      "iana": "Europe/Zurich",
+      "q": "geneva geneve"
+    },
+    {
+      "city": "Bern",
+      "iana": "Europe/Zurich",
+      "q": "bern"
+    },
+    {
+      "city": "Vienna",
+      "iana": "Europe/Vienna",
+      "q": "vienna wien"
+    },
+    {
+      "city": "Madrid",
+      "iana": "Europe/Madrid",
+      "q": "madrid"
+    },
+    {
+      "city": "Barcelona",
+      "iana": "Europe/Madrid",
+      "q": "barcelona"
+    },
+    {
+      "city": "Valencia",
+      "iana": "Europe/Madrid",
+      "q": "valencia"
+    },
+    {
+      "city": "Seville",
+      "iana": "Europe/Madrid",
+      "q": "seville sevilla"
+    },
+    {
+      "city": "Lisbon",
+      "iana": "Europe/Lisbon",
+      "q": "lisbon lisboa"
+    },
+    {
+      "city": "Porto",
+      "iana": "Europe/Lisbon",
+      "q": "porto oporto"
+    },
+    {
+      "city": "Rome",
+      "iana": "Europe/Rome",
+      "q": "rome roma"
+    },
+    {
+      "city": "Milan",
+      "iana": "Europe/Rome",
+      "q": "milan milano"
+    },
+    {
+      "city": "Naples",
+      "iana": "Europe/Rome",
+      "q": "naples napoli"
+    },
+    {
+      "city": "Florence",
+      "iana": "Europe/Rome",
+      "q": "florence firenze"
+    },
+    {
+      "city": "Venice",
+      "iana": "Europe/Rome",
+      "q": "venice venezia"
+    },
+    {
+      "city": "Stockholm",
+      "iana": "Europe/Stockholm",
+      "q": "stockholm"
+    },
+    {
+      "city": "Gothenburg",
+      "iana": "Europe/Stockholm",
+      "q": "gothenburg goteborg"
+    },
+    {
+      "city": "Oslo",
+      "iana": "Europe/Oslo",
+      "q": "oslo"
+    },
+    {
+      "city": "Copenhagen",
+      "iana": "Europe/Copenhagen",
+      "q": "copenhagen kobenhavn"
+    },
+    {
+      "city": "Helsinki",
+      "iana": "Europe/Helsinki",
+      "q": "helsinki"
+    },
+    {
+      "city": "Reykjavik",
+      "iana": "Atlantic/Reykjavik",
+      "q": "reykjavik"
+    },
+    {
+      "city": "Tallinn",
+      "iana": "Europe/Tallinn",
+      "q": "tallinn"
+    },
+    {
+      "city": "Riga",
+      "iana": "Europe/Riga",
+      "q": "riga"
+    },
+    {
+      "city": "Vilnius",
+      "iana": "Europe/Vilnius",
+      "q": "vilnius"
+    },
+    {
+      "city": "Warsaw",
+      "iana": "Europe/Warsaw",
+      "q": "warsaw warszawa"
+    },
+    {
+      "city": "Krakow",
+      "iana": "Europe/Warsaw",
+      "q": "krakow cracow"
+    },
+    {
+      "city": "Prague",
+      "iana": "Europe/Prague",
+      "q": "prague praha"
+    },
+    {
+      "city": "Bratislava",
+      "iana": "Europe/Bratislava",
+      "q": "bratislava"
+    },
+    {
+      "city": "Budapest",
+      "iana": "Europe/Budapest",
+      "q": "budapest"
+    },
+    {
+      "city": "Bucharest",
+      "iana": "Europe/Bucharest",
+      "q": "bucharest bucuresti"
+    },
+    {
+      "city": "Sofia",
+      "iana": "Europe/Sofia",
+      "q": "sofia"
+    },
+    {
+      "city": "Athens",
+      "iana": "Europe/Athens",
+      "q": "athens athina"
+    },
+    {
+      "city": "Zagreb",
+      "iana": "Europe/Zagreb",
+      "q": "zagreb"
+    },
+    {
+      "city": "Ljubljana",
+      "iana": "Europe/Ljubljana",
+      "q": "ljubljana"
+    },
+    {
+      "city": "Belgrade",
+      "iana": "Europe/Belgrade",
+      "q": "belgrade beograd"
+    },
+    {
+      "city": "Sarajevo",
+      "iana": "Europe/Sarajevo",
+      "q": "sarajevo"
+    },
+    {
+      "city": "Chisinau",
+      "iana": "Europe/Chisinau",
+      "q": "chisinau kishinev"
+    },
+    {
+      "city": "Kyiv",
+      "iana": "Europe/Kyiv",
+      "q": "kyiv kiev"
+    },
+    {
+      "city": "Minsk",
+      "iana": "Europe/Minsk",
+      "q": "minsk"
+    },
+    {
+      "city": "Istanbul",
+      "iana": "Europe/Istanbul",
+      "q": "istanbul"
+    },
+    {
+      "city": "Ankara",
+      "iana": "Europe/Istanbul",
+      "q": "ankara"
+    },
+    {
+      "city": "Tbilisi",
+      "iana": "Asia/Tbilisi",
+      "q": "tbilisi"
+    },
+    {
+      "city": "Yerevan",
+      "iana": "Asia/Yerevan",
+      "q": "yerevan"
+    },
+    {
+      "city": "Baku",
+      "iana": "Asia/Baku",
+      "q": "baku"
+    },
+    {
+      "city": "Dubai",
+      "iana": "Asia/Dubai",
+      "q": "dubai"
+    },
+    {
+      "city": "Abu Dhabi",
+      "iana": "Asia/Dubai",
+      "q": "abu dhabi"
+    },
+    {
+      "city": "Doha",
+      "iana": "Asia/Qatar",
+      "q": "doha"
+    },
+    {
+      "city": "Riyadh",
+      "iana": "Asia/Riyadh",
+      "q": "riyadh"
+    },
+    {
+      "city": "Tel Aviv",
+      "iana": "Asia/Jerusalem",
+      "q": "tel aviv"
+    },
+    {
+      "city": "Jerusalem",
+      "iana": "Asia/Jerusalem",
+      "q": "jerusalem"
+    },
+    {
+      "city": "Almaty",
+      "iana": "Asia/Almaty",
+      "q": "almaty"
+    },
+    {
+      "city": "Astana",
+      "iana": "Asia/Almaty",
+      "q": "astana nur sultan"
+    },
+    {
+      "city": "Tashkent",
+      "iana": "Asia/Tashkent",
+      "q": "tashkent"
+    },
+    {
+      "city": "New Delhi",
+      "iana": "Asia/Kolkata",
+      "q": "delhi new delhi"
+    },
+    {
+      "city": "Mumbai",
+      "iana": "Asia/Kolkata",
+      "q": "mumbai bombay"
+    },
+    {
+      "city": "Bangkok",
+      "iana": "Asia/Bangkok",
+      "q": "bangkok"
+    },
+    {
+      "city": "Singapore",
+      "iana": "Asia/Singapore",
+      "q": "singapore"
+    },
+    {
+      "city": "Hong Kong",
+      "iana": "Asia/Hong_Kong",
+      "q": "hong kong hongkong"
+    },
+    {
+      "city": "Beijing",
+      "iana": "Asia/Shanghai",
+      "q": "beijing peking"
+    },
+    {
+      "city": "Shanghai",
+      "iana": "Asia/Shanghai",
+      "q": "shanghai"
+    },
+    {
+      "city": "Seoul",
+      "iana": "Asia/Seoul",
+      "q": "seoul"
+    },
+    {
+      "city": "Tokyo",
+      "iana": "Asia/Tokyo",
+      "q": "tokyo"
+    },
+    {
+      "city": "Jakarta",
+      "iana": "Asia/Jakarta",
+      "q": "jakarta"
+    },
+    {
+      "city": "Cairo",
+      "iana": "Africa/Cairo",
+      "q": "cairo"
+    },
+    {
+      "city": "Johannesburg",
+      "iana": "Africa/Johannesburg",
+      "q": "johannesburg"
+    },
+    {
+      "city": "Nairobi",
+      "iana": "Africa/Nairobi",
+      "q": "nairobi"
+    },
+    {
+      "city": "Lagos",
+      "iana": "Africa/Lagos",
+      "q": "lagos"
+    },
+    {
+      "city": "New York",
+      "iana": "America/New_York",
+      "q": "new york nyc"
+    },
+    {
+      "city": "Washington",
+      "iana": "America/New_York",
+      "q": "washington dc"
+    },
+    {
+      "city": "Toronto",
+      "iana": "America/Toronto",
+      "q": "toronto"
+    },
+    {
+      "city": "Chicago",
+      "iana": "America/Chicago",
+      "q": "chicago"
+    },
+    {
+      "city": "Denver",
+      "iana": "America/Denver",
+      "q": "denver"
+    },
+    {
+      "city": "Los Angeles",
+      "iana": "America/Los_Angeles",
+      "q": "los angeles la"
+    },
+    {
+      "city": "San Francisco",
+      "iana": "America/Los_Angeles",
+      "q": "san francisco sf"
+    },
+    {
+      "city": "Mexico City",
+      "iana": "America/Mexico_City",
+      "q": "mexico city"
+    },
+    {
+      "city": "Bogota",
+      "iana": "America/Bogota",
+      "q": "bogota"
+    },
+    {
+      "city": "Lima",
+      "iana": "America/Lima",
+      "q": "lima"
+    },
+    {
+      "city": "Sao Paulo",
+      "iana": "America/Sao_Paulo",
+      "q": "sao paulo"
+    },
+    {
+      "city": "Buenos Aires",
+      "iana": "America/Argentina/Buenos_Aires",
+      "q": "buenos aires"
+    },
+    {
+      "city": "Santiago",
+      "iana": "America/Santiago",
+      "q": "santiago"
+    },
+    {
+      "city": "Sydney",
+      "iana": "Australia/Sydney",
+      "q": "sydney"
+    },
+    {
+      "city": "Melbourne",
+      "iana": "Australia/Melbourne",
+      "q": "melbourne"
+    },
+    {
+      "city": "Perth",
+      "iana": "Australia/Perth",
+      "q": "perth"
+    },
+    {
+      "city": "Auckland",
+      "iana": "Pacific/Auckland",
+      "q": "auckland"
+    },
+    {
+      "city": "Wellington",
+      "iana": "Pacific/Auckland",
+      "q": "wellington"
+    }
+  ],
+  "aliases": [
+    {
+      "city": "Rio de Janeiro",
+      "iana": "America/Sao_Paulo",
+      "q": "rio de janeiro rio-de-janeiro rio"
+    }
+  ]
+}

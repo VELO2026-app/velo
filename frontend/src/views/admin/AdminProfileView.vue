@@ -12,25 +12,28 @@
 
 <template>
   <div class="admin-profile">
-    <VHeader title="Профиль" show-back @back="router.back()" />
+    <VHeader :title="t('adminScreens.adminProfile.title')" show-back @back="router.back()" />
 
     <!-- Header -->
     <VCard class="admin-profile__header">
       <VAvatar :name="displayName" size="xl" />
       <div class="admin-profile__header-info">
         <h1 class="admin-profile__name">{{ displayName }}</h1>
-        <VBadge variant="info">Администратор</VBadge>
+        <VBadge variant="info">{{ t('adminScreens.adminProfile.administrator') }}</VBadge>
       </div>
     </VCard>
 
     <!-- Switch to user mode -->
     <VCard class="admin-profile__section">
-      <div class="admin-profile__section-title">РЕЖИМ ПРОСМОТРА</div>
+      <div class="admin-profile__section-title">
+        {{ t('adminScreens.adminProfile.readOnlyBadge') }}
+      </div>
       <p class="admin-profile__section-desc">
-        Перейдите в интерфейс пользователя, чтобы просматривать каталог и бронировать практики.
+        {{ t('adminScreens.adminProfile.switchNote') }}
       </p>
       <VButton variant="secondary" @click="switchToUserMode">
-        Открыть как пользователь<IconArrowRight
+        {{ t('adminScreens.adminProfile.switchCta')
+        }}<IconArrowRight
           :size="18"
           :style="{ marginLeft: 'var(--space-2)', verticalAlign: 'middle' }"
         />
@@ -42,12 +45,15 @@
 
     <!-- Logout -->
     <VCard class="admin-profile__section">
-      <VButton variant="ghost" :loading="loggingOut" @click="onLogout"> Выйти </VButton>
+      <VButton variant="ghost" :loading="loggingOut" @click="onLogout">{{
+        t('adminScreens.adminProfile.logout')
+      }}</VButton>
     </VCard>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { VAvatar, VBadge, VButton, VCard } from '@/components/ui'
@@ -64,9 +70,9 @@ const uiStore = useUiStore()
 const loggingOut = ref(false)
 
 const displayName = computed(() => {
-  if (!authStore.user) return 'Администратор'
+  if (!authStore.user) return t('adminScreens.adminProfile.administrator')
   const parts = [authStore.user.first_name, authStore.user.last_name].filter(Boolean)
-  return parts.length > 0 ? parts.join(' ') : 'Администратор'
+  return parts.length > 0 ? parts.join(' ') : t('adminScreens.adminProfile.administrator')
 })
 
 // -- Switch to user mode --

@@ -36,17 +36,21 @@
   <div class="group-detail">
     <VHeader :title="headerTitle" show-back @back="router.push({ name: 'master-groups' })">
       <template v-if="kind === 'custom'" #action>
-        <VMenu ariaLabel="Меню группы">
+        <VMenu :ariaLabel="t('masterScreens.masterGroupDetail.menuAria')">
           <template #default="{ close }">
             <VMenuItem
               :icon="IconShare"
-              ariaLabel="Пригласить в группу"
+              :ariaLabel="t('masterScreens.masterGroupDetail.inviteCta')"
               @click="onHeaderInviteClick(close)"
             />
-            <VMenuItem :icon="IconPen" ariaLabel="Изменить" @click="onRenameClick(close)" />
+            <VMenuItem
+              :icon="IconPen"
+              :ariaLabel="t('masterScreens.masterGroupDetail.editAria')"
+              @click="onRenameClick(close)"
+            />
             <VMenuItem
               :icon="IconTrash"
-              ariaLabel="Удалить группу"
+              :ariaLabel="t('masterScreens.masterGroupDetail.deleteCta')"
               danger
               @click="onDeleteClick(close)"
             />
@@ -65,8 +69,8 @@
         <div class="group-detail__search-field">
           <VInput
             v-model="search"
-            placeholder="Искать ученика..."
-            aria-label="Искать ученика"
+            :placeholder="t('masterScreens.masterGroupDetail.search.placeholder')"
+            :aria-label="t('masterScreens.masterGroupDetail.search.aria')"
             @focus="onFieldFocus"
           />
         </div>
@@ -81,10 +85,10 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        title="Не удалось загрузить участников"
+        :title="t('masterScreens.masterGroupDetail.toast.loadMembersFailed')"
         :description="error"
       >
-        <VButton size="sm" variant="outline" @click="retry">Повторить</VButton>
+        <VButton size="sm" variant="outline" @click="retry">{{ t('common.retry') }}</VButton>
       </VEmptyState>
 
       <template v-else>
@@ -119,8 +123,10 @@
         <VEmptyState
           v-if="members.length === 0"
           icon="group"
-          :title="search ? 'Никого не найдено' : 'Участников пока нет'"
-          :description="search ? 'Попробуйте изменить запрос' : emptyDescription"
+          :title="
+            search ? t('common.searchNoHits') : t('masterScreens.masterGroupDetail.empty.noMembers')
+          "
+          :description="search ? t('common.searchHint') : emptyDescription"
         />
         <!-- Empty-group invite CTA REMOVED here (owner Q8, PROMPT №610): the
              header's own «⋯» menu (line ~30 above, kind==='custom') is now
@@ -140,17 +146,21 @@
          prop, and was missed when this dialog was built. -->
     <VBottomSheet
       :open="renameOpen"
-      title="Изменить название и описание"
+      :title="t('masterScreens.masterGroupDetail.renameCta')"
       compact-title
-      save-label="Сохранить"
+      :save-label="t('ui.save')"
       @save="onRenameSave"
       @close="renameOpen = false"
     >
-      <VInput v-model="renameName" label="Название" placeholder="Название группы" />
+      <VInput
+        v-model="renameName"
+        :label="t('masterScreens.masterGroupDetail.fields.name')"
+        :placeholder="t('masterScreens.masterGroupDetail.fields.namePlaceholder')"
+      />
       <VTextarea
         v-model="renameDescription"
-        label="Описание"
-        placeholder="Описание"
+        :label="t('masterScreens.masterGroupDetail.fields.description')"
+        :placeholder="t('masterScreens.masterGroupDetail.fields.description')"
         :rows="3"
         autogrow
       />
@@ -160,7 +170,7 @@
     <VConfirmDialog
       :open="deleteConfirmOpen"
       :message="deleteMessage"
-      confirm-label="Удалить"
+      :confirm-label="t('ui.delete')"
       danger
       :loading="deleting"
       @confirm="onDeleteConfirm"
@@ -170,6 +180,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -221,7 +232,9 @@ const groupMeta = ref<GroupListItem | null>(null)
 const groupName = computed(() =>
   groupMeta.value ? groupMeta.value.name : String(route.query.name ?? ''),
 )
-const headerTitle = computed(() => `Группа "${groupName.value}"`)
+const headerTitle = computed(() =>
+  t('masterScreens.masterGroupDetail.rename.title', { name: groupName.value }),
+)
 const groupDescription = computed(() =>
   groupMeta.value ? (groupMeta.value.description ?? '') : String(route.query.description ?? ''),
 )
@@ -235,7 +248,9 @@ const kind = computed((): GroupKind => {
 })
 
 const emptyDescription = computed(() =>
-  kind.value === 'deleted' ? 'Никого не заблокировали' : 'Добавьте первого ученика',
+  kind.value === 'deleted'
+    ? t('masterScreens.masterGroupDetail.empty.deletedEmpty')
+    : t('masterScreens.masterGroupDetail.empty.addFirst'),
 )
 
 const members = ref<GroupMemberItem[]>([])
@@ -267,7 +282,7 @@ async function loadGroups(): Promise<void> {
       // being absent means genuinely gone or invalid -- reuse this
       // screen's own existing error state rather than leaving a blank
       // header (owner Q12's own explicit warning).
-      error.value = 'Группа не найдена'
+      error.value = t('masterScreens.masterGroupDetail.notFound')
     }
   } catch {
     // Best-effort: load() below (members) has its own independent error
@@ -283,7 +298,7 @@ async function load(): Promise<void> {
     const res = await getGroupMembers(groupId.value, search.value)
     members.value = res.items
   } catch (e) {
-    error.value = extractApiError(e, 'Попробуйте ещё раз')
+    error.value = extractApiError(e, t('common.tryAgain'))
   } finally {
     loading.value = false
   }
@@ -343,9 +358,9 @@ async function onInviteClick(): Promise<void> {
     // Clipboard needs no backend — write the link straight to the
     // clipboard (B2, same pattern as MasterGroupsView's row invite).
     await navigator.clipboard.writeText(res.invite_url)
-    toast.success('Ссылка скопирована')
+    toast.success(t('common.linkCopied'))
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось создать ссылку'))
+    toast.error(extractApiError(e, t('masterScreens.masterGroupDetail.toast.linkCreateFailed')))
   } finally {
     inviting.value = false
   }
@@ -380,15 +395,15 @@ async function onRenameSave(): Promise<void> {
     // rewriting the URL, same source of truth loadGroups() already is.
     await loadGroups()
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось переименовать группу'))
+    toast.error(extractApiError(e, t('masterScreens.masterGroupDetail.toast.renameFailed')))
   }
 }
 
 // -- Delete (G2, PROMPT №609 -- moved from MasterGroupsView's card menu) --
 const deleteConfirmOpen = ref(false)
 const deleting = ref(false)
-const deleteMessage = computed(
-  () => `Удалить группу «${groupName.value}»? Участники вернутся в группу «Ученики».`,
+const deleteMessage = computed(() =>
+  t('masterScreens.masterGroupDetail.rename.deleteConfirm', { name: groupName.value }),
 )
 function onDeleteClick(close: () => void): void {
   deleteConfirmOpen.value = true
@@ -411,7 +426,7 @@ async function onDeleteConfirm(): Promise<void> {
     if (e instanceof ApiResponseError && e.code === 'group_in_use') {
       toast.error(errorMessage('group_in_use'))
     } else {
-      toast.error(extractApiError(e, 'Не удалось удалить группу'))
+      toast.error(extractApiError(e, t('masterScreens.masterGroupDetail.toast.deleteFailed')))
     }
   } finally {
     deleting.value = false

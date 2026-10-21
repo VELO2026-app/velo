@@ -30,7 +30,7 @@
     <!-- A11Y-AUDIT-20260810 P1: no visible title (the logo carries the wordmark) --
          sr-only heading so screen-reader users navigating by heading still get a
          page label for this screen. -->
-    <h1 class="velo-sr-only">Добро пожаловать</h1>
+    <h1 class="velo-sr-only">{{ t('auth.welcomeSr') }}</h1>
     <div class="welcome__logo">
       <!-- White mandala variant, large -- matches Figma 01_Welcome.
            The logo already contains the VELO wordmark, so no text heading. -->
@@ -40,7 +40,7 @@
          centered logo lands at the SAME vertical position on both screens and
          does not jump on the loading -> welcome transition. -->
     <div class="welcome__below">
-      <p class="welcome__message">Пространство для практики<br />и внутреннего развития</p>
+      <p class="welcome__message">{{ t('auth.tagline1') }}<br />{{ t('auth.tagline2') }}</p>
 
       <div class="welcome__actions">
         <button
@@ -48,7 +48,7 @@
           class="welcome__button welcome__button--primary"
           @click="$emit('enter')"
         >
-          Войти
+          {{ t('auth.enter') }}
         </button>
       </div>
     </div>
@@ -56,10 +56,11 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { VeloLogo } from '@/components/ui'
 
 defineEmits<{
-  /** "Войти" tapped -- continue into the app (carousel or dashboard). */
+  /** t('auth.login') tapped -- continue into the app (carousel or dashboard). */
   enter: []
 }>()
 </script>

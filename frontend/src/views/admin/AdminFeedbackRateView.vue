@@ -22,23 +22,25 @@
     <VEmptyState
       v-else-if="error"
       icon="warning"
-      title="Не удалось загрузить метрику"
+      :title="t('adminScreens.adminCommon.loadMetricFailed')"
       :description="error"
     >
-      <VButton size="sm" variant="outline" @click="load">Повторить</VButton>
+      <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
     </VEmptyState>
 
     <template v-else>
-      <VMetricHero :value="leaveRate" label="Оставляют отзыв">
+      <VMetricHero :value="leaveRate" :label="t('adminScreens.adminFeedbackRate.leaveRate')">
         <template #icon><IconFeedback :size="28" /></template>
       </VMetricHero>
 
       <div class="admin-detail__stats2">
-        <VStatCard :value="visited" label="Посетили" />
-        <VStatCard :value="leftReview" label="Оставили отзыв" />
+        <VStatCard :value="visited" :label="t('adminScreens.adminFeedbackRate.visited')" />
+        <VStatCard :value="leftReview" :label="t('adminScreens.adminFeedbackRate.leftReview')" />
       </div>
 
-      <h3 class="admin-detail__section">Распределение оценок</h3>
+      <h3 class="admin-detail__section">
+        {{ t('adminScreens.adminFeedbackRate.distributionratings') }}
+      </h3>
       <VCard class="admin-detail__rating">
         <VRatingBar
           v-for="row in ratingRows"
@@ -55,6 +57,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -120,7 +123,7 @@ async function load(): Promise<void> {
   try {
     data.value = await getFeedbackMetric(period, offset)
   } catch (e) {
-    error.value = extractApiError(e, 'Ошибка загрузки')
+    error.value = extractApiError(e, t('common.loadError'))
   } finally {
     loading.value = false
   }

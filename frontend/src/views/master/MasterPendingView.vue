@@ -33,9 +33,13 @@
         <VLoader size="lg" />
       </template>
       <VCard v-else-if="statusError" class="pending-view__card">
-        <h2 class="pending-view__title">Не удалось обновить статус заявки</h2>
-        <p class="pending-view__subtitle">Проверьте соединение и попробуйте ещё раз.</p>
-        <VButton variant="primary" block @click="refreshStatus">Повторить</VButton>
+        <h2 class="pending-view__title">
+          {{ t('masterScreens.masterPending.toast.statusUpdateFailed') }}
+        </h2>
+        <p class="pending-view__subtitle">
+          {{ t('masterScreens.masterPending.connectionHint') }}
+        </p>
+        <VButton variant="primary" block @click="refreshStatus">{{ t('common.retry') }}</VButton>
       </VCard>
 
       <!-- ================= APPROVED (verified) =================
@@ -49,14 +53,15 @@
             alt=""
             class="pending-view__illu pending-view__illu--lg"
           />
-          <h2 class="pending-view__title">Ваша заявка одобрена!</h2>
+          <h2 class="pending-view__title">
+            {{ t('masterScreens.masterPending.approved.title') }}
+          </h2>
           <p class="pending-view__subtitle">
-            Переключитесь в режим мастера, чтобы открыть кабинет. Вернуться в режим пользователя
-            можно в любой момент из настроек.
+            {{ t('masterScreens.masterPending.switchHint') }}
           </p>
           <div class="pending-view__actions">
             <VButton variant="primary" block :loading="switching" @click="enterMasterMode">
-              Войти в кабинет
+              {{ t('masterScreens.masterPending.enterCabinet') }}
             </VButton>
           </div>
         </VCard>
@@ -70,20 +75,26 @@
             alt=""
             class="pending-view__illu pending-view__illu--lg"
           />
-          <h2 class="pending-view__title">Спасибо за заявку!</h2>
-          <p class="pending-view__subtitle">К сожалению, мы пока не можем одобрить вашу заявку.</p>
+          <h2 class="pending-view__title">
+            {{ t('masterScreens.masterPending.thanksForApplying') }}
+          </h2>
+          <p class="pending-view__subtitle">
+            {{ t('masterScreens.masterPending.rejected.text') }}
+          </p>
 
           <div class="pending-view__reason">
-            <div class="pending-view__reason-label">Причина:</div>
+            <div class="pending-view__reason-label">
+              {{ t('masterScreens.masterPending.reasonLabel') }}
+            </div>
             <div class="pending-view__reason-text">{{ rejectionReason }}</div>
           </div>
 
           <div class="pending-view__actions">
             <VButton variant="primary" block @click="router.push({ name: 'master-support' })">
-              Написать в поддержку
+              {{ t('masterScreens.masterPending.contactSupport') }}
             </VButton>
             <VButton variant="outline" block @click="router.push({ name: 'master-apply' })">
-              Подать новую заявку
+              {{ t('masterScreens.masterPending.reapply') }}
             </VButton>
           </div>
         </VCard>
@@ -97,12 +108,18 @@
       <template v-else>
         <VCard class="pending-view__card">
           <img src="/onboarding/master-verdict-sent.svg" alt="" class="pending-view__illu" />
-          <h2 class="pending-view__title">Заявка отправлена!</h2>
-          <p class="pending-view__subtitle">Заявка на проверке у администратора.</p>
+          <h2 class="pending-view__title">
+            {{ t('masterScreens.masterPending.toast.sent') }}
+          </h2>
+          <p class="pending-view__subtitle">
+            {{ t('masterScreens.masterPending.underReview') }}
+          </p>
           <div class="pending-view__actions">
-            <VButton variant="outline" block @click="refreshStatus">Обновить статус</VButton>
+            <VButton variant="outline" block @click="refreshStatus">{{
+              t('masterScreens.masterPending.refreshStatus')
+            }}</VButton>
             <VButton variant="ghost" block @click="router.push({ name: 'user-dashboard' })">
-              На главную
+              {{ t('common.backHome') }}
             </VButton>
           </div>
           <button
@@ -110,7 +127,7 @@
             class="pending-view__withdraw-link"
             @click="confirmWithdrawOpen = true"
           >
-            Отозвать заявку
+            {{ t('masterScreens.masterPending.revoke') }}
           </button>
         </VCard>
       </template>
@@ -118,8 +135,8 @@
 
     <VConfirmDialog
       :open="confirmWithdrawOpen"
-      message="Отозвать заявку? Вы вернётесь к обычному аккаунту пользователя. Подать новую заявку можно в любой момент."
-      confirm-label="Отозвать"
+      :message="t('masterScreens.masterPending.withdrawConfirm')"
+      :confirm-label="t('masterScreens.masterPending.withdrawCta')"
       danger
       :loading="withdrawing"
       @confirm="onWithdraw"
@@ -129,6 +146,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { VButton, VLoader, VCard, VConfirmDialog } from '@/components/ui'
@@ -189,7 +207,7 @@ const rejectionReason = computed((): string => {
   return (
     masterStore.profile?.rejection_reason ??
     authStore.masterApplication?.rejection_reason ??
-    'Заявка не прошла верификацию. Свяжитесь с поддержкой для повторной заявки.'
+    t('masterScreens.masterPending.rejected.contactSupport')
   )
 })
 
@@ -248,7 +266,7 @@ async function enterMasterMode(): Promise<void> {
     }
     void router.push({ name: 'master-dashboard' })
   } catch {
-    toast.error('Не удалось переключиться в режим мастера')
+    toast.error(t('masterScreens.masterPending.toast.switchFailed'))
   } finally {
     switching.value = false
   }
@@ -268,13 +286,13 @@ async function onWithdraw(): Promise<void> {
     // guard) doesn't mistake a stale session for a still-pending applicant.
     sessionStorage.removeItem(MASTER_APPLIED_KEY)
     await authStore.fetchMe()
-    toast.success('Заявка отозвана')
+    toast.success(t('masterScreens.masterPending.toast.withdrawn'))
     void router.replace({ name: 'user-dashboard' })
   } catch (e) {
     // 409 means someone else (e.g. an admin) already acted on it between
     // opening this dialog and confirming -- a generic message covers both
     // that race and any other failure without guessing which happened.
-    toast.error(extractApiError(e, 'Не удалось отозвать заявку'))
+    toast.error(extractApiError(e, t('masterScreens.masterPending.toast.withdrawFailed')))
   } finally {
     withdrawing.value = false
     confirmWithdrawOpen.value = false

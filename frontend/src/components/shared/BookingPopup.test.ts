@@ -14,6 +14,7 @@
 // Assertions are literals with the zone math in comments (house style).
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, h, nextTick, type App } from 'vue'
 import { createPinia, setActivePinia, type Pinia } from 'pinia'
@@ -76,7 +77,9 @@ let pinia: Pinia | null = null
 function mountPopup(p: PracticeResponse): void {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp({ render: () => h(BookingPopup, { practice: p, open: true }) })
+  app = createApp({ render: () => h(BookingPopup, { practice: p, open: true }) }).use(
+    createTestI18n(),
+  )
   app.use(pinia!)
   app.mount(host)
 }

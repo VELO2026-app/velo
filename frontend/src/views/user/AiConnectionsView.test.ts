@@ -7,6 +7,7 @@
 // looked up in document.body, the page itself in the mount host.
 // =============================================================================
 
+import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import AiConnectionsView from '@/views/user/AiConnectionsView.vue'
@@ -71,7 +72,7 @@ let setItem: ReturnType<typeof vi.spyOn>
 function mount(): void {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AiConnectionsView)
+  app = createApp(AiConnectionsView).use(createTestI18n())
   app.mount(host)
 }
 
@@ -150,7 +151,7 @@ describe('AiConnectionsView', () => {
     it('lists the tokens: prefix shown, revoked ones without a revoke button', async () => {
       vi.mocked(mcpApi.listMcpTokens).mockResolvedValue(
         list([item('a'), item('b', { revoked_at: '2026-10-11T11:00:00Z' })]),
-        )
+      )
       mount()
       await flush()
       const rows = host!.querySelectorAll('[data-test="token-row"]')
@@ -165,7 +166,7 @@ describe('AiConnectionsView', () => {
     it('an OAuth connection shows what it is, never its rotating prefix (BE-141)', async () => {
       vi.mocked(mcpApi.listMcpTokens).mockResolvedValue(
         list([item('o', { kind: 'oauth', name: 'Claude', prefix: 'fedcba9876543210' })]),
-        )
+      )
       mount()
       await flush()
       const row = host!.querySelector('[data-test="token-row"]')!
@@ -502,9 +503,7 @@ describe('BE-150 layout', () => {
   })
 
   it('no button sign-in on this server: the steps are not promised, the token is', async () => {
-    vi.mocked(mcpApi.listMcpTokens).mockResolvedValue(
-      list([], { oauth_connect_available: false }),
-    )
+    vi.mocked(mcpApi.listMcpTokens).mockResolvedValue(list([], { oauth_connect_available: false }))
     mount()
     await flush()
     expect(text('[data-test="mcp-url"]')).toBe(`${BASE}/mcp`)
@@ -561,9 +560,7 @@ describe('BE-150 layout', () => {
   })
 
   it('the new texts are in the product type: "—" and "→", never "--" or "->"', async () => {
-    vi.mocked(mcpApi.listMcpTokens).mockResolvedValue(
-      list([], { oauth_connect_available: false }),
-    )
+    vi.mocked(mcpApi.listMcpTokens).mockResolvedValue(list([], { oauth_connect_available: false }))
     mount()
     await flush()
     await openDev()

@@ -70,9 +70,17 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useAuth, isSchoolInviteStartParam } from '@/composables/useAuth'
 import { useAuthStore } from '@/stores/auth'
+import {
+  applyUserLanguage,
+  availableLocales,
+  clearLocaleHint,
+  loadLocale,
+  setLocale,
+} from '@/locales'
+import { INSTANCE } from '@/platform/instance'
 import { platform } from '@/platform'
 import { useBackgroundStabilizer } from '@/composables/useBackgroundStabilizer'
 import { useViewportGeometry } from '@/composables/useViewportGeometry'
@@ -88,16 +96,40 @@ import BotAccessHint from '@/views/auth/BotAccessHint.vue'
 import WelcomeView from '@/views/auth/WelcomeView.vue'
 import OnboardingView from '@/views/auth/OnboardingView.vue'
 
-const {
-  isReady,
-  isAuthenticated,
-  isLoggingOut,
-  restoreUnreachable,
-  botAccessHint,
-  initAuth,
-} = useAuth()
+const { isReady, isAuthenticated, isLoggingOut, restoreUnreachable, botAccessHint, initAuth } =
+  useAuth()
 const authStore = useAuthStore()
 const inTelegram = platform.name === 'telegram'
+
+// tz-i18n 0.3: the server owns the language (User.language, normalized by
+// the backend to en/de/es/ru); the UI follows it the moment the user record
+// arrives or changes (profile edit, phase-5 switcher).
+watch(
+  () => authStore.user?.language,
+  (language) => {
+    // Logout (user -> null): drop the boot hint and return to the default
+    // locale -- a signed-out device must not keep the personal language.
+    if (language == null) {
+      clearLocaleHint()
+      void setLocale(INSTANCE.defaultLocale)
+      return
+    }
+    applyUserLanguage(language)
+  },
+)
+
+// Prefetch the other catalog locales shortly after mount (tz-i18n phase 5):
+// warms the lazy chunk cache in the background so a switch is an instant
+// same-frame flip, not a network wait. loadLocale, NEVER setLocale -- warming
+// must not switch: a setLocale loop over availableLocales() ended every mount
+// on the last locale (en), silently reverting the UI to English two seconds
+// in. A plain timeout -- idle enough not to compete with the boot requests,
+// soon enough to warm before a tap.
+onMounted(() => {
+  setTimeout(() => {
+    for (const locale of availableLocales()) void loadLocale(locale)
+  }, 2000)
+})
 
 // Pin the fixed photo-background against the iOS/Telegram keyboard viewport
 // shift (the "dancing background"). Mounted once here, on the app root.
