@@ -347,15 +347,6 @@ for (const [root, fs] of rootsByFile) {
   if (fs.size > 1) collisions.push(`${root}: ${[...fs].join(', ')}`)
 }
 
-if (process.env.DEBUG_KEY) {
-  console.error('DEBUG add used:', usedExact.has('adminScreens.adminCatalog.add'))
-  console.error(
-    'DEBUG srcFiles:',
-    srcFiles.length,
-    srcFiles.filter((f) => f.includes('AdminCatalog')).length,
-  )
-  console.error('DEBUG usedExact size:', usedExact.size, 'dyn:', [...dynamicPrefixes])
-}
 let failed = false
 if (missing.length > 0) {
   failed = true
