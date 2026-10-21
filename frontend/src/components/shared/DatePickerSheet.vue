@@ -95,6 +95,7 @@
 import { ref, computed, watch } from 'vue'
 import { getLocale, t } from '@/locales'
 import { daysInMonth, firstWeekdayMonFirst, shiftMonthParts } from '@/utils/calendarMath'
+import { weekdayAbbrUpper } from '@/utils/displayHelpers'
 import { VBottomSheet, VWheel } from '@/components/ui'
 
 // tz-i18n 2.2b: title fallback via shared.datePicker.title; save/nav labels
@@ -129,7 +130,7 @@ const MONTHS = Array.from({ length: 12 }, (_, m) => {
   )
   return name.charAt(0).toUpperCase() + name.slice(1)
 })
-const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7].map((d) => t(`display.weekdayAbbr.${d}`).toUpperCase())
+const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7].map(weekdayAbbrUpper)
 
 const mode = ref<'calendar' | 'wheel'>('calendar')
 

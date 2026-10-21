@@ -25,7 +25,7 @@
   <div class="admin-list">
     <header class="admin-list__top">
       <VBackButton @click="router.back()" />
-      <h1 class="admin-list__title">{{ t('adminScreens.adminMasters.mastera') }}</h1>
+      <h1 class="admin-list__title">{{ t('adminScreens.adminMasters.masters') }}</h1>
       <span class="admin-list__count">{{ headerCount }}</span>
     </header>
 
@@ -217,7 +217,7 @@ const segOptions = computed<SegmentOption[]>(() => [
   { value: 'all', label: t('common.all'), badge: total.value || undefined },
   {
     value: 'pending',
-    label: t('adminScreens.adminMasters.proverka'),
+    label: t('adminScreens.adminMasters.review'),
     badge: statusCount('pending'),
   },
   {
@@ -232,7 +232,7 @@ const segOptions = computed<SegmentOption[]>(() => [
   },
   {
     value: 'suspended',
-    label: t('adminScreens.adminMasters.zablok'),
+    label: t('adminScreens.adminMasters.blockedShort'),
     badge: statusCount('suspended'),
   },
   {

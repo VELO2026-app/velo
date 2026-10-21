@@ -127,7 +127,7 @@
       <!-- Выручка -->
       <div class="admin-dashboard__section">
         <span class="admin-dashboard__section-title">{{
-          t('adminScreens.adminDashboard.vyruchka')
+          t('adminScreens.adminDashboard.revenue')
         }}</span>
       </div>
       <VCard class="admin-dashboard__revenue">
@@ -183,7 +183,7 @@
       <!-- Система: пользователи + заявки на смену методов -->
       <div class="admin-dashboard__section">
         <span class="admin-dashboard__section-title">{{
-          t('adminScreens.adminDashboard.sistema')
+          t('adminScreens.adminDashboard.system')
         }}</span>
       </div>
       <VListRow

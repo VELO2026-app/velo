@@ -2,9 +2,15 @@
 // VELO Frontend -- i18n test helper (tz-i18n 0.4)
 // =============================================================================
 //
-// A FRESH instance per mounting test app: tests must not share locale state
-// through a module singleton (a test that switches the locale would leak
-// into the next file in the same worker).
+// A FRESH instance per mounting test app. Scope note (tz-i18n 0.4 reality
+// check): components do NOT use useI18n()/$t -- they import the module
+// singleton t from '@/locales', so rendered text follows the SINGLETON, not
+// this instance. What actually isolates test files from each other is the
+// vitest default per-file isolation (forks pool, fresh module registry per
+// file); the two files that mutate the real singleton (localeHint.test.ts,
+// TimezoneSettingsView.test.ts) reset it in afterEach. Keep it that way:
+// do not disable isolation, and any new singleton-mutating test must reset
+// the same way.
 //
 // locale 'ru' + the verbatim catalog, so existing text assertions keep
 // passing untouched (tz-i18n §4.5). Warnings off: a missing key must not

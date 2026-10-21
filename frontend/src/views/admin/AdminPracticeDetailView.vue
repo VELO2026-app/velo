@@ -20,7 +20,7 @@
     <header class="admin-detail__top">
       <VBackButton @click="router.back()" />
       <span class="admin-detail__title">{{
-        t('adminScreens.adminPracticeDetail.Detalipractices')
+        t('adminScreens.adminPracticeDetail.practiceDetails')
       }}</span>
     </header>
 
@@ -70,7 +70,7 @@
         <h3 class="admin-detail__section admin-detail__section--first">Zoom</h3>
         <div class="admin-detail__zoom-row">
           <span class="admin-detail__zoom-label">{{
-            t('adminScreens.adminPracticeDetail.statusVstrechi')
+            t('adminScreens.adminPracticeDetail.meetingStatus')
           }}</span>
           <VBadge :variant="zoomStatusBadge.variant">{{ zoomStatusBadge.label }}</VBadge>
         </div>
@@ -158,7 +158,7 @@
         </div>
         <VCard v-else
           ><p class="admin-detail__empty">
-            {{ t('adminScreens.adminPracticeDetail.nodata') }}
+            {{ t('adminScreens.adminPracticeDetail.noData') }}
           </p></VCard
         >
       </template>
@@ -240,9 +240,9 @@ const ZOOM_STATUS_BADGES: Record<
   string,
   { label: string; variant: 'success' | 'error' | 'muted' }
 > = {
-  active: { label: t('adminScreens.adminPracticeDetail.aktivna'), variant: 'success' },
+  active: { label: t('adminScreens.adminPracticeDetail.active'), variant: 'success' },
   pending_creation: {
-    label: t('adminScreens.adminPracticeDetail.Ozhidaetcreation'),
+    label: t('adminScreens.adminPracticeDetail.awaitingCreation'),
     variant: 'muted',
   },
   create_failed: {

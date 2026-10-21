@@ -31,14 +31,20 @@ const DEFAULT_LOCALE = 'ru'
 // every locale folder under src/locales (ru canonical; others must keep
 // key parity with it -- fallbackLocale covers gaps, but the gate reports
 // them so the translation progress is measurable and can only grow)
-const localeDirs = readdirSync('src/locales').filter((name) => {
-  const p = join('src/locales', name)
-  return statSync(p).isDirectory() && readdirSync(p).some((f) => f.endsWith('.json'))
-}).sort()
-const filesFor = (locale) => readdirSync(join('src/locales', locale)).filter((f) => f.endsWith('.json')).sort()
+const localeDirs = readdirSync('src/locales')
+  .filter((name) => {
+    const p = join('src/locales', name)
+    return statSync(p).isDirectory() && readdirSync(p).some((f) => f.endsWith('.json'))
+  })
+  .sort()
+const filesFor = (locale) =>
+  readdirSync(join('src/locales', locale))
+    .filter((f) => f.endsWith('.json'))
+    .sort()
 const catalogOf = (locale) => {
   const catalog = {}
-  for (const f of filesFor(locale)) Object.assign(catalog, JSON.parse(readFileSync(join('src/locales', locale, f), 'utf8')))
+  for (const f of filesFor(locale))
+    Object.assign(catalog, JSON.parse(readFileSync(join('src/locales', locale, f), 'utf8')))
   return catalog
 }
 const catalog = catalogOf(DEFAULT_LOCALE)
@@ -64,7 +70,6 @@ const BLOCK_COMMENT = /\/\*[\s\S]*?\*\//g
 const LINE_COMMENT = /\/\/.*/g
 const HTML_COMMENT = /<!--[\s\S]*?-->/g
 const KEY_CALL = /\bt\(\s*(['"`])([^'"`]+)\1/g
-
 
 // Quote-aware comment stripper: removes // and /* */ only OUTSIDE string
 // literals (regex comment-stripping once ate half a file because the HTML
@@ -109,7 +114,6 @@ function stripJsComments(src) {
   return out
 }
 
-
 const usedExact = new Set()
 const dynamicPrefixes = new Set()
 for (const p of srcFiles) {
@@ -118,7 +122,7 @@ for (const p of srcFiles) {
   // HTML comment once swallowed the whole template under JS rules); the
   // script block gets the quote-aware JS stripper.
   const tplMatch = // order-agnostic: some SFCs put <script> first
-  raw.match(/<template>[\s\S]*<\/template>/)
+    raw.match(/<template>[\s\S]*<\/template>/)
   const scriptMatch = raw.match(/<script[^>]*>([\s\S]*?)<\/script>/)
   // Template refs are scanned WITH their HTML comments: a hidden-but
   // commented-out block (the "legend: HIDDEN for now" pattern) is a live
@@ -159,7 +163,12 @@ for (const path of usedExact) {
 const DATA_ROOTS = new Set(['errors', 'storeErrors', 'transcription'])
 const SEED_FILES = new Set(['timezones.json', 'dates.json', 'languages.json', 'taxonomy.json'])
 const unusedSkippedFiles = new Set(
-  files.filter((f) => SEED_FILES.has(f)).map((f) => Object.keys(JSON.parse(readFileSync(join('src/locales', DEFAULT_LOCALE, f), 'utf8')))[0]),
+  files
+    .filter((f) => SEED_FILES.has(f))
+    .map(
+      (f) =>
+        Object.keys(JSON.parse(readFileSync(join('src/locales', DEFAULT_LOCALE, f), 'utf8')))[0],
+    ),
 )
 const isDynUsed = (path) => {
   for (const pre of dynamicPrefixes) {
@@ -187,7 +196,8 @@ const flatDotted = []
 function walkFlat(node, path) {
   if (node != null && typeof node === 'object') {
     for (const k of Object.keys(node)) {
-      if (k.includes('.')) flatDotted.push(`${path ? `${path}.` : ''}${k} = ${String(node[k]).slice(0, 50)}`)
+      if (k.includes('.'))
+        flatDotted.push(`${path ? `${path}.` : ''}${k} = ${String(node[k]).slice(0, 50)}`)
       else walkFlat(node[k], path ? `${path}.${k}` : k)
     }
   }
@@ -235,17 +245,29 @@ for (const locale of localeDirs) {
   // parity: every canonical (referenced-or-not) ru path must exist here
   const ruPaths = []
   function walkRu(node, path) {
-    if (node != null && typeof node === 'object') { for (const k of Object.keys(node)) walkRu(node[k], path ? `${path}.${k}` : k); return }
+    if (node != null && typeof node === 'object') {
+      for (const k of Object.keys(node)) walkRu(node[k], path ? `${path}.${k}` : k)
+      return
+    }
     ruPaths.push(path)
   }
   walkRu(catalog, '')
-  const missing = ruPaths.filter((p) => !p.includes('_comment') && resolveLocale(cat, p) === undefined)
+  const missing = ruPaths.filter(
+    (p) => !p.includes('_comment') && resolveLocale(cat, p) === undefined,
+  )
   if (missing.length > 0) parityMissing[locale] = missing
   // compile every message the locale actually has
   function walkCompileLocale(node, path) {
-    if (node != null && typeof node === 'object') { for (const k of Object.keys(node)) walkCompileLocale(node[k], path ? `${path}.${k}` : k); return }
+    if (node != null && typeof node === 'object') {
+      for (const k of Object.keys(node)) walkCompileLocale(node[k], path ? `${path}.${k}` : k)
+      return
+    }
     if (typeof node !== 'string' || path.includes('_comment')) return
-    try { compileI18n.global.t(path) } catch (e) { foreignCompileFails.push(`${locale}: ${path} :: ${String(e.message).slice(0, 90)}`) }
+    try {
+      compileI18n.global.t(path)
+    } catch (e) {
+      foreignCompileFails.push(`${locale}: ${path} :: ${String(e.message).slice(0, 90)}`)
+    }
   }
   walkCompileLocale(cat, '')
   function walkFlatLocale(node, path) {
@@ -273,12 +295,43 @@ for (const locale of localeDirs) {
   compileI18n.global.setLocaleMessage(DEFAULT_LOCALE, catalogOf(locale))
   const cat = catalogOf(locale)
   function walkC(node, path) {
-    if (node != null && typeof node === 'object') { for (const k of Object.keys(node)) walkC(node[k], path ? `${path}.${k}` : k); return }
+    if (node != null && typeof node === 'object') {
+      for (const k of Object.keys(node)) walkC(node[k], path ? `${path}.${k}` : k)
+      return
+    }
     if (typeof node !== 'string' || path.includes('_comment')) return
-    try { compileI18n.global.t(path) } catch { /* counted above */ }
+    try {
+      compileI18n.global.t(path)
+    } catch {
+      /* counted above */
+    }
   }
   walkC(cat, '')
   compileI18n.global.setLocaleMessage(DEFAULT_LOCALE, catalog)
+}
+
+// -- 2e. ERROR_CODES <-> errors catalog parity ---------------------------------
+// api/errorMessages.ts maps every backend code to errors.<code>; the errors
+// root is exempt from the unused-check as catalog-as-data, so THIS check is
+// what keeps the list and the catalog from drifting apart (a code added to
+// ERROR_CODES with no phrase would silently render errors.generic forever;
+// a phrase with no code is dead weight the list no longer explains).
+const errorCodesSrc = readFileSync(join('src', 'api', 'errorMessages.ts'), 'utf8')
+const listMatch = errorCodesSrc.match(/export const ERROR_CODES = \[([\s\S]*?)\] as const/)
+if (!listMatch) throw new Error('key-audit: cannot parse ERROR_CODES in src/api/errorMessages.ts')
+const errorCodes = [...listMatch[1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1])
+const errorCodeMismatches = []
+for (const locale of localeDirs) {
+  const errRoot = catalogOf(locale).errors ?? {}
+  for (const code of errorCodes) {
+    if (!(code in errRoot))
+      errorCodeMismatches.push(`${locale}: errors.${code} missing (in ERROR_CODES)`)
+  }
+  for (const key of Object.keys(errRoot)) {
+    if (key !== 'generic' && !errorCodes.includes(key)) {
+      errorCodeMismatches.push(`${locale}: errors.${key} present but not in ERROR_CODES`)
+    }
+  }
 }
 
 // -- 3. root collisions (per locale dir) ---------------------------------------
@@ -296,7 +349,11 @@ for (const [root, fs] of rootsByFile) {
 
 if (process.env.DEBUG_KEY) {
   console.error('DEBUG add used:', usedExact.has('adminScreens.adminCatalog.add'))
-  console.error('DEBUG srcFiles:', srcFiles.length, srcFiles.filter((f) => f.includes('AdminCatalog')).length)
+  console.error(
+    'DEBUG srcFiles:',
+    srcFiles.length,
+    srcFiles.filter((f) => f.includes('AdminCatalog')).length,
+  )
   console.error('DEBUG usedExact size:', usedExact.size, 'dyn:', [...dynamicPrefixes])
 }
 let failed = false
@@ -317,18 +374,24 @@ if (flatDotted.length > 0) {
 }
 if (compileFails.length > 0) {
   failed = true
-  console.error(`\nkey-audit: ${compileFails.length} message(s) fail to COMPILE -- screen render would crash:\n`)
+  console.error(
+    `\nkey-audit: ${compileFails.length} message(s) fail to COMPILE -- screen render would crash:\n`,
+  )
   for (const k of compileFails) console.error(`   ${k}`)
 }
 if (collisions.length > 0) {
   failed = true
-  console.error(`\nkey-audit: ${collisions.length} ROOT collision(s) -- shallow merge drops one file's section:\n`)
+  console.error(
+    `\nkey-audit: ${collisions.length} ROOT collision(s) -- shallow merge drops one file's section:\n`,
+  )
   for (const k of collisions) console.error(`   ${k}`)
 }
 // Parity is a REPORT, not a failure: fallbackLocale covers gaps, and the
 // translation may legally trail the ru catalog (incremental rollout).
 for (const [locale, missing] of Object.entries(parityMissing)) {
-  console.error(`key-audit: ${locale} trails ${DEFAULT_LOCALE} by ${missing.length} key(s) (fallback covers)`)
+  console.error(
+    `key-audit: ${locale} trails ${DEFAULT_LOCALE} by ${missing.length} key(s) (fallback covers)`,
+  )
 }
 if (foreignCompileFails.length > 0) {
   failed = true
@@ -340,5 +403,14 @@ if (foreignFlatDotted.length > 0) {
   console.error(`\nkey-audit: ${foreignFlatDotted.length} non-ru FLAT-DOTTED key(s):\n`)
   for (const k of foreignFlatDotted) console.error(`   ${k}`)
 }
+if (errorCodeMismatches.length > 0) {
+  failed = true
+  console.error(
+    `\nkey-audit: ${errorCodeMismatches.length} ERROR_CODES <-> errors catalog mismatch(es):\n`,
+  )
+  for (const k of errorCodeMismatches) console.error(`   ${k}`)
+}
 if (failed) process.exit(1)
-console.log(`key-audit: clean (${files.length} catalogs, ${usedExact.size} referenced keys, ${dynamicPrefixes.size} dynamic prefixes)`)
+console.log(
+  `key-audit: clean (${files.length} catalogs, ${usedExact.size} referenced keys, ${dynamicPrefixes.size} dynamic prefixes)`,
+)

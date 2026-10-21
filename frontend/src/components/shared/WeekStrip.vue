@@ -96,6 +96,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { getLocale, t } from '@/locales'
+import { weekdayAbbrUpper } from '@/utils/displayHelpers'
 import { IconCalendar } from '@/components/icons'
 
 // tz-i18n 2.2b: weekday abbreviations come from display.weekdayAbbr (the
@@ -123,9 +124,7 @@ const emit = defineEmits<{
 }>()
 
 // Short weekday labels, Monday-first (Date.getDay: 0=Sun..6=Sat).
-const WEEKDAY_LABELS = [7, 1, 2, 3, 4, 5, 6].map((iso) =>
-  t(`display.weekdayAbbr.${iso}`).toUpperCase(),
-)
+const WEEKDAY_LABELS = [7, 1, 2, 3, 4, 5, 6].map(weekdayAbbrUpper)
 
 // [owner pass] Short month abbreviations -- the STATIONARY 6th chip
 // shows the month(s) of the five visible days ("Авг" / "Авг-Сен").

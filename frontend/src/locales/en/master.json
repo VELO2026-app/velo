@@ -623,7 +623,7 @@
     "masterOnboarding": {
       "welcome": {
         "title": "Welcome",
-        "text": "You are part of the VELO masters community"
+        "text": "You are part of the @:brand masters community"
       },
       "space": {
         "title": "Your space",

@@ -95,7 +95,7 @@ async function onCancel(): Promise<void> {
     toast.success(t('transfer.cancelled'))
     emit('cancelled')
   } catch (e) {
-    toast.error(extractApiError(e, t('transfer.cancel')))
+    toast.error(extractApiError(e, t('transfer.cancelFailed')))
   } finally {
     busy.value = false
   }

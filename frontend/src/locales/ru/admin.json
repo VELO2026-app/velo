@@ -95,8 +95,8 @@
       "catalogLink": "Каталог практик",
       "catalogHint": "Направления и виды практик",
       "supportLink": "Обращения пользователей и мастеров",
-      "vyruchka": "Выручка",
-      "sistema": "Система",
+      "revenue": "Выручка",
+      "system": "Система",
       "mastersBalance": "Баланс по мастерам",
       "verificationBanner": "{n} мастер на верификации | {n} мастера на верификации | {n} мастеров на верификации",
       "moderationBanner": "{n} обращение на модерации | {n} обращения на модерации | {n} обращений на модерации",
@@ -120,7 +120,7 @@
       "title": "Пригласить мастера",
       "oneTimeLinkLabel": "ОДНОРАЗОВАЯ ССЫЛКА",
       "linkReady": "ССЫЛКА ГОТОВА",
-      "skopirovat": "Скопировать",
+      "copy": "Скопировать",
       "oneTimeLinkExpiryHint": "Одноразовая · 7 дней с момента создания",
       "toast": {
         "linkCreateFailed": "Не удалось создать ссылку",
@@ -157,17 +157,17 @@
       "notFound": "Заявка не найдена",
       "notFoundHint": "Возможно, она была удалена или уже обработана",
       "rejectCta": "Отклонить заявку",
-      "otozvat": "Отозвать",
+      "revoke": "Отозвать",
       "addToCatalog": "Добавить в каталог",
       "thisMasterOnly": "Только этому мастеру",
       "applicationTitle": "Заявка мастера",
-      "informatsiya": "Информация",
+      "information": "Информация",
       "displayNameTitle": "Имя-визитка",
       "accountNameTitle": "Имя аккаунта",
-      "telefon": "Телефон",
-      "opyt": "Опыт",
-      "sertifikaty": "Сертификаты",
-      "dokumenty": "Документы",
+      "phone": "Телефон",
+      "experience": "Опыт",
+      "certificates": "Сертификаты",
+      "documents": "Документы",
       "noDocuments": "Документы не приложены",
       "firstApplication": "Заявка подаётся впервые.",
       "schoolCreationRight": "Право создавать школы",
@@ -195,6 +195,7 @@
       "experienceYears": "{n} лет",
       "revokeMessage": "Мастер {name} снова станет обычным пользователем. Все данные (профиль, практики, история) сохраняются — доступ можно вернуть кнопкой «Сделать мастером».",
       "revokeWarning": "{base} Внимание: {warns} — отзыв не блокируется, данные останутся.",
+      "grantNote": "Отзыв верификации замораживает все школы этого куратора — участники перестанут их видеть; данные сохранятся и оживут при повторной верификации.",
       "warnSchedule": "{n} практик(и) в расписании",
       "warnWithdrawals": "{n} выплат(ы) в ожидании",
       "save": "Сохранить",
@@ -213,9 +214,9 @@
       "rejectAction": "Отклонить"
     },
     "adminMasters": {
-      "mastera": "Мастера",
-      "proverka": "Проверка",
-      "zablok": "Заблок.",
+      "masters": "Мастера",
+      "review": "Проверка",
+      "blockedShort": "Заблок.",
       "inviteCta": "Пригласить мастера",
       "schoolsTab": "Школы",
       "curatorRole": "Куратор",
@@ -247,9 +248,9 @@
       "addToCatalog": "Добавить в каталог",
       "thisMasterOnly": "Только этому мастеру",
       "methodRequestsLink": "Заявки на смену методов",
-      "seychas": "Сейчас",
-      "predlozheno": "Предложено",
-      "MetodyObnovleny": "Методы обновлены",
+      "now": "Сейчас",
+      "offered": "Предложено",
+      "methodsUpdated": "Методы обновлены",
       "approveError": "Ошибка при одобрении",
       "rejectionReasonHint": "Укажите причину отказа",
       "toast": {
@@ -268,8 +269,8 @@
       "toast": {
         "loadMembersFailed": "Не удалось загрузить участников"
       },
-      "novye": "Новые",
-      "aktivnye": "Активные",
+      "new": "Новые",
+      "active": "Активные",
       "joinedLine": "Практик: {n} • с {since}",
       "lastSeen": "Последняя: {label}",
       "messageAria": "Написать",
@@ -277,12 +278,12 @@
       "messagesUnavailable": "Сообщения пока недоступны"
     },
     "adminPracticeDetail": {
-      "Detalipractices": "Детали практики",
-      "statusVstrechi": "Статус встречи",
-      "nodata": "Нет данных",
+      "practiceDetails": "Детали практики",
+      "meetingStatus": "Статус встречи",
+      "noData": "Нет данных",
       "m": "М",
-      "aktivna": "Активна",
-      "Ozhidaetcreation": "Ожидает создания",
+      "active": "Активна",
+      "awaitingCreation": "Ожидает создания",
       "creationError": "Ошибка создания",
       "bookedStat": "Записалось",
       "attendedStat": "Пришли",
@@ -297,32 +298,32 @@
       "errorReasonLabel": "Причина ошибки"
     },
     "adminPractices": {
-      "predstoyashchie": "Предстоящие",
-      "proshedshie": "Прошедшие",
+      "upcoming": "Предстоящие",
+      "past": "Прошедшие",
       "durationMinutes": "{n} мин",
       "loadFailed": "Не удалось загрузить практики",
       "title": "Практики"
     },
     "adminProfile": {
       "administrator": "Администратор",
-      "vyyti": "Выйти",
+      "logout": "Выйти",
       "title": "Профиль",
       "switchNote": "Перейдите в интерфейс пользователя, чтобы просматривать каталог и бронировать практики.",
       "switchCta": "Открыть как пользователь",
       "readOnlyBadge": "РЕЖИМ ПРОСМОТРА"
     },
     "adminPromos": {
-      "kompanii": "Компании",
-      "deaktivir": "Деактивир.",
+      "companies": "Компании",
+      "deactivatedShort": "Деактивир.",
       "empty": {
         "title": "Промокодов пока нет",
         "master": "Нет промокодов мастеров",
         "company": "Нет промокодов компании",
         "inactive": "Нет деактивированных промокодов"
       },
-      "bessrochno": "бессрочно",
+      "noExpiry": "бессрочно",
       "promocodesLoadError": "Ошибка загрузки промокодов",
-      "PromokodDeaktivirovan": "Промокод деактивирован",
+      "promocodeDeactivated": "Промокод деактивирован",
       "deactivateConfirm": "Деактивировать промокод {code}? Мастер и участники больше не смогут им воспользоваться.",
       "usedOf": "{used} из {max}",
       "typeCompany": "Компания",
@@ -337,15 +338,15 @@
       "title": "Промокоды"
     },
     "adminReportDetail": {
-      "PrimechanieKResheniyu": "Примечание к решению *",
-      "PrimechanieNeobyazatelno": "Примечание (необязательно)",
+      "resolutionNote": "Примечание к решению *",
+      "noteOptional": "Примечание (необязательно)",
       "rejectionReason": "Причина отклонения",
-      "detali": "Детали",
-      "TipTseli": "Тип цели",
-      "IdTseli": "ID цели",
-      "obrabotana": "Обработана",
-      "primechanie": "Примечание",
-      "VveditePrimechanieKResheniyu": "Введите примечание к решению",
+      "details": "Детали",
+      "targetType": "Тип цели",
+      "targetId": "ID цели",
+      "processed": "Обработана",
+      "note": "Примечание",
+      "resolutionNotePlaceholder": "Введите примечание к решению",
       "processError": "Ошибка при обработке",
       "title": "Жалоба",
       "resolve": "Решить",
@@ -367,9 +368,9 @@
         "title": "Обращений нет"
       },
       "filterNoHits": "По выбранным фильтрам ничего не найдено",
-      "tikety": "Тикеты",
-      "platezhi": "Платежи",
-      "filtr": "Фильтр",
+      "tickets": "Тикеты",
+      "payments": "Платежи",
+      "filter": "Фильтр",
       "ticketsLoadError": "Ошибка загрузки обращений",
       "moderationTab": "Модерация",
       "tabComplaints": "Жалобы"
@@ -384,7 +385,7 @@
     "adminRevenue": {
       "revenuePeriod": "Период выручки",
       "revenueLoadFailed": "Не удалось загрузить выручку",
-      "vyruchka": "Выручка",
+      "revenue": "Выручка",
       "byMasters": "По мастерам",
       "paidAmount": "Выплачено: {amount}",
       "commissionStat": "Комиссия",
@@ -393,12 +394,12 @@
       "titleMonth": "Выручка за месяц"
     },
     "adminSupportDetail": {
-      "otvet": "Ответ…",
+      "reply": "Ответ…",
       "status": {
         "unclaimed": "Не взято",
         "mine": "У меня"
       },
-      "zanyato": "Занято",
+      "taken": "Занято",
       "unclaimedHint": "Обращение не закреплено. Возьмите его в работу, чтобы отвечать.",
       "claimedByOtherHint": "Обращение уже закреплено за другим администратором — ответить может только он.",
       "ticketLoadError": "Ошибка загрузки обращения",
@@ -426,7 +427,7 @@
         "unclaimed": "Не взято",
         "mine": "У меня"
       },
-      "zanyato": "Занято",
+      "taken": "Занято",
       "ticketsLoadError": "Ошибка загрузки обращений",
       "resolved": "Решено",
       "closed": "Закрыто",
@@ -435,7 +436,7 @@
     },
     "adminUsers": {
       "usersLoadFailed": "Не удалось загрузить пользователей",
-      "naznachit": "Назначить",
+      "appoint": "Назначить",
       "noName": "Без имени",
       "empty": {
         "title": "Пользователей пока нет"
@@ -461,8 +462,8 @@
       "providerFee": "Комиссия провайдера",
       "netAmount": "К получению",
       "unavailable": "Запрос недоступен",
-      "ozhidaet": "Ожидает",
-      "odobren": "Одобрен",
+      "pending": "Ожидает",
+      "approved": "Одобрен",
       "toast": {
         "approved": "Выплата одобрена",
         "approveFailed": "Ошибка одобрения выплаты",
@@ -484,7 +485,7 @@
       "status": {
         "pending": "На рассмотрении"
       },
-      "odobren": "Одобрен",
+      "approved": "Одобрен",
       "bank": "Банк",
       "withdrawalsLoadError": "Ошибка загрузки выплат",
       "toReceive": "К получению {amount}",

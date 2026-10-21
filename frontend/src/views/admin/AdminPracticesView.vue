@@ -96,8 +96,8 @@ const segOptions = computed<SegmentOption[]>(() => [
     label: t('common.all'),
     badge: totalCount.value ?? undefined,
   },
-  { value: 'upcoming', label: t('adminScreens.adminPractices.predstoyashchie') },
-  { value: 'past', label: t('adminScreens.adminPractices.proshedshie') },
+  { value: 'upcoming', label: t('adminScreens.adminPractices.upcoming') },
+  { value: 'past', label: t('adminScreens.adminPractices.past') },
 ])
 
 function whenLabel(p: AdminPracticeListItem): string {

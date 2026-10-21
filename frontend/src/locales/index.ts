@@ -81,9 +81,19 @@ const i18n = createI18n({
   fallbackWarn: false,
 })
 i18n.global.setLocaleMessage('ru', ru)
+// A non-ru default locale starts aliased onto the ru catalog so the first
+// paint is never message-less; loadLocale replaces the alias with the real
+// chunks on first switch. For the golden build (default ru) this is a no-op.
 i18n.global.setLocaleMessage(INSTANCE.defaultLocale, ru)
 
-i18n.global.mergeLocaleMessage(INSTANCE.defaultLocale, { brand: INSTANCE.brand })
+// The brand word never lives in the catalogs (tz-i18n §7.2.3, and this
+// file's own header rule): messages reference it as the linked key @:brand. Linked keys do NOT fall back across
+// locales, so the merge must reach EVERY locale, not just the default -- an
+// en message linking @:brand with brand merged only into ru renders an empty
+// word. Every locale that gets messages gets the brand with them.
+const BRAND_MESSAGE = { brand: INSTANCE.brand } as const
+i18n.global.mergeLocaleMessage('ru', BRAND_MESSAGE)
+i18n.global.mergeLocaleMessage(INSTANCE.defaultLocale, BRAND_MESSAGE)
 
 export default i18n
 
@@ -118,7 +128,12 @@ export function applyInstanceOverrides(
   }
 }
 
-const loadedLocales = new Set<string>([INSTANCE.defaultLocale])
+// Seeded with 'ru' -- the only catalog the main bundle actually carries
+// (eager). INSTANCE.defaultLocale is NOT implicitly loaded: for a non-ru
+// default, line 84 above is just a fallback alias onto ru, and seeding it
+// here would make loadLocale(defaultLocale) early-return forever -- that
+// locale would render Russian text with no way to load its real catalog.
+const loadedLocales = new Set<string>(['ru'])
 
 // Boot hint (tz-i18n phase 5): the last locale the user CHOSE, persisted so
 // a reopen renders in it immediately instead of flashing the default while
@@ -141,30 +156,51 @@ export function clearLocaleHint(): void {
 }
 
 /**
- * Switch the UI language. Non-default locales load their catalog chunks on
- * first switch -- PARALLEL (a sequential await waterfall here was the 1-2s
- * dead switch and the 5-10s late flip on reopen: ~20 tiny JSON chunks, one
- * round-trip each, serialized). A locale with no folder is a no-op (fallback
- * keeps rendering). The language switcher UI (tz-i18n phase 5) only ever
- * offers locales that have catalogs.
+ * Load and merge a locale's catalog chunks WITHOUT switching to it -- the
+ * idle prefetch (App.vue) warms the chunk cache this way so a later switch
+ * is a same-frame flip. loadLocale must never assign locale.value or touch
+ * the boot hint: a prefetch built on setLocale switched through every
+ * available locale and left the app on the LAST one (en) two seconds after
+ * every mount -- the "UI reverts to English by itself" report. Chunks load
+ * PARALLEL (a sequential await waterfall here was the 1-2s dead switch and
+ * the 5-10s late flip on reopen: ~20 tiny JSON chunks, one round-trip each,
+ * serialized). A locale with no folder is a no-op.
+ */
+export async function loadLocale(locale: string): Promise<void> {
+  if (!isSupportedLocale(locale) || loadedLocales.has(locale)) return
+  const prefix = `./${locale}/`
+  const loaders = Object.entries(lazyLoaders)
+    .filter(([p]) => p.startsWith(prefix))
+    .map(([, loader]) => loader)
+  if (loaders.length === 0) return
+  const modules = (await Promise.all(loaders.map((load) => load()))) as unknown as {
+    default: Record<string, unknown>
+  }[]
+  const messages: Record<string, unknown> = {}
+  for (const mod of modules) Object.assign(messages, mod.default)
+
+  i18n.global.setLocaleMessage(locale, messages)
+  i18n.global.mergeLocaleMessage(locale, BRAND_MESSAGE)
+  loadedLocales.add(locale)
+}
+
+/**
+ * Switch the UI language: warm the catalog via loadLocale, then flip the
+ * composer, the root lang, and the boot hint. A locale with no folder is a
+ * no-op (fallback keeps rendering). The language switcher UI (tz-i18n
+ * phase 5) only ever offers locales that have catalogs.
  */
 export async function setLocale(locale: string): Promise<void> {
-  if (!isSupportedLocale(locale) || locale === i18n.global.locale.value) return
-  if (!loadedLocales.has(locale)) {
-    const prefix = `./${locale}/`
-    const loaders = Object.entries(lazyLoaders)
-      .filter(([p]) => p.startsWith(prefix))
-      .map(([, loader]) => loader)
-    if (loaders.length === 0) return
-    const modules = (await Promise.all(loaders.map((load) => load()))) as unknown as {
-      default: Record<string, unknown>
-    }[]
-    const messages: Record<string, unknown> = {}
-    for (const mod of modules) Object.assign(messages, mod.default)
-
-    i18n.global.setLocaleMessage(locale, messages)
-    loadedLocales.add(locale)
-  }
+  if (!isSupportedLocale(locale)) return
+  // Load BEFORE the same-locale exit: the current locale is not necessarily
+  // a loaded one (a non-ru default starts aliased onto ru -- see the
+  // loadedLocales seeding), so even a no-flip call may still have chunks to
+  // fetch before it can render its own text.
+  await loadLocale(locale)
+  // No catalog folder -> loadedLocales never gained the locale: keep the
+  // current locale rendering on fallback rather than switching into void.
+  if (!loadedLocales.has(locale)) return
+  if (i18n.global.locale.value === locale) return
   i18n.global.locale.value = locale
   setRootLang(locale)
   try {

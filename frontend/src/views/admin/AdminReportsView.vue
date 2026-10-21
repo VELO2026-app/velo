@@ -140,9 +140,9 @@ const filter = ref<ModerationFilter>({
 })
 
 const CATEGORY_LABELS: Record<string, string> = {
-  tickets: t('adminScreens.adminReports.tikety'),
+  tickets: t('adminScreens.adminReports.tickets'),
   complaints: t('adminScreens.adminReports.tabComplaints'),
-  payments: t('adminScreens.adminReports.platezhi'),
+  payments: t('adminScreens.adminReports.payments'),
 }
 
 const headerCount = computed<string>(() => (total.value ? String(total.value) : '—'))
@@ -158,7 +158,7 @@ const categoryLabel = computed<string>(() => {
 // The filter pill echoes the active category (operator «payments»/«complaints»
 // variants); the «Платежи» selection swaps the card glyph to the payment $.
 const pillLabel = computed<string>(() =>
-  filter.value.categories.length ? categoryLabel.value : t('adminScreens.adminReports.filtr'),
+  filter.value.categories.length ? categoryLabel.value : t('adminScreens.adminReports.filter'),
 )
 const isPayments = computed<boolean>(() => filter.value.categories.includes('payments'))
 

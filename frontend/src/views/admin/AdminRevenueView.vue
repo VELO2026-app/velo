@@ -17,7 +17,7 @@
   <div class="admin-detail">
     <header class="admin-detail__top">
       <VBackButton @click="router.back()" />
-      <span class="admin-detail__title">{{ t('adminScreens.adminRevenue.vyruchka') }}</span>
+      <span class="admin-detail__title">{{ t('adminScreens.adminRevenue.revenue') }}</span>
     </header>
 
     <VSegment

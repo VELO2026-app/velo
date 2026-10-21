@@ -73,7 +73,13 @@
 import { onMounted, ref, watch } from 'vue'
 import { useAuth, isSchoolInviteStartParam } from '@/composables/useAuth'
 import { useAuthStore } from '@/stores/auth'
-import { applyUserLanguage, availableLocales, clearLocaleHint, setLocale } from '@/locales'
+import {
+  applyUserLanguage,
+  availableLocales,
+  clearLocaleHint,
+  loadLocale,
+  setLocale,
+} from '@/locales'
 import { INSTANCE } from '@/platform/instance'
 import { platform } from '@/platform'
 import { useBackgroundStabilizer } from '@/composables/useBackgroundStabilizer'
@@ -114,11 +120,14 @@ watch(
 
 // Prefetch the other catalog locales shortly after mount (tz-i18n phase 5):
 // warms the lazy chunk cache in the background so a switch is an instant
-// same-frame flip, not a network wait. A plain timeout -- idle enough not
-// to compete with the boot requests, soon enough to warm before a tap.
+// same-frame flip, not a network wait. loadLocale, NEVER setLocale -- warming
+// must not switch: a setLocale loop over availableLocales() ended every mount
+// on the last locale (en), silently reverting the UI to English two seconds
+// in. A plain timeout -- idle enough not to compete with the boot requests,
+// soon enough to warm before a tap.
 onMounted(() => {
   setTimeout(() => {
-    for (const locale of availableLocales()) void setLocale(locale)
+    for (const locale of availableLocales()) void loadLocale(locale)
   }, 2000)
 })
 

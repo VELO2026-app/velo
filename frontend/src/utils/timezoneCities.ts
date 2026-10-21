@@ -30,7 +30,9 @@
 // ?raw + JSON.parse: VueI18nPlugin precompiles every plain locales/**/*.json
 // import into message ASTs; this seed is DATA, so its leaves must stay plain
 // strings (a plain import renders picker rows as JSON dumps).
-import citySeedRaw from '@/locales/ru/timezones.json?raw'
+import citySeedRuRaw from '@/locales/ru/timezones.json?raw'
+import citySeedEnRaw from '@/locales/en/timezones.json?raw'
+import { getLocale } from '@/locales'
 
 export interface TimezoneCity {
   city: string
@@ -38,22 +40,34 @@ export interface TimezoneCity {
   q: string
 }
 
-// The curated rows themselves live in the ru seed catalog
-// (locales/ru/timezones.json -- same pattern as taxonomy.json's display seed):
-// display names are DATA, not UI copy (tz-i18n §3.1 item 6 -- a non-ru UI
-// needs a localized city catalog, backend param or seed per locale, not
-// translation keys). The import keeps types + logic here, data there.
-const citySeed = JSON.parse(citySeedRaw) as {
+// The curated rows themselves live in the per-locale seed catalogs
+// (locales/{ru,en}/timezones.json -- same pattern as taxonomy.json's display
+// seed): display names are DATA, not UI copy (tz-i18n §3.1 item 6 + §7.2.4 --
+// a non-ru UI reads the localized city seed, not translation keys). The
+// import keeps types + logic here, data there.
+interface CitySeed {
   curated?: TimezoneCity[]
   aliases?: TimezoneCity[]
+}
+const parseSeed = (raw: string): CitySeed => JSON.parse(raw) as CitySeed
+const RU_SEED: CitySeed = parseSeed(citySeedRuRaw)
+const SEEDS: Record<string, CitySeed> = { ru: RU_SEED, en: parseSeed(citySeedEnRaw) }
+
+/** The seed for the ACTIVE locale -- falling back to ru when a locale has no
+ * city seed yet (de/es). Called inside timezoneRows, which the picker wraps
+ * in a computed: the rows re-derive on a locale switch, same frame. */
+function activeSeed(): { curated: TimezoneCity[]; aliases: TimezoneCity[] } {
+  const seed = SEEDS[getLocale()] ?? RU_SEED
+  return { curated: seed.curated ?? [], aliases: seed.aliases ?? [] }
 }
 
 // Famous cities that SHARE a zone with another city, so a search by their
 // own name still resolves (e.g. Рио-де-Жанейро → America/Sao_Paulo).
-const CURATED: TimezoneCity[] = citySeed.curated ?? []
-const ALIASES: TimezoneCity[] = citySeed.aliases ?? []
+const CURATED: TimezoneCity[] = RU_SEED.curated ?? []
+const ALIASES: TimezoneCity[] = RU_SEED.aliases ?? []
 
-/** The curated rows: shown first, and win over the catalog for their zones. */
+/** The curated rows (ru seed): shown first, and win over the catalog for
+ * their zones. Locale selection happens inside timezoneRows per call. */
 export const CURATED_CITIES: readonly TimezoneCity[] = [...CURATED, ...ALIASES]
 
 /** What timezoneRows() needs of the backend catalog (useTimezoneCatalog). */
@@ -101,16 +115,21 @@ function withWords(q: string, words: string[] | undefined): string {
  * value is in the profile, so the backend stored it, so it is canonical.
  */
 export function timezoneRows(catalog: TimezoneRowSource | null, saved: string): TimezoneCity[] {
+  const locale = getLocale()
+  const seed = locale === 'ru' ? { curated: CURATED, aliases: ALIASES } : activeSeed()
   const words = searchWords(catalog)
-  const rows: TimezoneCity[] = CURATED_CITIES.map((c) => ({
+  const rows: TimezoneCity[] = [...seed.curated, ...seed.aliases].map((c) => ({
     ...c,
     q: withWords(c.q, words.get(c.iana)),
   }))
   const covered = new Set(rows.map((c) => c.iana))
   const row = (iana: string): TimezoneCity => {
     const city = englishCity(iana)
+    // The backend catalog serves only city_ru captions (BE-157); ru rows use
+    // them, every other locale shows the city name derived from the IANA id
+    // (the full per-locale city catalog is a backend locale param away).
     return {
-      city: catalog?.labels[iana]?.city_ru ?? city,
+      city: locale === 'ru' ? (catalog?.labels[iana]?.city_ru ?? city) : city,
       iana,
       q: withWords(`${city} ${iana}`.toLowerCase(), words.get(iana)),
     }

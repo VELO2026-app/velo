@@ -40,7 +40,7 @@
       <span class="invite__section-title">{{ t('adminScreens.adminMasterInvite.linkReady') }}</span>
       <p class="invite__link">{{ inviteLink }}</p>
       <VButton variant="secondary" block @click="onCopy">{{
-        t('adminScreens.adminMasterInvite.skopirovat')
+        t('adminScreens.adminMasterInvite.copy')
       }}</VButton>
       <p class="invite__caption">{{ t('adminScreens.adminMasterInvite.oneTimeLinkExpiryHint') }}</p>
     </VCard>

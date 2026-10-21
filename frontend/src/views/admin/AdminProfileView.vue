@@ -46,7 +46,7 @@
     <!-- Logout -->
     <VCard class="admin-profile__section">
       <VButton variant="ghost" :loading="loggingOut" @click="onLogout">{{
-        t('adminScreens.adminProfile.vyyti')
+        t('adminScreens.adminProfile.logout')
       }}</VButton>
     </VCard>
   </div>

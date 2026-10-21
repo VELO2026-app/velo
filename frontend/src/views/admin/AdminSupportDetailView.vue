@@ -110,7 +110,7 @@
             <div class="support-detail__input">
               <VTextarea
                 v-model="draft"
-                :placeholder="t('adminScreens.adminSupportDetail.otvet')"
+                :placeholder="t('adminScreens.adminSupportDetail.reply')"
                 :rows="1"
                 autogrow
                 maxlength="4000"
@@ -200,7 +200,7 @@ const triageBadge = computed<{ variant: 'warning' | 'success' | 'info'; label: s
   if (threadItem.assignee === myId.value) {
     return { variant: 'success', label: t('adminScreens.adminSupportDetail.status.mine') }
   }
-  return { variant: 'info', label: t('adminScreens.adminSupportDetail.zanyato') }
+  return { variant: 'info', label: t('adminScreens.adminSupportDetail.taken') }
 })
 
 const claimPanelText = computed(() => {

@@ -61,7 +61,7 @@
           </div>
 
           <div class="mrq__block">
-            <div class="mrq__blabel">{{ t('adminScreens.adminMethodRequests.seychas') }}</div>
+            <div class="mrq__blabel">{{ t('adminScreens.adminMethodRequests.now') }}</div>
             <div class="mrq__chips">
               <VChip v-for="m in item.current_methods ?? []" :key="m" size="sm">{{ m }}</VChip>
               <span v-if="!item.current_methods?.length" class="mrq__empty">—</span>
@@ -69,7 +69,7 @@
           </div>
 
           <div class="mrq__block">
-            <div class="mrq__blabel">{{ t('adminScreens.adminMethodRequests.predlozheno') }}</div>
+            <div class="mrq__blabel">{{ t('adminScreens.adminMethodRequests.offered') }}</div>
             <div class="mrq__chips">
               <VChip v-for="m in item.proposed_methods ?? []" :key="m" size="sm">{{ m }}</VChip>
             </div>
@@ -265,7 +265,7 @@ async function doApprove(
   busyId.value = item.user_id
   try {
     await approveMethodChange(item.user_id, promote, masterOnly)
-    toast.success(t('adminScreens.adminMethodRequests.MetodyObnovleny'))
+    toast.success(t('adminScreens.adminMethodRequests.methodsUpdated'))
     removeItem(item.user_id)
   } catch (e) {
     toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.approveError')))

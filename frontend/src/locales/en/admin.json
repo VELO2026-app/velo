@@ -95,8 +95,8 @@
       "catalogLink": "Practice catalog",
       "catalogHint": "Practice directions and styles",
       "supportLink": "Tickets from users and masters",
-      "vyruchka": "Revenue",
-      "sistema": "System",
+      "revenue": "Revenue",
+      "system": "System",
       "mastersBalance": "Balance by masters",
       "verificationBanner": "{n} master awaiting verification | {n} masters awaiting verification",
       "moderationBanner": "{n} ticket in moderation | {n} tickets in moderation",
@@ -120,7 +120,7 @@
       "title": "Invite a master",
       "oneTimeLinkLabel": "ONE-TIME LINK",
       "linkReady": "LINK READY",
-      "skopirovat": "Copy",
+      "copy": "Copy",
       "oneTimeLinkExpiryHint": "Single-use · 7 days from creation",
       "toast": {
         "linkCreateFailed": "Failed to create the link",
@@ -157,17 +157,17 @@
       "notFound": "Application not found",
       "notFoundHint": "It may have been deleted or already processed",
       "rejectCta": "Reject the application",
-      "otozvat": "Revoke",
+      "revoke": "Revoke",
       "addToCatalog": "Add to the catalog",
       "thisMasterOnly": "This master only",
       "applicationTitle": "Master application",
-      "informatsiya": "Information",
+      "information": "Information",
       "displayNameTitle": "Display name",
       "accountNameTitle": "Account name",
-      "telefon": "Phone",
-      "opyt": "Experience",
-      "sertifikaty": "Certificates",
-      "dokumenty": "Documents",
+      "phone": "Phone",
+      "experience": "Experience",
+      "certificates": "Certificates",
+      "documents": "Documents",
       "noDocuments": "No documents attached",
       "firstApplication": "This is the first application.",
       "schoolCreationRight": "Right to create schools",
@@ -195,6 +195,7 @@
       "experienceYears": "{n} years",
       "revokeMessage": "The master {name} becomes a regular user again. All data (profile, practices, history) is kept — access can be restored with the \"Make a master\" button.",
       "revokeWarning": "{base} Note: {warns} — the revocation is not blocked, the data will be kept.",
+      "grantNote": "Revoking verification freezes all of this curator's schools — participants will stop seeing them; the data is kept and revives on re-verification.",
       "warnSchedule": "{n} practice(s) in the schedule",
       "warnWithdrawals": "{n} payout(s) pending",
       "save": "Save",
@@ -213,9 +214,9 @@
       "rejectAction": "Reject"
     },
     "adminMasters": {
-      "mastera": "Masters",
-      "proverka": "Review",
-      "zablok": "Blocked",
+      "masters": "Masters",
+      "review": "Review",
+      "blockedShort": "Blocked",
       "inviteCta": "Invite a master",
       "schoolsTab": "Schools",
       "curatorRole": "Curator",
@@ -247,9 +248,9 @@
       "addToCatalog": "Add to the catalog",
       "thisMasterOnly": "This master only",
       "methodRequestsLink": "Method change requests",
-      "seychas": "Now",
-      "predlozheno": "Offered",
-      "MetodyObnovleny": "Methods updated",
+      "now": "Now",
+      "offered": "Offered",
+      "methodsUpdated": "Methods updated",
       "approveError": "Error while approving",
       "rejectionReasonHint": "State the reason for rejection",
       "toast": {
@@ -268,8 +269,8 @@
       "toast": {
         "loadMembersFailed": "Failed to load the participants"
       },
-      "novye": "New",
-      "aktivnye": "Active",
+      "new": "New",
+      "active": "Active",
       "joinedLine": "Practices: {n} • since {since}",
       "lastSeen": "Last: {label}",
       "messageAria": "Write",
@@ -277,12 +278,12 @@
       "messagesUnavailable": "Messages are not available yet"
     },
     "adminPracticeDetail": {
-      "Detalipractices": "Practice details",
-      "statusVstrechi": "Meeting status",
-      "nodata": "No data",
+      "practiceDetails": "Practice details",
+      "meetingStatus": "Meeting status",
+      "noData": "No data",
       "m": "M",
-      "aktivna": "Active",
-      "Ozhidaetcreation": "Awaiting creation",
+      "active": "Active",
+      "awaitingCreation": "Awaiting creation",
       "creationError": "Creation error",
       "bookedStat": "Booked",
       "attendedStat": "Attended",
@@ -297,32 +298,32 @@
       "errorReasonLabel": "Error reason"
     },
     "adminPractices": {
-      "predstoyashchie": "Upcoming",
-      "proshedshie": "Past",
+      "upcoming": "Upcoming",
+      "past": "Past",
       "durationMinutes": "{n} min",
       "loadFailed": "Failed to load the practices",
       "title": "Practices"
     },
     "adminProfile": {
       "administrator": "Administrator",
-      "vyyti": "Log out",
+      "logout": "Log out",
       "title": "Profile",
       "switchNote": "Switch to the user interface to browse the catalog and book practices.",
       "switchCta": "Open as a user",
       "readOnlyBadge": "READ-ONLY MODE"
     },
     "adminPromos": {
-      "kompanii": "Companies",
-      "deaktivir": "Deactivated",
+      "companies": "Companies",
+      "deactivatedShort": "Deactivated",
       "empty": {
         "title": "No promo codes yet",
         "master": "No masters' promo codes",
         "company": "No company promo codes",
         "inactive": "No deactivated promo codes"
       },
-      "bessrochno": "no expiry",
+      "noExpiry": "no expiry",
       "promocodesLoadError": "Error loading the promo codes",
-      "PromokodDeaktivirovan": "The promo code has been deactivated",
+      "promocodeDeactivated": "The promo code has been deactivated",
       "deactivateConfirm": "Deactivate the promo code {code}? The master and participants will no longer be able to use it.",
       "usedOf": "{used} of {max}",
       "typeCompany": "Company",
@@ -337,15 +338,15 @@
       "title": "Promo codes"
     },
     "adminReportDetail": {
-      "PrimechanieKResheniyu": "Resolution note *",
-      "PrimechanieNeobyazatelno": "Note (optional)",
+      "resolutionNote": "Resolution note *",
+      "noteOptional": "Note (optional)",
       "rejectionReason": "Rejection reason",
-      "detali": "Details",
-      "TipTseli": "Target type",
-      "IdTseli": "Target ID",
-      "obrabotana": "Processed",
-      "primechanie": "Note",
-      "VveditePrimechanieKResheniyu": "Enter the resolution note",
+      "details": "Details",
+      "targetType": "Target type",
+      "targetId": "Target ID",
+      "processed": "Processed",
+      "note": "Note",
+      "resolutionNotePlaceholder": "Enter the resolution note",
       "processError": "Error while processing",
       "title": "Complaint",
       "resolve": "Resolve",
@@ -367,9 +368,9 @@
         "title": "No tickets"
       },
       "filterNoHits": "Nothing found for the selected filters",
-      "tikety": "Tickets",
-      "platezhi": "Payments",
-      "filtr": "Filter",
+      "tickets": "Tickets",
+      "payments": "Payments",
+      "filter": "Filter",
       "ticketsLoadError": "Error loading the tickets",
       "moderationTab": "Moderation",
       "tabComplaints": "Complaints"
@@ -384,7 +385,7 @@
     "adminRevenue": {
       "revenuePeriod": "Revenue period",
       "revenueLoadFailed": "Failed to load the revenue",
-      "vyruchka": "Revenue",
+      "revenue": "Revenue",
       "byMasters": "By masters",
       "paidAmount": "Paid out: {amount}",
       "commissionStat": "Commission",
@@ -393,12 +394,12 @@
       "titleMonth": "Monthly revenue"
     },
     "adminSupportDetail": {
-      "otvet": "Reply…",
+      "reply": "Reply…",
       "status": {
         "unclaimed": "Unclaimed",
         "mine": "Mine"
       },
-      "zanyato": "Taken",
+      "taken": "Taken",
       "unclaimedHint": "The ticket is unassigned. Take it to be able to reply.",
       "claimedByOtherHint": "The ticket is already assigned to another administrator — only they can reply.",
       "ticketLoadError": "Error loading the ticket",
@@ -426,7 +427,7 @@
         "unclaimed": "Unclaimed",
         "mine": "Mine"
       },
-      "zanyato": "Taken",
+      "taken": "Taken",
       "ticketsLoadError": "Error loading the tickets",
       "resolved": "Resolved",
       "closed": "Closed",
@@ -435,7 +436,7 @@
     },
     "adminUsers": {
       "usersLoadFailed": "Failed to load the users",
-      "naznachit": "Appoint",
+      "appoint": "Appoint",
       "noName": "No name",
       "empty": {
         "title": "No users yet"
@@ -461,8 +462,8 @@
       "providerFee": "Provider fee",
       "netAmount": "To receive",
       "unavailable": "The request is unavailable",
-      "ozhidaet": "Pending",
-      "odobren": "Approved",
+      "pending": "Pending",
+      "approved": "Approved",
       "toast": {
         "approved": "The payout has been approved",
         "approveFailed": "Error approving the payout",
@@ -484,7 +485,7 @@
       "status": {
         "pending": "Under review"
       },
-      "odobren": "Approved",
+      "approved": "Approved",
       "bank": "Bank",
       "withdrawalsLoadError": "Error loading the payouts",
       "toReceive": "To receive {amount}",

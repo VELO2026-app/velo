@@ -152,8 +152,8 @@ const filter = ref<Filter>('all')
 const segOptions: SegmentOption[] = [
   { value: 'all', label: t('common.all') },
   { value: 'master', label: t('adminScreens.adminPromos.filterMasters') },
-  { value: 'company', label: t('adminScreens.adminPromos.kompanii') },
-  { value: 'inactive', label: t('adminScreens.adminPromos.deaktivir') },
+  { value: 'company', label: t('adminScreens.adminPromos.companies') },
+  { value: 'inactive', label: t('adminScreens.adminPromos.deactivatedShort') },
 ]
 
 const items = ref<AdminPromoResponse[]>([])
@@ -194,7 +194,7 @@ function usedLabel(p: AdminPromoResponse): string {
   return t('adminScreens.adminPromos.usedOf', { used: p.used_count, max: p.max_uses ?? '∞' })
 }
 function untilLabel(p: AdminPromoResponse): string {
-  return p.valid_until ? formatShortDate(p.valid_until) : t('adminScreens.adminPromos.bessrochno')
+  return p.valid_until ? formatShortDate(p.valid_until) : t('adminScreens.adminPromos.noExpiry')
 }
 
 // -- Fetch (generation counter discards stale responses on rapid tab-switch,
@@ -263,7 +263,7 @@ async function onConfirmDeactivate(): Promise<void> {
     // The "inactive" tab is server-filtered on is_active=false -- a promo
     // deactivated while that tab is open already satisfies the filter, so no
     // removal needed there. Any other tab just flips the badge in place.
-    toast.success(t('adminScreens.adminPromos.PromokodDeaktivirovan'))
+    toast.success(t('adminScreens.adminPromos.promocodeDeactivated'))
   } catch (e) {
     toast.error(extractApiError(e, t('adminScreens.adminPromos.deactivateFailedToast')))
   } finally {

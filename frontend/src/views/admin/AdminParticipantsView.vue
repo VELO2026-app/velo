@@ -126,8 +126,8 @@ const segOptions = computed<SegmentOption[]>(() => [
     label: t('common.all'),
     badge: totalCount.value ?? undefined,
   },
-  { value: 'new', label: t('adminScreens.adminParticipants.novye') },
-  { value: 'active', label: t('adminScreens.adminParticipants.aktivnye') },
+  { value: 'new', label: t('adminScreens.adminParticipants.new') },
+  { value: 'active', label: t('adminScreens.adminParticipants.active') },
 ])
 
 async function load(reset: boolean): Promise<void> {

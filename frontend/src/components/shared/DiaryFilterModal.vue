@@ -151,6 +151,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { getLocale, t } from '@/locales'
+import { weekdayAbbrUpper } from '@/utils/displayHelpers'
 import {
   dayKeyOf,
   daysInMonth,
@@ -304,7 +305,7 @@ const MONTH_LABELS = Array.from({ length: 12 }, (_, m) => {
   )
   return name.charAt(0).toUpperCase() + name.slice(1)
 })
-const WEEKDAY_LABELS = [1, 2, 3, 4, 5, 6, 7].map((d) => t(`display.weekdayAbbr.${d}`).toUpperCase())
+const WEEKDAY_LABELS = [1, 2, 3, 4, 5, 6, 7].map(weekdayAbbrUpper)
 
 const monthTitle = computed(
   () => `${MONTH_LABELS[viewMonth.value.getMonth()]} ${viewMonth.value.getFullYear()}`,

@@ -12,7 +12,7 @@
         },
         "dev": {
           "howTo": "Как подключить",
-          "addressLabel": "Адрес VELO для вашей нейросети:"
+          "addressLabel": "Адрес @:brand для вашей нейросети:"
         },
         "section": {
           "connections": "Подключения"
@@ -72,7 +72,7 @@
         },
         "title": "Практика забронирована!",
         "practiceLine": "Практика: {title}, {when}\n\n{body}",
-        "zoomNote": "Войти в Zoom можно будет прямо в VELO — на экране практики.",
+        "zoomNote": "Войти в Zoom можно будет прямо в @:brand — на экране практики.",
         "sendRequest": "Отправить запрос"
       },
       "calendar": {
@@ -472,7 +472,7 @@
         "entryPreparing2": "Вход готовится",
         "join": "Войти",
         "checkinDone": "Check-in сделан",
-        "desktopCameraHint": "Чтобы включить камеру, откройте VELO с рабочего стола",
+        "desktopCameraHint": "Чтобы включить камеру, откройте @:brand с рабочего стола",
         "toast": {
           "stateChanged": "Состояние практики изменилось",
           "zoomOpenFailed": "Не удалось открыть Zoom. Попробуйте ещё раз"

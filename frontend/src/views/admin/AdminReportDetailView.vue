@@ -54,18 +54,18 @@
         <!-- Meta -->
         <div class="report-detail__section">
           <div class="report-detail__section-title">
-            {{ t('adminScreens.adminReportDetail.detali') }}
+            {{ t('adminScreens.adminReportDetail.details') }}
           </div>
           <VCard class="report-detail__meta-list" padding="none">
             <div class="report-detail__meta-row">
               <span class="report-detail__meta-key">{{
-                t('adminScreens.adminReportDetail.TipTseli')
+                t('adminScreens.adminReportDetail.targetType')
               }}</span>
               <span class="report-detail__meta-val">{{ report.target_type }}</span>
             </div>
             <div class="report-detail__meta-row">
               <span class="report-detail__meta-key">{{
-                t('adminScreens.adminReportDetail.IdTseli')
+                t('adminScreens.adminReportDetail.targetId')
               }}</span>
               <button
                 v-if="targetRoute"
@@ -90,7 +90,7 @@
             <template v-if="report.resolved_at">
               <div class="report-detail__meta-row">
                 <span class="report-detail__meta-key">{{
-                  t('adminScreens.adminReportDetail.obrabotana')
+                  t('adminScreens.adminReportDetail.processed')
                 }}</span>
                 <span class="report-detail__meta-val">
                   {{ formatDateTime(report.resolved_at) }}
@@ -100,7 +100,7 @@
             <template v-if="report.resolution_note">
               <div class="report-detail__meta-row report-detail__meta-row--column">
                 <span class="report-detail__meta-key">{{
-                  t('adminScreens.adminReportDetail.primechanie')
+                  t('adminScreens.adminReportDetail.note')
                 }}</span>
                 <span class="report-detail__meta-note">{{ report.resolution_note }}</span>
               </div>
@@ -117,7 +117,7 @@
             <div class="report-detail__action-form">
               <VTextarea
                 v-model="resolveNote"
-                :label="t('adminScreens.adminReportDetail.PrimechanieKResheniyu')"
+                :label="t('adminScreens.adminReportDetail.resolutionNote')"
                 :placeholder="t('adminScreens.adminReportDetail.resolutionPlaceholder')"
                 :rows="3"
                 :error="resolveError"
@@ -141,7 +141,7 @@
             <div class="report-detail__action-form">
               <VTextarea
                 v-model="dismissNote"
-                :label="t('adminScreens.adminReportDetail.PrimechanieNeobyazatelno')"
+                :label="t('adminScreens.adminReportDetail.noteOptional')"
                 :placeholder="t('adminScreens.adminReportDetail.rejectionReason')"
                 :rows="2"
               />
@@ -254,7 +254,7 @@ async function loadReport(): Promise<void> {
 async function onResolve(): Promise<void> {
   resolveError.value = ''
   if (!resolveNote.value.trim()) {
-    resolveError.value = t('adminScreens.adminReportDetail.VveditePrimechanieKResheniyu')
+    resolveError.value = t('adminScreens.adminReportDetail.resolutionNotePlaceholder')
     return
   }
   if (anyLoading.value) return

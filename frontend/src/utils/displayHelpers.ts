@@ -330,3 +330,13 @@ export function recurrenceDaysLabel(days: number[] | null | undefined): string |
   if (valid.length === 7) return t('display.recurrenceDaily')
   return valid.map((d) => t(`display.weekdayAbbr.${d}`)).join(', ')
 }
+
+/**
+ * Upper-cased short weekday label for an ISO weekday (1=Mon..7=Sun): the
+ * design grids (week strip, date/diary pickers) render ПН..ВС / MON..SUN.
+ * The ONE place that knows the labels are upper-cased -- callers keep only
+ * their own day ordering.
+ */
+export function weekdayAbbrUpper(iso: number): string {
+  return t(`display.weekdayAbbr.${iso}`).toUpperCase()
+}

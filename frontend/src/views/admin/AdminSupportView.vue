@@ -130,7 +130,7 @@ function triageBadge(item: SupportThread): {
     return { variant: 'warning', label: t('adminScreens.adminSupport.status.unclaimed') }
   if (item.assignee === authStore.user?.id)
     return { variant: 'success', label: t('adminScreens.adminSupport.status.mine') }
-  return { variant: 'info', label: t('adminScreens.adminSupport.zanyato') }
+  return { variant: 'info', label: t('adminScreens.adminSupport.taken') }
 }
 
 async function loadInitial(): Promise<void> {

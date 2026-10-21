@@ -8,7 +8,8 @@
     "cancelled": "The offer has been cancelled",
     "acceptFailed": "Failed to accept the school",
     "declined": "The offer has been declined",
-    "declineFailed": "Failed to decline the offer"
+    "declineFailed": "Failed to decline the offer",
+    "cancelFailed": "Failed to cancel the offer"
   },
   "tags": {
     "title": "Add a tag",

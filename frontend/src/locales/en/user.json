@@ -12,7 +12,7 @@
         },
         "dev": {
           "howTo": "How to connect",
-          "addressLabel": "The VELO address for your AI client:"
+          "addressLabel": "The @:brand address for your AI client:"
         },
         "section": {
           "connections": "Connections"
@@ -72,7 +72,7 @@
         },
         "title": "The practice is booked!",
         "practiceLine": "Practice: {title}, {when}\n\n{body}",
-        "zoomNote": "You will be able to join Zoom right in VELO — on the practice screen.",
+        "zoomNote": "You will be able to join Zoom right in @:brand — on the practice screen.",
         "sendRequest": "Send a request"
       },
       "calendar": {
@@ -472,7 +472,7 @@
         "entryPreparing2": "The entry is being prepared",
         "join": "Join",
         "checkinDone": "Check-in done",
-        "desktopCameraHint": "To turn the camera on, open VELO from a desktop",
+        "desktopCameraHint": "To turn the camera on, open @:brand from a desktop",
         "toast": {
           "stateChanged": "The practice state has changed",
           "zoomOpenFailed": "Failed to open Zoom. Try again"

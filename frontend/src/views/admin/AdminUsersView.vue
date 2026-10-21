@@ -76,7 +76,7 @@
     <VConfirmDialog
       :open="confirm.open"
       :message="confirm.message"
-      :confirm-label="t('adminScreens.adminUsers.naznachit')"
+      :confirm-label="t('adminScreens.adminUsers.appoint')"
       :loading="confirm.loading"
       @confirm="doMakeMaster"
       @cancel="closeConfirm"

@@ -126,7 +126,7 @@
           }}</label>
           <VCard class="apply-view__langs" padding="none">
             <VCheckbox v-model="langRu" :label="LANGUAGES[0]" />
-            <VCheckbox v-model="langEn" label="English" />
+            <VCheckbox v-model="langEn" :label="LANGUAGES[1]" />
           </VCard>
         </div>
 

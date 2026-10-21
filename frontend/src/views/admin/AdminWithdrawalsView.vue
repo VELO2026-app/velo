@@ -128,7 +128,7 @@ function statusIcon(s: WithdrawalStatus): Component {
 }
 const STATUS_LABEL: Record<WithdrawalStatus, string> = {
   pending: t('adminScreens.adminWithdrawals.status.pending'),
-  approved: t('adminScreens.adminWithdrawals.odobren'),
+  approved: t('adminScreens.adminWithdrawals.approved'),
   rejected: t('adminScreens.adminWithdrawals.statusRejected'),
 }
 function statusLabel(s: WithdrawalStatus): string {

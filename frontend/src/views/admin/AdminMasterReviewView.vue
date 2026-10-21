@@ -66,7 +66,7 @@
       <!-- Информация — every master-authored field is admin-editable (batch H).
            TWO distinct names: «Имя-визитка» (data.profile.display_name, shown to
            users) vs «Имя аккаунта» (User.first/last, shown in admin lists). -->
-      <div class="mreview__seclabel">{{ t('adminScreens.adminMasterReview.informatsiya') }}</div>
+      <div class="mreview__seclabel">{{ t('adminScreens.adminMasterReview.information') }}</div>
       <VCard class="mreview__info" padding="none">
         <!-- Имя-визитка = data.profile.display_name (text) -->
         <div class="mreview__row">
@@ -216,7 +216,7 @@
 
         <!-- Телефон (text) -->
         <div class="mreview__row">
-          <div class="mreview__k">{{ t('adminScreens.adminMasterReview.telefon') }}</div>
+          <div class="mreview__k">{{ t('adminScreens.adminMasterReview.phone') }}</div>
           <template v-if="editing === 'phone'">
             <div class="mreview__edit">
               <VInput v-model="draftText" placeholder="+7…" :error="fieldError" />
@@ -245,7 +245,7 @@
 
         <!-- Опыт = experience_years (number) -->
         <div class="mreview__row">
-          <div class="mreview__k">{{ t('adminScreens.adminMasterReview.opyt') }}</div>
+          <div class="mreview__k">{{ t('adminScreens.adminMasterReview.experience') }}</div>
           <template v-if="editing === 'experience_years'">
             <div class="mreview__edit">
               <VInput
@@ -376,7 +376,7 @@
 
         <!-- Сертификаты = certifications (free-text add/remove chips) -->
         <div class="mreview__row">
-          <div class="mreview__k">{{ t('adminScreens.adminMasterReview.sertifikaty') }}</div>
+          <div class="mreview__k">{{ t('adminScreens.adminMasterReview.certificates') }}</div>
           <template v-if="editing === 'certifications'">
             <div class="mreview__edit">
               <div v-if="draftCerts.length" class="mreview__chips">
@@ -433,7 +433,7 @@
       </VCard>
 
       <!-- Документы -->
-      <div class="mreview__seclabel">{{ t('adminScreens.adminMasterReview.dokumenty') }}</div>
+      <div class="mreview__seclabel">{{ t('adminScreens.adminMasterReview.documents') }}</div>
       <VCard v-if="documents.length" class="mreview__docs" padding="none">
         <div v-for="d in documents" :key="d.name" class="mreview__doc">
           <span class="mreview__doc-chk">
@@ -557,7 +557,7 @@
             </VButton>
           </div>
           <p class="mreview__grant-note">
-            {{ t('adminScreens.adminMasterReview.revokeWarning') }}
+            {{ t('adminScreens.adminMasterReview.grantNote') }}
           </p>
           <VButton variant="danger" :loading="revoking" :disabled="anyLoading" @click="openRevoke">
             {{ t('adminScreens.adminMasterReview.revokeMaster') }}
@@ -594,7 +594,7 @@
     <VConfirmDialog
       :open="showRevoke"
       :message="revokeMessage"
-      :confirm-label="t('adminScreens.adminMasterReview.otozvat')"
+      :confirm-label="t('adminScreens.adminMasterReview.revoke')"
       danger
       :loading="revoking"
       @confirm="onRevoke"

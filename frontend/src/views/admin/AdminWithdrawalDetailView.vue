@@ -174,8 +174,8 @@ const bankLabel = computed<string>(() => {
 })
 
 const STATUS_LABELS: Record<string, string> = {
-  pending: t('adminScreens.adminWithdrawalDetail.ozhidaet'),
-  approved: t('adminScreens.adminWithdrawalDetail.odobren'),
+  pending: t('adminScreens.adminWithdrawalDetail.pending'),
+  approved: t('adminScreens.adminWithdrawalDetail.approved'),
   rejected: t('adminScreens.adminWithdrawalDetail.statusRejected'),
 }
 const statusLabel = computed<string>(() => STATUS_LABELS[w.value?.status ?? ''] ?? '')

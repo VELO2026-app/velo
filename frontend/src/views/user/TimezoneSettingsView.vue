@@ -84,7 +84,7 @@
 
 <script setup lang="ts">
 import { t, availableLocales, setLocale } from '@/locales'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import { VSelect } from '@/components/ui'
@@ -137,11 +137,14 @@ async function onSelectLanguage(code: string): Promise<void> {
 // -- Date format (captured-only) --------------------------------------------
 // Built per the SVG but inert: dates render through the fixed format.ts, so the
 // choice does not apply yet. Zod task: persist + apply a date-format preference.
-const DATE_FORMAT_OPTIONS = [
+// A COMPUTED, not a plain const: this screen IS the language switcher -- a
+// setup-time const would keep these labels in the previous language through
+// the live flip the optimistic switch performs.
+const DATE_FORMAT_OPTIONS = computed(() => [
   { value: 'dd.mm.yyyy', label: t('user.screens.timezoneSettings.dateFormat.dmy') },
   { value: 'yyyy-mm-dd', label: t('user.screens.timezoneSettings.dateFormat.ymd') },
   { value: 'mm/dd/yyyy', label: t('user.screens.timezoneSettings.dateFormat.mdy') },
-]
+])
 const selectedDateFormat = ref('dd.mm.yyyy')
 
 // -- Timezone (unchanged from the prior build) ------------------------------
