@@ -1,0 +1,67 @@
+{
+  "display": {
+    "direction": {
+      "meditation": "Медитація",
+      "yoga": "Йога",
+      "breathwork": "Дихальні практики",
+      "somatic": "Соматика",
+      "tantra": "Тантра",
+      "circles": "Кола",
+      "sound_healing": "Саундхілінг",
+      "art": "Арт-практики",
+      "narrative": "Наративні практики",
+      "movement": "Рух"
+    },
+    "difficulty": {
+      "beginner": "Початкова",
+      "medium": "Середня",
+      "high": "Висока"
+    },
+    "durationBucket": {
+      "short": "До 1 години",
+      "long": "1 година і більше"
+    },
+    "timeOfDay": {
+      "night": "Ніч",
+      "morning": "Ранок",
+      "day": "День",
+      "evening": "Вечір"
+    },
+    "feedKind": {
+      "booking_confirmed": "Ви записалися",
+      "booking_cancelled_by_user": "Ви скасували запис",
+      "practice_rescheduled": "Майстер переніс практику",
+      "practice_cancelled_by_master": "Практику скасовано",
+      "practice_outcome": "",
+      "checkin": "Check-in",
+      "feedback": "Feedback",
+      "note": "Щоденник",
+      "dream": "Сонник",
+      "thread_started": "Ви розпочали діалог",
+      "external_activity": ""
+    },
+    "externalActivity": {
+      "vocal": "Вокал",
+      "nail_standing": "Гвоздестояння",
+      "meditation": "Медитація",
+      "massage": "Масаж",
+      "yoga": "Йога",
+      "dance": "Танці",
+      "custom": ""
+    },
+    "outcome": {
+      "attended": "Done",
+      "no_show": "Ви не прийшли"
+    },
+    "weekdayAbbr": {
+      "1": "Пн",
+      "2": "Вт",
+      "3": "Ср",
+      "4": "Чт",
+      "5": "Пт",
+      "6": "Сб",
+      "7": "Нд"
+    },
+    "recurrenceDaily": "Щодня"
+  }
+}

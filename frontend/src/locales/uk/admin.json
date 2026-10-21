@@ -1,0 +1,501 @@
+{
+  "moderation": {
+    "reportDate": "Дата заявки",
+    "category": "Категорія",
+    "priority": "Пріоритет",
+    "status": "Статус заявки",
+    "cats": {
+      "tickets": "Тікети",
+      "complaints": "Скарги",
+      "payments": "Платежі"
+    },
+    "statuses": {
+      "open": "Відкрита",
+      "closed": "Закрита"
+    }
+  },
+  "payout": {
+    "title": "Підтвердити виплату",
+    "sub": "Кошти підуть майстру через провайдера",
+    "amount": "Сума",
+    "fee": "Комісія провайдера",
+    "net": "До отримання",
+    "bank": "Банк",
+    "master": "Майстер",
+    "approve": "Схвалити виплату"
+  },
+  "admin": {
+    "fallbackUserName": "Користувач",
+    "masterStatus": {
+      "pending": "Очікує",
+      "verified": "Верифікований",
+      "rejected": "Відхилений",
+      "suspended": "Заблокований",
+      "cancelled_by_user": "Акаунт видалено"
+    },
+    "reportStatus": {
+      "pending": "Очікує",
+      "resolved": "Вирішена",
+      "dismissed": "Відхилена"
+    },
+    "reportTarget": {
+      "user": "Юзер",
+      "master": "Майстер",
+      "practice": "Практика"
+    },
+    "relative": {
+      "justNow": "щойно",
+      "minutesAgo": "{n} хв тому",
+      "hoursAgo": "{n} год тому"
+    },
+    "supportTicket": {
+      "resolved": "Вирішено",
+      "closed": "Закрито"
+    }
+  },
+  "adminScreens": {
+    "adminCatalog": {
+      "newDirectionPlaceholder": "Новий напрямок…",
+      "catalogLoadFailed": "Не вдалося завантажити каталог",
+      "newStylePlaceholder": "Новий вид…",
+      "catalogLink": "Каталог практик",
+      "noStyles": "Без видів",
+      "directionAdded": "Напрямок додано",
+      "styleAdded": "Вид додано",
+      "intro": "Керування каталогом. Зміни видно майстрам одразу під час вибору методів.",
+      "activate": "Активувати",
+      "inactiveNote": "Неактивно — приховано в майстрів, старі методи зберігаються",
+      "addDirectionFailed": "Не вдалося додати напрямок",
+      "addStyleFailed": "Не вдалося додати вид",
+      "saveFailed": "Не вдалося зберегти",
+      "statusChangeFailed": "Не вдалося змінити статус"
+    },
+    "adminCheckinRate": {
+      "lowCheckinTitle": "Низький check-in (практики)",
+      "subtitle": "{pct}% · {total} записів",
+      "avgRate": "Середній check-in rate",
+      "totalRecords": "Всього записів",
+      "checkedIn": "Відзначилися"
+    },
+    "adminCuratorGroups": {
+      "active": "Активна",
+      "frozen": "Заморожена",
+      "countsLine": "Майстрів: {masters} • Учнів: {students} • з {since}",
+      "emptyNote": "Шкіл поки немає. Школу створює сам верифікований майстер — окремої видачі прав не передбачено (важіль адміна — верифікація майстра).",
+      "title": "Школи"
+    },
+    "adminDashboard": {
+      "prevPeriod": "Попередній період",
+      "nextPeriod": "Наступний період",
+      "withdrawalRequestsLink": "Запити майстрів на вивід",
+      "promocodesLink": "Усі промокоди: платформи та майстрів",
+      "usersLink": "Усі користувачі · призначення майстрів",
+      "methodRequestsLink": "Заявки на зміну методів",
+      "methodRequestsHint": "Майстри змінюють свої напрямки",
+      "catalogLink": "Каталог практик",
+      "catalogHint": "Напрямки та види практик",
+      "supportLink": "Звернення користувачів і майстрів",
+      "revenue": "Виторг",
+      "system": "Система",
+      "mastersBalance": "Баланс по майстрах",
+      "verificationBanner": "{n} майстер на верифікації | {n} майстри на верифікації | {n} майстрів на верифікації",
+      "moderationBanner": "{n} звернення на модерації | {n} звернення на модерації | {n} звернень на модерації",
+      "practicesStat": "Практик",
+      "mastersStat": "Майстрів",
+      "participantsStat": "Учасників",
+      "payoutsSection": "Виплати",
+      "usersSection": "Користувачі",
+      "supportSection": "Підтримка",
+      "statistics": "Статистика",
+      "profileAria": "Профіль",
+      "promocodesSection": "Промокоди"
+    },
+    "adminFeedbackRate": {
+      "distributionratings": "Розподіл оцінок",
+      "leaveRate": "Залишають відгук",
+      "visited": "Відвідали",
+      "leftReview": "Залишили відгук"
+    },
+    "adminMasterInvite": {
+      "title": "Запросити майстра",
+      "oneTimeLinkLabel": "ОДНОРАЗОВЕ ПОСИЛАННЯ",
+      "linkReady": "ПОСИЛАННЯ ГОТОВЕ",
+      "copy": "Копіювати",
+      "oneTimeLinkExpiryHint": "Одноразове · 7 днів із моменту створення",
+      "toast": {
+        "linkCreateFailed": "Не вдалося створити посилання",
+        "copyFailed": "Не вдалося скопіювати"
+      },
+      "intro": "Створіть посилання та надішліть його майбутньому майстру. Воно одноразове: спрацює в першого, хто його відкриє, — після цього погашається. Термін дії — 7 днів.",
+      "create": "Створити посилання"
+    },
+    "adminMasterReview": {
+      "fields": {
+        "displayName": "Ім'я, видиме користувачам",
+        "experienceYears": "Років досвіду (0–50)",
+        "about": "Про себе",
+        "languages": "Мова практик",
+        "directions": "Напрямки практик",
+        "firstNamePlaceholder": "Ім'я",
+        "lastNamePlaceholder": "Прізвище",
+        "aboutPlaceholder": "Про себе"
+      },
+      "edit": {
+        "displayName": "Змінити ім'я-візитівку",
+        "accountName": "Змінити ім'я акаунта",
+        "about": "Змінити «про себе»",
+        "email": "Змінити email",
+        "phone": "Змінити телефон",
+        "experience": "Змінити досвід",
+        "languages": "Змінити мови",
+        "directions": "Змінити напрямки",
+        "certificates": "Змінити сертифікати"
+      },
+      "certificateEnter": "Додати сертифікат + Enter",
+      "viewDocument": "Переглянути документ",
+      "allowSchoolCreation": "Дозволити створювати школи (кураторські групи)",
+      "notFound": "Заявку не знайдено",
+      "notFoundHint": "Можливо, її було видалено або вже оброблено",
+      "rejectCta": "Відхилити заявку",
+      "revoke": "Відкликати",
+      "addToCatalog": "Додати до каталогу",
+      "thisMasterOnly": "Лише цьому майстру",
+      "applicationTitle": "Заявка майстра",
+      "information": "Інформація",
+      "displayNameTitle": "Ім'я-візитівка",
+      "accountNameTitle": "Ім'я акаунта",
+      "phone": "Телефон",
+      "experience": "Досвід",
+      "certificates": "Сертифікати",
+      "documents": "Документи",
+      "noDocuments": "Документи не додано",
+      "firstApplication": "Заявку подано вперше.",
+      "schoolCreationRight": "Право створювати школи",
+      "nonZeroBalance": "ненульовий баланс",
+      "revokedToUser": "Майстра відкликано — акаунт став користувачем",
+      "toast": {
+        "revokeFailed": "Не вдалося відкликати майстра",
+        "directionsUpdated": "Напрямки оновлено",
+        "directionsSaveFailed": "Не вдалося зберегти напрямки",
+        "schoolRightGranted": "Право створювати школи видано",
+        "schoolRightRevoked": "Право створювати школи відкликано",
+        "verified": "Майстра верифіковано",
+        "requestRejected": "Заявку відхилено",
+        "rejectFailed": "Помилка під час відхилення"
+      },
+      "dataLoadError": "Помилка завантаження даних",
+      "validation": {
+        "chooseDirection": "Виберіть хоча б один напрямок",
+        "enterDisplayName": "Уведіть ім'я-візитівку",
+        "experienceRange": "Досвід: ціле число 0–50"
+      },
+      "documentViewUnavailable": "Перегляд документа поки недоступний",
+      "verificationError": "Помилка верифікації",
+      "rejectionReasonHint": "Укажіть причину відмови",
+      "experienceYears": "{n} років",
+      "revokeMessage": "Майстер {name} знову стане звичайним користувачем. Усі дані (профіль, практики, історія) зберігаються — доступ можна повернути кнопкою «Зробити майстром».",
+      "revokeWarning": "{base} Увага: {warns} — відкликання не блокується, дані залишаться.",
+      "grantNote": "Відкликання верифікації заморожує всі школи цього куратора — учасники перестануть їх бачити; дані збережуться та оживуть під час повторної верифікації.",
+      "warnSchedule": "{n} практик(и) в розкладі",
+      "warnWithdrawals": "{n} виплат(и) в очікуванні",
+      "save": "Зберегти",
+      "historyTitle": "Історія заявок",
+      "approve": "Схвалити",
+      "alreadyProcessed": "Заявку вже оброблено — статус: ",
+      "granted": "Видано",
+      "notGranted": "Не видано",
+      "revokeGrant": "Відкликати право",
+      "grantAction": "Видати право",
+      "revokeMaster": "Відкликати майстра",
+      "rejectionReasonPlaceholder": "Укажіть причину відхилення заявки",
+      "rejectionReason": "Причина відмови",
+      "saveFailed": "Не вдалося зберегти",
+      "grantChangeFailed": "Не вдалося змінити право",
+      "rejectAction": "Відхилити"
+    },
+    "adminMasters": {
+      "masters": "Майстри",
+      "review": "Перевірка",
+      "blockedShort": "Заблок.",
+      "inviteCta": "Запросити майстра",
+      "schoolsTab": "Школи",
+      "curatorRole": "Куратор",
+      "status": {
+        "verified": "Верифікований",
+        "pending": "Очікує верифікації",
+        "rejected": "Відхилений",
+        "suspended": "Заблокований",
+        "cancelled_by_user": "Акаунт видалено"
+      },
+      "loadFailed": "Не вдалося завантажити майстрів",
+      "directionsMissing": "Напрямки не вказано",
+      "practicesStat": "Практик",
+      "studentsStat": "Учні",
+      "toWithdrawStat": "До виводу",
+      "filterDeleted": "Видалені",
+      "emptyPending": "Немає майстрів на перевірці",
+      "emptyVerified": "Немає верифікованих майстрів",
+      "emptyRejected": "Немає відхилених майстрів",
+      "emptySuspended": "Немає заблокованих майстрів",
+      "emptyCancelled": "Немає видалених акаунтів",
+      "emptyFallback": "Майстрів поки немає",
+      "loadFailedToast": "Помилка завантаження майстрів",
+      "verifiedShort": "Верифіц.",
+      "filterRejected": "Відхилені"
+    },
+    "adminMethodRequests": {
+      "rejectCta": "Відхилити заявку",
+      "addToCatalog": "Додати до каталогу",
+      "thisMasterOnly": "Лише цьому майстру",
+      "methodRequestsLink": "Заявки на зміну методів",
+      "now": "Зараз",
+      "offered": "Запропоновано",
+      "methodsUpdated": "Методи оновлено",
+      "approveError": "Помилка під час схвалення",
+      "rejectionReasonHint": "Укажіть причину відмови",
+      "toast": {
+        "requestRejected": "Заявку відхилено",
+        "rejectFailed": "Помилка під час відхилення"
+      },
+      "reject": "Відхилити",
+      "approve": "Схвалити",
+      "emptyTitle": "Заявок немає",
+      "rejectionReasonPlaceholder": "Укажіть причину відхилення запиту",
+      "loadFailedToast": "Помилка завантаження заявок",
+      "noChangeRequests": "Майстри не запитували зміну методів",
+      "rejectionReason": "Причина відмови"
+    },
+    "adminParticipants": {
+      "toast": {
+        "loadMembersFailed": "Не вдалося завантажити учасників"
+      },
+      "new": "Нові",
+      "active": "Активні",
+      "joinedLine": "Практик: {n} • з {since}",
+      "lastSeen": "Остання: {label}",
+      "messageAria": "Написати",
+      "title": "Учасники",
+      "messagesUnavailable": "Повідомлення поки недоступні"
+    },
+    "adminPracticeDetail": {
+      "practiceDetails": "Деталі практики",
+      "meetingStatus": "Статус зустрічі",
+      "noData": "Немає даних",
+      "m": "Х",
+      "active": "Активна",
+      "awaitingCreation": "Очікує створення",
+      "creationError": "Помилка створення",
+      "bookedStat": "Записалося",
+      "attendedStat": "Прийшли",
+      "freeStat": "Вільно",
+      "bookedSection": "Записалися ({booked}/{capacity})",
+      "presentSection": "Були присутні ({n})",
+      "absentSection": "Не прийшли ({n})",
+      "unmatchedTitle": "Нерозпізнані учасники",
+      "unavailable": "Практика недоступна",
+      "deletedLabel": "Видалена",
+      "notCreatedLabel": "Не створена",
+      "errorReasonLabel": "Причина помилки"
+    },
+    "adminPractices": {
+      "upcoming": "Найближчі",
+      "past": "Минулі",
+      "durationMinutes": "{n} хв",
+      "loadFailed": "Не вдалося завантажити практики",
+      "title": "Практики"
+    },
+    "adminProfile": {
+      "administrator": "Адміністратор",
+      "logout": "Вийти",
+      "title": "Профіль",
+      "switchNote": "Перейдіть в інтерфейс користувача, щоб переглядати каталог і бронювати практики.",
+      "switchCta": "Відкрити як користувач",
+      "readOnlyBadge": "РЕЖИМ ПЕРЕГЛЯДУ"
+    },
+    "adminPromos": {
+      "companies": "Компанії",
+      "deactivatedShort": "Деактив.",
+      "empty": {
+        "title": "Промокодів поки немає",
+        "master": "Немає промокодів майстрів",
+        "company": "Немає промокодів компанії",
+        "inactive": "Немає деактивованих промокодів"
+      },
+      "noExpiry": "безстроково",
+      "promocodesLoadError": "Помилка завантаження промокодів",
+      "promocodeDeactivated": "Промокод деактивовано",
+      "deactivateConfirm": "Деактивувати промокод {code}? Майстер і учасники більше не зможуть ним скористатися.",
+      "usedOf": "{used} з {max}",
+      "typeCompany": "Компанія",
+      "typeMaster": "Майстер",
+      "active": "Активний",
+      "inactive": "Деактивований",
+      "discountLine": "Знижка: {n}% · Використано: {used}",
+      "loadFailed": "Не вдалося завантажити промокоди",
+      "deactivateFailedToast": "Не вдалося деактивувати промокод",
+      "filterMasters": "Майстрів",
+      "ownerFallback": "Користувач",
+      "title": "Промокоди"
+    },
+    "adminReportDetail": {
+      "resolutionNote": "Примітка до рішення *",
+      "noteOptional": "Примітка (необов'язково)",
+      "rejectionReason": "Причина відхилення",
+      "details": "Деталі",
+      "targetType": "Тип цілі",
+      "targetId": "ID цілі",
+      "processed": "Оброблена",
+      "note": "Примітка",
+      "resolutionNotePlaceholder": "Уведіть примітку до рішення",
+      "processError": "Помилка під час обробки",
+      "title": "Скарга",
+      "resolve": "Вирішити",
+      "reject": "Відхилити",
+      "alreadyProcessed": "Скаргу вже оброблено — статус: ",
+      "notFoundTitle": "Скаргу не знайдено",
+      "createdLabel": "Створена",
+      "resolutionPlaceholder": "Опишіть, які заходи вжито",
+      "backToList": "Поверніться до списку скарг",
+      "loadFailedToast": "Помилка завантаження скарги",
+      "reportTextLabel": "Текст скарги",
+      "resolveCta": "Вирішити скаргу",
+      "rejectCta": "Відхилити скаргу",
+      "resolvedToast": "Скаргу вирішено",
+      "rejectedToast": "Скаргу відхилено"
+    },
+    "adminReports": {
+      "empty": {
+        "title": "Звернень немає"
+      },
+      "filterNoHits": "За вибраними фільтрами нічого не знайдено",
+      "tickets": "Тікети",
+      "payments": "Платежі",
+      "filter": "Фільтр",
+      "ticketsLoadError": "Помилка завантаження звернень",
+      "moderationTab": "Модерація",
+      "tabComplaints": "Скарги"
+    },
+    "adminReturnRate": {
+      "topLoyalUsers": "Топ лояльних юзерів",
+      "practicesCount": "{n} практик",
+      "returnRate": "Повертаються повторно",
+      "totalUsers": "Всього користувачів",
+      "returning": "Повторно"
+    },
+    "adminRevenue": {
+      "revenuePeriod": "Період виторгу",
+      "revenueLoadFailed": "Не вдалося завантажити виторг",
+      "revenue": "Виторг",
+      "byMasters": "По майстрах",
+      "paidAmount": "Виплачено: {amount}",
+      "commissionStat": "Комісія",
+      "payoutStat": "Виплачено",
+      "titleWeek": "Виторг за тиждень",
+      "titleMonth": "Виторг за місяць"
+    },
+    "adminSupportDetail": {
+      "reply": "Відповідь…",
+      "status": {
+        "unclaimed": "Не взято",
+        "mine": "У мене"
+      },
+      "taken": "Зайнято",
+      "unclaimedHint": "Звернення не закріплено. Візьміть його в роботу, щоб відповідати.",
+      "claimedByOtherHint": "Звернення вже закріплено за іншим адміністратором — відповісти може лише він.",
+      "ticketLoadError": "Помилка завантаження звернення",
+      "tryAgain": "Спробуйте ще раз",
+      "toast": {
+        "claimedByYou": "Звернення закріплено за вами",
+        "claimedByOther": "Вже взято іншим адміністратором",
+        "claimFailed": "Не вдалося закріпити звернення",
+        "replyFailed": "Не вдалося надіслати відповідь"
+      },
+      "take": "Взяти в роботу",
+      "noMessages": "Повідомлень поки немає.",
+      "refresh": "Оновити",
+      "messagesLoadFailed": "Не вдалося завантажити повідомлення",
+      "notFoundTitle": "Звернення не знайдено",
+      "backToList": "Поверніться до списку звернень",
+      "threadFallback": "Звернення"
+    },
+    "adminSupport": {
+      "empty": {
+        "title": "Звернень немає",
+        "text": "Сюди потраплять усі звернення в підтримку"
+      },
+      "status": {
+        "unclaimed": "Не взято",
+        "mine": "У мене"
+      },
+      "taken": "Зайнято",
+      "ticketsLoadError": "Помилка завантаження звернень",
+      "resolved": "Вирішено",
+      "closed": "Закрито",
+      "title": "Підтримка",
+      "userFallback": "Користувач"
+    },
+    "adminUsers": {
+      "usersLoadFailed": "Не вдалося завантажити користувачів",
+      "appoint": "Призначити",
+      "noName": "Без імені",
+      "empty": {
+        "title": "Користувачів поки немає"
+      },
+      "usersLoadError": "Помилка завантаження користувачів",
+      "toast": {
+        "promotedToMaster": "Користувача призначено майстром",
+        "promoteFailed": "Не вдалося призначити майстром"
+      },
+      "promoteConfirm": "Призначити користувача «{name}» майстром?",
+      "searchPlaceholder": "Пошук за ім'ям або Telegram ID",
+      "makeMaster": "Зробити майстром",
+      "roleAdmin": "Адмін",
+      "roleMaster": "Майстер",
+      "title": "Користувачі",
+      "roleUser": "Користувач"
+    },
+    "adminWithdrawalDetail": {
+      "rejectionReason": "Причина відхилення",
+      "rejectCta": "Відхилити виплату",
+      "requestTitle": "Запит на вивід",
+      "bank": "Банк",
+      "providerFee": "Комісія провайдера",
+      "netAmount": "До отримання",
+      "unavailable": "Запит недоступний",
+      "pending": "Очікує",
+      "approved": "Схвалений",
+      "toast": {
+        "approved": "Виплату схвалено",
+        "approveFailed": "Помилка схвалення виплати",
+        "rejected": "Виплату відхилено",
+        "rejectFailed": "Помилка відхилення виплати"
+      },
+      "alreadyProcessed": "Запит уже оброблено — статус: ",
+      "rejectionReasonPlaceholder": "Укажіть причину відхилення виплати",
+      "rejectionReasonRequired": "Укажіть причину відхилення",
+      "title": "Виплата",
+      "statusRejected": "Відхилений",
+      "openReject": "Відхилити"
+    },
+    "adminWithdrawals": {
+      "empty": {
+        "title": "Запитів на вивід немає",
+        "text": "Нові запити майстрів з'являться тут"
+      },
+      "status": {
+        "pending": "На розгляді"
+      },
+      "approved": "Схвалений",
+      "bank": "Банк",
+      "withdrawalsLoadError": "Помилка завантаження виплат",
+      "toReceive": "До отримання {amount}",
+      "title": "Виплати",
+      "statusRejected": "Відхилений"
+    },
+    "adminCommon": {
+      "loadMetricFailed": "Не вдалося завантажити метрику",
+      "methodSingle": "Методу «{label}» немає в каталозі — додати для всіх майстрів?",
+      "methodPlural": "Методів {labels} немає в каталозі — додати для всіх майстрів?"
+    }
+  }
+}

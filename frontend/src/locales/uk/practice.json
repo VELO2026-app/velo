@@ -1,0 +1,108 @@
+{
+  "filters": {
+    "title": "Фільтр",
+    "direction": "Напрямок практики",
+    "style": "Вид практики",
+    "difficulty": "Складність",
+    "duration": "Тривалість",
+    "durationChips": {
+      "short": "30 - 45 хв",
+      "long": "1 година і більше"
+    },
+    "apply": "Застосувати",
+    "resetDates": "Скинути дати",
+    "timeOfDay": "Час"
+  },
+  "calendarCard": {
+    "paid": "Оплачено"
+  },
+  "audience": {
+    "noGroups": "Поки немає жодної групи. Створіть групу на екрані «Мої групи».",
+    "noSchools": "Немає шкіл, доступних для вибору."
+  },
+  "useTemplate": {
+    "head": "Ви створювали раніше…",
+    "empty": "Даних поки немає…"
+  },
+  "practiceCancel": {
+    "title": "Скасувати практику?",
+    "notify": "Учасникам буде надіслано сповіщення. Оплати повернуться автоматично.",
+    "recurring": "Це регулярна практика",
+    "keep": "Не скасовувати",
+    "cancel": "Скасувати",
+    "scopeOne": "Лише цю",
+    "scopeFuture": "Цю й наступні"
+  },
+  "timePicker": {
+    "title": "Час практики"
+  },
+  "bookingCancel": {
+    "title": "Скасувати бронювання?",
+    "keep": "Ні, залишити",
+    "confirm": "Так, скасувати"
+  },
+  "booking": {
+    "title": "Бронювання",
+    "labels": {
+      "practice": "Практика",
+      "master": "Майстер",
+      "total": "Разом",
+      "date": "Дата"
+    },
+    "masterFallback": "Майстер",
+    "promoPlaceholder": "Промокод",
+    "discount": "Знижка {n}%",
+    "insufficientBalance": "Недостатньо коштів. Ваш баланс: {balance}",
+    "cta": {
+      "topup": "Поповнити баланс",
+      "signup": "Записатися",
+      "pay": "Оплатити"
+    },
+    "toast": {
+      "booked": "Ви записані!",
+      "alreadyBooked": "Ви вже записані на цю практику",
+      "purchaseFailed": "Не вдалося оформити бронювання",
+      "bookingError": "Помилка під час бронювання",
+      "promoFailed": "Не вдалося перевірити промокод"
+    }
+  },
+  "practice": {
+    "status": {
+      "draft": "Чернетка",
+      "completed": "Завершена",
+      "cancelled": "Скасована"
+    },
+    "offer": {
+      "awaiting_verification": "Очікує перевірки майстра",
+      "awaiting_answer": "Очікує відповіді учасника"
+    },
+    "regular": "Регулярна",
+    "remainingSessions": "Залишилося {left} з {total} занять",
+    "placeholderAlt": "Практика",
+    "durationMinutes": "{n} хвилин",
+    "audience": {
+      "public": "Публічна",
+      "students": "Усі учні",
+      "groups": "Конкретні групи",
+      "curator_groups": "Школи"
+    },
+    "styles": {
+      "silence": "Медитація мовчання",
+      "presence": "Медитація присутності",
+      "sound": "Звукова медитація",
+      "taoist": "Даоська медитація",
+      "nidra": "Йога-нідра",
+      "yin": "Інь-йога",
+      "hatha": "Хатха-йога",
+      "vinyasa": "Віньяса",
+      "kundalini": "Кундаліні-йога",
+      "ashtanga": "Аштанга-йога",
+      "womens": "Жіноче коло",
+      "mens": "Чоловіче коло",
+      "sharing": "Коло шерингу"
+    },
+    "loadFailed": "Не вдалося завантажити практику",
+    "customVariant": "Укажіть ваш варіант",
+    "participantsShort": "{n} учасник | {n} учасники | {n} учасників"
+  }
+}

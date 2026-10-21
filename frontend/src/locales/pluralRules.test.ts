@@ -43,6 +43,26 @@ describe('cldrPluralChoice en (2-form messages)', () => {
   })
 })
 
+describe('cldrPluralChoice uk (3-form messages -- same CLDR shape as ru)', () => {
+  const ukChoice = cldrPluralChoice('uk')
+  it('one: 1, 21, 101', () => {
+    expect(ukChoice(1, 3)).toBe(0)
+    expect(ukChoice(21, 3)).toBe(0)
+    expect(ukChoice(101, 3)).toBe(0)
+  })
+  it('few: 2-4, 22-24', () => {
+    expect(ukChoice(2, 3)).toBe(1)
+    expect(ukChoice(4, 3)).toBe(1)
+    expect(ukChoice(23, 3)).toBe(1)
+  })
+  it('many: 0, 5-20, 11-14, 111', () => {
+    expect(ukChoice(0, 3)).toBe(2)
+    expect(ukChoice(11, 3)).toBe(2)
+    expect(ukChoice(17, 3)).toBe(2)
+    expect(ukChoice(111, 3)).toBe(2)
+  })
+})
+
 describe('pipe messages render the agreed form end-to-end', () => {
   const i18n = createI18n({
     legacy: false,

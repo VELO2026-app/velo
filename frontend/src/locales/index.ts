@@ -64,6 +64,7 @@ export function cldrPluralChoice(
 const PLURAL_RULES = {
   ru: cldrPluralChoice('ru'),
   en: cldrPluralChoice('en'),
+  uk: cldrPluralChoice('uk'),
   de: cldrPluralChoice('de'),
   es: cldrPluralChoice('es'),
 }

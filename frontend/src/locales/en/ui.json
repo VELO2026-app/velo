@@ -40,7 +40,8 @@
     "pickerChooseDate": "Choose a date",
     "languageNames": {
       "ru": "Русский",
-      "en": "English"
+      "en": "English",
+      "uk": "Українська"
     }
   }
 }

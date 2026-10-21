@@ -1,0 +1,38 @@
+{
+  "diary": {
+    "categories": {
+      "entries": "Щоденник",
+      "dreams": "Сонник",
+      "feedbacks": "Feedbacks",
+      "checkins": "Check-ins",
+      "practices": "Практики"
+    },
+    "search": {
+      "placeholder": "Шукати...",
+      "aria": "Пошук по щоденнику",
+      "clearAria": "Очистити",
+      "recent": "Недавно ви шукали:",
+      "found": "Знайдено: {n}"
+    },
+    "bannerConfirmedTitle": "Ви записалися на",
+    "bannerConfirmedRef": "[{title} з {master}]",
+    "bannerConfirmedRefNoMaster": "[{title}]"
+  },
+  "reflection": {
+    "v1": {
+      "bannerTitle": "Як ваше самопочуття?",
+      "screenTitle": "Помітили, що вас сьогодні не було",
+      "screenSubtitle": "Як ваше самопочуття?"
+    },
+    "v2": {
+      "bannerTitle": "Як минув ваш день?",
+      "screenTitle": "Ми сумували без вас",
+      "screenSubtitle": "Розкажете, як минув ваш день?"
+    },
+    "v3": {
+      "bannerTitle": "Поділіться станом",
+      "screenTitle": "Іноді тіло просить паузи",
+      "screenSubtitle": "Чого вам сьогодні бракувало найбільше?"
+    }
+  }
+}

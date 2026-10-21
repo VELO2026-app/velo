@@ -13,7 +13,7 @@
 // User.language is the source of truth the UI follows (locales/index.ts).
 // =============================================================================
 
-export const SUPPORTED_LOCALES = ['ru', 'en', 'de', 'es'] as const
+export const SUPPORTED_LOCALES = ['ru', 'en', 'uk', 'de', 'es'] as const
 
 export type Locale = (typeof SUPPORTED_LOCALES)[number]
 
