@@ -142,19 +142,19 @@ booking.reminder_24h:
   telegram:
     title: "Практика завтра"
     body: "⏰ Напоминание: <b>{practice_title}</b> начнётся через 24 часа.\n\n📅 {scheduled_at}\n👤 Мастер: {master_name}"
-    button_text: "Открыть кошелёк"
+    button_text: "Открыть практику"
 
 booking.reminder_1h:
   telegram:
     title: "Практика через 1 час"
     body: "⏰ <b>{practice_title}</b> начнётся через 1 час!\n\n📅 {scheduled_at}\n👤 Мастер: {master_name}"
-    button_text: "Открыть кошелёк"
+    button_text: "Открыть практику"
 
 booking.reminder_10m:
   telegram:
     title: "Практика скоро начнётся"
-    body: "🔔 <b>{practice_title}</b> начнётся через 10 минут!\n\n👤 Мастер: {master_name}"
-    button_text: "Открыть кошелёк"
+    body: "🔔 <b>{practice_title}</b> начнётся через 10 минут!\n\n📅 {scheduled_at}\n👤 Мастер: {master_name}"
+    button_text: "Открыть практику"
 
 # -- Post-practice prompts --
 

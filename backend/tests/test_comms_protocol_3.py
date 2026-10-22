@@ -23,6 +23,7 @@
 # synthetic ids that no band user owns, cleaned up by those ids.
 # =============================================================================
 
+import string
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -48,6 +49,7 @@ from app.core.events.reminders import (
     BookingRef,
     booking_correlation,
     cancel_practice_reminders,
+    format_event_time,
     new_reschedule_act,
     practice_correlation,
     schedule_booking_reminders,
@@ -720,12 +722,20 @@ class TestProfileV2:
         assert len(doc["types"]) == 47
 
     def test_every_record_is_closed(self) -> None:
-        """An unknown key refuses comms startup; only x-... is tolerated."""
+        """An unknown key refuses comms startup; only x-... is tolerated.
+
+        The allowed set is the fields THIS profile uses, not every field the
+        comms loader knows: a new field is a conscious edit here, not a
+        silent widening. Until BE-132 that set was {category, channels} and
+        was right -- no record used anything else. BE-132 gave four types
+        `recipient_schedule: bypass` (comms field since 3.3.0), which widened
+        it; which four, and with which value, is TestRecipientSchedule's.
+        """
         for key, record in self._doc()["types"].items():
             assert isinstance(record, dict), key
             extra = {
                 k for k in record
-                if k not in {"category", "channels"}
+                if k not in {"category", "channels", "recipient_schedule"}
                 and not str(k).startswith("x-")
             }
             assert extra == set(), key
@@ -760,3 +770,136 @@ class TestProfileV2:
             "startup; only `x-...` keys are tolerated."
         ) in text
         assert "Unknown spec keys are tolerated" not in text
+
+
+# ===========================================================================
+# 5. BE-132: who goes past the person's schedule, and what the booking
+#    reminders say (no database except the last test)
+# ===========================================================================
+
+# Owner ruling 2026-10-11: the four types whose job expires (expiry_at)
+# before a held delivery would come out. comms-profile/types.yaml header.
+BYPASS_TYPES = {
+    "booking.reminder_1h",
+    "booking.reminder_10m",
+    "practice.master_reminder_1h",
+    "waitlist.spot_available",
+}
+# The button the sheets give every other type whose action is open_practice.
+_OPEN_PRACTICE_LABEL = {"ru": "Открыть практику", "en": "Open practice"}
+
+
+class _RefusingDuplicatesLoader(yaml.SafeLoader):
+    """yaml.safe_load keeps the LAST of two equal keys without a word; the
+    comms loader refuses the profile instead (app/profile/loader.py,
+    _DuplicateKeyLoader) and comms does not start. This one refuses too,
+    so a duplicated record is caught here and not on the box."""
+
+    def construct_mapping(self, node, deep=False):
+        seen: set = set()
+        for key_node, _ in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            assert key not in seen, f"key declared twice: {key!r}"
+            seen.add(key)
+        return super().construct_mapping(node, deep=deep)
+
+
+def _strict(path: Path) -> dict:
+    return yaml.load(path.read_text(), Loader=_RefusingDuplicatesLoader)
+
+
+def _sheets(locale: str) -> dict:
+    return _strict(_profile_dir() / "templates" / f"{locale}.yaml")
+
+
+class TestRecipientSchedule:
+    def test_no_key_is_declared_twice(self) -> None:
+        """POVTOR: one file per check -- the dictionary and both sheets."""
+        _strict(_profile_dir() / "types.yaml")
+        for locale in ("ru", "en"):
+            _sheets(locale)
+
+    def test_exactly_the_four_types_bypass_the_schedule(self) -> None:
+        types = _strict(_profile_dir() / "types.yaml")["types"]
+        declaring = {k for k, v in types.items() if "recipient_schedule" in v}
+        assert declaring == BYPASS_TYPES
+        # The value is bypass, written exactly -- comms refuses any other
+        # spelling at startup, and `respect` is its default, never written.
+        for key in BYPASS_TYPES:
+            assert types[key]["recipient_schedule"] == "bypass", key
+        # Pair: everyone else declares nothing, and is there.
+        others = set(types) - BYPASS_TYPES
+        assert len(others) == len(types) - 4 > 0
+        for key in others:
+            assert "recipient_schedule" not in types[key], key
+
+    @pytest.mark.parametrize("locale", ["ru", "en"])
+    def test_every_booking_reminder_names_its_start_time(self, locale: str) -> None:
+        """A reminder that comes after the practice moved says WHICH time it
+        is about: _10m did not (BE-132 audit), _24h and _1h already did."""
+        sheets = _sheets(locale)
+        for key in BOOKING_REMINDER_TYPES:
+            body = sheets[key]["telegram"]["body"]
+            fields = {name for _, name, _, _ in string.Formatter().parse(body)}
+            assert "scheduled_at" in fields, (locale, key)
+
+    @pytest.mark.parametrize("locale", ["ru", "en"])
+    def test_the_booking_reminders_button_opens_the_practice(
+        self, locale: str,
+    ) -> None:
+        """Their action is open_practice (core/events/reminders.py), so the
+        button says so -- it used to say "open wallet". Pair: the label is
+        the one the other open_practice types already carry, and the wallet
+        types keep theirs."""
+        sheets = _sheets(locale)
+        label = _OPEN_PRACTICE_LABEL[locale]
+        assert sheets["booking.confirmed"]["telegram"]["button_text"] == label
+        for key in BOOKING_REMINDER_TYPES:
+            assert sheets[key]["telegram"]["button_text"] == label, key
+        wallet = sheets["wallet.topup_confirmed"]["telegram"]["button_text"]
+        assert wallet != label and wallet
+
+
+@pytest.mark.asyncio
+async def test_every_variable_a_reminder_sheet_reads_is_sent(
+    db_session: AsyncSession,
+) -> None:
+    """comms fills a sheet from the job's action_data (comms
+    app/engine/formatters.py build_variables) -- so {scheduled_at} reaches
+    the _10m sheet only if velo sends it, as a finished string. One series,
+    in the reader's zone: each reminder carries the same time, the one
+    format_event_time gives, and every name its sheets read in both
+    locales; its action is open_practice."""
+    anchor = datetime(2031, 3, 7, 18, 30, tzinfo=UTC)
+    await schedule_booking_reminders(
+        db_session,
+        booking_id=SYNTH_BOOKING,
+        user_id=SYNTH_USER,
+        practice_id=SYNTH_PRACTICE,
+        practice_title="Yoga",
+        master_name="Anna",
+        scheduled_at=anchor,
+        act=BOOKED_ACT,
+        timezone="Europe/Berlin",
+    )
+    await db_session.commit()
+    events = await _synth_events(db_session)
+    sent = {e.payload["type"]: e.payload["action_data"] for e in events}
+    await db_session.execute(
+        delete(OutboxEvent).where(OutboxEvent.id.in_([e.id for e in events]))
+    )
+    await db_session.commit()
+
+    assert set(sent) == set(BOOKING_REMINDER_TYPES)
+    expected = format_event_time(anchor, "Europe/Berlin")
+    assert isinstance(expected, str) and expected
+    for key, data in sent.items():
+        assert data["scheduled_at"] == expected, key
+        assert data["action"] == "open_practice", key
+        for locale in ("ru", "en"):
+            sheet = _sheets(locale)[key]["telegram"]
+            for text in (sheet["title"], sheet["body"]):
+                for _, name, _, _ in string.Formatter().parse(text):
+                    if name:
+                        assert name in data, (locale, key, name)
+
