@@ -11,13 +11,16 @@
 // Pure functions -- no fetching, no module-level state, no mocking needed.
 // =============================================================================
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
 import {
   catalogDirectionOptions,
   catalogStylesForDirection,
+  directionDisplayLabel,
+  styleDisplayLabel,
   DIRECTION_OPTIONS,
   stylesForDirection,
 } from '@/utils/practiceOptions'
+import { setLocale } from '@/locales'
 import type { TaxonomyListResponse } from '@/api/taxonomy'
 
 const CATALOG_WITH_CUSTOM_DIRECTION: TaxonomyListResponse = {
@@ -105,5 +108,45 @@ describe('catalogStylesForDirection', () => {
     // happen in practice (catalog is a superset), but must degrade to [] --
     // never to the hardcoded fallback list for an unrelated direction.
     expect(catalogStylesForDirection(CATALOG_WITH_CUSTOM_DIRECTION, 'meditation')).toEqual([])
+  })
+})
+
+// tz-i18n + BE-165 patch: the DB catalog serves ONE label per row (the ru
+// storage canon). The display mapping renders KNOWN values through the
+// live-locale seed label and keeps the server label only for catalog-only
+// additions -- so the method picker/filter/form options follow the interface
+// language without forking the stored vocabulary.
+describe('catalog label display mapping (directionDisplayLabel/styleDisplayLabel)', () => {
+  afterEach(async () => {
+    await setLocale('ru')
+  })
+
+  it('a known direction renders the ACTIVE locale label, not the server one', async () => {
+    await setLocale('en')
+    // Server sends its ru canon label; the seed key wins for display.
+    expect(directionDisplayLabel('yoga', 'Йога')).toBe('Yoga')
+    // A catalog-only addition has no seed key -- the server label stands.
+    expect(directionDisplayLabel('therapy', 'Терапия')).toBe('Терапия')
+  })
+
+  it('a known style renders the ACTIVE locale label, not the server one', async () => {
+    await setLocale('en')
+    expect(styleDisplayLabel('hatha', 'Хатха-йога')).toBe('Hatha yoga')
+    expect(styleDisplayLabel('grounding', 'Заземление')).toBe('Заземление')
+  })
+
+  it('the option builders resolve labels through the same mapping', async () => {
+    await setLocale('en')
+    const directions = catalogDirectionOptions(CATALOG_WITH_CUSTOM_DIRECTION)
+    expect(directions).toContainEqual({ value: 'yoga', label: 'Yoga' })
+    expect(directions).toContainEqual({ value: 'therapy', label: 'Терапия' })
+    const styles = catalogStylesForDirection(CATALOG_WITH_CUSTOM_DIRECTION, 'yoga')
+    expect(styles).toEqual([{ value: 'hatha', label: 'Hatha yoga' }])
+    // ...and back to ru the same builders render the canon labels again.
+    await setLocale('ru')
+    expect(catalogDirectionOptions(CATALOG_WITH_CUSTOM_DIRECTION)).toContainEqual({
+      value: 'yoga',
+      label: 'Йога',
+    })
   })
 })

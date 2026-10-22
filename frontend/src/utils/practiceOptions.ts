@@ -487,11 +487,34 @@ export function hasStyleLabel(styleValue: string): boolean {
 // `d.value as PracticeDirection`). Contained here and in that one other spot;
 // PracticeDirection itself is NOT widened.
 
+/** DISPLAY label for a catalog direction row: the live-locale seed label for
+ *  the known taxonomy, the server's own label otherwise. The DB catalog
+ *  serves ONE label per row -- the ru storage canon (tz-i18n §3.1 item 1) --
+ *  so on a non-ru UI the known directions would render Russian without this
+ *  mapping. Catalog-only additions (admin-approved customs, no seed key)
+ *  keep the server label until the backend ships per-locale labels (BE-165).
+ *  DISPLAY-ONLY: flattenMethods keeps composing the stored «Направление —
+ *  Вид» canon from the server labels, so storage never forks. */
+export function directionDisplayLabel(value: string, catalogLabel: string): string {
+  return DIRECTION_OPTIONS.find((o) => o.value === value)?.label ?? catalogLabel
+}
+
+/** DISPLAY label for a catalog style row (same contract as
+ *  directionDisplayLabel, against the practice.styles keys). */
+export function styleDisplayLabel(value: string, catalogLabel: string): string {
+  return hasStyleLabel(value) ? styleLabel(value) : catalogLabel
+}
+
 /** Direction options, catalog-first with a fallback to the hardcoded
- *  DIRECTION_OPTIONS when the catalog is cold or unreachable. */
+ *  DIRECTION_OPTIONS when the catalog is cold or unreachable. Labels resolve
+ *  through directionDisplayLabel: live locale for the known taxonomy, the
+ *  server's ru canon label for catalog-only rows. */
 export function catalogDirectionOptions(catalog: TaxonomyListResponse | null): DirectionOption[] {
   if (!catalog) return DIRECTION_OPTIONS
-  return catalog.directions.map((d) => ({ value: d.value as PracticeDirection, label: d.label }))
+  return catalog.directions.map((d) => ({
+    value: d.value as PracticeDirection,
+    label: directionDisplayLabel(d.value, d.label),
+  }))
 }
 
 /** Styles for one direction, catalog-first with a fallback to the hardcoded
@@ -499,7 +522,7 @@ export function catalogDirectionOptions(catalog: TaxonomyListResponse | null): D
  *  catalog IS warm but the direction isn't found in it (should not happen --
  *  the catalog is a superset of the hardcoded directions), returns [] rather
  *  than falling back, mirroring MethodTaxonomyPicker.vue's own
- *  catalogStylesForDirection(). */
+ *  catalogStylesForDirection(). Labels resolve through styleDisplayLabel. */
 export function catalogStylesForDirection(
   catalog: TaxonomyListResponse | null,
   direction: string | undefined | null,
@@ -507,5 +530,10 @@ export function catalogStylesForDirection(
   if (!direction) return []
   if (!catalog) return stylesForDirection(direction as PracticeDirection)
   const entry = catalog.directions.find((d) => d.value === direction)
-  return entry ? (entry.styles ?? []).map((s) => ({ value: s.value, label: s.label })) : []
+  return entry
+    ? (entry.styles ?? []).map((s) => ({
+        value: s.value,
+        label: styleDisplayLabel(s.value, s.label),
+      }))
+    : []
 }

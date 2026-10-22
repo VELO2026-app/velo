@@ -110,6 +110,8 @@ import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import {
   DIRECTION_OPTIONS,
   stylesForDirection,
+  directionDisplayLabel,
+  styleDisplayLabel,
   type DirectionOption,
   type StyleOption,
 } from '@/utils/practiceOptions'
@@ -219,20 +221,29 @@ onMounted(async () => {
 })
 
 /** All directions, catalog-first. Cast is safe: the seeded catalog is
- *  byte-identical to DIRECTION_OPTIONS today (see header comment). */
+ *  byte-identical to DIRECTION_OPTIONS today (see header comment). Labels
+ *  resolve through directionDisplayLabel: the live locale for the known
+ *  taxonomy, the server's ru canon label for catalog-only rows (BE-165 will
+ *  localize those server-side). */
 function allDirectionOptions(): DirectionOption[] {
   if (!catalog.value) return [...DIRECTION_OPTIONS]
   return catalog.value.directions.map((d) => ({
     value: d.value as PracticeDirection,
-    label: d.label,
+    label: directionDisplayLabel(d.value, d.label),
   }))
 }
 
-/** Styles for one direction, catalog-first. */
+/** Styles for one direction, catalog-first. Labels resolve through
+ *  styleDisplayLabel (same contract as the directions above). */
 function catalogStylesForDirection(dir: PracticeDirection): StyleOption[] {
   if (!catalog.value) return stylesForDirection(dir)
   const entry = catalog.value.directions.find((d) => d.value === dir)
-  return entry ? (entry.styles ?? []).map((s) => ({ value: s.value, label: s.label })) : []
+  return entry
+    ? (entry.styles ?? []).map((s) => ({
+        value: s.value,
+        label: styleDisplayLabel(s.value, s.label),
+      }))
+    : []
 }
 
 // -- Level 1 (directions) ----------------------------------------------------
