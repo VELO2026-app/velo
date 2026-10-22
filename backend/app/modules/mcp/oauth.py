@@ -230,15 +230,29 @@ def _https_redirect(uri: object) -> bool:
 # connector docs). It is a request to a URL a client chose, so it is fenced:
 #   - the URL: https, port 443, a path, no query, no fragment, no userinfo,
 #     at most 2048 characters, and its host on mcp_oauth_cimd_allowed_hosts
-#     (claude.ai by default) -- anything else is refused unfetched;
+#     (claude.ai and chatgpt.com by default) -- anything else is refused
+#     unfetched;
 #   - the request: no redirects followed, mcp_oauth_cimd_timeout_seconds,
 #     at most mcp_oauth_cimd_max_bytes read, status 200 and an
 #     application/json body, or refused;
 #   - the document: a JSON object whose own client_id equals the URL, a
-#     public client ("none", no secret), https redirect URIs only (no
-#     loopback -- owner ruling; Claude Code's document is loopback-only and
-#     is refused by this rule), scope within ours (absent -> all three), and
-#     valid as the SDK's OAuthClientInformationFull.
+#     public client (no client_secret, and "none" offered -- below), https
+#     redirect URIs only (no loopback -- owner ruling; Claude Code's
+#     document is loopback-only and is refused by this rule), scope within
+#     ours (absent -> all three), and valid as the SDK's
+#     OAuthClientInformationFull.
+# A PUBLIC CLIENT is one that offers "none" (BE-170, dispatcher's ruling):
+# either as its token_endpoint_auth_method, as claude.ai's document does,
+# or inside its token_endpoint_auth_methods_supported list, as ChatGPT's
+# does -- ChatGPT names private_key_jwt as its preference and picks a
+# method from what both sides list (MCP SEP-3149; OpenAI's plugin auth
+# docs), and our metadata lists "none" only. Either way the client is kept
+# as "none": the only method this server takes, so the client gets exactly
+# claude.ai's protection -- PKCE S256, the exact redirect URI, a one-time
+# code. A document whose own method is "none" passes whatever its list
+# says; that is the one cell where this is looser than SEP-3149 (which
+# reads the list alone), and it keeps every document accepted before
+# BE-170 accepted. What this leaves open: KNOWN CEILING at _offers_none.
 # The document is kept in mcp_oauth_clients (fetched_at) for
 # mcp_oauth_cimd_cache_seconds and fetched again after that. If that later
 # fetch cannot REACH the document (network, timeout, a non-200 status), the
@@ -327,10 +341,53 @@ async def _fetch_cimd(url: str) -> dict:
     return doc
 
 
+def _offers_none(doc: dict) -> bool:
+    """Whether the document offers the "none" method (section header): as
+    its own method, or as an element of its list of methods -- a JSON
+    array holding exactly "none". A string is not a list ("none" in
+    "xnonex" would pass), and other elements of the list do not matter:
+    the list is read, never kept.
+
+    KNOWN CEILING -- ChatGPT is a public client only while its document
+    offers "none".
+      Mechanics: ChatGPT's document prefers private_key_jwt and lists
+        ["none", "private_key_jwt"]; it is accepted through the list and
+        kept as "none". If the list stops holding "none", the document is
+        refused (not_public): once the kept copy is older than
+        mcp_oauth_cimd_cache_seconds, ChatGPT's /authorize, /token and
+        refresh all fail, and the access tokens already issued live out
+        their hour. If ChatGPT sends a client_assertion without client_id
+        to /token, the SDK's ClientAuthenticator answers 401 invalid_client
+        ("Missing client_id") before any code here runs -- nothing of ours
+        is logged.
+      Status: acknowledged by design.
+      Task: BE-170, item 2 of the card (private_key_jwt) -- left out of
+        the BE-170 delivery.
+      Trigger: mcp_oauth_cimd_refused with host=chatgpt.com and
+        reason=not_public in the app log; or a 401 on POST /token in
+        nginx's access log while a ChatGPT connection is in use -- what
+        the student sees is ChatGPT not finishing the connection after
+        "Разрешить".
+      Fix form: private_key_jwt -- the SDK's /token handler with a client
+        authenticator of ours: the JWKS fetched from the document's
+        jwks_uri on an allowed host, RS256 checked, aud, iss/sub, and a
+        replay guard on jti in Redis.
+      Rejected: keeping a client secret -- the SDK compares it in plain
+        text, so it would be stored in plain text (BE-141); keeping the
+        document's own private_key_jwt -- the SDK's ClientAuthenticator
+        refuses every method but "none" and the two secret ones
+        ("Unsupported auth method"), so /token would always fail.
+    """
+    if doc.get("token_endpoint_auth_method") == "none":
+        return True
+    offered = doc.get("token_endpoint_auth_methods_supported")
+    return isinstance(offered, list) and "none" in offered
+
+
 def _cimd_info(url: str, doc: dict) -> OAuthClientInformationFull:
     if doc.get("client_id") != url:
         raise _CimdRefusedError("client_id_mismatch")
-    if "client_secret" in doc or doc.get("token_endpoint_auth_method") != "none":
+    if "client_secret" in doc or not _offers_none(doc):
         raise _CimdRefusedError("not_public")
     scope = doc.get("scope")
     if scope is not None and (
@@ -338,8 +395,13 @@ def _cimd_info(url: str, doc: dict) -> OAuthClientInformationFull:
     ):
         raise _CimdRefusedError("scope")
     try:
+        # Kept as "none" whatever the document prefers: _offers_none.
         info = OAuthClientInformationFull.model_validate(
-            doc | {"scope": scope or " ".join(SCOPES)}
+            doc
+            | {
+                "scope": scope or " ".join(SCOPES),
+                "token_endpoint_auth_method": "none",
+            }
         )
     except ValidationError:
         raise _CimdRefusedError("bad_metadata") from None

@@ -810,12 +810,15 @@ class Settings(BaseSettings):
     # Client ID Metadata Documents (CIMD, owner ruling): a client whose
     # client_id is an https URL on one of these hosts (comma-separated,
     # exact host match, case-insensitive) is known by fetching that URL --
-    # claude.ai's "Recommended" way. Any other host: refused (the server
-    # would otherwise fetch a URL a stranger names). The document is kept
-    # this long, then fetched again; it may be at most this many bytes and
-    # must arrive within this many seconds -- claude.ai gives the whole
-    # token request 10.
-    mcp_oauth_cimd_allowed_hosts: str = "claude.ai"
+    # the way claude.ai recommends and ChatGPT prefers (BE-170). By default
+    # the two of them: claude.ai and chatgpt.com. Any other host: refused
+    # (the server would otherwise fetch a URL a stranger names). Set to an
+    # empty value, the list is empty and every CIMD client is refused --
+    # claude.ai's included, since the metadata still offers CIMD. The
+    # document is kept this long, then fetched again; it may be at most
+    # this many bytes and must arrive within this many seconds -- claude.ai
+    # gives the whole token request 10.
+    mcp_oauth_cimd_allowed_hosts: str = "claude.ai,chatgpt.com"
     mcp_oauth_cimd_cache_seconds: int = 86400
     mcp_oauth_cimd_max_bytes: int = 16384
     mcp_oauth_cimd_timeout_seconds: float = 5.0
