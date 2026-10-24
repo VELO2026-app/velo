@@ -10,11 +10,20 @@
 # from client input. A request that tries to supply one is rejected, not
 # silently ignored: silence would hide an attempt.
 #
-# READ AUTHZ, the part comms cannot do for us: its read API is
-# operator-scoped, so it has no answer to "is this student in thread T". A
-# forged thread id would otherwise read a stranger's conversation. Every
-# thread-id route therefore resolves the local ChatThread pointer first
-# (chats/models.py) and checks membership against the session.
+# READ AUTHZ, the part comms cannot do for us: comms reads any thread id it
+# is given -- it has no answer to "is this person in thread T". A forged
+# thread id would otherwise read a stranger's conversation. Every thread-id
+# route therefore resolves a local pointer first and checks membership
+# against the session: the ChatThread pointer of a DM (chats/models.py), or
+# -- BE-163 -- the caller's OWN support thread pointer
+# (support/service.py::own_support_thread), by strict equality.
+#
+# THE LISTS COME FROM comms (BE-163, comms 3.9.0): a person's
+# conversations as a CLIENT (`?client=`) -- their DMs and their support
+# conversation in one list, most recently active first -- and, for a
+# master, their operator list on top. Each row carries its last message;
+# a support row's is rendered so that a reply in a language the person
+# does not read never leaves the process (support/translation.py).
 #
 # WHAT IS PROXIED (six of the nine 3b endpoints): create-or-get, list, post
 # message, list messages, mark read, unread count. The operator-queue verbs
@@ -44,22 +53,27 @@
 #   POST /chats           -- student -> verified master (the pre-sale channel)
 #   POST /chats/students  -- verified master -> student (the reverse, T3)
 # MEMBERSHIP has no exceptions: you are one of the two ids on the local
-# pointer row, or the thread does not exist as far as you are concerned.
-# No role widens it -- a thread neither of whose ids is the caller 404s for
-# everyone, admins included.
+# pointer row, or the client of the support thread whose pointer is yours,
+# or the thread does not exist as far as you are concerned. No role widens
+# it -- a thread neither of whose ids is the caller 404s for everyone,
+# admins included (an admin reads support threads through
+# /api/v1/support, never here).
 #
 # FAILURE MODEL: inherited from core/comms.py -- comms unreachable/5xx ->
 # 502, timeout -> 504, modeled 4xx forwarded. A chat outage never takes velo
 # down with it.
 # =============================================================================
 
+import base64
+import binascii
+import json
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends, Header, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
@@ -81,6 +95,13 @@ from app.core.exceptions import (
 from app.modules.auth.dependencies import get_current_user
 from app.modules.chats.models import ChatThread
 from app.modules.masters.service import is_master_verified
+from app.modules.support.models import SupportThread
+from app.modules.support.service import (
+    client_support_messages,
+    own_support_thread,
+    send_support_message,
+)
+from app.modules.support.translation import render_for_client, reply_language
 from app.modules.users.models import User, UserRole
 
 logger = structlog.get_logger()
@@ -106,6 +127,21 @@ _USER_OPERATOR_KIND = "user"
 # log line reads as a serialization artifact, which is the opposite of the
 # distinctness this marker exists for.)
 _FORM_KEY_ABSENT = "<no operator_kind>"
+
+# The form of a support thread (support/service.py opens it). On a CLIENT
+# list it is the person's own support conversation -- once its id is
+# proven to be their pointer (_client_rows); on an OPERATOR list it is the
+# pool, which never passes (_keep_only_user_form_threads).
+_SECTION_OPERATOR_KIND = "section"
+
+# What a row of GET /chats is, for the screen (BE-163): a conversation with
+# a person, or the caller's own conversation with support.
+CHANNEL_CHAT = "chat"
+CHANNEL_SUPPORT = "support"
+
+# A master's threads as a CLIENT are read whole, in one call of comms'
+# largest page (comms PAGE_LIMIT_MAX) -- see _merge_client_rows.
+_CLIENT_LIST_LIMIT = 100
 
 
 def _is_user_form_row(thread: Any) -> bool:
@@ -171,20 +207,6 @@ class MessageCreate(BaseModel):
     body: str = Field(min_length=1, max_length=4000)
 
 
-async def _load_thread(
-    session: AsyncSession, thread_id: UUID
-) -> ChatThread:
-    stmt = select(ChatThread).where(ChatThread.comms_thread_id == thread_id)
-    result = await session.execute(stmt)
-    thread = result.scalar_one_or_none()
-    if thread is None:
-        # Deliberately 404 and not 403: an id we have no pointer for is
-        # indistinguishable from one that does not exist, and saying which
-        # would confirm the existence of somebody else's conversation.
-        raise NotFoundError("Chat not found")
-    return thread
-
-
 def _is_participant(thread: ChatThread, user: User) -> bool:
     return user.id in (thread.client_user_id, thread.operator_user_id)
 
@@ -223,7 +245,7 @@ def _keep_only_user_form_threads(payload: dict[str, Any]) -> None:
     WHY THIS EXISTS -- A PRIVACY LEAK, not tidying. comms' operator-scoped
     read returns `assignee == me` OR `(section thread AND assignee IS
     NULL)`: the UNCLAIMED SUPPORT QUEUE reaches every operator, with no
-    supervisor involved. velo has no support screen for a master, so those
+    supervisor involved. A master is not support staff, so those
     rows were a stranger's support request sitting in a master's personal
     chat list -- carrying the opener's real name, avatar and velo uuid via
     the peer block, plus `title`, which is the topic text the opener typed
@@ -252,8 +274,12 @@ def _keep_only_user_form_threads(payload: dict[str, Any]) -> None:
     same predicate, deliberately. It is dead in both directions anyway --
     no projection row, so _require_participant 404s it -- and the rule
     this module lives by is that listed and openable must be the same set.
-    When a support screen exists it gets its own surface and its own
-    projection rows; it does not get lodged in the personal list.
+
+    A MASTER'S OWN SUPPORT CONVERSATION IS NOT LOST HERE (BE-163): it is a
+    pool row on the operator list too, and is dropped with the pool -- it
+    reaches the master's list from the CLIENT list instead, where it is
+    admitted only as the master's own (_client_rows). This filter stays the
+    guard of the operator list, whatever the client list brings.
 
     REJECTED: filtering by the local projection ("keep rows that have a
     chat_threads row"), which is tempting because it literally mirrors the
@@ -495,11 +521,12 @@ async def _local_thread_list(
 ) -> dict[str, Any]:
     """Local-pointer rows, peers in one SELECT, unread in one comms call.
 
-    Used by the two callers comms' operator-scoped list cannot serve: a
-    student (a CLIENT there, invisible to that API) and an admin (who is
-    not an operator scope either -- their list is their own threads, on
-    whichever side of the pair). P-1: without the bulk peer SELECT the
-    frontend would need one public-profile request per row.
+    Used by the one caller comms' lists cannot serve: an admin, whose list
+    is their own DM threads on whichever side of the pair -- neither one
+    operator scope nor one client scope. (A student's list used to come
+    from here too; since BE-163 it is comms' client list.) P-1: without the
+    bulk peer SELECT the frontend would need one public-profile request
+    per row.
 
     UNREAD RIDES ALONG (T-51), in one comms call for the whole page, so
     the frontend needs none of its own. `participant` is the SESSION's
@@ -538,11 +565,26 @@ async def _local_thread_list(
 
 async def _require_participant(
     session: AsyncSession, thread_id: UUID, user: User
-) -> ChatThread:
-    thread = await _load_thread(session, thread_id)
-    if not _is_participant(thread, user):
-        raise NotFoundError("Chat not found")
-    return thread
+) -> ChatThread | SupportThread:
+    """The conversation `thread_id` names, if the caller takes part in it.
+
+    Two kinds, one door (BE-163): a DM whose pointer names the caller on
+    either side, or the caller's OWN support thread -- the id equal to
+    their SupportThread pointer, nothing looser. Everything else is the
+    same 404, before any comms call: a stranger's DM, another person's
+    support thread, an id nobody has. The answer never says which.
+    """
+    stmt = select(ChatThread).where(ChatThread.comms_thread_id == thread_id)
+    dm = (await session.execute(stmt)).scalar_one_or_none()
+    if dm is not None and _is_participant(dm, user):
+        return dm
+    support = await own_support_thread(session, user=user, thread_id=thread_id)
+    if support is not None:
+        return support
+    # Deliberately 404 and not 403: an id we have no pointer for is
+    # indistinguishable from one that does not exist, and saying which
+    # would confirm the existence of somebody else's conversation.
+    raise NotFoundError("Chat not found")
 
 
 async def _create_or_get_thread(
@@ -791,6 +833,275 @@ def _parsed_created_at(payload: dict[str, Any]) -> datetime:
     return datetime.fromisoformat(str(raw))
 
 
+def _uuid_of(value: Any) -> UUID | None:
+    try:
+        return UUID(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _activity_key(row: Any) -> tuple[datetime, UUID] | None:
+    """A row's place in comms' list order, as comms computes it:
+    (COALESCE(last_message_at, created_at), id), both descending
+    (comms app/messaging/operators.py _activity_page). None when the row
+    does not carry a readable one -- it then has no place to be put in."""
+    if not isinstance(row, dict):
+        return None
+    raw = row.get("last_message_at") or row.get("created_at")
+    thread_id = _uuid_of(row.get("id"))
+    try:
+        when = datetime.fromisoformat(str(raw))
+    except (TypeError, ValueError):
+        return None
+    if thread_id is None or when.tzinfo is None:
+        return None
+    return when, thread_id
+
+
+def _dm_last_message(raw: Any) -> dict[str, Any] | None:
+    """A DM row's last message, as the list shows it: the text as written
+    -- nothing is translated between people (handoffer BE-163, section 4)
+    -- and nothing of comms' beyond the four fields of the preview."""
+    if not isinstance(raw, dict):
+        return None
+    out = {k: raw[k] for k in ("id", "sender", "created_at") if k in raw}
+    return {**out, "body": raw.get("body"), "translation": None}
+
+
+async def _read_client_list(
+    user: User,
+    *,
+    limit: int,
+    cursor: str | None,
+    user_locale: str | None,
+) -> tuple[list[Any], str | None]:
+    """One page of comms' CLIENT list for the session's user (comms 3.9.0,
+    INTEGRATION.md section 13): the threads in which they are the client
+    -- their DMs and their support conversation -- most recently active
+    first, each with its unread count and its last message; with
+    `user_locale` the last message also says what became of it in the
+    user's language. `client` is the session's id, never the wire's.
+    """
+    params: dict[str, Any] = {
+        "client": str(user.id),
+        "with_unread": True,
+        "with_last_message": True,
+        "limit": limit,
+    }
+    if user_locale is not None:
+        params["locale"] = user_locale
+    if cursor is not None:
+        params["cursor"] = cursor
+    payload = await comms_request("GET", "/api/v1/threads", params=params)
+    return read_comms_page(payload, path="/api/v1/threads")
+
+
+async def _client_rows(
+    session: AsyncSession,
+    items: list[Any],
+    *,
+    viewer: User,
+    user_locale: str | None,
+) -> list[dict[str, Any]]:
+    """The rows of a CLIENT list page the viewer may see and open --
+    built, enriched and returned; nothing else of the page goes out.
+
+    ALLOWLIST, the same stance as _keep_only_user_form_threads, and for the
+    same reason -- listed and openable are one set, and the unforeseen
+    falls to the hidden side:
+
+      user form, a ChatThread pointer naming this id with the viewer as
+        its client                     -> a chat row; peer = the master
+                                          (operator_value), last message as
+                                          written
+      section form, the id IS the viewer's own SupportThread pointer, with
+        a last message                 -> the support row; last message
+                                          rendered by render_for_client
+      the same, no last message yet    -> no row: the support row appears
+                                          with the first message (owner)
+      anything else -- a user-form row with no pointer, a section row that
+        is not the viewer's pointer, another form, no form, not a mapping
+                                       -> dropped, counted into one warning
+
+    A dropped DM or section row is EMPTY by construction: comms can hold a
+    thread velo has no pointer for only when the transaction that wrote the
+    pointer was lost after comms answered, and nobody can post into such a
+    thread -- every send resolves the pointer first. So the filter hides
+    nothing anybody wrote.
+
+    This is a SECOND list source next to _attach_peers_from_comms, not a
+    second caller of it: that function names a row's `client`, which on a
+    client list is the viewer. It keeps its one caller (see its marker).
+    """
+    ids = {tid for t in items if isinstance(t, dict) and (tid := _uuid_of(t.get("id")))}
+    own_dms: set[UUID] = set()
+    if ids:
+        own_dms = set(
+            (
+                await session.execute(
+                    select(ChatThread.comms_thread_id).where(
+                        ChatThread.comms_thread_id.in_(ids),
+                        ChatThread.client_user_id == viewer.id,
+                    )
+                )
+            ).scalars()
+        )
+    own_support = (
+        await session.execute(
+            select(SupportThread.comms_thread_id).where(
+                SupportThread.client_user_id == viewer.id
+            )
+        )
+    ).scalar_one_or_none()
+
+    peer_ids = {
+        pid
+        for t in items
+        if isinstance(t, dict)
+        and t.get("operator_kind") == _USER_OPERATOR_KIND
+        and _uuid_of(t.get("id")) in own_dms
+        and (pid := _uuid_of(t.get("operator_value"))) is not None
+    }
+    peers: dict[UUID, User] = {}
+    if peer_ids:
+        result = await session.execute(select(User).where(User.id.in_(peer_ids)))
+        peers = {u.id: u for u in result.scalars()}
+
+    viewer_id = str(viewer.id)
+    rows: list[dict[str, Any]] = []
+    dropped: dict[str, int] = {}
+    for t in items:
+        if not isinstance(t, dict):
+            dropped["<not a mapping>"] = dropped.get("<not a mapping>", 0) + 1
+            continue
+        tid = _uuid_of(t.get("id"))
+        form = t.get("operator_kind")
+        if form == _USER_OPERATOR_KIND and tid is not None and tid in own_dms:
+            row = {k: v for k, v in t.items() if k != "last_message"}
+            row["channel"] = CHANNEL_CHAT
+            peer_id = _uuid_of(t.get("operator_value"))
+            row["peer"] = _peer_payload(
+                peers.get(peer_id) if peer_id is not None else None
+            )
+            row["last_message"] = _dm_last_message(t.get("last_message"))
+            rows.append(row)
+            continue
+        if (
+            form == _SECTION_OPERATOR_KIND
+            and tid is not None
+            and tid == own_support
+        ):
+            last = t.get("last_message")
+            if not isinstance(last, dict):
+                continue  # before the first message: not a row yet
+            support_row: dict[str, Any] = {
+                "id": str(tid),
+                "channel": CHANNEL_SUPPORT,
+                "peer": None,
+                "created_at": t.get("created_at"),
+                "last_message_at": t.get("last_message_at"),
+                "last_message": render_for_client(
+                    last, client_id=viewer_id, user_locale=user_locale,
+                ),
+            }
+            if "unread" in t:
+                support_row["unread"] = t["unread"]
+            rows.append(support_row)
+            continue
+        key = str(form) if "operator_kind" in t else _FORM_KEY_ABSENT
+        dropped[key] = dropped.get(key, 0) + 1
+    if dropped:
+        # Counts and forms only -- never an id, a client or a title.
+        logger.warning("chat_client_rows_dropped", dropped=dropped)
+    return rows
+
+
+def _encode_master_cursor(
+    comms_cursor: str, bound: tuple[datetime, UUID],
+) -> str:
+    """velo's cursor for a master's list: comms' own cursor for the
+    operator list, and the place in the list order where this page ended
+    -- the upper edge of the next page's window for client rows."""
+    raw = json.dumps(
+        {"c": comms_cursor, "a": bound[0].isoformat(), "i": str(bound[1])},
+        separators=(",", ":"),
+    )
+    return base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
+
+
+def _decode_master_cursor(token: str) -> tuple[str, tuple[datetime, UUID]]:
+    try:
+        raw = base64.urlsafe_b64decode(token + "=" * (-len(token) % 4))
+        doc = json.loads(raw)
+        comms_cursor = doc["c"]
+        when = datetime.fromisoformat(doc["a"])
+        thread_id = UUID(doc["i"])
+    except (binascii.Error, ValueError, KeyError, TypeError):
+        raise BadRequestError("Malformed cursor") from None
+    if not isinstance(comms_cursor, str) or when.tzinfo is None:
+        raise BadRequestError("Malformed cursor")
+    return comms_cursor, (when, thread_id)
+
+
+def _merge_client_rows(
+    operator_rows: list[dict[str, Any]],
+    client_rows: list[dict[str, Any]],
+    *,
+    upper: tuple[datetime, UUID] | None,
+    lower: tuple[datetime, UUID] | None,
+) -> list[dict[str, Any]]:
+    """A master's page: the operator page, with the client rows that fall
+    between its edges put in their places in the one list order.
+
+    The page's window is (lower, upper): `upper` is where the previous page
+    ended (none on the first page), `lower` is the last row comms returned
+    on this one, before any filter (none on the last page -- every client
+    row older than `upper` belongs here). comms orders both lists by the
+    same key (_activity_key), so the merge is exact inside the window.
+
+    # KNOWN CEILING (a master's client threads are read as one page of
+    # _CLIENT_LIST_LIMIT; acknowledged by design):
+    #   1. Mechanics: the client list is read whole in ONE call of comms'
+    #      largest page, and its rows are spread over the operator pages
+    #      by the window. A master who is the client of more than
+    #      _CLIENT_LIST_LIMIT threads loses the oldest of them from his
+    #      list.
+    #   2. Status: acknowledged by design.
+    #   3. Task: none -- a master is the client of his support thread and
+    #      of the DMs he opened with other masters; a hundred is not in
+    #      sight, and the trigger says when it is.
+    #   4. Trigger: chat_list_client_threads_truncated in the app log
+    #      (comms answered the client list with a next_cursor).
+    #   5. Fix form: page the client list too -- velo's cursor then
+    #      carries the client list's own cursor next to the operator
+    #      list's, and the page takes the newer rows of the two.
+    #   6. Rejected: decoding comms' cursor to place rows -- it is opaque
+    #      (INTEGRATION.md section 5); and walking both lists by two
+    #      cursors with a count of rows to skip -- a thread that gets a
+    #      message between two pages moves up and shifts the count, and a
+    #      row is skipped silently.
+    """
+    placed = [
+        (key, row)
+        for row in client_rows
+        if (key := _activity_key(row)) is not None
+        and (upper is None or key < upper)
+        and (lower is None or key > lower)
+    ]
+    placed.sort(key=lambda pair: pair[0], reverse=True)
+    pending = [row for _, row in placed]
+    keys = [key for key, _ in placed]
+    merged: list[dict[str, Any]] = []
+    for row in operator_rows:
+        key = _activity_key(row)
+        while pending and key is not None and keys[0] > key:
+            merged.append(pending.pop(0))
+            keys.pop(0)
+        merged.append(row)
+    merged.extend(pending)
+    return merged
+
+
 @router.get("")
 async def list_chats(
     request: Request,
@@ -799,88 +1110,134 @@ async def list_chats(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_reader),
 ) -> Any:
-    """The caller's conversations.
+    """The caller's conversations, most recently active first (BE-163).
 
-    THREE lists, because comms knows only one of them:
+    Every row carries `channel` -- "chat" (a person) or "support" (the
+    caller's own conversation with support) -- and `last_message`: {id,
+    sender, created_at, body, translation} or null. In a chat the body is
+    as written and `translation` is null; in the support row an admin's
+    reply in a language the caller does not read is its translation, or
+    body null and `translation` "translating" / "unavailable"
+    (support/translation.py render_for_client). The support row appears
+    with the first message in it.
 
-      MASTER  -- an OPERATOR in comms, so the authoritative, activity-
-        ordered, paginated list comes straight from comms. is_supervisor
-        is hard False: a master sees their own threads and never anyone
-        else's.
+    THREE LISTS:
 
-      ADMIN   -- their own threads and nothing else (either side of the
+      everyone but a master and an admin -- a CLIENT: comms' client list
+        (comms 3.9.0), its order and its cursor; rows filtered and built
+        by _client_rows.
+
+      MASTER  -- an OPERATOR in comms (is_supervisor hard False: their own
+        threads, never anyone else's), filtered by
+        _keep_only_user_form_threads, PLUS their threads as a client --
+        their own support conversation and the DMs they opened with other
+        masters -- put into the same order by _merge_client_rows. The
+        cursor is velo's own (_encode_master_cursor).
+
+      ADMIN   -- their own DM threads and nothing else (either side of the
         pair), i.e. EXACTLY the set _require_participant will let them
-        open. Local, because an admin is not an operator scope and comms
-        cannot express it.
+        open through a DM pointer. Local, because an admin is neither one
+        operator scope nor one client scope, and so ordered by creation,
+        with no cursor and no last message.
         This used to be `is_supervisor=True`, which handed an admin every
         conversation on the installation -- each row enriched with the
         counterparty's real name and avatar, and each row 404ing the
         moment it was opened. A privacy exposure attached to a dead end;
         the widening is gone rather than narrowed.
 
-      everyone else -- a CLIENT, invisible to the operator-scoped comms
-        API, so their list is built from local pointers.
-
-    COST OF THE ADMIN CHANGE, stated plainly: the admin list loses comms'
-    activity ordering and its cursor (created_at desc, next_cursor null --
-    the same deal the student list has always had). Ordering a page by
-    "who wrote last" needs comms, and comms cannot be asked this question.
-
-    UNREAD IN EVERY BRANCH, no per-row calls anywhere (T-51). The master
-    branch asks comms for it inline (with_unread); the two local branches
-    get it in one batch call inside _local_thread_list. A row the caller
-    takes no part in carries NO `unread` key -- reachable in the LOCAL
-    branches, where a comms_thread_id in the projection may be stale or
-    foreign, and there the missing key is the drift detector it was built
-    to be. In the MASTER branch it is not reachable: after the privacy
-    filter every row left is a user-form thread this master is the
-    assignee of, so participation -- and therefore the key -- is
-    guaranteed.
+    UNREAD IN EVERY BRANCH, no per-row calls anywhere (T-51). comms counts
+    it inline on both of its lists (with_unread); the admin branch gets it
+    in one batch call inside _local_thread_list. A row the caller takes no
+    part in carries NO `unread` key -- reachable in the admin branch, where
+    a comms_thread_id in the projection may be stale or foreign, and there
+    the missing key is the drift detector it was built to be. On comms'
+    lists every row left is the caller's own, so the key is there.
 
     THE SUPPORT QUEUE IS NOT IN THIS LIST (T-53). comms hands every
     operator the unclaimed section pool; _keep_only_user_form_threads
-    drops it before anything is resolved. See that function -- it is a
-    privacy filter, not a cosmetic one.
+    drops it before anything is resolved -- a privacy filter, not a
+    cosmetic one. A support row comes ONLY from the client list, and only
+    as the caller's own pointer.
 
-    FAILURE ASYMMETRY, PRE-EXISTING AND NOT INTRODUCED HERE. If comms is
-    down the master branch 502s and the two local branches return 200 with
-    no badges. That split is not new and unread did not create it: the
-    master's list IS comms' list -- one call before this change, the same
-    one call with one more parameter after it. No new failure surface was
-    added to that branch; the local branches gained a call that is
-    explicitly allowed to fail quietly. Do not "fix" the asymmetry by
-    inventing a fallback list for a master -- an empty list on a chat
-    outage is a product decision nobody made.
+    comms DOWN IS A 502 on both comms branches: the list IS comms' list,
+    and an empty or local stand-in on a chat outage is a product decision
+    nobody made. Only the admin branch, local, still answers without
+    badges.
     """
     _reject_actor_override(request)
+    user_locale = reply_language(user)
 
     if user.role == UserRole.MASTER:
+        comms_cursor: str | None = None
+        upper: tuple[datetime, UUID] | None = None
+        if cursor is not None:
+            comms_cursor, upper = _decode_master_cursor(cursor)
         params: dict[str, Any] = {
             "operator": str(user.id),
             # Stamped from the role and never from the wire. Constant now
             # that the admin branch no longer routes through here: nothing
             # this proxy sends comms ever widens the read.
             "is_supervisor": False,
-            # Opt-in additive key (T-51): comms' list shape is frozen and
-            # unchanged without it.
+            # Opt-in additive keys: comms' list shape is frozen and
+            # unchanged without them.
             "with_unread": True,
+            "with_last_message": True,
             "limit": limit,
         }
-        if cursor is not None:
-            params["cursor"] = cursor
+        if comms_cursor is not None:
+            params["cursor"] = comms_cursor
         payload = await comms_request("GET", "/api/v1/threads", params=params)
         # comms' page is READ, not forwarded: the response is velo's own
         # page, built from the two things read_comms_page accepted, so no
         # key of comms' reaches the caller unparsed -- and an unknown shape
         # is a 502, not an unfiltered pass-through (see read_comms_page).
         items, next_cursor = read_comms_page(payload, path="/api/v1/threads")
+        # Where this page ends in the list order: the last row comms
+        # returned, BEFORE the privacy filter drops anything -- the next
+        # operator page starts right after it.
+        lower: tuple[datetime, UUID] | None = None
+        if next_cursor is not None:
+            lower = _activity_key(items[-1]) if items else None
+            if lower is None:
+                logger.error("chat_list_page_end_unreadable")
+                raise HTTPException(status_code=502, detail="Chats unavailable")
         page: dict[str, Any] = {"threads": items, "next_cursor": next_cursor}
         # Privacy filter FIRST -- see _keep_only_user_form_threads. The
         # unclaimed support queue reaches every operator, and nothing about
         # it may be resolved, enriched or returned here.
         _keep_only_user_form_threads(page)
         await _attach_peers_from_comms(page, session)
-        return page
+        operator_rows = [
+            {
+                **{k: v for k, v in t.items() if k != "last_message"},
+                "channel": CHANNEL_CHAT,
+                "last_message": _dm_last_message(t.get("last_message")),
+            }
+            for t in page["threads"]
+        ]
+
+        client_items, client_next = await _read_client_list(
+            user, limit=_CLIENT_LIST_LIMIT, cursor=None, user_locale=user_locale,
+        )
+        if client_next is not None:
+            # The KNOWN CEILING's trigger -- see _merge_client_rows.
+            logger.warning(
+                "chat_list_client_threads_truncated",
+                limit=_CLIENT_LIST_LIMIT,
+            )
+        client_rows = await _client_rows(
+            session, client_items, viewer=user, user_locale=user_locale,
+        )
+        return {
+            "threads": _merge_client_rows(
+                operator_rows, client_rows, upper=upper, lower=lower,
+            ),
+            "next_cursor": (
+                _encode_master_cursor(next_cursor, lower)
+                if next_cursor is not None and lower is not None
+                else None
+            ),
+        }
 
     if user.role == UserRole.ADMIN:
         # Mirrors _is_participant exactly -- listed and openable must be
@@ -903,15 +1260,15 @@ async def list_chats(
             session, admin_rows, viewer_id=user.id,
         )
 
-    rows = (
-        await session.execute(
-            select(ChatThread)
-            .where(ChatThread.client_user_id == user.id)
-            .order_by(ChatThread.created_at.desc())
-            .limit(limit)
-        )
-    ).scalars().all()
-    return await _local_thread_list(session, rows, viewer_id=user.id)
+    items, next_cursor = await _read_client_list(
+        user, limit=limit, cursor=cursor, user_locale=user_locale,
+    )
+    return {
+        "threads": await _client_rows(
+            session, items, viewer=user, user_locale=user_locale,
+        ),
+        "next_cursor": next_cursor,
+    }
 
 
 # Declared ABOVE every /{thread_id} route: a literal segment must not be
@@ -941,15 +1298,17 @@ async def unread_summary(
     open a chat with another master). For a row on one's OWN profile that
     is the right meaning.
 
-    WHERE THAT LEAVES THIS NUMBER AND THE CHAT LIST (T-53). The support
-    pool is now gone from BOTH: out of this aggregate because there is no
-    participation in it, and out of GET /chats because the master branch
-    filters it. What remains is a real and permanent difference, not a
-    drift: a thread where the master is himself the CLIENT counts HERE and
-    never appears in that list, because comms scopes an operator's list by
-    assignee and the assignee there is the other master. That asymmetry is
-    the approved T-51 meaning of this number -- "mine, in whatever role" --
-    and reading the two as "should match" is the mistake to avoid.
+    WHERE THAT LEAVES THIS NUMBER AND THE CHAT LIST (T-53, BE-163). The
+    support pool is gone from BOTH: out of this aggregate because there is
+    no participation in it, and out of GET /chats because the master
+    branch filters it. And since BE-163 the two cover the same threads:
+    a thread where the master is himself the CLIENT -- his own support
+    conversation, a DM he opened with another master -- counts HERE and is
+    in that list too, merged in from comms' client list. "Mine, in
+    whatever role" is now the meaning of both. They can still differ in
+    what one screen shows: the list is paged and its client part is read
+    as one page (see the KNOWN CEILING on _merge_client_rows), the sum is
+    not.
 
     # KNOWN CEILING (velo answers "do I have unread" on TWO surfaces;
     # acknowledged by design):
@@ -992,7 +1351,7 @@ async def post_message(
     body: MessageCreate,
     request: Request,
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_db_reader),
+    session: AsyncSession = Depends(get_db_session),
     idempotency_key: str | None = Header(
         default=None, alias=IDEMPOTENCY_HEADER,
     ),
@@ -1002,10 +1361,24 @@ async def post_message(
     An optional `Idempotency-Key` from the client names ONE intent to send:
     repeated with the same key, it is one message and one ping (see
     core/comms.py message_key). Without it, each request is its own.
+
+    The caller's own support thread (BE-163) is answered through
+    support/service.py::send_support_message, with no topic -- the same
+    function the support form uses, so the message is queued for
+    translation into the support language in this transaction. That write
+    is why the session here commits.
     """
     _reject_actor_override(request)
     key = message_key(user.id, idempotency_key)
-    await _require_participant(session, thread_id, user)
+    conversation = await _require_participant(session, thread_id, user)
+    if isinstance(conversation, SupportThread):
+        return await send_support_message(
+            session,
+            user=user,
+            topic=None,
+            body=body.body,
+            idempotency_key=idempotency_key,
+        )
     return await comms_request(
         "POST",
         f"/api/v1/threads/{thread_id}/messages",
@@ -1021,10 +1394,26 @@ async def list_messages(
     limit: int = Query(default=20, ge=1, le=100),
     cursor: str | None = Query(default=None),
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_db_reader),
+    session: AsyncSession = Depends(get_db_session),
 ) -> Any:
+    """A page of a conversation, newest first.
+
+    The caller's own support thread (BE-163) is read as its client reads
+    it: support/service.py::client_support_messages -- an admin's reply in
+    a language the caller does not read comes as its translation or as no
+    text and a state, never as the original; a reply whose translation was
+    never asked for is queued here, which is why the session commits.
+    """
     _reject_actor_override(request)
-    await _require_participant(session, thread_id, user)
+    conversation = await _require_participant(session, thread_id, user)
+    if isinstance(conversation, SupportThread):
+        return await client_support_messages(
+            session,
+            pointer=conversation,
+            client=user,
+            limit=limit,
+            cursor=cursor,
+        )
     params: dict[str, Any] = {"limit": limit}
     if cursor is not None:
         params["cursor"] = cursor
@@ -1049,7 +1438,12 @@ async def mark_read(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_reader),
 ) -> Any:
-    """Mark the thread read up to now for the CALLER (never for the peer)."""
+    """Mark the thread read up to now for the CALLER (never for the peer).
+
+    The same comms call for a DM and for the caller's own support thread
+    (BE-163): comms keeps a read pointer for every participant, the client
+    of a support thread included.
+    """
     _reject_actor_override(request)
     await _require_participant(session, thread_id, user)
     return await comms_request(

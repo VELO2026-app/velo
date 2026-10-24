@@ -353,8 +353,14 @@ class TestAdminList:
     async def test_master_list_still_comes_from_comms_unwidened(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch
     ) -> None:
-        """The master branch must not have moved: same call, same params,
-        is_supervisor still hard False."""
+        """The master's OPERATOR read must not have moved: the same params,
+        is_supervisor still hard False.
+
+        "Same call" was this docstring's word and held until BE-163, which
+        adds a second read -- the master's own threads as a client. The
+        test now picks the operator call by its reader instead of taking
+        the last call, and pins that the added one never widens.
+        """
         master = await _make_master(client, db_session, BAND_MIN + 37)
         fake = AsyncMock(return_value={"items": [], "next_cursor": None})
         monkeypatch.setattr(_SEAM, fake)
@@ -364,9 +370,13 @@ class TestAdminList:
         )
 
         assert resp.status_code == 200
-        params = fake.await_args.kwargs["params"]
+        calls = [c.kwargs["params"] for c in fake.await_args_list]
+        (params,) = [p for p in calls if "operator" in p]
         assert params["operator"] == master["user"]["id"]
         assert params["is_supervisor"] is False
+        (added,) = [p for p in calls if "operator" not in p]
+        assert added["client"] == master["user"]["id"]
+        assert "is_supervisor" not in added
 
 
 # ---------------------------------------------------------------------------

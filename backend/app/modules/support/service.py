@@ -216,6 +216,12 @@ async def send_support_message(
     wire: the caller's thread is resolved from the local pointer, exactly
     like every other actor field in this codebase.
 
+    TWO DOORS, ONE FUNCTION: the support form (support/router.py, with a
+    topic) and the conversation itself (BE-163: POST /chats/{id}/messages
+    on the caller's own support thread, no topic). Both land here, so a
+    reply from the conversation is queued for translation exactly like the
+    form's message.
+
     `topic` (PROMPT №712): prefixed onto the message text so it survives
     into what an admin actually reads when they open the thread -- the
     durable half of "the topic must survive into something an operator
@@ -257,6 +263,67 @@ async def send_support_message(
             text=text,
         )
     return message
+
+
+async def own_support_thread(
+    session: AsyncSession, *, user: User, thread_id: UUID,
+) -> SupportThread | None:
+    """The caller's OWN support thread, if `thread_id` names it -- or None.
+
+    The one door through which a person's chat routes reach their support
+    conversation (BE-163, chats/router.py): strict equality with the
+    pointer of the CALLER, so another person's support thread id answers
+    None exactly like an id nobody has. No role widens it.
+    """
+    return (
+        await session.execute(
+            select(SupportThread).where(
+                SupportThread.client_user_id == user.id,
+                SupportThread.comms_thread_id == thread_id,
+            )
+        )
+    ).scalar_one_or_none()
+
+
+async def client_support_messages(
+    session: AsyncSession,
+    *,
+    pointer: SupportThread,
+    client: User,
+    limit: int,
+    cursor: str | None,
+) -> dict[str, Any]:
+    """The user's own support thread, as they read it (BE-163).
+
+    Read in the user's language when it is not the support language: only
+    that read says what became of an admin's reply for them
+    (translation.render_for_client), and it drives the catch-up of a reply
+    whose job was lost (translation.client_feed). A user who reads the
+    support language reads the thread as it is.
+    """
+    user_locale = translation.reply_language(client)
+    params: dict[str, Any] = {"limit": limit}
+    if user_locale is not None:
+        params["locale"] = user_locale
+    if cursor is not None:
+        params["cursor"] = cursor
+    payload = await comms_request(
+        "GET",
+        f"/api/v1/threads/{pointer.comms_thread_id}/messages",
+        params=params,
+    )
+    messages, next_cursor = read_comms_page(
+        payload, path="/api/v1/threads/{thread_id}/messages",
+    )
+    return {
+        "messages": await translation.client_feed(
+            session,
+            pointer=pointer,
+            user_locale=user_locale,
+            messages=messages,
+        ),
+        "next_cursor": next_cursor,
+    }
 
 
 def _peer_payload(user: User | None) -> dict[str, Any] | None:
@@ -347,7 +414,7 @@ async def _require_support_thread(
     row per genuine comms thread create), so a row existing here is proof
     the id names a real support thread and not a student<->master DM the
     admin has no business reading through this door. Deliberately 404,
-    not 403 -- existence must not leak (chats/router.py::_load_thread's
+    not 403 -- existence must not leak (chats/router.py::_require_participant's
     own stance, same reasoning).
     """
     pointer = (

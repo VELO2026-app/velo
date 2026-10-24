@@ -28,6 +28,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.chats.router import _decode_master_cursor
 from app.modules.masters.models import MasterProfile
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
@@ -140,7 +141,15 @@ class TestMasterList:
         body = resp.json()
         assert set(body) == {"threads", "next_cursor"}
         assert [t["id"] for t in body["threads"]] == [own["id"]]
-        assert body["next_cursor"] == "c2"
+        # BE-163: the master's cursor is velo's own -- comms' cursor for the
+        # operator list, carried VERBATIM inside, plus where this page ended
+        # in the list order (the last row comms returned, before the
+        # filter). It used to be comms' cursor itself; the merge of the
+        # client list needs the page's edge, which comms' opaque cursor
+        # cannot give back.
+        comms_cursor, edge = _decode_master_cursor(body["next_cursor"])
+        assert comms_cursor == "c2"
+        assert edge[1] == UUID(own["id"])
         assert stranger not in resp.text
         assert "refund!" not in resp.text
 

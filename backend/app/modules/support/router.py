@@ -34,8 +34,15 @@
 #
 # BE-166: every message goes into the thread as written; its translation is
 # a comms VARIANT next to it -- support/translation.py. The admin feed
-# carries the variant and the author's `original`; no user route reads
-# either (the user's read of the thread is BE-163's).
+# carries the variant and the author's `original`.
+#
+# THE USER'S OWN READ IS NOT ON THIS ROUTER (BE-163): a person reads, marks
+# read and answers their support conversation through the chat routes
+# (chats/router.py, /api/v1/chats/{id}/...), where it sits in their list of
+# conversations; those routes resolve the id only against the caller's own
+# pointer (service.py::own_support_thread) and render each message by
+# translation.render_for_client -- never the original of a reply in a
+# language the user does not read.
 #
 # `is_supervisor` and `operator` are NOT accepted as request parameters
 # anywhere on this router -- there is no name a client could supply that

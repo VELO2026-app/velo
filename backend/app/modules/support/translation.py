@@ -42,7 +42,13 @@
 # THE USER IS TOLD ONCE (owner ruling 3): an admin's reply that will not
 # reach the user in their language -- the job failed, or the variant was
 # declined -- sends support.translation_unavailable once per (message,
-# language), whatever the number of attempts (user_notified_at).
+# language), whatever the number of attempts (user_notified_at). The
+# notice opens the conversation itself (open_thread, BE-163).
+#
+# WHAT THE USER READS (BE-163): an admin's reply in a language the user
+# does not read never leaves this process -- not in the feed, not in the
+# list preview (render_for_client). The user gets the variant, the
+# original when it is already in their language, or no text and a state.
 #
 # WRITERS OF A ROW: the send routes, the feed's catch-up and the admin's
 # retry INSERT (ON CONFLICT DO NOTHING on (message, language, attempt));
@@ -570,7 +576,13 @@ async def _emit_unavailable(session: AsyncSession, row: SupportTranslationJob) -
         target_value=str(pointer.client_user_id),
         title=title,
         body=body,
-        action_data={"action": "open_support", "params": {}},
+        # The conversation the reply sits in (BE-163), not the support form:
+        # the thread is the place where the reply is and where it can be
+        # answered.
+        action_data={
+            "action": "open_thread",
+            "params": {"thread_id": str(pointer.comms_thread_id)},
+        },
     )
     row.user_notified_at = datetime.now(UTC)
 
@@ -858,30 +870,18 @@ async def admin_feed(
     ids = [mid for m in messages if isinstance(m, dict) and (mid := _uuid(m.get("id")))]
     rows = await _latest_rows(session, ids)
 
-    queued = False
+    needs: list[_Need] = []
     for m in messages:
         mid = _uuid(m.get("id")) if isinstance(m, dict) else None
         if mid is None or not isinstance(m.get("body"), str):
             continue
         if m.get("sender") == client_id:
-            needs = (TO_SUPPORT, support, m)
+            needs.append(_Need(mid, TO_SUPPORT, support, m, m["body"]))
         elif user_locale is not None:
-            needs = (TO_USER, user_locale, for_user.get(mid))
-        else:
-            continue
-        direction, locale, item = needs
-        if (mid, locale) not in rows and (item or {}).get(
-            "variant_state", "not_requested"
-        ) == "not_requested":
-            queued |= await enqueue(
-                session,
-                pointer=pointer,
-                message_id=mid,
-                direction=direction,
-                locale=locale,
-                text=m["body"],
+            needs.append(
+                _Need(mid, TO_USER, user_locale, for_user.get(mid), m["body"])
             )
-    if queued:
+    if await catch_up(session, pointer=pointer, needs=needs, rows=rows):
         rows = await _latest_rows(session, ids)
 
     out: list[Any] = []
@@ -912,3 +912,171 @@ async def admin_feed(
             item["translation"] = None
         out.append(item)
     return out
+
+
+# ---------------------------------------------------------------------------
+# The catch-up -- one mechanism for both feeds
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class _Need:
+    """One message a feed has found that a reader needs translated:
+    `item` is that message as the feed in `locale` gave it (its
+    variant_state decides), `text` the author's words to translate."""
+
+    message_id: UUID
+    direction: str
+    locale: str
+    item: dict[str, Any] | None
+    text: str
+
+
+async def catch_up(
+    session: AsyncSession,
+    *,
+    pointer: SupportThread,
+    needs: list[_Need],
+    rows: dict[tuple[UUID, str], SupportTranslationJob],
+) -> bool:
+    """Queue every need that has nothing asked for it: no row of ours for
+    (message, language) and comms says `not_requested` -- its job was lost
+    with a rolled-back request. Returns whether anything was queued.
+
+    THE ORDER IS THE FEED'S, and the deadlock-freedom of the readers rests
+    on it: the admin's feed and the user's feed both insert in the order
+    comms pages a thread (newest first), so two readers catching up the same
+    messages wait for each other on the unique index in one direction only.
+    Iterating `needs` in any other order lets two of them hold one row each
+    and wait for the other's -- tests/test_support_conversation_be163.py
+    builds that deadlock against a reversed order.
+    """
+    queued = False
+    for need in needs:
+        if (need.message_id, need.locale) in rows:
+            continue
+        if (need.item or {}).get("variant_state", "not_requested") != "not_requested":
+            continue
+        queued |= await enqueue(
+            session,
+            pointer=pointer,
+            message_id=need.message_id,
+            direction=need.direction,
+            locale=need.locale,
+            text=need.text,
+        )
+    return queued
+
+
+# ---------------------------------------------------------------------------
+# What the user reads (BE-163)
+# ---------------------------------------------------------------------------
+
+# `translation` of a message the user reads with no text: a translation is
+# on its way / there will be none. null when the text is there.
+TRANSLATING = "translating"
+UNAVAILABLE = "unavailable"
+
+# The message fields a user reads besides `body`; nothing else of comms'
+# item -- `variant` carries a body too, and what comms adds next must not
+# ride out by default.
+_CLIENT_MESSAGE_FIELDS = ("id", "thread_id", "sender", "created_at")
+
+
+def render_for_client(
+    message: Any,
+    *,
+    client_id: str,
+    user_locale: str | None,
+) -> dict[str, Any] | None:
+    """One message of a support thread as its client reads it -- a feed
+    item or a list row's `last_message` (handoffer BE-163, section 4).
+
+    `user_locale` is reply_language(client): None when the user reads the
+    support language, and then nothing is translated for them at all. The
+    item is comms' with `variant` / `variant_state` when it was read in
+    `user_locale`.
+
+      own message                          -> the original
+      user reads the support language      -> the original
+      ready, a variant body in user_locale -> the variant
+      not_needed                           -> the original
+      preparing, not_requested             -> no text, TRANSLATING
+      anything else (impossible, a state
+      we do not know, ready without a body
+      or in another language, no state)    -> no text, UNAVAILABLE
+
+    The original of a reply in a language the user does not read is the one
+    thing this must never return; every unforeseen form falls to "no text".
+    Not a mapping -> None: the caller drops it, nothing of it goes out.
+    """
+    if not isinstance(message, dict):
+        return None
+    out: dict[str, Any] = {
+        name: message[name] for name in _CLIENT_MESSAGE_FIELDS if name in message
+    }
+    original = message.get("body")
+    if message.get("sender") == client_id or user_locale is None:
+        return {**out, "body": original, "translation": None}
+    state = message.get("variant_state")
+    if state == "ready":
+        variant = message.get("variant")
+        if (
+            isinstance(variant, dict)
+            and variant.get("locale") == user_locale
+            and isinstance(variant.get("body"), str)
+            and variant["body"].strip()
+        ):
+            return {**out, "body": variant["body"], "translation": None}
+        return {**out, "body": None, "translation": UNAVAILABLE}
+    if state == "not_needed":
+        return {**out, "body": original, "translation": None}
+    if state in ("preparing", "not_requested"):
+        return {**out, "body": None, "translation": TRANSLATING}
+    return {**out, "body": None, "translation": UNAVAILABLE}
+
+
+async def client_feed(
+    session: AsyncSession,
+    *,
+    pointer: SupportThread,
+    user_locale: str | None,
+    messages: list[Any],
+) -> list[dict[str, Any]]:
+    """A page of the user's own support thread as they read it.
+
+    `messages` is the page read in `user_locale` (support/service.py). An
+    admin's reply found here with nothing asked for it in the user's
+    language is queued now, by the same catch-up as the admin's feed -- only
+    that direction: the user's own messages are caught up by the admin's
+    feed, which reads them.
+    """
+    client_id = str(pointer.client_user_id)
+    if user_locale is not None:
+        ids = [
+            mid for m in messages if isinstance(m, dict) and (mid := _uuid(m.get("id")))
+        ]
+        needs = [
+            _Need(mid, TO_USER, user_locale, m, m["body"])
+            for m in messages
+            if isinstance(m, dict)
+            and (mid := _uuid(m.get("id"))) is not None
+            and isinstance(m.get("body"), str)
+            and m.get("sender") != client_id
+        ]
+        await catch_up(
+            session,
+            pointer=pointer,
+            needs=needs,
+            rows=await _latest_rows(session, ids),
+        )
+    return [
+        item
+        for m in messages
+        if (
+            item := render_for_client(
+                m, client_id=client_id, user_locale=user_locale,
+            )
+        )
+        is not None
+    ]

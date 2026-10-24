@@ -578,9 +578,20 @@ class TestListing:
             CHATS_URL, headers=auth_headers(master["session_token"]),
         )
         assert resp.status_code == 200
-        params = fake.await_args.kwargs["params"]
-        assert params["operator"] == master["user"]["id"]
-        assert params["is_supervisor"] is False
+        # BE-163: a master's list is TWO comms reads -- the operator list
+        # and his own threads as a client. This test used to read the one
+        # call's params; it now names each call by its reader, and holds
+        # the same property on both: the actor is the session's, and the
+        # supervisor widening is never sent.
+        calls = [c.kwargs["params"] for c in fake.await_args_list]
+        assert len(calls) == 2
+        (operator_call,) = [p for p in calls if "operator" in p]
+        (client_call,) = [p for p in calls if "client" in p]
+        assert operator_call["operator"] == master["user"]["id"]
+        assert operator_call["is_supervisor"] is False
+        assert client_call["client"] == master["user"]["id"]
+        assert "is_supervisor" not in client_call
+        assert "operator" not in client_call
 
     async def test_admin_no_longer_gets_the_widened_read(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch
@@ -622,17 +633,23 @@ class TestListing:
         assert resp.json() == {"threads": [], "next_cursor": None}
         fake.assert_not_awaited()
 
-    async def test_student_list_rows_are_local_and_comms_only_counts_unread(
+    async def test_student_list_rows_come_from_comms_and_only_own_pointers_pass(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch
     ) -> None:
-        """A client is invisible to the operator-scoped comms API, so the
-        ROWS can only come from the local pointers -- unchanged.
+        """REPLACES test_student_list_rows_are_local_and_comms_only_counts_unread.
 
-        Since T-51 comms IS asked one thing about this page: the unread
-        counts, in a single batch call. The property that matters is
-        therefore no longer "comms is not touched" but "comms does not
-        supply the rows" -- asserted by feeding it a poisoned counts map
-        and checking the rows still come from the pointer table.
+        The old test was right for its time: comms could not list a
+        client's threads, so the ROWS had to come from the local pointers,
+        and comms was asked only for unread counts -- it fed comms a
+        poisoned list and checked the rows ignored it. comms 3.9.0 lists a
+        client's threads (`?client=`) and BE-163 builds the student list
+        from it, so "comms does not supply the rows" is no longer true.
+
+        The property that replaces it is the one that protects the student:
+        comms supplies the rows, but only a row whose id is THIS student's
+        pointer passes (chats/router.py _client_rows) -- a row comms lists
+        with no pointer behind it is dropped, because it could not be
+        opened. One call, the client list, actor from the session.
         """
         student = await login_user(
             client, telegram_id=BAND_MIN + 22, first_name="Student",
@@ -646,11 +663,21 @@ class TestListing:
             CHATS_URL, json={"master_id": master["user"]["id"]}, headers=headers,
         )
 
+        mine = _thread_payload(created=False)
+        mine.pop("created")
+        mine.update(
+            client=student["user"]["id"],
+            operator_value=master["user"]["id"],
+            unread=4,
+            last_message=None,
+        )
+        unpointed = _thread_payload(
+            created=False, thread_id="bbbbbbbb-8972-4000-8000-00000000dead",
+        )
+        unpointed.pop("created")
+        unpointed.update(client=student["user"]["id"], last_message=None)
         fake = AsyncMock(
-            return_value={
-                "counts": {THREAD_ID: 4},
-                "items": ["SHOULD NOT BE USED"],
-            }
+            return_value={"items": [unpointed, mine], "next_cursor": None}
         )
         monkeypatch.setattr(_SEAM, fake)
         resp = await client.get(CHATS_URL, headers=headers)
@@ -660,9 +687,14 @@ class TestListing:
         assert [t["id"] for t in threads] == [THREAD_ID]
         assert threads[0]["operator_value"] == master["user"]["id"]
         assert threads[0]["unread"] == 4
-        # Exactly one call, and it is the batch -- never a list fetch.
+        assert threads[0]["channel"] == "chat"
+        assert "00000000dead" not in resp.text
+        # Exactly one call, and it is the client list, stamped.
         assert fake.await_count == 1
-        assert fake.await_args.args[1] == "/api/v1/threads/unread-counts"
+        assert fake.await_args.args[1] == "/api/v1/threads"
+        params = fake.await_args.kwargs["params"]
+        assert params["client"] == student["user"]["id"]
+        assert "operator" not in params and "is_supervisor" not in params
 
 
 # ---------------------------------------------------------------------------
@@ -759,9 +791,18 @@ class TestPeerEnrichment:
         # The seam detail stays a seam detail even with the block added.
         assert "created" not in resp.json()
 
-    async def test_student_list_names_the_masters_without_comms(
+    async def test_student_list_names_the_masters_from_velo(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch
     ) -> None:
+        """REPLACES test_student_list_names_the_masters_without_comms.
+
+        That test held two things: the peer block is velo's knowledge, and
+        comms is asked nothing but unread counts. The second stopped being
+        true with BE-163 -- the rows come from comms' client list. The
+        first still holds and is what this pins: comms names the master
+        only as a bare `operator_value`, and the name comes from velo's own
+        users table.
+        """
         student = await login_user(
             client, telegram_id=BAND_MIN + 36, first_name="Student",
         )
@@ -774,7 +815,14 @@ class TestPeerEnrichment:
             CHATS_URL, json={"master_id": master["user"]["id"]}, headers=headers,
         )
 
-        fake = AsyncMock(return_value={"counts": {}})
+        row = _thread_payload(created=False)
+        row.pop("created")
+        row.update(
+            client=student["user"]["id"],
+            operator_value=master["user"]["id"],
+            last_message=None,
+        )
+        fake = AsyncMock(return_value={"items": [row], "next_cursor": None})
         monkeypatch.setattr(_SEAM, fake)
         resp = await client.get(CHATS_URL, headers=headers)
 
@@ -782,11 +830,7 @@ class TestPeerEnrichment:
         (thread,) = resp.json()["threads"]
         assert thread["peer"]["user_id"] == master["user"]["id"]
         assert thread["peer"]["name"] == "Master"
-        # Enrichment is local knowledge (ID-11 pointer + users): the only
-        # thing comms is asked for on this page is unread counts (T-51),
-        # and it supplies no part of the peer block.
         assert fake.await_count == 1
-        assert fake.await_args.args[1] == "/api/v1/threads/unread-counts"
 
     async def test_master_list_is_enriched_and_a_stray_client_survives(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch

@@ -56,6 +56,7 @@ ACTIONS: dict[str, bool] = {
     "open_curator_group": True,
     "open_master_offer": True,
     "open_master_application": True,  # bare (BE-104) and group_id (BE-59)
+    "open_thread": True,  # BE-163: support.translation_unavailable
     "open_master_zone": False,
     "open_support": False,
     "open_master_practices": False,
