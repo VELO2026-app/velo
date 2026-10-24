@@ -822,6 +822,7 @@ BYPASS_TYPES = {
     "booking.reminder_10m",
     "practice.master_reminder_1h",
     "waitlist.spot_available",
+    "support.message_received",
 }
 # The button the sheets give every other type whose action is open_practice.
 _OPEN_PRACTICE_LABEL = {"ru": "Открыть практику", "en": "Open practice"}
@@ -857,7 +858,16 @@ class TestRecipientSchedule:
         for locale in ("ru", "en"):
             _sheets(locale)
 
-    def test_exactly_the_four_types_bypass_the_schedule(self) -> None:
+    def test_exactly_the_five_types_bypass_the_schedule(self) -> None:
+        """The set of types that go at any hour, written out whole.
+
+        Until BE-172 it was four -- the three reminders and the waitlist
+        spot, each a job whose expiry would run out while it waited for the
+        person's schedule (BE-132) -- and the test said four, rightly.
+        BE-172 added a fifth for another reason, by owner ruling: the admin
+        signal support.message_received, addressed to group:admins only,
+        reaches the admins at any hour.
+        """
         types = _strict(_profile_dir() / "types.yaml")["types"]
         declaring = {k for k, v in types.items() if "recipient_schedule" in v}
         assert declaring == BYPASS_TYPES
@@ -867,7 +877,8 @@ class TestRecipientSchedule:
             assert types[key]["recipient_schedule"] == "bypass", key
         # Pair: everyone else declares nothing, and is there.
         others = set(types) - BYPASS_TYPES
-        assert len(others) == len(types) - 4 > 0
+        assert len(BYPASS_TYPES) == 5
+        assert len(others) == len(types) - 5 > 0
         for key in others:
             assert "recipient_schedule" not in types[key], key
 

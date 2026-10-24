@@ -549,8 +549,15 @@ class TestProfileSheets:
             }
             assert used == carried, locale
 
-    def test_the_type_is_unmutable_and_reaches_telegram(self) -> None:
+    def test_the_type_is_unmutable_and_reaches_telegram_at_any_hour(self) -> None:
+        """No category (no mute), telegram, and -- since the owner's ruling
+        that the signal reaches admins at any hour -- the schedule bypass.
+        The record used to be the channels alone; the bypass is the only
+        field added, so the record is still asserted whole."""
         types = yaml.safe_load((_profile_dir() / "types.yaml").read_text())["types"]
         record = types[support_service.MESSAGE_RECEIVED_TYPE]
-        assert record == {"channels": ["in_app", "telegram"]}
+        assert record == {
+            "channels": ["in_app", "telegram"],
+            "recipient_schedule": "bypass",
+        }
         assert "support.thread_created" not in types

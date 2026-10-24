@@ -56,10 +56,12 @@
 # 3.3.0, deploy/INTEGRATION.md section 3): comms holds a delivery outside
 # the person's allowed periods until the next one opens. A type whose job
 # carries an `expiry_at` that runs out before that never arrives at all,
-# so exactly four types declare `recipient_schedule: bypass` and go at
-# any hour -- booking.reminder_1h, booking.reminder_10m,
-# practice.master_reminder_1h, waitlist.spot_available; each says why
-# beside its record. Every other type declares nothing and takes comms'
+# so four types declare `recipient_schedule: bypass` and go at any hour
+# -- booking.reminder_1h, booking.reminder_10m,
+# practice.master_reminder_1h, waitlist.spot_available. A fifth bypasses
+# for another reason: support.message_received (BE-172, owner ruling
+# 2026-10-25) -- a user's message to support reaches the admins at any
+# hour. Each says why beside its record. Every other type declares nothing and takes comms'
 # default, `respect` -- the default is never written out. bypass does NOT
 # pass a mute: a muted category stays silent at any hour. comms takes the
 # value when it ACCEPTS a job: jobs accepted before a profile change keep
@@ -205,10 +207,17 @@ types:
   #    it. A category would let it be muted like any other admin-facing type,
   #    and this ONE type is the one an operator must not be able to silence --
   #    the mechanism decision A already uses for non-mutable-by-mechanism
-  #    types, applied here for a different reason. --
+  #    types, applied here for a different reason.
+  #    recipient_schedule: bypass (owner ruling 2026-10-25, BE-172): the
+  #    signal reaches the admins at any hour. Its only address is
+  #    group:admins, so the bypass touches admins alone -- every
+  #    notification to a user still waits for that user's schedule. With
+  #    no category it cannot be muted either: neither the hour nor a
+  #    switch holds it back. --
 
   support.message_received:
     channels: [in_app, telegram]
+    recipient_schedule: bypass
 
   # -- BE-166: support translation, one llm type per direction (comms
   #    deploy/INTEGRATION.md sections 11-12: one mechanism, the direction is
