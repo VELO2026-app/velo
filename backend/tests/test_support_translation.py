@@ -37,6 +37,7 @@ from app.core.llm import LlmResult
 from app.modules.support import translation
 from app.modules.support.models import SupportThread, SupportTranslationJob
 from app.modules.support.router import router as support_router
+from app.modules.support.service import MESSAGE_RECEIVED_TYPE
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 
@@ -262,6 +263,14 @@ async def _clean(session: AsyncSession) -> None:
         delete(OutboxEvent).where(
             OutboxEvent.payload["idempotency_key"].astext.like("llm-support-tr:%")
             | OutboxEvent.payload["idempotency_key"].astext.like("support-tr-%")
+        )
+    )
+    # BE-172: every support message these tests send emits
+    # support.message_received to group:admins; a group-targeted row names
+    # no user, so full_cleanup_range cannot see it -- deleted by type.
+    await session.execute(
+        delete(OutboxEvent).where(
+            OutboxEvent.payload["type"].astext == MESSAGE_RECEIVED_TYPE
         )
     )
     await session.execute(delete(CommsFeedCursor))

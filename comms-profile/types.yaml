@@ -196,15 +196,18 @@ types:
     channels: [in_app, telegram]
 
   # -- Support: NO category on purpose (owner ruling 2026-08-14, T-38 support
-  #    build, PROMPT №710). Emitted once, at support-thread creation, to
-  #    group:admins (the same GROUP_ADMINS broadcast master.application_received
-  #    already uses in production) -- an unclaimed thread's only signal that
-  #    support has traffic. A category would let it be muted like any other
-  #    admin-facing type, and this ONE type is the one an operator must not be
-  #    able to silence -- the mechanism decision A already uses for
-  #    non-mutable-by-mechanism types, applied here for a different reason. --
+  #    build, PROMPT №710; kept by BE-172). Emitted on EVERY message a user
+  #    sends to support -- the form and the conversation alike, claimed
+  #    thread or not -- to group:admins (the same GROUP_ADMINS broadcast
+  #    master.application_received uses). It is the one support signal an
+  #    admin sees: comms' own msg.support_message reaches the roster in_app
+  #    only, and an admin has no in-app surface, so telegram is what carries
+  #    it. A category would let it be muted like any other admin-facing type,
+  #    and this ONE type is the one an operator must not be able to silence --
+  #    the mechanism decision A already uses for non-mutable-by-mechanism
+  #    types, applied here for a different reason. --
 
-  support.thread_created:
+  support.message_received:
     channels: [in_app, telegram]
 
   # -- BE-166: support translation, one llm type per direction (comms
@@ -253,7 +256,7 @@ types:
   # -- BE-21: the practice's own master learns his practice was cancelled by
   #    somebody else -- the curator of a school it was published to. NO
   #    category on purpose, and the reason is the same shape as
-  #    support.thread_created above rather than decision A's.
+  #    support.message_received above rather than decision A's.
   #
   #    `bookings` was the obvious home -- practice.cancelled lives there -- and
   #    it is exactly wrong here. `bookings` is the family a busy master mutes
@@ -262,7 +265,7 @@ types:
   #    that his session is gone, that it was not his doing, and that the money
   #    went back. This is the single type in the practice family that must not
   #    be silenceable, so it carries no category and bypasses the mute gate by
-  #    mechanism (§2.5), the way support.thread_created does for an operator. --
+  #    mechanism (§2.5), the way support.message_received does for an operator. --
 
   practice.cancelled_by_curator:
     channels: [in_app, telegram]

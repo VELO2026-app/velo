@@ -2,8 +2,8 @@
 # VELO Backend -- support thread service (B34)
 # =============================================================================
 #
-# TWO responsibilities, deliberately in one file because the second exists
-# only to serve the first:
+# THREE responsibilities, deliberately in one file because the second and
+# third exist only to serve the first:
 #
 #   1. LAZY SECTION RESOLUTION (support-sections-integration.md #3, binding).
 #      The comms section id for the key "support" is fetched via
@@ -18,17 +18,21 @@
 #      concurrent first callers is comms' problem to arbitrate, not ours to
 #      prevent.
 #
-#   2. THREAD CREATION + THE ADMIN SIGNAL. One eternal support thread per
-#      user (kind="dm", operator_kind="section", no subject_ref) -- see the
-#      module docstring on SupportThread for why kind="dm" was chosen over
-#      "ticket". The admin-group notification fires INLINE, in the SAME
-#      transaction as the local pointer write, and ONLY when comms reports
-#      `created=True` for THIS call (comms' own docstring: the flag is True
-#      exactly once per thread, for the caller that inserted it) -- so a user
-#      re-opening their existing support thread never re-notifies admins.
-#      Pattern mirrored from masters/service.py::_emit_application_received,
-#      which sits inline beside its own session.add() for the same reason:
-#      the event must live or die with the domain change it announces.
+#   2. THREAD CREATION. One eternal support thread per user (kind="dm",
+#      operator_kind="section", no subject_ref) -- see the module docstring
+#      on SupportThread for why kind="dm" was chosen over "ticket". Opening
+#      signals nobody: a thread nobody has written into is not news.
+#
+#   3. THE ADMIN SIGNAL (BE-172). support.message_received to group:admins
+#      on EVERY message a user sends into their support thread -- through
+#      the form and from the conversation alike, claimed thread or not --
+#      emitted by send_support_message, the one function both doors reach.
+#      The thread is eternal and a claim is forever today, so "only the
+#      claimer" would tie a person to one admin; all admins are told
+#      (owner ruling, BE-172; routing by claim arrives with BE-162). comms'
+#      own msg.support_message ping reaches the roster in-app only, and an
+#      admin has no in-app surface -- this signal, over Telegram, is the
+#      one an admin sees.
 # =============================================================================
 
 from typing import Any
@@ -46,6 +50,7 @@ from app.core.comms import (
     read_comms_page,
 )
 from app.core.config import settings
+from app.core.events import SECTION_SUPPORT_KEY, SECTION_SUPPORT_LABEL
 from app.core.exceptions import NotFoundError
 from app.modules.support import translation
 from app.modules.support.models import TO_SUPPORT, TO_USER, SupportThread
@@ -57,11 +62,6 @@ logger = structlog.get_logger()
 # process restart -- the next call simply re-resolves it.
 _support_section_id: UUID | None = None
 
-_SUPPORT_SECTION_KEY = "support"
-# Human label on comms' side (shown to whoever administers comms sections).
-# Chosen English per fleet LANGUAGE canon (tracked-file scan target is
-# literal zero Cyrillic) -- not shown anywhere in the velo product UI.
-_SUPPORT_SECTION_LABEL = "Support"
 
 
 async def get_support_section_id() -> UUID:
@@ -78,7 +78,7 @@ async def get_support_section_id() -> UUID:
     payload = await comms_request(
         "POST",
         "/api/v1/sections",
-        json={"key": _SUPPORT_SECTION_KEY, "label": _SUPPORT_SECTION_LABEL},
+        json={"key": SECTION_SUPPORT_KEY, "label": SECTION_SUPPORT_LABEL},
     )
     _support_section_id = UUID(str(payload["id"]))
     return _support_section_id
@@ -91,39 +91,39 @@ async def open_support_thread(
 
     Returns the comms thread payload verbatim except for the `created`
     seam detail (mirrors chats/router.py::_open_response -- `created` is
-    for this function to act on, not the caller's business).
+    comms' answer about this request, not the caller's business).
+
+    Emits nothing (BE-172): the admin signal belongs to a message, not to
+    a thread -- send_support_message.
 
     `topic` (PROMPT №712, owner ruling B): the form's topic-picker value.
     Has no effect on comms' dedup (kind="dm" alone already makes this an
-    eternal thread) and does nothing on a reopen -- the admin-group
-    notification only fires when `created` is True below, and `title` is
-    only stored by comms on the INSERT path (create_or_get_thread_detailed,
+    eternal thread) and does nothing on a reopen -- `title` is only stored
+    by comms on the INSERT path (create_or_get_thread_detailed,
     comms/app/messaging/threads.py -- a dedup hit returns the existing row
-    untouched). PROMPT №713 adds a THIRD surface for it, on top of the two
-    №712 already built (the notification text, and the message-text
-    prefix in send_support_message): comms' own `title` field, sent here
-    ONLY, so the admin LIST (`_thread_out` already returns `title`
-    verbatim, zero proxy change needed there) can show the topic without
-    fetching each thread's feed -- the two existing channels do not reach
-    a list view at all (notifications aren't queryable per-thread by an
-    admin browsing later; the message prefix needs the feed, which is an
-    N+1 the list must not pay).
+    untouched). It is one of the topic's three surfaces: comms' own
+    `title` field, sent here ONLY, so the admin LIST (`_thread_out`
+    already returns `title` verbatim) can show the topic without fetching
+    each thread's feed; the other two are the message-text prefix and the
+    admin signal's text, both in send_support_message, and neither reaches
+    a list view (the prefix needs the feed, an N+1 the list must not pay).
     """
     section_id = await get_support_section_id()
 
     # KEY PER REQUEST, NEVER A STABLE ONE (comms 3.0.0 requires the header
-    # here). A replay of a key answers `"created": True` whatever the
-    # thread's age -- comms' create_thread, the flag belongs to the
-    # creating request -- so a key derived from the pair would make every
-    # later open of the same conversation a "conversation started" and
-    # signal a new support thread again. The pair itself is deduplicated by comms
-    # (create-or-get), which is what makes a fresh key per request safe.
+    # here). A replay of a key answers the FIRST response again, `"created":
+    # True` included, whatever the thread's age -- comms' create_thread, the
+    # flag belongs to the creating request -- so a key derived from the
+    # pair would make comms describe every later open as a creation. The
+    # pair itself is deduplicated by comms (create-or-get), which is what
+    # makes a fresh key per request safe. velo reads `created` nowhere since
+    # BE-172, and the rule does not lean on it: each open is a new request.
     #
     # TWO KEY RULES IN THIS MODULE, ON PURPOSE: opening takes a key per
     # request (above), a message takes the CLIENT's key when it sends one
-    # (send_support_message). They answer different questions -- `created`
-    # must stay truthful, and "one intent, one message" lives in the
-    # client. Making them one rule breaks one of the two.
+    # (send_support_message). They answer different questions -- an open
+    # is a fresh request every time, while "one intent, one message" lives
+    # in the client. Making them one rule breaks one of the two.
     payload = await comms_request(
         "POST",
         "/api/v1/threads",
@@ -137,7 +137,6 @@ async def open_support_thread(
         idempotency_key=new_request_key("support-open"),
     )
     comms_thread_id = UUID(str(payload["id"]))
-    created = bool(payload.get("created"))
 
     # Local pointer, keyed by the user (one row per user; see
     # uq_support_threads_client). Mirrors _create_or_get_thread's
@@ -187,16 +186,6 @@ async def open_support_thread(
         pointer.comms_thread_id = comms_thread_id
         await session.flush()
 
-    # THE ADMIN SIGNAL. Gated on comms' own `created` flag, not on our
-    # local insert: `created` is True exactly once per thread's life
-    # (comms' contract), which is precisely "emit once per thread
-    # creation, not per message" -- a plain re-open of an existing thread
-    # never re-notifies.
-    if created:
-        await _emit_support_thread_created(
-            session, user, thread_id=comms_thread_id, topic=topic,
-        )
-
     return {k: v for k, v in payload.items() if k != "created"}
 
 
@@ -225,8 +214,15 @@ async def send_support_message(
     `topic` (PROMPT №712): prefixed onto the message text so it survives
     into what an admin actually reads when they open the thread -- the
     durable half of "the topic must survive into something an operator
-    can see" (the notification-text half lives in
-    _emit_support_thread_created, above).
+    can see"; the immediate half is the admin signal's text below. Only
+    the form carries one: a message from the conversation has no topic,
+    and the thread's comms `title` (the topic of its first opening) is
+    not this message's topic (BE-172).
+
+    THE ADMIN SIGNAL (BE-172): support.message_received to group:admins,
+    one per comms message (the key is the message id), emitted after the
+    message is in comms -- see _emit_support_message_received and the
+    KNOWN CEILING at the call.
     """
     pointer = (
         await session.execute(
@@ -261,6 +257,31 @@ async def send_support_message(
             direction=TO_SUPPORT,
             locale=settings.support_language,
             text=text,
+        )
+        # KNOWN CEILING (a message without its admin signal):
+        #   1. Mechanics: the message is written by the comms POST above,
+        #      outside this transaction; the signal is an outbox row of
+        #      this transaction. When comms accepted the POST and this
+        #      transaction then fails to commit, the message is in the
+        #      thread and no admin is told. The translation queued above
+        #      shares the window but has a catch-up (the admin feed queues
+        #      a missing translation when it is read); the signal has no
+        #      reader to catch it up from.
+        #   2. Status: acknowledged by design.
+        #   3. Backlog ref: none -- the window is the commit itself failing
+        #      after a successful POST; nothing observed has hit it.
+        #   4. Promotion trigger: a user message in comms with no outbox row
+        #      keyed `support-message:<its id>` behind it.
+        #   5. Agreed fix: velo mints the message's identity before the
+        #      POST, sends it to comms as the message's Idempotency-Key and
+        #      writes the outbox row under the same identity first -- the
+        #      signal then exists whenever the message can.
+        #   6. Rejected for now: that fix replaces the message key rule
+        #      (the client's key is the message's identity, BE-163,
+        #      core/comms.py message_key), and emitting before the POST
+        #      without it has no message id to key the signal by.
+        await _emit_support_message_received(
+            session, user, message_id=UUID(str(message_id)), topic=topic,
         )
     return message
 
@@ -560,51 +581,91 @@ async def claim_admin_support_thread(
     )
 
 
-async def _emit_support_thread_created(
+# The admin signal's type (BE-172; comms-profile/types.yaml declares it,
+# templates/ru.yaml and en.yaml carry its sheets).
+MESSAGE_RECEIVED_TYPE = "support.message_received"
+
+# Last rung of the sender-name chain: language-neutral, because this text
+# is built here and read by admins in either profile language.
+_NO_NAME = "—"
+
+
+def _sender_name(user: User) -> str:
+    """Who wrote, for the admin signal: the name, else @username, else a dash.
+
+    Never empty -- the stored body is built on it, and comms refuses an
+    empty body. Language-neutral on every rung: the signal goes to all
+    admins at once, whatever language each one reads.
+    """
+    name = " ".join(
+        part.strip()
+        for part in (user.first_name, user.last_name)
+        if part and part.strip()
+    )
+    if name:
+        return name
+    username = (user.credentials or {}).get("telegram_username")
+    if isinstance(username, str) and username.strip():
+        return f"@{username.strip()}"
+    return _NO_NAME
+
+
+def _topic_line(topic: str | None) -> str:
+    """The topic as its own line of the signal, or "" when there is none.
+
+    A template cannot say "if": comms fills it with str.format, where a
+    null variable prints "None" and a missing one drops the whole sheet to
+    the stored text. So the optional part is a variable that is either a
+    whole line or empty, marked by a sign rather than a word, which reads
+    the same in every profile language. A blank topic is no topic.
+    """
+    if topic is None or not topic.strip():
+        return ""
+    return f"\n🏷 {topic.strip()}"
+
+
+async def _emit_support_message_received(
     session: AsyncSession,
     user: User,
     *,
-    thread_id: UUID,
-    topic: str | None = None,
+    message_id: UUID,
+    topic: str | None,
 ) -> None:
-    """Comms (T-38 support build): support.thread_created to group:admins.
+    """support.message_received to group:admins -- one per user message.
 
     A COMMUNICATION audience (C-boundary ID-4), so it goes as ONE emit and
-    comms expands it over its synced admins group -- the same mechanism
-    that already carries master.application_received to that group in
-    production today. Category-less by design (comms-profile/types.yaml):
-    an unclaimed section thread has no assignee and comms notifies nobody
-    else, so this broadcast must not be mutable by any single admin.
+    comms expands it over its synced admins group -- the mechanism that
+    carries master.application_received to that group too. Category-less
+    by design (comms-profile/types.yaml): no admin can mute it.
 
-    `topic`, when given, is the immediate half of "the topic survives into
-    something an operator can see" (PROMPT №712) -- the notification text
-    itself, before anyone has even opened the thread.
+    The idempotency key names the comms MESSAGE: one message, one signal.
+    A client replay that comms answers with the same message emits the
+    same key again, and comms collapses it on the key.
 
-    `thread_id` is the comms thread whose creation this reports -- the
-    fact the idempotency key names (one thread, one signal).
+    Texts live in the profile's sheets (ru, en), filled from two template
+    variables, `sender_name` and `topic_line`; the stored title and body
+    below are neutral English and are read only when rendering fails.
     """
     from app.core.events.notify import (
         TARGET_GROUP_ADMINS,
         emit_notification,
     )
 
-    opener = " ".join(
-        part for part in (user.first_name, user.last_name) if part
-    ) or "Пользователь"
-    topic_clause = f" (тема: {topic})" if topic else ""
+    sender_name = _sender_name(user)
+    topic_line = _topic_line(topic)
     target_type, target_value = TARGET_GROUP_ADMINS
     await emit_notification(
         session,
-        idempotency_key=f"support-thread-created:{thread_id}",
-        type="support.thread_created",
+        idempotency_key=f"support-message:{message_id}",
+        type=MESSAGE_RECEIVED_TYPE,
         target_type=target_type,
         target_value=target_value,
-        title="Новое обращение в поддержку",
-        body=f"{opener} написал(а) в поддержку{topic_clause} -- требуется ответ.",
+        title="New message to support",
+        body=f"{sender_name}{topic_line}",
         action_data={
             "action": "open_admin_support",
             "params": {"user_id": str(user.id)},
-            "opener_name": opener,
-            "topic": topic,
+            "sender_name": sender_name,
+            "topic_line": topic_line,
         },
     )

@@ -2,13 +2,14 @@
 # VELO Backend -- Comms sync emit helpers (Phase 6 / T0, items 4-5)
 # =============================================================================
 #
-# Thin helpers over emit_event for the two sync-projection events of
-# the comms protocol (3.0.0):
+# Thin helpers over emit_event for the three sync-projection events of
+# the comms protocol:
 #
-#   user_upserted  -- full identity SNAPSHOT (contract discipline: ALL
-#                     keys present, "no value" is an explicit null), with
-#                     its VERSION;
-#   group_changed  -- contact-book membership delta.
+#   user_upserted              -- full identity SNAPSHOT (contract
+#                                 discipline: ALL keys present, "no value"
+#                                 is an explicit null), with its VERSION;
+#   group_changed              -- contact-book membership delta;
+#   section_membership_changed -- who SERVES a comms section (BE-172).
 #
 # THE SNAPSHOT VERSION is users.snapshot_version, raised by a database
 # trigger whenever a snapshot field changes (migration cm21a1b2c3d4 says
@@ -28,6 +29,27 @@
 #             the same capability-vs-mode reading; an admin who
 #             switched into user mode stays addressable.
 #   `all` is NOT synced: comms derives it (resolver._resolve_all).
+#
+# SECTIONS FOLLOW GROUPS (BE-172). A group's members serve the sections
+# service.SECTIONS_BY_GROUP names for it -- admins serve `support`.
+# emit_membership is the one place a membership is projected: it emits
+# group_changed and then section_membership_changed for every section of
+# the group, with the same `member`. The live delta below and the backfill
+# (scripts/backfill_comms_sync.py) both go through it, so neither can
+# declare the group without the roster.
+#
+# THE ROSTER IS A GATE IN comms, NOT ONLY AN ADDRESS LIST. comms reads a
+# section's roster in three places (messaging/membership.py): who sees the
+# section's unclaimed pool, who may claim a thread or change its status,
+# and whom the pool push pings. A section with members is served by its
+# members only -- an admin missing from the roster cannot claim a support
+# thread. A section with NO members is served by ANY operator: that is
+# comms' definition, not a fallback, and it is what velo had before the
+# roster existed. It is reachable again when the last admin loses the
+# capability; the support pool is then kept from masters only by the
+# chats proxy's own filter (chats/router.py, _keep_only_user_form_threads),
+# and no velo route lets a master claim or change the status of a support
+# thread (the one claim proxy is support/router.py, admin-only).
 #
 # Call sites pass capability BEFORE/AFTER around their status/role
 # write and this module emits ONLY on the delta -- so a no-op write
@@ -54,7 +76,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events.service import (
     EVENT_GROUP_CHANGED,
+    EVENT_SECTION_MEMBERSHIP_CHANGED,
     EVENT_USER_UPSERTED,
+    SECTIONS_BY_GROUP,
     emit_event,
 )
 
@@ -162,6 +186,63 @@ async def emit_group_changed(
     )
 
 
+async def emit_section_membership_changed(
+    session: AsyncSession,
+    *,
+    section_key: str,
+    section_label: str,
+    operator_id: UUID,
+    member: bool,
+) -> None:
+    """Emit one section-roster change into the outbox.
+
+    The section travels by KEY (comms creates it if absent and keeps the
+    label of whoever created it); `user_upserted` for the operator must
+    precede an ADD -- emit_membership's callers see to that.
+    """
+    await emit_event(
+        session,
+        EVENT_SECTION_MEMBERSHIP_CHANGED,
+        {
+            "section_key": section_key,
+            "section_label": section_label,
+            "operator_id": str(operator_id),
+            "member": member,
+        },
+    )
+
+
+async def emit_membership(
+    session: AsyncSession,
+    *,
+    group_key: str,
+    recipient_id: UUID,
+    member: bool,
+) -> None:
+    """Project one group membership: the group, then its sections.
+
+    group_changed first, then section_membership_changed for every
+    section SECTIONS_BY_GROUP names for the group, each with the same
+    `member` -- in this order in the outbox (emit_event assigns ids at
+    flush). A group with no sections emits group_changed alone. The
+    caller emits user_upserted before an ADD.
+    """
+    await emit_group_changed(
+        session,
+        group_key=group_key,
+        recipient_id=recipient_id,
+        member=member,
+    )
+    for section_key, section_label in SECTIONS_BY_GROUP.get(group_key, ()):
+        await emit_section_membership_changed(
+            session,
+            section_key=section_key,
+            section_label=section_label,
+            operator_id=recipient_id,
+            member=member,
+        )
+
+
 async def sync_membership_delta(
     session: AsyncSession,
     user: SyncedUser,
@@ -170,17 +251,18 @@ async def sync_membership_delta(
     had: bool,
     has: bool,
 ) -> None:
-    """Emit group_changed iff the capability actually changed.
+    """Project the membership iff the capability actually changed.
 
-    On ADD, an identity snapshot is emitted first (ordering belt, see
-    module header). On no delta -- silence: re-verifying a verified
-    master or re-running an authoritative CLI role set emits nothing.
+    The group and its sections go through emit_membership. On ADD, an
+    identity snapshot is emitted first (ordering belt, see module
+    header). On no delta -- silence: re-verifying a verified master or
+    re-running an authoritative CLI role set emits nothing.
     """
     if had == has:
         return
     if has:
         await emit_user_upserted(session, user)
-    await emit_group_changed(
+    await emit_membership(
         session,
         group_key=group_key,
         recipient_id=user.id,

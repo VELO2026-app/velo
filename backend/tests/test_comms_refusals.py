@@ -31,13 +31,16 @@ import httpx
 import pytest
 from fastapi import HTTPException
 from httpx import AsyncClient
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.comms import comms_request
 from app.core.config import settings
+from app.core.events.models import OutboxEvent
 from app.modules.chats.models import ChatThread
 from app.modules.masters.models import MasterProfile
 from app.modules.support.models import SupportThread
+from app.modules.support.service import MESSAGE_RECEIVED_TYPE
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 
@@ -56,11 +59,23 @@ _KEY = "Idempotency-Key"
 async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
     # Committed each time: an open delete would hold the band's rows
     # locked, and the next login (another session) would wait on it.
-    await full_cleanup_range(db_session, _TID_MIN, _TID_MAX, delete_users=True)
-    await db_session.commit()
+    async def _clean() -> None:
+        await full_cleanup_range(
+            db_session, _TID_MIN, _TID_MAX, delete_users=True,
+        )
+        # BE-172: a support message here emits support.message_received to
+        # group:admins; a group-targeted row names no user, so
+        # full_cleanup_range cannot see it -- deleted by type.
+        await db_session.execute(
+            delete(OutboxEvent).where(
+                OutboxEvent.payload["type"].astext == MESSAGE_RECEIVED_TYPE
+            )
+        )
+        await db_session.commit()
+
+    await _clean()
     yield
-    await full_cleanup_range(db_session, _TID_MIN, _TID_MAX, delete_users=True)
-    await db_session.commit()
+    await _clean()
 
 
 # ===========================================================================

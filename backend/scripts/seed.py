@@ -91,7 +91,11 @@ from sqlalchemy import delete, select  # noqa: E402
 from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
 
 from app.core.database import dispose_engine, get_session_factory  # noqa: E402
-from app.core.events import GROUP_MASTERS, sync_membership_delta  # noqa: E402
+from app.core.events import (  # noqa: E402
+    GROUP_ADMINS,
+    GROUP_MASTERS,
+    sync_membership_delta,
+)
 from app.modules.auth.service import upsert_user_on_login  # noqa: E402
 from app.modules.bookings.models import Booking  # noqa: E402
 from app.modules.curator_groups.models import (  # noqa: E402
@@ -126,6 +130,7 @@ from app.modules.practices.service import (  # noqa: E402
     update_practice,
 )
 from app.modules.users.models import User, UserRole  # noqa: E402
+from app.modules.users.schemas import has_admin_home  # noqa: E402
 from app.modules.users.service import lock_user_row  # noqa: E402
 
 PROFILES_DIR = _SCRIPTS_DIR / "seed_profiles"
@@ -247,6 +252,11 @@ def _verified_profile_data(fields: dict) -> dict:
     }
 
 
+def _admin_capability(user: User) -> bool:
+    """role==admin OR the round-trip marker -- the comms-group reading."""
+    return user.role == UserRole.ADMIN.value or has_admin_home(user.credentials)
+
+
 def _set_role_master(user: User) -> None:
     """Role flip + clear a stale admin round-trip marker (set_role.py)."""
     user.role = UserRole.MASTER.value
@@ -310,6 +320,11 @@ async def ensure_master(
 
     profile = await session.get(MasterProfile, user.id)
     had_master = _master_capability(profile)
+    # BE-172: admin capability BEFORE _set_role_master -- on a reused live
+    # account that is an admin (or switched away from admin), the flip to
+    # master clears the round-trip marker, and that IS the admin drop: it
+    # leaves group:admins and the support roster, as in make_master.
+    had_admin = _admin_capability(user)
 
     if profile is None:
         session.add(
@@ -379,6 +394,15 @@ async def ensure_master(
     # snapshot + masters.join on ADD, silence when already a master
     await sync_membership_delta(
         session, user, group_key=GROUP_MASTERS, had=had_master, has=True
+    )
+    # the admin drop, when the flip above took the capability; silence
+    # otherwise (a plain account, or a master already)
+    await sync_membership_delta(
+        session,
+        user,
+        group_key=GROUP_ADMINS,
+        had=had_admin,
+        has=_admin_capability(user),
     )
     return user
 

@@ -17,11 +17,13 @@
 #   - envelope {event, data} is assembled by the relay; this module
 #     stores `data` and stamps the required version field "v": 1;
 #   - event names: notification_request / user_upserted /
-#     group_changed (KNOWN_EVENT_TYPES below);
-#   - sync events (user_upserted / group_changed) carry NO
-#     idempotency_key -- they are naturally idempotent by upsert
-#     semantics; only notification_request has one (T1 concern; the
-#     contract suggests the outbox row id);
+#     group_changed / section_membership_changed / reminder_cancel
+#     (KNOWN_EVENT_TYPES below);
+#   - sync events (user_upserted / group_changed /
+#     section_membership_changed) carry NO idempotency_key -- they
+#     are naturally idempotent by upsert semantics; only
+#     notification_request has one (T1 concern; the contract suggests
+#     the outbox row id);
 #   - all data values must be JSON scalars / JSON trees -- checked
 #     here so a producer bug dies in a velo test, not in the comms
 #     DLQ.
@@ -52,6 +54,11 @@ EVENT_GROUP_CHANGED = "group_changed"
 # the given types whose ENVELOPE correlation equals the given one
 # (comms 3.0.0, engine/reminders.cancel_reminders; never by the letter).
 EVENT_REMINDER_CANCEL = "reminder_cancel"
+# BE-172: who serves a section (comms deploy/INTEGRATION.md section 7,
+# `section_membership_changed`; closed field set v / section_key /
+# section_label / operator_id / member). A sync event like
+# group_changed: idempotent both ways, no idempotency_key.
+EVENT_SECTION_MEMBERSHIP_CHANGED = "section_membership_changed"
 
 KNOWN_EVENT_TYPES = frozenset(
     {
@@ -59,6 +66,7 @@ KNOWN_EVENT_TYPES = frozenset(
         EVENT_USER_UPSERTED,
         EVENT_GROUP_CHANGED,
         EVENT_REMINDER_CANCEL,
+        EVENT_SECTION_MEMBERSHIP_CHANGED,
     }
 )
 
@@ -68,6 +76,29 @@ KNOWN_EVENT_TYPES = frozenset(
 # _resolve_all) -- derived, no membership sync.
 GROUP_MASTERS = "masters"
 GROUP_ADMINS = "admins"
+
+# The comms SECTION of support (BE-172). The one source of its key and
+# label: support/service.py resolves the section id by this key, and the
+# roster below declares who serves it. The key is the only stable name
+# the two services share -- a section id lives in the comms database and
+# does not survive its teardown. The label is shown only to whoever
+# administers comms sections, never in the velo product UI, and is
+# English per the fleet LANGUAGE canon (tracked-file scan target is
+# literal zero Cyrillic). comms keeps the label of the call that created
+# the section (create-or-find on both the HTTP and the event path), so
+# changing it here renames nothing that already exists.
+SECTION_SUPPORT_KEY = "support"
+SECTION_SUPPORT_LABEL = "Support"
+
+# Which comms sections a communication group's members SERVE (BE-172).
+# Membership of the group IS the seat on the section's roster: admins are
+# support (owner ruling, BE-166). Data, not a branch on the group key --
+# sync.emit_membership reads it for every membership it projects, the
+# live delta and the backfill alike, so the rule is written once. A group
+# with no entry serves no section.
+SECTIONS_BY_GROUP: dict[str, tuple[tuple[str, str], ...]] = {
+    GROUP_ADMINS: ((SECTION_SUPPORT_KEY, SECTION_SUPPORT_LABEL),),
+}
 
 _SCALAR_TYPES = (str, int, float, bool, type(None))
 

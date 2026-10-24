@@ -62,7 +62,7 @@ ACTIONS: dict[str, bool] = {
     "open_master_practices": False,
     "open_notifications": False,
     "open_admin_masters": False,
-    "open_admin_support": False,
+    "open_admin_support": True,  # BE-172: support.message_received, user_id
 }
 
 _SOURCES = [p for p in APP.rglob("*.py") if "__pycache__" not in p.parts]

@@ -53,6 +53,7 @@ from app.modules.support.models import (
     SupportThread,
     SupportTranslationJob,
 )
+from app.modules.support.service import MESSAGE_RECEIVED_TYPE
 from app.modules.support.translation import (
     TRANSLATING,
     UNAVAILABLE,
@@ -94,6 +95,14 @@ async def _clean(session: AsyncSession) -> None:
             OutboxEvent.payload["idempotency_key"].astext.like(
                 f"llm-support-tr:{_MID_PREFIX}%"
             )
+        )
+    )
+    # BE-172: every support message these tests send emits
+    # support.message_received to group:admins; a group-targeted row names
+    # no user, so full_cleanup_range cannot see it -- deleted by type.
+    await session.execute(
+        delete(OutboxEvent).where(
+            OutboxEvent.payload["type"].astext == MESSAGE_RECEIVED_TYPE
         )
     )
     await session.commit()
