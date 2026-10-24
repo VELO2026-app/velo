@@ -27,6 +27,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.modules.chats.models import ChatThread
 from app.modules.masters.models import MasterProfile
 from app.modules.support.models import SupportThread
@@ -124,9 +125,17 @@ async def _chat(client: AsyncClient, db_session: AsyncSession):
 
 
 async def _support(client: AsyncClient, db_session: AsyncSession):
-    """A support thread pointer; returns (admin auth, thread id)."""
+    """A support thread pointer; returns (admin auth, thread id).
+
+    The opener reads the support language -- set HERE, whatever the
+    environment's SUPPORT_LANGUAGE is: see _fed for why the tests rest on
+    it and what made the old form false.
+    """
     admin = await _login(client, db_session, _TID_ADMIN, UserRole.ADMIN.value)
     opener = await _login(client, db_session, _TID_OPENER)
+    opener_row = await db_session.get(User, UUID(opener["user"]["id"]))
+    opener_row.language = settings.support_language
+    await db_session.commit()
     thread_id = uuid4()
     db_session.add(
         SupportThread(
@@ -148,6 +157,16 @@ def _fed(url: str, rows: list[dict]) -> list[dict]:
     no row is the client's, and the client reads the support language, so
     nothing is queued and nothing is translated -- the rows are otherwise
     untouched, which is what these tests hold.
+
+    "The client reads the support language" is SET BY THE TEST (_support
+    gives the opener settings.support_language), not assumed of the
+    environment. It used to be assumed: a fresh user reads the default
+    language, `en`, and so does SUPPORT_LANGUAGE by default -- true in a
+    sandbox, false on the stand, where the owner set SUPPORT_LANGUAGE=ru on
+    24.10 for the live check of BE-166. There the opener became a reader of
+    another language, every row gained a translation block, and three of
+    these tests went red on a delivery that had not touched them (BE-163
+    fix).
     """
     if "/support/" not in url:
         return rows

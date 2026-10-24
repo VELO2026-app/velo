@@ -699,10 +699,26 @@ class TestAdminThreadMessages:
     async def test_get_messages_proxies_the_feed_for_a_known_support_thread(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
     ) -> None:
+        """The admin feed of a known support thread: one read, in the support
+        language, the student's message caught up.
+
+        ONE read because the student reads the support language -- and that
+        is SET HERE, not assumed of the environment. It used to be assumed:
+        a fresh user reads the default language, `en`, as does
+        SUPPORT_LANGUAGE by default. On the stand the owner set
+        SUPPORT_LANGUAGE=ru on 24.10 for the live check of BE-166; the
+        student became a reader of another language, the feed read the
+        page a second time in `en` (get_admin_support_messages), and
+        `await_args` -- the LAST call -- carried that second locale (BE-163
+        fix).
+        """
         admin = await _make_admin(client, db_session, BAND_MIN + 17)
         student = await login_user(
             client, telegram_id=BAND_MIN + 18, first_name="Cleo",
         )
+        student_row = await db_session.get(User, UUID(student["user"]["id"]))
+        student_row.language = settings.support_language
+        await db_session.commit()
         thread_id = uuid4()
         # client_user_id is a real FK -> users.id; a bare uuid4() would 500.
         await _seed_support_thread(
@@ -757,6 +773,7 @@ class TestAdminThreadMessages:
         assert fake.await_args.args[:2] == (
             "GET", f"/api/v1/threads/{thread_id}/messages",
         )
+        assert fake.await_count == 1
         assert fake.await_args.kwargs["params"]["locale"] == settings.support_language
 
 
