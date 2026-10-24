@@ -712,14 +712,16 @@ class TestProfileV2:
         doc = self._doc()
         assert set(doc) == {"version", "types"}
         assert doc["version"] == 2
-        # 47 since BE-79 (1a) (curator_group.member_blocked/_unblocked);
+        # 50 since BE-166 (support.translate_for_support / _for_user, the
+        # profile's first llm types, and support.translation_unavailable);
+        # 47 after BE-79 (1a) (curator_group.member_blocked/_unblocked);
         # 45 after BE-104 (3) (master.suspended); 44 after BE-104
         # (master.application_submitted); 43 after BE-63
         # (master_practice_published/_edited/_deleted); 40 after BE-102
         # (practice_created_for_master); 39 after BE-59 B1 (member_demoted);
         # 38 after BE-59 A (master_verification_required,
         # master_offer_closed); 36 before.
-        assert len(doc["types"]) == 47
+        assert len(doc["types"]) == 50
 
     def test_every_record_is_closed(self) -> None:
         """An unknown key refuses comms startup; only x-... is tolerated.
@@ -730,12 +732,20 @@ class TestProfileV2:
         was right -- no record used anything else. BE-132 gave four types
         `recipient_schedule: bypass` (comms field since 3.3.0), which widened
         it; which four, and with which value, is TestRecipientSchedule's.
+        BE-166 brought the first llm types, a record of another kind: comms
+        refuses `category` and `recipient_schedule` on it and needs
+        `llm_sets`; so the set is per kind -- a type for people as before,
+        an llm type (channels: [llm]) its own. Which llm types, and their
+        values, is test_the_llm_types_are_the_two_translations's.
         """
+        people = {"category", "channels", "recipient_schedule"}
+        llm = {"channels", "llm_sets", "lane", "push_on", "expires_after"}
         for key, record in self._doc()["types"].items():
             assert isinstance(record, dict), key
+            allowed = llm if record.get("channels") == ["llm"] else people
             extra = {
                 k for k in record
-                if k not in {"category", "channels", "recipient_schedule"}
+                if k not in allowed
                 and not str(k).startswith("x-")
             }
             assert extra == set(), key
@@ -747,11 +757,16 @@ class TestProfileV2:
         comms' default (in_app only) and lose telegram silently.
         """
         types = self._doc()["types"]
-        velo = {k: v for k, v in types.items() if not k.startswith("msg.")}
+        velo = {
+            k: v for k, v in types.items()
+            if not k.startswith("msg.") and v.get("channels") != ["llm"]
+        }
         comms_own = {k: v for k, v in types.items() if k.startswith("msg.")}
         # 33 pre-BE-59, +2 A, +1 B1, +1 BE-102, +3 BE-63, +2 BE-104,
-        # +2 BE-79 (1a)
-        assert len(velo) == 44
+        # +2 BE-79 (1a), +1 BE-166 (support.translation_unavailable). The
+        # llm types are not for people and have no telegram to lose:
+        # test_the_llm_types_are_the_two_translations.
+        assert len(velo) == 45
         assert sorted(comms_own) == [
             "msg.participant_message",
             "msg.support_message",
@@ -762,6 +777,29 @@ class TestProfileV2:
         for key, record in comms_own.items():
             assert "channels" not in record, key
             assert record["category"], key
+
+    def test_the_llm_types_are_the_two_translations(self) -> None:
+        """BE-166: one llm type per direction, both in the interactive lane,
+        read back at their outcome, given up after 15 minutes (owner
+        ruling), routed to the key set the owner defines on the box -- and
+        nothing a type for people carries."""
+        types = self._doc()["types"]
+        llm = {k: v for k, v in types.items() if v.get("channels") == ["llm"]}
+        assert sorted(llm) == [
+            "support.translate_for_support", "support.translate_for_user",
+        ]
+        for key, record in llm.items():
+            assert record == {
+                "channels": ["llm"],
+                "llm_sets": ["llm.text"],
+                "lane": "interactive",
+                "push_on": "outcome",
+                "expires_after": "15m",
+            }, key
+        assert types["support.translation_unavailable"] == {
+            "category": "msg_participants",
+            "channels": ["in_app", "telegram"],
+        }
 
     def test_the_header_states_the_closed_record(self) -> None:
         text = (_profile_dir() / "types.yaml").read_text()

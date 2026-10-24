@@ -156,6 +156,15 @@ booking.reminder_10m:
     body: "🔔 <b>{practice_title}</b> начнётся через 10 минут!\n\n📅 {scheduled_at}\n👤 Мастер: {master_name}"
     button_text: "Открыть практику"
 
+# BE-166: the support reply could not be translated into the user's
+# language (support.translate_for_user ended without an answer, or the model
+# declined).
+support.translation_unavailable:
+  telegram:
+    title: "Ответ поддержки не доставлен"
+    body: "⚠️ Поддержка ответила вам, но перевести ответ на ваш язык не получилось — сервис перевода сейчас недоступен.\n\nСотрудник поддержки увидит это и сможет отправить ответ ещё раз."
+    button_text: "Написать в поддержку"
+
 # -- Post-practice prompts --
 
 prompt.leave_review:

@@ -138,6 +138,22 @@ async def _support(client: AsyncClient, db_session: AsyncSession):
     return admin, thread_id
 
 
+def _fed(url: str, rows: list[dict]) -> list[dict]:
+    """What a feed answers for the comms rows it read.
+
+    The chat feed: the rows as they came. The support feed (admins): until
+    BE-166 also the rows as they came, and these tests asserted exactly
+    that; BE-166 gave every row `original` (the author's text) and
+    `translation` (support/translation.py admin_feed). Here it is null:
+    no row is the client's, and the client reads the support language, so
+    nothing is queued and nothing is translated -- the rows are otherwise
+    untouched, which is what these tests hold.
+    """
+    if "/support/" not in url:
+        return rows
+    return [{**r, "original": r.get("body"), "translation": None} for r in rows]
+
+
 # The two feeds, as (builder, seam, url) -- each test runs on both.
 _FEEDS = [
     pytest.param(_chat, _CHATS_SEAM, "/api/v1/chats/{}/messages", id="chat"),
@@ -171,7 +187,7 @@ class TestFeeds:
 
         assert resp.status_code == 200
         body = resp.json()
-        assert body == {"messages": rows, "next_cursor": "older"}
+        assert body == {"messages": _fed(url, rows), "next_cursor": "older"}
         assert "items" not in body
 
     async def test_every_unknown_shape_is_a_502_with_nothing_of_it_inside(
@@ -217,7 +233,7 @@ class TestFeeds:
             url.format(thread_id), headers=auth_headers(auth["session_token"]),
         )
         assert resp.status_code == 200
-        assert resp.json() == {"messages": [short], "next_cursor": None}
+        assert resp.json() == {"messages": _fed(url, [short]), "next_cursor": None}
 
     async def test_two_calls_give_the_same_answer(
         self, client, db_session, monkeypatch, setup, seam, url,
@@ -240,7 +256,9 @@ class TestFeeds:
             ).json()
             for _ in range(2)
         ]
-        assert first == second == {"messages": rows, "next_cursor": None}
+        assert first == second == {
+            "messages": _fed(url, rows), "next_cursor": None,
+        }
 
     async def test_the_refusal_logs_the_shape_and_no_message_text(
         self, client, db_session, monkeypatch, setup, seam, url,

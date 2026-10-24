@@ -60,6 +60,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.modules.support.service as support_service
+from app.core.config import settings
 from app.core.events.models import OutboxEvent
 from app.modules.support.models import SupportThread
 from app.modules.users.models import User
@@ -732,10 +733,31 @@ class TestAdminThreadMessages:
             headers=auth_headers(admin["session_token"]),
         )
         assert resp.status_code == 200
-        assert resp.json() == {"messages": rows, "next_cursor": None}
+        # BE-166: the page is read in the support language, and the
+        # student's message -- with no translation job yet -- is caught up:
+        # queued, so `preparing`; `body` stays the original until comms
+        # has its variant, which is also `original` (admins only). Before
+        # BE-166 this asserted the rows unchanged, and was right: nothing
+        # was translated.
+        assert resp.json() == {
+            "messages": [
+                {
+                    **rows[0],
+                    "original": rows[0]["body"],
+                    "translation": {
+                        "locale": settings.support_language,
+                        "state": "preparing",
+                        "source_locale": None,
+                        "retryable": False,
+                    },
+                },
+            ],
+            "next_cursor": None,
+        }
         assert fake.await_args.args[:2] == (
             "GET", f"/api/v1/threads/{thread_id}/messages",
         )
+        assert fake.await_args.kwargs["params"]["locale"] == settings.support_language
 
 
 class TestAdminReply:

@@ -45,8 +45,10 @@ from app.core.comms import (
     new_request_key,
     read_comms_page,
 )
+from app.core.config import settings
 from app.core.exceptions import NotFoundError
-from app.modules.support.models import SupportThread
+from app.modules.support import translation
+from app.modules.support.models import TO_SUPPORT, TO_USER, SupportThread
 from app.modules.users.models import User
 
 logger = structlog.get_logger()
@@ -231,12 +233,30 @@ async def send_support_message(
         raise NotFoundError("Open a support thread before sending a message")
 
     text = f"[{topic}] {body}" if topic else body
-    return await comms_request(
+    message = await comms_request(
         "POST",
         f"/api/v1/threads/{pointer.comms_thread_id}/messages",
         json={"sender": str(user.id), "body": text},
         idempotency_key=message_key(user.id, idempotency_key),
     )
+    # BE-166: the message is in the thread already, as written -- the user
+    # does not wait for a model. Its translation into the support language
+    # is ALWAYS queued (owner ruling: the interface language does not say
+    # what the user types in), in this transaction; if the transaction is
+    # lost, the admin feed's catch-up queues it when the thread is read
+    # (translation.admin_feed). A replayed client key returns the same
+    # comms message, and the queue is idempotent on it.
+    message_id = message.get("id") if isinstance(message, dict) else None
+    if message_id is not None:
+        await translation.enqueue(
+            session,
+            pointer=pointer,
+            message_id=UUID(str(message_id)),
+            direction=TO_SUPPORT,
+            locale=settings.support_language,
+            text=text,
+        )
+    return message
 
 
 def _peer_payload(user: User | None) -> dict[str, Any] | None:
@@ -356,20 +376,42 @@ async def get_admin_support_messages(
     the ONLY authz this function performs is the section/DM boundary
     above; there is no per-admin claim requirement to READ.
     """
-    await _require_support_thread(session, thread_id)
-    params: dict[str, Any] = {"limit": limit}
-    if cursor is not None:
-        params["cursor"] = cursor
-    payload = await comms_request(
-        "GET", f"/api/v1/threads/{thread_id}/messages", params=params,
-    )
-    # READ, not forwarded -- see chats/router.py list_messages: comms pages
-    # as {"items", ...}, the frontend reads {"messages", ...}
-    # (frontend/src/api/support.ts); an unknown shape is a 502.
-    messages, next_cursor = read_comms_page(
-        payload, path="/api/v1/threads/{thread_id}/messages",
-    )
-    return {"messages": messages, "next_cursor": next_cursor}
+    pointer = await _require_support_thread(session, thread_id)
+    # BE-166: read in the support language -- and the SAME page again in
+    # the user's language when it differs: only that read says what became
+    # of an admin's reply for the user (translation.admin_feed). The feed
+    # pages exactly alike with any locale.
+    client = await session.get(User, pointer.client_user_id)
+    user_locale = translation.reply_language(client) if client is not None else None
+
+    async def _page(locale: str) -> tuple[list[Any], str | None]:
+        params: dict[str, Any] = {"limit": limit, "locale": locale}
+        if cursor is not None:
+            params["cursor"] = cursor
+        payload = await comms_request(
+            "GET", f"/api/v1/threads/{thread_id}/messages", params=params,
+        )
+        # READ, not forwarded -- see chats/router.py list_messages: comms
+        # pages as {"items", ...}, the frontend reads {"messages", ...}
+        # (frontend/src/api/support.ts); an unknown shape is a 502.
+        return read_comms_page(
+            payload, path="/api/v1/threads/{thread_id}/messages",
+        )
+
+    messages, next_cursor = await _page(settings.support_language)
+    user_items: list[Any] = []
+    if user_locale is not None:
+        user_items, _ = await _page(user_locale)
+    return {
+        "messages": await translation.admin_feed(
+            session,
+            pointer=pointer,
+            messages=messages,
+            user_locale=user_locale,
+            user_items=user_items,
+        ),
+        "next_cursor": next_cursor,
+    }
 
 
 async def send_admin_support_message(
@@ -387,14 +429,45 @@ async def send_admin_support_message(
     403 back, forwarded verbatim (forward_403=True) instead of the
     default infra-fault mapping, so the caller can distinguish "you must
     claim this first" from "comms is down".
+
+    BE-166: the reply goes into the thread at once, as written. When the
+    user reads another language than support's, its translation into
+    theirs is queued in this transaction -- it becomes the message's
+    variant (translation.py); nothing is queued for a user who reads the
+    support language.
     """
-    await _require_support_thread(session, thread_id)
-    return await comms_request(
+    pointer = await _require_support_thread(session, thread_id)
+    message = await comms_request(
         "POST",
         f"/api/v1/threads/{thread_id}/messages",
         json={"sender": str(admin.id), "body": body},
         forward_403=True,
         idempotency_key=message_key(admin.id, idempotency_key),
+    )
+    client = await session.get(User, pointer.client_user_id)
+    target = translation.reply_language(client) if client is not None else None
+    message_id = message.get("id") if isinstance(message, dict) else None
+    if target is not None and message_id is not None:
+        await translation.enqueue(
+            session,
+            pointer=pointer,
+            message_id=UUID(str(message_id)),
+            direction=TO_USER,
+            locale=target,
+            text=body,
+        )
+    return message
+
+
+async def retry_support_translation(
+    session: AsyncSession, *, thread_id: UUID, message_id: UUID,
+) -> dict[str, Any]:
+    """Ask again for a message whose translation's job failed (BE-166);
+    any admin -- nothing is posted as anyone. 409 when there is nothing to
+    retry (in progress, translated, or declined -- final in comms)."""
+    pointer = await _require_support_thread(session, thread_id)
+    return await translation.retry(
+        session, pointer=pointer, message_id=message_id,
     )
 
 

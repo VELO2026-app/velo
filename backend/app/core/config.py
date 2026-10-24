@@ -36,6 +36,7 @@ from urllib.parse import urlsplit
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.i18n import SUPPORTED_LANGUAGES
 from app.core.telegram_links import normalize_telegram_url
 
 # T-14. Literal placeholders shipped in backend/.env.example -- copying
@@ -447,6 +448,15 @@ class Settings(BaseSettings):
     # an answer nobody receives.
     openrouter_http_timeout_seconds: float = 25.0
 
+    # -- Support translation (BE-166, owner ruling 2026-10-22) --
+    # The ONE language every support admin writes in. A user's message is
+    # translated INTO it, an admin's reply is translated FROM it into the
+    # user's language (users.language) -- unless the two are the same, when
+    # the reply goes as it is. An admin's own interface language plays no
+    # part. One of the backend's languages (core/i18n.py
+    # SUPPORTED_LANGUAGES), or the start is refused below.
+    support_language: str = "en"
+
     # -- Comms integration: reminder orchestration (Phase 6 / T1) --
     # Booking reminders (ID-6): velo schedules the series product-side
     # (comms engine/reminders.py left the domain orchestration to the
@@ -838,6 +848,16 @@ class Settings(BaseSettings):
         Production: crashes at startup if critical secrets are missing.
         """
         is_dev = self.app_env == "development"
+
+        # BE-166: a language the backend does not know cannot be anybody's
+        # users.language, so every reply would be translated into it and
+        # every message out of it -- refused at start, in every env.
+        if self.support_language not in SUPPORTED_LANGUAGES:
+            raise ValueError(
+                f"SUPPORT_LANGUAGE={self.support_language!r} is not one of "
+                f"the backend's languages: "
+                f"{', '.join(sorted(SUPPORTED_LANGUAGES))}"
+            )
 
         # DATABASE_URL: default only in dev (TD-006)
         if not self.database_url:

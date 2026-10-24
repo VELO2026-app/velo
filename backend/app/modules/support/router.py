@@ -29,6 +29,13 @@
 #   POST /api/v1/support/threads/{id}/claim          -- claim an
 #     unclaimed thread; the act that grants the right to reply. Yours ->
 #     {claimed: true}, also on a repeat; held by another admin -> 409.
+#   POST /api/v1/support/threads/{id}/messages/{mid}/translation/retry
+#     -- BE-166: ask again for a message whose translation's job failed.
+#
+# BE-166: every message goes into the thread as written; its translation is
+# a comms VARIANT next to it -- support/translation.py. The admin feed
+# carries the variant and the author's `original`; no user route reads
+# either (the user's read of the thread is BE-163's).
 #
 # `is_supervisor` and `operator` are NOT accepted as request parameters
 # anywhere on this router -- there is no name a client could supply that
@@ -60,6 +67,7 @@ from app.modules.support.service import (
     get_admin_support_messages,
     list_admin_support_threads,
     open_support_thread,
+    retry_support_translation,
     send_admin_support_message,
     send_support_message,
 )
@@ -213,4 +221,22 @@ async def claim_thread(
     holds it -- see support/service.py claim_admin_support_thread."""
     return await claim_admin_support_thread(
         session, admin=admin, thread_id=thread_id,
+    )
+
+
+@router.post("/threads/{thread_id}/messages/{message_id}/translation/retry")
+async def retry_translation(
+    thread_id: UUID,
+    message_id: UUID,
+    admin: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> Any:
+    """Ask again for a message whose translation's job failed (BE-166). Any
+    admin: nothing is posted as anyone. 200 `{message_id, locale, attempt,
+    state: "preparing"}`; 409 -- nothing to retry (in progress, translated,
+    declined -- a variant is final in comms -- or a reply that needs no
+    translation); 404 -- not a support thread, or the message is not within
+    the pages a retry searches (translation.find_message)."""
+    return await retry_support_translation(
+        session, thread_id=thread_id, message_id=message_id,
     )

@@ -323,7 +323,10 @@ class TestProfile:
         Templates are a SUBSET, not an equal set: support.thread_created is
         declared with no sheet on purpose (it goes to group:admins), so the
         assertion is containment and the known exception is named here
-        rather than silently allowed by a weaker check.
+        rather than silently allowed by a weaker check. BE-166 added two
+        more, of another kind: the llm types support.translate_for_support
+        and support.translate_for_user carry no sheet because comms refuses
+        one on an llm type -- a letter goes to a model, not to a person.
         """
         types = set(_load_profile())
         for locale in ("ru", "en"):
@@ -339,7 +342,11 @@ class TestProfile:
                 (_profile_dir() / "templates" / "ru.yaml").read_text()
             )
         )
-        assert types - ru == {"support.thread_created"}
+        assert types - ru == {
+            "support.thread_created",
+            "support.translate_for_support",
+            "support.translate_for_user",
+        }
 
     def test_the_two_locales_carry_the_same_sheets(self) -> None:
         """A type translated into one locale and not the other is how a

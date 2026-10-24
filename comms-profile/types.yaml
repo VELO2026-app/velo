@@ -207,6 +207,49 @@ types:
   support.thread_created:
     channels: [in_app, telegram]
 
+  # -- BE-166: support translation, one llm type per direction (comms
+  #    deploy/INTEGRATION.md sections 11-12: one mechanism, the direction is
+  #    the type). comms carries the letter to a model, the backend reads the
+  #    answer by key and writes the result next to the message as a VARIANT
+  #    -- the original is never changed (support/translation.py).
+  #    `llm_sets` names a set of LLM_KEY_SETS in the COMMS .env, and comms
+  #    REFUSES TO START on a box where that set is not defined -- the keys go
+  #    in before this profile is rolled out, on every box that takes it.
+  #    `interactive`: someone is waiting for the answer, and no type for
+  #    people travels in that lane, so a slow model holds nobody's message.
+  #    push_on: outcome -- the backend reads the job when it ends.
+  #    expires_after: 15m (owner ruling 2026-10-22) -- the longest a reader
+  #    waits before the translation is reported impossible. No category, no
+  #    recipient_schedule: an llm type has no person to gate, and comms
+  #    refuses both on it.
+  #    for_support: a user's message, into the support language.
+  #    for_user: an admin's reply, into the user's language. --
+
+  support.translate_for_support:
+    channels: [llm]
+    llm_sets: [llm.text]
+    lane: interactive
+    push_on: outcome
+    expires_after: 15m
+
+  support.translate_for_user:
+    channels: [llm]
+    llm_sets: [llm.text]
+    lane: interactive
+    push_on: outcome
+    expires_after: 15m
+
+  # -- BE-166: the reply to a user's support request could not be translated
+  #    into their language (the translation job ended without an answer, or
+  #    the model declined).
+  #    msg_participants, the category the reply itself would have pinged
+  #    the user under (comms msg.participant_message, client side): a user
+  #    who muted support replies is not told about a missing one either. --
+
+  support.translation_unavailable:
+    category: msg_participants
+    channels: [in_app, telegram]
+
   # -- BE-21: the practice's own master learns his practice was cancelled by
   #    somebody else -- the curator of a school it was published to. NO
   #    category on purpose, and the reason is the same shape as

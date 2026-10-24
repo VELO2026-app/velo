@@ -133,9 +133,11 @@ _CONNECTION_ERRORS = (RedisConnectionError, RedisTimeoutError, OSError)
 # BE-47: the advisory-lock key of the outbox relay. A NAMED constant, not a
 # literal at the call: any other pg_advisory_* lock on the same number in
 # this database would silence the relay for as long as it is held. The
-# number is this relay's alone -- no other advisory lock exists in the
-# VELO or the comms code (checked at BE-47); a new one picks another
-# number and says so here. Advisory locks are scoped to one database.
+# number is this relay's alone. One other advisory lock exists in this
+# database since BE-134: the comms push listener's,
+# core/comms_listener.py _LISTENER_ADVISORY_LOCK_KEY (4_701_134_000_134);
+# none in the comms code (checked at BE-47). A new one picks another number
+# and says so here. Advisory locks are scoped to one database.
 _RELAY_ADVISORY_LOCK_KEY = 4_701_047_000_047
 
 # T-13 redaction pass. Its own slow cadence, deliberately unrelated to
