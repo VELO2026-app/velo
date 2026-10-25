@@ -2,13 +2,16 @@
 // VELO Frontend -- CuratorGroupPageView Screen Tests (tz-curator.md §1.6)
 // =============================================================================
 //
-// ONE page, three viewers: every behavioural difference keys off the
-// server's viewer.relation. Per the owner's 2026-09-19 cut the page is:
+// ONE page, three viewers: member-facing differences key off the server's
+// viewer.relation; the CURATOR'S MANAGEMENT blocks key off relation AND zone
+// (FE-93 -- in user mode a curator reads the page as an ordinary member,
+// because every masters-surface call behind those blocks answers 403 there).
+// Per the owner's 2026-09-19 cut the page is:
 // hero → «Редактировать школу» + four nav rows → «Создать практику» →
 // «Ближайшие практики» (≤5, the page's LAST element). The rosters, the
 // journal, the header «⋯» menu and the invite/transfer/delete actions are
 // GONE from this page -- their tests went with them. Still covered: the
-// hero counters, relation gating of rows/CTA, the edit sheet, the LEAVE
+// hero counters, relation/zone gating of rows/CTA, the edit sheet, the LEAVE
 // flow (advisory preview + frozen-school 404 path), the transfer banner
 // (server-driven accept/decline/cancel) and the analytics row, which since
 // §6 MVP (owner 2026-10-02) navigates to the school analytics screen -- the
@@ -244,19 +247,20 @@ describe('CuratorGroupPageView -- relation matrix', () => {
     await flush()
 
     expect(buttonWith('Покинуть школу')).toBeFalsy()
-    // Owner 2026-09-19: the page is hero + these rows + CTA + feed. FE-93:
-    // the management rows («Участники», «Аналитика») mount in the master
-    // zone only -- the user-mode curator sees the member's page.
-    expect(rowWith('Редактировать школу')).toBeTruthy()
+    // FE-93: relation survives the switch to user mode, but every call
+    // behind the management blocks (invite, edit, create CTA) goes to the
+    // masters surface, which answers 403 there -- so none of them mounts.
+    // The shared rows and the feed stay.
+    expect(rowWith('Редактировать школу')).toBeUndefined()
     expect(rowWith('Предстоящие практики')).toBeTruthy()
     expect(rowWith('Участники')).toBeUndefined()
     expect(rowWith('Аналитика')).toBeUndefined()
-    expect(buttonWith('Создать практику')).toBeTruthy()
-    // §1.6 (owner 2026-09-22): the invite field rides the hero for the
-    // curator (Group 3801 form: the label pill reads «Ссылка-приглашение»);
-    // the mint fired exactly once on mount (get-or-get by contract).
-    expect(text()).toContain('Ссылка-приглашение')
-    expect(cgApi.createCuratorGroupInvite).toHaveBeenCalledTimes(1)
+    expect(buttonWith('Создать практику')).toBeUndefined()
+    expect(text()).not.toContain('Ссылка-приглашение')
+    // The silence is the point: no masters-surface call fired on mount, so
+    // no 403 toast can appear (the bug this closing was cut for).
+    expect(cgApi.createCuratorGroupInvite).not.toHaveBeenCalled()
+    expect(text()).toContain('Практика p1')
   })
 
   it('CURATOR in the MASTER zone: management rows open the master-zone screens', async () => {
@@ -421,10 +425,13 @@ describe('CuratorGroupPageView -- leave', () => {
   })
 })
 
-// -- Edit school (curator) ----------------------------------------------------
+// -- Edit school (curator, master zone -- FE-93) -------------------------------
 
 describe('CuratorGroupPageView -- edit', () => {
   it('the «Редактировать школу» row prefills the sheet; save PATCHes a trimmed name', async () => {
+    // FE-93: the edit row mounts in the master zone only -- editing from
+    // there PATCHes the masters surface.
+    routeState.name = 'master-curator-group'
     mockHappyLoad('curator')
     mount()
     await flush()
@@ -458,6 +465,7 @@ describe('CuratorGroupPageView -- edit', () => {
   })
 
   it('BE-20: avatar link is PATCHed when typed, and «сохранено как …» surfaces the normalization', async () => {
+    routeState.name = 'master-curator-group'
     mockHappyLoad('curator')
     mount()
     await flush()
@@ -493,6 +501,7 @@ describe('CuratorGroupPageView -- edit', () => {
   })
 
   it('BE-20: clearing the link on a school that HAS an avatar PATCHes null (remove)', async () => {
+    routeState.name = 'master-curator-group'
     vi.mocked(cgApi.getCuratorGroupPage).mockResolvedValue(
       pageFixture('curator', null, 'https://cdn.example.com/old.png'),
     )
@@ -541,6 +550,10 @@ describe('CuratorGroupPageView -- edit', () => {
 
 describe('CuratorGroupPageView -- transfer banner', () => {
   it('addressee accepts: the accept response REPLACES the page -- curator mode without a reload', async () => {
+    // The accept itself works in any zone (member surface); the assertion
+    // that the management rows appear afterwards is a master-zone claim
+    // (FE-93), so the test runs there.
+    routeState.name = 'master-curator-group'
     mockHappyLoad('master', transferFixture)
     vi.mocked(cgApi.acceptCuratorGroupTransfer).mockResolvedValue(pageFixture('curator'))
     mount()
@@ -571,7 +584,18 @@ describe('CuratorGroupPageView -- transfer banner', () => {
     expect(buttonWith('Покинуть школу')).toBeTruthy()
   })
 
+  it('FE-93: the curator who SENT the offer sees no banner in the user zone', async () => {
+    mockHappyLoad('curator', transferFixture)
+    mount()
+    await flush()
+
+    // Sending/cancelling an offer rides the masters surface -- the banner
+    // waits for the master zone like the rest of the management blocks.
+    expect(text()).not.toContain('Предложение передать школу отправлено')
+  })
+
   it('curator cancels: the banner clears without a reload', async () => {
+    routeState.name = 'master-curator-group'
     mockHappyLoad('curator', transferFixture)
     vi.mocked(cgApi.cancelCuratorGroupTransfer).mockResolvedValue(undefined)
     mount()
@@ -621,20 +645,22 @@ describe('CuratorGroupPageView -- §1.6 page body', () => {
     expect(rowWith('Пригласить')).toBeUndefined()
   })
 
-  it('the curator page carries the edit row, the nav rows and the create CTA', async () => {
+  it('the curator page carries the edit row, the nav rows and the create CTA (master zone, FE-93)', async () => {
+    routeState.name = 'master-curator-group'
     mockHappyLoad('curator')
     mount()
     await flush()
 
     // VMenuRow renders a div, so these are text-level assertions.
     expect(text()).toContain('Редактировать школу')
-    // FE-93: «Участники» and «Аналитика» mount in the master zone only --
-    // the user-mode curator reads the page like an ordinary member.
-    expect(text()).not.toContain('Участники')
+    // In the MASTER zone the curator gets the full §1.6 set: the roster and
+    // analytics rows mount here (FE-93 removed them from the user zone
+    // only, where this same relation renders the member's page).
+    expect(text()).toContain('Участники')
     expect(text()).not.toContain('Список мастеров')
     expect(text()).not.toContain('Список учеников')
     expect(text()).toContain('Предстоящие практики')
-    expect(text()).not.toContain('Аналитика')
+    expect(text()).toContain('Аналитика')
 
     buttonWith('Создать практику')?.click()
     await flush()

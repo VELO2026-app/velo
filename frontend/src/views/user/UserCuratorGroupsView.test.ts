@@ -87,15 +87,17 @@ describe('UserCuratorGroupsView', () => {
     expect(host?.querySelector('.ucg__state')).toBeTruthy()
   })
 
-  it('renders every school row with its counts line, and navigates on tap', async () => {
+  it('renders the PARTICIPATION rows (FE-93 filters the curated ones) with counts, and navigates on tap', async () => {
     vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue(
       mineResponse([row('g1', 'student'), row('g2', 'curator')]),
     )
     mount()
     await flush()
 
+    // FE-93: the curated row is the master list's «Я куратор» section --
+    // this zone lists the schools I participate in.
+    expect(text()).not.toContain('Школа g2')
     expect(text()).toContain('Школа g1')
-    expect(text()).toContain('Школа g2')
     // §1.4 stats line: two icon+number pairs, students first, no words.
     const firstRow = host?.querySelector('.cg-row') as HTMLElement
     const stats = Array.from(firstRow.querySelectorAll('.cg-row__stat')).map((s) =>

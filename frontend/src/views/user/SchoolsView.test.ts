@@ -6,6 +6,9 @@
 // mocked @/api/curatorGroups + vue-router. Covers the four honest list states
 // (loading / rows / empty+CTA / error+retry), the row -> school-page
 // navigation, and the create-right gating of the «+» and the CTA (BE-18).
+// FE-93: this zone lists PARTICIPATIONS (the curated rows /mine still
+// returns are the master list's section), and the create right is only
+// dialed in master mode -- hence the seeded auth role on every mount.
 //
 // The schoolsHub store (the tab probe) runs REAL against the mocked module --
 // it shares the same seam, so one vi.mock serves both.
@@ -14,8 +17,9 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
-import { createPinia } from 'pinia'
+import { createPinia, setActivePinia } from 'pinia'
 import SchoolsView from '@/views/user/SchoolsView.vue'
+import { useAuthStore } from '@/stores/auth'
 import * as cgApi from '@/api/curatorGroups'
 import type { CuratorGroupMineResponse } from '@/api/types'
 
@@ -35,12 +39,20 @@ vi.mock('@/composables/useToast', () => ({
 let app: App | null = null
 let host: HTMLElement | null = null
 
-function mount(): HTMLElement {
+function mount(role: 'user' | 'master' = 'user'): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(SchoolsView).use(createTestI18n())
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  // FE-93: the create right is dialed only in master mode, so the active
+  // role is part of this screen's contract -- seed it before the mount.
+  useAuthStore().user = {
+    id: 'u1',
+    role,
+    role_switch: { allowed_roles: [role] },
+  } as never
+  app = createApp(SchoolsView).use(createTestI18n()).use(pinia)
   // The hub reads the schoolsHub store (the tab probe shares this seam).
-  app.use(createPinia())
   app.mount(host)
   return host
 }
@@ -106,14 +118,16 @@ describe('SchoolsView', () => {
     expect(host?.querySelector('.schools__state')).toBeTruthy()
   })
 
-  it('renders the flat list and navigates a row to the school page', async () => {
+  it('renders the PARTICIPATION rows only (FE-93) and navigates a row to the school page', async () => {
     vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue(
       mineResponse([row('g1', 'curator'), row('g2', 'student')]),
     )
     mount()
     await flush()
 
-    expect(text()).toContain('Школа g1')
+    // FE-93: the curated row is the master list's «Я куратор» section --
+    // every management surface behind it would 403 from this zone.
+    expect(text()).not.toContain('Школа g1')
     expect(text()).toContain('Школа g2')
     // §1.4 stats line: two icon+number pairs, students first, no words.
     const firstRow = host?.querySelector('.cg-row') as HTMLElement
@@ -124,11 +138,13 @@ describe('SchoolsView', () => {
 
     firstRow.click()
     await flush()
-    expect(push).toHaveBeenCalledWith({ name: 'user-curator-group', params: { id: 'g1' } })
+    expect(push).toHaveBeenCalledWith({ name: 'user-curator-group', params: { id: 'g2' } })
   })
 
   it('empty list with the create right: the quiet §1.3 state -- one CTA, no empty-state plate', async () => {
-    mount()
+    // The right lives on the master surface, so this quiet state is only
+    // reachable from master mode (FE-93) -- a role=master in this zone.
+    mount('master')
     await flush()
 
     // §1.3: the curator-empty screen is the quiet background with ONE CTA --
@@ -143,12 +159,24 @@ describe('SchoolsView', () => {
     expect(push).toHaveBeenCalledWith({ name: 'master-curator-group-create' })
   })
 
+  it('FE-93: in user mode the master surface is not dialed -- no «+», no doomed 403', async () => {
+    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue(mineResponse([]))
+    mount('user')
+    await flush()
+
+    expect(cgApi.getCuratorGroups).not.toHaveBeenCalled()
+    expect(host?.querySelector('.schools__add-btn')).toBeFalsy()
+    // Without the create right the settled empty list is the plain empty
+    // state, not the quiet «Создать школу» screen.
+    expect(text()).toContain('Пока нет школ')
+  })
+
   it('the header «+» follows the create right (BE-18)', async () => {
     vi.mocked(cgApi.getCuratorGroups).mockResolvedValue({
       items: [],
       can_create_groups: false,
     })
-    mount()
+    mount('master')
     await flush()
 
     expect(host?.querySelector('.schools__add-btn')).toBeFalsy()
@@ -158,7 +186,7 @@ describe('SchoolsView', () => {
       can_create_groups: true,
     })
     app?.unmount()
-    mount()
+    mount('master')
     await flush()
     expect(host?.querySelector('.schools__add-btn')).toBeTruthy()
   })
@@ -170,7 +198,9 @@ describe('SchoolsView', () => {
 
     expect(text()).toContain('Не удалось загрузить школы')
 
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValueOnce(mineResponse([row('g1', 'curator')]))
+    // The retry renders a PARTICIPATION row (FE-93: the curated relation
+    // would be filtered out of this zone's list).
+    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValueOnce(mineResponse([row('g1', 'student')]))
     const retry = buttonWith('Повторить')
     retry?.click()
     await flush()

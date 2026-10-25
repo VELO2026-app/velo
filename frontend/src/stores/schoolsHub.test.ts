@@ -42,10 +42,13 @@ function mineItem(overrides: Partial<CuratorGroupMineItem> = {}): CuratorGroupMi
   } as CuratorGroupMineItem
 }
 
-function seedRoles(roles: string[]): void {
+function seedRoles(roles: string[], activeRole?: 'user' | 'master'): void {
   useAuthStore().user = {
     id: 'u1',
-    role: roles.includes('master') ? 'master' : 'user',
+    // FE-93: capability (allowed_roles) and the ACTIVE role are separate --
+    // a master switched to user mode keeps ['user', 'master'] but reads as
+    // role='user'. Tests pass activeRole to pin that split down.
+    role: activeRole ?? (roles.includes('master') ? 'master' : 'user'),
     role_switch: { allowed_roles: roles },
   } as never
 }
@@ -81,7 +84,7 @@ describe('schoolsHub store', () => {
     expect(hub.hasSchools).toBe(false)
   })
 
-  it('a master-capable account is probed on both surfaces; the right rides the master one', async () => {
+  it('in master mode both surfaces are probed; the right rides the master one', async () => {
     seedRoles(['user', 'master'])
     vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({ items: [] })
     vi.mocked(cgApi.getCuratorGroups).mockResolvedValue({
@@ -94,6 +97,58 @@ describe('schoolsHub store', () => {
 
     expect(hub.hasSchools).toBe(false)
     expect(hub.canCreate).toBe(true)
+  })
+
+  // ===========================================================================
+  // FE-93: relation survives a switch to user mode (the /mine payload is
+  // role-independent), but the USER zone counts participations only -- the
+  // curated rows are the master list's «Я куратор» section. And the master
+  // surface requires the ACTIVE role master, so the founding-right probe
+  // waits for that mode instead of burning a 403 per shell mount.
+  // ===========================================================================
+
+  it('FE-93: in user mode a curated-only /mine keeps the tab hidden and the master surface undialed', async () => {
+    seedRoles(['user', 'master'], 'user')
+    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+      items: [mineItem({ id: 'g-owned', relation: 'curator' })],
+    })
+
+    const hub = useSchoolsHubStore()
+    await hub.ensureCurator()
+
+    expect(hub.hasSchools).toBe(false)
+    expect(cgApi.getCuratorGroups).not.toHaveBeenCalled()
+  })
+
+  it('the same /mine counts the curated school again in master mode', async () => {
+    seedRoles(['user', 'master'])
+    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+      items: [mineItem({ id: 'g-owned', relation: 'curator' })],
+    })
+    vi.mocked(cgApi.getCuratorGroups).mockResolvedValue({
+      items: [],
+      can_create_groups: false,
+    })
+
+    const hub = useSchoolsHubStore()
+    await hub.ensureCurator()
+
+    expect(hub.hasSchools).toBe(true)
+  })
+
+  it('FE-93: in user mode a joined school keeps the tab up beside the curated ones', async () => {
+    seedRoles(['user', 'master'], 'user')
+    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+      items: [
+        mineItem({ id: 'g-owned', relation: 'curator' }),
+        mineItem({ id: 'g-joined', relation: 'student' }),
+      ],
+    })
+
+    const hub = useSchoolsHubStore()
+    await hub.ensureCurator()
+
+    expect(hub.hasSchools).toBe(true)
   })
 
   it('a settled probe never re-fetches', async () => {

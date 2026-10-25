@@ -2,10 +2,13 @@
   VELO Frontend -- CuratorGroupPageView (schools FE-19/FE-20 / GT P3)
 
   ONE school page component mounted by BOTH zones (precedent: EditProfileView
-  -- a user-zone view the master zone mounts directly). Everything that
-  differs between the three viewers keys off the SERVER's viewer.relation,
-  never off the zone: a master-zone curator and a user-zone student see the
-  same component with a different action set (TZ 6.3).
+  -- a user-zone view the master zone mounts directly). Member-facing blocks
+  key off the SERVER's viewer.relation; the CURATOR'S MANAGEMENT blocks (the
+  invite field, the edit row, the create-practice CTA, sending a transfer)
+  key off relation AND zone (FE-93): relation is role-independent -- the page
+  endpoint still answers relation='curator' after the owner switches to user
+  -- while every masters-surface call behind those blocks answers 403 there,
+  so in user mode a curator reads the page as an ordinary member (TZ 6.3).
 
   Data: GET /curator-groups/{id} (page + relation + transfer) + the school's
   practices; the feed renders at most five of them and is the page's last
@@ -97,12 +100,14 @@
              the invite is the curator's handle. This reverses the 2026-09-19
              "the invite has no entry point on this page" note -- the orphaned
              CuratorGroupInviteSheet is removed, this field IS the entry. -->
-        <SchoolInviteField v-if="isCurator" :group-id="groupId" />
+        <SchoolInviteField v-if="curatorSurface" :group-id="groupId" />
 
-        <!-- FE-21: transfer offer banner (curator sees "sent", addressee
-             sees accept/decline). Renders nothing for everyone else. -->
+        <!-- FE-21: transfer offer banner. The ADDRESSEE (relation 'master')
+             accepts/declines on the member surface -- any zone. The curator
+             who SENT it only manages it from the master zone (FE-93).
+             Renders nothing for everyone else. -->
         <CuratorGroupTransferBanner
-          v-if="page.transfer && (relation === 'master' || isCurator)"
+          v-if="page.transfer && (relation === 'master' || curatorSurface)"
           :transfer="page.transfer"
           :pending="null"
           :relation="relation"
@@ -112,15 +117,16 @@
           @declined="onTransferDeclined"
         />
 
-        <!-- §1.6: «Редактировать школу» (curator only) keeps its pencil and
-             no chevron; the nav rows that follow carry NO left icons --
+        <!-- §1.6: «Редактировать школу» (curator, master zone -- FE-93)
+             keeps its pencil and no chevron; the nav rows that follow
+             carry NO left icons --
              only the label and the enlarged dark chevron (§1.9). «Участники»
              opens the merged roster screen (§1.11, curator only); the
              rosters no longer live on this page. «Аналитика» opens the
              school's analytics screen (§6 MVP, owner 2026-10-02). -->
         <div class="cgp__actions">
           <VMenuRow
-            v-if="isCurator"
+            v-if="curatorSurface"
             :label="t('user.screens.curatorGroupPage.edit.title')"
             :show-arrow="false"
             @click="openEdit"
@@ -158,12 +164,14 @@
           />
         </div>
 
-        <!-- §1.6: the page's primary CTA, curator only (the page payload
-             carries no per-master creation right, so relation is the one
-             honest signal). The hand-off names the school -- the create
-             flow scopes its master picker to this school's masters. -->
+        <!-- §1.6: the page's primary CTA, curator in the master zone (the
+             page payload carries no per-master creation right, so relation
+             is the one honest signal -- and FE-93 keeps it out of user
+             mode, where its master-route target is unreachable anyway).
+             The hand-off names the school -- the create flow scopes its
+             master picker to this school's masters. -->
         <VButton
-          v-if="isCurator"
+          v-if="curatorSurface"
           variant="primary"
           block
           @click="
@@ -300,6 +308,11 @@ const practices = ref<PracticeResponse[]>([])
 
 const relation = computed(() => page.value?.viewer.relation ?? null)
 const isCurator = computed(() => relation.value === 'curator')
+/** FE-93: the curator's management blocks are the master zone's privilege.
+ *  Relation alone is not the gate -- it survives a switch to user mode, but
+ *  every call behind these blocks goes to the masters surface, which answers
+ *  403 there; in user mode a curator is an ordinary member. */
+const curatorSurface = computed(() => isCurator.value && inMasterZone.value)
 /** Who sees «Участники» (BE-76): the curator, and a master of the school in
  *  the master zone. The server enforces the same split on GET .../roster. */
 const canOpenRoster = computed(

@@ -332,9 +332,12 @@ describe('UserShell', () => {
       expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Дневник', 'Я'])
     })
 
-    it('a school CURATOR (relation=curator) keeps «Дневник» too (owner 2026-10-12)', async () => {
-      // Curatorship rides the membership, not the surface set: in user mode
-      // the account keeps the plain-user dock, «Школы» included (a member).
+    it('a school CURATOR (relation=curator) keeps «Дневник», but no «Школы» without participations (FE-93)', async () => {
+      // Curatorship still rides the membership for the diary: in user mode
+      // the account keeps the plain-user dock. FE-93 closes the tab side:
+      // the curated rows /mine still returns are the master list's section
+      // (every management surface behind them 403s in user mode), so a
+      // curator with no JOINED schools reads as "no schools" here.
       curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({
         items: [{ id: 'g1', name: 'Тихая школа', relation: 'curator' }],
       })
@@ -342,7 +345,7 @@ describe('UserShell', () => {
       await flush()
       await flush()
 
-      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Дневник', 'Школы', 'Я'])
+      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Дневник', 'Я'])
     })
 
     it('the reported repro surface: the school-scoped calendar hides the dock entirely (owner 2026-10-05)', async () => {

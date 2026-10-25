@@ -7,10 +7,12 @@
 
   Per the owner's mockups (Design_prototype/mockups/schools-*.png):
     - no schools -> the default screen with the CTA «Создать школу»;
-    - schools -> a FLAT list of cards (curated + participated in one run,
-      backend /mine order: curated first, then join time). The sectioned
-      lists of phase 1 (MasterCuratorGroupsView / UserCuratorGroupsView)
-      keep their own shape -- different screens answer different questions.
+    - schools -> a FLAT list of cards (the schools I PARTICIPATE in --
+      FE-93: /mine's curated rows are the master list's «Я куратор» section
+      and every management surface behind them 403s outside master mode, so
+      the user zone lists memberships only, backend join order). The
+      sectioned list of the master zone (MasterCuratorGroupsView) keeps its
+      own shape -- different screens answer different questions.
     - the search pill is deliberately NOT rendered in v1 (no discovery
       backend; tz-curator.md §1.3 / захоронка §7.1 №1).
 
@@ -94,6 +96,7 @@ import { t } from '@/locales'
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getCuratorGroups, getMyCuratorGroups } from '@/api/curatorGroups'
+import { useAuthStore } from '@/stores/auth'
 import type { CuratorGroupMineItem } from '@/api/types'
 import CuratorGroupRow from '@/components/shared/CuratorGroupRow.vue'
 import { IconPlusFilled } from '@/components/icons'
@@ -101,6 +104,7 @@ import { VButton, VEmptyState, VLoader } from '@/components/ui'
 import VHeader from '@/components/layout/VHeader.vue'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
 const loading = ref(true)
 const error = ref(false)
@@ -118,12 +122,23 @@ async function load(): Promise<void> {
     // recipe verbatim: /mine feeds the rows (relation + transfer_offered ride
     // only here), the curator list carries the create right. allSettled,
     // because the two calls are NOT equal: /mine failing means there is no
-    // screen, while the flag call failing only means no «+».
-    const [mineRes, listRes] = await Promise.allSettled([getMyCuratorGroups(), getCuratorGroups()])
+    // screen, while the flag call failing only means no «+». The flag lives
+    // on the master surface, which answers 403 outside master mode (FE-93),
+    // so it is only dialed there -- anywhere else false is the honest «+».
+    const [mineRes, listRes] = await Promise.allSettled([
+      getMyCuratorGroups(),
+      authStore.role === 'master' ? getCuratorGroups() : Promise.resolve(null),
+    ])
     if (mineRes.status === 'rejected') throw mineRes.reason
-    schools.value = mineRes.value.items
+    // FE-93: this zone lists the schools I PARTICIPATE in. The curated rows
+    // /mine still returns (relation is role-independent) are the master
+    // list's «Я куратор» section -- and each would 403 its way through this
+    // zone's screens.
+    schools.value = mineRes.value.items.filter((g) => g.relation !== 'curator')
     canCreate.value =
-      listRes.status === 'fulfilled' ? (listRes.value.can_create_groups ?? false) : false
+      listRes.status === 'fulfilled' && listRes.value
+        ? (listRes.value.can_create_groups ?? false)
+        : false
   } catch {
     error.value = true
   } finally {

@@ -3,9 +3,11 @@
 
   «Мои школы» for the user zone (route /user/groups, entry row in
   UserProfileView's «Аккаунт» section). A FLAT list of GET /curator-groups/mine
-  -- curated first, then by join time, exactly as the backend orders it; no
-  sectioning here (that is the master list's own distinction). Rows are the
-  shared CuratorGroupRow; tap -> the school page in this zone.
+  -- the schools I PARTICIPATE in, by join time. FE-93: /mine's curated rows
+  are the master list's «Я куратор» section and every management surface
+  behind them 403s outside master mode, so this zone lists memberships only
+  (a curator switched to user mode reads as an ordinary member). Rows are
+  the shared CuratorGroupRow; tap -> the school page in this zone.
 
   The honest empty state names the only way in: an invite link from a curator
   -- there is no catalogue and no search (v1 non-goal, owner-ruled).
@@ -75,7 +77,10 @@ async function load(): Promise<void> {
   error.value = false
   try {
     const res = await getMyCuratorGroups()
-    groups.value = res.items
+    // FE-93: this zone lists the schools I PARTICIPATE in -- the curated
+    // rows /mine still returns (relation is role-independent) are the
+    // master list's «Я куратор» section.
+    groups.value = res.items.filter((g) => g.relation !== 'curator')
   } catch {
     error.value = true
   } finally {
