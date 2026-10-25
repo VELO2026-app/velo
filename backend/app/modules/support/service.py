@@ -834,7 +834,7 @@ async def _admin_ticket_rows(
 async def list_admin_tickets(
     session: AsyncSession,
     *,
-    category: str | None,
+    categories: set[str] | None,
     status: str | None,
     created_from: datetime | None,
     created_to: datetime | None,
@@ -844,6 +844,7 @@ async def list_admin_tickets(
     """Tickets, newest appeal first (BE-162, 6) -- from velo's own table:
     the filters and, later, the statistics are ours.
 
+    `categories` is "any of these" (BE-162 fix 2); none -- every category.
     Without `status` the list is every ticket but SPAM (owner ruling 8: spam
     leaves the common list); `status=spam` is the spam tab. `created_from`
     is inclusive, `created_to` exclusive.
@@ -866,8 +867,8 @@ async def list_admin_tickets(
         stmt = stmt.where(SupportTicket.status == status)
     else:
         stmt = stmt.where(SupportTicket.status != STATUS_SPAM)
-    if category is not None:
-        stmt = stmt.where(SupportTicket.category == category)
+    if categories:
+        stmt = stmt.where(SupportTicket.category.in_(sorted(categories)))
     if created_from is not None:
         stmt = stmt.where(SupportTicket.created_at >= created_from)
     if created_to is not None:

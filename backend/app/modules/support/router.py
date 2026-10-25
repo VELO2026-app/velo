@@ -24,7 +24,8 @@
 #
 # ADMIN-FACING (get_current_admin):
 #   GET  /api/v1/support/tickets                 -- tickets, newest appeal
-#     first, from velo's table: filters category / status / created_from /
+#     first, from velo's table: filters category (repeatable -- any of
+#     them) / status / created_from /
 #     created_to; without `status` every ticket but spam.
 #   GET  /api/v1/support/tickets/{id}            -- one ticket, the list's
 #     own row (BE-162 fix: the card opened from a signal); spam included;
@@ -166,7 +167,10 @@ async def open_ticket(
 @router.get("/tickets")
 async def list_tickets(
     request: Request,
-    category: CategoryCode | None = Query(default=None),
+    # Repeatable (BE-162 fix 2): ?category=a&category=b is "a or b" -- the
+    # front's "complaints" chip is both complaint categories. Every value
+    # must be a code (422 otherwise); a repeated one counts once.
+    category: list[CategoryCode] | None = Query(default=None),
     status: StatusCode | None = Query(default=None),
     created_from: datetime | None = Query(default=None),
     created_to: datetime | None = Query(default=None),
@@ -183,7 +187,7 @@ async def list_tickets(
             raise BadRequestError(f"{name} must carry a time zone")
     return await list_admin_tickets(
         session,
-        category=category,
+        categories=set(category) if category else None,
         status=status,
         created_from=created_from,
         created_to=created_to,

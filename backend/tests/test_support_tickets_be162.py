@@ -1048,6 +1048,105 @@ class TestAdmin:
         assert comms.calls == []
 
 
+class TestCategoryFilter:
+    """?category= is repeatable (BE-162 fix 2): any of the codes given --
+    the front's "complaints" chip asks for both complaint categories."""
+
+    async def _five(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> tuple[dict, dict[str, UUID]]:
+        """An admin and five tickets, the two complaints interleaved in
+        time with the rest, newest last in this list."""
+        admin = await _person(client, db_session, 36, role=UserRole.ADMIN.value)
+        user = await _person(client, db_session, 37)
+        made = {}
+        for minutes, topic in (
+            (50, "complaint_master"),
+            (40, "payment"),
+            (30, "complaint_user"),
+            (20, "technical"),
+            (10, "complaint_master"),
+        ):
+            made[f"{topic}@{minutes}"] = await _ticket(
+                db_session,
+                user["user"]["id"],
+                topic=topic,
+                age_minutes=minutes,
+            )
+        return admin, made
+
+    async def test_two_categories_are_their_union_newest_first_across_pages(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        comms: FakeComms,
+    ) -> None:
+        admin, made = await self._five(client, db_session)
+        headers = auth_headers(admin["session_token"])
+        expected = [
+            str(made["complaint_master@10"]),
+            str(made["complaint_user@30"]),
+            str(made["complaint_master@50"]),
+        ]
+        both = [("category", "complaint_master"), ("category", "complaint_user")]
+        resp = await client.get(TICKETS_URL, params=both, headers=headers)
+        assert [t["id"] for t in resp.json()["tickets"]] == expected
+        seen, cursor = [], None
+        while True:
+            params = [*both, ("limit", "1"), *([("cursor", cursor)] if cursor else [])]
+            body = (
+                await client.get(TICKETS_URL, params=params, headers=headers)
+            ).json()
+            seen += [t["id"] for t in body["tickets"]]
+            cursor = body["next_cursor"]
+            if cursor is None:
+                break
+        assert seen == expected
+
+    async def test_one_category_and_a_repeated_one_are_that_category(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        comms: FakeComms,
+    ) -> None:
+        admin, made = await self._five(client, db_session)
+        headers = auth_headers(admin["session_token"])
+        expected = [str(made["complaint_master@10"]), str(made["complaint_master@50"])]
+        for params in (
+            [("category", "complaint_master")],
+            [("category", "complaint_master"), ("category", "complaint_master")],
+        ):
+            resp = await client.get(TICKETS_URL, params=params, headers=headers)
+            assert [t["id"] for t in resp.json()["tickets"]] == expected
+        resp = await client.get(TICKETS_URL, headers=headers)
+        assert len(resp.json()["tickets"]) == 5
+
+    @pytest.mark.parametrize(
+        "params",
+        [
+            [("category", "complaint_user"), ("category", "billing")],
+            [("category", "complaint_user"), ("category", "")],
+            [("category", "COMPLAINT_USER")],
+        ],
+    )
+    async def test_a_code_nobody_has_among_several_is_a_422(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        comms: FakeComms,
+        params,
+    ) -> None:
+        admin = await _person(client, db_session, 38, role=UserRole.ADMIN.value)
+        resp = await client.get(
+            TICKETS_URL,
+            params=params,
+            headers=auth_headers(admin["session_token"]),
+        )
+        assert resp.status_code == 422
+
+
 class TestTicketCard:
     """GET /support/tickets/{id} (BE-162 fix): the card an admin opens from
     the Telegram signal, which carries only the thread id."""
