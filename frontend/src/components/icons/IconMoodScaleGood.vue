@@ -5,6 +5,11 @@
   exactly as delivered. This component is the in-repo source of truth (raw
   svg sources are not kept). Full-color illustrative asset, not
   a currentColor glyph. Gradient id is unique per instance.
+
+  F2.0 step-0 (tz-whitelabel §3.1): the gradient stops carry the fill colors
+  as tokens with the source hex as fallback -- same pixels, but a skin can
+  now retheme them. The remaining mood-scale icons follow in step 1(в)
+  AFTER this probe is visually accepted.
 -->
 <template>
   <svg
@@ -42,8 +47,12 @@
         y2="177.85"
         gradientUnits="userSpaceOnUse"
       >
-        <stop stop-color="#F9CBD1" />
-        <stop offset="1" stop-color="#FDDFC4" />
+        <!-- F2.0 step-0 probe (tz-whitelabel §3.1): the pale fills route
+             through the tokens; the hex fallback keeps the render byte-for-byte
+             identical even where var() cannot resolve. var() in a presentation
+             ATTRIBUTE does not resolve -- it lives in style, which does. -->
+        <stop style="stop-color: var(--velo-mood-fill-rose, #f9cbd1)" />
+        <stop offset="1" style="stop-color: var(--velo-mood-fill-peach, #fddfc4)" />
       </linearGradient>
     </defs>
   </svg>

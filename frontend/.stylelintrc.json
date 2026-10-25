@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json.schemastore.org/stylelintrc.json",
+  "customSyntax": "postcss-html",
+  "ignoreFiles": ["src/styles/variables.css", "dist/**", "node_modules/**"],
+  "rules": {
+    "color-no-hex": true,
+    "declaration-property-value-allowed-list": {
+      "/^font-size$/": ["/^var\\(--/"],
+      "/^border-radius$/": ["/^var\\(--/", "inherit", "0"],
+      "/^box-shadow$/": ["/^var\\(--/", "none"]
+    }
+  }
+}

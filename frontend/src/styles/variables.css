@@ -550,4 +550,94 @@
   --velo-size-48: 48px; /* list count-badge min-width */
   --velo-size-60: 60px; /* dashboard week-nav button width */
   --velo-size-104: 104px; /* master-review photo square (= --velo-card-height-list value, distinct role) */
+
+  /* =========================================================================
+   * F2.0 token-lock foundation (tz-whitelabel §3.1, step 0, 2026-10-25).
+   * Appearance-preserving: every value below equals a literal that components
+   * carry today; the step-1/2 batches migrate the call sites (значения
+   * переносятся 1:1, «заодно нормализуем» запрещено). New names use the
+   * --velo-* prefix per the frozen naming rule at the top of this file.
+   * From step 3 this section becomes part of the skin-package contract,
+   * generation 1 (§3.1): additions are free, renames/removals are generation 2.
+   * ========================================================================= */
+
+  /* Glass — white alpha ramp. Composer / VTabBar / ExternalActivityCreateView
+     share one glass recipe (rim 0.35, field 0.12, ring 0.18, gradient stops
+     0.05/0.15/0.18); 0.01/0.2/0.25 already exist above under their original
+     roles (--velo-glass-white-01 / --velo-write-frost / --velo-glass-white-25);
+     0.2 gets a glass-role twin here so the white ramp is complete and the
+     write-mode role can drift independently. */
+  --velo-glass-white-05: rgba(255, 255, 255, 0.05);
+  --velo-glass-white-12: rgba(255, 255, 255, 0.12);
+  --velo-glass-white-15: rgba(255, 255, 255, 0.15);
+  --velo-glass-white-16: rgba(255, 255, 255, 0.16);
+  --velo-glass-white-18: rgba(255, 255, 255, 0.18);
+  --velo-glass-white-20: rgba(255, 255, 255, 0.2); /* = write-frost value, glass role */
+  --velo-glass-white-30: rgba(255, 255, 255, 0.3); /* VSegment selected fill */
+  --velo-glass-white-35: rgba(255, 255, 255, 0.35); /* the glass rim (borders) */
+  --velo-glass-white-55: rgba(255, 255, 255, 0.55); /* inset top highlight */
+  --velo-glass-white-70: rgba(255, 255, 255, 0.7); /* active border */
+  --velo-glass-white-75: rgba(255, 255, 255, 0.75); /* inset active highlight */
+  --velo-glass-white-80: rgba(255, 255, 255, 0.8); /* inset focus highlight */
+  --velo-glass-white-90: rgba(255, 255, 255, 0.9); /* DiarySearchBar active field */
+
+  /* Fog — the ink of the dissolve masks (MobileLayout/global.css fog,
+     VWheel, AdminLayout, SchoolBrandBanner). The gradient STOPS carry
+     positions; only the colour routes through this token. */
+  --velo-fog-color: #000000;
+
+  /* Shadows — whole recipes as ONE token (по образцу --velo-shadow-glow
+     above). The TZ sketch named them sheet/card; after the parallel cleanups
+     the surviving carriers are glass pills, the composer's active/focus
+     states, the toast and the switch — named for those roles instead. */
+  --velo-shadow-glass: inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.15), 0 8px 24px rgba(0, 0, 0, 0.08); /* glass pill/field, ×3 carriers */
+  --velo-write-shadow-active: inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 0 18px rgba(150, 190, 255, 0.2), 0 8px 30px rgba(0, 0, 0, 0.08); /* Composer active */
+  --velo-write-shadow-focus: inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.25), 0 0 0 2px rgba(255, 255, 255, 0.35),
+    0 0 26px rgba(150, 190, 255, 0.32), 0 8px 30px rgba(0, 0, 0, 0.08); /* Composer focus */
+  --velo-shadow-toast: 0 4px 12px rgba(0, 0, 0, 0.3); /* VToast, floats over everything */
+  --velo-shadow-switch: 0 1px 2px rgba(0, 0, 0, 0.2); /* VSwitch thumb */
+
+  /* Mood-scale secondary fills (IconMoodScale*): the pale fills paired with
+     the --velo-mood-* / --velo-rating-* accents. Named by hue role — one
+     hue serves several scale values, so a per-value name would mislead. */
+  --velo-mood-fill-rose: #f9cbd1;
+  --velo-mood-fill-teal: #bdecf1;
+  --velo-mood-fill-peach: #fddfc4;
+
+  /* Typography scale: the sizes components carry raw today (DiaryThreadCard,
+     VAvatar, VTabBar…). Deliberate overlap with the bare --text-8/10/12/16:
+     the skin contract speaks --velo-* only (§3.1), so every size a skin may
+     retheme needs a token in this family. 8px stays on --text-8 (no raw
+     carrier). Value-named, per the --velo-size-NN convention. */
+  --velo-fs-10: 10px;
+  --velo-fs-11: 11px;
+  --velo-fs-12: 12px;
+  --velo-fs-13: 13px;
+  --velo-fs-14: 14px;
+  --velo-fs-18: 18px;
+  --velo-fs-22: 22px;
+  --velo-fs-24: 24px;
+  --velo-fs-25: 25px;
+  --velo-fs-28: 28px;
+  --velo-fs-48: 48px;
+
+  /* Radius ramp + compound shapes (value-named per --velo-radius-9/10/14
+     above; --velo-radius-10 already exists). */
+  --velo-radius-3-5: 3.5px; /* VBottomSheet grab handle */
+  --velo-radius-4: 4px; /* diary thread chips, diary search result rows */
+  --velo-radius-8: 8px; /* DiaryThreadCard media */
+  --velo-radius-12: 12px; /* external-activity cover, practice-form media */
+  --velo-radius-22: 22px; /* composer capsule */
+  --velo-radius-24-5: 24.5px; /* VBottomSheet header block */
+  --velo-radius-31: 31px; /* VAdminTabBar pills */
+  /* Fully-round capsules (VTabBar, Composer). NOT the bare --radius-full
+     (9999px): 999 is the designers' literal; both clamp to a pill, values
+     migrate 1:1 — «заодно нормализуем» запрещено. */
+  --velo-radius-pill: 999px;
+  --velo-radius-sheet-top: 30px 30px 0 0; /* VBottomSheet top corners */
+  --velo-radius-bar-top: 6px 6px 0 0; /* VBarChart columns */
 }
