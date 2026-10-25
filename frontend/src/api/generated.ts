@@ -345,6 +345,10 @@ export interface ApproveWithdrawalRequest {
   note?: string | null
 }
 
+export interface AssignIn {
+  assignee: string
+}
+
 /** A participant's PRE check-in as shown to the practice master. Minimal projection of Checkin (diary module): only what the master needs while preparing for the practice -- the mood score and the optional note. Exposed ONLY inside the master-only attendance view (see module docstring). */
 export interface AttendanceCheckinResponse {
   mood: number
