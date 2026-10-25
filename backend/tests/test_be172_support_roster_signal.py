@@ -373,7 +373,9 @@ async def _with_thread(db_session: AsyncSession, user: User) -> UUID:
     return thread_id
 
 
-async def _signals(uid: UUID) -> list[dict]:
+async def _signals(thread_id: UUID) -> list[dict]:
+    """The admin signals about one support thread -- found by the thread the
+    button opens (the fix moved the button from the user to the thread)."""
     p = OutboxEvent.payload
     return [
         e.payload
@@ -382,7 +384,8 @@ async def _signals(uid: UUID) -> list[dict]:
                 select(OutboxEvent)
                 .where(
                     p["type"].astext == support_service.MESSAGE_RECEIVED_TYPE,
-                    p["action_data"]["params"]["user_id"].astext == str(uid),
+                    p["action_data"]["params"]["thread_id"].astext
+                    == str(thread_id),
                 )
                 .order_by(OutboxEvent.id)
             )
@@ -395,7 +398,7 @@ class TestSignal:
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
     ) -> None:
         user, token = await _login(client, db_session, BAND_MIN, first_name="Анна")
-        await _with_thread(db_session, user)
+        thread_id = await _with_thread(db_session, user)
         message = _message()
         monkeypatch.setattr(_SEAM, AsyncMock(return_value=message))
 
@@ -406,12 +409,14 @@ class TestSignal:
         )
         assert resp.status_code == 200, resp.text
 
-        (signal,) = await _signals(user.id)
+        (signal,) = await _signals(thread_id)
         assert signal["idempotency_key"] == f"support-message:{message['id']}"
         assert (signal["target_type"], signal["target_value"]) == ("group", "admins")
         assert signal["action_data"] == {
             "action": "open_admin_support",
-            "params": {"user_id": str(user.id)},
+            # the comms thread id -- what admin-support-detail opens by;
+            # it used to be the user's id, which named no screen (BE-172 fix)
+            "params": {"thread_id": str(thread_id)},
             "sender_name": "Анна",
             "topic_line": "\n🏷 Оплата",
         }
@@ -432,8 +437,9 @@ class TestSignal:
         )
         assert resp.status_code == 200, resp.text
 
-        (signal,) = await _signals(user.id)
+        (signal,) = await _signals(thread_id)
         assert signal["idempotency_key"] == f"support-message:{message['id']}"
+        assert signal["action_data"]["params"] == {"thread_id": str(thread_id)}
         assert signal["action_data"]["topic_line"] == ""
         assert signal["action_data"]["sender_name"] == "Bob"
 
@@ -441,7 +447,7 @@ class TestSignal:
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
     ) -> None:
         user, token = await _login(client, db_session, BAND_MIN + 2)
-        await _with_thread(db_session, user)
+        thread_id = await _with_thread(db_session, user)
         monkeypatch.setattr(_SEAM, AsyncMock(return_value=_message()))
 
         resp = await client.post(
@@ -450,7 +456,7 @@ class TestSignal:
             headers=auth_headers(token),
         )
         assert resp.status_code == 200, resp.text
-        (signal,) = await _signals(user.id)
+        (signal,) = await _signals(thread_id)
         assert signal["action_data"]["topic_line"] == ""
 
     async def test_a_replayed_message_repeats_the_same_document(
@@ -460,7 +466,7 @@ class TestSignal:
         the second emit carries the same key and the same bytes, which
         comms intake answers as a duplicate -- one signal reaches people."""
         user, token = await _login(client, db_session, BAND_MIN + 3)
-        await _with_thread(db_session, user)
+        thread_id = await _with_thread(db_session, user)
         message = _message()
         monkeypatch.setattr(_SEAM, AsyncMock(return_value=message))
         headers = {
@@ -476,7 +482,7 @@ class TestSignal:
             )
             assert resp.status_code == 200, resp.text
 
-        first, second = await _signals(user.id)
+        first, second = await _signals(thread_id)
         assert first == second
         assert first["idempotency_key"] == f"support-message:{message['id']}"
 
@@ -486,7 +492,7 @@ class TestSignal:
         """comms down on the POST: the request fails and the outbox holds
         no signal; the same request once comms answers holds exactly one."""
         user, token = await _login(client, db_session, BAND_MIN + 4)
-        await _with_thread(db_session, user)
+        thread_id = await _with_thread(db_session, user)
 
         # What comms_request raises when comms does not answer (core/comms).
         monkeypatch.setattr(
@@ -499,7 +505,7 @@ class TestSignal:
             headers=auth_headers(token),
         )
         assert resp.status_code == 502
-        assert await _signals(user.id) == []
+        assert await _signals(thread_id) == []
 
         monkeypatch.setattr(_SEAM, AsyncMock(return_value=_message()))
         resp = await client.post(
@@ -508,7 +514,7 @@ class TestSignal:
             headers=auth_headers(token),
         )
         assert resp.status_code == 200, resp.text
-        assert len(await _signals(user.id)) == 1
+        assert len(await _signals(thread_id)) == 1
 
 
 class TestSenderName:

@@ -281,7 +281,11 @@ async def send_support_message(
         #      core/comms.py message_key), and emitting before the POST
         #      without it has no message id to key the signal by.
         await _emit_support_message_received(
-            session, user, message_id=UUID(str(message_id)), topic=topic,
+            session,
+            user,
+            thread_id=pointer.comms_thread_id,
+            message_id=UUID(str(message_id)),
+            topic=topic,
         )
     return message
 
@@ -628,6 +632,7 @@ async def _emit_support_message_received(
     session: AsyncSession,
     user: User,
     *,
+    thread_id: UUID,
     message_id: UUID,
     topic: str | None,
 ) -> None:
@@ -641,6 +646,11 @@ async def _emit_support_message_received(
     The idempotency key names the comms MESSAGE: one message, one signal.
     A client replay that comms answers with the same message emits the
     same key again, and comms collapses it on the key.
+
+    The button opens the THREAD: `open_admin_support` carries the comms
+    thread id, the id the admin's thread screen (admin-support-detail) is
+    opened by -- the user's id would leave the front to find the thread
+    through the list (BE-172 fix, owner ruling).
 
     Texts live in the profile's sheets (ru, en), filled from two template
     variables, `sender_name` and `topic_line`; the stored title and body
@@ -664,7 +674,7 @@ async def _emit_support_message_received(
         body=f"{sender_name}{topic_line}",
         action_data={
             "action": "open_admin_support",
-            "params": {"user_id": str(user.id)},
+            "params": {"thread_id": str(thread_id)},
             "sender_name": sender_name,
             "topic_line": topic_line,
         },
