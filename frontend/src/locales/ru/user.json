@@ -33,16 +33,18 @@
           "copyFailedHint": "Не удалось скопировать — выделите {what} и скопируйте вручную"
         },
         "copy": {
+          "cta": "Скопировать",
           "entityToken": "токен",
           "headerValue": "Скопировано как заголовок",
           "entityAddress": "адрес"
         },
         "used": {
-          "at": "использован {at}"
+          "at": "Использован {at}"
         },
-        "neverUsed": "ещё не использовался",
-        "createdAt": "Создан {created} ·",
+        "neverUsed": "Ещё не использовался",
+        "createdAt": "Создан {created}",
         "oauthConnected": "Подключено кнопкой в ИИ-клиенте",
+        "connected": "Подключено",
         "revokedAt": "Отозван {at}",
         "revokeConfirmText": "Нейросеть с токеном «{name}» сразу потеряет доступ. Отменить это нельзя.",
         "title": "Подключения ИИ",

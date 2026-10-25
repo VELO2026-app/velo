@@ -45,7 +45,7 @@
             <p class="ai-conn__text">{{ t('user.screens.aiConnections.dev.addressLabel') }}</p>
             <code class="ai-conn__token" data-test="mcp-url">{{ mcpUrl }}</code>
             <VButton block variant="secondary" data-test="copy-url" @click="onCopyUrl">
-              <IconCopy :size="18" /> {{ t('user.screens.aiConnections.copy') }}
+              <IconCopy :size="18" /> {{ t('user.screens.aiConnections.copy.cta') }}
             </VButton>
             <p v-if="oauthAvailable" class="ai-conn__text" data-test="connect-howto">
               {{ t('user.screens.aiConnections.connectHowto') }}
@@ -68,27 +68,36 @@
           </p>
           <ul v-else class="ai-conn__list">
             <li
-              v-for="token in tokens"
+              v-for="token in sortedTokens"
               :key="token.id"
               class="ai-conn__item"
               :class="{ 'ai-conn__item--revoked': token.revoked_at }"
               data-test="token-row"
             >
               <div class="ai-conn__item-main">
-                <div class="ai-conn__item-name">{{ token.name }}</div>
+                <div class="ai-conn__item-name">
+                  <span>{{ token.name }}</span>
+                  <VBadge v-if="!token.revoked_at" variant="success" data-test="connected-badge">
+                    {{ t('user.screens.aiConnections.connected') }}
+                  </VBadge>
+                </div>
                 <!-- BE-141: an OAuth connection's prefix is its refresh token's,
                      rotating and meaningless here -- say what it is instead. -->
                 <div v-if="token.kind === 'personal'" class="ai-conn__item-prefix">
                   velo_pat_{{ token.prefix }}…
                 </div>
-                <div v-else class="ai-conn__item-prefix" data-test="oauth-kind">
-                  { t('user.screens.aiConnections.oauthConnected') }
+                <div v-else class="ai-conn__item-sub" data-test="oauth-kind">
+                  {{ t('user.screens.aiConnections.oauthConnected') }}
                 </div>
-                <div class="ai-conn__item-meta">{{ scopeSummary(token.scopes) }}</div>
+                <ul class="ai-conn__item-scopes" data-test="scopes">
+                  <li v-for="label in scopeLines(token.scopes)" :key="label">{{ label }}</li>
+                </ul>
                 <div class="ai-conn__item-meta">
                   {{
                     t('user.screens.aiConnections.createdAt', { created: fmt(token.created_at) })
                   }}
+                </div>
+                <div class="ai-conn__item-meta">
                   {{
                     token.last_used_at
                       ? t('user.screens.aiConnections.used.at', { at: fmt(token.last_used_at) })
@@ -106,7 +115,7 @@
                 data-test="revoke"
                 @click="askRevoke(token)"
               >
-                {{ t('user.screens.aiConnections.revoke') }}
+                {{ t('user.screens.aiConnections.revoke.cta') }}
               </VButton>
             </li>
           </ul>
@@ -162,7 +171,7 @@
         <p class="ai-conn__warning">{{ t('user.screens.aiConnections.create.copyHint') }}</p>
         <code class="ai-conn__token" data-test="token-text">{{ createdToken }}</code>
         <VButton block variant="secondary" data-test="copy" @click="onCopy">
-          <IconCopy :size="18" /> {{ t('user.screens.aiConnections.copy') }}
+          <IconCopy :size="18" /> {{ t('user.screens.aiConnections.copy.cta') }}
         </VButton>
         <VButton block variant="secondary" data-test="copy-header" @click="onCopyHeader">
           <IconCopy :size="18" /> {{ t('user.screens.aiConnections.copyAsHeader') }}
@@ -193,6 +202,7 @@ import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import {
   VAccordion,
+  VBadge,
   VButton,
   VCheckbox,
   VConfirmDialog,
@@ -234,6 +244,11 @@ const createdToken = ref<string | null>(null)
 const revokeTarget = ref<McpTokenItem | null>(null)
 const revoking = ref(false)
 
+/** Live connections on top, revoked below; otherwise the server order holds. */
+const sortedTokens = computed(() =>
+  [...tokens.value].sort((a, b) => Number(a.revoked_at !== null) - Number(b.revoked_at !== null)),
+)
+
 const canCreate = computed(() => name.value.trim().length > 0 && scopes.value.length > 0)
 const revokeMessage = computed(() =>
   revokeTarget.value
@@ -249,11 +264,9 @@ function allScopes(): McpScope[] {
   return scopeLabels.value.map((s) => s.scope)
 }
 
-function scopeSummary(list: McpScope[]): string {
-  return scopeLabels.value
-    .filter((s) => list.includes(s.scope))
-    .map((s) => s.label)
-    .join('; ')
+/** Scope descriptions in canonical order, one per line on the screen (BE-148). */
+function scopeLines(list: McpScope[]): string[] {
+  return scopeLabels.value.filter((s) => list.includes(s.scope)).map((s) => s.label)
 }
 
 function toggleScope(value: McpScope, on: boolean): void {
@@ -428,6 +441,9 @@ onMounted(load)
 }
 
 .ai-conn__item-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   font-weight: 600;
 }
 
@@ -436,8 +452,21 @@ onMounted(load)
   overflow-wrap: anywhere;
 }
 
+.ai-conn__item-sub,
 .ai-conn__item-meta,
 .ai-conn__item-revoked {
+  font-size: 13px;
+  color: var(--velo-text-secondary);
+}
+
+/* One permission per line: three sentences are not one sentence. */
+.ai-conn__item-scopes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
   font-size: 13px;
   color: var(--velo-text-secondary);
 }

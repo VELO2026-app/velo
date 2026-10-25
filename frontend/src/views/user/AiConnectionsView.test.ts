@@ -148,17 +148,21 @@ afterEach(() => {
 
 describe('AiConnectionsView', () => {
   describe('states', () => {
-    it('lists the tokens: prefix shown, revoked ones without a revoke button', async () => {
+    it('lists the tokens: live on top, revoked below without a revoke button', async () => {
       vi.mocked(mcpApi.listMcpTokens).mockResolvedValue(
-        list([item('a'), item('b', { revoked_at: '2026-10-11T11:00:00Z' })]),
+        list([item('b', { revoked_at: '2026-10-11T11:00:00Z' }), item('a')]),
       )
       mount()
       await flush()
       const rows = host!.querySelectorAll('[data-test="token-row"]')
       expect(rows).toHaveLength(2)
+      // A revoked row never outranks a live one, whatever order the server sent.
+      expect(rows[0]!.textContent).toContain('token a')
       expect(rows[0]!.textContent).toContain('velo_pat_0123456789abcdef…')
-      expect(rows[0]!.textContent).toContain('ещё не использовался')
-      expect(rows[0]!.querySelector('[data-test="revoke"]')).not.toBeNull()
+      expect(rows[0]!.textContent).toContain('Ещё не использовался')
+      expect(rows[0]!.querySelector('[data-test="connected-badge"]')).not.toBeNull()
+      expect(rows[0]!.querySelector('[data-test="revoke"]')!.textContent).toContain('Отозвать')
+      expect(rows[1]!.querySelector('[data-test="connected-badge"]')).toBeNull()
       expect(rows[1]!.querySelector('[data-test="revoke"]')).toBeNull()
       expect(rows[1]!.textContent).toContain('Отозван')
     })
@@ -172,6 +176,12 @@ describe('AiConnectionsView', () => {
       const row = host!.querySelector('[data-test="token-row"]')!
       expect(row.textContent).toContain('Claude')
       expect(row.querySelector('[data-test="oauth-kind"]')).not.toBeNull()
+      // Regression lock: single-brace mustaches once printed the t() call itself.
+      expect(row.querySelector('[data-test="oauth-kind"]')!.textContent).toContain(
+        'Подключено кнопкой',
+      )
+      expect(row.textContent).not.toContain('{ t(')
+      expect(row.querySelector('[data-test="connected-badge"]')).not.toBeNull()
       expect(row.textContent).not.toContain('velo_pat_')
       expect(row.textContent).not.toContain('fedcba9876543210')
       // Revocable like any token: that is where the student cuts it off.
@@ -482,6 +492,9 @@ describe('BE-150 layout', () => {
     await flush()
     expect(text('[data-test="mcp-url"]')).toBe(`${BASE}/mcp`)
     expect(text('[data-test="connect-howto"]')).toBe(HOWTO)
+    // The copy button has a label, not a leaked key path (copy was once an
+    // object in the locales, so t('...copy') printed the key itself).
+    expect(text('[data-test="copy-url"]')).toContain('Скопировать')
     expect(text('[data-test="connect-block"]')).not.toContain('ChatGPT')
     host!.querySelector<HTMLButtonElement>('[data-test="copy-url"]')!.click()
     await flush()
@@ -550,7 +563,11 @@ describe('BE-150 layout', () => {
     )
     mount()
     await flush()
-    expect(text('[data-test="token-row"]')).toContain('Описание А; Описание В')
+    const lines = Array.from(
+      host!.querySelectorAll('[data-test="token-row"] [data-test="scopes"] li'),
+    ).map((n) => (n.textContent ?? '').trim())
+    expect(lines).toEqual(['Описание А', 'Описание В'])
+    expect(text('[data-test="token-row"]')).not.toContain('; ')
     await openAndFill('x')
     const labels = Array.from(
       document.body.querySelectorAll('.v-modal__container [data-test^="scope-"]'),

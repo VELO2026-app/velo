@@ -33,16 +33,18 @@
           "copyFailedHint": "Failed to copy — select {what} and copy it manually"
         },
         "copy": {
+          "cta": "Copy",
           "entityToken": "token",
           "headerValue": "Copied as a header",
           "entityAddress": "address"
         },
         "used": {
-          "at": "used {at}"
+          "at": "Used {at}"
         },
-        "neverUsed": "never used",
-        "createdAt": "Created {created} ·",
+        "neverUsed": "Never used",
+        "createdAt": "Created {created}",
         "oauthConnected": "Connected via a button in the AI client",
+        "connected": "Connected",
         "revokedAt": "Revoked {at}",
         "revokeConfirmText": "The AI client with the token \"{name}\" will immediately lose access. This cannot be undone.",
         "title": "AI connections",
