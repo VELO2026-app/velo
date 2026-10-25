@@ -322,6 +322,43 @@ describe('AdminDashboardView', () => {
         '3 обращения на модерации',
       )
     })
+
+    // FE-100: «Модерация» opens on «Обращения» by default; the banner counts
+    // pending REPORTS, so it lands on the «Жалобы» tab.
+    it('the moderation banner opens «Модерация» on the «Жалобы» tab', async () => {
+      const store = useAdminStore()
+      store.stats = stats()
+      store.pendingReports = 3
+      mount()
+      await flush()
+
+      host?.querySelector<HTMLElement>('.banner--alert')?.click()
+      await flush()
+
+      expect(push).toHaveBeenCalledWith({ name: 'admin-reports', query: { tab: 'complaints' } })
+    })
+  })
+
+  // ===========================================================================
+  // FE-100, owner ruling 25.10: support appeals live in «Модерация»; the
+  // dashboard's «Поддержка» row is gone.
+  describe('no support block (FE-100)', () => {
+    it('the dashboard lists no «Поддержка» row and never routes to a support list', async () => {
+      const store = useAdminStore()
+      store.stats = stats()
+      store.overview = overview()
+      mount()
+      await flush()
+
+      expect(host?.textContent).not.toContain('Обращения пользователей и мастеров')
+      const rows = Array.from(host?.querySelectorAll<HTMLElement>('.v-list-row') ?? [])
+      expect(rows.length).toBeGreaterThan(0)
+      for (const row of rows) row.click()
+      await flush()
+      const targets = push.mock.calls.map((c) => (c[0] as { name?: string }).name)
+      expect(targets).not.toContain('admin-support')
+      expect(targets.length).toBe(rows.length)
+    })
   })
 
   // ===========================================================================

@@ -731,14 +731,9 @@ const router = createRouter({
           component: () => import('@/views/admin/AdminPromosView.vue'),
         },
         {
-          // B34 (PROMPT №713): support queue, reached from the dashboard --
-          // same pattern as reports (no fourth tab, see AdminSupportView's
-          // own header for why).
-          path: 'support',
-          name: 'admin-support',
-          component: () => import('@/views/admin/AdminSupportView.vue'),
-        },
-        {
+          // A support ticket's card (FE-100: the list is the «Обращения» tab
+          // of «Модерация», admin-reports; the deep link of the BE-172
+          // signal lands here directly).
           path: 'support/:id',
           name: 'admin-support-detail',
           component: () => import('@/views/admin/AdminSupportDetailView.vue'),

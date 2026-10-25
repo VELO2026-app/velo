@@ -338,7 +338,8 @@ describe('AdminReportDetailView', () => {
       expect(adminApi.resolveReport).toHaveBeenCalledWith('r_pending', 'Меры приняты')
       expect(toastSuccess).toHaveBeenCalledWith('Жалоба решена')
       // S-1/S-2: push to the list, not back() -- fresh loadInitial() on return.
-      expect(push).toHaveBeenCalledWith({ name: 'admin-reports' })
+      // FE-100: the «Жалобы» tab of «Модерация» -- the list it came from, as before.
+      expect(push).toHaveBeenCalledWith({ name: 'admin-reports', query: { tab: 'complaints' } })
     })
 
     it('failure: toasts the generic fallback (unmapped code) and the report STAYS pending (no navigation)', async () => {
@@ -388,7 +389,8 @@ describe('AdminReportDetailView', () => {
 
       expect(adminApi.dismissReport).toHaveBeenCalledWith('r_pending', undefined)
       expect(toastSuccess).toHaveBeenCalledWith('Жалоба отклонена')
-      expect(push).toHaveBeenCalledWith({ name: 'admin-reports' })
+      // FE-100: the «Жалобы» tab of «Модерация» -- the list it came from, as before.
+      expect(push).toHaveBeenCalledWith({ name: 'admin-reports', query: { tab: 'complaints' } })
     })
 
     it('a filled (optional) note is sent, trimmed', async () => {

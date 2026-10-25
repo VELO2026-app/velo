@@ -22,6 +22,7 @@ import {
   getAdminSupportMessages,
   getAdminTicket,
   listAdminTickets,
+  retrySupportTranslation,
   sendAdminSupportReply,
   setTicketStatus,
 } from '@/api/support'
@@ -132,9 +133,46 @@ describe('admin -- the ticket routes', () => {
   })
 
   it('listAdminTickets passes the cursor through', async () => {
-    await listAdminTickets(20, 'c2')
+    await listAdminTickets({ cursor: 'c2' })
 
     expect(api.get).toHaveBeenCalledWith(`${S}/tickets?limit=20&cursor=c2`)
+  })
+
+  it('categories go as a REPEATED `category` -- "any of these" (BE-162 fix 2)', async () => {
+    await listAdminTickets({ categories: ['complaint_master', 'complaint_user'] })
+
+    expect(api.get).toHaveBeenCalledWith(
+      `${S}/tickets?limit=20&category=complaint_master&category=complaint_user`,
+    )
+  })
+
+  it('an empty category list sends no `category` at all', async () => {
+    await listAdminTickets({ categories: [] })
+
+    expect(api.get).toHaveBeenCalledWith(`${S}/tickets?limit=20`)
+  })
+
+  it('status, the day bounds (URL-encoded offsets), cursor and limit all reach the URL', async () => {
+    await listAdminTickets({
+      categories: ['tech'],
+      status: 'spam',
+      createdFrom: '2026-10-20T00:00:00.000+02:00',
+      createdTo: '2026-10-21T00:00:00.000+02:00',
+      cursor: 'c9',
+      limit: 5,
+    })
+
+    const url = vi.mocked(api.get).mock.calls[0]?.[0] ?? ''
+    const qs = new URLSearchParams(url.split('?')[1])
+    expect(url.startsWith(`${S}/tickets?`)).toBe(true)
+    expect(qs.get('limit')).toBe('5')
+    expect(qs.getAll('category')).toEqual(['tech'])
+    expect(qs.get('status')).toBe('spam')
+    expect(qs.get('created_from')).toBe('2026-10-20T00:00:00.000+02:00')
+    expect(qs.get('created_to')).toBe('2026-10-21T00:00:00.000+02:00')
+    expect(qs.get('cursor')).toBe('c9')
+    // The `+` of the offset must survive the wire: raw it would read as a space.
+    expect(url).toContain('created_from=2026-10-20T00%3A00%3A00.000%2B02%3A00')
   })
 
   it('getAdminTicket reads ONE ticket by its id', async () => {
@@ -172,6 +210,12 @@ describe('admin -- the thread routes keyed by the ticket id (unchanged)', () => 
 
     expect(api.post).toHaveBeenCalledWith(`${S}/threads/t_9/claim`, {})
   })
+
+  it('retrySupportTranslation POSTs to the message translation retry route (BE-166)', async () => {
+    await retrySupportTranslation('t_9', 'm_3')
+
+    expect(api.post).toHaveBeenCalledWith(`${S}/threads/t_9/messages/m_3/translation/retry`, {})
+  })
 })
 
 describe('the removed routes are not called by any wrapper', () => {
@@ -183,12 +227,13 @@ describe('the removed routes are not called by any wrapper', () => {
     await getAdminSupportMessages('t')
     await sendAdminSupportReply('t', 'x')
     await claimSupportThread('t')
+    await retrySupportTranslation('t', 'm')
 
     const urls = [...vi.mocked(api.get).mock.calls, ...vi.mocked(api.post).mock.calls].map(
       (c) => c[0],
     )
     // "X absent" paired with "Y present and non-empty".
-    expect(urls).toHaveLength(7)
+    expect(urls).toHaveLength(8)
     for (const url of urls) {
       expect(url).not.toMatch(/\/support\/threads(\?|\/messages|$)/)
     }

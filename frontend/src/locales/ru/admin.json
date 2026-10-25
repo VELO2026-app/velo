@@ -90,7 +90,6 @@
       "methodRequestsHint": "Мастера меняют свои направления",
       "catalogLink": "Каталог практик",
       "catalogHint": "Направления и виды практик",
-      "supportLink": "Обращения пользователей и мастеров",
       "revenue": "Выручка",
       "system": "Система",
       "mastersBalance": "Баланс по мастерам",
@@ -101,7 +100,6 @@
       "participantsStat": "Участников",
       "payoutsSection": "Выплаты",
       "usersSection": "Пользователи",
-      "supportSection": "Поддержка",
       "statistics": "Статистика",
       "profileAria": "Профиль",
       "promocodesSection": "Промокоды"
@@ -369,7 +367,8 @@
       "filter": "Фильтр",
       "ticketsLoadError": "Ошибка загрузки обращений",
       "moderationTab": "Модерация",
-      "tabComplaints": "Жалобы"
+      "tabComplaints": "Жалобы",
+      "tabTickets": "Обращения"
     },
     "adminReturnRate": {
       "topLoyalUsers": "Топ лояльных юзеров",
@@ -402,7 +401,10 @@
         "replyFailed": "Не удалось отправить ответ",
         "statusChanged": "Статус изменён",
         "statusConflict": "Обращение изменилось — проверьте статус",
-        "statusFailed": "Не удалось сменить статус"
+        "statusFailed": "Не удалось сменить статус",
+        "retryQueued": "Перевод запрошен снова",
+        "retryNothing": "Повторять нечего — перевод уже идёт или готов",
+        "retryFailed": "Не удалось повторить перевод"
       },
       "take": "Взять в работу",
       "noMessages": "Сообщений пока нет.",
@@ -416,6 +418,16 @@
       "history": {
         "show": "История обращений",
         "title": "Переписка до обращений через форму — только чтение"
+      },
+      "menu": {
+        "aria": "Действия с обращением"
+      },
+      "translation": {
+        "translating": "Переводится…",
+        "failed": "Ошибка перевода",
+        "undelivered": "Не доставлено",
+        "showOriginal": "Показать оригинал",
+        "showTranslation": "Показать перевод"
       }
     },
     "adminSupport": {
@@ -424,7 +436,6 @@
         "text": "Сюда попадут все обращения в поддержку"
       },
       "ticketsLoadError": "Ошибка загрузки обращений",
-      "title": "Поддержка",
       "userFallback": "Пользователь",
       "statuses": {
         "open": "Открыта",
@@ -438,7 +449,15 @@
         "mine": "У меня",
         "other": "Взял: {name}",
         "adminFallback": "Администратор"
-      }
+      },
+      "categories": {
+        "payments": "Оплаты",
+        "practices": "Практики",
+        "tech": "Тех. проблемы",
+        "complaints": "Жалобы",
+        "other": "Другое"
+      },
+      "appealDate": "Дата обращения"
     },
     "adminUsers": {
       "usersLoadFailed": "Не удалось загрузить пользователей",

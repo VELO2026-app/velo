@@ -263,7 +263,8 @@ async function onResolve(): Promise<void> {
     await resolveReport(reportId, resolveNote.value.trim())
     toast.success(t('adminScreens.adminReportDetail.resolvedToast'))
     // S-1/S-2: push to list instead of back() -- guarantees fresh loadInitial().
-    void router.push({ name: 'admin-reports' })
+    // FE-100: «Модерация» opens on «Обращения»; a report returns to «Жалобы».
+    void router.push({ name: 'admin-reports', query: { tab: 'complaints' } })
   } catch (e) {
     toast.error(extractApiError(e, t('adminScreens.adminReportDetail.processError')))
   } finally {
@@ -278,7 +279,8 @@ async function onDismiss(): Promise<void> {
     await dismissReport(reportId, dismissNote.value.trim() || undefined)
     toast.success(t('adminScreens.adminReportDetail.rejectedToast'))
     // S-1/S-2: push to list instead of back() -- guarantees fresh loadInitial().
-    void router.push({ name: 'admin-reports' })
+    // FE-100: «Модерация» opens on «Обращения»; a report returns to «Жалобы».
+    void router.push({ name: 'admin-reports', query: { tab: 'complaints' } })
   } catch (e) {
     toast.error(extractApiError(e, t('adminScreens.adminReportDetail.processError')))
   } finally {

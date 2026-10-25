@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- support topic and status labels (FE-104)
+// VELO Frontend -- support topic, category and status tables (FE-104, FE-100)
 // =============================================================================
 //
 // THE ONE TABLE "topic code -> label" on the front: the catalog section
@@ -7,12 +7,30 @@
 // both forms and in the admin list). The backend stores and returns codes
 // only (models.TOPICS); its own labels serve the admin Telegram signal alone.
 //
-// Which form offers which topic is the form's business (its own list of
-// codes); this module only names them.
+// THE ONE TABLE "category -> icon" (FE-100): six categories, five glyphs --
+// both complaints share one (owner ruling 25.10). Colours are existing tokens
+// sampled from the owner's mockup (25.10).
+//
+// TEMPORARY (owner ruling 25.10, FE-100 delivery B): the practices glyph is
+// IconMeditation standing in for the designer's yoga-mat icon (no source SVG
+// yet), and both complaints use IconProfile. Replace when the designer's
+// sources arrive -- only SUPPORT_CATEGORY_ICONS below changes.
+//
+// THE FILTER GROUPS (FE-100): five chips over the six categories -- the
+// «Жалобы» chip is both complaint categories (sent as a repeatable
+// `category`, BE-162 fix 2).
 // =============================================================================
 
+import type { Component } from 'vue'
 import { t } from '@/locales'
-import type { SupportTicketStatus, SupportTopicCode } from '@/api/support'
+import type { SupportCategory, SupportTicketStatus, SupportTopicCode } from '@/api/support'
+import {
+  IconFinance,
+  IconMeditation,
+  IconProfile,
+  IconQuestion,
+  IconWarning,
+} from '@/components/icons'
 
 export function supportTopicLabel(code: SupportTopicCode): string {
   return t(`supportTopics.${code}`)
@@ -35,4 +53,42 @@ const STATUS_BADGES: Record<SupportTicketStatus, SupportStatusBadge> = {
 
 export function supportStatusBadge(status: SupportTicketStatus): SupportStatusBadge {
   return STATUS_BADGES[status]
+}
+
+/** A category's glyph and its colour token (`--velo-*`, applied as `color`). */
+export interface SupportCategoryIcon {
+  icon: Component
+  color: string
+}
+
+const SUPPORT_CATEGORY_ICONS: Record<SupportCategory, SupportCategoryIcon> = {
+  tech: { icon: IconWarning, color: 'var(--velo-pink-300)' },
+  payments: { icon: IconFinance, color: 'var(--velo-analytics-neutral)' },
+  // TEMPORARY: the designer's yoga mat replaces this (see the header).
+  practices: { icon: IconMeditation, color: 'var(--velo-analytics-good)' },
+  complaint_master: { icon: IconProfile, color: 'var(--velo-peach-300)' },
+  complaint_user: { icon: IconProfile, color: 'var(--velo-peach-300)' },
+  other: { icon: IconQuestion, color: 'var(--velo-blue-200)' },
+}
+
+export function supportCategoryIcon(category: SupportCategory): SupportCategoryIcon {
+  return SUPPORT_CATEGORY_ICONS[category]
+}
+
+/** A filter chip: its key (also the catalog key) and the categories it sends. */
+export interface SupportCategoryGroup {
+  key: 'payments' | 'practices' | 'tech' | 'complaints' | 'other'
+  categories: readonly SupportCategory[]
+}
+
+export const SUPPORT_CATEGORY_GROUPS: readonly SupportCategoryGroup[] = [
+  { key: 'payments', categories: ['payments'] },
+  { key: 'practices', categories: ['practices'] },
+  { key: 'tech', categories: ['tech'] },
+  { key: 'complaints', categories: ['complaint_master', 'complaint_user'] },
+  { key: 'other', categories: ['other'] },
+]
+
+export function supportCategoryGroupLabel(key: SupportCategoryGroup['key']): string {
+  return t(`adminScreens.adminSupport.categories.${key}`)
 }

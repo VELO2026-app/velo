@@ -58,7 +58,7 @@
         variant="alert"
         :title="moderationTitle"
         clickable
-        @click="router.push({ name: 'admin-reports' })"
+        @click="router.push({ name: 'admin-reports', query: { tab: 'complaints' } })"
       >
         <template #icon><IconWarning :size="28" /></template>
       </Banner>
@@ -214,14 +214,6 @@
         :subtitle="t('adminScreens.adminDashboard.catalogHint')"
         clickable
         @click="router.push({ name: 'admin-catalog' })"
-      >
-        <template #trailing><IconArrowRight :size="20" /></template>
-      </VListRow>
-      <VListRow
-        :title="t('adminScreens.adminDashboard.supportSection')"
-        :subtitle="t('adminScreens.adminDashboard.supportLink')"
-        clickable
-        @click="router.push({ name: 'admin-support' })"
       >
         <template #trailing><IconArrowRight :size="20" /></template>
       </VListRow>

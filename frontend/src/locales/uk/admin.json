@@ -90,7 +90,6 @@
       "methodRequestsHint": "Майстри змінюють свої напрямки",
       "catalogLink": "Каталог практик",
       "catalogHint": "Напрямки та види практик",
-      "supportLink": "Звернення користувачів і майстрів",
       "revenue": "Виторг",
       "system": "Система",
       "mastersBalance": "Баланс по майстрах",
@@ -101,7 +100,6 @@
       "participantsStat": "Учасників",
       "payoutsSection": "Виплати",
       "usersSection": "Користувачі",
-      "supportSection": "Підтримка",
       "statistics": "Статистика",
       "profileAria": "Профіль",
       "promocodesSection": "Промокоди"
@@ -369,7 +367,8 @@
       "filter": "Фільтр",
       "ticketsLoadError": "Помилка завантаження звернень",
       "moderationTab": "Модерація",
-      "tabComplaints": "Скарги"
+      "tabComplaints": "Скарги",
+      "tabTickets": "Звернення"
     },
     "adminReturnRate": {
       "topLoyalUsers": "Топ лояльних юзерів",
@@ -402,7 +401,10 @@
         "replyFailed": "Не вдалося надіслати відповідь",
         "statusChanged": "Статус змінено",
         "statusConflict": "Звернення змінилося — перевірте статус",
-        "statusFailed": "Не вдалося змінити статус"
+        "statusFailed": "Не вдалося змінити статус",
+        "retryQueued": "Переклад запитано знову",
+        "retryNothing": "Нічого повторювати — переклад уже йде або готовий",
+        "retryFailed": "Не вдалося повторити переклад"
       },
       "take": "Взяти в роботу",
       "noMessages": "Повідомлень поки немає.",
@@ -416,6 +418,16 @@
       "history": {
         "show": "Історія звернень",
         "title": "Листування до звернень через форму — лише читання"
+      },
+      "menu": {
+        "aria": "Дії зі зверненням"
+      },
+      "translation": {
+        "translating": "Перекладається…",
+        "failed": "Помилка перекладу",
+        "undelivered": "Не доставлено",
+        "showOriginal": "Показати оригінал",
+        "showTranslation": "Показати переклад"
       }
     },
     "adminSupport": {
@@ -424,7 +436,6 @@
         "text": "Сюди потраплять усі звернення в підтримку"
       },
       "ticketsLoadError": "Помилка завантаження звернень",
-      "title": "Підтримка",
       "userFallback": "Користувач",
       "statuses": {
         "open": "Відкрита",
@@ -438,7 +449,15 @@
         "mine": "У мене",
         "other": "Взяв: {name}",
         "adminFallback": "Адміністратор"
-      }
+      },
+      "categories": {
+        "payments": "Оплати",
+        "practices": "Практики",
+        "tech": "Тех. проблеми",
+        "complaints": "Скарги",
+        "other": "Інше"
+      },
+      "appealDate": "Дата звернення"
     },
     "adminUsers": {
       "usersLoadFailed": "Не вдалося завантажити користувачів",

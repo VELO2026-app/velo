@@ -37,6 +37,7 @@ vi.mock('@/api/support', async (importOriginal) => {
     sendAdminSupportReply: vi.fn(),
     claimSupportThread: vi.fn(),
     setTicketStatus: vi.fn(),
+    retrySupportTranslation: vi.fn(),
   }
 })
 
@@ -86,7 +87,7 @@ function ticket(overrides: Partial<AdminSupportTicket> = {}): AdminSupportTicket
 }
 
 function message(overrides: Partial<SupportMessage> = {}): SupportMessage {
-  return {
+  const merged = {
     id: 'm_1',
     thread_id: 't_1',
     sender: 'u_1',
@@ -94,6 +95,7 @@ function message(overrides: Partial<SupportMessage> = {}): SupportMessage {
     created_at: '2026-10-25T10:00:00Z',
     ...overrides,
   }
+  return { original: merged.body, translation: null, ...merged }
 }
 
 function conflict(): ApiResponseError {
@@ -142,13 +144,45 @@ function setValue(el: HTMLTextAreaElement, value: string): void {
   el.dispatchEvent(new Event('input'))
 }
 function bubbles(): HTMLElement[] {
-  return Array.from(host?.querySelectorAll<HTMLElement>('.support-detail__bubble') ?? [])
+  return Array.from(host?.querySelectorAll<HTMLElement>('.bubble') ?? [])
 }
 
-function statusButtons(): string[] {
-  return Array.from(
-    host?.querySelectorAll<HTMLButtonElement>('.support-detail__actions .v-btn') ?? [],
-  ).map((b) => b.textContent?.trim() ?? '')
+// FE-100: the status actions live in the ⋯ menu (a teleported VBottomSheet).
+function menuButton(): HTMLButtonElement | null {
+  return host?.querySelector<HTMLButtonElement>('.support-detail__menu') ?? null
+}
+function menuRows(): HTMLElement[] {
+  const open = Array.from(document.body.querySelectorAll<HTMLElement>('.v-sheet__overlay')).filter(
+    (o) => !o.classList.contains('v-sheet-leave-active'),
+  )
+  return open.flatMap((o) => Array.from(o.querySelectorAll<HTMLElement>('.v-menu-row')))
+}
+/** The sheet is open: present and not leaving (its Transition keeps the
+ *  element through the leave animation). */
+function sheetOpen(): boolean {
+  const el = document.body.querySelector<HTMLElement>('.v-sheet__overlay')
+  return !!el && !el.classList.contains('v-sheet-leave-active')
+}
+/** What the ⋯ menu offers: opens it, reads the rows, closes it again. No
+ *  menu button -> nothing is offered. */
+async function statusOffer(): Promise<string[]> {
+  const button = menuButton()
+  if (!button) return []
+  button.click()
+  await flush()
+  const labels = menuRows().map((r) => r.textContent?.trim() ?? '')
+  document.body.querySelectorAll<HTMLElement>('.v-sheet__overlay').forEach((o) => o.click())
+  await flush()
+  return labels
+}
+/** Opens the ⋯ menu and taps the row with this label. */
+async function pickStatus(label: string): Promise<void> {
+  menuButton()?.click()
+  await flush()
+  menuRows()
+    .find((r) => r.textContent?.trim() === label)
+    ?.click()
+  await flush()
 }
 function badge(): string | undefined {
   return host?.querySelector('.support-detail__header .v-badge')?.textContent?.trim()
@@ -171,6 +205,7 @@ beforeEach(() => {
   vi.mocked(supportApi.sendAdminSupportReply).mockReset()
   vi.mocked(supportApi.claimSupportThread).mockReset()
   vi.mocked(supportApi.setTicketStatus).mockReset()
+  vi.mocked(supportApi.retrySupportTranslation).mockReset()
 })
 
 afterEach(() => {
@@ -179,6 +214,7 @@ afterEach(() => {
   app = null
   host = null
   window.history.replaceState({}, '')
+  document.body.querySelectorAll('.v-sheet__overlay').forEach((el) => el.remove())
   vi.clearAllMocks()
 })
 
@@ -261,19 +297,24 @@ describe('AdminSupportDetailView', () => {
     })
   })
 
-  describe('status actions (FE-100)', () => {
-    it('an OPEN ticket offers the four closing statuses -- to ANY admin, taker or not', async () => {
+  // Was: four buttons stacked in the card (delivery A). FE-100, owner ruling
+  // 25.10: the same four statuses, behind ⋯ in the header -- one menu that
+  // later grows «вернуть в работу» and «назначить». What the actions DO is
+  // asserted unchanged; only where they are tapped moved.
+  describe('status actions (FE-100) -- the ⋯ menu', () => {
+    it('an OPEN ticket offers the four closing statuses in ⋯ -- to ANY admin, taker or not', async () => {
       mount('t_1', ticket({ claimed_by: OTHER }))
       await flush()
 
-      expect(statusButtons()).toEqual(['Решена', 'Отклонена', 'Дубликат', 'Спам'])
+      expect(await statusOffer()).toEqual(['Решена', 'Отклонена', 'Дубликат', 'Спам'])
     })
 
-    it('a ticket that is not open offers none -- it shows its status instead', async () => {
+    it('a ticket that is not open has no ⋯ at all -- it shows its status instead', async () => {
       mount('t_1', ticket({ status: 'rejected' }))
       await flush()
 
-      expect(statusButtons()).toEqual([])
+      expect(menuButton()).toBeNull()
+      expect(await statusOffer()).toEqual([])
       expect(host?.querySelector('.support-detail__processed')?.textContent).toContain('Отклонена')
     })
 
@@ -294,12 +335,12 @@ describe('AdminSupportDetailView', () => {
       mount('t_1', ticket({ claimed_by: ME }))
       await flush()
 
-      btnByText(label)?.click()
-      await flush()
+      await pickStatus(label)
 
       expect(supportApi.setTicketStatus).toHaveBeenCalledWith('t_1', status)
+      expect(sheetOpen()).toBe(false) // the sheet closed on the pick
       expect(badge()).toBe(label)
-      expect(statusButtons()).toEqual([])
+      expect(await statusOffer()).toEqual([])
       expect(toastSuccess).toHaveBeenCalled()
       // The answer has no admin-only fields; what was read stays.
       expect(text()).toContain('Дана')
@@ -317,9 +358,10 @@ describe('AdminSupportDetailView', () => {
       mount('t_1', ticket())
       await flush()
 
-      btnByText('Решена')?.click()
-      btnByText('Отклонена')?.click()
-      await flush()
+      // The sheet closes on the first pick; reopen it while the call is in
+      // flight -- the ticket is still open, so ⋯ is still there.
+      await pickStatus('Решена')
+      await pickStatus('Отклонена')
 
       expect(supportApi.setTicketStatus).toHaveBeenCalledTimes(1)
       resolveStatus({ ...ticket(), status: 'resolved' })
@@ -334,13 +376,12 @@ describe('AdminSupportDetailView', () => {
       mount('t_1', ticket())
       await flush()
 
-      btnByText('Спам')?.click()
-      await flush()
+      await pickStatus('Спам')
 
       expect(toastError).toHaveBeenCalledWith('Обращение изменилось — проверьте статус')
       expect(supportApi.getAdminTicket).toHaveBeenCalledWith('t_1')
       expect(badge()).toBe('Решена')
-      expect(statusButtons()).toEqual([])
+      expect(await statusOffer()).toEqual([])
     })
 
     it('a 409 on a ticket that is STILL open (a person wrote meanwhile) leaves the buttons for a retry', async () => {
@@ -349,12 +390,11 @@ describe('AdminSupportDetailView', () => {
       mount('t_1', ticket())
       await flush()
 
-      btnByText('Решена')?.click()
-      await flush()
+      await pickStatus('Решена')
 
       expect(supportApi.getAdminTicket).toHaveBeenCalledTimes(1)
       expect(badge()).toBe('Открыта')
-      expect(statusButtons()).toEqual(['Решена', 'Отклонена', 'Дубликат', 'Спам'])
+      expect(await statusOffer()).toEqual(['Решена', 'Отклонена', 'Дубликат', 'Спам'])
     })
 
     it('any other failure toasts and changes nothing -- no re-read', async () => {
@@ -362,8 +402,7 @@ describe('AdminSupportDetailView', () => {
       mount('t_1', ticket())
       await flush()
 
-      btnByText('Решена')?.click()
-      await flush()
+      await pickStatus('Решена')
 
       expect(toastError).toHaveBeenCalled()
       expect(supportApi.getAdminTicket).not.toHaveBeenCalled()
@@ -526,9 +565,9 @@ describe('AdminSupportDetailView', () => {
       mount('t_1', ticket({ claimed_by: ME }))
       await flush()
 
-      const rows = Array.from(host?.querySelectorAll<HTMLElement>('.support-detail__row') ?? [])
-      expect(rows[0]?.classList.contains('support-detail__row--mine')).toBe(false)
-      expect(rows[1]?.classList.contains('support-detail__row--mine')).toBe(true)
+      const rows = Array.from(host?.querySelectorAll<HTMLElement>('.bubble-row') ?? [])
+      expect(rows[0]?.classList.contains('bubble-row--mine')).toBe(false)
+      expect(rows[1]?.classList.contains('bubble-row--mine')).toBe(true)
       expect(bubbles()).toHaveLength(2)
     })
 
@@ -545,9 +584,29 @@ describe('AdminSupportDetailView', () => {
   })
 
   describe('replying', () => {
-    it('sends and appends the message locally, clearing the draft', async () => {
-      const sent = message({ id: 'm_new', sender: 'admin_me', body: 'Здравствуйте' })
-      vi.mocked(supportApi.sendAdminSupportReply).mockResolvedValue(sent)
+    // Was: the reply was appended and that was all. FE-100 (BE-166): the
+    // send answers comms' message, without the reply's translation for the
+    // person -- the card shows it at once AND reads the feed again, so the
+    // translation block of the reply comes from the server.
+    it('sends, shows the reply at once, clears the draft, and reads the feed again', async () => {
+      vi.mocked(supportApi.sendAdminSupportReply).mockResolvedValue({
+        id: 'm_new',
+        thread_id: 't_1',
+        sender: 'admin_me',
+        body: 'Здравствуйте',
+        created_at: '2026-10-25T10:05:00Z',
+      })
+      let reads = 0
+      vi.mocked(supportApi.getAdminSupportMessages).mockImplementation(() => {
+        reads += 1
+        return Promise.resolve({
+          messages:
+            reads === 1
+              ? [message()]
+              : [message({ id: 'm_new', sender: 'admin_me', body: 'Здравствуйте' }), message()],
+          next_cursor: null,
+        })
+      })
       mount('t_1', ticket({ claimed_by: ME }))
       await flush()
 
@@ -557,7 +616,8 @@ describe('AdminSupportDetailView', () => {
       await flush()
 
       expect(supportApi.sendAdminSupportReply).toHaveBeenCalledWith('t_1', 'Здравствуйте')
-      expect(bubbles()).toHaveLength(2) // the seeded message + the new one
+      expect(supportApi.getAdminSupportMessages).toHaveBeenCalledTimes(2)
+      expect(bubbles()).toHaveLength(2) // the seeded message + the new one, once
       expect(draftField().value).toBe('')
     })
 
@@ -579,6 +639,254 @@ describe('AdminSupportDetailView', () => {
       await flush()
 
       expect(btnByText('Отправить')?.disabled).toBe(true)
+    })
+  })
+
+  // ===========================================================================
+  // FE-100 (BE-166): the translation in the card -- the marks and buttons
+  // themselves are SupportMessageBubble's (its own file); here the card's
+  // part: which thread a retry goes to, what a retry answer does, and the
+  // poll while a message is on its way.
+  describe('translation -- retry and the poll (FE-100)', () => {
+    function inFlight(state: 'preparing' | 'not_requested' = 'preparing'): SupportMessage {
+      return message({
+        body: 'Hello',
+        original: 'Hello',
+        translation: { locale: 'ru', state, source_locale: null, retryable: false },
+      })
+    }
+    function settled(): SupportMessage {
+      return message({
+        body: 'Привет',
+        original: 'Hello',
+        translation: { locale: 'ru', state: 'ready', source_locale: 'en', retryable: false },
+      })
+    }
+    function failed(id = 'm_1', threadId = 't_1'): SupportMessage {
+      return message({
+        id,
+        thread_id: threadId,
+        body: 'Hello',
+        original: 'Hello',
+        translation: { locale: 'ru', state: 'impossible', source_locale: null, retryable: true },
+      })
+    }
+    function feed(...pages: SupportMessage[][]): void {
+      let i = 0
+      vi.mocked(supportApi.getAdminSupportMessages).mockImplementation(() => {
+        const page = pages[Math.min(i, pages.length - 1)] ?? []
+        i += 1
+        return Promise.resolve({ messages: page, next_cursor: null })
+      })
+    }
+    function retryLink(): HTMLButtonElement | undefined {
+      return Array.from(host?.querySelectorAll<HTMLButtonElement>('.bubble__link') ?? []).find(
+        (b) => b.textContent?.trim() === 'Повторить',
+      )
+    }
+    async function tick(ms: number): Promise<void> {
+      await vi.advanceTimersByTimeAsync(ms)
+      await flush()
+    }
+    function reads(): number {
+      return vi.mocked(supportApi.getAdminSupportMessages).mock.calls.length
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('reads the feed every 5 s while a message is on its way, and stops once it settles', async () => {
+      feed([inFlight()], [inFlight()], [settled()])
+      mount('t_1', ticket())
+      await flush()
+      expect(reads()).toBe(1)
+      expect(text()).toContain('Переводится…')
+
+      await tick(4999)
+      expect(reads()).toBe(1)
+      await tick(1)
+      expect(reads()).toBe(2)
+      await tick(5000)
+      expect(reads()).toBe(3)
+      expect(text()).toContain('Привет')
+      expect(text()).not.toContain('Переводится…')
+
+      await tick(60000)
+      expect(reads()).toBe(3)
+    })
+
+    it('`not_requested` is on its way too -- it is polled', async () => {
+      feed([inFlight('not_requested')], [settled()])
+      mount('t_1', ticket())
+      await flush()
+
+      await tick(5000)
+      expect(reads()).toBe(2)
+    })
+
+    it('nothing on its way -> no poll at all', async () => {
+      feed([settled()])
+      mount('t_1', ticket())
+      await flush()
+
+      await tick(60000)
+      expect(reads()).toBe(1)
+    })
+
+    it('a message that never settles is read at most 24 times, then the poll stops', async () => {
+      feed([inFlight()])
+      mount('t_1', ticket())
+      await flush()
+
+      await tick(5000 * 40)
+      expect(reads()).toBe(1 + 24)
+    })
+
+    it('leaving the screen stops the poll', async () => {
+      feed([inFlight()])
+      mount('t_1', ticket())
+      await flush()
+
+      app?.unmount()
+      app = null
+      await tick(60000)
+      expect(reads()).toBe(1)
+    })
+
+    it('a failed poll read is silent and the poll goes on', async () => {
+      let i = 0
+      vi.mocked(supportApi.getAdminSupportMessages).mockImplementation(() => {
+        i += 1
+        if (i === 2) return Promise.reject(new Error('blip'))
+        return Promise.resolve({ messages: [i < 3 ? inFlight() : settled()], next_cursor: null })
+      })
+      mount('t_1', ticket())
+      await flush()
+
+      await tick(5000)
+      await tick(5000)
+      expect(reads()).toBe(3)
+      expect(toastError).not.toHaveBeenCalled()
+      expect(text()).toContain('Привет')
+    })
+
+    it('«Повторить» asks the ticket thread again, marks the message on its way and polls', async () => {
+      feed([failed()], [settled()])
+      vi.mocked(supportApi.retrySupportTranslation).mockResolvedValue({
+        message_id: 'm_1',
+        locale: 'ru',
+        attempt: 2,
+        state: 'preparing',
+      })
+      mount('t_1', ticket())
+      await flush()
+      expect(text()).toContain('Ошибка перевода')
+
+      retryLink()?.click()
+      await flush()
+
+      expect(supportApi.retrySupportTranslation).toHaveBeenCalledWith('t_1', 'm_1')
+      expect(toastSuccess).toHaveBeenCalledWith('Перевод запрошен снова')
+      expect(text()).toContain('Переводится…')
+      expect(retryLink()).toBeUndefined()
+
+      await tick(5000)
+      expect(reads()).toBe(2)
+      expect(text()).toContain('Привет')
+    })
+
+    it('«Повторить» twice before the answer asks ONCE', async () => {
+      feed([failed()])
+      vi.mocked(supportApi.retrySupportTranslation).mockReturnValue(new Promise(() => {}))
+      mount('t_1', ticket())
+      await flush()
+
+      const retry = retryLink()
+      retry?.click()
+      retry?.click()
+      await flush()
+
+      expect(supportApi.retrySupportTranslation).toHaveBeenCalledTimes(1)
+    })
+
+    it('a 409 on «Повторить» (nothing to retry) toasts and reads the feed again', async () => {
+      feed([failed()], [settled()])
+      vi.mocked(supportApi.retrySupportTranslation).mockRejectedValue(
+        new ApiResponseError(409, 'The translation is variant, nothing to retry'),
+      )
+      mount('t_1', ticket())
+      await flush()
+
+      retryLink()?.click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Повторять нечего — перевод уже идёт или готов')
+      expect(reads()).toBe(2)
+      expect(text()).toContain('Привет')
+    })
+
+    it('any other failure of «Повторить» toasts and changes nothing', async () => {
+      feed([failed()])
+      vi.mocked(supportApi.retrySupportTranslation).mockRejectedValue(
+        new ApiResponseError(404, 'Message not found in this thread'),
+      )
+      mount('t_1', ticket())
+      await flush()
+
+      retryLink()?.click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalled()
+      expect(text()).toContain('Ошибка перевода')
+      expect(retryLink()).toBeDefined()
+      expect(reads()).toBe(1)
+    })
+
+    it('«Повторить» in the history asks the HISTORY thread', async () => {
+      vi.mocked(supportApi.getAdminSupportMessages).mockImplementation((id: string) =>
+        Promise.resolve({
+          messages: id === 'h_1' ? [failed('h_m', 'h_1')] : [settled()],
+          next_cursor: null,
+        }),
+      )
+      vi.mocked(supportApi.retrySupportTranslation).mockResolvedValue({
+        message_id: 'h_m',
+        locale: 'ru',
+        attempt: 2,
+        state: 'preparing',
+      })
+      mount('t_1', ticket({ history_thread_id: 'h_1' }))
+      await flush()
+
+      btnByText('История обращений')?.click()
+      await flush()
+      retryLink()?.click()
+      await flush()
+
+      expect(supportApi.retrySupportTranslation).toHaveBeenCalledWith('h_1', 'h_m')
+    })
+
+    it('a history message on its way is polled -- with the ticket feed', async () => {
+      vi.mocked(supportApi.getAdminSupportMessages).mockImplementation((id: string) =>
+        Promise.resolve({
+          messages: id === 'h_1' ? [inFlight()] : [settled()],
+          next_cursor: null,
+        }),
+      )
+      mount('t_1', ticket({ history_thread_id: 'h_1' }))
+      await flush()
+      btnByText('История обращений')?.click()
+      await flush()
+      const before = reads()
+
+      await tick(5000)
+
+      const after = vi.mocked(supportApi.getAdminSupportMessages).mock.calls.slice(before)
+      expect(after.map((c) => c[0])).toEqual(['t_1', 'h_1'])
     })
   })
 })

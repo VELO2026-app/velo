@@ -34,11 +34,16 @@
 //
 // Cyrillic fixtures/expected strings below were typed via the Write tool,
 // never a shell heredoc.
+//
+// FE-100: «Модерация» is «Обращения | Жалобы», the tab in the query. Every
+// test of the reports list above mounts on `?tab=complaints` -- the list is
+// unchanged, only where it sits. The «Обращения» side (SupportTicketsPanel)
+// is stubbed here and tested in its own file.
 // =============================================================================
 
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { createApp, nextTick, type App } from 'vue'
+import { createApp, defineComponent, h, nextTick, reactive, type App } from 'vue'
 import AdminReportsView from '@/views/admin/AdminReportsView.vue'
 import * as adminApi from '@/api/admin'
 import { ApiResponseError } from '@/api/client'
@@ -48,8 +53,19 @@ vi.mock('@/api/admin')
 
 const back = vi.fn()
 const push = vi.fn()
+// Reactive, so the view's tab (computed from the query) follows replace().
+const route = reactive<{ query: Record<string, string> }>({ query: { tab: 'complaints' } })
+const replace = vi.fn((to: { query: Record<string, string> }) => {
+  route.query = to.query
+  return Promise.resolve()
+})
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ back, push }),
+  useRouter: () => ({ back, push, replace }),
+  useRoute: () => route,
+}))
+
+vi.mock('@/components/admin/SupportTicketsPanel.vue', () => ({
+  default: defineComponent({ setup: () => () => h('div', { class: 'tickets-stub' }) }),
 }))
 
 const toastError = vi.fn()
@@ -170,6 +186,8 @@ beforeEach(() => {
 
   back.mockReset()
   push.mockReset()
+  replace.mockClear()
+  route.query = { tab: 'complaints' }
   toastError.mockReset()
 })
 
@@ -421,16 +439,17 @@ describe('AdminReportsView', () => {
   })
 
   // ===========================================================================
-  describe('headerCount + openDetail', () => {
-    it('headerCount shows the API total, "—" when 0', async () => {
+  describe('header + openDetail', () => {
+    // Was: the header count showed the API total ("—" when 0). FE-100, owner
+    // ruling 25.10: the count leaves the «Модерация» header -- the header is
+    // shared by both tabs now, and the number belonged to one of them.
+    it('the header carries no count -- on either tab', async () => {
       vi.mocked(adminApi.getReports).mockResolvedValue(paginated([REPORT_A, REPORT_B], 42))
       mount()
       await flush()
-      expect(host?.querySelector('.admin-reports__count')?.textContent).toBe('42')
-
-      vi.mocked(adminApi.getReports).mockResolvedValue(paginated([], 0))
-      await applyStatusFilter('Открытая') // any trigger to re-load with a fresh mock
-      expect(host?.querySelector('.admin-reports__count')?.textContent).toBe('—')
+      expect(host?.querySelector('.admin-reports__top')?.textContent).not.toContain('42')
+      expect(host?.querySelector('.admin-reports__count')).toBeNull()
+      expect(host?.querySelector('.admin-reports__top h1')?.textContent?.trim()).toBe('Модерация')
     })
 
     it('openDetail pushes admin-report-detail with the id and a DEEP-CLONED report in state', async () => {
@@ -447,6 +466,68 @@ describe('AdminReportsView', () => {
       })
       const call = push.mock.calls[0]?.[0] as { state: { report: ReportResponse } }
       expect(call.state.report).not.toBe(REPORT_A) // deep-cloned, not the same reference
+    })
+  })
+
+  // ===========================================================================
+  describe('FE-100: the «Обращения | Жалобы» switch', () => {
+    function segment(label: string): HTMLButtonElement | undefined {
+      return Array.from(host?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? []).find(
+        (b) => b.textContent?.trim() === label,
+      )
+    }
+
+    it('without a tab in the query «Обращения» is shown and no report is fetched', async () => {
+      route.query = {}
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.tickets-stub')).not.toBeNull()
+      expect(cards()).toHaveLength(0)
+      expect(adminApi.getReports).not.toHaveBeenCalled()
+    })
+
+    it('an unknown tab is «Обращения» too', async () => {
+      route.query = { tab: 'whatever' }
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.tickets-stub')).not.toBeNull()
+      expect(adminApi.getReports).not.toHaveBeenCalled()
+    })
+
+    it('`?tab=complaints` shows the reports list as before, and no tickets', async () => {
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.tickets-stub')).toBeNull()
+      expect(cards()).toHaveLength(2)
+      expect(adminApi.getReports).toHaveBeenCalledTimes(1)
+    })
+
+    it('switching to «Жалобы» writes the tab to the query and loads the reports', async () => {
+      route.query = {}
+      mount()
+      await flush()
+
+      segment('Жалобы')?.click()
+      await flush()
+
+      expect(replace).toHaveBeenCalledWith({ query: { tab: 'complaints' } })
+      expect(adminApi.getReports).toHaveBeenCalledTimes(1)
+      expect(cards()).toHaveLength(2)
+    })
+
+    it('switching back to «Обращения» keeps the other query keys', async () => {
+      route.query = { tab: 'complaints', keep: 'me' }
+      mount()
+      await flush()
+
+      segment('Обращения')?.click()
+      await flush()
+
+      expect(replace).toHaveBeenCalledWith({ query: { tab: 'tickets', keep: 'me' } })
+      expect(host?.querySelector('.tickets-stub')).not.toBeNull()
     })
   })
 })

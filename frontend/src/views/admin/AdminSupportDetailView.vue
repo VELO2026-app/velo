@@ -35,7 +35,18 @@
 
 <template>
   <div class="support-detail">
-    <VHeader :title="headerTitle" show-back @back="router.back()" />
+    <VHeader :title="headerTitle" show-back @back="router.back()">
+      <template v-if="menuActions.length" #action>
+        <button
+          type="button"
+          class="support-detail__menu"
+          :aria-label="t('adminScreens.adminSupportDetail.menu.aria')"
+          @click="menuOpen = true"
+        >
+          <IconDots :size="20" />
+        </button>
+      </template>
+    </VHeader>
 
     <div class="support-detail__content">
       <div v-if="loadingTicket" class="support-detail__loader">
@@ -59,26 +70,8 @@
           <span class="support-detail__topic">{{ supportTopicLabel(ticket.topic) }}</span>
         </div>
 
-        <!-- Status: the four closing statuses while the ticket is open. -->
-        <div v-if="ticket.status === 'open'" class="support-detail__section">
-          <div class="support-detail__section-title">
-            {{ t('adminScreens.adminSupportDetail.statusSection') }}
-          </div>
-          <div class="support-detail__actions">
-            <VButton
-              v-for="status in SUPPORT_CLOSING_STATUSES"
-              :key="status"
-              :variant="status === 'resolved' ? 'primary' : 'outline'"
-              block
-              :loading="changingTo === status"
-              :disabled="changingTo !== null"
-              @click="onSetStatus(status)"
-            >
-              {{ supportStatusLabel(status) }}
-            </VButton>
-          </div>
-        </div>
-        <VCard v-else class="support-detail__processed">
+        <!-- Status: an open ticket's actions live in the ⋯ menu (header). -->
+        <VCard v-if="ticket.status !== 'open'" class="support-detail__processed">
           {{ t('adminScreens.adminSupportDetail.currentStatus') }}
           <strong>{{ supportStatusLabel(ticket.status) }}</strong>
         </VCard>
@@ -117,20 +110,18 @@
             <div v-if="messages.length === 0" class="support-detail__empty">
               {{ t('adminScreens.adminSupportDetail.noMessages') }}
             </div>
-            <div
+            <SupportMessageBubble
               v-for="m in messages"
               :key="m.id"
-              class="support-detail__row"
-              :class="{ 'support-detail__row--mine': m.sender === myId }"
-            >
-              <div
-                class="support-detail__bubble"
-                :class="{ 'support-detail__bubble--mine': m.sender === myId }"
-              >
-                <div class="support-detail__body">{{ m.body }}</div>
-                <div class="support-detail__time">{{ formatTime(m.created_at) }}</div>
-              </div>
-            </div>
+              :message="m"
+              :from-person="isPerson(m)"
+              :mine="m.sender === myId"
+              :show-original="originalShown.has(m.id)"
+              :retrying="retrying.has(m.id)"
+              :time="formatTime(m.created_at)"
+              @toggle="toggleOriginal(m.id)"
+              @retry="onRetry(ticketId, m.id)"
+            />
             <button type="button" class="support-detail__refresh" @click="loadMessages">
               {{ t('adminScreens.adminSupportDetail.refresh') }}
             </button>
@@ -192,20 +183,18 @@
               <div v-if="historyMessages.length === 0" class="support-detail__empty">
                 {{ t('adminScreens.adminSupportDetail.noMessages') }}
               </div>
-              <div
+              <SupportMessageBubble
                 v-for="m in historyMessages"
                 :key="m.id"
-                class="support-detail__row"
-                :class="{ 'support-detail__row--mine': m.sender === myId }"
-              >
-                <div
-                  class="support-detail__bubble"
-                  :class="{ 'support-detail__bubble--mine': m.sender === myId }"
-                >
-                  <div class="support-detail__body">{{ m.body }}</div>
-                  <div class="support-detail__time">{{ formatTime(m.created_at) }}</div>
-                </div>
-              </div>
+                :message="m"
+                :from-person="isPerson(m)"
+                :mine="m.sender === myId"
+                :show-original="originalShown.has(m.id)"
+                :retrying="retrying.has(m.id)"
+                :time="formatTime(m.created_at)"
+                @toggle="toggleOriginal(m.id)"
+                @retry="onRetry(historyThreadId, m.id)"
+              />
             </div>
           </div>
         </template>
@@ -220,15 +209,44 @@
         <VButton variant="outline" block @click="router.back()">{{ t('ui.back') }}</VButton>
       </div>
     </div>
+
+    <!-- The ⋯ menu: rows from TICKET_ACTIONS (one entry per action). -->
+    <VBottomSheet
+      :open="menuOpen"
+      :title="t('adminScreens.adminSupportDetail.statusSection')"
+      compact-title
+      @close="menuOpen = false"
+    >
+      <div class="support-detail__menu-rows">
+        <VMenuRow
+          v-for="action in menuActions"
+          :key="action.key"
+          :label="action.label()"
+          :show-arrow="false"
+          @click="runAction(action)"
+        />
+      </div>
+    </VBottomSheet>
   </div>
 </template>
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
-import { VBadge, VButton, VCard, VTextarea, VEmptyState, VLoader } from '@/components/ui'
+import {
+  VBadge,
+  VBottomSheet,
+  VButton,
+  VCard,
+  VMenuRow,
+  VTextarea,
+  VEmptyState,
+  VLoader,
+} from '@/components/ui'
+import { IconDots } from '@/components/icons'
+import SupportMessageBubble from '@/components/admin/SupportMessageBubble.vue'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { ApiResponseError } from '@/api/client'
@@ -237,6 +255,7 @@ import {
   claimSupportThread,
   getAdminSupportMessages,
   getAdminTicket,
+  retrySupportTranslation,
   sendAdminSupportReply,
   setTicketStatus,
   type AdminSupportTicket,
@@ -267,6 +286,10 @@ const sending = ref(false)
 const claiming = ref(false)
 const changingTo = ref<SupportClosingStatus | null>(null)
 
+const menuOpen = ref(false)
+const originalShown = ref<ReadonlySet<string>>(new Set())
+const retrying = ref<ReadonlySet<string>>(new Set())
+
 const historyShown = ref(false)
 const historyMessages = ref<SupportMessage[]>([])
 const loadingHistory = ref(false)
@@ -282,6 +305,132 @@ const claimPanelText = computed(() =>
     ? t('adminScreens.adminSupportDetail.claimedByOtherHint')
     : t('adminScreens.adminSupportDetail.unclaimedHint'),
 )
+
+const historyThreadId = computed(() => ticket.value?.history_thread_id ?? '')
+
+/** A message of the person the ticket is about (not of support). */
+function isPerson(m: SupportMessage): boolean {
+  return !!ticket.value?.opener && m.sender === ticket.value.opener.user_id
+}
+
+// -- The ⋯ menu ---------------------------------------------------------------
+// ONE ENTRY PER ACTION (owner ruling FE-100): «вернуть в работу» and
+// «назначить» (BE-162 delivery 2) are added here as entries, nothing else
+// changes. The button shows only while some entry applies.
+interface TicketMenuAction {
+  key: string
+  label: () => string
+  visible: (ticket: AdminSupportTicket) => boolean
+  run: () => Promise<void>
+}
+
+const TICKET_ACTIONS: readonly TicketMenuAction[] = SUPPORT_CLOSING_STATUSES.map((status) => ({
+  key: status,
+  label: () => supportStatusLabel(status),
+  visible: (tk) => tk.status === 'open',
+  run: () => onSetStatus(status),
+}))
+
+const menuActions = computed<TicketMenuAction[]>(() => {
+  const tk = ticket.value
+  return tk ? TICKET_ACTIONS.filter((a) => a.visible(tk)) : []
+})
+
+function runAction(action: TicketMenuAction): void {
+  menuOpen.value = false
+  void action.run()
+}
+
+// -- Translation (BE-166) -----------------------------------------------------
+
+function toggleOriginal(id: string): void {
+  const next = new Set(originalShown.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  originalShown.value = next
+}
+
+/** On its way: comms' `preparing`, or `not_requested` before the job is
+ *  taken. Polled until it settles (owner ruling FE-100). */
+function inFlight(list: readonly SupportMessage[]): boolean {
+  return list.some(
+    (m) => m.translation?.state === 'preparing' || m.translation?.state === 'not_requested',
+  )
+}
+
+// POLL: every POLL_MS while a message is in flight, at most POLL_LIMIT reads
+// per cycle (a cycle restarts on a load, a history open, a retry); stops when
+// nothing is in flight or the screen is left.
+const POLL_MS = 5000
+const POLL_LIMIT = 24
+let pollTimer: ReturnType<typeof setTimeout> | null = null
+let polls = 0
+let disposed = false
+
+function schedulePoll(): void {
+  if (pollTimer || disposed || polls >= POLL_LIMIT) return
+  if (!inFlight(messages.value) && !inFlight(historyMessages.value)) return
+  pollTimer = setTimeout(() => {
+    pollTimer = null
+    polls += 1
+    void rereadFeeds().then(schedulePoll)
+  }, POLL_MS)
+}
+
+function restartPolling(): void {
+  polls = 0
+  schedulePoll()
+}
+
+/** Read the feeds again in place, silently: a failed read keeps what is
+ *  shown -- the next poll or «Обновить» tries again. */
+async function rereadFeeds(): Promise<void> {
+  try {
+    const page = await getAdminSupportMessages(ticketId)
+    messages.value = [...page.messages].reverse()
+    const historyId = historyThreadId.value
+    if (historyShown.value && historyId) {
+      const history = await getAdminSupportMessages(historyId)
+      historyMessages.value = [...history.messages].reverse()
+    }
+  } catch {
+    // Silent by design (see above).
+  }
+}
+
+function markPreparing(messageId: string): void {
+  const settle = (list: SupportMessage[]): SupportMessage[] =>
+    list.map((m) =>
+      m.id === messageId && m.translation
+        ? { ...m, translation: { ...m.translation, state: 'preparing', retryable: false } }
+        : m,
+    )
+  messages.value = settle(messages.value)
+  historyMessages.value = settle(historyMessages.value)
+}
+
+async function onRetry(threadId: string, messageId: string): Promise<void> {
+  if (retrying.value.has(messageId)) return
+  retrying.value = new Set(retrying.value).add(messageId)
+  try {
+    await retrySupportTranslation(threadId, messageId)
+    toast.success(t('adminScreens.adminSupportDetail.toast.retryQueued'))
+    markPreparing(messageId)
+    restartPolling()
+  } catch (e) {
+    if (isStatus(e, 409)) {
+      toast.error(t('adminScreens.adminSupportDetail.toast.retryNothing'))
+      await rereadFeeds()
+      restartPolling()
+    } else {
+      toast.error(extractApiError(e, t('adminScreens.adminSupportDetail.toast.retryFailed')))
+    }
+  } finally {
+    const next = new Set(retrying.value)
+    next.delete(messageId)
+    retrying.value = next
+  }
+}
 
 function isStatus(e: unknown, status: number): boolean {
   return e instanceof ApiResponseError && e.status === status
@@ -335,6 +484,7 @@ async function loadMessages(): Promise<void> {
   try {
     const page = await getAdminSupportMessages(ticketId)
     messages.value = [...page.messages].reverse()
+    restartPolling()
   } catch (e) {
     messagesError.value = extractApiError(e, t('adminScreens.adminSupportDetail.tryAgain'))
   } finally {
@@ -351,6 +501,7 @@ async function loadHistory(): Promise<void> {
   try {
     const page = await getAdminSupportMessages(historyId)
     historyMessages.value = [...page.messages].reverse()
+    restartPolling()
   } catch (e) {
     historyError.value = extractApiError(e, t('adminScreens.adminSupportDetail.tryAgain'))
   } finally {
@@ -404,14 +555,22 @@ async function onSend(): Promise<void> {
   sending.value = true
   try {
     const sent = await sendAdminSupportReply(ticketId, body)
-    messages.value = [...messages.value, sent]
+    // Shown at once as written; its translation for the person (BE-166) is
+    // known only to the feed -- read it again, and poll if it is on its way.
+    messages.value = [...messages.value, { ...sent, original: sent.body, translation: null }]
     draft.value = ''
+    void rereadFeeds().then(restartPolling)
   } catch (e) {
     toast.error(extractApiError(e, t('adminScreens.adminSupportDetail.toast.replyFailed')))
   } finally {
     sending.value = false
   }
 }
+
+onBeforeUnmount(() => {
+  disposed = true
+  if (pollTimer) clearTimeout(pollTimer)
+})
 
 onMounted(async () => {
   await loadTicket()
@@ -483,39 +642,6 @@ onMounted(async () => {
   padding: var(--space-4) 0;
 }
 
-.support-detail__row {
-  display: flex;
-  justify-content: flex-start;
-}
-.support-detail__row--mine {
-  justify-content: flex-end;
-}
-
-.support-detail__bubble {
-  max-width: 78%;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  background: var(--velo-bg-card-solid);
-  color: var(--velo-text-primary);
-  word-break: break-word;
-}
-.support-detail__bubble--mine {
-  background: var(--velo-primary);
-  color: var(--velo-white);
-}
-
-.support-detail__body {
-  white-space: pre-wrap;
-  font-size: var(--text-sm);
-}
-
-.support-detail__time {
-  margin-top: var(--space-1);
-  font-size: var(--text-xs);
-  opacity: 0.6;
-  text-align: right;
-}
-
 .support-detail__refresh {
   align-self: center;
   margin-top: var(--space-2);
@@ -557,15 +683,29 @@ onMounted(async () => {
   letter-spacing: var(--velo-letter-spacing-05);
 }
 
-.support-detail__actions {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
 .support-detail__processed {
   text-align: center;
   font-size: var(--text-sm);
   color: var(--velo-text-muted);
+}
+
+.support-detail__menu {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--velo-size-40);
+  height: var(--velo-size-40);
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--velo-primary);
+  color: var(--velo-white);
+  cursor: pointer;
+}
+
+.support-detail__menu-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 </style>

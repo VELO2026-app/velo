@@ -84,12 +84,49 @@ export interface AdminSupportTicketList {
   next_cursor: string | null
 }
 
+/** A translation's state (comms VariantState, a closed set of five):
+ *  `ready` -- translated; `not_needed` -- already in the target language;
+ *  `preparing` / `not_requested` -- on its way; `impossible` -- failed, or
+ *  declined by the model (comms keeps a declined variant as `impossible`). */
+export type SupportTranslationState =
+  'ready' | 'not_needed' | 'preparing' | 'not_requested' | 'impossible'
+
+/** BE-166: a message's translation as the admin feed describes it.
+ *  On a person's message `locale` is the support language and `body` is the
+ *  translation when `ready`, the original otherwise. On a reply to a person
+ *  of another language `locale` is theirs and `variant_body` is what they
+ *  read (when `ready`). `retryable` -- the job failed in transport, and
+ *  POST .../translation/retry may ask again. */
+export interface SupportTranslation {
+  locale: string
+  state: SupportTranslationState
+  source_locale: string | null
+  retryable: boolean
+  variant_body?: string | null
+}
+
+/** A message of the admin feed. `original` is the author's text (admins
+ *  only); `translation` is null on a reply to a person of the support
+ *  language. */
 export interface SupportMessage {
   id: string
   thread_id: string
   sender: string
   body: string
+  original: string
+  translation: SupportTranslation | null
   created_at: string
+}
+
+/** A reply as the send answers it -- comms' message, without the admin
+ *  feed's `original` / `translation` (those come with the next feed read). */
+export type SupportSentMessage = Omit<SupportMessage, 'original' | 'translation'>
+
+export interface SupportRetryResult {
+  message_id: string
+  locale: string
+  attempt: number
+  state: 'preparing'
 }
 
 export interface SupportMessageList {
@@ -141,11 +178,27 @@ export function createAppealKeys(
 
 // -- Admin --------------------------------------------------------------------
 
-/** Tickets, newest appeal first. No status filter is sent: the backend then
- *  returns every ticket but spam. */
-export function listAdminTickets(limit = 20, cursor?: string): Promise<AdminSupportTicketList> {
-  const qs = new URLSearchParams({ limit: String(limit) })
-  if (cursor) qs.set('cursor', cursor)
+/** The filters of the admin ticket list. `categories` is "any of these"
+ *  (repeatable `category`, BE-162 fix 2); without `status` the backend
+ *  returns every ticket but spam. `createdFrom` inclusive, `createdTo`
+ *  exclusive -- ISO with an offset (the backend refuses one without). */
+export interface AdminTicketQuery {
+  categories?: readonly SupportCategory[]
+  status?: SupportTicketStatus
+  createdFrom?: string
+  createdTo?: string
+  cursor?: string
+  limit?: number
+}
+
+/** Tickets, newest appeal first. */
+export function listAdminTickets(query: AdminTicketQuery = {}): Promise<AdminSupportTicketList> {
+  const qs = new URLSearchParams({ limit: String(query.limit ?? 20) })
+  for (const c of query.categories ?? []) qs.append('category', c)
+  if (query.status) qs.set('status', query.status)
+  if (query.createdFrom) qs.set('created_from', query.createdFrom)
+  if (query.createdTo) qs.set('created_to', query.createdTo)
+  if (query.cursor) qs.set('cursor', query.cursor)
   return api.get<AdminSupportTicketList>(`/api/v1/support/tickets?${qs}`)
 }
 
@@ -180,8 +233,8 @@ export function getAdminSupportMessages(
 
 /** Reply as this admin, in a ticket. Throws ApiResponseError(403) -- via
  *  useApiError -- when the caller has not claimed it; comms' own refusal. */
-export function sendAdminSupportReply(threadId: string, body: string): Promise<SupportMessage> {
-  return api.post<SupportMessage>(`/api/v1/support/threads/${threadId}/messages`, { body })
+export function sendAdminSupportReply(threadId: string, body: string): Promise<SupportSentMessage> {
+  return api.post<SupportSentMessage>(`/api/v1/support/threads/${threadId}/messages`, { body })
 }
 
 /** Take a ticket -- the act that grants the right to reply. A repeat of your
@@ -190,4 +243,17 @@ export function sendAdminSupportReply(threadId: string, body: string): Promise<S
  *  who holds it is always velo's `claimed_by`. */
 export function claimSupportThread(threadId: string): Promise<unknown> {
   return api.post<unknown>(`/api/v1/support/threads/${threadId}/claim`, {})
+}
+
+/** Ask again for a message whose translation job failed in transport
+ *  (`translation.retryable`). 409 -- nothing to retry (in progress, done,
+ *  declined); 404 -- the message is not in the pages the backend searches. */
+export function retrySupportTranslation(
+  threadId: string,
+  messageId: string,
+): Promise<SupportRetryResult> {
+  return api.post<SupportRetryResult>(
+    `/api/v1/support/threads/${threadId}/messages/${messageId}/translation/retry`,
+    {},
+  )
 }

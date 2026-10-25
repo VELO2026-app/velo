@@ -90,7 +90,6 @@
       "methodRequestsHint": "Masters change their directions",
       "catalogLink": "Practice catalog",
       "catalogHint": "Practice directions and styles",
-      "supportLink": "Tickets from users and masters",
       "revenue": "Revenue",
       "system": "System",
       "mastersBalance": "Balance by masters",
@@ -101,7 +100,6 @@
       "participantsStat": "Participants",
       "payoutsSection": "Payouts",
       "usersSection": "Users",
-      "supportSection": "Support",
       "statistics": "Statistics",
       "profileAria": "Profile",
       "promocodesSection": "Promo codes"
@@ -369,7 +367,8 @@
       "filter": "Filter",
       "ticketsLoadError": "Error loading the tickets",
       "moderationTab": "Moderation",
-      "tabComplaints": "Complaints"
+      "tabComplaints": "Complaints",
+      "tabTickets": "Requests"
     },
     "adminReturnRate": {
       "topLoyalUsers": "Top loyal users",
@@ -402,7 +401,10 @@
         "replyFailed": "Failed to send the reply",
         "statusChanged": "Status changed",
         "statusConflict": "The ticket has changed — check its status",
-        "statusFailed": "Failed to change the status"
+        "statusFailed": "Failed to change the status",
+        "retryQueued": "Translation requested again",
+        "retryNothing": "Nothing to retry — the translation is under way or done",
+        "retryFailed": "Failed to retry the translation"
       },
       "take": "Take it",
       "noMessages": "No messages yet.",
@@ -416,6 +418,16 @@
       "history": {
         "show": "Earlier conversation",
         "title": "The conversation before form tickets — read-only"
+      },
+      "menu": {
+        "aria": "Ticket actions"
+      },
+      "translation": {
+        "translating": "Translating…",
+        "failed": "Translation failed",
+        "undelivered": "Not delivered",
+        "showOriginal": "Show original",
+        "showTranslation": "Show translation"
       }
     },
     "adminSupport": {
@@ -424,7 +436,6 @@
         "text": "All support requests will appear here"
       },
       "ticketsLoadError": "Error loading the tickets",
-      "title": "Support",
       "userFallback": "User",
       "statuses": {
         "open": "Open",
@@ -438,7 +449,15 @@
         "mine": "Mine",
         "other": "Taken by {name}",
         "adminFallback": "Administrator"
-      }
+      },
+      "categories": {
+        "payments": "Payments",
+        "practices": "Practices",
+        "tech": "Tech problems",
+        "complaints": "Complaints",
+        "other": "Other"
+      },
+      "appealDate": "Request date"
     },
     "adminUsers": {
       "usersLoadFailed": "Failed to load the users",

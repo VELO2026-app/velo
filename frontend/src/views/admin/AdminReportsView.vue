@@ -14,6 +14,12 @@
   payload) are honest placeholders; Категория / Приоритет / date filters have no backend.
   Roadmap (Zod): extend GET /admin/reports — category (ticket/complaint/payment) + priority
   (P0–P3) + date filtering + reporter name. Recorded in master-ds-zod-roadmap.
+
+  FE-100 (owner ruling 25.10): «Модерация» is two channels behind a «Обращения | Жалобы»
+  switch. «Обращения» -- support tickets (components/admin/SupportTicketsPanel.vue, the
+  former admin-support screen); «Жалобы» -- everything above, unchanged. The tab rides
+  the query (`?tab=complaints`; anything else is «Обращения», the default), so the
+  back button from a card lands on the tab it left. The header count is gone (owner).
 -->
 
 <template>
@@ -21,96 +27,104 @@
     <header class="admin-reports__top">
       <VBackButton @click="router.back()" />
       <h1 class="admin-reports__title">{{ t('adminScreens.adminReports.moderationTab') }}</h1>
-      <span class="admin-reports__count">{{ headerCount }}</span>
     </header>
 
-    <!-- Filter trigger (label echoes the active category, operator variants) -->
-    <button type="button" class="admin-reports__filter" @click="showFilter = true">
-      <span>{{ pillLabel }}</span>
-      <IconFilter :size="22" />
-    </button>
+    <VSegment v-model="tab" :options="tabOptions" />
 
-    <div v-if="!filter.categories.length" class="admin-reports__active">
-      {{ t('common.all') }}
-    </div>
-
-    <!-- Loading: initial -->
-    <div v-if="loading && items.length === 0" class="admin-reports__loader">
-      <VLoader size="lg" />
-    </div>
-
-    <!-- Fetch error -->
-    <VEmptyState
-      v-else-if="error"
-      icon="warning"
-      :title="t('common.loadFailed')"
-      :description="t('common.checkConnection')"
-    >
-      <template #action
-        ><VButton variant="primary" @click="loadInitial">{{ t('common.retry') }}</VButton></template
-      >
-    </VEmptyState>
-
-    <!-- Empty -->
-    <VEmptyState
-      v-else-if="items.length === 0"
-      icon="success"
-      :title="t('adminScreens.adminReports.empty.title')"
-      :description="t('adminScreens.adminReports.filterNoHits')"
-    />
+    <SupportTicketsPanel v-if="tab === 'tickets'" />
 
     <template v-else>
-      <div class="admin-reports__list">
-        <VCard
-          v-for="item in items"
-          :key="item.id"
-          class="rcard"
-          clickable
-          padding="none"
-          @click="openDetail(item)"
+      <!-- Filter trigger (label echoes the active category, operator variants) -->
+      <button type="button" class="admin-reports__filter" @click="showFilter = true">
+        <span>{{ pillLabel }}</span>
+        <IconFilter :size="22" />
+      </button>
+
+      <div v-if="!filter.categories.length" class="admin-reports__active">
+        {{ t('common.all') }}
+      </div>
+
+      <!-- Loading: initial -->
+      <div v-if="loading && items.length === 0" class="admin-reports__loader">
+        <VLoader size="lg" />
+      </div>
+
+      <!-- Fetch error -->
+      <VEmptyState
+        v-else-if="error"
+        icon="warning"
+        :title="t('common.loadFailed')"
+        :description="t('common.checkConnection')"
+      >
+        <template #action
+          ><VButton variant="primary" @click="loadInitial">{{
+            t('common.retry')
+          }}</VButton></template
         >
-          <span v-if="isPayments" class="rcard__icon rcard__icon--pay">
-            <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.9" />
-              <path
-                d="M12 6.5v11M14.6 9c-.5-.8-1.5-1.3-2.6-1.3-1.5 0-2.6.8-2.6 2s1 1.7 2.6 2 2.6.8 2.6 2-1.1 2-2.6 2c-1.1 0-2.1-.5-2.6-1.3"
-                stroke="currentColor"
-                stroke-width="1.7"
-                stroke-linecap="round"
-              />
-            </svg>
-          </span>
-          <span v-else class="rcard__icon"><IconWarning :size="34" /></span>
-          <div class="rcard__text">
-            <div class="rcard__title">{{ item.reason }}</div>
-            <div class="rcard__sub">{{ formatRelative(item.created_at) }}</div>
-          </div>
-        </VCard>
-      </div>
+      </VEmptyState>
 
-      <div v-if="hasMore" class="admin-reports__more">
-        <VButton variant="outline" block :loading="loadingMore" @click="loadMore">
-          {{ t('common.showMore') }}
-        </VButton>
-      </div>
+      <!-- Empty -->
+      <VEmptyState
+        v-else-if="items.length === 0"
+        icon="success"
+        :title="t('adminScreens.adminReports.empty.title')"
+        :description="t('adminScreens.adminReports.filterNoHits')"
+      />
+
+      <template v-else>
+        <div class="admin-reports__list">
+          <VCard
+            v-for="item in items"
+            :key="item.id"
+            class="rcard"
+            clickable
+            padding="none"
+            @click="openDetail(item)"
+          >
+            <span v-if="isPayments" class="rcard__icon rcard__icon--pay">
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.9" />
+                <path
+                  d="M12 6.5v11M14.6 9c-.5-.8-1.5-1.3-2.6-1.3-1.5 0-2.6.8-2.6 2s1 1.7 2.6 2 2.6.8 2.6 2-1.1 2-2.6 2c-1.1 0-2.1-.5-2.6-1.3"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                />
+              </svg>
+            </span>
+            <span v-else class="rcard__icon"><IconWarning :size="34" /></span>
+            <div class="rcard__text">
+              <div class="rcard__title">{{ item.reason }}</div>
+              <div class="rcard__sub">{{ formatRelative(item.created_at) }}</div>
+            </div>
+          </VCard>
+        </div>
+
+        <div v-if="hasMore" class="admin-reports__more">
+          <VButton variant="outline" block :loading="loadingMore" @click="loadMore">
+            {{ t('common.showMore') }}
+          </VButton>
+        </div>
+      </template>
+
+      <ModerationFilterModal
+        :open="showFilter"
+        :value="filter"
+        @apply="onApply"
+        @close="showFilter = false"
+      />
     </template>
-
-    <ModerationFilterModal
-      :open="showFilter"
-      :value="filter"
-      @apply="onApply"
-      @close="showFilter = false"
-    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { VBackButton, VButton, VLoader, VEmptyState, VCard } from '@/components/ui'
+import { ref, computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { VBackButton, VButton, VLoader, VEmptyState, VCard, VSegment } from '@/components/ui'
 import { IconFilter, IconWarning } from '@/components/icons'
 import ModerationFilterModal from '@/components/shared/ModerationFilterModal.vue'
+import SupportTicketsPanel from '@/components/admin/SupportTicketsPanel.vue'
 import type { ModerationFilter } from '@/components/shared/moderationFilter'
 import { toHistoryState } from '@/utils/historySnapshot'
 import { useToast } from '@/composables/useToast'
@@ -122,10 +136,21 @@ import { formatRelative } from '@/utils/adminHelpers'
 const LIMIT = 20
 
 const router = useRouter()
+const route = useRoute()
 const toast = useToast()
 
+// FE-100: «Обращения | Жалобы», the tab in the query (see the header).
+type ModerationTab = 'tickets' | 'complaints'
+const tab = computed<ModerationTab>({
+  get: () => (route.query.tab === 'complaints' ? 'complaints' : 'tickets'),
+  set: (next) => void router.replace({ query: { ...route.query, tab: next } }),
+})
+const tabOptions = computed(() => [
+  { value: 'tickets', label: t('adminScreens.adminReports.tabTickets') },
+  { value: 'complaints', label: t('adminScreens.adminReports.tabComplaints') },
+])
+
 const items = ref<ReportResponse[]>([])
-const total = ref(0)
 const loading = ref(false)
 const loadingMore = ref(false)
 const hasMore = ref(false)
@@ -144,8 +169,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   complaints: t('adminScreens.adminReports.tabComplaints'),
   payments: t('adminScreens.adminReports.payments'),
 }
-
-const headerCount = computed<string>(() => (total.value ? String(total.value) : '—'))
 
 // Section label reflects the active category filter (honest stub: category has no
 // backend yet, so this is a display-only echo of the chosen chips).
@@ -183,14 +206,12 @@ async function loadInitial(): Promise<void> {
   loading.value = true
   error.value = false
   items.value = []
-  total.value = 0
   hasMore.value = false
 
   try {
     const res = await getReports(apiStatus.value, undefined, LIMIT, 0)
     if (myGeneration !== generation) return
     items.value = res.items
-    total.value = res.total
     hasMore.value = res.items.length < res.total
   } catch (e) {
     if (myGeneration !== generation) return
@@ -227,7 +248,14 @@ function openDetail(item: ReportResponse): void {
   })
 }
 
-onMounted(loadInitial)
+// «Жалобы» load when their tab is shown -- on arrival and on every switch to it.
+watch(
+  tab,
+  (next) => {
+    if (next === 'complaints') void loadInitial()
+  },
+  { immediate: true },
+)
 </script>
 
 <style scoped>
@@ -251,22 +279,6 @@ onMounted(loadInitial)
   font-weight: 400;
   font-size: var(--text-sm);
   color: var(--velo-text-primary);
-  letter-spacing: 0.02em;
-}
-
-.admin-reports__count {
-  min-width: var(--velo-size-38);
-  height: var(--velo-size-36);
-  padding: 0 var(--velo-inset-12);
-  flex-shrink: 0;
-  border-radius: var(--radius-md);
-  background: var(--velo-primary);
-  color: var(--velo-white);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-body);
-  font-size: var(--text-base);
   letter-spacing: 0.02em;
 }
 
