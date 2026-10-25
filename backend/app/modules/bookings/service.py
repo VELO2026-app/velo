@@ -71,6 +71,7 @@ from app.core.exceptions import (
     NotFoundError,
 )
 from app.modules.bookings.models import Booking, BookingStatus
+from app.modules.payments.models import Purchase
 from app.modules.payments.purchase import (
     create_purchase_for_booking,
     finalize_purchases,
@@ -307,11 +308,66 @@ async def create_booking(
         promo_code=promo.code if promo else None,
     )
 
-    # Diary feed: project "user booked a practice" onto the user's timeline.
-    # Lazy import keeps the dependency one-way (bookings -> diary) and avoids
-    # an import cycle, same pattern as process_waitlist below.
+    # Everything a confirmed booking owes besides itself -- the diary row,
+    # booking.confirmed, the reminder series -- in ONE place, shared with
+    # the waitlist path (BE-174).
+    await announce_booking_confirmed(
+        session, booking=booking, practice=practice, user=user,
+        purchase=purchase,
+    )
+
+    # E21 step E: create the Zoom registrant for this booking. Best-effort,
+    # never raises, never blocks -- if the meeting isn't active yet or the
+    # Zoom call fails, the booking above has ALREADY succeeded; the
+    # registrant is queued for the retry poller (PROMPT №520 amendment,
+    # restated explicitly: not softened into "usually"). Lazy import, same
+    # one-way-dependency pattern as diary above.
+    from app.modules.zoom.service import create_registrant_for_booking
+    await create_registrant_for_booking(booking, user, session)
+
+    return booking
+
+
+async def announce_booking_confirmed(
+    session: AsyncSession,
+    *,
+    booking: Booking,
+    practice: Practice,
+    user: User,
+    purchase: Purchase,
+) -> None:
+    """Everything a CONFIRMED booking owes besides its own row (BE-174).
+
+    The diary row on the booker's timeline, booking.confirmed to the
+    booker, and the reminder series anchored at practice.scheduled_at --
+    all in the caller's transaction, so they exist exactly when the
+    booking commits (ID-2). Audience expansion is velo's (ID-4): the
+    booker is right here.
+
+    TWO PATHS CONFIRM A BOOKING and both call this: create_booking (a
+    plain booking) and waitlist/service.py confirm_waitlist (a held spot
+    taken). They used to carry a copy each, and the copies had drifted:
+    the waitlist one sent booking.confirmed without {paid_amount}, so
+    comms printed the stored text for it (comms 3.10.0), and projected no
+    diary row at all. One function is what keeps them one.
+
+    `purchase` is the one create_purchase_for_booking made for this
+    booking; {paid_amount} is what it charged, in euros, as the wallet
+    texts write amounts.
+
+    Lazy imports keep the dependency one-way (bookings -> diary, masters,
+    events) and avoid an import cycle, the pattern this module already
+    used for each of them.
+    """
+    from app.core.events.notify import emit_notification
+    from app.core.events.reminders import (
+        BOOKED_ACT,
+        format_event_time,
+        schedule_booking_reminders,
+    )
     from app.modules.diary.projections import project_booking_confirmed
     from app.modules.masters.service import get_master_display_name
+
     master_name = await get_master_display_name(practice.master_id, session)
     await project_booking_confirmed(
         session,
@@ -321,17 +377,6 @@ async def create_booking(
         occurred_at=booking.created_at,
     )
 
-    # Comms (T1, dictionary §2): booking.confirmed to the booker + the
-    # reminder series anchored at practice.scheduled_at -- both ride
-    # the transactional outbox, so they exist exactly when this
-    # booking commits (ID-2). Audience expansion is velo's (ID-4): the
-    # booker is right here in the transaction context.
-    from app.core.events.notify import emit_notification
-    from app.core.events.reminders import (
-        BOOKED_ACT,
-        format_event_time,
-        schedule_booking_reminders,
-    )
     when_text = format_event_time(practice.scheduled_at, user.timezone)
     await emit_notification(
         session,
@@ -346,7 +391,7 @@ async def create_booking(
         ),
         action_data={
             "action": "open_practice",
-            "params": {"practice_id": str(practice_id)},
+            "params": {"practice_id": str(practice.id)},
             "practice_title": practice.title,
             "master_name": master_name,
             "scheduled_at": when_text,
@@ -357,24 +402,13 @@ async def create_booking(
         session,
         booking_id=str(booking.id),
         user_id=str(user.id),
-        practice_id=str(practice_id),
+        practice_id=str(practice.id),
         practice_title=practice.title,
         master_name=master_name,
         scheduled_at=practice.scheduled_at,
         act=BOOKED_ACT,
         timezone=user.timezone,
     )
-
-    # E21 step E: create the Zoom registrant for this booking. Best-effort,
-    # never raises, never blocks -- if the meeting isn't active yet or the
-    # Zoom call fails, the booking above has ALREADY succeeded; the
-    # registrant is queued for the retry poller (PROMPT №520 amendment,
-    # restated explicitly: not softened into "usually"). Lazy import, same
-    # one-way-dependency pattern as diary above.
-    from app.modules.zoom.service import create_registrant_for_booking
-    await create_registrant_for_booking(booking, user, session)
-
-    return booking
 
 
 async def skip_checkin(

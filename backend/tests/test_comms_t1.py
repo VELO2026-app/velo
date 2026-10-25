@@ -143,6 +143,7 @@ async def _my_events(session) -> list[OutboxEvent]:
 
 
 class TestEmitNotification:
+    @pytest.mark.notification_by_hand
     async def test_document_form(self, db_session) -> None:
         await emit_notification(
             db_session,
@@ -174,6 +175,7 @@ class TestEmitNotification:
         # The document is wire-clean (relay json.dumps must not choke).
         json.dumps(p)
 
+    @pytest.mark.notification_by_hand
     async def test_idempotency_key_is_the_callers_verbatim(
         self, db_session,
     ) -> None:

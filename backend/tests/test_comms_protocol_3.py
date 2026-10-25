@@ -189,6 +189,7 @@ async def _emit(session: AsyncSession, **overrides: object) -> OutboxEvent:
 
 @pytest.mark.asyncio
 class TestEnvelopeStrings:
+    @pytest.mark.notification_by_hand
     async def test_an_empty_key_is_refused_and_a_valid_one_is_queued(
         self, db_session: AsyncSession,
     ) -> None:
@@ -201,6 +202,7 @@ class TestEnvelopeStrings:
         (event,) = await _synth_events(db_session)
         assert event.payload["idempotency_key"] == "p3-valid"
 
+    @pytest.mark.notification_by_hand
     async def test_the_bound_is_comms_own_and_inclusive(
         self, db_session: AsyncSession,
     ) -> None:
@@ -242,6 +244,7 @@ class TestEnvelopeStrings:
         with pytest.raises(TypeError, match=name):
             await _emit(db_session, **{name: value})
 
+    @pytest.mark.notification_by_hand
     async def test_correlation_travels_only_when_given(
         self, db_session: AsyncSession,
     ) -> None:

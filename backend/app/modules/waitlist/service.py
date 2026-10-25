@@ -68,6 +68,7 @@ from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.bookings.service import (
     _ACTIVE_BOOKING_STATUSES,
     _get_active_booking_count,
+    announce_booking_confirmed,
     recalculate_participants,
 )
 from app.modules.masters.service import get_master_display_name
@@ -380,6 +381,7 @@ async def confirm_waitlist(
         # hold is honestly closed regardless of what happened to the
         # practice.
         from app.core.events.notify import emit_notification
+        from app.core.events.reminders import format_event_time
         await emit_notification(
             session,
             # A waitlist row is REUSED (re-join, spot taken -> back to
@@ -403,6 +405,11 @@ async def confirm_waitlist(
                 "action": "open_practice",
                 "params": {"practice_id": str(entry.practice_id)},
                 "practice_title": practice.title,
+                # The holder is the caller (owner check above): their zone,
+                # as booking.confirmed writes the same time (BE-174).
+                "scheduled_at": format_event_time(
+                    practice.scheduled_at, user.timezone,
+                ),
             },
         )
 
@@ -503,7 +510,7 @@ async def confirm_waitlist(
     # Double-entry purchase (always, Semaphore 1.1).
     # Load user for balance check inside create_purchase_for_booking.
     user_obj = await session.get(User, user.id)
-    await create_purchase_for_booking(
+    purchase = await create_purchase_for_booking(
         booking=booking,
         practice=practice,
         user=user_obj,
@@ -523,49 +530,13 @@ async def confirm_waitlist(
 
     entry.status = WaitlistStatus.CONVERTED.value
 
-    # Comms (T1): this is the OTHER booking-creation path besides
-    # create_booking (which emits for itself) -- the converted hold is
-    # a confirmed booking, so it gets the same booking.confirmed +
-    # reminder series in the same transaction (dictionary §2, ID-2).
-    from app.core.events.notify import emit_notification
-    from app.core.events.reminders import (
-        BOOKED_ACT,
-        format_event_time,
-        schedule_booking_reminders,
-    )
-    master_name = await get_master_display_name(
-        practice.master_id, session,
-    )
-    when_text = format_event_time(practice.scheduled_at, user.timezone)
-    await emit_notification(
-        session,
-        idempotency_key=f"booking-confirmed:{booking.id}",
-        type="booking.confirmed",
-        target_type="user",
-        target_value=str(user.id),
-        title="Бронирование подтверждено",
-        body=(
-            f"Вы записаны на практику «{practice.title}». "
-            f"Начало: {when_text}. Мастер: {master_name}."
-        ),
-        action_data={
-            "action": "open_practice",
-            "params": {"practice_id": str(entry.practice_id)},
-            "practice_title": practice.title,
-            "master_name": master_name,
-            "scheduled_at": when_text,
-        },
-    )
-    await schedule_booking_reminders(
-        session,
-        booking_id=str(booking.id),
-        user_id=str(user.id),
-        practice_id=str(entry.practice_id),
-        practice_title=practice.title,
-        master_name=master_name,
-        scheduled_at=practice.scheduled_at,
-        act=BOOKED_ACT,
-        timezone=user.timezone,
+    # This is the OTHER booking-creation path besides create_booking: the
+    # converted hold is a confirmed booking, so it owes the same diary row,
+    # booking.confirmed and reminder series -- through the same function
+    # (BE-174), not a copy of it.
+    await announce_booking_confirmed(
+        session, booking=booking, practice=practice, user=user,
+        purchase=purchase,
     )
 
     # Update cached participant count (Frontend Backlog A-03).

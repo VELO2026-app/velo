@@ -50,6 +50,7 @@ from app.modules.payments.models import (
     PaymentStatus,
 )
 from app.modules.payments.service import record_company_ledger, record_user_ledger
+from app.modules.users.models import User
 
 logger = structlog.get_logger()
 
@@ -438,6 +439,11 @@ async def handle_checkout_completed(
     # guard above never double-emits.
     from app.core.events.notify import emit_notification
     amount_text = f"{payment.amount_cents / 100:.2f}"
+    # {balance}: the wallet AFTER this topup (BE-174). record_user_ledger
+    # above recomputed balance_cents under the user row's lock in this
+    # session, so this read is the new figure, written as amount is.
+    wallet = await session.get(User, payment.user_id)
+    balance_text = f"{wallet.balance_cents / 100:.2f}"
     await emit_notification(
         session,
         idempotency_key=f"topup-confirmed:{payment.id}",
@@ -450,6 +456,7 @@ async def handle_checkout_completed(
             "action": "open_wallet",
             "params": {},
             "amount": amount_text,
+            "balance": balance_text,
         },
     )
 

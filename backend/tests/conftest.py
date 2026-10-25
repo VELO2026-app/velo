@@ -20,6 +20,12 @@
 #   Tests that call login_user() share telegram_ids and would collide:
 #   the second login within the TTL window gets 400 "already used".
 #   Deleting those key prefixes before each test prevents the cascade.
+#
+# BE-174: notification_guard checks every notification the suite writes
+#   into the outbox against the comms profile (tests/notification_guard.py)
+#   and fails the test that wrote a broken one, at its teardown. Every run
+#   ends with the list of declared types no test emitted -- the guard's
+#   blind spots.
 # =============================================================================
 
 import os
@@ -34,6 +40,7 @@ from app.core.config import settings
 from app.core.database import dispose_engine, get_session_factory
 from app.core.redis import close_redis, get_redis, init_redis
 from app.main import app
+from tests.notification_guard import GUARD
 from tests.pg_isolation import (
     PgIsolationError,
     isolated_database_url,
@@ -146,6 +153,51 @@ async def flush_auth_redis_keys() -> AsyncGenerator[None, None]:
         if keys:
             await redis.delete(*keys)
     yield
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line(
+        "markers",
+        "notification_by_hand: the test hands emit_notification a payload of "
+        "its own making to test the emitting mechanism; the notification "
+        "guard (BE-174) does not check it. Never for a product site.",
+    )
+    GUARD.install()
+
+
+@pytest.fixture(autouse=True)
+def notification_guard(request: pytest.FixtureRequest):
+    """Fail the test that wrote a notification its profile cannot fill.
+
+    The listener records while the test runs, its fixtures included; the
+    check is here, at teardown, so neither an outbox cleanup nor an emit
+    wrapped in try/except can hide a broken row. Nothing is cleared at
+    setup: a row written outside any test (a session fixture) fails the
+    next test rather than vanishing.
+    """
+    GUARD.by_hand = (
+        request.node.get_closest_marker("notification_by_hand") is not None
+    )
+    yield
+    found, GUARD.violations = GUARD.violations, []
+    GUARD.by_hand = False
+    if found:
+        pytest.fail(
+            "notification guard (BE-174) -- a sheet reads what the job does "
+            "not carry:\n  " + "\n  ".join(found),
+            pytrace=False,
+        )
+
+
+def pytest_terminal_summary(terminalreporter) -> None:
+    """The guard's blind spots: declared types this run never emitted."""
+    missing = GUARD.never_emitted()
+    terminalreporter.section("notification guard (BE-174)")
+    terminalreporter.write_line(
+        f"declared types with variables that no test emitted: {len(missing)}"
+    )
+    for type_key in missing:
+        terminalreporter.write_line(f"  {type_key}")
 
 
 @pytest.fixture
