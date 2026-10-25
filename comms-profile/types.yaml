@@ -152,6 +152,17 @@ types:
     category: reminders
     channels: [in_app, telegram]
 
+  # -- BE-162 delivery 3: a support ticket was resolved -- the person is
+  #    asked to rate the help (1-5, a comment if they like). A prompt like
+  #    the two above, so `reminders` (owner ruling): muted with them. Sent
+  #    at once, in the transaction that resolves the ticket, and the
+  #    person's own quiet hours kept -- comms' default `respect`, written
+  #    nowhere: the request has no expiry to miss (owner ruling). --
+
+  prompt.rate_support:
+    category: reminders
+    channels: [in_app, telegram]
+
   # -- Wallet (category: finance) --
 
   wallet.topup_confirmed:

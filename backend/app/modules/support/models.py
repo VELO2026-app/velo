@@ -41,6 +41,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -178,8 +179,20 @@ class SupportTicket(TimestampMixin, Base):
     __tablename__ = "support_tickets"
 
     # The ticket IS its thread: the key is the support_threads row's id.
+    # DEFERRED (BE-162 delivery 3): a ticket names people three times with
+    # ON DELETE SET NULL (taken, resolved, rated). Deleting its person and
+    # its admins in ONE statement deletes the thread by cascade and updates
+    # the ticket twice by SET NULL; the second update re-checks this key
+    # against a thread already gone, before the cascade reaches the ticket
+    # itself -- a 23503 on a delete that ends consistent. Checked at commit,
+    # the key sees the end state: the ticket gone with its thread.
     support_thread_id: Mapped[UUID] = mapped_column(
-        ForeignKey("support_threads.id", ondelete="CASCADE"),
+        ForeignKey(
+            "support_threads.id",
+            ondelete="CASCADE",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
         primary_key=True,
     )
     topic: Mapped[str] = mapped_column(String(32))
@@ -192,6 +205,28 @@ class SupportTicket(TimestampMixin, Base):
     )
     status_changed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
+    )
+    # The admin who last moved the ticket to RESOLVED (BE-162, delivery 3):
+    # the "who resolved" of the card. A later reopen keeps it; a later
+    # RESOLVED overwrites it.
+    resolved_by_user_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # THE RATING (owner ruling: one per ticket, asked for at RESOLVED):
+    # 1..5 stars, an optional comment kept with the ticket -- not a chat
+    # message, never translated here (owner, BE-162 delivery 3 gate) --,
+    # when, and who had resolved the ticket WHEN it was rated: the admin
+    # the rating is about. `resolved_by_user_id` may move on after that (a
+    # reopen, another admin resolves); the rating stays with whom it rated.
+    rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rating_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    rated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+    )
+    rated_resolver_user_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
     )
     # Bumped by every change of the row a status change must not miss --
     # a person's message, a status change: the admin's status change is a
@@ -211,6 +246,15 @@ class SupportTicket(TimestampMixin, Base):
         CheckConstraint(
             f"status IN ({_sql_in(STATUSES)})",
             name="ck_support_tickets_status",
+        ),
+        CheckConstraint(
+            "rating IS NULL OR rating BETWEEN 1 AND 5",
+            name="ck_support_tickets_rating",
+        ),
+        # A rating is a whole: the stars and when, or nothing.
+        CheckConstraint(
+            "(rating IS NULL) = (rated_at IS NULL)",
+            name="ck_support_tickets_rated_at",
         ),
         Index(
             "ix_support_tickets_created",

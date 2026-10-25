@@ -190,6 +190,13 @@ prompt.leave_feedback:
     body: "📝 Как вам <b>{practice_title}</b>?\n\nВаши впечатления помогают мастерам делать практики лучше."
     button_text: "Оставить отзыв"
 
+# BE-162 delivery 3: the person's support ticket is resolved -- rate it.
+prompt.rate_support:
+  telegram:
+    title: "Как мы помогли?"
+    body: "⭐ Ваше обращение в поддержку решено.\n\nОцените, пожалуйста, нашу помощь — это займёт пару секунд."
+    button_text: "Оценить"
+
 # -- System --
 
 system.announcement:

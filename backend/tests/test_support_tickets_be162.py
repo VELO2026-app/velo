@@ -1224,6 +1224,9 @@ class TestTicketCard:
             "opener",
             "claimed_by",
             "history_thread_id",
+            # BE-162 delivery 3: who resolved it, and the person's rating
+            "resolved_by",
+            "rating",
         }
 
     async def test_anything_but_a_ticket_is_a_404(

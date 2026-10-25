@@ -715,6 +715,7 @@ class TestProfileV2:
         doc = self._doc()
         assert set(doc) == {"version", "types"}
         assert doc["version"] == 2
+        # 51 since BE-162 delivery 3 (prompt.rate_support);
         # 50 since BE-166 (support.translate_for_support / _for_user, the
         # profile's first llm types, and support.translation_unavailable);
         # 47 after BE-79 (1a) (curator_group.member_blocked/_unblocked);
@@ -724,7 +725,7 @@ class TestProfileV2:
         # (practice_created_for_master); 39 after BE-59 B1 (member_demoted);
         # 38 after BE-59 A (master_verification_required,
         # master_offer_closed); 36 before.
-        assert len(doc["types"]) == 50
+        assert len(doc["types"]) == 51
 
     def test_every_record_is_closed(self) -> None:
         """An unknown key refuses comms startup; only x-... is tolerated.
@@ -766,10 +767,11 @@ class TestProfileV2:
         }
         comms_own = {k: v for k, v in types.items() if k.startswith("msg.")}
         # 33 pre-BE-59, +2 A, +1 B1, +1 BE-102, +3 BE-63, +2 BE-104,
-        # +2 BE-79 (1a), +1 BE-166 (support.translation_unavailable). The
+        # +2 BE-79 (1a), +1 BE-166 (support.translation_unavailable), +1
+        # BE-162 delivery 3 (prompt.rate_support). The
         # llm types are not for people and have no telegram to lose:
         # test_the_llm_types_are_the_two_translations.
-        assert len(velo) == 45
+        assert len(velo) == 46
         assert sorted(comms_own) == [
             "msg.participant_message",
             "msg.support_message",

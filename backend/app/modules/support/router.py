@@ -14,6 +14,11 @@
 #     ticket. No thread or recipient on the wire -- the recipient is the
 #     support section, resolved server-side.
 #
+#   POST /api/v1/support/tickets/{id}/rating {stars, comment?} -- the
+#     person rates their RESOLVED ticket, once (BE-162 delivery 3).
+#   GET  /api/v1/support/ratings/pending -- the caller's tickets waiting
+#     for their rating (the rating pop-up's list).
+#
 # THE PERSON'S CONVERSATION IS NOT ON THIS ROUTER (BE-163, BE-162): they
 # read, mark read and answer it through the chat routes (chats/router.py,
 # /api/v1/chats/{id}/...), where all their support threads are one row and
@@ -30,6 +35,9 @@
 #   GET  /api/v1/support/tickets/{id}            -- one ticket, the list's
 #     own row (BE-162 fix: the card opened from a signal); spam included;
 #     a history thread or any other id -> 404.
+#   GET  /api/v1/support/stats                   -- support over a period
+#     of appeals: categories without spam, spam, ratings by category and by
+#     the admin each rating is about (BE-162 delivery 3).
 #   POST /api/v1/support/tickets/{id}/status     -- an OPEN ticket to
 #     resolved / rejected / duplicate / spam; comms' thread to `resolved`.
 #   GET  /api/v1/support/threads/{id}/messages   -- a support thread's feed
@@ -77,9 +85,12 @@ from app.modules.support.service import (
     get_admin_support_messages,
     get_admin_ticket,
     list_admin_tickets,
+    pending_ratings,
+    rate_ticket,
     retry_support_translation,
     send_admin_support_message,
     set_ticket_status,
+    support_stats,
 )
 from app.modules.users.models import User
 
@@ -116,6 +127,16 @@ class TicketIn(BaseModel):
 
     topic: TopicCode
     body: str = Field(min_length=1, max_length=4000)
+
+
+RatingFilter = Literal["1", "2", "3", "4", "5", "none"]
+
+
+class RatingIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    stars: int = Field(ge=1, le=5)
+    comment: str | None = Field(default=None, max_length=1000)
 
 
 class StatusIn(BaseModel):
@@ -171,6 +192,9 @@ async def list_tickets(
     # front's "complaints" chip is both complaint categories. Every value
     # must be a code (422 otherwise); a repeated one counts once.
     category: list[CategoryCode] | None = Query(default=None),
+    # BE-162 delivery 3: by rating, repeatable -- "1".."5", and "none" for
+    # tickets nobody has rated.
+    rating: list[RatingFilter] | None = Query(default=None),
     status: StatusCode | None = Query(default=None),
     created_from: datetime | None = Query(default=None),
     created_to: datetime | None = Query(default=None),
@@ -188,11 +212,58 @@ async def list_tickets(
     return await list_admin_tickets(
         session,
         categories=set(category) if category else None,
+        ratings=set(rating) if rating else None,
         status=status,
         created_from=created_from,
         created_to=created_to,
         limit=limit,
         cursor=cursor,
+    )
+
+
+@router.get("/stats")
+async def stats(
+    request: Request,
+    created_from: datetime = Query(),
+    created_to: datetime = Query(),
+    admin: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> Any:
+    """Support over the appeals of [created_from, created_to) -- see
+    service.support_stats. Both edges required, each with a time zone."""
+    _reject_actor_override(request)
+    for name, value in (("created_from", created_from), ("created_to", created_to)):
+        if value.tzinfo is None:
+            raise BadRequestError(f"{name} must carry a time zone")
+    return await support_stats(
+        session, created_from=created_from, created_to=created_to,
+    )
+
+
+@router.get("/ratings/pending")
+async def ratings_pending(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> Any:
+    """The caller's tickets waiting for their rating: `{tickets: [...]}`."""
+    return {"tickets": await pending_ratings(session, user=user)}
+
+
+@router.post("/tickets/{thread_id}/rating")
+async def rate(
+    thread_id: UUID,
+    body: RatingIn,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> Any:
+    """The caller rates their own RESOLVED ticket -- see
+    service.rate_ticket. 404 not theirs; 409 not resolved or rated."""
+    return await rate_ticket(
+        session,
+        user=user,
+        thread_id=thread_id,
+        stars=body.stars,
+        comment=body.comment,
     )
 
 

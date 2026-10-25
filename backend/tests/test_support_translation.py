@@ -553,8 +553,9 @@ async def test_original_is_on_the_admin_feed_only_and_no_user_route_reads_a_thre
     fake: FakeComms,
 ) -> None:
     """`original` exists on the admin feed and on no user route: the user's
-    one support route is the form's write (BE-162: POST /support/tickets),
-    and it does not answer with `original` or `translation` -- the user's
+    support routes are the form's write (BE-162: POST /support/tickets) and,
+    since BE-162 delivery 3, the rating and the tickets waiting for one --
+    none answers with `original` or `translation` -- the user's
     read is the chat routes' (BE-163). Until BE-162 the support router had
     two user writes, the open and the send of №712; both went with the one
     eternal thread."""
@@ -568,7 +569,14 @@ async def test_original_is_on_the_admin_feed_only_and_no_user_route_reads_a_thre
         deps = {d.call.__name__ for d in route.dependant.dependencies}
         if "get_current_admin" not in deps:
             user_routes |= {(m, route.path) for m in route.methods}
-    assert user_routes == {("POST", "/api/v1/support/tickets")}
+    # BE-162 delivery 3 adds the person's rating routes; neither reads a
+    # thread -- they answer with the rating and the tickets waiting for
+    # one (codes and dates), never a message.
+    assert user_routes == {
+        ("POST", "/api/v1/support/tickets"),
+        ("POST", "/api/v1/support/tickets/{thread_id}/rating"),
+        ("GET", "/api/v1/support/ratings/pending"),
+    }
 
 
 async def test_not_needed_when_the_model_finds_the_support_language(

@@ -41,7 +41,7 @@ from typing import Any
 from uuid import UUID
 
 import structlog
-from sqlalchemy import case, func, select, update
+from sqlalchemy import case, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -49,9 +49,12 @@ from app.core.comms import comms_request, message_key, read_comms_page
 from app.core.config import settings
 from app.core.events import SECTION_SUPPORT_KEY, SECTION_SUPPORT_LABEL
 from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
+from app.core.i18n import normalize_language
 from app.modules.support import translation
 from app.modules.support.models import (
+    CATEGORIES,
     STATUS_OPEN,
+    STATUS_RESOLVED,
     STATUS_SPAM,
     TO_SUPPORT,
     TO_USER,
@@ -67,6 +70,9 @@ logger = structlog.get_logger()
 # In-process cache ONLY (binding rule, see module header). Reset on every
 # process restart -- the next call simply re-resolves it.
 _support_section_id: UUID | None = None
+
+# The rating filter's word for "nobody rated it" (list_admin_tickets).
+RATING_NONE = "none"
 
 # A person with more support threads than this is the trigger of the
 # glued feed's KNOWN CEILING (client_support_messages).
@@ -781,7 +787,14 @@ async def _admin_ticket_rows(
     person's history thread. `rows` are (SupportTicket, SupportThread)
     pairs; one query per kind of fact, whatever their number."""
     people = {p.client_user_id for _, p in rows} | {
-        t.claimed_by_user_id for t, _ in rows if t.claimed_by_user_id is not None
+        uid
+        for t, _ in rows
+        for uid in (
+            t.claimed_by_user_id,
+            t.resolved_by_user_id,
+            t.rated_resolver_user_id,
+        )
+        if uid is not None
     }
     users: dict[UUID, User] = {}
     if people:
@@ -826,15 +839,42 @@ async def _admin_ticket_rows(
                 if pointer.client_user_id in history
                 else None
             ),
+            # BE-162 delivery 3: the last admin to resolve it, and the
+            # person's rating with whom it rated.
+            "resolved_by": _peer_or_none(users, ticket.resolved_by_user_id),
+            "rating": _rating_out(ticket, users.get(pointer.client_user_id), users),
         }
         for ticket, pointer in rows
     ]
+
+
+def _peer_or_none(users: dict[UUID, User], user_id: UUID | None) -> dict | None:
+    return _peer_payload(users.get(user_id)) if user_id is not None else None
+
+
+def _rating_out(
+    ticket: SupportTicket, opener: User | None, users: dict[UUID, User],
+) -> dict[str, Any] | None:
+    """The person's rating as an admin reads it: the stars, the comment AS
+    WRITTEN -- not translated (owner ruling, BE-162 delivery 3) -- and the
+    language it is most likely written in (the person's interface
+    language), so a screen can say so; when; and the admin it rated."""
+    if ticket.rating is None:
+        return None
+    return {
+        "stars": ticket.rating,
+        "comment": ticket.rating_comment,
+        "comment_locale": normalize_language(opener.language) if opener else None,
+        "rated_at": ticket.rated_at.isoformat() if ticket.rated_at else None,
+        "rated_resolver": _peer_or_none(users, ticket.rated_resolver_user_id),
+    }
 
 
 async def list_admin_tickets(
     session: AsyncSession,
     *,
     categories: set[str] | None,
+    ratings: set[str] | None = None,
     status: str | None,
     created_from: datetime | None,
     created_to: datetime | None,
@@ -845,6 +885,8 @@ async def list_admin_tickets(
     the filters and, later, the statistics are ours.
 
     `categories` is "any of these" (BE-162 fix 2); none -- every category.
+    `ratings` likewise (BE-162 delivery 3): stars "1".."5", and "none" for
+    a ticket nobody has rated.
     Without `status` the list is every ticket but SPAM (owner ruling 8: spam
     leaves the common list); `status=spam` is the spam tab. `created_from`
     is inclusive, `created_to` exclusive.
@@ -869,6 +911,12 @@ async def list_admin_tickets(
         stmt = stmt.where(SupportTicket.status != STATUS_SPAM)
     if categories:
         stmt = stmt.where(SupportTicket.category.in_(sorted(categories)))
+    if ratings:
+        stars = sorted(int(r) for r in ratings if r != RATING_NONE)
+        any_of = [SupportTicket.rating.in_(stars)] if stars else []
+        if RATING_NONE in ratings:
+            any_of.append(SupportTicket.rating.is_(None))
+        stmt = stmt.where(or_(*any_of))
     if created_from is not None:
         stmt = stmt.where(SupportTicket.created_at >= created_from)
     if created_to is not None:
@@ -1035,14 +1083,291 @@ async def set_ticket_status(
                 status=status,
                 status_changed_at=func.now(),
                 version=SupportTicket.version + 1,
+                # BE-162 delivery 3: who resolved it -- the last to do so.
+                resolved_by_user_id=(
+                    admin.id
+                    if status == STATUS_RESOLVED
+                    else SupportTicket.resolved_by_user_id
+                ),
             )
-            .returning(SupportTicket.support_thread_id)
+            .returning(SupportTicket.version, SupportTicket.rating)
         )
     ).first()
     if changed is None:
         logger.warning("support_ticket_status_drift", thread_id=str(thread_id))
         raise ConflictError("The ticket changed meanwhile -- read it again")
+    version, rating = changed
+    if status == STATUS_RESOLVED and rating is None:
+        await _emit_rating_request(session, pointer=pointer, version=version)
     return await _ticket_now(session, pointer, ticket)
+
+
+# The person's request to rate a resolved ticket (BE-162 delivery 3;
+# comms-profile/types.yaml declares it under `reminders`).
+RATING_REQUEST_TYPE = "prompt.rate_support"
+
+
+async def _emit_rating_request(
+    session: AsyncSession, *, pointer: SupportThread, version: int,
+) -> None:
+    """Ask the person to rate the ticket just RESOLVED -- at once, in the
+    same transaction as the status (owner: right away, no delay of ours;
+    the person's own quiet hours are kept -- comms' default `respect`, the
+    request has no expiry to miss).
+
+    One request per move to RESOLVED: the key names the ticket's version
+    after that move, so a repeat of the same move is the same document and
+    a later RESOLVED (after a reopen) is a new one -- sent only while the
+    ticket is still unrated (owner ruling: one rating per ticket).
+
+    The button opens the rating of THIS ticket: `open_support_rating` with
+    its comms thread id -- the id the rating routes take."""
+    from app.core.events.notify import emit_notification
+
+    await emit_notification(
+        session,
+        idempotency_key=f"support-rating:{pointer.comms_thread_id}:{version}",
+        type=RATING_REQUEST_TYPE,
+        target_type="user",
+        target_value=str(pointer.client_user_id),
+        title="How did we do?",
+        body="Your support request is resolved. Rate our help: it takes a second.",
+        action_data={
+            "action": "open_support_rating",
+            "params": {"thread_id": str(pointer.comms_thread_id)},
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# The person's rating (BE-162 delivery 3)
+# ---------------------------------------------------------------------------
+
+
+async def rate_ticket(
+    session: AsyncSession,
+    *,
+    user: User,
+    thread_id: UUID,
+    stars: int,
+    comment: str | None,
+) -> dict[str, Any]:
+    """The person rates their RESOLVED ticket: 1..5 stars and, if they
+    like, a comment -- one rating per ticket (owner ruling).
+
+    404 unless the ticket is the caller's own: another person's ticket, a
+    history thread, an id nobody has -- one answer, existence does not
+    leak. 409 when the ticket is not RESOLVED (a reopen beat the rating)
+    or is rated already.
+
+    ONE WRITE DECIDES, under the row's lock: RESOLVED and still unrated.
+    A person's message reopening the ticket, or a second rating, in the
+    same instant takes the lock first or second -- never both through.
+    The rating keeps the admin who resolved the ticket at this moment
+    (rated_resolver_user_id): a later reopen and another admin's RESOLVED
+    do not move it.
+    """
+    pointer, ticket = await _ticket_by_thread(session, thread_id)
+    if pointer is None or ticket is None or pointer.client_user_id != user.id:
+        raise NotFoundError("Ticket not found")
+    text = (comment or "").strip() or None
+    rated = (
+        await session.execute(
+            update(SupportTicket)
+            .where(
+                SupportTicket.support_thread_id == ticket.support_thread_id,
+                SupportTicket.status == STATUS_RESOLVED,
+                SupportTicket.rating.is_(None),
+            )
+            .values(
+                rating=stars,
+                rating_comment=text,
+                rated_at=func.now(),
+                rated_resolver_user_id=SupportTicket.resolved_by_user_id,
+            )
+            .returning(SupportTicket.rated_at)
+        )
+    ).first()
+    if rated is None:
+        raise ConflictError("Only a resolved ticket not rated yet is rated")
+    return {
+        "id": str(thread_id),
+        "stars": stars,
+        "comment": text,
+        "rated_at": rated[0].isoformat(),
+    }
+
+
+async def pending_ratings(
+    session: AsyncSession, *, user: User,
+) -> list[dict[str, Any]]:
+    """The caller's tickets waiting for their rating: RESOLVED and not
+    rated -- most recently resolved first. A ticket reopened since is not
+    waiting any more; it will be asked again when it is resolved again."""
+    rows = (
+        await session.execute(
+            select(SupportTicket, SupportThread)
+            .join(SupportThread, SupportThread.id == SupportTicket.support_thread_id)
+            .where(
+                SupportThread.client_user_id == user.id,
+                SupportTicket.status == STATUS_RESOLVED,
+                SupportTicket.rating.is_(None),
+            )
+            .order_by(
+                SupportTicket.status_changed_at.desc(),
+                SupportTicket.support_thread_id.desc(),
+            )
+        )
+    ).all()
+    return [
+        {
+            "id": str(pointer.comms_thread_id),
+            "topic": ticket.topic,
+            "category": ticket.category,
+            "status_changed_at": ticket.status_changed_at.isoformat(),
+        }
+        for ticket, pointer in rows
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Statistics (BE-162 delivery 3)
+# ---------------------------------------------------------------------------
+
+
+def _rating_figures(count: int, total: int | None, top: int | None) -> dict:
+    """The rating columns of a statistics row: how many rated, the average
+    (two decimals) and the share of 4-5 (0..1, three decimals); null when
+    nothing was rated -- no rating is not a zero."""
+    if not count:
+        return {"rated": 0, "average": None, "share_4_5": None}
+    return {
+        "rated": count,
+        "average": round((total or 0) / count, 2),
+        "share_4_5": round((top or 0) / count, 3),
+    }
+
+
+async def support_stats(
+    session: AsyncSession, *, created_from: datetime, created_to: datetime,
+) -> dict[str, Any]:
+    """Support over a period of APPEALS -- tickets created in
+    [created_from, created_to), the list's own date filter, so the
+    categories add up to the list without spam for the same period
+    (owner acceptance check 4).
+
+      categories -- all six, zeros included: tickets, and the ratings of
+                    them (rated, average, share of 4-5); spam left out,
+                    its rating too.
+      total      -- the sum of the categories.
+      spam       -- the spam tickets of the period, one figure.
+      resolvers  -- per admin a rating is about (rated_resolver), the same
+                    rating figures, spam left out.
+
+    History threads have no ticket and are not here (owner: statistics
+    start with tickets).
+
+    # KNOWN CEILING (spam is counted from the tickets that still exist;
+    # acknowledged by design):
+    #   1. Mechanics: every figure here is a count over live support_tickets
+    #      rows. Delivery 2 deletes spam after 30 days; a deleted ticket
+    #      would leave the count with it, and the owner wants its date and
+    #      category to stay in the statistics.
+    #   2. Status: acknowledged by design.
+    #   3. Task: BE-162 delivery 2 -- it brings the deletion and, with it,
+    #      the tombstone (date, category) this count then adds.
+    #   4. Trigger: tests/test_support_rating_be162.py
+    #      test_no_code_path_deletes_a_ticket goes red -- the first path in
+    #      app/ that deletes support_tickets rows.
+    #   5. Fix form: in the transaction that deletes a spam ticket, write
+    #      (created_at, category) to a tombstone table; `spam` here counts
+    #      live spam plus the period's tombstones.
+    #   6. Rejected: the tombstone table now, empty -- nothing writes it
+    #      before delivery 2, and a test building its rows by hand would
+    #      describe a state no code reaches.
+    """
+    in_period = (
+        SupportTicket.created_at >= created_from,
+        SupportTicket.created_at < created_to,
+    )
+    not_spam = SupportTicket.status != STATUS_SPAM
+    top = case((SupportTicket.rating >= 4, 1), else_=0)
+    per_category = {
+        category: (tickets, rated, total, best)
+        for category, tickets, rated, total, best in (
+            await session.execute(
+                select(
+                    SupportTicket.category,
+                    func.count(),
+                    func.count(SupportTicket.rating),
+                    func.sum(SupportTicket.rating),
+                    func.sum(top),
+                )
+                .where(*in_period, not_spam)
+                .group_by(SupportTicket.category)
+            )
+        ).all()
+    }
+    categories = [
+        {
+            "category": category,
+            "tickets": per_category.get(category, (0,))[0],
+            **_rating_figures(*per_category.get(category, (0, 0, None, None))[1:]),
+        }
+        for category in CATEGORIES
+    ]
+    spam = (
+        await session.execute(
+            select(func.count()).where(*in_period, SupportTicket.status == STATUS_SPAM)
+        )
+    ).scalar_one()
+    by_resolver = (
+        await session.execute(
+            select(
+                SupportTicket.rated_resolver_user_id,
+                func.count(SupportTicket.rating),
+                func.sum(SupportTicket.rating),
+                func.sum(top),
+            )
+            .where(
+                *in_period,
+                not_spam,
+                SupportTicket.rating.is_not(None),
+                SupportTicket.rated_resolver_user_id.is_not(None),
+            )
+            .group_by(SupportTicket.rated_resolver_user_id)
+        )
+    ).all()
+    admins: dict[UUID, User] = {}
+    if by_resolver:
+        admins = {
+            u.id: u
+            for u in (
+                await session.execute(
+                    select(User).where(User.id.in_([r[0] for r in by_resolver]))
+                )
+            ).scalars()
+        }
+    resolvers = sorted(
+        (
+            {
+                "admin": _peer_payload(admins.get(admin_id)),
+                **_rating_figures(count, total, best),
+            }
+            for admin_id, count, total, best in by_resolver
+        ),
+        key=lambda r: (-r["rated"], str((r["admin"] or {}).get("user_id"))),
+    )
+    return {
+        "period": {
+            "created_from": created_from.isoformat(),
+            "created_to": created_to.isoformat(),
+        },
+        "categories": categories,
+        "total": sum(c["tickets"] for c in categories),
+        "spam": spam,
+        "resolvers": resolvers,
+    }
 
 
 # The admin signal's type (BE-172; comms-profile/types.yaml declares it,

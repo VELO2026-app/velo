@@ -176,6 +176,13 @@ prompt.leave_feedback:
     body: "📝 How was <b>{practice_title}</b>?\n\nYour feedback helps masters improve their practices."
     button_text: "Leave feedback"
 
+# BE-162 delivery 3: the person's support ticket is resolved -- rate it.
+prompt.rate_support:
+  telegram:
+    title: "How did we do?"
+    body: "⭐ Your support request has been resolved.\n\nPlease rate our help — it takes a couple of seconds."
+    button_text: "Rate"
+
 # -- System --
 
 system.announcement:
