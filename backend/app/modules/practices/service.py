@@ -911,7 +911,12 @@ async def _tell_master_of_curator_act(
     """
     from app.core.audit import record_audit
     from app.core.events.notify import emit_notification
-    from app.core.events.reminders import format_event_time
+    from app.core.events.reminders import (
+        CURATOR_ACT_TYPES,
+        format_event_time,
+        practice_correlation,
+        revoke_practice_state,
+    )
     from app.modules.users.helpers import display_name
 
     await record_audit(
@@ -944,10 +949,17 @@ async def _tell_master_of_curator_act(
         if act is not _CURATOR_DELETED
         else {"action": "open_master_practices", "params": {}}
     )
+    # BE-171: each act is the practice's current state for its master --
+    # an earlier act not yet delivered (an edit before the delete, say) is
+    # revoked first, so the master is not told a superseded state last.
+    await revoke_practice_state(
+        session, practice_id=str(practice.id), types=CURATOR_ACT_TYPES,
+    )
     await emit_notification(
         session,
         idempotency_key=key,
         type=act.type,
+        correlation=practice_correlation(str(practice.id)),
         target_type="user",
         target_value=str(practice.master_id),
         title=act.title,
@@ -2812,10 +2824,13 @@ async def update_practice(
         # above: a repeated request to the same time never reaches here.
         from app.core.events.notify import emit_notification
         from app.core.events.reminders import (
+            RESCHEDULE_REVOKES,
             BookingRef,
             cancel_practice_reminders,
             format_event_time,
             new_reschedule_act,
+            practice_correlation,
+            revoke_practice_state,
             schedule_booking_reminders,
             schedule_master_practice_reminder,
             user_timezones,
@@ -2837,6 +2852,13 @@ async def update_practice(
         reader_tz = await user_timezones(
             session, [booking.user_id for booking in booked],
         )
+        # BE-171: an earlier move of this practice not yet delivered is
+        # stale now -- revoked first, so only the latest time arrives.
+        # Bookings, reminders and announcements are NOT revoked here: the
+        # practice goes ahead (the reminders are re-scheduled below).
+        await revoke_practice_state(
+            session, practice_id=str(practice.id), types=RESCHEDULE_REVOKES,
+        )
         for booking in booked:
             when_text = format_event_time(
                 new_scheduled_at, reader_tz.get(str(booking.user_id), "UTC"),
@@ -2849,6 +2871,7 @@ async def update_practice(
                 type="practice.rescheduled",
                 target_type="user",
                 target_value=str(booking.user_id),
+                correlation=practice_correlation(str(practice.id)),
                 title="Практика перенесена",
                 body=(
                     f"Практика «{practice.title}» перенесена. "

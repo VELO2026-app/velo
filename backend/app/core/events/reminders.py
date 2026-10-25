@@ -419,3 +419,97 @@ async def schedule_feedback_prompt(
             seconds=settings.prompt_feedback_expiry_seconds,
         ),
     )
+
+
+# =============================================================================
+# A new state revokes the undelivered old one (BE-171)
+# =============================================================================
+#
+# Since comms 3.6 the jobs of one lane go in parallel, and whatever waited
+# for a recipient's schedule at night is let go in the morning at once, in
+# any order: "cancelled" before "rescheduled", "you're booked" after
+# "cancelled", a spot offer on a cancelled practice. Owner ruling (BE-171):
+# before a new state is sent, the undelivered notifications it makes stale
+# are revoked -- reminder_cancel by correlation, the same mechanism as the
+# reminders above -- then the new one goes, in ONE transaction. The outbox
+# keeps the order: emit_event flushes each row, so the revocation's id is
+# the lower one, and the relay (one, BE-47) and comms (one consumer) take
+# rows in id order.
+#
+# WHAT A TRANSITION REVOKES IS LISTED PER TRANSITION, not "the whole
+# family": a reschedule must not take a school's announcement of the
+# practice away, a cancellation must. And no list here names a reminder
+# type -- booking.reminder_* and practice.master_reminder_1h are moved and
+# cancelled by the functions above, a reschedule re-schedules them right
+# after; a revocation naming them would take the new ones too
+# (tests/test_notification_states_be171.py holds the lists apart).
+#
+# THE TWO AXES of booking.confirmed / practice.checkin_received: they carry
+# the BOOKING's correlation (a booking is the one thing they are about); a
+# practice's cancellation revokes them booking by booking, like
+# cancel_practice_reminders -- revoke_booking_state per booking.
+# =============================================================================
+
+# Carry the booking's correlation (booking_correlation).
+BOOKING_STATE_TYPES = ["booking.confirmed", "practice.checkin_received"]
+
+# What a curator tells a master about the master's practice; each act is
+# the practice's current state for the master. Carry the practice's
+# correlation.
+CURATOR_ACT_TYPES = [
+    "curator_group.practice_created_for_master",
+    "curator_group.master_practice_published",
+    "curator_group.master_practice_edited",
+    "curator_group.master_practice_deleted",
+]
+
+# A reschedule makes an earlier, undelivered reschedule stale.
+RESCHEDULE_REVOKES = ["practice.rescheduled"]
+
+# A cancellation makes everything about the practice going ahead stale --
+# per practice; the bookings' own states go per booking
+# (revoke_booking_state).
+CANCELLATION_REVOKES = [
+    "practice.rescheduled",
+    "waitlist.spot_available",
+    "curator_group.practice_published",
+    *CURATOR_ACT_TYPES,
+]
+
+# Every type that carries the practice's correlation since BE-171 (besides
+# the master's reminder): the cancellation notices themselves, so a later
+# state could revoke them too, and everything the lists above revoke.
+PRACTICE_STATE_TYPES = [
+    "practice.cancelled",
+    "practice.cancelled_waitlist",
+    "practice.cancelled_by_curator",
+    *CANCELLATION_REVOKES,
+]
+
+
+async def revoke_booking_state(session: AsyncSession, *, booking_id: str) -> None:
+    """A booking has ended (cancelled by its student, by its practice's
+    cancellation, by a block): revoke what is still undelivered about it --
+    the student's "you're booked", the master's "a participant checked in".
+    No target: the booking's correlation is that booking's alone, and the
+    two have two recipients. NOT for a reschedule -- the booking lives on.
+    A no-match cancel is a zero-row update."""
+    await emit_reminder_cancel(
+        session,
+        types=BOOKING_STATE_TYPES,
+        correlation=booking_correlation(booking_id),
+    )
+
+
+async def revoke_practice_state(
+    session: AsyncSession, *, practice_id: str, types: Sequence[str],
+) -> None:
+    """Revoke the practice's undelivered notifications of `types` -- for
+    every recipient (no target: the practice's new state is news to all of
+    them). The caller names the transition's list (RESCHEDULE_REVOKES,
+    CANCELLATION_REVOKES, CURATOR_ACT_TYPES)."""
+    await emit_reminder_cancel(
+        session,
+        types=list(types),
+        correlation=practice_correlation(practice_id),
+    )

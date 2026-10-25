@@ -603,7 +603,11 @@ async def process_waitlist(
     # waitlist.spot_available -> the head of the queue; velo picks the
     # holder, ID-4). Lazy import mirrors the old pattern.
     from app.core.events.notify import emit_notification
-    from app.core.events.reminders import format_event_time, user_timezones
+    from app.core.events.reminders import (
+        format_event_time,
+        practice_correlation,
+        user_timezones,
+    )
 
     # Load practice for template variables.
     practice = await session.get(Practice, practice_id)
@@ -628,6 +632,9 @@ async def process_waitlist(
         type="waitlist.spot_available",
         target_type="user",
         target_value=str(entry.user_id),
+        # BE-171: an offer on a practice that is then cancelled is revoked
+        # if still undelivered -- no "a spot opened up" on a cancelled one.
+        correlation=practice_correlation(str(practice_id)),
         title="Освободилось место",
         body=(
             f"Освободилось место на практику «{practice.title}» "

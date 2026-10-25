@@ -42,6 +42,7 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events.notify import emit_notification
+from app.core.events.reminders import booking_correlation
 from app.modules.diary.insights_service import score_zone
 from app.modules.diary.models import Checkin, Feedback, ScoreZone
 from app.modules.practices.models import Practice
@@ -94,6 +95,9 @@ async def notify_master_of_checkin(
         type=CHECKIN_RECEIVED_TYPE,
         target_type="user",
         target_value=str(practice.master_id),
+        # BE-171: revoked, if still undelivered, when this booking ends --
+        # a cancellation must not be followed by "checked in".
+        correlation=booking_correlation(str(checkin.booking_id)),
         title="Новый чек-ин",
         body=(
             f"{name} отметился перед практикой «{practice.title}»."

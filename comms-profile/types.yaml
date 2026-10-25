@@ -62,7 +62,11 @@
 # for another reason: support.message_received (BE-172, owner ruling
 # 2026-10-25) -- a user's message to support reaches the admins at any
 # hour -- and, for the same reason, support.ticket_assigned and
-# support.ticket_released (BE-162 delivery 2). Each says why beside its record. Every other type declares nothing and takes comms'
+# support.ticket_released (BE-162 delivery 2). And three for a third:
+# practice.cancelled, practice.rescheduled, practice.cancelled_by_curator
+# (BE-171, owner ruling 2026-10-22) -- the person waits for exactly this
+# news, and missing it means coming to a cancelled practice. Each says why
+# beside its record. Every other type declares nothing and takes comms'
 # default, `respect` -- the default is never written out. bypass does NOT
 # pass a mute: a muted category stays silent at any hour. comms takes the
 # value when it ACCEPTS a job: jobs accepted before a profile change keep
@@ -85,10 +89,16 @@ types:
   practice.cancelled:
     category: bookings
     channels: [in_app, telegram]
+    # BE-171: at any hour -- the person must not come to a cancelled or
+    # moved practice; a newer state revokes this one if it is undelivered.
+    recipient_schedule: bypass
 
   practice.rescheduled:
     category: bookings
     channels: [in_app, telegram]
+    # BE-171: at any hour -- the person must not come to a cancelled or
+    # moved practice; a newer state revokes this one if it is undelivered.
+    recipient_schedule: bypass
 
   # T1: the dictionary §2 gives the waitlist branch of a practice
   # cancellation "its own sheet" -- in comms a type IS its sheet, so the
@@ -306,6 +316,9 @@ types:
 
   practice.cancelled_by_curator:
     channels: [in_app, telegram]
+    # BE-171: at any hour -- the person must not come to a cancelled or
+    # moved practice; a newer state revokes this one if it is undelivered.
+    recipient_schedule: bypass
 
   # ===========================================================================
   # CURATOR GROUPS -- school notifications (BE-25). Four of the five carry NO

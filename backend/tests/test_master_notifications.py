@@ -497,9 +497,14 @@ async def test_cancelling_the_practice_cancels_the_masters_reminder(
     )
     assert cancelled.status_code in (200, 204), cancelled.text
 
+    # Under the practice's correlation: the master's reminder cancel -- and,
+    # since BE-171, the revocation of the practice's stale state (an
+    # earlier move, a spot offer, ...), a separate event with its own
+    # types. This test is about the reminder: exactly one cancel names it.
     cancels = [
         c for c in await _cancel_events(db_session)
         if c.get("correlation") == f"practice:{practice_id}"
+        and MASTER_REMINDER_TYPE in c["types"]
     ]
     assert len(cancels) == 1, "no reminder_cancel was emitted for the practice"
     assert cancels[0]["types"] == [MASTER_REMINDER_TYPE]

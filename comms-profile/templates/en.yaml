@@ -60,7 +60,7 @@ practice.cancelled_by_curator:
 waitlist.spot_available:
   telegram:
     title: "Spot available!"
-    body: "🎉 A spot opened up for <b>{practice_title}</b>!\n\n📅 {scheduled_at}\n👤 Master: {master_name}\n\n⏳ You have <b>30 minutes</b> to confirm your spot.\nTap the button below to book now."
+    body: "🎉 A spot opened up for <b>{practice_title}</b>!\n\n📅 {scheduled_at}\n👤 Master: {master_name}\n\n⏳ Confirm by <b>{expires_at}</b>.\nTap the button below to book now."
     button_text: "Confirm spot"
 
 waitlist.expired:

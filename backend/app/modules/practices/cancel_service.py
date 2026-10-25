@@ -208,11 +208,27 @@ async def _cancel_one(
     # All in the cancellation's transaction (ID-2).
     from app.core.events.notify import emit_notification
     from app.core.events.reminders import (
+        CANCELLATION_REVOKES,
         BookingRef,
         cancel_practice_reminders,
         format_event_time,
+        practice_correlation,
+        revoke_booking_state,
+        revoke_practice_state,
         user_timezones,
     )
+    # BE-171: FIRST everything this cancellation makes stale and comms has
+    # not delivered yet -- an earlier move, a spot offer, the school's
+    # announcement, a curator's earlier word to the master (by the
+    # practice's correlation), and each booking's "you're booked" and
+    # "checked in" (by the booking's, per booking, the rows collected
+    # before the refund for this very reason). Then the cancellation: the
+    # outbox ids keep the order to comms.
+    await revoke_practice_state(
+        session, practice_id=str(practice.id), types=CANCELLATION_REVOKES,
+    )
+    for booking_id, _user_id in reminder_rows:
+        await revoke_booking_state(session, booking_id=str(booking_id))
     # BE-102 notification time: each reader (booked AND queued) reads THEIR
     # zone -- one query for both lists.
     reader_tz = await user_timezones(
@@ -232,6 +248,7 @@ async def _cancel_one(
             type="practice.cancelled",
             target_type="user",
             target_value=str(uid),
+            correlation=practice_correlation(str(practice.id)),
             title="Практика отменена",
             body=(
                 f"Практика «{practice.title}» ({when_text}) отменена. "
@@ -252,6 +269,7 @@ async def _cancel_one(
             type="practice.cancelled_waitlist",
             target_type="user",
             target_value=str(uid),
+            correlation=practice_correlation(str(practice.id)),
             title="Практика отменена",
             body=(
                 f"Практика «{practice.title}» ({when_text}), на "
@@ -351,7 +369,7 @@ async def _tell_master_cancelled_by_curator(
     title/body are Russian for everyone (owner, i18n is outside the MVP).
     """
     from app.core.events.notify import emit_notification
-    from app.core.events.reminders import format_event_time
+    from app.core.events.reminders import format_event_time, practice_correlation
     from app.modules.curator_groups.models import CuratorGroup
 
     group = await session.get(CuratorGroup, group_id)
@@ -363,6 +381,8 @@ async def _tell_master_cancelled_by_curator(
         type="practice.cancelled_by_curator",
         target_type="user",
         target_value=str(primary.master_id),
+        # BE-171: the practice's correlation, like every state of it.
+        correlation=practice_correlation(str(primary.id)),
         title="Вашу практику отменили",
         body=(
             f"Практику «{primary.title}» ({when_text}) отменил "

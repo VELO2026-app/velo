@@ -1092,7 +1092,10 @@ async def block_student(
     # cancel as bookings/service.py::cancel_booking); rides this
     # transaction (ID-2). Lazy import keeps
     # masters -> core.events one-way at call time.
-    from app.core.events.reminders import cancel_booking_reminders
+    from app.core.events.reminders import (
+        cancel_booking_reminders,
+        revoke_booking_state,
+    )
 
     # BE-71: the same registrant cancel cancel_booking makes (bookings/
     # service.py, E21 step E). Without it the registrant stayed
@@ -1128,6 +1131,9 @@ async def block_student(
             booking_id=str(booking.id),
             user_id=str(student_user_id),
         )
+        # BE-171: the booking has ended -- its undelivered "you're booked"
+        # and "checked in" go with it.
+        await revoke_booking_state(session, booking_id=str(booking.id))
         await cancel_registrant_for_booking(booking, session)
         touched_practice_ids.add(practice.id)
         cancelled_count += 1

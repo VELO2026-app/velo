@@ -158,6 +158,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.events.notify import emit_notification  # BE-25
+from app.core.events.reminders import practice_correlation  # BE-171
 from app.core.exceptions import (
     ConflictError,
     ForbiddenError,
@@ -1633,7 +1634,10 @@ async def _close_school_practices_to(
 
     # Lazy imports, the shape block_student and cancel_booking use: these
     # services import back into modules that import this one.
-    from app.core.events.reminders import cancel_booking_reminders
+    from app.core.events.reminders import (
+        cancel_booking_reminders,
+        revoke_booking_state,
+    )
     from app.modules.bookings.service import recalculate_participants
     from app.modules.payments.refund import refund_booking
     from app.modules.zoom.service import cancel_registrant_for_booking
@@ -1652,6 +1656,9 @@ async def _close_school_practices_to(
         await cancel_booking_reminders(
             session, booking_id=str(booking.id), user_id=str(user_id),
         )
+        # BE-171: the booking has ended -- its undelivered "you're booked"
+        # and "checked in" go with it.
+        await revoke_booking_state(session, booking_id=str(booking.id))
         await cancel_registrant_for_booking(booking, session)
         touched_practice_ids.add(practice.id)
     # Id order, as the practices were locked; the rows are already held.
@@ -4621,6 +4628,8 @@ async def announce_published_practice(
             type="curator_group.practice_published",
             target_type="user",
             target_value=str(recipient_id),
+            # BE-171: revoked, if undelivered, when the practice is cancelled.
+            correlation=practice_correlation(str(practice.id)),
             title="Новая практика в школе",
             body=(
                 f"{actor_name} опубликовал практику «{practice.title}» "

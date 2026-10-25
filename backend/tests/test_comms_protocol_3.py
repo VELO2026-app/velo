@@ -505,6 +505,17 @@ async def _seed_booking(
 
 
 async def _cancels_of(session: AsyncSession, correlations: set[str]) -> list:
+    """The REMINDER-series cancels under `correlations` -- the events whose
+    types are reminder types only.
+
+    Until BE-171 every reminder_cancel was a reminder's, and this took them
+    all. BE-171 sends a second kind under the same correlations: the
+    revocation of a stale STATE (booking.confirmed, practice.rescheduled,
+    ...; core/events/reminders.py BOOKING_STATE_TYPES and the transition
+    lists), held by tests/test_notification_states_be171.py. These tests
+    are about the reminder fan-out, so they read that one, by its types --
+    not by a count that the second kind would change."""
+    reminder_types = set(BOOKING_REMINDER_TYPES) | set(MASTER_REMINDER_TYPES)
     result = await session.execute(
         select(OutboxEvent)
         .where(
@@ -513,7 +524,11 @@ async def _cancels_of(session: AsyncSession, correlations: set[str]) -> list:
         )
         .order_by(OutboxEvent.id)
     )
-    return [row.payload for row in result.scalars().all()]
+    return [
+        row.payload
+        for row in result.scalars().all()
+        if set(row.payload["types"]) <= reminder_types
+    ]
 
 
 async def _requests(
@@ -832,6 +847,9 @@ BYPASS_TYPES = {
     "support.message_received",
     "support.ticket_assigned",
     "support.ticket_released",
+    "practice.cancelled",
+    "practice.rescheduled",
+    "practice.cancelled_by_curator",
 }
 # The button the sheets give every other type whose action is open_practice.
 _OPEN_PRACTICE_LABEL = {"ru": "Открыть практику", "en": "Open practice"}
@@ -867,7 +885,7 @@ class TestRecipientSchedule:
         for locale in ("ru", "en"):
             _sheets(locale)
 
-    def test_exactly_the_seven_types_bypass_the_schedule(self) -> None:
+    def test_exactly_the_ten_types_bypass_the_schedule(self) -> None:
         """The set of types that go at any hour, written out whole.
 
         Until BE-172 it was four -- the three reminders and the waitlist
@@ -878,7 +896,11 @@ class TestRecipientSchedule:
         reaches the admins at any hour -- and the test said five, rightly.
         BE-162 delivery 2 added the two handover signals for that same
         reason (a ticket handed to an admin, a ticket back in the pool):
-        seven, still admins-only beyond the four reminder-like types.
+        seven, still admins-only beyond the four reminder-like types -- and
+        the test said seven, rightly. BE-171 (owner ruling 2026-10-22)
+        added three for a third reason: a practice's cancellation and move
+        reach the person at any hour, so nobody comes to a cancelled one.
+        Ten.
         """
         types = _strict(_profile_dir() / "types.yaml")["types"]
         declaring = {k for k, v in types.items() if "recipient_schedule" in v}
@@ -889,8 +911,8 @@ class TestRecipientSchedule:
             assert types[key]["recipient_schedule"] == "bypass", key
         # Pair: everyone else declares nothing, and is there.
         others = set(types) - BYPASS_TYPES
-        assert len(BYPASS_TYPES) == 7
-        assert len(others) == len(types) - 7 > 0
+        assert len(BYPASS_TYPES) == 10
+        assert len(others) == len(types) - 10 > 0
         for key in others:
             assert "recipient_schedule" not in types[key], key
 

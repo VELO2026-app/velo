@@ -362,6 +362,7 @@ async def announce_booking_confirmed(
     from app.core.events.notify import emit_notification
     from app.core.events.reminders import (
         BOOKED_ACT,
+        booking_correlation,
         format_event_time,
         schedule_booking_reminders,
     )
@@ -384,6 +385,8 @@ async def announce_booking_confirmed(
         type="booking.confirmed",
         target_type="user",
         target_value=str(user.id),
+        # BE-171: revocable when the booking ends (revoke_booking_state).
+        correlation=booking_correlation(str(booking.id)),
         title="Бронирование подтверждено",
         body=(
             f"Вы записаны на практику «{practice.title}». "
@@ -616,12 +619,16 @@ async def cancel_booking(
     # addressed to the MASTER (velo expands the audience, ID-4), and
     # the booker's pending reminder series is cancelled by its
     # "booking:<id>" envelope correlation -- both in the cancellation's
-    # own transaction.
+    # own transaction. BE-171: FIRST the booking's undelivered state is
+    # revoked -- the student's "you're booked", the master's "checked in"
+    # -- so the cancellation is the last word the master gets about it.
     from app.core.events.notify import emit_notification
     from app.core.events.reminders import (
         cancel_booking_reminders,
         format_event_time,
+        revoke_booking_state,
     )
+    await revoke_booking_state(session, booking_id=str(booking.id))
     await emit_notification(
         session,
         idempotency_key=f"booking-cancelled:{booking.id}",

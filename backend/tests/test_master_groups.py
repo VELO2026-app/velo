@@ -50,7 +50,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.events.reminders import BOOKING_REMINDER_TYPES
+from app.core.events.reminders import BOOKING_REMINDER_TYPES, BOOKING_STATE_TYPES
 from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.chats.models import ChatThread
 from app.modules.masters.groups_models import (
@@ -1142,25 +1142,35 @@ async def test_block_emits_reminder_cancel_for_cancelled_bookings(
     assert resp.status_code == 200
     assert resp.json()["cancelled_bookings_count"] == 1
 
-    # Exactly one reminder_cancel, correlated by the cancelled booking.
-    # 3.0.0: the correlation is ONE envelope string, "booking:<id>"; this
-    # used to read a key/value pair (correlation_key == "booking_id"),
-    # the shape comms 2.0.0 matched against the letter and 3.0.0 refuses.
+    # Exactly two reminder_cancel events, correlated by the cancelled
+    # booking, in this order. It was exactly one -- the booking's reminder
+    # series -- and the test said one, rightly, until BE-171: a booking
+    # that ends now also revokes its undelivered state ("you're booked",
+    # "checked in"), a second event under the same correlation with its
+    # own type list and no target. 3.0.0: the correlation is ONE envelope
+    # string, "booking:<id>"; this used to read a key/value pair
+    # (correlation_key == "booking_id"), the shape comms 2.0.0 matched
+    # against the letter and 3.0.0 refuses.
     rows = (
         await fresh_execute(
-            select(OutboxEvent).where(
+            select(OutboxEvent)
+            .where(
                 OutboxEvent.event_type == "reminder_cancel",
                 OutboxEvent.payload["correlation"].astext
                 == f"booking:{future_booking.id}",
             )
+            .order_by(OutboxEvent.id)
         )
     ).scalars().all()
-    assert len(rows) == 1
+    assert len(rows) == 2
     payload = rows[0].payload
     assert "correlation_key" not in payload
     assert payload["types"] == BOOKING_REMINDER_TYPES
     assert payload["target_type"] == "user"
     assert payload["target_value"] == str(student_id)
+    state = rows[1].payload
+    assert state["types"] == BOOKING_STATE_TYPES
+    assert "target_type" not in state
 
 
 @pytest.mark.asyncio

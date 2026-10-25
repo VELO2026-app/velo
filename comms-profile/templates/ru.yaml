@@ -74,7 +74,7 @@ practice.cancelled_by_curator:
 waitlist.spot_available:
   telegram:
     title: "Место освободилось!"
-    body: "🎉 Освободилось место на <b>{practice_title}</b>!\n\n📅 {scheduled_at}\n👤 Мастер: {master_name}\n\n⏳ У вас <b>30 минут</b> на подтверждение.\nНажмите кнопку, чтобы забронировать."
+    body: "🎉 Освободилось место на <b>{practice_title}</b>!\n\n📅 {scheduled_at}\n👤 Мастер: {master_name}\n\n⏳ Подтвердите до <b>{expires_at}</b>.\nНажмите кнопку, чтобы забронировать."
     button_text: "Подтвердить место"
 
 waitlist.expired:
