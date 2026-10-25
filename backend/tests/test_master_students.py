@@ -73,10 +73,16 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
     about. full_cleanup_range is a strict superset of what the old list
     covered (same tables plus groups/ledgers/etc.), so nothing here loses
     coverage.
+
+    Each call is committed: full_cleanup_range leaves the commit to its
+    caller, and uncommitted the cleanup was undone -- the band's data
+    outlived the file (BE-171 fix).
     """
     await full_cleanup_range(db_session, _TID_MIN, _TID_MAX, delete_users=True)
+    await db_session.commit()
     yield
     await full_cleanup_range(db_session, _TID_MIN, _TID_MAX, delete_users=True)
+    await db_session.commit()
 
 
 # ===================================================================

@@ -65,9 +65,14 @@ _PROFILE = Path(__file__).resolve().parents[2] / "comms-profile"
 
 @pytest.fixture(autouse=True)
 async def _band(db_session: AsyncSession) -> AsyncGenerator[None, None]:
+    # full_cleanup_range deletes and leaves the commit to its caller (its
+    # docstring); uncommitted, the next call's defensive rollback undid it,
+    # and this file's data outlived it (BE-171 fix).
     await full_cleanup_range(db_session, BAND_MIN, BAND_MAX, delete_users=True)
+    await db_session.commit()
     yield
     await full_cleanup_range(db_session, BAND_MIN, BAND_MAX, delete_users=True)
+    await db_session.commit()
 
 
 async def _master(client: AsyncClient, db_session: AsyncSession, offset: int) -> dict:

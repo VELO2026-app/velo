@@ -156,9 +156,13 @@ def test_emoji_map_is_the_owner_set() -> None:
 
 @pytest.fixture(autouse=True)
 async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
+    # full_cleanup_range leaves the commit to its caller; uncommitted, the
+    # cleanup was undone and the band's data outlived the file (BE-171 fix).
     await full_cleanup_range(db_session, _TID_MIN, _TID_MAX, delete_users=True)
+    await db_session.commit()
     yield
     await full_cleanup_range(db_session, _TID_MIN, _TID_MAX, delete_users=True)
+    await db_session.commit()
 
 
 async def _make_verified_master(
