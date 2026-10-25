@@ -38,6 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events.models import OutboxEvent
 from app.core.exceptions import ConflictError
+from app.modules.chats.models import ChatThread
 from app.modules.support import router as support_router
 from app.modules.support import service, translation
 from app.modules.support.models import (
@@ -1045,6 +1046,129 @@ class TestAdmin:
         )
         assert resp.status_code == 404
         assert comms.calls == []
+
+
+class TestTicketCard:
+    """GET /support/tickets/{id} (BE-162 fix): the card an admin opens from
+    the Telegram signal, which carries only the thread id."""
+
+    @pytest.mark.parametrize("status", ["open", "spam"])
+    async def test_the_card_is_the_lists_own_row(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        comms: FakeComms,
+        status: str,
+    ) -> None:
+        """Equal to the row the list gives for the same ticket -- every
+        field, the person's history and the taker included; a spam ticket's
+        card opens like any other (its list row is the spam tab's)."""
+        admin = await _person(client, db_session, 30, role=UserRole.ADMIN.value)
+        user = await _person(client, db_session, 31)
+        await _history(db_session, user["user"]["id"])
+        thread = await _ticket(
+            db_session,
+            user["user"]["id"],
+            topic="complaint_master",
+            status=status,
+            claimed_by=admin["user"]["id"],
+        )
+        headers = auth_headers(admin["session_token"])
+        listed = await client.get(
+            TICKETS_URL,
+            params={"status": status},
+            headers=headers,
+        )
+        (row,) = listed.json()["tickets"]
+        resp = await client.get(f"{TICKETS_URL}/{thread}", headers=headers)
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == row
+        assert row["history_thread_id"] is not None
+        assert row["claimed_by"]["user_id"] == admin["user"]["id"]
+        assert comms.calls == []
+
+    async def test_the_signals_thread_id_opens_the_card(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        comms: FakeComms,
+    ) -> None:
+        """The id the Telegram button carries (`open_admin_support`,
+        params.thread_id) is the card's {id}: the bare row comes back, its
+        `id` that same comms thread id -- no wrapper."""
+        admin = await _person(client, db_session, 29, role=UserRole.ADMIN.value)
+        user = await _person(client, db_session, 28)
+        made = await client.post(
+            TICKETS_URL,
+            json={"topic": "practice", "body": "help"},
+            headers=auth_headers(user["session_token"]),
+        )
+        thread = UUID(made.json()["ticket"]["id"])
+        (signal,) = await _signals(thread)
+        button_id = signal["action_data"]["params"]["thread_id"]
+        assert signal["action_data"]["action"] == "open_admin_support"
+        resp = await client.get(
+            f"{TICKETS_URL}/{button_id}",
+            headers=auth_headers(admin["session_token"]),
+        )
+        assert resp.status_code == 200, resp.text
+        card = resp.json()
+        assert card["id"] == button_id
+        assert "ticket" not in card
+        assert set(card) == {
+            "id",
+            "topic",
+            "category",
+            "status",
+            "created_at",
+            "status_changed_at",
+            "opener",
+            "claimed_by",
+            "history_thread_id",
+        }
+
+    async def test_anything_but_a_ticket_is_a_404(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        comms: FakeComms,
+    ) -> None:
+        """A person's history thread has no card; a DM and an id nobody has
+        are the same 404."""
+        admin = await _person(client, db_session, 32, role=UserRole.ADMIN.value)
+        user = await _person(client, db_session, 33)
+        master = await _person(client, db_session, 34, role=UserRole.MASTER.value)
+        history = await _history(db_session, user["user"]["id"])
+        dm = uuid4()
+        db_session.add(
+            ChatThread(
+                comms_thread_id=dm,
+                client_user_id=UUID(user["user"]["id"]),
+                operator_user_id=UUID(master["user"]["id"]),
+            )
+        )
+        await db_session.commit()
+        headers = auth_headers(admin["session_token"])
+        for thread in (history, dm, uuid4()):
+            resp = await client.get(f"{TICKETS_URL}/{thread}", headers=headers)
+            assert resp.status_code == 404, thread
+        assert comms.calls == []
+
+    async def test_the_card_is_for_admins(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        comms: FakeComms,
+    ) -> None:
+        """Not even the ticket's own person: their conversation is the chat
+        routes, the card is support's."""
+        user = await _person(client, db_session, 35)
+        thread = await _ticket(db_session, user["user"]["id"])
+        resp = await client.get(
+            f"{TICKETS_URL}/{thread}",
+            headers=auth_headers(user["session_token"]),
+        )
+        assert resp.status_code == 403
 
 
 # ---------------------------------------------------------------------------

@@ -772,6 +772,65 @@ def _decode_list_cursor(token: str) -> tuple[datetime, UUID]:
     return when, row_id
 
 
+async def _admin_ticket_rows(
+    session: AsyncSession, rows: list[Any],
+) -> list[dict[str, Any]]:
+    """Tickets as an admin reads them -- THE row of the list and of the one
+    ticket (BE-162 fix: the card opened from a signal, without the list):
+    the ticket's codes and dates, who opened it, who took it, and the
+    person's history thread. `rows` are (SupportTicket, SupportThread)
+    pairs; one query per kind of fact, whatever their number."""
+    people = {p.client_user_id for _, p in rows} | {
+        t.claimed_by_user_id for t, _ in rows if t.claimed_by_user_id is not None
+    }
+    users: dict[UUID, User] = {}
+    if people:
+        users = {
+            u.id: u
+            for u in (
+                await session.execute(select(User).where(User.id.in_(people)))
+            ).scalars()
+        }
+    # The person's history -- their support thread without a ticket, the
+    # pre-BE-162 conversation -- for the ticket card (read-only).
+    history: dict[UUID, UUID] = {}
+    openers = {p.client_user_id for _, p in rows}
+    if openers:
+        history = {
+            client: thread_id
+            for client, thread_id in (
+                await session.execute(
+                    select(SupportThread.client_user_id, SupportThread.comms_thread_id)
+                    .outerjoin(
+                        SupportTicket,
+                        SupportTicket.support_thread_id == SupportThread.id,
+                    )
+                    .where(
+                        SupportThread.client_user_id.in_(openers),
+                        SupportTicket.support_thread_id.is_(None),
+                    )
+                )
+            ).all()
+        }
+    return [
+        {
+            **ticket_out(pointer, ticket),
+            "opener": _peer_payload(users.get(pointer.client_user_id)),
+            "claimed_by": (
+                _peer_payload(users.get(ticket.claimed_by_user_id))
+                if ticket.claimed_by_user_id is not None
+                else None
+            ),
+            "history_thread_id": (
+                str(history[pointer.client_user_id])
+                if pointer.client_user_id in history
+                else None
+            ),
+        }
+        for ticket, pointer in rows
+    ]
+
+
 async def list_admin_tickets(
     session: AsyncSession,
     *,
@@ -826,55 +885,7 @@ async def list_admin_tickets(
     has_more = len(rows) > limit
     rows = rows[:limit]
 
-    people = {p.client_user_id for _, p in rows} | {
-        t.claimed_by_user_id for t, _ in rows if t.claimed_by_user_id is not None
-    }
-    users: dict[UUID, User] = {}
-    if people:
-        users = {
-            u.id: u
-            for u in (
-                await session.execute(select(User).where(User.id.in_(people)))
-            ).scalars()
-        }
-    # The person's history -- their support thread without a ticket, the
-    # pre-BE-162 conversation -- for the ticket card (read-only).
-    history: dict[UUID, UUID] = {}
-    openers = {p.client_user_id for _, p in rows}
-    if openers:
-        history = {
-            client: thread_id
-            for client, thread_id in (
-                await session.execute(
-                    select(SupportThread.client_user_id, SupportThread.comms_thread_id)
-                    .outerjoin(
-                        SupportTicket,
-                        SupportTicket.support_thread_id == SupportThread.id,
-                    )
-                    .where(
-                        SupportThread.client_user_id.in_(openers),
-                        SupportTicket.support_thread_id.is_(None),
-                    )
-                )
-            ).all()
-        }
-    tickets = [
-        {
-            **ticket_out(pointer, ticket),
-            "opener": _peer_payload(users.get(pointer.client_user_id)),
-            "claimed_by": (
-                _peer_payload(users.get(ticket.claimed_by_user_id))
-                if ticket.claimed_by_user_id is not None
-                else None
-            ),
-            "history_thread_id": (
-                str(history[pointer.client_user_id])
-                if pointer.client_user_id in history
-                else None
-            ),
-        }
-        for ticket, pointer in rows
-    ]
+    tickets = await _admin_ticket_rows(session, rows)
     next_cursor = None
     if has_more:
         last_ticket = rows[-1][0]
@@ -882,6 +893,30 @@ async def list_admin_tickets(
             last_ticket.created_at, last_ticket.support_thread_id,
         )
     return {"tickets": tickets, "next_cursor": next_cursor}
+
+
+async def get_admin_ticket(
+    session: AsyncSession, *, thread_id: UUID,
+) -> dict[str, Any]:
+    """One ticket by its thread id, as the list shows it (BE-162 fix): the
+    card an admin opens from the Telegram signal, which carries only the
+    thread id. Any status, spam included -- a spam ticket's card opens.
+
+    404 for anything that is not a ticket: a person's history thread (no
+    ticket row -- it has no card), a DM, an id nobody has. One answer for
+    all, as everywhere on this router: existence does not leak.
+    """
+    row = (
+        await session.execute(
+            select(SupportTicket, SupportThread)
+            .join(SupportThread, SupportThread.id == SupportTicket.support_thread_id)
+            .where(SupportThread.comms_thread_id == thread_id)
+        )
+    ).first()
+    if row is None:
+        raise NotFoundError("Ticket not found")
+    (ticket,) = await _admin_ticket_rows(session, [row])
+    return ticket
 
 
 async def _require_support_thread(

@@ -26,6 +26,9 @@
 #   GET  /api/v1/support/tickets                 -- tickets, newest appeal
 #     first, from velo's table: filters category / status / created_from /
 #     created_to; without `status` every ticket but spam.
+#   GET  /api/v1/support/tickets/{id}            -- one ticket, the list's
+#     own row (BE-162 fix: the card opened from a signal); spam included;
+#     a history thread or any other id -> 404.
 #   POST /api/v1/support/tickets/{id}/status     -- an OPEN ticket to
 #     resolved / rejected / duplicate / spam; comms' thread to `resolved`.
 #   GET  /api/v1/support/threads/{id}/messages   -- a support thread's feed
@@ -71,6 +74,7 @@ from app.modules.support.service import (
     claim_admin_support_thread,
     create_ticket,
     get_admin_support_messages,
+    get_admin_ticket,
     list_admin_tickets,
     retry_support_translation,
     send_admin_support_message,
@@ -186,6 +190,17 @@ async def list_tickets(
         limit=limit,
         cursor=cursor,
     )
+
+
+@router.get("/tickets/{thread_id}")
+async def get_ticket(
+    thread_id: UUID,
+    admin: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> Any:
+    """One ticket, exactly as a row of GET /tickets -- see
+    service.get_admin_ticket. 404 unless `thread_id` is a ticket's."""
+    return await get_admin_ticket(session, thread_id=thread_id)
 
 
 @router.post("/tickets/{thread_id}/status")
