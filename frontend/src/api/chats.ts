@@ -85,6 +85,11 @@ export interface ChatThread {
   /** Newest message, or null for a thread that has none yet. */
   last_message: ChatLastMessage | null
   peer?: ChatPeer | null
+  /** `support` rows only (BE-162): every support thread of the caller -- a
+   *  ticket each, plus the pre-ticket history -- shown as this ONE row. `id`
+   *  is the most recently active of them; a push or a notice names a
+   *  SPECIFIC one, so a row is found by `id` or by membership here. */
+  thread_ids?: string[]
   /** Student's list: the master's user id. */
   operator_value?: string
   /** Master's list (comms shape): the client's user id. */
@@ -158,6 +163,14 @@ export function openStudentChat(studentId: string): Promise<ChatThread> {
 
 export function listChats(limit = 100): Promise<ChatThreadList> {
   return api.get<ChatThreadList>(`/api/v1/chats?limit=${limit}`)
+}
+
+/** The row a thread id opens: the row itself, or -- for a `support` row --
+ *  any of the caller's support threads it stands for (`thread_ids`). A push
+ *  (`open_thread`) and the "translation unavailable" notice name the thread
+ *  the message is in, which need not be the row's newest one. */
+export function chatRowFor(threads: ChatThread[], threadId: string): ChatThread | undefined {
+  return threads.find((t) => t.id === threadId || t.thread_ids?.includes(threadId))
 }
 
 export function listChatMessages(

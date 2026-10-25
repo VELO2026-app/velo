@@ -1,59 +1,86 @@
 // =============================================================================
-// VELO Frontend -- Support API (B34, PROMPT №712; admin surface PROMPT №713)
+// VELO Frontend -- Support API (B34; tickets since FE-104 / BE-162)
 // =============================================================================
 //
 // Typed wrappers over the support proxy (backend app/modules/support/router.py).
-// Owner ruling (option B, 2026-08-14): the topic-picker forms stay the entry;
-// submitting OPENS the caller's one eternal support thread and delivers the
-// topic + message as its first (or next) message. Two calls, same shape as
-// the chats module's own open-then-send split (api/chats.ts) -- opening is
-// idempotent and cheap to call on every submit, sending is the actual event.
 //
-// PROMPT №713 adds the ADMIN half: list every support thread (opener identity
-// + topic attached server-side), read one thread's feed, reply, and claim.
-// Claiming is what grants the right to reply -- comms itself enforces this
-// (client or assignee only, no supervisor bypass), so a reply against an
-// unclaimed thread 403s (comms' own error, forwarded, not a generic
-// "service unavailable" -- see backend/app/core/comms.py's forward_403).
+// EVERY APPEAL THROUGH A FORM IS A TICKET (owner ruling BE-162): its own comms
+// thread, a topic CODE (models.TOPICS), our own status. One call creates it
+// with its first message; the client's Idempotency-Key names the appeal, so a
+// repeat under the same key is the same ticket, not a second one.
 //
-// Types are hand-written, same precedent as chats.ts / notifications.ts: the
-// shape is the comms 3b contract passed through the proxy, not the velo
-// OpenAPI schema (generated.ts does not cover this module).
+// The person never reads support through this module: their tickets are one
+// row in «Сообщения» (api/chats.ts, `channel: 'support'`, `thread_ids`).
+//
+// ADMIN HALF: the ticket list (velo's own table; without a status filter every
+// ticket but spam), one ticket by id, the status change (an OPEN ticket only),
+// and -- unchanged routes, keyed by the ticket id -- the feed, the reply and
+// the claim. Claiming is what grants the right to reply: comms admits only
+// the client or the assignee, so a reply on an unclaimed ticket is comms' own
+// 403, forwarded (backend/app/core/comms.py forward_403).
+//
+// The request bodies' closed sets come from generated.ts (TicketIn, StatusIn)
+// so a backend change of the sets shows up here at type-check time. The
+// responses are hand-written: the routes return untyped dicts, generated.ts
+// has no schema for them.
 // =============================================================================
 
 import { api } from '@/api/client'
+import { newIdempotencyKey } from '@/api/chats'
+import type { StatusIn, TicketIn } from '@/api/generated'
 
-/** The thread opener's display identity (P-1, same shape as ChatPeer in
- *  api/chats.ts). Attached only on the admin listing -- null when the
- *  client id could not be resolved to a User row (degrade, not break). */
-export interface SupportOpener {
+/** A topic code of the support forms (backend models.TOPICS). The label is
+ *  the front's, in the reader's language -- utils/supportTopics.ts. */
+export type SupportTopicCode = TicketIn['topic']
+
+/** Where an admin may move an OPEN ticket. */
+export type SupportClosingStatus = StatusIn['status']
+
+/** A ticket's status. Back to `open` only a person's message moves it. */
+export type SupportTicketStatus = 'open' | SupportClosingStatus
+
+/** Every status an admin may set, in the order the card offers them. */
+export const SUPPORT_CLOSING_STATUSES: readonly SupportClosingStatus[] = [
+  'resolved',
+  'rejected',
+  'duplicate',
+  'spam',
+]
+
+export type SupportCategory =
+  'tech' | 'practices' | 'payments' | 'complaint_master' | 'complaint_user' | 'other'
+
+/** A person as velo knows them (P-1, same shape as ChatPeer in api/chats.ts).
+ *  `name` is null when the account has no name. */
+export interface SupportPerson {
   user_id: string
   name: string | null
   avatar_url: string | null
 }
 
-export interface SupportThread {
+/** A ticket as the backend describes it -- codes, never labels. `id` is the
+ *  ticket's comms thread id: the key of every admin route and of the
+ *  `open_admin_support__<id>` deep link. */
+export interface SupportTicket {
   id: string
-  client: string
-  operator_kind: string
-  operator_value: string
-  assignee: string | null
-  kind: string
-  status: string
-  subject_type: string | null
-  subject_id: string | null
-  /** The topic label, set once at creation (service.py::open_support_thread)
-   *  -- the only channel that reaches a LIST view without fetching a feed. */
-  title: string | null
-  priority: number | null
-  last_message_at: string | null
+  topic: SupportTopicCode
+  category: SupportCategory
+  status: SupportTicketStatus
   created_at: string
-  /** Admin-listing only. */
-  opener?: SupportOpener | null
+  status_changed_at: string
 }
 
-export interface SupportThreadList {
-  threads: SupportThread[]
+/** A ticket as the admin list and the one-ticket read return it. `opener`
+ *  is null when the person's row is gone; `history_thread_id` names the
+ *  person's pre-ticket support conversation (read-only), when they have one. */
+export interface AdminSupportTicket extends SupportTicket {
+  opener: SupportPerson | null
+  claimed_by: SupportPerson | null
+  history_thread_id: string | null
+}
+
+export interface AdminSupportTicketList {
+  tickets: AdminSupportTicket[]
   next_cursor: string | null
 }
 
@@ -70,39 +97,77 @@ export interface SupportMessageList {
   next_cursor: string | null
 }
 
-export interface SupportClaimResult {
-  claimed: boolean
-  thread: SupportThread
+export interface SupportTicketCreated {
+  ticket: SupportTicket
+  message: SupportMessage
 }
 
-/** Open (or return) the caller's support thread. `topic` is optional and
- *  only enriches the admin-group notification fired on genuine creation --
- *  it is not required and has no effect on a reopen. */
-export function openSupportThread(topic?: string): Promise<SupportThread> {
-  return api.post<SupportThread>('/api/v1/support/threads', topic ? { topic } : {})
+/** An appeal through a support form: a NEW ticket and its first message.
+ *  `idempotencyKey` names the appeal -- the caller keeps it across retries of
+ *  the same (topic, body) and replaces it when either changes. 422 -- unknown
+ *  code, empty or over-long body. */
+export function createTicket(
+  topic: SupportTopicCode,
+  body: string,
+  idempotencyKey: string,
+): Promise<SupportTicketCreated> {
+  return api.post<SupportTicketCreated>(
+    '/api/v1/support/tickets',
+    { topic, body },
+    { 'Idempotency-Key': idempotencyKey },
+  )
 }
 
-/** Deliver one message into the caller's support thread (must already be
- *  open). `topic` is prefixed onto the message text server-side so it is
- *  readable by whichever admin opens the thread. */
-export function sendSupportMessage(topic: string | null, body: string): Promise<SupportMessage> {
-  return api.post<SupportMessage>('/api/v1/support/threads/messages', { topic, body })
+/** ONE APPEAL, ONE KEY (owner ruling FE-104): a keeper that returns the
+ *  Idempotency-Key for a (topic, body) -- the same key while neither changes,
+ *  so a retry after a failed send is the same ticket; a fresh key once either
+ *  changes, so an edited appeal is never answered with the old one (the
+ *  backend would return the ticket and the message the key already names).
+ *  One keeper per form instance. */
+export function createAppealKeys(
+  mint: () => string = newIdempotencyKey,
+): (topic: SupportTopicCode, body: string) => string {
+  let key: string | null = null
+  let appeal = ''
+  return (topic, body) => {
+    const next = JSON.stringify([topic, body])
+    if (key === null || next !== appeal) {
+      key = mint()
+      appeal = next
+    }
+    return key
+  }
 }
 
-// -- Admin (PROMPT №713) ------------------------------------------------------
+// -- Admin --------------------------------------------------------------------
 
-/** Every support thread, section-scoped, opener identity attached. Admin-only
- *  server-side (get_current_admin) -- `is_supervisor`/`operator` are never
- *  parameters here, there is nothing to forward. */
-export function listAdminSupportThreads(limit = 20, cursor?: string): Promise<SupportThreadList> {
+/** Tickets, newest appeal first. No status filter is sent: the backend then
+ *  returns every ticket but spam. */
+export function listAdminTickets(limit = 20, cursor?: string): Promise<AdminSupportTicketList> {
   const qs = new URLSearchParams({ limit: String(limit) })
   if (cursor) qs.set('cursor', cursor)
-  return api.get<SupportThreadList>(`/api/v1/support/threads?${qs}`)
+  return api.get<AdminSupportTicketList>(`/api/v1/support/tickets?${qs}`)
 }
 
-/** A support thread's feed, newest-first. Read access is universal for
- *  admins (owner ruling) -- no claim required. 404s if `threadId` does not
- *  name a known support thread. */
+/** One ticket by its id -- the same row as in the list, spam included. 404 --
+ *  no such ticket (a person's history thread included). */
+export function getAdminTicket(ticketId: string): Promise<AdminSupportTicket> {
+  return api.get<AdminSupportTicket>(`/api/v1/support/tickets/${ticketId}`)
+}
+
+/** Move an OPEN ticket to a closing status. Returns the ticket without the
+ *  admin-only fields (opener, claimed_by, history_thread_id). 409 -- the
+ *  ticket is no longer open or changed meanwhile: read it again. */
+export function setTicketStatus(
+  ticketId: string,
+  status: SupportClosingStatus,
+): Promise<SupportTicket> {
+  return api.post<SupportTicket>(`/api/v1/support/tickets/${ticketId}/status`, { status })
+}
+
+/** A support thread's feed, newest-first: a ticket, or a person's history.
+ *  Read access is universal for admins -- no claim required. 404s if
+ *  `threadId` does not name a known support thread. */
 export function getAdminSupportMessages(
   threadId: string,
   limit = 50,
@@ -113,14 +178,16 @@ export function getAdminSupportMessages(
   return api.get<SupportMessageList>(`/api/v1/support/threads/${threadId}/messages?${qs}`)
 }
 
-/** Reply as this admin. Throws ApiResponseError(403) -- via useApiError --
- *  when the caller has not claimed the thread; comms' own refusal, not ours. */
+/** Reply as this admin, in a ticket. Throws ApiResponseError(403) -- via
+ *  useApiError -- when the caller has not claimed it; comms' own refusal. */
 export function sendAdminSupportReply(threadId: string, body: string): Promise<SupportMessage> {
   return api.post<SupportMessage>(`/api/v1/support/threads/${threadId}/messages`, { body })
 }
 
-/** Claim an unclaimed thread -- the act that grants the right to reply.
- *  `claimed: false` means someone else won the race, not an error. */
-export function claimSupportThread(threadId: string): Promise<SupportClaimResult> {
-  return api.post<SupportClaimResult>(`/api/v1/support/threads/${threadId}/claim`, {})
+/** Take a ticket -- the act that grants the right to reply. A repeat of your
+ *  own claim is 200 again; held by another admin -> 409. The answer (comms'
+ *  thread) is not read: the card reads the ticket again (getAdminTicket), so
+ *  who holds it is always velo's `claimed_by`. */
+export function claimSupportThread(threadId: string): Promise<unknown> {
+  return api.post<unknown>(`/api/v1/support/threads/${threadId}/claim`, {})
 }

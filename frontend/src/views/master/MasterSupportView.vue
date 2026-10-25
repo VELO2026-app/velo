@@ -5,11 +5,12 @@
   Built to SVGs «5 Support» / «5 Support 2» / «5 Support (files added)» /
   «Check-in Success» (the form's success screen).
 
-  WIRED (PROMPT №712, owner ruling B): «Отправить» opens the caller's one
-  eternal support thread (@/api/support::openSupportThread) and delivers the
-  topic label + message as its first (or next) message (::sendSupportMessage)
-  -- the messaging module (comms sections), NOT the `SupportTicket` model
-  VELO-Backend-Tasks.md describes elsewhere (that plan stays Zod's, untouched).
+  WIRED (FE-104, owner ruling BE-162): «Отправить» creates a NEW ticket -- the
+  topic as a CODE and the message, one call (@/api/support::createTicket) under
+  the appeal's Idempotency-Key (::createAppealKeys: the same key while the
+  topic and the text stay the same, so a retry after a failed send is the same
+  ticket). «Другое» has no free text of its own (owner): the substance is the
+  message. New master topic: «Жалоба на пользователя» (`complaint_user`).
   The success screen's copy was written for the old stub, became FALSE the
   moment this screen started delivering, was rewritten at PROMPT №712, and is
   REWRITTEN AGAIN at FE-103 (owner ruling 25.10), identical to the user
@@ -37,9 +38,9 @@
     />
 
     <!-- ===================== TERMINAL (delivery HAS happened) ================
-         Mirrors the user SupportView. Reached only after both calls resolved,
-         so it may state receipt: `submitted` is set inside the try, after
-         sendSupportMessage, and a failure toasts and leaves the form standing.
+         Mirrors the user SupportView. Reached only after the ticket call
+         resolved, so it may state receipt: `submitted` is set inside the try,
+         after createTicket, and a failure toasts and leaves the form standing.
          The old text here said there was no support backend and refused to
          claim delivery -- correct for the stub, false since PROMPT №712. -->
     <div v-if="submitted" class="support__success">
@@ -74,17 +75,6 @@
         <h2 class="support__title">{{ t('masterScreens.masterSupport.topic.label') }}</h2>
         <div class="support__card">
           <VRadioGroup v-model="topic" :options="topicOptions" />
-          <div v-if="topic === 'other'" class="support__other">
-            <input
-              v-model="otherText"
-              type="text"
-              class="support__other-input"
-              :placeholder="t('practice.customVariant')"
-              :aria-label="t('masterScreens.masterSupport.custom.title')"
-              @focus="onFieldFocus"
-            />
-            <IconArrowRight :size="18" class="support__other-arrow" />
-          </div>
         </div>
       </section>
 
@@ -94,6 +84,7 @@
         <VTextarea
           v-model="message"
           :rows="5"
+          maxlength="4000"
           :placeholder="t('masterScreens.masterSupport.message.placeholder')"
           @focus="onFieldFocus"
         />
@@ -153,12 +144,13 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import { VButton, VRadioGroup, VTextarea } from '@/components/ui'
-import { IconSupportChat, IconFile, IconClose, IconArrowRight } from '@/components/icons'
+import { IconSupportChat, IconFile, IconClose } from '@/components/icons'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
-import { openSupportThread, sendSupportMessage } from '@/api/support'
+import { createAppealKeys, createTicket, type SupportTopicCode } from '@/api/support'
 import { listChats } from '@/api/chats'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
+import { supportTopicLabel } from '@/utils/supportTopics'
 
 const router = useRouter()
 const toast = useToast()
@@ -171,40 +163,26 @@ const { onFieldFocus } = useKeyboardFieldScroll()
 // (P0/P1/P2 — future routing/sort signal) that is deliberately NOT rendered to
 // the master. «Добавить направление практики» is a PLAIN free-text topic (no
 // special form/route). «Вопрос по отклоненной заявке» removed (operator L7).
+// FE-104: codes only; labels from the one table (supportTopics). The
+// complaint topic's priority is P0, as the user form's complaint.
 type SupportPriority = 'P0' | 'P1' | 'P2'
 interface SupportTopic {
-  value: string
-  label: string
+  value: SupportTopicCode
   priority: SupportPriority
 }
 const TOPICS: SupportTopic[] = [
-  {
-    value: 'withdrawal',
-    label: t('masterScreens.masterSupport.topic.withdrawal'),
-    priority: 'P0',
-  },
-  {
-    value: 'practices',
-    label: t('masterScreens.masterSupport.topic.practices'),
-    priority: 'P1',
-  },
-  {
-    value: 'technical',
-    label: t('masterScreens.masterSupport.topic.tech'),
-    priority: 'P2',
-  },
-  {
-    value: 'add_direction',
-    label: t('masterScreens.masterSupport.topic.addDirection'),
-    priority: 'P2',
-  },
-  { value: 'other', label: t('common.other'), priority: 'P2' },
+  { value: 'withdrawal', priority: 'P0' },
+  { value: 'practices', priority: 'P1' },
+  { value: 'technical', priority: 'P2' },
+  { value: 'add_direction', priority: 'P2' },
+  { value: 'complaint_user', priority: 'P0' },
+  { value: 'other', priority: 'P2' },
 ]
 // VRadioGroup only needs {value,label}; priority stays off the rendered options.
-const topicOptions = TOPICS.map((t) => ({ value: t.value, label: t.label }))
-const topic = ref('withdrawal')
-const otherText = ref('')
+const topicOptions = TOPICS.map((t) => ({ value: t.value, label: supportTopicLabel(t.value) }))
+const topic = ref<SupportTopicCode>('withdrawal')
 const message = ref('')
+const appealKey = createAppealKeys()
 
 // -- Attachments (captured locally only; no upload backend — see header) -----
 const MAX_FILES = 5
@@ -230,32 +208,22 @@ function removeAttachment(i: number): void {
 // -- Submit (flow В) --------------------------------------------------------
 const emailHref = 'mailto:support@velo.app'
 
-const canSubmit = computed(() => {
-  const hasMessage = message.value.trim().length > 0
-  const hasTopic = topic.value !== 'other' || otherText.value.trim().length > 0
-  return hasMessage && hasTopic
-})
+const canSubmit = computed(() => message.value.trim().length > 0)
 
 const submitted = ref(false)
 const submitting = ref(false)
 
-// PROMPT №712 (owner ruling B): wired the same way as the user SupportView --
-// open the caller's eternal support thread, then deliver the topic + message
-// as its first (or next) message. Attachments stay CAPTURED-LOCALLY-ONLY as
+// FE-104: wired the same way as the user SupportView -- one call, a new
+// ticket with its first message. Attachments stay CAPTURED-LOCALLY-ONLY as
 // before (no upload/storage backend exists; out of this task's scope) -- they
-// are not sent anywhere. `priority` stays internal-only; see PROMPT №712's
-// report on why a comms thread has nowhere sortable to put it yet.
+// are not sent anywhere. `priority` stays internal-only: nothing sends it.
 async function onSubmit(): Promise<void> {
   if (!canSubmit.value || submitting.value) return
-  const selected = TOPICS.find((t) => t.value === topic.value)
-  const topicLabel =
-    topic.value === 'other' ? otherText.value.trim() : (selected?.label ?? topic.value)
   const text = message.value.trim()
 
   submitting.value = true
   try {
-    await openSupportThread(topicLabel)
-    await sendSupportMessage(topicLabel, text)
+    await createTicket(topic.value, text, appealKey(topic.value, text))
     submitted.value = true
     void openConversation()
   } catch (e) {
@@ -355,47 +323,6 @@ function onGoHome(): void {
   border: 1px solid var(--velo-border-card);
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--velo-inset-row);
-}
-
-.support__other {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-  height: var(--velo-size-40);
-  padding: 0 var(--space-4);
-  border: 1.5px solid var(--velo-primary);
-  border-radius: var(--radius-full);
-  transition: box-shadow var(--transition-fast);
-}
-
-/* PROMPT №679: mirrors user SupportView.vue's identical structure -- ring
-   around the existing border on focus, no colour change to the border. */
-.support__other:focus-within {
-  box-shadow: 0 0 0 3px var(--velo-glass-blue-60);
-}
-
-.support__other-input {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  background: transparent;
-  outline: none;
-  font-family: var(--font-body);
-  font-size: var(--text-base);
-  color: var(--velo-text-primary);
-}
-
-/* [FE-25] Readable placeholder: view-local field, same contract as the kit's
-   VInput/VTextarea -- the placeholder-specific token (90% base hue, 4.75:1 on
-   the white card), NOT --velo-text-muted (2.15:1). */
-.support__other-input::placeholder {
-  color: var(--velo-text-placeholder);
-}
-
-.support__other-arrow {
-  flex-shrink: 0;
-  color: var(--velo-primary);
 }
 
 /* -- Attachments -- */

@@ -2,15 +2,16 @@
 // VELO Frontend -- MasterSupportView Screen Tests
 // =============================================================================
 //
-// UPDATED PROMPT №712 (owner ruling B): onSubmit no longer stubs -- it opens
-// the caller's support thread (@/api/support::openSupportThread) then
-// delivers the topic + message as its first/next message
-// (::sendSupportMessage). Attachments stay CAPTURED-LOCALLY-ONLY (no
-// upload/storage backend exists, out of that prompt's scope too) -- their
-// tests below are unchanged, nothing about them sends anywhere.
+// UPDATED FE-104 (owner ruling BE-162): onSubmit creates a NEW ticket -- the
+// topic as a CODE and the message, one call (@/api/support::createTicket)
+// under the appeal's Idempotency-Key (::createAppealKeys). «Другое» has no
+// free text; the master form gains «Жалоба на пользователя»
+// (`complaint_user`). Attachments stay CAPTURED-LOCALLY-ONLY (no
+// upload/storage backend exists) -- their tests below are unchanged, nothing
+// about them sends anywhere.
 //
-// PATTERN: no store; API mocked at @/api/support (the two functions the SFC
-// calls), toast mocked at @/composables/useToast (error path only -- success
+// PATTERN: no store; createTicket mocked, createAppealKeys REAL (its key
+// source, newIdempotencyKey in @/api/chats, is a counter), toast mocked at @/composables/useToast (error path only -- success
 // never toasts, it flips to the terminal screen). vue-router mocked for
 // `back`/`push` only.
 //
@@ -41,19 +42,19 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ back, push }),
 }))
 
-const openSupportThread = vi.fn()
-const sendSupportMessage = vi.fn()
-vi.mock('@/api/support', () => ({
-  openSupportThread: (...args: Parameters<typeof openSupportThread>) => openSupportThread(...args),
-  sendSupportMessage: (...args: Parameters<typeof sendSupportMessage>) =>
-    sendSupportMessage(...args),
+const createTicket = vi.fn()
+vi.mock('@/api/support', async (importOriginal) => ({
+  createAppealKeys: (await importOriginal<typeof import('@/api/support')>()).createAppealKeys,
+  createTicket: (...args: Parameters<typeof createTicket>) => createTicket(...args),
 }))
 
 // FE-103: after the send the view looks up the support ROW (channel
 // 'support') to hand over to the conversation.
 const listChats = vi.fn()
+let minted = 0
 vi.mock('@/api/chats', () => ({
   listChats: (...args: Parameters<typeof listChats>) => listChats(...args),
+  newIdempotencyKey: () => `key-${++minted}`,
 }))
 
 const toastError = vi.fn()
@@ -104,15 +105,28 @@ function radio(label: string): HTMLButtonElement | undefined {
   )
 }
 
-function otherInput(): HTMLInputElement | null {
-  return host?.querySelector<HTMLInputElement>('.support__other-input') ?? null
+function radioLabels(): string[] {
+  return Array.from(host?.querySelectorAll('.v-radio__label') ?? []).map(
+    (l) => l.textContent?.trim() ?? '',
+  )
 }
 
-function setOtherInput(value: string): void {
-  const i = otherInput()
-  if (!i) throw new Error('.support__other-input did not render (topic is not «Другое»)')
-  i.value = value
-  i.dispatchEvent(new Event('input'))
+const CREATED = {
+  ticket: {
+    id: 'ticket-1',
+    topic: 'withdrawal',
+    category: 'payments',
+    status: 'open',
+    created_at: '2026-10-25T10:00:00Z',
+    status_changed_at: '2026-10-25T10:00:00Z',
+  },
+  message: {
+    id: 'msg-1',
+    thread_id: 'ticket-1',
+    sender: 'master-1',
+    body: 'placeholder',
+    created_at: '2026-10-25T10:00:00Z',
+  },
 }
 
 function thumbs(): HTMLButtonElement[] {
@@ -149,28 +163,8 @@ beforeEach(() => {
     ],
     next_cursor: null,
   })
-  openSupportThread.mockReset().mockResolvedValue({
-    id: 'thread-1',
-    client: 'master-1',
-    operator_kind: 'section',
-    operator_value: 'section-1',
-    assignee: null,
-    kind: 'dm',
-    status: 'open',
-    subject_type: null,
-    subject_id: null,
-    title: null,
-    priority: null,
-    last_message_at: null,
-    created_at: '2026-08-14T10:00:00Z',
-  })
-  sendSupportMessage.mockReset().mockResolvedValue({
-    id: 'msg-1',
-    thread_id: 'thread-1',
-    sender: 'master-1',
-    body: 'placeholder',
-    created_at: '2026-08-14T10:00:00Z',
-  })
+  minted = 0
+  createTicket.mockReset().mockResolvedValue(CREATED)
   toastError.mockReset()
 })
 
@@ -212,30 +206,54 @@ describe('MasterSupportView', () => {
       expect(submitBtn().disabled).toBe(true)
     })
 
-    it('switching to «Другое» re-disables until the free-text field is also filled', async () => {
+    // Was: switching to «Другое» re-disabled until a free-text topic was
+    // filled. Right while «Другое» carried its own text; FE-104 (owner
+    // ruling) removed it -- the substance is the message.
+    it('switching to «Другое» keeps it armed -- the message alone is enough', async () => {
       mount()
       await flush()
       setTextarea('Сообщение')
       await flush()
-      expect(submitBtn().disabled).toBe(false)
 
       radio('Другое')?.click()
-      await flush()
-
-      expect(otherInput()).not.toBeNull()
-      expect(submitBtn().disabled).toBe(true) // message alone is no longer enough
-
-      setOtherInput('Свой вариант темы')
       await flush()
 
       expect(submitBtn().disabled).toBe(false)
     })
 
-    it('the «Другое» field is not even rendered for a normal topic', async () => {
+    // Was: the «Другое» free-text field was absent for a normal topic. Now it
+    // is absent for EVERY topic, «Другое» included -- one text field.
+    it('no topic renders a field of its own -- «Другое» included', async () => {
+      mount()
+      await flush()
+      radio('Другое')?.click()
+      await flush()
+
+      expect(host?.querySelectorAll('textarea')).toHaveLength(1)
+      expect(host?.querySelector('.support__other-input')).toBeNull()
+    })
+  })
+
+  describe('the topic list (FE-104)', () => {
+    it('offers the six master topics, «Жалоба на пользователя» included', async () => {
       mount()
       await flush()
 
-      expect(otherInput()).toBeNull()
+      expect(radioLabels()).toEqual([
+        'Проблема с выводом',
+        'Вопрос по практикам',
+        'Технические проблемы',
+        'Добавить направление практики',
+        'Жалоба на пользователя',
+        'Другое',
+      ])
+    })
+
+    it('the message field is capped at the contract limit (4000)', async () => {
+      mount()
+      await flush()
+
+      expect(textarea().getAttribute('maxlength')).toBe('4000')
     })
   })
 
@@ -300,8 +318,10 @@ describe('MasterSupportView', () => {
     })
   })
 
-  describe('submitting (PROMPT №712: opens the thread, then sends the topic label + message)', () => {
-    it('opens with the topic LABEL, sends the same label, and flips to the terminal screen', async () => {
+  // Was: open the thread with the topic LABEL, then send label + message
+  // (PROMPT №712). Right for that contract; BE-162 removed both routes.
+  describe('submitting (FE-104: one ticket call -- the topic CODE + the message)', () => {
+    it('sends the default topic as its CODE with the trimmed message, and flips to the terminal screen', async () => {
       mount()
       await flush()
       setTextarea('  Проблема с выводом  ')
@@ -310,33 +330,34 @@ describe('MasterSupportView', () => {
       submitBtn().click()
       await flush()
 
-      expect(openSupportThread).toHaveBeenCalledWith('Проблема с выводом')
-      expect(sendSupportMessage).toHaveBeenCalledWith(
-        'Проблема с выводом',
-        'Проблема с выводом', // trimmed message text (coincidentally same as this topic's label)
-      )
+      expect(createTicket).toHaveBeenCalledTimes(1)
+      expect(createTicket).toHaveBeenCalledWith('withdrawal', 'Проблема с выводом', 'key-1')
       expect(text()).toContain('Обращение отправлено')
       // Header hides on the terminal screen -- no back button on a dead end.
       expect(host?.querySelector('[aria-label="Назад"]')).toBeNull()
     })
 
-    it('an «Другое» submission sends the TRIMMED free text as the topic label', async () => {
+    it.each([
+      ['Вопрос по практикам', 'practices'],
+      ['Технические проблемы', 'technical'],
+      ['Добавить направление практики', 'add_direction'],
+      ['Жалоба на пользователя', 'complaint_user'],
+      ['Другое', 'other'],
+    ] as const)('«%s» is sent as the code "%s"', async (label, code) => {
       mount()
       await flush()
-      setTextarea('Сообщение')
-      radio('Другое')?.click()
+      radio(label)?.click()
       await flush()
-      setOtherInput('  Хочу добавить йога-нидру  ')
+      setTextarea('Сообщение')
       await flush()
 
       submitBtn().click()
       await flush()
 
-      expect(openSupportThread).toHaveBeenCalledWith('Хочу добавить йога-нидру')
-      expect(sendSupportMessage).toHaveBeenCalledWith('Хочу добавить йога-нидру', 'Сообщение')
+      expect(createTicket).toHaveBeenCalledWith(code, 'Сообщение', 'key-1')
     })
 
-    it('attachments are captured locally only -- nothing about them reaches either API call', async () => {
+    it('attachments are captured locally only -- nothing about them reaches the API call', async () => {
       mount()
       await flush()
       setTextarea('Сообщение')
@@ -347,12 +368,13 @@ describe('MasterSupportView', () => {
       submitBtn().click()
       await flush()
 
-      expect(openSupportThread).toHaveBeenCalledWith('Проблема с выводом')
-      expect(sendSupportMessage).toHaveBeenCalledWith('Проблема с выводом', 'Сообщение')
+      expect(createTicket).toHaveBeenCalledTimes(1)
+      expect(createTicket).toHaveBeenCalledWith('withdrawal', 'Сообщение', 'key-1')
     })
 
-    it('a failed open shows a toast, stays on the form, and never sends a message', async () => {
-      openSupportThread.mockReset().mockRejectedValue(new Error('boom'))
+    // Was: a failed OPEN never sent the message. One call now.
+    it('a failed ticket call shows a toast and stays on the form', async () => {
+      createTicket.mockReset().mockRejectedValue(new Error('boom'))
       mount()
       await flush()
       setTextarea('Сообщение')
@@ -362,8 +384,30 @@ describe('MasterSupportView', () => {
       await flush()
 
       expect(toastError).toHaveBeenCalled()
-      expect(sendSupportMessage).not.toHaveBeenCalled()
       expect(text()).not.toContain('Обращение отправлено')
+    })
+
+    it('a retry after a failure, nothing edited, carries the SAME key; an edit mints a new one', async () => {
+      createTicket
+        .mockReset()
+        .mockRejectedValueOnce(new Error('network'))
+        .mockRejectedValueOnce(new Error('network'))
+        .mockResolvedValue(CREATED)
+      mount()
+      await flush()
+      setTextarea('Сообщение')
+      await flush()
+
+      submitBtn().click()
+      await flush()
+      submitBtn().click()
+      await flush()
+      setTextarea('Сообщение, исправленное')
+      await flush()
+      submitBtn().click()
+      await flush()
+
+      expect(createTicket.mock.calls.map((c) => c[2])).toEqual(['key-1', 'key-1', 'key-2'])
     })
 
     it('«На главную» from the terminal screen routes to the master dashboard', async () => {

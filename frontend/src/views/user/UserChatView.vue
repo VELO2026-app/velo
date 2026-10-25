@@ -54,7 +54,7 @@ import { VHeader } from '@/components/layout'
 import { VButton, VEmptyState, VLoader } from '@/components/ui'
 import { IconMessages } from '@/components/icons'
 import ChatThreadScreen from '@/components/shared/ChatThreadScreen.vue'
-import { listChats, type ChatPeer } from '@/api/chats'
+import { chatRowFor, listChats, type ChatPeer } from '@/api/chats'
 
 const route = useRoute()
 const router = useRouter()
@@ -74,7 +74,8 @@ const peerFallback = computed(() =>
 onMounted(async () => {
   try {
     const { threads } = await listChats()
-    const thread = threads.find((t) => t.id === threadId)
+    // BE-162: an old ticket's id opens the support row too (thread_ids).
+    const thread = chatRowFor(threads, threadId)
     if (!thread) {
       notFound.value = true
     } else {

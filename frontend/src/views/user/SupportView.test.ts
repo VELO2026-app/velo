@@ -3,26 +3,24 @@
 // =============================================================================
 //
 // PATTERN B (local-ref form) -- confirmed by reading every import: no store,
-// no fetch ladder. State is local refs (topic / otherText / message /
-// submitted / submitting). The FORM -> TERMINAL transition is driven by
-// `submitted`, now set only after two real API calls resolve (PROMPT №712,
-// owner ruling B): open the caller's support thread, then deliver the topic
-// + message as its first message.
+// no fetch ladder. State is local refs (topic / message / submitted /
+// submitting). The FORM -> TERMINAL transition is driven by `submitted`, set
+// only after the ticket call resolves (FE-104, owner ruling BE-162: every
+// appeal is a NEW ticket -- the topic as a CODE and the message, one call,
+// under the appeal's Idempotency-Key).
 //
 // External boundaries: vue-router (router.back / router.push),
-// useKeyboardFieldScroll, @/api/support (openSupportThread /
-// sendSupportMessage), @/composables/useToast (the error path only --
-// success never toasts, it flips to the terminal screen instead).
+// useKeyboardFieldScroll, @/api/support (createTicket mocked; createAppealKeys
+// is the REAL keeper -- its key source, newIdempotencyKey in @/api/chats, is
+// mocked to a counter so "same key" / "new key" are observable),
+// @/composables/useToast (the error path only -- success never toasts, it
+// flips to the terminal screen instead).
 //
 // DRIVEN THROUGH THE DOM THROUGHOUT -- click the radio, type into the
-// textarea/input, click the button -- never by reaching into topic/otherText/
-// message refs directly (the local-form empty-green trap the skill warns
-// about: poking refs would assert this file's own fixture, not the screen).
+// textarea, click the button -- never by reaching into the refs directly (the
+// local-form empty-green trap the skill warns about).
 //
-// MONEY: none. Cyrillic fixtures/expected strings below were still typed via
-// the Write tool, not a shell heredoc, per house habit.
-//
-// No modal, no v-show (grepped -- v-if throughout), no order dependence --
+// MONEY: none. No modal, no v-show (v-if throughout), no order dependence --
 // every test mounts its own app.
 // =============================================================================
 
@@ -42,19 +40,22 @@ vi.mock('@/composables/useKeyboardFieldScroll', () => ({
   useKeyboardFieldScroll: () => ({ onFieldFocus }),
 }))
 
-const openSupportThread = vi.fn()
-const sendSupportMessage = vi.fn()
-vi.mock('@/api/support', () => ({
-  openSupportThread: (...args: Parameters<typeof openSupportThread>) => openSupportThread(...args),
-  sendSupportMessage: (...args: Parameters<typeof sendSupportMessage>) =>
-    sendSupportMessage(...args),
+const createTicket = vi.fn()
+vi.mock('@/api/support', async (importOriginal) => ({
+  // The real keeper: what the form promises about keys is the keeper's
+  // behaviour seen through the DOM, not this file's stub.
+  createAppealKeys: (await importOriginal<typeof import('@/api/support')>()).createAppealKeys,
+  createTicket: (...args: Parameters<typeof createTicket>) => createTicket(...args),
 }))
 
 // FE-103: after the send the view looks up the support ROW (channel
-// 'support') to hand over to the conversation.
+// 'support') to hand over to the conversation. newIdempotencyKey is the
+// keeper's key source -- a counter, so each fresh key is distinguishable.
 const listChats = vi.fn()
+let minted = 0
 vi.mock('@/api/chats', () => ({
   listChats: (...args: Parameters<typeof listChats>) => listChats(...args),
+  newIdempotencyKey: () => `key-${++minted}`,
 }))
 
 const toastError = vi.fn()
@@ -81,13 +82,33 @@ async function flush(): Promise<void> {
   for (let i = 0; i < 3; i++) await nextTick()
 }
 
+// The labels of the one topic table (supportTopics, ru). `technical` reads
+// «Технические проблемы» on both forms since FE-104 (owner ruling).
 const TOPIC_LABEL = {
   payment: 'Проблема с оплатой / транзакцией',
   complaint_master: 'Жалоба на мастера',
   practice: 'Проблема с практикой',
-  technical: 'Технический вопрос',
+  technical: 'Технические проблемы',
   other: 'Другое',
 } as const
+
+const CREATED = {
+  ticket: {
+    id: 'ticket-1',
+    topic: 'payment',
+    category: 'payments',
+    status: 'open',
+    created_at: '2026-10-25T10:00:00Z',
+    status_changed_at: '2026-10-25T10:00:00Z',
+  },
+  message: {
+    id: 'msg-1',
+    thread_id: 'ticket-1',
+    sender: 'user-1',
+    body: 'placeholder',
+    created_at: '2026-10-25T10:00:00Z',
+  },
+}
 
 function radioByLabel(label: string): HTMLButtonElement {
   const btn = Array.from(host?.querySelectorAll<HTMLButtonElement>('.v-radio') ?? []).find(
@@ -101,8 +122,10 @@ function messageField(): HTMLTextAreaElement {
   if (!el) throw new Error('message textarea did not render')
   return el
 }
-function otherInput(): HTMLInputElement | null {
-  return host?.querySelector<HTMLInputElement>('.support__other-input') ?? null
+function radioLabels(): string[] {
+  return Array.from(host?.querySelectorAll('.v-radio__label') ?? []).map(
+    (l) => l.textContent?.trim() ?? '',
+  )
 }
 function submitBtn(): HTMLButtonElement {
   const el = host?.querySelector<HTMLButtonElement>('.support__submit')
@@ -127,28 +150,8 @@ beforeEach(() => {
   push.mockReset()
   onFieldFocus.mockReset()
   toastError.mockReset()
-  openSupportThread.mockReset().mockResolvedValue({
-    id: 'thread-1',
-    client: 'user-1',
-    operator_kind: 'section',
-    operator_value: 'section-1',
-    assignee: null,
-    kind: 'dm',
-    status: 'open',
-    subject_type: null,
-    subject_id: null,
-    title: null,
-    priority: null,
-    last_message_at: null,
-    created_at: '2026-08-14T10:00:00Z',
-  })
-  sendSupportMessage.mockReset().mockResolvedValue({
-    id: 'msg-1',
-    thread_id: 'thread-1',
-    sender: 'user-1',
-    body: 'placeholder',
-    created_at: '2026-08-14T10:00:00Z',
-  })
+  minted = 0
+  createTicket.mockReset().mockResolvedValue(CREATED)
   listChats.mockReset().mockResolvedValue({
     threads: [
       {
@@ -173,15 +176,15 @@ afterEach(() => {
 
 describe('SupportView', () => {
   // ===========================================================================
-  describe('canSubmit truth table (.vue:127-131), asserted via the submit button)', () => {
-    it('empty message: disabled (default topic is NOT "other")', async () => {
+  describe('canSubmit truth table, asserted via the submit button', () => {
+    it('empty message: disabled', async () => {
       mount()
       await flush()
 
       expect(submitBtn().disabled).toBe(true)
     })
 
-    it('message present, topic != "other": ENABLED', async () => {
+    it('message present: ENABLED', async () => {
       mount()
       await flush()
 
@@ -191,25 +194,25 @@ describe('SupportView', () => {
       expect(submitBtn().disabled).toBe(false)
     })
 
-    it('topic == "other" with an EMPTY otherText: disabled even with a message', async () => {
+    it('whitespace-only message: disabled -- trimmed before the check', async () => {
       mount()
       await flush()
 
-      radioByLabel(TOPIC_LABEL.other).click()
-      await flush()
-      setValue(messageField(), 'У меня вопрос')
+      setValue(messageField(), '   ')
       await flush()
 
       expect(submitBtn().disabled).toBe(true)
     })
 
-    it('topic == "other" with otherText filled + message: ENABLED', async () => {
+    // Was: «Другое» with an EMPTY free-text field stayed disabled. Right while
+    // «Другое» carried its own topic text; FE-104 (owner ruling) removed that
+    // text -- the substance is the message -- so «Другое» + message is enough.
+    it('topic «Другое» + message: ENABLED -- no free text is required', async () => {
       mount()
       await flush()
 
       radioByLabel(TOPIC_LABEL.other).click()
       await flush()
-      setValue(otherInput()!, 'Другой вопрос')
       setValue(messageField(), 'У меня вопрос')
       await flush()
 
@@ -218,20 +221,38 @@ describe('SupportView', () => {
   })
 
   // ===========================================================================
-  describe('"other" branch reveal (.vue:52)', () => {
-    it('selecting «Другое» renders the otherText input; switching away hides it', async () => {
+  // Was: selecting «Другое» revealed a free-text input. Cancelled by FE-104
+  // (owner ruling: «Другое» without free text); the form has one text field.
+  describe('the topic list (FE-104)', () => {
+    it('offers exactly the five user topics, labelled from the one table', async () => {
       mount()
       await flush()
 
-      expect(otherInput()).toBeNull()
+      expect(radioLabels()).toEqual([
+        TOPIC_LABEL.payment,
+        TOPIC_LABEL.complaint_master,
+        TOPIC_LABEL.practice,
+        TOPIC_LABEL.technical,
+        TOPIC_LABEL.other,
+      ])
+    })
+
+    it('selecting «Другое» renders no field of its own -- one textarea, one input set', async () => {
+      mount()
+      await flush()
 
       radioByLabel(TOPIC_LABEL.other).click()
       await flush()
-      expect(otherInput()).not.toBeNull()
 
-      radioByLabel(TOPIC_LABEL.technical).click()
+      expect(host?.querySelectorAll('textarea')).toHaveLength(1)
+      expect(host?.querySelectorAll('input[type="text"]')).toHaveLength(0)
+    })
+
+    it('the message field is capped at the contract limit (4000)', async () => {
+      mount()
       await flush()
-      expect(otherInput()).toBeNull()
+
+      expect(messageField().getAttribute('maxlength')).toBe('4000')
     })
   })
 
@@ -268,49 +289,27 @@ describe('SupportView', () => {
   })
 
   // ===========================================================================
-  describe('the wiring (.vue: onSubmit) -- opens the thread, then sends the topic label + message', () => {
-    it.each([
-      ['payment', 'Проблема с оплатой / транзакцией'],
-      ['complaint_master', 'Жалоба на мастера'],
-      ['practice', 'Проблема с практикой'],
-      ['technical', 'Технический вопрос'],
-    ] as const)(
-      'topic "%s" opens with its LABEL and sends the same label',
-      async (topicValue, label) => {
+  // Was: the submit opened the eternal thread with the topic LABEL, then sent
+  // the label + message (PROMPT №712). Right for that contract; BE-162
+  // removed both routes -- one call now carries the topic CODE.
+  describe('the wiring (onSubmit) -- one ticket call: the topic CODE + the message', () => {
+    it.each([['payment'], ['complaint_master'], ['practice'], ['technical'], ['other']] as const)(
+      'topic "%s" is sent as its CODE, never as a label',
+      async (code) => {
         mount()
         await flush()
 
-        radioByLabel(TOPIC_LABEL[topicValue]).click()
+        radioByLabel(TOPIC_LABEL[code]).click()
         await flush()
         setValue(messageField(), 'Текст обращения')
         await flush()
         submitBtn().click()
         await flush()
 
-        expect(openSupportThread).toHaveBeenCalledWith(label)
-        expect(sendSupportMessage).toHaveBeenCalledWith(label, 'Текст обращения')
-        // Open happens BEFORE send -- the thread must exist first.
-        expect(openSupportThread.mock.invocationCallOrder[0]).toBeLessThan(
-          sendSupportMessage.mock.invocationCallOrder[0]!,
-        )
+        expect(createTicket).toHaveBeenCalledTimes(1)
+        expect(createTicket).toHaveBeenCalledWith(code, 'Текст обращения', 'key-1')
       },
     )
-
-    it('topic "other": the TRIMMED otherText is sent as the topic label, not the raw value', async () => {
-      mount()
-      await flush()
-
-      radioByLabel(TOPIC_LABEL.other).click()
-      await flush()
-      setValue(otherInput()!, '  Свой вариант  ')
-      setValue(messageField(), 'Текст обращения')
-      await flush()
-      submitBtn().click()
-      await flush()
-
-      expect(openSupportThread).toHaveBeenCalledWith('Свой вариант')
-      expect(sendSupportMessage).toHaveBeenCalledWith('Свой вариант', 'Текст обращения')
-    })
 
     it('message is trimmed before it is sent', async () => {
       mount()
@@ -321,26 +320,13 @@ describe('SupportView', () => {
       submitBtn().click()
       await flush()
 
-      expect(sendSupportMessage.mock.calls[0]?.[1]).toBe('Текст с пробелами')
+      expect(createTicket.mock.calls[0]?.[1]).toBe('Текст с пробелами')
     })
 
-    it('a failed open shows a toast, stays on the form, and never sends a message', async () => {
-      openSupportThread.mockReset().mockRejectedValue(new Error('boom'))
-      mount()
-      await flush()
-
-      setValue(messageField(), 'У меня вопрос')
-      await flush()
-      submitBtn().click()
-      await flush()
-
-      expect(toastError).toHaveBeenCalled()
-      expect(sendSupportMessage).not.toHaveBeenCalled()
-      expect(isTerminal()).toBe(false)
-    })
-
-    it('a failed send shows a toast and stays on the form', async () => {
-      sendSupportMessage.mockReset().mockRejectedValue(new Error('boom'))
+    // Was: two calls, and a failed OPEN never sent. One call now: a failure
+    // of it toasts and leaves the form standing.
+    it('a failed ticket call shows a toast and stays on the form', async () => {
+      createTicket.mockReset().mockRejectedValue(new Error('boom'))
       mount()
       await flush()
 
@@ -353,11 +339,11 @@ describe('SupportView', () => {
       expect(isTerminal()).toBe(false)
     })
 
-    it('the submit button shows loading while the calls are in flight', async () => {
-      let resolveOpen!: (v: unknown) => void
-      openSupportThread.mockReset().mockReturnValue(
+    it('the submit button shows loading while the call is in flight', async () => {
+      let resolveCreate!: (v: unknown) => void
+      createTicket.mockReset().mockReturnValue(
         new Promise((resolve) => {
-          resolveOpen = resolve
+          resolveCreate = resolve
         }),
       )
       mount()
@@ -370,23 +356,98 @@ describe('SupportView', () => {
 
       expect(submitBtn().classList.contains('v-btn--loading')).toBe(true)
 
-      resolveOpen({
-        id: 'thread-1',
-        client: 'user-1',
-        operator_kind: 'section',
-        operator_value: 'section-1',
-        assignee: null,
-        kind: 'dm',
-        status: 'open',
-        subject_type: null,
-        subject_id: null,
-        title: null,
-        priority: null,
-        last_message_at: null,
-        created_at: '2026-08-14T10:00:00Z',
-      })
+      resolveCreate(CREATED)
       await flush()
       expect(isTerminal()).toBe(true)
+    })
+  })
+
+  // ===========================================================================
+  describe('one appeal, one key (FE-104)', () => {
+    it('a double tap while the call is in flight sends ONE ticket call', async () => {
+      let resolveCreate!: (v: unknown) => void
+      createTicket.mockReset().mockReturnValue(
+        new Promise((resolve) => {
+          resolveCreate = resolve
+        }),
+      )
+      mount()
+      await flush()
+
+      setValue(messageField(), 'У меня вопрос')
+      await flush()
+      submitBtn().click()
+      submitBtn().click()
+      await flush()
+
+      expect(createTicket).toHaveBeenCalledTimes(1)
+      resolveCreate(CREATED)
+      await flush()
+    })
+
+    it('a retry after a failure, nothing edited, carries the SAME key', async () => {
+      createTicket
+        .mockReset()
+        .mockRejectedValueOnce(new Error('network'))
+        .mockResolvedValue(CREATED)
+      mount()
+      await flush()
+
+      setValue(messageField(), 'У меня вопрос')
+      await flush()
+      submitBtn().click()
+      await flush()
+      submitBtn().click()
+      await flush()
+
+      expect(createTicket).toHaveBeenCalledTimes(2)
+      const [first, second] = createTicket.mock.calls
+      expect(first?.[2]).toBe('key-1')
+      expect(second?.[2]).toBe('key-1')
+      expect(isTerminal()).toBe(true)
+    })
+
+    it('an edit of the message after a failure mints a NEW key', async () => {
+      createTicket
+        .mockReset()
+        .mockRejectedValueOnce(new Error('network'))
+        .mockResolvedValue(CREATED)
+      mount()
+      await flush()
+
+      setValue(messageField(), 'У меня вопрос')
+      await flush()
+      submitBtn().click()
+      await flush()
+      setValue(messageField(), 'У меня другой вопрос')
+      await flush()
+      submitBtn().click()
+      await flush()
+
+      expect(createTicket.mock.calls.map((c) => c[2])).toEqual(['key-1', 'key-2'])
+    })
+
+    it('a change of the topic after a failure mints a NEW key', async () => {
+      createTicket
+        .mockReset()
+        .mockRejectedValueOnce(new Error('network'))
+        .mockResolvedValue(CREATED)
+      mount()
+      await flush()
+
+      setValue(messageField(), 'У меня вопрос')
+      await flush()
+      submitBtn().click()
+      await flush()
+      radioByLabel(TOPIC_LABEL.technical).click()
+      await flush()
+      submitBtn().click()
+      await flush()
+
+      expect(createTicket.mock.calls.map((c) => [c[0], c[2]])).toEqual([
+        ['payment', 'key-1'],
+        ['technical', 'key-2'],
+      ])
     })
   })
 

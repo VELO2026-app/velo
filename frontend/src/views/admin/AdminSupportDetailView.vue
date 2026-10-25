@@ -1,31 +1,36 @@
 <!--
-  VELO Frontend -- AdminSupportDetailView (B34, PROMPT №713)
+  VELO Frontend -- AdminSupportDetailView (B34, PROMPT №713; tickets since FE-100)
 
-  One support thread: feed + reply. Page shell reused from AdminReportDetailView
-  (VHeader + content sections, plain page scroll) -- no new layout, no .tmp/
-  preview needed (say-so-and-proceed branch). The message bubbles/composer
-  visual language is copied from ChatThreadScreen.vue's markup+CSS (a bubble
-  is a bubble everywhere in this app) WITHOUT reusing that component: it is
-  hardwired to api/chats.ts (a different backend contract -- DM threads, not
-  admin-scoped section threads) and refactoring it to accept a pluggable API
-  would be a shared-component change well past this task's minimal scope.
+  One support TICKET (BE-162): its status, the claim, the feed and the reply,
+  and -- read-only -- the person's conversation from before tickets. Page shell
+  reused from AdminReportDetailView (VHeader + content sections, plain page
+  scroll; the status buttons and the «already processed» card follow its
+  action section). The bubbles/composer visual language is copied from
+  ChatThreadScreen.vue's markup+CSS WITHOUT reusing that component: it is
+  hardwired to api/chats.ts, a different backend contract.
 
-  DELIBERATELY NOT BUILT (scope trim, stated not silent): 12s polling like
-  ChatThreadScreen has. "Read the feed, reply" does not ask for a live chat;
-  a manual "Обновить" affordance covers the same need at a fraction of the
-  complexity (no visibility listener, no near-bottom tracking, no timer
-  teardown). Also not built: mark-read/unread tracking for admins -- see
-  AdminSupportView's own header for why comms' per-participant unread-count
-  has no meaning for a thread nobody has claimed yet.
+  THE TICKET comes from the list's state hand-off; without it -- a deep link
+  (`open_admin_support__<id>`, BE-172), a reload -- and whenever it must be
+  read again (a 409 on the status, after a claim) it is ONE read: GET
+  /api/v1/support/tickets/{id}, the same row as in the list, spam included.
+  404 is the not-found screen.
 
-  CLAIM IS WRITE-AUTHZ, MADE LEGIBLE. comms' can_post_message admits only the
-  thread's client or its ASSIGNEE (no supervisor bypass) -- an admin who has
-  not claimed gets comms' own 403 on a reply (forwarded, not swallowed; see
-  backend/app/core/comms.py's forward_403). Rather than let that surprise the
-  admin mid-type, the claim state gates the composer itself: unclaimed or
-  claimed-by-someone-else hides the composer behind a notice, reusing the
-  established peach warning-panel convention (ReportUserSheet.vue's
-  --velo-warning-bg notice) instead of inventing new visual language.
+  STATUS: an OPEN ticket offers the four closing statuses to ANY admin (the
+  backend asks no claim for it); any other status shows itself. A 409 means
+  the ticket is no longer open or changed meanwhile (a person's message bumps
+  it): a toast and a fresh read -- if it is still open, the admin may retry.
+
+  CLAIM IS WRITE-AUTHZ, MADE LEGIBLE. comms admits only the thread's client or
+  its ASSIGNEE to post; an admin who has not claimed gets comms' own 403 on a
+  reply. So the composer shows only to the admin in `claimed_by`; everybody
+  else sees a notice, and «Взять в работу» while nobody holds it. A ticket
+  held by another admin is a 409 on the claim; after any claim answer the
+  ticket is read again, so `claimed_by` is always the server's.
+
+  DELIBERATELY NOT BUILT (scope trim, stated not silent): polling like
+  ChatThreadScreen has -- a manual «Обновить» covers it; mark-read for admins.
+  Delivery B (out of FE-100's minimum): translation marks, «Показать оригинал»,
+  «Повторить», the ⋯ menu, «вернуть в работу», «назначить».
 -->
 
 <template>
@@ -33,31 +38,57 @@
     <VHeader :title="headerTitle" show-back @back="router.back()" />
 
     <div class="support-detail__content">
-      <div v-if="loadingThread" class="support-detail__loader">
+      <div v-if="loadingTicket" class="support-detail__loader">
         <VLoader size="lg" />
       </div>
 
       <VEmptyState
-        v-else-if="threadError"
+        v-else-if="ticketError"
         icon="warning"
         :title="t('common.loadError')"
-        :description="threadError"
+        :description="ticketError"
       >
-        <VButton size="sm" variant="outline" @click="loadThread">{{ t('common.retry') }}</VButton>
+        <VButton size="sm" variant="outline" @click="fetchTicket">{{ t('common.retry') }}</VButton>
       </VEmptyState>
 
-      <template v-else-if="thread">
+      <template v-else-if="ticket">
         <div class="support-detail__header">
-          <VBadge :variant="triageBadge.variant">{{ triageBadge.label }}</VBadge>
-          <span v-if="thread.title" class="support-detail__topic">{{ thread.title }}</span>
+          <VBadge :variant="supportStatusBadge(ticket.status)">
+            {{ supportStatusLabel(ticket.status) }}
+          </VBadge>
+          <span class="support-detail__topic">{{ supportTopicLabel(ticket.topic) }}</span>
         </div>
 
-        <!-- Claim notice: shown whenever the caller is NOT the assignee, so
+        <!-- Status: the four closing statuses while the ticket is open. -->
+        <div v-if="ticket.status === 'open'" class="support-detail__section">
+          <div class="support-detail__section-title">
+            {{ t('adminScreens.adminSupportDetail.statusSection') }}
+          </div>
+          <div class="support-detail__actions">
+            <VButton
+              v-for="status in SUPPORT_CLOSING_STATUSES"
+              :key="status"
+              :variant="status === 'resolved' ? 'primary' : 'outline'"
+              block
+              :loading="changingTo === status"
+              :disabled="changingTo !== null"
+              @click="onSetStatus(status)"
+            >
+              {{ supportStatusLabel(status) }}
+            </VButton>
+          </div>
+        </div>
+        <VCard v-else class="support-detail__processed">
+          {{ t('adminScreens.adminSupportDetail.currentStatus') }}
+          <strong>{{ supportStatusLabel(ticket.status) }}</strong>
+        </VCard>
+
+        <!-- Claim notice: shown whenever the caller is NOT the taker, so
              "why can't I type" is answered before it is asked. -->
         <div v-if="!canReply" class="support-detail__claim-panel">
           <p class="support-detail__claim-text">{{ claimPanelText }}</p>
           <VButton
-            v-if="!thread.assignee"
+            v-if="!ticket.claimed_by"
             variant="primary"
             size="sm"
             :loading="claiming"
@@ -128,6 +159,56 @@
             </VButton>
           </div>
         </template>
+
+        <!-- The person's conversation before tickets: read-only, on demand. -->
+        <template v-if="ticket.history_thread_id">
+          <VButton
+            v-if="!historyShown"
+            variant="outline"
+            block
+            class="support-detail__history-open"
+            @click="loadHistory"
+          >
+            {{ t('adminScreens.adminSupportDetail.history.show') }}
+          </VButton>
+          <div v-else class="support-detail__section">
+            <div class="support-detail__section-title">
+              {{ t('adminScreens.adminSupportDetail.history.title') }}
+            </div>
+            <div v-if="loadingHistory" class="support-detail__loader">
+              <VLoader size="lg" />
+            </div>
+            <VEmptyState
+              v-else-if="historyError"
+              icon="warning"
+              :title="t('adminScreens.adminSupportDetail.messagesLoadFailed')"
+              :description="historyError"
+            >
+              <VButton size="sm" variant="outline" @click="loadHistory">{{
+                t('common.retry')
+              }}</VButton>
+            </VEmptyState>
+            <div v-else class="support-detail__feed">
+              <div v-if="historyMessages.length === 0" class="support-detail__empty">
+                {{ t('adminScreens.adminSupportDetail.noMessages') }}
+              </div>
+              <div
+                v-for="m in historyMessages"
+                :key="m.id"
+                class="support-detail__row"
+                :class="{ 'support-detail__row--mine': m.sender === myId }"
+              >
+                <div
+                  class="support-detail__bubble"
+                  :class="{ 'support-detail__bubble--mine': m.sender === myId }"
+                >
+                  <div class="support-detail__body">{{ m.body }}</div>
+                  <div class="support-detail__time">{{ formatTime(m.created_at) }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
       </template>
 
       <div v-else class="support-detail__not-found">
@@ -147,30 +228,35 @@ import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
-import { VBadge, VButton, VTextarea, VEmptyState, VLoader } from '@/components/ui'
+import { VBadge, VButton, VCard, VTextarea, VEmptyState, VLoader } from '@/components/ui'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
+import { ApiResponseError } from '@/api/client'
 import {
-  listAdminSupportThreads,
-  getAdminSupportMessages,
-  sendAdminSupportReply,
+  SUPPORT_CLOSING_STATUSES,
   claimSupportThread,
-  type SupportThread,
+  getAdminSupportMessages,
+  getAdminTicket,
+  sendAdminSupportReply,
+  setTicketStatus,
+  type AdminSupportTicket,
+  type SupportClosingStatus,
   type SupportMessage,
 } from '@/api/support'
 import { extractApiError } from '@/composables/useApiError'
+import { supportStatusBadge, supportStatusLabel, supportTopicLabel } from '@/utils/supportTopics'
 
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const authStore = useAuthStore()
 
-const threadId = route.params.id as string
+const ticketId = route.params.id as string
 const myId = computed(() => authStore.user?.id ?? '')
 
-const thread = ref<SupportThread | null>(null)
-const loadingThread = ref(false)
-const threadError = ref<string | null>(null)
+const ticket = ref<AdminSupportTicket | null>(null)
+const loadingTicket = ref(false)
+const ticketError = ref<string | null>(null)
 
 const messages = ref<SupportMessage[]>([])
 const loadingMessages = ref(false)
@@ -179,36 +265,27 @@ const messagesError = ref<string | null>(null)
 const draft = ref('')
 const sending = ref(false)
 const claiming = ref(false)
+const changingTo = ref<SupportClosingStatus | null>(null)
+
+const historyShown = ref(false)
+const historyMessages = ref<SupportMessage[]>([])
+const loadingHistory = ref(false)
+const historyError = ref<string | null>(null)
 
 const headerTitle = computed(
-  () => thread.value?.opener?.name ?? t('adminScreens.adminSupportDetail.threadFallback'),
+  () => ticket.value?.opener?.name ?? t('adminScreens.adminSupportDetail.threadFallback'),
 )
-const canReply = computed(() => !!thread.value && thread.value.assignee === myId.value)
+const canReply = computed(() => !!myId.value && ticket.value?.claimed_by?.user_id === myId.value)
 
-const triageBadge = computed<{ variant: 'warning' | 'success' | 'info'; label: string }>(() => {
-  const threadItem = thread.value
-  if (!threadItem) return { variant: 'info', label: '' }
-  if (threadItem.status === 'resolved') {
-    return { variant: 'success', label: t('admin.supportTicket.resolved') }
-  }
-  if (threadItem.status === 'closed') {
-    return { variant: 'info', label: t('admin.supportTicket.closed') }
-  }
-  if (!threadItem.assignee) {
-    return { variant: 'warning', label: t('adminScreens.adminSupportDetail.status.unclaimed') }
-  }
-  if (threadItem.assignee === myId.value) {
-    return { variant: 'success', label: t('adminScreens.adminSupportDetail.status.mine') }
-  }
-  return { variant: 'info', label: t('adminScreens.adminSupportDetail.taken') }
-})
+const claimPanelText = computed(() =>
+  ticket.value?.claimed_by
+    ? t('adminScreens.adminSupportDetail.claimedByOtherHint')
+    : t('adminScreens.adminSupportDetail.unclaimedHint'),
+)
 
-const claimPanelText = computed(() => {
-  if (!thread.value?.assignee) {
-    return t('adminScreens.adminSupportDetail.unclaimedHint')
-  }
-  return t('adminScreens.adminSupportDetail.claimedByOtherHint')
-})
+function isStatus(e: unknown, status: number): boolean {
+  return e instanceof ApiResponseError && e.status === status
+}
 
 function formatTime(iso: string): string {
   const d = new Date(iso)
@@ -216,26 +293,39 @@ function formatTime(iso: string): string {
   return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
 }
 
-async function loadThread(): Promise<void> {
-  const stateData = (history.state as { thread?: SupportThread }).thread
-  if (stateData && stateData.id === threadId) {
-    thread.value = stateData
-    threadError.value = null
+async function loadTicket(): Promise<void> {
+  const stateData = (history.state as { ticket?: AdminSupportTicket }).ticket
+  if (stateData && stateData.id === ticketId) {
+    ticket.value = stateData
+    ticketError.value = null
     return
   }
-  // No (or stale) hand-off -- e.g. a direct link/refresh. There is no
-  // "get one thread" endpoint (comms itself has none), so the admin list
-  // is re-fetched and searched by id, same fallback MasterChatView.vue
-  // uses for the DM equivalent.
-  loadingThread.value = true
-  threadError.value = null
+  await fetchTicket()
+}
+
+/** The ticket by its one read, behind the page loader (no hand-off). */
+async function fetchTicket(): Promise<void> {
+  loadingTicket.value = true
+  ticketError.value = null
   try {
-    const page = await listAdminSupportThreads(100)
-    thread.value = page.threads.find((t) => t.id === threadId) ?? null
+    ticket.value = await getAdminTicket(ticketId)
   } catch (e) {
-    threadError.value = extractApiError(e, t('adminScreens.adminSupportDetail.ticketLoadError'))
+    if (isStatus(e, 404)) ticket.value = null
+    else
+      ticketError.value = extractApiError(e, t('adminScreens.adminSupportDetail.ticketLoadError'))
   } finally {
-    loadingThread.value = false
+    loadingTicket.value = false
+  }
+}
+
+/** Read the ticket again in place -- after a 409 or a claim -- without
+ *  hiding the page: a failure toasts and keeps what is shown. */
+async function refreshTicket(): Promise<void> {
+  try {
+    ticket.value = await getAdminTicket(ticketId)
+  } catch (e) {
+    if (isStatus(e, 404)) ticket.value = null
+    else toast.error(extractApiError(e, t('adminScreens.adminSupportDetail.ticketLoadError')))
   }
 }
 
@@ -243,7 +333,7 @@ async function loadMessages(): Promise<void> {
   loadingMessages.value = true
   messagesError.value = null
   try {
-    const page = await getAdminSupportMessages(threadId)
+    const page = await getAdminSupportMessages(ticketId)
     messages.value = [...page.messages].reverse()
   } catch (e) {
     messagesError.value = extractApiError(e, t('adminScreens.adminSupportDetail.tryAgain'))
@@ -252,15 +342,57 @@ async function loadMessages(): Promise<void> {
   }
 }
 
+async function loadHistory(): Promise<void> {
+  const historyId = ticket.value?.history_thread_id
+  if (!historyId || loadingHistory.value) return
+  historyShown.value = true
+  loadingHistory.value = true
+  historyError.value = null
+  try {
+    const page = await getAdminSupportMessages(historyId)
+    historyMessages.value = [...page.messages].reverse()
+  } catch (e) {
+    historyError.value = extractApiError(e, t('adminScreens.adminSupportDetail.tryAgain'))
+  } finally {
+    loadingHistory.value = false
+  }
+}
+
+async function onSetStatus(status: SupportClosingStatus): Promise<void> {
+  if (!ticket.value || changingTo.value) return
+  changingTo.value = status
+  try {
+    const changed = await setTicketStatus(ticketId, status)
+    // The answer carries no admin-only fields; the status change does not
+    // touch them, so they stay as read.
+    if (ticket.value) ticket.value = { ...ticket.value, ...changed }
+    toast.success(t('adminScreens.adminSupportDetail.toast.statusChanged'))
+  } catch (e) {
+    if (isStatus(e, 409)) {
+      toast.error(t('adminScreens.adminSupportDetail.toast.statusConflict'))
+      await refreshTicket()
+    } else {
+      toast.error(extractApiError(e, t('adminScreens.adminSupportDetail.toast.statusFailed')))
+    }
+  } finally {
+    changingTo.value = null
+  }
+}
+
 async function onClaim(): Promise<void> {
+  if (claiming.value) return
   claiming.value = true
   try {
-    const result = await claimSupportThread(threadId)
-    if (thread.value) thread.value = { ...thread.value, assignee: result.thread.assignee }
-    if (result.claimed) toast.success(t('adminScreens.adminSupportDetail.toast.claimedByYou'))
-    else toast.error(t('adminScreens.adminSupportDetail.toast.claimedByOther'))
+    await claimSupportThread(ticketId)
+    toast.success(t('adminScreens.adminSupportDetail.toast.claimedByYou'))
+    await refreshTicket()
   } catch (e) {
-    toast.error(extractApiError(e, t('adminScreens.adminSupportDetail.toast.claimFailed')))
+    if (isStatus(e, 409)) {
+      toast.error(t('adminScreens.adminSupportDetail.toast.claimedByOther'))
+      await refreshTicket()
+    } else {
+      toast.error(extractApiError(e, t('adminScreens.adminSupportDetail.toast.claimFailed')))
+    }
   } finally {
     claiming.value = false
   }
@@ -271,7 +403,7 @@ async function onSend(): Promise<void> {
   if (!body || sending.value) return
   sending.value = true
   try {
-    const sent = await sendAdminSupportReply(threadId, body)
+    const sent = await sendAdminSupportReply(ticketId, body)
     messages.value = [...messages.value, sent]
     draft.value = ''
   } catch (e) {
@@ -282,8 +414,8 @@ async function onSend(): Promise<void> {
 }
 
 onMounted(async () => {
-  await loadThread()
-  await loadMessages()
+  await loadTicket()
+  if (ticket.value) await loadMessages()
 })
 </script>
 
@@ -410,5 +542,30 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+
+.support-detail__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.support-detail__section-title {
+  font-size: var(--text-xs);
+  color: var(--velo-text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--velo-letter-spacing-05);
+}
+
+.support-detail__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.support-detail__processed {
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--velo-text-muted);
 }
 </style>

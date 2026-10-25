@@ -52,5 +52,16 @@
     "analytics": "Analytics",
     "masters": "Masters",
     "moderation": "Moderation"
+  },
+  "supportTopics": {
+    "payment": "A problem with a payment / transaction",
+    "complaint_master": "A complaint about a master",
+    "practice": "A problem with a practice",
+    "withdrawal": "A problem with a withdrawal",
+    "practices": "A question about practices",
+    "add_direction": "Add a practice direction",
+    "complaint_user": "A complaint about a user",
+    "technical": "Technical problems",
+    "other": "Other"
   }
 }

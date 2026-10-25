@@ -47,10 +47,6 @@
       "justNow": "только что",
       "minutesAgo": "{n} мин назад",
       "hoursAgo": "{n} ч назад"
-    },
-    "supportTicket": {
-      "resolved": "Решено",
-      "closed": "Закрыто"
     }
   },
   "adminScreens": {
@@ -395,11 +391,6 @@
     },
     "adminSupportDetail": {
       "reply": "Ответ…",
-      "status": {
-        "unclaimed": "Не взято",
-        "mine": "У меня"
-      },
-      "taken": "Занято",
       "unclaimedHint": "Обращение не закреплено. Возьмите его в работу, чтобы отвечать.",
       "claimedByOtherHint": "Обращение уже закреплено за другим администратором — ответить может только он.",
       "ticketLoadError": "Ошибка загрузки обращения",
@@ -408,7 +399,10 @@
         "claimedByYou": "Обращение закреплено за вами",
         "claimedByOther": "Уже взято другим администратором",
         "claimFailed": "Не удалось закрепить обращение",
-        "replyFailed": "Не удалось отправить ответ"
+        "replyFailed": "Не удалось отправить ответ",
+        "statusChanged": "Статус изменён",
+        "statusConflict": "Обращение изменилось — проверьте статус",
+        "statusFailed": "Не удалось сменить статус"
       },
       "take": "Взять в работу",
       "noMessages": "Сообщений пока нет.",
@@ -416,23 +410,35 @@
       "messagesLoadFailed": "Не удалось загрузить сообщения",
       "notFoundTitle": "Обращение не найдено",
       "backToList": "Вернитесь к списку обращений",
-      "threadFallback": "Обращение"
+      "threadFallback": "Обращение",
+      "statusSection": "Отметить обращение как",
+      "currentStatus": "Статус обращения:",
+      "history": {
+        "show": "История обращений",
+        "title": "Переписка до обращений через форму — только чтение"
+      }
     },
     "adminSupport": {
       "empty": {
         "title": "Обращений нет",
         "text": "Сюда попадут все обращения в поддержку"
       },
-      "status": {
-        "unclaimed": "Не взято",
-        "mine": "У меня"
-      },
-      "taken": "Занято",
       "ticketsLoadError": "Ошибка загрузки обращений",
-      "resolved": "Решено",
-      "closed": "Закрыто",
       "title": "Поддержка",
-      "userFallback": "Пользователь"
+      "userFallback": "Пользователь",
+      "statuses": {
+        "open": "Открыта",
+        "resolved": "Решена",
+        "rejected": "Отклонена",
+        "duplicate": "Дубликат",
+        "spam": "Спам"
+      },
+      "claimedBy": {
+        "none": "Не взято",
+        "mine": "У меня",
+        "other": "Взял: {name}",
+        "adminFallback": "Администратор"
+      }
     },
     "adminUsers": {
       "usersLoadFailed": "Не удалось загрузить пользователей",

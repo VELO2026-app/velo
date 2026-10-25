@@ -833,9 +833,6 @@
       "title": "Weekly summary"
     },
     "masterSupport": {
-      "custom": {
-        "title": "Custom topic"
-      },
       "message": {
         "placeholder": "Describe your problem or question...",
         "label": "Message"
@@ -852,11 +849,7 @@
       "title": "Support",
       "responseHint": "We usually reply within 24 hours",
       "topic": {
-        "label": "Topic",
-        "withdrawal": "A problem with a withdrawal",
-        "practices": "A question about practices",
-        "tech": "Technical problems",
-        "addDirection": "Add a practice direction"
+        "label": "Topic"
       },
       "addFile": "Add a file (5MB)"
     },

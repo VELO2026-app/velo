@@ -47,10 +47,6 @@
       "justNow": "щойно",
       "minutesAgo": "{n} хв тому",
       "hoursAgo": "{n} год тому"
-    },
-    "supportTicket": {
-      "resolved": "Вирішено",
-      "closed": "Закрито"
     }
   },
   "adminScreens": {
@@ -395,11 +391,6 @@
     },
     "adminSupportDetail": {
       "reply": "Відповідь…",
-      "status": {
-        "unclaimed": "Не взято",
-        "mine": "У мене"
-      },
-      "taken": "Зайнято",
       "unclaimedHint": "Звернення не закріплено. Візьміть його в роботу, щоб відповідати.",
       "claimedByOtherHint": "Звернення вже закріплено за іншим адміністратором — відповісти може лише він.",
       "ticketLoadError": "Помилка завантаження звернення",
@@ -408,7 +399,10 @@
         "claimedByYou": "Звернення закріплено за вами",
         "claimedByOther": "Вже взято іншим адміністратором",
         "claimFailed": "Не вдалося закріпити звернення",
-        "replyFailed": "Не вдалося надіслати відповідь"
+        "replyFailed": "Не вдалося надіслати відповідь",
+        "statusChanged": "Статус змінено",
+        "statusConflict": "Звернення змінилося — перевірте статус",
+        "statusFailed": "Не вдалося змінити статус"
       },
       "take": "Взяти в роботу",
       "noMessages": "Повідомлень поки немає.",
@@ -416,23 +410,35 @@
       "messagesLoadFailed": "Не вдалося завантажити повідомлення",
       "notFoundTitle": "Звернення не знайдено",
       "backToList": "Поверніться до списку звернень",
-      "threadFallback": "Звернення"
+      "threadFallback": "Звернення",
+      "statusSection": "Позначити звернення як",
+      "currentStatus": "Статус звернення:",
+      "history": {
+        "show": "Історія звернень",
+        "title": "Листування до звернень через форму — лише читання"
+      }
     },
     "adminSupport": {
       "empty": {
         "title": "Звернень немає",
         "text": "Сюди потраплять усі звернення в підтримку"
       },
-      "status": {
-        "unclaimed": "Не взято",
-        "mine": "У мене"
-      },
-      "taken": "Зайнято",
       "ticketsLoadError": "Помилка завантаження звернень",
-      "resolved": "Вирішено",
-      "closed": "Закрито",
       "title": "Підтримка",
-      "userFallback": "Користувач"
+      "userFallback": "Користувач",
+      "statuses": {
+        "open": "Відкрита",
+        "resolved": "Вирішена",
+        "rejected": "Відхилена",
+        "duplicate": "Дублікат",
+        "spam": "Спам"
+      },
+      "claimedBy": {
+        "none": "Не взято",
+        "mine": "У мене",
+        "other": "Взяв: {name}",
+        "adminFallback": "Адміністратор"
+      }
     },
     "adminUsers": {
       "usersLoadFailed": "Не вдалося завантажити користувачів",

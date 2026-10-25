@@ -47,10 +47,6 @@
       "justNow": "just now",
       "minutesAgo": "{n} min ago",
       "hoursAgo": "{n} h ago"
-    },
-    "supportTicket": {
-      "resolved": "Resolved",
-      "closed": "Closed"
     }
   },
   "adminScreens": {
@@ -395,11 +391,6 @@
     },
     "adminSupportDetail": {
       "reply": "Reply…",
-      "status": {
-        "unclaimed": "Unclaimed",
-        "mine": "Mine"
-      },
-      "taken": "Taken",
       "unclaimedHint": "The ticket is unassigned. Take it to be able to reply.",
       "claimedByOtherHint": "The ticket is already assigned to another administrator — only they can reply.",
       "ticketLoadError": "Error loading the ticket",
@@ -408,7 +399,10 @@
         "claimedByYou": "The ticket is assigned to you",
         "claimedByOther": "Already taken by another administrator",
         "claimFailed": "Failed to claim the ticket",
-        "replyFailed": "Failed to send the reply"
+        "replyFailed": "Failed to send the reply",
+        "statusChanged": "Status changed",
+        "statusConflict": "The ticket has changed — check its status",
+        "statusFailed": "Failed to change the status"
       },
       "take": "Take it",
       "noMessages": "No messages yet.",
@@ -416,23 +410,35 @@
       "messagesLoadFailed": "Failed to load the messages",
       "notFoundTitle": "Ticket not found",
       "backToList": "Return to the tickets list",
-      "threadFallback": "Ticket"
+      "threadFallback": "Ticket",
+      "statusSection": "Mark the ticket as",
+      "currentStatus": "Ticket status:",
+      "history": {
+        "show": "Earlier conversation",
+        "title": "The conversation before form tickets — read-only"
+      }
     },
     "adminSupport": {
       "empty": {
         "title": "No tickets",
         "text": "All support requests will appear here"
       },
-      "status": {
-        "unclaimed": "Unclaimed",
-        "mine": "Mine"
-      },
-      "taken": "Taken",
       "ticketsLoadError": "Error loading the tickets",
-      "resolved": "Resolved",
-      "closed": "Closed",
       "title": "Support",
-      "userFallback": "User"
+      "userFallback": "User",
+      "statuses": {
+        "open": "Open",
+        "resolved": "Resolved",
+        "rejected": "Rejected",
+        "duplicate": "Duplicate",
+        "spam": "Spam"
+      },
+      "claimedBy": {
+        "none": "Unclaimed",
+        "mine": "Mine",
+        "other": "Taken by {name}",
+        "adminFallback": "Administrator"
+      }
     },
     "adminUsers": {
       "usersLoadFailed": "Failed to load the users",

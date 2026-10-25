@@ -621,9 +621,6 @@
         "title": "Schools"
       },
       "support": {
-        "custom": {
-          "title": "Custom topic"
-        },
         "message": {
           "placeholder": "Describe your problem or question...",
           "label": "Message"
@@ -638,11 +635,7 @@
         "title": "How can we help?",
         "responseHint": "We usually reply within 24 hours",
         "topic": {
-          "label": "Topic",
-          "payments": "A problem with a payment / transaction",
-          "masterComplaint": "A complaint about a master",
-          "practice": "A problem with a practice",
-          "tech": "A technical question"
+          "label": "Topic"
         }
       },
       "timezoneSettings": {

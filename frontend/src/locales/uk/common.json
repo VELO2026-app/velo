@@ -52,5 +52,16 @@
     "analytics": "Аналітика",
     "masters": "Майстри",
     "moderation": "Модерація"
+  },
+  "supportTopics": {
+    "payment": "Проблема з оплатою / транзакцією",
+    "complaint_master": "Скарга на майстра",
+    "practice": "Проблема з практикою",
+    "withdrawal": "Проблема з виведенням",
+    "practices": "Питання по практиках",
+    "add_direction": "Додати напрямок практики",
+    "complaint_user": "Скарга на користувача",
+    "technical": "Технічні проблеми",
+    "other": "Інше"
   }
 }

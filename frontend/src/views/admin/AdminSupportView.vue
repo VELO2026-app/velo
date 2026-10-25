@@ -1,28 +1,22 @@
 <!--
-  VELO Frontend -- AdminSupportView (B34, PROMPT №713)
+  VELO Frontend -- AdminSupportView (B34, PROMPT №713; tickets since FE-100)
 
-  The support queue: every section thread, opener + topic + triage state.
+  The support queue: every ticket (BE-162 -- each appeal through a form is
+  its own), newest appeal first, from velo's own table (GET
+  /api/v1/support/tickets). Without a status filter the backend returns
+  every ticket but spam (owner ruling: spam leaves the common list); no
+  filter is sent from here -- filters and the spam tab are delivery B.
+
   STRAIGHT REUSE of AdminReportsView's shape (header + count, VCard row list,
-  loading/error/empty ladder, "Показать ещё") -- no new layout, so no .tmp/
-  preview: this is the "say so and proceed" branch of that instruction, not
-  the "build one first" branch. Tapping a card opens the thread detail with
-  a state hand-off (mirrors AdminReportDetailView's `history.state`), same
-  reason: skip a redundant fetch for the common case.
+  loading/error/empty ladder, "Показать ещё"). Tapping a card opens the
+  ticket card with a state hand-off (mirrors AdminReportDetailView's
+  `history.state`): the row IS what the card needs.
 
-  TRIAGE STATE, ONE BADGE PER ROW, deliberately no "unread" count: comms'
-  unread-count is per-PARTICIPANT (backend/app/modules/support/service.py's
-  own recon, PROMPT №713 report) -- meaningless for an admin who has never
-  claimed a thread, and misleading if computed anyway (N+1 calls for a
-  number nobody has earned yet). What actually drives triage here: resolved/
-  closed (done), unclaimed (needs someone), claimed by me, claimed by
-  someone else -- covers the full state space with one badge, no N+1.
-
-  THE TOPIC rides comms' own `title` (service.py::open_support_thread sets
-  it at creation) -- the only one of the two №712 channels (message prefix,
-  notification text) that reaches a LIST without an N+1 feed fetch.
-
-  WHO: `opener` is resolved server-side (service.py::list_admin_support_
-  threads, P-1) -- a raw client uuid tells an admin nothing.
+  ONE ROW: who wrote (`opener`, resolved server-side -- a raw uuid tells an
+  admin nothing), the topic (a CODE, labelled by the one front table,
+  utils/supportTopics.ts), the date of the appeal, who took it (`claimed_by`)
+  and one badge -- the ticket's status. A row carries no last message: the
+  list does not pay a feed call per ticket (known gap, BE-162).
 -->
 
 <template>
@@ -68,13 +62,12 @@
           <span class="scard__icon"><IconSupportChat :size="30" /></span>
           <div class="scard__text">
             <div class="scard__title">{{ openerName(item) }}</div>
-            <div v-if="item.title" class="scard__topic">{{ item.title }}</div>
-            <div class="scard__sub">
-              {{ formatRelative(item.last_message_at ?? item.created_at) }}
-            </div>
+            <div class="scard__topic">{{ supportTopicLabel(item.topic) }}</div>
+            <div class="scard__sub">{{ formatRelative(item.created_at) }}</div>
+            <div class="scard__sub">{{ claimText(item) }}</div>
           </div>
-          <VBadge :variant="triageBadge(item).variant" class="scard__badge">
-            {{ triageBadge(item).label }}
+          <VBadge :variant="supportStatusBadge(item.status)" class="scard__badge">
+            {{ supportStatusLabel(item.status) }}
           </VBadge>
         </VCard>
       </div>
@@ -97,10 +90,10 @@ import { VBackButton, VButton, VLoader, VEmptyState, VCard, VBadge } from '@/com
 import { IconSupportChat } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
-import { listAdminSupportThreads } from '@/api/support'
-import type { SupportThread } from '@/api/support'
+import { listAdminTickets, type AdminSupportTicket } from '@/api/support'
 import { extractApiError } from '@/composables/useApiError'
 import { formatRelative } from '@/utils/adminHelpers'
+import { supportStatusBadge, supportStatusLabel, supportTopicLabel } from '@/utils/supportTopics'
 
 const LIMIT = 20
 
@@ -108,29 +101,23 @@ const router = useRouter()
 const toast = useToast()
 const authStore = useAuthStore()
 
-const items = ref<SupportThread[]>([])
+const items = ref<AdminSupportTicket[]>([])
 const nextCursor = ref<string | null>(null)
 const loading = ref(false)
 const loadingMore = ref(false)
 const error = ref(false)
 
-function openerName(item: SupportThread): string {
+function openerName(item: AdminSupportTicket): string {
   return item.opener?.name ?? t('adminScreens.adminSupport.userFallback')
 }
 
-function triageBadge(item: SupportThread): {
-  variant: 'warning' | 'success' | 'info'
-  label: string
-} {
-  if (item.status === 'resolved')
-    return { variant: 'success', label: t('adminScreens.adminSupport.resolved') }
-  if (item.status === 'closed')
-    return { variant: 'info', label: t('adminScreens.adminSupport.closed') }
-  if (!item.assignee)
-    return { variant: 'warning', label: t('adminScreens.adminSupport.status.unclaimed') }
-  if (item.assignee === authStore.user?.id)
-    return { variant: 'success', label: t('adminScreens.adminSupport.status.mine') }
-  return { variant: 'info', label: t('adminScreens.adminSupport.taken') }
+/** Who took the ticket: nobody, me, or another admin by name. */
+function claimText(item: AdminSupportTicket): string {
+  const taker = item.claimed_by
+  if (!taker) return t('adminScreens.adminSupport.claimedBy.none')
+  if (taker.user_id === authStore.user?.id) return t('adminScreens.adminSupport.claimedBy.mine')
+  const name = taker.name ?? t('adminScreens.adminSupport.claimedBy.adminFallback')
+  return t('adminScreens.adminSupport.claimedBy.other', { name })
 }
 
 async function loadInitial(): Promise<void> {
@@ -139,8 +126,8 @@ async function loadInitial(): Promise<void> {
   items.value = []
   nextCursor.value = null
   try {
-    const res = await listAdminSupportThreads(LIMIT)
-    items.value = res.threads
+    const res = await listAdminTickets(LIMIT)
+    items.value = res.tickets
     nextCursor.value = res.next_cursor
   } catch (e) {
     error.value = true
@@ -151,11 +138,11 @@ async function loadInitial(): Promise<void> {
 }
 
 async function loadMore(): Promise<void> {
-  if (!nextCursor.value) return
+  if (!nextCursor.value || loadingMore.value) return
   loadingMore.value = true
   try {
-    const res = await listAdminSupportThreads(LIMIT, nextCursor.value)
-    items.value.push(...res.threads)
+    const res = await listAdminTickets(LIMIT, nextCursor.value)
+    items.value.push(...res.tickets)
     nextCursor.value = res.next_cursor
   } catch (e) {
     toast.error(extractApiError(e, t('common.loadError')))
@@ -164,11 +151,11 @@ async function loadMore(): Promise<void> {
   }
 }
 
-function openDetail(item: SupportThread): void {
+function openDetail(item: AdminSupportTicket): void {
   void router.push({
     name: 'admin-support-detail',
     params: { id: item.id },
-    state: { thread: toHistoryState(item) },
+    state: { ticket: toHistoryState(item) },
   })
 }
 
