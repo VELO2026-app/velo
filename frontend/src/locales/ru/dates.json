@@ -1,6 +1,19 @@
 {
   "dates": {
     "_comment": "VELO Frontend -- ru seed calendar tables (utils/format.ts). The VELO short-month table is a RUSSIAN typographic rule (tz-i18n §3.1: genitive <= 4 letters in full with no period, otherwise abbreviated + dot); other locales render ICU's own short month, so this table is ru seed data, not per-locale UI copy.",
-    "shortMonths": ["янв.", "февр.", "мар.", "апр.", "мая", "июня", "июля", "авг.", "сент.", "окт.", "нояб.", "дек."]
+    "shortMonths": [
+      "янв.",
+      "февр.",
+      "мар.",
+      "апр.",
+      "мая",
+      "июня",
+      "июля",
+      "авг.",
+      "сент.",
+      "окт.",
+      "нояб.",
+      "дек."
+    ]
   }
 }

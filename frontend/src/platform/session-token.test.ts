@@ -54,7 +54,7 @@ describe('sessionTokenStore', () => {
 
 // The carriers the two REAL platforms wire (every other test mocks
 // @/platform): the reason Telegram never sees a browser sign-in.
-describe('the platforms\' carriers', () => {
+describe("the platforms' carriers", () => {
   beforeEach(() => {
     localStorage.clear()
     sessionStorage.clear()

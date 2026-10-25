@@ -171,7 +171,9 @@ describe('useAuthStore', () => {
 
     it('saved token + 401: rejected, session cleared, token removed from storage', async () => {
       localStorage.setItem('velo_token', 'stale_tok')
-      vi.mocked(usersApi.getMe).mockRejectedValue(new ApiResponseError(401, 'Session expired', 'unauthorized'))
+      vi.mocked(usersApi.getMe).mockRejectedValue(
+        new ApiResponseError(401, 'Session expired', 'unauthorized'),
+      )
       const store = useAuthStore()
 
       const result = await store.restoreSession()
@@ -183,7 +185,9 @@ describe('useAuthStore', () => {
 
     it('saved token + 403 (deactivated account): rejected, token removed', async () => {
       localStorage.setItem('velo_token', 'tok_of_disabled')
-      vi.mocked(usersApi.getMe).mockRejectedValue(new ApiResponseError(403, 'Account is deactivated', 'account_deactivated'))
+      vi.mocked(usersApi.getMe).mockRejectedValue(
+        new ApiResponseError(403, 'Account is deactivated', 'account_deactivated'),
+      )
       const store = useAuthStore()
 
       expect(await store.restoreSession()).toBe('rejected')
@@ -205,7 +209,9 @@ describe('useAuthStore', () => {
 
     it('saved token + 5xx: unreachable, token kept', async () => {
       localStorage.setItem('velo_token', 'good_tok')
-      vi.mocked(usersApi.getMe).mockRejectedValue(new ApiResponseError(502, 'Bad gateway', 'bad_gateway'))
+      vi.mocked(usersApi.getMe).mockRejectedValue(
+        new ApiResponseError(502, 'Bad gateway', 'bad_gateway'),
+      )
       const store = useAuthStore()
 
       expect(await store.restoreSession()).toBe('unreachable')

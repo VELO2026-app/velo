@@ -62,7 +62,10 @@ export function newMark(): string {
 }
 
 /** Remember the sign-in this browser is about to start. */
-export function rememberLoginMark(mark: LoginMark, storage: () => Storage = () => host.localStorage): void {
+export function rememberLoginMark(
+  mark: LoginMark,
+  storage: () => Storage = () => host.localStorage,
+): void {
   try {
     storage().setItem(LOGIN_MARK_KEY, JSON.stringify(mark))
   } catch {

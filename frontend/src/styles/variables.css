@@ -590,14 +590,17 @@
      above). The TZ sketch named them sheet/card; after the parallel cleanups
      the surviving carriers are glass pills, the composer's active/focus
      states, the toast and the switch — named for those roles instead. */
-  --velo-shadow-glass: inset 0 1px 0 rgba(255, 255, 255, 0.55),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.15), 0 8px 24px rgba(0, 0, 0, 0.08); /* glass pill/field, ×3 carriers */
-  --velo-write-shadow-active: inset 0 1px 0 rgba(255, 255, 255, 0.75),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.18),
-    0 0 18px rgba(150, 190, 255, 0.2), 0 8px 30px rgba(0, 0, 0, 0.08); /* Composer active */
-  --velo-write-shadow-focus: inset 0 1px 0 rgba(255, 255, 255, 0.8),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.25), 0 0 0 2px rgba(255, 255, 255, 0.35),
-    0 0 26px rgba(150, 190, 255, 0.32), 0 8px 30px rgba(0, 0, 0, 0.08); /* Composer focus */
+  --velo-shadow-glass:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55), inset 0 -1px 0 rgba(255, 255, 255, 0.15),
+    0 8px 24px rgba(0, 0, 0, 0.08); /* glass pill/field, ×3 carriers */
+  --velo-write-shadow-active:
+    inset 0 1px 0 rgba(255, 255, 255, 0.75), inset 0 -1px 0 rgba(255, 255, 255, 0.2),
+    0 0 0 1px rgba(255, 255, 255, 0.18), 0 0 18px rgba(150, 190, 255, 0.2),
+    0 8px 30px rgba(0, 0, 0, 0.08); /* Composer active */
+  --velo-write-shadow-focus:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8), inset 0 -1px 0 rgba(255, 255, 255, 0.25),
+    0 0 0 2px rgba(255, 255, 255, 0.35), 0 0 26px rgba(150, 190, 255, 0.32),
+    0 8px 30px rgba(0, 0, 0, 0.08); /* Composer focus */
   --velo-shadow-toast: 0 4px 12px rgba(0, 0, 0, 0.3); /* VToast, floats over everything */
   --velo-shadow-switch: 0 1px 2px rgba(0, 0, 0, 0.2); /* VSwitch thumb */
 

@@ -240,7 +240,11 @@ describe('initAuth outside Telegram', () => {
     openReturn('code=C1&state=S1')
     vi.mocked(api.post).mockImplementation(async (path: string) => {
       if (path === COMPLETE) {
-        return { session_token: 'new_tok', user: user({ id: 'user_other' }), bot_access_granted: true }
+        return {
+          session_token: 'new_tok',
+          user: user({ id: 'user_other' }),
+          bot_access_granted: true,
+        }
       }
       return undefined
     })
@@ -327,7 +331,7 @@ describe('initAuth inside Telegram', () => {
   // won -- right while one tab never changed hands, wrong in Telegram Web,
   // where an account switch keeps the iframe's sessionStorage. The session
   // here belongs to 1001, the initData user, so it is still restored.
-  it('this run\'s session of the SAME Telegram user is restored first (a reload inside the Mini App)', async () => {
+  it("this run's session of the SAME Telegram user is restored first (a reload inside the Mini App)", async () => {
     sessionStorage.setItem(SESSION_TOKEN_KEY, 'run_tok')
     vi.mocked(usersApi.getMe).mockResolvedValue(user({ telegram_id: 1001 }))
 
@@ -361,11 +365,12 @@ describe('initAuth inside Telegram -- whose session is restored', () => {
     initData = TG_INIT_DATA // Telegram user 1001 opened the app
   })
 
-  it('account A\'s session, B opened the app: A revoked on the server, B signed in', async () => {
+  it("account A's session, B opened the app: A revoked on the server, B signed in", async () => {
     sessionStorage.setItem(SESSION_TOKEN_KEY, 'tok_A')
     vi.mocked(usersApi.getMe).mockResolvedValue(user({ id: 'user_A', telegram_id: 2002 }))
     vi.mocked(api.post).mockImplementation(async (path: string) => {
-      if (path === TG_LOGIN) return { session_token: 'tok_B', user: user({ id: 'user_B', telegram_id: 1001 }) }
+      if (path === TG_LOGIN)
+        return { session_token: 'tok_B', user: user({ id: 'user_B', telegram_id: 1001 }) }
       return undefined
     })
 
@@ -409,21 +414,25 @@ describe('initAuth inside Telegram -- whose session is restored', () => {
     ['no user field', 'auth_date=1&hash=x'],
     ['user not JSON', 'user=%7Bbroken&auth_date=1&hash=x'],
     ['user without id', `user=${encodeURIComponent('{"first_name":"B"}')}&auth_date=1&hash=x`],
-  ])('initData naming nobody (%s): the restored session is NOT used -- revoked, stub', async (_label, data) => {
-    initData = data
-    sessionStorage.setItem(SESSION_TOKEN_KEY, 'tok_A')
-    vi.mocked(usersApi.getMe).mockResolvedValue(user({ telegram_id: 2002 }))
-    vi.mocked(api.post).mockImplementation(async (path: string) => {
-      if (path === TG_LOGIN) throw new ApiResponseError(400, 'Missing user in initData', 'bad_request')
-      return undefined
-    })
+  ])(
+    'initData naming nobody (%s): the restored session is NOT used -- revoked, stub',
+    async (_label, data) => {
+      initData = data
+      sessionStorage.setItem(SESSION_TOKEN_KEY, 'tok_A')
+      vi.mocked(usersApi.getMe).mockResolvedValue(user({ telegram_id: 2002 }))
+      vi.mocked(api.post).mockImplementation(async (path: string) => {
+        if (path === TG_LOGIN)
+          throw new ApiResponseError(400, 'Missing user in initData', 'bad_request')
+        return undefined
+      })
 
-    const auth = await run()
+      const auth = await run()
 
-    expect(postsTo(LOGOUT)).toHaveLength(1)
-    expect(auth.isAuthenticated.value).toBe(false) // App.vue -> TelegramStubView
-    expect(sessionStorage.getItem(SESSION_TOKEN_KEY)).toBeNull()
-  })
+      expect(postsTo(LOGOUT)).toHaveLength(1)
+      expect(auth.isAuthenticated.value).toBe(false) // App.vue -> TelegramStubView
+      expect(sessionStorage.getItem(SESSION_TOKEN_KEY)).toBeNull()
+    },
+  )
 
   it('the same person reopening: no revoke, no initData sign-in', async () => {
     sessionStorage.setItem(SESSION_TOKEN_KEY, 'tok_B')
@@ -436,7 +445,10 @@ describe('initAuth inside Telegram -- whose session is restored', () => {
   })
 
   it('nothing restored: initData sign-in, nothing to revoke', async () => {
-    vi.mocked(api.post).mockResolvedValue({ session_token: 'tok_B', user: user({ telegram_id: 1001 }) })
+    vi.mocked(api.post).mockResolvedValue({
+      session_token: 'tok_B',
+      user: user({ telegram_id: 1001 }),
+    })
 
     await run()
 
@@ -466,7 +478,10 @@ describe('initDataUserId', () => {
 
 describe('startBrowserLogin', () => {
   it('remembers { state, mark } and leaves for Telegram', async () => {
-    vi.mocked(api.post).mockResolvedValue({ url: 'https://oauth.telegram.org/auth?x=1', state: 'S9' })
+    vi.mocked(api.post).mockResolvedValue({
+      url: 'https://oauth.telegram.org/auth?x=1',
+      state: 'S9',
+    })
     const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {})
 
     await useAuthStore().startBrowserLogin()

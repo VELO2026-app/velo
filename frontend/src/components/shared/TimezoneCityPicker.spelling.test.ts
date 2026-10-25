@@ -69,13 +69,29 @@ function AsGivenDateTimeFormat(
 }
 
 beforeAll(() => {
-  Object.defineProperty(Intl, 'DateTimeFormat', { value: AsGivenDateTimeFormat, configurable: true, writable: true })
-  Object.defineProperty(Intl, 'supportedValuesOf', { value: () => OLD_LIST, configurable: true, writable: true })
+  Object.defineProperty(Intl, 'DateTimeFormat', {
+    value: AsGivenDateTimeFormat,
+    configurable: true,
+    writable: true,
+  })
+  Object.defineProperty(Intl, 'supportedValuesOf', {
+    value: () => OLD_LIST,
+    configurable: true,
+    writable: true,
+  })
 })
 
 afterAll(() => {
-  Object.defineProperty(Intl, 'DateTimeFormat', { value: RealDateTimeFormat, configurable: true, writable: true })
-  Object.defineProperty(Intl, 'supportedValuesOf', { value: realSupportedValuesOf, configurable: true, writable: true })
+  Object.defineProperty(Intl, 'DateTimeFormat', {
+    value: RealDateTimeFormat,
+    configurable: true,
+    writable: true,
+  })
+  Object.defineProperty(Intl, 'supportedValuesOf', {
+    value: realSupportedValuesOf,
+    configurable: true,
+    writable: true,
+  })
 })
 
 // -- Fresh module state per test (the catalog is cached per module) ----------
@@ -140,15 +156,18 @@ describe('TimezoneCityPicker -- rows from the backend catalog', () => {
     },
   )
 
-  it.each(['киев', 'kiev', 'kyiv', 'украина'])('search «%s» gives one row, «Киев»', async (query) => {
-    const wrapper = await mountPicker()
-    await wrapper.find('input').setValue(query)
-    const rows = wrapper.findAll('.tz-picker__row')
-    expect(rows).toHaveLength(1)
-    expect(rows[0]!.find('.tz-picker__city').text()).toBe('Киев')
-    expect(rows[0]!.find('.tz-picker__zone').text()).toBe('Europe/Kyiv')
-    wrapper.unmount()
-  })
+  it.each(['киев', 'kiev', 'kyiv', 'украина'])(
+    'search «%s» gives one row, «Киев»',
+    async (query) => {
+      const wrapper = await mountPicker()
+      await wrapper.find('input').setValue(query)
+      const rows = wrapper.findAll('.tz-picker__row')
+      expect(rows).toHaveLength(1)
+      expect(rows[0]!.find('.tz-picker__city').text()).toBe('Киев')
+      expect(rows[0]!.find('.tz-picker__zone').text()).toBe('Europe/Kyiv')
+      wrapper.unmount()
+    },
+  )
 
   it('tapping the found row emits the name the backend stores', async () => {
     const wrapper = await mountPicker('UTC')
