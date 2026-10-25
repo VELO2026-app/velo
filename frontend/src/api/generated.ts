@@ -1296,10 +1296,6 @@ export interface OfferCuratorGroupTransferRequest {
   to_user_id: string
 }
 
-export interface OpenThreadIn {
-  topic?: string | null
-}
-
 /** GET /api/v1/admin/curator-groups. */
 export interface PaginatedAdminCuratorGroupsResponse {
   items: AdminCuratorGroupListItem[]
@@ -1916,11 +1912,6 @@ export interface ScoreZoneCounts {
   fire: number
 }
 
-export interface SendMessageIn {
-  topic?: string | null
-  body: string
-}
-
 /** One bar in the check-in weekly chart (label = bucket date, value = %). */
 export interface SeriesPoint {
   label: string
@@ -1935,6 +1926,10 @@ export interface SetMasterGroupRightRequest {
 /** PUT /masters/me/students/{student_user_id}/tag. tag: null clears the tag (deletes the master_student row if it would otherwise be empty -- i.e. not blocked either). */
 export interface SetStudentTagRequest {
   tag: string | null
+}
+
+export interface StatusIn {
+  status: 'resolved' | 'rejected' | 'duplicate' | 'spam'
 }
 
 /** Open (or reopen) the conversation with one student, master-side. A SIBLING of ChatCreate rather than an optional field on it: ChatCreate is extra="forbid" and heavily tested, and the two directions differ in more than the id (who may call, what the target must be). Widening the existing body would have put both rule sets behind one schema. */
@@ -2024,6 +2019,11 @@ export interface TaxonomyStyleResponse {
 /** POST /api/v1/auth/telegram — request body. */
 export interface TelegramAuthRequest {
   init_data: string
+}
+
+export interface TicketIn {
+  topic: 'payment' | 'complaint_master' | 'practice' | 'withdrawal' | 'practices' | 'add_direction' | 'complaint_user' | 'technical' | 'other'
+  body: string
 }
 
 /** GET /api/v1/users/timezones -- what the timezone picker is built from. names: every name PATCH /users/me stores unchanged; aliases: every other accepted spelling -> the name stored for it; labels: Russian city/country per name, where CLDR has one. See app/core/timezone_catalog.py. */
