@@ -154,6 +154,19 @@ support.message_received:
     body: "💬 A user has written to support.\n\n👤 {sender_name}{topic_line_en}"
     button_text: "Open VELO"
 
+# BE-162 delivery 2: a ticket was handed to this admin / returned to the pool.
+support.ticket_assigned:
+  telegram:
+    title: "A support request was handed to you"
+    body: "📨 {actor_name} handed a support request to you.\n\n👤 {sender_name}{topic_line_en}"
+    button_text: "Open VELO"
+
+support.ticket_released:
+  telegram:
+    title: "A support request is back in the pool"
+    body: "↩️ {actor_name} returned a support request to the pool — anyone can take it.\n\n👤 {sender_name}{topic_line_en}"
+    button_text: "Open VELO"
+
 # BE-166: the support reply could not be translated into the user's
 # language (support.translate_for_user ended without an answer, or the model
 # declined).

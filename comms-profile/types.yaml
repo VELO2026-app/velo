@@ -58,10 +58,11 @@
 # carries an `expiry_at` that runs out before that never arrives at all,
 # so four types declare `recipient_schedule: bypass` and go at any hour
 # -- booking.reminder_1h, booking.reminder_10m,
-# practice.master_reminder_1h, waitlist.spot_available. A fifth bypasses
+# practice.master_reminder_1h, waitlist.spot_available. Three more bypass
 # for another reason: support.message_received (BE-172, owner ruling
 # 2026-10-25) -- a user's message to support reaches the admins at any
-# hour. Each says why beside its record. Every other type declares nothing and takes comms'
+# hour -- and, for the same reason, support.ticket_assigned and
+# support.ticket_released (BE-162 delivery 2). Each says why beside its record. Every other type declares nothing and takes comms'
 # default, `respect` -- the default is never written out. bypass does NOT
 # pass a mute: a muted category stays silent at any hour. comms takes the
 # value when it ACCEPTS a job: jobs accepted before a profile change keep
@@ -227,6 +228,22 @@ types:
   #    switch holds it back. --
 
   support.message_received:
+    channels: [in_app, telegram]
+    recipient_schedule: bypass
+
+  # -- BE-162 delivery 2: a ticket changed hands. comms tells nobody on an
+  #    assign or a release (INTEGRATION.md section 14), so velo does:
+  #    assigned -- to the admin it was handed to; released -- to every
+  #    admin (group:admins), it is in the pool again. NO category and
+  #    recipient_schedule: bypass, for the reason support.message_received
+  #    has both: support's own signals reach the admins at any hour and
+  #    cannot be muted. --
+
+  support.ticket_assigned:
+    channels: [in_app, telegram]
+    recipient_schedule: bypass
+
+  support.ticket_released:
     channels: [in_app, telegram]
     recipient_schedule: bypass
 

@@ -16,8 +16,8 @@
 #   5. STATISTICS: the categories add up to the list without spam for the
 #      same period (owner acceptance 4); spam apart; ratings by category and
 #      by the admin each rating is about.
-#   6. NO PATH DELETES A TICKET -- the trigger of the statistics' KNOWN
-#      CEILING (support/service.py support_stats).
+#   6. ONLY THE SPAM BIN DELETES A TICKET (BE-162 delivery 2), and it
+#      leaves a tombstone the statistics count.
 #   7. RACES: the rating against a reopening message; two ratings.
 # =============================================================================
 
@@ -791,12 +791,19 @@ _DELETION_FORMS = [
 ]
 
 
-def test_no_code_path_deletes_a_ticket() -> None:
-    """support_stats counts live support_tickets rows (its KNOWN CEILING).
-    The day a path in app/ deletes a ticket -- delivery 2's spam deletion --
-    this goes red and points there: that path must leave the ticket's
-    date and category behind (the tombstone), or the statistics lose it.
-    scripts/seed.py deletes synthetic users and is not the application."""
+def test_only_the_spam_bin_deletes_tickets() -> None:
+    """REPLACES test_no_code_path_deletes_a_ticket. It held "no path in
+    app/ deletes a ticket" -- true while support_stats counted live rows
+    only, and its KNOWN CEILING named this test as the trigger. BE-162
+    delivery 2 brought the deletion: the spam bin (support/purge.py)
+    deletes spam tickets past the retention and, in the same transaction,
+    leaves a tombstone the statistics count (the marker is gone).
+
+    What holds now, exactly: the one path that deletes tickets is the bin
+    -- every deletion form found in app/ is in support/purge.py -- and that
+    module writes the tombstone. That the tombstone is written in the
+    deleting transaction, and counted, is held by behaviour in
+    tests/test_support_spam_bin_be162.py."""
     app_dir = Path(sys.modules["app"].__file__).parent
     found = [
         f"{path.relative_to(app_dir.parent)}:{n}"
@@ -805,7 +812,10 @@ def test_no_code_path_deletes_a_ticket() -> None:
         if not line.lstrip().startswith("#")
         and any(form.search(line) for form in _DELETION_FORMS)
     ]
-    assert found == []
+    assert found, "the bin's deletion must be found by the forms"
+    assert {f.split(":")[0] for f in found} == {"app/modules/support/purge.py"}
+    bin_source = (app_dir / "modules/support/purge.py").read_text()
+    assert "SupportSpamTombstone(" in bin_source
 
 
 def test_the_deletion_forms_do_catch_a_deletion() -> None:

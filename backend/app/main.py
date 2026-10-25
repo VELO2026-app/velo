@@ -125,6 +125,9 @@ from app.modules.zoom.retry_poller import run_zoom_retry_poller  # E21
 # Zoom report poller -- the attendance decision (E21 step F).
 from app.modules.zoom.report_poller import run_zoom_report_poller  # E21
 
+# Support spam bin -- deletes spam tickets past the retention (BE-162 (2)).
+from app.modules.support.purge import run_support_spam_purge  # BE-162 (2)
+
 
 logger = structlog.get_logger()
 
@@ -215,6 +218,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     autofinalizer_task: asyncio.Task | None = None
     zoom_retry_task: asyncio.Task | None = None
     zoom_report_task: asyncio.Task | None = None
+    spam_purge_task: asyncio.Task | None = None
     try:
         await init_redis()
 
@@ -280,6 +284,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             )
         else:
             logger.info("zoom_report_poller_disabled")
+        # BE-162 delivery 2: the support spam bin (support/purge.py). Gated
+        # like every worker here: tests disable it so the loop cannot purge
+        # a test's spam ticket out from under an assertion.
+        if settings.support_spam_purge_enabled:
+            spam_purge_task = asyncio.create_task(
+                run_support_spam_purge(), name="support_spam_purge",
+            )
+        else:
+            logger.info("support_spam_purge_disabled")
 
         logger.info(
             "app_started",
@@ -326,6 +339,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             zoom_report_task.cancel()
             try:
                 await zoom_report_task
+            except asyncio.CancelledError:
+                pass
+
+        # Stop the support spam bin (BE-162 delivery 2).
+        if spam_purge_task is not None and not spam_purge_task.done():
+            spam_purge_task.cancel()
+            try:
+                await spam_purge_task
             except asyncio.CancelledError:
                 pass
 

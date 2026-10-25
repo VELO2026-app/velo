@@ -33,7 +33,7 @@
 
 from urllib.parse import urlsplit
 
-from pydantic import model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.i18n import SUPPORTED_LANGUAGES
@@ -617,6 +617,28 @@ class Settings(BaseSettings):
     # disable it so the loop can't race manual test calls.
     zoom_retry_enabled: bool = True
     zoom_retry_poll_interval_seconds: int = 30
+    # BE-162 delivery 2: the spam bin. A spam ticket older than
+    # support_spam_retention_days (owner ruling: 30) is deleted with its
+    # conversation by the purge loop (support/purge.py), which runs every
+    # support_spam_purge_interval_seconds. The worker toggle has the same
+    # rationale as the others: tests disable it so the loop cannot race
+    # manual calls. The retention is a setting so the owner can watch the
+    # bin empty on the stand without waiting a month (set it to 0, restart,
+    # set it back to 30) -- see the BE-162 delivery 2 report.
+    support_spam_purge_enabled: bool = True
+    support_spam_purge_interval_seconds: int = Field(default=3600, ge=60)
+    support_spam_retention_days: int = Field(default=30, ge=0)
+
+    @field_validator("support_spam_retention_days", mode="before")
+    @classmethod
+    def _empty_retention_is_unset(cls, value: object) -> object:
+        """`velo env set SUPPORT_SPAM_RETENTION_DAYS` with an empty value
+        writes the key empty -- the script's "empty clears it". An empty
+        string is not an integer, and the backend would refuse to start;
+        empty means unset here: the owner's 30 days."""
+        if isinstance(value, str) and not value.strip():
+            return 30
+        return value
     zoom_retry_max_backoff_seconds: int = 600
     # Cap on ZoomMeeting.retry_count for a create_failed row. Past this many
     # attempts the poller stops retrying that row -- it stays VISIBLY

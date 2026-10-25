@@ -168,6 +168,19 @@ support.message_received:
     body: "💬 Пользователь написал в поддержку.\n\n👤 {sender_name}{topic_line_ru}"
     button_text: "Открыть VELO"
 
+# BE-162 delivery 2: a ticket was handed to this admin / returned to the pool.
+support.ticket_assigned:
+  telegram:
+    title: "Вам передано обращение"
+    body: "📨 {actor_name} передал(а) вам обращение в поддержку.\n\n👤 {sender_name}{topic_line_ru}"
+    button_text: "Открыть VELO"
+
+support.ticket_released:
+  telegram:
+    title: "Обращение вернулось в общий список"
+    body: "↩️ {actor_name} вернул(а) обращение в общий список — его можно взять.\n\n👤 {sender_name}{topic_line_ru}"
+    button_text: "Открыть VELO"
+
 # BE-166: the support reply could not be translated into the user's
 # language (support.translate_for_user ended without an answer, or the model
 # declined).

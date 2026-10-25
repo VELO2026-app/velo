@@ -265,6 +265,49 @@ class SupportTicket(TimestampMixin, Base):
 
 
 # =============================================================================
+# The spam bin (BE-162 delivery 2)
+# =============================================================================
+
+
+class SupportSpamTombstone(UUIDMixin, Base):
+    """What is left of a spam ticket the bin emptied (owner ruling: after
+    the deletion the statistics keep only the date and the category, no
+    text): the date of the appeal and its category -- nothing that names
+    a person, a thread or an admin. Written in the transaction that deletes
+    the ticket (service.purge_spam_step); read by service.support_stats."""
+
+    __tablename__ = "support_spam_tombstones"
+
+    appealed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    category: Mapped[str] = mapped_column(String(32))
+
+    __table_args__ = (
+        CheckConstraint(
+            f"category IN ({_sql_in(CATEGORIES)})",
+            name="ck_support_spam_tombstones_category",
+        ),
+        Index("ix_support_spam_tombstones_appealed", "appealed_at"),
+    )
+
+
+class SupportThreadPurge(Base):
+    """A comms thread whose rows velo has already deleted and comms has not
+    yet: the second phase of emptying the spam bin. A row lives from the
+    transaction that deletes the ticket until comms answers the DELETE
+    (204, also for a thread already gone) -- comms down leaves it for the
+    next step. `attempts` and `last_error_at` are there to be seen."""
+
+    __tablename__ = "support_thread_purges"
+
+    comms_thread_id: Mapped[UUID] = mapped_column(primary_key=True)
+    queued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    last_error_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+    )
+
+
+# =============================================================================
 # Support translation jobs (BE-166)
 # =============================================================================
 #

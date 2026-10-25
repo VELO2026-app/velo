@@ -67,6 +67,7 @@ async def setup_infrastructure():
     settings.practice_autofinalize_enabled = False
     settings.zoom_retry_enabled = False
     settings.zoom_report_enabled = False
+    settings.support_spam_purge_enabled = False  # BE-162 delivery 2
     # Phase 6 / T0: relay tests drive relay_pending_batch manually --
     # the same no-background-race rationale as the workers above.
     settings.comms_relay_enabled = False

@@ -36,11 +36,12 @@
 import base64
 import binascii
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
 import structlog
+from fastapi import HTTPException
 from sqlalchemy import case, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -60,10 +61,11 @@ from app.modules.support.models import (
     TO_USER,
     TOPIC_OTHER,
     TOPICS,
+    SupportSpamTombstone,
     SupportThread,
     SupportTicket,
 )
-from app.modules.users.models import User
+from app.modules.users.models import User, UserRole
 
 logger = structlog.get_logger()
 
@@ -1025,6 +1027,240 @@ async def claim_admin_support_thread(
     return answer
 
 
+async def assign_ticket(
+    session: AsyncSession, *, admin: User, thread_id: UUID, assignee_id: UUID,
+) -> dict[str, Any]:
+    """Hand a ticket to another admin (BE-162 delivery 2): comms' `assign`,
+    then the taker here. Any admin may hand over (comms admits the whole
+    roster, and every admin is on it, BE-172); the assignee must be an
+    admin -- 422 before comms otherwise. The new taker writes, the previous
+    one no longer can (comms answers them 403), and the person's messages
+    now signal the new taker alone (owner ruling 6). comms tells nobody, so
+    velo tells the assignee (support.ticket_assigned).
+
+    The same admin again: comms is asked again -- idempotent by outcome,
+    and it aligns comms if the two ever disagreed -- and nothing else
+    happens: no write, no signal.
+
+    # KNOWN CEILING (two handovers of one ticket in quick succession can be
+    # recorded out of order; acknowledged by design):
+    #   1. Mechanics: comms is called first, the taker written here after.
+    #      comms applies a handover over whoever holds the thread when IT
+    #      gets the call and answers without any mark of order. Two
+    #      handovers that comms performs one after the other (A, then B)
+    #      can reach this write in the other order: the write is a
+    #      compare-and-set on the taker read before the comms call, so the
+    #      later write loses -- but which one is "later" here is not
+    #      comms' order. comms may then hold B while the ticket says A,
+    #      and the person's messages signal A until the next handover. A
+    #      person's message landing between comms' handover and this write
+    #      signals the previous taker the same way.
+    #   2. Status: acknowledged by design.
+    #   3. Task: none in velo yet -- comms adds `revision` to every answer
+    #      that carries a thread (letter to comms, 25.10); the fix waits for
+    #      that comms release and is not made before it.
+    #   4. Trigger: support_handover_drift in the app log (this write lost
+    #      its compare-and-set: the taker changed while comms was called).
+    #   5. Fix form: comms' `revision` -- the revision number of the thread
+    #      row, in every answer with a thread. velo keeps the revision of
+    #      the answer it recorded the taker from, and records a taker only
+    #      if the answer's revision is greater than the one kept. Not
+    #      `assigned_at`: a release clears it, and comms takes the time
+    #      before the call queues on the row, so it does not follow comms'
+    #      own order.
+    #   6. Rejected: holding the ticket's row lock across the comms call --
+    #      an HTTP call inside a lock blocks the person's messages for as
+    #      long as comms takes.
+    """
+    pointer, ticket = await _require_ticket(session, thread_id)
+    target = await session.get(User, assignee_id)
+    if target is None or target.role != UserRole.ADMIN:
+        raise HTTPException(status_code=422, detail="The assignee must be an admin")
+    seen = ticket.claimed_by_user_id
+    await comms_request(
+        "POST",
+        f"/api/v1/threads/{thread_id}/assign",
+        json={"operator": str(admin.id), "assignee": str(assignee_id)},
+    )
+    if seen != assignee_id:
+        version = await _record_taker(session, ticket, seen=seen, taker=assignee_id)
+        await _emit_handover(
+            session,
+            type=ASSIGNED_TYPE,
+            pointer=pointer,
+            ticket=ticket,
+            actor=admin,
+            version=version,
+            target=("user", str(assignee_id)),
+        )
+    return await get_admin_ticket(session, thread_id=thread_id)
+
+
+async def release_ticket(
+    session: AsyncSession, *, admin: User, thread_id: UUID,
+) -> dict[str, Any]:
+    """Return a ticket to the pool (BE-162 delivery 2): comms' `release`,
+    then no taker here -- the person's messages signal every admin again.
+    comms calls nobody on a release; velo tells every admin
+    (support.ticket_released). Already in the pool: comms is asked again
+    (idempotent) and nothing else happens. Same ordering ceiling as
+    assign_ticket."""
+    pointer, ticket = await _require_ticket(session, thread_id)
+    seen = ticket.claimed_by_user_id
+    await comms_request(
+        "POST",
+        f"/api/v1/threads/{thread_id}/release",
+        json={"operator": str(admin.id)},
+    )
+    if seen is not None:
+        version = await _record_taker(session, ticket, seen=seen, taker=None)
+        from app.core.events.notify import TARGET_GROUP_ADMINS
+
+        await _emit_handover(
+            session,
+            type=RELEASED_TYPE,
+            pointer=pointer,
+            ticket=ticket,
+            actor=admin,
+            version=version,
+            target=TARGET_GROUP_ADMINS,
+        )
+    return await get_admin_ticket(session, thread_id=thread_id)
+
+
+async def _record_taker(
+    session: AsyncSession,
+    ticket: SupportTicket,
+    *,
+    seen: UUID | None,
+    taker: UUID | None,
+) -> int:
+    """Write the taker comms has just set, if the ticket still has the one
+    read before the call; bump the version (a status change read before
+    the handover is then refused). Lost -> 409 and the drift log -- the
+    KNOWN CEILING on assign_ticket."""
+    changed = (
+        await session.execute(
+            update(SupportTicket)
+            .where(
+                SupportTicket.support_thread_id == ticket.support_thread_id,
+                SupportTicket.claimed_by_user_id.is_not_distinct_from(seen),
+            )
+            .values(claimed_by_user_id=taker, version=SupportTicket.version + 1)
+            .returning(SupportTicket.version)
+        )
+    ).first()
+    if changed is None:
+        logger.warning(
+            "support_handover_drift", ticket=str(ticket.support_thread_id),
+        )
+        raise ConflictError("The ticket changed hands meanwhile -- read it again")
+    return changed[0]
+
+
+async def reopen_ticket(
+    session: AsyncSession, *, admin: User, thread_id: UUID,
+) -> dict[str, Any]:
+    """Back to OPEN by an admin (BE-162 delivery 2): "back to work" from
+    resolved / rejected / duplicate, "not spam" from spam -- while the spam
+    is younger than the retention (owner: 30 days); older is a 409, and
+    once the bin has emptied it the ticket is gone (404). comms' thread is
+    moved back to `open` (manual since comms 3.11.0).
+
+    The same compare-and-set as a status change: the status and version
+    read before the comms call, and for spam its age, all still true at
+    the write -- otherwise 409. The bin takes a ticket under its row lock
+    by the same age rule, so of "not spam" and the bin exactly one gets it.
+    """
+    _, ticket = await _require_ticket(session, thread_id)
+    if ticket.status == STATUS_OPEN:
+        raise ConflictError("The ticket is open already")
+    cutoff = datetime.now(UTC) - timedelta(days=settings.support_spam_retention_days)
+    if ticket.status == STATUS_SPAM and ticket.status_changed_at <= cutoff:
+        raise ConflictError("Spam older than the retention cannot come back")
+    seen_status, seen_version = ticket.status, ticket.version
+    await comms_request(
+        "POST",
+        f"/api/v1/threads/{thread_id}/status",
+        json={"operator": str(admin.id), "status": "open"},
+    )
+    conditions = [
+        SupportTicket.support_thread_id == ticket.support_thread_id,
+        SupportTicket.status == seen_status,
+        SupportTicket.version == seen_version,
+    ]
+    if seen_status == STATUS_SPAM:
+        conditions.append(SupportTicket.status_changed_at > cutoff)
+    changed = (
+        await session.execute(
+            update(SupportTicket)
+            .where(*conditions)
+            .values(
+                status=STATUS_OPEN,
+                status_changed_at=func.now(),
+                version=SupportTicket.version + 1,
+            )
+            .returning(SupportTicket.version)
+        )
+    ).first()
+    if changed is None:
+        still, _ = await _ticket_by_thread(session, thread_id)
+        if still is None:
+            # The bin took it between the read and the write.
+            raise NotFoundError("Ticket not found")
+        logger.warning("support_ticket_status_drift", thread_id=str(thread_id))
+        raise ConflictError("The ticket changed meanwhile -- read it again")
+    return await get_admin_ticket(session, thread_id=thread_id)
+
+
+# The handover signals (BE-162 delivery 2; comms-profile/types.yaml).
+ASSIGNED_TYPE = "support.ticket_assigned"
+RELEASED_TYPE = "support.ticket_released"
+
+
+async def _emit_handover(
+    session: AsyncSession,
+    *,
+    type: str,
+    pointer: SupportThread,
+    ticket: SupportTicket,
+    actor: User,
+    version: int,
+    target: tuple[str, str],
+) -> None:
+    """Tell admins what comms does not: a ticket was handed to one of them
+    (to that admin alone), or returned to the pool (to every admin). Keyed
+    by the ticket's version after the handover -- one signal per handover,
+    the same document on a repeat. The button opens the ticket's card."""
+    from app.core.events.notify import emit_notification
+
+    opener = await session.get(User, pointer.client_user_id)
+    topic_line_ru, topic_line_en = _topic_lines(ticket.topic)
+    actor_name = _sender_name(actor)
+    sender_name = _sender_name(opener) if opener is not None else ""
+    await emit_notification(
+        session,
+        idempotency_key=f"{type}:{pointer.comms_thread_id}:{version}",
+        type=type,
+        target_type=target[0],
+        target_value=target[1],
+        title=(
+            "A support request was handed to you"
+            if type == ASSIGNED_TYPE
+            else "A support request is back in the pool"
+        ),
+        body=f"{actor_name}: {sender_name}{topic_line_en}",
+        action_data={
+            "action": "open_admin_support",
+            "params": {"thread_id": str(pointer.comms_thread_id)},
+            "actor_name": actor_name,
+            "sender_name": sender_name,
+            "topic_line_ru": topic_line_ru,
+            "topic_line_en": topic_line_en,
+        },
+    )
+
+
 async def set_ticket_status(
     session: AsyncSession, *, admin: User, thread_id: UUID, status: str,
 ) -> dict[str, Any]:
@@ -1267,24 +1503,12 @@ async def support_stats(
     History threads have no ticket and are not here (owner: statistics
     start with tickets).
 
-    # KNOWN CEILING (spam is counted from the tickets that still exist;
-    # acknowledged by design):
-    #   1. Mechanics: every figure here is a count over live support_tickets
-    #      rows. Delivery 2 deletes spam after 30 days; a deleted ticket
-    #      would leave the count with it, and the owner wants its date and
-    #      category to stay in the statistics.
-    #   2. Status: acknowledged by design.
-    #   3. Task: BE-162 delivery 2 -- it brings the deletion and, with it,
-    #      the tombstone (date, category) this count then adds.
-    #   4. Trigger: tests/test_support_rating_be162.py
-    #      test_no_code_path_deletes_a_ticket goes red -- the first path in
-    #      app/ that deletes support_tickets rows.
-    #   5. Fix form: in the transaction that deletes a spam ticket, write
-    #      (created_at, category) to a tombstone table; `spam` here counts
-    #      live spam plus the period's tombstones.
-    #   6. Rejected: the tombstone table now, empty -- nothing writes it
-    #      before delivery 2, and a test building its rows by hand would
-    #      describe a state no code reaches.
+    SPAM THAT IS GONE STILL COUNTS (BE-162 delivery 2): the bin deletes a
+    spam ticket after the retention and leaves a tombstone -- the date of
+    the appeal and the category, nothing else (owner ruling) -- in the same
+    transaction (support/purge.py). `spam` is the period's live spam plus
+    the period's tombstones, by the date of the appeal like everything
+    here.
     """
     in_period = (
         SupportTicket.created_at >= created_from,
@@ -1316,11 +1540,20 @@ async def support_stats(
         }
         for category in CATEGORIES
     ]
-    spam = (
+    live_spam = (
         await session.execute(
             select(func.count()).where(*in_period, SupportTicket.status == STATUS_SPAM)
         )
     ).scalar_one()
+    purged_spam = (
+        await session.execute(
+            select(func.count()).where(
+                SupportSpamTombstone.appealed_at >= created_from,
+                SupportSpamTombstone.appealed_at < created_to,
+            )
+        )
+    ).scalar_one()
+    spam = live_spam + purged_spam
     by_resolver = (
         await session.execute(
             select(

@@ -217,7 +217,7 @@ async def comms_request(
     """One request to the internal comms API; returns the parsed JSON body.
 
     Args:
-        method: HTTP method ("GET", "POST", "PATCH").
+        method: HTTP method ("GET", "POST", "PATCH", "DELETE").
         path: API path starting with "/" (e.g.
             "/api/v1/recipients/{id}/inbox").
         params: Optional query parameters.
@@ -281,6 +281,12 @@ async def comms_request(
     # unless the caller opted in (forward_403, module header).
     if response.status_code >= 400:
         raise _refusal(response, path=path, forward_403=forward_403)
+
+    # 204 No Content has no body by definition (comms' DELETE /threads/{id},
+    # BE-162 delivery 2): the call succeeded and there is nothing to read.
+    # Without this the empty body below read as "comms answered garbage".
+    if response.status_code == 204:
+        return None
 
     try:
         return response.json()

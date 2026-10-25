@@ -715,6 +715,7 @@ class TestProfileV2:
         doc = self._doc()
         assert set(doc) == {"version", "types"}
         assert doc["version"] == 2
+        # 53 since BE-162 delivery 2 (support.ticket_assigned / _released);
         # 51 since BE-162 delivery 3 (prompt.rate_support);
         # 50 since BE-166 (support.translate_for_support / _for_user, the
         # profile's first llm types, and support.translation_unavailable);
@@ -725,7 +726,7 @@ class TestProfileV2:
         # (practice_created_for_master); 39 after BE-59 B1 (member_demoted);
         # 38 after BE-59 A (master_verification_required,
         # master_offer_closed); 36 before.
-        assert len(doc["types"]) == 51
+        assert len(doc["types"]) == 53
 
     def test_every_record_is_closed(self) -> None:
         """An unknown key refuses comms startup; only x-... is tolerated.
@@ -768,10 +769,11 @@ class TestProfileV2:
         comms_own = {k: v for k, v in types.items() if k.startswith("msg.")}
         # 33 pre-BE-59, +2 A, +1 B1, +1 BE-102, +3 BE-63, +2 BE-104,
         # +2 BE-79 (1a), +1 BE-166 (support.translation_unavailable), +1
-        # BE-162 delivery 3 (prompt.rate_support). The
+        # BE-162 delivery 3 (prompt.rate_support), +2 BE-162 delivery 2
+        # (support.ticket_assigned / _released). The
         # llm types are not for people and have no telegram to lose:
         # test_the_llm_types_are_the_two_translations.
-        assert len(velo) == 46
+        assert len(velo) == 48
         assert sorted(comms_own) == [
             "msg.participant_message",
             "msg.support_message",
@@ -828,6 +830,8 @@ BYPASS_TYPES = {
     "practice.master_reminder_1h",
     "waitlist.spot_available",
     "support.message_received",
+    "support.ticket_assigned",
+    "support.ticket_released",
 }
 # The button the sheets give every other type whose action is open_practice.
 _OPEN_PRACTICE_LABEL = {"ru": "Открыть практику", "en": "Open practice"}
@@ -863,7 +867,7 @@ class TestRecipientSchedule:
         for locale in ("ru", "en"):
             _sheets(locale)
 
-    def test_exactly_the_five_types_bypass_the_schedule(self) -> None:
+    def test_exactly_the_seven_types_bypass_the_schedule(self) -> None:
         """The set of types that go at any hour, written out whole.
 
         Until BE-172 it was four -- the three reminders and the waitlist
@@ -871,7 +875,10 @@ class TestRecipientSchedule:
         person's schedule (BE-132) -- and the test said four, rightly.
         BE-172 added a fifth for another reason, by owner ruling: the admin
         signal support.message_received, addressed to group:admins only,
-        reaches the admins at any hour.
+        reaches the admins at any hour -- and the test said five, rightly.
+        BE-162 delivery 2 added the two handover signals for that same
+        reason (a ticket handed to an admin, a ticket back in the pool):
+        seven, still admins-only beyond the four reminder-like types.
         """
         types = _strict(_profile_dir() / "types.yaml")["types"]
         declaring = {k for k, v in types.items() if "recipient_schedule" in v}
@@ -882,8 +889,8 @@ class TestRecipientSchedule:
             assert types[key]["recipient_schedule"] == "bypass", key
         # Pair: everyone else declares nothing, and is there.
         others = set(types) - BYPASS_TYPES
-        assert len(BYPASS_TYPES) == 5
-        assert len(others) == len(types) - 5 > 0
+        assert len(BYPASS_TYPES) == 7
+        assert len(others) == len(types) - 7 > 0
         for key in others:
             assert "recipient_schedule" not in types[key], key
 

@@ -38,6 +38,10 @@
 #   GET  /api/v1/support/stats                   -- support over a period
 #     of appeals: categories without spam, spam, ratings by category and by
 #     the admin each rating is about (BE-162 delivery 3).
+#   POST /api/v1/support/tickets/{id}/assign {assignee} -- hand the ticket
+#     to another admin; .../release -- back to the pool; .../reopen -- back
+#     to OPEN ("back to work", "not spam" within the retention). BE-162
+#     delivery 2; comms tells nobody, velo signals the admins.
 #   POST /api/v1/support/tickets/{id}/status     -- an OPEN ticket to
 #     resolved / rejected / duplicate / spam; comms' thread to `resolved`.
 #   GET  /api/v1/support/threads/{id}/messages   -- a support thread's feed
@@ -80,6 +84,7 @@ from app.core.database import get_db_session
 from app.core.exceptions import BadRequestError
 from app.modules.auth.dependencies import get_current_admin, get_current_user
 from app.modules.support.service import (
+    assign_ticket,
     claim_admin_support_thread,
     create_ticket,
     get_admin_support_messages,
@@ -87,6 +92,8 @@ from app.modules.support.service import (
     list_admin_tickets,
     pending_ratings,
     rate_ticket,
+    release_ticket,
+    reopen_ticket,
     retry_support_translation,
     send_admin_support_message,
     set_ticket_status,
@@ -276,6 +283,51 @@ async def get_ticket(
     """One ticket, exactly as a row of GET /tickets -- see
     service.get_admin_ticket. 404 unless `thread_id` is a ticket's."""
     return await get_admin_ticket(session, thread_id=thread_id)
+
+
+class AssignIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    assignee: UUID
+
+
+@router.post("/tickets/{thread_id}/assign")
+async def assign(
+    thread_id: UUID,
+    body: AssignIn,
+    admin: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> Any:
+    """Hand the ticket to another admin -- the ticket's row back. 422 the
+    assignee is not an admin; 409 the ticket changed hands meanwhile or is
+    a history thread; 404 not a ticket. service.assign_ticket."""
+    return await assign_ticket(
+        session, admin=admin, thread_id=thread_id, assignee_id=body.assignee,
+    )
+
+
+@router.post("/tickets/{thread_id}/release")
+async def release(
+    thread_id: UUID,
+    admin: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> Any:
+    """Return the ticket to the pool -- the ticket's row back.
+    service.release_ticket."""
+    return await release_ticket(session, admin=admin, thread_id=thread_id)
+
+
+@router.post("/tickets/{thread_id}/reopen")
+async def reopen(
+    thread_id: UUID,
+    admin: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> Any:
+    """Back to OPEN: "back to work" from resolved / rejected / duplicate,
+    "not spam" from spam within the retention -- the ticket's row back.
+    409 open already, spam past the retention, or changed meanwhile; 404
+    gone (the spam bin emptied it). service.reopen_ticket."""
+    return await reopen_ticket(session, admin=admin, thread_id=thread_id)
 
 
 @router.post("/tickets/{thread_id}/status")
