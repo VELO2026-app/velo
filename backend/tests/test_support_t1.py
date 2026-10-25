@@ -174,26 +174,31 @@ async def _clean_band(db_session: AsyncSession):
     support_service._support_section_id = None
 
 
-async def _support_signals(user_id: str) -> list[OutboxEvent]:
-    """Every support.* notification about this user in the outbox.
+async def _support_signals(
+    user_id: str, thread_id: str = THREAD_ID,
+) -> list[OutboxEvent]:
+    """Every support.* notification about this user or their thread.
 
     Wider than one type on purpose: "opening emits nothing" must not pass
     because the opening path emits under a NAME this query does not know.
-    Narrowed to the user -- addressed to them, or naming them in the
-    button's params, as a group signal does -- so rows other tests leave
-    behind cannot colour the answer.
+    Narrowed to the user and their thread -- addressed to the user, or
+    naming the thread or the user in the button's params -- so rows other
+    tests leave behind cannot colour the answer. The admin signal goes to
+    a group and names the THREAD (BE-172 fix: its button opens the thread
+    screen); it used to name the user, and the query matched it by
+    user_id alone -- that clause stays, the thread clause is what now
+    catches the signal.
     """
     payload = OutboxEvent.payload
+    params = payload["action_data"]["params"]
     return list(
         (
             await fresh_execute(
                 select(OutboxEvent).where(
                     payload["type"].astext.like("support.%"),
                     (payload["target_value"].astext == user_id)
-                    | (
-                        payload["action_data"]["params"]["user_id"].astext
-                        == user_id
-                    ),
+                    | (params["thread_id"].astext == thread_id)
+                    | (params["user_id"].astext == user_id),
                 )
             )
         ).scalars().all()
