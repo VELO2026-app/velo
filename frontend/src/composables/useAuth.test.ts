@@ -45,16 +45,37 @@ describe('parseStartParam', () => {
       ['open_support', 'master', { name: 'master-support' }],
       ['open_master_practices', 'master', { name: 'master-practices' }],
       [`open_practice__${id}`, 'master', { name: 'master-practice-detail', params: { id } }],
+      // FE-103: the Telegram twin of the bell's msg.* buttons -- support
+      // notification and «перевод недоступен» land on the same chat routes
+      // the bell uses; the role picks the zone.
+      [`open_thread__${id}`, 'user', { name: 'user-chat', params: { id } }],
+      [`open_thread__${id}`, 'master', { name: 'master-chat', params: { id } }],
+      // FE-103/BE-172: the admin signal carries the OPENER's user_id; only
+      // an admin gets the destination.
+      [`open_admin_support__${id}`, 'admin', { name: 'admin-support-detail', params: { id } }],
     ] as const)('%s as %s', (param, role, route) => {
       expect(parseStartParam(param, role)).toEqual(route)
     })
 
-    it.each(['open_notifications', 'open_admin_masters', 'open_admin_support', 'open_thread__x'])(
-      '%s -> no route (no admin bell; msg.* has no Telegram)',
+    it.each(['open_notifications', 'open_admin_masters', 'open_thread__x'])(
+      '%s -> no route (no admin bell; malformed thread id)',
       (param) => {
         expect(parseStartParam(param, 'user')).toBeNull()
       },
     )
+
+    it.each(['open_admin_support', `open_admin_support__${id}`])(
+      '%s without the admin role -> no route',
+      (param) => {
+        expect(parseStartParam(param, 'user')).toBeNull()
+        expect(parseStartParam(param, 'master')).toBeNull()
+      },
+    )
+
+    it('open_thread / open_admin_support without an id are no route', () => {
+      expect(parseStartParam('open_thread', 'user')).toBeNull()
+      expect(parseStartParam('open_admin_support', 'admin')).toBeNull()
+    })
 
     it('a verb that needs its id without one is no route', () => {
       expect(parseStartParam('confirm_waitlist', 'user')).toBeNull()

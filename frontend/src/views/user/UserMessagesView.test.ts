@@ -45,11 +45,25 @@ vi.mock('vue-router', () => ({
 function thread(overrides: Partial<ChatThread> = {}): ChatThread {
   return {
     id: 'thread-1',
-    operator_value: 'master-1',
+    channel: 'chat',
     created_at: '2026-08-01T10:30:00+00:00',
+    last_message: null,
+    operator_value: 'master-1',
     peer: { user_id: 'master-1', name: 'Анна Петрова', avatar_url: null },
     ...overrides,
   }
+}
+
+function supportThread(overrides: Partial<ChatThread> = {}): ChatThread {
+  // BE-163: a support row has peer: null -- the VELO logo + «Поддержка
+  // VELO» stand in for both.
+  return thread({
+    id: 'support-1',
+    channel: 'support',
+    operator_value: undefined,
+    peer: null,
+    ...overrides,
+  })
 }
 
 // -----------------------------------------------------------------------------
@@ -126,6 +140,58 @@ describe('UserMessagesView', () => {
 
     expect(rows()).toHaveLength(1)
     expect(row(0).querySelector('.chat-row__name')?.textContent?.trim()).toBe('Мастер')
+  })
+
+  // FE-103 / BE-163: the caller's own support conversation rides the same
+  // list -- VELO logo instead of the avatar, the support title instead of
+  // the role fallback, and the newest-message line with its time.
+  it('a support row renders the VELO logo, «Поддержка VELO» and the last message, not «Мастер»', async () => {
+    vi.mocked(chatsApi.listChats).mockResolvedValue({
+      threads: [
+        supportThread({
+          last_message_at: '2026-08-07T09:00:00+00:00',
+          last_message: {
+            id: 'm-1',
+            sender: 'admin-1',
+            created_at: '2026-08-07T09:00:00+00:00',
+            body: 'Ответ поддержки',
+            translation: null,
+          },
+        }),
+      ],
+      next_cursor: null,
+    })
+    mount()
+    await flush()
+
+    expect(row(0).querySelector('.chat-row__name')?.textContent?.trim()).toBe('Поддержка VELO')
+    expect(row(0).querySelector('.chat-row__logo')).not.toBeNull()
+    expect(row(0).querySelector('.v-avatar')).toBeNull()
+    expect(row(0).querySelector('.chat-row__preview')?.textContent?.trim()).toBe('Ответ поддержки')
+    expect(row(0).querySelector('.chat-row__time')).not.toBeNull()
+  })
+
+  it('a support row whose last message is still translating previews «Переводится…», never the original', async () => {
+    vi.mocked(chatsApi.listChats).mockResolvedValue({
+      threads: [
+        supportThread({
+          last_message: {
+            id: 'm-2',
+            sender: 'admin-1',
+            created_at: '2026-08-07T09:00:00+00:00',
+            body: null,
+            translation: 'unavailable',
+          },
+        }),
+      ],
+      next_cursor: null,
+    })
+    mount()
+    await flush()
+
+    expect(row(0).querySelector('.chat-row__preview')?.textContent?.trim()).toBe(
+      'Перевод недоступен',
+    )
   })
 
   it('unread badges ride on the rows: a positive count shows, an explicit zero shows nothing', async () => {

@@ -201,6 +201,11 @@ const SCHOOL_INVITE_PARAM = /^school__([A-Za-z0-9_-]{16,128})$/
  *   master_onboarding__{token}  -> { name: 'master-invite', params: { token } }
  *   group_invite__{token}       -> { name: 'group-join', params: { token } } (P4, PROMPT №593)
  *   school__{token}             -> { name: 'curator-group-join', params: { token } } (FE-18, Links)
+ *   open_thread__{uuid}         -> { name: 'user-chat' | 'master-chat', params: { id } }
+ *                                  (FE-103: Telegram twin of the bell's msg.* buttons)
+ *   open_admin_support__{uuid}  -> { name: 'admin-support-detail', params: { id } }, admin only
+ *                                  (FE-103/BE-172: the comms THREAD id -- owner
+ *                                  ruling in the BE-172 fix)
  *   <action>[__{uuid}]          -> the bell's screen for that notification verb (Links);
  *                                  the session `role` picks the zone where bells differ
  *
@@ -221,6 +226,7 @@ export function parseStartParam(
   // and no viewer -- so roleRedirect parses it AFTER auth, with the session's
   // role, and the same verb lands where the matching bell would send it.
   const asMaster = role === 'master'
+  const asAdmin = role === 'admin'
 
   const practiceMatch = startParam.match(/^open_practice__([0-9a-f-]{36})$/)
   if (practiceMatch?.[1]) {
@@ -275,7 +281,6 @@ export function parseStartParam(
   // Notification buttons (Links, 3 October): comms builds startapp as
   // `<action>` or `<action>__<one param>`. Each verb lands where the bell
   // sends it; where the bells differ by zone, the session role decides.
-  // open_thread is not here: msg.* types have no Telegram channel.
   const verb = startParam.match(/^([a-z_]+?)(?:__([0-9a-f-]{36}))?$/)
   const action = verb?.[1]
   const id = verb?.[2]
@@ -304,9 +309,22 @@ export function parseStartParam(
       return id ? null : { name: asMaster ? 'master-support' : 'user-support' }
     case 'open_master_practices':
       return id ? null : { name: 'master-practices' }
+    case 'open_thread':
+      // FE-103: the Telegram twin of the bell's msg.* buttons -- the support
+      // notification and the "translation unavailable" notice carry
+      // `open_thread__<thread_id>`, and the SAME routes open it (the thread
+      // screen learns it is support from the row's `channel`).
+      return id ? { name: asMaster ? 'master-chat' : 'user-chat', params: { id } } : null
+    case 'open_admin_support':
+      // FE-103 / BE-172: the per-admin Telegram signal about a support
+      // message deep-links the admin detail screen by the comms THREAD id
+      // (owner ruling in the BE-172 fix -- the opener's user_id would leave
+      // the front to find the thread through the list). Bare (no id) has no
+      // destination of its own.
+      return id && asAdmin ? { name: 'admin-support-detail', params: { id } } : null
     default:
-      // open_notifications / open_admin_*: there is no admin bell -- the
-      // app opens as usual. Anything else is not a route.
+      // open_notifications / open_admin_masters: there is no admin bell --
+      // the app opens as usual. Anything else is not a route.
       return null
   }
 }

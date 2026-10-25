@@ -16,18 +16,26 @@
     - read: POST read on mount AND whenever the poll delivers new messages
       while the tab is visible -- the list badge dies exactly when the
       messages were actually seen.
-    - updates: plain 12s polling of the visible thread only (approved plan
-      §4). Paused while document.hidden; an immediate refetch on return.
-      No websockets -- behind the fence.
+    - updates: polling of the visible thread only (approved plan §4) -- the
+      plain 12s cadence, tightening to 3s while any support message is
+      still «Переводится…» (BE-166). Paused while document.hidden; an
+      immediate refetch on return. No websockets -- behind the fence.
 
   Bubbles align by sender === my user id; the peer's name falls back to the
   role wording the PARENT supplies (a student sees «Мастер», a master sees
   «Ученик») -- peer may be null when the proxy could not resolve the user.
+
+  BE-163 support conversation: the wrapper passes `support` (the row's
+  `channel === 'support'`) and the screen then renders the VELO logo in the
+  header, the «Поддержка» caption on peer bubbles (never an admin's name),
+  the BE-166 translation states for body-less messages, and sends with an
+  Idempotency-Key minted HERE (a failed draft's key rides its retry, so a
+  lost answer can never become a twin message).
 -->
 
 <template>
   <div class="chat-thread">
-    <VHeader :title="peerTitle" show-back @back="emit('back')" />
+    <VHeader :title="peerTitle" :logo="support" show-back @back="emit('back')" />
 
     <!-- Loading (first fetch only; polls refresh silently) -->
     <div v-if="loading" class="chat-thread__center">
@@ -74,8 +82,21 @@
               :class="{ 'chat-thread__bubble--mine': m.sender === myId }"
               :data-testid="m.sender === myId ? 'bubble-mine' : 'bubble-peer'"
             >
-              <div class="chat-thread__body">
-                {{ m.body }}
+              <!-- Support threads (BE-163): the caption is the SERVICE, never
+                   an admin's name -- `sender` is a technical id, good only
+                   for the me/not-me split. -->
+              <div
+                v-if="support && m.sender !== myId"
+                class="chat-thread__sender"
+                data-testid="bubble-sender"
+              >
+                {{ t('chat.supportSender') }}
+              </div>
+              <div
+                class="chat-thread__body"
+                :class="{ 'chat-thread__body--state': m.body === null }"
+              >
+                {{ messageText(m) }}
               </div>
               <div class="chat-thread__time">
                 {{ formatTime(m.created_at) }}
@@ -128,6 +149,7 @@ import {
   listChatMessages,
   markChatRead,
   sendChatMessage,
+  newIdempotencyKey,
   type ChatMessage,
   type ChatPeer,
 } from '@/api/chats'
@@ -141,13 +163,26 @@ const props = defineProps<{
   threadId: string
   /** P-1 display block; null when the proxy could not resolve the user. */
   peer?: ChatPeer | null
-  /** Role-appropriate fallback when peer/name is absent («Мастер»/«Ученик»). */
+  /** Role-appropriate fallback when peer/name is absent («Мастер»/«Ученик»);
+   *  the support thread's wrapper passes «Поддержка {brand}» here. */
   peerFallback: string
+  /** BE-163: the thread is the caller's own support conversation -- the
+   *  header carries the VELO logo and peer bubbles the «Поддержка» caption. */
+  support?: boolean
 }>()
 
 const emit = defineEmits<{ back: [] }>()
 
 const POLL_MS = 12_000
+
+/** BE-166: while any support message is still «Переводится…», the feed is
+ *  re-read on a short leash until the state resolves (owner ruling 24.10,
+ *  variant 1) -- the plain 12s cadence would leave the placeholder hanging
+ *  up to a quarter minute past the translated answer. The leash is bounded
+ *  (owner brief 25.10): 2 minutes of translating, then back to the plain
+ *  cadence; and the whole loop parks while the screen is hidden. */
+const TRANSLATING_POLL_MS = 3_000
+const TRANSLATING_LEASE_MS = 2 * 60_000
 
 const authStore = useAuthStore()
 const myId = computed(() => authStore.user?.id ?? '')
@@ -214,12 +249,25 @@ onBeforeUnmount(() => {
 const composing = ref(false)
 const growCap = useComposerGrowCap(composing)
 
-let pollTimer: ReturnType<typeof setInterval> | null = null
+let pollTimer: ReturnType<typeof setTimeout> | null = null
+let disposed = false
 
 function formatTime(iso: string): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return ''
   return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+}
+
+/** BE-166: a support feed may hold an admin reply the reader must never see
+ *  in the original language -- the backend sends `body: null` and the
+ *  translation state IS the wording. Own messages and `chat` feeds are
+ *  plain strings (body never null there), so this is inert outside support
+ *  threads. */
+function messageText(m: ChatMessage): string {
+  if (m.body !== null) return m.body
+  if (m.translation === 'translating') return t('chat.translating')
+  if (m.translation === 'unavailable') return t('chat.translationUnavailable')
+  return ''
 }
 
 async function scrollToBottom(): Promise<void> {
@@ -290,6 +338,14 @@ function newestId(list: ChatMessage[]): string | null {
   return list.at(-1)?.id ?? null
 }
 
+/** The page's translation shape -- per message, null-body+state or plain
+ *  string. BE-166: a state can flip on the SAME id («Переводится…» lands as
+ *  the translated text) without moving newestId or the length, exactly the
+ *  drift the id/length compares are blind to. */
+function translationShape(list: ChatMessage[]): string {
+  return list.map((m) => (m.body === null ? `null:${m.translation ?? '-'}` : 'body')).join(',')
+}
+
 function markRead(): void {
   // Fire-and-forget: the read pointer is a courtesy to the badge, a failed
   // call must never disturb the conversation itself.
@@ -311,10 +367,43 @@ async function reload(): Promise<void> {
     await scrollToBottom()
     // [owner pass] keep-bottom: the wrap is mounted only now (v-else branch).
     attachKeepBottom()
+    // The feed's translation shape is known only now -- re-time the tick
+    // (a thread opened straight into «Переводится…» must not wait 12s).
+    schedulePoll()
   } catch (e) {
     error.value = extractApiError(e, t('common.tryAgain'))
     loading.value = false
   }
+}
+
+/** Self-scheduling poll loop (was a flat 12s interval): the next tick is
+ *  TRANSLATING_POLL_MS while any message is still translating and the 2-minute
+ *  lease is young, else the plain cadence. Hidden screen -> the loop PARKS
+ *  (no timer booked); onVisibility re-kicks it with an immediate poll.
+ *  Idempotent -- re-booking clears the pending tick first, so reload()
+ *  (which resolves AFTER the mount-time bootstrap booking, and is what
+ *  first learns the feed's translation shape) re-times the same single
+ *  loop. The chain books the next tick only from the previous tick's
+ *  finally -- parallel requests cannot pile up. */
+let translatingSince: number | null = null
+
+function schedulePoll(): void {
+  if (disposed) return
+  if (pollTimer !== null) clearTimeout(pollTimer)
+  if (isDocumentHidden()) {
+    pollTimer = null
+    return
+  }
+  const translating = messages.value.some((m) => m.translation === 'translating')
+  let delay = POLL_MS
+  if (translating) {
+    const now = Date.now()
+    if (translatingSince === null) translatingSince = now
+    if (now - translatingSince < TRANSLATING_LEASE_MS) delay = TRANSLATING_POLL_MS
+  } else {
+    translatingSince = null
+  }
+  pollTimer = setTimeout(() => void poll(), delay)
 }
 
 /** Silent poll of the visible thread. Any drift (new tail, an edit-free
@@ -322,21 +411,29 @@ async function reload(): Promise<void> {
  *  additionally marks read and -- only when the reader is already at the
  *  bottom (CH-3) -- follows the conversation down. */
 async function poll(): Promise<void> {
-  if (isDocumentHidden() || loading.value || sendInFlight.value) return
   try {
-    const fresh = await fetchMessages()
-    const freshNewest = newestId(fresh)
-    const hasNew = freshNewest !== null && freshNewest !== newestId(messages.value)
-    if (hasNew || fresh.length !== messages.value.length) {
-      const followDown = hasNew && readerNearBottom()
-      messages.value = fresh
-      if (hasNew) {
-        markRead()
-        if (followDown) await scrollToBottom()
+    if (isDocumentHidden() || loading.value || sendInFlight.value) return
+    try {
+      const fresh = await fetchMessages()
+      const freshNewest = newestId(fresh)
+      const hasNew = freshNewest !== null && freshNewest !== newestId(messages.value)
+      const changed =
+        hasNew ||
+        fresh.length !== messages.value.length ||
+        translationShape(fresh) !== translationShape(messages.value)
+      if (changed) {
+        const followDown = hasNew && readerNearBottom()
+        messages.value = fresh
+        if (hasNew) {
+          markRead()
+          if (followDown) await scrollToBottom()
+        }
       }
+    } catch {
+      // A missed poll is silent by design; the next tick retries.
     }
-  } catch {
-    // A missed poll is silent by design; the next tick retries.
+  } finally {
+    schedulePoll()
   }
 }
 
@@ -361,14 +458,25 @@ function onVisibility(): void {
 // than reached into.
 const sendInFlight = ref(false)
 
+/** BE-163: the idempotency key is chosen HERE, per logical message -- the
+ *  key of a FAILED attempt is kept and reused when the same draft is sent
+ *  again, so a request that created the message before its answer was lost
+ *  returns it instead of posting a twin. (Had the key been minted inside
+ *  the api wrapper, the retry would arrive under a NEW key and dedup would
+ *  never see the pair.) A different (edited) draft gets a fresh key. */
+let failedSend: { key: string; body: string } | null = null
+
 async function handleSend(body: string): Promise<ComposerSendResult> {
   sendInFlight.value = true
+  const key = failedSend?.body === body ? failedSend.key : newIdempotencyKey()
   try {
-    const sent = await sendChatMessage(props.threadId, body)
+    const sent = await sendChatMessage(props.threadId, body, key)
+    failedSend = null
     messages.value = [...messages.value, sent]
     await scrollToBottom()
     return { ok: true }
   } catch (e) {
+    failedSend = { key, body }
     return { ok: false, error: extractApiError(e, t('chat.sendFailed')) }
   } finally {
     sendInFlight.value = false
@@ -377,12 +485,13 @@ async function handleSend(body: string): Promise<ComposerSendResult> {
 
 onMounted(() => {
   void reload()
-  pollTimer = setInterval(() => void poll(), POLL_MS)
+  schedulePoll()
   onDocumentEvent('visibilitychange', onVisibility)
 })
 
 onBeforeUnmount(() => {
-  if (pollTimer !== null) clearInterval(pollTimer)
+  disposed = true
+  if (pollTimer !== null) clearTimeout(pollTimer)
   offDocumentEvent('visibilitychange', onVisibility)
 })
 </script>
@@ -530,6 +639,22 @@ onBeforeUnmount(() => {
 
 .chat-thread__body {
   white-space: pre-wrap;
+}
+
+/* Support threads (BE-163): the «Поддержка» caption above the body -- the
+   service, never an admin's name. */
+.chat-thread__sender {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.65;
+  margin-bottom: var(--space-1);
+}
+
+/* BE-166 placeholder («Переводится…» / «Перевод недоступен»): not the
+   sender's words -- visibly provisional. */
+.chat-thread__body--state {
+  font-style: italic;
+  opacity: 0.7;
 }
 
 .chat-thread__time {

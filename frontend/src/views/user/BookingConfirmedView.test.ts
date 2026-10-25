@@ -389,7 +389,12 @@ describe('BookingConfirmedView', () => {
   // history; replace otherwise) and both failure paths (no navigation, the
   // text survives for a retry).
   describe('ask-master (real: sends the DM and returns to the practice screen)', () => {
-    const THREAD = { id: 'thread-7', created_at: '2026-08-01T10:30:00+00:00' }
+    const THREAD = {
+      id: 'thread-7',
+      channel: 'chat' as const,
+      created_at: '2026-08-01T10:30:00+00:00',
+      last_message: null,
+    }
     const SENT = {
       id: 'msg-1',
       thread_id: 'thread-7',

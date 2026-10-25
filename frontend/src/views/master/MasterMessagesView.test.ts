@@ -47,11 +47,13 @@ vi.mock('vue-router', () => ({
 function commsThread(overrides: Partial<ChatThread> = {}): ChatThread {
   return {
     id: 'thread-1',
+    channel: 'chat',
     client: 'student-1',
     operator_value: 'master-me',
     kind: 'dm',
     status: 'open',
     last_message_at: '2026-08-07T09:00:00+00:00',
+    last_message: null,
     created_at: '2026-08-01T10:30:00+00:00',
     peer: { user_id: 'student-1', name: 'Вера Соколова', avatar_url: null },
     ...overrides,
@@ -132,6 +134,41 @@ describe('MasterMessagesView', () => {
 
     expect(rows()).toHaveLength(1)
     expect(row(0).querySelector('.chat-row__name')?.textContent?.trim()).toBe('Ученик')
+  })
+
+  // FE-103 / BE-163: the master's OWN support conversation rides the same
+  // list -- VELO logo instead of the avatar, «Поддержка VELO» instead of
+  // the «Ученик» a null peer would degrade to.
+  it("the master's own support row renders the VELO logo and «Поддержка VELO», not «Ученик»", async () => {
+    vi.mocked(chatsApi.listChats).mockResolvedValue({
+      threads: [
+        commsThread({
+          id: 'support-1',
+          channel: 'support',
+          client: undefined,
+          kind: undefined,
+          status: undefined,
+          peer: null,
+          last_message: {
+            id: 'm-1',
+            sender: 'admin-1',
+            created_at: '2026-08-07T09:00:00+00:00',
+            body: 'Ваш вопрос рассматривается',
+            translation: null,
+          },
+        }),
+      ],
+      next_cursor: null,
+    })
+    mount()
+    await flush()
+
+    expect(row(0).querySelector('.chat-row__name')?.textContent?.trim()).toBe('Поддержка VELO')
+    expect(row(0).querySelector('.chat-row__logo')).not.toBeNull()
+    expect(row(0).querySelector('.v-avatar')).toBeNull()
+    expect(row(0).querySelector('.chat-row__preview')?.textContent?.trim()).toBe(
+      'Ваш вопрос рассматривается',
+    )
   })
 
   it('unread badge renders from the row itself, with no extra request', async () => {

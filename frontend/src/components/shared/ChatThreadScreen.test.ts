@@ -19,6 +19,8 @@
 //      lost) and appends nothing.
 //   4. POLLING -- fake timers: the 12s tick refetches; growth re-reads.
 //   5. Bubble alignment: sender===me -> mine, else peer.
+//   6. BE-166 translation states (body: null -> the wording), the 3s
+//      translating leash and the same-id state flip re-render.
 // =============================================================================
 
 import { createTestI18n } from '@/locales/testing'
@@ -44,6 +46,7 @@ vi.mock('@/composables/useToast', () => ({
 
 const MY_ID = 'me-1'
 const THREAD_ID = 'thread-1'
+let keySeq = 0
 
 function me(): UserResponse {
   return {
@@ -143,6 +146,12 @@ beforeEach(() => {
   vi.mocked(chatsApi.listChatMessages).mockReset().mockResolvedValue(feed([]))
   vi.mocked(chatsApi.markChatRead).mockReset().mockResolvedValue({ unread: 0 })
   vi.mocked(chatsApi.sendChatMessage).mockReset()
+  // The automock would leave the screen's key factory returning undefined --
+  // give it a countable, assertable implementation.
+  keySeq = 0
+  vi.mocked(chatsApi.newIdempotencyKey)
+    .mockReset()
+    .mockImplementation(() => `key-${++keySeq}`)
 })
 
 afterEach(() => {
@@ -254,7 +263,12 @@ describe('ChatThreadScreen', () => {
     sendBtn().click()
     await flush()
 
-    expect(chatsApi.sendChatMessage).toHaveBeenCalledWith(THREAD_ID, 'вопрос про практику')
+    // BE-163: the send carries the screen-minted Idempotency-Key.
+    expect(chatsApi.sendChatMessage).toHaveBeenCalledWith(
+      THREAD_ID,
+      'вопрос про практику',
+      expect.any(String),
+    )
     expect(bodies()).toEqual(['вопрос про практику'])
     expect(composerTextarea().value).toBe('')
   })
@@ -425,6 +439,79 @@ describe('ChatThreadScreen', () => {
     expect(composerTextarea().getAttribute('maxlength')).toBe('4000')
   })
 
+  // FE-103 / BE-166: a support feed may hold an admin reply whose body the
+  // reader must never see in the original language -- body: null and the
+  // translation state IS the wording. The chat feeds' shape (always-string
+  // bodies) is untouched.
+  it('renders the BE-166 translation states for a body-less admin reply', async () => {
+    vi.mocked(chatsApi.listChatMessages).mockResolvedValue(
+      feed([
+        msg({ id: 'm-2', body: null, translation: 'translating' }),
+        msg({ id: 'm-1', body: null, translation: 'unavailable' }),
+      ]),
+    )
+    mount()
+    await flush()
+
+    expect(bodies()).toEqual(['Перевод недоступен', 'Переводится…'])
+    expect(host?.querySelectorAll('.chat-thread__body--state')).toHaveLength(2)
+  })
+
+  // BE-166 (owner ruling 24.10, variant 1): while a message is still
+  // «Переводится…», the visible thread is re-read every few seconds -- 3s,
+  // not the 12s cadence; once the state resolves the plain cadence returns.
+  it('polls on the 3s leash while translating, and relaxes to 12s once resolved', async () => {
+    vi.useFakeTimers()
+    vi.mocked(chatsApi.listChatMessages).mockResolvedValue(
+      feed([msg({ id: 'm-1', body: null, translation: 'translating' })]),
+    )
+    mount()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(chatsApi.listChatMessages).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(chatsApi.listChatMessages).toHaveBeenCalledTimes(2)
+
+    // Still translating at the second tick -> the leash stays 3s.
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(chatsApi.listChatMessages).toHaveBeenCalledTimes(3)
+
+    // The translation landed -> this tick relaxes the cadence back to 12s.
+    vi.mocked(chatsApi.listChatMessages).mockResolvedValue(
+      feed([msg({ id: 'm-1', body: 'вот перевод', translation: null })]),
+    )
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(chatsApi.listChatMessages).toHaveBeenCalledTimes(4)
+
+    vi.mocked(chatsApi.listChatMessages).mockClear()
+    await vi.advanceTimersByTimeAsync(11_999)
+    expect(chatsApi.listChatMessages).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(chatsApi.listChatMessages).toHaveBeenCalledTimes(1)
+  })
+
+  // BE-166: the state flips on the SAME id -- newestId and the length do
+  // not move, so the poll's drift check must see the translation shape
+  // change or the bubble would hang on «Переводится…» forever.
+  it('a translation state flip on the same message id re-renders the bubble (no false read-mark)', async () => {
+    vi.useFakeTimers()
+    vi.mocked(chatsApi.listChatMessages).mockResolvedValue(
+      feed([msg({ id: 'm-1', body: null, translation: 'translating' })]),
+    )
+    mount()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(bodies()).toEqual(['Переводится…'])
+    vi.mocked(chatsApi.markChatRead).mockClear()
+
+    vi.mocked(chatsApi.listChatMessages).mockResolvedValue(
+      feed([msg({ id: 'm-1', body: 'вот перевод', translation: null })]),
+    )
+    await vi.advanceTimersByTimeAsync(3_000)
+
+    expect(bodies()).toEqual(['вот перевод'])
+    expect(chatsApi.markChatRead).not.toHaveBeenCalled()
+  })
+
   it('a failed initial load shows the retry state, and «Повторить» refetches', async () => {
     vi.mocked(chatsApi.listChatMessages)
       .mockRejectedValueOnce(new Error('down'))
@@ -441,5 +528,129 @@ describe('ChatThreadScreen', () => {
     await flush()
 
     expect(bodies()).toEqual(['привет'])
+  })
+
+  // -- FE-103 / BE-163: the support conversation -----------------------------
+
+  /** Mount with `support: true` (the wrappers pass the row's `channel`). */
+  function mountSupport(): HTMLElement {
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    app = createApp(ChatThreadScreen, {
+      threadId: THREAD_ID,
+      peer: null,
+      peerFallback: 'Поддержка VELO',
+      support: true,
+    }).use(createTestI18n())
+    app.use(pinia)
+    app.mount(host)
+    return host
+  }
+
+  it('a support thread: VELO logo in the header, «Поддержка» caption on peer bubbles only', async () => {
+    vi.mocked(chatsApi.listChatMessages).mockResolvedValue(
+      feed([msg(), msg({ id: 'm-2', sender: MY_ID, body: 'мой вопрос' })]),
+    )
+    mountSupport()
+    await flush()
+
+    expect(host?.querySelector('.v-header__logo')).not.toBeNull()
+    expect(host?.textContent).toContain('Поддержка VELO')
+    // The caption is the SERVICE -- never an admin's name, never on own words.
+    const senders = Array.from(host?.querySelectorAll('[data-testid="bubble-sender"]') ?? []).map(
+      (el) => el.textContent?.trim(),
+    )
+    expect(senders).toEqual(['Поддержка'])
+  })
+
+  it('a person-to-person thread renders no captions and no logo (default)', async () => {
+    vi.mocked(chatsApi.listChatMessages).mockResolvedValue(feed([msg()]))
+    mount()
+    await flush()
+
+    expect(host?.querySelector('.v-header__logo')).toBeNull()
+    expect(host?.querySelector('[data-testid="bubble-sender"]')).toBeNull()
+  })
+
+  it("BE-163: a retry of the SAME draft reuses the failed attempt's Idempotency-Key; success clears it", async () => {
+    vi.mocked(chatsApi.sendChatMessage)
+      .mockRejectedValueOnce(new Error('lost'))
+      .mockResolvedValueOnce(msg({ id: 'm-9', sender: MY_ID }))
+      .mockResolvedValueOnce(msg({ id: 'm-10', sender: MY_ID }))
+    mount()
+    await flush()
+
+    await type('первый раз')
+    sendBtn().click()
+    await flush()
+    const [, , failedKey] = vi.mocked(chatsApi.sendChatMessage).mock.calls[0]!
+    expect(failedKey).toEqual(expect.any(String))
+
+    // Same draft again -> the SAME key goes out (the backend dedups on it).
+    sendBtn().click()
+    await flush()
+    expect(vi.mocked(chatsApi.sendChatMessage).mock.calls[1]![2]).toBe(failedKey)
+
+    // A NEW draft -> a fresh key (a different logical message).
+    await type('второй текст')
+    sendBtn().click()
+    await flush()
+    expect(vi.mocked(chatsApi.sendChatMessage).mock.calls[2]![2]).toEqual(expect.any(String))
+    expect(vi.mocked(chatsApi.sendChatMessage).mock.calls[2]![2]).not.toBe(failedKey)
+  })
+
+  it('BE-166: the 3s leash gives up after 2 minutes of translating and falls back to the 12s cadence', async () => {
+    vi.useFakeTimers()
+    vi.mocked(chatsApi.listChatMessages).mockResolvedValue(
+      feed([msg({ id: 'm-1', body: null, translation: 'translating' })]),
+    )
+    mount()
+    await vi.advanceTimersByTimeAsync(0)
+    const callsAt = (n: number) => {
+      expect(chatsApi.listChatMessages).toHaveBeenCalledTimes(n)
+    }
+    callsAt(1)
+
+    // Fast ticks while young (3s apart)...
+    await vi.advanceTimersByTimeAsync(3_000)
+    callsAt(2)
+    await vi.advanceTimersByTimeAsync(117_000) // t=120s: the lease is spent
+    expect(vi.mocked(chatsApi.listChatMessages).mock.calls.length).toBeGreaterThan(20)
+
+    const fastCount = vi.mocked(chatsApi.listChatMessages).mock.calls.length
+    vi.mocked(chatsApi.listChatMessages).mockClear()
+    // ...then the plain 12s cadence takes over.
+    await vi.advanceTimersByTimeAsync(11_999)
+    expect(chatsApi.listChatMessages).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(chatsApi.listChatMessages).toHaveBeenCalledTimes(1)
+    expect(fastCount).toBeGreaterThan(0)
+  })
+
+  it('BE-166: a hidden screen parks the re-read loop; visibility re-kicks it', async () => {
+    vi.useFakeTimers()
+    vi.mocked(chatsApi.listChatMessages).mockResolvedValue(
+      feed([msg({ id: 'm-1', body: null, translation: 'translating' })]),
+    )
+    mount()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(chatsApi.listChatMessages).toHaveBeenCalledTimes(1)
+
+    const hidden = Object.getOwnPropertyDescriptor(Document.prototype, 'hidden')
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true })
+    try {
+      document.dispatchEvent(new Event('visibilitychange'))
+      await vi.advanceTimersByTimeAsync(30_000)
+      // Parked: not a single further fetch while hidden.
+      expect(chatsApi.listChatMessages).toHaveBeenCalledTimes(1)
+
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => false })
+      document.dispatchEvent(new Event('visibilitychange'))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(chatsApi.listChatMessages).toHaveBeenCalledTimes(2)
+    } finally {
+      if (hidden) Object.defineProperty(Document.prototype, 'hidden', hidden)
+      else delete (document as { hidden?: boolean }).hidden
+    }
   })
 })

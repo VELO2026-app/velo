@@ -843,11 +843,11 @@
       "attachFile": "Attach a file",
       "removeFile": "Remove the file",
       "toast": {
-        "thanks": "Thanks for the request",
+        "thanks": "Request sent",
         "sendFailed": "Failed to send the request"
       },
       "thanks": {
-        "text": "We have received your request and will reply right here in the app."
+        "text": "The reply will arrive in Messages — we will send you a notification."
       },
       "title": "Support",
       "responseHint": "We usually reply within 24 hours",

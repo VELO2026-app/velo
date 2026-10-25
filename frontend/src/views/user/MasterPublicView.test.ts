@@ -297,7 +297,9 @@ describe('MasterPublicView', () => {
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
       vi.mocked(chatsApi.openChat).mockResolvedValue({
         id: 'thread-9',
+        channel: 'chat',
         created_at: '2026-09-30T10:00:00+00:00',
+        last_message: null,
       })
       vi.mocked(chatsApi.sendChatMessage).mockResolvedValue({
         id: 'msg-9',
@@ -858,7 +860,9 @@ describe('MasterPublicView', () => {
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
       vi.mocked(chatsApi.openChat).mockResolvedValue({
         id: 'thread-1',
+        channel: 'chat',
         created_at: '2026-08-01T10:30:00+00:00',
+        last_message: null,
       })
       vi.mocked(chatsApi.sendChatMessage).mockResolvedValue({
         id: 'msg-1',

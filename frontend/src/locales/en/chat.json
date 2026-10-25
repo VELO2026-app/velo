@@ -10,7 +10,12 @@
     "sent": "Message sent",
     "sendFailed": "Failed to send the message",
     "loadFailed": "Failed to load the conversation",
-    "empty": "No messages yet — write the first one."
+    "empty": "No messages yet — write the first one.",
+    "supportTitle": "@:brand Support",
+    "translating": "Translating…",
+    "translationUnavailable": "Translation unavailable",
+    "supportSender": "Support",
+    "listLoadFailed": "Failed to load the messages"
   },
   "composer": {
     "voiceAria": "Voice input",

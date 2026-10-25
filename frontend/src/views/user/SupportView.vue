@@ -12,13 +12,12 @@
   + message as its first (or next) message (::sendSupportMessage) -- this is the
   messaging module (comms sections), not the `SupportTicket` model
   VELO-Backend-Tasks.md describes elsewhere (that plan stays Zod's, untouched).
-  The terminal screen's copy was written for the old stub and became FALSE the
-  moment this screen started delivering -- it promised a channel that had just
-  arrived and sent the reader to email instead. Rewritten at PROMPT №712 to the
-  owner's own approved wording: the reply comes back HERE, and email is now the
-  fallback for a late answer rather than the substitute for a missing channel.
-  ⚠ Do not "improve" this wording. Words a human reads are the owner's call on
-  this project, and this screen already cost one round of exactly that.
+  The terminal screen's copy was written for the old stub, became FALSE the
+  moment this screen started delivering, was rewritten at PROMPT №712, and is
+  REWRITTEN AGAIN at FE-103 (owner ruling 25.10): the reply now arrives in
+  «Сообщения» (BE-163), and after the send the form opens that conversation
+  itself. ⚠ Do not "improve" this wording. Words a human reads are the owner's
+  call on this project, and this screen already cost two rounds of exactly that.
 
   Route: /user/support (name 'user-support').
 -->
@@ -106,6 +105,7 @@ import { VButton, VRadioGroup, VTextarea } from '@/components/ui'
 import { IconSupportChat } from '@/components/icons'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import { openSupportThread, sendSupportMessage } from '@/api/support'
+import { listChats } from '@/api/chats'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
 
@@ -159,6 +159,10 @@ const submitting = ref(false)
 // metadata (unchanged from the stub): PROMPT №712 measured that a comms
 // thread has no server-side-sortable field for it, so nothing here sends it
 // anywhere yet -- see that prompt's report for the open question.
+//
+// FE-103 (owner ruling 25.10): after the send the form hands over to the
+// conversation itself -- the support row from listChats() IS the thread.
+// The terminal text stays for the rare case the row is not there yet.
 async function onSubmit(): Promise<void> {
   if (!canSubmit.value || submitting.value) return
   const selected = TOPICS.find((t) => t.value === topic.value)
@@ -171,10 +175,22 @@ async function onSubmit(): Promise<void> {
     await openSupportThread(topicLabel)
     await sendSupportMessage(topicLabel, text)
     submitted.value = true
+    void openConversation()
   } catch (e) {
     toast.error(extractApiError(e, t('user.screens.support.toast.sendFailed')))
   } finally {
     submitting.value = false
+  }
+}
+
+async function openConversation(): Promise<void> {
+  try {
+    const { threads } = await listChats()
+    const support = threads.find((t) => t.channel === 'support')
+    if (support) await router.push({ name: 'user-chat', params: { id: support.id } })
+  } catch {
+    // The terminal screen is the honest fallback (the reply lands in
+    // «Сообщения» regardless); a failed lookup must not toast over success.
   }
 }
 

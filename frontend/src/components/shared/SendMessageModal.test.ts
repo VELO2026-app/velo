@@ -48,7 +48,12 @@ const STUDENT_ID = 'student-7'
 const THREAD_ID = 'thread-7'
 
 function thread(): ChatThread {
-  return { id: THREAD_ID, created_at: '2026-08-07T09:00:00+00:00' }
+  return {
+    id: THREAD_ID,
+    channel: 'chat',
+    created_at: '2026-08-07T09:00:00+00:00',
+    last_message: null,
+  }
 }
 
 // -- mount ------------------------------------------------------------------

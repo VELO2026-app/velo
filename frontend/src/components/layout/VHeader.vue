@@ -28,6 +28,9 @@
           :aria-label="title ? t('ui.back') : backLabel"
           @click="$emit('back')"
         />
+        <!-- FE-103: the support conversation's mark -- the VELO logo where a
+             peer avatar would sit in a person-to-person chat. -->
+        <VeloLogo v-if="logo" :size="28" class="v-header__logo" />
         <h1 v-if="title" class="v-header__title">{{ title }}</h1>
         <span v-if="badge" class="v-header__badge">{{ badge }}</span>
       </div>
@@ -40,7 +43,7 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { VBackButton } from '@/components/ui'
+import { VBackButton, VeloLogo } from '@/components/ui'
 import { useFloatingHeader } from '@/components/layout/useFloatingHeader'
 
 // tz-i18n 1.3: the back-aria fallback comes from ui.back; backLabel stays a
@@ -57,12 +60,15 @@ withDefaults(
     showBack?: boolean
     backLabel?: string
     badge?: string | number
+    /** FE-103: render the VELO logo before the title (support conversation). */
+    logo?: boolean
   }>(),
   {
     title: '',
     showBack: false,
     backLabel: undefined,
     badge: undefined,
+    logo: false,
   },
 )
 
@@ -112,6 +118,10 @@ defineEmits<{
   align-items: center;
   gap: var(--space-3);
   min-width: 0;
+}
+
+.v-header__logo {
+  flex-shrink: 0;
 }
 
 .v-header__title {

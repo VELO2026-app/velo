@@ -162,7 +162,9 @@ beforeEach(() => {
   vi.mocked(chatsApi.openChat).mockReset()
   vi.mocked(chatsApi.openChat).mockResolvedValue({
     id: 'thread-7',
+    channel: 'chat',
     created_at: '2026-08-01T10:30:00+00:00',
+    last_message: null,
   })
   vi.mocked(chatsApi.sendChatMessage).mockReset()
   vi.mocked(chatsApi.sendChatMessage).mockResolvedValue({

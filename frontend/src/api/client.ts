@@ -106,8 +106,13 @@ export function resetClientState(): void {
 
 // -- Core request --
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const headers: Record<string, string> = {}
+async function request<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  extraHeaders?: Record<string, string>,
+): Promise<T> {
+  const headers: Record<string, string> = { ...extraHeaders }
 
   if (_token) {
     headers['Authorization'] = `Bearer ${_token}`
@@ -234,8 +239,8 @@ export const api = {
     return promise
   },
 
-  post<T>(path: string, body?: unknown): Promise<T> {
-    return request<T>('POST', path, body)
+  post<T>(path: string, body?: unknown, headers?: Record<string, string>): Promise<T> {
+    return request<T>('POST', path, body, headers)
   },
 
   patch<T>(path: string, body?: unknown): Promise<T> {

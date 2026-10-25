@@ -16,9 +16,10 @@
 //        open-or-get the DM with one student (T3). 403 unless the caller is
 //        a verified master; the pair is directed server-side (student =
 //        client, master = operator) no matter who tapped first.
-//   GET  /api/v1/chats                        -- my conversations. A student
-//        gets local pointers, a master the comms operator list; BOTH carry
-//        the P-1 `peer` display block, so no per-row name lookups here.
+//   GET  /api/v1/chats                        -- my conversations. Every role
+//        gets {threads, next_cursor} ordered last-message-first (BE-163);
+//        rows carry the P-1 `peer` display block, so no per-row name lookups
+//        here, plus `channel` and the row's own `last_message` preview.
 //   POST /api/v1/chats/{id}/messages          -- send; returns the message.
 //   GET  /api/v1/chats/{id}/messages          -- NEWEST-FIRST, keyset-
 //        paginated feed {messages, next_cursor}.
@@ -48,12 +49,41 @@ export interface ChatPeer {
   avatar_url: string | null
 }
 
-/** One conversation. The comms serializer's full shape arrives for a
- *  master; a student's local-pointer rows carry only id / operator_value /
- *  created_at (+ peer) -- hence the optionals. */
+/** BE-163: `"chat"` is a person-to-person DM, `"support"` the caller's own
+ *  support conversation (peer is always null there -- the row shows the
+ *  VELO logo and «Поддержка VELO» instead). */
+export type ChatChannel = 'chat' | 'support'
+
+/** BE-166 translation state, attached to support-channel messages. `null`
+ *  pairs with a string `body`; the two word-states replace a body the caller
+ *  must not read in the original language (the backend sends `body: null`
+ *  for them). Absent entirely on `chat` feeds -- that shape is unchanged. */
+export type ChatTranslation = 'translating' | 'unavailable'
+
+/** The row/feed preview of the newest message. `body` is null exactly when
+ *  the translation state speaks instead (own messages and same-language
+ *  messages are always plain strings). */
+export interface ChatLastMessage {
+  id: string
+  sender: string
+  created_at: string
+  body: string | null
+  translation: ChatTranslation | null
+}
+
+/** One conversation (BE-163 shape, live on `test` since 6a31aa6). Both roles
+ *  get the same row now; `chat` rows additionally carry the comms fields
+ *  (client / operator_value / operator_kind / assignee / kind / status /
+ *  title) -- more of them than the student's list used to have. */
 export interface ChatThread {
   id: string
+  channel: ChatChannel
   created_at: string
+  /** Display time of the row: last_message.created_at, else created_at --
+   *  the backend computes it, the view renders it as-is. */
+  last_message_at?: string | null
+  /** Newest message, or null for a thread that has none yet. */
+  last_message: ChatLastMessage | null
   peer?: ChatPeer | null
   /** Student's list: the master's user id. */
   operator_value?: string
@@ -61,7 +91,7 @@ export interface ChatThread {
   client?: string
   kind?: string
   status?: string
-  last_message_at?: string | null
+  title?: string | null
   /** Unread for the CALLER, attached by the backend list (T-51).
    *
    *  OPTIONAL ON PURPOSE, and the absence carries meaning: the key is
@@ -83,8 +113,13 @@ export interface ChatMessage {
   id: string
   thread_id: string
   sender: string
-  body: string
   created_at: string
+  /** A support feed may carry body: null for an admin reply in a language
+   *  the reader does not speak (BE-166) -- `translation` says which state
+   *  replaces the text. Own messages and `chat` feeds are always strings. */
+  body: string | null
+  /** Absent on `chat` feeds (the legacy shape, no translation column). */
+  translation?: ChatTranslation | null
 }
 
 /** Newest-first page of a thread's feed. */
@@ -135,8 +170,32 @@ export function listChatMessages(
   return api.get<ChatMessageList>(`/api/v1/chats/${threadId}/messages?${qs}`)
 }
 
-export function sendChatMessage(threadId: string, body: string): Promise<ChatMessage> {
-  return api.post<ChatMessage>(`/api/v1/chats/${threadId}/messages`, { body })
+/** RFC4122 v4 uuid for the Idempotency-Key header (BE-163). crypto.randomUUID
+ *  exists in every webview VELO targets; the fallback keeps runtimes without
+ *  it honest instead of crashy. Exported for senders that retry the SAME
+ *  logical message after a failed attempt. */
+export function newIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16)
+  })
+}
+
+/** BE-163: the send carries an Idempotency-Key -- the backend dedups on it,
+ *  so one logical message can never land twice. Default is a fresh key per
+ *  call; a caller RETRYING the same message (send failed, draft kept) must
+ *  pass the key of the failed attempt back in. */
+export function sendChatMessage(
+  threadId: string,
+  body: string,
+  idempotencyKey: string = newIdempotencyKey(),
+): Promise<ChatMessage> {
+  return api.post<ChatMessage>(
+    `/api/v1/chats/${threadId}/messages`,
+    { body },
+    { 'Idempotency-Key': idempotencyKey },
+  )
 }
 
 export function markChatRead(threadId: string): Promise<ChatUnread> {

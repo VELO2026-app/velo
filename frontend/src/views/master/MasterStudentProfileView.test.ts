@@ -208,7 +208,12 @@ beforeEach(() => {
   vi.mocked(reportsApi.createReport).mockReset()
   vi.mocked(chatsApi.openStudentChat)
     .mockReset()
-    .mockResolvedValue({ id: 'thread-1', created_at: '2026-08-07T09:00:00+00:00' })
+    .mockResolvedValue({
+      id: 'thread-1',
+      channel: 'chat',
+      created_at: '2026-08-07T09:00:00+00:00',
+      last_message: null,
+    })
   vi.mocked(chatsApi.sendChatMessage).mockReset().mockResolvedValue({
     id: 'm-1',
     thread_id: 'thread-1',

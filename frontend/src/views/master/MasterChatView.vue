@@ -35,7 +35,8 @@
       v-else
       :thread-id="threadId"
       :peer="peer"
-      :peer-fallback="t('masterScreens.masterChat.peerFallback')"
+      :peer-fallback="peerFallback"
+      :support="isSupport"
       @back="router.back()"
     />
   </div>
@@ -43,7 +44,7 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import { VButton, VEmptyState, VLoader } from '@/components/ui'
@@ -58,6 +59,13 @@ const threadId = String(route.params.id ?? '')
 const resolving = ref(true)
 const notFound = ref(false)
 const peer = ref<ChatPeer | null>(null)
+/** BE-163: the row's `channel` is the screen's identity -- a `support`
+ *  thread is titled «Поддержка VELO», never the role fallback («Ученик»). */
+const isSupport = ref(false)
+
+const peerFallback = computed(() =>
+  isSupport.value ? t('chat.supportTitle') : t('masterScreens.masterChat.peerFallback'),
+)
 
 onMounted(async () => {
   try {
@@ -67,6 +75,7 @@ onMounted(async () => {
       notFound.value = true
     } else {
       peer.value = thread.peer ?? null
+      isSupport.value = thread.channel === 'support'
     }
   } catch {
     peer.value = null

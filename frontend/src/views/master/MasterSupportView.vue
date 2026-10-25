@@ -10,12 +10,12 @@
   topic label + message as its first (or next) message (::sendSupportMessage)
   -- the messaging module (comms sections), NOT the `SupportTicket` model
   VELO-Backend-Tasks.md describes elsewhere (that plan stays Zod's, untouched).
-  The success screen's copy was written for the old stub and became FALSE the
-  moment this screen started delivering. Rewritten at PROMPT №712 to the owner's
-  own approved wording, identical to the user screen's: the reply comes back
-  HERE, and email is the fallback for a late answer, not the substitute for a
-  missing channel. ⚠ Do not "improve" it -- wording is the owner's call.
-  Attachments stay
+  The success screen's copy was written for the old stub, became FALSE the
+  moment this screen started delivering, was rewritten at PROMPT №712, and is
+  REWRITTEN AGAIN at FE-103 (owner ruling 25.10), identical to the user
+  screen's: the reply now arrives in «Сообщения» (BE-163), and after the send
+  the form opens that conversation itself. ⚠ Do not "improve" it -- wording is
+  the owner's call. Attachments stay
   CAPTURED-LOCALLY-ONLY, unwired, out of that prompt's scope (no
   upload/storage backend exists).
 
@@ -156,6 +156,7 @@ import { VButton, VRadioGroup, VTextarea } from '@/components/ui'
 import { IconSupportChat, IconFile, IconClose, IconArrowRight } from '@/components/icons'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import { openSupportThread, sendSupportMessage } from '@/api/support'
+import { listChats } from '@/api/chats'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
 
@@ -256,10 +257,25 @@ async function onSubmit(): Promise<void> {
     await openSupportThread(topicLabel)
     await sendSupportMessage(topicLabel, text)
     submitted.value = true
+    void openConversation()
   } catch (e) {
     toast.error(extractApiError(e, t('masterScreens.masterSupport.toast.sendFailed')))
   } finally {
     submitting.value = false
+  }
+}
+
+// FE-103 (owner ruling 25.10): after the send the form hands over to the
+// conversation itself -- the support row from listChats() IS the thread.
+// The success screen stays for the rare case the row is not there yet.
+async function openConversation(): Promise<void> {
+  try {
+    const { threads } = await listChats()
+    const support = threads.find((t) => t.channel === 'support')
+    if (support) await router.push({ name: 'master-chat', params: { id: support.id } })
+  } catch {
+    // The success screen is the honest fallback (the reply lands in
+    // «Сообщения» regardless); a failed lookup must not toast over success.
   }
 }
 

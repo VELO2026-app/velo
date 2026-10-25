@@ -50,6 +50,13 @@ vi.mock('@/api/support', () => ({
     sendSupportMessage(...args),
 }))
 
+// FE-103: after the send the view looks up the support ROW (channel
+// 'support') to hand over to the conversation.
+const listChats = vi.fn()
+vi.mock('@/api/chats', () => ({
+  listChats: (...args: Parameters<typeof listChats>) => listChats(...args),
+}))
+
 const toastError = vi.fn()
 vi.mock('@/composables/useToast', () => ({
   useToast: () => ({ error: toastError, success: vi.fn(), info: vi.fn() }),
@@ -142,6 +149,18 @@ beforeEach(() => {
     body: 'placeholder',
     created_at: '2026-08-14T10:00:00Z',
   })
+  listChats.mockReset().mockResolvedValue({
+    threads: [
+      {
+        id: 'support-row-1',
+        channel: 'support',
+        created_at: '2026-08-14T10:00:00Z',
+        last_message: null,
+        peer: null,
+      },
+    ],
+    next_cursor: null,
+  })
 })
 
 afterEach(() => {
@@ -228,7 +247,9 @@ describe('SupportView', () => {
       await flush()
 
       expect(isTerminal()).toBe(true)
-      expect(host?.textContent).toContain('Спасибо за обращение')
+      // FE-103 (owner wording 25.10): the reply arrives in «Сообщения»...
+      expect(host?.textContent).toContain('Обращение отправлено')
+      expect(host?.textContent).toContain('Ответ придёт в «Сообщения»')
       expect(host?.querySelector('.support__content')).toBeNull()
       expect(host?.querySelector('.v-header')).toBeNull()
     })
@@ -365,6 +386,49 @@ describe('SupportView', () => {
         created_at: '2026-08-14T10:00:00Z',
       })
       await flush()
+      expect(isTerminal()).toBe(true)
+    })
+  })
+
+  // ===========================================================================
+  describe('FE-103: the hand-over to the conversation', () => {
+    it('after the send, the support ROW from listChats() opens user-chat', async () => {
+      mount()
+      await flush()
+
+      setValue(messageField(), 'У меня вопрос')
+      await flush()
+      submitBtn().click()
+      for (let i = 0; i < 12; i++) await nextTick()
+
+      expect(push).toHaveBeenCalledWith({ name: 'user-chat', params: { id: 'support-row-1' } })
+    })
+
+    it('no support row in the list yet -- the terminal screen stays (honest fallback)', async () => {
+      listChats.mockReset().mockResolvedValue({ threads: [], next_cursor: null })
+      mount()
+      await flush()
+
+      setValue(messageField(), 'У меня вопрос')
+      await flush()
+      submitBtn().click()
+      for (let i = 0; i < 12; i++) await nextTick()
+
+      expect(push).not.toHaveBeenCalled()
+      expect(isTerminal()).toBe(true)
+    })
+
+    it('a failed listChats lookup is swallowed -- no toast over a delivered message', async () => {
+      listChats.mockReset().mockRejectedValue(new Error('down'))
+      mount()
+      await flush()
+
+      setValue(messageField(), 'У меня вопрос')
+      await flush()
+      submitBtn().click()
+      for (let i = 0; i < 12; i++) await nextTick()
+
+      expect(toastError).not.toHaveBeenCalled()
       expect(isTerminal()).toBe(true)
     })
   })

@@ -49,6 +49,13 @@ vi.mock('@/api/support', () => ({
     sendSupportMessage(...args),
 }))
 
+// FE-103: after the send the view looks up the support ROW (channel
+// 'support') to hand over to the conversation.
+const listChats = vi.fn()
+vi.mock('@/api/chats', () => ({
+  listChats: (...args: Parameters<typeof listChats>) => listChats(...args),
+}))
+
 const toastError = vi.fn()
 vi.mock('@/composables/useToast', () => ({
   useToast: () => ({ error: toastError, success: vi.fn(), info: vi.fn() }),
@@ -130,6 +137,18 @@ function fileInputValue(): string {
 }
 
 beforeEach(() => {
+  listChats.mockReset().mockResolvedValue({
+    threads: [
+      {
+        id: 'support-row-1',
+        channel: 'support',
+        created_at: '2026-08-14T10:00:00Z',
+        last_message: null,
+        peer: null,
+      },
+    ],
+    next_cursor: null,
+  })
   openSupportThread.mockReset().mockResolvedValue({
     id: 'thread-1',
     client: 'master-1',
@@ -296,7 +315,7 @@ describe('MasterSupportView', () => {
         'Проблема с выводом',
         'Проблема с выводом', // trimmed message text (coincidentally same as this topic's label)
       )
-      expect(text()).toContain('Спасибо за обращение')
+      expect(text()).toContain('Обращение отправлено')
       // Header hides on the terminal screen -- no back button on a dead end.
       expect(host?.querySelector('[aria-label="Назад"]')).toBeNull()
     })
@@ -344,7 +363,7 @@ describe('MasterSupportView', () => {
 
       expect(toastError).toHaveBeenCalled()
       expect(sendSupportMessage).not.toHaveBeenCalled()
-      expect(text()).not.toContain('Спасибо за обращение')
+      expect(text()).not.toContain('Обращение отправлено')
     })
 
     it('«На главную» from the terminal screen routes to the master dashboard', async () => {
