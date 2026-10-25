@@ -17,7 +17,7 @@
 
 import { describe, it, expect } from 'vitest'
 import indexHtml from '../../index.html?raw'
-import { pwaManifest } from '@/pwa/manifest'
+import { pwaManifest, pwaManifestWithPassport } from '@/pwa/manifest'
 
 /** Files under public/icons, keyed as their served path (/icons/x.png). */
 const iconFiles = new Set(
@@ -45,6 +45,31 @@ describe('pwaManifest -- the single manifest', () => {
       lang: 'ru',
     })
     expect(pwaManifest.background_color).toMatch(/^#[0-9a-f]{6}$/i)
+  })
+
+  it('identity follows the instance passport (tz-whitelabel F1, §2.3), not literals', () => {
+    // vite.config.ts resolves the VITE_* map (loadEnv: .env files +
+    // process.env) and hands it to the factory -- two .env files produce two
+    // builds (§2.4) without touching this file. Absent keys keep the golden
+    // values; an empty map IS the golden object.
+    expect(pwaManifestWithPassport({ VITE_BRAND: 'ШКОЛА' })).toMatchObject({
+      name: 'ШКОЛА',
+      short_name: 'ШКОЛА',
+      lang: 'ru',
+    })
+    expect(pwaManifestWithPassport({ VITE_DEFAULT_LOCALE: 'en' })).toMatchObject({
+      name: 'VELO',
+      lang: 'en',
+    })
+    expect(pwaManifestWithPassport({})).toBe(pwaManifest)
+  })
+
+  it('description speaks the manifest language (lang: ru -> Russian text)', () => {
+    // Regression: the description used to be English under lang: 'ru'
+    // (tz-whitelabel §2.3 fixes the mismatch).
+    expect(pwaManifest.description).toBeTruthy()
+    expect(pwaManifest.description).toMatch(/\p{Script=Cyrillic}/u)
+    expect(pwaManifest.description).not.toMatch(/[a-zA-Z]{4,}/)
   })
 
   it('theme_color is the same colour as <meta name="theme-color"> in index.html', () => {
@@ -106,6 +131,14 @@ describe('index.html head -- what the build is made from', () => {
 
     expect(href).not.toBeNull()
     expect(iconFiles).toContain(href)
+  })
+
+  it('passport placeholders: lang and title come from %VITE_*% (tz-whitelabel F1)', () => {
+    // The source carries placeholders, not literals; the build substitutes
+    // them (Vite natively, leftovers via passportHtmlDefaults in
+    // vite.config.ts -- pinned in platform/passport-html.test.ts).
+    expect(attr(/<html[^>]*>/, 'lang')).toBe('%VITE_DEFAULT_LOCALE%')
+    expect(indexHtml).toMatch(/<title>%VITE_BRAND%<\/title>/)
   })
 
   it('viewport tag is the one Telegram has always had: NO viewport-fit here', () => {

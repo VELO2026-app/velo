@@ -219,9 +219,10 @@ import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { formatDate } from '@/utils/format'
 import { bearerHeaderValue, mcpServerUrl } from '@/utils/mcpServerUrl'
+import { INSTANCE } from '@/platform/instance'
 
 /** <API base>/mcp, or null when no base is configured (fails closed). */
-const mcpUrl = mcpServerUrl(import.meta.env.VITE_API_BASE_URL)
+const mcpUrl = mcpServerUrl(INSTANCE.apiBaseUrl)
 
 const router = useRouter()
 const toast = useToast()

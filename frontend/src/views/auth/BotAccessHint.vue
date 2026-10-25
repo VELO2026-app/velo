@@ -30,11 +30,12 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
+import { INSTANCE } from '@/platform/instance'
 defineEmits<{ close: [] }>()
 
 // Same link and same fallback as TelegramStubView (a universal link: same
 // tab, direct gesture -- see that file's header).
-const botUrl = import.meta.env.VITE_TELEGRAM_BOT_URL || 'https://telegram.me/veloappbot'
+const botUrl = INSTANCE.telegramBotUrl
 </script>
 
 <style scoped>

@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- Web App Manifest (BE-149, standalone phase 2)
+// VELO Frontend -- Web App Manifest (BE-149, standalone phase 2; F1 §2.3)
 // =============================================================================
 //
 // The ONE source of the web app manifest. vite.config.ts hands this object to
@@ -14,9 +14,24 @@
 // suite runs BEFORE the build in the Docker image, so the only manifest a test
 // can see is this object -- src/pwa/manifest.test.ts pins its fields.
 //
+// Identity (tz-whitelabel F1, §2.3). The GOLDEN object below carries the
+// golden build's values. For a rebranded build vite.config.ts resolves the
+// instance env (loadEnv: .env files + process.env) and hands it to
+// pwaManifestWithPassport() -- two .env files produce two builds (§2.4)
+// without touching this file. This module is evaluated at CONFIG time in
+// Node (imported by vite.config.ts), where import.meta.env does not exist --
+// which is also why it must NOT import platform/instance.ts (a browser
+// module; and a dynamic env read here would inline the whole env into the
+// client bundle). description is Russian, matching lang: 'ru' (it used to be
+// English under a Russian lang); F2 lets a skin override identity via
+// brand.json materialization (§1).
+//
 // Colours: theme_color mirrors <meta name="theme-color"> in index.html;
 // background_color is the body background (--velo-bg-start in variables.css),
-// which is what the Android splash screen should match.
+// which is what the Android splash screen should match. tz-whitelabel §1:
+// the SINGLE source of the header colour will be skin/brand.json -- until F2
+// materializes it at build time, both consumers keep the golden default and
+// this file deliberately does not invent its own.
 //
 // Icons: `any` and `maskable` are SEPARATE entries on purpose. A single
 // "any maskable" entry makes the launcher crop the transparent-cornered circle
@@ -33,7 +48,7 @@ export const pwaManifest: Partial<ManifestOptions> = {
   id: '/',
   name: 'VELO',
   short_name: 'VELO',
-  description: 'Platform for wellness practice facilitators',
+  description: 'Платформа для ведения практик благополучия',
   lang: 'ru',
   start_url: '/',
   scope: '/',
@@ -51,4 +66,20 @@ export const pwaManifest: Partial<ManifestOptions> = {
       purpose: 'maskable',
     },
   ],
+}
+
+/** Identity overrides from the instance passport (tz-whitelabel §1/§2.3).
+ *  `env` is the resolved VITE_* map (loadEnv output); absent keys keep the
+ *  golden values, so an empty map returns the manifest unchanged. */
+export function pwaManifestWithPassport(
+  env: Record<string, string | undefined>,
+): Partial<ManifestOptions> {
+  const brand = env.VITE_BRAND
+  const lang = env.VITE_DEFAULT_LOCALE
+  if (!brand && !lang) return pwaManifest
+  return {
+    ...pwaManifest,
+    ...(brand ? { name: brand, short_name: brand } : {}),
+    ...(lang ? { lang } : {}),
+  }
 }

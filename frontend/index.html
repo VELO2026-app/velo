@@ -1,5 +1,11 @@
 <!doctype html>
-<html lang="ru">
+<!-- tz-whitelabel §2.2: passport values arrive as %VITE_*% placeholders (Vite
+     replaces defined env vars natively). An UNdefined var must not ship the
+     literal placeholder -- vite.config.ts resolves the rest to the golden
+     defaults (VELO / ru), same values platform/instance.ts defaults to.
+     theme-color and the font link are NOT env: they will be materialized
+     from skin/brand.json at build time in tz-whitelabel F2 (§1). -->
+<html lang="%VITE_DEFAULT_LOCALE%">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes, interactive-widget=resizes-visual" />
@@ -26,7 +32,7 @@
          clearance comes from env(safe-area-inset-top) (useSafeArea.ts). -->
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-    <title>VELO</title>
+    <title>%VITE_BRAND%</title>
   </head>
   <body>
     <!-- PROMPT №383: body-level, viewport-anchored fixed bg layer, static in the

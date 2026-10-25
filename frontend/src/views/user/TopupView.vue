@@ -90,6 +90,7 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { host } from '@/platform/host'
+import { INSTANCE } from '@/platform/instance'
 import { ref, computed, nextTick, onMounted } from 'vue'
 import { VButton, VInput } from '@/components/ui'
 import { useBalanceStore } from '@/stores/balance'
@@ -120,7 +121,7 @@ const MAX_CENTS = 50000 // EUR 500.00 (from backend config)
 // to permit a foreign domain.
 const ALLOWED_REDIRECT_PREFIXES = [
   'https://checkout.stripe.com/',
-  ...(import.meta.env.VITE_API_BASE_URL ? [import.meta.env.VITE_API_BASE_URL] : []),
+  ...(INSTANCE.apiBaseUrl ? [INSTANCE.apiBaseUrl] : []),
 ]
 
 // -- State --

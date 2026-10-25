@@ -18,8 +18,9 @@
 
 import type { ApiError } from './types'
 import i18n from '@/locales'
+import { INSTANCE } from '@/platform/instance'
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
+const BASE_URL = INSTANCE.apiBaseUrl
 const REQUEST_TIMEOUT_MS = 15_000
 
 // -- Error classes --

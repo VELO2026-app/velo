@@ -37,9 +37,10 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
+import { INSTANCE } from '@/platform/instance'
 import { VeloLogo } from '@/components/ui'
 
-const botUrl = import.meta.env.VITE_TELEGRAM_BOT_URL || 'https://telegram.me/veloappbot'
+const botUrl = INSTANCE.telegramBotUrl
 </script>
 
 <style scoped>

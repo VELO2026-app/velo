@@ -5,8 +5,8 @@
 // The ONE place that reads instance-level VITE_* values off the build.
 // Every seam carries today's behavior as its default, so a build without a
 // passport is indistinguishable from the app as it ships now (the golden
-// build). API base URL and the bot URL join here in tz-whitelabel F1; until
-// then their existing import.meta.env read sites stay untouched.
+// build). tz-whitelabel F1: all seven former import.meta.env read sites
+// (5x VITE_API_BASE_URL, 2x VITE_TELEGRAM_BOT_URL) go through INSTANCE now.
 //
 // The locale set mirrors what the backend normalizes Telegram's
 // language_code to (backend auth/service.py normalize_language: en/de/es/ru);
@@ -52,6 +52,17 @@ export function hasFeature(features: FeatureSet, name: string): boolean {
 
 /** Instance passport as seen by this build. Defaults = the golden build. */
 export const INSTANCE = {
+  // tz-whitelabel §1 URL seams. Getters, not a snapshot: production replaces
+  // import.meta.env statically either way, and the live read keeps the exact
+  // per-mount semantics the former inline reads had (views read them in
+  // setup; vi.stubEnv in tests keeps working unchanged).
+  /** tz-whitelabel §1: empty = same-origin (Nginx proxies /api/* in prod). */
+  get apiBaseUrl(): string {
+    return import.meta.env.VITE_API_BASE_URL || ''
+  },
+  get telegramBotUrl(): string {
+    return import.meta.env.VITE_TELEGRAM_BOT_URL || 'https://telegram.me/veloappbot'
+  },
   brand: import.meta.env.VITE_BRAND ?? 'VELO',
   defaultLocale: parseLocale(import.meta.env.VITE_DEFAULT_LOCALE, 'ru'),
   locales: parseLocales(import.meta.env.VITE_LOCALES),

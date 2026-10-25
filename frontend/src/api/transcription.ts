@@ -25,6 +25,7 @@
  */
 
 import i18n from '@/locales'
+import { INSTANCE } from '@/platform/instance'
 
 import { blobToBase64 } from '@/utils/audio'
 
@@ -38,7 +39,7 @@ export interface TranscribeResult {
 }
 
 const TRANSCRIBE_URL = '/api/v1/ai/transcribe'
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
+const BASE_URL = INSTANCE.apiBaseUrl
 const TIMEOUT_MS = 30000
 
 /**

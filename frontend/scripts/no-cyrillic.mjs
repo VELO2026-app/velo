@@ -9,6 +9,11 @@
 //     must yield the same SVG). Its 'Ш' monogram fallback is a prototype
 //     constant, not UI copy; palette DISPLAY NAMES live in locales/ru/
 //     schools.json (branding.palettes), hex roles stay in code.
+//   - pwa/ -- build-time instance metadata consumed by vite.config.ts, not
+//     runtime copy: the manifest description is instance data, which
+//     tz-whitelabel §3.1 puts in the exception registry (it moves to
+//     skin/brand.json materialization in F2, not to an i18n catalog -- a
+//     catalog leaf with no t() call would fail key-audit §4.4 instead).
 // Data that is locale-independent lives in locales/ru/* seed files
 // (timezones.json, dates.json, languages.json) -- move literals there,
 // never back into code. Exit 1 on any hit.
@@ -16,7 +21,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 const CYR = /[А-Яа-яЁё]/
-const EXEMPT_DIRS = ['src/utils/schoolBranding']
+const EXEMPT_DIRS = ['src/utils/schoolBranding', 'src/pwa']
 const LINE_COMMENT = /\/\/.*/g
 const BLOCK_COMMENT = /\/\*.*?\*\//gs
 const HTML_COMMENT = /<!--.*?-->/gs
