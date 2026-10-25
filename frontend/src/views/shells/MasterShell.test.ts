@@ -60,6 +60,9 @@ function buildRouter(): Router {
     routes: [
       { path: '/master/dashboard', name: 'master-dashboard', component: StubChild },
       { path: '/master/practices', name: 'master-practices', component: StubChild },
+      // §1.2: the master zone's schools TAB HUB -- no hideTabBar meta, the
+      // dock stays visible with the fourth tab active (mirrors router/index.ts).
+      { path: '/master/curator-groups', name: 'master-curator-groups', component: StubChild },
       // §1.11 (owner 2026-09-22): the participants screen -- a FOG_ROUTES
       // member (mirrors router/index.ts).
       {
@@ -228,6 +231,23 @@ describe('MasterShell', () => {
         b.getAttribute('aria-label'),
       )
       expect(labels).toEqual(['Дашборд', 'Практики', 'Аналитика', 'Школы', 'Я'])
+    })
+
+    it('the hub screen itself keeps the dock visible with Школы active (§1.2 mockup)', async () => {
+      // The mockup's normative line: «На /user/schools и
+      // /master/curator-groups активен четвёртый таб» -- the hub is the tab
+      // bar's own screen, so the bar must render there (the FE-20-era
+      // hideTabBar meta once hid it entirely).
+      curatorGroupsMock.getCuratorGroups.mockResolvedValue({
+        items: [],
+        can_create_groups: true,
+      })
+      await mount('master-curator-groups', {}, seedMaster)
+      await flush()
+      await flush()
+
+      expect(host?.querySelector('.v-tabbar')).not.toBeNull()
+      expect(activeTabLabel()).toBe('Школы')
     })
   })
 

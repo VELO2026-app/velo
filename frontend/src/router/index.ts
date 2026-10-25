@@ -484,14 +484,13 @@ const router = createRouter({
           component: () => import('@/views/master/MasterGroupDetailView.vue'),
         },
         {
-          // FE-20 (GT P3): SCHOOLS, deliberately named «Группы мастеров» --
-          // «Мои группы» one row above means the master's own STUDENT groups
-          // (master_group), a different entity. Entry row: MasterDashboardView,
-          // under that «Мои группы» row.
+          // tz-curator.md §1.2: the master zone's «Школы» TAB HUB -- the
+          // sectioned schools list the dock tab lands on, same contract as
+          // user-schools: the tab bar stays visible with the fourth tab
+          // active, so no hideTabBar meta here.
           path: 'curator-groups',
           name: 'master-curator-groups',
           beforeEnter: masterStatusGuard,
-          meta: { hideTabBar: true },
           component: () => import('@/views/master/MasterCuratorGroupsView.vue'),
         },
         {
