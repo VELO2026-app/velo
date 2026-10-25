@@ -85,6 +85,11 @@ _CLASS_STATUS: dict[str, int] = {
     "stale_snapshot": 409,
     "recipient_deleted": 409,
     "internal": 500,
+    # BE-134: the changes feed's answer to a cursor older than comms'
+    # retention (comms deploy/INTEGRATION.md section 9). Only that one
+    # route issues it, and only the push listener reads it
+    # (core/comms_listener.py): it starts the feed again without a cursor.
+    "cursor_expired": 410,
 }
 
 # The classes that mean something to the end client on a resource call.
@@ -92,7 +97,9 @@ _CLASS_STATUS: dict[str, int] = {
 # see the module header. `stale_snapshot` / `recipient_deleted` belong to
 # the sync events, not to these calls, and `method_not_allowed` is our
 # own wiring: all of them end as a logged 502 rather than a branch each.
-_FORWARDABLE_CLASSES = frozenset({"validation", "not_found", "conflict"})
+_FORWARDABLE_CLASSES = frozenset(
+    {"validation", "not_found", "conflict", "cursor_expired"},
+)
 
 # comms bounds an Idempotency-Key to 1..200 characters.
 IDEMPOTENCY_KEY_MAX = 200

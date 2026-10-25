@@ -51,6 +51,21 @@
 #
 # NO external domains anywhere in this file or the templates: the
 # comms startup fence over profile data rejects them (decision 13).
+#
+# RECIPIENT SCHEDULE (BE-132, owner ruling 2026-10-11; comms field since
+# 3.3.0, deploy/INTEGRATION.md section 3): comms holds a delivery outside
+# the person's allowed periods until the next one opens. A type whose job
+# carries an `expiry_at` that runs out before that never arrives at all,
+# so four types declare `recipient_schedule: bypass` and go at any hour
+# -- booking.reminder_1h, booking.reminder_10m,
+# practice.master_reminder_1h, waitlist.spot_available. A fifth bypasses
+# for another reason: support.message_received (BE-172, owner ruling
+# 2026-10-25) -- a user's message to support reaches the admins at any
+# hour. Each says why beside its record. Every other type declares nothing and takes comms'
+# default, `respect` -- the default is never written out. bypass does NOT
+# pass a mute: a muted category stays silent at any hour. comms takes the
+# value when it ACCEPTS a job: jobs accepted before a profile change keep
+# the value they had. The set is asserted by tests/test_comms_protocol_3.py.
 # =============================================================================
 
 version: 2
@@ -82,9 +97,14 @@ types:
     category: bookings
     channels: [in_app, telegram]
 
+  # BE-132: bypass. The hold lasts 30 minutes and the job expires with it
+  # (expiry_at = the hold's deadline, waitlist/service.py): held for the
+  # person's morning, the offer expires unseen and the spot goes to the
+  # next in the queue.
   waitlist.spot_available:
     category: bookings
     channels: [in_app, telegram]
+    recipient_schedule: bypass
 
   waitlist.expired:
     category: bookings
@@ -103,13 +123,20 @@ types:
     category: reminders
     channels: [in_app, telegram]
 
+  # BE-132: _1h and _10m bypass the schedule. Each expires when the
+  # practice starts (expiry_at = practice.scheduled_at, core/events/
+  # reminders.py): held for the person's next allowed period, it expires
+  # unsent and the reminder about a session at 07:00 never comes. _24h is
+  # not in the ruling and stays `respect`.
   booking.reminder_1h:
     category: reminders
     channels: [in_app, telegram]
+    recipient_schedule: bypass
 
   booking.reminder_10m:
     category: reminders
     channels: [in_app, telegram]
+    recipient_schedule: bypass
 
   # -- Post-practice prompts (category: reminders; scheduled via the
   #    reminder mechanic from practice_outcome, ID-6). v1 schedules
@@ -171,21 +198,74 @@ types:
     channels: [in_app, telegram]
 
   # -- Support: NO category on purpose (owner ruling 2026-08-14, T-38 support
-  #    build, PROMPT №710). Emitted once, at support-thread creation, to
-  #    group:admins (the same GROUP_ADMINS broadcast master.application_received
-  #    already uses in production) -- an unclaimed thread's only signal that
-  #    support has traffic. A category would let it be muted like any other
-  #    admin-facing type, and this ONE type is the one an operator must not be
-  #    able to silence -- the mechanism decision A already uses for
-  #    non-mutable-by-mechanism types, applied here for a different reason. --
+  #    build, PROMPT №710; kept by BE-172). Emitted on EVERY message a user
+  #    sends to support -- the form and the conversation alike, claimed
+  #    thread or not -- to group:admins (the same GROUP_ADMINS broadcast
+  #    master.application_received uses). It is the one support signal an
+  #    admin sees: comms' own msg.support_message reaches the roster in_app
+  #    only, and an admin has no in-app surface, so telegram is what carries
+  #    it. A category would let it be muted like any other admin-facing type,
+  #    and this ONE type is the one an operator must not be able to silence --
+  #    the mechanism decision A already uses for non-mutable-by-mechanism
+  #    types, applied here for a different reason.
+  #    recipient_schedule: bypass (owner ruling 2026-10-25, BE-172): the
+  #    signal reaches the admins at any hour. Its only address is
+  #    group:admins, so the bypass touches admins alone -- every
+  #    notification to a user still waits for that user's schedule. With
+  #    no category it cannot be muted either: neither the hour nor a
+  #    switch holds it back. --
 
-  support.thread_created:
+  support.message_received:
+    channels: [in_app, telegram]
+    recipient_schedule: bypass
+
+  # -- BE-166: support translation, one llm type per direction (comms
+  #    deploy/INTEGRATION.md sections 11-12: one mechanism, the direction is
+  #    the type). comms carries the letter to a model, the backend reads the
+  #    answer by key and writes the result next to the message as a VARIANT
+  #    -- the original is never changed (support/translation.py).
+  #    `llm_sets` names a set of LLM_KEY_SETS in the COMMS .env, and comms
+  #    REFUSES TO START on a box where that set is not defined -- the keys go
+  #    in before this profile is rolled out, on every box that takes it.
+  #    `interactive`: someone is waiting for the answer, and no type for
+  #    people travels in that lane, so a slow model holds nobody's message.
+  #    push_on: outcome -- the backend reads the job when it ends.
+  #    expires_after: 15m (owner ruling 2026-10-22) -- the longest a reader
+  #    waits before the translation is reported impossible. No category, no
+  #    recipient_schedule: an llm type has no person to gate, and comms
+  #    refuses both on it.
+  #    for_support: a user's message, into the support language.
+  #    for_user: an admin's reply, into the user's language. --
+
+  support.translate_for_support:
+    channels: [llm]
+    llm_sets: [llm.text]
+    lane: interactive
+    push_on: outcome
+    expires_after: 15m
+
+  support.translate_for_user:
+    channels: [llm]
+    llm_sets: [llm.text]
+    lane: interactive
+    push_on: outcome
+    expires_after: 15m
+
+  # -- BE-166: the reply to a user's support request could not be translated
+  #    into their language (the translation job ended without an answer, or
+  #    the model declined).
+  #    msg_participants, the category the reply itself would have pinged
+  #    the user under (comms msg.participant_message, client side): a user
+  #    who muted support replies is not told about a missing one either. --
+
+  support.translation_unavailable:
+    category: msg_participants
     channels: [in_app, telegram]
 
   # -- BE-21: the practice's own master learns his practice was cancelled by
   #    somebody else -- the curator of a school it was published to. NO
   #    category on purpose, and the reason is the same shape as
-  #    support.thread_created above rather than decision A's.
+  #    support.message_received above rather than decision A's.
   #
   #    `bookings` was the obvious home -- practice.cancelled lives there -- and
   #    it is exactly wrong here. `bookings` is the family a busy master mutes
@@ -194,7 +274,7 @@ types:
   #    that his session is gone, that it was not his doing, and that the money
   #    went back. This is the single type in the practice family that must not
   #    be silenceable, so it carries no category and bypasses the mute gate by
-  #    mechanism (§2.5), the way support.thread_created does for an operator. --
+  #    mechanism (§2.5), the way support.message_received does for an operator. --
 
   practice.cancelled_by_curator:
     channels: [in_app, telegram]
@@ -388,9 +468,14 @@ types:
   #    correlation "practice:<practice_id>" -- see core/events/reminders.py
   #    MASTER_REMINDER_TYPES. --
 
+  #    BE-132: bypass, for the reason the booking reminders above have it:
+  #    it expires when the practice starts (expiry_at = scheduled_at), so a
+  #    master teaching early would never hear about his own session. --
+
   practice.master_reminder_1h:
     category: master_reminders
     channels: [in_app, telegram]
+    recipient_schedule: bypass
 
   # -- A participant checked in before the master's practice. POSTED ONE BY
   #    ONE, not as a digest (owner ruling): the check-in carries a comment

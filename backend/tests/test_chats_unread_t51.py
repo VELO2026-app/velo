@@ -71,7 +71,10 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.chats.models import ChatThread
-from app.modules.chats.router import _attach_peers_from_comms
+from app.modules.chats.router import (
+    _attach_peers_from_comms,
+    _decode_master_cursor,
+)
 from app.modules.masters.models import MasterProfile
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, cleanup_range, login_user
@@ -299,12 +302,19 @@ class TestMasterListBranch:
         )
         assert resp.status_code == 200
 
-        # ONE call, and it carries the opt-in flag plus the stamped actor.
-        assert fake.await_count == 1
-        params = fake.await_args.kwargs["params"]
+        # ONE call PER LIST, whatever the row count -- the T-51 property.
+        # It was "one call" until BE-163 gave a master a second list (his
+        # own threads as a client); each of the two carries the opt-in flag
+        # and the stamped actor, and neither is made per row.
+        assert fake.await_count == 2
+        calls = [c.kwargs["params"] for c in fake.await_args_list]
+        (params,) = [p for p in calls if "operator" in p]
         assert params["with_unread"] is True
         assert params["operator"] == master["user"]["id"]
         assert params["is_supervisor"] is False
+        (as_client,) = [p for p in calls if "client" in p]
+        assert as_client["with_unread"] is True
+        assert as_client["client"] == master["user"]["id"]
 
         rows = resp.json()["threads"]
         assert [r["unread"] for r in rows] == [3, 0]
@@ -704,10 +714,17 @@ class TestMasterListPrivacyFilter:
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch
     ) -> None:
         """A master who wrote to support is the CLIENT of a section thread,
-        so comms hands it to them like any other pool row -- and it goes
-        with the rest. Not a loss: their own support conversation has its
-        own screen (/api/v1/support), which owns that surface. The personal
-        chat list is for DMs.
+        so comms hands it to them like any other pool row on the OPERATOR
+        list -- and there it goes with the rest: the sentry decides by form
+        and has no exception for "mine".
+
+        Not a loss, but no longer for the reason this docstring gave
+        ("their support conversation has its own screen; the personal list
+        is for DMs" -- true until BE-163). The owner put the support
+        conversation into the personal list; it arrives from the master's
+        CLIENT list, and only when its id is his own pointer
+        (test_support_conversation_be163.py). Here no pointer exists, so
+        it stays out on both paths.
         """
         master = await _make_master(client, db_session, BAND_MIN + 31)
         own_support = _comms_thread(
@@ -797,9 +814,12 @@ class TestMasterListPrivacyFilter:
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch
     ) -> None:
         """The filter must not quietly redefine pagination: an emptied page
-        still advances, and the cursor comes back exactly as comms sent it.
-        (The short-page consequence itself is a KNOWN CEILING on the filter
-        -- harmless until the master list gains paged loading.)"""
+        still advances, and comms' cursor comes back exactly as comms sent
+        it -- since BE-163 INSIDE velo's own cursor, next to the edge of the
+        page (the last row comms returned, filtered or not), which the
+        merge of a master's client list needs. (The short-page consequence
+        itself is a KNOWN CEILING on the filter -- harmless until the master
+        list gains paged loading.)"""
         master = await _make_master(client, db_session, BAND_MIN + 34)
         monkeypatch.setattr(
             _CHATS_SEAM,
@@ -820,7 +840,8 @@ class TestMasterListPrivacyFilter:
         assert resp.status_code == 200
         body = resp.json()
         assert body["threads"] == []
-        assert body["next_cursor"] == "opaque-cursor-from-comms"
+        comms_cursor, _edge = _decode_master_cursor(body["next_cursor"])
+        assert comms_cursor == "opaque-cursor-from-comms"
 
     async def test_repeated_request_filters_identically(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch
@@ -898,33 +919,45 @@ class TestMasterListPrivacyFilter:
 
 
 class TestLocalListBranches:
-    async def test_student_list_gets_one_batch_call_for_the_whole_page(
+    """BE-163 SPLIT THIS CLASS. Until then a student's list and an admin's
+    were both LOCAL -- built from chat_threads, with unread from one batch
+    call -- and every test here held both. comms 3.9.0 lists a client's
+    threads, so the student's list is comms' client list now: one list
+    call, unread inline. Only the admin's list is still local, and the
+    properties that live only there (the absence rule as a drift detector,
+    the list surviving a comms outage, an empty page costing no call) are
+    held on it. Each test below says what it held before."""
+
+    async def test_student_list_is_one_comms_call_for_the_whole_page(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch
     ) -> None:
+        """Was test_student_list_gets_one_batch_call_for_the_whole_page:
+        three rows, ONE comms call (the unread batch). The property -- one
+        call whatever the row count, unread on every row -- holds; the call
+        is now the client list itself, with unread inline."""
         student = await login_user(
             client, telegram_id=BAND_MIN + 9, first_name="Student",
         )
         student_id = UUID(student["user"]["id"])
-        thread_ids = []
-        for offset in (10, 11, 12):
+        rows = []
+        for offset, unread in ((10, 2), (11, 0), (12, 9)):
             master = await _make_master(client, db_session, BAND_MIN + offset)
-            thread_ids.append(
-                await _pointer(
-                    db_session,
-                    client_id=student_id,
-                    operator_id=UUID(master["user"]["id"]),
+            thread_id = await _pointer(
+                db_session,
+                client_id=student_id,
+                operator_id=UUID(master["user"]["id"]),
+            )
+            rows.append(
+                _comms_thread(
+                    str(thread_id),
+                    client=str(student_id),
+                    operator_value=master["user"]["id"],
+                    unread=unread,
+                    last_message=None,
                 )
             )
 
-        fake = AsyncMock(
-            return_value={
-                "counts": {
-                    str(thread_ids[0]): 2,
-                    str(thread_ids[1]): 0,
-                    str(thread_ids[2]): 9,
-                }
-            }
-        )
+        fake = AsyncMock(return_value={"items": rows, "next_cursor": None})
         monkeypatch.setattr(_CHATS_SEAM, fake)
 
         resp = await client.get(
@@ -932,24 +965,21 @@ class TestLocalListBranches:
         )
         assert resp.status_code == 200
 
-        # Three rows, ONE comms call -- the whole point of the change.
         assert fake.await_count == 1
-        body = fake.await_args.kwargs["json"]
-        assert body["participant"] == str(student_id)
-        assert sorted(body["thread_ids"]) == sorted(
-            str(t) for t in thread_ids
-        )
+        params = fake.await_args.kwargs["params"]
+        assert params["client"] == str(student_id)
+        assert params["with_unread"] is True
 
-        rows = {r["id"]: r for r in resp.json()["threads"]}
-        assert rows[str(thread_ids[0])]["unread"] == 2
-        assert rows[str(thread_ids[1])]["unread"] == 0
-        assert rows[str(thread_ids[2])]["unread"] == 9
+        got = {r["id"]: r["unread"] for r in resp.json()["threads"]}
+        assert got == {r["id"]: r["unread"] for r in rows}
 
-    async def test_admin_list_takes_the_same_path(
+    async def test_admin_list_is_local_with_one_batch_call(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch
     ) -> None:
-        """An admin's list is local too -- their own threads, either side of
-        the pair -- so it gets the same single batch call."""
+        """Was test_admin_list_takes_the_same_path ("the same path" as the
+        student's). The admin's list is still local -- their own DM
+        threads, either side of the pair -- and still gets one batch call;
+        the student's took another path in BE-163."""
         admin = await _make_admin(client, db_session, BAND_MIN + 13)
         admin_id = UUID(admin["user"]["id"])
         master = await _make_master(client, db_session, BAND_MIN + 14)
@@ -975,21 +1005,24 @@ class TestLocalListBranches:
     ) -> None:
         """The pointer table drifting out of sync with comms is exactly what
         the absence rule is for: comms omits an id it does not recognise,
-        and velo shows no badge instead of a confident 0."""
-        student = await login_user(
-            client, telegram_id=BAND_MIN + 15, first_name="Student",
-        )
-        student_id = UUID(student["user"]["id"])
+        and velo shows no badge instead of a confident 0.
+
+        Held on the ADMIN's list now (it was the student's): the student's
+        rows come from comms' client list, where every row is the
+        student's own and carries the key, so the drift this detects can
+        only show where the list is still built from pointers."""
+        admin = await _make_admin(client, db_session, BAND_MIN + 15)
+        admin_id = UUID(admin["user"]["id"])
         master = await _make_master(client, db_session, BAND_MIN + 16)
         known = await _pointer(
             db_session,
-            client_id=student_id,
+            client_id=admin_id,
             operator_id=UUID(master["user"]["id"]),
         )
         master2 = await _make_master(client, db_session, BAND_MIN + 17)
         stale = await _pointer(
             db_session,
-            client_id=student_id,
+            client_id=admin_id,
             operator_id=UUID(master2["user"]["id"]),
         )
 
@@ -999,28 +1032,36 @@ class TestLocalListBranches:
         )
 
         resp = await client.get(
-            CHATS_URL, headers=auth_headers(student["session_token"]),
+            CHATS_URL, headers=auth_headers(admin["session_token"]),
         )
         rows = {r["id"]: r for r in resp.json()["threads"]}
         assert rows[str(known)]["unread"] == 1
         assert "unread" not in rows[str(stale)]
 
-    async def test_comms_down_leaves_the_local_list_alive_without_badges(
+    async def test_comms_down_is_a_502_for_a_student_and_not_for_an_admin(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch
     ) -> None:
-        """200 with rows and no keys. NOT 502, NOT an empty list, NOT a key
-        set to 0 -- a lying badge is worse than no badge, and a chat outage
-        must not take the screen down."""
+        """Was test_comms_down_leaves_the_local_list_alive_without_badges,
+        on a STUDENT: 200 with rows and no keys, because the rows were
+        local and only the badges came from comms.
+
+        BE-163 made the student's rows comms' rows, so there is nothing
+        local left to show on an outage -- a stand-in list from the
+        pointers would be a second form of the same list, and the master's
+        list has always answered 502 for the same reason. The student now
+        does too. The admin's list is still local and keeps the old
+        promise exactly: rows, no keys, never a 0."""
         from fastapi import HTTPException
 
         student = await login_user(
             client, telegram_id=BAND_MIN + 18, first_name="Student",
         )
-        student_id = UUID(student["user"]["id"])
+        admin = await _make_admin(client, db_session, BAND_MIN + 20)
+        admin_id = UUID(admin["user"]["id"])
         master = await _make_master(client, db_session, BAND_MIN + 19)
         thread_id = await _pointer(
             db_session,
-            client_id=student_id,
+            client_id=admin_id,
             operator_id=UUID(master["user"]["id"]),
         )
 
@@ -1032,6 +1073,11 @@ class TestLocalListBranches:
         resp = await client.get(
             CHATS_URL, headers=auth_headers(student["session_token"]),
         )
+        assert resp.status_code == 502
+
+        resp = await client.get(
+            CHATS_URL, headers=auth_headers(admin["session_token"]),
+        )
         assert resp.status_code == 200
         rows = resp.json()["threads"]
         assert [r["id"] for r in rows] == [str(thread_id)]
@@ -1040,15 +1086,15 @@ class TestLocalListBranches:
     async def test_empty_page_spends_no_comms_call_at_all(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch
     ) -> None:
-        """comms would answer {} -- there is no reason to ask."""
-        student = await login_user(
-            client, telegram_id=BAND_MIN + 20, first_name="Student",
-        )
+        """comms would answer {} -- there is no reason to ask. Held on the
+        admin's local list (it was the student's, whose list IS a comms
+        call now)."""
+        admin = await _make_admin(client, db_session, BAND_MIN + 21)
         fake = AsyncMock(return_value={"counts": {}})
         monkeypatch.setattr(_CHATS_SEAM, fake)
 
         resp = await client.get(
-            CHATS_URL, headers=auth_headers(student["session_token"]),
+            CHATS_URL, headers=auth_headers(admin["session_token"]),
         )
         assert resp.status_code == 200
         assert resp.json()["threads"] == []
@@ -1058,20 +1104,33 @@ class TestLocalListBranches:
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch
     ) -> None:
         """Reading a list is a read: it clears nothing (only mark-read
-        does), so asking twice answers twice the same."""
+        does), so asking twice answers twice the same. Since BE-163 the
+        student's page comes from comms, so the mock is the client list."""
         student = await login_user(
-            client, telegram_id=BAND_MIN + 21, first_name="Student",
+            client, telegram_id=BAND_MIN + 22, first_name="Student",
         )
         student_id = UUID(student["user"]["id"])
-        master = await _make_master(client, db_session, BAND_MIN + 22)
+        master = await _make_master(client, db_session, BAND_MIN + 23)
         thread_id = await _pointer(
             db_session,
             client_id=student_id,
             operator_id=UUID(master["user"]["id"]),
         )
+        page = {
+            "items": [
+                _comms_thread(
+                    str(thread_id),
+                    client=str(student_id),
+                    operator_value=master["user"]["id"],
+                    unread=3,
+                    last_message=None,
+                )
+            ],
+            "next_cursor": None,
+        }
         monkeypatch.setattr(
             _CHATS_SEAM,
-            AsyncMock(return_value={"counts": {str(thread_id): 3}}),
+            AsyncMock(side_effect=lambda *a, **k: deepcopy(page)),
         )
         headers = auth_headers(student["session_token"])
 

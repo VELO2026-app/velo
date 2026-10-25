@@ -253,8 +253,10 @@ async def full_cleanup_range(
     # 1. outbox_events (Phase 6 / T1: the notifications successor).
     #    No FK to users -- the notification_request payload carries the
     #    target as data->>'target_value' (string user UUID); sync events
-    #    carry data->>'recipient_id'. Delete rows referencing band users so
-    #    reruns do not accumulate unpublished test events.
+    #    carry data->>'recipient_id', except section_membership_changed,
+    #    which names its person data->>'operator_id' (BE-172). Delete rows
+    #    referencing band users so reruns do not accumulate unpublished
+    #    test events.
     # -----------------------------------------------------------------------
     await session.execute(
         delete(OutboxEvent).where(
@@ -263,6 +265,9 @@ async def full_cleanup_range(
                     user_ids_str_subq
                 ),
                 OutboxEvent.payload["recipient_id"].astext.in_(
+                    user_ids_str_subq
+                ),
+                OutboxEvent.payload["operator_id"].astext.in_(
                     user_ids_str_subq
                 ),
                 OutboxEvent.payload["action_data"][

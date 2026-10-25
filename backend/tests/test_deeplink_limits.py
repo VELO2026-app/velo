@@ -56,12 +56,13 @@ ACTIONS: dict[str, bool] = {
     "open_curator_group": True,
     "open_master_offer": True,
     "open_master_application": True,  # bare (BE-104) and group_id (BE-59)
+    "open_thread": True,  # BE-163: support.translation_unavailable
     "open_master_zone": False,
     "open_support": False,
     "open_master_practices": False,
     "open_notifications": False,
     "open_admin_masters": False,
-    "open_admin_support": False,
+    "open_admin_support": True,  # BE-172: support.message_received, user_id
 }
 
 _SOURCES = [p for p in APP.rglob("*.py") if "__pycache__" not in p.parts]

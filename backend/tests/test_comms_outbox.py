@@ -92,8 +92,9 @@ async def _clean_band(db_session):
     """Reset band users + drain OUR outbox rows around every test.
 
     TARGETED cleanup only (post-T0 finding #1): outbox rows are deleted
-    iff their recipient_id belongs to a band user or carries the SYNTH
-    prefix. The rest of the (live, shared) outbox -- other suites'
+    iff their recipient_id (or, for section_membership_changed, their
+    operator_id -- BE-172) belongs to a band user, or the recipient_id
+    carries the SYNTH prefix. The rest of the (live, shared) outbox -- other suites'
     events and the production audit trail -- is not ours to sweep.
     """
     async def _drain() -> None:
@@ -107,9 +108,12 @@ async def _clean_band(db_session):
         band_ids = [str(uid) for uid in result.scalars().all()]
         await cleanup_range(db_session, BAND_MIN, BAND_MAX)
         recipient = OutboxEvent.payload["recipient_id"].astext
+        # BE-172: section_membership_changed names its person operator_id.
+        operator = OutboxEvent.payload["operator_id"].astext
         conditions = [recipient.like(f"{SYNTH}%")]
         if band_ids:
             conditions.append(recipient.in_(band_ids))
+            conditions.append(operator.in_(band_ids))
         await db_session.execute(delete(OutboxEvent).where(or_(*conditions)))
         await db_session.commit()
 

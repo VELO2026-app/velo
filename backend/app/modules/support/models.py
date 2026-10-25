@@ -25,9 +25,17 @@
 # THREAD id is stored, exactly like chat_threads.
 # =============================================================================
 
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import ForeignKey, UniqueConstraint
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -58,3 +66,97 @@ class SupportThread(UUIDMixin, TimestampMixin, Base):
             "client_user_id", name="uq_support_threads_client",
         ),
     )
+
+
+# =============================================================================
+# Support translation jobs (BE-166)
+# =============================================================================
+#
+# OUR WORK QUEUE, NOT A COPY OF THE CONVERSATION: no message text and no
+# translation is stored here (comms, 3.8.0: two copies of a conversation
+# drift apart). The texts live in comms -- the message in the thread, the
+# translation as the message's VARIANT next to it (comms
+# deploy/INTEGRATION.md section 12). A row is one attempt of one llm job
+# that translates one message into one language, and it exists for what
+# only the product can do: write comms' variant request once comms has
+# taken the job (request_written_at -- the push listener's sweep retries
+# until then), tie a job key back to its message, tell the user once that a
+# reply could not be translated (user_notified_at), and let an admin retry.
+#
+#   direction  to_support -- a user's message, into the support language;
+#              to_user -- an admin's reply, into the user's language.
+#   outcome    NULL while the job is ours to wait for; then
+#              variant     -- the translation was written as a variant;
+#              not_needed  -- the model found it already in `locale`;
+#              declined    -- written declined: the language is closed for
+#                             this message for good (comms never replaces
+#                             a variant);
+#              failed      -- the job ended without an answer, or comms
+#                             refused it at intake: retryable by an admin;
+#              retried     -- the answer could not be read, and the next
+#                             attempt was queued automatically.
+
+TO_SUPPORT = "to_support"
+TO_USER = "to_user"
+DIRECTIONS = (TO_SUPPORT, TO_USER)
+
+OUTCOME_VARIANT = "variant"
+OUTCOME_NOT_NEEDED = "not_needed"
+OUTCOME_DECLINED = "declined"
+OUTCOME_FAILED = "failed"
+OUTCOME_RETRIED = "retried"
+OUTCOMES = (
+    OUTCOME_VARIANT,
+    OUTCOME_NOT_NEEDED,
+    OUTCOME_DECLINED,
+    OUTCOME_FAILED,
+    OUTCOME_RETRIED,
+)
+
+
+def _sql_in(values: tuple[str, ...]) -> str:
+    return ", ".join(f"'{v}'" for v in values)
+
+
+class SupportTranslationJob(UUIDMixin, TimestampMixin, Base):
+    """One attempt to translate one support message into one language."""
+
+    __tablename__ = "support_translation_jobs"
+
+    support_thread_id: Mapped[UUID] = mapped_column(
+        ForeignKey("support_threads.id", ondelete="CASCADE"),
+        index=True,
+    )
+    comms_message_id: Mapped[UUID] = mapped_column()
+    direction: Mapped[str] = mapped_column(String(16))
+    # The variant's language (comms section 12's opaque token; ours are the
+    # backend's language codes).
+    locale: Mapped[str] = mapped_column(String(8))
+    attempt: Mapped[int] = mapped_column(Integer)
+    job_key: Mapped[str] = mapped_column(String(200), unique=True)
+    request_written_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+    )
+    outcome: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    user_notified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "comms_message_id", "locale", "attempt",
+            name="uq_support_translation_jobs_attempt",
+        ),
+        CheckConstraint(
+            f"direction IN ({_sql_in(DIRECTIONS)})",
+            name="ck_support_translation_jobs_direction",
+        ),
+        CheckConstraint(
+            f"outcome IS NULL OR outcome IN ({_sql_in(OUTCOMES)})",
+            name="ck_support_translation_jobs_outcome",
+        ),
+        CheckConstraint(
+            "attempt >= 1", name="ck_support_translation_jobs_attempt",
+        ),
+    )
+

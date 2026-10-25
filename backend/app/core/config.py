@@ -36,6 +36,7 @@ from urllib.parse import urlsplit
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.i18n import SUPPORTED_LANGUAGES
 from app.core.telegram_links import normalize_telegram_url
 
 # T-14. Literal placeholders shipped in backend/.env.example -- copying
@@ -447,6 +448,15 @@ class Settings(BaseSettings):
     # an answer nobody receives.
     openrouter_http_timeout_seconds: float = 25.0
 
+    # -- Support translation (BE-166, owner ruling 2026-10-22) --
+    # The ONE language every support admin writes in. A user's message is
+    # translated INTO it, an admin's reply is translated FROM it into the
+    # user's language (users.language) -- unless the two are the same, when
+    # the reply goes as it is. An admin's own interface language plays no
+    # part. One of the backend's languages (core/i18n.py
+    # SUPPORTED_LANGUAGES), or the start is refused below.
+    support_language: str = "en"
+
     # -- Comms integration: reminder orchestration (Phase 6 / T1) --
     # Booking reminders (ID-6): velo schedules the series product-side
     # (comms engine/reminders.py left the domain orchestration to the
@@ -810,12 +820,15 @@ class Settings(BaseSettings):
     # Client ID Metadata Documents (CIMD, owner ruling): a client whose
     # client_id is an https URL on one of these hosts (comma-separated,
     # exact host match, case-insensitive) is known by fetching that URL --
-    # claude.ai's "Recommended" way. Any other host: refused (the server
-    # would otherwise fetch a URL a stranger names). The document is kept
-    # this long, then fetched again; it may be at most this many bytes and
-    # must arrive within this many seconds -- claude.ai gives the whole
-    # token request 10.
-    mcp_oauth_cimd_allowed_hosts: str = "claude.ai"
+    # the way claude.ai recommends and ChatGPT prefers (BE-170). By default
+    # the two of them: claude.ai and chatgpt.com. Any other host: refused
+    # (the server would otherwise fetch a URL a stranger names). Set to an
+    # empty value, the list is empty and every CIMD client is refused --
+    # claude.ai's included, since the metadata still offers CIMD. The
+    # document is kept this long, then fetched again; it may be at most
+    # this many bytes and must arrive within this many seconds -- claude.ai
+    # gives the whole token request 10.
+    mcp_oauth_cimd_allowed_hosts: str = "claude.ai,chatgpt.com"
     mcp_oauth_cimd_cache_seconds: int = 86400
     mcp_oauth_cimd_max_bytes: int = 16384
     mcp_oauth_cimd_timeout_seconds: float = 5.0
@@ -835,6 +848,16 @@ class Settings(BaseSettings):
         Production: crashes at startup if critical secrets are missing.
         """
         is_dev = self.app_env == "development"
+
+        # BE-166: a language the backend does not know cannot be anybody's
+        # users.language, so every reply would be translated into it and
+        # every message out of it -- refused at start, in every env.
+        if self.support_language not in SUPPORTED_LANGUAGES:
+            raise ValueError(
+                f"SUPPORT_LANGUAGE={self.support_language!r} is not one of "
+                f"the backend's languages: "
+                f"{', '.join(sorted(SUPPORTED_LANGUAGES))}"
+            )
 
         # DATABASE_URL: default only in dev (TD-006)
         if not self.database_url:

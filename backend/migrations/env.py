@@ -52,7 +52,10 @@ from app.modules.payments.models import (  # noqa: F401  # Phase 6.1-6.4
 from app.modules.withdrawals.models import Withdrawal  # noqa: F401  # Phase 6.6
 from app.modules.promos.models import Promo  # noqa: F401  # Phase 6.7
 from app.modules.practices.taxonomy_models import TaxonomyDirection, TaxonomyStyle  # noqa: F401  # R5
-from app.core.events.models import OutboxEvent  # noqa: F401  # Phase 6 / T0
+from app.core.events.models import (  # noqa: F401  # Phase 6 / T0, BE-134
+    CommsFeedCursor,
+    OutboxEvent,
+)
 from app.modules.chats.models import ChatThread  # noqa: F401  # Phase 6 / T2
 from app.modules.curator_groups.models import (  # noqa: F401  # Curator GROUPS P1
     CuratorGroup,
@@ -75,7 +78,10 @@ from app.modules.diary.models import (  # noqa: F401  # Phase 8.1-8.4 + redesign
     Feedback,
     Reflection,
 )
-from app.modules.support.models import SupportThread  # noqa: F401  # B34 / T-38
+from app.modules.support.models import (  # noqa: F401  # B34 / T-38, BE-166
+    SupportThread,
+    SupportTranslationJob,
+)
 from app.modules.masters.groups_models import (  # noqa: F401  # P1
     GroupInvite,
     MasterGroup,

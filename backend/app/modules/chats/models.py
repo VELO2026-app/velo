@@ -16,8 +16,9 @@
 # forged thread id in a URL would read somebody else's conversation.
 #
 # Hence a local pointer row, written when the proxy creates-or-gets a thread.
-# It also gives the student side a list of its own chats, which the
-# operator-scoped comms API cannot produce either.
+# (It used to give the student side its list of chats as well, which comms
+# could not produce then; since comms 3.9.0 lists a client's threads, the
+# list comes from comms -- BE-163 -- and this table only answers "who".)
 #
 # What this table is NOT: a mirror. No message bodies, no unread counters, no
 # last-activity -- those stay in comms and are read through it, so the two
@@ -68,7 +69,8 @@ class ChatThread(UUIDMixin, TimestampMixin, Base):
             "operator_user_id",
             name="uq_chat_threads_pair",
         ),
-        # The student's own list: WHERE client_user_id = ? ORDER BY created_at.
+        # Built for the student's own list (WHERE client_user_id = ? ORDER
+        # BY created_at), which no longer reads this table (BE-163).
         Index(
             "ix_chat_threads_client_created",
             "client_user_id",

@@ -1982,3 +1982,299 @@ async def test_the_rendered_consent_page_has_no_ascii_dashes_or_arrows(
     body = page.text
     assert "--" not in body and "-&gt;" not in body and "->" not in body
     assert "→" in body  # the revoke hint: VELO → Профиль → Подключения ИИ
+
+
+# ---------------------------------------------------------------------------
+# BE-170: ChatGPT connects through CIMD, as a public client
+# ---------------------------------------------------------------------------
+#
+# ChatGPT's document (the form OpenAI publishes, MCP SEP-3149) prefers
+# private_key_jwt and lists ["none", "private_key_jwt"]; it is accepted
+# through the list and kept as "none" (oauth.py, _offers_none). The tests
+# run on the setting's CODE default, not on whatever the environment sets:
+# what is checked is the default this delivery ships, so the color is the
+# code's, not the box's.
+
+GPT_CB = "https://chatgpt.com/connector/oauth/be170-cb"
+_GPT_DEFAULT = type(settings).model_fields["mcp_oauth_cimd_allowed_hosts"].default
+
+
+@pytest.fixture
+def gpt_hosts(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "mcp_oauth_cimd_allowed_hosts", _GPT_DEFAULT)
+
+
+def _gpt_url() -> str:
+    return f"https://chatgpt.com/oauth/be170-test-{secrets.token_hex(4)}/client.json"
+
+
+def _gpt_doc(url: str, **over) -> dict:
+    """The shape of ChatGPT's published document (BE-170 handoff, §2)."""
+    doc = {
+        "client_id": url,
+        "client_uri": "https://chatgpt.com/",
+        "redirect_uris": [GPT_CB],
+        "token_endpoint_auth_method": "private_key_jwt",
+        "token_endpoint_auth_methods_supported": ["none", "private_key_jwt"],
+        "grant_types": ["authorization_code", "refresh_token"],
+        "response_types": ["code"],
+        "client_name": f"ChatGPT {_NAME_MARK}",
+        "logo_uri": "https://persistent.oaistatic.com/sonic/misc/openai-logo.png",
+        "token_endpoint_auth_signing_alg": "RS256",
+        "jwks_uri": "https://chatgpt.com/oauth/jwks.json",
+    } | over
+    return {k: v for k, v in doc.items() if v is not _DROP}
+
+
+async def _gpt_code(
+    client: AsyncClient, tid: int, url: str, challenge: str
+) -> tuple[httpx.Response, str]:
+    """/authorize -> Telegram -> consent page -> "Разрешить": (page, code)."""
+    page = await _to_consent(
+        client, tid, url, challenge, redirect_uri=GPT_CB, scope=" ".join(ALL)
+    )
+    assert page.status_code == 200, page.text
+    resp = await _decide(client, _consent_id(page), "allow", ALL)
+    assert resp.status_code == 302, resp.text
+    assert resp.headers["location"].startswith(GPT_CB)
+    return page, _query(resp.headers["location"])["code"]
+
+
+def _refusals(out: str) -> list[str]:
+    return [ln for ln in out.splitlines() if "mcp_oauth_cimd_refused" in ln]
+
+
+def test_the_default_hosts_are_claude_and_chatgpt(gpt_hosts: None) -> None:
+    """Both, and nothing else: chatgpt.com added, claude.ai still there."""
+    assert mcp_oauth._cimd_allowed_hosts() == {"claude.ai", "chatgpt.com"}
+
+
+async def test_chatgpt_connects_through_cimd_as_a_public_client(
+    client: AsyncClient, telegram: FakeTelegram, cimd: FakeCimd, gpt_hosts: None
+) -> None:
+    """The whole path of ChatGPT's form: /authorize -> consent naming
+    chatgpt.com -> code exchanged on /token with "none" and PKCE -> tokens
+    -> refresh. The kept client says "none", whatever the document prefers."""
+    user_id, _ = await _student(client, 73451)
+    url = _gpt_url()
+    cimd.answers[url] = httpx.Response(200, json=_gpt_doc(url))
+
+    verifier, challenge = _pkce()
+    page, code = await _gpt_code(client, 73451, url, challenge)
+    assert "(chatgpt.com)" in page.text  # the client_id URL's host
+    assert f"ChatGPT {_NAME_MARK}" in page.text
+    assert "Ответ уйдёт на: chatgpt.com" in page.text
+
+    resp = await _exchange(client, url, code, verifier, redirect_uri=GPT_CB)
+    assert resp.status_code == 200, resp.text
+    tokens = resp.json()
+    assert tokens["access_token"] and tokens["refresh_token"]
+
+    row = await _cimd_row(url)
+    assert row is not None and row.fetched_at is not None
+    assert row.client_info["token_endpoint_auth_method"] == "none"
+    assert "client_secret" not in row.client_info
+    grant = next(r for r in await _rows(user_id) if r.revoked_at is None)
+    assert grant.oauth_client_id == url
+
+    resp = await _refresh(client, url, tokens["refresh_token"])
+    assert resp.status_code == 200, resp.text
+    assert cimd.fetches == [url]  # authorize, token, refresh: one fetch
+
+
+@pytest.mark.parametrize(
+    "over",
+    [
+        pytest.param({}, id="chatgpt_form"),
+        pytest.param(
+            {"token_endpoint_auth_methods_supported": ["private_key_jwt", "none"]},
+            id="none_second",
+        ),
+        pytest.param(
+            {"token_endpoint_auth_methods_supported": ["none", "none"]}, id="repeat"
+        ),
+        pytest.param(
+            {"token_endpoint_auth_methods_supported": [5, None, {"x": 1}, "none"]},
+            id="junk_beside_none",
+        ),
+        pytest.param({"token_endpoint_auth_method": _DROP}, id="no_own_method"),
+        pytest.param({"token_endpoint_auth_method": None}, id="own_method_null"),
+        pytest.param({"token_endpoint_auth_method": ""}, id="own_method_empty"),
+        pytest.param(
+            {"token_endpoint_auth_method": "client_secret_post"},
+            id="own_method_secret_post",
+        ),
+        # The one cell looser than SEP-3149 (oauth.py, section header):
+        # an own "none" passes whatever the list says.
+        pytest.param(
+            {
+                "token_endpoint_auth_method": "none",
+                "token_endpoint_auth_methods_supported": ["private_key_jwt"],
+            },
+            id="own_none_list_without_none",
+        ),
+    ],
+)
+async def test_a_document_offering_none_is_kept_as_none(
+    client: AsyncClient, cimd: FakeCimd, gpt_hosts: None, over: dict
+) -> None:
+    url = _gpt_url()
+    cimd.answers[url] = httpx.Response(200, json=_gpt_doc(url, **over))
+    resp = await _authorize(client, url, _pkce()[1], redirect_uri=GPT_CB)
+    assert resp.status_code == 302, resp.text
+    assert resp.headers["location"].startswith(telegram_oidc.AUTHORIZE_URL)
+    row = await _cimd_row(url)
+    assert row is not None
+    assert row.client_info["token_endpoint_auth_method"] == "none"
+
+
+@pytest.mark.parametrize(
+    "over",
+    [
+        pytest.param({"token_endpoint_auth_methods_supported": _DROP}, id="no_list"),
+        pytest.param({"token_endpoint_auth_methods_supported": None}, id="null"),
+        pytest.param({"token_endpoint_auth_methods_supported": []}, id="empty"),
+        pytest.param({"token_endpoint_auth_methods_supported": "none"}, id="string"),
+        pytest.param(
+            {"token_endpoint_auth_methods_supported": "xnonex"}, id="substring"
+        ),
+        pytest.param({"token_endpoint_auth_methods_supported": ["NONE"]}, id="case"),
+        pytest.param({"token_endpoint_auth_methods_supported": [" none"]}, id="space"),
+        pytest.param(
+            {"token_endpoint_auth_methods_supported": {"none": True}}, id="object"
+        ),
+        pytest.param(
+            {"token_endpoint_auth_methods_supported": [["none"]]}, id="nested"
+        ),
+        pytest.param(
+            {"token_endpoint_auth_methods_supported": ["private_key_jwt"]},
+            id="without_none",
+        ),
+        pytest.param({"client_secret": "s"}, id="secret_with_none_listed"),
+        pytest.param({"client_secret": None}, id="secret_key_null"),
+        pytest.param(
+            {"client_secret": "s", "token_endpoint_auth_method": "none"},
+            id="secret_with_own_none",
+        ),
+    ],
+)
+async def test_a_document_not_offering_none_is_refused_and_not_kept(
+    client: AsyncClient,
+    cimd: FakeCimd,
+    gpt_hosts: None,
+    capsys: pytest.CaptureFixture,
+    over: dict,
+) -> None:
+    url = _gpt_url()
+    cimd.answers[url] = httpx.Response(200, json=_gpt_doc(url, **over))
+    resp = await _authorize(client, url, _pkce()[1], redirect_uri=GPT_CB)
+    assert resp.status_code == 400, resp.text
+    assert "location" not in resp.headers
+    assert cimd.fetches == [url]  # fetched, then refused for what it says
+    assert await _cimd_row(url) is None
+    lines = _refusals(capsys.readouterr().out)
+    assert lines and all(
+        "host=chatgpt.com" in ln and "reason=not_public" in ln for ln in lines
+    )
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://chatgpt.com.evil.example/oauth/x/client.json",
+        "https://www.chatgpt.com/oauth/x/client.json",  # exact host only
+        "https://chatgpt.com:8443/oauth/x/client.json",
+        "http://chatgpt.com/oauth/x/client.json",
+    ],
+)
+async def test_a_chatgpt_lookalike_url_is_never_fetched(
+    client: AsyncClient, cimd: FakeCimd, gpt_hosts: None, url: str
+) -> None:
+    resp = await _authorize(client, url, _pkce()[1], redirect_uri=GPT_CB)
+    assert resp.status_code == 400
+    assert "location" not in resp.headers
+    assert cimd.fetches == []
+
+
+async def test_chatgpt_losing_none_on_refetch_is_refused_until_it_returns(
+    client: AsyncClient,
+    telegram: FakeTelegram,
+    cimd: FakeCimd,
+    gpt_hosts: None,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """The KNOWN CEILING's trigger, built: the kept copy past its time, the
+    document no longer listing "none" -> refused, logged with host and
+    reason; the kept row is not used. Pair: "none" back, the same refresh
+    token works again."""
+    await _student(client, 73452)
+    url = _gpt_url()
+    cimd.answers[url] = httpx.Response(200, json=_gpt_doc(url))
+    verifier, challenge = _pkce()
+    _, code = await _gpt_code(client, 73452, url, challenge)
+    resp = await _exchange(client, url, code, verifier, redirect_uri=GPT_CB)
+    assert resp.status_code == 200, resp.text
+    refresh = resp.json()["refresh_token"]
+
+    await _age(url)
+    capsys.readouterr()
+    cimd.answers[url] = httpx.Response(
+        200,
+        json=_gpt_doc(url, token_endpoint_auth_methods_supported=["private_key_jwt"]),
+    )
+    resp = await _refresh(client, url, refresh)
+    assert resp.status_code == 401 and resp.json()["error"] == "invalid_client"
+    lines = _refusals(capsys.readouterr().out)
+    assert any("host=chatgpt.com" in ln and "reason=not_public" in ln for ln in lines)
+    assert await _cimd_row(url) is not None  # kept, not used, not deleted
+
+    cimd.answers[url] = httpx.Response(200, json=_gpt_doc(url))
+    resp = await _refresh(client, url, refresh)
+    assert resp.status_code == 200, resp.text
+
+
+async def test_chatgpt_token_request_with_a_client_assertion(
+    client: AsyncClient, telegram: FakeTelegram, cimd: FakeCimd, gpt_hosts: None
+) -> None:
+    """What the SDK does with private_key_jwt's fields once the client is
+    kept as "none": with client_id they are ignored (PKCE carries the
+    exchange); without client_id the request is refused 401 invalid_client
+    before the code is even looked at -- the other half of the KNOWN
+    CEILING's trigger. Pair: the same code, then sent with client_id, is
+    still good."""
+    await _student(client, 73453)
+    url = _gpt_url()
+    cimd.answers[url] = httpx.Response(200, json=_gpt_doc(url))
+    assertion = {
+        "client_assertion_type": (
+            "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+        ),
+        "client_assertion": "eyJhbGciOiJSUzI1NiJ9.e30.not-a-signature",
+    }
+
+    verifier, challenge = _pkce()
+    _, code = await _gpt_code(client, 73453, url, challenge)
+    resp = await _token(
+        client,
+        grant_type="authorization_code",
+        code=code,
+        code_verifier=verifier,
+        redirect_uri=GPT_CB,
+        **assertion,
+    )
+    assert resp.status_code == 401, resp.text
+    assert resp.json() == {
+        "error": "invalid_client",
+        "error_description": "Missing client_id",
+    }
+    resp = await _token(
+        client,
+        grant_type="authorization_code",
+        client_id=url,
+        code=code,
+        code_verifier=verifier,
+        redirect_uri=GPT_CB,
+        **assertion,
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["access_token"]

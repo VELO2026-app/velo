@@ -112,6 +112,7 @@ from app.modules.zoom.models import (  # noqa: F401  # E21 + GT-21
 
 # Comms outbox relay (Phase 6 / T0; since T1 the ONLY notification
 # pipeline -- the old modules/notifications processor is gone, ID-1/ID-8).
+from app.core.comms_listener import run_listener  # BE-134
 from app.core.events.relay import run_relay  # Phase 6 / T0
 from app.core.events.models import OutboxEvent  # noqa: F401  # Phase 6 / T0
 
@@ -210,6 +211,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
 
     relay_task: asyncio.Task | None = None
+    listener_task: asyncio.Task | None = None
     autofinalizer_task: asyncio.Task | None = None
     zoom_retry_task: asyncio.Task | None = None
     zoom_report_task: asyncio.Task | None = None
@@ -237,6 +239,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Gated by settings for the same reason as the processor above:
         # tests disable it so the background loop doesn't finalize a test
         # practice out from under an assertion via FOR UPDATE SKIP LOCKED.
+        # BE-134: the comms push listener -- the other direction of the same
+        # pipe, so the same gate plus the API it reads jobs back through.
+        # One per worker, one active (core/comms_listener.py).
+        if (
+            settings.comms_relay_enabled
+            and settings.comms_redis_url
+            and settings.comms_api_url
+        ):
+            listener_task = asyncio.create_task(
+                run_listener(), name="comms_push_listener",
+            )
+        else:
+            logger.info("comms_push_listener_disabled")
+
         if settings.practice_autofinalize_enabled:
             autofinalizer_task = asyncio.create_task(
                 run_autofinalizer(), name="practice_autofinalizer",
@@ -284,6 +300,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             relay_task.cancel()
             with suppress(asyncio.CancelledError):
                 await relay_task
+        if listener_task is not None and not listener_task.done():
+            listener_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await listener_task
 
         # Stop practice auto-finalizer (Batch 1).
         if autofinalizer_task is not None and not autofinalizer_task.done():

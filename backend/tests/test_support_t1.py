@@ -29,8 +29,9 @@
 #   2. THREAD CREATION -- one eternal thread per user (operator_kind=
 #      "section", kind="dm"), local pointer written, `created` stripped
 #      from the response, topic reaches comms' own `title` (PROMPT №713).
-#   3. THE ADMIN SIGNAL -- fires exactly once, on the call that actually
-#      creates the comms thread; a reopen emits nothing new.
+#   3. OPENING SIGNALS NOBODY (BE-172) -- the admin signal belongs to a
+#      message (support.message_received, test_support_message_signal.py);
+#      an open, first or repeated, with a topic or without, emits none.
 #   4. THE ADMIN LISTING -- is_supervisor/operator are never client-
 #      controllable (not bound as request params at all), the response is
 #      scoped to SECTION threads even when comms' own page also carries DM
@@ -60,6 +61,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.modules.support.service as support_service
+from app.core.config import settings
 from app.core.events.models import OutboxEvent
 from app.modules.support.models import SupportThread
 from app.modules.users.models import User
@@ -136,8 +138,9 @@ async def _clean_band(db_session: AsyncSession):
 
     OutboxEvent rows for a GROUP-targeted emit (target_value="admins", not
     a user id) are invisible to full_cleanup_range's user-scoped subqueries
-    -- the same shape master.application_received already uses and which
-    is untested elsewhere. Deleted here by TYPE directly, the same
+    -- the same shape master.application_received already uses. Every
+    support message these tests send emits support.message_received to
+    group:admins (BE-172); deleted here by TYPE directly, the same
     precaution test_chats_t2.py takes for chat_threads (a table
     full_cleanup_range also does not enumerate)."""
 
@@ -158,7 +161,8 @@ async def _clean_band(db_session: AsyncSession):
         # full_cleanup_range's user-scoped subqueries cannot see them.
         await db_session.execute(
             delete(OutboxEvent).where(
-                OutboxEvent.payload["type"].astext == "support.thread_created"
+                OutboxEvent.payload["type"].astext
+                == support_service.MESSAGE_RECEIVED_TYPE
             )
         )
         await db_session.commit()
@@ -168,6 +172,32 @@ async def _clean_band(db_session: AsyncSession):
     yield
     await _drain()
     support_service._support_section_id = None
+
+
+async def _support_signals(user_id: str) -> list[OutboxEvent]:
+    """Every support.* notification about this user in the outbox.
+
+    Wider than one type on purpose: "opening emits nothing" must not pass
+    because the opening path emits under a NAME this query does not know.
+    Narrowed to the user -- addressed to them, or naming them in the
+    button's params, as a group signal does -- so rows other tests leave
+    behind cannot colour the answer.
+    """
+    payload = OutboxEvent.payload
+    return list(
+        (
+            await fresh_execute(
+                select(OutboxEvent).where(
+                    payload["type"].astext.like("support.%"),
+                    (payload["target_value"].astext == user_id)
+                    | (
+                        payload["action_data"]["params"]["user_id"].astext
+                        == user_id
+                    ),
+                )
+            )
+        ).scalars().all()
+    )
 
 
 async def _make_admin(
@@ -186,9 +216,18 @@ async def _make_admin(
 
 
 class TestOpenSupportThread:
-    async def test_open_creates_section_thread_local_pointer_and_signal(
+    async def test_open_creates_section_thread_local_pointer_and_no_signal(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
     ) -> None:
+        """The first open writes the pointer and signals nobody.
+
+        It used to assert ONE support.thread_created row for group:admins:
+        right while the admin signal belonged to the thread's creation.
+        BE-172 moved it to every message (support.message_received, sent
+        by send_support_message) and removed thread_created whole, so the
+        open's signal is now none -- asserted over every support.* type,
+        next to the pointer the same call did write.
+        """
         student = await login_user(
             client, telegram_id=BAND_MIN, first_name="Student",
         )
@@ -230,24 +269,18 @@ class TestOpenSupportThread:
         ).scalar_one()
         assert str(pointer.comms_thread_id) == THREAD_ID
 
-        # THE ADMIN SIGNAL: one outbox row, categoryless type, group:admins.
-        rows = (
-            await fresh_execute(
-                select(OutboxEvent).where(
-                    OutboxEvent.payload["type"].astext
-                    == "support.thread_created"
-                )
-            )
-        ).scalars().all()
-        assert len(rows) == 1
-        payload = rows[0].payload
-        assert payload["target_type"] == "group"
-        assert payload["target_value"] == "admins"
-        assert payload["action_data"]["params"]["user_id"] == student["user"]["id"]
+        # No signal: an open is not a message (BE-172).
+        assert await _support_signals(student["user"]["id"]) == []
 
     async def test_reopen_returns_same_thread_and_emits_nothing_new(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
     ) -> None:
+        """Two opens, one pointer, no signal.
+
+        "Nothing new" used to be one support.thread_created row after both
+        opens -- the creation's own. With BE-172 an open emits nothing, so
+        the count over every support.* type is zero, not one.
+        """
         student = await login_user(
             client, telegram_id=BAND_MIN + 1, first_name="Student",
         )
@@ -286,15 +319,7 @@ class TestOpenSupportThread:
         ).scalars().all()
         assert len(pointers) == 1
 
-        rows = (
-            await fresh_execute(
-                select(OutboxEvent).where(
-                    OutboxEvent.payload["type"].astext
-                    == "support.thread_created"
-                )
-            )
-        ).scalars().all()
-        assert len(rows) == 1
+        assert await _support_signals(student["user"]["id"]) == []
 
     async def test_section_id_resolved_once_across_two_opens(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
@@ -330,21 +355,26 @@ class TestOpenSupportThread:
 
         assert len(section_calls) == 1
 
-    async def test_topic_enriches_the_creation_notification(
+    async def test_topic_on_open_reaches_the_thread_title_not_a_signal(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
     ) -> None:
         """PROMPT №712: the topic must survive into something an operator
-        can see -- the immediate half is the notification text itself."""
+        can see. On an OPEN that is comms' thread `title` (PROMPT №713).
+
+        This used to assert the topic in support.thread_created's text --
+        the immediate half while the signal belonged to the thread's
+        creation. BE-172 moved the signal to each message, which carries
+        that message's topic (test_support_message_signal.py); the open
+        keeps the title and signals nothing.
+        """
         student = await login_user(
             client, telegram_id=BAND_MIN + 8, first_name="Student",
         )
-        monkeypatch.setattr(
-            _COMMS_SEAM,
-            _creation_seam(
-                _section_payload(),
-                _thread_payload(created=True, client=student["user"]["id"]),
-            ),
+        fake = _creation_seam(
+            _section_payload(),
+            _thread_payload(created=True, client=student["user"]["id"]),
         )
+        monkeypatch.setattr(_COMMS_SEAM, fake)
 
         resp = await client.post(
             SUPPORT_URL,
@@ -353,24 +383,22 @@ class TestOpenSupportThread:
         )
         assert resp.status_code == 200
 
-        row = (
-            await fresh_execute(
-                select(OutboxEvent).where(
-                    OutboxEvent.payload["type"].astext
-                    == "support.thread_created"
-                )
-            )
-        ).scalar_one()
-        assert "Жалоба на мастера" in row.payload["body"]
-        assert row.payload["action_data"]["topic"] == "Жалоба на мастера"
+        thread_call = fake.await_args_list[1]
+        assert thread_call.args[:2] == ("POST", "/api/v1/threads")
+        assert thread_call.kwargs["json"]["title"] == "Жалоба на мастера"
+        assert await _support_signals(student["user"]["id"]) == []
 
-    async def test_topic_is_optional_and_reopen_never_reenriches(
+    async def test_topic_is_optional_and_no_open_signals(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
     ) -> None:
-        """No topic on open -> no crash, no topic clause; and a reopen
-        (created=False) with a DIFFERENT topic must not emit a second,
-        re-enriched notification -- the gate is `created`, not the
-        presence of a topic."""
+        """No topic on open -> no crash; a reopen (created=False) with a
+        DIFFERENT topic -> still nothing emitted.
+
+        This used to assert exactly one support.thread_created row, without
+        the second topic: the gate was comms' `created`. BE-172 removed
+        that signal -- an open emits nothing at all, whatever `created`
+        says and whatever the topic -- so both opens leave zero rows.
+        """
         student = await login_user(
             client, telegram_id=BAND_MIN + 9, first_name="Student",
         )
@@ -399,17 +427,9 @@ class TestOpenSupportThread:
             headers=headers,
         )
         assert second.status_code == 200
+        assert second.json()["id"] == first.json()["id"]
 
-        rows = (
-            await fresh_execute(
-                select(OutboxEvent).where(
-                    OutboxEvent.payload["type"].astext
-                    == "support.thread_created"
-                )
-            )
-        ).scalars().all()
-        assert len(rows) == 1
-        assert "Другое" not in rows[0].payload["body"]
+        assert await _support_signals(student["user"]["id"]) == []
 
 
 # ---------------------------------------------------------------------------
@@ -698,10 +718,26 @@ class TestAdminThreadMessages:
     async def test_get_messages_proxies_the_feed_for_a_known_support_thread(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
     ) -> None:
+        """The admin feed of a known support thread: one read, in the support
+        language, the student's message caught up.
+
+        ONE read because the student reads the support language -- and that
+        is SET HERE, not assumed of the environment. It used to be assumed:
+        a fresh user reads the default language, `en`, as does
+        SUPPORT_LANGUAGE by default. On the stand the owner set
+        SUPPORT_LANGUAGE=ru on 24.10 for the live check of BE-166; the
+        student became a reader of another language, the feed read the
+        page a second time in `en` (get_admin_support_messages), and
+        `await_args` -- the LAST call -- carried that second locale (BE-163
+        fix).
+        """
         admin = await _make_admin(client, db_session, BAND_MIN + 17)
         student = await login_user(
             client, telegram_id=BAND_MIN + 18, first_name="Cleo",
         )
+        student_row = await db_session.get(User, UUID(student["user"]["id"]))
+        student_row.language = settings.support_language
+        await db_session.commit()
         thread_id = uuid4()
         # client_user_id is a real FK -> users.id; a bare uuid4() would 500.
         await _seed_support_thread(
@@ -732,10 +768,32 @@ class TestAdminThreadMessages:
             headers=auth_headers(admin["session_token"]),
         )
         assert resp.status_code == 200
-        assert resp.json() == {"messages": rows, "next_cursor": None}
+        # BE-166: the page is read in the support language, and the
+        # student's message -- with no translation job yet -- is caught up:
+        # queued, so `preparing`; `body` stays the original until comms
+        # has its variant, which is also `original` (admins only). Before
+        # BE-166 this asserted the rows unchanged, and was right: nothing
+        # was translated.
+        assert resp.json() == {
+            "messages": [
+                {
+                    **rows[0],
+                    "original": rows[0]["body"],
+                    "translation": {
+                        "locale": settings.support_language,
+                        "state": "preparing",
+                        "source_locale": None,
+                        "retryable": False,
+                    },
+                },
+            ],
+            "next_cursor": None,
+        }
         assert fake.await_args.args[:2] == (
             "GET", f"/api/v1/threads/{thread_id}/messages",
         )
+        assert fake.await_count == 1
+        assert fake.await_args.kwargs["params"]["locale"] == settings.support_language
 
 
 class TestAdminReply:

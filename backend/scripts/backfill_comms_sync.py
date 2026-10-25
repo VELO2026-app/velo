@@ -5,9 +5,12 @@
 #
 # One-shot projection of the EXISTING user base into the comms sync
 # events: for every user an identity snapshot (user_upserted), plus a
-# group_changed(member=true) for every held communication capability
+# membership(member=true) for every held communication capability
 # (group:masters -- a verified MasterProfile; group:admins -- role ==
-# admin OR the switched-away-admin marker). Events land in the outbox
+# admin OR the switched-away-admin marker). A membership is projected by
+# core/events emit_membership -- the group AND the comms sections its
+# members serve (BE-172: group:admins -> the `support` roster), the same
+# function the live delta uses. Events land in the outbox
 # (the same emit_event as live traffic); the background relay ships
 # them to comms.
 #
@@ -19,15 +22,19 @@
 #     everyone who existed before the sync went live;
 #   - again after ANY seed run (scripts/seed*.py create User rows
 #     directly, bypassing the instrumented auth path -- the backfill
-#     is how seeded users reach comms).
+#     is how seeded users reach comms);
+#   - inside `velo resync-comms`, after its TRUNCATE of recipients:
+#     the cascade empties the section rosters too, and this run is what
+#     declares them again.
 #
-# IDEMPOTENCY: both sync events are naturally idempotent per the
-# frozen comms contract (user_upserted is a snapshot upsert;
-# group_changed(member=true) is "ensure member"). A repeat run emits
-# a fresh batch of identical snapshots -- more outbox rows, ZERO new
-# recipients/memberships in comms. Ordering per user (snapshot first,
-# then memberships) satisfies the contract's "user_upserted must
-# precede group_changed".
+# IDEMPOTENCY: every sync event is naturally idempotent per the comms
+# contract (user_upserted is a snapshot upsert; group_changed and
+# section_membership_changed with member=true are "ensure member").
+# A repeat run emits a fresh batch of identical snapshots -- more
+# outbox rows, ZERO new recipients/memberships in comms. Ordering per
+# user (snapshot first, then memberships) satisfies the contract's
+# "user_upserted must precede group_changed" (and
+# section_membership_changed).
 #
 # SCOPE: only the communication groups of integration design §4.
 # Domain master-groups (groups_models) are NOT synced (deferred, §7);
@@ -57,7 +64,7 @@ from app.core.database import dispose_engine, get_session_factory  # noqa: E402
 from app.core.events import (  # noqa: E402
     GROUP_ADMINS,
     GROUP_MASTERS,
-    emit_group_changed,
+    emit_membership,
     emit_user_upserted,
 )
 from app.modules.masters.models import MasterProfile  # noqa: E402
@@ -99,7 +106,7 @@ async def backfill() -> tuple[int, int, int]:
             users += 1
 
             if user.id in verified_ids:
-                await emit_group_changed(
+                await emit_membership(
                     session,
                     group_key=GROUP_MASTERS,
                     recipient_id=user.id,
@@ -108,7 +115,7 @@ async def backfill() -> tuple[int, int, int]:
                 masters += 1
 
             if user.role == UserRole.ADMIN or has_admin_home(user.credentials):
-                await emit_group_changed(
+                await emit_membership(
                     session,
                     group_key=GROUP_ADMINS,
                     recipient_id=user.id,

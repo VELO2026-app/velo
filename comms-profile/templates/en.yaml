@@ -128,19 +128,37 @@ booking.reminder_24h:
   telegram:
     title: "Practice tomorrow"
     body: "⏰ Reminder: <b>{practice_title}</b> starts in 24 hours.\n\n📅 {scheduled_at}\n👤 Master: {master_name}"
-    button_text: "Open wallet"
+    button_text: "Open practice"
 
 booking.reminder_1h:
   telegram:
     title: "Practice in 1 hour"
     body: "⏰ <b>{practice_title}</b> starts in 1 hour!\n\n📅 {scheduled_at}\n👤 Master: {master_name}"
-    button_text: "Open wallet"
+    button_text: "Open practice"
 
 booking.reminder_10m:
   telegram:
     title: "Practice starting soon"
-    body: "🔔 <b>{practice_title}</b> starts in 10 minutes!\n\n👤 Master: {master_name}"
-    button_text: "Open wallet"
+    body: "🔔 <b>{practice_title}</b> starts in 10 minutes!\n\n📅 {scheduled_at}\n👤 Master: {master_name}"
+    button_text: "Open practice"
+
+# BE-172: a user wrote to support -- every message, the form and the
+# conversation alike, to group:admins. {topic_line} is a whole line or
+# empty (support/service.py, _topic_line): a sheet cannot say "if".
+support.message_received:
+  telegram:
+    title: "Message to support"
+    body: "💬 A user has written to support.\n\n👤 {sender_name}{topic_line}"
+    button_text: "Open VELO"
+
+# BE-166: the support reply could not be translated into the user's
+# language (support.translate_for_user ended without an answer, or the model
+# declined).
+support.translation_unavailable:
+  telegram:
+    title: "Support reply not delivered"
+    body: "⚠️ Support has replied to you, but the reply could not be translated into your language — the translation service is unavailable right now.\n\nThe support agent will see this and can send the reply again."
+    button_text: "Contact support"
 
 # -- Post-practice prompts --
 
