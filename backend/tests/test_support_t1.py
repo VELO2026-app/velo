@@ -52,20 +52,21 @@
 # test_chats_t3_students.py.
 # =============================================================================
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import delete, select
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.modules.support.service as support_service
 from app.core.config import settings
 from app.core.events.models import OutboxEvent
-from app.modules.support.models import SupportThread
+from app.modules.support.models import SupportThread, SupportTicket
 from app.modules.users.models import User
-from tests.helpers import auth_headers, fresh_execute, full_cleanup_range, login_user
+from tests.helpers import auth_headers, full_cleanup_range, login_user
 
 BAND_MIN, BAND_MAX = 89870, 89899
 _COMMS_SEAM = "app.modules.support.service.comms_request"
@@ -76,14 +77,6 @@ SECTION_ID = "aaaaaaaa-5ec7-4000-8000-000000000001"
 THREAD_ID = "aaaaaaaa-7412-4000-8000-000000000001"
 THREAD_CREATED_AT = "2026-08-14T10:00:00+00:00"
 
-
-def _section_payload(section_id: str = SECTION_ID) -> dict:
-    return {
-        "id": section_id,
-        "key": "support",
-        "label": "Support",
-        "created_at": THREAD_CREATED_AT,
-    }
 
 
 def _thread_payload(
@@ -111,22 +104,6 @@ def _thread_payload(
         "created": created,
     }
 
-
-def _creation_seam(
-    section_payload: dict, thread_payload: dict,
-) -> AsyncMock:
-    """One mock covering both comms calls the creation path makes,
-    dispatched on the path -- mirrors how the real comms_request is a
-    single function serving every endpoint."""
-
-    async def _dispatch(method: str, path: str, **kwargs) -> dict:
-        if path == "/api/v1/sections":
-            return section_payload
-        if path == "/api/v1/threads":
-            return thread_payload
-        raise AssertionError(f"unexpected comms path in test: {path}")
-
-    return AsyncMock(side_effect=_dispatch)
 
 
 @pytest.fixture(autouse=True)
@@ -174,36 +151,6 @@ async def _clean_band(db_session: AsyncSession):
     support_service._support_section_id = None
 
 
-async def _support_signals(
-    user_id: str, thread_id: str = THREAD_ID,
-) -> list[OutboxEvent]:
-    """Every support.* notification about this user or their thread.
-
-    Wider than one type on purpose: "opening emits nothing" must not pass
-    because the opening path emits under a NAME this query does not know.
-    Narrowed to the user and their thread -- addressed to the user, or
-    naming the thread or the user in the button's params -- so rows other
-    tests leave behind cannot colour the answer. The admin signal goes to
-    a group and names the THREAD (BE-172 fix: its button opens the thread
-    screen); it used to name the user, and the query matched it by
-    user_id alone -- that clause stays, the thread clause is what now
-    catches the signal.
-    """
-    payload = OutboxEvent.payload
-    params = payload["action_data"]["params"]
-    return list(
-        (
-            await fresh_execute(
-                select(OutboxEvent).where(
-                    payload["type"].astext.like("support.%"),
-                    (payload["target_value"].astext == user_id)
-                    | (params["thread_id"].astext == thread_id)
-                    | (params["user_id"].astext == user_id),
-                )
-            )
-        ).scalars().all()
-    )
-
 
 async def _make_admin(
     client: AsyncClient, db_session: AsyncSession, telegram_id: int,
@@ -220,485 +167,36 @@ async def _make_admin(
 # ---------------------------------------------------------------------------
 
 
-class TestOpenSupportThread:
-    async def test_open_creates_section_thread_local_pointer_and_no_signal(
-        self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
-    ) -> None:
-        """The first open writes the pointer and signals nobody.
-
-        It used to assert ONE support.thread_created row for group:admins:
-        right while the admin signal belonged to the thread's creation.
-        BE-172 moved it to every message (support.message_received, sent
-        by send_support_message) and removed thread_created whole, so the
-        open's signal is now none -- asserted over every support.* type,
-        next to the pointer the same call did write.
-        """
-        student = await login_user(
-            client, telegram_id=BAND_MIN, first_name="Student",
-        )
-        fake = _creation_seam(
-            _section_payload(),
-            _thread_payload(created=True, client=student["user"]["id"]),
-        )
-        monkeypatch.setattr(_COMMS_SEAM, fake)
-
-        resp = await client.post(
-            SUPPORT_URL, headers=auth_headers(student["session_token"]),
-        )
-        assert resp.status_code == 200
-
-        # The section call happened first, and the resolved id -- not a
-        # constant, not an env value -- is what the thread call carries.
-        calls = fake.await_args_list
-        assert calls[0].args[:2] == ("POST", "/api/v1/sections")
-        assert calls[0].kwargs["json"] == {"key": "support", "label": "Support"}
-        assert calls[1].args[:2] == ("POST", "/api/v1/threads")
-        thread_body = calls[1].kwargs["json"]
-        assert thread_body["client"] == student["user"]["id"]
-        assert thread_body["operator_kind"] == "section"
-        assert thread_body["operator_value"] == SECTION_ID
-        assert thread_body["kind"] == "dm"
-        assert "subject_type" not in thread_body
-
-        # `created` is a seam detail, stripped before the frontend sees it.
-        assert "created" not in resp.json()
-        assert resp.json()["id"] == THREAD_ID
-
-        # Local pointer: one row, this user, this comms thread.
-        pointer = (
-            await fresh_execute(
-                select(SupportThread).where(
-                    SupportThread.client_user_id == UUID(student["user"]["id"])
-                )
-            )
-        ).scalar_one()
-        assert str(pointer.comms_thread_id) == THREAD_ID
-
-        # No signal: an open is not a message (BE-172).
-        assert await _support_signals(student["user"]["id"]) == []
-
-    async def test_reopen_returns_same_thread_and_emits_nothing_new(
-        self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
-    ) -> None:
-        """Two opens, one pointer, no signal.
-
-        "Nothing new" used to be one support.thread_created row after both
-        opens -- the creation's own. With BE-172 an open emits nothing, so
-        the count over every support.* type is zero, not one.
-        """
-        student = await login_user(
-            client, telegram_id=BAND_MIN + 1, first_name="Student",
-        )
-        headers = auth_headers(student["session_token"])
-
-        monkeypatch.setattr(
-            _COMMS_SEAM,
-            _creation_seam(
-                _section_payload(),
-                _thread_payload(created=True, client=student["user"]["id"]),
-            ),
-        )
-        first = await client.post(SUPPORT_URL, headers=headers)
-        assert first.status_code == 200
-
-        # Second call: comms reports a DEDUP HIT (created=False) -- the
-        # real behaviour a repeat open would see.
-        monkeypatch.setattr(
-            _COMMS_SEAM,
-            _creation_seam(
-                _section_payload(),
-                _thread_payload(created=False, client=student["user"]["id"]),
-            ),
-        )
-        second = await client.post(SUPPORT_URL, headers=headers)
-        assert second.status_code == 200
-        assert second.json()["id"] == first.json()["id"]
-
-        # Still exactly one local pointer, and no second signal.
-        pointers = (
-            await fresh_execute(
-                select(SupportThread).where(
-                    SupportThread.client_user_id == UUID(student["user"]["id"])
-                )
-            )
-        ).scalars().all()
-        assert len(pointers) == 1
-
-        assert await _support_signals(student["user"]["id"]) == []
-
-    async def test_section_id_resolved_once_across_two_opens(
-        self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
-    ) -> None:
-        """The in-process cache: two different users opening support in
-        the same process must hit POST /api/v1/sections only ONCE."""
-        alice = await login_user(
-            client, telegram_id=BAND_MIN + 2, first_name="Alice",
-        )
-        bob = await login_user(
-            client, telegram_id=BAND_MIN + 3, first_name="Bob",
-        )
-
-        section_calls: list[str] = []
-
-        async def _dispatch(method: str, path: str, **kwargs) -> dict:
-            if path == "/api/v1/sections":
-                section_calls.append(path)
-                return _section_payload()
-            if path == "/api/v1/threads":
-                client_id = kwargs["json"]["client"]
-                return _thread_payload(
-                    created=True,
-                    thread_id=str(uuid4()),
-                    client=client_id,
-                )
-            raise AssertionError(f"unexpected comms path: {path}")
-
-        monkeypatch.setattr(_COMMS_SEAM, AsyncMock(side_effect=_dispatch))
-
-        await client.post(SUPPORT_URL, headers=auth_headers(alice["session_token"]))
-        await client.post(SUPPORT_URL, headers=auth_headers(bob["session_token"]))
-
-        assert len(section_calls) == 1
-
-    async def test_topic_on_open_reaches_the_thread_title_not_a_signal(
-        self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
-    ) -> None:
-        """PROMPT №712: the topic must survive into something an operator
-        can see. On an OPEN that is comms' thread `title` (PROMPT №713).
-
-        This used to assert the topic in support.thread_created's text --
-        the immediate half while the signal belonged to the thread's
-        creation. BE-172 moved the signal to each message, which carries
-        that message's topic (test_support_message_signal.py); the open
-        keeps the title and signals nothing.
-        """
-        student = await login_user(
-            client, telegram_id=BAND_MIN + 8, first_name="Student",
-        )
-        fake = _creation_seam(
-            _section_payload(),
-            _thread_payload(created=True, client=student["user"]["id"]),
-        )
-        monkeypatch.setattr(_COMMS_SEAM, fake)
-
-        resp = await client.post(
-            SUPPORT_URL,
-            json={"topic": "Жалоба на мастера"},
-            headers=auth_headers(student["session_token"]),
-        )
-        assert resp.status_code == 200
-
-        thread_call = fake.await_args_list[1]
-        assert thread_call.args[:2] == ("POST", "/api/v1/threads")
-        assert thread_call.kwargs["json"]["title"] == "Жалоба на мастера"
-        assert await _support_signals(student["user"]["id"]) == []
-
-    async def test_topic_is_optional_and_no_open_signals(
-        self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
-    ) -> None:
-        """No topic on open -> no crash; a reopen (created=False) with a
-        DIFFERENT topic -> still nothing emitted.
-
-        This used to assert exactly one support.thread_created row, without
-        the second topic: the gate was comms' `created`. BE-172 removed
-        that signal -- an open emits nothing at all, whatever `created`
-        says and whatever the topic -- so both opens leave zero rows.
-        """
-        student = await login_user(
-            client, telegram_id=BAND_MIN + 9, first_name="Student",
-        )
-        headers = auth_headers(student["session_token"])
-
-        monkeypatch.setattr(
-            _COMMS_SEAM,
-            _creation_seam(
-                _section_payload(),
-                _thread_payload(created=True, client=student["user"]["id"]),
-            ),
-        )
-        first = await client.post(SUPPORT_URL, headers=headers)
-        assert first.status_code == 200
-
-        monkeypatch.setattr(
-            _COMMS_SEAM,
-            _creation_seam(
-                _section_payload(),
-                _thread_payload(created=False, client=student["user"]["id"]),
-            ),
-        )
-        second = await client.post(
-            SUPPORT_URL,
-            json={"topic": "Другое"},
-            headers=headers,
-        )
-        assert second.status_code == 200
-        assert second.json()["id"] == first.json()["id"]
-
-        assert await _support_signals(student["user"]["id"]) == []
-
-
-# ---------------------------------------------------------------------------
-# Sending a message
-# ---------------------------------------------------------------------------
-
-
-class TestSendMessage:
-    async def test_prefixes_topic_and_delivers_to_the_open_thread(
-        self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
-    ) -> None:
-        student = await login_user(
-            client, telegram_id=BAND_MIN + 10, first_name="Student",
-        )
-        headers = auth_headers(student["session_token"])
-
-        monkeypatch.setattr(
-            _COMMS_SEAM,
-            _creation_seam(
-                _section_payload(),
-                _thread_payload(created=True, client=student["user"]["id"]),
-            ),
-        )
-        opened = await client.post(SUPPORT_URL, headers=headers)
-        assert opened.status_code == 200
-
-        fake_message = AsyncMock(
-            return_value={
-                "id": str(uuid4()),
-                "thread_id": THREAD_ID,
-                "sender": student["user"]["id"],
-                "body": "[Технический вопрос] It won't load",
-                "created_at": THREAD_CREATED_AT,
-            }
-        )
-        monkeypatch.setattr(_COMMS_SEAM, fake_message)
-
-        resp = await client.post(
-            f"{SUPPORT_URL}/messages",
-            json={"topic": "Технический вопрос", "body": "It won't load"},
-            headers=headers,
-        )
-        assert resp.status_code == 200
-
-        call = fake_message.await_args
-        assert call.args[:2] == ("POST", f"/api/v1/threads/{THREAD_ID}/messages")
-        assert call.kwargs["json"]["sender"] == student["user"]["id"]
-        assert call.kwargs["json"]["body"] == "[Технический вопрос] It won't load"
-
-    async def test_without_an_open_thread_is_404(
-        self, client: AsyncClient, db_session: AsyncSession,
-    ) -> None:
-        student = await login_user(
-            client, telegram_id=BAND_MIN + 11, first_name="Student",
-        )
-        resp = await client.post(
-            f"{SUPPORT_URL}/messages",
-            json={"body": "Hello?"},
-            headers=auth_headers(student["session_token"]),
-        )
-        assert resp.status_code == 404
-
-    async def test_no_topic_sends_the_body_unprefixed(
-        self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
-    ) -> None:
-        student = await login_user(
-            client, telegram_id=BAND_MIN + 12, first_name="Student",
-        )
-        headers = auth_headers(student["session_token"])
-
-        monkeypatch.setattr(
-            _COMMS_SEAM,
-            _creation_seam(
-                _section_payload(),
-                _thread_payload(created=True, client=student["user"]["id"]),
-            ),
-        )
-        await client.post(SUPPORT_URL, headers=headers)
-
-        fake_message = AsyncMock(
-            return_value={
-                "id": str(uuid4()),
-                "thread_id": THREAD_ID,
-                "sender": student["user"]["id"],
-                "body": "just a question",
-                "created_at": THREAD_CREATED_AT,
-            }
-        )
-        monkeypatch.setattr(_COMMS_SEAM, fake_message)
-
-        await client.post(
-            f"{SUPPORT_URL}/messages",
-            json={"body": "just a question"},
-            headers=headers,
-        )
-        assert fake_message.await_args.kwargs["json"]["body"] == "just a question"
-
-
-# ---------------------------------------------------------------------------
-# Admin listing
-# ---------------------------------------------------------------------------
-
-
-class TestAdminListing:
-    async def test_requires_admin_role(
-        self, client: AsyncClient, db_session: AsyncSession,
-    ) -> None:
-        student = await login_user(
-            client, telegram_id=BAND_MIN + 4, first_name="Student",
-        )
-        resp = await client.get(
-            SUPPORT_URL, headers=auth_headers(student["session_token"]),
-        )
-        assert resp.status_code == 403
-
-    async def test_is_supervisor_and_operator_are_never_accepted_from_client(
-        self, client: AsyncClient, db_session: AsyncSession,
-    ) -> None:
-        """A client-supplied is_supervisor/operator must be REJECTED, not
-        silently ignored -- silence would hide the attempt (chats/router.py's
-        own rationale for _reject_actor_override, mirrored here)."""
-        admin = await _make_admin(client, db_session, BAND_MIN + 5)
-        headers = auth_headers(admin["session_token"])
-
-        resp = await client.get(
-            f"{SUPPORT_URL}?is_supervisor=false&operator={uuid4()}",
-            headers=headers,
-        )
-        assert resp.status_code == 400
-
-    async def test_scopes_to_section_threads_and_forces_supervisor(
-        self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
-    ) -> None:
-        admin = await _make_admin(client, db_session, BAND_MIN + 6)
-        headers = auth_headers(admin["session_token"])
-
-        mixed_page = {
-            "items": [
-                _thread_payload(
-                    thread_id=str(uuid4()),
-                    operator_kind="user",
-                    operator_value=str(uuid4()),
-                ),
-                _thread_payload(
-                    thread_id=THREAD_ID,
-                    operator_kind="section",
-                    operator_value=SECTION_ID,
-                ),
-            ],
-            "next_cursor": "opaque-cursor-value",
-        }
-        fake = AsyncMock(return_value=mixed_page)
-        monkeypatch.setattr(_COMMS_SEAM, fake)
-
-        resp = await client.get(SUPPORT_URL, headers=headers)
-        assert resp.status_code == 200
-
-        params = fake.await_args.kwargs["params"]
-        assert params["is_supervisor"] is True
-        assert params["operator"] == admin["user"]["id"]
-
-        body = resp.json()
-        # The DM thread never reaches an admin through this door.
-        assert len(body["threads"]) == 1
-        assert body["threads"][0]["id"] == THREAD_ID
-        assert body["threads"][0]["operator_kind"] == "section"
-        # next_cursor forwarded verbatim -- filtering never touches paging.
-        assert body["next_cursor"] == "opaque-cursor-value"
-
-    async def test_empty_page_after_filtering_stays_a_valid_response(
-        self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
-    ) -> None:
-        """An all-DM page must not error just because nothing survives
-        the section filter -- it is a legitimately empty page, not a
-        fault."""
-        admin = await _make_admin(client, db_session, BAND_MIN + 7)
-        headers = auth_headers(admin["session_token"])
-
-        all_dm_page = {
-            "items": [
-                _thread_payload(
-                    thread_id=str(uuid4()), operator_kind="user",
-                    operator_value=str(uuid4()),
-                ),
-            ],
-            "next_cursor": None,
-        }
-        monkeypatch.setattr(
-            _COMMS_SEAM, AsyncMock(return_value=all_dm_page),
-        )
-
-        resp = await client.get(SUPPORT_URL, headers=headers)
-        assert resp.status_code == 200
-        assert resp.json()["threads"] == []
-        assert resp.json()["next_cursor"] is None
-
-    async def test_list_attaches_the_opener_identity_and_the_topic_title(
-        self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
-    ) -> None:
-        """PROMPT №713: 'who' and 'the topic' on the list -- opener is a
-        real user, resolved in bulk (P-1); the topic rides comms' own
-        `title` field, set at creation (service.py::open_support_thread)."""
-        admin = await _make_admin(client, db_session, BAND_MIN + 13)
-        student = await login_user(
-            client, telegram_id=BAND_MIN + 14, first_name="Dana",
-            username="dana",
-        )
-        headers = auth_headers(admin["session_token"])
-
-        page = {
-            "items": [
-                _thread_payload(
-                    thread_id=THREAD_ID,
-                    client=student["user"]["id"],
-                )
-                | {"title": "Жалоба на мастера"},
-            ],
-            "next_cursor": None,
-        }
-        monkeypatch.setattr(_COMMS_SEAM, AsyncMock(return_value=page))
-
-        resp = await client.get(SUPPORT_URL, headers=headers)
-        assert resp.status_code == 200
-
-        row = resp.json()["threads"][0]
-        assert row["title"] == "Жалоба на мастера"
-        assert row["opener"]["user_id"] == student["user"]["id"]
-        assert row["opener"]["name"] == "Dana"
-
-    async def test_list_opener_is_null_for_an_unresolvable_client(
-        self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
-    ) -> None:
-        """A client id with no matching User degrades to opener=null --
-        never an exception that would take the whole list down."""
-        admin = await _make_admin(client, db_session, BAND_MIN + 15)
-        headers = auth_headers(admin["session_token"])
-
-        page = {
-            "items": [
-                _thread_payload(thread_id=THREAD_ID, client=str(uuid4())),
-            ],
-            "next_cursor": None,
-        }
-        monkeypatch.setattr(_COMMS_SEAM, AsyncMock(return_value=page))
-
-        resp = await client.get(SUPPORT_URL, headers=headers)
-        assert resp.status_code == 200
-        assert resp.json()["threads"][0]["opener"] is None
-
-
-# ---------------------------------------------------------------------------
-# The admin thread screen: feed, reply, claim
-# ---------------------------------------------------------------------------
+# TestOpenSupportThread, TestSendMessage and TestAdminListing lived here
+# until BE-162 removed what they tested: the one eternal thread opened by
+# POST /support/threads, the topic prefixed onto the message text, and the
+# admin list read from comms with is_supervisor=True. What of them still
+# holds -- the section resolved once, the recipient never from the wire,
+# admin-only access, no actor override, the opener's identity -- is held on
+# the ticket routes in tests/test_support_tickets_be162.py.
 
 
 async def _seed_support_thread(
     db_session: AsyncSession, *, client_user_id: UUID, comms_thread_id: UUID,
 ) -> None:
-    """Insert a local support_threads pointer directly -- the section/DM
-    boundary these tests exercise only needs the ROW to exist, not the
-    full open_support_thread flow that would normally write it."""
+    """Insert a local support thread directly, as a TICKET -- the
+    section/DM boundary these tests exercise only needs the rows to exist,
+    not the full create_ticket flow that would normally write them. A
+    ticket since BE-162: a pointer without one is a person's history,
+    read-only for admins (claim and reply are 409 there)."""
+    pointer = SupportThread(
+        comms_thread_id=comms_thread_id, client_user_id=client_user_id,
+    )
+    db_session.add(pointer)
+    await db_session.flush()
     db_session.add(
-        SupportThread(
-            comms_thread_id=comms_thread_id, client_user_id=client_user_id,
+        SupportTicket(
+            support_thread_id=pointer.id,
+            topic="technical",
+            category="tech",
+            status="open",
+            status_changed_at=datetime.now(UTC),
+            version=1,
         )
     )
     await db_session.commit()

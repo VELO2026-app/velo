@@ -35,7 +35,11 @@ from app.core.database import get_engine
 from app.core.events.models import CommsFeedCursor, OutboxEvent
 from app.core.llm import LlmResult
 from app.modules.support import translation
-from app.modules.support.models import SupportThread, SupportTranslationJob
+from app.modules.support.models import (
+    SupportThread,
+    SupportTicket,
+    SupportTranslationJob,
+)
 from app.modules.support.router import router as support_router
 from app.modules.support.service import MESSAGE_RECEIVED_TYPE
 from app.modules.users.models import User, UserRole
@@ -301,7 +305,8 @@ async def _setup(
     user_language: str,
 ) -> tuple[dict, dict, Thread]:
     """An admin, a user reading `user_language`, and the user's support
-    thread pointer."""
+    thread pointer -- an OPEN TICKET since BE-162 (a pointer without a
+    ticket is a person's history: admins only read it)."""
     admin = await login_user(client, telegram_id=_TID_ADMIN, first_name="Admin")
     admin_user = await db_session.get(User, UUID(admin["user"]["id"]))
     admin_user.role = UserRole.ADMIN.value
@@ -310,15 +315,32 @@ async def _setup(
     user_row.language = user_language
     pointer = SupportThread(comms_thread_id=uuid4(), client_user_id=user_row.id)
     db_session.add(pointer)
+    await db_session.flush()
+    db_session.add(
+        SupportTicket(
+            support_thread_id=pointer.id,
+            topic="technical",
+            category="tech",
+            status="open",
+            status_changed_at=datetime.now(UTC),
+            version=1,
+        )
+    )
     await db_session.commit()
     thread = Thread(pointer.id, pointer.comms_thread_id, pointer.client_user_id)
     admin = await login_user(client, telegram_id=_TID_ADMIN, first_name="Admin")
     return admin, user, thread
 
 
-async def _user_writes(client: AsyncClient, user: dict, body: str) -> dict:
+async def _user_writes(
+    client: AsyncClient, user: dict, pointer: Thread, body: str,
+) -> dict:
+    """The user writes in their support conversation (BE-163 / BE-162:
+    POST /chats/{id}/messages) -- it lands in their open ticket, the one
+    _setup made. Until BE-162 this was POST /support/threads/messages,
+    removed with the one eternal thread."""
     resp = await client.post(
-        "/api/v1/support/threads/messages",
+        f"/api/v1/chats/{pointer.comms_thread_id}/messages",
         json={"body": body},
         headers=auth_headers(user["session_token"]),
     )
@@ -405,7 +427,7 @@ async def test_a_users_message_goes_in_at_once_and_its_translation_follows(
     capsys: pytest.CaptureFixture,
 ) -> None:
     admin, user, pointer = await _setup(client, db_session, user_language="de")
-    sent = await _user_writes(client, user, "Ich kann mich nicht anmelden")
+    sent = await _user_writes(client, user, pointer, "Ich kann mich nicht anmelden")
     mid = sent["id"]
 
     # In the thread AS WRITTEN, before any model is asked.
@@ -531,10 +553,13 @@ async def test_original_is_on_the_admin_feed_only_and_no_user_route_reads_a_thre
     fake: FakeComms,
 ) -> None:
     """`original` exists on the admin feed and on no user route: the user's
-    support routes are the two writes of №712, and neither answers with
-    `original` or `translation` (the user's read is BE-163's)."""
+    one support route is the form's write (BE-162: POST /support/tickets),
+    and it does not answer with `original` or `translation` -- the user's
+    read is the chat routes' (BE-163). Until BE-162 the support router had
+    two user writes, the open and the send of №712; both went with the one
+    eternal thread."""
     admin, user, pointer = await _setup(client, db_session, user_language="de")
-    sent = await _user_writes(client, user, "Hallo")
+    sent = await _user_writes(client, user, pointer, "Hallo")
     assert "original" not in sent and "translation" not in sent
     assert "original" in (await _feed(client, admin, pointer))[sent["id"]]
 
@@ -543,10 +568,7 @@ async def test_original_is_on_the_admin_feed_only_and_no_user_route_reads_a_thre
         deps = {d.call.__name__ for d in route.dependant.dependencies}
         if "get_current_admin" not in deps:
             user_routes |= {(m, route.path) for m in route.methods}
-    assert user_routes == {
-        ("POST", "/api/v1/support/threads"),
-        ("POST", "/api/v1/support/threads/messages"),
-    }
+    assert user_routes == {("POST", "/api/v1/support/tickets")}
 
 
 async def test_not_needed_when_the_model_finds_the_support_language(
@@ -557,7 +579,7 @@ async def test_not_needed_when_the_model_finds_the_support_language(
     """A user's message is ALWAYS sent to the model; already in the support
     language -> the variant "none needed", the body stays the original."""
     admin, user, pointer = await _setup(client, db_session, user_language="de")
-    sent = await _user_writes(client, user, "Hi, I need help")
+    sent = await _user_writes(client, user, pointer, "Hi, I need help")
     [row] = await _rows(db_session, sent["id"])
     await ship(db_session, fake)
     fake.answer(row.job_key, _answer("EN-us", None))
@@ -660,8 +682,8 @@ async def test_an_unreadable_answer_is_asked_again_once_then_declined(
     db_session: AsyncSession,
     fake: FakeComms,
 ) -> None:
-    _, user, _ = await _setup(client, db_session, user_language="de")
-    mid = (await _user_writes(client, user, "Hallo"))["id"]
+    _, user, pointer = await _setup(client, db_session, user_language="de")
+    mid = (await _user_writes(client, user, pointer, "Hallo"))["id"]
     [first] = await _rows(db_session, mid)
     await ship(db_session, fake)
     fake.answer(first.job_key, "Sure! Here is the translation: Hello")
@@ -735,8 +757,8 @@ async def test_a_repeated_outcome_writes_one_variant(
     db_session: AsyncSession,
     fake: FakeComms,
 ) -> None:
-    _, user, _ = await _setup(client, db_session, user_language="de")
-    mid = (await _user_writes(client, user, "Hallo"))["id"]
+    _, user, pointer = await _setup(client, db_session, user_language="de")
+    mid = (await _user_writes(client, user, pointer, "Hallo"))["id"]
     [row] = await _rows(db_session, mid)
     await ship(db_session, fake)
     fake.answer(row.job_key, _answer("de", "Hello"))
@@ -768,7 +790,7 @@ async def test_the_feed_catches_up_a_message_without_a_job_once(
         "created_at": datetime.now(UTC).isoformat(),
     }
     fake.messages.append(lost)
-    kept = (await _user_writes(client, user, "Behalten"))["id"]
+    kept = (await _user_writes(client, user, pointer, "Behalten"))["id"]
     await asyncio.gather(
         _feed(client, admin, pointer),
         _feed(client, admin, pointer),

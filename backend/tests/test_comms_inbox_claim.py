@@ -18,6 +18,7 @@
 # =============================================================================
 
 from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, patch
 from uuid import UUID, uuid4
@@ -28,7 +29,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.modules.support.models import SupportThread
+from app.modules.support.models import SupportThread, SupportTicket
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 
@@ -214,10 +215,22 @@ async def _admin_and_thread(client, db_session) -> tuple[dict, UUID]:
     admin.role = UserRole.ADMIN.value
     opener = await login_user(client, telegram_id=_TID_OPENER)
     thread_id = uuid4()
+    pointer = SupportThread(
+        comms_thread_id=thread_id,
+        client_user_id=UUID(opener["user"]["id"]),
+    )
+    db_session.add(pointer)
+    await db_session.flush()
+    # A ticket since BE-162: only a ticket is taken (a pointer without one
+    # is a person's read-only history).
     db_session.add(
-        SupportThread(
-            comms_thread_id=thread_id,
-            client_user_id=UUID(opener["user"]["id"]),
+        SupportTicket(
+            support_thread_id=pointer.id,
+            topic="technical",
+            category="tech",
+            status="open",
+            status_changed_at=datetime.now(UTC),
+            version=1,
         )
     )
     await db_session.commit()

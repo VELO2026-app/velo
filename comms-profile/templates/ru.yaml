@@ -156,13 +156,16 @@ booking.reminder_10m:
     body: "🔔 <b>{practice_title}</b> начнётся через 10 минут!\n\n📅 {scheduled_at}\n👤 Мастер: {master_name}"
     button_text: "Открыть практику"
 
-# BE-172: a user wrote to support -- every message, the form and the
-# conversation alike, to group:admins. {topic_line} is a whole line or
-# empty (support/service.py, _topic_line): a sheet cannot say "if".
+# BE-172, BE-162: a person wrote to support -- every message, the form
+# and the conversation alike: to group:admins while its ticket is not
+# taken, to the admin who took it once it is. {topic_line_ru} is the
+# ticket's topic as a whole line in this sheet's language
+# (support/service.py, _topic_lines; every message belongs to a ticket,
+# so it is never empty).
 support.message_received:
   telegram:
     title: "Сообщение в поддержку"
-    body: "💬 Пользователь написал в поддержку.\n\n👤 {sender_name}{topic_line}"
+    body: "💬 Пользователь написал в поддержку.\n\n👤 {sender_name}{topic_line_ru}"
     button_text: "Открыть VELO"
 
 # BE-166: the support reply could not be translated into the user's

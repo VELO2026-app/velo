@@ -15,12 +15,15 @@
 # thread id would otherwise read a stranger's conversation. Every thread-id
 # route therefore resolves a local pointer first and checks membership
 # against the session: the ChatThread pointer of a DM (chats/models.py), or
-# -- BE-163 -- the caller's OWN support thread pointer
-# (support/service.py::own_support_thread), by strict equality.
+# -- BE-163 -- one of the caller's OWN support thread pointers
+# (support/service.py::own_support_thread), by strict equality. Since
+# BE-162 a person has a support thread per ticket, and any of them opens
+# their one support conversation.
 #
 # THE LISTS COME FROM comms (BE-163, comms 3.9.0): a person's
 # conversations as a CLIENT (`?client=`) -- their DMs and their support
-# conversation in one list, most recently active first -- and, for a
+# conversation (all their support threads as ONE row, BE-162) in one list,
+# most recently active first -- and, for a
 # master, their operator list on top. Each row carries its last message;
 # a support row's is rendered so that a reply in a language the person
 # does not read never leaves the process (support/translation.py).
@@ -98,8 +101,11 @@ from app.modules.masters.service import is_master_verified
 from app.modules.support.models import SupportThread
 from app.modules.support.service import (
     client_support_messages,
+    mark_support_read,
     own_support_thread,
-    send_support_message,
+    own_support_threads,
+    send_dialog_message,
+    support_unread,
 )
 from app.modules.support.translation import render_for_client, reply_language
 from app.modules.users.models import User, UserRole
@@ -569,8 +575,10 @@ async def _require_participant(
     """The conversation `thread_id` names, if the caller takes part in it.
 
     Two kinds, one door (BE-163): a DM whose pointer names the caller on
-    either side, or the caller's OWN support thread -- the id equal to
-    their SupportThread pointer, nothing looser. Everything else is the
+    either side, or one of the caller's OWN support threads -- the id
+    equal to one of their SupportThread pointers, nothing looser (since
+    BE-162 a person has one per ticket, and each stands for their whole
+    support conversation). Everything else is the
     same 404, before any comms call: a stranger's DM, another person's
     support thread, an id nobody has. The answer never says which.
     """
@@ -902,9 +910,11 @@ async def _client_rows(
     *,
     viewer: User,
     user_locale: str | None,
-) -> list[dict[str, Any]]:
+    support_given: bool = False,
+) -> tuple[list[dict[str, Any]], bool]:
     """The rows of a CLIENT list page the viewer may see and open --
-    built, enriched and returned; nothing else of the page goes out.
+    built, enriched and returned; nothing else of the page goes out. Also
+    returns whether the support row has been given out by now.
 
     ALLOWLIST, the same stance as _keep_only_user_form_threads, and for the
     same reason -- listed and openable are one set, and the unforeseen
@@ -914,14 +924,26 @@ async def _client_rows(
         its client                     -> a chat row; peer = the master
                                           (operator_value), last message as
                                           written
-      section form, the id IS the viewer's own SupportThread pointer, with
-        a last message                 -> the support row; last message
-                                          rendered by render_for_client
-      the same, no last message yet    -> no row: the support row appears
-                                          with the first message (owner)
+      section form, the id is ONE OF the viewer's own SupportThread
+        pointers, with a last message, and no support row given yet
+                                       -> THE support row: id = this thread
+                                          (the most recently active one),
+                                          thread_ids = all of the viewer's
+                                          support threads, unread = their
+                                          sum, last message rendered by
+                                          render_for_client
+      the same, the support row already given, or no last message yet
+                                       -> no row: the person's support
+                                          threads are ONE conversation
+                                          (BE-162), shown once, from the
+                                          first message on (owner)
       anything else -- a user-form row with no pointer, a section row that
-        is not the viewer's pointer, another form, no form, not a mapping
+        is not the viewer's, another form, no form, not a mapping
                                        -> dropped, counted into one warning
+
+    `support_given` carries "already given" across the pages of a paged
+    list (the user's -- see list_chats); a master's client list is read
+    whole, so it starts false there and the row lands in its window.
 
     A dropped DM or section row is EMPTY by construction: comms can hold a
     thread velo has no pointer for only when the transaction that wrote the
@@ -946,13 +968,8 @@ async def _client_rows(
                 )
             ).scalars()
         )
-    own_support = (
-        await session.execute(
-            select(SupportThread.comms_thread_id).where(
-                SupportThread.client_user_id == viewer.id
-            )
-        )
-    ).scalar_one_or_none()
+    own_support = await own_support_threads(session, user=viewer)
+    own_support_ids = {t.comms_thread_id for t in own_support}
 
     peer_ids = {
         pid
@@ -989,31 +1006,51 @@ async def _client_rows(
         if (
             form == _SECTION_OPERATOR_KIND
             and tid is not None
-            and tid == own_support
+            and tid in own_support_ids
         ):
             last = t.get("last_message")
-            if not isinstance(last, dict):
-                continue  # before the first message: not a row yet
-            support_row: dict[str, Any] = {
-                "id": str(tid),
-                "channel": CHANNEL_SUPPORT,
-                "peer": None,
-                "created_at": t.get("created_at"),
-                "last_message_at": t.get("last_message_at"),
-                "last_message": render_for_client(
-                    last, client_id=viewer_id, user_locale=user_locale,
-                ),
-            }
-            if "unread" in t:
-                support_row["unread"] = t["unread"]
-            rows.append(support_row)
+            if support_given or not isinstance(last, dict):
+                continue  # one conversation, given once, from a message on
+            rows.append(
+                {
+                    "id": str(tid),
+                    "channel": CHANNEL_SUPPORT,
+                    "thread_ids": [str(x.comms_thread_id) for x in own_support],
+                    "peer": None,
+                    "created_at": t.get("created_at"),
+                    "last_message_at": t.get("last_message_at"),
+                    "unread": await support_unread(user=viewer, threads=own_support),
+                    "last_message": render_for_client(
+                        last, client_id=viewer_id, user_locale=user_locale,
+                    ),
+                }
+            )
+            support_given = True
             continue
         key = str(form) if "operator_kind" in t else _FORM_KEY_ABSENT
         dropped[key] = dropped.get(key, 0) + 1
     if dropped:
         # Counts and forms only -- never an id, a client or a title.
         logger.warning("chat_client_rows_dropped", dropped=dropped)
-    return rows
+    return rows, support_given
+
+
+def _encode_client_cursor(comms_cursor: str, support_given: bool) -> str:
+    """velo's cursor for a client's list: comms' own cursor, and whether
+    the support row is already behind (_client_rows)."""
+    raw = json.dumps({"c": comms_cursor, "s": support_given}, separators=(",", ":"))
+    return base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
+
+
+def _decode_client_cursor(token: str) -> tuple[str, bool]:
+    try:
+        doc = json.loads(base64.urlsafe_b64decode(token + "=" * (-len(token) % 4)))
+        comms_cursor, support_given = doc["c"], doc["s"]
+    except (binascii.Error, ValueError, KeyError, TypeError):
+        raise BadRequestError("Malformed cursor") from None
+    if not isinstance(comms_cursor, str) or not isinstance(support_given, bool):
+        raise BadRequestError("Malformed cursor")
+    return comms_cursor, support_given
 
 
 def _encode_master_cursor(
@@ -1119,13 +1156,17 @@ async def list_chats(
     reply in a language the caller does not read is its translation, or
     body null and `translation` "translating" / "unavailable"
     (support/translation.py render_for_client). The support row appears
-    with the first message in it.
+    with the first message in it, ONCE, however many support threads the
+    caller has (BE-162): `id` is the most recently active of them,
+    `thread_ids` all of them -- any of them opens the conversation --,
+    `unread` their sum.
 
     THREE LISTS:
 
       everyone but a master and an admin -- a CLIENT: comms' client list
-        (comms 3.9.0), its order and its cursor; rows filtered and built
-        by _client_rows.
+        (comms 3.9.0) in its order; rows filtered and built by
+        _client_rows. The cursor is velo's own (_encode_client_cursor):
+        comms' cursor, and whether the support row is already given.
 
       MASTER  -- an OPERATOR in comms (is_supervisor hard False: their own
         threads, never anyone else's), filtered by
@@ -1157,7 +1198,7 @@ async def list_chats(
     operator the unclaimed section pool; _keep_only_user_form_threads
     drops it before anything is resolved -- a privacy filter, not a
     cosmetic one. A support row comes ONLY from the client list, and only
-    as the caller's own pointer.
+    as one of the caller's own pointers.
 
     comms DOWN IS A 502 on both comms branches: the list IS comms' list,
     and an empty or local stand-in on a chat outage is a product decision
@@ -1225,7 +1266,7 @@ async def list_chats(
                 "chat_list_client_threads_truncated",
                 limit=_CLIENT_LIST_LIMIT,
             )
-        client_rows = await _client_rows(
+        client_rows, _ = await _client_rows(
             session, client_items, viewer=user, user_locale=user_locale,
         )
         return {
@@ -1260,14 +1301,26 @@ async def list_chats(
             session, admin_rows, viewer_id=user.id,
         )
 
+    comms_cursor, support_given = (
+        _decode_client_cursor(cursor) if cursor is not None else (None, False)
+    )
     items, next_cursor = await _read_client_list(
-        user, limit=limit, cursor=cursor, user_locale=user_locale,
+        user, limit=limit, cursor=comms_cursor, user_locale=user_locale,
+    )
+    rows, support_given = await _client_rows(
+        session,
+        items,
+        viewer=user,
+        user_locale=user_locale,
+        support_given=support_given,
     )
     return {
-        "threads": await _client_rows(
-            session, items, viewer=user, user_locale=user_locale,
+        "threads": rows,
+        "next_cursor": (
+            _encode_client_cursor(next_cursor, support_given)
+            if next_cursor is not None
+            else None
         ),
-        "next_cursor": next_cursor,
     }
 
 
@@ -1362,20 +1415,20 @@ async def post_message(
     repeated with the same key, it is one message and one ping (see
     core/comms.py message_key). Without it, each request is its own.
 
-    The caller's own support thread (BE-163) is answered through
-    support/service.py::send_support_message, with no topic -- the same
-    function the support form uses, so the message is queued for
-    translation into the support language in this transaction. That write
-    is why the session here commits.
+    Any of the caller's own support threads (BE-163) names their ONE
+    support conversation, and the message goes where the conversation
+    sends it -- support/service.py::send_dialog_message: their latest open
+    ticket, else their latest ticket, else a new ticket "other" (BE-162),
+    not necessarily the thread the id names. It is queued for translation
+    in this transaction; that write is why the session here commits.
     """
     _reject_actor_override(request)
     key = message_key(user.id, idempotency_key)
     conversation = await _require_participant(session, thread_id, user)
     if isinstance(conversation, SupportThread):
-        return await send_support_message(
+        return await send_dialog_message(
             session,
             user=user,
-            topic=None,
             body=body.body,
             idempotency_key=idempotency_key,
         )
@@ -1398,8 +1451,10 @@ async def list_messages(
 ) -> Any:
     """A page of a conversation, newest first.
 
-    The caller's own support thread (BE-163) is read as its client reads
-    it: support/service.py::client_support_messages -- an admin's reply in
+    Any of the caller's own support threads opens their WHOLE support
+    conversation (BE-162): all their support threads glued by time, read as
+    their client reads it -- support/service.py::client_support_messages,
+    with velo's own cursor. An admin's reply in
     a language the caller does not read comes as its translation or as no
     text and a state, never as the original; a reply whose translation was
     never asked for is queued here, which is why the session commits.
@@ -1408,11 +1463,7 @@ async def list_messages(
     conversation = await _require_participant(session, thread_id, user)
     if isinstance(conversation, SupportThread):
         return await client_support_messages(
-            session,
-            pointer=conversation,
-            client=user,
-            limit=limit,
-            cursor=cursor,
+            session, client=user, limit=limit, cursor=cursor,
         )
     params: dict[str, Any] = {"limit": limit}
     if cursor is not None:
@@ -1440,12 +1491,17 @@ async def mark_read(
 ) -> Any:
     """Mark the thread read up to now for the CALLER (never for the peer).
 
-    The same comms call for a DM and for the caller's own support thread
-    (BE-163): comms keeps a read pointer for every participant, the client
-    of a support thread included.
+    For any of the caller's own support threads, their whole support
+    conversation is read (BE-162): every support thread of theirs, one comms
+    call each (support/service.py::mark_support_read) -- comms keeps a read
+    pointer per thread, the client of a support thread included.
     """
     _reject_actor_override(request)
-    await _require_participant(session, thread_id, user)
+    conversation = await _require_participant(session, thread_id, user)
+    if isinstance(conversation, SupportThread):
+        return await mark_support_read(
+            user=user, threads=await own_support_threads(session, user=user),
+        )
     return await comms_request(
         "POST",
         f"/api/v1/threads/{thread_id}/read",
@@ -1489,7 +1545,14 @@ async def unread_count(
     #      else.
     """
     _reject_actor_override(request)
-    await _require_participant(session, thread_id, user)
+    conversation = await _require_participant(session, thread_id, user)
+    if isinstance(conversation, SupportThread):
+        # The whole support conversation (BE-162), as the list counts it.
+        return {
+            "unread": await support_unread(
+                user=user, threads=await own_support_threads(session, user=user),
+            )
+        }
     return await comms_request(
         "GET",
         f"/api/v1/threads/{thread_id}/unread-count",

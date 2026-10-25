@@ -1043,7 +1043,9 @@ async def client_feed(
     user_locale: str | None,
     messages: list[Any],
 ) -> list[dict[str, Any]]:
-    """A page of the user's own support thread as they read it.
+    """Messages of ONE of the user's support threads as they read them --
+    the glued conversation (service.py::client_support_messages) calls
+    this per thread, since the catch-up needs that thread's pointer.
 
     `messages` is the page read in `user_locale` (support/service.py). An
     admin's reply found here with nothing asked for it in the user's

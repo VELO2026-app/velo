@@ -1,59 +1,65 @@
 # =============================================================================
-# VELO Backend -- support thread service (B34)
+# VELO Backend -- support service (B34, BE-162)
 # =============================================================================
 #
-# THREE responsibilities, deliberately in one file because the second and
-# third exist only to serve the first:
+# WHAT SUPPORT IS, SINCE BE-162 (owner rulings, the card's table):
 #
-#   1. LAZY SECTION RESOLUTION (support-sections-integration.md #3, binding).
-#      The comms section id for the key "support" is fetched via
-#      POST /api/v1/sections every time it is needed and cached ONLY in
-#      process memory. It must never survive a teardown -- not in .env, not
-#      in a table, not in a migration, not in a frontend constant -- because
-#      the section lives in the comms database and a reinstall hands out a
-#      DIFFERENT id. A module-level variable is the whole mechanism; there is
-#      deliberately no lock, because the endpoint this call sits behind is
-#      CREATE-OR-FIND on comms' side (a repeat POST with the same key returns
-#      the SAME row, not an error, not a second row) -- a race between two
-#      concurrent first callers is comms' problem to arbitrate, not ours to
-#      prevent.
+#   EVERY APPEAL THROUGH THE FORM IS A TICKET -- a new one even when an
+#   earlier ticket is open: its own comms thread of kind `ticket` (comms
+#   creates a fresh thread on every call; a client key replays the same
+#   one), a topic and a category as codes (models.TOPICS), our status. The
+#   message goes in as written -- no topic in its text.
 #
-#   2. THREAD CREATION. One eternal support thread per user (kind="dm",
-#      operator_kind="section", no subject_ref) -- see the module docstring
-#      on SupportThread for why kind="dm" was chosen over "ticket". Opening
-#      signals nobody: a thread nobody has written into is not news.
+#   FOR THE PERSON IT IS ONE CONVERSATION: their support threads -- the
+#   pre-BE-162 `dm` history and every ticket -- are glued into one feed by
+#   time (client_support_messages), read and counted together. A message
+#   written in the conversation goes to their latest OPEN ticket, else to
+#   their latest ticket, else opens a ticket "other" (send_dialog_message).
 #
-#   3. THE ADMIN SIGNAL (BE-172). support.message_received to group:admins
-#      on EVERY message a user sends into their support thread -- through
-#      the form and from the conversation alike, claimed thread or not --
-#      emitted by send_support_message, the one function both doors reach.
-#      The thread is eternal and a claim is forever today, so "only the
-#      claimer" would tie a person to one admin; all admins are told
-#      (owner ruling, BE-172; routing by claim arrives with BE-162). comms'
-#      own msg.support_message ping reaches the roster in-app only, and an
-#      admin has no in-app surface -- this signal, over Telegram, is the
-#      one an admin sees.
+#   STATUSES ARE OURS, comms KNOWS TWO: an admin moves an OPEN ticket to
+#   resolved / rejected / duplicate / spam, and the thread to comms'
+#   `resolved`; nothing moves a thread to `closed` (comms would tell the
+#   person). A person's message reopens -- comms its thread, we the ticket
+#   -- except SPAM, which stays spam, translates nothing and signals nobody.
+#
+#   THE ADMIN SIGNAL (BE-172, routed here): support.message_received on
+#   every message a person sends -- to every admin while the ticket is not
+#   taken, to the admin who took it once it is.
+#
+# Three mechanisms beside it, unchanged: LAZY SECTION RESOLUTION
+# (get_support_section_id -- the comms section id for "support" lives in
+# process memory only, support-sections-integration.md section 3), the
+# translation queue (support/translation.py, BE-166), and the pointer
+# tables (support/models.py).
 # =============================================================================
 
+import base64
+import binascii
+import json
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import case, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.comms import (
-    comms_request,
-    message_key,
-    new_request_key,
-    read_comms_page,
-)
+from app.core.comms import comms_request, message_key, read_comms_page
 from app.core.config import settings
 from app.core.events import SECTION_SUPPORT_KEY, SECTION_SUPPORT_LABEL
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
 from app.modules.support import translation
-from app.modules.support.models import TO_SUPPORT, TO_USER, SupportThread
+from app.modules.support.models import (
+    STATUS_OPEN,
+    STATUS_SPAM,
+    TO_SUPPORT,
+    TO_USER,
+    TOPIC_OTHER,
+    TOPICS,
+    SupportThread,
+    SupportTicket,
+)
 from app.modules.users.models import User
 
 logger = structlog.get_logger()
@@ -62,6 +68,9 @@ logger = structlog.get_logger()
 # process restart -- the next call simply re-resolves it.
 _support_section_id: UUID | None = None
 
+# A person with more support threads than this is the trigger of the
+# glued feed's KNOWN CEILING (client_support_messages).
+FEED_THREADS_CEILING = 20
 
 
 async def get_support_section_id() -> UUID:
@@ -84,221 +93,39 @@ async def get_support_section_id() -> UUID:
     return _support_section_id
 
 
-async def open_support_thread(
-    session: AsyncSession, *, user: User, topic: str | None = None,
-) -> dict:
-    """Open (or return) the caller's one eternal support thread.
+# ---------------------------------------------------------------------------
+# A person's support threads
+# ---------------------------------------------------------------------------
 
-    Returns the comms thread payload verbatim except for the `created`
-    seam detail (mirrors chats/router.py::_open_response -- `created` is
-    comms' answer about this request, not the caller's business).
 
-    Emits nothing (BE-172): the admin signal belongs to a message, not to
-    a thread -- send_support_message.
-
-    `topic` (PROMPT №712, owner ruling B): the form's topic-picker value.
-    Has no effect on comms' dedup (kind="dm" alone already makes this an
-    eternal thread) and does nothing on a reopen -- `title` is only stored
-    by comms on the INSERT path (create_or_get_thread_detailed,
-    comms/app/messaging/threads.py -- a dedup hit returns the existing row
-    untouched). It is one of the topic's three surfaces: comms' own
-    `title` field, sent here ONLY, so the admin LIST (`_thread_out`
-    already returns `title` verbatim) can show the topic without fetching
-    each thread's feed; the other two are the message-text prefix and the
-    admin signal's text, both in send_support_message, and neither reaches
-    a list view (the prefix needs the feed, an N+1 the list must not pay).
-    """
-    section_id = await get_support_section_id()
-
-    # KEY PER REQUEST, NEVER A STABLE ONE (comms 3.0.0 requires the header
-    # here). A replay of a key answers the FIRST response again, `"created":
-    # True` included, whatever the thread's age -- comms' create_thread, the
-    # flag belongs to the creating request -- so a key derived from the
-    # pair would make comms describe every later open as a creation. The
-    # pair itself is deduplicated by comms (create-or-get), which is what
-    # makes a fresh key per request safe. velo reads `created` nowhere since
-    # BE-172, and the rule does not lean on it: each open is a new request.
-    #
-    # TWO KEY RULES IN THIS MODULE, ON PURPOSE: opening takes a key per
-    # request (above), a message takes the CLIENT's key when it sends one
-    # (send_support_message). They answer different questions -- an open
-    # is a fresh request every time, while "one intent, one message" lives
-    # in the client. Making them one rule breaks one of the two.
-    payload = await comms_request(
-        "POST",
-        "/api/v1/threads",
-        json={
-            "client": str(user.id),
-            "operator_kind": "section",
-            "operator_value": str(section_id),
-            "kind": "dm",
-            "title": topic,
-        },
-        idempotency_key=new_request_key("support-open"),
+async def own_support_threads(
+    session: AsyncSession, *, user: User,
+) -> list[SupportThread]:
+    """Every support thread of this person -- history and tickets -- oldest
+    first."""
+    return list(
+        (
+            await session.execute(
+                select(SupportThread)
+                .where(SupportThread.client_user_id == user.id)
+                .order_by(SupportThread.created_at, SupportThread.id)
+            )
+        ).scalars()
     )
-    comms_thread_id = UUID(str(payload["id"]))
-
-    # Local pointer, keyed by the user (one row per user; see
-    # uq_support_threads_client). Mirrors _create_or_get_thread's
-    # find-by-pair / re-point-on-id-change / concurrent-insert-race
-    # handling in chats/router.py, narrowed to one participant instead of
-    # a pair.
-    pointer = (
-        await session.execute(
-            select(SupportThread).where(
-                SupportThread.client_user_id == user.id
-            )
-        )
-    ).scalar_one_or_none()
-
-    if pointer is None:
-        try:
-            async with session.begin_nested():
-                session.add(
-                    SupportThread(
-                        comms_thread_id=comms_thread_id,
-                        client_user_id=user.id,
-                    )
-                )
-                await session.flush()
-        except IntegrityError:
-            pointer = (
-                await session.execute(
-                    select(SupportThread).where(
-                        SupportThread.client_user_id == user.id
-                    )
-                )
-            ).scalar_one_or_none()
-            if pointer is None:
-                raise
-            logger.info(
-                "support_thread_insert_race_lost",
-                user_id=str(user.id),
-                thread_id=str(comms_thread_id),
-            )
-    elif pointer.comms_thread_id != comms_thread_id:
-        logger.warning(
-            "support_thread_repointed",
-            user_id=str(user.id),
-            old_thread_id=str(pointer.comms_thread_id),
-            new_thread_id=str(comms_thread_id),
-        )
-        pointer.comms_thread_id = comms_thread_id
-        await session.flush()
-
-    return {k: v for k, v in payload.items() if k != "created"}
-
-
-async def send_support_message(
-    session: AsyncSession,
-    *,
-    user: User,
-    topic: str | None,
-    body: str,
-    idempotency_key: str | None = None,
-) -> dict[str, Any]:
-    """Deliver one message into the caller's OWN support thread.
-
-    The thread must already exist (the form calls open_support_thread
-    first, on every submit -- cheap, idempotent, matches the chats
-    module's own open-then-send split). No thread_id is accepted from the
-    wire: the caller's thread is resolved from the local pointer, exactly
-    like every other actor field in this codebase.
-
-    TWO DOORS, ONE FUNCTION: the support form (support/router.py, with a
-    topic) and the conversation itself (BE-163: POST /chats/{id}/messages
-    on the caller's own support thread, no topic). Both land here, so a
-    reply from the conversation is queued for translation exactly like the
-    form's message.
-
-    `topic` (PROMPT №712): prefixed onto the message text so it survives
-    into what an admin actually reads when they open the thread -- the
-    durable half of "the topic must survive into something an operator
-    can see"; the immediate half is the admin signal's text below. Only
-    the form carries one: a message from the conversation has no topic,
-    and the thread's comms `title` (the topic of its first opening) is
-    not this message's topic (BE-172).
-
-    THE ADMIN SIGNAL (BE-172): support.message_received to group:admins,
-    one per comms message (the key is the message id), emitted after the
-    message is in comms -- see _emit_support_message_received and the
-    KNOWN CEILING at the call.
-    """
-    pointer = (
-        await session.execute(
-            select(SupportThread).where(
-                SupportThread.client_user_id == user.id
-            )
-        )
-    ).scalar_one_or_none()
-    if pointer is None:
-        raise NotFoundError("Open a support thread before sending a message")
-
-    text = f"[{topic}] {body}" if topic else body
-    message = await comms_request(
-        "POST",
-        f"/api/v1/threads/{pointer.comms_thread_id}/messages",
-        json={"sender": str(user.id), "body": text},
-        idempotency_key=message_key(user.id, idempotency_key),
-    )
-    # BE-166: the message is in the thread already, as written -- the user
-    # does not wait for a model. Its translation into the support language
-    # is ALWAYS queued (owner ruling: the interface language does not say
-    # what the user types in), in this transaction; if the transaction is
-    # lost, the admin feed's catch-up queues it when the thread is read
-    # (translation.admin_feed). A replayed client key returns the same
-    # comms message, and the queue is idempotent on it.
-    message_id = message.get("id") if isinstance(message, dict) else None
-    if message_id is not None:
-        await translation.enqueue(
-            session,
-            pointer=pointer,
-            message_id=UUID(str(message_id)),
-            direction=TO_SUPPORT,
-            locale=settings.support_language,
-            text=text,
-        )
-        # KNOWN CEILING (a message without its admin signal):
-        #   1. Mechanics: the message is written by the comms POST above,
-        #      outside this transaction; the signal is an outbox row of
-        #      this transaction. When comms accepted the POST and this
-        #      transaction then fails to commit, the message is in the
-        #      thread and no admin is told. The translation queued above
-        #      shares the window but has a catch-up (the admin feed queues
-        #      a missing translation when it is read); the signal has no
-        #      reader to catch it up from.
-        #   2. Status: acknowledged by design.
-        #   3. Backlog ref: none -- the window is the commit itself failing
-        #      after a successful POST; nothing observed has hit it.
-        #   4. Promotion trigger: a user message in comms with no outbox row
-        #      keyed `support-message:<its id>` behind it.
-        #   5. Agreed fix: velo mints the message's identity before the
-        #      POST, sends it to comms as the message's Idempotency-Key and
-        #      writes the outbox row under the same identity first -- the
-        #      signal then exists whenever the message can.
-        #   6. Rejected for now: that fix replaces the message key rule
-        #      (the client's key is the message's identity, BE-163,
-        #      core/comms.py message_key), and emitting before the POST
-        #      without it has no message id to key the signal by.
-        await _emit_support_message_received(
-            session,
-            user,
-            thread_id=pointer.comms_thread_id,
-            message_id=UUID(str(message_id)),
-            topic=topic,
-        )
-    return message
 
 
 async def own_support_thread(
     session: AsyncSession, *, user: User, thread_id: UUID,
 ) -> SupportThread | None:
-    """The caller's OWN support thread, if `thread_id` names it -- or None.
+    """One of the caller's OWN support threads, if `thread_id` names one --
+    or None.
 
     The one door through which a person's chat routes reach their support
-    conversation (BE-163, chats/router.py): strict equality with the
-    pointer of the CALLER, so another person's support thread id answers
-    None exactly like an id nobody has. No role widens it.
+    conversation (BE-163, chats/router.py): strict equality with a pointer
+    of the CALLER, so another person's support thread id answers None
+    exactly like an id nobody has. Any of the caller's threads opens the
+    whole conversation (BE-162): what a route does with it is decided by
+    the conversation, not by the thread the id names.
     """
     return (
         await session.execute(
@@ -310,45 +137,486 @@ async def own_support_thread(
     ).scalar_one_or_none()
 
 
+# ---------------------------------------------------------------------------
+# Tickets: the form, the conversation
+# ---------------------------------------------------------------------------
+
+
+async def _ticket_now(
+    session: AsyncSession, pointer: SupportThread, ticket: SupportTicket,
+) -> dict[str, Any]:
+    """The ticket as it stands after this transaction's own writes."""
+    await session.refresh(ticket)
+    return ticket_out(pointer, ticket)
+
+
+def ticket_out(pointer: SupportThread, ticket: SupportTicket) -> dict[str, Any]:
+    """A ticket as velo describes it -- codes, never labels."""
+    return {
+        "id": str(pointer.comms_thread_id),
+        "topic": ticket.topic,
+        "category": ticket.category,
+        "status": ticket.status,
+        "created_at": ticket.created_at.isoformat() if ticket.created_at else None,
+        "status_changed_at": ticket.status_changed_at.isoformat(),
+    }
+
+
+async def create_ticket(
+    session: AsyncSession,
+    *,
+    user: User,
+    topic: str,
+    body: str,
+    idempotency_key: str | None = None,
+) -> dict[str, Any]:
+    """One appeal through the support form: a new ticket and its first
+    message (owner ruling BE-162, 1-2) -- a new one even when the person
+    has an open ticket.
+
+    ONE INTENT, ONE TICKET: the client's Idempotency-Key names the appeal.
+    Both comms calls are keyed by it -- the thread (`ticket:` + the message
+    key) and the message -- so a repeated submit gets the same thread back
+    from comms and the same message; the unique comms_thread_id turns the
+    replay into "the ticket exists". Without a client key every submit is
+    its own appeal (comms creates a fresh `ticket` thread per call).
+
+    `topic` is a code of models.TOPICS (the router refuses anything else);
+    the category follows from it, in that one table.
+    """
+    key = message_key(user.id, idempotency_key)
+    section_id = await get_support_section_id()
+    payload = await comms_request(
+        "POST",
+        "/api/v1/threads",
+        json={
+            "client": str(user.id),
+            "operator_kind": "section",
+            "operator_value": str(section_id),
+            "kind": "ticket",
+        },
+        idempotency_key=f"ticket:{key}",
+    )
+    comms_thread_id = UUID(str(payload["id"]))
+    pointer, ticket = await _ticket_by_thread(session, comms_thread_id)
+    if pointer is None:
+        try:
+            async with session.begin_nested():
+                pointer = SupportThread(
+                    comms_thread_id=comms_thread_id, client_user_id=user.id,
+                )
+                session.add(pointer)
+                await session.flush()
+                ticket = SupportTicket(
+                    support_thread_id=pointer.id,
+                    topic=topic,
+                    category=TOPICS[topic].category,
+                    status=STATUS_OPEN,
+                    status_changed_at=datetime.now(UTC),
+                    version=1,
+                )
+                session.add(ticket)
+                await session.flush()
+        except IntegrityError:
+            # The same appeal, replayed concurrently under the same key:
+            # comms answered both with one thread, the other insert won.
+            pointer, ticket = await _ticket_by_thread(session, comms_thread_id)
+            if pointer is None or ticket is None:
+                raise
+            logger.info(
+                "support_ticket_insert_race_lost", thread_id=str(comms_thread_id),
+            )
+    assert ticket is not None  # a thread born in create_ticket has its ticket
+    message = await _post_and_route(
+        session, user=user, pointer=pointer, ticket=ticket, body=body, key=key,
+    )
+    return {"ticket": await _ticket_now(session, pointer, ticket), "message": message}
+
+
+async def _ticket_by_thread(
+    session: AsyncSession, comms_thread_id: UUID,
+) -> tuple[SupportThread | None, SupportTicket | None]:
+    row = (
+        await session.execute(
+            select(SupportThread, SupportTicket)
+            .outerjoin(
+                SupportTicket,
+                SupportTicket.support_thread_id == SupportThread.id,
+            )
+            .where(SupportThread.comms_thread_id == comms_thread_id)
+        )
+    ).first()
+    if row is None:
+        return None, None
+    return row[0], row[1]
+
+
+async def send_dialog_message(
+    session: AsyncSession,
+    *,
+    user: User,
+    body: str,
+    idempotency_key: str | None = None,
+) -> dict[str, Any]:
+    """A message the person writes in their support conversation, not
+    through the form (owner ruling BE-162, 3): it belongs to their latest
+    OPEN ticket; with none open, to their latest ticket (comms reopens its
+    thread, _post_and_route the ticket); with no ticket at all -- only the
+    pre-BE-162 history, or nothing -- it opens a ticket "other".
+
+    "Latest" is by creation: the ticket the person opened last.
+    """
+    rows = (
+        await session.execute(
+            select(SupportThread, SupportTicket)
+            .join(SupportTicket, SupportTicket.support_thread_id == SupportThread.id)
+            .where(SupportThread.client_user_id == user.id)
+            .order_by(
+                (SupportTicket.status == STATUS_OPEN).desc(),
+                SupportTicket.created_at.desc(),
+                SupportThread.id.desc(),
+            )
+            .limit(1)
+        )
+    ).first()
+    if rows is None:
+        created = await create_ticket(
+            session,
+            user=user,
+            topic=TOPIC_OTHER,
+            body=body,
+            idempotency_key=idempotency_key,
+        )
+        return created["message"]
+    pointer, ticket = rows
+    return await _post_and_route(
+        session,
+        user=user,
+        pointer=pointer,
+        ticket=ticket,
+        body=body,
+        key=message_key(user.id, idempotency_key),
+    )
+
+
+async def _post_and_route(
+    session: AsyncSession,
+    *,
+    user: User,
+    pointer: SupportThread,
+    ticket: SupportTicket,
+    body: str,
+    key: str,
+) -> dict[str, Any]:
+    """Post the person's message into the ticket's thread, as written, and
+    do what a person's message does to a ticket -- the one place it is done,
+    for the form and the conversation alike:
+
+      the ticket is not spam -> back to OPEN (owner ruling 5; comms has
+        reopened the thread itself), `version` bumped -- an admin's status
+        change in flight sees it and refuses (set_ticket_status); the
+        message queued for translation into the support language (BE-166);
+        the admin signal, routed by who took the ticket (owner ruling 6).
+      the ticket is spam -> the message is in the thread and that is all:
+        no status change, no translation job (no paid model call on spam;
+        the admin feed's catch-up queues one if an admin opens it), no
+        signal (owner ruling, BE-162 gate).
+
+    The decision is the UPDATE's own: a ticket turned spam by an admin a
+    moment ago matches nothing, so the message is treated as spam's.
+    """
+    message = await comms_request(
+        "POST",
+        f"/api/v1/threads/{pointer.comms_thread_id}/messages",
+        json={"sender": str(user.id), "body": body},
+        idempotency_key=key,
+    )
+    message_id = message.get("id") if isinstance(message, dict) else None
+    if message_id is None:
+        return message
+    reopened = (
+        await session.execute(
+            update(SupportTicket)
+            .where(
+                SupportTicket.support_thread_id == ticket.support_thread_id,
+                SupportTicket.status != STATUS_SPAM,
+            )
+            .values(
+                status=STATUS_OPEN,
+                version=SupportTicket.version + 1,
+                status_changed_at=case(
+                    (SupportTicket.status != STATUS_OPEN, func.now()),
+                    else_=SupportTicket.status_changed_at,
+                ),
+            )
+            .returning(SupportTicket.claimed_by_user_id)
+        )
+    ).first()
+    if reopened is None:
+        return message
+    await translation.enqueue(
+        session,
+        pointer=pointer,
+        message_id=UUID(str(message_id)),
+        direction=TO_SUPPORT,
+        locale=settings.support_language,
+        text=body,
+    )
+    # KNOWN CEILING (a message without its admin signal):
+    #   1. Mechanics: the message is written by the comms POST above,
+    #      outside this transaction; the signal is an outbox row of this
+    #      transaction. When comms accepted the POST and this transaction
+    #      then fails to commit, the message is in the thread and no admin
+    #      is told. The translation queued above shares the window but has
+    #      a catch-up (the admin feed queues a missing translation when it
+    #      is read); the signal has no reader to catch it up from.
+    #   2. Status: acknowledged by design.
+    #   3. Backlog ref: none -- the window is the commit itself failing
+    #      after a successful POST; nothing observed has hit it.
+    #   4. Promotion trigger: a person's message in comms with no outbox
+    #      row keyed `support-message:<its id>` behind it.
+    #   5. Agreed fix: velo mints the message's identity before the POST,
+    #      sends it to comms as the message's Idempotency-Key and writes
+    #      the outbox row under the same identity first -- the signal then
+    #      exists whenever the message can.
+    #   6. Rejected for now: that fix replaces the message key rule (the
+    #      client's key is the message's identity, BE-163, core/comms.py
+    #      message_key), and emitting before the POST without it has no
+    #      message id to key the signal by.
+    await _emit_support_message_received(
+        session,
+        user,
+        thread_id=pointer.comms_thread_id,
+        message_id=UUID(str(message_id)),
+        topic=ticket.topic,
+        claimed_by=reopened[0],
+    )
+    return message
+
+
+# ---------------------------------------------------------------------------
+# The person's one conversation (BE-162 over BE-163)
+# ---------------------------------------------------------------------------
+
+
+def _message_key_of(row: Any) -> tuple[datetime, UUID] | None:
+    """A message's place in the glued feed: (created_at, id), newest first
+    -- comms' own order inside a thread."""
+    if not isinstance(row, dict):
+        return None
+    try:
+        when = datetime.fromisoformat(str(row.get("created_at")))
+        mid = UUID(str(row.get("id")))
+    except (TypeError, ValueError):
+        return None
+    if when.tzinfo is None:
+        return None
+    return when, mid
+
+
+def _encode_feed_cursor(
+    anchors: dict[UUID, str | None], boundary: tuple[datetime, UUID],
+) -> str:
+    raw = json.dumps(
+        {
+            "t": {str(k): v for k, v in anchors.items()},
+            "a": boundary[0].isoformat(),
+            "i": str(boundary[1]),
+        },
+        separators=(",", ":"),
+    )
+    return base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
+
+
+def _decode_feed_cursor(
+    token: str,
+) -> tuple[dict[UUID, str | None], tuple[datetime, UUID]]:
+    try:
+        doc = json.loads(base64.urlsafe_b64decode(token + "=" * (-len(token) % 4)))
+        anchors = {UUID(k): v for k, v in doc["t"].items()}
+        boundary = (datetime.fromisoformat(doc["a"]), UUID(doc["i"]))
+    except (binascii.Error, ValueError, KeyError, TypeError, AttributeError):
+        raise BadRequestError("Malformed cursor") from None
+    if boundary[0].tzinfo is None or not all(
+        v is None or isinstance(v, str) for v in anchors.values()
+    ):
+        raise BadRequestError("Malformed cursor")
+    return anchors, boundary
+
+
+async def _thread_page(
+    thread_id: UUID,
+    *,
+    anchor: str | None,
+    limit: int,
+    user_locale: str | None,
+) -> tuple[list[Any], str | None]:
+    params: dict[str, Any] = {"limit": limit}
+    if user_locale is not None:
+        params["locale"] = user_locale
+    if anchor is not None:
+        params["cursor"] = anchor
+    payload = await comms_request(
+        "GET", f"/api/v1/threads/{thread_id}/messages", params=params,
+    )
+    return read_comms_page(payload, path="/api/v1/threads/{thread_id}/messages")
+
+
 async def client_support_messages(
     session: AsyncSession,
     *,
-    pointer: SupportThread,
     client: User,
     limit: int,
     cursor: str | None,
 ) -> dict[str, Any]:
-    """The user's own support thread, as they read it (BE-163).
+    """The person's support conversation, as they read it: all their
+    support threads glued into one feed, newest first (BE-162, 5).
 
-    Read in the user's language when it is not the support language: only
-    that read says what became of an admin's reply for them
-    (translation.render_for_client), and it drives the catch-up of a reply
-    whose job was lost (translation.client_feed). A user who reads the
-    support language reads the thread as it is.
+    Each message is rendered by translation.client_feed, thread by thread
+    -- the catch-up of a reply whose translation was lost included (it
+    needs its thread's pointer) -- and put in its place by (created_at, id).
+
+    THE CURSOR IS velo's: where each thread stands (comms' own cursor, or
+    null for its top) and the place of the last message given out (the
+    boundary). A page reads one comms page per thread, keeps what is older
+    than the boundary, takes the newest `limit` of all of them, and moves
+    each thread to just after its last message taken -- a thread taken
+    from only in part is re-read up to that message to get comms' cursor
+    there (one more call). Messages never move, so this is exact; a thread
+    born after the first page has only newer messages and is not in the
+    cursor.
+
+    # KNOWN CEILING (the glued feed reads every thread of the person;
+    # acknowledged by design):
+    #   1. Mechanics: one comms call per support thread per page, plus one
+    #      per thread taken from in part, and a cursor that grows with the
+    #      thread count -- a ticket per appeal makes the count grow with
+    #      the person's history.
+    #   2. Status: acknowledged by design.
+    #   3. Task: none -- the trigger says when it is needed.
+    #   4. Trigger: support_feed_threads_many in the app log (a person with
+    #      more than FEED_THREADS_CEILING support threads opened the feed).
+    #   5. Fix form: read only the threads whose activity reaches into the
+    #      page -- their last_message_at, from comms' client list -- and
+    #      drop the rest from the cursor.
+    #   6. Rejected: gluing only the latest K threads -- it hides the
+    #      person's own history from them.
     """
+    threads = await own_support_threads(session, user=client)
+    by_id = {t.comms_thread_id: t for t in threads}
+    if len(by_id) > FEED_THREADS_CEILING:
+        logger.warning("support_feed_threads_many", threads=len(by_id))
+    boundary: tuple[datetime, UUID] | None = None
+    if cursor is None:
+        anchors: dict[UUID, str | None] = dict.fromkeys(by_id)
+    else:
+        anchors, boundary = _decode_feed_cursor(cursor)
+        anchors = {tid: a for tid, a in anchors.items() if tid in by_id}
     user_locale = translation.reply_language(client)
-    params: dict[str, Any] = {"limit": limit}
-    if user_locale is not None:
-        params["locale"] = user_locale
-    if cursor is not None:
-        params["cursor"] = cursor
-    payload = await comms_request(
-        "GET",
-        f"/api/v1/threads/{pointer.comms_thread_id}/messages",
-        params=params,
-    )
-    messages, next_cursor = read_comms_page(
-        payload, path="/api/v1/threads/{thread_id}/messages",
-    )
-    return {
-        "messages": await translation.client_feed(
+
+    # What each thread offers below the boundary: (the anchor its page was
+    # read from, that page as comms gave it, its keyed rows below the
+    # boundary, comms' next cursor).
+    offers: dict[
+        UUID, tuple[str | None, list[Any], list[tuple[Any, dict]], str | None]
+    ] = {}
+    for tid, anchor in anchors.items():
+        while True:
+            items, next_cursor = await _thread_page(
+                tid, anchor=anchor, limit=limit, user_locale=user_locale,
+            )
+            below = [
+                (k, row)
+                for row in items
+                if (k := _message_key_of(row)) is not None
+                and (boundary is None or k < boundary)
+            ]
+            if below or next_cursor is None:
+                break
+            anchor = next_cursor  # a whole page newer than the boundary
+        offers[tid] = (anchor, items, below, next_cursor)
+
+    candidates = sorted(
+        ((k, tid, row) for tid, (_, _, below, _) in offers.items() for k, row in below),
+        key=lambda c: c[0],
+        reverse=True,
+    )[:limit]
+    taken: dict[UUID, list[dict]] = {}
+    for _, tid, row in candidates:
+        taken.setdefault(tid, []).append(row)
+
+    new_anchors: dict[UUID, str | None] = {}
+    for tid, (anchor, items, below, next_cursor) in offers.items():
+        mine = taken.get(tid, [])
+        if len(mine) == len(below):
+            if next_cursor is not None:
+                new_anchors[tid] = next_cursor
+            continue  # read to its end
+        if not mine:
+            new_anchors[tid] = anchor
+            continue
+        # Taken in part: re-read the same page up to the last message taken
+        # -- its position in what comms gave, whatever else that held --
+        # and stand on comms' cursor there.
+        last = next(i for i, row in enumerate(items) if row is mine[-1])
+        _, reanchored = await _thread_page(
+            tid, anchor=anchor, limit=last + 1, user_locale=user_locale,
+        )
+        new_anchors[tid] = reanchored
+
+    rendered: dict[UUID, list[dict]] = {}
+    for tid in sorted(taken, key=str):
+        rendered[tid] = await translation.client_feed(
             session,
-            pointer=pointer,
+            pointer=by_id[tid],
             user_locale=user_locale,
-            messages=messages,
-        ),
-        "next_cursor": next_cursor,
-    }
+            messages=taken[tid],
+        )
+    position = dict.fromkeys(rendered, 0)
+    messages: list[dict] = []
+    for _, tid, _ in candidates:
+        messages.append(rendered[tid][position[tid]])
+        position[tid] += 1
+
+    next_page = None
+    if candidates and new_anchors:
+        next_page = _encode_feed_cursor(new_anchors, candidates[-1][0])
+    return {"messages": messages, "next_cursor": next_page}
+
+
+async def mark_support_read(*, user: User, threads: list[SupportThread]) -> dict:
+    """Read up to now in every support thread of the person: one call per
+    thread (comms keeps a read pointer per thread). The sum of what each
+    leaves unread -- 0 unless a message arrived meanwhile."""
+    unread = 0
+    for thread in threads:
+        answer = await comms_request(
+            "POST",
+            f"/api/v1/threads/{thread.comms_thread_id}/read",
+            json={"participant": str(user.id)},
+        )
+        if isinstance(answer, dict) and isinstance(answer.get("unread"), int):
+            unread += answer["unread"]
+    return {"unread": unread}
+
+
+async def support_unread(*, user: User, threads: list[SupportThread]) -> int:
+    """What the person has not read in all their support threads -- one
+    batch call."""
+    if not threads:
+        return 0
+    answer = await comms_request(
+        "POST",
+        "/api/v1/threads/unread-counts",
+        json={
+            "participant": str(user.id),
+            "thread_ids": [str(t.comms_thread_id) for t in threads],
+        },
+    )
+    counts = answer.get("counts") if isinstance(answer, dict) else None
+    if not isinstance(counts, dict):
+        return 0
+    return sum(n for n in counts.values() if isinstance(n, int))
 
 
 def _peer_payload(user: User | None) -> dict[str, Any] | None:
@@ -366,94 +634,6 @@ def _peer_payload(user: User | None) -> dict[str, Any] | None:
     }
 
 
-async def list_admin_support_threads(
-    session: AsyncSession,
-    *,
-    admin: User,
-    limit: int,
-    cursor: str | None,
-) -> dict[str, Any]:
-    """Every support (section) thread, enriched with the opener's display
-    identity. is_supervisor is hard True, operator is the admin's own id
-    -- both stamped here, never accepted from a caller (support/router.py
-    never binds either name as a request parameter at all).
-    """
-    params: dict[str, Any] = {
-        "operator": str(admin.id),
-        "is_supervisor": True,
-        "limit": limit,
-    }
-    if cursor is not None:
-        params["cursor"] = cursor
-
-    payload = await comms_request("GET", "/api/v1/threads", params=params)
-    # is_supervisor=True above means this page is EVERY thread on the
-    # installation -- private DMs included -- so an unknown shape must not
-    # be forwarded: it used to be (`return payload` when a `threads` key
-    # was missing, and comms 3.0.0 names it `items`), and the admin list
-    # carried every conversation of every master. read_comms_page refuses
-    # instead (502), logging the shape and never the rows.
-    threads, next_cursor = read_comms_page(payload, path="/api/v1/threads")
-
-    # SECTION-only scoping (unchanged from №711): comms' list has no
-    # operator_kind filter, so the DM/section split happens on the page
-    # we already fetched, never widening what next_cursor means -- it is
-    # forwarded verbatim below, so a page that filters to zero threads
-    # still advances correctly on the next call.
-    section_threads = [
-        t
-        for t in threads
-        if isinstance(t, dict) and t.get("operator_kind") == "section"
-    ]
-
-    def _client_uuid(thread: dict[str, Any]) -> UUID | None:
-        try:
-            return UUID(str(thread.get("client")))
-        except (TypeError, ValueError):
-            return None
-
-    client_ids = {
-        cid for t in section_threads if (cid := _client_uuid(t)) is not None
-    }
-    users: dict[UUID, User] = {}
-    if client_ids:
-        result = await session.execute(
-            select(User).where(User.id.in_(client_ids))
-        )
-        users = {u.id: u for u in result.scalars()}
-    for thread in section_threads:
-        thread["opener"] = _peer_payload(users.get(_client_uuid(thread)))
-
-    # Built, not spread: `{**payload, ...}` would carry comms' own `items`
-    # -- the unfiltered page -- out next to the filtered one.
-    return {"threads": section_threads, "next_cursor": next_cursor}
-
-
-async def _require_support_thread(
-    session: AsyncSession, thread_id: UUID,
-) -> SupportThread:
-    """Resolve a comms thread id to a KNOWN support thread, or 404.
-
-    THE section-vs-DM boundary for every admin thread/message/claim call
-    below: support_threads is written ONLY by open_support_thread (one
-    row per genuine comms thread create), so a row existing here is proof
-    the id names a real support thread and not a student<->master DM the
-    admin has no business reading through this door. Deliberately 404,
-    not 403 -- existence must not leak (chats/router.py::_require_participant's
-    own stance, same reasoning).
-    """
-    pointer = (
-        await session.execute(
-            select(SupportThread).where(
-                SupportThread.comms_thread_id == thread_id
-            )
-        )
-    ).scalar_one_or_none()
-    if pointer is None:
-        raise NotFoundError("Support thread not found")
-    return pointer
-
-
 async def get_admin_support_messages(
     session: AsyncSession,
     *,
@@ -468,7 +648,7 @@ async def get_admin_support_messages(
     the ONLY authz this function performs is the section/DM boundary
     above; there is no per-admin claim requirement to READ.
     """
-    pointer = await _require_support_thread(session, thread_id)
+    pointer, _ = await _require_support_thread(session, thread_id)
     # BE-166: read in the support language -- and the SAME page again in
     # the user's language when it differs: only that read says what became
     # of an admin's reply for the user (translation.admin_feed). The feed
@@ -527,8 +707,12 @@ async def send_admin_support_message(
     theirs is queued in this transaction -- it becomes the message's
     variant (translation.py); nothing is queued for a user who reads the
     support language.
+
+    BE-162: a ticket only -- a person's history thread is read-only (409),
+    and a reply in a ticket of any status is allowed (comms' write-authz
+    does not look at the status).
     """
-    pointer = await _require_support_thread(session, thread_id)
+    pointer, _ = await _require_ticket(session, thread_id)
     message = await comms_request(
         "POST",
         f"/api/v1/threads/{thread_id}/messages",
@@ -557,32 +741,272 @@ async def retry_support_translation(
     """Ask again for a message whose translation's job failed (BE-166);
     any admin -- nothing is posted as anyone. 409 when there is nothing to
     retry (in progress, translated, or declined -- final in comms)."""
-    pointer = await _require_support_thread(session, thread_id)
+    pointer, _ = await _require_support_thread(session, thread_id)
     return await translation.retry(
         session, pointer=pointer, message_id=message_id,
     )
 
 
+# ---------------------------------------------------------------------------
+# Admins
+# ---------------------------------------------------------------------------
+
+
+def _encode_list_cursor(created_at: datetime, thread_row_id: UUID) -> str:
+    raw = json.dumps(
+        {"a": created_at.isoformat(), "i": str(thread_row_id)},
+        separators=(",", ":"),
+    )
+    return base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
+
+
+def _decode_list_cursor(token: str) -> tuple[datetime, UUID]:
+    try:
+        doc = json.loads(base64.urlsafe_b64decode(token + "=" * (-len(token) % 4)))
+        when = datetime.fromisoformat(doc["a"])
+        row_id = UUID(doc["i"])
+    except (binascii.Error, ValueError, KeyError, TypeError):
+        raise BadRequestError("Malformed cursor") from None
+    if when.tzinfo is None:
+        raise BadRequestError("Malformed cursor")
+    return when, row_id
+
+
+async def list_admin_tickets(
+    session: AsyncSession,
+    *,
+    category: str | None,
+    status: str | None,
+    created_from: datetime | None,
+    created_to: datetime | None,
+    limit: int,
+    cursor: str | None,
+) -> dict[str, Any]:
+    """Tickets, newest appeal first (BE-162, 6) -- from velo's own table:
+    the filters and, later, the statistics are ours.
+
+    Without `status` the list is every ticket but SPAM (owner ruling 8: spam
+    leaves the common list); `status=spam` is the spam tab. `created_from`
+    is inclusive, `created_to` exclusive.
+
+    comms is not asked anything: the list needed comms' supervisor read
+    before (every thread of the installation, private DMs included) and
+    that read is gone. A row carries no last message -- comms reads one
+    thread's feed per call, and the list does not pay N+1 for a preview.
+    """
+    stmt = (
+        select(SupportTicket, SupportThread)
+        .join(SupportThread, SupportThread.id == SupportTicket.support_thread_id)
+        .order_by(
+            SupportTicket.created_at.desc(),
+            SupportTicket.support_thread_id.desc(),
+        )
+        .limit(limit + 1)
+    )
+    if status is not None:
+        stmt = stmt.where(SupportTicket.status == status)
+    else:
+        stmt = stmt.where(SupportTicket.status != STATUS_SPAM)
+    if category is not None:
+        stmt = stmt.where(SupportTicket.category == category)
+    if created_from is not None:
+        stmt = stmt.where(SupportTicket.created_at >= created_from)
+    if created_to is not None:
+        stmt = stmt.where(SupportTicket.created_at < created_to)
+    if cursor is not None:
+        when, row_id = _decode_list_cursor(cursor)
+        stmt = stmt.where(
+            (SupportTicket.created_at < when)
+            | (
+                (SupportTicket.created_at == when)
+                & (SupportTicket.support_thread_id < row_id)
+            )
+        )
+    rows = list((await session.execute(stmt)).all())
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+
+    people = {p.client_user_id for _, p in rows} | {
+        t.claimed_by_user_id for t, _ in rows if t.claimed_by_user_id is not None
+    }
+    users: dict[UUID, User] = {}
+    if people:
+        users = {
+            u.id: u
+            for u in (
+                await session.execute(select(User).where(User.id.in_(people)))
+            ).scalars()
+        }
+    # The person's history -- their support thread without a ticket, the
+    # pre-BE-162 conversation -- for the ticket card (read-only).
+    history: dict[UUID, UUID] = {}
+    openers = {p.client_user_id for _, p in rows}
+    if openers:
+        history = {
+            client: thread_id
+            for client, thread_id in (
+                await session.execute(
+                    select(SupportThread.client_user_id, SupportThread.comms_thread_id)
+                    .outerjoin(
+                        SupportTicket,
+                        SupportTicket.support_thread_id == SupportThread.id,
+                    )
+                    .where(
+                        SupportThread.client_user_id.in_(openers),
+                        SupportTicket.support_thread_id.is_(None),
+                    )
+                )
+            ).all()
+        }
+    tickets = [
+        {
+            **ticket_out(pointer, ticket),
+            "opener": _peer_payload(users.get(pointer.client_user_id)),
+            "claimed_by": (
+                _peer_payload(users.get(ticket.claimed_by_user_id))
+                if ticket.claimed_by_user_id is not None
+                else None
+            ),
+            "history_thread_id": (
+                str(history[pointer.client_user_id])
+                if pointer.client_user_id in history
+                else None
+            ),
+        }
+        for ticket, pointer in rows
+    ]
+    next_cursor = None
+    if has_more:
+        last_ticket = rows[-1][0]
+        next_cursor = _encode_list_cursor(
+            last_ticket.created_at, last_ticket.support_thread_id,
+        )
+    return {"tickets": tickets, "next_cursor": next_cursor}
+
+
+async def _require_support_thread(
+    session: AsyncSession, thread_id: UUID,
+) -> tuple[SupportThread, SupportTicket | None]:
+    """Resolve a comms thread id to a KNOWN support thread, or 404 -- and
+    its ticket, None for a person's history.
+
+    THE section-vs-DM boundary for every admin call: support_threads is
+    written ONLY by create_ticket (and held the pre-BE-162 threads), so a
+    row here is proof the id names a support thread and not a
+    student<->master DM. Deliberately 404, not 403 -- existence must not
+    leak (chats/router.py::_require_participant's own stance).
+    """
+    pointer, ticket = await _ticket_by_thread(session, thread_id)
+    if pointer is None:
+        raise NotFoundError("Support thread not found")
+    return pointer, ticket
+
+
+async def _require_ticket(
+    session: AsyncSession, thread_id: UUID,
+) -> tuple[SupportThread, SupportTicket]:
+    """A support thread that is a TICKET. A person's history (no ticket) is
+    read-only (BE-162, 5): no claim, no reply, no status -- 409."""
+    pointer, ticket = await _require_support_thread(session, thread_id)
+    if ticket is None:
+        raise ConflictError("A support history thread is read-only")
+    return pointer, ticket
+
+
 async def claim_admin_support_thread(
     session: AsyncSession, *, admin: User, thread_id: UUID,
 ) -> dict[str, Any]:
-    """Claim an unclaimed thread -- the act that grants the right to
-    reply (comms' can_post_message admits the assignee; claiming is how
-    an admin becomes it). Returns comms' own {claimed, thread} verbatim.
+    """Take a ticket -- the act that grants the right to reply (comms'
+    can_post_message admits the assignee) and, since BE-162, routes the
+    person's messages to this admin alone. Returns comms' {claimed, thread}.
 
-    comms 3.0.0 claims IDEMPOTENTLY BY OUTCOME (its messaging.py claim):
-    `claimed` is always true and means "the thread is yours now" -- a
-    repeated claim of your own thread is true again, not an error. A
-    thread held by ANOTHER operator is a 409, class `conflict`, which
-    core/comms.py forwards with comms' message as the detail. There is no
-    `claimed: false` any more; nothing here branches on one.
+    comms ARBITRATES: it claims idempotently by outcome, and a ticket held
+    by another admin is its 409, forwarded. The taker is written here only
+    after comms said yes. If this transaction is then lost, comms has an
+    assignee and the ticket has none: the person's messages go to every
+    admin (the old behaviour) until the taker claims again -- comms
+    answers yes again, and this writes it.
     """
-    await _require_support_thread(session, thread_id)
-    return await comms_request(
+    _, ticket = await _require_ticket(session, thread_id)
+    answer = await comms_request(
         "POST",
         f"/api/v1/threads/{thread_id}/claim",
         json={"operator": str(admin.id)},
     )
+    await session.execute(
+        update(SupportTicket)
+        .where(SupportTicket.support_thread_id == ticket.support_thread_id)
+        .values(claimed_by_user_id=admin.id)
+    )
+    return answer
+
+
+async def set_ticket_status(
+    session: AsyncSession, *, admin: User, thread_id: UUID, status: str,
+) -> dict[str, Any]:
+    """Move an OPEN ticket to resolved / rejected / duplicate / spam
+    (BE-162, 7), and its thread to comms' `resolved` -- never `closed`.
+
+    THE ORDER: the ticket is read (its version), comms is told, then the
+    ticket is written by compare-and-set on (OPEN, version). Nothing is
+    locked across the comms call. A second admin's change, or a message of
+    the person, in between bumps the version: this change is refused (409)
+    and the ticket stays as they left it.
+
+    # KNOWN CEILING (comms' thread status may disagree with the ticket's;
+    # acknowledged by design):
+    #   1. Mechanics: comms is told before the ticket is written. When the
+    #      person's message lands between the two -- comms reopens the
+    #      thread, then this call resolves it -- the compare-and-set fails
+    #      and the ticket is OPEN while comms says `resolved`. And a
+    #      person's message into a SPAM ticket: comms reopens the thread,
+    #      the ticket stays spam (owner ruling) -- comms says `open`.
+    #   2. Status: acknowledged by design.
+    #   3. Task: none -- the ticket's status is the truth every velo
+    #      screen and signal reads; comms' status changes nothing for the
+    #      person (comms auto-close is off, THREAD_AUTO_CLOSE_DAYS=0) and
+    #      does not stop anyone writing.
+    #   4. Trigger: support_ticket_status_drift in the app log (a status
+    #      change refused after comms was told); and the owner turning
+    #      comms' auto-close back on -- a `resolved`/`open` mismatch would
+    #      then close threads on comms' own schedule.
+    #   5. Fix form: read comms' thread status back after a refused
+    #      change and align it -- needs comms to allow `resolved -> open`
+    #      by an operator (it does not: only a client message reopens),
+    #      or move the ticket only after comms by a status comms returns.
+    #   6. Rejected: holding the ticket row locked across the comms call
+    #      -- an HTTP call inside a lock, which blocks the person's message
+    #      for as long as comms takes.
+    """
+    pointer, ticket = await _require_ticket(session, thread_id)
+    if ticket.status != STATUS_OPEN:
+        raise ConflictError("Only an open ticket changes its status")
+    seen = ticket.version
+    await comms_request(
+        "POST",
+        f"/api/v1/threads/{thread_id}/status",
+        json={"operator": str(admin.id), "status": "resolved"},
+    )
+    changed = (
+        await session.execute(
+            update(SupportTicket)
+            .where(
+                SupportTicket.support_thread_id == ticket.support_thread_id,
+                SupportTicket.status == STATUS_OPEN,
+                SupportTicket.version == seen,
+            )
+            .values(
+                status=status,
+                status_changed_at=func.now(),
+                version=SupportTicket.version + 1,
+            )
+            .returning(SupportTicket.support_thread_id)
+        )
+    ).first()
+    if changed is None:
+        logger.warning("support_ticket_status_drift", thread_id=str(thread_id))
+        raise ConflictError("The ticket changed meanwhile -- read it again")
+    return await _ticket_now(session, pointer, ticket)
 
 
 # The admin signal's type (BE-172; comms-profile/types.yaml declares it,
@@ -614,18 +1038,14 @@ def _sender_name(user: User) -> str:
     return _NO_NAME
 
 
-def _topic_line(topic: str | None) -> str:
-    """The topic as its own line of the signal, or "" when there is none.
-
-    A template cannot say "if": comms fills it with str.format, where a
-    null variable prints "None" and a missing one drops the whole sheet to
-    the stored text. So the optional part is a variable that is either a
-    whole line or empty, marked by a sign rather than a word, which reads
-    the same in every profile language. A blank topic is no topic.
-    """
-    if topic is None or not topic.strip():
-        return ""
-    return f"\n🏷 {topic.strip()}"
+def _topic_lines(topic: str) -> tuple[str, str]:
+    """The ticket's topic as its own line of the signal, in Russian and in
+    English -- one variable per profile sheet (topic_line_ru in ru.yaml,
+    topic_line_en in en.yaml), so the sheet and the topic are always in one
+    language. A template cannot look a code up: comms fills it with
+    str.format. Marked by a sign rather than a word."""
+    label = TOPICS[topic]
+    return f"\n🏷 {label.ru}", f"\n🏷 {label.en}"
 
 
 async def _emit_support_message_received(
@@ -634,27 +1054,26 @@ async def _emit_support_message_received(
     *,
     thread_id: UUID,
     message_id: UUID,
-    topic: str | None,
+    topic: str,
+    claimed_by: UUID | None,
 ) -> None:
-    """support.message_received to group:admins -- one per user message.
+    """support.message_received -- one per message of a person.
 
-    A COMMUNICATION audience (C-boundary ID-4), so it goes as ONE emit and
-    comms expands it over its synced admins group -- the mechanism that
-    carries master.application_received to that group too. Category-less
-    by design (comms-profile/types.yaml): no admin can mute it.
+    ROUTED BY WHO TOOK THE TICKET (owner ruling BE-162, 6): nobody yet --
+    group:admins, ONE emit that comms expands over its synced admins group
+    (C-boundary ID-4); taken -- the taker alone. Category-less by design
+    (comms-profile/types.yaml): no admin can mute it.
 
     The idempotency key names the comms MESSAGE: one message, one signal.
-    A client replay that comms answers with the same message emits the
-    same key again, and comms collapses it on the key.
 
     The button opens the THREAD: `open_admin_support` carries the comms
-    thread id, the id the admin's thread screen (admin-support-detail) is
-    opened by -- the user's id would leave the front to find the thread
-    through the list (BE-172 fix, owner ruling).
+    thread id of the ticket, the id the admin's thread screen is opened by
+    (BE-172 fix).
 
-    Texts live in the profile's sheets (ru, en), filled from two template
-    variables, `sender_name` and `topic_line`; the stored title and body
-    below are neutral English and are read only when rendering fails.
+    Texts live in the profile's sheets (ru, en), filled from
+    `sender_name` and the topic line of the sheet's own language; the
+    stored title and body below are neutral English and are read only when
+    rendering fails.
     """
     from app.core.events.notify import (
         TARGET_GROUP_ADMINS,
@@ -662,8 +1081,11 @@ async def _emit_support_message_received(
     )
 
     sender_name = _sender_name(user)
-    topic_line = _topic_line(topic)
-    target_type, target_value = TARGET_GROUP_ADMINS
+    topic_line_ru, topic_line_en = _topic_lines(topic)
+    if claimed_by is not None:
+        target_type, target_value = "user", str(claimed_by)
+    else:
+        target_type, target_value = TARGET_GROUP_ADMINS
     await emit_notification(
         session,
         idempotency_key=f"support-message:{message_id}",
@@ -671,11 +1093,12 @@ async def _emit_support_message_received(
         target_type=target_type,
         target_value=target_value,
         title="New message to support",
-        body=f"{sender_name}{topic_line}",
+        body=f"{sender_name}{topic_line_en}",
         action_data={
             "action": "open_admin_support",
             "params": {"thread_id": str(thread_id)},
             "sender_name": sender_name,
-            "topic_line": topic_line,
+            "topic_line_ru": topic_line_ru,
+            "topic_line_en": topic_line_en,
         },
     )

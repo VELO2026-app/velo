@@ -2,8 +2,9 @@
 # VELO Backend -- comms thread lists: the unknown shape closes the door
 # =============================================================================
 #
-# telegram_id band: 88200-88299 (master 88201, admin 88202, clients
-# 88210-88212). Declared module-level below as _TID_MIN/_TID_MAX, once.
+# telegram_id band: 88200-88299 (master 88201, clients 88210-88212;
+# 88202 was the admin of the support-list tests, gone with BE-162).
+# Declared module-level below as _TID_MIN/_TID_MAX, once.
 # Checked free before it was claimed: no literal 882xx occurs in tests/,
 # and the bands of test_comms_protocol_3.py (88000-88099) and
 # test_comms_snapshot_version.py (88100-88199) end below it.
@@ -14,7 +15,8 @@
 #   - GET /chats (master): the unclaimed support queue -- strangers' uuids
 #     and the text of their requests;
 #   - GET /support/threads (admin, is_supervisor=True): every thread on
-#     the installation, every master's private DMs included.
+#     the installation, every master's private DMs included -- a read gone
+#     since BE-162 (the admin list is velo's ticket table).
 #
 # Every leak assertion is paired with "and the caller's own rows ARE
 # there" -- a filter that hides everything would pass the first half.
@@ -37,10 +39,8 @@ _TID_MIN = 88200
 _TID_MAX = 88299
 
 _TID_MASTER = 88201
-_TID_ADMIN = 88202
 
 CHATS_URL = "/api/v1/chats"
-SUPPORT_URL = "/api/v1/support/threads"
 _CHATS_SEAM = "app.modules.chats.router.comms_request"
 _SUPPORT_SEAM = "app.modules.support.service.comms_request"
 _LOG_SEAM = "app.core.comms.logger"
@@ -230,66 +230,13 @@ class TestMasterList:
 
 
 # ===========================================================================
-# 2. The admin support list (is_supervisor=True: every thread on the box)
+# 2. The admin support list -- gone with its leak (BE-162)
 # ===========================================================================
-
-
-class TestAdminSupportList:
-    async def test_private_dms_stay_out_and_support_threads_are_there(
-        self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
-    ) -> None:
-        admin = await _with_role(
-            client, db_session, _TID_ADMIN, UserRole.ADMIN.value,
-        )
-        dm_client = str(uuid4())
-        private = _row(operator_kind="user", client=dm_client, title="just us")
-        support = _row(operator_kind="section", title="help")
-        monkeypatch.setattr(
-            _SUPPORT_SEAM,
-            AsyncMock(return_value=_page(private, support, next_cursor="n")),
-        )
-
-        resp = await client.get(
-            SUPPORT_URL, headers=auth_headers(admin["session_token"]),
-        )
-
-        assert resp.status_code == 200
-        body = resp.json()
-        assert set(body) == {"threads", "next_cursor"}
-        assert [t["id"] for t in body["threads"]] == [support["id"]]
-        assert body["next_cursor"] == "n"
-        # Built, not spread: comms' own `items` must not ride along.
-        assert "items" not in body
-        assert dm_client not in resp.text
-        assert "just us" not in resp.text
-
-    async def test_every_unknown_shape_is_a_502_with_nothing_of_it_inside(
-        self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
-    ) -> None:
-        admin = await _with_role(
-            client, db_session, _TID_ADMIN, UserRole.ADMIN.value,
-        )
-        stranger = str(uuid4())
-        for payload in _unknown_shapes(stranger):
-            monkeypatch.setattr(_SUPPORT_SEAM, AsyncMock(return_value=payload))
-            resp = await client.get(
-                SUPPORT_URL, headers=auth_headers(admin["session_token"]),
-            )
-            assert resp.status_code == 502, payload
-            assert stranger not in resp.text
-
-    async def test_an_empty_page_is_an_empty_list(
-        self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
-    ) -> None:
-        admin = await _with_role(
-            client, db_session, _TID_ADMIN, UserRole.ADMIN.value,
-        )
-        monkeypatch.setattr(_SUPPORT_SEAM, AsyncMock(return_value=_page()))
-        resp = await client.get(
-            SUPPORT_URL, headers=auth_headers(admin["session_token"]),
-        )
-        assert resp.status_code == 200
-        assert resp.json() == {"threads": [], "next_cursor": None}
+# TestAdminSupportList pinned that GET /support/threads (is_supervisor=True:
+# every thread on the box) kept private DMs out. BE-162 removed that read:
+# the admin's list is velo's own ticket table and asks comms nothing, so
+# there is no page of strangers' threads left to filter -- held in
+# tests/test_support_tickets_be162.py.
 
 
 # ===========================================================================

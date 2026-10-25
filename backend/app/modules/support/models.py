@@ -1,30 +1,36 @@
 # =============================================================================
-# VELO Backend -- support thread pointer (B34)
+# VELO Backend -- support threads and tickets (B34, BE-162)
 # =============================================================================
 #
-# The local pointer for ONE eternal comms thread per (user, support section).
-# Same reason chat_threads exists (chats/models.py): comms' read API is
-# operator-scoped, and a section thread's operator is the section, not the
-# caller, so comms cannot answer "is this user the client of thread T" any
-# more than it can for a DM. Kept deliberately separate from ChatThread
-# rather than reusing it: ChatThread has two NON-NULLABLE user FKs
-# (client_user_id, operator_user_id) because a DM's operator is always a
-# master (a user row); a support thread's operator is a comms SECTION id,
-# which is not a users.id and cannot be forced into that column without
-# either a nullable FK (weakening the DM invariant) or a fake user row.
-# ONE ROW PER USER: `client_user_id` is UNIQUE. This is the local mirror of
-# the design decision made in support/service.py (kind="dm", no subject) --
-# comms itself already dedups to one eternal thread per (client, section)
-# pair; the local unique constraint keeps the pointer table honest under
-# the same invariant instead of silently allowing a second local row to
-# point at a comms thread that already exists for that user.
+# TWO TABLES, TWO QUESTIONS.
+#
+#   support_threads -- WHICH comms threads are a person's support
+#     conversation, and whose. One row per comms thread, however many a
+#     person has (BE-162). The pointer exists for the reason chat_threads
+#     does (chats/models.py): comms reads any thread id it is given, so
+#     "is this person the client of thread T" is ours to answer. Kept
+#     separate from ChatThread: a support thread's operator is a comms
+#     SECTION, not a users.id.
+#
+#   support_tickets -- WHAT a thread is to support: every appeal through
+#     the support form is a ticket (owner ruling BE-162) -- its own comms
+#     thread of kind `ticket`, a topic and a category as CODES, our own
+#     status, the admin who took it. One row per ticket thread; its key IS
+#     the thread row's id. No message text, ever: the conversation lives in
+#     comms.
+#
+# A THREAD WITHOUT A TICKET is the person's HISTORY: the one eternal `dm`
+# thread support used before BE-162 (owner: it stays history, no tickets
+# after the fact). Nothing creates such a row any more -- every new support
+# thread is born with its ticket, in the same transaction
+# (service.py::create_ticket) -- so a person has at most the one history
+# thread they already had, and it is read-only for admins.
 #
 # The support section id itself is NEVER a column here or anywhere else
-# (support-sections-integration.md §3, binding): it does not survive a
-# comms teardown, so persisting it would go stale. Only the resulting
-# THREAD id is stored, exactly like chat_threads.
+# (support-sections-integration.md section 3, binding): it does not survive
+# a comms teardown. Only thread ids are stored.
 # =============================================================================
-
+from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
@@ -32,6 +38,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     UniqueConstraint,
@@ -43,16 +50,17 @@ from app.core.mixins import TimestampMixin, UUIDMixin
 
 
 class SupportThread(UUIDMixin, TimestampMixin, Base):
-    """velo's pointer to one user's eternal comms support thread."""
+    """velo's pointer to one comms support thread of one person."""
 
     __tablename__ = "support_threads"
 
-    # The comms thread id (UUID, opaque to us). Unique: create-or-get in
-    # comms returns the SAME thread for a repeated (client, section) pair.
+    # The comms thread id (UUID, opaque to us). Unique: one pointer per
+    # thread -- a ticket replayed under its client key returns the SAME
+    # thread from comms, and this constraint is what turns the replay into
+    # "the ticket exists" (service.py::create_ticket).
     comms_thread_id: Mapped[UUID] = mapped_column(nullable=False)
-
-    # The user who opened the thread. Unique: one support thread per user,
-    # for the life of the account (mirrors comms' own dm-kind dedup).
+    # The person whose support conversation this is (comms' `client`).
+    # Not unique since BE-162: a person has a thread per ticket.
     client_user_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         index=True,
@@ -62,8 +70,152 @@ class SupportThread(UUIDMixin, TimestampMixin, Base):
         UniqueConstraint(
             "comms_thread_id", name="uq_support_threads_comms_id",
         ),
-        UniqueConstraint(
-            "client_user_id", name="uq_support_threads_client",
+    )
+
+
+# =============================================================================
+# Tickets (BE-162)
+# =============================================================================
+
+# Categories (owner ruling BE-162, item 7) -- codes; the labels are the
+# front's, in the reader's language.
+CATEGORY_TECH = "tech"
+CATEGORY_PRACTICES = "practices"
+CATEGORY_PAYMENTS = "payments"
+CATEGORY_COMPLAINT_MASTER = "complaint_master"
+CATEGORY_COMPLAINT_USER = "complaint_user"
+CATEGORY_OTHER = "other"
+CATEGORIES = (
+    CATEGORY_TECH,
+    CATEGORY_PRACTICES,
+    CATEGORY_PAYMENTS,
+    CATEGORY_COMPLAINT_MASTER,
+    CATEGORY_COMPLAINT_USER,
+    CATEGORY_OTHER,
+)
+
+
+@dataclass(frozen=True)
+class Topic:
+    """One topic of the support forms: its category, and its label in the
+    two profile languages -- read ONLY by the admin signal
+    (service.py::_topic_lines), which is rendered by comms and cannot look
+    a code up; every screen draws its own labels from the code."""
+
+    category: str
+    ru: str
+    en: str
+
+
+# THE ONE PLACE "topic -> category" lives (BE-162, the card's table).
+# Codes are the forms' own values (frontend SupportView / MasterSupportView);
+# `technical` and `other` are on both forms. Which form shows which topic is
+# the form's business: any known code is accepted from anyone.
+TOPIC_OTHER = "other"
+TOPICS: dict[str, Topic] = {
+    # the user's form
+    "payment": Topic(
+        CATEGORY_PAYMENTS,
+        "Проблема с оплатой / транзакцией",
+        "A problem with a payment / transaction",
+    ),
+    "complaint_master": Topic(
+        CATEGORY_COMPLAINT_MASTER, "Жалоба на мастера", "A complaint about a master",
+    ),
+    "practice": Topic(
+        CATEGORY_PRACTICES, "Проблема с практикой", "A problem with a practice",
+    ),
+    # the master's form
+    "withdrawal": Topic(
+        CATEGORY_PAYMENTS, "Проблема с выводом", "A problem with a withdrawal",
+    ),
+    "practices": Topic(
+        CATEGORY_PRACTICES, "Вопрос по практикам", "A question about practices",
+    ),
+    "add_direction": Topic(
+        CATEGORY_PRACTICES,
+        "Добавить направление практики",
+        "Add a practice direction",
+    ),
+    "complaint_user": Topic(
+        CATEGORY_COMPLAINT_USER, "Жалоба на пользователя", "A complaint about a user",
+    ),
+    # both forms
+    "technical": Topic(CATEGORY_TECH, "Технические проблемы", "Technical problems"),
+    TOPIC_OTHER: Topic(CATEGORY_OTHER, "Другое", "Other"),
+}
+
+# Statuses (owner ruling BE-162, item 4) -- ours. comms knows only `open`
+# and `resolved`: every status but OPEN is `resolved` there, and nothing
+# ever moves a ticket's thread to `closed` (comms would tell the person).
+STATUS_OPEN = "open"
+STATUS_RESOLVED = "resolved"
+STATUS_REJECTED = "rejected"
+STATUS_DUPLICATE = "duplicate"
+STATUS_SPAM = "spam"
+STATUSES = (
+    STATUS_OPEN,
+    STATUS_RESOLVED,
+    STATUS_REJECTED,
+    STATUS_DUPLICATE,
+    STATUS_SPAM,
+)
+# Where an admin may move an OPEN ticket. Back to OPEN only a person's
+# message does (service.py::send_dialog_message); an admin's "back to work"
+# is delivery 2.
+CLOSING_STATUSES = (STATUS_RESOLVED, STATUS_REJECTED, STATUS_DUPLICATE, STATUS_SPAM)
+
+
+def _sql_in(values: tuple[str, ...]) -> str:
+    return ", ".join(f"'{v}'" for v in values)
+
+
+class SupportTicket(TimestampMixin, Base):
+    """One appeal through the support form: its thread, topic, category,
+    status and the admin who took it. `created_at` is the date of the
+    appeal."""
+
+    __tablename__ = "support_tickets"
+
+    # The ticket IS its thread: the key is the support_threads row's id.
+    support_thread_id: Mapped[UUID] = mapped_column(
+        ForeignKey("support_threads.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    topic: Mapped[str] = mapped_column(String(32))
+    category: Mapped[str] = mapped_column(String(32))
+    status: Mapped[str] = mapped_column(String(16), default=STATUS_OPEN)
+    # Who took it (claim). Their signal is theirs alone (owner ruling 6).
+    claimed_by_user_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    status_changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+    )
+    # Bumped by every change of the row a status change must not miss --
+    # a person's message, a status change: the admin's status change is a
+    # compare-and-set on it (service.py::set_ticket_status), since comms is
+    # called between reading the ticket and writing it.
+    version: Mapped[int] = mapped_column(Integer, default=1)
+
+    __table_args__ = (
+        CheckConstraint(
+            f"topic IN ({_sql_in(tuple(TOPICS))})",
+            name="ck_support_tickets_topic",
+        ),
+        CheckConstraint(
+            f"category IN ({_sql_in(CATEGORIES)})",
+            name="ck_support_tickets_category",
+        ),
+        CheckConstraint(
+            f"status IN ({_sql_in(STATUSES)})",
+            name="ck_support_tickets_status",
+        ),
+        Index(
+            "ix_support_tickets_created",
+            "created_at",
+            "support_thread_id",
         ),
     )
 
@@ -112,10 +264,6 @@ OUTCOMES = (
     OUTCOME_FAILED,
     OUTCOME_RETRIED,
 )
-
-
-def _sql_in(values: tuple[str, ...]) -> str:
-    return ", ".join(f"'{v}'" for v in values)
 
 
 class SupportTranslationJob(UUIDMixin, TimestampMixin, Base):

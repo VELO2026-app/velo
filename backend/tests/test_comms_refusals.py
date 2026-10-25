@@ -23,6 +23,7 @@
 
 import hashlib
 from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import patch
 from uuid import UUID, uuid4
@@ -39,7 +40,7 @@ from app.core.config import settings
 from app.core.events.models import OutboxEvent
 from app.modules.chats.models import ChatThread
 from app.modules.masters.models import MasterProfile
-from app.modules.support.models import SupportThread
+from app.modules.support.models import SupportThread, SupportTicket
 from app.modules.support.service import MESSAGE_RECEIVED_TYPE
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
@@ -310,28 +311,40 @@ class TestOpenKeys:
         assert first and second and first != second
         assert first.startswith("thread-open:")
 
-    async def test_support_open_and_send_follow_their_two_rules(
+    async def test_a_support_ticket_is_keyed_by_the_clients_key(
         self, client: AsyncClient, db_session: AsyncSession, wire: _Wire,
     ) -> None:
+        """REPLACES test_support_open_and_send_follow_their_two_rules: the
+        open took a fresh key per request (one eternal `dm` thread, deduped
+        by comms on the pair) and the message the client's key. BE-162
+        made every appeal a `ticket` thread -- a fresh thread per call -- so
+        a fresh open key would make a retried submit a second ticket. Now
+        ONE rule: the client's key names the appeal, and both the thread
+        (`ticket:` + the message key) and the message are keyed by it; a
+        submit without one gets fresh keys, its own appeal."""
         student = await _login(client, db_session, _TID_STUDENT)
         headers = auth_headers(student["session_token"])
         for _ in range(2):
             resp = await client.post(
-                "/api/v1/support/threads", json={"topic": "t"}, headers=headers,
-            )
-            assert resp.status_code in (200, 201), resp.text
-            resp = await client.post(
-                "/api/v1/support/threads/messages",
-                json={"topic": "t", "body": "help"},
+                "/api/v1/support/tickets",
+                json={"topic": "technical", "body": "help"},
                 headers={**headers, _KEY: "form-1"},
             )
             assert resp.status_code == 200, resp.text
+        resp = await client.post(
+            "/api/v1/support/tickets",
+            json={"topic": "technical", "body": "help"},
+            headers=headers,
+        )
+        assert resp.status_code == 200, resp.text
+        message_key = _expected(student["user"]["id"], "form-1")
         opens = wire.keys("/api/v1/threads")
-        assert len(opens) == 2 and opens[0] != opens[1]
-        assert all(k.startswith("support-open:") for k in opens)
-        assert wire.keys("/messages") == [
-            _expected(student["user"]["id"], "form-1")
-        ] * 2
+        assert opens[:2] == [f"ticket:{message_key}"] * 2
+        assert opens[2] not in (None, f"ticket:{message_key}")
+        assert opens[2].startswith("ticket:msg:")
+        sends = wire.keys("/messages")
+        assert sends[:2] == [message_key] * 2
+        assert sends[2] not in (None, message_key)
 
     async def test_an_admin_reply_carries_the_admins_key(
         self, client: AsyncClient, db_session: AsyncSession, wire: _Wire,
@@ -339,10 +352,22 @@ class TestOpenKeys:
         admin = await _login(client, db_session, _TID_ADMIN, UserRole.ADMIN.value)
         opener = await _login(client, db_session, _TID_STUDENT)
         thread_id = uuid4()
+        pointer = SupportThread(
+            comms_thread_id=thread_id,
+            client_user_id=UUID(opener["user"]["id"]),
+        )
+        db_session.add(pointer)
+        await db_session.flush()
+        # A ticket since BE-162: an admin replies in tickets only (a pointer
+        # without one is a person's read-only history).
         db_session.add(
-            SupportThread(
-                comms_thread_id=thread_id,
-                client_user_id=UUID(opener["user"]["id"]),
+            SupportTicket(
+                support_thread_id=pointer.id,
+                topic="technical",
+                category="tech",
+                status="open",
+                status_changed_at=datetime.now(UTC),
+                version=1,
             )
         )
         await db_session.commit()

@@ -1,67 +1,65 @@
 # =============================================================================
-# VELO Backend -- support proxy (B34, T-38; admin thread/message/claim
-# endpoints added PROMPT №713)
+# VELO Backend -- support proxy (B34, T-38, PROMPT №713, BE-162)
 # =============================================================================
 #
 # Same trust stance as chats/router.py and notifications/router.py: comms
 # authenticates the PRODUCT, not the end user, and trusts every actor id
 # we send it.
 #
-# USER-FACING (any authenticated user; unchanged from №712):
-#   POST /api/v1/support/threads          -- open (or return) the caller's
-#     own eternal support thread. Optional {topic} body, used to enrich
-#     the admin-group notification and (PROMPT №713) the comms thread's
-#     own `title` on genuine creation -- see service.py::open_support_thread.
-#   POST /api/v1/support/threads/messages -- deliver one message into the
-#     caller's OWN thread. No thread_id anywhere on the wire -- resolved
-#     server-side from the local pointer.
+# USER-FACING (any authenticated user):
+#   POST /api/v1/support/tickets {topic, body} -- an appeal through the
+#     support form: a NEW ticket and its first message (BE-162). `topic`
+#     is a code (models.TOPICS); the category follows from it. The
+#     client's Idempotency-Key names the appeal: a repeat is the same
+#     ticket. No thread or recipient on the wire -- the recipient is the
+#     support section, resolved server-side.
 #
-# ADMIN-FACING (get_current_admin; PROMPT №713 except the first):
-#   GET  /api/v1/support/threads                    -- every support
-#     thread, section-scoped (never a DM), opener identity attached.
-#   GET  /api/v1/support/threads/{id}/messages       -- a thread's feed.
-#     Read access is universal-for-admins (owner ruling: every admin SEES
-#     every thread) -- no claim required to READ.
-#   POST /api/v1/support/threads/{id}/messages       -- reply. Comms
-#     itself enforces write-authz (client or ASSIGNEE only, no supervisor
-#     bypass) -- an admin who has not claimed gets comms' own 403 back
-#     (forward_403=True on the comms_request call), not a swallowed 502.
-#   POST /api/v1/support/threads/{id}/claim          -- claim an
-#     unclaimed thread; the act that grants the right to reply. Yours ->
-#     {claimed: true}, also on a repeat; held by another admin -> 409.
+# THE PERSON'S CONVERSATION IS NOT ON THIS ROUTER (BE-163, BE-162): they
+# read, mark read and answer it through the chat routes (chats/router.py,
+# /api/v1/chats/{id}/...), where all their support threads are one row and
+# one glued feed; those routes resolve the id only against the caller's
+# own pointers (service.py::own_support_thread) and render each message by
+# translation.render_for_client -- never the original of a reply in a
+# language the person does not read.
+#
+# ADMIN-FACING (get_current_admin):
+#   GET  /api/v1/support/tickets                 -- tickets, newest appeal
+#     first, from velo's table: filters category / status / created_from /
+#     created_to; without `status` every ticket but spam.
+#   POST /api/v1/support/tickets/{id}/status     -- an OPEN ticket to
+#     resolved / rejected / duplicate / spam; comms' thread to `resolved`.
+#   GET  /api/v1/support/threads/{id}/messages   -- a support thread's feed
+#     (a ticket, or a person's pre-BE-162 history). Every admin reads every
+#     thread -- no claim required to READ.
+#   POST /api/v1/support/threads/{id}/messages   -- reply, in a ticket.
+#     comms enforces write-authz (client or ASSIGNEE): an admin who has not
+#     claimed gets comms' 403 back (forward_403=True).
+#   POST /api/v1/support/threads/{id}/claim      -- take a ticket: the
+#     right to reply, and the person's signals to this admin alone. Yours
+#     -> {claimed: true}, also on a repeat; held by another admin -> 409.
 #   POST /api/v1/support/threads/{id}/messages/{mid}/translation/retry
 #     -- BE-166: ask again for a message whose translation's job failed.
+#   A person's history thread is read-only: claim / reply / status -> 409.
 #
 # BE-166: every message goes into the thread as written; its translation is
 # a comms VARIANT next to it -- support/translation.py. The admin feed
 # carries the variant and the author's `original`.
 #
-# THE USER'S OWN READ IS NOT ON THIS ROUTER (BE-163): a person reads, marks
-# read and answers their support conversation through the chat routes
-# (chats/router.py, /api/v1/chats/{id}/...), where it sits in their list of
-# conversations; those routes resolve the id only against the caller's own
-# pointer (service.py::own_support_thread) and render each message by
-# translation.render_for_client -- never the original of a reply in a
-# language the user does not read.
-#
 # `is_supervisor` and `operator` are NOT accepted as request parameters
-# anywhere on this router -- there is no name a client could supply that
-# any handler here would read, which is the point: comms' own handler
-# docstring calls forwarding a client-supplied is_supervisor a full
-# read-authz bypass, and velo's chats admin branch was already rolled
-# back once for exactly that (see list_chats() in chats/router.py and its
-# own docstring on why it no longer calls comms with is_supervisor=True
-# at all). `{id}` in every admin route is a comms thread id validated
-# against the LOCAL support_threads pointer before any comms call
-# (service.py::_require_support_thread) -- that is what stops an admin
-# from reading a student<->master DM by guessing/passing its thread id
-# here; a 404, not a 403, so existence never leaks.
+# anywhere on this router, and since BE-162 velo never sends comms
+# is_supervisor=True at all: the admin list is velo's own table. `{id}` in
+# every admin route is a comms thread id validated against the LOCAL
+# support_threads pointer before any comms call
+# (service.py::_require_support_thread) -- that is what stops an admin from
+# reading a student<->master DM through this door; a 404, not a 403, so
+# existence never leaks.
 # =============================================================================
 
-from typing import Any
+from datetime import datetime
+from typing import Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, Header, Query, Request
+from fastapi import APIRouter, Depends, Header, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -71,29 +69,54 @@ from app.core.exceptions import BadRequestError
 from app.modules.auth.dependencies import get_current_admin, get_current_user
 from app.modules.support.service import (
     claim_admin_support_thread,
+    create_ticket,
     get_admin_support_messages,
-    list_admin_support_threads,
-    open_support_thread,
+    list_admin_tickets,
     retry_support_translation,
     send_admin_support_message,
-    send_support_message,
+    set_ticket_status,
 )
 from app.modules.users.models import User
 
 router = APIRouter(prefix="/api/v1/support", tags=["support"])
 
+# The closed sets the wire accepts -- literal copies checked equal to
+# models.TOPICS / CATEGORIES / STATUSES / CLOSING_STATUSES by
+# tests/test_support_tickets_be162.py (a Literal needs the values spelled).
+TopicCode = Literal[
+    "payment",
+    "complaint_master",
+    "practice",
+    "withdrawal",
+    "practices",
+    "add_direction",
+    "complaint_user",
+    "technical",
+    "other",
+]
+CategoryCode = Literal[
+    "tech",
+    "practices",
+    "payments",
+    "complaint_master",
+    "complaint_user",
+    "other",
+]
+StatusCode = Literal["open", "resolved", "rejected", "duplicate", "spam"]
+ClosingStatus = Literal["resolved", "rejected", "duplicate", "spam"]
 
-class OpenThreadIn(BaseModel):
+
+class TicketIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    topic: str | None = Field(default=None, max_length=200)
-
-
-class SendMessageIn(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    topic: str | None = Field(default=None, max_length=200)
+    topic: TopicCode
     body: str = Field(min_length=1, max_length=4000)
+
+
+class StatusIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: ClosingStatus
 
 
 class AdminReplyIn(BaseModel):
@@ -103,9 +126,8 @@ class AdminReplyIn(BaseModel):
 
 
 # Named explicitly so the rejection message can name the offender, same
-# rationale as chats/router.py::_ACTOR_PARAMS -- kept here even though
-# neither name is bound anywhere on list_support_threads below: silence on
-# an attempted override would hide the attempt, an explicit 400 does not.
+# rationale as chats/router.py::_ACTOR_PARAMS: silence on an attempted
+# override would hide the attempt, an explicit 400 does not.
 _ACTOR_PARAMS = ("operator", "is_supervisor")
 
 
@@ -117,38 +139,18 @@ def _reject_actor_override(request: Request) -> None:
             )
 
 
-@router.post("/threads")
-async def open_thread(
-    body: OpenThreadIn | None = Body(default=None),
-    user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_db_session),
-) -> Any:
-    """Open the caller's support conversation, or return the existing one.
-
-    `topic` is the only field the body can carry, and it names nothing --
-    the RECIPIENT is always the support section, resolved inside
-    open_support_thread, never from the wire.
-    """
-    topic = body.topic if body is not None else None
-    return await open_support_thread(session, user=user, topic=topic)
-
-
-@router.post("/threads/messages")
-async def send_message(
-    body: SendMessageIn,
+@router.post("/tickets")
+async def open_ticket(
+    body: TicketIn,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
     idempotency_key: str | None = Header(
         default=None, alias=IDEMPOTENCY_HEADER,
     ),
 ) -> Any:
-    """Send one message into the caller's OWN support thread.
-
-    404s if the caller has never opened a support thread -- the form
-    calls POST /threads first on every submit, so this should not happen
-    in practice, but there is no thread to resolve without it.
-    """
-    return await send_support_message(
+    """An appeal through the support form: `{ticket, message}`. An unknown
+    topic code is a 422 before anything is called."""
+    return await create_ticket(
         session,
         user=user,
         topic=body.topic,
@@ -157,26 +159,46 @@ async def send_message(
     )
 
 
-@router.get("/threads")
-async def list_support_threads(
+@router.get("/tickets")
+async def list_tickets(
     request: Request,
+    category: CategoryCode | None = Query(default=None),
+    status: StatusCode | None = Query(default=None),
+    created_from: datetime | None = Query(default=None),
+    created_to: datetime | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
     cursor: str | None = Query(default=None),
     admin: User = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
-    """Every support thread, section-scoped, opener identity attached.
-
-    is_supervisor is hard True and operator is the admin's own id -- both
-    stamped in service.py, never read from the request. `operator` is
-    functionally inert when is_supervisor=True (comms skips its own scope
-    filter entirely in that case), but the param is required on comms'
-    side, so the admin's own id is what is sent, same as every other
-    authenticated proxy call in this codebase.
-    """
+    """Tickets, newest appeal first -- see service.list_admin_tickets.
+    `created_from` / `created_to` must carry a time zone."""
     _reject_actor_override(request)
-    return await list_admin_support_threads(
-        session, admin=admin, limit=limit, cursor=cursor,
+    for name, value in (("created_from", created_from), ("created_to", created_to)):
+        if value is not None and value.tzinfo is None:
+            raise BadRequestError(f"{name} must carry a time zone")
+    return await list_admin_tickets(
+        session,
+        category=category,
+        status=status,
+        created_from=created_from,
+        created_to=created_to,
+        limit=limit,
+        cursor=cursor,
+    )
+
+
+@router.post("/tickets/{thread_id}/status")
+async def change_ticket_status(
+    thread_id: UUID,
+    body: StatusIn,
+    admin: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> Any:
+    """An OPEN ticket to resolved / rejected / duplicate / spam. 409 -- the
+    ticket is not open, it changed meanwhile, or it is a history thread."""
+    return await set_ticket_status(
+        session, admin=admin, thread_id=thread_id, status=body.status,
     )
 
 
@@ -206,8 +228,9 @@ async def reply_to_thread(
         default=None, alias=IDEMPOTENCY_HEADER,
     ),
 ) -> Any:
-    """Reply as this admin. 403s (comms' own, forwarded) if the caller has
-    not claimed the thread -- claim it first via POST .../claim."""
+    """Reply as this admin, in a ticket. 403s (comms' own, forwarded) if
+    the caller has not claimed it -- claim it first via POST .../claim;
+    409 on a person's history thread."""
     return await send_admin_support_message(
         session,
         admin=admin,
@@ -223,9 +246,9 @@ async def claim_thread(
     admin: User = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
-    """Claim a support thread: 200 `{claimed: true, thread}` when it is
-    yours (a repeat of your own claim included), 409 when another admin
-    holds it -- see support/service.py claim_admin_support_thread."""
+    """Take a ticket: 200 `{claimed: true, thread}` when it is yours (a
+    repeat of your own claim included), 409 when another admin holds it or
+    it is a history thread -- see service.claim_admin_support_thread."""
     return await claim_admin_support_thread(
         session, admin=admin, thread_id=thread_id,
     )

@@ -14,17 +14,20 @@
 #      admin with a verified profile (the stand's live-check path, profile
 #      untouched), seed's flip of an admin into a master, the backfill and
 #      its repeat.
-#   3. THE SIGNAL. support.message_received to group:admins on every user
-#      message -- the form and the conversation alike -- keyed by the comms
-#      message; the topic as a whole line or nothing; the sender-name
-#      chain; nothing when comms refused the message; the profile's two
-#      sheets read only variables the emit carries.
+#   3. THE SIGNAL. support.message_received on every user message -- the
+#      form and the conversation alike -- keyed by the comms message; the
+#      ticket's topic as a whole line, one per profile language (BE-162);
+#      the sender-name chain; nothing when comms refused the message; the
+#      profile's two sheets read only variables the emit carries. Routed to
+#      group:admins while the ticket is not taken -- the routing by taker
+#      is held in tests/test_support_tickets_be162.py.
 #
 # comms is cut at app.modules.support.service.comms_request, the one seam
 # both message doors reach (the chats door resolves the caller's support
 # thread locally, chats/router.py _require_participant).
 # =============================================================================
 
+from datetime import UTC, datetime
 from string import Formatter
 from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
@@ -48,7 +51,7 @@ from app.core.events import (
 from app.core.events.models import OutboxEvent
 from app.modules.masters.models import MasterProfile
 from app.modules.support import service as support_service
-from app.modules.support.models import SupportThread
+from app.modules.support.models import TOPICS, SupportThread, SupportTicket
 from app.modules.users.models import User
 from scripts import seed, set_role
 from tests.helpers import (
@@ -366,11 +369,42 @@ def _message(body: str = "help", message_id: str | None = None) -> dict:
     }
 
 
-async def _with_thread(db_session: AsyncSession, user: User) -> UUID:
+async def _with_thread(
+    db_session: AsyncSession, user: User, *, topic: str = "payment",
+) -> UUID:
+    """A support thread of `user` that is an open TICKET (BE-162: a person's
+    messages land in their tickets; a pointer without a ticket is history,
+    and a message from the conversation would open a new ticket "other")."""
     thread_id = uuid4()
-    db_session.add(SupportThread(comms_thread_id=thread_id, client_user_id=user.id))
+    pointer = SupportThread(comms_thread_id=thread_id, client_user_id=user.id)
+    db_session.add(pointer)
+    await db_session.flush()
+    db_session.add(
+        SupportTicket(
+            support_thread_id=pointer.id,
+            topic=topic,
+            category=TOPICS[topic].category,
+            status="open",
+            status_changed_at=datetime.now(UTC),
+            version=1,
+        )
+    )
     await db_session.commit()
     return thread_id
+
+
+def _ticket_comms(thread_id: UUID, message: dict) -> AsyncMock:
+    """comms for POST /support/tickets: the section, a fresh `ticket`
+    thread, the message."""
+
+    async def _route(method: str, path: str, **kw: object) -> dict:
+        if path == "/api/v1/sections":
+            return {"id": str(uuid4()), "key": "support"}
+        if path == "/api/v1/threads":
+            return {"id": str(thread_id), "kind": "ticket"}
+        return message
+
+    return AsyncMock(side_effect=_route)
 
 
 async def _signals(thread_id: UUID) -> list[dict]:
@@ -394,17 +428,26 @@ async def _signals(thread_id: UUID) -> list[dict]:
 
 
 class TestSignal:
+    """BE-172's signal, since BE-162 on tickets: every message belongs to a
+    ticket and carries the TICKET's topic -- a code drawn as a label, one
+    line per profile language. Its routing by who took the ticket is held
+    in tests/test_support_tickets_be162.py."""
+
     async def test_form_message_signals_every_admin_with_its_topic(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
     ) -> None:
-        user, token = await _login(client, db_session, BAND_MIN, first_name="Анна")
-        thread_id = await _with_thread(db_session, user)
+        """Was: the topic as the form typed it (" Оплата " -> "Оплата"). The
+        form sends a CODE since BE-162; the label is the table's, in both
+        languages."""
+        _, token = await _login(client, db_session, BAND_MIN, first_name="Анна")
+        thread_id = uuid4()
         message = _message()
-        monkeypatch.setattr(_SEAM, AsyncMock(return_value=message))
+        monkeypatch.setattr(_SEAM, _ticket_comms(thread_id, message))
+        monkeypatch.setattr(support_service, "_support_section_id", None)
 
         resp = await client.post(
-            "/api/v1/support/threads/messages",
-            json={"topic": " Оплата ", "body": "help"},
+            "/api/v1/support/tickets",
+            json={"topic": "payment", "body": "help"},
             headers=auth_headers(token),
         )
         assert resp.status_code == 200, resp.text
@@ -418,15 +461,21 @@ class TestSignal:
             # it used to be the user's id, which named no screen (BE-172 fix)
             "params": {"thread_id": str(thread_id)},
             "sender_name": "Анна",
-            "topic_line": "\n🏷 Оплата",
+            "topic_line_ru": "\n🏷 Проблема с оплатой / транзакцией",
+            "topic_line_en": "\n🏷 A problem with a payment / transaction",
         }
-        assert signal["title"] and signal["body"] == "Анна\n🏷 Оплата"
+        assert signal["title"] and signal["body"] == (
+            "Анна\n🏷 A problem with a payment / transaction"
+        )
 
-    async def test_conversation_message_signals_too_without_a_topic(
+    async def test_conversation_message_signals_with_its_tickets_topic(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
     ) -> None:
+        """Was: a message from the conversation signals "without a topic" --
+        right while the topic belonged to the form's message. Since BE-162
+        it belongs to the ticket the message lands in."""
         user, token = await _login(client, db_session, BAND_MIN + 1, first_name="Bob")
-        thread_id = await _with_thread(db_session, user)
+        thread_id = await _with_thread(db_session, user, topic="withdrawal")
         message = _message()
         monkeypatch.setattr(_SEAM, AsyncMock(return_value=message))
 
@@ -440,24 +489,27 @@ class TestSignal:
         (signal,) = await _signals(thread_id)
         assert signal["idempotency_key"] == f"support-message:{message['id']}"
         assert signal["action_data"]["params"] == {"thread_id": str(thread_id)}
-        assert signal["action_data"]["topic_line"] == ""
+        assert signal["action_data"]["topic_line_ru"] == "\n🏷 Проблема с выводом"
         assert signal["action_data"]["sender_name"] == "Bob"
 
-    async def test_blank_topic_is_no_topic(
-        self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
+    @pytest.mark.parametrize("topic", ["", "   ", "Оплата", None])
+    async def test_a_topic_that_is_no_code_is_a_422_before_comms(
+        self, client: AsyncClient, db_session: AsyncSession, monkeypatch, topic,
     ) -> None:
-        user, token = await _login(client, db_session, BAND_MIN + 2)
-        thread_id = await _with_thread(db_session, user)
-        monkeypatch.setattr(_SEAM, AsyncMock(return_value=_message()))
+        """Was test_blank_topic_is_no_topic: a blank topic sent no topic
+        line. A topic is a code since BE-162, and anything that is not one
+        -- blank, a label, none -- is refused before anything is called."""
+        _, token = await _login(client, db_session, BAND_MIN + 2)
+        fake = AsyncMock()
+        monkeypatch.setattr(_SEAM, fake)
 
         resp = await client.post(
-            "/api/v1/support/threads/messages",
-            json={"topic": "   ", "body": "help"},
+            "/api/v1/support/tickets",
+            json={"topic": topic, "body": "help"},
             headers=auth_headers(token),
         )
-        assert resp.status_code == 200, resp.text
-        (signal,) = await _signals(thread_id)
-        assert signal["action_data"]["topic_line"] == ""
+        assert resp.status_code == 422
+        assert fake.await_count == 0
 
     async def test_a_replayed_message_repeats_the_same_document(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
@@ -476,8 +528,8 @@ class TestSignal:
 
         for _ in range(2):
             resp = await client.post(
-                "/api/v1/support/threads/messages",
-                json={"topic": "t", "body": "help"},
+                f"/api/v1/chats/{thread_id}/messages",
+                json={"body": "help"},
                 headers=headers,
             )
             assert resp.status_code == 200, resp.text
@@ -500,7 +552,7 @@ class TestSignal:
             AsyncMock(side_effect=HTTPException(status_code=502, detail="down")),
         )
         resp = await client.post(
-            "/api/v1/support/threads/messages",
+            f"/api/v1/chats/{thread_id}/messages",
             json={"body": "help"},
             headers=auth_headers(token),
         )
@@ -509,7 +561,7 @@ class TestSignal:
 
         monkeypatch.setattr(_SEAM, AsyncMock(return_value=_message()))
         resp = await client.post(
-            "/api/v1/support/threads/messages",
+            f"/api/v1/chats/{thread_id}/messages",
             json={"body": "help"},
             headers=auth_headers(token),
         )
@@ -539,10 +591,12 @@ class TestProfileSheets:
     def test_both_sheets_read_only_what_the_emit_carries(self) -> None:
         """comms fills a sheet with str.format; a variable the job does not
         carry drops the whole sheet to the stored English text without a
-        word. Every variable of both sheets must be a key the emit sends,
-        and both of the emit's text variables must be read."""
-        carried = {"sender_name", "topic_line"}
+        word. Every variable of each sheet must be a key the emit sends,
+        and each sheet reads the sender and the topic line of ITS language
+        (BE-162: topic_line_ru / topic_line_en -- one `topic_line` before,
+        when the topic was the form's free text)."""
         for locale in ("ru", "en"):
+            carried = {"sender_name", f"topic_line_{locale}"}
             sheets = yaml.safe_load(
                 (_profile_dir() / "templates" / f"{locale}.yaml").read_text()
             )

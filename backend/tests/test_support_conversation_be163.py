@@ -30,7 +30,9 @@
 # comms is cut at its seams (chats.router / support.service comms_request).
 # =============================================================================
 
+import itertools
 from collections.abc import AsyncGenerator
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
@@ -44,13 +46,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.events.models import OutboxEvent
 from app.modules.chats.models import ChatThread
-from app.modules.chats.router import _decode_master_cursor
+from app.modules.chats.router import _decode_client_cursor, _decode_master_cursor
 from app.modules.masters.models import MasterProfile
 from app.modules.support import translation
 from app.modules.support.models import (
     TO_SUPPORT,
     TO_USER,
     SupportThread,
+    SupportTicket,
     SupportTranslationJob,
 )
 from app.modules.support.service import MESSAGE_RECEIVED_TYPE
@@ -129,6 +132,8 @@ class FakeComms:
         self.client_items: list[Any] = []
         self.client_next: str | None = None
         self.feed: list[Any] = []
+        # unread per thread id, for the batch count of the support row
+        self.unread: dict[str, int] = {}
         self.calls: list[tuple[str, str, dict, Any]] = []
         self._replay: dict[tuple[str, str, str], Any] = {}
 
@@ -176,6 +181,14 @@ class FakeComms:
                 "body": body["body"],
                 "created_at": "2026-10-25T10:00:00+00:00",
             }
+        if path == "/api/v1/threads/unread-counts":
+            return {
+                "counts": {
+                    tid: self.unread[tid]
+                    for tid in body["thread_ids"]
+                    if tid in self.unread
+                }
+            }
         if path.endswith("/read"):
             return {"unread": 0}
         if path.endswith("/unread-count"):
@@ -220,9 +233,22 @@ async def _person(
 
 
 async def _support_pointer(db_session: AsyncSession, user_id: str) -> UUID:
+    """A support thread of the person -- an open TICKET (BE-162; a pointer
+    without one is history, and a message from the conversation would
+    open a new ticket)."""
     thread_id = uuid4()
+    pointer = SupportThread(comms_thread_id=thread_id, client_user_id=UUID(user_id))
+    db_session.add(pointer)
+    await db_session.flush()
     db_session.add(
-        SupportThread(comms_thread_id=thread_id, client_user_id=UUID(user_id))
+        SupportTicket(
+            support_thread_id=pointer.id,
+            topic="technical",
+            category="tech",
+            status="open",
+            status_changed_at=datetime.now(UTC),
+            version=1,
+        )
     )
     await db_session.commit()
     return thread_id
@@ -281,6 +307,15 @@ def _row(
     }
 
 
+_CLOCK = itertools.count()
+
+
+def _next_older() -> str:
+    tick = next(_CLOCK)
+    when = datetime(2026, 10, 20, 12, tzinfo=UTC) - timedelta(seconds=tick)
+    return when.isoformat()
+
+
 def _msg(
     sender: str,
     body: str,
@@ -290,13 +325,15 @@ def _msg(
     variant_locale: str = "ru",
     mid: str | None = None,
 ) -> dict:
-    """A message as comms gives it, read with ?locale when `state` is set."""
+    """A message as comms gives it, read with ?locale when `state` is set.
+    Every call is one second OLDER than the last, so a page written newest
+    first is in comms' own order -- which the glued feed (BE-162) keeps."""
     out: dict[str, Any] = {
         "id": mid or _mid(),
         "thread_id": str(uuid4()),
         "sender": sender,
         "body": body,
-        "created_at": "2026-10-20T10:00:00+00:00",
+        "created_at": _next_older(),
     }
     if state is not None:
         out["variant_state"] = state
@@ -477,6 +514,8 @@ class TestUserList:
             ),
         ]
 
+        comms.unread[str(support)] = 2
+
         resp = await client.get(CHATS_URL, headers=auth_headers(user["session_token"]))
 
         assert resp.status_code == 200
@@ -484,7 +523,11 @@ class TestUserList:
         assert [r["id"] for r in rows] == [str(support), str(dm)]
         sup, chat = rows
         assert sup["channel"] == "support" and sup["peer"] is None
+        # BE-162: the support row stands for ALL the person's support
+        # threads -- its unread is their sum by one batch count, not the
+        # row's own; here the one thread, 2.
         assert sup["unread"] == 2
+        assert sup["thread_ids"] == [str(support)]
         assert sup["last_message"]["body"] == "Перевод"
         assert sup["last_message"]["translation"] is None
         # the support row is built: no assignee, no section id, no topic
@@ -496,6 +539,7 @@ class TestUserList:
             "last_message_at",
             "last_message",
             "unread",
+            "thread_ids",
         }
         # a DM is not translated -- as written, whatever its variant state
         assert chat["channel"] == "chat"
@@ -684,23 +728,41 @@ class TestUserList:
         }
         assert "Zinaida" not in repr(warning)
 
-    async def test_comms_cursor_is_forwarded_both_ways(
+    async def test_the_cursor_is_velos_and_carries_comms_cursor(
         self,
         client: AsyncClient,
         db_session: AsyncSession,
         comms: FakeComms,
     ) -> None:
+        """REPLACES test_comms_cursor_is_forwarded_both_ways: the user's list
+        handed comms' cursor out and back as it was. BE-162 made a person's
+        support threads ONE row, and a page must know whether that row was
+        given on an earlier one -- so the cursor is velo's: comms' cursor
+        inside, verbatim, and the flag. A cursor velo did not make is a 400
+        before comms is asked."""
         user = await _person(client, db_session, 9)
+        headers = auth_headers(user["session_token"])
         comms.client_next = "client-next"
-        resp = await client.get(
-            CHATS_URL,
-            params={"cursor": "client-prev", "limit": 7},
-            headers=auth_headers(user["session_token"]),
+        first = await client.get(CHATS_URL, params={"limit": 7}, headers=headers)
+        token = first.json()["next_cursor"]
+        assert token != "client-next"
+        assert _decode_client_cursor(token) == ("client-next", False)
+
+        second = await client.get(
+            CHATS_URL, params={"cursor": token, "limit": 7}, headers=headers,
         )
-        assert resp.json()["next_cursor"] == "client-next"
-        (params,) = comms.lists("client")
-        assert params["cursor"] == "client-prev"
-        assert params["limit"] == 7
+        assert second.status_code == 200
+        first_params, second_params = comms.lists("client")
+        assert "cursor" not in first_params
+        assert second_params["cursor"] == "client-next"
+        assert second_params["limit"] == 7
+
+        calls = len(comms.calls)
+        bad = await client.get(
+            CHATS_URL, params={"cursor": "client-prev"}, headers=headers,
+        )
+        assert bad.status_code == 400
+        assert len(comms.calls) == calls
 
     async def test_client_from_the_wire_is_refused(
         self,
@@ -921,7 +983,7 @@ class TestMasterList:
         assert row["last_message"] == {
             "id": row["last_message"]["id"],
             "sender": _ADMIN,
-            "created_at": "2026-10-20T10:00:00+00:00",
+            "created_at": last["created_at"],
             "body": None,
             "translation": TRANSLATING,
         }
