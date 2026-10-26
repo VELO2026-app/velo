@@ -3,7 +3,11 @@
 
   Approved mood-scale face (FE-85, tz-mood-scale.md §6): kept 1:1 from the approved source art: geometry, colors and gradients
   exactly as delivered. This component is the in-repo source of truth (raw
-  svg sources are not kept). Full-color illustrative asset, not
+  svg sources are not kept).
+  F2.0 (tz-whitelabel §3.1, batch (в)): the pale paints carry tokens with the
+  source hex as fallback -- same pixels, skin-themable. The hex fallback is
+  load-bearing: the view tests tell the faces apart by the fallback hex in
+  the rendered art. Full-color illustrative asset, not
   a currentColor glyph.
 -->
 <template>
@@ -14,7 +18,7 @@
     viewBox="0 0 356 356"
     fill="none"
   >
-    <rect width="355.699" height="355.699" rx="177.85" fill="#FDDFC4" />
+    <rect width="355.699" height="355.699" rx="177.85" style="fill: var(--velo-mood-fill-peach, #fddfc4)" />
     <path
       d="M207.384 184.963C210.479 184.963 213.039 187.493 212.485 190.538C211.237 197.389 207.71 203.766 202.318 208.743C195.485 215.05 186.219 218.593 176.556 218.593C166.894 218.593 157.627 215.05 150.795 208.743C145.403 203.766 141.876 197.389 140.628 190.538C140.073 187.493 142.633 184.963 145.729 184.963L176.556 184.963H207.384Z"
       style="fill: var(--velo-primary-dark, #4c6589)"

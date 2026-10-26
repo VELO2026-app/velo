@@ -3,7 +3,11 @@
 
   Approved mood-scale face (FE-85, tz-mood-scale.md §6): kept 1:1 from the approved source art: geometry, colors and gradients
   exactly as delivered. This component is the in-repo source of truth (raw
-  svg sources are not kept). Full-color illustrative asset, not
+  svg sources are not kept).
+  F2.0 (tz-whitelabel §3.1, batch (в)): the pale paints carry tokens with the
+  source hex as fallback -- same pixels, skin-themable. The hex fallback is
+  load-bearing: the view tests tell the faces apart by the fallback hex in
+  the rendered art. Full-color illustrative asset, not
   a currentColor glyph. Gradient id is unique per instance.
 -->
 <template>
@@ -32,8 +36,8 @@
         y2="177.518"
         gradientUnits="userSpaceOnUse"
       >
-        <stop stop-color="#BDECF1" />
-        <stop offset="1" stop-color="#F9CBD1" />
+        <stop style="stop-color: var(--velo-mood-fill-teal, #bdecf1)" />
+        <stop offset="1" style="stop-color: var(--velo-mood-fill-rose, #f9cbd1)" />
       </linearGradient>
     </defs>
   </svg>
