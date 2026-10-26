@@ -19,7 +19,7 @@
     <div class="login__logo">
       <VeloLogo :size="120" />
     </div>
-    <h1 class="login__title">VELΘ</h1>
+    <h1 class="login__title">{{ t('common.brandName') }}</h1>
     <p class="login__message">{{ t('auth.tagline1') }}<br />{{ t('auth.tagline2') }}</p>
     <button type="button" class="login__button" :disabled="starting" @click="onLogin">
       {{ starting ? t('auth.loginOpening') : t('auth.loginCta') }}

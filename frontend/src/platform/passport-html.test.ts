@@ -106,5 +106,19 @@ describe('passportHtmlDefaults -- skin derivatives (tz-whitelabel F2, §1/§3)',
     const out = transformSkin(FONT_HTML)
     expect(out).toContain('https://fonts.example.com/rubik.css')
     expect(out).not.toContain('Marmelad')
+    // the tab title follows the skin display name (half-branded tabs read fake)
+    expect(transformSkin('<title>VELO</title>')).toBe('<title>ШКОЛА</title>')
+  })
+
+  it('no skin: the golden title is untouched', () => {
+    resolveWithRoot()
+    const plugin = passportHtmlDefaults()
+    ;(plugin as unknown as HtmlPlugin).configResolved({
+      mode: 'production',
+      root: process.cwd(),
+      envDir: NO_ENV_DIR,
+    })
+    const hook = (plugin as unknown as HtmlPlugin).transformIndexHtml
+    expect(hook.handler('<title>VELO</title>')).toBe('<title>VELO</title>')
   })
 })

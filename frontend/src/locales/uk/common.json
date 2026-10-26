@@ -1,5 +1,6 @@
 {
   "common": {
+    "brandName": "@:brand",
     "today": "Сьогодні",
     "tomorrow": "Завтра",
     "yesterday": "Учора",

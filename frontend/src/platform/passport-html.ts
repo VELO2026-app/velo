@@ -61,8 +61,11 @@ export function passportHtmlDefaults(skin: SkinPackage | null = null): Plugin {
         })
         // Skin derivatives (§1: brand.json is the single header-color source).
         out = out.replace(/%VELO_THEME_COLOR%/g, skin?.themeColor ?? GOLDEN_SKIN.themeColor)
-        if (skin?.fontUrl) {
-          out = out.replace(FONT_BLOCK, skinFontBlock(skin))
+        if (skin) {
+          if (skin.fontUrl) out = out.replace(FONT_BLOCK, skinFontBlock(skin))
+          // The tab title follows the skin's display name: a branded build
+          // whose browser tab still said VELO would read as half-skinned.
+          out = out.replace(/<title>[^<]*<\/title>/, `<title>${skin.displayName}</title>`)
         }
         return out
       },

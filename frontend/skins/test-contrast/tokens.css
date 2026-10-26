@@ -1,9 +1,15 @@
 /* Test-reference skin (tz-whitelabel §3): deliberately contrasted against
  * the golden VELO so a migration that leaks golden values is VISIBLE.
- * Owner canon 2026-10-26: the palette is a test fixture, not a design. */
---velo-tg-header: #1b2a41;
---velo-primary: #2f7d5f;
---velo-primary-dark: #1f5a44;
---velo-text-primary: #22333b;
---velo-nav-active-bg: #2f7d5f;
---velo-fs-12: 13px;
+ * Owner canon 2026-10-26: the palette is a test fixture, not a design.
+ * The materialization copies this file verbatim into the bundle, so the
+ * overrides must be valid CSS: declarations outside a rule are dropped
+ * by the parser and silently theme nothing. */
+:root {
+  --velo-tg-header: #1b2a41;
+  --velo-primary: #2f7d5f;
+  --velo-primary-dark: #1f5a44;
+  --velo-text-primary: #22333b;
+  --velo-nav-active-bg: #2f7d5f;
+  --velo-fs-12: 13px;
+--font-body: 'Rubik', 'Noto Sans', sans-serif;
+}

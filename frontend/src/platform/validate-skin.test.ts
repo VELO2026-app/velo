@@ -34,6 +34,17 @@ describe('validate-skin (tz-whitelabel §3)', () => {
     expect(report.manual.some((line) => line.includes('safe zone'))).toBe(true)
   })
 
+  it('the nightfall show-piece skin (dark theme) passes the contract', () => {
+    const report = validateSkin(join(process.cwd(), 'skins', 'nightfall'), FRONTEND) as {
+      fails: string[]
+      passed: string[]
+    }
+    expect(report.fails).toEqual([])
+    // The font seam is load-bearing: a dark demo with the golden Marmelad
+    // would give the lie to «другое приложение».
+    expect(report.passed.some((line) => line.includes('Unbounded'))).toBe(true)
+  })
+
   it('a package with an unknown token and a 13-char shortName fails, named', () => {
     const dir = mkdtempSync(join(tmpdir(), 'velo-bad-skin-'))
     cpSync(REFERENCE_SKIN, dir, { recursive: true })

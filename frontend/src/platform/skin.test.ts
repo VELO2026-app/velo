@@ -86,6 +86,8 @@ describe('materializedSkinTokens (the §3 cascade file)', () => {
       GOLDEN_SKIN,
     )
     expect(css).toContain('GENERATED')
+    // flat package declarations get wrapped in :root (bare ones are invalid CSS)
+    expect(css).toContain(':root {')
     expect(css).toContain('--velo-tg-header: #1b2a41;')
   })
 })

@@ -26,7 +26,7 @@
     <div class="stub__logo">
       <VeloLogo :size="120" />
     </div>
-    <h1 class="stub__title">VELΘ</h1>
+    <h1 class="stub__title">{{ t('common.brandName') }}</h1>
     <p class="stub__message">{{ t('auth.tagline1') }}<br />{{ t('auth.tagline2') }}</p>
     <a :href="botUrl" class="stub__button stub__button--primary" rel="noopener">
       {{ t('auth.stub.open') }}

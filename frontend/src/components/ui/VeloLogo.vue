@@ -42,7 +42,11 @@
         />
       </div>
     </div>
-    <img class="velo-logo__layer velo-logo__word" src="/icons/velo-word-filled.svg" alt="VELΘ" />
+    <img
+      class="velo-logo__layer velo-logo__word"
+      src="/icons/velo-word-filled.svg"
+      :alt="t('common.brandName')"
+    />
   </div>
   <!-- Colored/blue logo: layered light composition (PNG ring + dark wordmark on
        top). Mirrors the spin layering, static, with the word scaled to match the
@@ -61,7 +65,7 @@
     <img
       class="velo-logo__layer velo-logo__word velo-logo__word--blue"
       src="/icons/velo-word-blue.svg"
-      alt="VELΘ"
+      :alt="t('common.brandName')"
     />
   </div>
   <!-- White static logo. -->
@@ -70,12 +74,14 @@
     src="/icons/logo-white.svg"
     :width="size"
     :height="size"
-    alt="VELΘ"
+    :alt="t('common.brandName')"
     class="velo-logo"
   />
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
+
 withDefaults(
   defineProps<{
     size?: number

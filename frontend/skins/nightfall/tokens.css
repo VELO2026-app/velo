@@ -1,0 +1,26 @@
+/* skins/nightfall -- the show-piece skin (tz-whitelabel §3): a deliberately
+ * different EVENING identity (ink-violet surfaces, lavender accent, Unbounded)
+ * so a demo reads as another product, not a recolour. Owner show piece
+ * 2026-10-26; palette is a fixture, not a design canon. */
+--velo-tg-header: #1b1530;
+--velo-tg-bg: #14101f;
+--velo-tg-bg-kbd: #3a3159;
+--font-body: 'Unbounded', 'Noto Sans', sans-serif;
+--velo-primary: #8b7cf6;
+--velo-primary-dark: #6d5bd0;
+--velo-bg-start: #14101f;
+--velo-bg-card-solid: #1e1832;
+--velo-bg-subtle: rgba(139, 124, 246, 0.08);
+--velo-text-primary: #ece9f7;
+--velo-text-secondary: rgba(236, 233, 247, 0.72);
+--velo-text-muted: rgba(236, 233, 247, 0.55);
+--velo-text-placeholder: rgba(236, 233, 247, 0.85);
+--velo-border: #453c6b;
+--velo-border-light: rgba(185, 168, 255, 0.3);
+--velo-border-card: #3a3159;
+--velo-border-input-focus: #b9a8ff;
+--velo-nav-active-bg: #8b7cf6;
+--velo-nav-active-bg-glass: rgba(139, 124, 246, 0.6);
+--velo-nav-inactive-bg: rgba(139, 124, 246, 0.15);
+--velo-danger-text: #ff9fb0;
+--velo-fs-12: 13px;

@@ -34,6 +34,7 @@ const MANDATORY_ASSETS = [
   'mandala-blue.png',
   'velo-word-filled.svg',
   'velo-word-blue.svg',
+  'logo-white.svg',
   'favicon.svg',
   'icon-192.png',
   'icon-512.png',
@@ -188,13 +189,39 @@ export function validateSkin(skinDir, frontendDir) {
   if (tokenNames.length === 0) warn(out, 'tokens.css declares no custom properties')
   const known = knownVeloTokens(frontendDir)
   for (const name of tokenNames) {
-    if (!name.startsWith('--velo-'))
-      fail(out, `FAIL tokens.css: ${name} is not a --velo-* token (frozen naming, PROMPT №437)`)
-    else if (!known.has(name))
+    if (!name.startsWith('--velo-')) continue // bare tokens: judged by BARE_ALLOWED below
+    if (!known.has(name))
       fail(out, `FAIL tokens.css: ${name} does not exist in variables.css (a typo themes nothing)`)
   }
   if (tokenNames.length > 0 && !tokenNames.some((n) => !n.startsWith('--')))
     ok(out, `tokens.css: ${tokenNames.length} token(s), all known --velo-*`)
+  // The ONE bare token a skin may set: --font-body (the family swaps with the
+  // brand.json fontUrl link -- tz-whitelabel §7 «подстановка ссылки и токена»;
+  // every OTHER bare token stays golden, the frozen split owns them).
+  const BARE_ALLOWED = new Set(['--font-body'])
+  for (const name of tokenNames) {
+    if (!name.startsWith('--velo-') && !BARE_ALLOWED.has(name))
+      fail(out, `FAIL tokens.css: ${name} is neither a --velo-* token nor the allowed --font-body`)
+  }
+  const brandFamily = (() => {
+    const url = String(brand['fontUrl'] ?? '')
+    const m = url.match(/family=([^&:]+)/)
+    return m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : null
+  })()
+  if (brand['fontUrl'] !== undefined && brandFamily) {
+    const body = tokens['--font-body']
+    if (body === undefined)
+      fail(
+        out,
+        `FAIL tokens.css: fontUrl is set but --font-body is not overridden -- the link loads a font the app never uses`,
+      )
+    else if (!body.includes(brandFamily))
+      fail(
+        out,
+        `FAIL tokens.css: --font-body must name the fontUrl family "${brandFamily}", got: ${body}`,
+      )
+    else ok(out, `font: --font-body carries the fontUrl family "${brandFamily}"`)
+  }
   if (tokens['--velo-tg-header'] !== undefined) {
     const declared = tokens['--velo-tg-header'].toLowerCase()
     const brandColor = brand['themeColor'].trim().toLowerCase()

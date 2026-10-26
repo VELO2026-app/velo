@@ -185,7 +185,7 @@ function currentParams(): { type?: AdminPromoTypeFilter; isActive?: boolean } {
 /** Owner display: master's "First Last" (falls back to t('adminScreens.adminPromos.ownerFallback') like
  *  masterDisplayName), or "VELO" for a company promo (master_id=null). */
 function ownerName(p: AdminPromoResponse): string {
-  if (p.type === 'company') return 'VELO'
+  if (p.type === 'company') return t('common.brandName')
   const parts = [p.master_first_name, p.master_last_name].filter(Boolean)
   return parts.length > 0 ? parts.join(' ') : t('adminScreens.adminPromos.ownerFallback')
 }

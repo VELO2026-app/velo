@@ -59,6 +59,7 @@ function skinAssetSpill(skinDir: string | null, distDir: string): Plugin {
         [join(skinDir, 'mandala-blue.png'), 'icons/mandala-blue.png'],
         [join(skinDir, 'velo-word-filled.svg'), 'icons/velo-word-filled.svg'],
         [join(skinDir, 'velo-word-blue.svg'), 'icons/velo-word-blue.svg'],
+        [join(skinDir, 'logo-white.svg'), 'icons/logo-white.svg'],
         [join(skinDir, 'favicon.svg'), 'icons/favicon.svg'],
         [join(skinDir, 'icon-192.png'), 'icons/icon-192.png'],
         [join(skinDir, 'icon-512.png'), 'icons/icon-512.png'],
@@ -97,6 +98,14 @@ export default defineConfig(({ mode }) => {
   writeFileSync(
     join(frontendDir, 'src', 'styles', 'skin-tokens.css'),
     materializedSkinTokens(publicDir, skin),
+  )
+  // The brand TEXT (tz-whitelabel §1, skin > env): locales/index.ts renders
+  // it through the @:brand link from every catalog string.
+  writeFileSync(
+    join(frontendDir, 'src', 'platform', 'skin-brand.generated.ts'),
+    `/* GENERATED -- the brand text of this build (tz-whitelabel §1/§3). */
+export const SKIN_BRAND: string | null = ${JSON.stringify(skin?.displayName ?? null)}
+`,
   )
 
   return {

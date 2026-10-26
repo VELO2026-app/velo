@@ -22,6 +22,7 @@ import { createI18n } from 'vue-i18n'
 
 import { setRootLang } from '@/platform/dom'
 import { INSTANCE, isSupportedLocale, SUPPORTED_LOCALES } from '@/platform/instance'
+import { SKIN_BRAND } from '@/platform/skin-brand.generated'
 // Per-domain catalogs (tz-i18n §4.1): one FOLDER per locale, one FILE per
 // domain. Adding a language = adding a folder; adding a domain = adding a
 // file. No per-language import chains.
@@ -92,7 +93,9 @@ i18n.global.setLocaleMessage(INSTANCE.defaultLocale, ru)
 // locales, so the merge must reach EVERY locale, not just the default -- an
 // en message linking @:brand with brand merged only into ru renders an empty
 // word. Every locale that gets messages gets the brand with them.
-const BRAND_MESSAGE = { brand: INSTANCE.brand } as const
+// The brand word of THIS build: a skin's displayName wins (tz-whitelabel §1
+// priority, skin > env); no skin -> the VITE_BRAND passport value.
+const BRAND_MESSAGE = { brand: SKIN_BRAND ?? INSTANCE.brand } as const
 i18n.global.mergeLocaleMessage('ru', BRAND_MESSAGE)
 i18n.global.mergeLocaleMessage(INSTANCE.defaultLocale, BRAND_MESSAGE)
 

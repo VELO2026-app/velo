@@ -109,9 +109,15 @@ export function materializedSkinTokens(publicDir: string, skin: SkinPackage | nu
 `
   }
   const tokens = readFileSync(join(publicDir, 'skin', 'tokens.css'), 'utf8')
+  // The package keeps its declarations FLAT (no selector) -- simpler for a
+  // non-CSS author; this file wraps them in :root, because bare declarations
+  // outside a selector are invalid CSS the browser silently drops (caught by
+  // the first dark-theme build: the background applied, the tokens did not).
   return `/* GENERATED from public/skin/tokens.css (tz-whitelabel §3 cascade) —
  * do not edit; regenerate by rebuilding. Imported AFTER global.css in app.ts.
  */
+:root {
 ${tokens}
+}
 `
 }
