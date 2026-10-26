@@ -28,7 +28,18 @@
 
 import { describe, expect, it } from 'vitest'
 
-const files = import.meta.glob<string>('/src/**/*.ts', {
+const tsFiles = import.meta.glob<string>('/src/**/*.ts', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+})
+
+// The mood-scale icons are the one place a raw hex is LEGAL: as the second
+// argument of a token-first var(). stylelint's color-no-hex is switched off
+// for them (it cannot see inside var()), so THIS check is what keeps the
+// exemption honest: every hex in those templates must sit inside
+// var(--velo-…, #hex) — never bare.
+const moodIconFiles = import.meta.glob<string>('/src/components/icons/IconMoodScale*.vue', {
   query: '?raw',
   import: 'default',
   eager: true,
@@ -106,17 +117,20 @@ describe('token law: no raw hex in *.ts outside the registry (tz-whitelabel §3.
     // Sanity on the harness itself: the glob must have seen the codebase,
     // and the registry must have actually matched something (a registry
     // whose patterns typo'd into nothing would silently «clean»).
-    expect(Object.keys(files).length).toBeGreaterThan(100)
+    expect(Object.keys(tsFiles).length).toBeGreaterThan(100)
     expect(
-      Object.keys(files).filter((path) =>
+      Object.keys(tsFiles).filter((path) =>
         REGISTRY.some((entry) => entry.pattern.test(path.replace(/^\/src\//, ''))),
       ).length,
     ).toBeGreaterThan(4)
+    // The icon check below polices an OFF stylelint rule for these files -- a
+    // glob that matched nothing would silently exempt them instead.
+    expect(Object.keys(moodIconFiles).length).toBeGreaterThanOrEqual(5)
   })
 
   it('raw hex appears only inside the exception registry', () => {
     const violations: string[] = []
-    for (const [rawPath, content] of Object.entries(files)) {
+    for (const [rawPath, content] of Object.entries(tsFiles)) {
       const path = rawPath.replace(/^\/src\//, '')
       if (path.includes('.test.')) continue // tests pin hex on purpose
       if (REGISTRY.some((entry) => entry.pattern.test(path))) continue
@@ -125,6 +139,29 @@ describe('token law: no raw hex in *.ts outside the registry (tz-whitelabel §3.
       lines.forEach((line, index) => {
         for (const match of line.matchAll(HEX)) {
           violations.push(`${path}:${index + 1}: ${match[0]} in ${line.trim().slice(0, 80)}`)
+        }
+      })
+    }
+    expect(violations).toEqual([])
+  })
+
+  it('the mood-scale icons carry hex only inside a token-first var() fallback', () => {
+    // stylelint's color-no-hex is OFF for these five files (it cannot see
+    // inside var()); this check is what keeps that exemption honest.
+    const violations: string[] = []
+    for (const [rawPath, content] of Object.entries(moodIconFiles)) {
+      const path = rawPath.replace(/^\/src\//, '')
+      const lines = content.split('\n')
+      lines.forEach((line, index) => {
+        const trimmed = line.trim()
+        if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return
+        for (const match of line.matchAll(HEX)) {
+          const insideFallback = /var\(--velo-[^)]*#[0-9a-fA-F]{3,8}\)/.test(line)
+          if (!insideFallback) {
+            violations.push(
+              `${path}:${index + 1}: ${match[0]} outside var() in ${trimmed.slice(0, 80)}`,
+            )
+          }
         }
       })
     }

@@ -5,9 +5,17 @@
   "rules": {
     "color-no-hex": true,
     "declaration-property-value-allowed-list": {
-      "/^font-size$/": ["/^var\\(--/"],
+      "/^font-size$/": ["/^var\\(--/", "inherit"],
       "/^border-radius$/": ["/^var\\(--/", "inherit", "0"],
       "/^box-shadow$/": ["/^var\\(--/", "none"]
     }
-  }
+  },
+  "overrides": [
+    {
+      "files": ["src/components/icons/IconMoodScale*.vue"],
+      "rules": {
+        "color-no-hex": null
+      }
+    }
+  ]
 }

@@ -18,7 +18,12 @@
     viewBox="0 0 356 356"
     fill="none"
   >
-    <rect width="355.699" height="355.699" rx="177.85" style="fill: var(--velo-mood-fill-teal, #bdecf1)" />
+    <rect
+      width="355.699"
+      height="355.699"
+      rx="177.85"
+      style="fill: var(--velo-mood-fill-teal, #bdecf1)"
+    />
     <path
       d="M304.34 188.625L272.012 214.617L310.16 230.91"
       style="stroke: var(--velo-primary-dark, #4c6589)"

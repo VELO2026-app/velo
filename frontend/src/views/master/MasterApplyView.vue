@@ -524,13 +524,13 @@ async function submit(skipDocuments = false): Promise<void> {
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0,
-    #000 var(--space-4),
+    var(--velo-fog-color) var(--space-4),
     var(--velo-fog-color) 100%
   );
   mask-image: linear-gradient(
     to bottom,
     transparent 0,
-    #000 var(--space-4),
+    var(--velo-fog-color) var(--space-4),
     var(--velo-fog-color) 100%
   );
   /* Standalone route (outside MobileLayout) — apply the screen rail directly. */

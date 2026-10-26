@@ -18,7 +18,12 @@
     viewBox="0 0 356 356"
     fill="none"
   >
-    <rect width="355.699" height="355.699" rx="177.85" style="fill: var(--velo-mood-fill-rose, #f9cbd1)" />
+    <rect
+      width="355.699"
+      height="355.699"
+      rx="177.85"
+      style="fill: var(--velo-mood-fill-rose, #f9cbd1)"
+    />
     <circle cx="73.8014" cy="190.783" r="17.7518" style="fill: var(--velo-primary-dark, #4c6589)" />
     <circle cx="286.823" cy="190.783" r="17.7518" style="fill: var(--velo-primary-dark, #4c6589)" />
     <path
