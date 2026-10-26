@@ -9,6 +9,9 @@
 //     must yield the same SVG). Its 'Ш' monogram fallback is a prototype
 //     constant, not UI copy; palette DISPLAY NAMES live in locales/ru/
 //     schools.json (branding.palettes), hex roles stay in code.
+//   - *.generated.ts -- build OUTPUT (e.g. skin-brand.generated.ts carries
+//     the skin's displayName; its content is deploy data, not hand-written
+//     copy -- the stub is empty)
 //   - pwa/ -- build-time instance metadata consumed by vite.config.ts, not
 //     runtime copy: the manifest description is instance data, which
 //     tz-whitelabel §3.1 puts in the exception registry (it moves to
@@ -28,7 +31,6 @@ const HTML_COMMENT = /<!--.*?-->/gs
 const TAG = /<[^>]+>/g
 const STRING_LIT = /(`[^`\n]*`|'[^'\n]*'|"[^"\n]*")/g
 const ATTR = /([\w:-]+)="([^"]*[А-Яа-яЁё][^"]*)"/g
-
 
 // Quote-aware comment stripper: removes // and /* */ only OUTSIDE string
 // literals (regex comment-stripping once ate half a file because the HTML
@@ -86,7 +88,11 @@ function walk(dir) {
     if (st.isDirectory()) {
       if (p === 'src/locales') continue
       walk(p)
-    } else if (/\.(ts|vue)$/.test(name) && !name.includes('.test.')) {
+    } else if (
+      /\.(ts|vue)$/.test(name) &&
+      !name.includes('.test.') &&
+      !name.endsWith('.generated.ts')
+    ) {
       const normalized = p.replaceAll('\\', '/')
       if (!EXEMPT_DIRS.some((dir) => normalized.startsWith(dir + '/'))) files.push(p)
     }
@@ -101,7 +107,7 @@ for (const p of files) {
   // HTML comment once swallowed the whole template under JS rules); the
   // script block gets the quote-aware JS stripper.
   const tplMatch = // order-agnostic: some SFCs put <script> first
-  raw.match(/<template>[\s\S]*<\/template>/)
+    raw.match(/<template>[\s\S]*<\/template>/)
   const scriptMatch = raw.match(/<script[^>]*>([\s\S]*?)<\/script>/)
   const tpl = tplMatch ? stripHtmlComments(tplMatch[0]) : ''
   const script = scriptMatch ? stripJsComments(scriptMatch[1]) : stripJsComments(raw)
@@ -111,9 +117,11 @@ for (const p of files) {
     const noTags = line.replace(TAG, ' ')
     for (const seg of noTags.split('>')) {
       const text = seg.split('<')[0]
-      if (CYR.test(text) && text.trim(' \t="\'')) hits.push(`${p}:~${i + 1} template text: ${text.trim().slice(0, 90)}`)
+      if (CYR.test(text) && text.trim(' \t="\''))
+        hits.push(`${p}:~${i + 1} template text: ${text.trim().slice(0, 90)}`)
     }
-    for (const m of cleanTpl ? line.matchAll(ATTR) : []) hits.push(`${p}:~${i + 1} attr ${m[1]}="${m[2].slice(0, 80)}"`)
+    for (const m of cleanTpl ? line.matchAll(ATTR) : [])
+      hits.push(`${p}:~${i + 1} attr ${m[1]}="${m[2].slice(0, 80)}"`)
   })
 
   const cleanScript = script
@@ -126,7 +134,9 @@ for (const p of files) {
 }
 
 if (hits.length > 0) {
-  console.error(`no-cyrillic: ${hits.length} hit(s) outside locales/ -- move copy to a catalog (tz-i18n §4.6):\n`)
+  console.error(
+    `no-cyrillic: ${hits.length} hit(s) outside locales/ -- move copy to a catalog (tz-i18n §4.6):\n`,
+  )
   for (const h of hits) console.error('  ' + h)
   process.exit(1)
 }

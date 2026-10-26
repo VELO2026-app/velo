@@ -11,13 +11,24 @@ import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 
+// tz-whitelabel §3: the unit suite ALWAYS runs against the GOLDEN build.
+// vite.config materializes skin-brand.generated.ts from whatever skin sits in
+// public/skin/ -- in a working tree used for a skin demo that is a real
+// brand, and the suite must not depend on deploy state. The alias pins the
+// golden stub for every test file.
+const GOLDEN_BRAND_STUB = fileURLToPath(
+  new URL('./src/platform/skin-brand.golden-test-stub.ts', import.meta.url),
+)
+
 export default defineConfig({
   plugins: [vue()],
 
   resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
-    },
+    // array form: the exact skin-brand key must win before the '@' prefix
+    alias: [
+      { find: '@/platform/skin-brand.generated', replacement: GOLDEN_BRAND_STUB },
+      { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
+    ],
   },
 
   test: {
