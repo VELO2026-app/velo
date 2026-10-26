@@ -541,7 +541,7 @@ html.is-keyboard-open .v-sheet__panel {
    drop ONLY the BOTTOM fade (was: whole mask → `none`, which made the whole
    backdrop visibly "switch"). Reuses the resting top stops (--fog-top-hard /
    --fog-top-fade, set inline on this same element by MobileLayout.mainStyle);
-   the bottom is fully opaque (`#000 100%` = no bottom fade). Only `--fog` list
+   the bottom is fully opaque (`var(--velo-fog-color) 100%` = no bottom fade). Only `--fog` list
    screens carry the mask. AT REST the class is ABSENT → the full top+bottom mask
    is unchanged. */
 html.is-keyboard-open .mobile-layout__main--fog {
@@ -549,15 +549,15 @@ html.is-keyboard-open .mobile-layout__main--fog {
     to bottom,
     transparent 0,
     transparent var(--fog-top-hard),
-    #000 calc(var(--fog-top-hard) + var(--fog-top-fade)),
-    #000 100%
+    var(--velo-fog-color) calc(var(--fog-top-hard) + var(--fog-top-fade)),
+    var(--velo-fog-color) 100%
   );
   mask-image: linear-gradient(
     to bottom,
     transparent 0,
     transparent var(--fog-top-hard),
-    #000 calc(var(--fog-top-hard) + var(--fog-top-fade)),
-    #000 100%
+    var(--velo-fog-color) calc(var(--fog-top-hard) + var(--fog-top-fade)),
+    var(--velo-fog-color) 100%
   );
 }
 

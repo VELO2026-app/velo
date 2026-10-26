@@ -106,7 +106,7 @@ defineEmits<{
 }
 
 .v-segment__badge {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--velo-glass-white-30);
   color: inherit;
   font-size: var(--text-xs);
   padding: 1px 6px;

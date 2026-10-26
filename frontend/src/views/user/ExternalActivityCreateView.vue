@@ -584,13 +584,13 @@ async function onSubmit(): Promise<void> {
     to bottom,
     transparent 0,
     transparent var(--ea-fog-hard),
-    #000 var(--ea-fog-top)
+    var(--velo-fog-color) var(--ea-fog-top)
   );
   mask-image: linear-gradient(
     to bottom,
     transparent 0,
     transparent var(--ea-fog-hard),
-    #000 var(--ea-fog-top)
+    var(--velo-fog-color) var(--ea-fog-top)
   );
 }
 
@@ -735,7 +735,7 @@ async function onSubmit(): Promise<void> {
   flex-shrink: 0;
   border: none;
   border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--velo-glass-white-25);
   color: var(--velo-white);
   cursor: pointer;
   transition: opacity var(--transition-fast);
@@ -894,14 +894,11 @@ async function onSubmit(): Promise<void> {
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  border: 1px solid var(--velo-glass-white-35);
   border-radius: var(--radius-full);
   background: transparent;
   transform: translateZ(0);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.55),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.15),
-    0 8px 24px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--velo-shadow-glass);
   font-family: var(--font-body);
   font-size: var(--text-base);
   font-weight: 600;
@@ -915,7 +912,7 @@ async function onSubmit(): Promise<void> {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--velo-glass-white-20);
   backdrop-filter: blur(18px) saturate(180%);
   -webkit-backdrop-filter: blur(18px) saturate(180%);
   z-index: -1;
@@ -929,9 +926,9 @@ async function onSubmit(): Promise<void> {
   pointer-events: none;
   background: linear-gradient(
     135deg,
-    rgba(255, 255, 255, 0.35),
-    rgba(255, 255, 255, 0.05) 45%,
-    rgba(255, 255, 255, 0.18)
+    var(--velo-glass-white-35),
+    var(--velo-glass-white-05) 45%,
+    var(--velo-glass-white-18)
   );
   mix-blend-mode: soft-light;
 }

@@ -575,16 +575,16 @@ onBeforeUnmount(() => {
     to bottom,
     transparent 0,
     transparent var(--chat-fog-hard),
-    #000 calc(var(--chat-fog-hard) + var(--chat-fog-fade)),
-    #000 calc(100% - 24px),
+    var(--velo-fog-color) calc(var(--chat-fog-hard) + var(--chat-fog-fade)),
+    var(--velo-fog-color) calc(100% - 24px),
     transparent 100%
   );
   mask-image: linear-gradient(
     to bottom,
     transparent 0,
     transparent var(--chat-fog-hard),
-    #000 calc(var(--chat-fog-hard) + var(--chat-fog-fade)),
-    #000 calc(100% - 24px),
+    var(--velo-fog-color) calc(var(--chat-fog-hard) + var(--chat-fog-fade)),
+    var(--velo-fog-color) calc(100% - 24px),
     transparent 100%
   );
 }

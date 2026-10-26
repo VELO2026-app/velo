@@ -364,7 +364,7 @@ const matchingGroups = computed((): GroupListItem[] => {
      similarly-measured glow, not this exact value; inlined here rather than
      silently reusing the approximate token for a number given explicitly
      this time. */
-  box-shadow: 0 0 13.167px 8.82px #ffffff;
+  box-shadow: var(--velo-shadow-glow-sm);
 }
 
 /* T24-21: placeholder 16px (--text-16) -- the FIELD's own text stays the DS

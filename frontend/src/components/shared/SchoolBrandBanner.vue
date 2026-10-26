@@ -59,7 +59,7 @@ const src = computed((): string => {
   position: absolute;
   inset: 0 0 0 auto;
   width: 34%;
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 42%);
-  mask-image: linear-gradient(to right, transparent, #000 42%);
+  -webkit-mask-image: linear-gradient(to right, transparent, var(--velo-fog-color) 42%);
+  mask-image: linear-gradient(to right, transparent, var(--velo-fog-color) 42%);
 }
 </style>

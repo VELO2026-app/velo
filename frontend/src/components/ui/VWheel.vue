@@ -124,11 +124,17 @@ onMounted(() => {
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0,
-    #000 38%,
-    #000 62%,
+    var(--velo-fog-color) 38%,
+    var(--velo-fog-color) 62%,
     transparent 100%
   );
-  mask-image: linear-gradient(to bottom, transparent 0, #000 38%, #000 62%, transparent 100%);
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    var(--velo-fog-color) 38%,
+    var(--velo-fog-color) 62%,
+    transparent 100%
+  );
 }
 
 .v-wheel::-webkit-scrollbar {

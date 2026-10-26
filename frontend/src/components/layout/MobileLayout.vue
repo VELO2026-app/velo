@@ -299,13 +299,13 @@ defineEmits<{
     to bottom,
     transparent 0,
     transparent var(--fog-top-hard),
-    #000 calc(var(--fog-top-hard) + var(--fog-top-fade))
+    var(--velo-fog-color) calc(var(--fog-top-hard) + var(--fog-top-fade))
   );
   mask-image: linear-gradient(
     to bottom,
     transparent 0,
     transparent var(--fog-top-hard),
-    #000 calc(var(--fog-top-hard) + var(--fog-top-fade))
+    var(--velo-fog-color) calc(var(--fog-top-hard) + var(--fog-top-fade))
   );
 }
 

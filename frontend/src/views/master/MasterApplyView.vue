@@ -521,8 +521,18 @@ async function submit(skipDocuments = false): Promise<void> {
      dashboard/diary island gradient — not a new mechanism). The fade sits inside
      the top padding, so at rest the first block is fully crisp (layout
      unchanged). Bottom stays crisp — the «Далее/Отправить» actions must not fade. */
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--space-4), #000 100%);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--space-4), #000 100%);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--space-4),
+    var(--velo-fog-color) 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--space-4),
+    var(--velo-fog-color) 100%
+  );
   /* Standalone route (outside MobileLayout) — apply the screen rail directly. */
   padding: var(--space-4) var(--velo-rail-pad-x) var(--space-8);
   display: flex;

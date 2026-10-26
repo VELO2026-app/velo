@@ -108,8 +108,8 @@ defineEmits<{ click: [] }>()
    -- the feed scrolling beneath the floating button still reads through it,
    just denser. The solid variant stays the DS default everywhere else. */
 .v-back--glass {
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: var(--velo-glass-white-20);
+  border: 1px solid var(--velo-glass-white-35);
   backdrop-filter: blur(18px) saturate(180%);
   -webkit-backdrop-filter: blur(18px) saturate(180%);
 }

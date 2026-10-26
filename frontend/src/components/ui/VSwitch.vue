@@ -92,7 +92,7 @@ function toggle(): void {
   height: 20px;
   border-radius: var(--radius-full);
   background: var(--velo-white);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--velo-shadow-switch);
   transition: transform var(--transition-base);
 }
 

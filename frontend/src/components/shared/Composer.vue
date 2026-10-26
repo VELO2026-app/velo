@@ -549,13 +549,10 @@ defineExpose({ focus: focusField })
   /* Owns the ::before/::after layers (relative anchor) and their stacking
      context (translateZ) -- the frost child's z:-1 stays contained. */
   transform: translateZ(0);
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  border: 1px solid var(--velo-glass-white-35);
   border-radius: 22px;
   background: transparent;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.55),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.15),
-    0 8px 24px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--velo-shadow-glass);
   cursor: text;
   /* [owner spec] Focus glow transition: box-shadow / border-color ONLY --
      non-layout properties, zero geometry change, zero layout shift.
@@ -626,7 +623,7 @@ defineExpose({ focus: focusField })
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--velo-glass-white-12);
   transition: background-color 0.2s ease;
   backdrop-filter: blur(18px) saturate(180%);
   -webkit-backdrop-filter: blur(18px) saturate(180%);
@@ -643,9 +640,9 @@ defineExpose({ focus: focusField })
   pointer-events: none;
   background: linear-gradient(
     135deg,
-    rgba(255, 255, 255, 0.35),
-    rgba(255, 255, 255, 0.05) 45%,
-    rgba(255, 255, 255, 0.18)
+    var(--velo-glass-white-35),
+    var(--velo-glass-white-05) 45%,
+    var(--velo-glass-white-18)
   );
   mix-blend-mode: soft-light;
 }
@@ -655,17 +652,12 @@ defineExpose({ focus: focusField })
    sharpens, a hairline white halo and a SOFT COLD glow breathe around the
    pill -- no bright blue border, no neon, no geometry change. */
 .composer__field:focus-within {
-  border-color: rgba(255, 255, 255, 0.7);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.75),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.2),
-    0 0 0 1px rgba(255, 255, 255, 0.18),
-    0 0 18px rgba(150, 190, 255, 0.2),
-    0 8px 30px rgba(0, 0, 0, 0.08);
+  border-color: var(--velo-glass-white-70);
+  box-shadow: var(--velo-write-shadow-active);
 }
 
 .composer__field:focus-within::before {
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--velo-glass-white-16);
 }
 
 /* Accessibility, same language: keyboard navigation (:focus-visible) gets a
@@ -673,12 +665,7 @@ defineExpose({ focus: focusField })
    Liquid Glass, never a blue ring. :has() degrades gracefully: engines
    without it simply keep the :focus-within glow above. */
 .composer__field:has(.composer__input:focus-visible) {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.8),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.25),
-    0 0 0 2px rgba(255, 255, 255, 0.35),
-    0 0 26px rgba(150, 190, 255, 0.32),
-    0 8px 30px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--velo-write-shadow-focus);
 }
 
 /* [FE-9 kept verbatim below] The send slot lives INSIDE the field; the

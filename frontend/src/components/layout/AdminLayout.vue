@@ -126,8 +126,8 @@ defineEmits<{
     to bottom,
     transparent 0,
     transparent 40px,
-    #000 60px,
-    #000 calc(100% - 160px),
+    var(--velo-fog-color) 60px,
+    var(--velo-fog-color) calc(100% - 160px),
     transparent calc(100% - 90px),
     transparent 100%
   );
@@ -135,8 +135,8 @@ defineEmits<{
     to bottom,
     transparent 0,
     transparent 40px,
-    #000 60px,
-    #000 calc(100% - 160px),
+    var(--velo-fog-color) 60px,
+    var(--velo-fog-color) calc(100% - 160px),
     transparent calc(100% - 90px),
     transparent 100%
   );

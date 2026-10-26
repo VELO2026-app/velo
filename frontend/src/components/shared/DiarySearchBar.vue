@@ -338,7 +338,7 @@ defineExpose({ focus })
      out-of-flow clear (below) keep the pill rock-solid at 50. */
   height: var(--velo-size-50);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  border: 1px solid var(--velo-glass-white-35);
   border-radius: var(--radius-full);
 }
 
@@ -347,7 +347,7 @@ defineExpose({ focus })
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--velo-glass-white-90);
   backdrop-filter: blur(18px) saturate(180%);
   -webkit-backdrop-filter: blur(18px) saturate(180%);
   z-index: -1;
@@ -408,9 +408,9 @@ defineExpose({ focus })
   flex-direction: column;
   gap: var(--space-1);
   padding: var(--space-3) var(--space-2);
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  border: 1px solid var(--velo-glass-white-35);
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--velo-glass-white-90);
   backdrop-filter: blur(18px) saturate(180%);
   -webkit-backdrop-filter: blur(18px) saturate(180%);
   box-sizing: border-box;

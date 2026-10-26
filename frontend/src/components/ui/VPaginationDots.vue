@@ -49,7 +49,7 @@ withDefaults(
   border-radius: var(--radius-full);
   /* Inactive = brand text @ 60%. No 0.6-alpha token exists; this is now the
      single canonical home for the value (operator-canonized 2026-06-27). */
-  background: rgba(76, 101, 137, 0.6);
+  background: var(--velo-glass-blue-700-60);
   transition:
     width var(--transition-fast),
     height var(--transition-fast),

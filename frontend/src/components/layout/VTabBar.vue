@@ -98,12 +98,9 @@ defineEmits<{
      at z:-1 so icon repaints never race the backdrop sampling (the
      iOS-stable shape for glass over moving content). */
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  border: 1px solid var(--velo-glass-white-35);
   border-radius: 999px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.55),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.15),
-    0 8px 24px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--velo-shadow-glass);
   z-index: var(--z-sticky);
 }
 
@@ -116,7 +113,7 @@ defineEmits<{
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--velo-glass-white-12);
   backdrop-filter: blur(18px) saturate(180%);
   -webkit-backdrop-filter: blur(18px) saturate(180%);
   z-index: -1;
@@ -132,9 +129,9 @@ defineEmits<{
   pointer-events: none;
   background: linear-gradient(
     135deg,
-    rgba(255, 255, 255, 0.35),
-    rgba(255, 255, 255, 0.05) 45%,
-    rgba(255, 255, 255, 0.18)
+    var(--velo-glass-white-35),
+    var(--velo-glass-white-05) 45%,
+    var(--velo-glass-white-18)
   );
   mix-blend-mode: soft-light;
 }
