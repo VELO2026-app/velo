@@ -684,6 +684,13 @@
    *   typography       --velo-fs-10..48 <-> velo.font.size.*; family via
    *                    --font-body (bare, frozen) -- a skin swaps the family
    *                    through brand.json, which rewrites the link + token
+   *                    LEGACY CAVEAT (2026-10-26): a large pre-contract layer
+   *                    of bare --text-* size tokens stays in use (~60 files,
+   *                    frozen split, PROMPT №437) and is NOT skin-addressable;
+   *                    a skin overriding velo.font.size.* rethemes only the
+   *                    --velo-fs-* carriers -- the F2 validator/checklist must
+   *                    warn about the bare --text-* consumers (or the owner
+   *                    schedules a generation-2 sweep onto --velo-fs-*)
    *   radius           --velo-radius-* <-> velo.radius.*
    *   depth            --velo-shadow-glow(-sm)/glass/toast/switch,
    *                    --velo-write-shadow-*, --velo-effect-*

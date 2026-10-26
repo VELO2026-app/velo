@@ -5,7 +5,7 @@
   by multi-step wizards (master apply) and intro carousels (onboarding).
   Operator-canonized 2026-06-27, replacing the older 13×7 pill:
     active   = 13×13 circle, --velo-text-primary
-    inactive = 7×7 circle,   rgba(76,101,137,0.6)   (brand text @ 60%; no token)
+    inactive = 7×7 circle,   --velo-glass-blue-700-60   (brand text @ 60%)
 
   Placement is the CONSUMER's responsibility (wizard = top-left, carousel =
   bottom-center) — this renders only the dot row.
