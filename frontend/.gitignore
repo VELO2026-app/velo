@@ -9,6 +9,10 @@ dist/
 .env.local
 .env.*.local
 
+# Skin package (tz-whitelabel §3): deploy-supplied, never committed.
+# Local testing: copy a package here, validate + build, then remove it.
+public/skin/
+
 # Editor
 .vscode/
 .idea/
