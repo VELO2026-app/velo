@@ -51,6 +51,7 @@ const REGISTRY: Array<{ pattern: RegExp; reason: string }> = [
   { pattern: /^utils\/schoolBranding\//, reason: 'golden port (product data)' },
   { pattern: /^platform\/(telegram|zoom-sdk)\.ts$/, reason: 'platform boundary, token-first' },
   { pattern: /^pwa\/manifest\.ts$/, reason: 'build-time instance metadata (F2 materializes)' },
+  { pattern: /^platform\/skin\.ts$/, reason: 'build-side skin seam; golden hex mirrors (pinned)' },
   { pattern: /^utils\/displayHelpers\.ts$/, reason: 'MOOD_SCALE_FILLS mirror, token-first' },
 ]
 

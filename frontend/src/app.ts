@@ -34,6 +34,12 @@ import i18n from './locales'
 // Global styles (order matters: variables first, then reset/base).
 import './styles/variables.css'
 import './styles/global.css'
+// tz-whitelabel §3 cascade: the skin overrides ride LAST, mechanically --
+// this file is GENERATED at build time (public/skin/tokens.css when a skin
+// ships, an empty stub otherwise; see platform/skin.ts). The TZ sketch said
+// main.ts, but the app-wide stylesheet order lives HERE, so the generated
+// import sits in the same chain -- hopeful import order is not a mechanism.
+import './styles/skin-tokens.css'
 
 import { initTelegramSdk } from './platform/telegram-sdk'
 import { readLocaleHint, setLocale } from './locales'

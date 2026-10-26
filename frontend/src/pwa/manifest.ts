@@ -44,6 +44,8 @@
 
 import type { ManifestOptions } from 'vite-plugin-pwa'
 
+import type { SkinPackage } from '../platform/skin'
+
 export const pwaManifest: Partial<ManifestOptions> = {
   id: '/',
   name: 'VELO',
@@ -68,18 +70,23 @@ export const pwaManifest: Partial<ManifestOptions> = {
   ],
 }
 
-/** Identity overrides from the instance passport (tz-whitelabel §1/§2.3).
- *  `env` is the resolved VITE_* map (loadEnv output); absent keys keep the
- *  golden values, so an empty map returns the manifest unchanged. */
+/** Identity + colour overrides, in tz-whitelabel §1 priority order:
+ *  the SKIN package (build-time, brand.json) wins over the instance ENV,
+ *  absent keys keep the golden values; an empty everything returns the
+ *  golden object unchanged. theme_color/background_color come ONLY from the
+ *  skin here (§1: brand.json is the single source; the env passport carries
+ *  no colours). */
 export function pwaManifestWithPassport(
   env: Record<string, string | undefined>,
+  skin?: SkinPackage | null,
 ): Partial<ManifestOptions> {
-  const brand = env.VITE_BRAND
+  const brand = skin?.displayName ?? env.VITE_BRAND
   const lang = env.VITE_DEFAULT_LOCALE
-  if (!brand && !lang) return pwaManifest
+  if (!brand && !lang && !skin) return pwaManifest
   return {
     ...pwaManifest,
-    ...(brand ? { name: brand, short_name: brand } : {}),
+    ...(brand ? { name: brand, short_name: skin?.shortName ?? brand } : {}),
     ...(lang ? { lang } : {}),
+    ...(skin ? { theme_color: skin.themeColor, background_color: skin.backgroundColor } : {}),
   }
 }

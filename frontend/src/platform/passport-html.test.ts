@@ -64,3 +64,47 @@ describe('passportHtmlDefaults (tz-whitelabel F1)', () => {
     expect(transform('%VITE_SOMETHING_ELSE%')).toBe('%VITE_SOMETHING_ELSE%')
   })
 })
+
+describe('passportHtmlDefaults -- skin derivatives (tz-whitelabel F2, §1/§3)', () => {
+  const FONT_HTML =
+    '<!--VELO:FONT--><link href="https://fonts.googleapis.com/css2?family=Marmelad&display=swap" rel="stylesheet" /><!--/VELO:FONT-->'
+
+  it('no skin: %VELO_THEME_COLOR% is the golden default, the font block is untouched', () => {
+    resolveWithRoot()
+    const plugin = passportHtmlDefaults()
+    ;(plugin as unknown as HtmlPlugin).configResolved({
+      mode: 'production',
+      root: process.cwd(),
+      envDir: NO_ENV_DIR,
+    })
+    const transformSkin = (html: string): string => {
+      const hook = (plugin as unknown as HtmlPlugin).transformIndexHtml
+      return hook.handler(html)
+    }
+    expect(transformSkin('<meta name="theme-color" content="%VELO_THEME_COLOR%" />')).toBe(
+      '<meta name="theme-color" content="#334D6E" />',
+    )
+    expect(transformSkin(FONT_HTML)).toBe(FONT_HTML)
+  })
+
+  it('a skin: themeColor and the font link materialize from brand.json (§1 single source)', () => {
+    resolveWithRoot()
+    const plugin = passportHtmlDefaults({
+      displayName: 'ШКОЛА',
+      shortName: 'Школа',
+      themeColor: '#1B2A41',
+      backgroundColor: '#F5F1EA',
+      fontUrl: 'https://fonts.example.com/rubik.css',
+    })
+    const transformSkin = (html: string): string => {
+      const hook = (plugin as unknown as HtmlPlugin).transformIndexHtml
+      return hook.handler(html)
+    }
+    expect(transformSkin('<meta name="theme-color" content="%VELO_THEME_COLOR%" />')).toBe(
+      '<meta name="theme-color" content="#1B2A41" />',
+    )
+    const out = transformSkin(FONT_HTML)
+    expect(out).toContain('https://fonts.example.com/rubik.css')
+    expect(out).not.toContain('Marmelad')
+  })
+})

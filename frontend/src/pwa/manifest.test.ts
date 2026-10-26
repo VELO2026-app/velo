@@ -18,6 +18,7 @@
 import { describe, it, expect } from 'vitest'
 import indexHtml from '../../index.html?raw'
 import { pwaManifest, pwaManifestWithPassport } from '@/pwa/manifest'
+import { GOLDEN_SKIN } from '@/platform/skin'
 
 /** Files under public/icons, keyed as their served path (/icons/x.png). */
 const iconFiles = new Set(
@@ -64,6 +65,26 @@ describe('pwaManifest -- the single manifest', () => {
     expect(pwaManifestWithPassport({})).toBe(pwaManifest)
   })
 
+  it('a skin package wins over the env passport and paints the colours (F2, §1)', () => {
+    const skin = {
+      displayName: 'ШКОЛА ГАРМОНИИ',
+      shortName: 'Гармония',
+      themeColor: '#1B2A41',
+      backgroundColor: '#F5F1EA',
+    }
+    expect(pwaManifestWithPassport({ VITE_BRAND: 'ENV-БРЕНД' }, skin)).toMatchObject({
+      name: 'ШКОЛА ГАРМОНИИ',
+      short_name: 'Гармония',
+      theme_color: '#1B2A41',
+      background_color: '#F5F1EA',
+    })
+    // The golden skin record resolves to the golden manifest.
+    expect(pwaManifestWithPassport({}, GOLDEN_SKIN)).toMatchObject({
+      name: 'VELO',
+      theme_color: '#334D6E',
+    })
+  })
+
   it('description speaks the manifest language (lang: ru -> Russian text)', () => {
     // Regression: the description used to be English under lang: 'ru'
     // (tz-whitelabel §2.3 fixes the mismatch).
@@ -72,11 +93,15 @@ describe('pwaManifest -- the single manifest', () => {
     expect(pwaManifest.description).not.toMatch(/[a-zA-Z]{4,}/)
   })
 
-  it('theme_color is the same colour as <meta name="theme-color"> in index.html', () => {
+  it('theme_color and the index.html meta share the SKIN placeholder (F2, §1)', () => {
+    // The source carries %VELO_THEME_COLOR%; passport-html resolves it (to
+    // the golden default with no skin -- pinned in passport-html.test.ts).
+    // The mirror holds by construction: both consumers resolve the SAME
+    // brand.json value at build time.
     const meta = attr(/<meta name="theme-color"[^>]*>/, 'content')
 
-    expect(meta).not.toBeNull()
-    expect(pwaManifest.theme_color?.toLowerCase()).toBe(meta!.toLowerCase())
+    expect(meta).toBe('%VELO_THEME_COLOR%')
+    expect(pwaManifest.theme_color?.toLowerCase()).toBe('#334d6e') // golden default
   })
 
   it('icons: "any" and "maskable" are SEPARATE entries -- no combined purpose', () => {

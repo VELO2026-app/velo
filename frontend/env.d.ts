@@ -7,6 +7,13 @@ declare module '*.vue' {
   export default component
 }
 
+// Node-side build scripts imported by the unit suite (validate-skin.mjs):
+// typed loosely -- the script itself is plain ESM JavaScript.
+declare module '*.mjs' {
+  const value: Record<string, unknown>
+  export = value
+}
+
 // Vite environment variables (VITE_ prefix required).
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL: string
