@@ -634,7 +634,7 @@ onBeforeUnmount(() => {
 }
 .chat-thread__bubble--mine {
   background: var(--velo-primary);
-  color: #ffffff;
+  color: var(--velo-white);
 }
 
 .chat-thread__body {

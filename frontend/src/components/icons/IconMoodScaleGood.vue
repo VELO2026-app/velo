@@ -22,19 +22,19 @@
     <rect width="355.699" height="355.699" rx="177.85" :fill="`url(#${gid})`" />
     <path
       d="M128.055 206.305C158.39 225.806 197.316 225.806 227.651 206.305"
-      stroke="#4C6589"
+      style="stroke: var(--velo-primary-dark, #4c6589)"
       stroke-width="11.2308"
       stroke-linecap="round"
     />
     <path
       d="M42.6741 163.622C54.7736 180.907 80.3725 180.907 92.472 163.622"
-      stroke="#4C6589"
+      style="stroke: var(--velo-primary-dark, #4c6589)"
       stroke-width="11.2308"
       stroke-linecap="round"
     />
     <path
       d="M256.104 163.622C268.204 180.907 293.803 180.907 305.902 163.622"
-      stroke="#4C6589"
+      style="stroke: var(--velo-primary-dark, #4c6589)"
       stroke-width="11.2308"
       stroke-linecap="round"
     />

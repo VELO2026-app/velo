@@ -15,11 +15,11 @@
     fill="none"
   >
     <rect width="355.699" height="355.699" rx="177.85" fill="#F9CBD1" />
-    <circle cx="73.8014" cy="190.783" r="17.7518" fill="#4C6589" />
-    <circle cx="286.823" cy="190.783" r="17.7518" fill="#4C6589" />
+    <circle cx="73.8014" cy="190.783" r="17.7518" style="fill: var(--velo-primary-dark, #4c6589)" />
+    <circle cx="286.823" cy="190.783" r="17.7518" style="fill: var(--velo-primary-dark, #4c6589)" />
     <path
       d="M128.914 241.013H229.803"
-      stroke="#4C6589"
+      style="stroke: var(--velo-primary-dark, #4c6589)"
       stroke-width="11.2099"
       stroke-linecap="round"
     />

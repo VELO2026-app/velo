@@ -15,11 +15,11 @@
     fill="none"
   >
     <rect width="355.037" height="355.037" rx="177.518" :fill="`url(#${gid})`" />
-    <circle cx="67.452" cy="208.32" r="17.7518" fill="#4C6589" />
-    <circle cx="280.473" cy="208.32" r="17.7518" fill="#4C6589" />
+    <circle cx="67.452" cy="208.32" r="17.7518" style="fill: var(--velo-primary-dark, #4c6589)" />
+    <circle cx="280.473" cy="208.32" r="17.7518" style="fill: var(--velo-primary-dark, #4c6589)" />
     <path
       d="M224.198 261.459C193.863 241.958 154.937 241.958 124.603 261.459"
-      stroke="#4C6589"
+      style="stroke: var(--velo-primary-dark, #4c6589)"
       stroke-width="11.2308"
       stroke-linecap="round"
     />

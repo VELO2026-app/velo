@@ -37,7 +37,10 @@ describe('IconMoodScaleGood -- the F2.0 var() probe', () => {
   it('still renders the approved art (gradient fill + stroke geometry)', () => {
     const wrapper = mount(IconMoodScaleGood)
     expect(wrapper.find('rect[fill^="url(#mood-scale-good-"]').exists()).toBe(true)
-    // The three approved strokes stay untouched by the probe.
-    expect(wrapper.findAll('path[stroke="#4C6589"]')).toHaveLength(3)
+    // The three approved strokes stay untouched by the probe: same geometry,
+    // now painted token-first with the source hex as fallback (batch (а)).
+    expect(
+      wrapper.findAll('path[style*="stroke: var(--velo-primary-dark, #4c6589)"]'),
+    ).toHaveLength(3)
   })
 })
