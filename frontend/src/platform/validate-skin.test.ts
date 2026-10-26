@@ -8,7 +8,7 @@
 // =============================================================================
 
 import { describe, expect, it } from 'vitest'
-import { cpSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -20,6 +20,7 @@ import { validateSkin } from '../../scripts/validate-skin.mjs'
 // paths anchor to the working directory).
 const FRONTEND = process.cwd()
 const REFERENCE_SKIN = join(process.cwd(), 'skins', 'test-contrast')
+const NIGHTFALL_SKIN = join(process.cwd(), 'skins', 'nightfall')
 
 describe('validate-skin (tz-whitelabel §3)', () => {
   it('the repo test-reference skin passes the contract', () => {
@@ -43,6 +44,16 @@ describe('validate-skin (tz-whitelabel §3)', () => {
     // The font seam is load-bearing: a dark demo with the golden Marmelad
     // would give the lie to «другое приложение».
     expect(report.passed.some((line) => line.includes('Unbounded'))).toBe(true)
+  })
+
+  it('a DARK package without bg/background.png fails: light text on the golden photo', () => {
+    // the velo_test_front_bot incident: tokens shipped, the background did
+    // not -- light theme photo stayed under light text tokens
+    const dir = mkdtempSync(join(tmpdir(), 'velo-bad-skin-'))
+    cpSync(NIGHTFALL_SKIN, dir, { recursive: true }) // the DARK show-piece
+    rmSync(join(dir, 'bg'), { recursive: true, force: true })
+    const report = validateSkin(dir, FRONTEND) as { fails: string[] }
+    expect(report.fails.join('\n')).toContain('FAIL bg/background.png: missing')
   })
 
   it('a package with an unknown token and a 13-char shortName fails, named', () => {
