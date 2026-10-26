@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "verify": "pnpm lint && pnpm typecheck && pnpm test",
     "verify:quick": "node scripts/verify-quick.mjs",
-    "lint": "node scripts/lint-budget.mjs && node scripts/no-cyrillic.mjs && node scripts/key-audit.mjs",
+    "lint": "node scripts/lint-budget.mjs && node scripts/no-cyrillic.mjs && node scripts/key-audit.mjs && pnpm lint:css",
     "lint:css": "stylelint \"src/**/*.{css,vue}\"",
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write src/",

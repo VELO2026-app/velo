@@ -652,4 +652,46 @@
   --velo-radius-pill: 999px;
   --velo-radius-sheet-top: 30px 30px 0 0; /* VBottomSheet top corners */
   --velo-radius-bar-top: 6px 6px 0 0; /* VBarChart columns */
+
+  /* =========================================================================
+   * SKIN-PACKAGE CONTRACT -- GENERATION 1 (tz-whitelabel §3.1, step 3)
+   * Frozen 2026-10-26, after the step-2 migration took the token gate to
+   * zero (pnpm lint:css is part of `pnpm lint`, so CI and the pre-push hook
+   * fail on any raw value outside this file).
+   *
+   * A skin package (skin/tokens.css, tz-whitelabel §3) may override the
+   * --velo-* tokens ONLY. The DTCG mapping below is the machine-facing name
+   * each contract branch gets in the skin's brand.json validation (the
+   * F2 validator reads the same branches). Mapping rule:
+   *   --velo-<a>-<b>-<c>  <->  velo.<a>.<b>.<c>
+   *
+   * Generation 1 branches (what a skin may retheme):
+   *   brand color      --velo-primary(-dark), --velo-text-*, --velo-bg-*,
+   *                    --velo-border*, --velo-blue-*, --velo-peach-*,
+   *                    --velo-pink-*, --velo-teal-*,
+   *                    --velo-success/warning/error (+ -bg/-border/-text
+   *                    tints), --velo-danger-text, --velo-required-done
+   *                    <-> velo.color.*
+   *   accents          --velo-mood-*, --velo-rating-*, --velo-analytics-*,
+   *                    --velo-mood-fill-*        <-> velo.accent.*
+   *   glass & fog      --velo-glass-*, --velo-write-* (frost/blur/shadows),
+   *                    --velo-fog-color, --velo-scrim <-> velo.glass.*,
+   *                    velo.fog.color
+   *   telegram chrome  --velo-tg-header / --velo-tg-bg / --velo-tg-bg-kbd
+   *                    <-> velo.telegram.header / background / keyboard
+   *                    (read by NAME via getComputedStyle -- renaming them
+   *                    is a breaking platform change, not a retheme)
+   *   typography       --velo-fs-10..48 <-> velo.font.size.*; family via
+   *                    --font-body (bare, frozen) -- a skin swaps the family
+   *                    through brand.json, which rewrites the link + token
+   *   radius           --velo-radius-* <-> velo.radius.*
+   *   depth            --velo-shadow-glow(-sm)/glass/toast/switch,
+   *                    --velo-write-shadow-*, --velo-effect-*
+   *                    <-> velo.shadow.* / velo.effect.*
+   *
+   * Generation rules (owner decision 2026-10-24): ADDING a token is free and
+   * needs no generation bump. RENAMING or REMOVING a contract token, or
+   * changing what a branch means, is GENERATION 2 -- a coordinated skin+app
+   * release, announced in this section.
+   * ========================================================================= */
 }
