@@ -105,7 +105,7 @@ const resolvedIcon = computed<Component | null>(() => ICON_MAP[props.icon] ?? nu
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 48px;
+  font-size: var(--velo-fs-48);
   line-height: 1;
   margin-bottom: var(--space-3);
   /* Vector DS icon (resolved from the semantic key) inherits this as currentColor. */

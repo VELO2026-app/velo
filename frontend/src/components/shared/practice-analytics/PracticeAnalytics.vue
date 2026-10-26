@@ -296,7 +296,7 @@ const showPairsPager = computed(
 .practice-analytics__author :deep(.v-avatar) {
   width: 18px;
   height: 18px;
-  font-size: 8px;
+  font-size: var(--text-8);
 }
 .practice-analytics__meta {
   display: flex;

@@ -323,12 +323,12 @@ function onTap(): void {
   color: var(--velo-text-secondary);
 }
 .tcard__banner-title {
-  font-size: 12px;
+  font-size: var(--velo-fs-12);
   font-weight: 600;
   letter-spacing: 0.22px;
 }
 .tcard__banner-subtitle {
-  font-size: 12px;
+  font-size: var(--velo-fs-12);
   font-weight: 600;
   letter-spacing: 0.22px;
   opacity: 0.85;
@@ -385,7 +385,7 @@ function onTap(): void {
   right: 78px;
 }
 .tcard__bubble-title {
-  font-size: 13px;
+  font-size: var(--velo-fs-13);
   font-weight: 700;
   color: var(--velo-text-primary);
   white-space: nowrap;
@@ -393,7 +393,7 @@ function onTap(): void {
   text-overflow: ellipsis;
 }
 .tcard__bubble-preview {
-  font-size: 12px;
+  font-size: var(--velo-fs-12);
   color: var(--velo-text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -405,7 +405,7 @@ function onTap(): void {
   position: relative;
   width: 217px;
   height: 67px;
-  border-radius: 8px;
+  border-radius: var(--velo-radius-8);
   background: var(--velo-bg-card-solid);
 }
 .tcard__prac-icon {
@@ -430,7 +430,7 @@ function onTap(): void {
   min-width: 0;
 }
 .tcard__prac-title {
-  font-size: 13px;
+  font-size: var(--velo-fs-13);
   color: var(--velo-text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -457,7 +457,7 @@ function onTap(): void {
   display: block;
 }
 .tcard__prac-master-name {
-  font-size: 10px;
+  font-size: var(--velo-fs-10);
   color: var(--velo-text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -476,7 +476,7 @@ function onTap(): void {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 10px;
+  font-size: var(--velo-fs-10);
   color: var(--velo-text-secondary);
   white-space: nowrap;
 }
@@ -487,8 +487,8 @@ function onTap(): void {
   gap: 3px;
   height: 16px;
   padding: 0 7px;
-  border-radius: 4px;
-  font-size: 10px;
+  border-radius: var(--velo-radius-4);
+  font-size: var(--velo-fs-10);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -531,7 +531,7 @@ function onTap(): void {
   background: var(--velo-bg-card-solid);
 }
 .tcard__entry-title {
-  font-size: 12px;
+  font-size: var(--velo-fs-12);
   font-weight: 700;
   color: var(--velo-text-primary);
   white-space: nowrap;
@@ -539,7 +539,7 @@ function onTap(): void {
   text-overflow: ellipsis;
 }
 .tcard__entry-preview {
-  font-size: 12px;
+  font-size: var(--velo-fs-12);
   color: var(--velo-text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -566,7 +566,7 @@ function onTap(): void {
   background: var(--velo-glass-blue-15);
   color: var(--velo-text-secondary);
   text-align: center;
-  font-size: 12px;
+  font-size: var(--velo-fs-12);
   cursor: default;
 }
 </style>

@@ -603,7 +603,7 @@ async function onSubmit(): Promise<void> {
   gap: var(--velo-banner-gap-icon-text);
   background: var(--velo-glass-pink-40);
   border: 1px solid var(--velo-pink-300);
-  border-radius: 12px;
+  border-radius: var(--velo-radius-12);
   padding: 10px var(--space-4);
   font-family: var(--font-body);
   font-size: var(--text-xs);
@@ -803,7 +803,7 @@ async function onSubmit(): Promise<void> {
 .ea__custom-input:focus {
   outline: none;
   border-color: var(--velo-border-input-focus);
-  box-shadow: 0 0 0 3px var(--velo-glass-blue-15);
+  box-shadow: var(--velo-effect-focus-glass);
 }
 
 .ea__custom--error .ea__custom-input {

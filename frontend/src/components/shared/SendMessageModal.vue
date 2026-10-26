@@ -116,7 +116,7 @@ async function onSend(): Promise<void> {
   align-items: center;
   gap: var(--space-3);
   background: var(--velo-glass-blue-15);
-  border-radius: 10px;
+  border-radius: var(--velo-radius-10);
   padding: 10px var(--space-4);
 }
 

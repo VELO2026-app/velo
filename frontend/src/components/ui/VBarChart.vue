@@ -80,7 +80,7 @@ function heightFor(value: number): string {
   width: 100%;
   max-width: 26px;
   margin-top: auto;
-  border-radius: 6px 6px 0 0;
+  border-radius: var(--velo-radius-bar-top);
 }
 
 .v-bar-chart__label {

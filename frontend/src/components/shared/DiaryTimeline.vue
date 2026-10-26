@@ -131,7 +131,7 @@ const dayGroups = computed<DayGroup[]>(() => {
 .timeline__date-label {
   /* Strong date node (thread-events reference): big bold label, one line. */
   font-family: var(--font-body);
-  font-size: 18px;
+  font-size: var(--velo-fs-18);
   font-weight: 700;
   line-height: 1;
   color: var(--velo-text-primary);

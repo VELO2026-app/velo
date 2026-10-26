@@ -99,7 +99,7 @@ defineEmits<{
      iOS-stable shape for glass over moving content). */
   background: transparent;
   border: 1px solid var(--velo-glass-white-35);
-  border-radius: 999px;
+  border-radius: var(--velo-radius-pill);
   box-shadow: var(--velo-shadow-glass);
   z-index: var(--z-sticky);
 }
@@ -206,6 +206,6 @@ defineEmits<{
   align-items: center;
   justify-content: center;
   line-height: 0;
-  font-size: 22px;
+  font-size: var(--velo-fs-22);
 }
 </style>

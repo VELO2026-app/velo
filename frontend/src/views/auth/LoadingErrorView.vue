@@ -74,7 +74,7 @@ function onRetry(): void {
 }
 
 .auth-error__icon {
-  font-size: 48px;
+  font-size: var(--velo-fs-48);
 }
 
 .auth-error__title {

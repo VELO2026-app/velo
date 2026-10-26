@@ -550,7 +550,7 @@ defineExpose({ focus: focusField })
      context (translateZ) -- the frost child's z:-1 stays contained. */
   transform: translateZ(0);
   border: 1px solid var(--velo-glass-white-35);
-  border-radius: 22px;
+  border-radius: var(--velo-radius-22);
   background: transparent;
   box-shadow: var(--velo-shadow-glass);
   cursor: text;
@@ -578,7 +578,7 @@ defineExpose({ focus: focusField })
    the capsule on their own. */
 .composer--single .composer__field {
   min-height: var(--velo-size-44);
-  border-radius: 999px;
+  border-radius: var(--velo-radius-pill);
   padding: var(--space-1) var(--space-1) var(--space-1) 20px;
 }
 

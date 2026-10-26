@@ -219,7 +219,7 @@ onUnmounted(() => {
   flex-direction: column;
   background: var(--velo-bg-card-solid);
   /* Flush to the bottom edge -> round the TOP corners only. */
-  border-radius: 30px 30px 0 0;
+  border-radius: var(--velo-radius-sheet-top);
   padding: 8px var(--velo-rail-pad-x) 22px;
 }
 
@@ -227,7 +227,7 @@ onUnmounted(() => {
   width: 126px;
   height: 7px;
   flex-shrink: 0;
-  border-radius: 3.5px;
+  border-radius: var(--velo-radius-3-5);
   background: var(--velo-glass-blue-30);
   margin: 0 auto 14px;
 }
@@ -261,7 +261,7 @@ onUnmounted(() => {
   flex-shrink: 0;
   height: 49px;
   margin-top: 18px;
-  border-radius: 24.5px;
+  border-radius: var(--velo-radius-24-5);
   background: var(--velo-primary);
   color: var(--velo-white);
   border: 1px solid var(--velo-glass-border);
@@ -297,7 +297,7 @@ onUnmounted(() => {
 .v-sheet__cancel {
   flex: 39 1 0%;
   height: 49px;
-  border-radius: 24.5px;
+  border-radius: var(--velo-radius-24-5);
   background: var(--velo-primary);
   color: var(--velo-white);
   border: 1px solid var(--velo-glass-border);

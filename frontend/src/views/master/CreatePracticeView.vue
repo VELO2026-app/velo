@@ -1503,7 +1503,7 @@ html.is-keyboard-open .create-practice {
   gap: var(--velo-banner-gap-icon-text);
   background: var(--velo-glass-pink-40);
   border: 1px solid var(--velo-pink-300);
-  border-radius: 12px;
+  border-radius: var(--velo-radius-12);
   padding: 10px var(--space-4);
   font-family: var(--font-body);
   font-size: var(--text-xs);

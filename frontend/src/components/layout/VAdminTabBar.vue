@@ -82,7 +82,7 @@ defineEmits<{
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 31px;
+  border-radius: var(--velo-radius-31);
   cursor: pointer;
   color: var(--velo-text-primary);
   /* Inactive (default): glass bubble. Same glass tokens as VTabBar; only the

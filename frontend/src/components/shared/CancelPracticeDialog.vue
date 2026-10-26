@@ -184,7 +184,7 @@ const practiceWhen = computed((): string => {
   align-items: center;
   gap: var(--space-2);
   background: var(--velo-glass-blue-15);
-  border-radius: 10px;
+  border-radius: var(--velo-radius-10);
   padding: 11px var(--space-4);
   font-family: var(--font-body);
   font-size: var(--text-base);

@@ -609,6 +609,9 @@
   /* [F2.0 step-1 addendum] VPaginationDots inactive dot — the blue-alpha
      sibling of the white ramp above: primary-dark @ 0.6 (value 1:1). */
   --velo-glass-blue-700-60: rgba(76, 101, 137, 0.6);
+  /* [F2.0 step-2 addendum] ExternalActivityCreateView save-button focus ring
+     — the glass sibling of --velo-effect-focus above (whole recipe, 1:1). */
+  --velo-effect-focus-glass: 0 0 0 3px var(--velo-glass-blue-15);
 
   /* Mood-scale secondary fills (IconMoodScale*): the pale fills paired with
      the --velo-mood-* / --velo-rating-* accents. Named by hue role — one

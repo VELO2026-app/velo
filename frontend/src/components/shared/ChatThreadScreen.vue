@@ -644,7 +644,7 @@ onBeforeUnmount(() => {
 /* Support threads (BE-163): the «Поддержка» caption above the body -- the
    service, never an admin's name. */
 .chat-thread__sender {
-  font-size: 11px;
+  font-size: var(--velo-fs-11);
   font-weight: 600;
   opacity: 0.65;
   margin-bottom: var(--space-1);
@@ -659,7 +659,7 @@ onBeforeUnmount(() => {
 
 .chat-thread__time {
   margin-top: var(--space-1);
-  font-size: 11px;
+  font-size: var(--velo-fs-11);
   opacity: 0.6;
   text-align: right;
 }

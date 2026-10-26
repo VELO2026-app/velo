@@ -100,19 +100,19 @@ const initials = computed(() => {
 .v-avatar--md {
   width: var(--velo-size-40);
   height: var(--velo-size-40);
-  font-size: 14px;
+  font-size: var(--velo-fs-14);
 }
 
 .v-avatar--lg {
   width: 64px;
   height: 64px;
-  font-size: 22px;
+  font-size: var(--velo-fs-22);
 }
 
 .v-avatar--xl {
   width: 80px;
   height: 80px;
-  font-size: 28px;
+  font-size: var(--velo-fs-28);
 }
 
 .v-avatar__img {

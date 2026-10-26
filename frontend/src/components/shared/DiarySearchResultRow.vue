@@ -158,7 +158,7 @@ mark.dsr-row__hit {
   background: var(--velo-glass-blue-15);
   color: inherit;
   font-weight: 700;
-  border-radius: 4px;
+  border-radius: var(--velo-radius-4);
   padding: 0 1px;
 }
 

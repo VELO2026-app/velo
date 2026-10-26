@@ -115,7 +115,7 @@ defineEmits<{
 
 .v-stat__icon {
   display: block;
-  font-size: 24px;
+  font-size: var(--velo-fs-24);
   /* Vector DS icons inside the slot inherit this as currentColor. */
   color: var(--velo-text-primary);
 }
@@ -140,7 +140,7 @@ defineEmits<{
 
 .v-stat__label {
   /* 13px (slightly under --text-xs) + secondary, no-wrap — matches user dash. */
-  font-size: 13px;
+  font-size: var(--velo-fs-13);
   color: var(--velo-text-secondary);
   white-space: nowrap;
 }

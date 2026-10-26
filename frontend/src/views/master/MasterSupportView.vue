@@ -421,7 +421,7 @@ function onGoHome(): void {
 
 .support__ok-title {
   font-family: var(--font-body);
-  font-size: 28px;
+  font-size: var(--velo-fs-28);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;

@@ -152,7 +152,7 @@ onMounted(() => {
   justify-content: center;
   scroll-snap-align: center;
   font-family: var(--font-body);
-  font-size: 25px;
+  font-size: var(--velo-fs-25);
   letter-spacing: 0.02em;
   color: var(--velo-text-primary);
   background: none;

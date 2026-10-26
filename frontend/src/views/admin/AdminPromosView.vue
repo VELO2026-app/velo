@@ -357,7 +357,7 @@ onMounted(loadInitial)
 }
 
 .pcard__owner-label {
-  font-size: 11px;
+  font-size: var(--velo-fs-11);
   color: var(--velo-text-muted);
 }
 
