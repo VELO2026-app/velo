@@ -12,6 +12,7 @@
     "verify:quick": "node scripts/verify-quick.mjs",
     "lint": "node scripts/lint-budget.mjs && node scripts/no-cyrillic.mjs && node scripts/key-audit.mjs && pnpm lint:css",
     "lint:css": "stylelint \"src/**/*.{css,vue}\"",
+    "skin": "node scripts/apply-skin.mjs",
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write src/",
     "format:check": "prettier --check src/",
