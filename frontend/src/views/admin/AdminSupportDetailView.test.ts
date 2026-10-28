@@ -26,20 +26,31 @@ import { createApp, nextTick, type App } from 'vue'
 import AdminSupportDetailView from '@/views/admin/AdminSupportDetailView.vue'
 import * as supportApi from '@/api/support'
 import type { AdminSupportTicket, SupportMessage, SupportPerson } from '@/api/support'
+import type { UserResponse } from '@/api/types'
 import { ApiResponseError } from '@/api/client'
 
 vi.mock('@/api/support', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/api/support')>()
   return {
     SUPPORT_CLOSING_STATUSES: real.SUPPORT_CLOSING_STATUSES,
+    // REAL here too: the «Не спам» visibility math is part of what is tested.
+    spamWithinRetention: real.spamWithinRetention,
     getAdminTicket: vi.fn(),
     getAdminSupportMessages: vi.fn(),
     sendAdminSupportReply: vi.fn(),
     claimSupportThread: vi.fn(),
     setTicketStatus: vi.fn(),
     retrySupportTranslation: vi.fn(),
+    assignTicket: vi.fn(),
+    releaseTicket: vi.fn(),
+    reopenTicket: vi.fn(),
   }
 })
+
+const getUsersList = vi.fn()
+vi.mock('@/api/admin', () => ({
+  getUsersList: (...args: unknown[]) => getUsersList(...args),
+}))
 
 const push = vi.fn()
 const back = vi.fn()
@@ -70,6 +81,24 @@ vi.mock('@/stores/auth', () => ({
 
 const ME: SupportPerson = { user_id: 'admin_me', name: 'Я', avatar_url: null }
 const OTHER: SupportPerson = { user_id: 'other_admin', name: 'Ольга', avatar_url: null }
+
+/** The roster rows of GET /admin/users?role=admin (FE-108: «Назначить»). */
+const OLGA_USER = {
+  id: 'other_admin',
+  first_name: 'Ольга',
+  last_name: 'Иванова',
+} as unknown as UserResponse
+const NAMELESS_USER = { id: 'a_2', first_name: null, last_name: null } as unknown as UserResponse
+const ME_USER = { id: 'admin_me', first_name: 'Я' } as unknown as UserResponse
+
+function roster(...items: UserResponse[]): unknown {
+  return { items, total: items.length, limit: 100, offset: 0 }
+}
+
+/** An ISO moment `days` in the past -- the spam retention edge is live math. */
+function daysAgo(days: number): string {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+}
 
 function ticket(overrides: Partial<AdminSupportTicket> = {}): AdminSupportTicket {
   return {
@@ -148,14 +177,29 @@ function bubbles(): HTMLElement[] {
 }
 
 // FE-100: the status actions live in the ⋯ menu (a teleported VBottomSheet).
+// FE-108 added a SECOND sheet -- «Назначить»'s roster; the helpers below
+// tell them apart by the roster's own container class.
 function menuButton(): HTMLButtonElement | null {
   return host?.querySelector<HTMLButtonElement>('.support-detail__menu') ?? null
 }
-function menuRows(): HTMLElement[] {
-  const open = Array.from(document.body.querySelectorAll<HTMLElement>('.v-sheet__overlay')).filter(
+function sheetOverlays(): HTMLElement[] {
+  return Array.from(document.body.querySelectorAll<HTMLElement>('.v-sheet__overlay')).filter(
     (o) => !o.classList.contains('v-sheet-leave-active'),
   )
-  return open.flatMap((o) => Array.from(o.querySelectorAll<HTMLElement>('.v-menu-row')))
+}
+function menuRows(): HTMLElement[] {
+  return sheetOverlays()
+    .filter((o) => !o.querySelector('.support-detail__assign'))
+    .flatMap((o) => Array.from(o.querySelectorAll<HTMLElement>('.v-menu-row')))
+}
+/** The rows of the «Назначить» roster sheet. */
+function assignRows(): HTMLElement[] {
+  return sheetOverlays()
+    .filter((o) => o.querySelector('.support-detail__assign'))
+    .flatMap((o) => Array.from(o.querySelectorAll<HTMLElement>('.v-menu-row')))
+}
+function assignSheetOpen(): boolean {
+  return sheetOverlays().some((o) => o.querySelector('.support-detail__assign'))
 }
 /** The sheet is open: present and not leaving (its Transition keeps the
  *  element through the leave animation). */
@@ -206,6 +250,10 @@ beforeEach(() => {
   vi.mocked(supportApi.claimSupportThread).mockReset()
   vi.mocked(supportApi.setTicketStatus).mockReset()
   vi.mocked(supportApi.retrySupportTranslation).mockReset()
+  vi.mocked(supportApi.assignTicket).mockReset()
+  vi.mocked(supportApi.releaseTicket).mockReset()
+  vi.mocked(supportApi.reopenTicket).mockReset()
+  getUsersList.mockReset().mockResolvedValue(roster())
 })
 
 afterEach(() => {
@@ -298,23 +346,39 @@ describe('AdminSupportDetailView', () => {
   })
 
   // Was: four buttons stacked in the card (delivery A). FE-100, owner ruling
-  // 25.10: the same four statuses, behind ⋯ in the header -- one menu that
-  // later grows «вернуть в работу» and «назначить». What the actions DO is
-  // asserted unchanged; only where they are tapped moved.
+  // 25.10: the same four statuses, behind ⋯ in the header. FE-108 grew the
+  // same menu by the handover entries («Назначить», «Освободить»). What the
+  // actions DO is asserted unchanged; only the offer grew.
   describe('status actions (FE-100) -- the ⋯ menu', () => {
-    it('an OPEN ticket offers the four closing statuses in ⋯ -- to ANY admin, taker or not', async () => {
+    it('an OPEN ticket offers the handover plus the four closing statuses -- to ANY admin, taker or not', async () => {
       mount('t_1', ticket({ claimed_by: OTHER }))
       await flush()
 
-      expect(await statusOffer()).toEqual(['Решена', 'Отклонена', 'Дубликат', 'Спам'])
+      expect(await statusOffer()).toEqual([
+        'Назначить',
+        'Освободить',
+        'Решена',
+        'Отклонена',
+        'Дубликат',
+        'Спам',
+      ])
     })
 
-    it('a ticket that is not open has no ⋯ at all -- it shows its status instead', async () => {
+    it('an open UNCLAIMED ticket offers «Назначить» but not «Освободить»', async () => {
+      mount('t_1', ticket())
+      await flush()
+
+      expect(await statusOffer()).toEqual(['Назначить', 'Решена', 'Отклонена', 'Дубликат', 'Спам'])
+    })
+
+    // Was (FE-100): a closed ticket had no ⋯ at all. FE-108: it keeps ⋯ --
+    // «Назначить» and «Вернуть в работу» -- and still shows its status.
+    it('a REJECTED ticket keeps ⋯ -- «Назначить» and «Вернуть в работу», no closing statuses', async () => {
       mount('t_1', ticket({ status: 'rejected' }))
       await flush()
 
-      expect(menuButton()).toBeNull()
-      expect(await statusOffer()).toEqual([])
+      expect(menuButton()).not.toBeNull()
+      expect(await statusOffer()).toEqual(['Назначить', 'Вернуть в работу'])
       expect(host?.querySelector('.support-detail__processed')?.textContent).toContain('Отклонена')
     })
 
@@ -330,7 +394,9 @@ describe('AdminSupportDetailView', () => {
         category: 'complaint_master',
         status,
         created_at: '2026-10-25T09:00:00Z',
-        status_changed_at: '2026-10-25T11:00:00Z',
+        // NOW, not a fixed date: a spam verdict must stay inside the
+        // retention for «Не спам» to be offered after the change.
+        status_changed_at: new Date().toISOString(),
       })
       mount('t_1', ticket({ claimed_by: ME }))
       await flush()
@@ -340,7 +406,14 @@ describe('AdminSupportDetailView', () => {
       expect(supportApi.setTicketStatus).toHaveBeenCalledWith('t_1', status)
       expect(sheetOpen()).toBe(false) // the sheet closed on the pick
       expect(badge()).toBe(label)
-      expect(await statusOffer()).toEqual([])
+      // A closed ticket still keeps ⋯ -- the reopen side of the new status.
+      // The taker is unchanged (the answer carries no admin fields), so
+      // «Освободить» stays offered too.
+      const reopenOffer =
+        status === 'spam'
+          ? ['Назначить', 'Освободить', 'Не спам']
+          : ['Назначить', 'Освободить', 'Вернуть в работу']
+      expect(await statusOffer()).toEqual(reopenOffer)
       expect(toastSuccess).toHaveBeenCalled()
       // The answer has no admin-only fields; what was read stays.
       expect(text()).toContain('Дана')
@@ -381,7 +454,9 @@ describe('AdminSupportDetailView', () => {
       expect(toastError).toHaveBeenCalledWith('Обращение изменилось — проверьте статус')
       expect(supportApi.getAdminTicket).toHaveBeenCalledWith('t_1')
       expect(badge()).toBe('Решена')
-      expect(await statusOffer()).toEqual([])
+      // The refreshed ticket: still held by the other admin, closed -> the
+      // handover entries, no closing statuses.
+      expect(await statusOffer()).toEqual(['Назначить', 'Освободить', 'Вернуть в работу'])
     })
 
     it('a 409 on a ticket that is STILL open (a person wrote meanwhile) leaves the buttons for a retry', async () => {
@@ -394,7 +469,7 @@ describe('AdminSupportDetailView', () => {
 
       expect(supportApi.getAdminTicket).toHaveBeenCalledTimes(1)
       expect(badge()).toBe('Открыта')
-      expect(await statusOffer()).toEqual(['Решена', 'Отклонена', 'Дубликат', 'Спам'])
+      expect(await statusOffer()).toEqual(['Назначить', 'Решена', 'Отклонена', 'Дубликат', 'Спам'])
     })
 
     it('any other failure toasts and changes nothing -- no re-read', async () => {
@@ -407,6 +482,219 @@ describe('AdminSupportDetailView', () => {
       expect(toastError).toHaveBeenCalled()
       expect(supportApi.getAdminTicket).not.toHaveBeenCalled()
       expect(badge()).toBe('Открыта')
+    })
+  })
+
+  // ===========================================================================
+  // FE-108 (BE-162 delivery 2): «Назначить», «Освободить», «Вернуть в работу»,
+  // «Не спам» -- entries of the same TICKET_ACTIONS array. The three routes
+  // answer the ticket's FULL row, so their answers replace the card outright;
+  // a 409 re-reads, a 404 on reopen is the not-found screen.
+  describe('the handover (FE-108) -- «Назначить»', () => {
+    it('opens the admin roster (the admin users list, myself not offered) and a pick hands the ticket over', async () => {
+      getUsersList.mockResolvedValue(roster(OLGA_USER, NAMELESS_USER, ME_USER))
+      vi.mocked(supportApi.assignTicket).mockResolvedValue(ticket({ claimed_by: OTHER }))
+      mount('t_1', ticket({ claimed_by: ME }))
+      await flush()
+
+      await pickStatus('Назначить')
+
+      expect(getUsersList).toHaveBeenCalledWith('admin')
+      expect(assignRows().map((r) => r.textContent?.trim() ?? '')).toEqual([
+        'Ольга Иванова',
+        'Администратор',
+      ])
+
+      assignRows()[0]?.click()
+      await flush()
+
+      expect(supportApi.assignTicket).toHaveBeenCalledWith('t_1', 'other_admin')
+      expect(toastSuccess).toHaveBeenCalledWith('Обращение передано: Ольга Иванова')
+      expect(assignSheetOpen()).toBe(false)
+      // The answer row replaced the card (no second read): the caller is no
+      // longer the taker, so the composer gave way to the claim notice.
+      expect(supportApi.getAdminTicket).not.toHaveBeenCalled()
+      expect(composer()).toBeNull()
+      expect(text()).toContain('закреплено за другим администратором')
+    })
+
+    it('a 422 (the chosen admin stopped being one) toasts and re-reads the roster; the sheet stays for another pick', async () => {
+      getUsersList.mockResolvedValue(roster(OLGA_USER))
+      vi.mocked(supportApi.assignTicket).mockRejectedValue(
+        new ApiResponseError(422, 'The assignee must be an admin'),
+      )
+      mount('t_1', ticket())
+      await flush()
+
+      await pickStatus('Назначить')
+      const rosterReads = getUsersList.mock.calls.length
+      assignRows()[0]?.click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Выбранный пользователь не администратор')
+      expect(getUsersList.mock.calls.length).toBe(rosterReads + 1)
+      expect(assignSheetOpen()).toBe(true)
+      expect(supportApi.getAdminTicket).not.toHaveBeenCalled()
+    })
+
+    it('a 409 (handed over meanwhile) toasts, closes the sheet and reads the ticket again', async () => {
+      getUsersList.mockResolvedValue(roster(OLGA_USER))
+      vi.mocked(supportApi.assignTicket).mockRejectedValue(conflict())
+      vi.mocked(supportApi.getAdminTicket).mockResolvedValue(ticket({ claimed_by: OTHER }))
+      mount('t_1', ticket())
+      await flush()
+
+      await pickStatus('Назначить')
+      assignRows()[0]?.click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Обращение изменилось — проверьте, у кого оно')
+      expect(supportApi.getAdminTicket).toHaveBeenCalledWith('t_1')
+      expect(assignSheetOpen()).toBe(false)
+      expect(text()).toContain('закреплено за другим администратором')
+    })
+
+    it('no other admins -> the honest empty line, and nothing is sent', async () => {
+      mount('t_1', ticket())
+      await flush()
+
+      await pickStatus('Назначить')
+
+      expect(assignRows()).toEqual([])
+      expect(document.body.textContent).toContain('Других администраторов нет')
+      expect(supportApi.assignTicket).not.toHaveBeenCalled()
+    })
+
+    it('a failed roster read shows its own retry; the retry re-reads and lists the admins', async () => {
+      getUsersList
+        .mockRejectedValueOnce(new ApiResponseError(502, 'down'))
+        .mockResolvedValueOnce(roster(OLGA_USER))
+      mount('t_1', ticket())
+      await flush()
+
+      await pickStatus('Назначить')
+
+      expect(document.body.textContent).toContain('Не удалось загрузить администраторов')
+      const retry = Array.from(
+        document.body.querySelectorAll<HTMLButtonElement>('.v-sheet__overlay .v-btn'),
+      ).find((b) => b.textContent?.trim() === 'Повторить')
+      retry?.click()
+      await flush()
+
+      expect(assignRows().map((r) => r.textContent?.trim() ?? '')).toEqual(['Ольга Иванова'])
+    })
+  })
+
+  describe('the handover (FE-108) -- «Освободить»', () => {
+    it('returns a held ticket to the pool; the answer row replaces the card', async () => {
+      vi.mocked(supportApi.releaseTicket).mockResolvedValue(ticket({ claimed_by: null }))
+      mount('t_1', ticket({ claimed_by: ME }))
+      await flush()
+
+      await pickStatus('Освободить')
+
+      expect(supportApi.releaseTicket).toHaveBeenCalledWith('t_1')
+      expect(toastSuccess).toHaveBeenCalledWith('Обращение возвращено в общий список')
+      expect(supportApi.getAdminTicket).not.toHaveBeenCalled()
+      // Back in the pool: the claim panel offers «Взять в работу» again.
+      expect(composer()).toBeNull()
+      expect(btnByText('Взять в работу')).toBeDefined()
+    })
+
+    it('a 409 (handed over meanwhile) toasts and reads the ticket again', async () => {
+      vi.mocked(supportApi.releaseTicket).mockRejectedValue(conflict())
+      vi.mocked(supportApi.getAdminTicket).mockResolvedValue(ticket({ claimed_by: OTHER }))
+      mount('t_1', ticket({ claimed_by: ME }))
+      await flush()
+
+      await pickStatus('Освободить')
+
+      expect(toastError).toHaveBeenCalledWith('Обращение изменилось — проверьте, у кого оно')
+      expect(supportApi.getAdminTicket).toHaveBeenCalledWith('t_1')
+      expect(text()).toContain('закреплено за другим администратором')
+    })
+
+    it('any other failure toasts and changes nothing -- no re-read', async () => {
+      vi.mocked(supportApi.releaseTicket).mockRejectedValue(new ApiResponseError(502, 'down'))
+      mount('t_1', ticket({ claimed_by: ME }))
+      await flush()
+
+      await pickStatus('Освободить')
+
+      expect(toastError).toHaveBeenCalled()
+      expect(supportApi.getAdminTicket).not.toHaveBeenCalled()
+      expect(composer()).not.toBeNull()
+    })
+  })
+
+  describe('the handover (FE-108) -- «Вернуть в работу» and «Не спам» (one reopen route)', () => {
+    it('«Вернуть в работу» on a RESOLVED ticket -- the card is open again', async () => {
+      vi.mocked(supportApi.reopenTicket).mockResolvedValue(
+        ticket({ status: 'open', claimed_by: ME }),
+      )
+      mount('t_1', ticket({ status: 'resolved', claimed_by: ME }))
+      await flush()
+
+      await pickStatus('Вернуть в работу')
+
+      expect(supportApi.reopenTicket).toHaveBeenCalledWith('t_1')
+      expect(toastSuccess).toHaveBeenCalledWith('Обращение снова открыто')
+      expect(badge()).toBe('Открыта')
+      expect(host?.querySelector('.support-detail__processed')).toBeNull()
+      expect(supportApi.getAdminTicket).not.toHaveBeenCalled()
+    })
+
+    it('«Не спам» on a FRESH spam ticket -- the same route, the card is open again', async () => {
+      vi.mocked(supportApi.reopenTicket).mockResolvedValue(ticket({ status: 'open' }))
+      mount('t_1', ticket({ status: 'spam', status_changed_at: daysAgo(1) }))
+      await flush()
+
+      expect(await statusOffer()).toEqual(['Назначить', 'Не спам'])
+
+      await pickStatus('Не спам')
+
+      expect(supportApi.reopenTicket).toHaveBeenCalledWith('t_1')
+      expect(badge()).toBe('Открыта')
+    })
+
+    it('«Не спам» is NOT offered once the verdict is past the 30-day retention', async () => {
+      mount('t_1', ticket({ status: 'spam', status_changed_at: daysAgo(31) }))
+      await flush()
+
+      expect(await statusOffer()).toEqual(['Назначить'])
+    })
+
+    it('a 409 (open already / changed / spam past the retention) toasts and reads the ticket again', async () => {
+      vi.mocked(supportApi.reopenTicket).mockRejectedValue(conflict())
+      vi.mocked(supportApi.getAdminTicket).mockResolvedValue(
+        ticket({ status: 'spam', status_changed_at: daysAgo(31) }),
+      )
+      mount('t_1', ticket({ status: 'spam', status_changed_at: daysAgo(1) }))
+      await flush()
+
+      await pickStatus('Не спам')
+
+      expect(toastError).toHaveBeenCalledWith(
+        'Вернуть не удалось — обращение изменилось или спам старше 30 дней',
+      )
+      expect(supportApi.getAdminTicket).toHaveBeenCalledWith('t_1')
+      // The refreshed row is past the retention -- the offer is gone.
+      expect(await statusOffer()).toEqual(['Назначить'])
+    })
+
+    it('a 404 (the spam bin emptied it) -> the not-found screen, no toast, no re-read', async () => {
+      vi.mocked(supportApi.reopenTicket).mockRejectedValue(
+        new ApiResponseError(404, 'Ticket not found'),
+      )
+      mount('t_1', ticket({ status: 'spam', status_changed_at: daysAgo(1) }))
+      await flush()
+
+      await pickStatus('Не спам')
+
+      expect(toastError).not.toHaveBeenCalled()
+      expect(supportApi.getAdminTicket).not.toHaveBeenCalled()
+      expect(text()).toContain('Обращение не найдено')
+      expect(menuButton()).toBeNull()
     })
   })
 

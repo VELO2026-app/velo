@@ -688,8 +688,8 @@
       "userChat": {
         "peerFallback": "Master",
         "title": "Messages",
-        "notFound": "Conversation not found",
-        "notFoundHint": "The link may be outdated"
+        "gone": "This conversation is gone",
+        "goneHint": "The conversation was deleted — for example, its support appeal was closed as spam"
       },
       "userCuratorGroups": {
         "loadFailedHint": "Check your connection and try again.",

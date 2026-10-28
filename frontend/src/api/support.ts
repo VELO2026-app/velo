@@ -14,8 +14,9 @@
 //
 // ADMIN HALF: the ticket list (velo's own table; without a status filter every
 // ticket but spam), one ticket by id, the status change (an OPEN ticket only),
-// and -- unchanged routes, keyed by the ticket id -- the feed, the reply and
-// the claim. Claiming is what grants the right to reply: comms admits only
+// the handover -- assign / release / reopen (BE-162 delivery 2) -- and --
+// unchanged routes, keyed by the ticket id -- the feed, the reply and the
+// claim. Claiming is what grants the right to reply: comms admits only
 // the client or the assignee, so a reply on an unclaimed ticket is comms' own
 // 403, forwarded (backend/app/core/comms.py forward_403).
 //
@@ -216,6 +217,48 @@ export function setTicketStatus(
   status: SupportClosingStatus,
 ): Promise<SupportTicket> {
   return api.post<SupportTicket>(`/api/v1/support/tickets/${ticketId}/status`, { status })
+}
+
+// -- The handover (BE-162 delivery 2) -----------------------------------------
+//
+// All three answer the ticket's FULL row -- the same as GET /tickets/{id},
+// admin fields included -- so the card takes the answer as its new truth
+// without a second read (unlike setTicketStatus, whose answer is thin).
+
+/** Hand the ticket to another admin. `assignee` is the admin's user id.
+ *  422 -- the assignee is not an admin; 409 -- the ticket changed hands
+ *  meanwhile or is a history thread; 404 -- not a ticket. */
+export function assignTicket(ticketId: string, assignee: string): Promise<AdminSupportTicket> {
+  return api.post<AdminSupportTicket>(`/api/v1/support/tickets/${ticketId}/assign`, { assignee })
+}
+
+/** Return the ticket to the pool (nobody holds it; every admin may reply
+ *  again). 409 -- changed hands meanwhile or a history thread; 404 -- not a
+ *  ticket. */
+export function releaseTicket(ticketId: string): Promise<AdminSupportTicket> {
+  return api.post<AdminSupportTicket>(`/api/v1/support/tickets/${ticketId}/release`)
+}
+
+/** Back to OPEN: «вернуть в работу» from resolved / rejected / duplicate,
+ *  «не спам» from spam within the retention -- one route for both. 409 --
+ *  open already, spam past the retention, or changed meanwhile; 404 -- gone
+ *  (the spam bin emptied it). */
+export function reopenTicket(ticketId: string): Promise<AdminSupportTicket> {
+  return api.post<AdminSupportTicket>(`/api/v1/support/tickets/${ticketId}/reopen`)
+}
+
+/** How long a spam verdict keeps the ticket recoverable (owner ruling: 30
+ *  days; backend settings.support_spam_retention_days). Past it the bin
+ *  deletes the ticket with its conversation. */
+export const SUPPORT_SPAM_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
+
+/** May this spam ticket still come back («Не спам»)? True while the verdict
+ *  is STRICTLY younger than the retention -- the backend refuses a verdict
+ *  exactly at the cutoff (`status_changed_at <= cutoff` is a 409), so the
+ *  offer disappears on the same edge. */
+export function spamWithinRetention(statusChangedAt: string, now: number = Date.now()): boolean {
+  const changed = Date.parse(statusChangedAt)
+  return Number.isFinite(changed) && changed > now - SUPPORT_SPAM_RETENTION_MS
 }
 
 /** A support thread's feed, newest-first: a ticket, or a person's history.

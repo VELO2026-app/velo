@@ -404,7 +404,16 @@
         "statusFailed": "Failed to change the status",
         "retryQueued": "Translation requested again",
         "retryNothing": "Nothing to retry — the translation is under way or done",
-        "retryFailed": "Failed to retry the translation"
+        "retryFailed": "Failed to retry the translation",
+        "assigned": "The ticket is handed to {name}",
+        "assignFailed": "Failed to hand over the ticket",
+        "assignNotAdmin": "The chosen user is not an administrator",
+        "released": "The ticket is back in the shared list",
+        "releaseFailed": "Failed to release the ticket",
+        "handoverConflict": "The ticket has changed — check who holds it",
+        "reopened": "The ticket is open again",
+        "reopenConflict": "Cannot reopen — the ticket changed or the spam is over 30 days old",
+        "reopenFailed": "Failed to reopen the ticket"
       },
       "take": "Take it",
       "noMessages": "No messages yet.",
@@ -413,14 +422,22 @@
       "notFoundTitle": "Ticket not found",
       "backToList": "Return to the tickets list",
       "threadFallback": "Ticket",
-      "statusSection": "Mark the ticket as",
       "currentStatus": "Ticket status:",
       "history": {
         "show": "Earlier conversation",
         "title": "The conversation before form tickets — read-only"
       },
       "menu": {
-        "aria": "Ticket actions"
+        "aria": "Ticket actions",
+        "title": "Ticket actions",
+        "assign": "Assign",
+        "release": "Release",
+        "reopen": "Reopen",
+        "notSpam": "Not spam",
+        "assignTitle": "Hand over the ticket",
+        "assignEmpty": "There are no other administrators",
+        "assignLoadFailed": "Failed to load the administrators",
+        "adminFallback": "Administrator"
       },
       "translation": {
         "translating": "Translating…",

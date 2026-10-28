@@ -27,10 +27,19 @@
   held by another admin is a 409 on the claim; after any claim answer the
   ticket is read again, so `claimed_by` is always the server's.
 
+  THE HANDOVER (FE-108, BE-162 delivery 2) lives in the same ⋯ menu as the
+  statuses: «Назначить» (a roster of admins -- the admin users list, myself
+  not offered), «Освободить» (a held ticket), «Вернуть в работу» (a closed
+  ticket) and «Не спам» (spam inside the 30-day retention). All three routes
+  answer the ticket's FULL row, so their answers replace the card outright.
+  A 409 means the ticket moved on meanwhile: a toast and a fresh read; a 404
+  on reopen means the spam bin emptied it: the not-found screen. The card only
+  ever holds a ticket (a history thread id 404s at the one-ticket read), so
+  the routes' "on a history thread" 409s are a backend backstop, not a state
+  this screen can reach.
+
   DELIBERATELY NOT BUILT (scope trim, stated not silent): polling like
   ChatThreadScreen has -- a manual «Обновить» covers it; mark-read for admins.
-  Delivery B (out of FE-100's minimum): translation marks, «Показать оригинал»,
-  «Повторить», the ⋯ menu, «вернуть в работу», «назначить».
 -->
 
 <template>
@@ -213,7 +222,7 @@
     <!-- The ⋯ menu: rows from TICKET_ACTIONS (one entry per action). -->
     <VBottomSheet
       :open="menuOpen"
-      :title="t('adminScreens.adminSupportDetail.statusSection')"
+      :title="t('adminScreens.adminSupportDetail.menu.title')"
       compact-title
       @close="menuOpen = false"
     >
@@ -225,6 +234,41 @@
           :show-arrow="false"
           @click="runAction(action)"
         />
+      </div>
+    </VBottomSheet>
+
+    <!-- «Назначить»: the admin roster (FE-108). Read fresh on every open --
+         the roster is one small GET, and a stale handover target is a 422. -->
+    <VBottomSheet
+      :open="assignOpen"
+      :title="t('adminScreens.adminSupportDetail.menu.assignTitle')"
+      compact-title
+      @close="assignOpen = false"
+    >
+      <div class="support-detail__assign">
+        <div v-if="loadingAdmins" class="support-detail__loader">
+          <VLoader size="lg" />
+        </div>
+        <VEmptyState
+          v-else-if="adminsError"
+          icon="warning"
+          :title="t('adminScreens.adminSupportDetail.menu.assignLoadFailed')"
+          :description="adminsError"
+        >
+          <VButton size="sm" variant="outline" @click="loadAdmins">{{ t('common.retry') }}</VButton>
+        </VEmptyState>
+        <div v-else-if="admins.length === 0" class="support-detail__empty">
+          {{ t('adminScreens.adminSupportDetail.menu.assignEmpty') }}
+        </div>
+        <div v-else class="support-detail__menu-rows">
+          <VMenuRow
+            v-for="admin in admins"
+            :key="admin.id"
+            :label="admin.name"
+            :show-arrow="false"
+            @click="onAssign(admin)"
+          />
+        </div>
       </div>
     </VBottomSheet>
   </div>
@@ -252,16 +296,22 @@ import { useAuthStore } from '@/stores/auth'
 import { ApiResponseError } from '@/api/client'
 import {
   SUPPORT_CLOSING_STATUSES,
+  assignTicket,
   claimSupportThread,
   getAdminSupportMessages,
   getAdminTicket,
+  releaseTicket,
+  reopenTicket,
   retrySupportTranslation,
   sendAdminSupportReply,
   setTicketStatus,
+  spamWithinRetention,
   type AdminSupportTicket,
   type SupportClosingStatus,
   type SupportMessage,
+  type SupportTicketStatus,
 } from '@/api/support'
+import { getUsersList, type UserResponse } from '@/api/admin'
 import { extractApiError } from '@/composables/useApiError'
 import { supportStatusBadge, supportStatusLabel, supportTopicLabel } from '@/utils/supportTopics'
 
@@ -285,6 +335,8 @@ const draft = ref('')
 const sending = ref(false)
 const claiming = ref(false)
 const changingTo = ref<SupportClosingStatus | null>(null)
+const releasing = ref(false)
+const reopening = ref(false)
 
 const menuOpen = ref(false)
 const originalShown = ref<ReadonlySet<string>>(new Set())
@@ -314,9 +366,10 @@ function isPerson(m: SupportMessage): boolean {
 }
 
 // -- The ⋯ menu ---------------------------------------------------------------
-// ONE ENTRY PER ACTION (owner ruling FE-100): «вернуть в работу» and
-// «назначить» (BE-162 delivery 2) are added here as entries, nothing else
-// changes. The button shows only while some entry applies.
+// ONE ENTRY PER ACTION (owner ruling FE-100): the four closing statuses,
+// then the handover of BE-162 delivery 2 (FE-108) -- «назначить»,
+// «освободить», «вернуть в работу», «не спам» -- each its own entry, nothing
+// else changes. The button shows only while some entry applies.
 interface TicketMenuAction {
   key: string
   label: () => string
@@ -324,12 +377,47 @@ interface TicketMenuAction {
   run: () => Promise<void>
 }
 
-const TICKET_ACTIONS: readonly TicketMenuAction[] = SUPPORT_CLOSING_STATUSES.map((status) => ({
-  key: status,
-  label: () => supportStatusLabel(status),
-  visible: (tk) => tk.status === 'open',
-  run: () => onSetStatus(status),
-}))
+/** A closed-but-not-spam ticket: «Вернуть в работу» reopens it. */
+const REOPENABLE_STATUSES: readonly SupportTicketStatus[] = ['resolved', 'rejected', 'duplicate']
+
+const TICKET_ACTIONS: readonly TicketMenuAction[] = [
+  // «Назначить» -- always, on a ticket. A history thread never reaches the
+  // card (its id 404s at the one-ticket read), so "кроме истории" holds by
+  // construction; the route's 409 is the backend backstop.
+  {
+    key: 'assign',
+    label: () => t('adminScreens.adminSupportDetail.menu.assign'),
+    visible: () => true,
+    run: () => openAssignSheet(),
+  },
+  {
+    key: 'release',
+    label: () => t('adminScreens.adminSupportDetail.menu.release'),
+    visible: (tk) => tk.claimed_by !== null,
+    run: () => onRelease(),
+  },
+  ...SUPPORT_CLOSING_STATUSES.map<TicketMenuAction>((status) => ({
+    key: status,
+    label: () => supportStatusLabel(status),
+    visible: (tk) => tk.status === 'open',
+    run: () => onSetStatus(status),
+  })),
+  {
+    key: 'reopen',
+    label: () => t('adminScreens.adminSupportDetail.menu.reopen'),
+    visible: (tk) => REOPENABLE_STATUSES.includes(tk.status),
+    run: () => onReopen(),
+  },
+  // «Не спам» is the same reopen route, offered only while the verdict is
+  // inside the retention (past it the bin deletes the ticket with its
+  // conversation -- the route would 404/409 anyway).
+  {
+    key: 'not-spam',
+    label: () => t('adminScreens.adminSupportDetail.menu.notSpam'),
+    visible: (tk) => tk.status === 'spam' && spamWithinRetention(tk.status_changed_at),
+    run: () => onReopen(),
+  },
+]
 
 const menuActions = computed<TicketMenuAction[]>(() => {
   const tk = ticket.value
@@ -339,6 +427,121 @@ const menuActions = computed<TicketMenuAction[]>(() => {
 function runAction(action: TicketMenuAction): void {
   menuOpen.value = false
   void action.run()
+}
+
+// -- «Назначить»: the roster and the handover (FE-108) ------------------------
+
+interface AdminOption {
+  id: string
+  name: string
+}
+
+const assignOpen = ref(false)
+const admins = ref<readonly AdminOption[]>([])
+const loadingAdmins = ref(false)
+const adminsError = ref<string | null>(null)
+const assigning = ref(false)
+
+/** The roster source is the admin users list (the same one AdminUsersView
+ *  reads). The caller themselves is not offered: handing a ticket to
+ *  yourself is «Взять в работу», not a handover. */
+function adminName(u: UserResponse): string {
+  return (
+    [u.first_name, u.last_name].filter(Boolean).join(' ') ||
+    t('adminScreens.adminSupportDetail.menu.adminFallback')
+  )
+}
+
+async function loadAdmins(): Promise<void> {
+  if (loadingAdmins.value) return
+  loadingAdmins.value = true
+  adminsError.value = null
+  try {
+    const page = await getUsersList('admin')
+    admins.value = page.items
+      .filter((u) => u.id !== myId.value)
+      .map((u) => ({ id: u.id, name: adminName(u) }))
+  } catch (e) {
+    adminsError.value = extractApiError(
+      e,
+      t('adminScreens.adminSupportDetail.menu.assignLoadFailed'),
+    )
+  } finally {
+    loadingAdmins.value = false
+  }
+}
+
+async function openAssignSheet(): Promise<void> {
+  assignOpen.value = true
+  await loadAdmins()
+}
+
+async function onAssign(target: AdminOption): Promise<void> {
+  if (assigning.value) return
+  assigning.value = true
+  try {
+    ticket.value = await assignTicket(ticketId, target.id)
+    assignOpen.value = false
+    toast.success(t('adminScreens.adminSupportDetail.toast.assigned', { name: target.name }))
+  } catch (e) {
+    if (isStatus(e, 409)) {
+      // Handed over (or freed) meanwhile: the fresh read below is now the
+      // card, and the roster on the sheet names the past -- close it.
+      assignOpen.value = false
+      toast.error(t('adminScreens.adminSupportDetail.toast.handoverConflict'))
+      await refreshTicket()
+    } else if (isStatus(e, 422)) {
+      // The chosen admin stopped being one between the list and the pick:
+      // the roster re-reads, the sheet stays open for another choice.
+      toast.error(t('adminScreens.adminSupportDetail.toast.assignNotAdmin'))
+      await loadAdmins()
+    } else {
+      toast.error(extractApiError(e, t('adminScreens.adminSupportDetail.toast.assignFailed')))
+    }
+  } finally {
+    assigning.value = false
+  }
+}
+
+async function onRelease(): Promise<void> {
+  if (!ticket.value || releasing.value) return
+  releasing.value = true
+  try {
+    ticket.value = await releaseTicket(ticketId)
+    toast.success(t('adminScreens.adminSupportDetail.toast.released'))
+  } catch (e) {
+    if (isStatus(e, 409)) {
+      toast.error(t('adminScreens.adminSupportDetail.toast.handoverConflict'))
+      await refreshTicket()
+    } else {
+      toast.error(extractApiError(e, t('adminScreens.adminSupportDetail.toast.releaseFailed')))
+    }
+  } finally {
+    releasing.value = false
+  }
+}
+
+/** «Вернуть в работу» and «Не спам» -- one route (FE-108). */
+async function onReopen(): Promise<void> {
+  if (!ticket.value || reopening.value) return
+  reopening.value = true
+  try {
+    ticket.value = await reopenTicket(ticketId)
+    toast.success(t('adminScreens.adminSupportDetail.toast.reopened'))
+  } catch (e) {
+    if (isStatus(e, 404)) {
+      // The spam bin emptied it between the read and the click: there is no
+      // ticket to show -- the not-found screen, no toast on top of it.
+      ticket.value = null
+    } else if (isStatus(e, 409)) {
+      toast.error(t('adminScreens.adminSupportDetail.toast.reopenConflict'))
+      await refreshTicket()
+    } else {
+      toast.error(extractApiError(e, t('adminScreens.adminSupportDetail.toast.reopenFailed')))
+    }
+  } finally {
+    reopening.value = false
+  }
 }
 
 // -- Translation (BE-166) -----------------------------------------------------

@@ -105,7 +105,9 @@ function stub(): HTMLElement | null {
 }
 
 function notFound(): boolean {
-  return (host?.textContent ?? '').includes('Переписка не найдена')
+  // FE-108: the state is worded as «Этой переписки больше нет» -- a deleted
+  // support thread (spam past the retention) and a foreign id are one screen.
+  return (host?.textContent ?? '').includes('Этой переписки больше нет')
 }
 
 beforeEach(() => {

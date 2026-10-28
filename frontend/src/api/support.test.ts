@@ -16,15 +16,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
   SUPPORT_CLOSING_STATUSES,
+  SUPPORT_SPAM_RETENTION_MS,
+  assignTicket,
   claimSupportThread,
   createAppealKeys,
   createTicket,
   getAdminSupportMessages,
   getAdminTicket,
   listAdminTickets,
+  releaseTicket,
+  reopenTicket,
   retrySupportTranslation,
   sendAdminSupportReply,
   setTicketStatus,
+  spamWithinRetention,
 } from '@/api/support'
 import { api } from '@/api/client'
 
@@ -189,6 +194,58 @@ describe('admin -- the ticket routes', () => {
 
   it('the closing statuses are the four the backend accepts, in the card order', () => {
     expect(SUPPORT_CLOSING_STATUSES).toEqual(['resolved', 'rejected', 'duplicate', 'spam'])
+  })
+})
+
+describe('admin -- the handover routes (BE-162 delivery 2, FE-108)', () => {
+  it('assignTicket POSTs {assignee} to the assign route', async () => {
+    await assignTicket('t_9', 'a_1')
+
+    expect(api.post).toHaveBeenCalledWith(`${S}/tickets/t_9/assign`, { assignee: 'a_1' })
+  })
+
+  it('the assign body carries exactly the assignee -- the backend forbids extra fields', async () => {
+    await assignTicket('t_9', 'a_1')
+
+    const body = vi.mocked(api.post).mock.calls[0]?.[1]
+    expect(Object.keys(body as object)).toEqual(['assignee'])
+  })
+
+  it('releaseTicket POSTs to the release route with NO body', async () => {
+    await releaseTicket('t_9')
+
+    expect(api.post).toHaveBeenCalledWith(`${S}/tickets/t_9/release`)
+  })
+
+  it('reopenTicket POSTs to the reopen route with NO body -- «вернуть в работу» and «не спам» are one route', async () => {
+    await reopenTicket('t_9')
+
+    expect(api.post).toHaveBeenCalledWith(`${S}/tickets/t_9/reopen`)
+  })
+})
+
+describe('spamWithinRetention -- «не спам» is offered while the verdict is young', () => {
+  const NOW = Date.parse('2026-10-28T12:00:00Z')
+  const DAY_MS = 24 * 60 * 60 * 1000
+
+  it('the retention is the owner-ruled 30 days', () => {
+    expect(SUPPORT_SPAM_RETENTION_MS).toBe(30 * DAY_MS)
+  })
+
+  it('a fresh verdict is within the retention', () => {
+    expect(spamWithinRetention('2026-10-28T11:00:00Z', NOW)).toBe(true)
+  })
+
+  it('a verdict exactly 30 days old is NOT offered -- the backend refuses `<= cutoff`', () => {
+    expect(spamWithinRetention('2026-09-28T12:00:00Z', NOW)).toBe(false)
+  })
+
+  it('a verdict one day past the retention is not offered', () => {
+    expect(spamWithinRetention('2026-09-27T12:00:00Z', NOW)).toBe(false)
+  })
+
+  it('an unparsable date is not offered', () => {
+    expect(spamWithinRetention('not a date', NOW)).toBe(false)
   })
 })
 
