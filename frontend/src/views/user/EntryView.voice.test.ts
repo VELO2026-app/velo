@@ -288,6 +288,46 @@ describe('EntryView -- voice dictation on the entry body', () => {
     await flush()
   })
 
+  it('the permission prompt already owns the field: body hidden, no premature panel, «Сохранить» frozen; a denial thaws the row', async () => {
+    // The composer's own rule (its textarea hides on voiceActive, not just
+    // when the panel shows), pinned here so the surfaces cannot drift apart
+    // again: editable text must not sit under an open OS permission dialog.
+    await mount()
+    await startEditing()
+
+    voiceState.value = 'requesting'
+    await flush()
+
+    expect(contentArea().style.display).toBe('none')
+    expect(panel()).toBeNull()
+    expect(mic()).toBeNull()
+    expect(button('Сохранить')?.disabled).toBe(true)
+
+    voiceState.value = 'idle'
+    await flush()
+    expect(contentArea().style.display).not.toBe('none')
+    expect(contentArea().value).toBe('Старый текст записи.')
+    expect(button('Сохранить')?.disabled).toBe(false)
+  })
+
+  it('leaving the editor while the permission prompt is open kills the REQUEST -- no orphaned recording when getUserMedia answers late', async () => {
+    // The recorder's generation guard (FE-78.1) only engages if cancel
+    // reaches it during `requesting`; the composable's cancel must not stop
+    // at `recording`. Without this, a late permission grant starts a take
+    // whose panel just unmounted with the editor.
+    await mount()
+    await startEditing()
+    voiceState.value = 'requesting'
+    await flush()
+
+    host?.querySelector<HTMLButtonElement>('.v-back')?.click()
+    await flush()
+
+    expect(voice.cancel).toHaveBeenCalledTimes(1)
+    expect(voiceState.value).toBe('idle')
+    expect(push).not.toHaveBeenCalled() // back in edit mode only returns to view
+  })
+
   it('leaving the editor mid-take discards the take -- no orphaned recording', async () => {
     await mount()
     await startEditing()

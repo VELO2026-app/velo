@@ -245,17 +245,29 @@ describe('VTextarea -- the take owns the field', () => {
     voice.state.value = 'idle'
   })
 
-  it('requesting (permission prompt): no premature busy panel, mic gone', async () => {
+  it('requesting (permission prompt): the field freezes HIDDEN as an empty band -- no premature busy panel, mic gone; a denial returns the field', async () => {
     voice.start.mockImplementation(async () => {
       voice.state.value = 'requesting'
     })
-    await mount({ voiceInput: true })
+    await mount({ modelValue: 'Утро', voiceInput: true })
     mic()!.click()
     await flush()
 
-    expect(panel()).toBeNull()
+    // The composer's own rule: the take owns the field from the permission
+    // prompt on -- editable text must not sit under an open OS dialog.
+    expect(textareaEl().style.display).toBe('none')
     expect(mic()).toBeNull()
-    voice.state.value = 'idle'
+    expect(panel()).toBeNull()
+    const band = host!.querySelector('.v-textarea__voice')
+    expect(band).not.toBeNull() // the frozen band holds the row's shape
+    expect(band!.querySelector('[data-testid="voice-panel"]')).toBeNull()
+
+    // Denied: the row thaws exactly where it was, text intact.
+    voiceState.value = 'idle'
+    await flush()
+    expect(textareaEl().style.display).not.toBe('none')
+    expect(host!.querySelector('.v-textarea__voice')).toBeNull()
+    expect(mic()).not.toBeNull()
   })
 
   it('the stopwatch drives the panel readout', async () => {

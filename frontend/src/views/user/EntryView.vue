@@ -120,12 +120,13 @@
             />
             <!-- [FE-94, voice step 2] The content field grows by voice: mic
                  disc beside the field (append, not the composer's
-                 empty-field-only replace), and while a take owns the field
-                 the recording panel stands in for the textarea. The disc
-                 rides the field's growing bottom edge (flex-end). -->
+                 empty-field-only replace), and while a take owns the field --
+                 the permission prompt included -- the recording panel stands
+                 in for the textarea. The disc rides the field's growing
+                 bottom edge (flex-end). -->
             <div class="entry__edit-row">
               <textarea
-                v-show="!voicePanelVisible"
+                v-show="!voiceActive"
                 ref="editEl"
                 v-model="editContent"
                 class="entry__edit-content"
@@ -293,9 +294,10 @@ const {
 })
 
 function autogrow(): void {
-  // While the recording panel owns the field the textarea is display:none --
-  // scrollHeight is a hard 0 and a resize now would bake a garbage height in.
-  if (voicePanelVisible.value) return
+  // A voice take owns the field for its whole span (the permission prompt
+  // included) and the textarea is display:none for it -- scrollHeight is a
+  // hard 0 and a resize now would bake a garbage height in.
+  if (voiceActive.value) return
   const el = editEl.value
   if (!el) return
   el.style.height = 'auto'
@@ -305,8 +307,8 @@ function autogrow(): void {
 // A take's end is the first honest moment to measure a field that may have
 // just grown by a transcript while hidden behind the panel (v-model updates
 // fire no input event, so nothing else would re-grow it).
-watch(voicePanelVisible, (visible) => {
-  if (!visible) void nextTick(autogrow)
+watch(voiceActive, (active) => {
+  if (!active) void nextTick(autogrow)
 })
 
 // Leaving the editor mid-take discards the take: the panel lives inside the
@@ -497,11 +499,14 @@ function goBack(): void {
 
 /* [FE-94] The content field's row: textarea (flex:1) + the mic disc at its
    growing bottom edge; a live take swaps the textarea for the recording
-   panel inside the same band. */
+   panel inside the same band. The 44px floor holds the band through the
+   permission-prompt phase too, before the panel mounts -- the row never
+   collapses under the user mid-take. */
 .entry__edit-row {
   display: flex;
   align-items: flex-end;
   gap: var(--space-2);
+  min-height: var(--velo-size-44);
 }
 
 .entry__edit-content {

@@ -25,7 +25,7 @@
     >
     <div class="v-textarea__row">
       <textarea
-        v-show="!voicePanelVisible"
+        v-show="!voiceActive"
         :id="fieldId"
         ref="fieldEl"
         class="v-textarea__field"
@@ -41,15 +41,21 @@
         @focus="onFieldFocus"
         @input="onInput"
       />
-      <!-- [FE-94, voice step 2] While a take owns the field, the recording
-           panel stands in for the plate; the textarea stays mounted (v-show)
-           so focus and the autogrow height survive the take. -->
+      <!-- [FE-94, voice step 2] While a take owns the field, this wrapper
+           holds the plate's slot for the WHOLE span -- including the
+           `requesting` permission prompt, when it stays an honestly frozen
+           EMPTY band, the composer's own behaviour (no premature
+           «Транскрибация…» before there is a take to transcribe). The panel
+           itself mounts only once the recorder is actually rolling; the
+           textarea stays mounted (v-show) so focus and the autogrow height
+           survive the take. -->
       <div
-        v-if="voicePanelVisible"
+        v-if="voiceActive"
         class="v-textarea__voice"
         :class="{ 'v-textarea__voice--plate': !autogrow }"
       >
         <VoiceRecordingPanel
+          v-if="voicePanelVisible"
           :state="voicePhase"
           :elapsed-sec="voiceElapsed"
           @cancel="cancel"
@@ -189,9 +195,10 @@ const { voiceActive, voicePhase, voicePanelVisible, voiceElapsed, micTap, stop, 
 // in past the cap, so no min/max math is needed here.
 function resize(): void {
   if (!props.autogrow) return
-  // The recording panel owns the row: the hidden field measures scrollHeight 0
-  // and a resize now would bake a garbage height in for after the take.
-  if (voicePanelVisible.value) return
+  // A voice take owns the row for its whole span (permission prompt included):
+  // the hidden field measures scrollHeight 0 and a resize now would bake a
+  // garbage height in for after the take.
+  if (voiceActive.value) return
   const el = fieldEl.value
   if (!el) return
   el.style.height = 'auto'
@@ -216,8 +223,8 @@ watch(
 )
 // A take's end is the first honest moment to measure a field that may have
 // just grown by a transcript while hidden behind the panel.
-watch(voicePanelVisible, (visible) => {
-  if (!visible) void nextTick(resize)
+watch(voiceActive, (active) => {
+  if (!active) void nextTick(resize)
 })
 </script>
 
@@ -256,16 +263,18 @@ watch(voicePanelVisible, (visible) => {
   gap: var(--space-2);
 }
 
-/* [FE-94, voice step 2] The recording panel's slot while a take owns the
-   field. Plate parity for the fixed-rows variant: the wrapper wears the
-   plate's own surface so the row keeps its shape and the panel does not
-   float disembodied over the form; the autogrow variant stays transparent --
-   its height is content-driven and the panel carries the band alone. */
+/* [FE-94, voice step 2] The take's slot while it owns the field -- from the
+   permission prompt (an empty frozen band) through the panel itself. Plate
+   parity for the fixed-rows variant: the wrapper wears the plate's own
+   surface so the row keeps its shape and the panel does not float
+   disembodied over the form; the autogrow variant stays transparent, its
+   floor just one band tall. */
 .v-textarea__voice {
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
+  min-height: var(--velo-size-44);
 }
 
 .v-textarea__voice--plate {

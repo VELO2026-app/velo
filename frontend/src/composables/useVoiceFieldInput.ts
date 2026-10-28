@@ -11,11 +11,13 @@
  * before a take so the keyboard never hangs over the recording panel.
  *
  * THE PANEL CONTRACT, so every surface renders the same take: micTap opens a
- * recording; while voicePanelVisible is true the caller's field yields its
- * row to VoiceRecordingPanel (recording) and stays hidden until the freeze
- * ends (processing + the transcription request); voiceActive additionally
- * spans the `requesting` permission prompt, when the row freezes WITHOUT a
- * panel. Mic/stop buttons unmount for the whole span.
+ * recording; the caller's field yields its row for the WHOLE voiceActive span
+ * -- hidden, not merely disabled, exactly like the composer hides its textarea
+ * -- while the panel itself waits for an actual take (voicePanelVisible:
+ * recording, plus the processing/transcription freeze). voiceActive spans the
+ * `requesting` permission prompt too, when the row freezes as an empty band
+ * WITHOUT a premature «Транскрибация…». Mic/stop buttons unmount for the whole
+ * span.
  *
  * Composer.vue deliberately keeps its own copy of this flow: its version is
  * interwoven with the draft-preview suppression and capsule autogrow, and its
@@ -100,9 +102,13 @@ export function useVoiceFieldInput(options: VoiceFieldInputOptions) {
 
   /** The panel's ✕: silent discard -- an aborted take is not an error and
    *  needs no toast. Also the "surface is going away" escape hatch (e.g. the
-   *  diary editor left mid-take). */
+   *  diary editor left mid-take). Non-idle, not just recording: a surface
+   *  unmounted while the PERMISSION PROMPT sat open must kill that request
+   *  too -- the recorder's own generation guard (FE-78.1) then discards the
+   *  mic stream whenever the late getUserMedia answer arrives, so no orphaned
+   *  recording starts with its panel already gone. */
   function cancel(): void {
-    if (recorderState.value !== 'recording') return
+    if (recorderState.value === 'idle') return
     cancelRecorder()
   }
 
