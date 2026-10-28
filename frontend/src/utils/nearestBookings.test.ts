@@ -3,7 +3,7 @@
 // =============================================================================
 
 import { describe, it, expect } from 'vitest'
-import { selectNearestBookings } from '@/utils/nearestBookings'
+import { selectNearestBookings, selectActionableBookings } from '@/utils/nearestBookings'
 import type { BookingWithPracticeResponse } from '@/api/types'
 
 const NOW = 1_700_000_000_000 // fixed epoch ms
@@ -79,5 +79,42 @@ describe('selectNearestBookings', () => {
 
   it('is empty when there are no eligible bookings', () => {
     expect(selectNearestBookings([], NOW)).toEqual([])
+  })
+})
+
+describe('selectActionableBookings (FE-56: the check-in banner pool)', () => {
+  it('returns ALL eligible bookings soonest-first -- no top-3 cap', () => {
+    // 4 upcoming + a live session: the LIST would cap this at 3, the banner
+    // pool must keep every still-actionable booking.
+    const bookings = [
+      makeBooking({ id: 'up4', startOffsetMin: 240 }),
+      makeBooking({ id: 'live', startOffsetMin: -10 }),
+      makeBooking({ id: 'up2', startOffsetMin: 90 }),
+      makeBooking({ id: 'up3', startOffsetMin: 180 }),
+      makeBooking({ id: 'up1', startOffsetMin: 30 }),
+    ]
+    expect(ids(selectActionableBookings(bookings, NOW))).toEqual([
+      'live',
+      'up1',
+      'up2',
+      'up3',
+      'up4',
+    ])
+  })
+
+  it('excludes non-confirmed, completed/cancelled, and already-ended bookings', () => {
+    const bookings = [
+      makeBooking({ id: 'pending', startOffsetMin: 10, status: 'attended' }),
+      makeBooking({ id: 'cancelledPractice', startOffsetMin: 10, practiceStatus: 'cancelled' }),
+      makeBooking({ id: 'completedPractice', startOffsetMin: 10, practiceStatus: 'completed' }),
+      makeBooking({ id: 'ended', startOffsetMin: -120, durationMin: 60 }), // ended 1h ago
+      makeBooking({ id: 'ok1', startOffsetMin: 25 }),
+      makeBooking({ id: 'ok2', startOffsetMin: 85 }),
+    ]
+    expect(ids(selectActionableBookings(bookings, NOW))).toEqual(['ok1', 'ok2'])
+  })
+
+  it('is empty when there are no eligible bookings', () => {
+    expect(selectActionableBookings([], NOW)).toEqual([])
   })
 })
