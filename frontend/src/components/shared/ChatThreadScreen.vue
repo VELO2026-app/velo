@@ -31,6 +31,14 @@
   the BE-166 translation states for body-less messages, and sends with an
   Idempotency-Key minted HERE (a failed draft's key rides its retry, so a
   lost answer can never become a twin message).
+
+  FE-108: a support appeal deleted with its spam ticket takes its thread
+  along; a delivered notification then lands here and the messages read
+  answers 404. That is not a load failure -- the screen becomes «Этой
+  переписки больше нет» (chat.goneTitle), with a way back and no retry.
+  The same holds for a deletion discovered MID-SESSION by the poll: the
+  404 flips the very same flag, the feed and composer give way, and the
+  ticks stop (a missed poll is silent, a gone thread is not a miss).
 -->
 
 <template>
@@ -40,6 +48,19 @@
     <!-- Loading (first fetch only; polls refresh silently) -->
     <div v-if="loading" class="chat-thread__center">
       <VLoader size="lg" />
+    </div>
+
+    <!-- FE-108: the thread is GONE (a support appeal deleted with its spam
+         ticket after the retention; the proxy 404s the id -- deliberately,
+         "not yours" and "not there" are indistinguishable). Not an error
+         with a retry: an honest screen and a way back. -->
+    <div v-else-if="gone" class="chat-thread__center">
+      <VEmptyState :title="t('chat.goneTitle')" :description="t('chat.goneHint')">
+        <template #icon>
+          <IconMessages :size="48" />
+        </template>
+      </VEmptyState>
+      <VButton size="sm" @click="emit('back')">{{ t('ui.back') }}</VButton>
     </div>
 
     <!-- Load failure: the thread may well exist -- offer a retry. -->
@@ -155,6 +176,7 @@ import {
 } from '@/api/chats'
 import { useAuthStore } from '@/stores/auth'
 import { extractApiError } from '@/composables/useApiError'
+import { ApiResponseError } from '@/api/client'
 import { useComposerGrowCap } from '@/composables/useComposerGrowCap'
 
 // tz-i18n 2.2b: load-failed/empty states via chat.* / common.retry.
@@ -191,6 +213,9 @@ const peerTitle = computed(() => props.peer?.name || props.peerFallback)
 
 const loading = ref(true)
 const error = ref<string | null>(null)
+/** FE-108: the messages read answered 404 -- the thread is gone (deleted
+ *  with its spam ticket, or never the caller's). Terminal: no retry, no poll. */
+const gone = ref(false)
 const messages = ref<ChatMessage[]>([])
 const feedEl = ref<HTMLElement | null>(null)
 
@@ -371,7 +396,16 @@ async function reload(): Promise<void> {
     // (a thread opened straight into «Переводится…» must not wait 12s).
     schedulePoll()
   } catch (e) {
-    error.value = extractApiError(e, t('common.tryAgain'))
+    // FE-108: a 404 is not a failure to load -- the conversation itself is
+    // gone (a support appeal deleted with its spam ticket). The «gone»
+    // screen replaces the thread; polling stops with it.
+    if (e instanceof ApiResponseError && e.status === 404) {
+      gone.value = true
+      if (pollTimer !== null) clearTimeout(pollTimer)
+      pollTimer = null
+    } else {
+      error.value = extractApiError(e, t('common.tryAgain'))
+    }
     loading.value = false
   }
 }
@@ -388,7 +422,7 @@ async function reload(): Promise<void> {
 let translatingSince: number | null = null
 
 function schedulePoll(): void {
-  if (disposed) return
+  if (disposed || gone.value) return
   if (pollTimer !== null) clearTimeout(pollTimer)
   if (isDocumentHidden()) {
     pollTimer = null
@@ -412,7 +446,7 @@ function schedulePoll(): void {
  *  bottom (CH-3) -- follows the conversation down. */
 async function poll(): Promise<void> {
   try {
-    if (isDocumentHidden() || loading.value || sendInFlight.value) return
+    if (isDocumentHidden() || loading.value || gone.value || sendInFlight.value) return
     try {
       const fresh = await fetchMessages()
       const freshNewest = newestId(fresh)
@@ -429,8 +463,13 @@ async function poll(): Promise<void> {
           if (followDown) await scrollToBottom()
         }
       }
-    } catch {
-      // A missed poll is silent by design; the next tick retries.
+    } catch (e) {
+      // A missed poll is silent by design; the next tick retries. A 404 is
+      // not a miss -- the thread was deleted WHILE OPEN (its spam ticket
+      // past the retention): the same honest «gone» screen as on load, not
+      // a stale feed with a live composer. schedulePoll (in the finally
+      // below) refuses while gone, so the ticks stop here too.
+      if (e instanceof ApiResponseError && e.status === 404) gone.value = true
     }
   } finally {
     schedulePoll()

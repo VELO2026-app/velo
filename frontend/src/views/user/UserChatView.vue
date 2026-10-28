@@ -14,6 +14,14 @@
   the ID-11 fence), each row carrying the P-1 peer block. A deep link to an
   id that is not ours lands in the not-found state: the proxy 404s every
   thread route for non-participants, and the list simply won't contain it.
+
+  FE-108: a support appeal deleted with its spam ticket (30 days past the
+  verdict) leaves a delivered `open_thread__<id>` notification pointing at
+  an id the list no longer carries -- that same not-found state becomes the
+  «Этой переписки больше нет» screen. "Deleted with the ticket" and "never
+  the caller's" are indistinguishable by design (the backend's 404 never
+  says which), so the screen says neither -- it only says the conversation
+  is not there to open.
 -->
 
 <template>
@@ -25,8 +33,8 @@
     <div v-else-if="notFound" class="user-chat__center">
       <VHeader :title="t('user.screens.userChat.title')" show-back @back="router.back()" />
       <VEmptyState
-        :title="t('user.screens.userChat.notFound')"
-        :description="t('user.screens.userChat.notFoundHint')"
+        :title="t('user.screens.userChat.gone')"
+        :description="t('user.screens.userChat.goneHint')"
       >
         <template #icon>
           <IconMessages :size="48" />

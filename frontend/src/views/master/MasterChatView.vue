@@ -10,6 +10,12 @@
   from MasterMessagesView. A deep link to a foreign/unknown id: the list
   won't contain it -> not-found state here, and the proxy 404s every thread
   route anyway (membership is checked against the local pointer, ID-11).
+
+  FE-108: the not-found state is worded as «Этой переписки больше нет» --
+  a master's support appeal deleted with its spam ticket leaves a delivered
+  `open_thread__<id>` notification naming an id the list no longer carries,
+  and "deleted" vs "never yours" is deliberately indistinguishable (the
+  twin wording lives in UserChatView; same reason, own keys).
 -->
 
 <template>
@@ -21,8 +27,8 @@
     <div v-else-if="notFound" class="chat__center">
       <VHeader :title="t('masterScreens.masterChat.title')" show-back @back="router.back()" />
       <VEmptyState
-        :title="t('masterScreens.masterChat.notFound')"
-        :description="t('masterScreens.masterChat.notFoundHint')"
+        :title="t('masterScreens.masterChat.gone')"
+        :description="t('masterScreens.masterChat.goneHint')"
       >
         <template #icon>
           <IconMessages :size="48" />

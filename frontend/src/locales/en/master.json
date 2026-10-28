@@ -332,8 +332,8 @@
     "masterChat": {
       "peerFallback": "Student",
       "title": "Messages",
-      "notFound": "Conversation not found",
-      "notFoundHint": "The link may be outdated"
+      "gone": "This conversation is gone",
+      "goneHint": "The conversation was deleted — for example, its support appeal was closed as spam"
     },
     "masterCuratorGroupCreate": {
       "unavailable": "Creating schools is unavailable",
