@@ -247,9 +247,13 @@ export function reopenTicket(ticketId: string): Promise<AdminSupportTicket> {
   return api.post<AdminSupportTicket>(`/api/v1/support/tickets/${ticketId}/reopen`)
 }
 
-/** How long a spam verdict keeps the ticket recoverable (owner ruling: 30
- *  days; backend settings.support_spam_retention_days). Past it the bin
- *  deletes the ticket with its conversation. */
+/** How long a spam verdict keeps the ticket recoverable. The backend reads
+ *  a SETTING (support_spam_retention_days, owner ruling: 30) that is on no
+ *  wire -- exposing it would be a contract change -- so this mirrors the
+ *  ruling. Should the backend ever retune it, the front's offer drifts but
+ *  nothing breaks: the route's own 409 ("past the retention") is the
+ *  authority, and its refusal edge matches this constant's edge exactly
+ *  (`status_changed_at <= cutoff` there, strictly-newer here). */
 export const SUPPORT_SPAM_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 
 /** May this spam ticket still come back («Не спам»)? True while the verdict

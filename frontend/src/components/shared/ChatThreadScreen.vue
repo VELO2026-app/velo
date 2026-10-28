@@ -36,6 +36,9 @@
   along; a delivered notification then lands here and the messages read
   answers 404. That is not a load failure -- the screen becomes «Этой
   переписки больше нет» (chat.goneTitle), with a way back and no retry.
+  The same holds for a deletion discovered MID-SESSION by the poll: the
+  404 flips the very same flag, the feed and composer give way, and the
+  ticks stop (a missed poll is silent, a gone thread is not a miss).
 -->
 
 <template>
@@ -460,8 +463,13 @@ async function poll(): Promise<void> {
           if (followDown) await scrollToBottom()
         }
       }
-    } catch {
-      // A missed poll is silent by design; the next tick retries.
+    } catch (e) {
+      // A missed poll is silent by design; the next tick retries. A 404 is
+      // not a miss -- the thread was deleted WHILE OPEN (its spam ticket
+      // past the retention): the same honest «gone» screen as on load, not
+      // a stale feed with a live composer. schedulePoll (in the finally
+      // below) refuses while gone, so the ticks stop here too.
+      if (e instanceof ApiResponseError && e.status === 404) gone.value = true
     }
   } finally {
     schedulePoll()

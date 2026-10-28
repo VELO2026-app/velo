@@ -567,6 +567,38 @@ describe('ChatThreadScreen', () => {
     expect(host?.textContent).toContain('Этой переписки больше нет')
   })
 
+  // The gap the first cut left: a thread deleted WHILE OPEN -- the poll's
+  // silent catch used to swallow the 404, leaving a stale feed with a live
+  // composer polling a dead id every 12s. The poll now flips the same
+  // `gone` flag the load path flips.
+  it('FE-108: a deletion discovered by the POLL mid-session flips the gone screen; feed and composer give way, ticks stop', async () => {
+    vi.useFakeTimers()
+    vi.mocked(chatsApi.listChatMessages).mockResolvedValueOnce(feed([msg()]))
+    mount()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(bodies()).toEqual(['привет'])
+    expect(host?.querySelector('[data-testid="chat-send"]')).not.toBeNull()
+
+    // The retention empties the spam bin under the open screen.
+    vi.mocked(chatsApi.listChatMessages).mockRejectedValue(
+      new ApiResponseError(404, 'Chat not found'),
+    )
+    await vi.advanceTimersByTimeAsync(12_000)
+
+    expect(chatsApi.listChatMessages).toHaveBeenCalledTimes(2)
+    expect(host?.textContent).toContain('Этой переписки больше нет')
+    expect(host?.querySelector('[data-testid="chat-feed"]')).toBeNull()
+    expect(host?.querySelector('[data-testid="chat-send"]')).toBeNull()
+    const retry = Array.from(host?.querySelectorAll('button') ?? []).find((b) =>
+      b.textContent?.includes('Повторить'),
+    )
+    expect(retry).toBeUndefined()
+
+    // Terminal: no further ticks against the dead id.
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(chatsApi.listChatMessages).toHaveBeenCalledTimes(2)
+  })
+
   // -- FE-103 / BE-163: the support conversation -----------------------------
 
   /** Mount with `support: true` (the wrappers pass the row's `channel`). */
