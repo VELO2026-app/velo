@@ -819,3 +819,158 @@ async def test_update_me_email_coexists_with_phone_bio(client: AsyncClient) -> N
     assert body["phone"] == "+7 916 000 11 22"
     assert body["bio"] == "hi"
     assert body["email"] == "combo@example.com"
+
+
+# ---------------------------------------------------------------------------
+# FE-101: onboarding birth date + goals (schema-on-read, same JSONB path)
+# ---------------------------------------------------------------------------
+
+
+async def test_birth_date_goals_default_for_new_user(client: AsyncClient) -> None:
+    """A fresh user reports birth_date=None, goals=[], goals_custom=None."""
+    data = await login_user(client, telegram_id=89477, first_name="Fresh")
+    token = data["session_token"]
+
+    response = await client.get("/api/v1/users/me", headers=auth_headers(token))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["birth_date"] is None
+    assert body["goals"] == []
+    assert body["goals_custom"] is None
+
+
+async def test_update_birth_date_and_goals(client: AsyncClient) -> None:
+    """The FE-101 onboarding payload is persisted and survives re-login."""
+    data = await login_user(client, telegram_id=89478, first_name="Onboard")
+    token = data["session_token"]
+
+    response = await client.patch(
+        "/api/v1/users/me",
+        headers=auth_headers(token),
+        json={
+            "birth_date": "2001-10-14",
+            "goals": ["less_anxiety", "better_sleep", "custom"],
+            "goals_custom": "Подготовиться к ретриту",
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["birth_date"] == "2001-10-14"
+    assert body["goals"] == ["less_anxiety", "better_sleep", "custom"]
+    assert body["goals_custom"] == "Подготовиться к ретриту"
+
+    # Survives re-login (credentials are merged, not reset, on sign-in).
+    again = await login_user(client, telegram_id=89478, first_name="Onboard")
+    me = await client.get(
+        "/api/v1/users/me", headers=auth_headers(again["session_token"])
+    )
+    me_body = me.json()
+    assert me_body["birth_date"] == "2001-10-14"
+    assert me_body["goals"] == ["less_anxiety", "better_sleep", "custom"]
+    assert me_body["goals_custom"] == "Подготовиться к ретриту"
+
+
+async def test_birth_date_goals_coexist_with_onboarding_flag(client: AsyncClient) -> None:
+    """The finish PATCH sends everything at once -- one write, all keys kept."""
+    data = await login_user(client, telegram_id=89479, first_name="AllAtOnce")
+    token = data["session_token"]
+
+    response = await client.patch(
+        "/api/v1/users/me",
+        headers=auth_headers(token),
+        json={
+            "timezone": "Europe/Moscow",
+            "onboarding_completed": True,
+            "birth_date": "1990-01-01",
+            "goals": ["calm_mind"],
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["onboarding_completed"] is True
+    assert body["timezone"] == "Europe/Moscow"
+    assert body["birth_date"] == "1990-01-01"
+    assert body["goals"] == ["calm_mind"]
+
+
+async def test_birth_date_invalid_values_rejected(client: AsyncClient) -> None:
+    """Not-a-date, non-calendar dates, pre-1900 and future dates -> 422."""
+    data = await login_user(client, telegram_id=89477, first_name="BadDate")
+    token = data["session_token"]
+
+    for bad in ["14.10.2001", "20011014", "2001-02-30", "1899-12-31", "2999-01-01"]:
+        response = await client.patch(
+            "/api/v1/users/me",
+            headers=auth_headers(token),
+            json={"birth_date": bad},
+        )
+        assert response.status_code == 422, bad
+
+
+async def test_goals_unknown_slug_rejected_and_deduped(client: AsyncClient) -> None:
+    """Unknown slugs -> 422; duplicates collapse on the write path."""
+    data = await login_user(client, telegram_id=89478, first_name="Goals")
+    token = data["session_token"]
+
+    bad = await client.patch(
+        "/api/v1/users/me",
+        headers=auth_headers(token),
+        json={"goals": ["world_peace"]},
+    )
+    assert bad.status_code == 422
+
+    dupes = await client.patch(
+        "/api/v1/users/me",
+        headers=auth_headers(token),
+        json={"goals": ["better_sleep", "better_sleep"]},
+    )
+    assert dupes.status_code == 200
+    assert dupes.json()["goals"] == ["better_sleep"]
+
+
+async def test_birth_date_goals_null_untouched_empty_writes(client: AsyncClient) -> None:
+    """null leaves the stored values; "" clears them; [] is a real value."""
+    data = await login_user(client, telegram_id=89479, first_name="NullSem")
+    token = data["session_token"]
+
+    await client.patch(
+        "/api/v1/users/me",
+        headers=auth_headers(token),
+        json={"birth_date": "2000-06-15", "goals": ["more_energy"], "goals_custom": "текст"},
+    )
+
+    # null / absent: untouched.
+    nulled = await client.patch(
+        "/api/v1/users/me",
+        headers=auth_headers(token),
+        json={"birth_date": None, "goals": None, "goals_custom": None},
+    )
+    assert nulled.status_code == 200
+    assert nulled.json()["birth_date"] == "2000-06-15"
+    assert nulled.json()["goals"] == ["more_energy"]
+    assert nulled.json()["goals_custom"] == "текст"
+
+    # "" clears the string fields; an empty goals list overwrites to [].
+    cleared = await client.patch(
+        "/api/v1/users/me",
+        headers=auth_headers(token),
+        json={"birth_date": "", "goals": [], "goals_custom": ""},
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["birth_date"] == ""
+    assert cleared.json()["goals"] == []
+    assert cleared.json()["goals_custom"] == ""
+
+
+async def test_goals_custom_too_long_rejected(client: AsyncClient) -> None:
+    """goals_custom is capped at 200 chars."""
+    data = await login_user(client, telegram_id=89477, first_name="LongText")
+    token = data["session_token"]
+
+    response = await client.patch(
+        "/api/v1/users/me",
+        headers=auth_headers(token),
+        json={"goals_custom": "x" * 201},
+    )
+    assert response.status_code == 422

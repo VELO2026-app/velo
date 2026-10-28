@@ -40,7 +40,8 @@
 # the carrier with the block would silently break self role-switch.
 # =============================================================================
 
-from datetime import datetime
+import re
+from datetime import date, datetime
 from uuid import UUID
 
 from email_validator import EmailNotValidError, validate_email
@@ -48,6 +49,25 @@ from pydantic import BaseModel, Field, computed_field, field_validator
 
 from app.core.timezones import UnknownTimezoneError, canonical_timezone
 from app.modules.users.models import UserRole
+
+# FE-101: the onboarding goal catalog. Canonical SLUGS, never display labels
+# -- labels live in the frontend catalogs (auth.onboarding.goals.options.*).
+# The frontend keeps its own ordered copy (the order is UI copy); this set is
+# only the membership check, so the two cannot drift into an invalid payload.
+# "custom" marks the «Свой вариант» free-text answer, carried by goals_custom.
+USER_GOAL_OPTIONS = frozenset(
+    {
+        "less_anxiety",
+        "better_sleep",
+        "more_energy",
+        "calm_mind",
+        "self_understanding",
+        "curious_to_try",
+        "custom",
+    }
+)
+
+_BIRTH_DATE_SHAPE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 class RoleSwitchInfo(BaseModel):
@@ -267,6 +287,46 @@ class UserResponse(BaseModel):
 
     @computed_field  # type: ignore[prop-decorator]
     @property
+    def birth_date(self) -> str | None:
+        """User's birth date (FE-101 onboarding), ISO ``YYYY-MM-DD`` string.
+
+        Same schema-on-read pattern as phone/bio (key "birth_date" in the
+        credentials JSONB), including the "" (cleared) reads-as-"" semantics
+        the family keeps: a cleared value and an unset one both mean "no
+        date", but the stored distinction is not hidden from the client.
+        """
+        value = self.credentials_in.get("birth_date")
+        return value if isinstance(value, str) else None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def goals(self) -> list[str]:
+        """Onboarding goal picks (FE-101), canonical slugs from
+        USER_GOAL_OPTIONS.
+
+        Schema-on-read (key "goals"). Missing key / wrong shape -> [] (a
+        plain default, never an error: GET must not 500 on a hand-edited
+        blob). Duplicates are removed by the write path, not here.
+        """
+        value = self.credentials_in.get("goals")
+        if not isinstance(value, list):
+            return []
+        return [g for g in value if isinstance(g, str)]
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def goals_custom(self) -> str | None:
+        """Free-text answer behind the «Свой вариант» goal pick (FE-101).
+
+        Schema-on-read (key "goals_custom"), same semantics as phone/bio
+        ("" reads as ""): meaningful only together with the "custom" slug
+        in `goals`.
+        """
+        value = self.credentials_in.get("goals_custom")
+        return value if isinstance(value, str) else None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
     def role_switch(self) -> RoleSwitchInfo | None:
         """Self role-switch capability, or None when there is nothing to
         switch to.
@@ -334,6 +394,17 @@ class UserUpdate(BaseModel):
     # Email (E11). Same "" clears / null untouched semantics as phone/bio;
     # soft-validated below. Stored in credentials JSONB (no column).
     email: str | None = Field(default=None, max_length=254)
+    # Birth date (FE-101 onboarding). ISO "YYYY-MM-DD" stored in the
+    # credentials JSONB. Same "" clears / null untouched semantics as
+    # phone/bio; hard-validated below (a date is either right or garbage).
+    birth_date: str | None = Field(default=None, max_length=10)
+    # Goal picks (FE-101 onboarding): canonical slugs from USER_GOAL_OPTIONS.
+    # An empty list is a real value ("nothing selected in the end") and IS
+    # written; null / not sent leave the stored list untouched.
+    goals: list[str] | None = Field(default=None)
+    # Free text behind the "custom" goal slug. Same "" clears / null
+    # untouched semantics as phone/bio.
+    goals_custom: str | None = Field(default=None, max_length=200)
     # NOTE: BOTH notification stores are deliberately ABSENT from this model.
     # `notifications` (the four-key user store) went with T-26 set 1;
     # `master_notifications` (nine toggles + schedule) with set 2 -- the master
@@ -391,6 +462,55 @@ class UserUpdate(BaseModel):
         except EmailNotValidError as e:
             raise ValueError("Invalid email address") from e
         return v
+
+    @field_validator("birth_date")
+    @classmethod
+    def validate_birth_date(cls, v: str | None) -> str | None:
+        """FE-101: hard-validate the onboarding birth date.
+
+        Semantics follow phone/bio: None = not sent (untouched), "" = clear.
+        A non-empty value must be a strict ISO ``YYYY-MM-DD`` CALENDAR date
+        (the shape regex runs first: Python 3.11's fromisoformat also accepts
+        "20011014" and ISO week forms, which are NOT what the wheel picker
+        sends), not before 1900-01-01 (older than any living player of this
+        product) and not in the future (a birth date that has not happened
+        yet). Normalized via date.isoformat() so the stored spelling is
+        always canonical.
+        """
+        if v is None or v == "":
+            return v
+        if not _BIRTH_DATE_SHAPE.match(v):
+            raise ValueError("birth_date must be an ISO date, YYYY-MM-DD")
+        try:
+            parsed = date.fromisoformat(v)
+        except ValueError:
+            raise ValueError("birth_date is not a real calendar date") from None
+        if parsed.year < 1900:
+            raise ValueError("birth_date cannot be earlier than 1900")
+        if parsed > date.today():
+            raise ValueError("birth_date cannot be in the future")
+        return parsed.isoformat()
+
+    @field_validator("goals")
+    @classmethod
+    def validate_goals(cls, v: list[str] | None) -> list[str] | None:
+        """FE-101: every goal must be a canonical slug; duplicates collapse.
+
+        Membership is checked against USER_GOAL_OPTIONS -- the same set the
+        frontend picker offers -- so a stale/hand-built client cannot store
+        arbitrary strings that no reader (analytics, profile) would ever
+        recognise. Order is preserved (first pick first); duplicates are
+        removed here rather than trusted from the client.
+        """
+        if v is None:
+            return v
+        unknown = [g for g in v if g not in USER_GOAL_OPTIONS]
+        if unknown:
+            raise ValueError(
+                f"Unknown goal(s): {', '.join(unknown)}. "
+                f"Allowed: {', '.join(sorted(USER_GOAL_OPTIONS))}"
+            )
+        return list(dict.fromkeys(v))
 
     @field_validator("timezone", "language", mode="before")
     @classmethod
