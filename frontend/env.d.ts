@@ -30,6 +30,13 @@ interface ImportMeta {
   readonly env: ImportMetaEnv
 }
 
+// Feature-gate literals materialized by vite.config.ts `define` from
+// VITE_FEATURES (tz-whitelabel §4, F3 variant «а»): literal flags let Rollup's
+// DCE drop a disabled module's routes together with its chunks. Present only
+// in Vite-processed builds; the runtime accessor lives in platform/features.
+declare const __VELO_FEATURE_AI__: boolean
+declare const __VELO_FEATURE_PAYMENTS__: boolean
+
 // =============================================================================
 // Telegram WebApp SDK (Phase F1.1, updated TD-F01)
 // =============================================================================

@@ -32,6 +32,7 @@ import { passportHtmlDefaults } from './src/platform/passport-html'
 // index.html theme-color/font, manifest identity/colours) materialize HERE,
 // at config time.
 import { materializedSkinTokens, readSkin } from './src/platform/skin'
+import { featureDefines } from './src/platform/features'
 import type { Plugin } from 'vite'
 
 /** Modules of the Zoom Meeting SDK chunk: the SDK and its peer stack (its
@@ -89,6 +90,14 @@ function skinAssetSpill(skinDir: string | null, distDir: string): Plugin {
 export default defineConfig(({ mode }) => {
   const frontendDir = fileURLToPath(new URL('.', import.meta.url))
   const instanceEnv = loadEnv(mode, frontendDir, 'VITE_')
+  // tz-whitelabel §4 (F3, variant «а»): VITE_FEATURES materializes into one
+  // boolean literal per module (featureDefines() in platform/features -- the
+  // same builder vitest.config pins to the golden all-on set). Route gates in
+  // router/index.ts read these __VELO_FEATURE_*__ defines DIRECTLY -- a
+  // literal `false` folds the gate, Rollup tree-shakes the module's dynamic
+  // imports, and its chunks are physically absent from dist/. An undefined
+  // VITE_FEATURES is the golden build.
+  const defines = featureDefines(instanceEnv.VITE_FEATURES)
   const publicDir = join(frontendDir, 'public')
   const skin = readSkin(publicDir)
 
@@ -181,6 +190,9 @@ export const SKIN_BRAND: string | null = ${JSON.stringify(skin?.displayName ?? n
         },
       }),
     ],
+
+    // tz-whitelabel §4: the per-module literals from `defines` above.
+    define: defines,
 
     resolve: {
       alias: {

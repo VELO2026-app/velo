@@ -6,7 +6,7 @@
 // thread). The old DiaryView and its tab sub-components are removed.
 // =============================================================================
 
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { RETURN_PATH } from '@/platform/browser-login'
 import { useUiStore } from '@/stores/ui'
@@ -26,6 +26,51 @@ import type { ReadyResult } from '@/composables/useAuth'
 import UserShell from '@/views/shells/UserShell.vue'
 import MasterShell from '@/views/shells/MasterShell.vue'
 import AdminShell from '@/views/shells/AdminShell.vue'
+
+// -- Module route groups (tz-whitelabel §4, F3) --
+// Registration is gated by the BUILD-TIME feature literals (vite `define`,
+// materialized from VITE_FEATURES) -- never by a runtime helper: a literal
+// `false` folds `__VELO_FEATURE_X__ ? ROUTES : []` to an empty spread, the
+// group const becomes unreferenced, and Rollup tree-shakes its dynamic
+// imports -- the module's chunks are physically absent from dist/. A deep
+// link into a disabled module misses these records and lands on the
+// catch-all's /404 (NotFoundView), per §4.
+const AI_USER_ROUTES: RouteRecordRaw[] = [
+  {
+    // BE-138: personal tokens for the user's MCP clients.
+    path: 'profile/ai-connections',
+    name: 'user-ai-connections',
+    component: () => import('@/views/user/AiConnectionsView.vue'),
+  },
+  {
+    path: 'ai-summary',
+    name: 'user-ai-summary',
+    component: () => import('@/views/user/AiSummaryView.vue'),
+  },
+]
+
+const PAYMENTS_USER_ROUTES: RouteRecordRaw[] = [
+  {
+    path: 'topup',
+    name: 'user-topup',
+    // [FE-3] No floating header (own inline title) -- headerless contract,
+    // was the phantom 104px band.
+    meta: { headerless: true },
+    component: () => import('@/views/user/TopupView.vue'),
+  },
+  {
+    path: 'topup/success',
+    name: 'user-topup-success',
+    meta: { headerless: true },
+    component: () => import('@/views/user/TopupSuccessView.vue'),
+  },
+  {
+    path: 'topup/cancel',
+    name: 'user-topup-cancel',
+    meta: { headerless: true },
+    component: () => import('@/views/user/TopupCancelView.vue'),
+  },
+]
 
 const router = createRouter({
   history: createWebHistory(),
@@ -121,12 +166,8 @@ const router = createRouter({
           name: 'user-timezone',
           component: () => import('@/views/user/TimezoneSettingsView.vue'),
         },
-        {
-          // BE-138: personal tokens for the user's MCP clients.
-          path: 'profile/ai-connections',
-          name: 'user-ai-connections',
-          component: () => import('@/views/user/AiConnectionsView.vue'),
-        },
+        // tz-whitelabel §4: registered only when the edition enables «ai».
+        ...(__VELO_FEATURE_AI__ ? AI_USER_ROUTES : []),
         {
           path: 'profile/edit',
           name: 'user-edit-profile',
@@ -255,31 +296,9 @@ const router = createRouter({
           // and the screen's own back button.
           meta: { headerless: true },
         },
-        {
-          path: 'ai-summary',
-          name: 'user-ai-summary',
-          component: () => import('@/views/user/AiSummaryView.vue'),
-        },
-        {
-          path: 'topup',
-          name: 'user-topup',
-          // [FE-3] No floating header (own inline title) -- headerless contract,
-          // was the phantom 104px band.
-          meta: { headerless: true },
-          component: () => import('@/views/user/TopupView.vue'),
-        },
-        {
-          path: 'topup/success',
-          name: 'user-topup-success',
-          meta: { headerless: true },
-          component: () => import('@/views/user/TopupSuccessView.vue'),
-        },
-        {
-          path: 'topup/cancel',
-          name: 'user-topup-cancel',
-          meta: { headerless: true },
-          component: () => import('@/views/user/TopupCancelView.vue'),
-        },
+        // tz-whitelabel §4: registered only when the edition enables
+        // «payments» (the whole topup group travels together).
+        ...(__VELO_FEATURE_PAYMENTS__ ? PAYMENTS_USER_ROUTES : []),
         {
           path: '',
           redirect: { name: 'user-dashboard' },

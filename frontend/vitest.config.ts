@@ -10,6 +10,7 @@
 import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
+import { featureDefines } from './src/platform/features'
 
 // tz-whitelabel §3: the unit suite ALWAYS runs against the GOLDEN build.
 // vite.config materializes skin-brand.generated.ts from whatever skin sits in
@@ -22,6 +23,13 @@ const GOLDEN_BRAND_STUB = fileURLToPath(
 
 export default defineConfig({
   plugins: [vue()],
+
+  // tz-whitelabel §4 (F3): the unit suite ALWAYS runs the GOLDEN feature set
+  // (every module on) -- the same philosophy as the golden brand stub below.
+  // Route gates in router/index.ts read the __VELO_FEATURE_*__ literals;
+  // without this define they would be bare undeclared identifiers under
+  // vitest (vitest.config does NOT inherit vite.config).
+  define: featureDefines(undefined),
 
   resolve: {
     // array form: the exact skin-brand key must win before the '@' prefix

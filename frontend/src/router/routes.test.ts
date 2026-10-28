@@ -35,3 +35,21 @@ describe('route table: the school analytics screen (§6 MVP) resolves by name + 
     expect(r.name).toBe('master-curator-group-analytics')
   })
 })
+
+describe('route table: module gates resolve in the golden build (tz-whitelabel §4)', () => {
+  // The suite builds with no VITE_FEATURES -- every module on. A gate that
+  // dropped routes by default fails here; the «chunks absent» side of the
+  // contract is proven by the build matrix (F5), not by unit tests.
+  it('ai routes resolve', () => {
+    expect(router.resolve({ name: 'user-ai-summary' }).href).toBe('/user/ai-summary')
+    expect(router.resolve({ name: 'user-ai-connections' }).href).toBe(
+      '/user/profile/ai-connections',
+    )
+  })
+
+  it('payments routes resolve', () => {
+    expect(router.resolve({ name: 'user-topup' }).href).toBe('/user/topup')
+    expect(router.resolve({ name: 'user-topup-success' }).href).toBe('/user/topup/success')
+    expect(router.resolve({ name: 'user-topup-cancel' }).href).toBe('/user/topup/cancel')
+  })
+})

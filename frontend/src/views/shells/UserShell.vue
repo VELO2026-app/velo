@@ -36,6 +36,7 @@ import { MobileLayout } from '@/components/layout'
 import { USER_TABS, type TabItem } from '@/router/tabs'
 import { useKeyboardOpen } from '@/composables/useKeyboardOpen'
 import { useSchoolsHubStore } from '@/stores/schoolsHub'
+import { featureEnabled } from '@/platform/features'
 
 const route = useRoute()
 const router = useRouter()
@@ -57,6 +58,9 @@ onMounted(() => {
 const visibleTabs = computed<TabItem[]>(() =>
   USER_TABS.filter((tab) => {
     if (tab.requires === 'schools') return schoolsHub.hasSchools
+    // tz-whitelabel §4: an edition require is the feature registry's call,
+    // not server data.
+    if (tab.requires !== undefined) return featureEnabled(tab.requires)
     return true
   }),
 )
