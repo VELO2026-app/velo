@@ -22,15 +22,23 @@
 // genuine zero are indistinguishable on screen. Every test below that reads a
 // non-zero stat value is therefore proof the seam is read, not just defaulted.
 //
-// A THIRD trap, found only by reading stores/bookings.ts (.vue:221,237-292 vs
-// .vue:315-317): checkinAlert [FE-13: the only banner left] searches
-// `bookingsStore.bookings` (the PAGINATED list, fed by getMyBookings via
-// fetchMyBookings/pagination.refresh), while the nearest-practice section reads
-// `bookingsStore.upcoming` (a SEPARATE list from a SEPARATE endpoint,
-// getUpcomingBookings via fetchUpcoming). These are deliberately given
-// DIFFERENT booking IDs below (bk_* for banners, up_* for nearest) so a mixed-up
-// wire (a banner accidentally reading `upcoming`, or vice versa) would produce a
-// visibly wrong id/title rather than an accidental pass.
+// A THIRD trap, found only by reading stores/bookings.ts: this screen reads
+// TWO booking lists. `bookingsStore.upcoming` (getUpcomingBookings: confirmed
+// + not-ended, scheduled_at ASC) feeds the nearest-practice section, while
+// `bookingsStore.bookings` (getMyBookings: a created_at-ordered PAGINATED
+// page) used to feed the check-in banner as well -- which is exactly the
+// FE-56 bug: the page's first in-window item could be a LATER practice, so
+// the banner offered check-in for the wrong session while a sooner one sat
+// in the nearest list. [FE-56] the banner now picks from the SAME upcoming
+// source + candidate rule as the list (selectActionableBookings -- the
+// UNCAPPED pool behind selectNearestBookings, so a >3-deep in-window stack
+// cannot lose a check-in to the list's top-3 cap), and the dashboard no
+// longer warms the page itself (every bookings-page screen fetches on its
+// own mount). The banner fixtures below ride the up_* seam, and the bk_*
+// DECOY is loaded INTO the store (fetchMyBookings over the mocked API -- the
+// state the pre-fix banner read from, as another screen would have left it)
+// so a wire-back to the page is a visibly wrong title/id, not an accidental
+// pass.
 //
 // TIME IS PINNED to 2026-07-20T12:00:00Z with fake timers -- this screen reads
 // the wall clock in FOUR places that decide what renders: the reactive `now`
@@ -273,18 +281,36 @@ const UP_SOON = booking(
   },
 )
 
-// -- Banner fixtures (bookingsStore.bookings, getMyBookings) -- DIFFERENT ids
-// from the up_* set on purpose (see banner).
-const CHECKIN_IN = booking(
-  'bk_checkin',
+// -- Check-in banner fixtures (bookingsStore.upcoming, getUpcomingBookings) --
+// [FE-56] the banner's candidates are the SAME live-aware nearest selection as
+// the list, so these ride the up_* seam too.
+// UP_CHECKIN: 2h out -- inside the 24h check-in window, the SOONEST of the pair.
+const UP_CHECKIN = booking(
+  'up_checkin',
   { status: 'confirmed', has_checkin: false, checkin_skipped: false },
   { title: 'Вечерняя практика', scheduled_at: '2026-07-20T14:00:00Z', duration_minutes: 60 },
 )
-// +30h -- outside the 24h check-in window (window opens at scheduled-24h).
-const CHECKIN_OUT = booking(
-  'bk_checkin_out',
+// UP_CHECKIN_LATER: 4h out -- also inside the window, but NOT the nearest.
+const UP_CHECKIN_LATER = booking(
+  'up_checkin_later',
+  { status: 'confirmed', has_checkin: false, checkin_skipped: false },
+  { title: 'Послеобеденная практика', scheduled_at: '2026-07-20T16:00:00Z', duration_minutes: 60 },
+)
+// UP_CHECKIN_OUT: +30h -- outside the 24h check-in window (window opens at
+// scheduled-24h).
+const UP_CHECKIN_OUT = booking(
+  'up_checkin_out',
   { status: 'confirmed', has_checkin: false, checkin_skipped: false },
   { title: 'Далёкая практика', scheduled_at: '2026-07-21T18:00:00Z', duration_minutes: 60 },
+)
+// BK_PAGE_FIRST: the FIRST item of the paginated getMyBookings page -- the
+// DECOY (see banner). Same 16:00 slot as UP_CHECKIN_LATER but a bk_* id: the
+// pre-FE-56 banner searched that page unsorted-by-scheduled_at and would have
+// picked exactly this one.
+const BK_PAGE_FIRST = booking(
+  'bk_page_first',
+  { status: 'confirmed', has_checkin: false, checkin_skipped: false },
+  { title: 'Поздняя практика', scheduled_at: '2026-07-20T16:00:00Z', duration_minutes: 60 },
 )
 // [FE-13] FEEDBACK_IN/FEEDBACK_OUT/REFLECT_IN/REFLECT_OUT fixtures removed
 // together with the banners and their describe blocks.
@@ -758,7 +784,7 @@ describe('UserDashboardView', () => {
   // ===========================================================================
   describe('check-in banner', () => {
     it('in-window: shows the banner with the real countdown and navigates on click', async () => {
-      vi.mocked(bookingsApi.getMyBookings).mockResolvedValue(page([CHECKIN_IN]))
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([UP_CHECKIN])
       mount()
       await flush()
 
@@ -770,12 +796,83 @@ describe('UserDashboardView', () => {
       await flush()
       expect(push).toHaveBeenCalledWith({
         name: 'user-checkin',
-        params: { practiceId: 'pr_bk_checkin' },
+        params: { practiceId: 'pr_up_checkin' },
       })
     })
 
+    it('[FE-56] shows the FIRST nearest practice, not the first item of the paginated bookings page', async () => {
+      // The reported bug: the banner searched bookingsStore.bookings (a
+      // created_at-ordered page, unsorted by scheduled_at), so with a LATER
+      // in-window booking first on that page it offered check-in for the
+      // wrong session while a sooner one sat in the nearest list. The decoy
+      // page is loaded INTO the store via the real fetchMyBookings over the
+      // mocked API (the dashboard itself no longer fetches it -- the state
+      // another screen would have left behind); the upcoming source
+      // (deliberately unsorted input -- the selection sorts itself) holds
+      // both a 16:00 and a sooner 14:00 booking. Only reading the same
+      // upcoming pool as the list picks the 14:00 one.
+      vi.mocked(bookingsApi.getMyBookings).mockResolvedValue(page([BK_PAGE_FIRST]))
+      await useBookingsStore().fetchMyBookings()
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([UP_CHECKIN_LATER, UP_CHECKIN])
+      mount()
+      await flush()
+
+      const b = bannerTitled('Пора на check-in!')
+      expect(b).toBeDefined()
+      expect(bannerBody(b!)).toBe('Вечерняя практика • через 2 ч')
+      expect(text()).not.toContain('Поздняя практика')
+
+      b!.click()
+      await flush()
+      expect(push).toHaveBeenCalledWith({
+        name: 'user-checkin',
+        params: { practiceId: 'pr_up_checkin' },
+      })
+    })
+
+    it('[FE-56] a 3-deep in-window stack: the banner finds the third booking even past the list top-3 cap', async () => {
+      // The 24h window can easily hold several practices at once. The list
+      // caps at 2 upcoming cards (nothing live here), so the 17:00 booking
+      // is NOT rendered -- yet it is the first one still checkable (the two
+      // shown ones are exhausted: one already checked in, one persistently
+      // skipped), and the banner must offer exactly it. A banner wired to
+      // the list's output would have shown nothing.
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([
+        { ...UP_CHECKIN, has_checkin: true }, // 14:00 -- checked in already
+        { ...UP_CHECKIN_LATER, checkin_skipped: true }, // 16:00 -- skipped (B2)
+        booking(
+          'up_third',
+          { status: 'confirmed', has_checkin: false, checkin_skipped: false },
+          { title: 'Третья практика', scheduled_at: '2026-07-20T17:00:00Z', duration_minutes: 60 },
+        ),
+      ])
+      mount()
+      await flush()
+
+      // The list shows only the top-2 upcoming; the third card is capped out.
+      expect(nearestBlocks()).toHaveLength(2)
+
+      const b = bannerTitled('Пора на check-in!')
+      expect(b).toBeDefined()
+      expect(bannerBody(b!)).toBe('Третья практика • через 5 ч')
+
+      b!.click()
+      await flush()
+      expect(push).toHaveBeenCalledWith({
+        name: 'user-checkin',
+        params: { practiceId: 'pr_up_third' },
+      })
+    })
+
+    it('[FE-56] the dashboard no longer warms the paginated bookings page (nothing here reads it)', async () => {
+      mount()
+      await flush()
+
+      expect(bookingsApi.getMyBookings).not.toHaveBeenCalled()
+    })
+
     it('out-of-window: does not show (too early, outside the 24h check-in window)', async () => {
-      vi.mocked(bookingsApi.getMyBookings).mockResolvedValue(page([CHECKIN_OUT]))
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([UP_CHECKIN_OUT])
       mount()
       await flush()
 
@@ -783,9 +880,9 @@ describe('UserDashboardView', () => {
     })
 
     it('hidden once already checked in, even inside the window', async () => {
-      vi.mocked(bookingsApi.getMyBookings).mockResolvedValue(
-        page([{ ...CHECKIN_IN, has_checkin: true }]),
-      )
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([
+        { ...UP_CHECKIN, has_checkin: true },
+      ])
       mount()
       await flush()
 
@@ -793,9 +890,9 @@ describe('UserDashboardView', () => {
     })
 
     it('hidden when the user persistently skipped this booking (checkin_skipped, B2)', async () => {
-      vi.mocked(bookingsApi.getMyBookings).mockResolvedValue(
-        page([{ ...CHECKIN_IN, checkin_skipped: true }]),
-      )
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([
+        { ...UP_CHECKIN, checkin_skipped: true },
+      ])
       mount()
       await flush()
 
@@ -803,11 +900,11 @@ describe('UserDashboardView', () => {
     })
 
     it('hidden when dismissed THIS SESSION (store state, driven directly per Pattern A idiom)', async () => {
-      vi.mocked(bookingsApi.getMyBookings).mockResolvedValue(page([CHECKIN_IN]))
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([UP_CHECKIN])
       mount()
       // Real store, real action -- proves the screen reads dismissedCheckins,
       // not that dismissCheckin itself works (that lives elsewhere).
-      useBookingsStore().dismissCheckin('pr_bk_checkin')
+      useBookingsStore().dismissCheckin('pr_up_checkin')
       await flush()
 
       expect(bannerTitled('Пора на check-in!')).toBeUndefined()
@@ -817,9 +914,9 @@ describe('UserDashboardView', () => {
   // ===========================================================================
   describe('the 60s clock', () => {
     it('a check-in banner appears the moment the window opens, with no reload', async () => {
-      // CHECKIN_OUT opens its window at scheduled-24h = 2026-07-20T18:00:00Z.
+      // UP_CHECKIN_OUT opens its window at scheduled-24h = 2026-07-20T18:00:00Z.
       // Advance system time there and let the screen's own interval re-evaluate.
-      vi.mocked(bookingsApi.getMyBookings).mockResolvedValue(page([CHECKIN_OUT]))
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([UP_CHECKIN_OUT])
       mount()
       await flush()
       expect(bannerTitled('Пора на check-in!')).toBeUndefined()

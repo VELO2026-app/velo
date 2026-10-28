@@ -15,11 +15,35 @@ const startMs = (b: BookingWithPracticeResponse): number =>
   new Date(b.practice.scheduled_at).getTime()
 
 /**
+ * ALL actionable bookings, soonest first -- the uncapped candidate pool behind
+ * selectNearestBookings. The dashboard check-in banner searches this pool
+ * (FE-56): with several practices inside the 24h window at once, the first
+ * still-checkable one may sit past the list's top-3 cap (e.g. behind a live
+ * session and two already checked-in cards), and the banner must find it
+ * anyway.
+ */
+export function selectActionableBookings(
+  bookings: readonly BookingWithPracticeResponse[],
+  nowMs: number,
+): BookingWithPracticeResponse[] {
+  return bookings
+    .filter((b) => {
+      if (b.status !== 'confirmed') return false
+      if (b.practice.status === 'completed' || b.practice.status === 'cancelled') {
+        return false
+      }
+      const endMs = startMs(b) + b.practice.duration_minutes * 60 * 1000
+      return nowMs < endMs
+    })
+    .sort((a, b) => startMs(a) - startMs(b))
+}
+
+/**
  * Live-aware nearest-bookings selection (operator Г).
  *
- * Candidate rule: a confirmed booking whose practice is not completed/cancelled
- * and has NOT ended yet (now < start + duration_minutes) -- the same filter the
- * single-card version used.
+ * Candidate rule (unchanged, shared with selectActionableBookings): a booking
+ * is a candidate while its practice has NOT ended yet (now < start +
+ * duration_minutes) -- the same filter the single-card version used.
  *
  * Selection: pin the ACTIVE session first (the single latest-started in-progress
  * booking -- start <= now), then the `maxUpcoming` soonest NOT-yet-started
@@ -35,14 +59,7 @@ export function selectNearestBookings(
   nowMs: number,
   maxUpcoming: number = DEFAULT_MAX_UPCOMING,
 ): BookingWithPracticeResponse[] {
-  const candidates = bookings.filter((b) => {
-    if (b.status !== 'confirmed') return false
-    if (b.practice.status === 'completed' || b.practice.status === 'cancelled') {
-      return false
-    }
-    const endMs = startMs(b) + b.practice.duration_minutes * 60 * 1000
-    return nowMs < endMs
-  })
+  const candidates = selectActionableBookings(bookings, nowMs)
 
   // Active session: already started, not past the ceiling. Keep only the single
   // latest-started one (matches the old "live wins" pick).

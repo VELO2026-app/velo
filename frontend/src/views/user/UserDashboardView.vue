@@ -2,7 +2,11 @@
   VELO Frontend -- UserDashboardView (Phase F3.1, updated DS-dashboard)
 
   Main user screen. Shows:
-    - Check-in alert banner (amber) -- confirmed booking in check-in window
+    - Check-in alert banner (amber) -- the nearest still-checkable confirmed
+                              booking inside the check-in window; drawn from
+                              the SAME upcoming source + candidate rule as the
+                              list below (FE-56), never the paginated bookings
+                              page
     - "Ближайшие практики" -- live-aware list: the active session (if any) pinned
                               first, then up to 2 soonest upcoming (max 3), each
                               with Zoom; Check-in hides while the session is
@@ -237,7 +241,7 @@ import Banner from '@/components/shared/Banner.vue'
 import { formatDateShort, formatTime, formatDuration } from '@/utils/format'
 import { isInCheckinWindow } from '@/composables/usePracticeWindows'
 import { isLiveNow, isFree } from '@/utils/bookingStatus'
-import { selectNearestBookings } from '@/utils/nearestBookings'
+import { selectNearestBookings, selectActionableBookings } from '@/utils/nearestBookings'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import { CHECKIN_WINDOW_H } from '@/utils/constants'
 import { zoomEntryState, type ZoomEntryStateKind } from '@/utils/zoomEntryState'
@@ -264,14 +268,59 @@ let clockInterval: ReturnType<typeof setInterval> | null = null
 const stats = ref<UserStatsResponse | null>(null)
 
 // =========================================================================
+// Nearest bookings (shared selection -- the list AND the check-in banner)
+// =========================================================================
+
+/**
+ * Nearest bookings the user can still act on (live-aware list, TASK-2).
+ *
+ * Candidate rule (unchanged): a booking is a candidate while its practice has
+ * NOT ended yet -- still confirmed, practice not completed/cancelled, and now is
+ * before its END (start + duration_minutes). This keeps the card visible to a
+ * booked user during the live session (Zoom / Check-in) and hides it the moment
+ * the practice is over. (This is "my session" -- distinct from the bookable
+ * calendar feed, which hides a practice once it STARTS.)
+ *
+ * Selection (operator Г): pin the active session (the single latest-started
+ * in-progress booking) FIRST -- that's where Zoom / Check-in matter -- then the
+ * 2 soonest upcoming, so a genuinely-imminent booking is never hidden behind a
+ * live one. Max 3 cards; nothing live -> just the 2 soonest upcoming. The pure
+ * selection lives in utils/nearestBookings (unit-tested); reacts to `now` so it
+ * re-ranks on the 60s clock tick.
+ *
+ * [FE-56] This selection shares its source and candidate rule with the
+ * check-in banner below (both read bookingsStore.upcoming through
+ * utils/nearestBookings), so the two can never disagree. The list caps the
+ * pool at 3 cards for display; the banner searches the FULL pool -- see
+ * checkinAlert. (The banner used to search the paginated bookings page
+ * instead -- see checkinAlert.)
+ */
+const nearestBookings = computed((): BookingWithPracticeResponse[] =>
+  selectNearestBookings(bookingsStore.upcoming, now.value),
+)
+
+// =========================================================================
 // Alert banners
 // =========================================================================
 
-/** First confirmed booking currently in the check-in window, not yet done. */
+/**
+ * First still-checkable booking inside the check-in window, soonest first.
+ *
+ * [FE-56] The candidate pool is selectActionableBookings(bookingsStore.
+ * upcoming) -- the SAME upcoming source and candidate rule that drive the
+ * «Ближайшие практики» list, but UNCAPPED: the list shows at most 3 cards,
+ * and with several practices inside the 24h window at once the first
+ * still-checkable one may sit past that cap (e.g. behind a live session and
+ * two already checked-in cards). NOT bookingsStore.bookings: that paginated
+ * page is created_at-ordered and capped, so its first in-window item could be
+ * a LATER practice while a sooner one sat in the nearest list -- the banner
+ * then offered check-in for the wrong session (the reported bug). The pool
+ * already guarantees confirmed + not-ended; the checks below are the
+ * banner-specific ones.
+ */
 const checkinAlert = computed((): BookingWithPracticeResponse | null => {
   return (
-    bookingsStore.bookings.find((b) => {
-      if (b.status !== 'confirmed') return false
+    selectActionableBookings(bookingsStore.upcoming, now.value).find((b) => {
       // Hide once the user has already checked in (no re-submit via banner).
       if (b.has_checkin) return false
       // Hide if the user persistently skipped this booking's check-in (B2).
@@ -303,29 +352,8 @@ const checkinAlertTime = computed((): string => {
 // still uses it.
 
 // =========================================================================
-// Nearest practice
+// Per-card helpers
 // =========================================================================
-
-/**
- * Nearest bookings the user can still act on (live-aware list, TASK-2).
- *
- * Candidate rule (unchanged): a booking is a candidate while its practice has
- * NOT ended yet -- still confirmed, practice not completed/cancelled, and now is
- * before its END (start + duration_minutes). This keeps the card visible to a
- * booked user during the live session (Zoom / Check-in) and hides it the moment
- * the practice is over. (This is "my session" -- distinct from the bookable
- * calendar feed, which hides a practice once it STARTS.)
- *
- * Selection (operator Г): pin the active session (the single latest-started
- * in-progress booking) FIRST -- that's where Zoom / Check-in matter -- then the
- * 2 soonest upcoming, so a genuinely-imminent booking is never hidden behind a
- * live one. Max 3 cards; nothing live -> just the 2 soonest upcoming. The pure
- * selection lives in utils/nearestBookings (unit-tested); reacts to `now` so it
- * re-ranks on the 60s clock tick.
- */
-const nearestBookings = computed((): BookingWithPracticeResponse[] =>
-  selectNearestBookings(bookingsStore.upcoming, now.value),
-)
 
 /**
  * True when a card's practice is happening right now — decided by CLIENT TIME
@@ -514,7 +542,6 @@ onMounted(() => {
   void notifications.refreshUnread()
   startBellPoll()
   onDocumentEvent('visibilitychange', onBellVisibility)
-  void bookingsStore.fetchMyBookings()
   // W15 fix (PROMPT №409): fetchUpcoming used to swallow its error entirely
   // (an empty result looked identical to "genuinely nothing upcoming") --
   // surface it via toast instead of leaving the widget silently blank.
