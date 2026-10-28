@@ -50,8 +50,22 @@
      --velo-bg-card-solid is 2.15:1, below both WCAG bars. 72 usages of --velo-text-muted exist,
      only 4 are placeholders (VInput/VTextarea) -- darkening the shared token would move 68
      unreviewed places to fix four. This token is 90% opacity of the same base hue, the minimum
-     clean value that clears 4.5:1 (measured 4.75:1; 85% measures 4.26:1 and still fails). */
+     clean value that clears 4.5:1 (measured 4.75:1; 85% measures 4.26:1 and still fails).
+     [FE-79] This GLOBAL value stays №679's: a fainter placeholder ride is scoped to the
+     «Новое событие» screen via the faint sibling just below, pending the owner's global-vs-
+     screen ruling -- re-theming the other placeholder consumers (~10 places) is the owner's
+     call, not this ticket's. Pinned byte-exact by placeholder-contrast.test.ts. */
   --velo-text-placeholder: rgba(76, 101, 137, 0.9);
+  /* [FE-79] The screen-scoped paler placeholder -- the audit's «бледнее, но контрастно»
+     third way, WITHOUT its predicted 4.5:1 violation: a desaturated, lighter blue-grey
+     measuring 4.79:1 on --velo-bg-card-solid (№679's own level), paler than the typed
+     text (#4c6589: 5.95:1) on the axis same-hue alpha could not move -- saturation
+     (HSL S 29%→17%; the text keeps its blue cast, the hint reads grey). Consumed ONLY
+     by ExternalActivityCreateView's scoped --velo-text-placeholder override; every hint
+     on that screen («Мысли», «Укажите ваш вариант», the «Дата»/«Время» pickers) rides
+     it. Invariants (≥4.5:1; saturation ≥8pp under the text's) live in
+     placeholder-contrast.test.ts, calibrated so №679's 0.9-alpha FAILS them. */
+  --velo-text-placeholder-faint: #62748a;
 
   /* === Colors: Borders === */
   --velo-border: #abbfda;

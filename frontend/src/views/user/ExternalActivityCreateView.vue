@@ -538,6 +538,15 @@ async function onSubmit(): Promise<void> {
      at the header's bottom edge -- same shape as MobileLayout's fog mask. */
   --ea-fog-hard: 40px;
   --ea-fog-top: calc(var(--space-5) + var(--velo-size-44) + var(--space-3));
+  /* [FE-79] SCREEN-SCOPED placeholder tint: inside .ea every placeholder --
+     «Мысли» (VTextarea), «Укажите ваш вариант», the empty «Дата»/«Время»
+     pickers -- resolves --velo-text-placeholder to the paler faint sibling,
+     visibly greyer than the typed text while holding №679's 4.5:1 bar
+     (4.79:1). The GLOBAL token keeps №679's value: fading the app's other
+     ~10 placeholder consumers is the owner's pending global-vs-screen call,
+     not this screen's. If the owner rules global, delete this declaration --
+     the faint token and its contract test are already in place. */
+  --velo-text-placeholder: var(--velo-text-placeholder-faint);
 }
 
 .ea__header {
@@ -646,8 +655,13 @@ async function onSubmit(): Promise<void> {
   cursor: pointer;
 }
 
+/* [FE-79] An empty picker IS this screen's placeholder: it rides the DS
+   placeholder token like «Мысли» and «Укажите ваш вариант» -- one muted
+   style for every hint on the screen, visibly paler than the picked value
+   (--velo-text-primary above). The former --velo-text-muted ride composited
+   2.15:1, under the №679 bar the token is held to. */
 .ea__picker--empty {
-  color: var(--velo-text-muted);
+  color: var(--velo-text-placeholder);
 }
 
 .ea__picker--error {
