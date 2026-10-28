@@ -13,7 +13,7 @@
 // (pre-existing, Batch-INVITE №258), group_invite__{token} (new, P4).
 // =============================================================================
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { decodePracticeCode, parseStartParam } from '@/composables/useAuth'
 
 describe('parseStartParam', () => {
@@ -55,6 +55,19 @@ describe('parseStartParam', () => {
       [`open_admin_support__${id}`, 'admin', { name: 'admin-support-detail', params: { id } }],
     ] as const)('%s as %s', (param, role, route) => {
       expect(parseStartParam(param, role)).toEqual(route)
+    })
+
+    // tz-whitelabel §4: an edition without payments has no wallet route --
+    // the user-side tap degrades to no navigation; the master's finance
+    // screen is not part of the gated module and stays.
+    it('open_wallet without the payments module -> user: no route, master: finance', () => {
+      vi.stubEnv('VITE_FEATURES', 'ai')
+      try {
+        expect(parseStartParam('open_wallet', 'user')).toBeNull()
+        expect(parseStartParam('open_wallet', 'master')).toEqual({ name: 'master-finance' })
+      } finally {
+        vi.unstubAllEnvs()
+      }
     })
 
     it.each(['open_notifications', 'open_admin_masters', 'open_thread__x'])(

@@ -108,9 +108,11 @@
           >
             <template #icon><IconGlobe :size="20" /></template>
           </VMenuRow>
-          <!-- BE-138: tokens for the user's AI (MCP) clients. Always shown:
-               with MCP switched off the screen itself says "unavailable". -->
+          <!-- BE-138: tokens for the user's AI (MCP) clients. tz-whitelabel
+               §4: the row follows the «ai» edition module -- an edition
+               without it has neither the route nor the entry point. -->
           <VMenuRow
+            v-if="aiEnabled"
             :label="t('user.screens.userProfile.menu.aiConnections')"
             @click="onAiConnections"
           >
@@ -175,6 +177,7 @@ import { t } from '@/locales'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { featureEnabled } from '@/platform/features'
 import { useUiStore } from '@/stores/ui'
 import { VAvatar, VStatCard, VCard, VMenuRow } from '@/components/ui'
 import RoleSwitchSection from '@/components/shared/RoleSwitchSection.vue'
@@ -247,6 +250,9 @@ function onTimezoneSettings(): void {
 function onAiConnections(): void {
   void router.push({ name: 'user-ai-connections' })
 }
+
+// tz-whitelabel §4: the «ai» edition module owns the menu row above.
+const aiEnabled = featureEnabled('ai')
 
 function onSupport(): void {
   // User support screen (batch I): topic picker + message + honest stub submit

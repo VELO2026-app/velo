@@ -35,6 +35,7 @@ import { platform } from '@/platform'
 import { takeLoginMark, takeLoginReturn } from '@/platform/browser-login'
 import { useAuthStore } from '@/stores/auth'
 import { ApiNetworkError, ApiResponseError, ApiTimeoutError } from '@/api/client'
+import { featureEnabled } from '@/platform/features'
 import type { UserRole } from '@/api/types'
 
 /** Whether auth initialization has completed. */
@@ -288,7 +289,10 @@ export function parseStartParam(
     case 'open_feedback':
       return id ? { name: 'user-feedback', params: { practiceId: id } } : null
     case 'open_wallet': // bare (payouts, top-ups) or __<practice_id> (refunds)
-      return { name: asMaster ? 'master-finance' : 'user-topup' }
+      if (asMaster) return { name: 'master-finance' }
+      // tz-whitelabel §4: an edition without the payments module has no
+      // wallet route -- the tap degrades to no navigation, not the 404.
+      return featureEnabled('payments') ? { name: 'user-topup' } : null
     case 'confirm_waitlist':
       return id ? { name: 'waitlist-confirm', params: { id } } : null
     case 'open_curator_group':

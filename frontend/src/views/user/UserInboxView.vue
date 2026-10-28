@@ -108,6 +108,7 @@ import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useAuthStore } from '@/stores/auth'
+import { featureEnabled } from '@/platform/features'
 import {
   listNotifications,
   markAllNotificationsRead,
@@ -265,7 +266,9 @@ function routeFor(
     case 'open_feedback':
       return practiceId ? { name: 'user-feedback', params: { practiceId } } : null
     case 'open_wallet':
-      return { name: 'user-topup' }
+      // tz-whitelabel §4: an edition without the payments module has no
+      // wallet route -- the tap degrades to no navigation, not the 404.
+      return featureEnabled('payments') ? { name: 'user-topup' } : null
     case 'open_curator_group_join': {
       // The participant school invitation: routes by the invite TOKEN -- the
       // join screen reads the school by it, exactly like the invite link.

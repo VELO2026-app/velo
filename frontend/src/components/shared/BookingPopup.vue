@@ -110,6 +110,7 @@ import { useToast } from '@/composables/useToast'
 import { useBalanceStore } from '@/stores/balance'
 import { purchasePractice, previewPurchase } from '@/api/bookings'
 import { ApiResponseError } from '@/api/client'
+import { featureEnabled } from '@/platform/features'
 import { extractApiError } from '@/composables/useApiError'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import { formatDate, formatMoney } from '@/utils/format'
@@ -184,8 +185,13 @@ const insufficientBalance = computed(
   () => !props.practice.is_free && !balanceStore.hasEnough(totalCents.value),
 )
 
+// tz-whitelabel §4: an edition without the payments module has no topup
+// screen -- the insufficient-balance path degrades to the plain pay CTA and
+// the honest backend rejection instead of a redirect into the missing route.
+const topupAvailable = featureEnabled('payments')
+
 const purchaseButtonText = computed(() => {
-  if (insufficientBalance.value) return t('booking.cta.topup')
+  if (insufficientBalance.value && topupAvailable) return t('booking.cta.topup')
   if (props.practice.is_free) return t('booking.cta.signup')
   return t('booking.cta.pay')
 })
@@ -223,8 +229,10 @@ async function onPurchase(): Promise<void> {
   // C-2: Guard against double tap / rapid clicks.
   if (purchasing.value) return
 
-  // Redirect to topup if insufficient balance.
-  if (insufficientBalance.value) {
+  // Redirect to topup if insufficient balance (tz-whitelabel §4: only when
+  // the edition has the payments module; otherwise the attempt falls through
+  // to the backend's own insufficient-funds error -- never a 404 redirect).
+  if (insufficientBalance.value && topupAvailable) {
     resetState()
     emit('close')
     void router.push({ name: 'user-topup' })

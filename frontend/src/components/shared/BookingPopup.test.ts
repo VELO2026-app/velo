@@ -21,8 +21,15 @@ import { createPinia, setActivePinia, type Pinia } from 'pinia'
 import BookingPopup from '@/components/shared/BookingPopup.vue'
 import type { PracticeResponse } from '@/api/types'
 
+// Mutable harness state the mocked factories close over -- reset per test in
+// beforeEach; the feature-gate tests flip both sides.
+const harness = vi.hoisted(() => ({
+  routerPush: vi.fn(),
+  hasEnough: true,
+}))
+
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: vi.fn(), back: vi.fn() }),
+  useRouter: () => ({ push: harness.routerPush, back: vi.fn() }),
 }))
 
 vi.mock('@/composables/useToast', () => ({
@@ -31,7 +38,7 @@ vi.mock('@/composables/useToast', () => ({
 
 vi.mock('@/stores/balance', () => ({
   useBalanceStore: () => ({
-    hasEnough: () => true,
+    hasEnough: () => harness.hasEnough,
     refresh: vi.fn(),
     formattedBalance: '100,00 €',
   }),
@@ -93,9 +100,12 @@ describe('BookingPopup · [FE-52] viewer-timezone date', () => {
     pinia = createPinia()
     setActivePinia(pinia)
     viewerZone = 'Europe/Berlin'
+    harness.routerPush.mockClear()
+    harness.hasEnough = true
   })
 
   afterEach(() => {
+    vi.unstubAllEnvs()
     app?.unmount()
     host?.remove()
     app = null
@@ -137,5 +147,48 @@ describe('BookingPopup · [FE-52] viewer-timezone date', () => {
     // 10:00 UTC rendered as 10:00 (neutral default), not 15:00 (master).
     expect(text).toContain('10:00')
     expect(text).not.toContain('15:00')
+  })
+})
+
+describe('BookingPopup · feature gates (tz-whitelabel §4)', () => {
+  beforeEach(() => {
+    pinia = createPinia()
+    setActivePinia(pinia)
+    viewerZone = 'Europe/Berlin'
+    harness.routerPush.mockClear()
+    harness.hasEnough = true
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    app?.unmount()
+    host?.remove()
+    app = null
+    host = null
+  })
+
+  it('an edition WITH payments: insufficient balance -> the topup CTA (control)', async () => {
+    harness.hasEnough = false
+    mountPopup(practice({ is_free: false, price_cents: 5000 }))
+    await flush()
+    expect(document.body.textContent).toContain('Пополнить баланс')
+  })
+
+  it('an edition WITHOUT payments: the CTA falls back to «Оплатить», never the dead redirect', async () => {
+    harness.hasEnough = false
+    vi.stubEnv('VITE_FEATURES', 'ai')
+    mountPopup(practice({ is_free: false, price_cents: 5000 }))
+    await flush()
+    const text = document.body.textContent ?? ''
+    expect(text).toContain('Оплатить')
+    expect(text).not.toContain('Пополнить баланс')
+    // The redirect guard and the label share one condition (topupAvailable):
+    // exercising the CTA proves the insufficient-balance tap cannot navigate
+    // into the unregistered route.
+    for (const button of Array.from(document.querySelectorAll('button'))) {
+      if ((button.textContent ?? '').trim() === 'Оплатить') button.click()
+    }
+    await flush()
+    expect(harness.routerPush).not.toHaveBeenCalled()
   })
 })
