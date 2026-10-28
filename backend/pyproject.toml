@@ -86,6 +86,11 @@ dev = [
 requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
+# Flat-layout has two top-level dirs (app, migrations); package only app —
+# migrations are executed by alembic, not installed as a package.
+[tool.setuptools.packages.find]
+include = ["app*"]
+
 # =============================================================================
 # Tool Configuration
 # =============================================================================
