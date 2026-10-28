@@ -445,7 +445,8 @@
         "undelivered": "Not delivered",
         "showOriginal": "Show original",
         "showTranslation": "Show translation"
-      }
+      },
+      "resolvedBy": "Resolved by: {name}"
     },
     "adminSupport": {
       "empty": {
@@ -474,7 +475,28 @@
         "complaints": "Complaints",
         "other": "Other"
       },
-      "appealDate": "Request date"
+      "appealDate": "Request date",
+      "rating": {
+        "filterLabel": "Rating",
+        "none": "No rating",
+        "commentIn": "Comment {language}",
+        "aboutResolver": "rating the work of: {name}",
+        "locales": {
+          "ru": "in Russian",
+          "en": "in English",
+          "uk": "in Ukrainian",
+          "de": "in German",
+          "es": "in Spanish"
+        }
+      },
+      "categoryNames": {
+        "tech": "Technical",
+        "practices": "Practices",
+        "payments": "Payments",
+        "complaint_master": "Complaint about a master",
+        "complaint_user": "Complaint about a user",
+        "other": "Other"
+      }
     },
     "adminUsers": {
       "usersLoadFailed": "Failed to load the users",
@@ -538,6 +560,22 @@
       "loadMetricFailed": "Failed to load the metric",
       "methodSingle": "The method \"{label}\" is not in the catalog — add it for all masters?",
       "methodPlural": "The methods {labels} are not in the catalog — add them for all masters?"
+    },
+    "adminSupportStats": {
+      "title": "Support statistics",
+      "prevMonth": "Previous month",
+      "nextMonth": "Next month",
+      "total": "Requests",
+      "spam": "Spam",
+      "categories": "By category",
+      "resolvers": "By admin",
+      "ticketsCount": "{count} req.",
+      "ratedCount": "{count} rated",
+      "average": "avg. {average}",
+      "noAverage": "avg. —",
+      "share": "4–5: {share}%",
+      "noShare": "4–5: —",
+      "noRatings": "No ratings in this period yet"
     }
   }
 }

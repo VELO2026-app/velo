@@ -445,7 +445,8 @@
         "undelivered": "Не доставлено",
         "showOriginal": "Показать оригинал",
         "showTranslation": "Показать перевод"
-      }
+      },
+      "resolvedBy": "Решена: {name}"
     },
     "adminSupport": {
       "empty": {
@@ -474,7 +475,28 @@
         "complaints": "Жалобы",
         "other": "Другое"
       },
-      "appealDate": "Дата обращения"
+      "appealDate": "Дата обращения",
+      "rating": {
+        "filterLabel": "Оценка",
+        "none": "Без оценки",
+        "commentIn": "Комментарий {language}",
+        "aboutResolver": "оценка работе: {name}",
+        "locales": {
+          "ru": "на русском",
+          "en": "на английском",
+          "uk": "на украинском",
+          "de": "на немецком",
+          "es": "на испанском"
+        }
+      },
+      "categoryNames": {
+        "tech": "Тех. проблемы",
+        "practices": "Практики",
+        "payments": "Оплаты",
+        "complaint_master": "Жалоба на мастера",
+        "complaint_user": "Жалоба на пользователя",
+        "other": "Другое"
+      }
     },
     "adminUsers": {
       "usersLoadFailed": "Не удалось загрузить пользователей",
@@ -538,6 +560,22 @@
       "loadMetricFailed": "Не удалось загрузить метрику",
       "methodSingle": "Метода «{label}» нет в каталоге — добавить для всех мастеров?",
       "methodPlural": "Методов {labels} нет в каталоге — добавить для всех мастеров?"
+    },
+    "adminSupportStats": {
+      "title": "Статистика поддержки",
+      "prevMonth": "Предыдущий месяц",
+      "nextMonth": "Следующий месяц",
+      "total": "Обращений",
+      "spam": "Спам",
+      "categories": "По категориям",
+      "resolvers": "По администраторам",
+      "ticketsCount": "{count} обр.",
+      "ratedCount": "{count} с оценкой",
+      "average": "ср. {average}",
+      "noAverage": "ср. —",
+      "share": "4–5: {share}%",
+      "noShare": "4–5: —",
+      "noRatings": "Оценок за этот период пока нет"
     }
   }
 }

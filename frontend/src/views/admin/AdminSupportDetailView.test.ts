@@ -111,6 +111,8 @@ function ticket(overrides: Partial<AdminSupportTicket> = {}): AdminSupportTicket
     opener: { user_id: 'u_1', name: 'Дана', avatar_url: null },
     claimed_by: null,
     history_thread_id: null,
+    resolved_by: null,
+    rating: null,
     ...overrides,
   }
 }
@@ -342,6 +344,72 @@ describe('AdminSupportDetailView', () => {
       expect(host?.querySelector('.support-detail__topic')?.textContent?.trim()).toBe(
         'Жалоба на пользователя',
       )
+    })
+  })
+
+  // ===========================================================================
+  // FE-107 / BE-162 delivery 3: the person's rating in the card, and who
+  // resolved the ticket.
+  // ===========================================================================
+  describe('the rating (FE-107)', () => {
+    it('a rated ticket shows the stars, the comment AS WRITTEN, its language and the admin it rated', async () => {
+      mount(
+        't_1',
+        ticket({
+          status: 'resolved',
+          rating: {
+            stars: 5,
+            comment: 'Дуже дякую',
+            comment_locale: 'uk',
+            rated_at: '2026-10-26T10:00:00Z',
+            rated_resolver: { user_id: 'other_admin', name: 'Ольга', avatar_url: null },
+          },
+        }),
+      )
+      await flush()
+
+      const card = host?.querySelector('[data-testid="ticket-rating"]')
+      expect(card).not.toBeNull()
+      expect(card?.querySelectorAll('.support-detail__star--on')).toHaveLength(5)
+      expect(card?.querySelectorAll('.support-detail__rating-stars svg')).toHaveLength(5)
+      expect(text()).toContain('Дуже дякую')
+      expect(text()).toContain('на украинском')
+      expect(text()).toContain('Ольга')
+    })
+
+    it('an unrated ticket shows no rating card', async () => {
+      mount('t_1', ticket({ status: 'resolved' }))
+      await flush()
+
+      expect(host?.querySelector('[data-testid="ticket-rating"]')).toBeNull()
+    })
+
+    it('a resolved ticket names who resolved it', async () => {
+      mount(
+        't_1',
+        ticket({
+          status: 'resolved',
+          resolved_by: { user_id: 'other_admin', name: 'Ольга', avatar_url: null },
+        }),
+      )
+      await flush()
+
+      expect(host?.querySelector('.support-detail__resolved-by')?.textContent?.trim()).toBe(
+        'Решена: Ольга',
+      )
+    })
+
+    it('an open ticket names nobody -- the header line is resolution-only', async () => {
+      mount(
+        't_1',
+        ticket({
+          status: 'open',
+          resolved_by: { user_id: 'other_admin', name: 'Ольга', avatar_url: null },
+        }),
+      )
+      await flush()
+
+      expect(host?.querySelector('.support-detail__resolved-by')).toBeNull()
     })
   })
 

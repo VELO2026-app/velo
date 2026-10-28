@@ -445,7 +445,8 @@
         "undelivered": "Не доставлено",
         "showOriginal": "Показати оригінал",
         "showTranslation": "Показати переклад"
-      }
+      },
+      "resolvedBy": "Вирішено: {name}"
     },
     "adminSupport": {
       "empty": {
@@ -474,7 +475,28 @@
         "complaints": "Скарги",
         "other": "Інше"
       },
-      "appealDate": "Дата звернення"
+      "appealDate": "Дата звернення",
+      "rating": {
+        "filterLabel": "Оцінка",
+        "none": "Без оцінки",
+        "commentIn": "Коментар {language}",
+        "aboutResolver": "оцінка роботі: {name}",
+        "locales": {
+          "ru": "російською",
+          "en": "англійською",
+          "uk": "українською",
+          "de": "німецькою",
+          "es": "іспанською"
+        }
+      },
+      "categoryNames": {
+        "tech": "Тех. проблеми",
+        "practices": "Практики",
+        "payments": "Оплати",
+        "complaint_master": "Скарга на майстра",
+        "complaint_user": "Скарга на користувача",
+        "other": "Інше"
+      }
     },
     "adminUsers": {
       "usersLoadFailed": "Не вдалося завантажити користувачів",
@@ -538,6 +560,22 @@
       "loadMetricFailed": "Не вдалося завантажити метрику",
       "methodSingle": "Методу «{label}» немає в каталозі — додати для всіх майстрів?",
       "methodPlural": "Методів {labels} немає в каталозі — додати для всіх майстрів?"
+    },
+    "adminSupportStats": {
+      "title": "Статистика підтримки",
+      "prevMonth": "Попередній місяць",
+      "nextMonth": "Наступний місяць",
+      "total": "Звернень",
+      "spam": "Спам",
+      "categories": "За категоріями",
+      "resolvers": "За адміністраторами",
+      "ticketsCount": "{count} зв.",
+      "ratedCount": "{count} з оцінкою",
+      "average": "сер. {average}",
+      "noAverage": "сер. —",
+      "share": "4–5: {share}%",
+      "noShare": "4–5: —",
+      "noRatings": "Оцінок за цей період ще немає"
     }
   }
 }
