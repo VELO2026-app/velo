@@ -215,6 +215,7 @@
             :error="errors.thoughts"
             :model-value="thoughts"
             :placeholder="THOUGHTS_PLACEHOLDER"
+            :voice-input="TEXTAREA_VOICE_INPUT"
             @update:model-value="onThoughtsInput"
           />
         </div>
@@ -271,7 +272,7 @@ import MoodSlider from '@/components/shared/MoodSlider.vue'
 import { useDiaryStore, type ExternalActivityFieldErrors } from '@/stores/diary'
 import { useToast } from '@/composables/useToast'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
-import { EXTERNAL_ACTIVITY_MOOD_HIDDEN } from '@/utils/constants'
+import { EXTERNAL_ACTIVITY_MOOD_HIDDEN, TEXTAREA_VOICE_INPUT } from '@/utils/constants'
 import { MOOD_SCALE_DEFAULT_SCORE } from '@/utils/moodScale'
 import { formatShortDate } from '@/utils/format'
 import type { ExternalActivityType } from '@/api/types'

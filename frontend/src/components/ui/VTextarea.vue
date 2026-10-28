@@ -8,6 +8,7 @@
   Usage:
     <VTextarea v-model="bio" label="О себе" :rows="4" placeholder="Расскажите..." />
     <VTextarea v-model="bio" label="О себе" required />
+    <VTextarea v-model="thoughts" voice-input maxlength="2000" /> (FE-94)
 -->
 
 <template>
@@ -24,6 +25,7 @@
     >
     <div class="v-textarea__row">
       <textarea
+        v-show="!voicePanelVisible"
         :id="fieldId"
         ref="fieldEl"
         class="v-textarea__field"
@@ -39,6 +41,21 @@
         @focus="onFieldFocus"
         @input="onInput"
       />
+      <!-- [FE-94, voice step 2] While a take owns the field, the recording
+           panel stands in for the plate; the textarea stays mounted (v-show)
+           so focus and the autogrow height survive the take. -->
+      <div
+        v-if="voicePanelVisible"
+        class="v-textarea__voice"
+        :class="{ 'v-textarea__voice--plate': !autogrow }"
+      >
+        <VoiceRecordingPanel
+          :state="voicePhase"
+          :elapsed-sec="voiceElapsed"
+          @cancel="cancel"
+          @stop="stop"
+        />
+      </div>
       <!-- Required marker (DS): mirrors VInput/VSelect's seal -- gutter always
            reserved while `required` so the field width never jumps on fill. -->
       <span
@@ -49,15 +66,30 @@
         <IconRequired v-if="!modelValue" :size="22" />
         <IconRequiredDone v-else :size="22" />
       </span>
+      <!-- [FE-94, voice step 2] The mic disc, opt-in via `voiceInput`. Unlike
+           the composer's mic it renders with text present too -- a transcript
+           here APPENDS (appendTranscript), so dictation is for adding to what
+           is written, not only for starting it. Gone for the whole span of a
+           take and whenever the field is disabled. -->
+      <VoiceMicButton v-if="voiceInput && !disabled && !voiceActive" @click="micTap" />
     </div>
     <span v-if="error" class="v-textarea__error">{{ error }}</span>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, nextTick, useId } from 'vue'
+import { ref, watch, onMounted, nextTick, useId, useAttrs } from 'vue'
 import { IconRequired, IconRequiredDone } from '@/components/icons'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
+import { appendTranscript, useVoiceFieldInput } from '@/composables/useVoiceFieldInput'
+// Shared reach from ui (FE-94, a first for this folder): the voice family
+// lives in components/shared next to its Composer consumer. Relative file
+// imports -- shared has no barrel. This closes a module cycle
+// (ui barrel -> here -> VoiceRecordingPanel -> ui barrel for VLoader); it is
+// safe because BOTH cycle edges are render-time-only bindings, never
+// module-body reads, and the ui barrel itself is pure re-exports.
+import VoiceRecordingPanel from '../shared/VoiceRecordingPanel.vue'
+import VoiceMicButton from '../shared/VoiceMicButton.vue'
 
 // inheritAttrs:false — forward native attrs (maxlength/inputmode/…) onto the
 // inner <textarea>, not the wrapper div. Parity with VInput/VSelect.
@@ -101,6 +133,12 @@ const props = withDefaults(
      *  measured bordered-pill value in his files (the search screen). Default
      *  OFF -- every existing caller stays byte-identical. */
     borderedAtRest?: boolean
+    /** [FE-94, voice step 2; kill-switched per call site] The mic disc in the
+     *  field's row: tap -> record -> transcribe -> the transcript APPENDS to
+     *  the current value (appendTranscript), clamped to the caller's
+     *  maxlength attr. False (the default) keeps the disc unmounted and every
+     *  piece of voice machinery unreachable; no other behaviour changes. */
+    voiceInput?: boolean
   }>(),
   {
     modelValue: '',
@@ -113,6 +151,7 @@ const props = withDefaults(
     required: false,
     hideLabel: false,
     borderedAtRest: false,
+    voiceInput: false,
   },
 )
 
@@ -122,11 +161,37 @@ const emit = defineEmits<{
 
 const fieldEl = ref<HTMLTextAreaElement | null>(null)
 
+// -- voice input (FE-94, step 2) ---------------------------------------------
+
+// maxlength reaches this component as a fallthrough ATTR (v-bind="$attrs"
+// puts it on the textarea); the append clamp needs it as a number.
+const attrs = useAttrs()
+function fieldMaxLength(): number | undefined {
+  const raw = attrs.maxlength
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw
+  if (typeof raw === 'string' && raw.trim() !== '') {
+    const parsed = Number.parseInt(raw, 10)
+    return Number.isFinite(parsed) ? parsed : undefined
+  }
+  return undefined
+}
+
+const { voiceActive, voicePhase, voicePanelVisible, voiceElapsed, micTap, stop, cancel } =
+  useVoiceFieldInput({
+    blurField: () => fieldEl.value?.blur(),
+    onTranscript: (text) => {
+      emit('update:modelValue', appendTranscript(props.modelValue, text, fieldMaxLength()))
+    },
+  })
+
 // Resize to content: reset to auto, then take scrollHeight. The CSS max-height
 // (--velo-textarea-autogrow-max) caps the visible box and overflow-y:auto kicks
 // in past the cap, so no min/max math is needed here.
 function resize(): void {
   if (!props.autogrow) return
+  // The recording panel owns the row: the hidden field measures scrollHeight 0
+  // and a resize now would bake a garbage height in for after the take.
+  if (voicePanelVisible.value) return
   const el = fieldEl.value
   if (!el) return
   el.style.height = 'auto'
@@ -149,6 +214,11 @@ watch(
     if (props.autogrow) void nextTick(resize)
   },
 )
+// A take's end is the first honest moment to measure a field that may have
+// just grown by a transcript while hidden behind the panel.
+watch(voicePanelVisible, (visible) => {
+  if (!visible) void nextTick(resize)
+})
 </script>
 
 <style scoped>
@@ -184,6 +254,27 @@ watch(
   display: flex;
   align-items: flex-start;
   gap: var(--space-2);
+}
+
+/* [FE-94, voice step 2] The recording panel's slot while a take owns the
+   field. Plate parity for the fixed-rows variant: the wrapper wears the
+   plate's own surface so the row keeps its shape and the panel does not
+   float disembodied over the form; the autogrow variant stays transparent --
+   its height is content-driven and the panel carries the band alone. */
+.v-textarea__voice {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.v-textarea__voice--plate {
+  min-height: 100px;
+  padding: var(--space-1) var(--space-2);
+  box-sizing: border-box;
+  background: var(--velo-bg-card-solid);
+  border: 2px solid transparent;
+  border-radius: var(--velo-radius-badge);
 }
 
 .v-textarea__field {

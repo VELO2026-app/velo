@@ -51,6 +51,23 @@ export const WITHDRAWAL_FEE_EUROS = 2
 export const COMPOSER_VOICE_INPUT = true
 
 // ---------------------------------------------------------------------------
+// Field voice input, step 2 (FE-94, transcription via our own backend) --
+// kill-switch
+// Used by: EntryView (edit-mode content field), ExternalActivityCreateView
+// (thoughts VTextarea via :voice-input)
+// ---------------------------------------------------------------------------
+
+/**
+ * Voice dictation on multiline FIELDS beyond the composer (FE-94 §11): the
+ * transcript APPENDS to what is already written (appendTranscript), so the
+ * mic stays available with text present. FALSE is the kill-switch: the mic
+ * disc never renders and every voice-capable field behaves exactly as before
+ * the feature -- no call-site changes needed. Same backend transcription as
+ * the composer (POST /api/v1/ai/transcribe, GT-41).
+ */
+export const TEXTAREA_VOICE_INPUT = true
+
+// ---------------------------------------------------------------------------
 // Master onboarding (WS-1, item 2)
 // Used by: MasterApplyView (set), master store $reset (clear), masterPendingGuard (read)
 // ---------------------------------------------------------------------------

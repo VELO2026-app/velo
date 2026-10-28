@@ -18,7 +18,11 @@
     view  -- header "<- Запись ⋯", optional practice header, date, title,
              full content.
     menu  -- the "⋯" popover: pencil (edit) + trash (delete).
-    edit  -- editable title + autogrow textarea + "Сохранить".
+    edit  -- editable title + autogrow textarea + "Сохранить"; the content
+             field also takes voice dictation (FE-94): mic disc beside it,
+             transcript APPENDS to the body (TEXTAREA_VOICE_INPUT kill-switch),
+             a live take freezes «Сохранить» and leaving the editor discards
+             the take.
     delete-> soft-delete, navigate back to the feed; the feed shows an
              "Запись удалена / Отменить" undo bar (handled in DiaryFeedView
              via the ?deleted query param).
@@ -114,28 +118,49 @@
               :maxlength="MAX_TITLE_LEN"
               :disabled="saving"
             />
-            <textarea
-              ref="editEl"
-              v-model="editContent"
-              class="entry__edit-content"
-              :aria-label="t('user.screens.entry.textAria')"
-              rows="3"
-              :maxlength="MAX_CONTENT_LEN"
-              :disabled="saving"
-              @input="autogrow"
-            />
+            <!-- [FE-94, voice step 2] The content field grows by voice: mic
+                 disc beside the field (append, not the composer's
+                 empty-field-only replace), and while a take owns the field
+                 the recording panel stands in for the textarea. The disc
+                 rides the field's growing bottom edge (flex-end). -->
+            <div class="entry__edit-row">
+              <textarea
+                v-show="!voicePanelVisible"
+                ref="editEl"
+                v-model="editContent"
+                class="entry__edit-content"
+                :aria-label="t('user.screens.entry.textAria')"
+                rows="3"
+                :maxlength="MAX_CONTENT_LEN"
+                :disabled="saving"
+                @input="autogrow"
+              />
+              <VoiceRecordingPanel
+                v-if="voicePanelVisible"
+                :state="voicePhase"
+                :elapsed-sec="voiceElapsed"
+                @cancel="onVoiceCancel"
+                @stop="onVoiceStop"
+              />
+              <VoiceMicButton
+                v-if="TEXTAREA_VOICE_INPUT && !saving && !voiceActive"
+                @click="onMicTap"
+              />
+            </div>
           </template>
         </VCard>
       </template>
     </div>
 
-    <!-- Save bar (edit mode) -->
+    <!-- Save bar (edit mode). A live voice take freezes it alongside the
+         field it owns (FE-94): saving mid-take would omit the transcript the
+         person is still dictating. -->
     <div v-if="mode === 'edit'" class="entry__save-bar">
       <VButton
         variant="primary"
         size="lg"
         block
-        :disabled="!canSave || saving"
+        :disabled="!canSave || saving || voiceActive"
         :loading="saving"
         @click="onSave"
       >
@@ -147,7 +172,7 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import {
@@ -167,6 +192,10 @@ import { IconTrash } from '@/components/icons'
 import { useDiaryStore } from '@/stores/diary'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
+import { appendTranscript, useVoiceFieldInput } from '@/composables/useVoiceFieldInput'
+import { TEXTAREA_VOICE_INPUT } from '@/utils/constants'
+import VoiceRecordingPanel from '@/components/shared/VoiceRecordingPanel.vue'
+import VoiceMicButton from '@/components/shared/VoiceMicButton.vue'
 import { getPractice } from '@/api/practices'
 import { formatFeedDateTime, formatDuration, formatTime } from '@/utils/format'
 import type { PracticeResponse } from '@/api/types'
@@ -246,12 +275,46 @@ const editEl = ref<HTMLTextAreaElement | null>(null)
 
 const canSave = computed(() => editContent.value.trim().length > 0)
 
+// -- voice input (FE-94, step 2): dictation APPENDS to the entry body --------
+
+const {
+  voiceActive,
+  voicePhase,
+  voicePanelVisible,
+  voiceElapsed,
+  micTap: onMicTap,
+  stop: onVoiceStop,
+  cancel: onVoiceCancel,
+} = useVoiceFieldInput({
+  blurField: () => editEl.value?.blur(),
+  onTranscript: (text) => {
+    editContent.value = appendTranscript(editContent.value, text, MAX_CONTENT_LEN)
+  },
+})
+
 function autogrow(): void {
+  // While the recording panel owns the field the textarea is display:none --
+  // scrollHeight is a hard 0 and a resize now would bake a garbage height in.
+  if (voicePanelVisible.value) return
   const el = editEl.value
   if (!el) return
   el.style.height = 'auto'
   el.style.height = `${el.scrollHeight}px`
 }
+
+// A take's end is the first honest moment to measure a field that may have
+// just grown by a transcript while hidden behind the panel (v-model updates
+// fire no input event, so nothing else would re-grow it).
+watch(voicePanelVisible, (visible) => {
+  if (!visible) void nextTick(autogrow)
+})
+
+// Leaving the editor mid-take discards the take: the panel lives inside the
+// edit template, and an orphaned recording would keep the mic and stopwatch
+// with no surface left to stop them on.
+watch(mode, (m) => {
+  if (m === 'view') onVoiceCancel()
+})
 
 async function startEdit(): Promise<void> {
   if (!entry.value) return
@@ -263,7 +326,9 @@ async function startEdit(): Promise<void> {
 }
 
 async function onSave(): Promise<void> {
-  if (!entry.value || !canSave.value || saving.value) return
+  // voiceActive: a live take owns the field -- the disabled attribute only
+  // lands on the next render, so this guard is what stops a same-frame tap.
+  if (!entry.value || !canSave.value || saving.value || voiceActive.value) return
   saving.value = true
   const trimmedTitle = entryEditTitleTrimmed()
   const result = await diaryStore.updateEntry(entry.value.id, {
@@ -430,7 +495,18 @@ function goBack(): void {
   padding-bottom: calc(var(--space-1) - 1px);
 }
 
+/* [FE-94] The content field's row: textarea (flex:1) + the mic disc at its
+   growing bottom edge; a live take swaps the textarea for the recording
+   panel inside the same band. */
+.entry__edit-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
 .entry__edit-content {
+  flex: 1;
+  min-width: 0;
   border: none;
   border-bottom: 1px solid transparent;
   background: transparent;
