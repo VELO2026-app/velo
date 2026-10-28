@@ -129,19 +129,19 @@ export const SKIN_BRAND: string | null = ${JSON.stringify(skin?.displayName ?? n
         // The single manifest (BE-149). The plugin writes manifest.webmanifest
         // and injects the only <link rel="manifest">; index.html carries none.
         manifest: pwaManifestWithPassport(instanceEnv, skin),
-        // 'prompt' WITHOUT a prompt UI: a new service worker installs and then
-        // WAITS until every window of the app is closed, so a new build takes
-        // over at the next open, never mid-session (TZ decision 16). While it
-        // waits, the old worker keeps serving the old build from its precache,
-        // including every lazy chunk the open page may still ask for -- which is
-        // what keeps an open app working across a deploy. Nothing in the app
-        // posts SKIP_WAITING, so the generated worker never skips the wait.
-        // Deliberately NO skipWaiting / clientsClaim: they swapped the worker
-        // under an open page, the swap purged the old precache, and the page's
-        // next lazy route 404'd. Pages without a worker (first visit, webviews
-        // without service workers) are covered by platform/chunk-reload.ts.
-        // The registration script is still auto-injected (registerSW.js).
-        registerType: 'prompt',
+        // 'autoUpdate': the generated worker gets skipWaiting()/clientsClaim(),
+        // so a deployed build takes over on the next launch -- and mid-session
+        // once the new worker installs. Owner decision 2026-10-26 (per-instance
+        // skin deploys): under the previous 'prompt' scheme users stayed on old
+        // builds for days -- a waiting worker never activates while ANY window
+        // of the installed PWA is alive, and mobile webviews keep their window
+        // alive through close/reopen. This reopens the failure the old decision
+        // guarded against: the swap purges the old precache under an open page,
+        // and that page's next LAZY ROUTE can 404. The mitigation predates the
+        // swap: platform/chunk-reload.ts catches the failed chunk import and
+        // silently reloads the page onto the new build. The registration script
+        // is still auto-injected (registerSW.js) -- no app-side registerSW().
+        registerType: 'autoUpdate',
         // Include these file types in precache.
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],

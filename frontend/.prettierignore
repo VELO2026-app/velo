@@ -1,3 +1,7 @@
 # Auto-generated from OpenAPI schema by backend/scripts/generate_ts_types.py
 # Regenerated via `make gen-types` — never hand-format or it will drift on regen.
 src/api/generated.ts
+# Auto-generated from skin packages by scripts/apply-skin.mjs
+# (`pnpm skin <name>`) — regenerating overwrites any hand-formatting.
+src/platform/skin-brand.generated.ts
+src/styles/skin-tokens.css
