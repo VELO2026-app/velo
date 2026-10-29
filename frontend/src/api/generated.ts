@@ -2154,6 +2154,9 @@ export interface UserResponse {
   phone: string | null
   bio: string | null
   email: string | null
+  birth_date: string | null
+  goals: string[]
+  goals_custom: string | null
   role_switch: RoleSwitchInfo | null
 }
 
@@ -2175,6 +2178,9 @@ export interface UserUpdate {
   phone?: string | null
   bio?: string | null
   email?: string | null
+  birth_date?: string | null
+  goals?: string[] | null
+  goals_custom?: string | null
 }
 
 /** POST /admin/masters/{user_id}/verify -- request body. promote (PROMPT №503 commit 3, mirrors ApproveMethodChangeRequest.promote below): optional list of custom method labels from the applicant's own `methods` that the admin chose to add to the taxonomy catalog. Before this, only an ALREADY-VERIFIED master's later method-change request had any promotion path -- a brand-new applicant's «Свой вариант» text could never become a real catalog chip, no matter what the admin did. Absent/empty -> no catalog write, identical to before this field existed. Deduped against existing rows (_promote_custom_methods) -- admin-picked, not automatic, same editorial-control rationale as the method-change-request flow (operator decision 3=B): a custom label becomes SHARED vocabulary for every future master/admin the moment it's promoted, so it stays a deliberate admin choice rather than something typo'd free text can trigger unreviewed. */
