@@ -121,8 +121,22 @@ logger = structlog.get_logger()
 #   exact same write path as onboarding_completed -- no special-casing.
 #   email (E11): Telegram provides none, so it is captured via the profile
 #   edit form and stored here (additive JSONB, no column, no migration).
+# birth_date / goals / goals_custom (FE-101 onboarding answers): same flat
+#   schema-on-read path. birth_date is an ISO "YYYY-MM-DD" string, goals a
+#   list of canonical slugs, goals_custom the free text behind the "custom"
+#   slug. An EMPTY goals list is a real value and is stored ("picked, then
+#   unpicked everything"); None is dropped like everywhere here.
 _JSONB_CREDENTIAL_FIELDS = frozenset(
-    {"onboarding_completed", "master_onboarding_completed", "phone", "bio", "email"}
+    {
+        "onboarding_completed",
+        "master_onboarding_completed",
+        "phone",
+        "bio",
+        "email",
+        "birth_date",
+        "goals",
+        "goals_custom",
+    }
 )
 
 
