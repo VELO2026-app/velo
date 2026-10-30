@@ -274,7 +274,7 @@ describe('ChatThreadScreen', () => {
     expect(composerTextarea().value).toBe('')
   })
 
-  it('negative twin: a FAILED send toasts, keeps the draft (nothing typed is lost) and appends nothing', async () => {
+  it('negative twin: a FAILED send toasts, restores the draft (nothing typed is lost) and leaves a "not sent" bubble with a retry', async () => {
     vi.mocked(chatsApi.sendChatMessage).mockRejectedValue(new Error('down'))
     mount()
     await flush()
@@ -284,8 +284,82 @@ describe('ChatThreadScreen', () => {
     await flush()
 
     expect(toastError).toHaveBeenCalled()
-    expect(bodies()).toEqual([])
     expect(composerTextarea().value).toBe('не потеряй меня')
+    // Nothing was delivered: the only bubble is the optimistic one, failed.
+    const bubbles = host?.querySelectorAll('[data-testid="bubble-mine"]') ?? []
+    expect(bubbles).toHaveLength(1)
+    expect(bubbles[0]?.getAttribute('data-state')).toBe('failed')
+    expect(host?.querySelector('[data-testid="bubble-retry"]')).not.toBeNull()
+  })
+
+  it('optimistic: the bubble shows as "sending" before the answer and brightens IN PLACE (same node) when it lands', async () => {
+    let resolveSend!: (m: ChatMessage) => void
+    vi.mocked(chatsApi.sendChatMessage).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSend = resolve
+      }),
+    )
+    vi.mocked(chatsApi.listChatMessages).mockResolvedValue(feed([msg()]))
+    mount()
+    await flush()
+
+    await type('сейчас')
+    sendBtn().click()
+    await flush()
+
+    expect(composerTextarea().value).toBe('')
+    expect(composerTextarea().disabled).toBe(false)
+    const pending = host?.querySelector('[data-state="sending"]')
+    expect(pending).not.toBeNull()
+    expect(bodies()).toEqual([msg().body, 'сейчас'])
+
+    resolveSend(msg({ id: 'm-9', sender: MY_ID, body: 'сейчас' }))
+    await flush()
+
+    // The same element, now an ordinary delivered bubble -- no remount, no
+    // reorder, no twin.
+    const mine = host?.querySelectorAll('[data-testid="bubble-mine"]') ?? []
+    expect(mine).toHaveLength(1)
+    expect(mine[0]).toBe(pending)
+    expect(mine[0]?.getAttribute('data-state')).toBeNull()
+    expect(bodies()).toEqual([msg().body, 'сейчас'])
+  })
+
+  it('the failed bubble retries under the SAME key and, once delivered, clears the restored draft', async () => {
+    vi.mocked(chatsApi.sendChatMessage)
+      .mockRejectedValueOnce(new Error('lost'))
+      .mockResolvedValueOnce(msg({ id: 'm-9', sender: MY_ID, body: 'ещё раз' }))
+    mount()
+    await flush()
+
+    await type('ещё раз')
+    sendBtn().click()
+    await flush()
+    expect(composerTextarea().value).toBe('ещё раз')
+
+    host?.querySelector<HTMLButtonElement>('[data-testid="bubble-retry"]')?.click()
+    await flush()
+
+    const calls = vi.mocked(chatsApi.sendChatMessage).mock.calls
+    expect(calls).toHaveLength(2)
+    expect(calls[1]?.[2]).toBe(calls[0]?.[2])
+    expect(host?.querySelector('[data-state]')).toBeNull()
+    expect(bodies()).toEqual(['ещё раз'])
+    expect(composerTextarea().value).toBe('')
+  })
+
+  it('a poll that already carries the just-delivered message does not render it twice', async () => {
+    vi.mocked(chatsApi.sendChatMessage).mockResolvedValueOnce(
+      msg({ id: 'm-9', sender: MY_ID, body: 'одно' }),
+    )
+    mount()
+    await flush()
+    await type('одно')
+    sendBtn().click()
+    await flush()
+
+    expect(bodies()).toEqual(['одно'])
+    expect(host?.querySelectorAll('[data-testid="bubble-mine"]')).toHaveLength(1)
   })
 
   // PROMPT №740 (track 2, B48) used to make the send control ABSENT while

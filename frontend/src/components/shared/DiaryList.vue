@@ -22,18 +22,28 @@
       <div class="diary-list__divider">
         <span>{{ group.label }}</span>
       </div>
-      <DiaryFeedCard
+      <!-- Optimistic entries: same itemKey / pendingState contract as
+           DiaryTimeline (dimmed while sending, a caption when failed). -->
+      <div
         v-for="item in group.items"
-        :key="item.id"
-        :item="item"
-        :timezone="timezone"
-        @tap="(p) => emit('tap', p)"
-      />
+        :key="itemKey ? itemKey(item) : item.id"
+        class="diary-list__item"
+        :class="{
+          'diary-list__item--sending': pendingState?.(item) === 'sending',
+        }"
+        :data-state="pendingState?.(item)"
+      >
+        <DiaryFeedCard :item="item" :timezone="timezone" @tap="(p) => emit('tap', p)" />
+        <p v-if="pendingState?.(item) === 'failed'" class="diary-list__not-sent">
+          {{ t('user.screens.diaryFeed.notSent') }}
+        </p>
+      </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed } from 'vue'
 import DiaryFeedCard from '@/components/shared/DiaryFeedCard.vue'
 import { dayKeyOf, dayLabelOf } from '@/utils/format'
@@ -42,6 +52,10 @@ import type { DiaryFeedItem } from '@/api/types'
 const props = defineProps<{
   items: DiaryFeedItem[]
   timezone?: string
+  /** Stable v-for key (an optimistic entry keeps its key once delivered). */
+  itemKey?: (item: DiaryFeedItem) => string
+  /** Optimistic state of a row, undefined for an ordinary feed item. */
+  pendingState?: (item: DiaryFeedItem) => 'sending' | 'failed' | 'sent' | undefined
 }>()
 
 const emit = defineEmits<{
@@ -104,5 +118,22 @@ const dayGroups = computed<DayGroup[]>(() => {
   font-size: var(--text-xs);
   color: var(--velo-text-secondary);
   white-space: nowrap;
+}
+
+.diary-list__item {
+  /* sending -> sent brightens in place (same node, itemKey). */
+  transition: opacity var(--velo-dur-base) var(--velo-ease-out);
+}
+
+/* Optimistic entry on its way: quietly dimmed, geometry untouched. */
+.diary-list__item--sending {
+  opacity: 0.6;
+}
+
+.diary-list__not-sent {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xs);
+  color: var(--velo-text-secondary);
+  text-align: center;
 }
 </style>

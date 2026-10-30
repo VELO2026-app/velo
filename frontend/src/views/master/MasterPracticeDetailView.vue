@@ -160,6 +160,8 @@
                 :src="item.user_avatar_url"
                 alt=""
                 class="pd-prow__ava-img"
+                loading="lazy"
+                decoding="async"
                 @error="brokenAvatars.add(item.booking_id)"
               />
               <template v-else>{{ initials(item) }}</template>

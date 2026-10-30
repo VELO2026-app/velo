@@ -45,9 +45,12 @@
   <div class="chat-thread">
     <VHeader :title="peerTitle" :logo="support" show-back @back="emit('back')" />
 
-    <!-- Loading (first fetch only; polls refresh silently) -->
-    <div v-if="loading" class="chat-thread__center">
-      <VLoader size="lg" />
+    <!-- Loading (first fetch only; polls refresh silently): bubble skeletons
+         settled at the bottom, where the newest messages will land. Once
+         seen they stay a visible minimum (useLoadingHold) and the feed then
+         fades in where they stood. -->
+    <div v-if="feedSkeleton" class="chat-thread__skeleton">
+      <VSkeletonBubbles />
     </div>
 
     <!-- FE-108: the thread is GONE (a support appeal deleted with its spam
@@ -80,7 +83,7 @@
            device-proven: computed GRAD yet zero visible clipping, while the
            diary -- identical mask on a NON-scrolling parent's child pattern --
            fades fine). Wrapper masks + inner scroller is the working shape. -->
-      <div ref="wrapEl" class="chat-thread__feed-wrap">
+      <div ref="wrapEl" class="chat-thread__feed-wrap" :class="{ 'velo-reveal': feedReveal }">
         <div
           ref="feedEl"
           class="chat-thread__feed"
@@ -88,26 +91,39 @@
           @scroll="rememberBottomState"
         >
           <!-- Empty thread: an honest invitation, not a fake history. -->
-          <div v-if="messages.length === 0" class="chat-thread__empty">
+          <div v-if="rows.length === 0" class="chat-thread__empty">
             {{ t('chat.empty') }}
           </div>
 
+          <!-- Optimistic send: an own message shows at once as a "sending"
+               bubble (dimmed) keyed by its idempotency key; the server copy
+               takes over the SAME key, so the bubble stays one DOM node and
+               only brightens -- no flicker, no reorder. A failed one stays
+               in place with a retry. -->
           <div
-            v-for="m in messages"
-            :key="m.id"
+            v-for="row in rows"
+            :key="row.key"
             class="chat-thread__row"
-            :class="{ 'chat-thread__row--mine': m.sender === myId }"
+            :class="{ 'chat-thread__row--mine': row.mine }"
           >
+            <!-- ONE bubble element for both states: delivery only drops the
+                 --sending class (an opacity transition on the same node). -->
             <div
               class="chat-thread__bubble"
-              :class="{ 'chat-thread__bubble--mine': m.sender === myId }"
-              :data-testid="m.sender === myId ? 'bubble-mine' : 'bubble-peer'"
+              :class="{
+                'chat-thread__bubble--mine': row.mine,
+                'chat-thread__bubble--sending': row.pending?.status === 'sending',
+                'chat-thread__bubble--failed': row.pending?.status === 'failed',
+              }"
+              :data-testid="row.mine ? 'bubble-mine' : 'bubble-peer'"
+              :data-state="row.pending?.status"
+              :aria-busy="row.pending?.status === 'sending' ? 'true' : undefined"
             >
               <!-- Support threads (BE-163): the caption is the SERVICE, never
                    an admin's name -- `sender` is a technical id, good only
                    for the me/not-me split. -->
               <div
-                v-if="support && m.sender !== myId"
+                v-if="support && !row.mine"
                 class="chat-thread__sender"
                 data-testid="bubble-sender"
               >
@@ -115,12 +131,22 @@
               </div>
               <div
                 class="chat-thread__body"
-                :class="{ 'chat-thread__body--state': m.body === null }"
+                :class="{ 'chat-thread__body--state': row.message?.body === null }"
               >
-                {{ messageText(m) }}
+                {{ row.message ? messageText(row.message) : row.pending?.body }}
               </div>
-              <div class="chat-thread__time">
-                {{ formatTime(m.created_at) }}
+              <button
+                v-if="row.pending?.status === 'failed'"
+                type="button"
+                class="chat-thread__retry"
+                data-testid="bubble-retry"
+                @click="retry(row.pending)"
+              >
+                {{ t('chat.notSent') }}
+              </button>
+              <div v-else class="chat-thread__time">
+                <span v-if="row.pending" class="velo-sr-only">{{ t('chat.sending') }}</span>
+                {{ formatTime(row.message?.created_at ?? row.pending?.createdAt ?? '') }}
               </div>
             </div>
           </div>
@@ -136,8 +162,9 @@
            diary uses, via useComposerGrowCap -- see that file for the numbers
            and the CHROME_OFFSET caveat (diary-measured, reused here as an
            approximation, not re-measured for this screen). -->
-      <div class="chat-thread__composer">
+      <div class="chat-thread__composer" :class="{ 'velo-reveal': feedReveal }">
         <Composer
+          ref="composerRef"
           :placeholder="t('chat.threadPlaceholder')"
           :max-length="4000"
           :send="handleSend"
@@ -161,10 +188,12 @@ import {
   rootStyleValue,
 } from '@/platform/dom'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useLoadingHold } from '@/composables/useLoadingHold'
+import { useToast } from '@/composables/useToast'
 import { VHeader } from '@/components/layout'
-import { VEmptyState, VLoader, VButton } from '@/components/ui'
+import { VEmptyState, VSkeletonBubbles, VButton } from '@/components/ui'
 import { IconMessages } from '@/components/icons'
-import Composer, { type ComposerSendResult } from './Composer.vue'
+import Composer from './Composer.vue'
 import { COMPOSER_VOICE_INPUT } from '@/utils/constants'
 import {
   listChatMessages,
@@ -212,6 +241,11 @@ const myId = computed(() => authStore.user?.id ?? '')
 const peerTitle = computed(() => props.peer?.name || props.peerFallback)
 
 const loading = ref(true)
+const {
+  showSkeleton: feedSkeleton,
+  reveal: feedReveal,
+  settled: feedSettled,
+} = useLoadingHold(loading)
 const error = ref<string | null>(null)
 /** FE-108: the messages read answered 404 -- the thread is gone (deleted
  *  with its spam ticket, or never the caller's). Terminal: no retry, no poll. */
@@ -389,6 +423,9 @@ async function reload(): Promise<void> {
     // loading branch is a silent no-op (`feedEl.value` is null) -- a fresh
     // thread landed at the top of the history instead of the newest message.
     loading.value = false
+    // A skeleton that was seen stays its minimum: the feed mounts only
+    // after it, and the scroll needs the mounted feed.
+    if (feedSkeleton.value) await feedSettled()
     await scrollToBottom()
     // [owner pass] keep-bottom: the wrap is mounted only now (v-else branch).
     attachKeepBottom()
@@ -446,7 +483,7 @@ function schedulePoll(): void {
  *  bottom (CH-3) -- follows the conversation down. */
 async function poll(): Promise<void> {
   try {
-    if (isDocumentHidden() || loading.value || gone.value || sendInFlight.value) return
+    if (isDocumentHidden() || loading.value || gone.value || sendInFlight.value > 0) return
     try {
       const fresh = await fetchMessages()
       const freshNewest = newestId(fresh)
@@ -458,6 +495,7 @@ async function poll(): Promise<void> {
       if (changed) {
         const followDown = hasNew && readerNearBottom()
         messages.value = fresh
+        dropDelivered()
         if (hasNew) {
           markRead()
           if (followDown) await scrollToBottom()
@@ -480,46 +518,133 @@ function onVisibility(): void {
   if (!isDocumentHidden()) void poll()
 }
 
-// (a): the shared Composer owns the draft and its own submit-button in-flight
-// guard (prevents a double-click double-send) -- this is the persistence
-// callback it calls, unchanged in substance from the old onSend (same
-// endpoint, same local append, same scroll-to-bottom, same error message).
-// Toasting on failure now happens inside Composer itself, from the `error`
-// this returns.
+// (a): the shared Composer owns the draft; this is the persistence callback
+// it calls. OPTIMISTIC (owner decision): Composer clears the field at once,
+// this screen shows the message as a "sending" bubble right away, and the
+// server's copy replaces it under the same row key. A failure leaves the
+// bubble in place marked "not sent" with a retry, and Composer puts the text
+// back into the field (toasting the error itself).
 //
-// `sendInFlight` is a SEPARATE guard the old single-file version also had
-// (as `sending.value` in poll()'s own condition) -- it stops a concurrent
-// poll from racing the optimistic local append: a poll response that lands
+// `sendInFlight` (a counter: a bubble retry may overlap a new send) stops a
+// concurrent poll from racing the local append: a poll response that lands
 // between "sent" and "appended" would otherwise overwrite `messages.value`
-// with a copy that does not yet include the just-sent message, making it
-// flicker out until the next 12s tick. Composer's internal submitting state
-// is not exposed to this component, so this is tracked independently rather
-// than reached into.
-const sendInFlight = ref(false)
+// with a copy that does not yet include the just-sent message.
+const sendInFlight = ref(0)
 
-/** BE-163: the idempotency key is chosen HERE, per logical message -- the
- *  key of a FAILED attempt is kept and reused when the same draft is sent
- *  again, so a request that created the message before its answer was lost
- *  returns it instead of posting a twin. (Had the key been minted inside
- *  the api wrapper, the retry would arrive under a NEW key and dedup would
- *  never see the pair.) A different (edited) draft gets a fresh key. */
-let failedSend: { key: string; body: string } | null = null
+const toast = useToast()
+const composerRef = ref<InstanceType<typeof Composer> | null>(null)
 
-async function handleSend(body: string): Promise<ComposerSendResult> {
-  sendInFlight.value = true
-  const key = failedSend?.body === body ? failedSend.key : newIdempotencyKey()
+interface PendingSend {
+  /** BE-163 idempotency key -- also the row key, before and after delivery. */
+  key: string
+  body: string
+  status: 'sending' | 'failed' | 'sent'
+  createdAt: string
+  /** The server's copy once delivered (status 'sent'). */
+  message?: ChatMessage
+}
+
+/** Own messages not yet in `messages`, in send order. */
+const pendingSends = ref<PendingSend[]>([])
+/** Server id -> the client key its bubble was rendered under (stable rows). */
+const clientKeyById = new Map<string, string>()
+
+interface FeedRow {
+  key: string
+  mine: boolean
+  message: ChatMessage | null
+  pending: PendingSend | null
+}
+
+const rows = computed<FeedRow[]>(() => {
+  const ids = new Set(messages.value.map((m) => m.id))
+  const out: FeedRow[] = messages.value.map((m) => ({
+    key: clientKeyById.get(m.id) ?? m.id,
+    mine: m.sender === myId.value,
+    message: m,
+    pending: null,
+  }))
+  for (const p of pendingSends.value) {
+    if (p.message && ids.has(p.message.id)) continue
+    // A delivered one waiting behind an earlier unsent one renders as the
+    // message it now is, still at its own place in the queue.
+    out.push(
+      p.message
+        ? { key: p.key, mine: true, message: p.message, pending: null }
+        : { key: p.key, mine: true, message: null, pending: p },
+    )
+  }
+  return out
+})
+
+/** Moves delivered sends into `messages` from the FRONT of the queue only --
+ * a later send that lands first never jumps above an earlier one still
+ * sending -- and forgets those a poll has already brought in. */
+function dropDelivered(): void {
+  const ids = new Set(messages.value.map((m) => m.id))
+  const queue = pendingSends.value.filter((p) => !(p.message && ids.has(p.message.id)))
+  const moved: ChatMessage[] = []
+  while (queue[0]?.status === 'sent' && queue[0].message) {
+    moved.push(queue[0].message)
+    queue.shift()
+  }
+  if (moved.length) messages.value = [...messages.value, ...moved]
+  pendingSends.value = queue
+}
+
+/** ComposerSendResult's shape, declared here: type-aware lint cannot see
+ * types exported from a .vue file (see router/tabs.ts). */
+interface SendOutcome {
+  ok: boolean
+  error?: string
+}
+
+async function deliver(p: PendingSend): Promise<SendOutcome> {
+  sendInFlight.value += 1
   try {
-    const sent = await sendChatMessage(props.threadId, body, key)
-    failedSend = null
-    messages.value = [...messages.value, sent]
+    const sent = await sendChatMessage(props.threadId, p.body, p.key)
+    clientKeyById.set(sent.id, p.key)
+    p.message = sent
+    p.status = 'sent'
+    dropDelivered()
     await scrollToBottom()
     return { ok: true }
   } catch (e) {
-    failedSend = { key, body }
+    p.status = 'failed'
     return { ok: false, error: extractApiError(e, t('chat.sendFailed')) }
   } finally {
-    sendInFlight.value = false
+    sendInFlight.value -= 1
   }
+}
+
+/** BE-163: the idempotency key is chosen HERE, per logical message -- the
+ *  key of a FAILED attempt is kept and reused when the same text is sent
+ *  again (from the field or the bubble's retry), so a request that created
+ *  the message before its answer was lost returns it instead of posting a
+ *  twin. A different (edited) text gets a fresh key. */
+function handleSend(body: string): Promise<SendOutcome> {
+  const failed = pendingSends.value.find((p) => p.status === 'failed' && p.body === body)
+  if (failed) {
+    failed.status = 'sending'
+    return deliver(failed)
+  }
+  pendingSends.value = [
+    ...pendingSends.value,
+    { key: newIdempotencyKey(), body, status: 'sending', createdAt: new Date().toISOString() },
+  ]
+  void scrollToBottom()
+  const p = pendingSends.value[pendingSends.value.length - 1]
+  return p ? deliver(p) : Promise.resolve({ ok: false })
+}
+
+/** The failed bubble's retry: same key, same place. Success also clears the
+ * field if Composer had put this very text back into it. */
+async function retry(p: PendingSend): Promise<void> {
+  if (p.status !== 'failed') return
+  p.status = 'sending'
+  const result = await deliver(p)
+  if (result.ok) composerRef.value?.discardDraft(p.body)
+  else toast.error(result.error ?? t('chat.sendFailed'))
 }
 
 onMounted(() => {
@@ -582,6 +707,18 @@ onBeforeUnmount(() => {
   justify-content: center;
   gap: var(--space-3);
   padding: 0 var(--velo-rail-pad-x, var(--space-4));
+}
+
+/* Same box as the feed it gives way to: bottom-aligned, same paddings. */
+.chat-thread__skeleton {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: var(--chat-fog-live, var(--velo-chat-fog-top, 96px))
+    var(--velo-rail-pad-x, var(--space-4)) var(--space-3);
+  overflow: hidden;
 }
 
 /* B37 (PROMPT №741, track 3): the feed is the ONLY flexible row (flex:1,
@@ -674,6 +811,31 @@ onBeforeUnmount(() => {
 .chat-thread__bubble--mine {
   background: var(--velo-primary);
   color: var(--velo-white);
+  /* sending -> sent brightens in place (same node, see the template). */
+  transition: opacity var(--velo-dur-base) var(--velo-ease-out);
+}
+
+/* Optimistic send: on its way -- quietly dimmed, nothing else changes, so
+   delivery is a pure opacity change (no reflow, no jump). */
+.chat-thread__bubble--sending {
+  opacity: 0.6;
+}
+
+.chat-thread__bubble--failed {
+  opacity: 0.85;
+}
+
+.chat-thread__retry {
+  display: block;
+  margin: var(--space-1) 0 0 auto;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: var(--velo-fs-11);
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 .chat-thread__body {

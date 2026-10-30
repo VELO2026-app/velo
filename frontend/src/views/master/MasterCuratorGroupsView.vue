@@ -113,10 +113,11 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { computed, onMounted, ref } from 'vue'
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { getCuratorGroups, getMyCuratorGroups } from '@/api/curatorGroups'
 import type { CuratorGroupMineItem } from '@/api/types'
+import { useQuery } from '@/composables/useQuery'
 import CuratorGroupRow from '@/components/shared/CuratorGroupRow.vue'
 import { IconPlusFilled } from '@/components/icons'
 import { VButton, VEmptyState } from '@/components/ui'
@@ -125,21 +126,13 @@ import { VLoader } from '@/components/ui'
 
 const router = useRouter()
 
-const loading = ref(true)
-const error = ref(false)
-const groups = ref<CuratorGroupMineItem[]>([])
-/** BE-18: the admin-issued right to found a school. False is the honest
- *  default on a failed flag fetch -- an offered «+» that only ever answers
- *  403 is worse than a missing one. */
-const canCreate = ref(false)
-
-const curated = computed(() => groups.value.filter((g) => g.relation === 'curator'))
-const memberOnly = computed(() => groups.value.filter((g) => g.relation !== 'curator'))
-
-async function load(): Promise<void> {
-  loading.value = true
-  error.value = false
-  try {
+// Tab screen: the list lives in the screen-data cache (useQuery) -- a return
+// through the dock renders the schools at once and refreshes them in the
+// background (staleTime 0: a school created a moment ago is there on the
+// next visit), no spinner on every visit.
+const groupsQuery = useQuery<{ groups: CuratorGroupMineItem[]; canCreate: boolean }>({
+  key: ['curatorGroups', 'mine', 'master-hub'],
+  query: async () => {
     // Two parallel calls, one payload split: /mine feeds the rows (it alone
     // carries relation + transfer_offered), the curator list carries only
     // the create right -- a property of the master, not of any one school.
@@ -149,17 +142,29 @@ async function load(): Promise<void> {
     // state over data we already hold.
     const [mineRes, listRes] = await Promise.allSettled([getMyCuratorGroups(), getCuratorGroups()])
     if (mineRes.status === 'rejected') throw mineRes.reason
-    groups.value = mineRes.value.items
-    canCreate.value =
-      listRes.status === 'fulfilled' ? (listRes.value.can_create_groups ?? false) : false
-  } catch {
-    error.value = true
-  } finally {
-    loading.value = false
-  }
-}
+    return {
+      groups: mineRes.value.items,
+      canCreate:
+        listRes.status === 'fulfilled' ? (listRes.value.can_create_groups ?? false) : false,
+    }
+  },
+  staleTime: 0,
+})
+const loading = groupsQuery.isPending
+/** Only an error with nothing to show replaces the list. */
+const error = computed(() => groupsQuery.error.value != null && !groupsQuery.data.value)
+const groups = computed(() => groupsQuery.data.value?.groups ?? [])
+/** BE-18: the admin-issued right to found a school. False is the honest
+ *  default on a failed flag fetch -- an offered «+» that only ever answers
+ *  403 is worse than a missing one. */
+const canCreate = computed(() => groupsQuery.data.value?.canCreate ?? false)
 
-onMounted(load)
+const curated = computed(() => groups.value.filter((g) => g.relation === 'curator'))
+const memberOnly = computed(() => groups.value.filter((g) => g.relation !== 'curator'))
+
+function load(): void {
+  void groupsQuery.refresh()
+}
 </script>
 
 <style scoped>

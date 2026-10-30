@@ -90,85 +90,100 @@
         {{ t('user.screens.userDashboard.sections.upcoming') }}
       </h3>
 
-      <!-- Loading -->
-      <div
-        v-if="bookingsStore.upcomingLoading && nearestBookings.length === 0"
-        class="dashboard__loader"
+      <!-- Loading: placeholders in the cards' own geometry, swapped for the
+           list in place (VLoadingSwap: nothing for a fast answer, at least
+           450 ms once seen, then a crossfade) -- the sections below never
+           get pushed down. -->
+      <VLoadingSwap
+        :pending="bookingsStore.upcomingLoading && !bookingsStore.upcomingLoaded"
+        memory-key="dashboard-upcoming"
+        :revision="nearestRevision"
       >
-        <VLoader />
-      </div>
-
-      <!-- Empty -->
-      <div v-else-if="nearestBookings.length === 0" class="dashboard__empty">
-        <p class="dashboard__empty-text">{{ t('user.screens.userDashboard.upcoming.empty') }}</p>
-        <VButton size="sm" variant="outline" @click="router.push({ name: 'user-calendar' })">
-          {{ t('user.screens.userDashboard.findPractice') }}
-        </VButton>
-      </div>
-
-      <!-- Live-aware list (TASK-2): the active session (if any) is pinned first,
-           then up to 2 soonest upcoming (max 3). Each card keeps its full markup
-           + per-card handlers (Zoom / check-in / live badge). -->
-      <template v-else>
-        <div v-for="b in nearestBookings" :key="b.id" class="dashboard__nearest-item">
-          <PracticeListCard
-            :practice="b.practice"
-            :title="practiceTitle(b)"
-            :when="practiceDate(b)"
-            :when-time="practiceTime(b)"
-            :duration="practiceDuration(b)"
-            @click="openBooking(b)"
-          >
-            <template #badge>
-              <VBadge v-if="isLive(b)" variant="success">
-                <span class="dashboard__live-dot" />
-                {{ t('user.screens.userDashboard.liveBadge') }}
-              </VBadge>
-              <VBadge v-else-if="isFree(b)" variant="blue">{{ t('common.free') }}</VBadge>
-              <VBadge v-else variant="blue">
-                <IconCheck :size="12" />{{ t('user.screens.userDashboard.paidBadge') }}</VBadge
-              >
-            </template>
-          </PracticeListCard>
-
-          <!-- Action buttons (outside the card, per Figma) -->
-          <div class="dashboard__practice-actions">
-            <!-- R1 (№263): honest state — a row that cannot be entered yet
-                 disables the button rather than reading as broken.
-                 Standalone F4: the button opens no link any more -- it takes
-                 the person to the practice screen, where Zoom runs inside
-                 VELO (Meeting SDK). -->
-            <VButton
-              variant="secondary"
-              block
-              :disabled="zoomStateFor(b) !== 'ready'"
-              @click="onZoomClick(b)"
-            >
-              Zoom
-            </VButton>
-            <!-- [FE-47] Check-in is NOT RENDERED (not disabled) when the
-                 session is already live («В эфире») or the booking already
-                 has a check-in -- a disabled button reads as broken here.
-                 When it drops out, Zoom becomes the row's only child and
-                 spans it (see :only-child in the styles) -- no empty column.
-                 Zoom's own availability rules are untouched. -->
-            <VButton
-              v-if="!isLive(b) && !b.has_checkin"
-              variant="primary"
-              block
-              @click="goToCheckin(b.practice_id)"
-            >
-              Check-in
-            </VButton>
+        <template #skeleton>
+          <div class="dashboard__loader">
+            <VSkeletonPracticeCard v-for="i in upcomingSkeletons" :key="i" />
           </div>
-          <!-- A4 V2 (PROMPT №572): honest permanent-failure state, distinct
-               from "still preparing" -- see PracticeLiveView's identical
-               badge for the full rationale. -->
-          <VBadge v-if="zoomStateFor(b) === 'failed'" variant="error" class="dashboard__zoom-note">
-            {{ t('user.screens.userDashboard.zoomFailed') }}
-          </VBadge>
+        </template>
+
+        <!-- Empty -->
+        <div v-if="nearestBookings.length === 0" class="dashboard__empty">
+          <p class="dashboard__empty-text">{{ t('user.screens.userDashboard.upcoming.empty') }}</p>
+          <VButton size="sm" variant="outline" @click="router.push({ name: 'user-calendar' })">
+            {{ t('user.screens.userDashboard.findPractice') }}
+          </VButton>
         </div>
-      </template>
+
+        <!-- Live-aware list (TASK-2): the active session (if any) is pinned first,
+             then up to 2 soonest upcoming (max 3). Each card keeps its full markup
+             + per-card handlers (Zoom / check-in / live badge). -->
+        <!-- A silent refresh that adds or drops a booking: rows fade in/out
+             and the rest slide (velo-list), the block's height glides
+             (VLoadingSwap revision). -->
+        <TransitionGroup v-else name="velo-list" tag="div" class="velo-list">
+          <div v-for="b in nearestBookings" :key="b.id" class="dashboard__nearest-item">
+            <PracticeListCard
+              :practice="b.practice"
+              :title="practiceTitle(b)"
+              :when="practiceDate(b)"
+              :when-time="practiceTime(b)"
+              :duration="practiceDuration(b)"
+              @click="openBooking(b)"
+            >
+              <template #badge>
+                <VBadge v-if="isLive(b)" variant="success">
+                  <span class="dashboard__live-dot" />
+                  {{ t('user.screens.userDashboard.liveBadge') }}
+                </VBadge>
+                <VBadge v-else-if="isFree(b)" variant="blue">{{ t('common.free') }}</VBadge>
+                <VBadge v-else variant="blue">
+                  <IconCheck :size="12" />{{ t('user.screens.userDashboard.paidBadge') }}</VBadge
+                >
+              </template>
+            </PracticeListCard>
+
+            <!-- Action buttons (outside the card, per Figma) -->
+            <div class="dashboard__practice-actions">
+              <!-- R1 (№263): honest state — a row that cannot be entered yet
+                   disables the button rather than reading as broken.
+                   Standalone F4: the button opens no link any more -- it takes
+                   the person to the practice screen, where Zoom runs inside
+                   VELO (Meeting SDK). -->
+              <VButton
+                variant="secondary"
+                block
+                :disabled="zoomStateFor(b) !== 'ready'"
+                @click="onZoomClick(b)"
+              >
+                Zoom
+              </VButton>
+              <!-- [FE-47] Check-in is NOT RENDERED (not disabled) when the
+                   session is already live («В эфире») or the booking already
+                   has a check-in -- a disabled button reads as broken here.
+                   When it drops out, Zoom becomes the row's only child and
+                   spans it (see :only-child in the styles) -- no empty column.
+                   Zoom's own availability rules are untouched. -->
+              <VButton
+                v-if="!isLive(b) && !b.has_checkin"
+                variant="primary"
+                block
+                @click="goToCheckin(b.practice_id)"
+              >
+                Check-in
+              </VButton>
+            </div>
+            <!-- A4 V2 (PROMPT №572): honest permanent-failure state, distinct
+                 from "still preparing" -- see PracticeLiveView's identical
+                 badge for the full rationale. -->
+            <VBadge
+              v-if="zoomStateFor(b) === 'failed'"
+              variant="error"
+              class="dashboard__zoom-note"
+            >
+              {{ t('user.screens.userDashboard.zoomFailed') }}
+            </VBadge>
+          </div>
+        </TransitionGroup>
+      </VLoadingSwap>
     </section>
 
     <!-- ================================================================
@@ -212,11 +227,13 @@
         <VStatCard
           class="dashboard__stat"
           :value="attendedCount"
+          :value-pending="statsPending"
           :label="t('user.screens.userDashboard.progress.practicesDone')"
         />
         <VStatCard
           class="dashboard__stat"
           :value="practiceHours"
+          :value-pending="statsPending"
           :label="t('user.screens.userDashboard.progress.hours')"
         />
       </div>
@@ -227,14 +244,17 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { onDocumentEvent, offDocumentEvent, isDocumentHidden } from '@/platform/dom'
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted, onActivated, onDeactivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { useBookingsStore } from '@/stores/bookings'
 import { useNotificationsStore } from '@/stores/notifications'
-import { getMyStats } from '@/api/bookings'
 import { useToast } from '@/composables/useToast'
 import { VHeader } from '@/components/layout'
-import { VLoader, VButton, VBadge, VStatCard } from '@/components/ui'
+import { VButton, VBadge, VStatCard, VSkeletonPracticeCard, VLoadingSwap } from '@/components/ui'
+import { useQuery } from '@/composables/useQuery'
+import { myStatsQuery } from '@/composables/queries'
+import { useLoadingHold } from '@/composables/useLoadingHold'
+import { useRememberedCount } from '@/composables/useRememberedCount'
 import { IconClock, IconCheck, IconBellPlain, IconMeditation } from '@/components/icons'
 import PracticeListCard from '@/components/shared/PracticeListCard.vue'
 import Banner from '@/components/shared/Banner.vue'
@@ -245,7 +265,7 @@ import { selectNearestBookings, selectActionableBookings } from '@/utils/nearest
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import { CHECKIN_WINDOW_H } from '@/utils/constants'
 import { zoomEntryState, type ZoomEntryStateKind } from '@/utils/zoomEntryState'
-import type { BookingWithPracticeResponse, UserStatsResponse } from '@/api/types'
+import type { BookingWithPracticeResponse } from '@/api/types'
 
 // CHECKIN_WINDOW_H is imported but only used implicitly via isInCheckinWindow.
 // Keeping import to document the dependency (mirrors usePracticeWindows).
@@ -264,8 +284,15 @@ const now = ref(Date.now())
 let clockInterval: ReturnType<typeof setInterval> | null = null
 
 // -- Profile stats (attended count + hours): server-side aggregate over ALL
-// attended bookings -- not derived from the paginated bookings page (W-6). --
-const stats = ref<UserStatsResponse | null>(null)
+// attended bookings -- not derived from the paginated bookings page (W-6).
+// Cached across visits (they change only after an attended practice), so a
+// return to the dashboard shows the numbers at once. While the FIRST answer
+// is pending the cards show a placeholder, never a false «0». --
+const statsQuery = useQuery(myStatsQuery())
+const stats = statsQuery.data
+// Same loading rule as the blocks (useLoadingHold): no placeholder for a fast
+// answer, at least 450 ms once one was seen.
+const { showSkeleton: statsPending } = useLoadingHold(statsQuery.isPending)
 
 // =========================================================================
 // Nearest bookings (shared selection -- the list AND the check-in banner)
@@ -297,6 +324,18 @@ const stats = ref<UserStatsResponse | null>(null)
  */
 const nearestBookings = computed((): BookingWithPracticeResponse[] =>
   selectNearestBookings(bookingsStore.upcoming, now.value),
+)
+/** The list's shape (VLoadingSwap revision): a row added or dropped glides. */
+const nearestRevision = computed(() => nearestBookings.value.map((b) => b.id).join(','))
+
+// The loading block is drawn in the size it had last time (1 card for an
+// empty list), so the swap to the answer barely moves (VLoadingSwap glides
+// the rest).
+const upcomingSkeletons = useRememberedCount(
+  'dashboard-upcoming',
+  () => nearestBookings.value.length,
+  () => !bookingsStore.upcomingLoading,
+  { fallback: 2, max: 3 },
 )
 
 // =========================================================================
@@ -466,15 +505,6 @@ const practiceHours = computed((): string => {
   return hours % 1 === 0 ? String(hours) : hours.toFixed(1).replace('.', ',')
 })
 
-/** Load the server-side attended-practice stats (W-6: full, not page-derived). */
-async function loadStats(): Promise<void> {
-  try {
-    stats.value = await getMyStats()
-  } catch {
-    // Leave stats null -> the cards show 0; the rest of the dashboard still works.
-  }
-}
-
 // =========================================================================
 // Actions
 // =========================================================================
@@ -536,29 +566,52 @@ function onBellVisibility(): void {
 // Lifecycle
 // =========================================================================
 
-onMounted(() => {
-  // Bell presence dot -- silent refresh (a failure keeps the last known
-  // value, stores/notifications.ts).
-  void notifications.refreshUnread()
-  startBellPoll()
-  onDocumentEvent('visibilitychange', onBellVisibility)
+function loadUpcoming(): void {
   // W15 fix (PROMPT №409): fetchUpcoming used to swallow its error entirely
   // (an empty result looked identical to "genuinely nothing upcoming") --
   // surface it via toast instead of leaving the widget silently blank.
   void bookingsStore.fetchUpcoming().then(() => {
     if (bookingsStore.upcomingError) toast.error(bookingsStore.upcomingError)
   })
-  void loadStats()
-  clockInterval = setInterval(() => {
+}
+
+/** Screen on: bell (silent refresh -- a failure keeps the last known value,
+ * stores/notifications.ts), its poll, and the minute clock. */
+function resume(): void {
+  now.value = Date.now()
+  void notifications.refreshUnread()
+  startBellPoll()
+  onDocumentEvent('visibilitychange', onBellVisibility)
+  clockInterval ??= setInterval(() => {
     now.value = Date.now()
   }, 60_000)
-})
+}
 
-onUnmounted(() => {
+/** Screen off (left or kept in the background by TabRouterView). */
+function pause(): void {
   offDocumentEvent('visibilitychange', onBellVisibility)
   stopBellPoll()
   if (clockInterval) clearInterval(clockInterval)
+  clockInterval = null
+}
+
+onMounted(() => {
+  resume()
+  loadUpcoming()
 })
+
+// Kept alive as a tab root (TabRouterView): back on the tab, the finished
+// screen is re-attached as is and only revalidates quietly -- the shown list
+// never turns back into a loading state. The first call is the mount itself.
+let activations = 0
+onActivated(() => {
+  if (activations++ === 0) return
+  resume()
+  loadUpcoming()
+  void statsQuery.revalidate()
+})
+onDeactivated(pause)
+onUnmounted(pause)
 </script>
 
 <style scoped>
@@ -696,15 +749,21 @@ onUnmounted(() => {
 }
 
 /* ===== Loader / empty ===== */
+/* Same rhythm as the real list (.dashboard__nearest-item margin). */
 .dashboard__loader {
   display: flex;
-  justify-content: center;
-  padding: var(--space-8) 0;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
 .dashboard__empty {
+  /* As tall as one booking row would be, so "nothing" vs "one booking" is
+     not a jump (and the loading block reserves the same space). */
+  min-height: var(--velo-card-height-list);
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  justify-content: center;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-5) 0;

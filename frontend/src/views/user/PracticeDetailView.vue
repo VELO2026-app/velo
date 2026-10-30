@@ -28,9 +28,20 @@
 -->
 
 <template>
-  <!-- Loading -->
-  <div v-if="store.selectedLoading" class="detail__loader">
-    <VLoader size="lg" />
+  <!-- Loading: only for a practice nothing is known about yet (a revisit or
+       a practice from the calendar list renders at once -- stores/practices).
+       The header is real so the back button and title never pop in; the
+       skeleton keeps the hero + section geometry. Once seen, the loader is
+       held for a visible minimum (useLoadingHold) and the page then fades in
+       (.velo-reveal); no grid crossfade here -- both branches teleport a
+       VHeader into the island, two at once would stack. -->
+  <div v-if="detailSkeleton" class="detail__loader">
+    <VHeader :title="t('user.screens.practiceDetail.titlePlain')" show-back @back="router.back()" />
+    <!-- 172px = PracticeHeroCard's catalog height (icon + title + meta + dots). -->
+    <VSkeleton class="detail__hero" shape="rect" height="172px" />
+    <div class="detail__body">
+      <VSkeleton v-for="i in 3" :key="i" shape="pill" />
+    </div>
   </div>
 
   <!-- Error -->
@@ -44,7 +55,7 @@
   </VEmptyState>
 
   <!-- Content -->
-  <div v-else-if="practice" class="detail">
+  <div v-else-if="practice" class="detail" :class="{ 'velo-reveal': detailReveal }">
     <!-- Back button header (contextual: catalog vs booked). The «…» kebab
          (BE-63) is shown to the practice's master OR the curator of the school
          it belongs to -- the two managers the backend accepts on PATCH -- and
@@ -287,7 +298,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'
 import { useBookingsStore } from '@/stores/bookings'
 import {
-  VLoader,
+  VSkeleton,
   VEmptyState,
   VButton,
   VBadge,
@@ -300,6 +311,7 @@ import { VHeader } from '@/components/layout'
 import { useAuthStore } from '@/stores/auth'
 import { useSchoolsHubStore } from '@/stores/schoolsHub'
 import { useToast } from '@/composables/useToast'
+import { useLoadingHold } from '@/composables/useLoadingHold'
 import BookingPopup from '@/components/shared/BookingPopup.vue'
 import PracticeSoldOut from '@/components/shared/PracticeSoldOut.vue'
 import PracticeHeroCard from '@/components/shared/PracticeHeroCard.vue'
@@ -317,6 +329,9 @@ import type { BookingStatus, BookingWithPracticeResponse, PracticeDifficulty } f
 const route = useRoute()
 const router = useRouter()
 const store = usePracticesStore()
+const { showSkeleton: detailSkeleton, reveal: detailReveal } = useLoadingHold(
+  () => store.selectedLoading,
+)
 const bookingsStore = useBookingsStore()
 
 const practice = computed(() => store.selected)
@@ -773,7 +788,7 @@ let clockInterval: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
   const id = route.params.id as string
-  void store.fetchPractice(id)
+  void store.openPractice(id)
   // B30: refreshMyBookings() (not fetchMyBookings()) -- the list may already
   // be cached from a screen visited earlier in the session, taken BEFORE this
   // practice ended; fetchMyBookings() would then no-op and the attendance
@@ -794,7 +809,7 @@ watch(
   (newId, oldId) => {
     if (newId && newId !== oldId) {
       store.clearSelected()
-      void store.fetchPractice(newId)
+      void store.openPractice(newId)
       justPurchased.value = false
       // REC-1: drop the previous practice's recording link immediately --
       // myAnyBooking's watch will refetch for the new one, but that resolves
@@ -812,9 +827,7 @@ onUnmounted(() => {
 <style scoped>
 .detail__loader {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 40vh;
+  flex-direction: column;
 }
 
 /* Outer container: a plain block — the whole screen scrolls in MobileLayout's

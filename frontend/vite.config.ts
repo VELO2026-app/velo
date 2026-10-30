@@ -82,6 +82,64 @@ function skinAssetSpill(skinDir: string | null, distDir: string): Plugin {
   }
 }
 
+/** Startup (motion report §8.3.7): main.ts awaits prepareHost() -- in
+ * Telegram, the telegram-web-app.js download -- and only THEN imports the
+ * app chunk, so the two downloads ran back to back before the first frame.
+ * This lists the app chunk and its static imports as <link rel=modulepreload>
+ * (and its CSS as a preload) in index.html: the browser fetches them in
+ * parallel with the Telegram script, while EVALUATION still waits for
+ * main.ts -- the platform pick at app import time is unchanged. Files the
+ * entry already preloads are skipped; the Zoom SDK chunk is never static. */
+function preloadAppChunk(): Plugin {
+  let base = '/'
+  return {
+    name: 'velo-preload-app-chunk',
+    apply: 'build',
+    configResolved(config) {
+      base = config.base
+    },
+    transformIndexHtml: {
+      order: 'post',
+      handler(html, ctx) {
+        const bundle = ctx.bundle
+        if (!bundle) return
+        // Not facadeModuleId: Rollup merges app.ts into a chunk without a
+        // facade (it comes back null), so match on the module list instead.
+        const app = Object.values(bundle).find(
+          (out) =>
+            out.type === 'chunk' &&
+            out.isDynamicEntry &&
+            out.moduleIds.some((id) => id.endsWith('/src/app.ts')),
+        )
+        if (!app || app.type !== 'chunk') return
+        const scripts = new Set<string>()
+        const styles = new Set<string>()
+        const walk = (file: string): void => {
+          const chunk = bundle[file]
+          if (!chunk || chunk.type !== 'chunk' || scripts.has(file)) return
+          scripts.add(file)
+          for (const css of chunk.viteMetadata?.importedCss ?? []) styles.add(css)
+          for (const dep of chunk.imports) walk(dep)
+        }
+        walk(app.fileName)
+        const fresh = (file: string): boolean => !html.includes(`${base}${file}"`)
+        return [
+          ...[...scripts].filter(fresh).map((file) => ({
+            tag: 'link',
+            attrs: { rel: 'modulepreload', crossorigin: true, href: `${base}${file}` },
+            injectTo: 'head' as const,
+          })),
+          ...[...styles].filter(fresh).map((file) => ({
+            tag: 'link',
+            attrs: { rel: 'preload', as: 'style', crossorigin: true, href: `${base}${file}` },
+            injectTo: 'head' as const,
+          })),
+        ]
+      },
+    },
+  }
+}
+
 // tz-whitelabel F1 (§2.3): the manifest identity follows the instance
 // passport -- the resolved VITE_* map (.env files + process.env) is handed
 // to pwaManifestWithPassport(), so two .env files produce two builds (§2.4).
@@ -121,6 +179,7 @@ export const SKIN_BRAND: string | null = ${JSON.stringify(skin?.displayName ?? n
     plugins: [
       passportHtmlDefaults(skin),
       skinAssetSpill(skin ? join(publicDir, 'skin') : null, join(frontendDir, 'dist')),
+      preloadAppChunk(),
       // tz-i18n §4.1: locale catalogs (src/locales/*.json) compile ahead of
       // runtime -- the message compiler stays out of the bundle and the PWA
       // precache. Include is scoped to the catalogs; other .json imports

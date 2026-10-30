@@ -93,11 +93,11 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { onMounted, ref } from 'vue'
+import { computed, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
-import { getCuratorGroups, getMyCuratorGroups } from '@/api/curatorGroups'
 import { useAuthStore } from '@/stores/auth'
-import type { CuratorGroupMineItem } from '@/api/types'
+import { useQuery } from '@/composables/useQuery'
+import { userSchoolsQuery } from '@/composables/queries'
 import CuratorGroupRow from '@/components/shared/CuratorGroupRow.vue'
 import { IconPlusFilled } from '@/components/icons'
 import { VButton, VEmptyState, VLoader } from '@/components/ui'
@@ -106,47 +106,29 @@ import VHeader from '@/components/layout/VHeader.vue'
 const router = useRouter()
 const authStore = useAuthStore()
 
-const loading = ref(true)
-const error = ref(false)
-const schools = ref<CuratorGroupMineItem[]>([])
+// Tab screen: the list lives in the screen-data cache (useQuery), so a
+// return through the dock renders the schools at once and refreshes them in
+// the background (staleTime 0 -- a just-joined school shows up on the next
+// visit) instead of a spinner on every visit.
+const schoolsQuery = useQuery(userSchoolsQuery(authStore.role ?? ''))
+// Kept alive as a tab root (TabRouterView): a return revalidates quietly
+// (the shown data stays). The first activation is the mount itself.
+let activations = 0
+onActivated(() => {
+  if (activations++ > 0) void schoolsQuery.revalidate()
+})
+const loading = schoolsQuery.isPending
+/** Only an error with nothing to show replaces the list. */
+const error = computed(() => schoolsQuery.error.value != null && !schoolsQuery.data.value)
+const schools = computed(() => schoolsQuery.data.value?.schools ?? [])
 /** BE-18: the admin-issued right to found a school. False is the honest
  *  default on a failed flag fetch -- an offered «+» that only ever answers
  *  403 is worse than a missing one. */
-const canCreate = ref(false)
+const canCreate = computed(() => schoolsQuery.data.value?.canCreate ?? false)
 
-async function load(): Promise<void> {
-  loading.value = true
-  error.value = false
-  try {
-    // Two parallel calls, one payload split -- the MasterCuratorGroupsView
-    // recipe verbatim: /mine feeds the rows (relation + transfer_offered ride
-    // only here), the curator list carries the create right. allSettled,
-    // because the two calls are NOT equal: /mine failing means there is no
-    // screen, while the flag call failing only means no «+». The flag lives
-    // on the master surface, which answers 403 outside master mode (FE-93),
-    // so it is only dialed there -- anywhere else false is the honest «+».
-    const [mineRes, listRes] = await Promise.allSettled([
-      getMyCuratorGroups(),
-      authStore.role === 'master' ? getCuratorGroups() : Promise.resolve(null),
-    ])
-    if (mineRes.status === 'rejected') throw mineRes.reason
-    // FE-93: this zone lists the schools I PARTICIPATE in. The curated rows
-    // /mine still returns (relation is role-independent) are the master
-    // list's «Я куратор» section -- and each would 403 its way through this
-    // zone's screens.
-    schools.value = mineRes.value.items.filter((g) => g.relation !== 'curator')
-    canCreate.value =
-      listRes.status === 'fulfilled' && listRes.value
-        ? (listRes.value.can_create_groups ?? false)
-        : false
-  } catch {
-    error.value = true
-  } finally {
-    loading.value = false
-  }
+function load(): void {
+  void schoolsQuery.refresh()
 }
-
-onMounted(load)
 </script>
 
 <style scoped>

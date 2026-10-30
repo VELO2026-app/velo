@@ -17,7 +17,9 @@
     "supportSender": "Support",
     "listLoadFailed": "Failed to load the messages",
     "goneTitle": "This conversation is gone",
-    "goneHint": "The conversation was deleted — for example, its support appeal was closed as spam"
+    "goneHint": "The conversation was deleted — for example, its support appeal was closed as spam",
+    "sending": "Sending…",
+    "notSent": "Not sent · Retry"
   },
   "composer": {
     "voiceAria": "Voice input",

@@ -97,8 +97,6 @@ const emit = defineEmits<{
   background: var(--velo-glass-blue-200-15);
   border: 1px solid var(--velo-glass-border);
   border-radius: var(--radius-xl);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
 }
 
 .v-segment-track__btn {
@@ -107,7 +105,10 @@ const emit = defineEmits<{
   border: none;
   border-radius: var(--radius-xl);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
 }
 
 .v-segment-track__btn--active {

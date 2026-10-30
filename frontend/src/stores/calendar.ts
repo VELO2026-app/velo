@@ -40,6 +40,8 @@ import { ref, reactive, computed } from 'vue'
 import { getCuratorGroupPractices } from '@/api/curatorGroups'
 import { getPractices } from '@/api/practices'
 import { extractApiError } from '@/composables/useApiError'
+import { readPersisted, writePersisted } from '@/composables/persistedCache'
+import { seedPractices } from '@/stores/practices'
 import i18n from '@/locales'
 
 const { t } = i18n.global
@@ -227,6 +229,8 @@ export const useCalendarStore = defineStore('calendar', () => {
   // -- Actions --
 
   let loadToken = 0
+  /** The window (range + filters + scope) whose answer is on screen. */
+  let lastLoadedKey: string | null = null
   /**
    * Load every practice in the current week in one request.
    * date_from/date_to are the local Monday 00:00 .. Sunday 23:59:59.999.
@@ -240,7 +244,6 @@ export const useCalendarStore = defineStore('calendar', () => {
    */
   async function loadWeek(silent = false): Promise<void> {
     const token = ++loadToken
-    if (!silent) loading.value = true
     error.value = null
 
     const week = days.value
@@ -271,6 +274,30 @@ export const useCalendarStore = defineStore('calendar', () => {
     if (selFrom < from) from.setTime(selFrom.getTime())
     if (selTo > to) to.setTime(selTo.getTime())
 
+    // Stale-while-revalidate: the window already on screen (a return to the
+    // tab, the idle prefetch) is refreshed quietly -- no skeleton, no reset.
+    // The default feed (no scope) also comes back from the last session's
+    // copy (persistedCache) so a cold start draws the week at once.
+    const rangeKey = JSON.stringify({
+      from: from.toISOString(),
+      to: to.toISOString(),
+      filters,
+      master: masterScope.value,
+      group: masterGroupFilter.value,
+      school: schoolScope.value,
+    })
+    const unscoped = masterScope.value === null && schoolScope.value === null
+    const persistName = `calendar:${rangeKey}`
+    let quiet = silent || rangeKey === lastLoadedKey
+    if (!quiet && unscoped) {
+      const saved = readPersisted<PracticeResponse[]>(persistName)
+      if (saved) {
+        weekPractices.value = saved.data
+        quiet = true
+      }
+    }
+    if (!quiet) loading.value = true
+
     // School scope: no per-week request -- the full upcoming school feed is
     // fetched once (below, only when not loaded yet) and each window is
     // sliced from it client-side.
@@ -291,6 +318,7 @@ export const useCalendarStore = defineStore('calendar', () => {
             items.push(...res.items)
           }
           schoolFeed.value = items
+          seedPractices(items)
           // Open ON the practices: the default window is today's week, and a
           // school whose nearest practice sits further out would read as an
           // empty calendar. Snap the window and the selection to the nearest
@@ -316,10 +344,13 @@ export const useCalendarStore = defineStore('calendar', () => {
           const t = new Date(p.scheduled_at).getTime()
           return t >= fromMs && t <= toMs
         })
+        lastLoadedKey = rangeKey
       } catch (e) {
         if (token !== loadToken) return // superseded -- keep the newer truth
         error.value = extractApiError(e, t('storeErrors.calendar.schoolPractices'))
-        weekPractices.value = []
+        // A silent (background) refresh keeps what is on screen; a real
+        // reload (new scope/filters) must not show the previous answer.
+        if (!quiet) weekPractices.value = []
       } finally {
         if (token === loadToken) loading.value = false
       }
@@ -349,10 +380,13 @@ export const useCalendarStore = defineStore('calendar', () => {
         masterScope.value && masterGroupFilter.value
           ? res.items.filter((p) => p.curator_group_id === masterGroupFilter.value)
           : res.items
+      seedPractices(res.items)
+      lastLoadedKey = rangeKey
+      if (unscoped) writePersisted(persistName, weekPractices.value)
     } catch (e) {
       if (token !== loadToken) return // superseded -- keep the newer truth
       error.value = extractApiError(e, t('storeErrors.calendar.calendar'))
-      weekPractices.value = []
+      if (!quiet) weekPractices.value = [] // see the school branch above
     } finally {
       if (token === loadToken) loading.value = false
     }

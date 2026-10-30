@@ -168,9 +168,19 @@ export function getFeedback(id: string): Promise<FeedbackResponse> {
  *
  * content is required (1-10000 chars).
  * title, mood, practice_id are optional.
+ *
+ * `idempotencyKey` (optimistic composer): one key per logical entry, reused
+ * on a retry of the same text -- the chat send's convention (the
+ * `Idempotency-Key` header, api/chats.ts). The backend may not honour it yet
+ * (BE ticket: dedup POST /api/v1/diary by Idempotency-Key); sending it costs
+ * nothing and makes the retry safe the day it does.
  */
-export function createDiaryEntry(body: CreateDiaryEntryRequest): Promise<DiaryEntryResponse> {
-  return api.post<DiaryEntryResponse>('/api/v1/diary', body)
+export function createDiaryEntry(
+  body: CreateDiaryEntryRequest,
+  idempotencyKey?: string,
+): Promise<DiaryEntryResponse> {
+  if (!idempotencyKey) return api.post<DiaryEntryResponse>('/api/v1/diary', body)
+  return api.post<DiaryEntryResponse>('/api/v1/diary', body, { 'Idempotency-Key': idempotencyKey })
 }
 
 export interface ListDiaryEntriesParams {

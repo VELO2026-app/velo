@@ -7,6 +7,9 @@
 // =============================================================================
 
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import { installViewTransitions } from '@/router/viewTransition'
+import { installTabPrefetch } from '@/router/prefetch'
+import { installDataPrefetch } from '@/router/dataPrefetch'
 import { useAuthStore } from '@/stores/auth'
 import { RETURN_PATH } from '@/platform/browser-login'
 import { useUiStore } from '@/stores/ui'
@@ -197,6 +200,12 @@ const router = createRouter({
         {
           path: 'practices/:id',
           name: 'practice-detail',
+          meta: {
+            preload: (to) =>
+              import('@/stores/practices').then(({ prefetchPractice }) =>
+                prefetchPractice(String(to.params.id)),
+              ),
+          },
           component: () => import('@/views/user/PracticeDetailView.vue'),
         },
         {
@@ -833,5 +842,9 @@ router.beforeEach(async (to) => {
 
   return true
 })
+
+installViewTransitions(router)
+installTabPrefetch(router)
+installDataPrefetch(router)
 
 export default router

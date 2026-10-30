@@ -8,6 +8,10 @@
   loadFailed below) -- without that, a dead image host paints a broken-image
   glyph and the initials path is never reached.
 
+  Loading (motion report §8.3.6): the initials sit UNDER the photo, which is
+  decoded off the main thread and fades in once loaded -- no empty plate
+  followed by a hard pop. An image already in the cache shows at once.
+
   Usage:
     <VAvatar name="Мария К." size="md" />
     <VAvatar name="Alex" url="/avatars/alex.jpg" size="lg" />
@@ -15,19 +19,31 @@
 
 <template>
   <div class="v-avatar" :class="[`v-avatar--${size}`, { 'v-avatar--square': square }]">
+    <!-- Hidden once the photo is in: a transparent PNG mark must not show
+         letters through. -->
+    <span
+      class="v-avatar__initials"
+      :class="{ 'v-avatar__initials--covered': showImg && loaded }"
+      :aria-hidden="showImg || undefined"
+      >{{ initials }}</span
+    >
     <img
-      v-if="url && !loadFailed"
+      v-if="showImg"
+      ref="imgEl"
       :src="url"
       :alt="name"
       class="v-avatar__img"
+      :class="{ 'v-avatar__img--loaded': loaded }"
+      loading="lazy"
+      decoding="async"
+      @load="loaded = true"
       @error="loadFailed = true"
     />
-    <span v-else class="v-avatar__initials">{{ initials }}</span>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 
 const props = withDefaults(
   defineProps<{
@@ -52,6 +68,14 @@ const props = withDefaults(
 // Falling back on `error` makes ANY dead avatar host (this one or the next)
 // degrade into clean initials instead of a broken glyph.
 const loadFailed = ref(false)
+const loaded = ref(false)
+const imgEl = ref<HTMLImageElement | null>(null)
+const showImg = computed(() => !!props.url && !loadFailed.value)
+
+// Cached image: mark it loaded before the first paint, so it never fades.
+onMounted(() => {
+  if (imgEl.value?.complete && imgEl.value.naturalWidth > 0) loaded.value = true
+})
 
 // A fresh URL deserves a fresh attempt: Vue recycles this component across list
 // rows, so without this reset one broken avatar would poison the next row.
@@ -59,6 +83,7 @@ watch(
   () => props.url,
   () => {
     loadFailed.value = false
+    loaded.value = false
   },
 )
 
@@ -75,6 +100,7 @@ const initials = computed(() => {
 
 <style scoped>
 .v-avatar {
+  position: relative;
   border-radius: var(--radius-full);
   display: flex;
   align-items: center;
@@ -116,12 +142,25 @@ const initials = computed(() => {
 }
 
 .v-avatar__img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  opacity: 0;
+  transition: opacity var(--velo-dur-base) var(--velo-ease-out);
+}
+
+.v-avatar__img--loaded {
+  opacity: 1;
 }
 
 .v-avatar__initials {
   line-height: 1;
+  transition: opacity var(--velo-dur-base) var(--velo-ease-out);
+}
+
+.v-avatar__initials--covered {
+  opacity: 0;
 }
 </style>

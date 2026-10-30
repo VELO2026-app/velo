@@ -101,6 +101,32 @@ describe('useCursorPagination', () => {
     expect(feed.error.value).toBe('boom')
   })
 
+  it('refreshInPlace: a failed background reload KEEPS the shown items (no rung)', async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce({ items: [row('a')], next_cursor: null })
+      .mockRejectedValueOnce(new Error('blip'))
+      .mockResolvedValueOnce({ items: [row('b')], next_cursor: null })
+    const feed = useCursorPagination<Row>(fetchFn, 2)
+
+    await feed.refresh()
+    await feed.refreshInPlace()
+    expect(feed.items.value.map((r) => r.id)).toEqual(['a'])
+    expect(feed.error.value).toBeNull()
+
+    await feed.refreshInPlace()
+    expect(feed.items.value.map((r) => r.id)).toEqual(['b'])
+  })
+
+  it('refreshInPlace on an EMPTY list is a plain refresh (the rung still works)', async () => {
+    const fetchFn = vi.fn().mockRejectedValueOnce(new Error('boom'))
+    const feed = useCursorPagination<Row>(fetchFn, 2)
+
+    await feed.refreshInPlace()
+    expect(feed.error.value).toBe('boom')
+    expect(feed.loading.value).toBe(false)
+  })
+
   it('a failed loadMore KEEPS the items and fills `loadMoreError` (the split)', async () => {
     const fetchFn = vi
       .fn()

@@ -29,6 +29,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
+import { flushPersisted, readPersisted, writePersisted } from '@/composables/persistedCache'
 import { api, ApiNetworkError, ApiResponseError } from '@/api/client'
 import * as usersApi from '@/api/users'
 import type { AuthResponse, UserResponse } from '@/api/types'
@@ -225,6 +226,26 @@ describe('useAuthStore', () => {
 
       expect(await store.restoreSession()).toBe('none')
       expect(usersApi.getMe).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('persisted screen data', () => {
+    it('belongs to the signed-in account and is wiped on logout', async () => {
+      platformName = 'telegram'
+      vi.mocked(api.post).mockResolvedValue({ session_token: 'tok_1', user: fakeUser() })
+      const store = useAuthStore()
+      await store.loginViaTelegram('init')
+      writePersisted('bookings.upcoming', [{ id: 'b1' }])
+      flushPersisted()
+      expect(readPersisted('bookings.upcoming')?.data).toEqual([{ id: 'b1' }])
+
+      platformName = 'standalone'
+      vi.mocked(api.post).mockResolvedValue(undefined)
+      await store.logout()
+      expect(readPersisted('bookings.upcoming')).toBeUndefined()
+      expect(Object.keys(sessionStorage).some((k) => k.startsWith('velo:screen-cache:'))).toBe(
+        false,
+      )
     })
   })
 

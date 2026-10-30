@@ -68,6 +68,7 @@ const practicesState: {
   selectedError: string | null
 } = { selected: null, selectedLoading: false, selectedError: null }
 const fetchPractice = vi.fn()
+const openPractice = vi.fn()
 const clearSelected = vi.fn()
 vi.mock('@/stores/practices', () => ({
   usePracticesStore: () => ({
@@ -81,6 +82,7 @@ vi.mock('@/stores/practices', () => ({
       return practicesState.selectedError
     },
     fetchPractice,
+    openPractice,
     clearSelected,
   }),
 }))
@@ -291,6 +293,7 @@ beforeEach(() => {
   authState.role = 'user'
   schoolsHubState.mine = []
   fetchPractice.mockReset()
+  openPractice.mockReset()
   clearSelected.mockReset()
   fetchMyBookings.mockReset()
   refreshBookings.mockReset()
@@ -351,7 +354,7 @@ describe('PracticeDetailView', () => {
       mount()
       await flush()
 
-      expect(fetchPractice).toHaveBeenCalledWith('p1')
+      expect(openPractice).toHaveBeenCalledWith('p1')
       expect(refreshMyBookings).toHaveBeenCalled()
     })
   })

@@ -22,16 +22,28 @@
 -->
 
 <template>
-  <nav class="v-tabbar">
+  <nav ref="navEl" class="v-tabbar" :class="{ 'v-tabbar--unmeasured': !indicator }">
+    <!-- The active disc is ONE element that travels (transform only) from the
+         old tab to the new one, on the same clock as the screen crossfade
+         (--velo-dur-tab). Until it is measured (first paint, test DOM) the
+         active button paints its own fill, so the bar is never without one. -->
+    <span
+      class="v-tabbar__indicator"
+      :class="{ 'v-tabbar__indicator--animate': animate }"
+      :style="indicatorStyle"
+      aria-hidden="true"
+    />
     <button
       v-for="item in items"
       :key="item.to"
+      :ref="itemRef(item.to)"
       class="v-tabbar__item"
-      :class="{ 'v-tabbar__item--active': active === item.to }"
+      :class="{ 'v-tabbar__item--active': current === item.to }"
       :aria-label="item.label"
-      :aria-current="active === item.to ? 'page' : undefined"
+      :aria-current="current === item.to ? 'page' : undefined"
       type="button"
-      @click="$emit('navigate', item.to)"
+      @pointerdown="$emit('intent', item.to)"
+      @click="onTap(item.to)"
     >
       <span class="v-tabbar__icon">
         <component :is="item.icon" v-if="typeof item.icon !== 'string'" :size="27" />
@@ -42,16 +54,152 @@
 </template>
 
 <script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { ComponentPublicInstance } from 'vue'
 import type { TabItem } from '@/router/tabs'
 
-defineProps<{
+const props = defineProps<{
   items: TabItem[]
   active?: string
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   navigate: [to: string]
+  /** Finger down on a tab: the shell warms that screen's chunk. */
+  intent: [to: string]
 }>()
+
+// ---------------------------------------------------------------------------
+// Optimistic active tab: the disc starts moving on the tap itself, not when
+// the router has finished (chunk, guards, the transition's snapshot). The
+// route's own `active` takes over as soon as it arrives. It hands back only
+// when the navigation clearly went elsewhere (a guard redirect: `active`
+// lands on a tab that was never tapped) or never landed at all (PENDING_MS,
+// generous on purpose -- a slow first chunk on a dev tunnel must not bounce
+// the disc back and forth).
+// ---------------------------------------------------------------------------
+const PENDING_MS = 8000
+const pending = ref<string | null>(null)
+/** Tabs tapped since the hold started (a rapid double tap's stops). */
+const tapped = new Set<string>()
+let pendingTimer: ReturnType<typeof setTimeout> | null = null
+
+const current = computed(() => pending.value ?? props.active)
+
+function clearPending(): void {
+  if (pendingTimer !== null) clearTimeout(pendingTimer)
+  pendingTimer = null
+  pending.value = null
+  tapped.clear()
+}
+
+watch(
+  () => props.active,
+  (active) => {
+    if (pending.value === null) return
+    // An intermediate stop of a rapid double tap must not bounce the disc.
+    if (active !== undefined && active !== pending.value && tapped.has(active)) return
+    clearPending()
+  },
+)
+
+function onTap(to: string): void {
+  if (to === props.active) {
+    clearPending()
+  } else if (to !== current.value) {
+    if (pendingTimer !== null) clearTimeout(pendingTimer)
+    pending.value = to
+    tapped.add(to)
+    pendingTimer = setTimeout(clearPending, PENDING_MS)
+  }
+  emit('navigate', to)
+}
+
+// ---------------------------------------------------------------------------
+// The travelling disc + FLIP for the buttons. The active button is the wider
+// stadium (flex-grow, capped), so a switch re-lays the row out at once; each
+// button then glides from where it was (translateX, compositor-only) instead
+// of the old flex-grow tween that re-laid the row out on every frame.
+// ---------------------------------------------------------------------------
+const navEl = ref<HTMLElement | null>(null)
+const els = new Map<string, HTMLElement>()
+
+function itemRef(to: string) {
+  return (el: Element | ComponentPublicInstance | null): void => {
+    if (el instanceof HTMLElement) els.set(to, el)
+    else els.delete(to)
+  }
+}
+
+const indicator = ref<{ x: number; y: number; w: number; h: number } | null>(null)
+/** Off for the first placement (the disc must not fly in from the left). */
+const animate = ref(false)
+
+const indicatorStyle = computed(() => {
+  const box = indicator.value
+  if (!box) return { opacity: '0' }
+  return {
+    width: `${box.w}px`,
+    height: `${box.h}px`,
+    transform: `translate(${box.x}px, ${box.y}px)`,
+  }
+})
+
+function measure(): void {
+  const el = current.value ? els.get(current.value) : undefined
+  // Zero width = not laid out (hidden, or a DOM without layout).
+  indicator.value =
+    el && el.offsetWidth > 0
+      ? { x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight }
+      : null
+}
+
+function centres(): Map<string, number> {
+  const out = new Map<string, number>()
+  for (const [to, el] of els) out.set(to, el.offsetLeft + el.offsetWidth / 2)
+  return out
+}
+
+watch(current, () => {
+  // flush 'pre': the DOM still holds the old row.
+  const before = centres()
+  void nextTick(() => {
+    for (const [to, el] of els) {
+      const was = before.get(to)
+      if (was === undefined) continue
+      const dx = was - (el.offsetLeft + el.offsetWidth / 2)
+      if (Math.abs(dx) < 0.5) continue
+      el.style.transition = 'none'
+      el.style.transform = `translateX(${dx}px)`
+      void el.offsetWidth // commit the start state, then glide to 0
+      el.style.transition = ''
+      el.style.transform = ''
+    }
+    measure()
+    animate.value = indicator.value !== null
+  })
+})
+
+watch(
+  () => props.items.map((item) => item.to).join('|'),
+  () => void nextTick(measure),
+)
+
+let ro: ResizeObserver | null = null
+
+onMounted(() => {
+  measure()
+  if (typeof ResizeObserver === 'function' && navEl.value) {
+    ro = new ResizeObserver(() => measure())
+    ro.observe(navEl.value)
+  }
+})
+
+onBeforeUnmount(() => {
+  ro?.disconnect()
+  ro = null
+  if (pendingTimer !== null) clearTimeout(pendingTimer)
+})
 </script>
 
 <style scoped>
@@ -102,20 +250,25 @@ defineEmits<{
   border-radius: var(--velo-radius-pill);
   box-shadow: var(--velo-shadow-glass);
   z-index: var(--z-sticky);
+  /* Own View Transition layer (styles/motion.css): stays put between tab
+     screens, slides away when a detail screen hides the dock. */
+  view-transition-name: velo-tabbar;
 }
 
-/* The frost layer: white 12% surface over blur(18) saturate(180), on its own
+/* The frost layer: white 12% surface over blur(12) saturate(150), on its own
    child layer (z -1). The nav's absolute position + z-index already form the
    stacking context that keeps it contained -- the composer's translateZ(0)
-   anchor trick is not needed here. */
+   anchor trick is not needed here. The dock floats over a scrolling feed, so
+   this blur is re-sampled on every scrolled frame: 12px reads as the same
+   frost at a 60Hz WebKit budget, 18px + 180% saturate did not fit it. */
 .v-tabbar::before {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
   background: var(--velo-glass-white-12);
-  backdrop-filter: blur(18px) saturate(180%);
-  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
   z-index: -1;
 }
 
@@ -157,10 +310,18 @@ defineEmits<{
      fills out to "lost". */
   position: relative;
   z-index: 1;
+  /* transform = the FLIP glide on a tab switch (script); same clock as the
+     travelling disc and the screen crossfade. */
   transition:
-    background var(--transition-fast),
-    color var(--transition-fast),
-    flex-grow var(--transition-fast);
+    background-color var(--transition-base),
+    color var(--velo-dur-tab) var(--velo-ease-out),
+    transform var(--velo-dur-tab) var(--velo-ease-out);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.v-tabbar__item:active .v-tabbar__icon {
+  transform: scale(0.92);
+  transition-duration: var(--velo-dur-press);
 }
 
 /* [FE-26 pattern, VBackButton precedent] Touch skirt: the pill's compact
@@ -181,8 +342,8 @@ defineEmits<{
    [owner, 2026-09-07] The active tab is an ELONGATED pill: flex-grow: 1
    lets it absorb free width (its 48px width is the flex basis, siblings
    keep their fixed targets), and the item's own radius-full rounds the
-   ends. The base transition's flex-grow leg hands the width smoothly
-   from the previously-active tab to the next one.
+   ends. The width change itself is instant; the buttons glide into the
+   new row (FLIP, transform) and the fill travels as one disc.
    [owner, 2026-09-08] But the pill no longer drinks the dock's WHOLE free
    width (~158px at a 390px viewport, ~196px at 428px -- it read as a bar,
    not a tab): max-width caps it at 96px, twice the 48px base circle -- a
@@ -192,8 +353,31 @@ defineEmits<{
 .v-tabbar__item--active {
   flex-grow: 1;
   max-width: 96px;
-  background: var(--velo-nav-active-bg-glass);
   color: var(--velo-white);
+}
+
+/* Before the disc is measured, the active button carries the fill itself. */
+.v-tabbar--unmeasured .v-tabbar__item--active {
+  background: var(--velo-nav-active-bg-glass);
+}
+
+/* The travelling active disc: sized and placed by the script to the active
+   button's box. Above the ::after sheen (same z as the buttons, earlier in
+   the DOM, so the icons paint over it). */
+.v-tabbar__indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  border-radius: var(--radius-full);
+  background: var(--velo-nav-active-bg-glass);
+  pointer-events: none;
+}
+
+.v-tabbar__indicator--animate {
+  transition:
+    transform var(--velo-dur-tab) var(--velo-ease-out),
+    width var(--velo-dur-tab) var(--velo-ease-out);
 }
 
 .v-tabbar__item:focus-visible {
@@ -207,5 +391,6 @@ defineEmits<{
   justify-content: center;
   line-height: 0;
   font-size: var(--velo-fs-22);
+  transition: transform var(--transition-fast);
 }
 </style>

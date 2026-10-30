@@ -461,7 +461,7 @@ function onDayClick(dateKey: string): void {
 }
 
 .week-strip__days--anim {
-  transition: transform 220ms ease;
+  transition: transform var(--transition-base);
 }
 
 .week-strip__day {
@@ -479,7 +479,10 @@ function onDayClick(dateKey: string): void {
   background: var(--velo-white);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    opacity var(--transition-fast);
 }
 
 .week-strip__day:hover {

@@ -120,6 +120,68 @@ describe('usePracticesStore', () => {
     })
   })
 
+  describe('stale-while-revalidate', () => {
+    it('a practice seen before renders at once (no loading state) and refreshes silently', async () => {
+      vi.mocked(practicesApi.getPractice).mockResolvedValueOnce(
+        fakePractice({ id: 'p1', title: 'Old' }),
+      )
+      const store = usePracticesStore()
+      await store.fetchPractice('p1')
+      store.clearSelected()
+
+      let resolve: (v: PracticeResponse) => void = () => {}
+      vi.mocked(practicesApi.getPractice).mockReturnValueOnce(
+        new Promise<PracticeResponse>((r) => {
+          resolve = r
+        }),
+      )
+      const refresh = store.fetchPractice('p1')
+
+      expect(store.selected?.title).toBe('Old')
+      expect(store.selectedLoading).toBe(false)
+
+      resolve(fakePractice({ id: 'p1', title: 'New' }))
+      await refresh
+      expect(store.selected?.title).toBe('New')
+    })
+
+    it('a list seed is shown until the response lands', async () => {
+      vi.mocked(practicesApi.getPractice).mockReturnValueOnce(new Promise(() => {}))
+      const store = usePracticesStore()
+
+      void store.fetchPractice('p2', fakePractice({ id: 'p2', title: 'From list' }))
+
+      expect(store.selected?.title).toBe('From list')
+      expect(store.selectedLoading).toBe(false)
+    })
+
+    it('a failed refresh keeps the practice on screen', async () => {
+      const store = usePracticesStore()
+      vi.mocked(practicesApi.getPractice).mockResolvedValueOnce(fakePractice({ id: 'p1' }))
+      await store.fetchPractice('p1')
+
+      vi.mocked(practicesApi.getPractice).mockRejectedValueOnce(new Error('offline'))
+      await store.fetchPractice('p1')
+
+      expect(store.selected?.id).toBe('p1')
+      expect(store.selectedError).toBeNull()
+    })
+
+    it('a refresh that says the practice is gone (404) clears it, even when it was shown', async () => {
+      const store = usePracticesStore()
+      vi.mocked(practicesApi.getPractice).mockResolvedValueOnce(fakePractice({ id: 'p1' }))
+      await store.fetchPractice('p1')
+
+      vi.mocked(practicesApi.getPractice).mockRejectedValueOnce(
+        new ApiResponseError(404, 'gone', 'not_found'),
+      )
+      await store.fetchPractice('p1')
+
+      expect(store.selected).toBeNull()
+      expect(store.selectedError).not.toBeNull()
+    })
+  })
+
   describe('clearSelected', () => {
     it('clears the selected practice and its error, independent of loading', () => {
       const store = usePracticesStore()

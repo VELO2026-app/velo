@@ -21,6 +21,13 @@
 
 <template>
   <Teleport to="body">
+    <!-- The frosted scrim is its OWN layer, faded on itself: an opacity
+         animation on an ANCESTOR of a backdrop-filter makes WebKit drop the
+         blur until the fade ends (it pops in). The dialog layer above it is
+         transparent, so it can fade/scale freely. -->
+    <Transition name="v-modal-scrim">
+      <div v-if="open" class="v-modal__scrim" aria-hidden="true" />
+    </Transition>
     <Transition name="v-modal">
       <div v-if="open" class="v-modal__overlay" @click.self="onOverlayClick">
         <div class="v-modal__container" role="dialog" aria-modal="true">
@@ -110,6 +117,18 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.v-modal__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  background: var(--velo-scrim);
+  /* Light frosted glass over the page (owner ask 2026-09-30, «немного
+     блюрить»). -webkit- prefix for the Telegram webviews; a browser without
+     backdrop-filter simply keeps the plain scrim. */
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
 .v-modal__overlay {
   position: fixed;
   inset: 0;
@@ -119,12 +138,6 @@ onUnmounted(() => {
      posture moved entirely to VBottomSheet. */
   align-items: center;
   justify-content: center;
-  background: var(--velo-scrim);
-  /* Light frosted glass over the page (owner ask 2026-09-30, «немного
-     блюрить»). -webkit- prefix for the Telegram webviews; a browser without
-     backdrop-filter simply keeps the plain scrim. */
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   padding: var(--space-4);
 }
 
@@ -171,7 +184,9 @@ onUnmounted(() => {
   font-size: var(--text-sm);
   color: var(--velo-text-muted);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
 }
 
 /* [FE-26] 44px touch-target bar: the × stays 32x32 visually (the modal
@@ -189,29 +204,41 @@ onUnmounted(() => {
   color: var(--velo-text-primary);
 }
 
-/* -- Transitions -- */
-/* A centred dialog scales/fades in place; the old bottom-sheet slide-up is
-   gone with the sheet posture. */
-.v-modal-enter-active,
-.v-modal-leave-active {
-  transition: opacity var(--transition-slow);
+/* -- Transitions --
+   A centred dialog rises a little and settles; it leaves faster and travels
+   less than it arrived. transform/opacity only. */
+.v-modal-scrim-enter-active {
+  transition: opacity var(--velo-dur-sheet) var(--velo-ease-out);
 }
 
-.v-modal-enter-active .v-modal__container,
-.v-modal-leave-active .v-modal__container {
-  transition: transform var(--transition-slow);
+.v-modal-scrim-leave-active {
+  transition: opacity var(--velo-dur-sheet-exit) var(--velo-ease-in);
 }
 
-.v-modal-enter-from,
-.v-modal-leave-to {
+.v-modal-scrim-enter-from,
+.v-modal-scrim-leave-to {
   opacity: 0;
 }
 
-.v-modal-enter-from .v-modal__container {
-  transform: translateY(20px) scale(0.98);
+.v-modal-enter-active {
+  transition:
+    opacity var(--velo-dur-sheet) var(--velo-ease-out),
+    transform var(--velo-dur-sheet) var(--velo-ease-out);
 }
 
-.v-modal-leave-to .v-modal__container {
-  transform: translateY(20px) scale(0.98);
+.v-modal-leave-active {
+  transition:
+    opacity var(--velo-dur-sheet-exit) var(--velo-ease-in),
+    transform var(--velo-dur-sheet-exit) var(--velo-ease-in);
+}
+
+.v-modal-enter-from {
+  opacity: 0;
+  transform: translateY(12px) scale(0.985);
+}
+
+.v-modal-leave-to {
+  opacity: 0;
+  transform: translateY(6px) scale(0.99);
 }
 </style>

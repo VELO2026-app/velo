@@ -45,7 +45,14 @@
 
     <div class="feed-card__practice-master">
       <span class="feed-card__avatar" aria-hidden="true">
-        <img v-if="masterAvatarUrl" :src="masterAvatarUrl" alt="" class="feed-card__avatar-img" />
+        <img
+          v-if="masterAvatarUrl"
+          :src="masterAvatarUrl"
+          alt=""
+          class="feed-card__avatar-img"
+          loading="lazy"
+          decoding="async"
+        />
       </span>
       <span class="feed-card__master-name">{{ masterName }}</span>
     </div>

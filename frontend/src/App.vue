@@ -52,17 +52,19 @@
 <template>
   <!-- Single safe-area frame around every gated screen (see AppFrame). -->
   <AppFrame>
-    <LoadingView v-if="!isReady || isLoggingOut || stage === null" />
-    <LoadingErrorView v-else-if="restoreUnreachable" />
-    <template v-else-if="!isAuthenticated">
-      <TelegramStubView v-if="inTelegram" />
-      <TelegramLoginView v-else />
-    </template>
-    <template v-else>
-      <WelcomeView v-if="stage === 'welcome'" @enter="onWelcomeEnter" />
+    <!-- Stage changes crossfade (styles/motion.css «velo-stage»): the leaving
+         stage is lifted out of flow and fades over the arriving one, so the
+         splash dissolves into the first screen instead of cutting to it.
+         Simultaneous, not out-in -- no added wait on the way in. -->
+    <Transition name="velo-stage">
+      <LoadingView v-if="!isReady || isLoggingOut || stage === null" />
+      <LoadingErrorView v-else-if="restoreUnreachable" />
+      <TelegramStubView v-else-if="!isAuthenticated && inTelegram" />
+      <TelegramLoginView v-else-if="!isAuthenticated" />
+      <WelcomeView v-else-if="stage === 'welcome'" @enter="onWelcomeEnter" />
       <OnboardingView v-else-if="stage === 'onboarding'" @done="stage = 'app'" />
       <RouterView v-else />
-    </template>
+    </Transition>
   </AppFrame>
   <!-- VToast teleports to body (overlay); kept outside the frame. -->
   <VToast />

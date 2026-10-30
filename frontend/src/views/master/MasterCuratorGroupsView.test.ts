@@ -39,10 +39,10 @@ function mount(): HTMLElement {
   return host
 }
 
+// The list loads through the screen-data cache (useQuery): a settled
+// request takes a few more microtasks than the old local ref did.
 async function flush(): Promise<void> {
-  await nextTick()
-  await nextTick()
-  await nextTick()
+  for (let i = 0; i < 8; i++) await nextTick()
 }
 
 function text(): string {

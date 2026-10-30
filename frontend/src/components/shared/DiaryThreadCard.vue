@@ -94,6 +94,8 @@
             :src="masterAvatarUrl"
             alt=""
             class="tcard__prac-avatar-img"
+            loading="lazy"
+            decoding="async"
           />
         </span>
         <span v-if="masterName" class="tcard__prac-master-name">{{ masterName }}</span>

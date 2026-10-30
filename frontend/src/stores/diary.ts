@@ -26,6 +26,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, reactive } from 'vue'
+import { newIdempotencyKey } from '@/api/chats'
 import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
 import i18n from '@/locales'
@@ -86,6 +87,16 @@ export type ExternalActivityFieldErrors = Partial<
   Record<(typeof EXTERNAL_ACTIVITY_FIELDS)[number], string>
 >
 
+/** An entry the composer handed over that the feed does not carry yet. */
+export interface PendingDiaryEntry {
+  /** Idempotency key -- also the row key, before and after delivery. */
+  key: string
+  body: CreateDiaryEntryRequest
+  status: 'sending' | 'failed' | 'sent'
+  /** The stand-in feed row (id `pending:<key>`). */
+  item: DiaryFeedItem
+}
+
 export const useDiaryStore = defineStore('diary', () => {
   // ===========================================================================
   // Check-in submit (CheckinView)
@@ -104,7 +115,9 @@ export const useDiaryStore = defineStore('diary', () => {
       await upsertCheckin(practiceId, body)
       // The check-in is now a feed event and flips the booking's has_checkin
       // flag -- refresh both so the diary feed and dashboard banner update.
-      await refreshAfterDiaryMutation()
+      // Not awaited: the check-in is saved, so the «done» screen shows now;
+      // the timeline catches up in the background (it never fails the submit).
+      void refreshAfterDiaryMutation()
       return { ok: true, error: '' }
     } catch (e) {
       const message = extractApiError(e, t('storeErrors.diary.sendCheckin'))
@@ -132,7 +145,8 @@ export const useDiaryStore = defineStore('diary', () => {
       await upsertFeedback(practiceId, body)
       // The feedback is now a feed event and flips the booking's has_feedback
       // flag -- refresh both so the diary feed and dashboard banner update.
-      await refreshAfterDiaryMutation()
+      // Not awaited -- see submitCheckin.
+      void refreshAfterDiaryMutation()
       return { ok: true, error: '' }
     } catch (e) {
       const message = extractApiError(e, t('storeErrors.diary.sendFeedback'))
@@ -269,6 +283,12 @@ export const useDiaryStore = defineStore('diary', () => {
    */
   async function fetchFeed(): Promise<void> {
     if (feed.items.value.length > 0) return
+    // An answered EMPTY feed is data: revalidate it quietly (the screen keys
+    // its skeleton on feedLoaded, not on an empty list).
+    if (feed.loaded.value) {
+      await feed.refreshInPlace()
+      return
+    }
     await feed.refresh()
   }
 
@@ -279,6 +299,7 @@ export const useDiaryStore = defineStore('diary', () => {
   async function setFeedFilters(patch: Partial<DiaryFeedFilters>): Promise<void> {
     exitJump()
     Object.assign(feedFilters, patch)
+    feed.loaded.value = false // a new query: its answer is not known yet
     await feed.refresh()
   }
 
@@ -291,6 +312,7 @@ export const useDiaryStore = defineStore('diary', () => {
     feedFilters.date_from = undefined
     feedFilters.date_to = undefined
     feedFilters.search = undefined
+    feed.loaded.value = false // a new query: its answer is not known yet
     await feed.refresh()
   }
 
@@ -303,6 +325,7 @@ export const useDiaryStore = defineStore('diary', () => {
     exitJump()
     const trimmed = query.trim()
     feedFilters.search = trimmed.length > 0 ? trimmed : undefined
+    feed.loaded.value = false // a new query: its answer is not known yet
     await feed.refresh()
   }
 
@@ -396,7 +419,8 @@ export const useDiaryStore = defineStore('diary', () => {
 
   /**
    * Refresh the feed after a check-in / feedback mutation projected a new event
-   * onto the timeline. Best-effort: a refresh failure must not fail the submit.
+   * onto the timeline. Best-effort: a refresh failure must not fail the submit
+   * (callers fire it without awaiting; it never rejects).
    *
    * W27 (PROMPT №438): this used to ALSO call
    * `useBookingsStore().refreshBookings()`, which was the diary->bookings half of
@@ -415,7 +439,7 @@ export const useDiaryStore = defineStore('diary', () => {
    * a new caller of submitCheckin/submitFeedback ever needs it, it does the same.
    */
   async function refreshAfterDiaryMutation(): Promise<void> {
-    await Promise.allSettled([feed.refresh()])
+    await Promise.allSettled([feed.refreshInPlace()])
   }
 
   // ===========================================================================
@@ -463,12 +487,103 @@ export const useDiaryStore = defineStore('diary', () => {
   ): Promise<SubmitResult & { entry: DiaryEntryResponse | null }> {
     try {
       const entry = await createDiaryEntry(body)
-      await feed.refresh()
+      await feed.refreshInPlace()
       return { ok: true, error: '', entry }
     } catch (e) {
       const message = extractApiError(e, t('storeErrors.diary.create'))
       return { ok: false, error: message, entry: null }
     }
+  }
+
+  // ===========================================================================
+  // Optimistic entries (the composer's send, owner decision)
+  //
+  // The entry shows in the thread at once as a "sending" row; the server's
+  // feed item later takes over the SAME row key (feedItemKey), so the card
+  // stays one DOM node and only brightens -- no flicker, no reorder. A
+  // failed one stays in place, marked, and retries under its own key.
+  // ===========================================================================
+
+  /** Row id prefix of an optimistic feed item. */
+  const PENDING_ID_PREFIX = 'pending:'
+
+  const pendingEntries = ref<PendingDiaryEntry[]>([])
+  /** Server entry id -> the client key its row was rendered under. */
+  const keyByEntryId = new Map<string, string>()
+
+  /** The v-for key of a feed row: a delivered optimistic entry keeps the key
+   * it was first rendered with. */
+  function feedItemKey(item: DiaryFeedItem): string {
+    if (item.source_type === 'diary_entry') {
+      const key = keyByEntryId.get(item.source_id)
+      if (key) return PENDING_ID_PREFIX + key
+    }
+    return item.id
+  }
+
+  function pendingFor(item: DiaryFeedItem): PendingDiaryEntry | undefined {
+    if (!item.id.startsWith(PENDING_ID_PREFIX)) return undefined
+    return pendingEntries.value.find((p) => p.item.id === item.id)
+  }
+
+  async function deliverEntry(p: PendingDiaryEntry): Promise<SubmitResult> {
+    p.status = 'sending'
+    try {
+      const entry = await createDiaryEntry(p.body, p.key)
+      keyByEntryId.set(entry.id, p.key)
+      p.item = { ...p.item, source_id: entry.id }
+      p.status = 'sent'
+      await feed.refreshInPlace()
+      // The feed now carries the entry under the same row key (or does not
+      // show it at all under an active filter): the stand-in has done its job.
+      pendingEntries.value = pendingEntries.value.filter((x) => x.key !== p.key)
+      return { ok: true, error: '' }
+    } catch (e) {
+      p.status = 'failed'
+      return { ok: false, error: extractApiError(e, t('storeErrors.diary.create')) }
+    }
+  }
+
+  /**
+   * Optimistic create: the entry is on screen before the request leaves.
+   * Re-sending the text of a failed entry retries THAT entry (same key, same
+   * place) instead of adding a second one.
+   */
+  function sendEntry(body: CreateDiaryEntryRequest): Promise<SubmitResult> {
+    const failed = pendingEntries.value.find(
+      (p) =>
+        p.status === 'failed' &&
+        p.body.content === body.content &&
+        p.body.entry_type === body.entry_type,
+    )
+    if (failed) return deliverEntry(failed)
+    const key = newIdempotencyKey()
+    const now = new Date().toISOString()
+    pendingEntries.value = [
+      ...pendingEntries.value,
+      {
+        key,
+        body,
+        status: 'sending',
+        item: {
+          id: PENDING_ID_PREFIX + key,
+          kind: body.entry_type ?? 'note',
+          occurred_at: now,
+          source_type: 'diary_entry',
+          source_id: '',
+          snapshot: { content_preview: body.content },
+          created_at: now,
+        },
+      },
+    ]
+    const p = pendingEntries.value[pendingEntries.value.length - 1]
+    return p ? deliverEntry(p) : Promise.resolve({ ok: false, error: '' })
+  }
+
+  /** The failed row's own retry. */
+  function retryEntry(key: string): Promise<SubmitResult> {
+    const p = pendingEntries.value.find((x) => x.key === key && x.status === 'failed')
+    return p ? deliverEntry(p) : Promise.resolve({ ok: false, error: '' })
   }
 
   /**
@@ -480,7 +595,7 @@ export const useDiaryStore = defineStore('diary', () => {
   ): Promise<SubmitResult & { entry: DiaryEntryResponse | null }> {
     try {
       const entry = await updateDiaryEntry(id, body)
-      await feed.refresh()
+      await feed.refreshInPlace()
       if (selectedEntry.value?.id === id) {
         selectedEntry.value = entry
       }
@@ -497,7 +612,7 @@ export const useDiaryStore = defineStore('diary', () => {
   async function deleteEntry(id: string): Promise<SubmitResult> {
     try {
       await deleteDiaryEntry(id)
-      await feed.refresh()
+      await feed.refreshInPlace()
       if (selectedEntry.value?.id === id) {
         selectedEntry.value = null
       }
@@ -515,7 +630,7 @@ export const useDiaryStore = defineStore('diary', () => {
   async function restoreEntry(id: string): Promise<SubmitResult> {
     try {
       await restoreDiaryEntry(id)
-      await feed.refresh()
+      await feed.refreshInPlace()
       return { ok: true, error: '' }
     } catch (e) {
       const message = extractApiError(e, t('storeErrors.diary.restore'))
@@ -583,6 +698,8 @@ export const useDiaryStore = defineStore('diary', () => {
     insightsCache.clear()
     insightsLoadingSet.clear()
     insightsErrorMap.clear()
+    pendingEntries.value = []
+    keyByEntryId.clear()
   }
 
   return {
@@ -599,6 +716,7 @@ export const useDiaryStore = defineStore('diary', () => {
     // Unified feed
     feedItems: feed.items,
     feedLoading: feed.loading,
+    feedLoaded: feed.loaded,
     feedError: feed.error,
     feedLoadMoreError: feed.loadMoreError,
     feedHasMore: feed.hasMore,
@@ -606,7 +724,9 @@ export const useDiaryStore = defineStore('diary', () => {
     feedScrollTop,
     fetchFeed,
     loadMoreFeed: feed.loadMore,
-    refreshFeed: feed.refresh,
+    // A background reload (after a mutation elsewhere, the retry rung): keeps
+    // the shown timeline on failure -- see useCursorPagination.refreshInPlace.
+    refreshFeed: feed.refreshInPlace,
     setFeedFilters,
     clearFeedFilters,
     runFeedSearch,
@@ -631,6 +751,11 @@ export const useDiaryStore = defineStore('diary', () => {
 
     // Entry CRUD
     createEntry,
+    pendingEntries,
+    sendEntry,
+    retryEntry,
+    feedItemKey,
+    pendingFor,
     updateEntry,
     deleteEntry,
     restoreEntry,

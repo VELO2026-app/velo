@@ -74,6 +74,11 @@ interface TelegramWebApp {
   ready(): void
   /** Expand the WebApp to full viewport height. */
   expand(): void
+  /** True when the client implements Bot API `version` or newer. */
+  isVersionAtLeast?(version: string): boolean
+  /** Bot API 7.7+: a vertical swipe no longer minimizes/closes the Mini App
+   * (the Telegram header can still be dragged). Absent on older clients. */
+  disableVerticalSwipes?(): void
   /** Close the WebApp and return to the chat. */
   close(): void
   /** Set the header bar color. */

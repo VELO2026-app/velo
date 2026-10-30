@@ -229,8 +229,6 @@ onMounted(() => {
   background: var(--velo-glass-blue-15);
   border: 1px solid var(--velo-glass-border);
   border-radius: var(--radius-md);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
 }
 
 .topup__balance-label {
@@ -272,9 +270,11 @@ onMounted(() => {
   font-size: var(--text-lg);
   color: var(--velo-text-primary);
   cursor: pointer;
-  transition: all var(--transition-fast);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    opacity var(--transition-fast);
 }
 
 .topup__preset:hover {
@@ -298,7 +298,10 @@ onMounted(() => {
   text-align: center;
   border: 1px dashed var(--velo-border-light);
   border-radius: var(--radius-md);
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    opacity var(--transition-fast);
 }
 
 .topup__custom-toggle:hover {

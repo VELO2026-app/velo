@@ -1,0 +1,233 @@
+/* =============================================================================
+ * VELO Frontend -- screen motion (View Transitions + stage crossfade)
+ * =============================================================================
+ * Tokens: variables.css «Motion». Reduced motion is carried by those tokens
+ * (durations collapse, --velo-shift-page = 0), so every rule below degrades
+ * to a short plain crossfade without a separate branch.
+ *
+ * Layers (router/viewTransition.ts): velo-page = MobileLayout's scroller,
+ * velo-header = the floating header island, velo-tabbar = the dock. The root
+ * (backdrop photo, frame) is identical on both sides and does not animate.
+ * Kind classes on <html> during a View Transition: vt-forward / vt-back
+ * (depth on Blink only). Tab switches never use one -- see the CSS screen
+ * changes block at the end.
+ * ========================================================================== */
+
+/* The overlay itself never paints: whatever shows through a pseudo is the
+ * themed app (no white/UA backdrop between snapshots). */
+::view-transition {
+  background: transparent;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+
+/* -- Page: arrives from a short distance and settles; leaves faster. ------ */
+::view-transition-old(velo-page) {
+  animation: velo-page-out var(--velo-dur-page-exit) var(--velo-ease-in) both;
+}
+
+::view-transition-new(velo-page) {
+  animation: velo-page-in var(--velo-dur-page) var(--velo-ease-out) both;
+}
+
+html.vt-back::view-transition-old(velo-page) {
+  animation-name: velo-page-out-back;
+}
+
+html.vt-back::view-transition-new(velo-page) {
+  animation-name: velo-page-in-back;
+}
+
+@keyframes velo-page-out {
+  to {
+    opacity: 0;
+    transform: translateX(calc(var(--velo-shift-page) * -0.4));
+  }
+}
+
+@keyframes velo-page-in {
+  from {
+    opacity: 0;
+    transform: translateX(var(--velo-shift-page));
+  }
+}
+
+@keyframes velo-page-out-back {
+  to {
+    opacity: 0;
+    transform: translateX(var(--velo-shift-page));
+  }
+}
+
+@keyframes velo-page-in-back {
+  from {
+    opacity: 0;
+    transform: translateX(calc(var(--velo-shift-page) * -0.4));
+  }
+}
+
+@keyframes velo-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes velo-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* -- Header island: titles differ, so a crossfade; the group resizes. ----- */
+::view-transition-group(velo-header) {
+  animation-duration: var(--velo-dur-page);
+  animation-timing-function: var(--velo-ease-out);
+}
+
+::view-transition-old(velo-header) {
+  animation: velo-fade-out var(--velo-dur-page-exit) var(--velo-ease-in) both;
+}
+
+::view-transition-new(velo-header) {
+  animation: velo-fade-in var(--velo-dur-page) var(--velo-ease-out) both;
+}
+
+/* -- Dock: on both screens it stays put (the live new state shows at once,
+ *    so the active-tab pill animates by itself instead of ghosting); when it
+ *    only exists on one side it slides away / comes back. ------------------ */
+::view-transition-group(velo-tabbar) {
+  animation-duration: var(--velo-dur-page);
+  animation-timing-function: var(--velo-ease-out);
+}
+
+::view-transition-old(velo-tabbar) {
+  animation: none;
+  opacity: 0;
+}
+
+::view-transition-new(velo-tabbar) {
+  animation: none;
+}
+
+::view-transition-old(velo-tabbar):only-child {
+  opacity: 1;
+  animation: velo-dock-out var(--velo-dur-page-exit) var(--velo-ease-in) both;
+}
+
+::view-transition-new(velo-tabbar):only-child {
+  animation: velo-dock-in var(--velo-dur-page) var(--velo-ease-out) both;
+}
+
+@keyframes velo-dock-out {
+  to {
+    opacity: 0;
+    transform: translateY(calc(var(--velo-shift-page) * 1.2));
+  }
+}
+
+@keyframes velo-dock-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--velo-shift-page) * 1.2));
+  }
+}
+
+/* -- App stages (App.vue: splash -> welcome/onboarding -> app) ------------ */
+.velo-stage-enter-active {
+  transition: opacity var(--velo-dur-calm) var(--velo-ease-out);
+}
+
+.velo-stage-leave-active {
+  /* Out of flow, over the arriving stage, in the frame's own box: below its
+     safe-area padding (AppFrame publishes the offset), at the design width. */
+  position: absolute;
+  top: var(--velo-content-safe-top, 0px);
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-width: var(--velo-screen-width);
+  margin-inline: auto;
+  pointer-events: none;
+  transition: opacity var(--velo-dur-calm) var(--velo-ease-in-out);
+}
+
+.velo-stage-enter-from,
+.velo-stage-leave-to {
+  opacity: 0;
+}
+
+/* -- Content after a visible skeleton (useLoadingHold().reveal) ----------- */
+/* For screens that cannot stack skeleton and content in one grid cell
+   (VLoadingSwap): full-height flex screens and the scroll-pinned diary. The
+   skeleton leaves at once, the content fades in where it stood. Applied only
+   when a placeholder was actually seen -- fast content never animates. */
+.velo-reveal {
+  animation: velo-reveal var(--velo-dur-base) var(--velo-ease-out) both;
+}
+
+@keyframes velo-reveal {
+  from {
+    opacity: 0;
+  }
+}
+
+/* -- Rows of a list that refreshes in place (TransitionGroup name="velo-list")
+ *    A row that arrives fades in; a row that goes fades out OUT OF FLOW (so
+ *    the block's height can glide to its final value at once, VLoadingSwap
+ *    `revision`); the rows that stay slide to their new place (FLIP). The
+ *    group's element must be position: relative (.velo-list). ------------- */
+.velo-list {
+  position: relative;
+}
+
+.velo-list-enter-active {
+  transition: opacity var(--velo-dur-base) var(--velo-ease-out);
+}
+
+.velo-list-leave-active {
+  position: absolute;
+  left: 0;
+  right: 0;
+  transition: opacity var(--velo-dur-fast) var(--velo-ease-in);
+}
+
+.velo-list-enter-from,
+.velo-list-leave-to {
+  opacity: 0;
+}
+
+.velo-list-move {
+  transition: transform var(--velo-dur-resize) var(--velo-ease-out);
+}
+
+/* -- CSS screen changes (router/viewTransition.ts) ------------------------ */
+/* Tab switches everywhere, and every screen change on WebKit / hosts without
+   View Transitions. Only MobileLayout's two containers animate, opacity
+   only -- the screen inside is swapped by Vue while they are invisible, so
+   no part of the previous screen (its teleported header included) is ever
+   on stage next to the new one. The dock is not part of it: it never
+   changes between tabs. Class names are MobileLayout's own (global on
+   purpose -- the router owns the timing, the layout the elements). */
+
+/* Tab, phase 1: the old screen and its header fade out (taps are dropped
+   while it is leaving). */
+html.vt-leave .mobile-layout__main,
+html.vt-leave .mobile-layout__island {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--velo-dur-tab-out) var(--velo-ease-in);
+}
+
+/* Phase 2 (and the only phase for depth): the new screen fades in. */
+html.vt-fallback .mobile-layout__main,
+html.vt-fallback .mobile-layout__island {
+  animation: velo-fade-in var(--velo-dur-base) var(--velo-ease-out) both;
+}
+
+html.vt-fallback.vt-tab .mobile-layout__main,
+html.vt-fallback.vt-tab .mobile-layout__island {
+  animation-duration: var(--velo-dur-tab-in);
+}

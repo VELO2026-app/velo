@@ -93,10 +93,12 @@ defineEmits<{
   background: var(--velo-glass-blue-15);
   border: 1px solid var(--velo-glass-border);
   border-radius: var(--radius-xl);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
 }
 
 .v-segment__item--active {

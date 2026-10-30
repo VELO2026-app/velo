@@ -118,6 +118,7 @@ import * as notificationsApi from '@/api/notifications'
 import { useAuthStore } from '@/stores/auth'
 import { useBookingsStore } from '@/stores/bookings'
 import { ApiResponseError } from '@/api/client'
+import { flushPersisted, setPersistOwner, writePersisted } from '@/composables/persistedCache'
 import type {
   BookingWithPracticeResponse,
   PaginatedBookingsResponse,
@@ -1219,5 +1220,50 @@ describe('UserDashboardView', () => {
       expect(push).toHaveBeenCalledTimes(1)
       expect(push).toHaveBeenCalledWith({ name: 'user-diary-activity-new' })
     })
+  })
+})
+
+// -----------------------------------------------------------------------------
+// Known data never turns into skeleton cards (an EMPTY answer is data too)
+// -----------------------------------------------------------------------------
+
+describe('UserDashboardView -- no skeleton once the answer is known', () => {
+  function skeletonCards(): number {
+    return host?.querySelectorAll('.v-skeleton-practice').length ?? 0
+  }
+
+  it('control: a first-ever load past the delay does show the skeleton cards', async () => {
+    vi.mocked(bookingsApi.getUpcomingBookings).mockReturnValue(new Promise(() => {}))
+    mount()
+    await flush()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(skeletonCards()).toBeGreaterThan(0)
+  })
+
+  it('an empty list from the last session: zero skeletons on mount and while revalidating', async () => {
+    setPersistOwner('user_1') // the signed-in account (auth._setUser in the app)
+    writePersisted('bookings.upcoming', [])
+    flushPersisted()
+    vi.mocked(bookingsApi.getUpcomingBookings).mockReturnValue(new Promise(() => {}))
+    mount()
+    await flush()
+    expect(skeletonCards()).toBe(0)
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(skeletonCards()).toBe(0)
+    expect(emptyState()).not.toBeNull()
+  })
+
+  it('a return to the tab (store already answered, empty): the refetch shows no skeleton', async () => {
+    mount()
+    await flush()
+    app?.unmount()
+    host?.remove()
+    vi.mocked(bookingsApi.getUpcomingBookings).mockReturnValue(new Promise(() => {}))
+    mount()
+    await flush()
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(useBookingsStore().upcomingLoading).toBe(true)
+    expect(skeletonCards()).toBe(0)
+    expect(emptyState()).not.toBeNull()
   })
 })

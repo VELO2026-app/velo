@@ -58,8 +58,15 @@
   <Teleport to="body">
     <Transition name="v-sheet">
       <div v-if="open" class="v-sheet__overlay" @click.self="onOverlay">
-        <div class="v-sheet__panel velo-kbd-scroll" role="dialog" aria-modal="true">
-          <div class="v-sheet__handle" aria-hidden="true" />
+        <div ref="panelEl" class="v-sheet__panel velo-kbd-scroll" role="dialog" aria-modal="true">
+          <div
+            class="v-sheet__handle"
+            aria-hidden="true"
+            @pointerdown="onGrabDown"
+            @pointermove="onGrabMove"
+            @pointerup="onGrabEnd"
+            @pointercancel="onGrabCancel"
+          />
           <h2
             v-if="title"
             class="v-sheet__title"
@@ -67,6 +74,10 @@
               'v-sheet__title--compact': compactTitle,
               'v-sheet__title--strong': titleStrong,
             }"
+            @pointerdown="onGrabDown"
+            @pointermove="onGrabMove"
+            @pointerup="onGrabEnd"
+            @pointercancel="onGrabCancel"
           >
             {{ title }}
           </h2>
@@ -109,7 +120,7 @@
 
 <script setup lang="ts">
 import { onDocumentEvent, offDocumentEvent } from '@/platform/dom'
-import { watch, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { lockBodyScroll, unlockBodyScroll } from '@/composables/useBodyScrollLock'
 
 const props = withDefaults(
@@ -167,6 +178,77 @@ function onKeydown(e: KeyboardEvent): void {
   if (e.key === 'Escape' && props.open) emit('close')
 }
 
+// Swipe-to-close from the grab zone (handle + title). The zone is
+// touch-action:none, so the gesture never competes with the body's own
+// scroll; the panel follows the finger 1:1 via transform. Released past a
+// quarter of the panel (capped) or flicked down -> it keeps going and the
+// sheet closes; otherwise it settles back. Only with Telegram's vertical
+// swipes disabled (platform/telegram.ts) does the host leave this drag to us.
+const panelEl = ref<HTMLElement | null>(null)
+const CLOSE_DISTANCE_MAX_PX = 160
+const CLOSE_VELOCITY_PX_PER_MS = 0.5
+let dragPointer: number | null = null
+let dragStartY = 0
+let dragDy = 0
+let lastY = 0
+let lastT = 0
+let velocity = 0
+
+function setPanelMotion(transform: string, transition: string): void {
+  const el = panelEl.value
+  if (!el) return
+  el.style.transition = transition
+  el.style.transform = transform
+}
+
+function onGrabDown(e: PointerEvent): void {
+  if (dragPointer !== null || (e.pointerType === 'mouse' && e.button !== 0)) return
+  dragPointer = e.pointerId
+  dragStartY = lastY = e.clientY
+  lastT = e.timeStamp
+  dragDy = 0
+  velocity = 0
+  ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+}
+
+function onGrabMove(e: PointerEvent): void {
+  if (e.pointerId !== dragPointer) return
+  dragDy = Math.max(0, e.clientY - dragStartY)
+  const dt = e.timeStamp - lastT
+  if (dt > 0) velocity = (e.clientY - lastY) / dt
+  lastY = e.clientY
+  lastT = e.timeStamp
+  setPanelMotion(`translate3d(0, ${dragDy}px, 0)`, 'none')
+}
+
+function onGrabEnd(e: PointerEvent): void {
+  if (e.pointerId !== dragPointer) return
+  dragPointer = null
+  const height = panelEl.value?.offsetHeight ?? 0
+  const closeAt = Math.min(CLOSE_DISTANCE_MAX_PX, height * 0.25)
+  if (dragDy > 0 && (dragDy > closeAt || velocity > CLOSE_VELOCITY_PX_PER_MS)) {
+    setPanelMotion(
+      'translate3d(0, 100%, 0)',
+      'transform var(--velo-dur-sheet-exit) var(--velo-ease-in)',
+    )
+    emit('close')
+    return
+  }
+  settleBack()
+}
+
+function onGrabCancel(e: PointerEvent): void {
+  if (e.pointerId !== dragPointer) return
+  dragPointer = null
+  settleBack()
+}
+
+function settleBack(): void {
+  if (dragDy === 0) return
+  dragDy = 0
+  setPanelMotion('', 'transform var(--velo-dur-sheet-exit) var(--velo-ease-out)')
+}
+
 // Lock body scroll while open. Ref-counted (W16, PROMPT №409) -- see
 // VModal.vue's identical comment for why (two overlays open at once, whoever
 // closes first must not unlock the body out from under the other).
@@ -221,15 +303,26 @@ onUnmounted(() => {
   /* Flush to the bottom edge -> round the TOP corners only. */
   border-radius: var(--velo-radius-sheet-top);
   padding: 8px var(--velo-rail-pad-x) 22px;
+  overscroll-behavior: contain;
 }
 
 .v-sheet__handle {
+  position: relative;
   width: 126px;
   height: 7px;
   flex-shrink: 0;
   border-radius: var(--velo-radius-3-5);
   background: var(--velo-glass-blue-30);
   margin: 0 auto 14px;
+  touch-action: none;
+  cursor: grab;
+}
+
+/* The 7px bar is the visual; the finger gets a taller invisible zone. */
+.v-sheet__handle::after {
+  content: '';
+  position: absolute;
+  inset: -12px -24px;
 }
 
 .v-sheet__title {
@@ -239,6 +332,7 @@ onUnmounted(() => {
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
   margin: 6px 0 18px;
+  touch-action: none;
 }
 
 /* Opt-in (PROMPT №609, G11) -- see this component's own header for why
@@ -367,15 +461,24 @@ onUnmounted(() => {
   opacity: 1;
 }
 
-/* -- Slide-up transition (mirrors VModal) -- */
-.v-sheet-enter-active,
-.v-sheet-leave-active {
-  transition: opacity var(--transition-base);
+/* -- Slide-up transition --
+   Asymmetric: arrives with a long soft deceleration, leaves quicker with a
+   gentle start. The scrim fade carries the same duration (Vue times the
+   transition from the overlay, the root). */
+.v-sheet-enter-active {
+  transition: opacity var(--velo-dur-sheet) var(--velo-ease-out);
 }
 
-.v-sheet-enter-active .v-sheet__panel,
+.v-sheet-leave-active {
+  transition: opacity var(--velo-dur-sheet-exit) var(--velo-ease-in);
+}
+
+.v-sheet-enter-active .v-sheet__panel {
+  transition: transform var(--velo-dur-sheet) var(--velo-ease-out);
+}
+
 .v-sheet-leave-active .v-sheet__panel {
-  transition: transform var(--transition-base);
+  transition: transform var(--velo-dur-sheet-exit) var(--velo-ease-in);
 }
 
 .v-sheet-enter-from,
@@ -385,6 +488,6 @@ onUnmounted(() => {
 
 .v-sheet-enter-from .v-sheet__panel,
 .v-sheet-leave-to .v-sheet__panel {
-  transform: translateY(100%);
+  transform: translate3d(0, 100%, 0);
 }
 </style>

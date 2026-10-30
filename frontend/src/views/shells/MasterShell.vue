@@ -14,6 +14,7 @@
     :hide-tab-bar="hideTabBar"
     v-bind="fogTuning"
     @navigate="router.push($event)"
+    @intent="warmRoute(router, $event)"
   >
     <RouterView />
   </MobileLayout>
@@ -23,6 +24,7 @@
 import { rootComputedStyle } from '@/platform/dom'
 import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { warmRoute } from '@/router/prefetch'
 import { MobileLayout } from '@/components/layout'
 import { MASTER_TABS, type TabItem } from '@/router/tabs'
 import { useKeyboardOpen } from '@/composables/useKeyboardOpen'

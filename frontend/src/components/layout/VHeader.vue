@@ -20,7 +20,7 @@
        teleport the header into that island so it floats ABOVE the masked feed
        instead of being eaten by the fog (G-1). Elsewhere (shell-less screens,
        admin) `floating` is false and it renders inline exactly as before. -->
-  <Teleport defer to=".mobile-layout__island" :disabled="!floating">
+  <Teleport defer to=".mobile-layout__island" :disabled="!floating || !onStage">
     <header class="v-header" :class="{ 'v-header--floating': floating }">
       <div class="v-header__left">
         <VBackButton
@@ -45,6 +45,7 @@
 import { t } from '@/locales'
 import { VBackButton, VeloLogo } from '@/components/ui'
 import { useFloatingHeader } from '@/components/layout/useFloatingHeader'
+import { useKeptActive } from '@/composables/useKeptActive'
 
 // tz-i18n 1.3: the back-aria fallback comes from ui.back; backLabel stays a
 // caller prop (shells pass it per screen).
@@ -53,6 +54,8 @@ import { useFloatingHeader } from '@/components/layout/useFloatingHeader'
 // header then teleports into the island and registers its presence (so the feed
 // gets top clearance). False -> inline render, unchanged legacy behaviour.
 const floating = useFloatingHeader()
+// A screen kept alive off-stage (TabRouterView) takes its header home with it.
+const onStage = useKeptActive()
 
 withDefaults(
   defineProps<{

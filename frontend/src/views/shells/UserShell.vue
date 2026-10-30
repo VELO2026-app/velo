@@ -23,8 +23,12 @@
     :fog="isFogRoute"
     v-bind="fogTuning"
     @navigate="router.push($event)"
+    @intent="warmRoute(router, $event)"
   >
-    <RouterView />
+    <!-- Tab roots stay alive between dock taps (TabRouterView). The diary is
+         left out: it is an immersive full-screen mode with document-level
+         listeners of its own, and its feed is cached in the store anyway. -->
+    <TabRouterView :keep="keptTabs" :max="4" />
   </MobileLayout>
 </template>
 
@@ -32,7 +36,9 @@
 import { rootComputedStyle } from '@/platform/dom'
 import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { warmRoute } from '@/router/prefetch'
 import { MobileLayout } from '@/components/layout'
+import TabRouterView from '@/components/layout/TabRouterView.vue'
 import { USER_TABS, type TabItem } from '@/router/tabs'
 import { useKeyboardOpen } from '@/composables/useKeyboardOpen'
 import { useSchoolsHubStore } from '@/stores/schoolsHub'
@@ -63,6 +69,11 @@ const visibleTabs = computed<TabItem[]>(() =>
     if (tab.requires !== undefined) return featureEnabled(tab.requires)
     return true
   }),
+)
+
+/** Tab roots kept alive between dock taps (all but the immersive diary). */
+const keptTabs = computed(() =>
+  visibleTabs.value.map((tab) => tab.to).filter((to) => to !== '/user/diary'),
 )
 
 // Hide the floating tab bar while the soft keyboard is open, so it does not ride

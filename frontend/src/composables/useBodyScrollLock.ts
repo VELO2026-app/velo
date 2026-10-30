@@ -13,17 +13,30 @@
 // caller must pair calls 1:1 (see VModal.vue / VBottomSheet.vue for the
 // per-instance `locked` guard that makes this safe against a watch firing
 // more than once, or unmounting without ever having opened).
+//
+// The app's real scroller is MobileLayout's <main>, not body: the root class
+// SCROLL_LOCK_CLASS lets that layout freeze its own overflow too, so the
+// feed under an open sheet/modal does not scroll through on iOS.
 // =============================================================================
+
+import { setBodyOverflow, toggleRootClass } from '@/platform/dom'
+
+export const SCROLL_LOCK_CLASS = 'velo-scroll-locked'
 
 let lockCount = 0
 
 export function lockBodyScroll(): void {
   lockCount += 1
-  if (lockCount === 1) setBodyOverflow('hidden')
+  if (lockCount === 1) {
+    setBodyOverflow('hidden')
+    toggleRootClass(SCROLL_LOCK_CLASS, true)
+  }
 }
 
 export function unlockBodyScroll(): void {
   lockCount = Math.max(0, lockCount - 1)
-  if (lockCount === 0) setBodyOverflow('')
+  if (lockCount === 0) {
+    setBodyOverflow('')
+    toggleRootClass(SCROLL_LOCK_CLASS, false)
+  }
 }
-import { setBodyOverflow } from '@/platform/dom'

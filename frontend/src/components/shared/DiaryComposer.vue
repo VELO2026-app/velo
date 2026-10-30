@@ -88,8 +88,11 @@ function onComposingChange(value: boolean): void {
 
 // (a): the shared component owns nothing about persistence -- this is the
 // whole reason `send` is a prop.
+// Optimistic (owner decision): the store shows the entry in the thread at
+// once as "sending" and settles it in place; Composer clears the field on
+// hand-over and puts the text back on a failure.
 async function handleSend(content: string): Promise<ComposerSendResult> {
-  const result = await diaryStore.createEntry({
+  const result = await diaryStore.sendEntry({
     content,
     entry_type: props.entryType,
   })
@@ -104,5 +107,11 @@ function focus(): void {
   composerRef.value?.focus()
 }
 
-defineExpose({ focus })
+/** A failed entry's retry from the thread went through: drop the restored
+ * text from the field if it is still exactly that. */
+function discardDraft(content: string): void {
+  composerRef.value?.discardDraft(content)
+}
+
+defineExpose({ focus, discardDraft })
 </script>

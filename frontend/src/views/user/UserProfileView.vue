@@ -174,7 +174,7 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { featureEnabled } from '@/platform/features'
@@ -194,7 +194,8 @@ import {
   IconBrain,
 } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
-import { getMyStats } from '@/api/bookings'
+import { useQuery } from '@/composables/useQuery'
+import { myStatsQuery } from '@/composables/queries'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -215,10 +216,21 @@ const displayName = computed(() => {
 })
 
 // -- Stats (attended practices + hours) from /bookings/me/stats --
-const practicesAttended = ref(0)
-const hoursAttended = ref(0)
+// The dashboard's cache entry (useQuery): a visit renders the last known
+// numbers at once instead of 0 -> N, and refreshes them every time (the
+// unread-messages dot must be current). A failed fetch keeps what is shown
+// (NEW-7: the profile never breaks on it).
+const statsQuery = useQuery(myStatsQuery(0))
+// Kept alive as a tab root (TabRouterView): a return revalidates quietly
+// (the shown data stays). The first activation is the mount itself.
+let activations = 0
+onActivated(() => {
+  if (activations++ > 0) void statsQuery.revalidate()
+})
+const practicesAttended = computed(() => statsQuery.data.value?.practices_attended ?? 0)
+const hoursAttended = computed(() => statsQuery.data.value?.hours_attended ?? 0)
 // B52: colour indicator on the t('user.screens.userProfile.messages') row, same request, no new call.
-const hasUnreadMessages = ref(false)
+const hasUnreadMessages = computed(() => statsQuery.data.value?.has_unread_messages ?? false)
 
 /**
  * Hours label: integers show without a trailing ".0" (e.g. "12"), while
@@ -278,20 +290,6 @@ function returnToNativeMode(): void {
     void router.push({ name: 'master-dashboard' })
   }
 }
-
-// -- Lifecycle --
-onMounted(async () => {
-  // NEW-7: wrapped in try/catch -- a stats fetch failure must not leave the
-  // profile screen broken; the cards just stay at 0 until the next visit.
-  try {
-    const stats = await getMyStats()
-    practicesAttended.value = stats.practices_attended
-    hoursAttended.value = stats.hours_attended
-    hasUnreadMessages.value = stats.has_unread_messages ?? false
-  } catch {
-    // Non-critical -- profile still renders without fresh counts.
-  }
-})
 </script>
 
 <style scoped>

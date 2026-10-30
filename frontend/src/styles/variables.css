@@ -211,10 +211,42 @@
    * reintroduce a `none` placeholder.
    */
 
-  /* === Transitions === */
-  --transition-fast: 0.15s ease;
-  --transition-base: 0.2s ease;
-  --transition-slow: 0.3s ease;
+  /* === Motion ===
+   * One calm scale for a mental-health product: decelerate without overshoot,
+   * leave faster than arrive (~2/3), move only transform/opacity. Every token
+   * below has consumers: the three --transition-* pairs (60+ files) are built
+   * FROM them, the rest drive View Transitions (global.css), sheets/modals,
+   * press states and skeletons. Unlike the scale removed in PROMPT №437 this is
+   * not a parallel catalog -- it IS the --transition-* seam, with named parts.
+   * prefers-reduced-motion shortens everything (end of this file). */
+  --velo-ease-out: cubic-bezier(0.22, 1, 0.36, 1); /* arrive: long soft tail */
+  --velo-ease-in: cubic-bezier(0.55, 0, 0.75, 0.2); /* leave: gentle start */
+  --velo-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1); /* re-arrange in place */
+  --velo-ease-breath: cubic-bezier(0.37, 0, 0.63, 1); /* sine: pulse, breath */
+  --velo-dur-press: 120ms; /* finger down */
+  --velo-dur-fast: 180ms; /* colour, focus, icons, finger up */
+  --velo-dur-base: 260ms; /* segments, toasts, content fade-in */
+  --velo-dur-page: 360ms; /* screen arrives */
+  --velo-dur-page-exit: 240ms; /* screen leaves */
+  --velo-dur-tab: 220ms; /* dock indicator travel on a tab switch */
+  --velo-dur-tab-out: 100ms; /* tab switch: old screen fades out */
+  --velo-dur-tab-in: 160ms; /* tab switch: new screen fades in */
+  --velo-dur-resize: 300ms; /* a block settles to its loaded height (VLoadingSwap) */
+  --velo-dur-sheet: 420ms; /* sheet / modal arrives */
+  --velo-dur-sheet-exit: 280ms; /* sheet / modal leaves */
+  --velo-dur-calm: 600ms; /* success, stage change (splash -> app) */
+  --velo-dur-calm-long: 1400ms; /* highlight flash (diary jump) */
+  --velo-dur-pulse: 1800ms; /* skeleton breathing cycle */
+  --velo-shift-page: 20px; /* screen travel on push / pop */
+  /* Loading placeholders (VSkeleton, VLoader): a fast answer shows nothing --
+     the placeholder only fades in after the delay. */
+  --velo-skeleton-delay: 300ms;
+  --velo-skeleton-fill: var(--velo-glass-blue-15);
+
+  /* === Transitions (frozen names; values come from the motion scale) === */
+  --transition-fast: var(--velo-dur-fast) var(--velo-ease-out);
+  --transition-base: var(--velo-dur-base) var(--velo-ease-out);
+  --transition-slow: var(--velo-dur-sheet) var(--velo-ease-out);
 
   /* === Z-index === */
   --z-dropdown: 100;
@@ -715,4 +747,26 @@
    * changing what a branch means, is GENERATION 2 -- a coordinated skin+app
    * release, announced in this section.
    * ========================================================================= */
+}
+
+/* Reduced motion (WCAG 2.3.3): travel goes to zero and durations collapse to
+ * a short crossfade, so state changes stay readable without movement. The
+ * View Transition and skeleton rules read the same tokens (global.css). */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --velo-dur-press: 0ms;
+    --velo-dur-fast: 120ms;
+    --velo-dur-base: 120ms;
+    --velo-dur-page: 160ms;
+    --velo-dur-page-exit: 120ms;
+    --velo-dur-tab: 120ms;
+    --velo-dur-tab-out: 60ms;
+    --velo-dur-tab-in: 100ms;
+    --velo-dur-resize: 0ms;
+    --velo-dur-sheet: 160ms;
+    --velo-dur-sheet-exit: 120ms;
+    --velo-dur-calm: 200ms;
+    --velo-dur-calm-long: 600ms;
+    --velo-shift-page: 0px;
+  }
 }

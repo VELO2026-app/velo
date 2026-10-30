@@ -23,6 +23,8 @@ import { ref, computed } from 'vue'
 import { api, setAuthToken, setOnUnauthorized, ApiResponseError } from '@/api/client'
 import { getMe, updateMe, switchRole as apiSwitchRole } from '@/api/users'
 import { platform } from '@/platform'
+import { queryCache } from '@/composables/useQuery'
+import { clearPersisted, setPersistOwner } from '@/composables/persistedCache'
 import { host } from '@/platform/host'
 import { newMark, rememberLoginMark } from '@/platform/browser-login'
 import type {
@@ -88,12 +90,19 @@ export const useAuthStore = defineStore('auth', () => {
 
   function _setUser(newUser: UserResponse | null): void {
     user.value = newUser
+    // Persisted screen data is per account: another account's copy goes.
+    if (newUser) setPersistOwner(newUser.id)
   }
 
   /** Clear all auth state (used by 401 handler and logout). */
   function _clearSession(): void {
     _setToken(null)
     _setUser(null)
+    // Cached screen data belongs to the account that fetched it -- in
+    // memory and the copy that survives reloads.
+    queryCache.clear()
+    clearPersisted()
+    setPersistOwner(null)
   }
 
   // FIX 10.2: register callback so API client delegates 401 handling here.

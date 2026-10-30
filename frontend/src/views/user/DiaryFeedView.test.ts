@@ -1276,3 +1276,106 @@ describe('DiaryFeedView', () => {
 // - The date-range half of DiaryFilterModal (its calendar grid, tz-correct
 //   bounds): that modal's own logic, and the screen only forwards the payload.
 // =============================================================================
+
+// -- Optimistic entries (owner decision: optimistic composer) ------------------
+describe('DiaryFeedView -- optimistic entries', () => {
+  function rowsWithState(state: string): HTMLElement[] {
+    return Array.from(
+      feedBody().querySelectorAll<HTMLElement>(`.timeline__row[data-state="${state}"]`),
+    )
+  }
+
+  it('a sent note shows at once as "sending" and the feed item takes over THE SAME row (no remount, no twin)', async () => {
+    vi.mocked(diaryApi.listDiaryFeed).mockResolvedValue(page([NOTE]))
+    mount()
+    await flush()
+
+    let resolveCreate!: (v: { id: string }) => void
+    vi.mocked(diaryApi.createDiaryEntry).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveCreate = resolve as never
+      }) as never,
+    )
+    const store = useDiaryStore()
+    const sent = store.sendEntry({ content: 'Новая мысль', entry_type: 'note' })
+    await flush()
+
+    const pendingRows = rowsWithState('sending')
+    expect(pendingRows).toHaveLength(1)
+    expect(cardPreviews()).toEqual(['Сегодня было спокойно', 'Новая мысль'])
+
+    // The server answers; the refresh then carries the entry as a feed item.
+    vi.mocked(diaryApi.listDiaryFeed).mockResolvedValue(
+      page([
+        {
+          ...feedItem('f9', 'note', '2026-07-16T12:00:00Z', { content_preview: 'Новая мысль' }),
+          source_id: 'e9',
+        },
+        NOTE,
+      ]),
+    )
+    resolveCreate({ id: 'e9' })
+    await sent
+    await flush()
+
+    const rows = Array.from(feedBody().querySelectorAll<HTMLElement>('.timeline__row'))
+    expect(rows).toHaveLength(2)
+    expect(rows[1]).toBe(pendingRows[0]) // same node: it only brightened
+    expect(rows[1]?.getAttribute('data-state')).toBeNull()
+    expect(rows[1]?.getAttribute('data-entry-id')).toBe('f9')
+    expect(cardPreviews()).toEqual(['Сегодня было спокойно', 'Новая мысль'])
+    expect(store.pendingEntries).toHaveLength(0)
+  })
+
+  it('a failed note stays in place marked "not saved"; the store retry goes out under the same key', async () => {
+    vi.mocked(diaryApi.listDiaryFeed).mockResolvedValue(page([NOTE]))
+    mount()
+    await flush()
+
+    vi.mocked(diaryApi.createDiaryEntry).mockRejectedValueOnce(new Error('offline'))
+    const store = useDiaryStore()
+    await store.sendEntry({ content: 'Не потеряй', entry_type: 'note' })
+    await flush()
+
+    expect(rowsWithState('failed')).toHaveLength(1)
+    expect(bodyText()).toContain('Не сохранено')
+    expect(cardPreviews()).toEqual(['Сегодня было спокойно', 'Не потеряй'])
+
+    vi.mocked(diaryApi.createDiaryEntry).mockResolvedValueOnce({ id: 'e5' } as never)
+    const key = store.pendingEntries[0]?.key ?? ''
+    await store.retryEntry(key)
+    const calls = vi.mocked(diaryApi.createDiaryEntry).mock.calls
+    expect(calls[1]?.[1]).toBe(calls[0]?.[1])
+  })
+
+  it('an empty diary with a pending note shows the note, never the skeleton or «empty»', async () => {
+    mount()
+    await flush()
+
+    vi.mocked(diaryApi.createDiaryEntry).mockReturnValueOnce(new Promise(() => {}))
+    // The refresh after the send would reload an empty feed from scratch.
+    vi.mocked(diaryApi.listDiaryFeed).mockReturnValue(new Promise(() => {}))
+    void useDiaryStore().sendEntry({ content: 'Первая запись', entry_type: 'note' })
+    await flush()
+
+    expect(feedBody().querySelector('.diary-feed__state--skeleton')).toBeNull()
+    expect(cardPreviews()).toEqual(['Первая запись'])
+  })
+
+  describe('known data never turns into skeletons', () => {
+    it('an answered EMPTY feed: a return revalidates with zero skeleton nodes', async () => {
+      mount()
+      await flush()
+      expect(bodyText()).toContain('Дневник пуст')
+      app?.unmount()
+      host?.remove()
+      vi.mocked(diaryApi.listDiaryFeed).mockReturnValue(new Promise(() => {}))
+      mount()
+      await flush()
+      expect(diaryApi.listDiaryFeed).toHaveBeenCalledTimes(2) // revalidates
+      expect(feedBody().querySelector('.diary-feed__state--skeleton')).toBeNull()
+      expect(feedBody().querySelector('.v-skeleton-bubbles')).toBeNull()
+      expect(bodyText()).toContain('Дневник пуст')
+    })
+  })
+})

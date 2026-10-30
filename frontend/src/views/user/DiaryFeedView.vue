@@ -195,9 +195,11 @@
          (in <style>) is the whole mechanism now; nothing here reacts to
          `composing` any more except the mask/dim rules below it. -->
     <div ref="scrollEl" class="diary-feed__body" @scroll="rememberBottomState">
-      <!-- Initial loading -->
-      <div v-if="initialLoading" class="diary-feed__state">
-        <VLoader size="lg" />
+      <!-- Initial loading: entry-shaped placeholders settled at the bottom,
+           where the newest entries (and the eye) are. Once seen they stay a
+           visible minimum (useLoadingHold); the thread then fades in. -->
+      <div v-if="feedSkeleton" class="diary-feed__state diary-feed__state--skeleton">
+        <VSkeletonBubbles />
       </div>
 
       <!-- Error (only when nothing loaded yet) -->
@@ -270,7 +272,7 @@
 
       <!-- Empty -->
       <VEmptyState
-        v-else-if="items.length === 0"
+        v-else-if="timelineItems.length === 0"
         :title="t('user.screens.diaryFeed.empty.title')"
         :description="t('user.screens.diaryFeed.empty.text')"
       >
@@ -297,14 +299,26 @@
              entries sit next to the composer, chat-style. При активном
              фильтре/поиске прижатие отключается (--top) — результаты идут
              СВЕРХУ, а не уезжают в середину/низ (operator 2026-06-04). -->
-        <div class="diary-feed__thread" :class="{ 'diary-feed__thread--top': filterActive }">
+        <div
+          class="diary-feed__thread"
+          :class="{ 'diary-feed__thread--top': filterActive, 'velo-reveal': feedReveal }"
+        >
           <DiaryList
             v-if="viewMode === 'list'"
             :items="timelineItems"
             :timezone="timezone"
+            :item-key="diaryStore.feedItemKey"
+            :pending-state="pendingStateOf"
             @tap="onTap"
           />
-          <DiaryTimeline v-else :items="timelineItems" :timezone="timezone" @tap="onTap" />
+          <DiaryTimeline
+            v-else
+            :items="timelineItems"
+            :timezone="timezone"
+            :item-key="diaryStore.feedItemKey"
+            :pending-state="pendingStateOf"
+            @tap="onTap"
+          />
         </div>
       </template>
     </div>
@@ -379,9 +393,18 @@
 import { t } from '@/locales'
 import { onDocumentEvent, offDocumentEvent, activeHTMLElement } from '@/platform/dom'
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { useLoadingHold } from '@/composables/useLoadingHold'
 import { useRouter, useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
-import { VLoader, VEmptyState, VButton, VBackButton, VMenu, VMenuItem } from '@/components/ui'
+import {
+  VLoader,
+  VEmptyState,
+  VButton,
+  VBackButton,
+  VMenu,
+  VMenuItem,
+  VSkeletonBubbles,
+} from '@/components/ui'
 import { IconDiaryBook } from '@/components/icons'
 import DiaryTimeline from '@/components/shared/DiaryTimeline.vue'
 import DiaryList from '@/components/shared/DiaryList.vue'
@@ -404,6 +427,7 @@ const toast = useToast()
 const {
   feedItems,
   feedLoading,
+  feedLoaded,
   feedError,
   feedHasMore,
   feedFilters,
@@ -411,13 +435,40 @@ const {
   jumpTargetId,
   jumpLoading,
   jumpMoreLoading,
+  pendingEntries,
 } = storeToRefs(diaryStore)
 
 const items = computed<DiaryFeedItem[]>(() => feedItems.value)
 const timezone = computed(() => authStore.user?.timezone ?? 'UTC')
 
+// Optimistic entries (the composer's send): shown at the newest end of the
+// thread until the feed carries them -- the feed item then takes over the
+// same row key (diaryStore.feedItemKey). Not mixed into search results or a
+// jump window (those are server slices, not "my thread right now").
+const pendingItems = computed<DiaryFeedItem[]>(() => {
+  if (searchActive.value || jumpActive.value) return []
+  const landed = new Set(
+    items.value.filter((i) => i.source_type === 'diary_entry').map((i) => i.source_id),
+  )
+  return pendingEntries.value
+    .filter((p) => !(p.item.source_id && landed.has(p.item.source_id)))
+    .map((p) => p.item)
+    .reverse() // the feed is newest-first
+})
+
+function pendingStateOf(item: DiaryFeedItem): 'sending' | 'failed' | 'sent' | undefined {
+  return diaryStore.pendingFor(item)?.status
+}
+
 // Loading split: first page (full-screen loader) vs subsequent pages (inline).
-const initialLoading = computed(() => feedLoading.value && items.value.length === 0)
+// A pending entry is something to show: never a skeleton over it.
+const initialLoading = computed(
+  () =>
+    feedLoading.value &&
+    !feedLoaded.value &&
+    items.value.length === 0 &&
+    pendingItems.value.length === 0,
+)
 const loadingMore = computed(() => feedLoading.value && items.value.length > 0)
 
 // -- Jump window (Telegram-style scroll to the found entry) -------------------
@@ -427,7 +478,7 @@ const jumpActive = computed(() => jumpTargetId.value !== null)
 // The thread renders the jump window while one is open (the search results
 // stay loaded in the feed behind it -- exiting the jump returns to them).
 const timelineItems = computed<DiaryFeedItem[]>(() =>
-  jumpActive.value ? jumpItems.value : items.value,
+  jumpActive.value ? jumpItems.value : [...pendingItems.value, ...items.value],
 )
 
 // The "loading older" indicator + sentinel guard follow whichever history is
@@ -443,6 +494,13 @@ const historyBusy = computed(() => feedLoading.value || jumpLoading.value || jum
 // -- Tap handling ------------------------------------------------------------
 
 function onTap(payload: { item: DiaryFeedItem; editable: boolean }): void {
+  // Optimistic rows: a sending one has nothing to open yet; a failed one
+  // retries (same key, same place); a delivered one opens like any entry.
+  const pending = diaryStore.pendingFor(payload.item)
+  if (pending && (pending.status !== 'sent' || !payload.item.source_id)) {
+    if (pending.status === 'failed') void retryPending(pending.key, pending.body.content)
+    return
+  }
   // Remember the current timeline position so returning from the entry/detail
   // restores it instead of snapping back to "today" (the bottom).
   if (scrollEl.value) diaryStore.feedScrollTop = scrollEl.value.scrollTop
@@ -491,6 +549,12 @@ function onTap(payload: { item: DiaryFeedItem; editable: boolean }): void {
   // Banner kinds (booking_confirmed/cancelled/rescheduled) are not tappable.
 }
 
+async function retryPending(key: string, content: string): Promise<void> {
+  const result = await diaryStore.retryEntry(key)
+  if (result.ok) diaryComposerRef.value?.discardDraft(content)
+  else toast.error(result.error || t('storeErrors.diary.create'))
+}
+
 // -- "..." menu + filter modal / inline search (screens 42 / 43 / 44) ------
 
 const showFilter = ref(false)
@@ -500,6 +564,14 @@ const searchBarEl = ref<{ focus: () => void } | null>(null)
 // A live search keeps the bar mounted even when its "mode" is closed -- it is
 // the only visible indicator of the filter (no header title any more).
 const searchActive = computed(() => (feedFilters.value.search ?? '') !== '')
+
+// The first-page skeleton's hold (useLoadingHold). Declared here, after
+// everything initialLoading reads (the hold evaluates it at once).
+const {
+  showSkeleton: feedSkeleton,
+  reveal: feedReveal,
+  settled: feedSettled,
+} = useLoadingHold(initialLoading)
 
 // The header row's slot is owned by the bar while ANY search state is up
 // (owner 2026-09-09): the open mode, a committed query, or the jump window
@@ -815,6 +887,9 @@ async function reload(): Promise<void> {
 
 onMounted(async () => {
   await diaryStore.fetchFeed()
+  // A skeleton that was seen stays its minimum; the thread (and the scroll
+  // target) mounts only after it. No extra tick when nothing was held.
+  if (feedSkeleton.value) await feedSettled()
   await nextTick()
   // Returning from an entry/detail: restore the saved timeline position.
   // First open (no saved offset): pin to the newest entry (bottom). Do this
@@ -1369,7 +1444,7 @@ onBeforeUnmount(() => {
 }
 
 :deep(.diary-feed__flash) {
-  animation: diary-jump-flash 1400ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  animation: diary-jump-flash var(--velo-dur-calm-long) var(--velo-ease-out);
   border-radius: var(--radius-md);
 }
 
@@ -1383,6 +1458,13 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: center;
   padding: var(--space-10) 0;
+}
+
+.diary-feed__state--skeleton {
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 100%;
+  padding-bottom: var(--space-4);
 }
 
 /* Zero-height rail the top sentinel and the loading-older overlay hang on.

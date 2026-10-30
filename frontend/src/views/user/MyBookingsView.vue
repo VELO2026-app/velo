@@ -18,70 +18,80 @@
   <div class="bookings">
     <VHeader :title="t('user.screens.myBookings.title')" show-back @back="router.back()" />
 
-    <!-- Loading (initial) -->
-    <div v-if="store.loading && store.bookings.length === 0" class="bookings__loader">
-      <VLoader size="lg" />
-    </div>
-
-    <!-- Error -->
-    <VEmptyState
-      v-else-if="store.error && store.bookings.length === 0"
-      icon="warning"
-      :title="t('common.loadError')"
-      :description="store.error"
+    <!-- Loading (initial): skeleton cards held for a visible minimum, then
+         crossfaded into whichever state lands (VLoadingSwap). -->
+    <VLoadingSwap
+      :pending="store.loading && store.bookings.length === 0"
+      memory-key="my-bookings"
+      :revision="bookingsRevision"
     >
-      <VButton size="sm" @click="store.refreshBookings()">{{
-        t('user.screens.myBookings.retry')
-      }}</VButton>
-    </VEmptyState>
-
-    <!-- Empty (no bookings at all) -->
-    <VEmptyState
-      v-else-if="upcoming.length === 0 && past.length === 0"
-      icon="list"
-      :title="t('user.screens.myBookings.empty.title')"
-      :description="t('user.screens.myBookings.empty.text')"
-    />
-
-    <!-- Content -->
-    <div v-else class="bookings__content">
-      <!-- Upcoming -->
-      <section v-if="upcoming.length" class="bookings__section">
-        <h3 class="bookings__section-title">{{ t('user.screens.myBookings.tabs.upcoming') }}</h3>
-        <div class="bookings__list">
-          <BookingCard
-            v-for="booking in upcoming"
-            :key="booking.id"
-            :booking="booking"
-            :badge="badgeFor(booking)"
-            @click="openDetail(booking)"
-          />
+      <template #skeleton>
+        <div class="bookings__loader">
+          <VSkeletonPracticeCard v-for="i in skeletons" :key="i" />
         </div>
-      </section>
+      </template>
 
-      <!-- Past -->
-      <section v-if="past.length" class="bookings__section">
-        <h3 class="bookings__section-title">{{ t('user.screens.myBookings.tabs.past') }}</h3>
-        <div class="bookings__list">
-          <BookingCard
-            v-for="booking in past"
-            :key="booking.id"
-            :booking="booking"
-            :badge="badgeFor(booking)"
-            @click="openDetail(booking)"
-          />
+      <!-- Error -->
+      <VEmptyState
+        v-if="store.error && store.bookings.length === 0"
+        icon="warning"
+        :title="t('common.loadError')"
+        :description="store.error"
+      >
+        <VButton size="sm" @click="store.refreshBookings()">{{
+          t('user.screens.myBookings.retry')
+        }}</VButton>
+      </VEmptyState>
+
+      <!-- Empty (no bookings at all) -->
+      <VEmptyState
+        v-else-if="upcoming.length === 0 && past.length === 0"
+        class="bookings__empty"
+        icon="list"
+        :title="t('user.screens.myBookings.empty.title')"
+        :description="t('user.screens.myBookings.empty.text')"
+      />
+
+      <!-- Content -->
+      <div v-else class="bookings__content">
+        <!-- Upcoming -->
+        <section v-if="upcoming.length" class="bookings__section">
+          <h3 class="bookings__section-title">{{ t('user.screens.myBookings.tabs.upcoming') }}</h3>
+          <div class="bookings__list">
+            <BookingCard
+              v-for="booking in upcoming"
+              :key="booking.id"
+              :booking="booking"
+              :badge="badgeFor(booking)"
+              @click="openDetail(booking)"
+            />
+          </div>
+        </section>
+
+        <!-- Past -->
+        <section v-if="past.length" class="bookings__section">
+          <h3 class="bookings__section-title">{{ t('user.screens.myBookings.tabs.past') }}</h3>
+          <div class="bookings__list">
+            <BookingCard
+              v-for="booking in past"
+              :key="booking.id"
+              :booking="booking"
+              :badge="badgeFor(booking)"
+              @click="openDetail(booking)"
+            />
+          </div>
+        </section>
+
+        <!-- Load more (W-7): the list is paginated -- append the next page, which
+             then re-groups into the two sections above. store.loading guards a
+             double-tap; the button hides once every page is loaded. -->
+        <div v-if="store.hasMore" class="bookings__more">
+          <VButton variant="ghost" block :loading="store.loading" @click="onLoadMore">
+            {{ t('common.showMore') }}
+          </VButton>
         </div>
-      </section>
-
-      <!-- Load more (W-7): the list is paginated -- append the next page, which
-           then re-groups into the two sections above. store.loading guards a
-           double-tap; the button hides once every page is loaded. -->
-      <div v-if="store.hasMore" class="bookings__more">
-        <VButton variant="ghost" block :loading="store.loading" @click="onLoadMore">
-          {{ t('common.showMore') }}
-        </VButton>
       </div>
-    </div>
+    </VLoadingSwap>
   </div>
 </template>
 
@@ -89,7 +99,7 @@
 import { t } from '@/locales'
 import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { VLoader, VEmptyState, VButton } from '@/components/ui'
+import { VSkeletonPracticeCard, VLoadingSwap, VEmptyState, VButton } from '@/components/ui'
 import { VHeader } from '@/components/layout'
 import { useBookingsStore } from '@/stores/bookings'
 import { useToast } from '@/composables/useToast'
@@ -97,12 +107,23 @@ import BookingCard from '@/components/shared/BookingCard.vue'
 import type { BookingBadge } from '@/components/shared/bookingBadge'
 import { isLiveNow, hasEnded as endedByClock } from '@/utils/bookingStatus'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
+import { useRememberedCount } from '@/composables/useRememberedCount'
 import type { BookingWithPracticeResponse } from '@/api/types'
 
 const router = useRouter()
 const toast = useToast()
 const store = useBookingsStore()
 const viewerTz = useViewerTimezone()
+// Skeleton in the size of the last answer (see useRememberedCount).
+/** The list's shape (VLoadingSwap revision): a refresh that adds or drops a
+ * booking glides the block's height instead of snapping. */
+const bookingsRevision = computed(() => store.bookings.map((b) => b.id).join(','))
+const skeletons = useRememberedCount(
+  'my-bookings',
+  () => store.bookings.length,
+  () => !store.loading,
+  { fallback: 3, max: 3 },
+)
 
 // A failed «Показать ещё» keeps the list (the error rung is initial-load-only,
 // :28) -- which, until now, meant the tap did nothing and NOTHING said why.
@@ -261,6 +282,11 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* As tall as one booking card, so "nothing" vs "one booking" is not a jump. */
+.bookings__empty {
+  min-height: var(--velo-card-height-list);
+}
+
 .bookings {
   display: flex;
   flex-direction: column;
@@ -269,9 +295,8 @@ onMounted(() => {
 
 .bookings__loader {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 40vh;
+  flex-direction: column;
+  gap: var(--space-3);
 }
 
 .bookings__content {

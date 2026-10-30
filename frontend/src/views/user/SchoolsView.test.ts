@@ -57,10 +57,10 @@ function mount(role: 'user' | 'master' = 'user'): HTMLElement {
   return host
 }
 
+// The list loads through the screen-data cache (useQuery): a settled
+// request takes a few more microtasks than the old local ref did.
 async function flush(): Promise<void> {
-  await nextTick()
-  await nextTick()
-  await nextTick()
+  for (let i = 0; i < 8; i++) await nextTick()
 }
 
 function text(): string {
@@ -116,6 +116,24 @@ describe('SchoolsView', () => {
     await flush()
 
     expect(host?.querySelector('.schools__state')).toBeTruthy()
+  })
+
+  it('a return through the dock renders the cached schools at once, no loading state', async () => {
+    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue(mineResponse([row('g2', 'student')]))
+    mount()
+    await flush()
+    expect(text()).toContain('Школа g2')
+
+    // Revisit while the background refresh is still in flight.
+    app?.unmount()
+    host?.remove()
+    vi.mocked(cgApi.getMyCuratorGroups).mockReturnValue(new Promise(() => {}))
+    mount()
+    await flush()
+
+    expect(host?.querySelector('.schools__state')).toBeNull()
+    expect(text()).toContain('Школа g2')
+    expect(cgApi.getMyCuratorGroups).toHaveBeenCalledTimes(2) // still refreshed
   })
 
   it('renders the PARTICIPATION rows only (FE-93) and navigates a row to the school page', async () => {

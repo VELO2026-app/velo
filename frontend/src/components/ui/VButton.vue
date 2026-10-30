@@ -76,14 +76,29 @@ const normalizedSize = computed(() => (props.size === 'lg' ? 'md' : props.size))
   font-weight: 600;
   border: 1px solid var(--velo-glass-border);
   cursor: pointer;
-  transition: all var(--transition-base);
+  /* Explicit list, never `all`: a state change (disabled -> enabled, a skin
+     swap) must not fade the glow shadow or the border in -- only the colours
+     and the press scale move. No backdrop-filter: a 2px blur under a
+     near-opaque fill is invisible, but every button inside the scroller paid
+     for its own compositor layer on each scrolled frame. */
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    opacity var(--transition-fast),
+    transform var(--transition-fast);
   text-decoration: none;
   position: relative;
   white-space: nowrap;
   border-radius: var(--radius-full);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
   box-shadow: var(--velo-shadow-glow);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Press: quick down, soft release (behavior.md: scale .97). */
+.v-btn:active:not(:disabled) {
+  transform: scale(0.97);
+  transition-duration: var(--velo-dur-press);
 }
 
 /* -- Sizes -- */
@@ -163,8 +178,6 @@ const normalizedSize = computed(() => (props.size === 'lg' ? 'md' : props.size))
   color: var(--velo-text-muted);
   border-color: transparent;
   box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 
 /* -- Loading -- */

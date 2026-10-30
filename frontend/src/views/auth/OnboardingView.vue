@@ -46,7 +46,12 @@
 
     <!-- ================= INTRO STEPS (0-2) ================= -->
     <div class="onboarding__body velo-kbd-scroll">
-      <img :src="currentSlide.image" :alt="currentSlide.title" class="onboarding__illustration" />
+      <img
+        :src="currentSlide.image"
+        :alt="currentSlide.title"
+        class="onboarding__illustration"
+        decoding="async"
+      />
       <h2 class="onboarding__title">{{ currentSlide.title }}</h2>
       <p class="onboarding__text">{{ currentSlide.text }}</p>
     </div>

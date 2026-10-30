@@ -192,6 +192,33 @@ describe('MyBookingsView', () => {
       expect(text()).not.toContain('Бронирований нет')
     })
 
+    it('slow first page: the skeleton, once seen, stays its 450 ms minimum, then the list replaces it', async () => {
+      vi.useFakeTimers()
+      try {
+        let resolvePage!: (v: ReturnType<typeof page>) => void
+        vi.mocked(bookingsApi.getMyBookings).mockReturnValue(
+          new Promise((resolve) => {
+            resolvePage = resolve
+          }),
+        )
+        mount()
+        await flush()
+        await vi.advanceTimersByTimeAsync(320) // past the 300 ms delay: seen
+
+        resolvePage(page([booking('b1', {}, { title: 'Утренняя практика' })]))
+        await flush()
+        // The data is here, but the placeholder holds its minimum: no blink.
+        expect(host?.querySelector('.bookings__loader')).not.toBeNull()
+        expect(text()).not.toContain('Утренняя практика')
+
+        await vi.advanceTimersByTimeAsync(450)
+        await flush()
+        expect(text()).toContain('Утренняя практика')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
     it('error: shows the error state and surfaces the REAL backend message', async () => {
       // usePagination.ts:68 assigns e.message verbatim, and the screen binds
       // :description="store.error" (MyBookingsView.vue:31) -- so the actual

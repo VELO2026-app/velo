@@ -27,7 +27,10 @@
       class="v-stat__value"
       :class="valueTone !== 'default' ? `v-stat__value--${valueTone}` : null"
     >
-      {{ value }}
+      <template v-if="valuePending"
+        >&#8203;<VSkeleton class="v-stat__value-skeleton" width="1.6em" height="0.8em"
+      /></template>
+      <template v-else>{{ value }}</template>
     </div>
     <div class="v-stat__label">{{ label }}</div>
     <div v-if="delta" class="v-stat__delta" :class="`v-stat__delta--${deltaTone}`">{{ delta }}</div>
@@ -35,6 +38,8 @@
 </template>
 
 <script setup lang="ts">
+import VSkeleton from './VSkeleton.vue'
+
 withDefaults(
   defineProps<{
     value: string | number
@@ -51,6 +56,10 @@ withDefaults(
     /** Value colour: 'default' (primary) / 'teal' (attended) / 'rose' (no-show).
      *  Used by the practice-detail + attendance-roster stat cards. */
     valueTone?: 'default' | 'teal' | 'rose'
+    /** The value is still loading: a placeholder of the value's own line
+     *  height stands in, so the card does not resize -- and no false «0»
+     *  is ever shown before the real number arrives. */
+    valuePending?: boolean
   }>(),
   {
     icon: '',
@@ -59,6 +68,7 @@ withDefaults(
     delta: '',
     deltaTone: 'up',
     valueTone: 'default',
+    valuePending: false,
   },
 )
 
@@ -82,7 +92,7 @@ defineEmits<{
   justify-content: center;
   gap: 9px;
   text-align: center;
-  transition: all var(--transition-base);
+  transition: transform var(--transition-base);
 }
 
 .v-stat--clickable {
@@ -163,5 +173,9 @@ defineEmits<{
 
 .v-stat__delta--muted {
   color: var(--velo-text-muted);
+}
+.v-stat__value-skeleton {
+  display: inline-block;
+  vertical-align: middle;
 }
 </style>

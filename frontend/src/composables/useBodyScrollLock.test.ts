@@ -38,6 +38,16 @@ describe('useBodyScrollLock (W16 -- ref-counted, no premature unlock)', () => {
     expect(document.body.style.overflow).toBe('') // now released
   })
 
+  it('marks the root while locked, so the layout scroller can freeze too', () => {
+    lockBodyScroll()
+    lockBodyScroll()
+    expect(document.documentElement.classList.contains('velo-scroll-locked')).toBe(true)
+    unlockBodyScroll()
+    expect(document.documentElement.classList.contains('velo-scroll-locked')).toBe(true)
+    unlockBodyScroll()
+    expect(document.documentElement.classList.contains('velo-scroll-locked')).toBe(false)
+  })
+
   it('unlocking more times than locked never goes negative or gets stuck locked', () => {
     lockBodyScroll()
     unlockBodyScroll()

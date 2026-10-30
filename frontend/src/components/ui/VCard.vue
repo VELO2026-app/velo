@@ -57,15 +57,21 @@ defineEmits<{
   border: 1px solid var(--velo-border-card);
   border-radius: var(--radius-md);
   padding: var(--space-4);
-  transition: all var(--transition-base);
 }
 
 .v-card--clickable {
   cursor: pointer;
+  transition:
+    transform var(--transition-fast),
+    opacity var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
 }
 
+/* Press: the card sinks a little under the finger, releases softly. */
 .v-card--clickable:active {
-  transform: translateY(0);
+  transform: scale(0.985);
+  opacity: 0.92;
+  transition-duration: var(--velo-dur-press);
 }
 
 .v-card--pad-sm {

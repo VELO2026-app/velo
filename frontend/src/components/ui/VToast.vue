@@ -73,22 +73,33 @@ const { toasts, dismiss } = useToast()
   color: var(--velo-white);
 }
 
-/* -- Transition -- */
+/* -- Transition --
+   transform + opacity only; arrive slower than leave. The leaving toast is
+   taken out of flow so its neighbour glides (-move) instead of jumping. */
 .v-toast-enter-active {
-  transition: all var(--transition-slow);
+  transition:
+    transform var(--velo-dur-sheet) var(--velo-ease-out),
+    opacity var(--velo-dur-sheet) var(--velo-ease-out);
 }
 
 .v-toast-leave-active {
-  transition: all var(--transition-base);
+  position: absolute;
+  transition:
+    transform var(--velo-dur-sheet-exit) var(--velo-ease-in),
+    opacity var(--velo-dur-sheet-exit) var(--velo-ease-in);
+}
+
+.v-toast-move {
+  transition: transform var(--transition-base);
 }
 
 .v-toast-enter-from {
-  transform: translateY(20px);
+  transform: translateY(16px);
   opacity: 0;
 }
 
 .v-toast-leave-to {
-  transform: translateY(-10px);
+  transform: translateY(-8px);
   opacity: 0;
 }
 </style>

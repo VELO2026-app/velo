@@ -42,14 +42,25 @@
 
       <!-- Cards of this day, centered, joined by the small decor link (Декор 2
            / small) — shown between cards, not before the first one. -->
-      <template v-for="(item, i) in group.items" :key="item.id">
+      <template v-for="(item, i) in group.items" :key="itemKey ? itemKey(item) : item.id">
         <div v-if="i > 0" class="timeline__link">
           <IconDecor2 part="small" :size="18" />
         </div>
         <!-- data-entry-id: the search-jump scroll target (DiaryFeedView's
              revealJumpTarget). -->
-        <div class="timeline__row" :data-entry-id="item.id">
+        <!-- Optimistic entries (pendingState): "sending" is a quiet dim;
+             "failed" adds a caption and the card's tap retries. Delivery is a
+             pure opacity change on the same node (itemKey keeps it). -->
+        <div
+          class="timeline__row"
+          :class="pendingClass(item)"
+          :data-entry-id="item.id"
+          :data-state="pendingState?.(item)"
+        >
           <DiaryThreadCard :item="item" :timezone="timezone" @tap="(p) => emit('tap', p)" />
+          <p v-if="pendingState?.(item) === 'failed'" class="timeline__not-sent">
+            {{ t('user.screens.diaryFeed.notSent') }}
+          </p>
         </div>
       </template>
     </template>
@@ -57,6 +68,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed } from 'vue'
 import DiaryThreadCard from '@/components/shared/DiaryThreadCard.vue'
 import { IconDecor, IconDecor2 } from '@/components/icons'
@@ -66,7 +78,19 @@ import type { DiaryFeedItem } from '@/api/types'
 const props = defineProps<{
   items: DiaryFeedItem[]
   timezone?: string
+  /** Stable v-for key (an optimistic entry keeps its key once delivered). */
+  itemKey?: (item: DiaryFeedItem) => string
+  /** Optimistic state of a row, undefined for an ordinary feed item. */
+  pendingState?: (item: DiaryFeedItem) => 'sending' | 'failed' | 'sent' | undefined
 }>()
+
+function pendingClass(item: DiaryFeedItem): Record<string, boolean> {
+  const state = props.pendingState?.(item)
+  return {
+    'timeline__row--sending': state === 'sending',
+    'timeline__row--failed': state === 'failed',
+  }
+}
 
 const emit = defineEmits<{
   tap: [payload: { item: DiaryFeedItem; editable: boolean }]
@@ -152,5 +176,25 @@ const dayGroups = computed<DayGroup[]>(() => {
   display: flex;
   justify-content: center;
   width: 100%;
+  /* sending -> sent brightens in place (same node, itemKey). */
+  transition: opacity var(--velo-dur-base) var(--velo-ease-out);
+}
+
+/* Optimistic entry on its way: quietly dimmed, geometry untouched. */
+.timeline__row--sending {
+  opacity: 0.6;
+}
+
+.timeline__row--failed {
+  flex-direction: column;
+  align-items: center;
+}
+
+.timeline__not-sent {
+  margin: var(--space-1) 0 0;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--velo-text-secondary);
+  text-align: center;
 }
 </style>

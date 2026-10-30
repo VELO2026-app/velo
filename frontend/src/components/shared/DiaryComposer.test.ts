@@ -35,6 +35,7 @@ import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import DiaryComposer from './DiaryComposer.vue'
 import * as diaryApi from '@/api/diary'
+import { useDiaryStore } from '@/stores/diary'
 import type { DiaryEntryResponse, DiaryFeedResponse } from '@/api/types'
 
 vi.mock('@/api/diary')
@@ -380,16 +381,47 @@ describe('DiaryComposer -- send path', () => {
     slotBtn().click()
     await flush()
 
-    expect(diaryApi.createDiaryEntry).toHaveBeenCalledWith({
-      content: 'a real entry',
-      entry_type: 'note',
-    })
+    // Optimistic send: a client idempotency key rides along (chat's
+    // convention, the Idempotency-Key header -- api/diary.ts).
+    expect(diaryApi.createDiaryEntry).toHaveBeenCalledWith(
+      { content: 'a real entry', entry_type: 'note' },
+      expect.any(String),
+    )
     expect(textarea().value).toBe('')
     expect(localStorage.getItem('velo:diary:draft:note')).toBeNull()
     expect(createdCount).toBe(1)
+    // Delivered and the feed refreshed: the stand-in row is gone.
+    expect(useDiaryStore().pendingEntries).toHaveLength(0)
   })
 
-  it('failure: the text survives, the error toasts, created never emits', async () => {
+  it('optimistic: the field clears and the entry shows as "sending" BEFORE the server answers', async () => {
+    let resolveCreate!: (v: DiaryEntryResponse) => void
+    vi.mocked(diaryApi.createDiaryEntry).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveCreate = resolve
+      }),
+    )
+    mount()
+    typeText('a real entry')
+    await nextTick()
+
+    slotBtn().click()
+    await nextTick()
+
+    expect(textarea().value).toBe('')
+    expect(textarea().disabled).toBe(false) // iOS keeps the keyboard
+    expect(createdCount).toBe(1) // the parent scrolls to the new row now
+    const pending = useDiaryStore().pendingEntries
+    expect(pending).toHaveLength(1)
+    expect(pending[0]?.status).toBe('sending')
+    expect(pending[0]?.item.snapshot.content_preview).toBe('a real entry')
+
+    resolveCreate(entryFixture('a real entry'))
+    await flush()
+    expect(useDiaryStore().pendingEntries).toHaveLength(0)
+  })
+
+  it('failure: the text comes back, the error toasts, the entry stays marked failed', async () => {
     vi.mocked(diaryApi.createDiaryEntry).mockRejectedValueOnce(new Error('boom'))
     mount()
     typeText('a real entry')
@@ -398,9 +430,57 @@ describe('DiaryComposer -- send path', () => {
     slotBtn().click()
     await flush()
 
+    // Nothing typed is lost: the field holds the text again...
     expect(textarea().value).toBe('a real entry')
     expect(toastError).toHaveBeenCalledWith('Не удалось создать запись')
-    expect(createdCount).toBe(0)
+    // ...and the thread keeps the entry in place, marked for a retry.
+    const pending = useDiaryStore().pendingEntries
+    expect(pending).toHaveLength(1)
+    expect(pending[0]?.status).toBe('failed')
+  })
+
+  it('re-sending the restored text retries THE SAME entry under the same key', async () => {
+    vi.mocked(diaryApi.createDiaryEntry)
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce(entryFixture('a real entry'))
+    mount()
+    typeText('a real entry')
+    await nextTick()
+    slotBtn().click()
+    await flush()
+    expect(useDiaryStore().pendingEntries).toHaveLength(1)
+
+    slotBtn().click() // the restored text, unchanged
+    await flush()
+
+    const calls = vi.mocked(diaryApi.createDiaryEntry).mock.calls
+    expect(calls).toHaveLength(2)
+    expect(calls[1]?.[1]).toBe(calls[0]?.[1])
+    expect(useDiaryStore().pendingEntries).toHaveLength(0)
+    expect(textarea().value).toBe('')
+  })
+
+  it('a failure does not overwrite something new typed meanwhile', async () => {
+    let rejectCreate!: (e: Error) => void
+    vi.mocked(diaryApi.createDiaryEntry).mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        rejectCreate = reject
+      }),
+    )
+    mount()
+    typeText('first')
+    await nextTick()
+    slotBtn().click()
+    await nextTick()
+    typeText('second thought')
+    await nextTick()
+
+    rejectCreate(new Error('boom'))
+    await flush()
+
+    expect(textarea().value).toBe('second thought')
+    expect(toastError).toHaveBeenCalled()
+    expect(useDiaryStore().pendingEntries[0]?.status).toBe('failed')
   })
 
   it('ruling 3b (PROMPT №668, supersedes ruling 3): success does NOT blur the field -- the keyboard stays open', async () => {
@@ -423,7 +503,7 @@ describe('DiaryComposer -- send path', () => {
     expect(blurSpy).not.toHaveBeenCalled()
   })
 
-  it('a second click while the first send is still in flight is a no-op (submitting guard)', async () => {
+  it('a second click while the first send is still in flight is a no-op (the field is already empty)', async () => {
     let resolveCreate!: (v: DiaryEntryResponse) => void
     vi.mocked(diaryApi.createDiaryEntry).mockReturnValueOnce(
       new Promise((resolve) => {

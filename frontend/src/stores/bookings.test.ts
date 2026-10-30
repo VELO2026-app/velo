@@ -40,6 +40,45 @@ describe('useBookingsStore', () => {
     refreshFeed.mockReset()
   })
 
+  describe('fetchUpcoming', () => {
+    it('a failed refresh keeps the list already on screen and records the error', async () => {
+      const store = useBookingsStore()
+      const shown = [{ id: 'b1' }] as unknown as Awaited<
+        ReturnType<typeof bookingsApi.getUpcomingBookings>
+      >
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValueOnce(shown)
+      await store.fetchUpcoming()
+      expect(store.upcoming).toEqual(shown)
+
+      vi.mocked(bookingsApi.getUpcomingBookings).mockRejectedValueOnce(new Error('offline'))
+      await store.fetchUpcoming()
+
+      expect(store.upcoming).toEqual(shown)
+      expect(store.upcomingError).not.toBe('')
+      expect(store.upcomingLoading).toBe(false)
+    })
+  })
+
+  describe('fetchUpcoming -- an answer is known', () => {
+    it('an EMPTY answer counts as loaded (the screen shows no skeleton for it)', async () => {
+      const store = useBookingsStore()
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValueOnce([])
+      expect(store.upcomingLoaded).toBe(false)
+      await store.fetchUpcoming()
+      expect(store.upcoming).toEqual([])
+      expect(store.upcomingLoaded).toBe(true)
+    })
+
+    it('concurrent callers (prefetch, finger-down, mount) share one request', async () => {
+      const store = useBookingsStore()
+      vi.mocked(bookingsApi.getUpcomingBookings).mockClear().mockResolvedValue([])
+      await Promise.all([store.fetchUpcoming(), store.fetchUpcoming(), store.fetchUpcoming()])
+      expect(bookingsApi.getUpcomingBookings).toHaveBeenCalledTimes(1)
+      await store.fetchUpcoming()
+      expect(bookingsApi.getUpcomingBookings).toHaveBeenCalledTimes(2)
+    })
+  })
+
   describe('cancelBooking', () => {
     it('on success: calls the API, refreshes the list, and fires diary.refreshFeed', async () => {
       vi.mocked(bookingsApi.cancelBooking).mockResolvedValue(undefined)

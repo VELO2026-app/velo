@@ -199,7 +199,8 @@
         "exitAria": "Leave the diary",
         "showMapAria": "Show as a map",
         "showListAria": "Show as a list",
-        "cancel": "Cancel"
+        "cancel": "Cancel",
+        "notSent": "Not saved · tap to retry"
       },
       "editProfile": {
         "about": {

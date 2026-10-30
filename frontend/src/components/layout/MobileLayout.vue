@@ -34,6 +34,9 @@
         'velo-kbd-scroll': !fill,
       }"
       :style="fill ? undefined : mainStyle"
+      @scroll.passive="rememberScroll"
+      @touchstart.passive="cancelRestore"
+      @wheel.passive="cancelRestore"
     >
       <slot />
     </main>
@@ -41,14 +44,17 @@
       v-if="!hideTabBar"
       :items="tabs"
       :active="activeTab"
-      @navigate="$emit('navigate', $event)"
+      @navigate="onTabNavigate"
+      @intent="$emit('intent', $event)"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { rootComputedStyle } from '@/platform/dom'
+import { nextFrame, prefersReducedMotion, rootComputedStyle } from '@/platform/dom'
+import { historyPosition } from '@/platform/history'
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
+import { lastNavigationWasPop } from '@/router/viewTransition'
 import { useRoute } from 'vue-router'
 import VTabBar from '@/components/layout/VTabBar.vue'
 import type { TabItem } from '@/router/tabs'
@@ -73,14 +79,74 @@ const islandH = ref(0)
 // The scrollable feed. __main persists across child-route changes (the shell
 // stays mounted), so without an explicit reset a new screen opens at the previous
 // screen's scroll position (e.g. returning to the dashboard after check-in landed
-// mid-feed). Reset to the top on every route change.
+// mid-feed). A NEW entry (push/replace) starts at the top; going BACK/forward
+// through history returns to where that entry was left -- keyed by the history
+// position, remembered while scrolling. The scroll is set while the stage is
+// invisible (tab fade-out / before the new snapshot), so it never visibly jumps.
 const mainEl = ref<HTMLElement | null>(null)
 const route = useRoute()
+const scrollMemory = new Map<number, number>()
+let entryKey = historyPosition()
+let lastPath: string | null = route.path
+/** A restore target the content was not tall enough for yet (data still
+ * arriving); retried for a short while, dropped as soon as the user scrolls. */
+let pendingRestore: { top: number; until: number } | null = null
+const RESTORE_WINDOW_MS = 1200
+
+function rememberScroll(): void {
+  if (entryKey !== null && mainEl.value) scrollMemory.set(entryKey, mainEl.value.scrollTop)
+}
+
+function cancelRestore(): void {
+  pendingRestore = null
+}
+
+async function retryRestore(): Promise<void> {
+  while (pendingRestore && Date.now() < pendingRestore.until) {
+    await nextFrame()
+    const el = mainEl.value
+    if (!el || !pendingRestore) return
+    if (el.scrollHeight - el.clientHeight >= pendingRestore.top) {
+      el.scrollTo({ top: pendingRestore.top })
+      pendingRestore = null
+      return
+    }
+  }
+  pendingRestore = null
+}
+
+/** Tab roots keep their own scroll, like a native tab bar: leaving the
+ * calendar mid-list and coming back via the dock lands on the same spot.
+ * Keyed by the tab's path; only a dock hop (tab root -> tab root) reads it. */
+const tabScroll = new Map<string, number>()
+const isTabRoot = (path: string): boolean => props.tabs.some((tab) => tab.to === path)
+
 watch(
   () => route.fullPath,
   () => {
+    pendingRestore = null
+    entryKey = historyPosition()
+    const fromTab = lastPath !== null && isTabRoot(lastPath)
+    // pre-flush: the DOM still shows the screen being left.
+    if (fromTab && lastPath !== null && mainEl.value) {
+      tabScroll.set(lastPath, mainEl.value.scrollTop)
+    }
+    const tabHop = fromTab && isTabRoot(route.path)
+    lastPath = route.path
+    const saved =
+      entryKey !== null && lastNavigationWasPop()
+        ? scrollMemory.get(entryKey)
+        : tabHop
+          ? tabScroll.get(route.path)
+          : undefined
     void nextTick(() => {
-      mainEl.value?.scrollTo({ top: 0 })
+      const el = mainEl.value
+      if (!el) return
+      el.scrollTo({ top: saved ?? 0 })
+      if (saved !== undefined && el.scrollTop < saved - 1) {
+        pendingRestore = { top: saved, until: Date.now() + RESTORE_WINDOW_MS }
+        void retryRestore()
+      }
     })
   },
 )
@@ -239,9 +305,21 @@ const mainStyle = computed(() => {
   }
 })
 
-defineEmits<{
+const emit = defineEmits<{
   navigate: [to: string]
+  /** Finger down on a tab (VTabBar): the shell warms that screen. */
+  intent: [to: string]
 }>()
+
+/** A tap on the tab that is already open scrolls it back to the top (the
+ * native tab-bar convention) instead of a no-op navigation. */
+function onTabNavigate(to: string): void {
+  if (to === route.path) {
+    mainEl.value?.scrollTo({ top: 0, behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
+    return
+  }
+  emit('navigate', to)
+}
 </script>
 
 <style scoped>
@@ -282,6 +360,22 @@ defineEmits<{
 
 .mobile-layout__main::-webkit-scrollbar {
   display: none; /* WebKit / Blink (Telegram webview) */
+}
+
+/* An open sheet/modal (useBodyScrollLock) freezes the real scroller too --
+   body overflow alone let the feed scroll through on iOS. */
+html.velo-scroll-locked .mobile-layout__main {
+  overflow: hidden;
+}
+
+/* View Transitions layers (router/viewTransition.ts, global.css): the page
+   and the header island crossfade separately; the dock is named in VTabBar. */
+.mobile-layout__main {
+  view-transition-name: velo-page;
+}
+
+.mobile-layout__island {
+  view-transition-name: velo-header;
 }
 
 /* Edge-to-edge fog: TOP-ONLY fade mask for long scrolling lists. Opt-in via

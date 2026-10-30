@@ -27,6 +27,7 @@ import i18n from '@/locales'
 
 const { t } = i18n.global
 import { extractApiError } from '@/composables/useApiError'
+import { readPersisted, writePersisted } from '@/composables/persistedCache'
 // One-way dependency: bookings -> diary. Used only inside actions, never at
 // module scope or in the store's setup body -- keep it that way.
 //
@@ -53,6 +54,9 @@ export interface ActionResult {
   status?: number
 }
 
+/** persistedCache slot of the dashboard's upcoming bookings. */
+const UPCOMING_PERSIST = 'bookings.upcoming'
+
 export const useBookingsStore = defineStore('bookings', () => {
   // -- Status filter --
   const statusFilter = ref<BookingStatus | undefined>(undefined)
@@ -68,6 +72,11 @@ export const useBookingsStore = defineStore('bookings', () => {
   // the nearest-selection is not capped/mis-sorted by the created_at page (B1).
   const upcoming = ref<BookingWithPracticeResponse[]>([])
   const upcomingLoading = ref(false)
+  /** An answer is known (fetched, or restored from the last session) -- even
+   * an EMPTY one. "Nothing upcoming" is data, not "not loaded yet": a screen
+   * keys its skeleton on this, never on `upcoming.length === 0`. */
+  const upcomingLoaded = ref(false)
+  let upcomingInFlight: Promise<void> | null = null
   const upcomingError = ref('')
 
   // -- Single booking detail (screen 18) --
@@ -115,16 +124,37 @@ export const useBookingsStore = defineStore('bookings', () => {
    * Load the live-or-upcoming set for the dashboard nearest widget.
    * Always refetches (cheap, bounded list; scheduled times shift with `now`).
    */
-  async function fetchUpcoming(): Promise<void> {
+  /** One request at a time: the idle prefetch, the dock's finger-down warm
+   * and the screen's own mount share it. */
+  function fetchUpcoming(): Promise<void> {
+    upcomingInFlight ??= loadUpcoming().finally(() => {
+      upcomingInFlight = null
+    })
+    return upcomingInFlight
+  }
+
+  async function loadUpcoming(): Promise<void> {
+    // First load after a (re)start: show the copy from the last session at
+    // once (persistedCache), the request below replaces it silently.
+    if (!upcomingLoaded.value) {
+      const saved = readPersisted<BookingWithPracticeResponse[]>(UPCOMING_PERSIST)
+      if (saved) {
+        upcoming.value = saved.data
+        upcomingLoaded.value = true
+      }
+    }
     upcomingLoading.value = true
     upcomingError.value = ''
     try {
       upcoming.value = await getUpcomingBookings()
+      upcomingLoaded.value = true
+      writePersisted(UPCOMING_PERSIST, upcoming.value)
     } catch (e) {
       // W15 fix (PROMPT №409): used to swallow the error entirely (empty array
-      // looks identical to "genuinely nothing upcoming") -- keep the same
-      // fallback but record the error so the caller can surface it.
-      upcoming.value = []
+      // looks identical to "genuinely nothing upcoming") -- record the error so
+      // the caller can surface it. A failed REFRESH keeps the list already on
+      // screen (a network blip must not empty the dashboard); a failed first
+      // load stays the empty initial list, as before.
       upcomingError.value = extractApiError(e, t('storeErrors.bookings.upcoming'))
     } finally {
       upcomingLoading.value = false
@@ -154,7 +184,7 @@ export const useBookingsStore = defineStore('bookings', () => {
     try {
       await apiCancelBooking(bookingId)
       // Refresh bookings list to reflect new status.
-      await pagination.refresh()
+      await pagination.refreshInPlace()
       // A cancellation projects a "booking_cancelled_by_user" event onto the
       // diary timeline; refresh the feed (best-effort) so it shows up without
       // an app reload.
@@ -175,7 +205,7 @@ export const useBookingsStore = defineStore('bookings', () => {
   async function joinBooking(bookingId: string): Promise<ActionResult> {
     try {
       await apiJoinBooking(bookingId)
-      await pagination.refresh()
+      await pagination.refreshInPlace()
       return { ok: true, error: '' }
     } catch (e) {
       const message = extractApiError(e, t('storeErrors.bookings.join'))
@@ -194,7 +224,7 @@ export const useBookingsStore = defineStore('bookings', () => {
   async function leaveBooking(bookingId: string): Promise<ActionResult> {
     try {
       await apiLeaveBooking(bookingId)
-      await pagination.refresh()
+      await pagination.refreshInPlace()
       return { ok: true, error: '' }
     } catch (e) {
       const message = extractApiError(e, t('storeErrors.bookings.leave'))
@@ -210,7 +240,7 @@ export const useBookingsStore = defineStore('bookings', () => {
   async function skipCheckin(bookingId: string): Promise<ActionResult> {
     try {
       await apiSkipCheckin(bookingId)
-      await pagination.refresh()
+      await pagination.refreshInPlace()
       return { ok: true, error: '' }
     } catch (e) {
       const message = extractApiError(e, t('storeErrors.bookings.skipCheckin'))
@@ -238,6 +268,7 @@ export const useBookingsStore = defineStore('bookings', () => {
     // Live-or-upcoming set for the dashboard nearest widget (B1)
     upcoming,
     upcomingLoading,
+    upcomingLoaded,
     upcomingError,
     fetchUpcoming,
 

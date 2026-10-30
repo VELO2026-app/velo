@@ -35,6 +35,9 @@ export function useCursorPagination<T>(fetchFn: CursorFetchFn<T>, pageSize = 20)
   const items = ref<T[]>([]) as Ref<T[]>
   const cursor = ref<string | null>(null)
   const loading = ref(false)
+  /** A first page has been answered (even an empty one) since the last
+   * reset: "no items" is then data, and a screen shows no skeleton for it. */
+  const loaded = ref(false)
 
   // Race guard for overlapping requests. Every fetch captures the epoch it
   // started in; a response that lands after a NEWER fetch has started is
@@ -91,6 +94,7 @@ export function useCursorPagination<T>(fetchFn: CursorFetchFn<T>, pageSize = 20)
       items.value = [...items.value, ...result.items]
       cursor.value = result.next_cursor
       hasMore.value = result.next_cursor !== null
+      loaded.value = true
       return true
     } catch (e) {
       if (epoch === fetchEpoch) {
@@ -117,6 +121,7 @@ export function useCursorPagination<T>(fetchFn: CursorFetchFn<T>, pageSize = 20)
     error.value = null
     loadMoreError.value = null
     hasMore.value = true
+    loaded.value = false
   }
 
   /**
@@ -138,6 +143,7 @@ export function useCursorPagination<T>(fetchFn: CursorFetchFn<T>, pageSize = 20)
       items.value = result.items
       cursor.value = result.next_cursor
       hasMore.value = result.next_cursor !== null
+      loaded.value = true
     } catch (e) {
       if (epoch !== fetchEpoch) return
       items.value = []
@@ -149,8 +155,36 @@ export function useCursorPagination<T>(fetchFn: CursorFetchFn<T>, pageSize = 20)
     }
   }
 
+  /**
+   * Background freshness reload (after a mutation, a pull, a refocus): the
+   * same fetch-then-swap as refresh(), but for an ALREADY-POPULATED list a
+   * failure keeps the items on screen -- the query did not change, so the
+   * shown page is still the right answer, just older. A network blip after
+   * saving an entry must not empty the timeline. On an empty list it is
+   * exactly refresh() (the initial-load rung needs loading/error). Mirrors
+   * usePagination.refreshInPlace().
+   */
+  async function refreshInPlace(): Promise<void> {
+    if (items.value.length === 0) return refresh()
+    const epoch = ++fetchEpoch
+    try {
+      const result = await fetchFn(null, pageSize)
+      if (epoch !== fetchEpoch) return
+      items.value = result.items
+      cursor.value = result.next_cursor
+      hasMore.value = result.next_cursor !== null
+      error.value = null
+    } catch {
+      // Stale-but-right items stay; the next reload tries again.
+    } finally {
+      // It superseded any fetch in flight -- that one will not clear loading.
+      if (epoch === fetchEpoch) loading.value = false
+    }
+  }
+
   return {
     items,
+    loaded,
     cursor,
     loading,
     error,
@@ -159,5 +193,6 @@ export function useCursorPagination<T>(fetchFn: CursorFetchFn<T>, pageSize = 20)
     loadMore,
     reset,
     refresh,
+    refreshInPlace,
   }
 }

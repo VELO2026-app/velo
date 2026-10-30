@@ -24,7 +24,10 @@
 
   What it absorbs from the two call sites it replaces (recon №735):
   (a) `send` is a PROP (text) => Promise<{ok, error?}> -- no store/API import
-      here at all; each consumer supplies its own persistence.
+      here at all; each consumer supplies its own persistence. OPTIMISTIC:
+      the field clears and `sent` fires on hand-over; on a failed result the
+      text returns to the (still empty) field and the error toasts -- the
+      consumer shows the message as sending/failed itself (see onSend).
   (b) `draftKey` is OPTIONAL. Set -> localStorage-persisted draft (diary's
       existing behaviour, unchanged in shape: `velo:diary:draft:${entryType}`
       lives in the DiaryComposer wrapper, not here). Unset -> no persistence
@@ -74,7 +77,6 @@
         :aria-label="placeholder"
         rows="1"
         :maxlength="maxLength"
-        :disabled="submitting"
         :style="growCap != null ? { maxHeight: `${growCap}px` } : undefined"
         @input="autogrow"
         @focus="onTextareaFocus"
@@ -94,7 +96,6 @@
           class="composer__btn"
           :aria-label="t('common.submitSend')"
           :data-testid="sendTestId"
-          :disabled="submitting"
           @pointerdown.prevent
           @click="onSend"
         >
@@ -194,7 +195,6 @@ const toast = useToast()
 const { onFieldFocus } = useKeyboardFieldScroll()
 
 const text = ref('')
-const submitting = ref(false)
 const composing = ref(false)
 const inputEl = ref<HTMLTextAreaElement | null>(null)
 
@@ -492,29 +492,43 @@ async function onVoiceTakeReady(take: VoiceTake | null): Promise<void> {
   }
 }
 
+// OPTIMISTIC (owner decision): the field clears the moment the message is
+// handed over -- the consumer shows it at once as "sending" -- and `sent`
+// fires right then (the consumer scrolls to its new pending row). The field
+// is never disabled meanwhile (iOS would drop the keyboard). On a failure the
+// text comes back into the field -- unless the user has started typing
+// something new -- and the error toasts; the consumer marks its own row as
+// failed with a retry. An empty field makes a double tap a no-op by itself.
 async function onSend(): Promise<void> {
-  if (!canSend.value || submitting.value) return
-  submitting.value = true
-  try {
-    const result = await props.send(text.value.trim())
-    if (result.ok) {
-      text.value = ''
-      await nextTick()
-      autogrow()
-      emit('sent')
-    } else {
-      toast.error(result.error ?? t('storeErrors.diary.send'))
-    }
-  } finally {
-    submitting.value = false
+  if (!canSend.value) return
+  const body = text.value.trim()
+  text.value = ''
+  void nextTick(autogrow)
+  const result = props.send(body)
+  emit('sent')
+  const { ok, error } = await result
+  if (ok) return
+  if (text.value.trim().length === 0) {
+    text.value = body
+    await nextTick()
+    autogrow()
   }
+  toast.error(error ?? t('storeErrors.diary.send'))
+}
+
+/** A retry from the consumer's own failed row went through: drop the text
+ * Composer had put back, if the field still holds exactly that. */
+function discardDraft(body: string): void {
+  if (text.value.trim() !== body) return
+  text.value = ''
+  void nextTick(autogrow)
 }
 
 // FE-70: one-tap "Добавить запись" from the dashboard needs the diary's
 // composer to ENTER write mode on arrival. Exposing the existing focusField()
 // (optimistic composing + focus, draft-preview un-hide) rather than a new
 // focus path keeps the collapse/autogrow/preview behaviour singular.
-defineExpose({ focus: focusField })
+defineExpose({ focus: focusField, discardDraft })
 </script>
 
 <style scoped>

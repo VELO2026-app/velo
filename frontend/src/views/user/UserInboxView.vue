@@ -45,54 +45,60 @@
       </template>
     </VHeader>
 
-    <div v-if="loading" class="user-inbox__center">
-      <VLoader size="lg" />
-    </div>
+    <!-- Skeleton rows held for a visible minimum, then crossfaded into
+         whichever state lands (VLoadingSwap). -->
+    <VLoadingSwap :pending="loading" memory-key="inbox">
+      <template #skeleton>
+        <div class="user-inbox__list">
+          <VSkeletonRow v-for="i in skeletons" :key="i" />
+        </div>
+      </template>
 
-    <div v-else-if="error" class="user-inbox__center">
-      <VEmptyState :title="t('common.loadFailed')" :description="error">
+      <div v-if="error" class="user-inbox__center">
+        <VEmptyState :title="t('common.loadFailed')" :description="error">
+          <template #icon>
+            <IconBellPlain :size="48" />
+          </template>
+        </VEmptyState>
+        <VButton size="sm" @click="load">{{ t('common.retry') }}</VButton>
+      </div>
+
+      <VEmptyState v-else-if="items.length === 0" :title="t('user.screens.userInbox.empty.text')">
         <template #icon>
           <IconBellPlain :size="48" />
         </template>
       </VEmptyState>
-      <VButton size="sm" @click="load">{{ t('common.retry') }}</VButton>
-    </div>
 
-    <VEmptyState v-else-if="items.length === 0" :title="t('user.screens.userInbox.empty.text')">
-      <template #icon>
-        <IconBellPlain :size="48" />
-      </template>
-    </VEmptyState>
-
-    <template v-else>
-      <!-- Type slider: a view filter, not a refetch -- one page is loaded and
-           sliced locally. Only rendered when the feed itself has rows. -->
-      <VSegmentTrack
-        v-model="filter"
-        :options="FILTER_OPTIONS"
-        variant="tabs"
-        scrollable
-        class="user-inbox__filter"
-        :aria-label="t('user.screens.userInbox.typeFilter.label')"
-      />
-
-      <div v-if="visibleItems.length === 0" class="user-inbox__center">
-        <p class="user-inbox__filter-empty">{{ t('user.screens.userInbox.categoryEmpty') }}</p>
-      </div>
-
-      <div v-else class="user-inbox__list">
-        <NotificationRow
-          v-for="item in visibleItems"
-          :key="item.id"
-          :title="item.title"
-          :body="item.body"
-          :sent-at="item.sent_at"
-          :unread="item.read_at === null"
-          :icon="item.type.startsWith('msg.') ? 'message' : 'event'"
-          @open="onRow(item)"
+      <template v-else>
+        <!-- Type slider: a view filter, not a refetch -- one page is loaded and
+             sliced locally. Only rendered when the feed itself has rows. -->
+        <VSegmentTrack
+          v-model="filter"
+          :options="FILTER_OPTIONS"
+          variant="tabs"
+          scrollable
+          class="user-inbox__filter"
+          :aria-label="t('user.screens.userInbox.typeFilter.label')"
         />
-      </div>
-    </template>
+
+        <div v-if="visibleItems.length === 0" class="user-inbox__center">
+          <p class="user-inbox__filter-empty">{{ t('user.screens.userInbox.categoryEmpty') }}</p>
+        </div>
+
+        <div v-else class="user-inbox__list">
+          <NotificationRow
+            v-for="item in visibleItems"
+            :key="item.id"
+            :title="item.title"
+            :body="item.body"
+            :sent-at="item.sent_at"
+            :unread="item.read_at === null"
+            :icon="item.type.startsWith('msg.') ? 'message' : 'event'"
+            @open="onRow(item)"
+          />
+        </div>
+      </template>
+    </VLoadingSwap>
   </div>
 </template>
 
@@ -101,10 +107,11 @@ import { t } from '@/locales'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
-import { VButton, VEmptyState, VLoader, VSegmentTrack } from '@/components/ui'
+import { VButton, VEmptyState, VLoadingSwap, VSegmentTrack, VSkeletonRow } from '@/components/ui'
 import { IconBellPlain } from '@/components/icons'
 import NotificationRow from '@/components/shared/NotificationRow.vue'
 import { useToast } from '@/composables/useToast'
+import { useRememberedCount } from '@/composables/useRememberedCount'
 import { extractApiError } from '@/composables/useApiError'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useAuthStore } from '@/stores/auth'
@@ -127,6 +134,16 @@ const auth = useAuthStore()
 const loading = ref(true)
 const error = ref<string | null>(null)
 const items = ref<NotificationItem[]>([])
+// Skeleton in the size of the last answer (see useRememberedCount).
+const skeletons = useRememberedCount(
+  'inbox',
+  () => items.value.length,
+  () => !loading.value,
+  {
+    fallback: 5,
+    max: 5,
+  },
+)
 const unread = ref(0)
 
 // -- Type slider (Все / Сообщения / Мероприятия / Другое) -----------------------

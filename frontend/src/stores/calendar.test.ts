@@ -30,6 +30,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useCalendarStore } from '@/stores/calendar'
 import { useAuthStore } from '@/stores/auth'
+import { flushPersisted, setPersistOwner } from '@/composables/persistedCache'
 import * as practicesApi from '@/api/practices'
 import type { PracticeResponse, UserResponse } from '@/api/types'
 
@@ -90,6 +91,44 @@ describe('useCalendarStore', () => {
         100,
         0,
       )
+    })
+
+    it('the window already on screen is refreshed quietly: no loading flag, data kept', async () => {
+      const items = [fakePractice({ id: 'a' })]
+      vi.mocked(practicesApi.getPractices).mockResolvedValue({
+        items,
+        total: 1,
+        limit: 100,
+        offset: 0,
+      })
+      const store = useCalendarStore()
+      await store.loadWeek()
+
+      const again = store.loadWeek()
+      expect(store.loading).toBe(false) // a tab return: no skeleton
+      expect(store.weekPractices).toEqual(items)
+      await again
+      expect(practicesApi.getPractices).toHaveBeenCalledTimes(2) // still revalidated
+    })
+
+    it("a restart draws the last session's default week at once, then revalidates", async () => {
+      const items = [fakePractice({ id: 'kept' })]
+      vi.mocked(practicesApi.getPractices).mockResolvedValue({
+        items,
+        total: 1,
+        limit: 100,
+        offset: 0,
+      })
+      setPersistOwner('u1')
+      await useCalendarStore().loadWeek()
+      flushPersisted()
+
+      setActivePinia(createPinia()) // a fresh app
+      const store = useCalendarStore()
+      const pending = store.loadWeek()
+      expect(store.weekPractices).toEqual(items)
+      expect(store.loading).toBe(false)
+      await pending
     })
 
     it('on success: stores the returned practices', async () => {
@@ -158,6 +197,17 @@ describe('useCalendarStore', () => {
       expect(store.error).toBe('Не удалось загрузить календарь')
       expect(store.weekPractices).toEqual([])
       expect(store.loading).toBe(false)
+    })
+
+    it('a failed SILENT refresh (ribbon scroll) keeps the practices on screen', async () => {
+      vi.mocked(practicesApi.getPractices).mockRejectedValue(new Error('network down'))
+      const store = useCalendarStore()
+      store.weekPractices = [fakePractice()]
+
+      await store.loadWeek(true)
+
+      expect(store.error).toBe('Не удалось загрузить календарь')
+      expect(store.weekPractices).toHaveLength(1)
     })
   })
 

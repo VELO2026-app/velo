@@ -130,6 +130,40 @@ describe('telegramPlatform.init -- app chrome', () => {
     expect(ready).toHaveBeenCalled()
     expect(expand).toHaveBeenCalled()
   })
+
+  it('keeps vertical drags inside the app on Bot API 7.7+', async () => {
+    const disableVerticalSwipes = vi.fn()
+    const isVersionAtLeast = vi.fn((v: string) => v === '7.7')
+    ;(window as unknown as { Telegram: { WebApp: object } }).Telegram.WebApp = {
+      ready,
+      expand,
+      setHeaderColor,
+      setBackgroundColor,
+      isVersionAtLeast,
+      disableVerticalSwipes,
+    }
+
+    await telegramPlatform.init()
+
+    expect(isVersionAtLeast).toHaveBeenCalledWith('7.7')
+    expect(disableVerticalSwipes).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves the host gesture alone on clients older than 7.7', async () => {
+    const disableVerticalSwipes = vi.fn()
+    ;(window as unknown as { Telegram: { WebApp: object } }).Telegram.WebApp = {
+      ready,
+      expand,
+      setHeaderColor,
+      setBackgroundColor,
+      isVersionAtLeast: () => false,
+      disableVerticalSwipes,
+    }
+
+    await telegramPlatform.init()
+
+    expect(disableVerticalSwipes).not.toHaveBeenCalled()
+  })
 })
 
 describe('setKeyboardSurface -- [TG-SURFACE]', () => {

@@ -55,6 +55,11 @@ export const telegramPlatform: Platform = {
     const webApp = getWebApp()
     webApp.ready()
     webApp.expand()
+    // A vertical drag inside the app (list overscroll, sheet swipe-to-close)
+    // must stay the app's gesture: without this Telegram treats it as «pull
+    // the Mini App down» and minimizes the window mid-scroll. Bot API 7.7+;
+    // older clients simply keep the host gesture.
+    if (webApp.isVersionAtLeast?.('7.7')) webApp.disableVerticalSwipes?.()
     // Fallbacks MUST mirror variables.css. telegram.test.ts parses that file and
     // fails if these two drift from it -- do not edit one without the other.
     webApp.setHeaderColor(tokenColor('--velo-tg-header', '#334d6e'))

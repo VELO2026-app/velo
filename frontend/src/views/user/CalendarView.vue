@@ -25,7 +25,7 @@
          `defer` lets the teleport find the layout's island even on first mount
          (target is rendered by the parent) — avoids the "Invalid Teleport target
          on mount: null" crash that blanked the heading + broke the screen. -->
-    <Teleport defer to=".mobile-layout__island" :disabled="!floating">
+    <Teleport defer to=".mobile-layout__island" :disabled="!floating || !onStage">
       <div class="calendar__island" :class="{ 'calendar__island--floating': floating }">
         <!-- Master mode (owner 2026-09-30): a back control rides the island --
              this stacked screen is NOT the tab hub, so the viewer must have a
@@ -145,50 +145,56 @@
       </VCard>
     </div>
 
-    <!-- Loading (initial) -->
-    <div v-if="store.loading && dayPractices.length === 0" class="calendar__loader">
-      <VLoader />
-    </div>
+    <!-- Loading (initial): VLoadingSwap holds the day's skeleton cards for
+         a visible minimum and crossfades them into whichever state lands. -->
+    <VLoadingSwap :pending="store.loading && dayPractices.length === 0" memory-key="calendar-day">
+      <template #skeleton>
+        <div class="calendar__loader">
+          <VSkeletonPracticeCard v-for="i in daySkeletons" :key="i" />
+        </div>
+      </template>
 
-    <!-- Error -->
-    <VEmptyState
-      v-else-if="store.error"
-      icon="warning"
-      :title="t('common.loadFailed')"
-      :description="store.error"
-    >
-      <VButton size="sm" @click="store.loadWeek()">{{ t('common.retry') }}</VButton>
-    </VEmptyState>
+      <!-- Error (only when there is nothing to show: a failed background
+           refresh keeps the day's practices on screen) -->
+      <VEmptyState
+        v-if="store.error && dayPractices.length === 0"
+        icon="warning"
+        :title="t('common.loadFailed')"
+        :description="store.error"
+      >
+        <VButton size="sm" @click="store.loadWeek()">{{ t('common.retry') }}</VButton>
+      </VEmptyState>
 
-    <!-- Empty: no practices on the selected day -->
-    <VEmptyState
-      v-else-if="dayPractices.length === 0"
-      :title="
-        masterMode || schoolMode
-          ? t('user.screens.calendar.emptyMode')
-          : t('user.screens.calendar.emptyPlain')
-      "
-      :description="
-        masterMode
-          ? t('user.screens.calendar.emptyDesc.master')
-          : schoolMode
-            ? t('user.screens.calendar.emptyDesc.school')
-            : t('user.screens.calendar.emptyDesc.plain')
-      "
-    >
-      <template #icon><IconClock :size="48" /></template>
-    </VEmptyState>
+      <!-- Empty: no practices on the selected day -->
+      <VEmptyState
+        v-else-if="dayPractices.length === 0"
+        :title="
+          masterMode || schoolMode
+            ? t('user.screens.calendar.emptyMode')
+            : t('user.screens.calendar.emptyPlain')
+        "
+        :description="
+          masterMode
+            ? t('user.screens.calendar.emptyDesc.master')
+            : schoolMode
+              ? t('user.screens.calendar.emptyDesc.school')
+              : t('user.screens.calendar.emptyDesc.plain')
+        "
+      >
+        <template #icon><IconClock :size="48" /></template>
+      </VEmptyState>
 
-    <!-- Selected-day practices -->
-    <div v-else class="calendar__list">
-      <h3 class="calendar__date-header">{{ dayLabel }}</h3>
-      <CalendarPracticeCard
-        v-for="p in dayPractices"
-        :key="p.id"
-        :practice="p"
-        @click="goToDetail"
-      />
-    </div>
+      <!-- Selected-day practices -->
+      <div v-else class="calendar__list">
+        <h3 class="calendar__date-header">{{ dayLabel }}</h3>
+        <CalendarPracticeCard
+          v-for="p in dayPractices"
+          :key="p.id"
+          :practice="p"
+          @click="goToDetail"
+        />
+      </div>
+    </VLoadingSwap>
 
     <!-- Filter modal -->
     <CalendarFilterModal
@@ -202,18 +208,20 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onActivated } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCalendarStore } from '@/stores/calendar'
-import { VLoader, VEmptyState, VButton, VCard } from '@/components/ui'
+import { VSkeletonPracticeCard, VLoadingSwap, VEmptyState, VButton, VCard } from '@/components/ui'
 import WeekStrip from '@/components/shared/WeekStrip.vue'
 import { useFloatingHeader } from '@/components/layout/useFloatingHeader'
+import { useKeptActive } from '@/composables/useKeptActive'
 import { historyHasBack } from '@/platform'
 import CalendarPracticeCard from '@/components/shared/CalendarPracticeCard.vue'
 import CalendarFilterModal from '@/components/shared/CalendarFilterModal.vue'
 import { IconCheck, IconClock } from '@/components/icons'
 import { formatDateShort } from '@/utils/format'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
+import { useRememberedCount } from '@/composables/useRememberedCount'
 import { DIFFICULTY_LABEL, DURATION_BUCKET_LABEL, TIME_OF_DAY_LABEL } from '@/utils/displayHelpers'
 // T2 stage 2 (2026-07-15): direction chip label goes through directionLabel()
 // (hardcoded first, catalog second, raw value last resort), NOT the strict
@@ -288,6 +296,9 @@ function goBack(): void {
 // Title + week strip float as an island (G-1): the date nav stays in place while
 // the practice list scrolls under it.
 const floating = useFloatingHeader()
+// Kept alive off-stage (TabRouterView): the island heading goes home with the
+// screen (moved, not remounted -- the week strip keeps its scroll).
+const onStage = useKeptActive()
 
 const expanded = ref(false)
 const showFilter = ref(false)
@@ -298,6 +309,13 @@ function openFilter(): void {
 
 // Practices on the selected day (already sorted by the store).
 const dayPractices = computed<PracticeResponse[]>(() => store.selectedDayPractices)
+// Skeleton in the size of the last settled day (see useRememberedCount).
+const daySkeletons = useRememberedCount(
+  'calendar-day',
+  () => dayPractices.value.length,
+  () => !store.loading,
+  { fallback: 3, max: 3 },
+)
 
 // Section header for the selected day (t('user.screens.calendar.today') / t('user.screens.calendar.tomorrow') / «28 января»),
 // derived from the VIEWER's profile timezone (SW2) -- matching the store's
@@ -415,6 +433,15 @@ function goToDetail(id: string): void {
 }
 
 onMounted(() => {
+  void store.init()
+})
+
+// The tab calendar is kept alive (TabRouterView): back on the tab, the week
+// on screen revalidates quietly (same range -> no skeleton, see loadWeek).
+// The first call is the mount itself; stacked calendars are never kept.
+let activations = 0
+onActivated(() => {
+  if (activations++ === 0 || masterMode.value || schoolMode.value) return
   void store.init()
 })
 </script>
@@ -598,7 +625,7 @@ onMounted(() => {
 
 .calendar__loader {
   display: flex;
-  justify-content: center;
-  padding: var(--space-8) 0;
+  flex-direction: column;
+  gap: var(--space-3);
 }
 </style>
