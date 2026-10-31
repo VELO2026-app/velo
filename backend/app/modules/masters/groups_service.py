@@ -47,6 +47,8 @@ from sqlalchemy import and_, delete, exists, func, literal_column, or_, select, 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.config import settings
 from app.core.exceptions import (
@@ -103,8 +105,10 @@ class MasterLinkAction(enum.StrEnum):
           group-audience practices). The strict link only: the person's
           OWN act toward this master.
       INTERNAL -- the action is the master's own bookkeeping about the
-          person: set_student_tag, block_student. The strict link OR an
-          existing conversation of the pair.
+          person: set_student_tag, block_student, the dossier and the
+          «Удалённые» list. The strict link OR an existing conversation of
+          the pair OR his own block of this person marked
+          blocked_with_link (BE-46 FIX).
       OPEN_CHAT -- the master opens a DM (POST /chats/students): INTERNAL,
           OR the person is a member of a school where the master is a
           master or the curator (BE-76 / BE-78 send school masters there).
@@ -113,6 +117,82 @@ class MasterLinkAction(enum.StrEnum):
     GRANT_ACCESS = "grant_access"
     INTERNAL = "internal"
     OPEN_CHAT = "open_chat"
+
+
+def master_link_clause(
+    master_id: UUID,
+    person_id: UUID | ColumnElement[UUID],
+    *,
+    action: MasterLinkAction,
+) -> ColumnElement[bool]:
+    """The link as one SQL condition (BE-46) -- THE place the rule lives.
+
+    `person_id` is a value for a door (has_master_link below) or a column
+    of the enclosing query for a list (_list_blocked_students correlates it
+    to master_student.student_user_id row by row). The rule itself --
+    which sources count for which action, and why -- is in
+    has_master_link's docstring.
+    """
+    booking = exists().where(
+        Booking.user_id == person_id,
+        Booking.practice_id == Practice.id,
+        Practice.master_id == master_id,
+    )
+    waitlist = exists().where(
+        Waitlist.user_id == person_id,
+        Waitlist.practice_id == Practice.id,
+        Practice.master_id == master_id,
+    )
+    membership = exists().where(
+        MasterGroupMembership.student_user_id == person_id,
+        MasterGroupMembership.group_id == MasterGroup.id,
+        MasterGroup.master_id == master_id,
+    )
+    sources = [booking, waitlist, membership]
+
+    if action in (MasterLinkAction.INTERNAL, MasterLinkAction.OPEN_CHAT):
+        sources.append(
+            exists().where(
+                ChatThread.client_user_id == person_id,
+                ChatThread.operator_user_id == master_id,
+            )
+        )
+
+    if action is MasterLinkAction.INTERNAL:
+        # An alias, so that inside a query over master_student (the
+        # «Удалённые» list) this is its own row lookup, not a correlation
+        # to the outer row.
+        own_block = aliased(MasterStudent, name="own_block")
+        sources.append(
+            exists().where(
+                own_block.master_id == master_id,
+                own_block.student_user_id == person_id,
+                own_block.blocked_at.is_not(None),
+                own_block.blocked_with_link.is_(True),
+            )
+        )
+
+    if action is MasterLinkAction.OPEN_CHAT:
+        person_school = CuratorGroupMember.__table__.alias("person_school")
+        master_school = CuratorGroupMember.__table__.alias("master_school")
+        sources.append(
+            exists().where(
+                person_school.c.user_id == person_id,
+                or_(
+                    exists().where(
+                        master_school.c.group_id == person_school.c.group_id,
+                        master_school.c.user_id == master_id,
+                        master_school.c.kind == CuratorMemberKind.MASTER.value,
+                    ),
+                    exists().where(
+                        CuratorGroup.id == person_school.c.group_id,
+                        CuratorGroup.curator_user_id == master_id,
+                    ),
+                ),
+            )
+        )
+
+    return or_(*sources)
 
 
 async def has_master_link(
@@ -153,6 +233,18 @@ async def has_master_link(
     forward one. Never counts for GRANT_ACCESS: otherwise opening a chat
     would earn the right to grant access.
 
+    INTERNAL alone also accepts this master's own block of the person
+    marked blocked_with_link (BE-46 FIX). A block deletes the person's
+    custom-group memberships; when that was the only link, the lawful block
+    would otherwise vanish from his own dossier and «Удалённые» and could
+    never be lifted (the frontend unblocks from the dossier only). The mark
+    says the block was made with a link: block_student sets it -- since
+    BE-46 every block is -- and revision be46a1b2c3d4 set it on older
+    blocks linked at migration time. A block written on a stranger's id
+    before BE-46 is unmarked and opens nothing. Not for OPEN_CHAT: the
+    mark never lets a master start a new conversation with someone he
+    blocked. Not for GRANT_ACCESS: a block gives nothing.
+
     OPEN_CHAT also accepts a shared school: the person has a member row
     (student or master) in a school where this master has a master row or
     is the curator. The curator is not a member row (curator_groups/
@@ -170,52 +262,8 @@ async def has_master_link(
     school row can be removed concurrently; the caller then acts as if it
     had run just before that removal -- one of the two serial orders.
     """
-    booking = exists().where(
-        Booking.user_id == person_id,
-        Booking.practice_id == Practice.id,
-        Practice.master_id == master_id,
-    )
-    waitlist = exists().where(
-        Waitlist.user_id == person_id,
-        Waitlist.practice_id == Practice.id,
-        Practice.master_id == master_id,
-    )
-    membership = exists().where(
-        MasterGroupMembership.student_user_id == person_id,
-        MasterGroupMembership.group_id == MasterGroup.id,
-        MasterGroup.master_id == master_id,
-    )
-    sources = [booking, waitlist, membership]
-
-    if action in (MasterLinkAction.INTERNAL, MasterLinkAction.OPEN_CHAT):
-        sources.append(
-            exists().where(
-                ChatThread.client_user_id == person_id,
-                ChatThread.operator_user_id == master_id,
-            )
-        )
-
-    if action is MasterLinkAction.OPEN_CHAT:
-        person_school = CuratorGroupMember.__table__.alias("person_school")
-        master_school = CuratorGroupMember.__table__.alias("master_school")
-        sources.append(
-            exists().where(
-                person_school.c.user_id == person_id,
-                or_(
-                    exists().where(
-                        master_school.c.group_id == person_school.c.group_id,
-                        master_school.c.user_id == master_id,
-                        master_school.c.kind == CuratorMemberKind.MASTER.value,
-                    ),
-                    exists().where(
-                        CuratorGroup.id == person_school.c.group_id,
-                        CuratorGroup.curator_user_id == master_id,
-                    ),
-                ),
-            )
-        )
-
-    return bool(await session.scalar(select(or_(*sources))))
+    clause = master_link_clause(master_id, person_id, action=action)
+    return bool(await session.scalar(select(clause)))
 
 
 # ===========================================================================
@@ -359,11 +407,25 @@ async def count_derived_students(master_id: UUID, session: AsyncSession) -> int:
     return (await session.execute(stmt)).scalar_one()
 
 
+def _shown_as_blocked(master_id: UUID) -> ColumnElement[bool]:
+    """Which of this master's blocked rows «Удалённые» shows (BE-46 FIX):
+    the same rule as the dossier -- master_link_clause(INTERNAL),
+    correlated to the row's student. A lawful block is either still linked
+    or marked blocked_with_link; a block written on a stranger's id before
+    BE-46 is neither, and showing it would hand out that person's name and
+    avatar. It stays in the table, still blocking, and shown nowhere."""
+    return master_link_clause(
+        master_id, MasterStudent.student_user_id, action=MasterLinkAction.INTERNAL,
+    )
+
+
 async def count_blocked_students(master_id: UUID, session: AsyncSession) -> int:
-    """Total size of the virtual "Удалённые" group."""
+    """Total size of the virtual "Удалённые" group -- the same rows
+    _list_blocked_students shows (BE-46 FIX: linked or marked only)."""
     stmt = select(func.count(MasterStudent.id)).where(
         MasterStudent.master_id == master_id,
         MasterStudent.blocked_at.is_not(None),
+        _shown_as_blocked(master_id),
     )
     return (await session.execute(stmt)).scalar_one()
 
@@ -374,50 +436,6 @@ async def count_group_members(group_id: UUID, session: AsyncSession) -> int:
         MasterGroupMembership.group_id == group_id,
     )
     return (await session.execute(stmt)).scalar_one()
-
-
-async def is_master_audience_member(
-    master_id: UUID, student_id: UUID, session: AsyncSession,
-) -> bool:
-    """True iff `student_id` is someone this master can already see on
-    screen: a derived "Ученики" member, i.e. anyone _derived_students_base
-    admits (T-37: bookings, chat threads, waitlist entries, or custom-group
-    membership -- see that function's docstring for the full rule).
-
-    Reused by students_service.get_master_student_detail's own gate (P6,
-    owner-ruled widen, PROMPT №609) instead of that module writing a THIRD
-    definition of "student" -- see that function's docstring.
-
-    T-37 CONSEQUENCE, stated because it changes reachability without
-    changing this function's own code: custom-group membership used to be
-    checked here as a SEPARATE second condition (a student with no booking
-    could only get in through this branch). It is now folded into
-    _derived_students_base itself as one of the four union sources, so a
-    second check here would be redundant -- checking derived-membership
-    alone is now equivalent to the old (derived OR group) check, PLUS it
-    additionally admits chat-only and waitlist-only contacts, which is the
-    whole point of T-37: anyone the master can see on the wide list can open
-    that person's profile.
-
-    Deliberately does NOT admit a BLOCKED ("Удалённые") student: excluded
-    from _derived_students_base by construction (MasterStudent.blocked_at
-    IS NULL is one of its own WHERE clauses), and removed from every custom
-    group the moment they're blocked (block_student) -- so a blocked student
-    cannot re-enter through the group-membership union source either. That
-    exclusion is a separate, undecided scope question, not silently folded
-    in here.
-    """
-    derived_hit = (
-        await session.execute(
-            select(func.count()).select_from(
-                _derived_students_base(master_id)
-                .where(User.id == student_id)
-                .order_by(None)
-                .subquery()
-            )
-        )
-    ).scalar_one()
-    return derived_hit > 0
 
 
 async def _list_derived_students(
@@ -484,6 +502,7 @@ async def _list_blocked_students(
         .where(
             MasterStudent.master_id == master_id,
             MasterStudent.blocked_at.is_not(None),
+            _shown_as_blocked(master_id),
         )
     )
 
@@ -1163,10 +1182,11 @@ async def block_student(
     the held spot.
 
     BE-46: only for a person linked to this master (has_master_link,
-    INTERNAL). A block row on a stranger would also open the stranger's
-    dossier (get_master_student_detail admits the master's own blocked
-    students) -- name and avatar of any id. Without a link: the same 404 a
-    missing user gets, and nothing is written. The check is a read, taken
+    INTERNAL). A block row on a stranger's id used to open that person's
+    dossier and «Удалённые» entry -- name and avatar of any id; both now
+    ask the same question (BE-46 FIX), so a pre-BE-46 row opens nothing
+    either. Without a link: the same 404 a missing user gets, and nothing
+    is written. The check is a read, taken
     before the first lock, so LOCK ORDER (module header) is unchanged.
     """
     if not await has_master_link(
@@ -1178,8 +1198,12 @@ async def block_student(
 
     # The pair's row, taken first -- see LOCK ORDER in the module header.
     # A repeat block overwrites blocked_at, as it always has.
+    # blocked_with_link (BE-46 FIX): the link was just checked above, and
+    # this block is about to delete the custom-group memberships that may
+    # be all of it -- the mark is what keeps the block visible after that.
     await _take_master_student(
-        master_id, student_user_id, session, blocked_at=now,
+        master_id, student_user_id, session,
+        blocked_at=now, blocked_with_link=True,
     )
 
     # Drop from ALL this master's custom groups.
@@ -1388,6 +1412,9 @@ async def unblock_student(
         raise NotFoundError("Student is not blocked")
 
     row.blocked_at = None
+    # The mark belongs to the block (ck_master_student_link_needs_block):
+    # it goes with it. A tag kept on the row gives no link of its own.
+    row.blocked_with_link = False
     if row.tag is None:
         await session.delete(row)
     await session.flush()

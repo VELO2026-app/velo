@@ -29,14 +29,16 @@
 # test_chats_t3_students.py; the provider of truth here is our tables.
 # =============================================================================
 
+import importlib.util
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import event, select
+from sqlalchemy import event, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_engine, get_session_factory
@@ -845,3 +847,256 @@ async def test_a_link_removed_in_flight_gives_one_of_the_serial_orders(
             await groups_service.add_group_member(
                 master_id, str(group_a.id), person_id, adder,
             )
+
+
+# ===================================================================
+# BE-46 FIX -- old rows, lawful blocks, and «Удалённые»
+# ===================================================================
+
+_REVISION = (
+    Path(__file__).resolve().parent.parent
+    / "migrations" / "versions"
+    / "2026_10_31_be46a1b2c3d4_master_student_blocked_with_link.py"
+)
+
+
+def _revision_module():
+    spec = importlib.util.spec_from_file_location("rev_be46", _REVISION)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+async def _old_row(
+    db_session: AsyncSession, master_id: UUID, person_id: UUID, *,
+    blocked: bool = True, tag: str | None = None,
+) -> None:
+    """A master_student row as code before BE-46 could write it: on any
+    id, no link required, and never marked."""
+    db_session.add(MasterStudent(
+        master_id=master_id,
+        student_user_id=person_id,
+        blocked_at=datetime.now(UTC) if blocked else None,
+        tag=tag,
+        blocked_with_link=False,
+    ))
+    await db_session.commit()
+
+
+async def _statements_of(call) -> tuple[object, int]:
+    statements: list[str] = []
+
+    def _watch(
+        conn, cursor, statement, parameters, context, executemany,
+        seen: list[str] = statements,
+    ):
+        seen.append(statement)
+
+    sync_engine = get_engine().sync_engine
+    event.listen(sync_engine, "before_cursor_execute", _watch)
+    try:
+        result = await call()
+    finally:
+        event.remove(sync_engine, "before_cursor_execute", _watch)
+    return result, len(statements)
+
+
+async def _deleted_list(client: AsyncClient, headers: dict) -> dict:
+    resp = await client.get(f"{GROUPS_URL}/deleted/members", headers=headers)
+    assert resp.status_code == 200
+    return resp.json()
+
+
+async def _deleted_count(client: AsyncClient, headers: dict) -> int:
+    groups = (await client.get(GROUPS_URL, headers=headers)).json()["items"]
+    return next((g["members_count"] for g in groups if g["id"] == "deleted"), 0)
+
+
+async def test_an_old_unlinked_block_opens_no_dossier_like_a_missing_user(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """Requirement 1: a block written before BE-46 on a stranger's id. The
+    dossier answers it exactly as it answers an id with no user: same
+    status, same bytes, same number of statements -- and no name."""
+    master = await _master(client, db_session, 71350)
+    stranger = await _person(client, 71351)
+    await _old_row(db_session, _id(master), _id(stranger))
+    headers = auth_headers(master["session_token"])
+
+    missing, missing_n = await _statements_of(
+        lambda: client.get(f"{STUDENTS_URL}/{uuid4()}", headers=headers)
+    )
+    old, old_n = await _statements_of(
+        lambda: client.get(f"{STUDENTS_URL}/{_id(stranger)}", headers=headers)
+    )
+
+    assert missing.status_code == old.status_code == 404
+    assert missing.content == old.content
+    assert b"Person" not in old.content
+    assert missing_n == old_n > 0
+
+
+async def test_an_old_tag_only_row_opens_no_dossier(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """A tag written on a stranger before BE-46 is no link either."""
+    master = await _master(client, db_session, 71350)
+    stranger = await _person(client, 71351)
+    await _old_row(db_session, _id(master), _id(stranger), blocked=False, tag="x")
+
+    resp = await client.get(
+        f"{STUDENTS_URL}/{_id(stranger)}",
+        headers=auth_headers(master["session_token"]),
+    )
+
+    assert resp.status_code == 404
+
+
+async def test_a_lawful_block_through_membership_stays_open_and_can_be_lifted(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """Requirement 2: the person's only link is a group (joined by invite);
+    the block deletes that membership -- and the block is still his: the
+    dossier opens with blocked=True, a tag can still be set (observation
+    2), and «Разблокировать» works. After the unblock no link is left, so
+    the dossier closes like any stranger's."""
+    master = await _master(client, db_session, 71350)
+    person = await _person(client, 71351)
+    await _membership(db_session, _id(master), _id(person))
+    headers = auth_headers(master["session_token"])
+    url = f"{STUDENTS_URL}/{_id(person)}"
+
+    assert (await client.post(f"{url}/block", headers=headers)).status_code == 200
+    memberships = (await fresh_execute(
+        select(MasterGroupMembership).where(
+            MasterGroupMembership.student_user_id == _id(person),
+        )
+    )).scalars().all()
+    assert memberships == [], "the block was to remove the only link"
+
+    dossier = await client.get(url, headers=headers)
+    assert dossier.status_code == 200
+    assert dossier.json()["blocked"] is True
+    tagged = await client.put(f"{url}/tag", json={"tag": "Удалён"}, headers=headers)
+    assert tagged.status_code == 200
+
+    # The frontend's own unblock call (api/groups.ts unblockStudent).
+    assert (await client.delete(f"{url}/block", headers=headers)).status_code == 204
+    after = await client.get(url, headers=headers)
+    assert after.status_code == 404
+    row = (await fresh_execute(
+        select(MasterStudent).where(
+            MasterStudent.master_id == _id(master),
+            MasterStudent.student_user_id == _id(person),
+        )
+    )).scalar_one()
+    assert row.blocked_at is None
+    assert row.blocked_with_link is False
+
+
+async def test_deleted_shows_the_lawful_block_and_not_the_old_stranger(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """«Удалённые» -- rows and count -- by the dossier's rule: the lawful
+    block (marked) is listed, the pre-BE-46 block on a stranger is not."""
+    master = await _master(client, db_session, 71350)
+    lawful = await _person(client, 71351)
+    stranger = await _person(client, 71352)
+    await _membership(db_session, _id(master), _id(lawful))
+    await _old_row(db_session, _id(master), _id(stranger))
+    headers = auth_headers(master["session_token"])
+    blocked = await client.post(
+        f"{STUDENTS_URL}/{_id(lawful)}/block", headers=headers,
+    )
+    assert blocked.status_code == 200
+
+    listed = await _deleted_list(client, headers)
+
+    assert [item["id"] for item in listed["items"]] == [lawful["user"]["id"]]
+    assert listed["total"] == 1
+    assert await _deleted_count(client, headers) == 1
+
+
+async def test_an_old_block_with_a_link_now_is_still_shown(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """An unmarked old block whose person IS linked (he booked, or wrote
+    to the master after the block) stays visible and liftable."""
+    master = await _master(client, db_session, 71350)
+    person = await _person(client, 71351)
+    await _old_row(db_session, _id(master), _id(person))
+    await _thread(db_session, client_id=_id(person), operator_id=_id(master))
+    headers = auth_headers(master["session_token"])
+
+    dossier = await client.get(f"{STUDENTS_URL}/{_id(person)}", headers=headers)
+
+    assert dossier.status_code == 200
+    assert dossier.json()["blocked"] is True
+    assert (await _deleted_list(client, headers))["total"] == 1
+
+
+async def test_the_mark_never_opens_a_new_conversation(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """The mark is for the master's bookkeeping only: after a block that
+    removed the only link, INTERNAL holds and OPEN_CHAT does not."""
+    master = await _master(client, db_session, 71350)
+    person = await _person(client, 71351)
+    await _membership(db_session, _id(master), _id(person))
+    await groups_service.block_student(_id(master), _id(person), db_session)
+    await db_session.commit()
+
+    assert await _link(db_session, _id(master), _id(person), INTERNAL) is True
+    assert await _link(db_session, _id(master), _id(person), CHAT) is False
+    assert await _link(db_session, _id(master), _id(person), GRANT) is False
+
+
+async def test_the_backfill_marks_linked_blocks_only(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """The revision's own SQL, on rows written as before it. A block linked
+    through EACH of the four sources -- a booking, a waitlist entry, a
+    group, a conversation -- is marked (one person per source, so dropping
+    any one source from the SQL turns this red); a stranger's block is not;
+    an unblocked tag row is not. The owner's count query lists exactly the
+    stranger's block. Rolled back -- it is a whole-table UPDATE."""
+    rev = _revision_module()
+    master = await _master(client, db_session, 71350)
+    by_booking = await _person(client, 71351)
+    stranger = await _person(client, 71352)
+    tagged = await _person(client, 71353)
+    by_waitlist = await _person(client, 71354)
+    by_group = await _person(client, 71355)
+    by_chat = await _person(client, 71356)
+    await _booking(db_session, _id(master), _id(by_booking))
+    await _waitlist(db_session, _id(master), _id(by_waitlist))
+    await _membership(db_session, _id(master), _id(by_group))
+    await _thread(db_session, client_id=_id(by_chat), operator_id=_id(master))
+    await _booking(db_session, _id(master), _id(tagged))
+    for linked in (by_booking, by_waitlist, by_group, by_chat, stranger):
+        await _old_row(db_session, _id(master), _id(linked))
+    await _old_row(db_session, _id(master), _id(tagged), blocked=False, tag="x")
+
+    try:
+        listed = (await db_session.execute(
+            text(rev.BLOCKED_WITHOUT_LINK_SQL)
+        )).all()
+        await db_session.execute(text(rev.BACKFILL_SQL))
+        marks = dict((await db_session.execute(
+            select(MasterStudent.student_user_id, MasterStudent.blocked_with_link)
+            .where(MasterStudent.master_id == _id(master))
+        )).all())
+    finally:
+        await db_session.rollback()
+
+    mine = [row for row in listed if row.master_id == _id(master)]
+    assert [row.student_user_id for row in mine] == [_id(stranger)]
+    assert marks == {
+        _id(by_booking): True,
+        _id(by_waitlist): True,
+        _id(by_group): True,
+        _id(by_chat): True,
+        _id(stranger): False,
+        _id(tagged): False,
+    }

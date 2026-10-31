@@ -21,12 +21,13 @@
 #       Still 404s for a real stranger (no booking of any status, no
 #       group membership) -- proves the gate was widened, not removed.
 #     - T24-20 (PROMPT №638): a master's OWN blocked student now opens too
-#       (narrow allow-path, separate from is_master_audience_member) --
-#       response carries blocked=True/False.
+#       response carries blocked=True/False. Since the BE-46 FIX the gate
+#       is groups_service.has_master_link(INTERNAL), which admits a lawful
+#       block (linked, or marked blocked_with_link).
 #     - T-37 (PROMPT №706): a chat-only contact (no booking, no group
-#       membership) also opens -- this file's own code is UNCHANGED; the
-#       gate widened because groups_service.is_master_audience_member did.
-#       Proves the cross-module effect, not a change to this module.
+#       membership) also opens. Written when the gate was
+#       is_master_audience_member (removed by the BE-46 FIX); the gate is
+#       now has_master_link(INTERNAL), which reads the same sources.
 #     - T-37 amendment (PROMPT №707, 2026-08-14): a cancelled-only-booking
 #       contact also opens, for the same cross-module reason. practices_count
 #       stays 0 -- this module's ATTENDED-only aggregate was never touched.
@@ -534,12 +535,12 @@ async def test_student_detail_chat_only_contact_opens(
     db_session: AsyncSession,
 ) -> None:
     """T-37 (PROMPT №706): this endpoint's OWN code is unchanged, but its
-    gate (groups_service.is_master_audience_member) now delegates entirely
-    to the widened _derived_students_base -- so a chat-only contact (no
-    booking, no group membership) opens too. Proves the cross-module effect
-    without touching students_service.py: THIS module's code did not change,
-    only what its dependency admits did. Aggregates stay exactly the same
-    honest zeros the pre-existing widened cases already assert."""
+    gate admitted the widened _derived_students_base -- so a chat-only
+    contact (no booking, no group membership) opens too. The gate was then
+    is_master_audience_member; since the BE-46 FIX it is
+    groups_service.has_master_link(INTERNAL), and a conversation is one of
+    its sources, so the assertion holds unchanged. Aggregates stay exactly
+    the same honest zeros the pre-existing widened cases already assert."""
     master = await _make_verified_master(client, db_session, telegram_id=91918)
     mid = master["user"]["id"]
 
@@ -567,9 +568,10 @@ async def test_student_detail_cancelled_only_contact_opens(
     db_session: AsyncSession,
 ) -> None:
     """2026-08-14 amendment to T-37 (PROMPT №707): a booking whose ONLY
-    status is CANCELLED now makes its holder a contact -- so the gate
-    (groups_service.is_master_audience_member, unchanged CODE, widened
-    DEPENDENCY) opens this profile too. This module's own aggregate query
+    status is CANCELLED now makes its holder a contact -- so the gate opens
+    this profile too (then is_master_audience_member; since the BE-46 FIX
+    has_master_link(INTERNAL), where a booking counts at any status). This
+    module's own aggregate query
     (ATTENDED-only, untouched by the amendment) correctly reports
     practices_count=0 -- a cancelled booking was never attended, so this
     number is not a new zero the amendment invented, it is the same
@@ -627,10 +629,9 @@ async def test_student_detail_blocked_student_opens_with_blocked_true(
     db_session: AsyncSession,
 ) -> None:
     """T24-20 (PROMPT №638): a master's OWN blocked student now opens (200,
-    blocked=True) instead of 404 -- the narrow allow-path in
-    get_master_student_detail, NOT a widened is_master_audience_member (a
-    stranger still 404s, proven above and re-checked here isn't touched by
-    this same call sequence)."""
+    blocked=True) instead of 404. Since the BE-46 FIX the gate is
+    has_master_link(INTERNAL): this student attended, so the link stands
+    after the block as well (a stranger still 404s, proven above)."""
     master = await _make_verified_master(client, db_session, telegram_id=91916)
     headers = auth_headers(master["session_token"])
     practice = await _create_completed_practice(db_session, master["user"]["id"])

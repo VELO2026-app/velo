@@ -81,10 +81,10 @@ class StudentDetailResponse(BaseModel):
                        is set for THIS master. Lets the frontend swap the
                        bottom action ("Заблокировать" / "Разблокировать")
                        instead of guessing from the fact the request merely
-                       succeeded. get_master_student_detail's own narrow
-                       allow-path (NOT is_master_audience_member, which still
-                       never admits a blocked student -- see that function's
-                       docstring) is the only place blocked=True can occur.
+                       succeeded. Only this dossier can return
+                       blocked=True: its gate (has_master_link, INTERNAL --
+                       BE-46 FIX) admits this master's lawful block, while
+                       the derived "Ученики" list excludes blocked students.
     """
 
     name: str

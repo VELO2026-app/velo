@@ -943,9 +943,9 @@ async def test_the_id_in_the_feed_does_not_open_the_students_dossier(
 
     This is the test that makes carrying user_id safe to reason about: the
     curator takes the id straight out of their own feed and asks for the
-    per-student profile with it, and gets the 404 that
-    is_master_audience_member produces for somebody who is not this
-    master's student. The practice's own master gets 200 on the same id in
+    per-student profile with it, and gets the 404 that the dossier's gate
+    (has_master_link, INTERNAL -- BE-46) produces for somebody who is not
+    this master's student. The practice's own master gets 200 on the same id in
     the same test -- without that half, a dossier broken for everybody
     would read as a passing privacy check.
     """

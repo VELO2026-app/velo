@@ -100,8 +100,11 @@ async def get_my_student_endpoint(
 ) -> StudentDetailResponse:
     """Per-student detail: counts, hours, satisfaction, recent activity.
 
-    404 only for a real stranger. Opens for this master's own blocked
-    student too (T24-20, PROMPT №638) -- response.blocked tells the caller.
+    404 for anyone with no link to this master (BE-46: a booking, a
+    waitlist entry, his group, a conversation, or his own block made with
+    a link) -- the same 404 as for an id with no user behind it. Opens for
+    this master's own lawful block (T24-20, PROMPT №638) -- response.blocked
+    tells the caller.
     """
     user, _profile = master_tuple
     data = await get_master_student_detail(user.id, student_id, session)

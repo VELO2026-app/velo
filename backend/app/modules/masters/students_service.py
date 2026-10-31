@@ -16,11 +16,12 @@
 # one DISTINCT ON query. Optional case-insensitive name search;
 # offset/limit pagination.
 #
-# DETAIL (GET /masters/me/students/{id}) -- "Профиль ученика": WIDER gate
-# (P6, PROMPT №609) -- reachable for anyone this master can already see on
-# screen, via groups_service.is_master_audience_member (a derived
-# "Ученики" member OR a custom-group member with no booking at all), not
-# ATTENDED-only. practices_count + hours (attended duration summed / 60),
+# DETAIL (GET /masters/me/students/{id}) -- "Профиль ученика": the gate is
+# groups_service.has_master_link(INTERNAL) (BE-46 FIX) -- the derived
+# "Ученики" list's own sources (any booking, a conversation, a waitlist
+# entry, a custom group) plus this master's own block marked
+# blocked_with_link -- not ATTENDED-only. practices_count + hours
+# (attended duration summed / 60),
 # satisfaction_pct (round(avg(rating)*10) over the student's feedbacks on
 # this master's practices), and the newest recent_checkins / feedbacks
 # stay attended/feedback-only and degrade to honest zeros/empty for
@@ -44,7 +45,7 @@ from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.diary.insights_service import ATTENTION_RATING_MAX
 from app.modules.diary.models import Checkin, Feedback
 from app.modules.masters.groups_models import MasterStudent
-from app.modules.masters.groups_service import is_master_audience_member
+from app.modules.masters.groups_service import MasterLinkAction, has_master_link
 from app.modules.practices.models import Practice
 from app.modules.users.helpers import display_name
 from app.modules.users.models import User
@@ -163,10 +164,9 @@ async def get_master_student_detail(
     Returns a dict ready for StudentDetailResponse.
 
     Raises:
-        NotFoundError: when `student_id` is neither someone this master can
-            already see on screen (is_master_audience_member's two admitted
-            cases, P6, PROMPT №609) NOR this master's own blocked student
-            (T24-20 below).
+        NotFoundError: when `student_id` has no link to this master
+            (has_master_link, INTERNAL -- BE-46 FIX below) -- the same 404,
+            after the same single query, as for an id with no user behind it.
 
     practices_count/hours/satisfaction_pct/recent_checkins/feedbacks below
     are STILL attended-only / feedback-only, unchanged -- widening the
@@ -177,31 +177,35 @@ async def get_master_student_detail(
     than crashing or fabricating history -- none of these queries assumed
     at least one row existed.
 
-    T24-20 (PROMPT №638): a blocked student's profile used to hard-404 (the
-    generic "Не удалось загрузить профиль" screen) because
-    is_master_audience_member deliberately never admits a blocked student
-    (see its own docstring -- that exclusion is load-bearing: the predicate
-    also gates audience/visibility elsewhere, and loosening IT would risk
-    letting a blocked student back into practice visibility, the opposite
-    of what blocking means). The owner's ruling was narrower than that: the
-    profile itself should open for a master's OWN blocked student, showing
-    "Разблокировать" instead of "Заблокировать" at the bottom -- nothing
-    about audience/visibility. So the allow-path here is a SEPARATE, local
-    query against MasterStudent for exactly this master+student pair,
-    scoped to this one function -- is_master_audience_member itself is
-    untouched.
+    T24-20 (PROMPT №638): the profile opens for a master's OWN blocked
+    student too, showing "Разблокировать" instead of "Заблокировать" at the
+    bottom -- the only place the frontend lifts a block. A ruling about
+    this screen only: the derived "Ученики" list still excludes blocked
+    students (_derived_students_base, MasterStudent.blocked_at IS NULL),
+    and so does every practice-visibility check.
+
+    BE-46 FIX (Dispatcher, 2026-10-31): the gate is has_master_link
+    (INTERNAL) -- the derived list's four sources WITHOUT its blocked
+    exclusion, plus this master's block marked blocked_with_link. The gate
+    it replaced admitted ANY own blocked row through a separate query, so
+    a block (or a tag) written before BE-46 on a guessed id opened that
+    person's name and avatar. Now such a row answers exactly like a
+    missing user: the same 404, after the same single query. A lawful
+    block stays open even when the block removed the only link -- the
+    group membership -- because block_student marks it. blocked_at is
+    read only once the gate has passed.
     """
-    blocked_at = None
-    if not await is_master_audience_member(master_id, student_id, session):
-        blocked_at = await session.scalar(
-            select(MasterStudent.blocked_at).where(
-                MasterStudent.master_id == master_id,
-                MasterStudent.student_user_id == student_id,
-                MasterStudent.blocked_at.is_not(None),
-            )
+    if not await has_master_link(
+        master_id, student_id, session, action=MasterLinkAction.INTERNAL,
+    ):
+        raise NotFoundError("Student not found")
+    blocked_at = await session.scalar(
+        select(MasterStudent.blocked_at).where(
+            MasterStudent.master_id == master_id,
+            MasterStudent.student_user_id == student_id,
+            MasterStudent.blocked_at.is_not(None),
         )
-        if blocked_at is None:
-            raise NotFoundError("Student not found")
+    )
 
     # practices_count + attended duration in one pass. Deliberately STILL
     # ATTENDED-only (see the docstring above) -- a widened-gate student

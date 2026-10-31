@@ -726,7 +726,7 @@ class CuratorGroupMasterOfferRequest(BaseModel):
 #
 # user_id IS CARRIED, and it is not the thing that keeps a curator out of a
 # student's dossier -- GET /masters/me/students/{id} does that itself, with
-# is_master_audience_member and a 404 (masters/students_service.py). Leaving
+# has_master_link and a 404 (masters/students_service.py). Leaving
 # the id out would have bought no protection and cost the curator the
 # ability to tell two students of the same name apart, which is most of the
 # reason names are shown at all.

@@ -20,6 +20,8 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
@@ -159,6 +161,15 @@ class MasterStudent(UUIDMixin, Base):
     the schema has: the migration (2026_07_24_5e6a7b8c9d0e) builds it with
     op.create_index(..., unique=True), so pg_indexes lists it and
     pg_constraint does not. ON CONFLICT ON CONSTRAINT cannot name it.
+
+    blocked_with_link (BE-46 FIX): the block was made while the student had
+    a link to this master. Every block since BE-46 does (block_student
+    requires one); revision be46a1b2c3d4 marked the older blocks that still
+    had one. It is what keeps a lawful block visible once the block itself
+    has removed the student's only link -- custom-group membership --
+    while a block written on a stranger's id before BE-46 stays unmarked
+    and opens nothing (has_master_link). Only a blocked row can carry it
+    (the CHECK); unblock_student clears it with blocked_at.
     """
 
     __tablename__ = "master_student"
@@ -167,6 +178,10 @@ class MasterStudent(UUIDMixin, Base):
             "uq_master_student_master_student",
             "master_id", "student_user_id",
             unique=True,
+        ),
+        CheckConstraint(
+            "NOT blocked_with_link OR blocked_at IS NOT NULL",
+            name="ck_master_student_link_needs_block",
         ),
     )
 
@@ -181,6 +196,9 @@ class MasterStudent(UUIDMixin, Base):
     tag: Mapped[str | None] = mapped_column(String(100), default=None)
     blocked_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), default=None,
+    )
+    blocked_with_link: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false",
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
