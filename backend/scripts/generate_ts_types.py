@@ -10,7 +10,7 @@
 #   python scripts/generate_ts_types.py openapi.json ../frontend/src/api/generated.ts
 #
 # On a server, the schema comes out of the app container (BE-114 item 2 --
-# the served /openapi.json is not the source):
+# the app does not serve /openapi.json at all):
 #   docker compose exec -T app python scripts/dump_openapi.py > openapi.json
 #   python3 backend/scripts/generate_ts_types.py openapi.json \
 #     frontend/src/api/generated.ts

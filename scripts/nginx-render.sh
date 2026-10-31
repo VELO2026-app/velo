@@ -230,8 +230,9 @@ server {
     # This host serves the API, not the app: nothing here is meant to be
     # framed or to load third-party resources, so the policy is tighter than
     # the frontend's. Still Report-Only -- same reason, it has never been
-    # measured against the real traffic (the OpenAPI docs routes do render
-    # HTML from this origin).
+    # measured against the real traffic (HTML is still rendered from this
+    # origin: the /z/ link pages and the MCP OAuth sign-in and consent pages;
+    # the OpenAPI docs pages are no longer served, BE-114 item 2).
     add_header Content-Security-Policy-Report-Only "default-src 'none'; frame-ancestors 'none'; base-uri 'none'" always;
 
     location / {

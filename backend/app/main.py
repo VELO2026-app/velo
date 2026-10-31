@@ -358,11 +358,23 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 # ---------------------------------------------------------------------------
 # FastAPI Application
 # ---------------------------------------------------------------------------
+# BE-114 item 2 (owner decision: no Swagger outside): the schema and its two
+# viewers are NOT SERVED -- not /openapi.json, not /docs, not /redoc -- on any
+# box, in any APP_ENV. Unconditional on purpose: the TEST server also runs
+# with APP_ENV=production (core/config.py), so an env-gated switch could not
+# tell it from prod, and a flag forgotten on one box would leave that box
+# open. The schema itself still exists: app.openapi() builds it in-process
+# whether or not it is served, and that is what type generation reads
+# (backend/scripts/dump_openapi.py, run inside the app container by `velo
+# update`, `velo gen-types` and the installer) and what CI reads.
 app = FastAPI(
     title="VELO API",
     description="Platform for wellness practice facilitators",
     version="0.1.0",
     lifespan=lifespan,
+    openapi_url=None,
+    docs_url=None,
+    redoc_url=None,
 )
 
 app.include_router(auth_router)

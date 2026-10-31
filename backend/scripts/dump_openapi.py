@@ -10,8 +10,9 @@
 # update`, `velo gen-types` and the installer got the schema, and it needed
 # the schema to be served over HTTP -- which made it public on every box the
 # API is reachable from. The schema is built in-process here instead, the
-# way CI already builds it (.github/workflows/ci.yml), so the served route
-# can be closed (BE-114 item 2) without the type generation losing its input.
+# way CI already builds it (.github/workflows/ci.yml): the app no longer
+# serves the schema at all (BE-114 item 2, app/main.py), and the type
+# generation does not lose its input.
 #
 # STDOUT CARRIES THE SCHEMA AND NOTHING ELSE. The caller redirects stdout
 # into the file the generator parses, so one stray line breaks the deploy.
