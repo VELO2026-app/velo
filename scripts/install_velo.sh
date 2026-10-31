@@ -1269,12 +1269,16 @@ ZOOM_SDK_CLIENT_SECRET=${ZOOM_SDK_CLIENT_SECRET}
 # Read by the SERVER. It is never a VITE_ variable and never reaches the
 # bundle -- that is the whole reason the transcription endpoint exists.
 # Empty: the mic records and every take answers a machine code instead of a
-# transcript. Nothing here caps per-person usage, so the key itself should
-# carry a spend cap.
+# transcript. The daily quota below bounds each person, not the sum, so the
+# key itself should still carry a spend cap.
 OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
 # Optional. Empty falls back to openai/gpt-audio-mini (config.py). Kept
 # overridable because the provider renamed its audio models once already.
 OPENROUTER_TRANSCRIBE_MODEL=
+# Transcriptions per person per UTC day (BE-67, owner decision: 60); failed
+# provider calls count too. Change with `velo env set
+# TRANSCRIPTION_DAILY_LIMIT`, then `velo restart`.
+TRANSCRIPTION_DAILY_LIMIT=60
 
 # --- MCP OAuth for claude.ai (BE-141) ---
 # The issuer is this API's https origin, derived from the domain. The two
@@ -1940,10 +1944,11 @@ start_stack() {
         error "Could not create a temporary file for the OpenAPI snapshot."
         exit 1
     fi
-    # -f (fail on HTTP error) is required, not cosmetic: without it curl exits
-    # 0 on a 500 and writes the error body to the file instead of failing here.
-    if ! curl -sf http://127.0.0.1:8000/openapi.json > "$OPENAPI_TMP"; then
-        error "Could not fetch openapi.json from the backend — is it healthy?"
+    # Built inside the running app container (backend/scripts/dump_openapi.py),
+    # not fetched over HTTP: the served /openapi.json is closed to the
+    # outside (BE-114 item 2). The script keeps stdout to the schema alone.
+    if ! docker compose exec -T app python scripts/dump_openapi.py > "$OPENAPI_TMP"; then
+        error "Could not build the OpenAPI schema in the app container — is it healthy?"
         rm -f "$OPENAPI_TMP"
         exit 1
     fi

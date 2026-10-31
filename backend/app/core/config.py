@@ -447,6 +447,25 @@ class Settings(BaseSettings):
     # gave up first, the completion would keep running and we would pay for
     # an answer nobody receives.
     openrouter_http_timeout_seconds: float = 25.0
+    # BE-67: transcriptions one person may make per UTC day (owner decision:
+    # 60). Counted before the provider is called, failed calls included --
+    # see modules/ai/quota.py. 0 turns voice input off for everyone. To see
+    # the refusal on a stand without 60 recordings: `velo env set
+    # TRANSCRIPTION_DAILY_LIMIT` with 2, then `velo restart`, and back with
+    # 60 (an empty value also means 60).
+    transcription_daily_limit: int = Field(default=60, ge=0)
+
+    @field_validator("transcription_daily_limit", mode="before")
+    @classmethod
+    def _empty_daily_limit_is_unset(cls, value: object) -> object:
+        """`velo env set TRANSCRIPTION_DAILY_LIMIT` with an empty value
+        writes the key empty -- the script's "empty clears it". An empty
+        string is not an integer and the backend would refuse to start
+        (measured: int_parsing at import); empty means unset here: the
+        owner's 60."""
+        if isinstance(value, str) and not value.strip():
+            return 60
+        return value
 
     # -- Support translation (BE-166, owner ruling 2026-10-22) --
     # The ONE language every support admin writes in. A user's message is

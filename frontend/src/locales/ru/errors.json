@@ -63,6 +63,7 @@
     "speech_not_recognized": "Не удалось распознать речь",
     "audio_too_large": "Запись слишком длинная",
     "audio_invalid": "Не удалось обработать запись",
+    "transcription_quota_exceeded": "Дневной лимит голосового ввода исчерпан",
     "unauthorized": "Сессия истекла, войдите заново"
   },
   "storeErrors": {

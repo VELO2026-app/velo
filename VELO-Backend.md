@@ -702,14 +702,16 @@ logger.info("booking.created", booking_id=str(booking.id), user_id=str(user.id))
 Бэкенд — единственный источник правды для API-контракта. TypeScript-типы фронтенда генерируются автоматически из OpenAPI-схемы FastAPI.
 
 **Скрипт:** `backend/scripts/generate_ts_types.py`
-**Вход:** `openapi.json` (снимается с живого бэкенда через `curl`)
+**Вход:** `openapi.json` -- снимается внутри контейнера приложения: `docker compose exec -T app python
+scripts/dump_openapi.py` строит схему через `app.openapi()`, без HTTP (BE-114 п. 2: отдаваемый
+`/openapi.json` наружу закрыт). Тем же `app.openapi()` схему берёт CI.
 **Выход:** `frontend/src/api/generated.ts` (коммитится в git, перегенерируется при каждом `velo update`)
 
 **Как работает при `velo update`:**
 
 ```
 build app -> down -> up app -> migrate -> pytest ->
-curl openapi.json -> generate_ts_types.py -> generated.ts ->
+exec app dump_openapi.py -> generate_ts_types.py -> generated.ts ->
 [drift? -> velo-bot commit + push origin $BRANCH] ->
 build frontend -> up frontend -> health check
 ```
@@ -725,8 +727,8 @@ discard на следующем update". Перенесено из рабоче�
 **Как работает при `bash install_velo.sh`:**
 
 ```
-build app -> up app -> wait health ->
-curl openapi.json -> generate_ts_types.py -> generated.ts ->
+build app -> up app -> wait health -> migrate ->
+exec app dump_openapi.py -> generate_ts_types.py -> generated.ts ->
 build frontend -> up frontend
 ```
 

@@ -33,10 +33,10 @@
 # nine of those and the frontend cannot read a code off any of them; that is
 # a known defect, not a pattern to copy.
 #
-# WHAT IS NOT HERE, deliberately: a per-person quota. The endpoint requires
-# authentication, and that is the ONLY thing standing between this key and
-# the budget. How many minutes a day one person may transcribe is a product
-# decision nobody has taken.
+# WHAT IS NOT HERE, deliberately: the per-person quota. It is spent at the
+# route, before this service is called (BE-67, modules/ai/quota.py), because
+# it is VELO's budget rule and must outlive this module when voice moves to
+# comms (BE-136).
 #
 # SESSION RULES: no database access at all -- this service never touches a
 # session.
