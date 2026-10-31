@@ -43,7 +43,7 @@
 
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from httpx import AsyncClient
@@ -52,6 +52,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.bookings.service import create_booking
+from app.modules.chats.models import ChatThread
 from app.modules.masters.groups_service import block_student
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import Practice, PracticeStatus, PracticeType
@@ -382,6 +383,15 @@ async def test_no_future_bookings_block_passes_with_no_zoom_call(
         db_session, master, meeting_status=ZoomMeetingStatus.ACTIVE.value,
     )
     bystander_booking = await create_booking(bystander, practice.id, session=db_session)
+    # BE-46: a block needs a link to the master. A conversation the blocked
+    # person opened -- not a booking, so there is still nothing to cancel.
+    db_session.add(
+        ChatThread(
+            comms_thread_id=uuid4(),
+            client_user_id=blocked.id,
+            operator_user_id=master.id,
+        )
+    )
     await db_session.flush()
     bystander_registrant = await _registrant_of(db_session, bystander_booking)
 

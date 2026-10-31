@@ -272,9 +272,17 @@ async def test_narrow_to_groups_after_booking_checkin_ok(
 async def test_removed_from_target_group_after_booking_checkin_ok(
     client: AsyncClient,
     db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Live 'выпадение из группы': member of the target group books,
-    master removes them from the group -> check-in still created."""
+    master removes them from the group -> check-in still created.
+
+    BE-46: the student enters the group by the master's invite link --
+    the way a person with no booking yet gets into a group. The master
+    adding him by id would now be refused: no link to the master yet."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "telegram_bot_url", "https://t.me/velo_testbot")
     master = await _make_verified_master(client, db_session, 89660)
     m_headers = auth_headers(master["session_token"])
 
@@ -287,12 +295,15 @@ async def test_removed_from_target_group_after_booking_checkin_ok(
     student = await login_user(
         client, telegram_id=89661, first_name="Student",
     )
-    add = await client.post(
-        f"{GROUPS_URL}/{gid}/members",
-        json={"student_user_id": student["user"]["id"]},
-        headers=m_headers,
+    invite = await client.post(f"{GROUPS_URL}/{gid}/invite", headers=m_headers)
+    assert invite.status_code == 200
+    token = invite.json()["invite_url"].rsplit("group_invite__", 1)[1]
+    joined = await client.post(
+        "/api/v1/masters/groups/join",
+        json={"token": token},
+        headers=auth_headers(student["session_token"]),
     )
-    assert add.status_code == 204
+    assert joined.status_code == 200
 
     pid = await _scheduled_practice(
         client, master, audience_kind="groups", group_ids=[gid],

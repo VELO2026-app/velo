@@ -22,7 +22,9 @@ export { formatPercent } from '@/utils/format'
 //   curator       -> the school student profile, which requires STUDENT
 //                    membership now; anyone else (a guest, a school master,
 //                    a former student) -> no tap at all
-//   school_master -> a direct message (POST /chats/students, open by design)
+//   school_master -> a direct message (POST /chats/students: a member of the
+//                    viewer's school, or someone linked to him -- BE-46; a
+//                    guest outside the school is refused)
 export type PersonTarget =
   | { kind: 'route'; to: { name: string; params: Record<string, string> } }
   | { kind: 'chat'; studentId: string; name: string }

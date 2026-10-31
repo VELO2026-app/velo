@@ -97,6 +97,7 @@ from app.core.exceptions import (
 )
 from app.modules.auth.dependencies import get_current_user
 from app.modules.chats.models import ChatThread
+from app.modules.masters.groups_service import MasterLinkAction, has_master_link
 from app.modules.masters.service import is_master_verified
 from app.modules.support.models import SupportThread
 from app.modules.support.service import (
@@ -786,11 +787,18 @@ async def open_student_chat(
     for the master's convenience would have manufactured a second
     conversation between the same two people.
 
-    OPEN BY DESIGN, no relationship required: the student-initiated
-    direction is deliberately a pre-sale channel (see open_chat), and
-    nothing in the model says the reverse must be narrower. Whether a
-    master should be able to cold-message a user who is not their student
-    is a PRODUCT question, flagged rather than decided here.
+    ONLY WITH A LINK (BE-46, owner 2026-10-31): the master may open a
+    conversation with someone who did something toward him (a booking, a
+    waitlist entry, membership of his group), with someone he already has
+    this conversation with -- whoever opened it -- or with a member of a
+    school where he is a master or the curator (BE-76, BE-78). The rule
+    lives in masters/groups_service.has_master_link (OPEN_CHAT). Without
+    it, the answer is the same 404 a missing user gets: this route used to
+    tell an existing account from a missing one and hand back the person's
+    name, and the thread it created made the stranger a "student" -- a
+    contact in "Ученики" whose dossier then opened. The student-initiated
+    direction (open_chat) stays an open pre-sale channel and is not
+    touched.
     """
     _reject_actor_override(request)
 
@@ -811,12 +819,16 @@ async def open_student_chat(
     if not await is_master_verified(user.id, session):
         raise ForbiddenError("Only a verified master can open this chat")
 
-    # A real, existing velo user -- and not only as a product rule: comms
-    # knows recipients identity sync shipped it, so an id with no user
+    # BE-46: a link to this master, or the same 404 a missing user gets --
+    # one query for both, so neither the answer nor the query count tells
+    # them apart. A link implies an existing user (every source row
+    # references users.id), which comms also needs: an id with no user
     # behind it would 404 at the create call with an opaque message.
-    student = await session.get(User, body.student_id)
-    if student is None:
+    if not await has_master_link(
+        user.id, body.student_id, session, action=MasterLinkAction.OPEN_CHAT,
+    ):
         raise NotFoundError("User not found")
+    student = await session.get_one(User, body.student_id)
 
     # B41: the THREAD_STARTED diary write that used to happen here (keyed on
     # `repointed`/`comms_thread_id`) is removed -- see open_chat's docstring.

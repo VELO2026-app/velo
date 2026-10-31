@@ -255,6 +255,32 @@ async def _booking(
     return booking
 
 
+async def _link_to(
+    db_session: AsyncSession, master_id: str, student_id: str,
+) -> None:
+    """BE-46: give the student a link to this master before the master acts
+    on them by id -- add to a group, tag, block. Without a link those
+    answer 404 like a missing user (has_master_link).
+
+    The weakest link that changes nothing else a test here looks at: a
+    CANCELLED booking on a PAST practice of this master. Cancelled, it is
+    not counted in practices_count and gives no entitlement; past, it is
+    never a booking block_student cancels. It does make the student a
+    contact in «Ученики» (any booking status is a contact, T-37) -- tests
+    that use it either expect the student there or do not look.
+
+    Committed: the API call reads through a session of its own.
+    """
+    practice = await _practice(
+        db_session, master_id, scheduled_hours_from_now=-72,
+        status=PracticeStatus.COMPLETED.value,
+    )
+    await _booking(
+        db_session, practice, student_id, status=BookingStatus.CANCELLED.value,
+    )
+    await db_session.commit()
+
+
 async def _purchase(
     db_session: AsyncSession,
     practice: Practice,
@@ -658,6 +684,7 @@ async def test_delete_group_cascades_memberships(
     group_id = created.json()["id"]
 
     student_id = await _login(client, 99730, "Student")
+    await _link_to(db_session, master["user"]["id"], student_id)
     await client.post(
         GROUP_MEMBERS_URL.format(group_id=group_id),
         json={"student_user_id": student_id},
@@ -730,6 +757,7 @@ async def test_groups_list_shows_deleted_last_when_non_empty(
     await client.post(GROUPS_URL, json={"name": "Custom"}, headers=headers)
 
     student_id = await _login(client, 99731, "ToBlock")
+    await _link_to(db_session, master["user"]["id"], student_id)
     resp = await client.post(BLOCK_URL.format(student_id=student_id), headers=headers)
     assert resp.status_code == 200
 
@@ -754,6 +782,8 @@ async def test_group_members_count_reflects_real_membership(
 
     s1 = await _login(client, 99732, "S1")
     s2 = await _login(client, 99733, "S2")
+    await _link_to(db_session, master["user"]["id"], s1)
+    await _link_to(db_session, master["user"]["id"], s2)
     await client.post(
         GROUP_MEMBERS_URL.format(group_id=group_id),
         json={"student_user_id": s1},
@@ -784,6 +814,7 @@ async def test_add_member_idempotent(
     created = await client.post(GROUPS_URL, json={"name": "Idem"}, headers=headers)
     group_id = created.json()["id"]
     student_id = await _login(client, 99734, "Student")
+    await _link_to(db_session, master["user"]["id"], student_id)
 
     first = await client.post(
         GROUP_MEMBERS_URL.format(group_id=group_id),
@@ -913,6 +944,7 @@ async def test_set_and_clear_tag(client: AsyncClient, db_session: AsyncSession) 
     master = await _make_verified_master(client, db_session, 99720)
     headers = auth_headers(master["session_token"])
     student_id = await _login(client, 99739, "Student")
+    await _link_to(db_session, master["user"]["id"], student_id)
 
     set_resp = await client.put(
         TAG_URL.format(student_id=student_id),
@@ -960,6 +992,7 @@ async def test_tag_overwrites_not_appends(
     master = await _make_verified_master(client, db_session, 99721)
     headers = auth_headers(master["session_token"])
     student_id = await _login(client, 99740, "Student")
+    await _link_to(db_session, master["user"]["id"], student_id)
 
     await client.put(
         TAG_URL.format(student_id=student_id), json={"tag": "Первый"}, headers=headers
@@ -1002,6 +1035,7 @@ async def test_block_sets_blocked_at_and_removes_from_custom_groups(
     created = await client.post(GROUPS_URL, json={"name": "Was In"}, headers=headers)
     group_id = created.json()["id"]
     student_id = await _login(client, 99741, "Student")
+    await _link_to(db_session, master_id, student_id)
     await client.post(
         GROUP_MEMBERS_URL.format(group_id=group_id),
         json={"student_user_id": student_id},
@@ -1244,6 +1278,7 @@ async def test_block_never_touches_a_different_masters_waitlist(
     master_b = await _make_verified_master(client, db_session, 99757)
     master_b_id = master_b["user"]["id"]
     student_id = await _login(client, 99784, "Waiter")
+    await _link_to(db_session, master_a["user"]["id"], student_id)
 
     other_practice = await _practice(
         db_session, master_b_id, scheduled_hours_from_now=48,
@@ -1347,6 +1382,7 @@ async def test_unblock_returns_to_students_without_restoring_custom_group_but_ke
     created = await client.post(GROUPS_URL, json={"name": "Original"}, headers=headers)
     group_id = created.json()["id"]
     student_id = await _login(client, 99744, "Student")
+    await _link_to(db_session, master_id, student_id)
     await client.post(
         GROUP_MEMBERS_URL.format(group_id=group_id),
         json={"student_user_id": student_id},
@@ -1789,6 +1825,9 @@ async def test_my_tags_returns_distinct_alphabetical_tags(
     s1 = await _login(client, 99747, "S1")
     s2 = await _login(client, 99748, "S2")
     s3 = await _login(client, 99749, "S3")
+    await _link_to(db_session, master["user"]["id"], s1)
+    await _link_to(db_session, master["user"]["id"], s2)
+    await _link_to(db_session, master["user"]["id"], s3)
 
     await client.put(
         TAG_URL.format(student_id=s1), json={"tag": "Постоянный"}, headers=headers,
@@ -1838,6 +1877,8 @@ async def test_student_groups_lists_only_this_masters_custom_groups(
     )
 
     student_id = await _login(client, 99752, "Student")
+    await _link_to(db_session, master_a["user"]["id"], student_id)
+    await _link_to(db_session, master_b["user"]["id"], student_id)
     await client.post(
         GROUP_MEMBERS_URL.format(group_id=group_a1.json()["id"]),
         json={"student_user_id": student_id},
@@ -2025,6 +2066,10 @@ async def test_join_group_blocked_joiner_gets_403(
     blocked_auth = await login_user(client, telegram_id=99768, first_name="Blocked")
     blocked_id = blocked_auth["user"]["id"]
     blocked_headers = auth_headers(blocked_auth["session_token"])
+    # BE-46: a block needs a link; this one is a conversation the person
+    # opened -- the natural reason to block someone before he ever booked.
+    await _chat_thread(db_session, master["user"]["id"], blocked_id)
+    await db_session.commit()
     await client.post(BLOCK_URL.format(student_id=blocked_id), headers=headers)
 
     resp = await client.post(
@@ -2198,6 +2243,7 @@ async def test_search_group_memberships_one_row_per_membership(
     group_b_id = group_b.json()["id"]
 
     student_id = await _login(client, 99790, "Дважды")
+    await _link_to(db_session, master["user"]["id"], student_id)
     await client.post(
         GROUP_MEMBERS_URL.format(group_id=group_a_id),
         json={"student_user_id": student_id},
@@ -2233,6 +2279,8 @@ async def test_search_group_memberships_name_filter(
 
     match_id = await _login(client, 99791, "Найдётся")
     other_id = await _login(client, 99792, "Другой")
+    await _link_to(db_session, master["user"]["id"], match_id)
+    await _link_to(db_session, master["user"]["id"], other_id)
     for sid in (match_id, other_id):
         await client.post(
             GROUP_MEMBERS_URL.format(group_id=group_id),

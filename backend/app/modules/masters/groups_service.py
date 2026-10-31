@@ -37,12 +37,13 @@
 #   deadlock.
 # =============================================================================
 
+import enum
 import secrets
 from datetime import UTC, datetime
 from uuid import UUID
 
 import structlog
-from sqlalchemy import and_, delete, func, literal_column, select, union
+from sqlalchemy import and_, delete, exists, func, literal_column, or_, select, union
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -58,6 +59,11 @@ from app.core.exceptions import (
 from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.bookings.service import recalculate_participants
 from app.modules.chats.models import ChatThread
+from app.modules.curator_groups.models import (
+    CuratorGroup,
+    CuratorGroupMember,
+    CuratorMemberKind,
+)
 from app.modules.masters.groups_models import (
     GroupInvite,
     MasterGroup,
@@ -78,6 +84,138 @@ _SYSTEM_SLUGS = frozenset({SYSTEM_GROUP_STUDENTS, SYSTEM_GROUP_DELETED})
 
 _GROUP_NAME_STUDENTS = "Ученики"
 _GROUP_NAME_DELETED = "Удалённые"
+
+
+# ===========================================================================
+# The master's link to a person (BE-46) -- the ONE rule for "may this master
+# act on this person by id"
+# ===========================================================================
+
+
+class MasterLinkAction(enum.StrEnum):
+    """What a master is about to do to a person addressed by id (BE-46).
+
+    The owner split the actions in two (2026-10-31), and the chat adds one
+    condition of its own:
+
+      GRANT_ACCESS -- the action GIVES the person something: today only
+          add_group_member (a group membership opens the master's
+          group-audience practices). The strict link only: the person's
+          OWN act toward this master.
+      INTERNAL -- the action is the master's own bookkeeping about the
+          person: set_student_tag, block_student. The strict link OR an
+          existing conversation of the pair.
+      OPEN_CHAT -- the master opens a DM (POST /chats/students): INTERNAL,
+          OR the person is a member of a school where the master is a
+          master or the curator (BE-76 / BE-78 send school masters there).
+    """
+
+    GRANT_ACCESS = "grant_access"
+    INTERNAL = "internal"
+    OPEN_CHAT = "open_chat"
+
+
+async def has_master_link(
+    master_id: UUID,
+    person_id: UUID,
+    session: AsyncSession,
+    *,
+    action: MasterLinkAction,
+) -> bool:
+    """True iff this master may act on `person_id` for `action` (BE-46).
+
+    THE LINK. Without one, a master who knew -- or guessed -- an id could
+    tell an existing account from a missing one by the answer, and through
+    add_group_member put a stranger into the audience of his closed
+    practices. Owner's rule (2026-10-31): the link is what the PERSON did
+    toward this master, never something the master can manufacture alone:
+
+      - a booking at ANY status on a practice whose master_id is this
+        master -- cancelled included (the person chose this master once);
+        a school's practice counts when this master is its master_id;
+      - a waitlist entry at any status on such a practice -- the person's
+        own act, like a booking;
+      - membership of ANY of this master's custom groups -- the invite-link
+        join is stored ONLY as this row (no source column on
+        master_group_membership, no joiner on group_invite), so "came by
+        the master's invite" reads as "is in one of his groups".
+
+    INTERNAL and OPEN_CHAT also accept an existing conversation of the pair
+    with this master as its master: a chat_threads row with the person as
+    client and this master as operator, whoever opened it -- the row the
+    student's own open_chat and the master's open_student_chat both land
+    on, and the source "Ученики" reads (_derived_students_base). The master
+    already sees that person in his chats -- no oracle -- and cannot create
+    such a row without a link: open_student_chat is the only master-side
+    creator and is gated by this very function. The reverse row (this
+    master as somebody else's client) is not his student's conversation
+    and does not count; counted, it would let open_student_chat create the
+    forward one. Never counts for GRANT_ACCESS: otherwise opening a chat
+    would earn the right to grant access.
+
+    OPEN_CHAT also accepts a shared school: the person has a member row
+    (student or master) in a school where this master has a master row or
+    is the curator. The curator is not a member row (curator_groups/
+    models.py, I-2), so the school's own curator_user_id is read for that.
+
+    ONE STATEMENT, by design: every caller turns False into the same
+    refusal it used to give for a missing user, so "no such user" and "no
+    link" must not differ in the number of queries either. No user lookup
+    is needed: every source row references users.id (FK), so a link implies
+    the account exists.
+
+    Reads only, unlocked. A booking or waitlist row is never deleted (no
+    code path does; their FKs cascade only from a hard delete of a user or
+    a practice, which nothing performs). A membership, a conversation or a
+    school row can be removed concurrently; the caller then acts as if it
+    had run just before that removal -- one of the two serial orders.
+    """
+    booking = exists().where(
+        Booking.user_id == person_id,
+        Booking.practice_id == Practice.id,
+        Practice.master_id == master_id,
+    )
+    waitlist = exists().where(
+        Waitlist.user_id == person_id,
+        Waitlist.practice_id == Practice.id,
+        Practice.master_id == master_id,
+    )
+    membership = exists().where(
+        MasterGroupMembership.student_user_id == person_id,
+        MasterGroupMembership.group_id == MasterGroup.id,
+        MasterGroup.master_id == master_id,
+    )
+    sources = [booking, waitlist, membership]
+
+    if action in (MasterLinkAction.INTERNAL, MasterLinkAction.OPEN_CHAT):
+        sources.append(
+            exists().where(
+                ChatThread.client_user_id == person_id,
+                ChatThread.operator_user_id == master_id,
+            )
+        )
+
+    if action is MasterLinkAction.OPEN_CHAT:
+        person_school = CuratorGroupMember.__table__.alias("person_school")
+        master_school = CuratorGroupMember.__table__.alias("master_school")
+        sources.append(
+            exists().where(
+                person_school.c.user_id == person_id,
+                or_(
+                    exists().where(
+                        master_school.c.group_id == person_school.c.group_id,
+                        master_school.c.user_id == master_id,
+                        master_school.c.kind == CuratorMemberKind.MASTER.value,
+                    ),
+                    exists().where(
+                        CuratorGroup.id == person_school.c.group_id,
+                        CuratorGroup.curator_user_id == master_id,
+                    ),
+                ),
+            )
+        )
+
+    return bool(await session.scalar(select(or_(*sources))))
 
 
 # ===========================================================================
@@ -822,11 +960,21 @@ async def add_group_member(
     master_id: UUID, group_id_str: str, student_user_id: UUID, session: AsyncSession,
 ) -> None:
     """Add-access, not move (owner-settled): the student keeps every other
-    group/virtual membership they already have."""
+    group/virtual membership they already have.
+
+    BE-46: only a person with the STRICT link to this master (a booking, a
+    waitlist entry, or membership of one of his groups -- has_master_link,
+    GRANT_ACCESS). Membership opens the master's group-audience practices,
+    so it is never granted to someone who did nothing toward him. "No such
+    user" and "no link" are ONE refusal: the same 404, the same body, the
+    same single query.
+    """
     group = await _get_custom_group_or_404(master_id, group_id_str, session)
 
-    student = await session.get(User, student_user_id)
-    if student is None:
+    if not await has_master_link(
+        master_id, student_user_id, session,
+        action=MasterLinkAction.GRANT_ACCESS,
+    ):
         raise NotFoundError("Student not found")
 
     existing = (
@@ -950,9 +1098,15 @@ async def set_student_tag(
     ONE tag per student (owner Q1=A) -- this REPLACES, never appends.
     Clearing to null deletes the row entirely UNLESS the student is also
     blocked (the row must persist for the block to keep meaning anything).
+
+    BE-46: only for a person linked to this master (has_master_link,
+    INTERNAL -- the strict link or an existing conversation). Without one
+    the answer is the same 404 a missing user gets, for setting and for
+    clearing alike, and no master_student row is written.
     """
-    student = await session.get(User, student_user_id)
-    if student is None:
+    if not await has_master_link(
+        master_id, student_user_id, session, action=MasterLinkAction.INTERNAL,
+    ):
         raise NotFoundError("Student not found")
 
     if tag is None:
@@ -1007,9 +1161,17 @@ async def block_student(
     practice) already stops them from converting that hold into a real
     booking -- the leak was never a booking, it was the notification +
     the held spot.
+
+    BE-46: only for a person linked to this master (has_master_link,
+    INTERNAL). A block row on a stranger would also open the stranger's
+    dossier (get_master_student_detail admits the master's own blocked
+    students) -- name and avatar of any id. Without a link: the same 404 a
+    missing user gets, and nothing is written. The check is a read, taken
+    before the first lock, so LOCK ORDER (module header) is unchanged.
     """
-    student = await session.get(User, student_user_id)
-    if student is None:
+    if not await has_master_link(
+        master_id, student_user_id, session, action=MasterLinkAction.INTERNAL,
+    ):
         raise NotFoundError("Student not found")
 
     now = datetime.now(UTC)

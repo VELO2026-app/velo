@@ -199,7 +199,10 @@ async def add_group_member_endpoint(
     session: AsyncSession = Depends(get_db_session),
 ) -> None:
     """ADD to a CUSTOM group (add-access, not move). 400 on a system slug,
-    404 if the group or the student doesn't exist. Idempotent-safe."""
+    404 if the group doesn't exist / isn't this master's, and the same 404
+    for a student who is not linked to him (BE-46: a booking, a waitlist
+    entry, or one of his groups) as for an id with no user behind it.
+    Idempotent-safe."""
     user, _profile = master_tuple
     await add_group_member(user.id, group_id, body.student_user_id, session)
     await session.flush()

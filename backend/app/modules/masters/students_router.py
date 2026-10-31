@@ -117,7 +117,9 @@ async def set_student_tag_endpoint(
 ) -> StudentTagResponse:
     """Upsert the single tag for this student (null clears it).
 
-    404 if student_id does not resolve to an existing user.
+    404 if student_id is not linked to this master (BE-46: a booking, a
+    waitlist entry, his group, or an existing conversation) -- the same 404
+    as for an id with no user behind it.
     """
     user, _profile = master_tuple
     tag = await set_student_tag(user.id, student_id, body.tag, session)
@@ -134,8 +136,9 @@ async def block_student_endpoint(
     """Block: sets blocked_at, drops the student from every custom group,
     and cancels+refunds their FUTURE confirmed bookings on this master's
     practices (refund via the existing refund_booking() path -- no new
-    money movement). 404 if student_id does not resolve to an existing
-    user.
+    money movement). 404 if student_id is not linked to this master
+    (BE-46: a booking, a waitlist entry, his group, or an existing
+    conversation) -- the same 404 as for an id with no user behind it.
     """
     user, _profile = master_tuple
     result = await block_student(user.id, student_id, session)

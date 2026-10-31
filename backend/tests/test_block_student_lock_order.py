@@ -41,7 +41,7 @@
 import asyncio
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from httpx import AsyncClient
@@ -52,6 +52,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_session_factory
 from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.bookings.service import cancel_booking, create_booking
+from app.modules.chats.models import ChatThread
 from app.modules.masters import groups_service
 from app.modules.masters.groups_models import MasterStudent
 from app.modules.masters.models import MasterProfile
@@ -103,6 +104,20 @@ async def _user(
         )
     await db_session.flush()
     return user
+
+
+def _conversation(db_session: AsyncSession, master: User, student: User) -> None:
+    """BE-46: tag and block need a link to the master. The races in the
+    master_student section have no booking on purpose (a row with no
+    booking behind it), so their link is a conversation the student
+    opened -- a chat_threads row, which no writer here locks or touches."""
+    db_session.add(
+        ChatThread(
+            comms_thread_id=uuid4(),
+            client_user_id=student.id,
+            operator_user_id=master.id,
+        )
+    )
 
 
 async def _practice(db_session: AsyncSession, master: User) -> Practice:
@@ -516,6 +531,7 @@ async def test_same_student_tagged_twice_at_once(
     student, a second PUT overwrites (owner Q1=A)."""
     master = await _user(client, db_session, 69757, master=True)
     student = await _user(client, db_session, 69758)
+    _conversation(db_session, master, student)
     await db_session.commit()
     master_id, student_id = master.id, student.id
 
@@ -552,6 +568,7 @@ async def test_block_and_tag_at_once_with_no_row_keep_both(
     did not survive as the only thing in the row."""
     master = await _user(client, db_session, 69759, master=True)
     student = await _user(client, db_session, 69760)
+    _conversation(db_session, master, student)
     await db_session.commit()
     master_id, student_id = master.id, student.id
 
@@ -597,6 +614,8 @@ async def test_block_while_the_tag_is_cleared_blocks(
     gone, not resurrected by the block."""
     master = await _user(client, db_session, 69761, master=True)
     student = await _user(client, db_session, 69762)
+    _conversation(db_session, master, student)
+    await db_session.flush()
     await groups_service.set_student_tag(master.id, student.id, "regular", db_session)
     await db_session.commit()
     master_id, student_id = master.id, student.id

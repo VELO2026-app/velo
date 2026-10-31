@@ -51,6 +51,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.chats.models import ChatThread
 from app.modules.diary.models import DiaryEvent, DiaryEventKind
+from app.modules.masters.groups_models import MasterGroup, MasterGroupMembership
 from app.modules.masters.models import MasterProfile
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, cleanup_range, fresh_execute, login_user
@@ -131,6 +132,10 @@ async def _clean_band(db_session: AsyncSession):
             await db_session.execute(
                 delete(DiaryEvent).where(DiaryEvent.user_id.in_(ids))
             )
+            # BE-46 links (_group_link): memberships go with the group.
+            await db_session.execute(
+                delete(MasterGroup).where(MasterGroup.master_id.in_(ids))
+            )
             await db_session.commit()
         await cleanup_range(db_session, BAND_MIN, BAND_MAX)
         await db_session.commit()
@@ -158,6 +163,25 @@ async def _make_master(
     user.role = UserRole.MASTER.value
     await db_session.commit()
     return auth
+
+
+async def _group_link(
+    db_session: AsyncSession, master: dict, student: dict,
+) -> None:
+    """BE-46: a master opens a NEW conversation only with someone linked to
+    him (has_master_link, OPEN_CHAT). The link here is membership of one of
+    his groups -- the trace an invite-link join leaves, so the scenario is
+    "the master writes first to someone who joined his group". Committed:
+    the API call reads through a session of its own."""
+    group = MasterGroup(master_id=UUID(master["user"]["id"]), name="BE-46 link")
+    db_session.add(group)
+    await db_session.flush()
+    db_session.add(
+        MasterGroupMembership(
+            group_id=group.id, student_user_id=UUID(student["user"]["id"]),
+        )
+    )
+    await db_session.commit()
 
 
 async def _make_admin(
@@ -395,6 +419,7 @@ class TestMasterInitiatedChat:
         student = await login_user(
             client, telegram_id=BAND_MIN + 39, first_name="Student",
         )
+        await _group_link(db_session, master, student)
         fake = AsyncMock(return_value=_thread_payload(created=True))
         monkeypatch.setattr(_SEAM, fake)
 
@@ -442,6 +467,7 @@ class TestMasterInitiatedChat:
         student = await login_user(
             client, telegram_id=BAND_MIN + 16, first_name="Student",
         )
+        await _group_link(db_session, master, student)
         monkeypatch.setattr(
             _SEAM, AsyncMock(return_value=_thread_payload(created=True))
         )
@@ -522,6 +548,7 @@ class TestMasterInitiatedChat:
         student = await login_user(
             client, telegram_id=BAND_MIN + 21, first_name="Student",
         )
+        await _group_link(db_session, master, student)
         monkeypatch.setattr(
             _SEAM, AsyncMock(return_value=_thread_payload(created=True))
         )
