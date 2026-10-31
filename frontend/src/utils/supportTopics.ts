@@ -92,3 +92,10 @@ export const SUPPORT_CATEGORY_GROUPS: readonly SupportCategoryGroup[] = [
 export function supportCategoryGroupLabel(key: SupportCategoryGroup['key']): string {
   return t(`adminScreens.adminSupport.categories.${key}`)
 }
+
+/** The SIX categories by their own code (FE-107: the statistics rows name
+ *  each category separately -- complaint_master and complaint_user apart,
+ *  where the filter's chips merge them into «Жалобы»). */
+export function supportCategoryLabel(category: SupportCategory): string {
+  return t(`adminScreens.adminSupport.categoryNames.${category}`)
+}

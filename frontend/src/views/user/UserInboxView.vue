@@ -242,7 +242,7 @@ async function markAll(): Promise<void> {
 // with an undefined param.
 function routeFor(
   item: NotificationItem,
-): { name: string; params?: Record<string, string> } | null {
+): { name: string; params?: Record<string, string>; query?: Record<string, string> } | null {
   const action = item.action_data?.action
   const params = item.action_data?.params ?? {}
   const practiceId = typeof params.practice_id === 'string' ? params.practice_id : null
@@ -313,6 +313,14 @@ function routeFor(
       // confirmed against comms when it is reachable (FE follow-up note).
       const threadId = typeof params.thread_id === 'string' ? params.thread_id : null
       return threadId ? { name: 'user-chat', params: { id: threadId } } : null
+    }
+    case 'open_support_rating': {
+      // FE-107 / BE-162 delivery 3: «Как мы помогли?» -- the rating sheet on
+      // THAT resolved ticket. The chat route resolves the ticket id to the
+      // person's one support row; ?rate=1 asks the sheet to open on the
+      // ticket the notification named (the route's own id).
+      const threadId = typeof params.thread_id === 'string' ? params.thread_id : null
+      return threadId ? { name: 'user-chat', params: { id: threadId }, query: { rate: '1' } } : null
     }
     default:
       // msg.* without a thread reference: the messages list, one hop away.

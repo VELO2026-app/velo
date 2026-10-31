@@ -23,7 +23,10 @@ import {
   createTicket,
   getAdminSupportMessages,
   getAdminTicket,
+  getSupportStats,
   listAdminTickets,
+  listPendingRatings,
+  rateTicket,
   releaseTicket,
   reopenTicket,
   retrySupportTranslation,
@@ -157,6 +160,18 @@ describe('admin -- the ticket routes', () => {
     expect(api.get).toHaveBeenCalledWith(`${S}/tickets?limit=20`)
   })
 
+  it('ratings go as a REPEATED `rating` -- "any of these", `none` included (delivery 3)', async () => {
+    await listAdminTickets({ ratings: ['4', '5'] })
+
+    expect(api.get).toHaveBeenCalledWith(`${S}/tickets?limit=20&rating=4&rating=5`)
+  })
+
+  it('an empty rating list sends no `rating` at all', async () => {
+    await listAdminTickets({ ratings: [] })
+
+    expect(api.get).toHaveBeenCalledWith(`${S}/tickets?limit=20`)
+  })
+
   it('status, the day bounds (URL-encoded offsets), cursor and limit all reach the URL', async () => {
     await listAdminTickets({
       categories: ['tech'],
@@ -272,6 +287,50 @@ describe('admin -- the thread routes keyed by the ticket id (unchanged)', () => 
     await retrySupportTranslation('t_9', 'm_3')
 
     expect(api.post).toHaveBeenCalledWith(`${S}/threads/t_9/messages/m_3/translation/retry`, {})
+  })
+})
+
+describe("the person's rating (BE-162 delivery 3)", () => {
+  it('listPendingRatings reads the pending list', async () => {
+    await listPendingRatings()
+
+    expect(api.get).toHaveBeenCalledWith(`${S}/ratings/pending`)
+  })
+
+  it('rateTicket POSTs {stars, comment} to the ticket rating route', async () => {
+    await rateTicket('t_9', 4, ' Быстро помогли ')
+
+    expect(api.post).toHaveBeenCalledWith(`${S}/tickets/t_9/rating`, {
+      stars: 4,
+      comment: 'Быстро помогли',
+    })
+  })
+
+  it('a blank comment goes as null, not as an empty string', async () => {
+    await rateTicket('t_9', 5, '   ')
+
+    expect(api.post).toHaveBeenCalledWith(`${S}/tickets/t_9/rating`, {
+      stars: 5,
+      comment: null,
+    })
+  })
+
+  it('no comment at all goes as null too', async () => {
+    await rateTicket('t_9', 3)
+
+    expect(api.post).toHaveBeenCalledWith(`${S}/tickets/t_9/rating`, { stars: 3, comment: null })
+  })
+})
+
+describe('admin -- the period statistics (BE-162 delivery 3)', () => {
+  it('getSupportStats sends both edges, URL-encoded as-is', async () => {
+    await getSupportStats('2026-10-01T00:00:00.000+02:00', '2026-11-01T00:00:00.000+02:00')
+
+    const url = vi.mocked(api.get).mock.calls[0]?.[0] ?? ''
+    expect(url.startsWith(`${S}/stats?`)).toBe(true)
+    const qs = new URLSearchParams(url.split('?')[1])
+    expect(qs.get('created_from')).toBe('2026-10-01T00:00:00.000+02:00')
+    expect(qs.get('created_to')).toBe('2026-11-01T00:00:00.000+02:00')
   })
 })
 

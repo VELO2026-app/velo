@@ -8,8 +8,11 @@
   and stays as it is (owner ruling 24.10: two channels).
 
   Every group is SINGLE-select with «Все» -- the backend takes one status and
-  one category set per request (supportTicketsFilter.ts). The status group is
-  hidden in the «Спам» tab, where the status is fixed.
+  one category set per request (supportTicketsFilter.ts) -- except the rating
+  group (FE-107), which is MULTI-select: the backend takes a repeatable
+  `rating`, so the star chips and «Без оценки» toggle independently and «Все»
+  is the reset. The status group is hidden in the «Спам» tab, where the
+  status is fixed.
 -->
 
 <template>
@@ -65,6 +68,31 @@
         </div>
       </section>
 
+      <!-- FE-107: the rating group is MULTI-select -- the backend takes a
+           repeatable `rating` ("any of these"), so each chip toggles on its
+           own; «Все» (nothing chosen) is the reset, not a state. -->
+      <section class="sfilter__group">
+        <h3 class="sfilter__label">{{ t('adminScreens.adminSupport.rating.filterLabel') }}</h3>
+        <div class="sfilter__chips">
+          <VChip size="md" clickable :active="draft.rating.length === 0" @click="draft.rating = []">
+            {{ t('common.all') }}
+          </VChip>
+          <VChip
+            v-for="r in SUPPORT_RATING_FILTERS"
+            :key="r"
+            size="md"
+            clickable
+            :active="draft.rating.includes(r)"
+            @click="toggleRating(r)"
+          >
+            <span v-if="r !== 'none'" class="sfilter__rating-chip">
+              {{ r }}<IconStar :size="14" class="sfilter__rating-star" />
+            </span>
+            <template v-else>{{ t('adminScreens.adminSupport.rating.none') }}</template>
+          </VChip>
+        </div>
+      </section>
+
       <VButton variant="ghost" block :disabled="!hasActiveFilters" @click="resetFilters">
         {{ t('common.reset') }}
       </VButton>
@@ -84,7 +112,7 @@
 import { t, getLocale } from '@/locales'
 import { computed, reactive, ref, watch } from 'vue'
 import { VModal, VChip, VButton } from '@/components/ui'
-import { IconFilter } from '@/components/icons'
+import { IconFilter, IconStar } from '@/components/icons'
 import DatePickerSheet from '@/components/shared/DatePickerSheet.vue'
 import {
   SUPPORT_CATEGORY_GROUPS,
@@ -94,6 +122,7 @@ import {
 import {
   EMPTY_SUPPORT_FILTER,
   SUPPORT_FILTER_STATUSES,
+  SUPPORT_RATING_FILTERS,
   type SupportTicketsFilter,
 } from './supportTicketsFilter'
 
@@ -132,8 +161,16 @@ const dateLabel = computed<string>(() =>
 )
 
 const hasActiveFilters = computed<boolean>(
-  () => draft.group !== null || draft.status !== null || draft.date !== '',
+  () =>
+    draft.group !== null || draft.status !== null || draft.date !== '' || draft.rating.length > 0,
 )
+
+/** The rating chips toggle: on -> off, off -> on; «Все» is nothing chosen. */
+function toggleRating(value: (typeof SUPPORT_RATING_FILTERS)[number]): void {
+  draft.rating = draft.rating.includes(value)
+    ? draft.rating.filter((r) => r !== value)
+    : [...draft.rating, value]
+}
 
 // «Сбросить»: clear every group and STAY open -- closing applies.
 function resetFilters(): void {
@@ -227,5 +264,16 @@ function applyAndClose(): void {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+/* A star chip's number and glyph read as one value («4 ★»). */
+.sfilter__rating-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.sfilter__rating-star {
+  color: var(--velo-peach-500);
 }
 </style>

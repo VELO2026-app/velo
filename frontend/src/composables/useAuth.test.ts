@@ -53,6 +53,19 @@ describe('parseStartParam', () => {
       // FE-103/BE-172: the admin signal carries the OPENER's user_id; only
       // an admin gets the destination.
       [`open_admin_support__${id}`, 'admin', { name: 'admin-support-detail', params: { id } }],
+      // FE-107 / BE-162 delivery 3: «Как мы помогли?» -- the same chat route
+      // open_thread uses, plus ?rate=1 asking the rating sheet to open on
+      // the ticket the link named; the role picks the zone.
+      [
+        `open_support_rating__${id}`,
+        'user',
+        { name: 'user-chat', params: { id }, query: { rate: '1' } },
+      ],
+      [
+        `open_support_rating__${id}`,
+        'master',
+        { name: 'master-chat', params: { id }, query: { rate: '1' } },
+      ],
     ] as const)('%s as %s', (param, role, route) => {
       expect(parseStartParam(param, role)).toEqual(route)
     })
@@ -69,6 +82,13 @@ describe('parseStartParam', () => {
         vi.unstubAllEnvs()
       }
     })
+
+    it.each(['open_support_rating', 'open_support_rating__x'])(
+      '%s -> no route (no ticket named; malformed id)',
+      (param) => {
+        expect(parseStartParam(param, 'user')).toBeNull()
+      },
+    )
 
     it.each(['open_notifications', 'open_admin_masters', 'open_thread__x'])(
       '%s -> no route (no admin bell; malformed thread id)',
