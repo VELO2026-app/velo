@@ -51,7 +51,7 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { onDocumentEvent, offDocumentEvent } from '@/platform/dom'
-import { onMounted, onUnmounted, watch } from 'vue'
+import { onMounted, onUnmounted, watch, onDeactivated } from 'vue'
 import { IconClose } from '@/components/icons'
 import { lockBodyScroll, unlockBodyScroll } from '@/composables/useBodyScrollLock'
 
@@ -70,6 +70,12 @@ const props = withDefaults(
 const emit = defineEmits<{
   close: []
 }>()
+
+// Its screen kept alive off-stage (TabRouterView, a dock tap while open):
+// an overlay must not stay over the next screen -- close it like a dismiss.
+onDeactivated(() => {
+  if (props.open) emit('close')
+})
 
 function onOverlayClick(): void {
   if (props.closeOnOverlay) {

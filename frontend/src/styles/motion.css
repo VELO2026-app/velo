@@ -231,3 +231,38 @@ html.vt-fallback.vt-tab .mobile-layout__main,
 html.vt-fallback.vt-tab .mobile-layout__island {
   animation-duration: var(--velo-dur-tab-in);
 }
+
+/* ---- velo-reveal: a block that appears/disappears LATER (a banner after a
+ *    refresh) opens and closes its row instead of shoving what is below.
+ *    <Transition name="velo-reveal"> around one `.velo-reveal` wrapper with a
+ *    single child; no `appear` -- present at first paint means no motion.
+ *    Reduced motion: --velo-dur-resize is 0, only the short fade stays. ---- */
+.velo-reveal {
+  display: grid;
+  grid-template-rows: 1fr;
+}
+
+.velo-reveal > * {
+  min-height: 0;
+}
+
+.velo-reveal-enter-active,
+.velo-reveal-leave-active {
+  transition:
+    grid-template-rows var(--velo-dur-resize) var(--velo-ease-out),
+    margin var(--velo-dur-resize) var(--velo-ease-out),
+    opacity var(--velo-dur-base) var(--velo-ease-out);
+}
+
+.velo-reveal-enter-active > *,
+.velo-reveal-leave-active > * {
+  overflow: hidden;
+}
+
+.velo-reveal-enter-from,
+.velo-reveal-leave-to {
+  grid-template-rows: 0fr;
+  margin-top: 0;
+  margin-bottom: 0;
+  opacity: 0;
+}

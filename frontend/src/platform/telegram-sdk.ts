@@ -29,6 +29,9 @@ function isTelegramEnv(): boolean {
 }
 
 let _initialized = false
+/** Settles once the viewport (safe-area insets, heights) is mounted -- or at
+ * once outside Telegram / when the SDK is unavailable. */
+let _viewportSettled: Promise<void> = Promise.resolve()
 
 export function initTelegramSdk(): void {
   if (_initialized) return
@@ -36,7 +39,7 @@ export function initTelegramSdk(): void {
 
   try {
     init()
-    void mountViewport()
+    _viewportSettled = mountViewport()
     _initialized = true
   } catch {
     // Outside Telegram or unsupported client -- standalone/tests fall through.
@@ -55,6 +58,12 @@ async function mountViewport(): Promise<void> {
   } catch {
     // Viewport not supported on this client/version -- safe-area falls back to 0.
   }
+}
+
+/** The first-screen gate waits for this (capped) so the insets are final
+ * before the first screen paints -- no safe-area jump right after start. */
+export function viewportSettled(): Promise<void> {
+  return _viewportSettled
 }
 
 export function isTelegramSdkReady(): boolean {

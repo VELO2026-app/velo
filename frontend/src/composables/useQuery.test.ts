@@ -11,7 +11,7 @@
 // =============================================================================
 
 import { describe, it, expect, vi } from 'vitest'
-import { effectScope, nextTick, ref } from 'vue'
+import { effectScope, nextTick, ref, watch } from 'vue'
 import { queryCache, useQuery } from '@/composables/useQuery'
 
 function deferred<T>() {
@@ -163,5 +163,45 @@ describe('queryCache', () => {
     queryCache.setData(['n'], () => 1)
     queryCache.clear()
     expect(queryCache.get(['n'])).toBeUndefined()
+  })
+})
+
+describe('useQuery -- structural sharing', () => {
+  it('a revalidation answering EQUAL data keeps the reference and triggers nothing', async () => {
+    const payload = () => ({ practices_attended: 3, items: [{ id: 'a' }] })
+    const query = vi.fn(() => Promise.resolve(payload()))
+    const scope = effectScope()
+    const q = scope.run(() => useQuery({ key: ['shared'], query, staleTime: 0 }))!
+    await settle()
+    const shown = q.data.value
+    expect(shown).toEqual(payload())
+    let triggered = 0
+    scope.run(() => watch(q.data, () => triggered++))
+    await q.refresh()
+    await settle()
+    expect(query).toHaveBeenCalledTimes(2)
+    expect(q.data.value).toBe(shown)
+    expect(triggered).toBe(0)
+    scope.stop()
+  })
+
+  it('a changed answer still lands (unchanged parts keep their refs)', async () => {
+    let n = 1
+    const scope = effectScope()
+    const q = scope.run(() =>
+      useQuery({
+        key: ['shared2'],
+        query: () => Promise.resolve({ n, rows: [{ id: 'a' }] }),
+        staleTime: 0,
+      }),
+    )!
+    await settle()
+    const rows = q.data.value!.rows
+    n = 2
+    await q.refresh()
+    await settle()
+    expect(q.data.value!.n).toBe(2)
+    expect(q.data.value!.rows).toBe(rows)
+    scope.stop()
   })
 })

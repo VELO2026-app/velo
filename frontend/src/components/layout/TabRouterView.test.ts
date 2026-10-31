@@ -7,11 +7,12 @@
 // mounts fresh exactly as a plain RouterView does.
 
 import { describe, it, expect, afterEach } from 'vitest'
-import { createApp, defineComponent, h, nextTick, onActivated, onMounted } from 'vue'
+import { createApp, defineComponent, h, nextTick, onActivated, onMounted, ref } from 'vue'
 import type { App } from 'vue'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import TabRouterView from './TabRouterView.vue'
 import VHeader from './VHeader.vue'
+import { VModal } from '@/components/ui'
 import { provideFloatingHeader } from './useFloatingHeader'
 
 const counts: Record<string, { mounted: number; activated: number }> = {}
@@ -28,6 +29,24 @@ function screen(name: string) {
     },
   })
 }
+
+const modal = { closed: 0 }
+const modalScreen = defineComponent({
+  name: 'M',
+  setup() {
+    const open = ref(true)
+    return () =>
+      h('div', { class: 'screen' }, [
+        h(VModal, {
+          open: open.value,
+          onClose: () => {
+            modal.closed++
+            open.value = false
+          },
+        }),
+      ])
+  },
+})
 
 let app: App | null = null
 let host: HTMLElement | null = null
@@ -46,6 +65,7 @@ async function setup(): Promise<Router> {
       { path: '/a', component: screen('A') },
       { path: '/b', component: screen('B') },
       { path: '/detail/:id', component: screen('D') },
+      { path: '/m', component: modalScreen },
     ],
   })
   host = document.createElement('div')
@@ -56,7 +76,7 @@ async function setup(): Promise<Router> {
         provideFloatingHeader()
         return () => [
           h('div', { class: 'mobile-layout__island' }),
-          h('main', [h(TabRouterView, { keep: ['/a', '/b'] })]),
+          h('main', [h(TabRouterView, { keep: ['/a', '/b', '/m'] })]),
         ]
       },
     }),
@@ -119,5 +139,16 @@ describe('TabRouterView', () => {
     await go(router, '/detail/2')
     expect(counts.D!.mounted).toBe(2)
     expect(counts.A).toEqual({ mounted: 1, activated: 2 })
+  })
+
+  it('an open modal on a kept screen closes when the screen goes off-stage', async () => {
+    const router = await setup()
+    await go(router, '/m')
+    expect(modal.closed).toBe(0)
+    await go(router, '/a')
+    expect(modal.closed).toBe(1)
+    document.body
+      .querySelectorAll('.v-modal__overlay, .v-modal__scrim')
+      .forEach((el) => el.remove())
   })
 })

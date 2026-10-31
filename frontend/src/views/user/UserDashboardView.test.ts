@@ -1258,6 +1258,8 @@ describe('UserDashboardView -- no skeleton once the answer is known', () => {
     await flush()
     app?.unmount()
     host?.remove()
+    // Past the freshness window: the return revalidates.
+    await vi.advanceTimersByTimeAsync(11_000)
     vi.mocked(bookingsApi.getUpcomingBookings).mockReturnValue(new Promise(() => {}))
     mount()
     await flush()
@@ -1265,5 +1267,74 @@ describe('UserDashboardView -- no skeleton once the answer is known', () => {
     expect(useBookingsStore().upcomingLoading).toBe(true)
     expect(skeletonCards()).toBe(0)
     expect(emptyState()).not.toBeNull()
+  })
+})
+
+// -----------------------------------------------------------------------------
+// The first screen paints once: no motion for hydrated data, nothing for an
+// equal revalidation
+// -----------------------------------------------------------------------------
+
+describe('UserDashboardView -- paints once', () => {
+  function watchMutations(): { count: () => number; stop: () => void } {
+    let n = 0
+    const mo = new MutationObserver((records) => {
+      n += records.length
+    })
+    mo.observe(host!, { childList: true, subtree: true, characterData: true, attributes: true })
+    return {
+      count: () => {
+        n += mo.takeRecords().length
+        return n
+      },
+      stop: () => mo.disconnect(),
+    }
+  }
+
+  it('data already in the store (first-screen gate): no enter animation, no height glide', async () => {
+    vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([UP_SOON])
+    await useBookingsStore().fetchUpcoming()
+    mount()
+    await nextTick()
+    expect(nearestBlocks().length).toBe(1)
+    expect(host?.querySelector('[class*="-enter-"]')).toBeNull()
+    expect(host?.querySelector('.v-loading-swap--sizing')).toBeNull()
+    expect(host?.querySelector('.v-skeleton-practice')).toBeNull()
+    // and the mount does not ask again (fresh within UPCOMING_FRESH_MS)
+    expect(bookingsApi.getUpcomingBookings).toHaveBeenCalledTimes(1)
+  })
+
+  it('a revalidation answering the SAME data changes nothing in the DOM', async () => {
+    vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([UP_SOON])
+    mount()
+    await flush()
+    await vi.advanceTimersByTimeAsync(1000)
+    const card = nearestBlocks()[0]
+    expect(card).toBeDefined()
+    const shown = useBookingsStore().upcoming
+    const mutations = watchMutations()
+    // A fresh copy of the same payload (new object refs, as from the network).
+    vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue(
+      JSON.parse(JSON.stringify([UP_SOON])) as BookingWithPracticeResponse[],
+    )
+    await useBookingsStore().fetchUpcoming()
+    await flush()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(useBookingsStore().upcoming).toBe(shown) // same reference kept
+    expect(nearestBlocks()[0]).toBe(card)
+    expect(mutations.count()).toBe(0)
+    mutations.stop()
+  })
+
+  it('a revalidation with a CHANGED row updates it (sharing never hides a change)', async () => {
+    vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([UP_SOON])
+    mount()
+    await flush()
+    vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([
+      booking('up_soon', { has_checkin: true }, { ...UP_SOON.practice, title: 'Новое название' }),
+    ])
+    await useBookingsStore().fetchUpcoming()
+    await flush()
+    expect(titleOf(nearestBlocks()[0]!)).toBe('Новое название')
   })
 })

@@ -70,17 +70,23 @@
     <!-- Greeting removed (static, low-value, took space — operator 2026-06-04). -->
 
     <!-- Check-in alert banner (shared Banner) -->
-    <Banner
-      v-if="checkinAlert"
-      variant="warning"
-      :title="t('user.screens.userDashboard.checkinBanner.title')"
-      :body="`${checkinAlert.practice.title} • ${checkinAlertTime}`"
-      :clickable="true"
-      class="dashboard__alert"
-      @click="goToCheckin(checkinAlert.practice_id)"
-    >
-      <template #icon><IconClock :size="28" /></template>
-    </Banner>
+    <!-- In place at first paint (router/firstScreen.ts loads the list before
+         the splash leaves -- no `appear`, so no motion then). Arriving or
+         leaving LATER (a refresh, the check-in window opening), it opens /
+         closes its row smoothly instead of shoving the list (velo-reveal). -->
+    <Transition name="velo-reveal">
+      <div v-if="checkinAlert" class="velo-reveal dashboard__alert">
+        <Banner
+          variant="warning"
+          :title="t('user.screens.userDashboard.checkinBanner.title')"
+          :body="`${checkinAlert.practice.title} • ${checkinAlertTime}`"
+          :clickable="true"
+          @click="goToCheckin(checkinAlert.practice_id)"
+        >
+          <template #icon><IconClock :size="28" /></template>
+        </Banner>
+      </div>
+    </Transition>
 
     <!-- ================================================================
          NEAREST PRACTICE
@@ -247,6 +253,7 @@ import { onDocumentEvent, offDocumentEvent, isDocumentHidden } from '@/platform/
 import { computed, ref, onMounted, onUnmounted, onActivated, onDeactivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { useBookingsStore } from '@/stores/bookings'
+import { UPCOMING_FRESH_MS } from '@/router/dataPrefetch'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useToast } from '@/composables/useToast'
 import { VHeader } from '@/components/layout'
@@ -570,7 +577,7 @@ function loadUpcoming(): void {
   // W15 fix (PROMPT №409): fetchUpcoming used to swallow its error entirely
   // (an empty result looked identical to "genuinely nothing upcoming") --
   // surface it via toast instead of leaving the widget silently blank.
-  void bookingsStore.fetchUpcoming().then(() => {
+  void bookingsStore.fetchUpcoming({ maxAgeMs: UPCOMING_FRESH_MS }).then(() => {
     if (bookingsStore.upcomingError) toast.error(bookingsStore.upcomingError)
   })
 }

@@ -79,6 +79,53 @@ describe('useBookingsStore', () => {
     })
   })
 
+  describe('$reset (account boundary, W-1)', () => {
+    const shown = [{ id: 'b1' }] as unknown as Awaited<
+      ReturnType<typeof bookingsApi.getUpcomingBookings>
+    >
+
+    it('takes the freshness marker with it: the next ask fetches again', async () => {
+      const store = useBookingsStore()
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValueOnce(shown)
+      await store.fetchUpcoming()
+      expect(store.upcoming).toEqual(shown)
+
+      // Within the freshness window a re-ask is skipped (the first-screen
+      // gate already loaded it)...
+      vi.mocked(bookingsApi.getUpcomingBookings).mockClear()
+      await store.fetchUpcoming({ maxAgeMs: 10_000 })
+      expect(bookingsApi.getUpcomingBookings).not.toHaveBeenCalled()
+
+      // ...and the reset must take that skip with it, or the NEXT account's
+      // first dashboard mount would be served THIS account's list.
+      store.$reset()
+      expect(store.upcoming).toEqual([])
+      expect(store.upcomingLoaded).toBe(false)
+
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValueOnce([])
+      await store.fetchUpcoming({ maxAgeMs: 10_000 })
+      expect(bookingsApi.getUpcomingBookings).toHaveBeenCalledTimes(1)
+    })
+
+    it('an in-flight answer landing after $reset does not repopulate the list', async () => {
+      let resolveFetch!: (
+        value: Awaited<ReturnType<typeof bookingsApi.getUpcomingBookings>>,
+      ) => void
+      vi.mocked(bookingsApi.getUpcomingBookings).mockReturnValue(
+        new Promise<Awaited<ReturnType<typeof bookingsApi.getUpcomingBookings>>>((resolve) => {
+          resolveFetch = resolve
+        }),
+      )
+      const store = useBookingsStore()
+      const pending = store.fetchUpcoming()
+      store.$reset()
+      resolveFetch(shown)
+      await pending
+      expect(store.upcoming).toEqual([])
+      expect(store.upcomingLoaded).toBe(false)
+    })
+  })
+
   describe('cancelBooking', () => {
     it('on success: calls the API, refreshes the list, and fires diary.refreshFeed', async () => {
       vi.mocked(bookingsApi.cancelBooking).mockResolvedValue(undefined)

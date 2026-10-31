@@ -54,6 +54,11 @@ vi.mock('@/stores/master', () => ({
   useMasterStore: () => ({ $reset: masterReset }),
 }))
 
+const bookingsReset = vi.fn()
+vi.mock('@/stores/bookings', () => ({
+  useBookingsStore: () => ({ $reset: bookingsReset }),
+}))
+
 const beginLogout = vi.fn()
 vi.mock('@/composables/useAuth', () => ({ beginLogout }))
 
@@ -96,6 +101,7 @@ describe('useAuthStore', () => {
     vi.mocked(api.post).mockReset()
     vi.mocked(usersApi.getMe).mockReset()
     masterReset.mockReset()
+    bookingsReset.mockReset()
     beginLogout.mockReset()
     platformClose.mockReset()
     platformName = 'standalone'
@@ -246,6 +252,20 @@ describe('useAuthStore', () => {
       expect(Object.keys(sessionStorage).some((k) => k.startsWith('velo:screen-cache:'))).toBe(
         false,
       )
+    })
+
+    it('the account boundary resets the bookings store with the session (W-1)', async () => {
+      platformName = 'standalone'
+      vi.mocked(api.post).mockResolvedValue(undefined)
+      localStorage.setItem('velo_token', 'tok')
+      const store = useAuthStore()
+      store.token = 'tok'
+      store.user = fakeUser()
+
+      await store.logout()
+      // The reset rides a dynamic import out of _clearSession.
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(bookingsReset).toHaveBeenCalled()
     })
   })
 

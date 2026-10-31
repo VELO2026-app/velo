@@ -73,6 +73,8 @@
 
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { firstScreenReady } from '@/router/firstScreen'
 import { useAuth, isSchoolInviteStartParam } from '@/composables/useAuth'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -101,6 +103,7 @@ import OnboardingView from '@/views/auth/OnboardingView.vue'
 const { isReady, isAuthenticated, isLoggingOut, restoreUnreachable, botAccessHint, initAuth } =
   useAuth()
 const authStore = useAuthStore()
+const router = useRouter()
 const inTelegram = platform.name === 'telegram'
 
 // tz-i18n 0.3: the server owns the language (User.language, normalized by
@@ -190,8 +193,13 @@ function onWelcomeEnter(): void {
 onMounted(() => {
   // FE-39: once initAuth() resolves, decide whether the splash hands off to
   // the app directly (returning user) or to the Welcome screen (new user).
-  void initAuth().then(() => {
-    stage.value = decideInitialStage()
+  // First-screen gate (router/firstScreen.ts): a returning user's splash
+  // hands over only once the route is resolved and the first screen's data,
+  // dock and insets are in (capped) -- the screen paints once, finished.
+  void initAuth().then(async () => {
+    const next = decideInitialStage()
+    if (next === 'app' && isAuthenticated.value) await firstScreenReady(router)
+    stage.value = next
   })
   // T21-4/T21-5 (PROMPT №546): foreground-only poll so a role/master-
   // application change is picked up even if the session never navigates

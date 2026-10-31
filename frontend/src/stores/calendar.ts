@@ -35,6 +35,7 @@
 // =============================================================================
 
 import { defineStore } from 'pinia'
+import { replaceEqualDeep } from '@/utils/structuralShare'
 import { DateTime } from 'luxon'
 import { ref, reactive, computed } from 'vue'
 import { getCuratorGroupPractices } from '@/api/curatorGroups'
@@ -376,10 +377,13 @@ export const useCalendarStore = defineStore('calendar', () => {
       // School-context master scope (owner 2026-10-03): keep only the master's
       // practices in THAT school; personal ones (curator_group_id null) and
       // other schools' ones are not the curator's business here.
-      weekPractices.value =
+      // Structural sharing: a quiet refresh with the same week is a no-op.
+      weekPractices.value = replaceEqualDeep(
+        weekPractices.value,
         masterScope.value && masterGroupFilter.value
           ? res.items.filter((p) => p.curator_group_id === masterGroupFilter.value)
-          : res.items
+          : res.items,
+      )
       seedPractices(res.items)
       lastLoadedKey = rangeKey
       if (unscoped) writePersisted(persistName, weekPractices.value)

@@ -11,6 +11,7 @@
 // =============================================================================
 
 import { defineStore } from 'pinia'
+import { replaceEqualDeep } from '@/utils/structuralShare'
 import { ref, watch } from 'vue'
 import {
   getMyBookings,
@@ -77,6 +78,11 @@ export const useBookingsStore = defineStore('bookings', () => {
    * keys its skeleton on this, never on `upcoming.length === 0`. */
   const upcomingLoaded = ref(false)
   let upcomingInFlight: Promise<void> | null = null
+  /** When the list was last answered by the server (0 = never / restored). */
+  let upcomingAt = 0
+  /** Bumped by $reset: an in-flight answer belongs to the previous account
+   * and is dropped when it lands (usePagination's requestId, W17). */
+  let upcomingGeneration = 0
   const upcomingError = ref('')
 
   // -- Single booking detail (screen 18) --
@@ -126,7 +132,12 @@ export const useBookingsStore = defineStore('bookings', () => {
    */
   /** One request at a time: the idle prefetch, the dock's finger-down warm
    * and the screen's own mount share it. */
-  function fetchUpcoming(): Promise<void> {
+  function fetchUpcoming({ maxAgeMs = 0 }: { maxAgeMs?: number } = {}): Promise<void> {
+    // Fresh enough (e.g. the first-screen gate loaded it a moment ago): the
+    // screen's own mount does not ask again.
+    if (upcomingInFlight === null && upcomingAt > 0 && Date.now() - upcomingAt < maxAgeMs) {
+      return Promise.resolve()
+    }
     upcomingInFlight ??= loadUpcoming().finally(() => {
       upcomingInFlight = null
     })
@@ -145,8 +156,13 @@ export const useBookingsStore = defineStore('bookings', () => {
     }
     upcomingLoading.value = true
     upcomingError.value = ''
+    const generation = upcomingGeneration
     try {
-      upcoming.value = await getUpcomingBookings()
+      // Structural sharing: an unchanged answer is a no-op for the screen.
+      const fresh = await getUpcomingBookings()
+      if (generation !== upcomingGeneration) return // superseded by $reset
+      upcoming.value = replaceEqualDeep(upcoming.value, fresh)
+      upcomingAt = Date.now()
       upcomingLoaded.value = true
       writePersisted(UPCOMING_PERSIST, upcoming.value)
     } catch (e) {
@@ -248,6 +264,29 @@ export const useBookingsStore = defineStore('bookings', () => {
     }
   }
 
+  // =========================================================================
+  // Reset (on the account boundary -- W-1, same reasoning as master.ts)
+  // =========================================================================
+
+  /** A different account in the same tab starts fresh: the upcoming list,
+   * its freshness marker and the detail slot are the previous account's data
+   * (auth._clearSession calls this alongside queryCache/clearPersisted). */
+  function $reset(): void {
+    upcomingGeneration += 1
+    upcomingInFlight = null
+    upcomingAt = 0
+    upcoming.value = []
+    upcomingLoading.value = false
+    upcomingLoaded.value = false
+    upcomingError.value = ''
+    selectedBooking.value = null
+    selectedLoading.value = false
+    selectedError.value = ''
+    dismissedCheckins.value = []
+    statusFilter.value = undefined
+    pagination.reset()
+  }
+
   return {
     // List
     bookings: pagination.items,
@@ -271,6 +310,7 @@ export const useBookingsStore = defineStore('bookings', () => {
     upcomingLoaded,
     upcomingError,
     fetchUpcoming,
+    $reset,
 
     // Single booking detail (screen 18)
     selectedBooking,

@@ -19,6 +19,7 @@
 // =============================================================================
 
 import { defineStore } from 'pinia'
+import { replaceEqualDeep } from '@/utils/structuralShare'
 import { ref, computed } from 'vue'
 import { api, setAuthToken, setOnUnauthorized, ApiResponseError } from '@/api/client'
 import { getMe, updateMe, switchRole as apiSwitchRole } from '@/api/users'
@@ -89,7 +90,8 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function _setUser(newUser: UserResponse | null): void {
-    user.value = newUser
+    // Structural sharing: a /me poll answering the same user re-renders nothing.
+    user.value = replaceEqualDeep(user.value, newUser)
     // Persisted screen data is per account: another account's copy goes.
     if (newUser) setPersistOwner(newUser.id)
   }
@@ -103,6 +105,12 @@ export const useAuthStore = defineStore('auth', () => {
     queryCache.clear()
     clearPersisted()
     setPersistOwner(null)
+    // W-1, same reasoning as logout()'s master/schoolsHub resets: the
+    // bookings store keeps account-scoped lists OUTSIDE the query cache,
+    // and its freshness marker would otherwise skip the next account's
+    // first fetch (up to UPCOMING_FRESH_MS of the previous account's data).
+    // Dynamic import breaks the potential circular dep, as in logout().
+    void import('@/stores/bookings').then(({ useBookingsStore }) => useBookingsStore().$reset())
   }
 
   // FIX 10.2: register callback so API client delegates 401 handling here.

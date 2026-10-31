@@ -27,6 +27,7 @@
 // on the next start and is always revalidated in the background.
 // =============================================================================
 
+import { replaceEqualDeep } from '@/utils/structuralShare'
 import {
   computed,
   onScopeDispose,
@@ -165,7 +166,9 @@ function run(entry: Entry): Promise<void> {
   entry.promise = query()
     .then((data) => {
       if (entry.version !== version) return
-      entry.data.value = data
+      // Structural sharing: an unchanged answer keeps the shown references
+      // (no re-render, no motion); a changed one keeps its unchanged parts.
+      entry.data.value = replaceEqualDeep(entry.data.value, data)
       entry.error.value = null
       entry.updatedAt = Date.now()
       if (entry.persist) writePersisted(persistName(entry.hash), data)
@@ -270,7 +273,7 @@ export const queryCache = {
     const next = updater(entry.data.value as T | undefined)
     if (next === undefined) return
     entry.version += 1
-    entry.data.value = next
+    entry.data.value = replaceEqualDeep(entry.data.value, next)
     entry.error.value = null
     entry.updatedAt = Date.now()
     if (entry.persist) writePersisted(persistName(serializeKey(key)), next)
