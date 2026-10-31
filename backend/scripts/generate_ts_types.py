@@ -9,9 +9,11 @@
 # Usage:
 #   python scripts/generate_ts_types.py openapi.json ../frontend/src/api/generated.ts
 #
-# Or inside Docker:
-#   curl -s http://127.0.0.1:8000/openapi.json | \
-#     python scripts/generate_ts_types.py /dev/stdin frontend/src/api/generated.ts
+# On a server, the schema comes out of the app container (BE-114 item 2 --
+# the served /openapi.json is not the source):
+#   docker compose exec -T app python scripts/dump_openapi.py > openapi.json
+#   python3 backend/scripts/generate_ts_types.py openapi.json \
+#     frontend/src/api/generated.ts
 #
 # Output is deterministic: same input JSON always produces the same .ts file.
 # This allows `diff` to detect drift in CI / velo update.

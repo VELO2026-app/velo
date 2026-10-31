@@ -63,6 +63,7 @@
     "speech_not_recognized": "Could not recognize the speech",
     "audio_too_large": "The recording is too long",
     "audio_invalid": "Could not process the recording",
+    "transcription_quota_exceeded": "The daily voice input limit is reached",
     "unauthorized": "Your session has expired, log in again"
   },
   "storeErrors": {

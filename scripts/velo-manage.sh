@@ -309,7 +309,7 @@ NC='\033[0m'
 # and whichever temp path only the first trap knew about would leak on abort.
 # That is not hypothetical here -- update_all() below already sets its own
 # EXIT trap for the self-update snapshot file, on exactly the `update` path
-# that also fetches openapi.json into a temp file. Closing the CLASS (not
+# that also writes the OpenAPI schema into a temp file. Closing the CLASS (not
 # just the two known /tmp/openapi.json call sites) means every mktemp'd path
 # in this script, present or future, registers HERE instead of installing
 # its own trap: update_all's snapshot cleanup and gen-types' (and update's)
@@ -805,9 +805,10 @@ sys.exit(1)
 }
 
 # Poll the backend /health endpoint until it responds, or fail after timeout.
-# Avoids a race where we hit the API (openapi.json / health) before the `app`
-# container is actually listening -- previously masked by the test step that
-# happened to give the backend time to boot. 30 attempts x 1s = 30s max.
+# Avoids a race where we use the `app` container (the OpenAPI snapshot is
+# taken inside it, BE-114) before it is actually up -- previously masked by
+# the test step that happened to give the backend time to boot. 30 attempts
+# x 1s = 30s max.
 wait_for_backend() {
     local attempts=30
     echo "Waiting for backend to become healthy..."
@@ -1989,8 +1990,10 @@ update_product() {
         fi
 
         # -- 3. Generate frontend types from live backend --
-        # Make sure the backend is actually up before hitting its OpenAPI
-        # endpoint (otherwise curl returns empty and the generator crashes).
+        # The schema is built INSIDE the running app container
+        # (backend/scripts/dump_openapi.py), not fetched over HTTP: the
+        # served /openapi.json is closed to the outside (BE-114 item 2).
+        # The app must be up to exec into, hence the health wait first.
         echo ""
         wait_for_backend || exit 1
 
@@ -2005,8 +2008,8 @@ update_product() {
             exit 1
         }
         velo_cleanup_register "$OPENAPI_TMP"
-        if ! curl -sf http://127.0.0.1:8000/openapi.json > "$OPENAPI_TMP"; then
-            echo -e "${RED}✗ Failed to fetch openapi.json from backend${NC}"
+        if ! $COMPOSE_CMD exec -T app python scripts/dump_openapi.py > "$OPENAPI_TMP"; then
+            echo -e "${RED}✗ Failed to build the OpenAPI schema inside the app container${NC}"
             echo "Check logs: velo logs app"
             rm -f "$OPENAPI_TMP"
             exit 1
@@ -3628,10 +3631,11 @@ case "${1:-}" in
     gen-types)
         echo "Generating frontend types from backend OpenAPI..."
         cd_compose
-        # -f (fail on HTTP error) is required, not cosmetic: without it curl
-        # exits 0 on a 500 and writes the error body to the file, so the `||`
-        # guard below would never fire and the generator would run against a
-        # backend error page instead of an OpenAPI schema.
+        # The schema is built inside the running app container, not fetched
+        # over HTTP -- the served /openapi.json is closed (BE-114 item 2);
+        # see backend/scripts/dump_openapi.py. A failed import exits non-zero
+        # and the guard below fires; the script keeps stdout to the schema
+        # alone, so the generator never parses a log line.
         #
         # Unpredictable path, registered into the ONE shared cleanup trap
         # near the top of this file (T-45 item 5) -- this command never runs
@@ -3641,8 +3645,8 @@ case "${1:-}" in
             exit 1
         }
         velo_cleanup_register "$OPENAPI_TMP"
-        if ! curl -sf http://127.0.0.1:8000/openapi.json > "$OPENAPI_TMP"; then
-            echo -e "${RED}✗ Cannot reach backend API. Is it running?${NC}"
+        if ! $COMPOSE_CMD exec -T app python scripts/dump_openapi.py > "$OPENAPI_TMP"; then
+            echo -e "${RED}✗ Cannot build the OpenAPI schema in the app container. Is it running?${NC}"
             rm -f "$OPENAPI_TMP"
             exit 1
         fi
