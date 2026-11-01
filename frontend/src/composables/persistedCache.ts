@@ -23,7 +23,10 @@
 
 import { readSessionJson, removeSessionKeys, writeSessionString } from '@/platform/session-memo'
 
-export const PERSIST_VERSION = 1
+// Bumped whenever a persisted payload changes shape. 2 (FE-127): the school
+// rename moved the practice school fields and the schools-list fields, so
+// every v1 copy is a payload this build no longer reads.
+export const PERSIST_VERSION = 2
 export const PERSIST_PREFIX = 'velo:screen-cache:'
 /** Total budget for the serialized cache (sessionStorage is ~5 MB). */
 export const PERSIST_MAX_BYTES = 256 * 1024

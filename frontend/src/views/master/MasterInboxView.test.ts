@@ -22,7 +22,7 @@
 //      master-practice-detail, open_wallet -> master-finance, open_thread ->
 //      that dialog (master-chat), msg.* (no velo action) -> the master
 //      messages list -- plus the BE-59 master-offer prompt
-//      (curator_group.master_offered + open_curator_group): the STANDALONE
+//      (school.master_offered + open_school): the STANDALONE
 //      school-offer screen, because its recipient is always a verified
 //      master, so this inbox is where the offer is accepted. Unmapped
 //      action / malformed id -> mark-read only, never a broken route.
@@ -382,15 +382,15 @@ describe('MasterInboxView', () => {
   // BE-79 (2): the block notices of a school. Blocked -> the school is closed
   // to the reader: mark-read only. Unblocked -> the school page.
   it.each([
-    ['curator_group.member_blocked', null],
-    ['curator_group.member_unblocked', { name: 'master-curator-group', params: { id: 'g7' } }],
+    ['school.member_blocked', null],
+    ['school.member_unblocked', { name: 'master-school', params: { id: 'g7' } }],
   ] as const)('BE-79: %s -> its own target', async (type, target) => {
     vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
       items: [
         item({
           id: 'bl',
           type,
-          action_data: { action: 'open_curator_group', params: { group_id: 'g7' } },
+          action_data: { action: 'open_school', params: { school_id: 'g7' } },
         }),
       ],
       next_cursor: null,
@@ -410,15 +410,15 @@ describe('MasterInboxView', () => {
     else expect(push).not.toHaveBeenCalled()
   })
 
-  // Links (3 October): was keyed on the TYPE over open_curator_group; the offer
+  // Links (3 October): was keyed on the TYPE over the school-page verb; the offer
   // has its own verb now, the same one its Telegram button carries.
   it('a master-offer row (open_master_offer) opens the school-offer screen', async () => {
     vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
       items: [
         item({
           id: 'g2',
-          type: 'curator_group.master_offered',
-          action_data: { action: 'open_master_offer', params: { group_id: 'grp_1' } },
+          type: 'school.master_offered',
+          action_data: { action: 'open_master_offer', params: { school_id: 'grp_1' } },
         }),
       ],
       next_cursor: null,
@@ -428,7 +428,7 @@ describe('MasterInboxView', () => {
     mount()
     await flush()
 
-    // curator_group.* has no bucket of its own -- the row lives in «Другое»
+    // school.* has no bucket of its own -- the row lives in «Другое»
     segment('Другое')?.click()
     await flush()
 
@@ -437,18 +437,18 @@ describe('MasterInboxView', () => {
 
     expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith('g2')
     expect(push).toHaveBeenCalledWith({
-      name: 'curator-group-master-offer',
+      name: 'school-master-offer',
       params: { id: 'grp_1' },
     })
   })
 
-  it('BE-59: a master-offer row with a malformed group_id never becomes an undefined route param', async () => {
+  it('BE-59: a master-offer row with a malformed school_id never becomes an undefined route param', async () => {
     vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
       items: [
         item({
           id: 'g3',
-          type: 'curator_group.master_offered',
-          action_data: { action: 'open_curator_group', params: { group_id: 7 } },
+          type: 'school.master_offered',
+          action_data: { action: 'open_school', params: { school_id: 7 } },
         }),
       ],
       next_cursor: null,
@@ -466,6 +466,41 @@ describe('MasterInboxView', () => {
 
     expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith('g3')
     expect(push).not.toHaveBeenCalled() // mark-read only -- honest fallback
+  })
+
+  // FE-127: the school verb and its param under the renamed contract, on the
+  // three twin axes. The FORMER verb and the FORMER param key -- both still in
+  // inbox records written before the rename -- stay mark-read only (owner: no
+  // alias). Both keys present -> school_id decides. An empty id is no route.
+  it.each([
+    ['open_school', { school_id: 'g1' }, { name: 'master-school', params: { id: 'g1' } }],
+    [
+      'open_school',
+      { school_id: 'g1', group_id: 'gX' },
+      { name: 'master-school', params: { id: 'g1' } },
+    ],
+    ['open_school', { group_id: 'g1' }, null],
+    ['open_school', { school_id: '' }, null],
+    ['open_curator_group', { school_id: 'g1' }, null],
+    ['open_master_offer', { group_id: 'g1' }, null],
+  ] as const)('FE-127: %s with %o -> its target', async (action, params, target) => {
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+      items: [item({ id: 'fe', type: 'school.transfer_offered', action_data: { action, params } })],
+      next_cursor: null,
+      unread: 1,
+    })
+    vi.mocked(notificationsApi.markNotificationRead).mockResolvedValue({ unread: 0 })
+    mount()
+    await flush()
+    segment('Другое')?.click()
+    await flush()
+
+    row(0).click()
+    await flush()
+
+    expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith('fe')
+    if (target) expect(push).toHaveBeenCalledWith(target)
+    else expect(push).not.toHaveBeenCalled()
   })
 
   it('unmapped action and not msg.* -> mark-read only, NO navigation', async () => {

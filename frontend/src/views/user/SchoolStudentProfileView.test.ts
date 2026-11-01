@@ -15,16 +15,16 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import SchoolStudentProfileView from '@/views/user/SchoolStudentProfileView.vue'
-import * as cgApi from '@/api/curatorGroups'
+import * as cgApi from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
 import type { SchoolStudentProfileResponse } from '@/api/types'
 
-vi.mock('@/api/curatorGroups')
+vi.mock('@/api/schools')
 
 const push = vi.fn()
 const replace = vi.fn()
 const routeState = {
-  name: 'master-curator-group-student',
+  name: 'master-school-student',
   groupId: 'g1',
   userId: 'u9',
   nameQuery: 'Пётр Сидоров',
@@ -102,12 +102,12 @@ function profileFixture(
 }
 
 beforeEach(() => {
-  routeState.name = 'master-curator-group-student'
+  routeState.name = 'master-school-student'
   routeState.groupId = 'g1'
   routeState.userId = 'u9'
   routeState.nameQuery = 'Пётр Сидоров'
   Object.values(cgApi).forEach((fn) => vi.mocked(fn).mockReset())
-  vi.mocked(cgApi.getCuratorGroupPage).mockResolvedValue({
+  vi.mocked(cgApi.getSchoolPage).mockResolvedValue({
     id: 'g1',
     name: 'Школа',
     description: null,
@@ -119,12 +119,12 @@ beforeEach(() => {
     transfer: null,
     created_at: '2026-09-01T00:00:00Z',
   })
-  vi.mocked(cgApi.cancelCuratorGroupMasterOffer).mockResolvedValue(undefined)
-  vi.mocked(cgApi.getCuratorGroupStudentProfile).mockResolvedValue(profileFixture())
-  vi.mocked(cgApi.offerCuratorGroupMaster).mockResolvedValue(undefined)
+  vi.mocked(cgApi.cancelSchoolMasterOffer).mockResolvedValue(undefined)
+  vi.mocked(cgApi.getSchoolStudentProfile).mockResolvedValue(profileFixture())
+  vi.mocked(cgApi.offerSchoolMaster).mockResolvedValue(undefined)
   // Default roster lookup: the student is NOT among the masters (the only
   // kind this screen is reached for); master-present tests override below.
-  vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue({
+  vi.mocked(cgApi.getSchoolMembers).mockResolvedValue({
     items: [],
     total: 0,
     limit: 100,
@@ -164,7 +164,7 @@ describe('SchoolStudentProfileView', () => {
     expect(buttonWith('Действия с учеником')).toBeTruthy()
 
     app?.unmount()
-    vi.mocked(cgApi.getCuratorGroupStudentProfile).mockRejectedValue(
+    vi.mocked(cgApi.getSchoolStudentProfile).mockRejectedValue(
       new ApiResponseError(404, 'not found', 'not_found'),
     )
     mount()
@@ -213,7 +213,7 @@ describe('SchoolStudentProfileView', () => {
 
     expect(text()).not.toContain('Заблокировать участника школы?')
     expect(toastInfo).not.toHaveBeenCalled()
-    expect(cgApi.offerCuratorGroupMaster).not.toHaveBeenCalled()
+    expect(cgApi.offerSchoolMaster).not.toHaveBeenCalled()
   })
 
   // BE-79 (2): this used to pin the INTERIM -- «nothing mutates, the chain is
@@ -237,9 +237,9 @@ describe('SchoolStudentProfileView', () => {
     expect(text()).toContain('Пользователь перемещён во вкладку «Блок» участников школы.')
     expect(exactButton('Не сейчас')).toBeTruthy()
     expect(exactButton('В поддержку')).toBeTruthy()
-    expect(cgApi.blockCuratorGroupMember).toHaveBeenCalledTimes(1)
-    expect(cgApi.blockCuratorGroupMember).toHaveBeenCalledWith('g1', 'u9')
-    expect(cgApi.offerCuratorGroupMaster).not.toHaveBeenCalled()
+    expect(cgApi.blockSchoolMember).toHaveBeenCalledTimes(1)
+    expect(cgApi.blockSchoolMember).toHaveBeenCalledWith('g1', 'u9')
+    expect(cgApi.offerSchoolMaster).not.toHaveBeenCalled()
   })
 
   async function confirmBlock(): Promise<void> {
@@ -258,26 +258,24 @@ describe('SchoolStudentProfileView', () => {
     exactButton('Не сейчас')?.click()
     await flush()
     expect(push).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'master-curator-group-members', params: { id: 'g1' } }),
+      expect.objectContaining({ name: 'master-school-members', params: { id: 'g1' } }),
     )
   })
 
   it('block 404 (not a member any more): says so, back to the roster, no success chain', async () => {
-    vi.mocked(cgApi.blockCuratorGroupMember).mockRejectedValueOnce(
+    vi.mocked(cgApi.blockSchoolMember).mockRejectedValueOnce(
       new ApiResponseError(404, 'not found', 'not_found'),
     )
     mount()
     await flush()
     await confirmBlock()
     expect(toastError).toHaveBeenCalledWith('Участник уже не в школе')
-    expect(push).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'master-curator-group-members' }),
-    )
+    expect(push).toHaveBeenCalledWith(expect.objectContaining({ name: 'master-school-members' }))
     expect(text()).not.toContain('Пользователь заблокирован')
   })
 
   it('block refused (409 / 403 / network): the error toast, no success chain, no navigation', async () => {
-    vi.mocked(cgApi.blockCuratorGroupMember).mockRejectedValueOnce(
+    vi.mocked(cgApi.blockSchoolMember).mockRejectedValueOnce(
       new ApiResponseError(409, 'cannot block the curator', 'cannot_block_curator'),
     )
     mount()
@@ -332,7 +330,7 @@ describe('SchoolStudentProfileView', () => {
 
     // INTERIM wiring (stopper BE-59): the same GT-27 offer until the
     // role-request contract lands.
-    expect(cgApi.offerCuratorGroupMaster).toHaveBeenCalledWith('g1', 'u9')
+    expect(cgApi.offerSchoolMaster).toHaveBeenCalledWith('g1', 'u9')
     expect(toastSuccess).toHaveBeenCalledWith('Предложение отправлено')
     // The appointment takes effect only when the appointee accepts -- no
     // navigation, no local roster rewrite.
@@ -353,11 +351,11 @@ describe('SchoolStudentProfileView', () => {
     confirm?.click()
     await flush()
 
-    expect(cgApi.offerCuratorGroupMaster).not.toHaveBeenCalled()
+    expect(cgApi.offerSchoolMaster).not.toHaveBeenCalled()
   })
 
   it('a current master gets NO student option -- demotion has no contract (§7.1 №6)', async () => {
-    vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue({
+    vi.mocked(cgApi.getSchoolMembers).mockResolvedValue({
       items: [
         {
           user_id: 'u9',
@@ -383,11 +381,11 @@ describe('SchoolStudentProfileView', () => {
     expect(exactButton('Ученик')).toBeUndefined()
     expect(exactButton('Мастер')?.getAttribute('aria-checked')).toBe('true')
     expect(exactButton('Изменить')?.disabled).toBe(true)
-    expect(cgApi.offerCuratorGroupMaster).not.toHaveBeenCalled()
+    expect(cgApi.offerSchoolMaster).not.toHaveBeenCalled()
   })
 
   it('master_required surfaces the errorMessages phrase, not a raw code', async () => {
-    vi.mocked(cgApi.offerCuratorGroupMaster).mockRejectedValue(
+    vi.mocked(cgApi.offerSchoolMaster).mockRejectedValue(
       new ApiResponseError(403, 'master required', 'master_required'),
     )
     mount()
@@ -430,12 +428,12 @@ describe('SchoolStudentProfileView', () => {
 
     expect(buttonWith('Исключить из школы')).toBeUndefined()
     expect(exactButton('Исключить')).toBeUndefined()
-    expect(cgApi.getCuratorGroupRemovePreview).not.toHaveBeenCalled()
-    expect(cgApi.removeCuratorGroupMember).not.toHaveBeenCalled()
+    expect(cgApi.getSchoolRemovePreview).not.toHaveBeenCalled()
+    expect(cgApi.removeSchoolMember).not.toHaveBeenCalled()
   })
 
   it('a masked 404 is its own rung (P-08), not an error and not an empty hero', async () => {
-    vi.mocked(cgApi.getCuratorGroupStudentProfile).mockRejectedValue(
+    vi.mocked(cgApi.getSchoolStudentProfile).mockRejectedValue(
       new ApiResponseError(404, 'not found', 'not_found'),
     )
     mount()
@@ -447,7 +445,7 @@ describe('SchoolStudentProfileView', () => {
   })
 
   it('a non-404 failure is retryable: «Не удалось загрузить профиль» + «Повторить»', async () => {
-    vi.mocked(cgApi.getCuratorGroupStudentProfile).mockRejectedValue(
+    vi.mocked(cgApi.getSchoolStudentProfile).mockRejectedValue(
       new ApiResponseError(500, 'boom', 'internal_error'),
     )
     mount()
@@ -456,7 +454,7 @@ describe('SchoolStudentProfileView', () => {
     expect(text()).toContain('Не удалось загрузить профиль')
     expect(buttonWith('Повторить')).toBeTruthy()
 
-    vi.mocked(cgApi.getCuratorGroupStudentProfile).mockResolvedValue(profileFixture())
+    vi.mocked(cgApi.getSchoolStudentProfile).mockResolvedValue(profileFixture())
     buttonWith('Повторить')?.click()
     await flush()
 
@@ -464,7 +462,7 @@ describe('SchoolStudentProfileView', () => {
   })
 
   it('an honest zero: hero stays, both stat cards show «0»', async () => {
-    vi.mocked(cgApi.getCuratorGroupStudentProfile).mockResolvedValue(
+    vi.mocked(cgApi.getSchoolStudentProfile).mockResolvedValue(
       profileFixture({ practices_count: 0, hours: 0 }),
     )
     mount()
@@ -476,7 +474,7 @@ describe('SchoolStudentProfileView', () => {
   })
 
   it('the recent_* contract arrays are NOT rendered (§1.13: no diagnostics on this screen yet)', async () => {
-    vi.mocked(cgApi.getCuratorGroupStudentProfile).mockResolvedValue(
+    vi.mocked(cgApi.getSchoolStudentProfile).mockResolvedValue(
       profileFixture({
         recent_checkins: [
           {
@@ -511,7 +509,7 @@ describe('pending school-master offer', () => {
     ['awaiting_verification', 'Ожидает проверки мастера'],
     ['awaiting_answer', 'Ожидает ответа участника'],
   ] as const)('shows %s and cancels only on confirmation', async (state, label) => {
-    vi.mocked(cgApi.getCuratorGroupStudentProfile).mockResolvedValue(
+    vi.mocked(cgApi.getSchoolStudentProfile).mockResolvedValue(
       profileFixture({ master_offer: state }),
     )
     mount()
@@ -519,8 +517,8 @@ describe('pending school-master offer', () => {
     expect(text()).toContain(label)
     exactButton('Отменить предложение')?.click()
     await flush()
-    expect(cgApi.cancelCuratorGroupMasterOffer).not.toHaveBeenCalled()
-    vi.mocked(cgApi.getCuratorGroupStudentProfile).mockResolvedValue(
+    expect(cgApi.cancelSchoolMasterOffer).not.toHaveBeenCalled()
+    vi.mocked(cgApi.getSchoolStudentProfile).mockResolvedValue(
       profileFixture({ master_offer: null }),
     )
     const dialog = document.body.querySelector('.v-modal__overlay')
@@ -531,17 +529,17 @@ describe('pending school-master offer', () => {
     confirm?.click()
     confirm?.click()
     await flush()
-    expect(cgApi.cancelCuratorGroupMasterOffer).toHaveBeenCalledTimes(1)
-    expect(cgApi.cancelCuratorGroupMasterOffer).toHaveBeenCalledWith('g1', 'u9')
+    expect(cgApi.cancelSchoolMasterOffer).toHaveBeenCalledTimes(1)
+    expect(cgApi.cancelSchoolMasterOffer).toHaveBeenCalledWith('g1', 'u9')
     expect(text()).not.toContain(label)
     expect(toastSuccess).toHaveBeenCalledWith('Предложение отменено')
   })
 
   it('keeps the offer and exposes failure if cancellation fails', async () => {
-    vi.mocked(cgApi.getCuratorGroupStudentProfile).mockResolvedValue(
+    vi.mocked(cgApi.getSchoolStudentProfile).mockResolvedValue(
       profileFixture({ master_offer: 'awaiting_answer' }),
     )
-    vi.mocked(cgApi.cancelCuratorGroupMasterOffer).mockRejectedValue(new Error('offline'))
+    vi.mocked(cgApi.cancelSchoolMasterOffer).mockRejectedValue(new Error('offline'))
     mount()
     await flush()
     exactButton('Отменить предложение')?.click()
@@ -565,17 +563,17 @@ describe('pending school-master offer', () => {
     await flush()
     exactButton('Мастер')?.click()
     await flush()
-    vi.mocked(cgApi.getCuratorGroupStudentProfile).mockResolvedValue(
+    vi.mocked(cgApi.getSchoolStudentProfile).mockResolvedValue(
       profileFixture({ master_offer: 'awaiting_verification' }),
     )
     exactButton('Изменить')?.click()
     await flush()
     expect(text()).toContain('Ожидает проверки мастера')
-    expect(cgApi.getCuratorGroupStudentProfile).toHaveBeenCalledTimes(2)
+    expect(cgApi.getSchoolStudentProfile).toHaveBeenCalledTimes(2)
   })
 
   it('does not allow an offer when the current role lookup fails', async () => {
-    vi.mocked(cgApi.getCuratorGroupMembers).mockRejectedValueOnce(new Error('offline'))
+    vi.mocked(cgApi.getSchoolMembers).mockRejectedValueOnce(new Error('offline'))
     mount()
     await flush()
     buttonWith('Действия с учеником')?.click()
@@ -584,12 +582,12 @@ describe('pending school-master offer', () => {
     await flush()
     expect(text()).toContain('Не удалось проверить роль участника')
     expect(exactButton('Изменить')?.disabled).toBe(true)
-    expect(cgApi.offerCuratorGroupMaster).not.toHaveBeenCalled()
+    expect(cgApi.offerSchoolMaster).not.toHaveBeenCalled()
   })
 
   it('a school master can read the student but has no curator actions', async () => {
-    const page = await cgApi.getCuratorGroupPage('g1')
-    vi.mocked(cgApi.getCuratorGroupPage).mockResolvedValue({
+    const page = await cgApi.getSchoolPage('g1')
+    vi.mocked(cgApi.getSchoolPage).mockResolvedValue({
       ...page,
       viewer: { relation: 'master' },
     })

@@ -10,18 +10,18 @@
 //     the curated rows /mine still answers -- relation is role-independent
 //     -- are the master list's «Я куратор» section, so a curator switched
 //     to user mode counts their participations only).
-//     /curator-groups/mine is a user surface, so EVERY authenticated account
+//     /schools/mine is a user surface, so EVERY authenticated account
 //     is probed -- the plain student of one school is the branch this store
 //     used to defer as a "later slice".
 //   - MASTER zone: the same membership (any relation), OR the admin-issued
-//     right to found a school (can_create_groups, BE-18). A right holder
+//     right to found a school (can_create_schools, BE-18). A right holder
 //     with zero schools keeps their entrance -- the empty hub with
 //     «Создать школу» is exactly their screen (owner 2026-09-19); a master
 //     without the right gains the tab when they belong to somebody else's
 //     school.
 //
-// The facts ride TWO calls: GET /curator-groups/mine (memberships; everyone)
-// and GET /masters/me/curator-groups (the founding right; only IN MASTER
+// The facts ride TWO calls: GET /schools/mine (memberships; everyone)
+// and GET /masters/me/schools (the founding right; only IN MASTER
 // MODE with master capability -- the surface requires the current role, so
 // the probe waits for it instead of burning a 403 per shell mount).
 //
@@ -31,9 +31,9 @@
 
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { getCuratorGroups, getMyCuratorGroups } from '@/api/curatorGroups'
+import { getSchools, getMySchools } from '@/api/schools'
 import { useAuthStore } from '@/stores/auth'
-import type { CuratorGroupMineItem } from '@/api/types'
+import type { SchoolMineItem } from '@/api/types'
 
 export const useSchoolsHubStore = defineStore('schoolsHub', () => {
   const authStore = useAuthStore()
@@ -41,8 +41,8 @@ export const useSchoolsHubStore = defineStore('schoolsHub', () => {
   /** The admin-issued right to FOUND a school (BE-18); gates «+»/CTA and
    *  keeps the MASTER-zone tab alive for a right holder with no schools. */
   const canCreate = ref(false)
-  /** Schools I belong to (GET /curator-groups/mine items, any relation). */
-  const mine = ref<CuratorGroupMineItem[]>([])
+  /** Schools I belong to (GET /schools/mine items, any relation). */
+  const mine = ref<SchoolMineItem[]>([])
   /** Settled = the probe succeeded (the tab decision is server-backed).
    *  Separate per surface: the user-zone tab filters on the mine probe
    *  alone, the master-zone tab on either probe (see the shells). */
@@ -66,7 +66,7 @@ export const useSchoolsHubStore = defineStore('schoolsHub', () => {
     const probes: Array<Promise<void>> = []
     if (!mineSettled.value) {
       probes.push(
-        getMyCuratorGroups()
+        getMySchools()
           .then((res) => {
             mine.value = res.items
             mineSettled.value = true
@@ -89,9 +89,9 @@ export const useSchoolsHubStore = defineStore('schoolsHub', () => {
       authStore.allowedRoles.includes('master')
     ) {
       probes.push(
-        getCuratorGroups()
+        getSchools()
           .then((res) => {
-            canCreate.value = res.can_create_groups ?? false
+            canCreate.value = res.can_create_schools ?? false
             masterSettled.value = true
           })
           .catch(() => {

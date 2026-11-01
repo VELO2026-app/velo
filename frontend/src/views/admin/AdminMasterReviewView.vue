@@ -536,7 +536,7 @@
               </div>
               <div class="mreview__v">
                 {{
-                  master.can_create_groups
+                  master.can_create_schools
                     ? t('adminScreens.adminMasterReview.granted')
                     : t('adminScreens.adminMasterReview.notGranted')
                 }}
@@ -550,7 +550,7 @@
               @click="onToggleRight"
             >
               {{
-                master.can_create_groups
+                master.can_create_schools
                   ? t('adminScreens.adminMasterReview.revokeGrant')
                   : t('adminScreens.adminMasterReview.grantAction')
               }}
@@ -645,7 +645,7 @@ import {
   editMasterProfile,
   getRevokePreview,
   revokeMaster,
-  setMasterGroupRight,
+  setMasterSchoolRight,
 } from '@/api/admin'
 import type {
   AdminMasterListItem,
@@ -1030,7 +1030,7 @@ const promoteMessage = computed((): string => {
  *  Defaults to NO -- absent/false writes nothing on the backend, and the
  *  right stays grantable later on the verified screen. */
 const grantSchools = ref(false)
-/** The verified screen's right toggle (PATCH can-create-groups). */
+/** The verified screen's right toggle (PATCH can-create-schools). */
 const togglingRight = ref(false)
 
 /** BE-18: flip the right and merge the answer into the local master row --
@@ -1040,10 +1040,10 @@ async function onToggleRight(): Promise<void> {
   if (!master.value || togglingRight.value) return
   togglingRight.value = true
   try {
-    const res = await setMasterGroupRight(masterId, !master.value.can_create_groups)
-    master.value = { ...master.value, can_create_groups: res.can_create_groups }
+    const res = await setMasterSchoolRight(masterId, !master.value.can_create_schools)
+    master.value = { ...master.value, can_create_schools: res.can_create_schools }
     toast.success(
-      res.can_create_groups
+      res.can_create_schools
         ? t('adminScreens.adminMasterReview.toast.schoolRightGranted')
         : t('adminScreens.adminMasterReview.toast.schoolRightRevoked'),
     )

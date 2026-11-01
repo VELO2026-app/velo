@@ -16,7 +16,7 @@
       getPractices with master_id -- no new endpoint, no dedicated store).
       Owner 2026-10-03: in the curator's school context (?groupId=) only the
       master's practices in THAT school are listed -- a larger page is fetched
-      and filtered client-side by the practices' curator_group_id (the public
+      and filtered client-side by the practices' school_id (the public
       feed has no school param); «Предстоящие практики» hands ?groupId to the
       master calendar for the same filter.
     - «⋯» меню: «Написать сообщение» -> ask-master flow (T2); в школьном
@@ -288,7 +288,7 @@ import SendMessageModal from '@/components/shared/SendMessageModal.vue'
 import TargetUserCard from '@/components/shared/TargetUserCard.vue'
 import { getPublicMaster } from '@/api/masters'
 import { getPractices } from '@/api/practices'
-import { blockCuratorGroupMember, demoteCuratorGroupMaster } from '@/api/curatorGroups'
+import { blockSchoolMember, demoteSchoolMaster } from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
@@ -358,7 +358,7 @@ async function onRoleConfirm(): Promise<void> {
   if (demoting.value) return
   demoting.value = true
   try {
-    await demoteCuratorGroupMaster(groupId.value, masterId.value)
+    await demoteSchoolMaster(groupId.value, masterId.value)
     roleOpen.value = false
     toast.success(t('user.screens.masterPublic.toast.roleChanged'))
   } catch (e) {
@@ -388,7 +388,7 @@ async function onBlockConfirm(): Promise<void> {
   if (blocking.value) return
   blocking.value = true
   try {
-    await blockCuratorGroupMember(groupId.value, masterId.value)
+    await blockSchoolMember(groupId.value, masterId.value)
     blockConfirmOpen.value = false
     toast.success(t('user.screens.masterPublic.toast.blocked'))
     router.back()
@@ -452,7 +452,7 @@ async function loadMaster(id: string): Promise<void> {
     // school context (?groupId=) only the master's practices in THAT school
     // are listed -- the public feed has no school param, so the page is
     // fetched larger and filtered client-side by the practices' own
-    // curator_group_id (null on personal practices, a foreign school's id
+    // school_id (null on personal practices, a foreign school's id
     // otherwise). Outside the school context the plain feed stands.
     try {
       const res = await getPractices(
@@ -468,7 +468,7 @@ async function loadMaster(id: string): Promise<void> {
       // The ≤5 cap is also enforced locally: the owner's 2026-09-30 spec is
       // "up to 5 cards", independent of any server limit regression.
       const items = schoolContext.value
-        ? res.items.filter((p) => p.curator_group_id === groupId.value)
+        ? res.items.filter((p) => p.school_id === groupId.value)
         : res.items
       upcoming.value = items.slice(0, 5)
     } catch {

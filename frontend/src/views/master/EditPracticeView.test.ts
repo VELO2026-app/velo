@@ -78,7 +78,7 @@ import { createApp, nextTick, type App } from 'vue'
 import EditPracticeView from '@/views/master/EditPracticeView.vue'
 import * as practicesApi from '@/api/practices'
 import * as groupsApi from '@/api/groups'
-import * as cgApi from '@/api/curatorGroups'
+import * as cgApi from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
 import type { MasterProfileResponse, PracticeResponse, UpdatePracticeRequest } from '@/api/types'
 
@@ -90,7 +90,7 @@ vi.mock('@/api/practices')
 vi.mock('@/api/groups')
 
 // FE-24 (GT P5): the schools fetch for the fourth option -- same reason.
-vi.mock('@/api/curatorGroups')
+vi.mock('@/api/schools')
 
 // Seamed at the helper, not at @/api/taxonomy: the real one caches for the whole
 // file (see the banner). Resolving null = catalog cold -> hardcoded fallback.
@@ -326,7 +326,7 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue(practice({ status: 'cancelled' }))
   vi.mocked(groupsApi.getGroups).mockReset().mockResolvedValue({ items: [] })
-  vi.mocked(cgApi.getMyCuratorGroups).mockReset().mockResolvedValue({ items: [] })
+  vi.mocked(cgApi.getMySchools).mockReset().mockResolvedValue({ items: [] })
   refreshMyPractices.mockReset().mockResolvedValue(undefined)
   push.mockReset()
   back.mockReset()
@@ -1593,9 +1593,9 @@ describe('EditPracticeView -- «Школы» audience (FE-24 / GT P5; BE-74, FE-
   it('a school practice offers the pair of radios, preselected to the saved kind; the school itself is not shown', async () => {
     mountCached(
       practice({
-        audience_kind: 'curator_groups',
-        curator_group_id: 'sc1',
-        curator_group_name: 'Тихая школа',
+        audience_kind: 'schools',
+        school_id: 'sc1',
+        school_name: 'Тихая школа',
       }),
     )
     await flush()
@@ -1613,18 +1613,22 @@ describe('EditPracticeView -- «Школы» audience (FE-24 / GT P5; BE-74, FE-
     await flush()
 
     expect(practicesApi.previewAudienceChange).not.toHaveBeenCalled()
-    expect(sentBody().audience_kind).toBe('curator_groups')
+    expect(sentBody().audience_kind).toBe('schools')
     expect(sentBody().group_ids).toEqual([])
-    expect(sentBody()).not.toHaveProperty('curator_group_id')
-    expect(sentBody()).not.toHaveProperty('curator_group_ids')
+    expect(sentBody()).not.toHaveProperty('school_id')
+    // FE-127: this guarded the plural array the school field once was (BE-74
+    // made it one id). The contract now names the entity «school», so the
+    // guard names the plural of the new field -- the regression it catches is
+    // the same, only the vocabulary moved.
+    expect(sentBody()).not.toHaveProperty('school_ids')
   })
 
   it('switching a school practice to «Публичная» previews the change and PATCHes public', async () => {
     mountCached(
       practice({
-        audience_kind: 'curator_groups',
-        curator_group_id: 'sc1',
-        curator_group_name: 'Тихая школа',
+        audience_kind: 'schools',
+        school_id: 'sc1',
+        school_name: 'Тихая школа',
       }),
     )
     await flush()
@@ -1640,15 +1644,15 @@ describe('EditPracticeView -- «Школы» audience (FE-24 / GT P5; BE-74, FE-
       group_ids: [],
     })
     expect(sentBody().audience_kind).toBe('public')
-    expect(sentBody()).not.toHaveProperty('curator_group_id')
+    expect(sentBody()).not.toHaveProperty('school_id')
   })
 
   it('a PUBLIC practice of a school preselects «Публичная» and stays public when saved untouched', async () => {
     mountCached(
       practice({
         audience_kind: 'public',
-        curator_group_id: 'sc1',
-        curator_group_name: 'Тихая школа',
+        school_id: 'sc1',
+        school_name: 'Тихая школа',
       }),
     )
     await flush()
@@ -1661,35 +1665,35 @@ describe('EditPracticeView -- «Школы» audience (FE-24 / GT P5; BE-74, FE-
 
     expect(practicesApi.previewAudienceChange).not.toHaveBeenCalled()
     expect(sentBody().audience_kind).toBe('public')
-    expect(sentBody()).not.toHaveProperty('curator_group_id')
+    expect(sentBody()).not.toHaveProperty('school_id')
   })
 
   it('same-named schools of the master cannot widen a school practice: Edit never asks for schools', async () => {
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({
       items: [school('sc_a', 'Дубль', 'u1'), school('sc_b', 'Дубль', 'u2')],
     })
     mountCached(
       practice({
-        audience_kind: 'curator_groups',
-        curator_group_id: 'sc_a',
-        curator_group_name: 'Дубль',
+        audience_kind: 'schools',
+        school_id: 'sc_a',
+        school_name: 'Дубль',
       }),
     )
     await flush()
 
-    expect(cgApi.getMyCuratorGroups).not.toHaveBeenCalled()
+    expect(cgApi.getMySchools).not.toHaveBeenCalled()
     expect(host?.querySelectorAll('.v-chip').length).toBe(0)
 
     button('Сохранить')?.click()
     await flush()
 
     const call = vi.mocked(practicesApi.updatePractice).mock.calls[0]
-    expect(call?.[1]?.audience_kind).toBe('curator_groups')
-    expect(call?.[1]).not.toHaveProperty('curator_group_id')
+    expect(call?.[1]?.audience_kind).toBe('schools')
+    expect(call?.[1]).not.toHaveProperty('school_id')
   })
 
   it('a practice without a school is not offered «Школы», even to a master who has schools', async () => {
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({
       items: [school('sc1', 'Тихая школа', 'u1')],
     })
     mountCached(practice({ audience_kind: 'public' }))

@@ -1,13 +1,13 @@
 <!--
-  VELO Frontend -- UserCuratorGroupsView (schools FE-19 / GT P3)
+  VELO Frontend -- UserMySchoolsView (schools FE-19 / GT P3)
 
   «Мои школы» for the user zone (route /user/groups, entry row in
-  UserProfileView's «Аккаунт» section). A FLAT list of GET /curator-groups/mine
+  UserProfileView's «Аккаунт» section). A FLAT list of GET /schools/mine
   -- the schools I PARTICIPATE in, by join time. FE-93: /mine's curated rows
   are the master list's «Я куратор» section and every management surface
   behind them 403s outside master mode, so this zone lists memberships only
   (a curator switched to user mode reads as an ordinary member). Rows are
-  the shared CuratorGroupRow; tap -> the school page in this zone.
+  the shared SchoolRow; tap -> the school page in this zone.
 
   The honest empty state names the only way in: an invite link from a curator
   -- there is no catalogue and no search (v1 non-goal, owner-ruled).
@@ -16,7 +16,7 @@
 <template>
   <div class="ucg">
     <VHeader
-      :title="t('user.screens.userCuratorGroups.title')"
+      :title="t('user.screens.userMySchools.title')"
       show-back
       @back="router.push({ name: 'user-profile' })"
     />
@@ -30,7 +30,7 @@
         v-else-if="error"
         icon="warning"
         :title="t('school.loadFailed')"
-        :description="t('user.screens.userCuratorGroups.loadFailedHint')"
+        :description="t('user.screens.userMySchools.loadFailedHint')"
       >
         <template #action>
           <VButton variant="outline" @click="load">{{ t('common.retry') }}</VButton>
@@ -40,16 +40,16 @@
       <VEmptyState
         v-else-if="!groups.length"
         icon="group"
-        :title="t('user.screens.userCuratorGroups.empty.title')"
-        :description="t('user.screens.userCuratorGroups.empty.text')"
+        :title="t('user.screens.userMySchools.empty.title')"
+        :description="t('user.screens.userMySchools.empty.text')"
       />
 
       <template v-else>
-        <CuratorGroupRow
+        <SchoolRow
           v-for="g in groups"
           :key="g.id"
           :group="g"
-          @open="router.push({ name: 'user-curator-group', params: { id: $event } })"
+          @open="router.push({ name: 'user-school', params: { id: $event } })"
         />
       </template>
     </div>
@@ -60,9 +60,9 @@
 import { t } from '@/locales'
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { getMyCuratorGroups } from '@/api/curatorGroups'
-import type { CuratorGroupMineItem } from '@/api/types'
-import CuratorGroupRow from '@/components/shared/CuratorGroupRow.vue'
+import { getMySchools } from '@/api/schools'
+import type { SchoolMineItem } from '@/api/types'
+import SchoolRow from '@/components/shared/SchoolRow.vue'
 import { VButton, VEmptyState, VLoader } from '@/components/ui'
 import VHeader from '@/components/layout/VHeader.vue'
 
@@ -70,13 +70,13 @@ const router = useRouter()
 
 const loading = ref(true)
 const error = ref(false)
-const groups = ref<CuratorGroupMineItem[]>([])
+const groups = ref<SchoolMineItem[]>([])
 
 async function load(): Promise<void> {
   loading.value = true
   error.value = false
   try {
-    const res = await getMyCuratorGroups()
+    const res = await getMySchools()
     // FE-93: this zone lists the schools I PARTICIPATE in -- the curated
     // rows /mine still returns (relation is role-independent) are the
     // master list's «Я куратор» section.

@@ -1,11 +1,11 @@
 // =============================================================================
-// VELO Frontend -- MasterCuratorGroupCreateView Screen Tests (FE-20 / GT P3)
+// VELO Frontend -- MasterSchoolCreateView Screen Tests (FE-20 / GT P3)
 // =============================================================================
 //
 // Mirrors MasterGroupCreateView's own test concerns: client-side required
 // check (no POST on a blank name), trimmed payloads, success navigation
 // (tz-curator.md §1.6: to the SCHOOL PAGE, not the list), and the 409
-// curator_group_name_taken path surfacing as an inline field error. The §1.5
+// school_name_taken path surfacing as an inline field error. The §1.5
 // media block is tested through the SCHOOL_MEDIA_UPLOAD_ENABLED kill-switch:
 // OFF (the shipped default) renders no pickers, ON renders both.
 // =============================================================================
@@ -13,16 +13,16 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
-import MasterCuratorGroupCreateView from '@/views/master/MasterCuratorGroupCreateView.vue'
-import * as cgApi from '@/api/curatorGroups'
+import MasterSchoolCreateView from '@/views/master/MasterSchoolCreateView.vue'
+import * as cgApi from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
 
-vi.mock('@/api/curatorGroups')
+vi.mock('@/api/schools')
 
 const push = vi.fn()
 const replace = vi.fn()
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: {}, name: 'master-curator-group-create' }),
+  useRoute: () => ({ params: {}, name: 'master-school-create' }),
   useRouter: () => ({ push, replace }),
 }))
 
@@ -48,7 +48,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(MasterCuratorGroupCreateView).use(createTestI18n())
+  app = createApp(MasterSchoolCreateView).use(createTestI18n())
   app.mount(host)
   return host
 }
@@ -84,7 +84,7 @@ async function type(values: [string, string]): Promise<void> {
 }
 
 beforeEach(() => {
-  vi.mocked(cgApi.createCuratorGroup).mockReset()
+  vi.mocked(cgApi.createSchool).mockReset()
   push.mockReset()
   replace.mockReset()
   toastSuccess.mockReset()
@@ -100,7 +100,7 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('MasterCuratorGroupCreateView', () => {
+describe('MasterSchoolCreateView', () => {
   it('owner 2026-10-01: the required canon is the section star -- legend hidden, no rosette', () => {
     mount()
 
@@ -120,11 +120,11 @@ describe('MasterCuratorGroupCreateView', () => {
     await flush()
 
     expect(text()).toContain('Введите название школы')
-    expect(cgApi.createCuratorGroup).not.toHaveBeenCalled()
+    expect(cgApi.createSchool).not.toHaveBeenCalled()
   })
 
   it('success: posts the TRIMMED name, omits a blank description, lands on the SCHOOL PAGE (§1.6)', async () => {
-    vi.mocked(cgApi.createCuratorGroup).mockResolvedValue({
+    vi.mocked(cgApi.createSchool).mockResolvedValue({
       id: 'g1',
       name: 'Тихая школа',
       description: null,
@@ -140,10 +140,10 @@ describe('MasterCuratorGroupCreateView', () => {
     buttonWith('Создать школу')?.click()
     await flush()
 
-    expect(cgApi.createCuratorGroup).toHaveBeenCalledWith('Тихая школа', undefined)
+    expect(cgApi.createSchool).toHaveBeenCalledWith('Тихая школа', undefined)
     expect(toastSuccess).toHaveBeenCalledWith('Школа «Тихая школа» создана')
     // §1.6 (owner): creation lands on the school page with the NEW id.
-    expect(replace).toHaveBeenCalledWith({ name: 'master-curator-group', params: { id: 'g1' } })
+    expect(replace).toHaveBeenCalledWith({ name: 'master-school', params: { id: 'g1' } })
   })
 
   it('media kill-switch OFF (shipped default): no pickers render', async () => {
@@ -174,7 +174,7 @@ describe('MasterCuratorGroupCreateView', () => {
   })
 
   it('a real description is forwarded trimmed', async () => {
-    vi.mocked(cgApi.createCuratorGroup).mockResolvedValue({
+    vi.mocked(cgApi.createSchool).mockResolvedValue({
       id: 'g1',
       name: 'Ш',
       description: 'd',
@@ -190,12 +190,12 @@ describe('MasterCuratorGroupCreateView', () => {
     buttonWith('Создать школу')?.click()
     await flush()
 
-    expect(cgApi.createCuratorGroup).toHaveBeenCalledWith('Ш', 'Практики тишины')
+    expect(cgApi.createSchool).toHaveBeenCalledWith('Ш', 'Практики тишины')
   })
 
-  it('409 curator_group_name_taken: inline field error + toast, stays on the form', async () => {
-    vi.mocked(cgApi.createCuratorGroup).mockRejectedValue(
-      new ApiResponseError(409, 'taken', 'curator_group_name_taken'),
+  it('409 school_name_taken: inline field error + toast, stays on the form', async () => {
+    vi.mocked(cgApi.createSchool).mockRejectedValue(
+      new ApiResponseError(409, 'taken', 'school_name_taken'),
     )
     mount()
     await flush()
@@ -209,9 +209,9 @@ describe('MasterCuratorGroupCreateView', () => {
     expect(replace).not.toHaveBeenCalled()
   })
 
-  it('403 group_creation_not_allowed (BE-18): the form is REPLACED by the refusal, no retry loop', async () => {
-    vi.mocked(cgApi.createCuratorGroup).mockRejectedValue(
-      new ApiResponseError(403, 'forbidden', 'group_creation_not_allowed'),
+  it('403 school_creation_not_allowed (BE-18): the form is REPLACED by the refusal, no retry loop', async () => {
+    vi.mocked(cgApi.createSchool).mockRejectedValue(
+      new ApiResponseError(403, 'forbidden', 'school_creation_not_allowed'),
     )
     mount()
     await flush()
@@ -230,6 +230,6 @@ describe('MasterCuratorGroupCreateView', () => {
     // Back to the list is the only honest action left.
     buttonWith('К моим школам')?.click()
     await flush()
-    expect(replace).toHaveBeenCalledWith({ name: 'master-curator-groups' })
+    expect(replace).toHaveBeenCalledWith({ name: 'master-schools' })
   })
 })

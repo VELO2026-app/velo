@@ -36,7 +36,7 @@ const router = useRouter()
 
 // tz-curator.md §1.2 (owner 2026-09-22): the SAME conditional tab contract
 // as UserShell -- membership in at least one school (any relation) -- widened
-// for this zone by the admin-issued founding right: a can_create_groups
+// for this zone by the admin-issued founding right: a can_create_schools
 // holder with zero schools keeps their entrance (the empty hub's «Создать
 // школу» is their only path to a first school). Fail-closed: the tab is
 // absent until a probe settles.
@@ -134,16 +134,16 @@ const FOG_ROUTES = [
   // PAGE are scrolling feeds under the floating header, and the create form
   // is a keyboard form (FORM_FOG_ROUTES tuning below, same as
   // master-group-create's FE-45 rationale).
-  'master-curator-groups',
-  'master-curator-group',
+  'master-schools',
+  'master-school',
   // tz-curator.md §1.11 (owner 2026-09-22): the participants screen is the
   // school's roster feed, same treatment as the school PAGE above.
-  'master-curator-group-members',
+  'master-school-members',
   // tz-curator.md §6 (owner 2026-10-02): the school's analytics screen --
   // the same scrolling feed under the floating header as the school PAGE
   // above (without this entry the header floats over raw content).
-  'master-curator-group-analytics',
-  'master-curator-group-create',
+  'master-school-analytics',
+  'master-school-create',
   'master-profile',
   // Edit-profile + language/timezone: fog so content doesn't smudge under the
   // floating header on scroll (operator FOG-1, 2026-06-30). Both are keyboard
@@ -253,7 +253,7 @@ const FORM_FOG_ROUTES = [
   // tz-curator.md §1.5: the school-create form is the same shape (floating
   // «Новая школа» header over a required-fields legend), so it joins here too.
   'master-group-create',
-  'master-curator-group-create',
+  'master-school-create',
 ]
 let formFogCache: {
   topGap: number

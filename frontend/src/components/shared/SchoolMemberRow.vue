@@ -14,8 +14,8 @@
   For students the flag is always true (they have no MasterProfile).
 
   TWO ROW TYPES, one component (BE-76): the curator's roster rows carry
-  is_visible / master_offer (CuratorGroupMemberItem); a school master's rows
-  are the plain CuratorGroupRosterItem without them -- the server leaves
+  is_visible / master_offer (SchoolMemberItem); a school master's rows
+  are the plain SchoolRosterItem without them -- the server leaves
   suspended masters out of that list instead. The row tells the two apart by
   the PRESENCE of the curator's fields and renders no subtitle without them.
 -->
@@ -30,16 +30,16 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { computed } from 'vue'
-import type { CuratorGroupMemberItem, CuratorGroupRosterItem } from '@/api/types'
+import type { SchoolMemberItem, SchoolRosterItem } from '@/api/types'
 import { masterOfferLabel } from '@/utils/masterOffers'
 import { VAvatar, VListRow } from '@/components/ui'
 
 const props = defineProps<{
-  member: CuratorGroupRosterItem | CuratorGroupMemberItem
+  member: SchoolRosterItem | SchoolMemberItem
 }>()
 
 defineEmits<{
-  open: [member: CuratorGroupRosterItem]
+  open: [member: SchoolRosterItem]
 }>()
 
 const subtitle = computed((): string | undefined => {

@@ -52,9 +52,9 @@
 //
 // AND THAT COMMAND HAS A BLIND SPOT worth naming rather than repeating: it
 // matches a STRING LITERAL after `code=`, so a code raised through a
-// constant is invisible to it. Two are: curator_group_name_taken
-// (_NAME_TAKEN_CODE) and group_creation_not_allowed (_NO_CREATE_RIGHT_CODE),
-// both in curator_groups/service.py. Counting raise sites rather than
+// constant is invisible to it. Two are: school_name_taken
+// (_NAME_TAKEN_CODE) and school_creation_not_allowed (_NO_CREATE_RIGHT_CODE),
+// both in schools/service.py. Counting raise sites rather than
 // literals put the real number at 36 at GT-15, and puts it at 49 at BE-92.
 //
 // SEEDED from the 7 call sites that already carried a hand-written Russian
@@ -100,19 +100,19 @@ export const ERROR_CODES = [
   'no_active_booking',
   'checkin_window_closed',
   'checkin_window_not_open',
-  'curator_group_name_taken',
-  'group_creation_not_allowed',
+  'school_name_taken',
+  'school_creation_not_allowed',
   'curator_cannot_leave',
-  'own_group',
+  'own_school',
   'master_required',
   'blocked_by_curator',
-  'blocked_in_group',
+  'blocked_in_school',
   'cannot_block_curator',
   'master_id_requires_school',
   'master_not_in_school',
   'curator_only',
   'curator_cannot_add_occurrence',
-  'curator_group_not_usable',
+  'school_not_usable',
   'transfer_pending',
   'invite_not_found',
   'transfer_not_found',

@@ -104,7 +104,7 @@ import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import CalendarView from '@/views/user/CalendarView.vue'
 import * as practicesApi from '@/api/practices'
-import * as cgApi from '@/api/curatorGroups'
+import * as cgApi from '@/api/schools'
 import * as taxonomyApi from '@/api/taxonomy'
 import { useAuthStore } from '@/stores/auth'
 import { useCalendarStore } from '@/stores/calendar'
@@ -118,7 +118,7 @@ vi.mock('@/api/practices')
 vi.mock('@/api/taxonomy')
 // School mode (owner 2026-10-01): the stacked school calendar feeds off the
 // school's own practices endpoint, not @/api/practices.
-vi.mock('@/api/curatorGroups')
+vi.mock('@/api/schools')
 
 const push = vi.fn()
 const back = vi.fn()
@@ -310,7 +310,7 @@ beforeEach(() => {
   vi.mocked(practicesApi.getPractices)
     .mockReset()
     .mockResolvedValue(page([practice('p1')]))
-  vi.mocked(cgApi.getCuratorGroupPractices)
+  vi.mocked(cgApi.getSchoolPractices)
     .mockReset()
     .mockResolvedValue({ items: [], total: 0, limit: 100, offset: 0 })
   vi.mocked(taxonomyApi.getActiveTaxonomy)
@@ -785,7 +785,7 @@ describe('CalendarView', () => {
 
   describe('school mode (user-calendar-school, owner 2026-10-01)', () => {
     it('mounts with :groupId, feeds off the school endpoint, and sits the personal filter UI out', async () => {
-      vi.mocked(cgApi.getCuratorGroupPractices).mockResolvedValue({
+      vi.mocked(cgApi.getSchoolPractices).mockResolvedValue({
         items: [practice('sp1')],
         total: 1,
         limit: 100,
@@ -796,7 +796,7 @@ describe('CalendarView', () => {
 
       // The feed comes from the school's own endpoint, never the personal
       // week feed -- the two answer different questions.
-      expect(cgApi.getCuratorGroupPractices).toHaveBeenCalledWith('g7', 100, 0)
+      expect(cgApi.getSchoolPractices).toHaveBeenCalledWith('g7', 100, 0)
       expect(practicesApi.getPractices).not.toHaveBeenCalled()
       expect(text()).toContain('Практики школы')
       expect(text()).not.toContain('Выбрать практики')
@@ -821,13 +821,13 @@ describe('CalendarView', () => {
       window.history.replaceState(null, '')
       backBtn!.click()
       expect(push).toHaveBeenCalledWith({
-        name: 'user-curator-group',
+        name: 'user-school',
         params: { id: 'g7' },
       })
     })
 
     it('leaving the screen resets the school scope and feed -- the shared store must not poison the tab calendar', async () => {
-      vi.mocked(cgApi.getCuratorGroupPractices).mockResolvedValue({
+      vi.mocked(cgApi.getSchoolPractices).mockResolvedValue({
         items: [practice('sp1')],
         total: 1,
         limit: 100,

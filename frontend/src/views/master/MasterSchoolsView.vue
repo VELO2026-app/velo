@@ -1,26 +1,26 @@
 <!--
-  VELO Frontend -- MasterCuratorGroupsView (schools FE-20 / GT P3)
+  VELO Frontend -- MasterSchoolsView (schools FE-20 / GT P3)
 
   «Школы» -- the master zone's entry into SCHOOLS (route
-  /master/curator-groups, dashboard row under «Мои группы»).
+  /master/schools, dashboard row under «Мои группы»).
 
-  Same GET /curator-groups/mine payload as the user list, but sectioned by
+  Same GET /schools/mine payload as the user list, but sectioned by
   MY relation: «Я куратор» first, «Я участник» second (backend order:
   curated first, then join time -- the split only groups it).
 
   BE-18: the «+» is visible ONLY with the admin-issued right to
-  found a school. The flag rides on GET /masters/me/curator-groups
-  (can_create_groups) -- fetched in parallel with /mine, which still feeds
+  found a school. The flag rides on GET /masters/me/schools
+  (can_create_schools) -- fetched in parallel with /mine, which still feeds
   the rows (it alone knows transfer_offered and the member sections).
   Without the right the «+» disappears and the empty state explains who
   issues it; the create ROUTE stays honest too -- a direct visit answers
-  403 group_creation_not_allowed, which that screen renders as a refusal.
+  403 school_creation_not_allowed, which that screen renders as a refusal.
 -->
 
 <template>
   <div class="mcg">
     <VHeader
-      :title="t('masterScreens.masterCuratorGroups.title')"
+      :title="t('masterScreens.masterSchools.title')"
       show-back
       @back="router.push({ name: 'master-dashboard' })"
     >
@@ -29,8 +29,8 @@
           v-if="canCreate"
           type="button"
           class="mcg__add-btn"
-          :aria-label="t('masterScreens.masterCuratorGroups.createCta')"
-          @click="router.push({ name: 'master-curator-group-create' })"
+          :aria-label="t('masterScreens.masterSchools.createCta')"
+          @click="router.push({ name: 'master-school-create' })"
         >
           <IconPlusFilled :size="20" />
         </button>
@@ -46,7 +46,7 @@
         v-else-if="error"
         icon="warning"
         :title="t('school.loadFailed')"
-        :description="t('masterScreens.masterCuratorGroups.loadFailedHint')"
+        :description="t('masterScreens.masterSchools.loadFailedHint')"
       >
         <template #action>
           <VButton variant="outline" @click="load">{{ t('common.retry') }}</VButton>
@@ -56,12 +56,12 @@
       <VEmptyState
         v-else-if="!groups.length && canCreate"
         icon="group"
-        :title="t('masterScreens.masterCuratorGroups.empty.title')"
-        :description="t('masterScreens.masterCuratorGroups.empty.text')"
+        :title="t('masterScreens.masterSchools.empty.title')"
+        :description="t('masterScreens.masterSchools.empty.text')"
       >
         <template #action>
-          <VButton variant="primary" @click="router.push({ name: 'master-curator-group-create' })">
-            {{ t('masterScreens.masterCuratorGroups.create') }}
+          <VButton variant="primary" @click="router.push({ name: 'master-school-create' })">
+            {{ t('masterScreens.masterSchools.create') }}
           </VButton>
         </template>
       </VEmptyState>
@@ -72,32 +72,32 @@
       <VEmptyState
         v-else-if="!groups.length"
         icon="group"
-        :title="t('masterScreens.masterCuratorGroups.empty.title')"
-        :description="t('masterScreens.masterCuratorGroups.empty.joinHint')"
+        :title="t('masterScreens.masterSchools.empty.title')"
+        :description="t('masterScreens.masterSchools.empty.joinHint')"
       />
 
       <template v-else>
         <template v-if="curated.length">
           <h2 class="velo-section-title mcg__section">
-            {{ t('masterScreens.masterCuratorGroups.tab.curator') }}
+            {{ t('masterScreens.masterSchools.tab.curator') }}
           </h2>
-          <CuratorGroupRow
+          <SchoolRow
             v-for="g in curated"
             :key="g.id"
             :group="g"
-            @open="router.push({ name: 'master-curator-group', params: { id: $event } })"
+            @open="router.push({ name: 'master-school', params: { id: $event } })"
           />
         </template>
 
         <template v-if="memberOnly.length">
           <h2 class="velo-section-title mcg__section">
-            {{ t('masterScreens.masterCuratorGroups.tab.member') }}
+            {{ t('masterScreens.masterSchools.tab.member') }}
           </h2>
-          <CuratorGroupRow
+          <SchoolRow
             v-for="g in memberOnly"
             :key="g.id"
             :group="g"
-            @open="router.push({ name: 'master-curator-group', params: { id: $event } })"
+            @open="router.push({ name: 'master-school', params: { id: $event } })"
           />
         </template>
       </template>
@@ -105,7 +105,7 @@
       <!-- Membership is untouched by the right -- rows render either way;
            only the founding offer is gated (BE-18). -->
       <p v-if="!loading && !error && groups.length && !canCreate" class="mcg__hint">
-        {{ t('masterScreens.masterCuratorGroups.masterOnlyNote') }}
+        {{ t('masterScreens.masterSchools.masterOnlyNote') }}
       </p>
     </div>
   </div>
@@ -115,10 +115,10 @@
 import { t } from '@/locales'
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { getCuratorGroups, getMyCuratorGroups } from '@/api/curatorGroups'
-import type { CuratorGroupMineItem } from '@/api/types'
+import { getSchools, getMySchools } from '@/api/schools'
+import type { SchoolMineItem } from '@/api/types'
 import { useQuery } from '@/composables/useQuery'
-import CuratorGroupRow from '@/components/shared/CuratorGroupRow.vue'
+import SchoolRow from '@/components/shared/SchoolRow.vue'
 import { IconPlusFilled } from '@/components/icons'
 import { VButton, VEmptyState } from '@/components/ui'
 import VHeader from '@/components/layout/VHeader.vue'
@@ -130,8 +130,8 @@ const router = useRouter()
 // through the dock renders the schools at once and refreshes them in the
 // background (staleTime 0: a school created a moment ago is there on the
 // next visit), no spinner on every visit.
-const groupsQuery = useQuery<{ groups: CuratorGroupMineItem[]; canCreate: boolean }>({
-  key: ['curatorGroups', 'mine', 'master-hub'],
+const groupsQuery = useQuery<{ groups: SchoolMineItem[]; canCreate: boolean }>({
+  key: ['schools', 'mine', 'master-hub'],
   query: async () => {
     // Two parallel calls, one payload split: /mine feeds the rows (it alone
     // carries relation + transfer_offered), the curator list carries only
@@ -140,12 +140,12 @@ const groupsQuery = useQuery<{ groups: CuratorGroupMineItem[]; canCreate: boolea
     // there is no screen, while the flag call failing only means no «+» --
     // rows plus the honest no-right hint is strictly better than an error
     // state over data we already hold.
-    const [mineRes, listRes] = await Promise.allSettled([getMyCuratorGroups(), getCuratorGroups()])
+    const [mineRes, listRes] = await Promise.allSettled([getMySchools(), getSchools()])
     if (mineRes.status === 'rejected') throw mineRes.reason
     return {
       groups: mineRes.value.items,
       canCreate:
-        listRes.status === 'fulfilled' ? (listRes.value.can_create_groups ?? false) : false,
+        listRes.status === 'fulfilled' ? (listRes.value.can_create_schools ?? false) : false,
     }
   },
   staleTime: 0,

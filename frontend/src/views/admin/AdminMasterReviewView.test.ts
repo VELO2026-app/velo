@@ -179,7 +179,7 @@ function master(overrides: Partial<AdminMasterDetail> = {}): AdminMasterDetail {
     phone: '+79991234567',
     languages: ['Русский'],
     certifications: ['Сертификат йоги'],
-    can_create_groups: false,
+    can_create_schools: false,
     ...overrides,
   }
 }
@@ -348,7 +348,7 @@ beforeEach(() => {
   vi.mocked(adminApi.editMasterProfile).mockReset()
   vi.mocked(adminApi.getRevokePreview).mockReset().mockResolvedValue(advisory())
   vi.mocked(adminApi.revokeMaster).mockReset()
-  vi.mocked(adminApi.setMasterGroupRight).mockReset()
+  vi.mocked(adminApi.setMasterSchoolRight).mockReset()
   // Rejected -- both this screen's parseMethods AND the picker's own fetch
   // fall back to the SAME hardcoded taxonomy on failure (see banner).
   vi.mocked(taxonomyApi.getActiveTaxonomy)
@@ -592,9 +592,9 @@ describe('AdminMasterReviewView', () => {
 
     it('grant: PATCHes true, merges the answer, the row flips to «Выдано» + «Отозвать право»', async () => {
       vi.mocked(adminApi.getMasterById).mockResolvedValue(MASTER_VERIFIED())
-      vi.mocked(adminApi.setMasterGroupRight).mockResolvedValue({
+      vi.mocked(adminApi.setMasterSchoolRight).mockResolvedValue({
         user_id: 'm_verified',
-        can_create_groups: true,
+        can_create_schools: true,
       })
       mount('m_verified')
       await flush()
@@ -602,7 +602,7 @@ describe('AdminMasterReviewView', () => {
       footBtn('Выдать право')?.click()
       await flush()
 
-      expect(adminApi.setMasterGroupRight).toHaveBeenCalledWith('m_verified', true)
+      expect(adminApi.setMasterSchoolRight).toHaveBeenCalledWith('m_verified', true)
       expect(toastSuccess).toHaveBeenCalledWith('Право создавать школы выдано')
       expect(text()).toContain('Выдано')
       expect(footBtn('Отозвать право')).toBeDefined()
@@ -610,11 +610,11 @@ describe('AdminMasterReviewView', () => {
 
     it('revoke direction: a master WITH the right offers «Отозвать право» and PATCHes false', async () => {
       vi.mocked(adminApi.getMasterById).mockResolvedValue(
-        master({ id: 'm_verified', master_status: 'verified', can_create_groups: true }),
+        master({ id: 'm_verified', master_status: 'verified', can_create_schools: true }),
       )
-      vi.mocked(adminApi.setMasterGroupRight).mockResolvedValue({
+      vi.mocked(adminApi.setMasterSchoolRight).mockResolvedValue({
         user_id: 'm_verified',
-        can_create_groups: false,
+        can_create_schools: false,
       })
       mount('m_verified')
       await flush()
@@ -623,14 +623,14 @@ describe('AdminMasterReviewView', () => {
       footBtn('Отозвать право')?.click()
       await flush()
 
-      expect(adminApi.setMasterGroupRight).toHaveBeenCalledWith('m_verified', false)
+      expect(adminApi.setMasterSchoolRight).toHaveBeenCalledWith('m_verified', false)
       expect(toastSuccess).toHaveBeenCalledWith('Право создавать школы отозвано')
       expect(text()).toContain('Не выдано')
     })
 
     it('failure: toasts, the local right does NOT flip', async () => {
       vi.mocked(adminApi.getMasterById).mockResolvedValue(MASTER_VERIFIED())
-      vi.mocked(adminApi.setMasterGroupRight).mockRejectedValue(
+      vi.mocked(adminApi.setMasterSchoolRight).mockRejectedValue(
         new ApiResponseError(409, 'conflict', 'conflict'),
       )
       mount('m_verified')

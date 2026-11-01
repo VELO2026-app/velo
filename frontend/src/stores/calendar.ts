@@ -38,7 +38,7 @@ import { defineStore } from 'pinia'
 import { replaceEqualDeep } from '@/utils/structuralShare'
 import { DateTime } from 'luxon'
 import { ref, reactive, computed } from 'vue'
-import { getCuratorGroupPractices } from '@/api/curatorGroups'
+import { getSchoolPractices } from '@/api/schools'
 import { getPractices } from '@/api/practices'
 import { extractApiError } from '@/composables/useApiError'
 import { readPersisted, writePersisted } from '@/composables/persistedCache'
@@ -132,7 +132,7 @@ export const useCalendarStore = defineStore('calendar', () => {
   // Owner 2026-10-03: in the curator's school context the route carries
   // ?groupId and the feed drops the master's practices OUTSIDE that school.
   // The public endpoint has no school param, so loadWeek filters the response
-  // client-side by the practices' own curator_group_id (null on personal
+  // client-side by the practices' own school_id (null on personal
   // practices, a foreign school's id otherwise). Cleared with the scope.
   const masterScope = ref<string | null>(null)
   const masterGroupFilter = ref<string | null>(null)
@@ -143,7 +143,7 @@ export const useCalendarStore = defineStore('calendar', () => {
 
   // SCHOOL scope (owner 2026-10-01): «Предстоящие практики» on the school page
   // opens the calendar scoped to ONE school's upcoming practices. The school
-  // feed endpoint (GET /curator-groups/{id}/practices) has no date params, so
+  // feed endpoint (GET /schools/{id}/practices) has no date params, so
   // its full upcoming list is fetched once (in loadWeek, when the feed is
   // empty) and every weekly window is derived from it client-side; the strip
   // can only reach future weeks and the feed is all-future by definition.
@@ -306,11 +306,11 @@ export const useCalendarStore = defineStore('calendar', () => {
       try {
         const firstFetch = schoolFeed.value === null
         if (firstFetch) {
-          const first = await getCuratorGroupPractices(schoolScope.value, SCHOOL_FEED_PAGE, 0)
+          const first = await getSchoolPractices(schoolScope.value, SCHOOL_FEED_PAGE, 0)
           const items = [...first.items]
           const pages = Math.ceil(first.total / SCHOOL_FEED_PAGE)
           for (let p = 1; p < Math.min(pages, SCHOOL_FEED_MAX_PAGES); p++) {
-            const res = await getCuratorGroupPractices(
+            const res = await getSchoolPractices(
               schoolScope.value,
               SCHOOL_FEED_PAGE,
               p * SCHOOL_FEED_PAGE,
@@ -375,13 +375,13 @@ export const useCalendarStore = defineStore('calendar', () => {
       const res = await getPractices(query, 100, 0)
       if (token !== loadToken) return // superseded by a newer load
       // School-context master scope (owner 2026-10-03): keep only the master's
-      // practices in THAT school; personal ones (curator_group_id null) and
+      // practices in THAT school; personal ones (school_id null) and
       // other schools' ones are not the curator's business here.
       // Structural sharing: a quiet refresh with the same week is a no-op.
       weekPractices.value = replaceEqualDeep(
         weekPractices.value,
         masterScope.value && masterGroupFilter.value
-          ? res.items.filter((p) => p.curator_group_id === masterGroupFilter.value)
+          ? res.items.filter((p) => p.school_id === masterGroupFilter.value)
           : res.items,
       )
       seedPractices(res.items)

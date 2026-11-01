@@ -30,9 +30,9 @@ describe('route table: stacked calendars resolve by name + params', () => {
 describe('route table: the school analytics screen (§6 MVP) resolves by name + params', () => {
   // FE-93: the user-zone twin is gone -- the analytics screen mounts in the
   // master zone only.
-  it('master-curator-group-analytics resolves with :id', () => {
-    const r = router.resolve({ name: 'master-curator-group-analytics', params: { id: 'g1' } })
-    expect(r.name).toBe('master-curator-group-analytics')
+  it('master-school-analytics resolves with :id', () => {
+    const r = router.resolve({ name: 'master-school-analytics', params: { id: 'g1' } })
+    expect(r.name).toBe('master-school-analytics')
   })
 })
 

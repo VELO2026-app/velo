@@ -201,7 +201,7 @@ const SCHOOL_INVITE_PARAM = /^school__([A-Za-z0-9_-]{16,128})$/
  *   zoom__{code}                -> { name: 'practice-live', params: { practiceId } } (T-35)
  *   master_onboarding__{token}  -> { name: 'master-invite', params: { token } }
  *   group_invite__{token}       -> { name: 'group-join', params: { token } } (P4, PROMPT №593)
- *   school__{token}             -> { name: 'curator-group-join', params: { token } } (FE-18, Links)
+ *   school__{token}             -> { name: 'school-join', params: { token } } (FE-18, Links)
  *   open_thread__{uuid}         -> { name: 'user-chat' | 'master-chat', params: { id } }
  *                                  (FE-103: Telegram twin of the bell's msg.* buttons)
  *   open_support_rating__{uuid} -> the same chat route + ?rate=1: the rating
@@ -271,16 +271,16 @@ export function parseStartParam(
     return { name: 'group-join', params: { token: groupInviteMatch[1] } }
   }
 
-  // Curator-group (school) invite (FE-18): a school's reusable link. ONE kind
+  // School invite (FE-18): a school's reusable link. ONE kind
   // for BOTH flavours -- master and student links differ only in the token's
   // row, and which one this is comes from the SERVER's preview
-  // (GET /curator-groups/invites/{token}), never from anything parseable
+  // (GET /schools/invites/{token}), never from anything parseable
   // here. Links (3 October): the kind is `school__` (owner) -- 8 + 43 = 51
-  // characters; the former curator_group_invite__ made 65 against
+  // characters; the former, longer kind made 65 against
   // Telegram's 64 and the link did not open.
-  const curatorInviteMatch = startParam.match(SCHOOL_INVITE_PARAM)
-  if (curatorInviteMatch?.[1]) {
-    return { name: 'curator-group-join', params: { token: curatorInviteMatch[1] } }
+  const schoolInviteMatch = startParam.match(SCHOOL_INVITE_PARAM)
+  if (schoolInviteMatch?.[1]) {
+    return { name: 'school-join', params: { token: schoolInviteMatch[1] } }
   }
 
   // Notification buttons (Links, 3 October): comms builds startapp as
@@ -299,13 +299,11 @@ export function parseStartParam(
       return featureEnabled('payments') ? { name: 'user-topup' } : null
     case 'confirm_waitlist':
       return id ? { name: 'waitlist-confirm', params: { id } } : null
-    case 'open_curator_group':
-      return id
-        ? { name: asMaster ? 'master-curator-group' : 'user-curator-group', params: { id } }
-        : null
+    case 'open_school':
+      return id ? { name: asMaster ? 'master-school' : 'user-school', params: { id } } : null
     case 'open_master_offer':
-      return id ? { name: 'curator-group-master-offer', params: { id } } : null
-    case 'open_master_application': // bare (BE-104) or __<group_id> (BE-59)
+      return id ? { name: 'school-master-offer', params: { id } } : null
+    case 'open_master_application': // bare (BE-104) or __<school_id> (BE-59)
       // The Telegram button does not know the type, so a rejection lands on
       // the apply wizard (its guard decides) -- the reason is in the text.
       return { name: 'master-apply' }

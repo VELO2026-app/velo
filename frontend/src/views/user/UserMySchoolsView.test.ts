@@ -1,9 +1,9 @@
 // =============================================================================
-// VELO Frontend -- UserCuratorGroupsView Screen Tests (schools FE-19 / GT P3)
+// VELO Frontend -- UserMySchoolsView Screen Tests (schools FE-19 / GT P3)
 // =============================================================================
 //
 // Standard screen-test idiom (GroupJoinView.test.ts): createApp/mount, mocked
-// @/api/curatorGroups + vue-router + useToast. Covers the four honest list
+// @/api/schools + vue-router + useToast. Covers the four honest list
 // states (loading / rows / empty / error+retry) and the row -> page
 // navigation.
 // =============================================================================
@@ -11,16 +11,16 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
-import UserCuratorGroupsView from '@/views/user/UserCuratorGroupsView.vue'
-import * as cgApi from '@/api/curatorGroups'
-import type { CuratorGroupMineResponse } from '@/api/types'
+import UserMySchoolsView from '@/views/user/UserMySchoolsView.vue'
+import * as cgApi from '@/api/schools'
+import type { SchoolMineResponse } from '@/api/types'
 
-vi.mock('@/api/curatorGroups')
+vi.mock('@/api/schools')
 
 const push = vi.fn()
 const replace = vi.fn()
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: {}, name: 'user-curator-groups' }),
+  useRoute: () => ({ params: {}, name: 'user-my-schools' }),
   useRouter: () => ({ push, replace }),
 }))
 
@@ -34,7 +34,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(UserCuratorGroupsView).use(createTestI18n())
+  app = createApp(UserMySchoolsView).use(createTestI18n())
   app.mount(host)
   return host
 }
@@ -49,7 +49,7 @@ function text(): string {
   return host?.textContent ?? ''
 }
 
-function mineResponse(items: CuratorGroupMineResponse['items']): CuratorGroupMineResponse {
+function mineResponse(items: SchoolMineResponse['items']): SchoolMineResponse {
   return { items }
 }
 
@@ -65,7 +65,7 @@ const row = (id: string, relation: 'curator' | 'master' | 'student', transfer = 
 })
 
 beforeEach(() => {
-  vi.mocked(cgApi.getMyCuratorGroups).mockReset()
+  vi.mocked(cgApi.getMySchools).mockReset()
   push.mockReset()
   replace.mockReset()
 })
@@ -78,9 +78,9 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('UserCuratorGroupsView', () => {
+describe('UserMySchoolsView', () => {
   it('shows the loading state while /mine is in flight', async () => {
-    vi.mocked(cgApi.getMyCuratorGroups).mockReturnValue(new Promise(() => {}))
+    vi.mocked(cgApi.getMySchools).mockReturnValue(new Promise(() => {}))
     mount()
     await flush()
 
@@ -88,7 +88,7 @@ describe('UserCuratorGroupsView', () => {
   })
 
   it('renders the PARTICIPATION rows (FE-93 filters the curated ones) with counts, and navigates on tap', async () => {
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue(
+    vi.mocked(cgApi.getMySchools).mockResolvedValue(
       mineResponse([row('g1', 'student'), row('g2', 'curator')]),
     )
     mount()
@@ -107,11 +107,11 @@ describe('UserCuratorGroupsView', () => {
 
     firstRow.click()
     await flush()
-    expect(push).toHaveBeenCalledWith({ name: 'user-curator-group', params: { id: 'g1' } })
+    expect(push).toHaveBeenCalledWith({ name: 'user-school', params: { id: 'g1' } })
   })
 
   it('empty list: the honest empty state names the only way in', async () => {
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue(mineResponse([]))
+    vi.mocked(cgApi.getMySchools).mockResolvedValue(mineResponse([]))
     mount()
     await flush()
 
@@ -120,13 +120,13 @@ describe('UserCuratorGroupsView', () => {
   })
 
   it('load failure: error state with a retry that works', async () => {
-    vi.mocked(cgApi.getMyCuratorGroups).mockRejectedValueOnce(new Error('network'))
+    vi.mocked(cgApi.getMySchools).mockRejectedValueOnce(new Error('network'))
     mount()
     await flush()
 
     expect(text()).toContain('Не удалось загрузить школы')
 
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValueOnce(mineResponse([row('g1', 'student')]))
+    vi.mocked(cgApi.getMySchools).mockResolvedValueOnce(mineResponse([row('g1', 'student')]))
     const retry = Array.from(host?.querySelectorAll('button') ?? []).find((b) =>
       b.textContent?.includes('Повторить'),
     ) as HTMLElement

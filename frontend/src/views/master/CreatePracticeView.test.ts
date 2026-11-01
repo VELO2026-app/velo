@@ -83,7 +83,7 @@ import { createApp, nextTick, type App } from 'vue'
 import CreatePracticeView from '@/views/master/CreatePracticeView.vue'
 import * as practicesApi from '@/api/practices'
 import * as groupsApi from '@/api/groups'
-import * as cgApi from '@/api/curatorGroups'
+import * as cgApi from '@/api/schools'
 import * as mastersApi from '@/api/masters'
 import { ApiResponseError } from '@/api/client'
 import type {
@@ -103,7 +103,7 @@ vi.mock('@/api/groups')
 
 // FE-24 (GT P5): the fourth option fetches the master's eligible schools on
 // mount -- mocked wholesale for the same reason as groups above.
-vi.mock('@/api/curatorGroups')
+vi.mock('@/api/schools')
 
 // §1.6 delegation: the masterId query resolves the target's display name on
 // mount -- mocked wholesale like the other api modules.
@@ -417,11 +417,11 @@ beforeEach(() => {
   fetchMyPractices.mockReset().mockResolvedValue(undefined)
   refreshMyPractices.mockReset().mockResolvedValue(undefined)
   vi.mocked(groupsApi.getGroups).mockReset().mockResolvedValue({ items: [] })
-  vi.mocked(cgApi.getMyCuratorGroups).mockReset().mockResolvedValue({ items: [] })
+  vi.mocked(cgApi.getMySchools).mockReset().mockResolvedValue({ items: [] })
   // §1.6 delegation: no query context and empty lookups by default -- the
   // master section must not render, and the body must carry no master_id.
   for (const key of Object.keys(routeQuery)) delete routeQuery[key]
-  vi.mocked(cgApi.getCuratorGroupMembers)
+  vi.mocked(cgApi.getSchoolMembers)
     .mockReset()
     .mockResolvedValue({ items: [], total: 0, limit: 50, offset: 0 })
   vi.mocked(mastersApi.getPublicMaster)
@@ -697,12 +697,12 @@ describe('CreatePracticeView', () => {
         currency: 'eur',
         recurrence: null,
         // P5 (PROMPT №594): untouched «Для кого практика» -> the default.
-        // BE-74: curator_group_id always ships too -- null for every
-        // non-school kind (it was an empty curator_group_ids array until a
+        // BE-74: school_id always ships too -- null for every
+        // non-school kind (it was an empty array of school ids until a
         // practice came to belong to exactly one school).
         audience_kind: 'public',
         group_ids: [],
-        curator_group_id: null,
+        school_id: null,
       })
     })
 
@@ -1699,8 +1699,8 @@ describe('CreatePracticeView -- «Школы» audience (FE-24 / GT P5)', () => 
     expect(button('Школы')).toBeUndefined()
   })
 
-  it('with eligible schools: option appears, student-relation schools are filtered out, and the picked chip ships curator_group_id', async () => {
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+  it('with eligible schools: option appears, student-relation schools are filtered out, and the picked chip ships school_id', async () => {
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({
       items: [
         school('sc1', 'Тихая школа', 'curator'),
         school('sc2', 'Утренняя школа', 'master'),
@@ -1728,14 +1728,14 @@ describe('CreatePracticeView -- «Школы» audience (FE-24 / GT P5)', () => 
     submitForm()
     await flush()
 
-    expect(sentBody().audience_kind).toBe('curator_groups')
-    expect(sentBody().curator_group_id).toBe('sc2')
+    expect(sentBody().audience_kind).toBe('schools')
+    expect(sentBody().school_id).toBe('sc2')
     // The unused target ships empty.
     expect(sentBody().group_ids).toEqual([])
   })
 
-  it('a school picked and then abandoned for «Публичная» does not ship (curator_group_id is null)', async () => {
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+  it('a school picked and then abandoned for «Публичная» does not ship (school_id is null)', async () => {
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({
       items: [school('sc1', 'Тихая школа', 'curator')],
     })
     mount()
@@ -1753,11 +1753,11 @@ describe('CreatePracticeView -- «Школы» audience (FE-24 / GT P5)', () => 
 
     expect(vi.mocked(practicesApi.createPractice)).toHaveBeenCalledTimes(1)
     expect(sentBody().audience_kind).toBe('public')
-    expect(sentBody().curator_group_id).toBeNull()
+    expect(sentBody().school_id).toBeNull()
   })
 
   it('«Школы» with nothing picked blocks submit with the field error', async () => {
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({
       items: [school('sc1', 'Тихая школа', 'curator')],
     })
     mount()
@@ -1809,14 +1809,14 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
 
     const body = vi.mocked(practicesApi.createPractice).mock.calls[0]![0]
     expect(body.master_id).toBe('m_pub')
-    expect(body.curator_group_id).toBe('g1')
+    expect(body.school_id).toBe('g1')
     expect(body.audience_kind).toBe('public')
     // BE-102 publish: the backend published it in the create request (this
     // pinned «the draft stays a draft», right under the 1 October ruling);
     // the front sends no second request either way.
     expect(practicesApi.updatePractice).not.toHaveBeenCalled()
     expect(toastSuccess).toHaveBeenCalledWith('Практика опубликована — мастер получит уведомление')
-    expect(replace).toHaveBeenCalledWith({ name: 'master-curator-group', params: { id: 'g1' } })
+    expect(replace).toHaveBeenCalledWith({ name: 'master-school', params: { id: 'g1' } })
   })
 
   it("masterId WITHOUT the school: no «Мастер» section, the practice is the caller's own", async () => {
@@ -1832,7 +1832,7 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     await flush()
     const body = vi.mocked(practicesApi.createPractice).mock.calls[0]![0]
     expect(body.master_id).toBeUndefined()
-    expect(body.curator_group_id).toBeNull()
+    expect(body.school_id).toBeNull()
   })
 
   it('a dedup for the master: «Такая практика уже есть у мастера», back to the school', async () => {
@@ -1853,7 +1853,7 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     submitForm()
     await flush()
     expect(toastInfo).toHaveBeenCalledWith('Такая практика уже есть у мастера')
-    expect(replace).toHaveBeenCalledWith({ name: 'master-curator-group', params: { id: 'g1' } })
+    expect(replace).toHaveBeenCalledWith({ name: 'master-school', params: { id: 'g1' } })
   })
 
   it.each([
@@ -1861,11 +1861,7 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     [403, 'curator_only', 'Создавать практику за мастера может только куратор школы'],
     [400, 'master_id_requires_school', 'Выберите школу, в которой создаётся практика'],
     // FE-92 follow-up: the unusable school has its own code now.
-    [
-      400,
-      'curator_group_not_usable',
-      'Школа недоступна: она отключена или вы в ней больше не состоите',
-    ],
+    [400, 'school_not_usable', 'Школа недоступна: она отключена или вы в ней больше не состоите'],
   ] as const)('refusal %i %s -> its toast; the form keeps its input', async (status, code, msg) => {
     routeQuery.masterId = 'm_pub'
     routeQuery.groupId = 'g1'
@@ -1895,7 +1891,7 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
 
   it('groupId query: lists visible school masters, «Я» stays creatable', async () => {
     routeQuery.groupId = 'g1'
-    vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue({
+    vi.mocked(cgApi.getSchoolMembers).mockResolvedValue({
       items: [
         {
           user_id: 'u1',
@@ -1962,7 +1958,7 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
 
   it("groupId query: picking a school master limits the audience to the school's two and sends the school with «public» too", async () => {
     routeQuery.groupId = 'g1'
-    vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue({
+    vi.mocked(cgApi.getSchoolMembers).mockResolvedValue({
       items: [
         {
           user_id: 'm2',
@@ -2003,8 +1999,8 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     await flush()
     const body = vi.mocked(practicesApi.createPractice).mock.calls[0]![0]
     expect(body.master_id).toBe('m2')
-    expect(body.curator_group_id).toBe('g1')
-    expect(['public', 'curator_groups']).toContain(body.audience_kind)
+    expect(body.school_id).toBe('g1')
+    expect(['public', 'schools']).toContain(body.audience_kind)
   })
 
   // FE-92 follow-up: «Использовать шаблон» offers the CALLER's practices --
@@ -2023,7 +2019,7 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
 
   it('templates: shown for «Я», hidden once a school master is picked', async () => {
     routeQuery.groupId = 'g1'
-    vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue({
+    vi.mocked(cgApi.getSchoolMembers).mockResolvedValue({
       items: [
         {
           user_id: 'm2',
@@ -2096,7 +2092,7 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
 
   it("groupId query: picking a school master swaps the direction filter to HIS methods; «Я» restores the caller's", async () => {
     routeQuery.groupId = 'g1'
-    vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue({
+    vi.mocked(cgApi.getSchoolMembers).mockResolvedValue({
       items: [
         {
           user_id: 'm2',
@@ -2146,7 +2142,7 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
 
   it('groupId query: a direction the newly picked master does not confirm is cleared from the form', async () => {
     routeQuery.groupId = 'g1'
-    vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue({
+    vi.mocked(cgApi.getSchoolMembers).mockResolvedValue({
       items: [
         {
           user_id: 'm2',

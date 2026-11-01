@@ -69,13 +69,13 @@ import * as mastersApi from '@/api/masters'
 import * as practicesApi from '@/api/practices'
 import { ApiResponseError } from '@/api/client'
 import * as chatsApi from '@/api/chats'
-import * as cgApi from '@/api/curatorGroups'
+import * as cgApi from '@/api/schools'
 import type { MasterPublicResponse, PracticeResponse } from '@/api/types'
 
 vi.mock('@/api/masters')
 vi.mock('@/api/practices')
 vi.mock('@/api/chats')
-vi.mock('@/api/curatorGroups')
+vi.mock('@/api/schools')
 
 const back = vi.fn()
 const push = vi.fn()
@@ -357,7 +357,7 @@ describe('MasterPublicView', () => {
       await flush()
 
       // The BE-59 demote is wired: the roster's school + the page's master.
-      expect(vi.mocked(cgApi.demoteCuratorGroupMaster)).toHaveBeenCalledWith('g1', 'm1')
+      expect(vi.mocked(cgApi.demoteSchoolMaster)).toHaveBeenCalledWith('g1', 'm1')
       expect(toastSuccess).toHaveBeenCalledWith('Роль изменена: участник теперь ученик школы')
     })
 
@@ -365,7 +365,7 @@ describe('MasterPublicView', () => {
       routeQuery.groupId = 'g1'
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
-      vi.mocked(cgApi.demoteCuratorGroupMaster).mockRejectedValue(
+      vi.mocked(cgApi.demoteSchoolMaster).mockRejectedValue(
         new ApiResponseError(500, 'backend said no'),
       )
       mount()
@@ -404,7 +404,7 @@ describe('MasterPublicView', () => {
       modalButton('Заблокировать')?.click()
       await flush()
 
-      expect(cgApi.blockCuratorGroupMember).toHaveBeenCalledWith('g1', 'm1')
+      expect(cgApi.blockSchoolMember).toHaveBeenCalledWith('g1', 'm1')
       expect(toastSuccess).toHaveBeenCalledWith('Участник заблокирован')
       expect(back).toHaveBeenCalledTimes(1)
       expect(toastInfo).not.toHaveBeenCalled()
@@ -414,7 +414,7 @@ describe('MasterPublicView', () => {
       routeQuery.groupId = 'g1'
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
-      vi.mocked(cgApi.blockCuratorGroupMember).mockRejectedValueOnce(
+      vi.mocked(cgApi.blockSchoolMember).mockRejectedValueOnce(
         new ApiResponseError(409, 'cannot block the curator', 'cannot_block_curator'),
       )
       mount()
@@ -702,9 +702,9 @@ describe('MasterPublicView', () => {
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(
         page([
-          practice('p-school', { curator_group_id: 'g1' }),
-          practice('p-personal', { curator_group_id: null }),
-          practice('p-foreign', { curator_group_id: 'g2' }),
+          practice('p-school', { school_id: 'g1' }),
+          practice('p-personal', { school_id: null }),
+          practice('p-foreign', { school_id: 'g2' }),
         ]),
       )
       mount()
@@ -730,8 +730,8 @@ describe('MasterPublicView', () => {
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(
         page([
-          practice('p-school', { curator_group_id: 'g1' }),
-          practice('p-personal', { curator_group_id: null }),
+          practice('p-school', { school_id: 'g1' }),
+          practice('p-personal', { school_id: null }),
         ]),
       )
       mount()

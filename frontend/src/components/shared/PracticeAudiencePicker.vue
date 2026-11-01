@@ -24,7 +24,7 @@
   Edit passes the practice's own school plus this flag and shows the fixed
   school itself; only the KIND stays selectable there (the FE-92 pair).
 
-  v-model:kind / v-model:groupIds / v-model:curatorGroupId -- the group array
+  v-model:kind / v-model:groupIds / v-model:schoolId -- the group array
   is replaced immutably (a fresh array per toggle), never mutated in place, so
   the caller's reactivity and its own change-detection stay honest; the school
   is one id or null.
@@ -52,14 +52,14 @@
       </p>
     </template>
 
-    <template v-else-if="kindModel === 'curator_groups' && !schoolLocked">
+    <template v-else-if="kindModel === 'schools' && !schoolLocked">
       <div v-if="schools.length" class="pap__chips">
         <VChip
           v-for="s in schools"
           :key="s.id"
           size="md"
           clickable
-          :active="curatorGroupId === s.id"
+          :active="schoolId === s.id"
           @click="toggleSchool(s.id)"
         >
           {{ s.name }}
@@ -75,11 +75,9 @@
     <!-- Review fix: the error belongs to the ACTIVE targeted kind only --
          after «Выберите хотя бы одну группу» a switch to «Публичная» clears
          the message instead of lying until the next submit. -->
-    <span
-      v-if="error && (kindModel === 'groups' || kindModel === 'curator_groups')"
-      class="pap__error"
-      >{{ error }}</span
-    >
+    <span v-if="error && (kindModel === 'groups' || kindModel === 'schools')" class="pap__error">{{
+      error
+    }}</span>
   </div>
 </template>
 
@@ -95,7 +93,7 @@ import type { AudienceSchoolOption } from './practiceAudience'
 const props = defineProps<{
   /** The master's own custom student groups (kind === 'groups' targets). */
   groups: GroupListItem[]
-  /** Eligible schools (kind === 'curator_groups' targets). */
+  /** Eligible schools (kind === 'schools' targets). */
   schools: AudienceSchoolOption[]
   /** Single validation-error line, shown for whichever kind is active. */
   error?: string
@@ -107,7 +105,7 @@ const props = defineProps<{
    *  creates for a school's master belongs to that school, and a school
    *  practice is for everyone or for the school's students
    *  (check_school_audience) -- so that flow passes ['public',
-   *  'curator_groups']. Absent -> every kind, as before. */
+   *  'schools']. Absent -> every kind, as before. */
   allowedKinds?: PracticeAudienceKind[]
   /** BE-74 edit seam: the school of an EXISTING practice never changes
    *  (practice_school_immutable). Edit passes the practice's own school in
@@ -119,7 +117,7 @@ const props = defineProps<{
 
 const kindModel = defineModel<PracticeAudienceKind>('kind', { required: true })
 const groupIds = defineModel<string[]>('groupIds', { required: true })
-const curatorGroupId = defineModel<string | null>('curatorGroupId', { required: true })
+const schoolId = defineModel<string | null>('schoolId', { required: true })
 
 const options = computed(() => {
   const all = audienceOptions(props.schools.length > 0)
@@ -135,7 +133,7 @@ function toggleGroup(id: string): void {
 }
 
 function toggleSchool(id: string): void {
-  curatorGroupId.value = curatorGroupId.value === id ? null : id
+  schoolId.value = schoolId.value === id ? null : id
 }
 </script>
 

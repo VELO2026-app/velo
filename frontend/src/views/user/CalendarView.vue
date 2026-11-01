@@ -287,7 +287,7 @@ function goBack(): void {
     })
   } else {
     void router.push({
-      name: 'user-curator-group',
+      name: 'user-school',
       params: { id: String(route.params.groupId) },
     })
   }

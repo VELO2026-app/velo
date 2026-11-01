@@ -44,7 +44,7 @@ export interface TabItem {
    *  the named server-side condition holds; VTabBar stays dumb. Omit for
    *  the unconditional default. 'schools' = the account belongs to >= 1 school
    *  (stores/schoolsHub, any relation); the MASTER zone's shell keeps the
-   *  tab also for the admin-issued founding right (can_create_groups).
+   *  tab also for the admin-issued founding right (can_create_schools).
    *  tz-whitelabel §4 (F3): a FeatureName is the EDITION level -- checked
    *  against the feature registry (platform/features), not against server
    *  data; the module's routes are cut at build time with it. */
@@ -124,7 +124,7 @@ export const MASTER_TABS: TabItem[] = [
   // tz-curator.md §1.2 (owner 2026-09-22: «только при наличии хотя бы одной
   // школы», право основания сохраняет вход): четвёртым, перед «Я» —
   // зеркально юзер-зоне. Same membership condition as the user zone's, PLUS
-  // the founding right: a can_create_groups holder with zero schools keeps
+  // the founding right: a can_create_schools holder with zero schools keeps
   // the tab -- the empty hub's «Создать школу» is their only entrance.
   // Target is the master zone's own sectioned schools list.
   {
@@ -132,7 +132,7 @@ export const MASTER_TABS: TabItem[] = [
     get label(): string {
       return t('tabs.schools')
     },
-    to: '/master/curator-groups',
+    to: '/master/schools',
     requires: 'schools',
   },
   {

@@ -85,7 +85,7 @@
                meets -- the master's student groups are invisible to them. -->
           <VMenuRow
             :label="t('user.screens.userProfile.menu.groups')"
-            @click="router.push({ name: 'user-curator-groups' })"
+            @click="router.push({ name: 'user-my-schools' })"
           >
             <template #icon><IconGroup :size="20" /></template>
           </VMenuRow>

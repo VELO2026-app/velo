@@ -2,7 +2,7 @@
 // VELO Frontend -- api/support.ts Unit Tests (FE-104 / FE-100)
 // =============================================================================
 //
-// Same pattern as api/curatorGroups.test.ts: mocks @/api/client (the HTTP
+// Same pattern as api/schools.test.ts: mocks @/api/client (the HTTP
 // seam), calls the REAL wrappers, and asserts the exact URL, body and headers
 // each one sends. The screen tests mock @/api/support entirely, so the wire
 // shape of the ticket routes (BE-162 section 7) is closed here: the

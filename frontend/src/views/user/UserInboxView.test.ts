@@ -30,14 +30,14 @@ import { createApp, nextTick, type App } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import UserInboxView from '@/views/user/UserInboxView.vue'
 import * as notificationsApi from '@/api/notifications'
-import * as cgApi from '@/api/curatorGroups'
+import * as cgApi from '@/api/schools'
 import type { NotificationItem } from '@/api/notifications'
-import type { CuratorGroupMineItem } from '@/api/types'
+import type { SchoolMineItem } from '@/api/types'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useAuthStore } from '@/stores/auth'
 
 vi.mock('@/api/notifications')
-vi.mock('@/api/curatorGroups')
+vi.mock('@/api/schools')
 
 const back = vi.fn()
 const push = vi.fn()
@@ -69,9 +69,9 @@ function item(overrides: Partial<NotificationItem> = {}): NotificationItem {
   }
 }
 
-/** One /curator-groups/mine row: a curated school the removed inbox mocks would
+/** One /schools/mine row: a curated school the removed inbox mocks would
  *  have minted an invite for -- the «nothing but the feed» test seeds it. */
-function mineItem(overrides: Partial<CuratorGroupMineItem> = {}): CuratorGroupMineItem {
+function mineItem(overrides: Partial<SchoolMineItem> = {}): SchoolMineItem {
   return {
     id: 'g1',
     name: 'Тихая школа',
@@ -81,7 +81,7 @@ function mineItem(overrides: Partial<CuratorGroupMineItem> = {}): CuratorGroupMi
     students_count: 3,
     relation: 'curator',
     ...overrides,
-  } as CuratorGroupMineItem
+  } as SchoolMineItem
 }
 
 // -----------------------------------------------------------------------------
@@ -133,15 +133,15 @@ beforeEach(() => {
   vi.mocked(notificationsApi.listNotifications).mockReset()
   vi.mocked(notificationsApi.markNotificationRead).mockReset()
   vi.mocked(notificationsApi.markAllNotificationsRead).mockReset()
-  vi.mocked(cgApi.getMyCuratorGroups)
+  vi.mocked(cgApi.getMySchools)
     .mockReset()
     .mockResolvedValue({
       items: [],
     } as never)
-  vi.mocked(cgApi.createCuratorGroupInvite)
+  vi.mocked(cgApi.createSchoolInvite)
     .mockReset()
     .mockResolvedValue({
-      invite_url: 'https://t.me/velobot?start=curator_group_invite__tok123',
+      invite_url: 'https://t.me/velobot?start=school__tok123',
     } as never)
 })
 
@@ -353,15 +353,15 @@ describe('UserInboxView', () => {
   // BE-79 (2): the block notices of a school. Blocked -> the school is closed
   // to the reader: mark-read only. Unblocked -> the school page.
   it.each([
-    ['curator_group.member_blocked', null],
-    ['curator_group.member_unblocked', { name: 'user-curator-group', params: { id: 'g7' } }],
+    ['school.member_blocked', null],
+    ['school.member_unblocked', { name: 'user-school', params: { id: 'g7' } }],
   ] as const)('BE-79: %s -> its own target', async (type, target) => {
     vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
       items: [
         item({
           id: 'bl',
           type,
-          action_data: { action: 'open_curator_group', params: { group_id: 'g7' } },
+          action_data: { action: 'open_school', params: { school_id: 'g7' } },
         }),
       ],
       next_cursor: null,
@@ -379,18 +379,18 @@ describe('UserInboxView', () => {
     else expect(push).not.toHaveBeenCalled()
   })
 
-  // Links (3 October): master_offered rode open_curator_group and was told
+  // Links (3 October): master_offered rode the school-page verb and was told
   // apart by TYPE -- right until the Telegram button (which has no type)
   // needed its own verb. It carries open_master_offer now.
-  it('curator_group.master_offered (open_master_offer) opens the consent screen', async () => {
+  it('school.master_offered (open_master_offer) opens the consent screen', async () => {
     vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
       items: [
         item({
           id: 'mo',
-          type: 'curator_group.master_offered',
+          type: 'school.master_offered',
           title: 'Вас приглашают вести школу',
           body: 'Мария Иванова предлагает вам стать мастером школы «Тихая школа».',
-          action_data: { action: 'open_master_offer', params: { group_id: 'g1' } },
+          action_data: { action: 'open_master_offer', params: { school_id: 'g1' } },
         }),
       ],
       next_cursor: null,
@@ -404,13 +404,13 @@ describe('UserInboxView', () => {
     await flush()
 
     expect(push).toHaveBeenCalledWith({
-      name: 'curator-group-master-offer',
+      name: 'school-master-offer',
       params: { id: 'g1' },
     })
   })
 
   // Links (В2): a school event stayed mark-read-only -- right while only the
-  // offer had a screen. Every curator_group.* notice now opens the school page,
+  // offer had a screen. Every school.* notice now opens the school page,
   // like its Telegram button; the block notice is the one exception (pinned in
   // the BE-79 block above).
   // Links (Д3): «Освободилось место» carries waitlist_id, not practice_id --
@@ -435,13 +435,13 @@ describe('UserInboxView', () => {
     expect(push).toHaveBeenCalledWith({ name: 'waitlist-confirm', params: { id: 'w1' } })
   })
 
-  it('another school event (open_curator_group) opens the school page', async () => {
+  it('another school event (open_school) opens the school page', async () => {
     vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
       items: [
         item({
           id: 'tr',
-          type: 'curator_group.transfer_offered',
-          action_data: { action: 'open_curator_group', params: { group_id: 'g1' } },
+          type: 'school.transfer_offered',
+          action_data: { action: 'open_school', params: { school_id: 'g1' } },
         }),
       ],
       next_cursor: null,
@@ -455,7 +455,40 @@ describe('UserInboxView', () => {
     await flush()
 
     expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith('tr')
-    expect(push).toHaveBeenCalledWith({ name: 'user-curator-group', params: { id: 'g1' } })
+    expect(push).toHaveBeenCalledWith({ name: 'user-school', params: { id: 'g1' } })
+  })
+
+  // FE-127: the school verb and its param under the renamed contract, on the
+  // three twin axes. The FORMER verb and the FORMER param key -- both still in
+  // inbox records written before the rename -- stay mark-read only (owner: no
+  // alias). Both keys present -> school_id decides. An empty id is no route.
+  it.each([
+    ['open_school', { school_id: 'g1' }, { name: 'user-school', params: { id: 'g1' } }],
+    [
+      'open_school',
+      { school_id: 'g1', group_id: 'gX' },
+      { name: 'user-school', params: { id: 'g1' } },
+    ],
+    ['open_school', { group_id: 'g1' }, null],
+    ['open_school', { school_id: '' }, null],
+    ['open_curator_group', { school_id: 'g1' }, null],
+    ['open_master_offer', { group_id: 'g1' }, null],
+  ] as const)('FE-127: %s with %o -> its target', async (action, params, target) => {
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+      items: [item({ id: 'fe', type: 'school.transfer_offered', action_data: { action, params } })],
+      next_cursor: null,
+      unread: 1,
+    })
+    vi.mocked(notificationsApi.markNotificationRead).mockResolvedValue({ unread: 0 })
+    mount()
+    await flush()
+
+    row(0).click()
+    await flush()
+
+    expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith('fe')
+    if (target) expect(push).toHaveBeenCalledWith(target)
+    else expect(push).not.toHaveBeenCalled()
   })
 
   it('open_master_application -> the apply wizard (BE-59 verification prompt)', async () => {
@@ -463,8 +496,8 @@ describe('UserInboxView', () => {
       items: [
         item({
           id: 'mv',
-          type: 'curator_group.master_verification_required',
-          action_data: { action: 'open_master_application', params: { group_id: 'g1' } },
+          type: 'school.master_verification_required',
+          action_data: { action: 'open_master_application', params: { school_id: 'g1' } },
         }),
       ],
       next_cursor: null,
@@ -788,7 +821,7 @@ describe('UserInboxView', () => {
   // mocks for telegram 388101199 were removed. The account that used to see
   // them now sees exactly the server page and the server badge, and opening
   // the bell calls nothing but the feed -- the mocks used to mint a real
-  // school invite token (createCuratorGroupInvite) on every open.
+  // school invite token (createSchoolInvite) on every open.
   // ===========================================================================
   describe('the former simulation account sees only the server', () => {
     function seedTelegram(telegramId: number): void {
@@ -798,7 +831,7 @@ describe('UserInboxView', () => {
     it('telegram 388101199: rows and badge are exactly the server page', async () => {
       seedTelegram(388101199)
       // A curated school exists -- the removed mock would have used it.
-      vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+      vi.mocked(cgApi.getMySchools).mockResolvedValue({
         items: [mineItem({ relation: 'curator' })],
       } as never)
       vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
@@ -815,8 +848,8 @@ describe('UserInboxView', () => {
       expect(readAllButton()).toBeFalsy()
       // The only API the bell touched is the feed.
       expect(notificationsApi.listNotifications).toHaveBeenCalledTimes(1)
-      expect(cgApi.getMyCuratorGroups).not.toHaveBeenCalled()
-      expect(cgApi.createCuratorGroupInvite).not.toHaveBeenCalled()
+      expect(cgApi.getMySchools).not.toHaveBeenCalled()
+      expect(cgApi.createSchoolInvite).not.toHaveBeenCalled()
     })
 
     it('telegram 388101199: a tap marks read on the SERVER (no client-only rows)', async () => {

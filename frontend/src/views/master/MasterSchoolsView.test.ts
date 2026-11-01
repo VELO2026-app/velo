@@ -1,26 +1,26 @@
 // =============================================================================
-// VELO Frontend -- MasterCuratorGroupsView Screen Tests (schools FE-20 / GT P3)
+// VELO Frontend -- MasterSchoolsView Screen Tests (schools FE-20 / GT P3)
 // =============================================================================
 //
-// Same idiom as UserCuratorGroupsView.test.ts, plus the master list's own
+// Same idiom as UserMySchoolsView.test.ts, plus the master list's own
 // distinctions: the «Я куратор» / «Я участник» sectioning over one /mine
 // payload, and -- since BE-18 -- the «+» gated on the admin-issued
-// can_create_groups flag that rides on GET /masters/me/curator-groups.
+// can_create_schools flag that rides on GET /masters/me/schools.
 // =============================================================================
 
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
-import MasterCuratorGroupsView from '@/views/master/MasterCuratorGroupsView.vue'
-import * as cgApi from '@/api/curatorGroups'
-import type { CuratorGroupMineResponse } from '@/api/types'
+import MasterSchoolsView from '@/views/master/MasterSchoolsView.vue'
+import * as cgApi from '@/api/schools'
+import type { SchoolMineResponse } from '@/api/types'
 
-vi.mock('@/api/curatorGroups')
+vi.mock('@/api/schools')
 
 const push = vi.fn()
 const replace = vi.fn()
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: {}, name: 'master-curator-groups' }),
+  useRoute: () => ({ params: {}, name: 'master-schools' }),
   useRouter: () => ({ push, replace }),
 }))
 
@@ -34,7 +34,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(MasterCuratorGroupsView).use(createTestI18n())
+  app = createApp(MasterSchoolsView).use(createTestI18n())
   app.mount(host)
   return host
 }
@@ -67,12 +67,10 @@ const row = (id: string, relation: 'curator' | 'master' | 'student') => ({
 })
 
 beforeEach(() => {
-  vi.mocked(cgApi.getMyCuratorGroups).mockReset()
+  vi.mocked(cgApi.getMySchools).mockReset()
   // BE-18: the flag rides on the CURATOR list call. Default true keeps the
   // pre-BE-18 behaviour for the row/section tests; the gate has its own.
-  vi.mocked(cgApi.getCuratorGroups)
-    .mockReset()
-    .mockResolvedValue({ items: [], can_create_groups: true })
+  vi.mocked(cgApi.getSchools).mockReset().mockResolvedValue({ items: [], can_create_schools: true })
   push.mockReset()
   replace.mockReset()
 })
@@ -85,11 +83,11 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('MasterCuratorGroupsView', () => {
+describe('MasterSchoolsView', () => {
   it('sections one /mine payload into «Я куратор» and «Я участник»', async () => {
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({
       items: [row('g1', 'curator'), row('g2', 'master'), row('g3', 'student')],
-    } satisfies CuratorGroupMineResponse)
+    } satisfies SchoolMineResponse)
     mount()
     await flush()
 
@@ -103,22 +101,22 @@ describe('MasterCuratorGroupsView', () => {
   })
 
   it('tap navigates into the MASTER zone page', async () => {
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({
       items: [row('g1', 'curator')],
-    } satisfies CuratorGroupMineResponse)
+    } satisfies SchoolMineResponse)
     mount()
     await flush()
 
     const first = host?.querySelector('.cg-row') as HTMLElement
     first.click()
     await flush()
-    expect(push).toHaveBeenCalledWith({ name: 'master-curator-group', params: { id: 'g1' } })
+    expect(push).toHaveBeenCalledWith({ name: 'master-school', params: { id: 'g1' } })
   })
 
   it('the «+» is present with the right (BE-18) and opens the create form', async () => {
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({
       items: [],
-    } satisfies CuratorGroupMineResponse)
+    } satisfies SchoolMineResponse)
     mount()
     await flush()
 
@@ -126,16 +124,16 @@ describe('MasterCuratorGroupsView', () => {
     expect(add).toBeTruthy()
     add?.click()
     await flush()
-    expect(push).toHaveBeenCalledWith({ name: 'master-curator-group-create' })
+    expect(push).toHaveBeenCalledWith({ name: 'master-school-create' })
   })
 
   it('BE-18: NO right -> no «+», no create button, and the hint says who issues it', async () => {
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({
       items: [row('g1', 'curator')],
-    } satisfies CuratorGroupMineResponse)
-    vi.mocked(cgApi.getCuratorGroups).mockResolvedValue({
+    } satisfies SchoolMineResponse)
+    vi.mocked(cgApi.getSchools).mockResolvedValue({
       items: [],
-      can_create_groups: false,
+      can_create_schools: false,
     })
     mount()
     await flush()
@@ -148,12 +146,12 @@ describe('MasterCuratorGroupsView', () => {
   })
 
   it('BE-18: no right and no schools -> the empty state offers only the invite-link way in', async () => {
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({
       items: [],
-    } satisfies CuratorGroupMineResponse)
-    vi.mocked(cgApi.getCuratorGroups).mockResolvedValue({
+    } satisfies SchoolMineResponse)
+    vi.mocked(cgApi.getSchools).mockResolvedValue({
       items: [],
-      can_create_groups: false,
+      can_create_schools: false,
     })
     mount()
     await flush()
@@ -163,10 +161,10 @@ describe('MasterCuratorGroupsView', () => {
   })
 
   it('BE-18: a FAILED flag call degrades to "no «+»" -- rows still render, no error screen', async () => {
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({
       items: [row('g1', 'curator')],
-    } satisfies CuratorGroupMineResponse)
-    vi.mocked(cgApi.getCuratorGroups).mockRejectedValue(new Error('blip'))
+    } satisfies SchoolMineResponse)
+    vi.mocked(cgApi.getSchools).mockRejectedValue(new Error('blip'))
     mount()
     await flush()
 
@@ -178,9 +176,9 @@ describe('MasterCuratorGroupsView', () => {
   })
 
   it('empty list: the hint covers BOTH ways in (create or join by link)', async () => {
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({
       items: [],
-    } satisfies CuratorGroupMineResponse)
+    } satisfies SchoolMineResponse)
     mount()
     await flush()
 
@@ -190,15 +188,15 @@ describe('MasterCuratorGroupsView', () => {
   })
 
   it('load failure: error state with a working retry', async () => {
-    vi.mocked(cgApi.getMyCuratorGroups).mockRejectedValueOnce(new Error('network'))
+    vi.mocked(cgApi.getMySchools).mockRejectedValueOnce(new Error('network'))
     mount()
     await flush()
 
     expect(text()).toContain('Не удалось загрузить школы')
 
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValueOnce({
+    vi.mocked(cgApi.getMySchools).mockResolvedValueOnce({
       items: [row('g1', 'curator')],
-    } satisfies CuratorGroupMineResponse)
+    } satisfies SchoolMineResponse)
     buttonWith('Повторить')?.click()
     await flush()
 

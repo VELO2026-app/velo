@@ -1,8 +1,8 @@
 // =============================================================================
-// VELO Frontend -- CuratorGroupMasterOfferView Screen Tests (BE-59/GT-27)
+// VELO Frontend -- SchoolMasterOfferView Screen Tests (BE-59/GT-27)
 // =============================================================================
 //
-// Same idiom as CuratorGroupJoinView.test.ts (createApp/mount, real
+// Same idiom as SchoolJoinView.test.ts (createApp/mount, real
 // ApiResponseError for status-based branching, mocked vue-router +
 // useToast), for the consent screen's own contract: the school page paints
 // the card, and the offer's existence is proven only by the accept --
@@ -13,12 +13,12 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
-import CuratorGroupMasterOfferView from '@/views/master/CuratorGroupMasterOfferView.vue'
-import * as cgApi from '@/api/curatorGroups'
+import SchoolMasterOfferView from '@/views/master/SchoolMasterOfferView.vue'
+import * as cgApi from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
-import type { CuratorGroupPageResponse } from '@/api/types'
+import type { SchoolPageResponse } from '@/api/types'
 
-vi.mock('@/api/curatorGroups')
+vi.mock('@/api/schools')
 
 const push = vi.fn()
 const replace = vi.fn()
@@ -47,7 +47,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(CuratorGroupMasterOfferView).use(createTestI18n())
+  app = createApp(SchoolMasterOfferView).use(createTestI18n())
   app.mount(host)
   return host
 }
@@ -70,7 +70,7 @@ function buttonWith(label: string): HTMLElement | undefined {
 
 /** The addressee's school page: a member's view of a school with a pending
  *  offer (the offer itself is not on this payload by contract). */
-function pageResponse(overrides: Partial<CuratorGroupPageResponse> = {}): CuratorGroupPageResponse {
+function pageResponse(overrides: Partial<SchoolPageResponse> = {}): SchoolPageResponse {
   return {
     id: 'g1',
     name: 'Тихая школа',
@@ -89,9 +89,9 @@ function pageResponse(overrides: Partial<CuratorGroupPageResponse> = {}): Curato
 beforeEach(() => {
   routeParams.id = 'g1'
   mockRole = 'user'
-  vi.mocked(cgApi.getCuratorGroupPage).mockReset()
-  vi.mocked(cgApi.acceptCuratorGroupMasterOffer).mockReset()
-  vi.mocked(cgApi.declineCuratorGroupMasterOffer).mockReset()
+  vi.mocked(cgApi.getSchoolPage).mockReset()
+  vi.mocked(cgApi.acceptSchoolMasterOffer).mockReset()
+  vi.mocked(cgApi.declineSchoolMasterOffer).mockReset()
   push.mockReset()
   replace.mockReset()
   toastSuccess.mockReset()
@@ -106,9 +106,9 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('CuratorGroupMasterOfferView -- page states', () => {
+describe('SchoolMasterOfferView -- page states', () => {
   it('shows the loading state while the school page is in flight', async () => {
-    vi.mocked(cgApi.getCuratorGroupPage).mockReturnValue(new Promise(() => {}))
+    vi.mocked(cgApi.getSchoolPage).mockReturnValue(new Promise(() => {}))
     mount()
     await flush()
 
@@ -116,7 +116,7 @@ describe('CuratorGroupMasterOfferView -- page states', () => {
   })
 
   it('renders the invite card: name, curator, counts, description, heading, both buttons', async () => {
-    vi.mocked(cgApi.getCuratorGroupPage).mockResolvedValue(pageResponse())
+    vi.mocked(cgApi.getSchoolPage).mockResolvedValue(pageResponse())
     mount()
     await flush()
 
@@ -131,7 +131,7 @@ describe('CuratorGroupMasterOfferView -- page states', () => {
   })
 
   it('page 404: the school is dark/gone or the reader left -- the invite is dead', async () => {
-    vi.mocked(cgApi.getCuratorGroupPage).mockRejectedValue(
+    vi.mocked(cgApi.getSchoolPage).mockRejectedValue(
       new ApiResponseError(404, 'not_found', 'not found'),
     )
     mount()
@@ -142,13 +142,13 @@ describe('CuratorGroupMasterOfferView -- page states', () => {
   })
 
   it('transient page error offers a retry, not a dead-invite verdict (W11)', async () => {
-    vi.mocked(cgApi.getCuratorGroupPage).mockRejectedValueOnce(new Error('network blip'))
+    vi.mocked(cgApi.getSchoolPage).mockRejectedValueOnce(new Error('network blip'))
     mount()
     await flush()
 
     expect(text()).toContain('Не удалось проверить приглашение')
 
-    vi.mocked(cgApi.getCuratorGroupPage).mockResolvedValueOnce(pageResponse())
+    vi.mocked(cgApi.getSchoolPage).mockResolvedValueOnce(pageResponse())
     buttonWith('Повторить')?.click()
     await flush()
 
@@ -156,37 +156,37 @@ describe('CuratorGroupMasterOfferView -- page states', () => {
   })
 })
 
-describe('CuratorGroupMasterOfferView -- the accept gate', () => {
+describe('SchoolMasterOfferView -- the accept gate', () => {
   it('on success: accepts, toasts, and lands on the school page in the USER zone', async () => {
-    vi.mocked(cgApi.getCuratorGroupPage).mockResolvedValue(pageResponse())
-    vi.mocked(cgApi.acceptCuratorGroupMasterOffer).mockResolvedValue(undefined)
+    vi.mocked(cgApi.getSchoolPage).mockResolvedValue(pageResponse())
+    vi.mocked(cgApi.acceptSchoolMasterOffer).mockResolvedValue(undefined)
     mount()
     await flush()
 
     buttonWith('Принять')?.click()
     await flush()
 
-    expect(cgApi.acceptCuratorGroupMasterOffer).toHaveBeenCalledWith('g1')
+    expect(cgApi.acceptSchoolMasterOffer).toHaveBeenCalledWith('g1')
     expect(toastSuccess).toHaveBeenCalledWith('Вы теперь мастер школы «Тихая школа»')
-    expect(replace).toHaveBeenCalledWith({ name: 'user-curator-group', params: { id: 'g1' } })
+    expect(replace).toHaveBeenCalledWith({ name: 'user-school', params: { id: 'g1' } })
   })
 
   it('a MASTER lands on the master zone school page after accepting', async () => {
     mockRole = 'master'
-    vi.mocked(cgApi.getCuratorGroupPage).mockResolvedValue(pageResponse())
-    vi.mocked(cgApi.acceptCuratorGroupMasterOffer).mockResolvedValue(undefined)
+    vi.mocked(cgApi.getSchoolPage).mockResolvedValue(pageResponse())
+    vi.mocked(cgApi.acceptSchoolMasterOffer).mockResolvedValue(undefined)
     mount()
     await flush()
 
     buttonWith('Принять')?.click()
     await flush()
 
-    expect(replace).toHaveBeenCalledWith({ name: 'master-curator-group', params: { id: 'g1' } })
+    expect(replace).toHaveBeenCalledWith({ name: 'master-school', params: { id: 'g1' } })
   })
 
   it('accept 404: the offer is gone -- the errorMessages phrase, no retry loop', async () => {
-    vi.mocked(cgApi.getCuratorGroupPage).mockResolvedValue(pageResponse())
-    vi.mocked(cgApi.acceptCuratorGroupMasterOffer).mockRejectedValue(
+    vi.mocked(cgApi.getSchoolPage).mockResolvedValue(pageResponse())
+    vi.mocked(cgApi.acceptSchoolMasterOffer).mockRejectedValue(
       new ApiResponseError(404, 'master_offer_not_found', 'not found'),
     )
     mount()
@@ -200,8 +200,8 @@ describe('CuratorGroupMasterOfferView -- the accept gate', () => {
   })
 
   it('accept 403 master_required: the apply wizard is the way out -- the offer survives', async () => {
-    vi.mocked(cgApi.getCuratorGroupPage).mockResolvedValue(pageResponse())
-    vi.mocked(cgApi.acceptCuratorGroupMasterOffer).mockRejectedValue(
+    vi.mocked(cgApi.getSchoolPage).mockResolvedValue(pageResponse())
+    vi.mocked(cgApi.acceptSchoolMasterOffer).mockRejectedValue(
       new ApiResponseError(403, 'forbidden', 'master_required'),
     )
     mount()
@@ -219,8 +219,8 @@ describe('CuratorGroupMasterOfferView -- the accept gate', () => {
   })
 
   it('a transient accept failure toasts and stays on the card', async () => {
-    vi.mocked(cgApi.getCuratorGroupPage).mockResolvedValue(pageResponse())
-    vi.mocked(cgApi.acceptCuratorGroupMasterOffer).mockRejectedValueOnce(new Error('timeout'))
+    vi.mocked(cgApi.getSchoolPage).mockResolvedValue(pageResponse())
+    vi.mocked(cgApi.acceptSchoolMasterOffer).mockRejectedValueOnce(new Error('timeout'))
     mount()
     await flush()
 
@@ -232,24 +232,24 @@ describe('CuratorGroupMasterOfferView -- the accept gate', () => {
   })
 })
 
-describe('CuratorGroupMasterOfferView -- decline', () => {
+describe('SchoolMasterOfferView -- decline', () => {
   it('declines, toasts, and lands on the school page (FE-67: both decisions do)', async () => {
-    vi.mocked(cgApi.getCuratorGroupPage).mockResolvedValue(pageResponse())
-    vi.mocked(cgApi.declineCuratorGroupMasterOffer).mockResolvedValue(undefined)
+    vi.mocked(cgApi.getSchoolPage).mockResolvedValue(pageResponse())
+    vi.mocked(cgApi.declineSchoolMasterOffer).mockResolvedValue(undefined)
     mount()
     await flush()
 
     buttonWith('Отказаться')?.click()
     await flush()
 
-    expect(cgApi.declineCuratorGroupMasterOffer).toHaveBeenCalledWith('g1')
+    expect(cgApi.declineSchoolMasterOffer).toHaveBeenCalledWith('g1')
     expect(toastSuccess).toHaveBeenCalledWith('Предложение отклонено')
-    expect(replace).toHaveBeenCalledWith({ name: 'user-curator-group', params: { id: 'g1' } })
+    expect(replace).toHaveBeenCalledWith({ name: 'user-school', params: { id: 'g1' } })
   })
 
   it('a transient decline failure toasts and stays on the card', async () => {
-    vi.mocked(cgApi.getCuratorGroupPage).mockResolvedValue(pageResponse())
-    vi.mocked(cgApi.declineCuratorGroupMasterOffer).mockRejectedValueOnce(new Error('timeout'))
+    vi.mocked(cgApi.getSchoolPage).mockResolvedValue(pageResponse())
+    vi.mocked(cgApi.declineSchoolMasterOffer).mockRejectedValueOnce(new Error('timeout'))
     mount()
     await flush()
 

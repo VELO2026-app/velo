@@ -6,23 +6,23 @@
 // entry the screen reads.
 // =============================================================================
 
-import { getCuratorGroups, getMyCuratorGroups } from '@/api/curatorGroups'
+import { getSchools, getMySchools } from '@/api/schools'
 import { getMyStats } from '@/api/bookings'
 import { queryKeys } from '@/composables/queryKeys'
 import type { QueryOptions } from '@/composables/useQuery'
-import type { CuratorGroupMineItem, UserStatsResponse } from '@/api/types'
+import type { SchoolMineItem, UserStatsResponse } from '@/api/types'
 
 export interface UserSchools {
-  schools: CuratorGroupMineItem[]
+  schools: SchoolMineItem[]
   canCreate: boolean
 }
 
 /** «Школы» tab (SchoolsView): the schools I participate in + the create right. */
 export function userSchoolsQuery(role: string): QueryOptions<UserSchools> {
   return {
-    key: ['curatorGroups', 'mine', 'participant', role],
+    key: ['schools', 'mine', 'participant', role],
     query: async () => {
-      // Two parallel calls, one payload split -- the MasterCuratorGroupsView
+      // Two parallel calls, one payload split -- the MasterSchoolsView
       // recipe verbatim: /mine feeds the rows (relation + transfer_offered ride
       // only here), the curator list carries the create right. allSettled,
       // because the two calls are NOT equal: /mine failing means there is no
@@ -30,8 +30,8 @@ export function userSchoolsQuery(role: string): QueryOptions<UserSchools> {
       // on the master surface, which answers 403 outside master mode (FE-93),
       // so it is only dialed there -- anywhere else false is the honest «+».
       const [mineRes, listRes] = await Promise.allSettled([
-        getMyCuratorGroups(),
-        role === 'master' ? getCuratorGroups() : Promise.resolve(null),
+        getMySchools(),
+        role === 'master' ? getSchools() : Promise.resolve(null),
       ])
       if (mineRes.status === 'rejected') throw mineRes.reason
       // FE-93: this zone lists the schools I PARTICIPATE in. The curated rows
@@ -42,7 +42,7 @@ export function userSchoolsQuery(role: string): QueryOptions<UserSchools> {
         schools: mineRes.value.items.filter((g) => g.relation !== 'curator'),
         canCreate:
           listRes.status === 'fulfilled' && listRes.value
-            ? (listRes.value.can_create_groups ?? false)
+            ? (listRes.value.can_create_schools ?? false)
             : false,
       }
     },

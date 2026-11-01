@@ -1,19 +1,19 @@
 <!--
 =============================================================================
-VELO Frontend — CuratorGroupMasterOfferView (BE-59/GT-27, owner mockup 2026-10-02)
+VELO Frontend — SchoolMasterOfferView (BE-59/GT-27, owner mockup 2026-10-02)
 =============================================================================
 
 «Приглашение стать мастером школы!» — the consent screen of the curator's
 master-role appointment: the curator offers, the appointee confirms, and
-the appointment takes effect HERE (POST /curator-groups/{id}/master-offer/
+the appointment takes effect HERE (POST /schools/{id}/master-offer/
 accept turns the member row into a master's). Reached from the
-curator_group.master_offered inbox notification («Вас приглашают вести
+school.master_offered inbox notification («Вас приглашают вести
 школу»), which UserInboxView routes here by TYPE — the notification rides
-the generic open_curator_group action like every school event. Standalone
+the generic open_school action like every school event. Standalone
 route like the join screen, no guard: the endpoints decide.
 
 THE CARD AND THE OFFER ARE TWO READS, ON PURPOSE. The school page
-(GET /curator-groups/{id}) paints the card — the addressee is a member of
+(GET /schools/{id}) paints the card — the addressee is a member of
 the school, so the page answers; there is deliberately NO member-side
 "my offer" endpoint (the offer's state is the curator's view, the roster).
 The offer's existence is therefore proven only by the accept itself:
@@ -69,10 +69,10 @@ lines — counts only, by the same ruling.
       <!-- The school is dark/gone, or the reader is no longer a member. -->
       <template v-else-if="gone">
         <h2 class="master-offer__title">
-          {{ t('masterScreens.curatorGroupMasterOffer.invalid.title') }}
+          {{ t('masterScreens.schoolMasterOffer.invalid.title') }}
         </h2>
         <p class="master-offer__subtitle">
-          {{ t('masterScreens.curatorGroupMasterOffer.unavailable') }}
+          {{ t('masterScreens.schoolMasterOffer.unavailable') }}
         </p>
         <div class="master-offer__actions">
           <VButton variant="primary" block @click="router.replace({ name: 'root' })">
@@ -94,14 +94,14 @@ lines — counts only, by the same ruling.
       <!-- The caller's master verification lapsed since the offer. -->
       <template v-else-if="verificationRequired">
         <h2 class="master-offer__title">
-          {{ t('masterScreens.curatorGroupMasterOffer.verificationNeeded') }}
+          {{ t('masterScreens.schoolMasterOffer.verificationNeeded') }}
         </h2>
         <p class="master-offer__subtitle">
-          {{ t('masterScreens.curatorGroupMasterOffer.verifyingNote') }}
+          {{ t('masterScreens.schoolMasterOffer.verifyingNote') }}
         </p>
         <div class="master-offer__actions">
           <VButton variant="primary" block @click="router.replace({ name: 'master-apply' })">
-            {{ t('masterScreens.curatorGroupMasterOffer.apply') }}
+            {{ t('masterScreens.schoolMasterOffer.apply') }}
           </VButton>
         </div>
       </template>
@@ -116,7 +116,7 @@ lines — counts only, by the same ruling.
           :masters-count="page.masters_count"
           :description="page.description"
           :curator-name="page.curator.display_name"
-          :heading="t('masterScreens.curatorGroupMasterOffer.invited.title')"
+          :heading="t('masterScreens.schoolMasterOffer.invited.title')"
         />
         <div class="master-offer__actions">
           <VButton
@@ -126,7 +126,7 @@ lines — counts only, by the same ruling.
             :disabled="declining"
             @click="accept"
           >
-            {{ t('masterScreens.curatorGroupMasterOffer.accept') }}
+            {{ t('masterScreens.schoolMasterOffer.accept') }}
           </VButton>
           <VButton
             variant="outline"
@@ -135,7 +135,7 @@ lines — counts only, by the same ruling.
             :disabled="accepting"
             @click="decline"
           >
-            {{ t('masterScreens.curatorGroupMasterOffer.decline') }}
+            {{ t('masterScreens.schoolMasterOffer.decline') }}
           </VButton>
         </div>
       </template>
@@ -147,13 +147,9 @@ lines — counts only, by the same ruling.
 import { t } from '@/locales'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import {
-  acceptCuratorGroupMasterOffer,
-  declineCuratorGroupMasterOffer,
-  getCuratorGroupPage,
-} from '@/api/curatorGroups'
+import { acceptSchoolMasterOffer, declineSchoolMasterOffer, getSchoolPage } from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
-import type { CuratorGroupPageResponse } from '@/api/types'
+import type { SchoolPageResponse } from '@/api/types'
 import { errorMessage, extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
@@ -168,7 +164,7 @@ const authStore = useAuthStore()
 const loading = ref(true)
 const transientError = ref(false)
 const gone = ref(false)
-const page = ref<CuratorGroupPageResponse | null>(null)
+const page = ref<SchoolPageResponse | null>(null)
 
 const accepting = ref(false)
 const declining = ref(false)
@@ -181,8 +177,8 @@ const offerGoneTitle = errorMessage('master_offer_not_found')
 /** The school page lives in the viewer's own zone — the join screen's idiom. */
 function schoolRoute(id: string): { name: string; params: { id: string } } {
   return authStore.role === 'master'
-    ? { name: 'master-curator-group', params: { id } }
-    : { name: 'user-curator-group', params: { id } }
+    ? { name: 'master-school', params: { id } }
+    : { name: 'user-school', params: { id } }
 }
 
 async function load(): Promise<void> {
@@ -190,7 +186,7 @@ async function load(): Promise<void> {
   transientError.value = false
   gone.value = false
   try {
-    page.value = await getCuratorGroupPage(String(route.params.id ?? ''))
+    page.value = await getSchoolPage(String(route.params.id ?? ''))
   } catch (e) {
     if (e instanceof ApiResponseError && e.status === 404) {
       gone.value = true
@@ -206,10 +202,8 @@ async function accept(): Promise<void> {
   if (!page.value || accepting.value || declining.value) return
   accepting.value = true
   try {
-    await acceptCuratorGroupMasterOffer(page.value.id)
-    toast.success(
-      t('masterScreens.curatorGroupMasterOffer.acceptedToast', { name: page.value.name }),
-    )
+    await acceptSchoolMasterOffer(page.value.id)
+    toast.success(t('masterScreens.schoolMasterOffer.acceptedToast', { name: page.value.name }))
     void router.replace(schoolRoute(page.value.id))
   } catch (e) {
     if (e instanceof ApiResponseError) {
@@ -227,7 +221,7 @@ async function accept(): Promise<void> {
         return
       }
     }
-    toast.error(extractApiError(e, t('masterScreens.curatorGroupMasterOffer.toast.acceptFailed')))
+    toast.error(extractApiError(e, t('masterScreens.schoolMasterOffer.toast.acceptFailed')))
   } finally {
     accepting.value = false
   }
@@ -237,15 +231,15 @@ async function decline(): Promise<void> {
   if (!page.value || accepting.value || declining.value) return
   declining.value = true
   try {
-    await declineCuratorGroupMasterOffer(page.value.id)
-    toast.success(t('masterScreens.curatorGroupMasterOffer.toast.declined'))
+    await declineSchoolMasterOffer(page.value.id)
+    toast.success(t('masterScreens.schoolMasterOffer.toast.declined'))
     // FE-67: BOTH decisions end on the school page — the decliner stays a
     // member of the school they were just offered a role in.
     void router.replace(schoolRoute(page.value.id))
   } catch (e) {
     // Decline answers 204 even when it was not yours — anything here is a
     // transport problem, so the screen stays and the toast says what happened.
-    toast.error(extractApiError(e, t('masterScreens.curatorGroupMasterOffer.toast.declineFailed')))
+    toast.error(extractApiError(e, t('masterScreens.schoolMasterOffer.toast.declineFailed')))
   } finally {
     declining.value = false
   }
@@ -273,7 +267,7 @@ onMounted(load)
   align-items: center;
   justify-content: center;
   /* Standalone route (outside MobileLayout) — apply the screen rail directly
-     so content matches the app's rail (WS-1), same as CuratorGroupJoinView. */
+     so content matches the app's rail (WS-1), same as SchoolJoinView. */
   padding: var(--space-8) var(--velo-rail-pad-x) var(--space-5);
   gap: var(--space-4);
 }

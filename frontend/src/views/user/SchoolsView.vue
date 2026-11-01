@@ -11,14 +11,14 @@
       FE-93: /mine's curated rows are the master list's «Я куратор» section
       and every management surface behind them 403s outside master mode, so
       the user zone lists memberships only, backend join order). The
-      sectioned list of the master zone (MasterCuratorGroupsView) keeps its
+      sectioned list of the master zone (MasterSchoolsView) keeps its
       own shape -- different screens answer different questions.
     - the search pill is deliberately NOT rendered in v1 (no discovery
       backend; tz-curator.md §1.3 / захоронка §7.1 №1).
 
   States are the list canon: loader -> error + retry -> empty -> rows.
-  /curator-groups/mine is unpaginated (whole list in one response), so the
-  screen single-loads -- the same canon MasterCuratorGroupsView ships.
+  /schools/mine is unpaginated (whole list in one response), so the
+  screen single-loads -- the same canon MasterSchoolsView ships.
 -->
 
 <template>
@@ -32,7 +32,7 @@
           type="button"
           class="schools__add-btn"
           :aria-label="t('user.screens.schools.create.title')"
-          @click="router.push({ name: 'master-curator-group-create' })"
+          @click="router.push({ name: 'master-school-create' })"
         >
           <IconPlusFilled :size="20" />
         </button>
@@ -60,11 +60,7 @@
            invented illustration, no «Пока нет школ» copy, no search pill
            (v1 has no discovery backend; захоронка §7.1 №1). -->
       <div v-else-if="!schools.length && canCreate" class="schools__empty">
-        <VButton
-          variant="primary"
-          block
-          @click="router.push({ name: 'master-curator-group-create' })"
-        >
+        <VButton variant="primary" block @click="router.push({ name: 'master-school-create' })">
           {{ t('user.screens.schools.create.title') }}
         </VButton>
       </div>
@@ -80,11 +76,11 @@
       />
 
       <template v-else>
-        <CuratorGroupRow
+        <SchoolRow
           v-for="g in schools"
           :key="g.id"
           :group="g"
-          @open="router.push({ name: 'user-curator-group', params: { id: $event } })"
+          @open="router.push({ name: 'user-school', params: { id: $event } })"
         />
       </template>
     </div>
@@ -98,7 +94,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useQuery } from '@/composables/useQuery'
 import { userSchoolsQuery } from '@/composables/queries'
-import CuratorGroupRow from '@/components/shared/CuratorGroupRow.vue'
+import SchoolRow from '@/components/shared/SchoolRow.vue'
 import { IconPlusFilled } from '@/components/icons'
 import { VButton, VEmptyState, VLoader } from '@/components/ui'
 import VHeader from '@/components/layout/VHeader.vue'
@@ -162,7 +158,7 @@ function load(): void {
   padding: var(--space-6) 0;
 }
 
-/* Round header «+» -- the MasterCuratorGroupsView recipe verbatim. */
+/* Round header «+» -- the MasterSchoolsView recipe verbatim. */
 .schools__add-btn {
   width: var(--velo-size-40);
   height: var(--velo-size-40);

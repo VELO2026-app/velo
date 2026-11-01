@@ -73,7 +73,7 @@
       "totalRecords": "Всего записей",
       "checkedIn": "Отметились"
     },
-    "adminCuratorGroups": {
+    "adminSchools": {
       "active": "Активна",
       "frozen": "Заморожена",
       "countsLine": "Мастеров: {masters} • Учеников: {students} • с {since}",
@@ -147,7 +147,7 @@
       },
       "certificateEnter": "Добавить сертификат + Enter",
       "viewDocument": "Посмотреть документ",
-      "allowSchoolCreation": "Разрешить создавать школы (кураторские группы)",
+      "allowSchoolCreation": "Разрешить создавать школы",
       "notFound": "Заявка не найдена",
       "notFoundHint": "Возможно, она была удалена или уже обработана",
       "rejectCta": "Отклонить заявку",

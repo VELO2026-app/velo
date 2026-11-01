@@ -8,9 +8,9 @@
 //
 // What is under test, and why:
 //   1. The tab condition follows MEMBERSHIP (owner 2026-09-22): every
-//      account is probed through GET /curator-groups/mine; only
+//      account is probed through GET /schools/mine; only
 //      master-capable accounts additionally probe the master surface for the
-//      founding right (can_create_groups, BE-18).
+//      founding right (can_create_schools, BE-18).
 //   2. Fail-closed per zone: a failed probe stays unsettled, keeps the tab
 //      hidden, and RETRIES on the next ensure; a settled probe never
 //      re-fetches. A failed MASTER probe must not poison the membership
@@ -24,12 +24,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useSchoolsHubStore } from '@/stores/schoolsHub'
 import { useAuthStore } from '@/stores/auth'
-import * as cgApi from '@/api/curatorGroups'
-import type { CuratorGroupMineItem } from '@/api/types'
+import * as cgApi from '@/api/schools'
+import type { SchoolMineItem } from '@/api/types'
 
-vi.mock('@/api/curatorGroups')
+vi.mock('@/api/schools')
 
-function mineItem(overrides: Partial<CuratorGroupMineItem> = {}): CuratorGroupMineItem {
+function mineItem(overrides: Partial<SchoolMineItem> = {}): SchoolMineItem {
   return {
     id: 'g1',
     name: 'Тихая школа',
@@ -39,7 +39,7 @@ function mineItem(overrides: Partial<CuratorGroupMineItem> = {}): CuratorGroupMi
     students_count: 3,
     relation: 'student',
     ...overrides,
-  } as CuratorGroupMineItem
+  } as SchoolMineItem
 }
 
 function seedRoles(roles: string[], activeRole?: 'user' | 'master'): void {
@@ -55,28 +55,28 @@ function seedRoles(roles: string[], activeRole?: 'user' | 'master'): void {
 
 beforeEach(() => {
   setActivePinia(createPinia())
-  vi.mocked(cgApi.getMyCuratorGroups).mockReset()
-  vi.mocked(cgApi.getCuratorGroups).mockReset()
+  vi.mocked(cgApi.getMySchools).mockReset()
+  vi.mocked(cgApi.getSchools).mockReset()
 })
 
 describe('schoolsHub store', () => {
   it('a plain user with a school settles the tab through /mine alone', async () => {
     seedRoles(['user'])
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({ items: [mineItem()] })
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({ items: [mineItem()] })
 
     const hub = useSchoolsHubStore()
     await hub.ensureCurator()
 
     expect(hub.hasSchools).toBe(true)
-    expect(cgApi.getMyCuratorGroups).toHaveBeenCalledTimes(1)
+    expect(cgApi.getMySchools).toHaveBeenCalledTimes(1)
     // The master surface would 403 for this token -- the store must not even
     // ask (no error round-trip).
-    expect(cgApi.getCuratorGroups).not.toHaveBeenCalled()
+    expect(cgApi.getSchools).not.toHaveBeenCalled()
   })
 
   it('a plain user without schools keeps the tab hidden', async () => {
     seedRoles(['user'])
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({ items: [] })
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({ items: [] })
 
     const hub = useSchoolsHubStore()
     await hub.ensureCurator()
@@ -86,10 +86,10 @@ describe('schoolsHub store', () => {
 
   it('in master mode both surfaces are probed; the right rides the master one', async () => {
     seedRoles(['user', 'master'])
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({ items: [] })
-    vi.mocked(cgApi.getCuratorGroups).mockResolvedValue({
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({ items: [] })
+    vi.mocked(cgApi.getSchools).mockResolvedValue({
       items: [],
-      can_create_groups: true,
+      can_create_schools: true,
     })
 
     const hub = useSchoolsHubStore()
@@ -109,7 +109,7 @@ describe('schoolsHub store', () => {
 
   it('FE-93: in user mode a curated-only /mine keeps the tab hidden and the master surface undialed', async () => {
     seedRoles(['user', 'master'], 'user')
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({
       items: [mineItem({ id: 'g-owned', relation: 'curator' })],
     })
 
@@ -117,17 +117,17 @@ describe('schoolsHub store', () => {
     await hub.ensureCurator()
 
     expect(hub.hasSchools).toBe(false)
-    expect(cgApi.getCuratorGroups).not.toHaveBeenCalled()
+    expect(cgApi.getSchools).not.toHaveBeenCalled()
   })
 
   it('the same /mine counts the curated school again in master mode', async () => {
     seedRoles(['user', 'master'])
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({
       items: [mineItem({ id: 'g-owned', relation: 'curator' })],
     })
-    vi.mocked(cgApi.getCuratorGroups).mockResolvedValue({
+    vi.mocked(cgApi.getSchools).mockResolvedValue({
       items: [],
-      can_create_groups: false,
+      can_create_schools: false,
     })
 
     const hub = useSchoolsHubStore()
@@ -138,7 +138,7 @@ describe('schoolsHub store', () => {
 
   it('FE-93: in user mode a joined school keeps the tab up beside the curated ones', async () => {
     seedRoles(['user', 'master'], 'user')
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({
       items: [
         mineItem({ id: 'g-owned', relation: 'curator' }),
         mineItem({ id: 'g-joined', relation: 'student' }),
@@ -153,20 +153,20 @@ describe('schoolsHub store', () => {
 
   it('a settled probe never re-fetches', async () => {
     seedRoles(['user', 'master'])
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({ items: [mineItem()] })
-    vi.mocked(cgApi.getCuratorGroups).mockResolvedValue({ items: [], can_create_groups: false })
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({ items: [mineItem()] })
+    vi.mocked(cgApi.getSchools).mockResolvedValue({ items: [], can_create_schools: false })
 
     const hub = useSchoolsHubStore()
     await hub.ensureCurator()
     await hub.ensureCurator()
 
-    expect(cgApi.getMyCuratorGroups).toHaveBeenCalledTimes(1)
-    expect(cgApi.getCuratorGroups).toHaveBeenCalledTimes(1)
+    expect(cgApi.getMySchools).toHaveBeenCalledTimes(1)
+    expect(cgApi.getSchools).toHaveBeenCalledTimes(1)
   })
 
   it('a FAILED probe stays hidden and retries on the next ensure', async () => {
     seedRoles(['user'])
-    vi.mocked(cgApi.getMyCuratorGroups)
+    vi.mocked(cgApi.getMySchools)
       .mockRejectedValueOnce(new Error('offline'))
       .mockResolvedValueOnce({ items: [mineItem()] })
 
@@ -176,15 +176,15 @@ describe('schoolsHub store', () => {
 
     await hub.ensureCurator()
     expect(hub.hasSchools).toBe(true)
-    expect(cgApi.getMyCuratorGroups).toHaveBeenCalledTimes(2)
+    expect(cgApi.getMySchools).toHaveBeenCalledTimes(2)
   })
 
   it('a failed MASTER probe does not poison the membership answer', async () => {
     seedRoles(['user', 'master'])
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({
       items: [mineItem({ relation: 'master' })],
     })
-    vi.mocked(cgApi.getCuratorGroups).mockRejectedValue(new Error('offline'))
+    vi.mocked(cgApi.getSchools).mockRejectedValue(new Error('offline'))
 
     const hub = useSchoolsHubStore()
     await hub.ensureCurator()
@@ -195,7 +195,7 @@ describe('schoolsHub store', () => {
 
   it('refreshCurator forces a fresh read: a school gained outside the shell is picked up', async () => {
     seedRoles(['user'])
-    vi.mocked(cgApi.getMyCuratorGroups)
+    vi.mocked(cgApi.getMySchools)
       .mockResolvedValueOnce({ items: [] })
       .mockResolvedValueOnce({ items: [mineItem()] })
 
@@ -207,12 +207,12 @@ describe('schoolsHub store', () => {
     // school through a standalone deeplink -- the fresh read must see it.
     await hub.refreshCurator()
     expect(hub.hasSchools).toBe(true)
-    expect(cgApi.getMyCuratorGroups).toHaveBeenCalledTimes(2)
+    expect(cgApi.getMySchools).toHaveBeenCalledTimes(2)
   })
 
   it('$reset drops everything (an account switch must not inherit schools)', async () => {
     seedRoles(['user'])
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({ items: [mineItem()] })
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({ items: [mineItem()] })
 
     const hub = useSchoolsHubStore()
     await hub.ensureCurator()
@@ -224,7 +224,7 @@ describe('schoolsHub store', () => {
 
     // The reset re-opens both probes: the next ensure fetches again.
     await hub.ensureCurator()
-    expect(cgApi.getMyCuratorGroups).toHaveBeenCalledTimes(2)
+    expect(cgApi.getMySchools).toHaveBeenCalledTimes(2)
   })
 
   // ===========================================================================

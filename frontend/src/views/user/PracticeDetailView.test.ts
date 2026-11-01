@@ -36,11 +36,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import PracticeDetailView from '@/views/user/PracticeDetailView.vue'
-import type {
-  BookingWithPracticeResponse,
-  CuratorGroupMineItem,
-  PracticeResponse,
-} from '@/api/types'
+import type { BookingWithPracticeResponse, SchoolMineItem, PracticeResponse } from '@/api/types'
 
 const push = vi.fn()
 const back = vi.fn()
@@ -126,7 +122,7 @@ vi.mock('@/stores/auth', () => ({
 // -- schools hub store (dependency): the BE-63 curator check reads my schools
 //    (relation + id are all the screen consumes; items are cast per fixture
 //    like the PracticeResponse one) --
-const schoolsHubState: { mine: CuratorGroupMineItem[] } = { mine: [] }
+const schoolsHubState: { mine: SchoolMineItem[] } = { mine: [] }
 vi.mock('@/stores/schoolsHub', () => ({
   useSchoolsHubStore: () => ({
     get mine() {
@@ -267,8 +263,8 @@ function byAria(label: string): HTMLButtonElement | null {
   return host?.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`) ?? null
 }
 
-/** One row of GET /curator-groups/mine, narrowed to what the screen reads. */
-function school(id: string, relation: CuratorGroupMineItem['relation']): CuratorGroupMineItem {
+/** One row of GET /schools/mine, narrowed to what the screen reads. */
+function school(id: string, relation: SchoolMineItem['relation']): SchoolMineItem {
   return {
     id,
     name: 'Школа',
@@ -277,7 +273,7 @@ function school(id: string, relation: CuratorGroupMineItem['relation']): Curator
     masters_count: 1,
     students_count: 1,
     relation,
-  } as CuratorGroupMineItem
+  } as SchoolMineItem
 }
 
 beforeEach(() => {
@@ -912,9 +908,9 @@ describe('PracticeDetailView', () => {
 
     it("the CURATOR of the practice's school gets it too (BE-63)", async () => {
       // A curator-created practice (master_id is the school's master, the
-      // school rides curator_group_id) seen by its curator: the manager rule
+      // school rides school_id) seen by its curator: the manager rule
       // is master OR curator-of-school, so the kebab shows for both.
-      practicesState.selected = practice({ curator_group_id: 'sc1' })
+      practicesState.selected = practice({ school_id: 'sc1' })
       authState.user = { id: 'curator_1' }
       authState.role = 'master'
       schoolsHubState.mine = [school('sc1', 'curator')]
@@ -930,7 +926,7 @@ describe('PracticeDetailView', () => {
     })
 
     it('a MASTER MEMBER of the school is not its curator -- no kebab', async () => {
-      practicesState.selected = practice({ curator_group_id: 'sc1' })
+      practicesState.selected = practice({ school_id: 'sc1' })
       authState.user = { id: 'member_1' }
       authState.role = 'master'
       schoolsHubState.mine = [school('sc1', 'master')]
@@ -942,7 +938,7 @@ describe('PracticeDetailView', () => {
     })
 
     it('a curator of ANOTHER school gets no kebab', async () => {
-      practicesState.selected = practice({ curator_group_id: 'sc1' })
+      practicesState.selected = practice({ school_id: 'sc1' })
       authState.user = { id: 'curator_1' }
       authState.role = 'master'
       schoolsHubState.mine = [school('sc2', 'curator')]
@@ -975,7 +971,7 @@ describe('PracticeDetailView', () => {
     })
 
     it('a stranger on a school practice: no kebab, the booking ladder intact', async () => {
-      practicesState.selected = practice({ curator_group_id: 'sc1' })
+      practicesState.selected = practice({ school_id: 'sc1' })
       schoolsHubState.mine = [school('sc1', 'student')]
       mount()
       await flush()

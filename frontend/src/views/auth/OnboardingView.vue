@@ -3,7 +3,7 @@
 
   Five-step welcome flow, shown once to new users (those whose
   onboarding_completed flag is still false). App.vue mounts it after "Войти"
-  on WelcomeView; the school-join flow (CuratorGroupJoinView) mounts the same
+  on WelcomeView; the school-join flow (SchoolJoinView) mounts the same
   flow AFTER a successful join (FE-83) -- the invitation comes first.
 
   Steps:

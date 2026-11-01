@@ -33,9 +33,7 @@
     "bannerUpload": "Upload a photo",
     "bannerReplace": "Replace",
     "bannerRemove": "Remove",
-    "loadFailed": "Failed to load the schools"
-  },
-  "curatorGroup": {
+    "loadFailed": "Failed to load the schools",
     "offerBadge": "Curatorship"
   },
   "distribution": {

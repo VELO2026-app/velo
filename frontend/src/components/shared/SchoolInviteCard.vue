@@ -13,9 +13,9 @@
   Everything is the existing canon, restated once: the logo priority and
   the counters idiom are SchoolHeroCard's (avatar_url wins → the flat
   SchoolMandalaBadge → VAvatar initials), the branding hash is derived
-  from the name exactly like CuratorGroupRow when the caller has no hash
+  from the name exactly like SchoolRow when the caller has no hash
   yet (§5.2 variant A). The screens around it keep the standalone-invite
-  skeleton of CuratorGroupJoinView.
+  skeleton of SchoolJoinView.
 -->
 
 <template>
@@ -71,7 +71,7 @@ const props = defineProps<{
   name: string
   avatarUrl?: string | null
   /** Branding hash: caller's field when it has one; otherwise derived from
-   *  the name (§5.2 variant A, the CuratorGroupRow idiom). */
+   *  the name (§5.2 variant A, the SchoolRow idiom). */
   hash?: string | null
   studentsCount: number
   mastersCount: number

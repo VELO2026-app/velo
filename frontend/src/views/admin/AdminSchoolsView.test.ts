@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- AdminCuratorGroupsView Tests (schools FE-23 / GT P4)
+// VELO Frontend -- AdminSchoolsView Tests (schools FE-23 / GT P4)
 // =============================================================================
 //
 // Admin list idiom (AdminParticipantsView's own suite): mocked api +
@@ -11,15 +11,15 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
-import AdminCuratorGroupsView from '@/views/admin/AdminCuratorGroupsView.vue'
-import * as cgApi from '@/api/curatorGroups'
+import AdminSchoolsView from '@/views/admin/AdminSchoolsView.vue'
+import * as cgApi from '@/api/schools'
 
-vi.mock('@/api/curatorGroups')
+vi.mock('@/api/schools')
 
 const push = vi.fn()
 const replace = vi.fn()
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: {}, name: 'admin-curator-groups' }),
+  useRoute: () => ({ params: {}, name: 'admin-schools' }),
   useRouter: () => ({ push, replace }),
 }))
 
@@ -34,7 +34,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminCuratorGroupsView).use(createTestI18n())
+  app = createApp(AdminSchoolsView).use(createTestI18n())
   app.mount(host)
   return host
 }
@@ -62,7 +62,7 @@ function school(id: string, is_active: boolean) {
 }
 
 beforeEach(() => {
-  vi.mocked(cgApi.getAdminCuratorGroups).mockReset()
+  vi.mocked(cgApi.getAdminSchools).mockReset()
   push.mockReset()
   replace.mockReset()
   toastError.mockReset()
@@ -76,9 +76,9 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('AdminCuratorGroupsView', () => {
+describe('AdminSchoolsView', () => {
   it('lists BOTH active and frozen schools -- the only place a frozen one is visible', async () => {
-    vi.mocked(cgApi.getAdminCuratorGroups).mockResolvedValue({
+    vi.mocked(cgApi.getAdminSchools).mockResolvedValue({
       items: [school('g1', true), school('g2', false)],
       total: 2,
       limit: 100,
@@ -95,7 +95,7 @@ describe('AdminCuratorGroupsView', () => {
   })
 
   it("a tap opens the CURATOR's review page -- the revoke lever lives there", async () => {
-    vi.mocked(cgApi.getAdminCuratorGroups).mockResolvedValue({
+    vi.mocked(cgApi.getAdminSchools).mockResolvedValue({
       items: [school('g1', true)],
       total: 1,
       limit: 100,
@@ -111,7 +111,7 @@ describe('AdminCuratorGroupsView', () => {
   })
 
   it('pagination: «Показать ещё» fetches the next offset and appends', async () => {
-    vi.mocked(cgApi.getAdminCuratorGroups)
+    vi.mocked(cgApi.getAdminSchools)
       .mockResolvedValueOnce({ items: [school('g1', true)], total: 2, limit: 100, offset: 0 })
       .mockResolvedValueOnce({ items: [school('g2', false)], total: 2, limit: 100, offset: 1 })
     mount()
@@ -123,19 +123,19 @@ describe('AdminCuratorGroupsView', () => {
     more.click()
     await flush()
 
-    expect(cgApi.getAdminCuratorGroups).toHaveBeenNthCalledWith(1, 100, 0)
-    expect(cgApi.getAdminCuratorGroups).toHaveBeenNthCalledWith(2, 100, 1)
+    expect(cgApi.getAdminSchools).toHaveBeenNthCalledWith(1, 100, 0)
+    expect(cgApi.getAdminSchools).toHaveBeenNthCalledWith(2, 100, 1)
     expect(text()).toContain('Школа g2')
   })
 
   it('a failed first page is an error state, not "no schools" (W12)', async () => {
-    vi.mocked(cgApi.getAdminCuratorGroups).mockRejectedValueOnce(new Error('network'))
+    vi.mocked(cgApi.getAdminSchools).mockRejectedValueOnce(new Error('network'))
     mount()
     await flush()
 
     expect(text()).toContain('Не удалось загрузить школы')
 
-    vi.mocked(cgApi.getAdminCuratorGroups).mockResolvedValueOnce({
+    vi.mocked(cgApi.getAdminSchools).mockResolvedValueOnce({
       items: [school('g1', true)],
       total: 1,
       limit: 100,
@@ -150,7 +150,7 @@ describe('AdminCuratorGroupsView', () => {
   })
 
   it('empty: honest "no schools yet"', async () => {
-    vi.mocked(cgApi.getAdminCuratorGroups).mockResolvedValue({
+    vi.mocked(cgApi.getAdminSchools).mockResolvedValue({
       items: [],
       total: 0,
       limit: 100,

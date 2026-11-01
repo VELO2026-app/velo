@@ -40,8 +40,8 @@ describe('parseStartParam', () => {
       ['open_wallet', 'master', { name: 'master-finance' }],
       [`open_wallet__${id}`, 'user', { name: 'user-topup' }],
       [`confirm_waitlist__${id}`, 'user', { name: 'waitlist-confirm', params: { id } }],
-      [`open_curator_group__${id}`, 'user', { name: 'user-curator-group', params: { id } }],
-      [`open_curator_group__${id}`, 'master', { name: 'master-curator-group', params: { id } }],
+      [`open_school__${id}`, 'user', { name: 'user-school', params: { id } }],
+      [`open_school__${id}`, 'master', { name: 'master-school', params: { id } }],
       ['open_support', 'master', { name: 'master-support' }],
       ['open_master_practices', 'master', { name: 'master-practices' }],
       [`open_practice__${id}`, 'master', { name: 'master-practice-detail', params: { id } }],
@@ -112,7 +112,7 @@ describe('parseStartParam', () => {
 
     it('a verb that needs its id without one is no route', () => {
       expect(parseStartParam('confirm_waitlist', 'user')).toBeNull()
-      expect(parseStartParam('open_curator_group', 'user')).toBeNull()
+      expect(parseStartParam('open_school', 'user')).toBeNull()
       expect(parseStartParam('open_feedback', 'user')).toBeNull()
     })
   })
@@ -164,7 +164,7 @@ describe('parseStartParam', () => {
     expect(`school__${token}`).toHaveLength(51)
     expect(parseStartParam(`curator_group_invite__${token}`)).toBeNull()
     expect(parseStartParam(`school__${token}`)).toEqual({
-      name: 'curator-group-join',
+      name: 'school-join',
       params: { token },
     })
   })
@@ -187,17 +187,28 @@ describe('parseStartParam', () => {
 
   // Links (3 October): the master-offer consent screen has its own verb,
   // open_master_offer__<group_id> (55 characters), sent by the backend for
-  // curator_group.master_offered. The former curator_group_master_offer__
+  // school.master_offered. The former curator_group_master_offer__
   // was built by nothing and is no route any more (no legacy).
   it('parses open_master_offer__{uuid}; the former kind is gone', () => {
     const groupId = '123e4567-e89b-12d3-a456-426614174000'
     expect(parseStartParam(`open_master_offer__${groupId}`)).toEqual({
-      name: 'curator-group-master-offer',
+      name: 'school-master-offer',
       params: { id: groupId },
     })
     expect(parseStartParam(`curator_group_master_offer__${groupId}`)).toBeNull()
     expect(parseStartParam('open_master_offer__not-a-uuid')).toBeNull()
     expect(parseStartParam('open_master_offer')).toBeNull()
+  })
+
+  // FE-127 (owner: no alias): a Telegram button sent before the rename carries
+  // the former school verb -- it is no route any more, and the guard opens the
+  // role's dashboard instead. The new verb needs its uuid.
+  it('open_school needs a uuid; the former school verb is no route', () => {
+    const id = '00000000-0000-4000-8000-0000000000b2'
+    expect(parseStartParam(`open_curator_group__${id}`, 'user')).toBeNull()
+    expect(parseStartParam(`open_curator_group__${id}`, 'master')).toBeNull()
+    expect(parseStartParam('open_school', 'user')).toBeNull()
+    expect(parseStartParam('open_school__not-a-uuid', 'master')).toBeNull()
   })
   // ===========================================================================
   // T-35: zoom__<22> -- the public practice code as a deep link.

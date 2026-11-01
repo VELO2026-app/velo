@@ -1,12 +1,12 @@
 <!--
 =============================================================================
-VELO Frontend — CuratorGroupJoinView (schools FE-18 / GT P3)
+VELO Frontend — SchoolJoinView (schools FE-18 / GT P3)
 =============================================================================
 
 Landing for the school__<token> deeplink (route
-/curator-groups/join/:token, standalone — exactly like group-join). Unlike
+/schools/join/:token, standalone — exactly like group-join). Unlike
 that screen's fire-and-forget POST, this one is a TWO-STEP flow: the preview
-(GET /curator-groups/invites/{token}) DESCRIBES the offer, and only «Вступить»
+(GET /schools/invites/{token}) DESCRIBES the offer, and only «Вступить»
 commits (POST /join). The preview is a hint and the join is the gate — between
 the two the world can change (token revoked, curator frozen), so join errors
 are handled as REAL states here, never as "impossible".
@@ -17,7 +17,7 @@ State machine (each renders honestly, none fakes data):
   404                -> «Приглашение недействительно» (one answer for unknown /
                         revoked / frozen / deleted — the backend refuses to
                         distinguish, P-08)
-  can_join=false     -> per-reason refusal; own_group / already_member add an
+  can_join=false     -> per-reason refusal; own_school / already_member add an
                         «Открыть» button into the school page
   can_join=true      -> school card + «Вступить» / «Отказаться»
   joined (new user)  -> post-join onboarding overlay (FE-83): an account whose
@@ -70,7 +70,7 @@ so the order is invitation -> join -> onboarding (skippable) -> school.
         <p v-if="blocked.description" class="cg-join__subtitle">{{ blocked.description }}</p>
         <div class="cg-join__actions">
           <VButton v-if="blocked.open" variant="primary" block @click="openSchool">
-            {{ t('masterScreens.curatorGroupJoin.open') }}
+            {{ t('masterScreens.schoolJoin.open') }}
           </VButton>
           <VButton v-else variant="primary" block @click="router.replace({ name: 'root' })">
             {{ t('common.backHome') }}
@@ -84,20 +84,20 @@ so the order is invitation -> join -> onboarding (skippable) -> school.
       <template v-else-if="preview">
         <SchoolInviteCard
           class="cg-join__card"
-          :name="preview.group.name"
-          :avatar-url="preview.group.avatar_url"
-          :students-count="preview.group.students_count"
-          :masters-count="preview.group.masters_count"
-          :description="preview.group.description"
-          :curator-name="preview.group.curator_name"
-          :heading="t('masterScreens.curatorGroupJoin.invited.title')"
+          :name="preview.school.name"
+          :avatar-url="preview.school.avatar_url"
+          :students-count="preview.school.students_count"
+          :masters-count="preview.school.masters_count"
+          :description="preview.school.description"
+          :curator-name="preview.school.curator_name"
+          :heading="t('masterScreens.schoolJoin.invited.title')"
         />
         <div class="cg-join__actions">
           <VButton variant="primary" block :loading="joining" @click="join">{{
-            t('masterScreens.curatorGroupJoin.joinCta')
+            t('masterScreens.schoolJoin.joinCta')
           }}</VButton>
           <VButton variant="outline" block :disabled="joining" @click="decline">
-            {{ t('masterScreens.curatorGroupJoin.decline') }}
+            {{ t('masterScreens.schoolJoin.decline') }}
           </VButton>
         </div>
       </template>
@@ -124,9 +124,9 @@ so the order is invitation -> join -> onboarding (skippable) -> school.
 import { t } from '@/locales'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getCuratorGroupInvitePreview, joinCuratorGroup } from '@/api/curatorGroups'
+import { getSchoolInvitePreview, joinSchool } from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
-import type { CuratorGroupInvitePreviewResponse } from '@/api/types'
+import type { SchoolInvitePreviewResponse } from '@/api/types'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import { useSafeArea } from '@/composables/useSafeArea'
@@ -145,7 +145,7 @@ const schoolsHub = useSchoolsHubStore()
 const loading = ref(true)
 const transientError = ref(false)
 const notFound = ref(false)
-const preview = ref<CuratorGroupInvitePreviewResponse | null>(null)
+const preview = ref<SchoolInvitePreviewResponse | null>(null)
 const joining = ref(false)
 
 const { contentSafeTopCss } = useSafeArea()
@@ -162,7 +162,7 @@ const joinedSchoolId = ref<string | null>(null)
 interface RefusalView {
   title: string
   description: string
-  /** own_group / already_member offer a jump straight into the school page. */
+  /** own_school / already_member offer a jump straight into the school page. */
   open: boolean
 }
 
@@ -170,45 +170,45 @@ interface RefusalView {
 const blocked = computed<RefusalView | null>(() => {
   if (notFound.value) {
     return {
-      title: t('masterScreens.curatorGroupJoin.invalid.title'),
-      description: t('masterScreens.curatorGroupJoin.invalid.text'),
+      title: t('masterScreens.schoolJoin.invalid.title'),
+      description: t('masterScreens.schoolJoin.invalid.text'),
       open: false,
     }
   }
   const p = preview.value
   if (!p || p.can_join) return null
   switch (p.reason) {
-    case 'own_group':
+    case 'own_school':
       return {
-        title: t('masterScreens.curatorGroupJoin.alreadyOwner.title'),
-        description: t('masterScreens.curatorGroupJoin.alreadyOwner.text'),
+        title: t('masterScreens.schoolJoin.alreadyOwner.title'),
+        description: t('masterScreens.schoolJoin.alreadyOwner.text'),
         open: true,
       }
     case 'already_member':
       return {
-        title: t('masterScreens.curatorGroupJoin.alreadyMember.title'),
-        description: t('masterScreens.curatorGroupJoin.alreadyMember.text'),
+        title: t('masterScreens.schoolJoin.alreadyMember.title'),
+        description: t('masterScreens.schoolJoin.alreadyMember.text'),
         open: true,
       }
     case 'blocked_by_curator':
       return {
-        title: t('masterScreens.curatorGroupJoin.unavailable'),
-        description: t('masterScreens.curatorGroupJoin.restricted.text'),
+        title: t('masterScreens.schoolJoin.unavailable'),
+        description: t('masterScreens.schoolJoin.restricted.text'),
         open: false,
       }
     // BE-79 (DRAFT wording): blocked by the curator IN this school -- the
     // preview says so, and a join refused 403 re-reads the preview (below).
-    case 'blocked_in_group':
+    case 'blocked_in_school':
       return {
-        title: t('masterScreens.curatorGroupJoin.unavailable'),
-        description: t('masterScreens.curatorGroupJoin.blocked.title'),
+        title: t('masterScreens.schoolJoin.unavailable'),
+        description: t('masterScreens.schoolJoin.blocked.title'),
         open: false,
       }
     default:
       // can_join=false with no reason is not a contract shape; stay honest
       // rather than guessing — same title as blocked, no invented details.
       return {
-        title: t('masterScreens.curatorGroupJoin.unavailable'),
+        title: t('masterScreens.schoolJoin.unavailable'),
         description: '',
         open: false,
       }
@@ -220,8 +220,8 @@ const blocked = computed<RefusalView | null>(() => {
  *  FE-19/FE-20; the deep link itself only ever needs them AFTER a join. */
 function schoolRoute(id: string): { name: string; params: { id: string } } {
   return authStore.role === 'master'
-    ? { name: 'master-curator-group', params: { id } }
-    : { name: 'user-curator-group', params: { id } }
+    ? { name: 'master-school', params: { id } }
+    : { name: 'user-school', params: { id } }
 }
 
 async function loadPreview(): Promise<void> {
@@ -229,7 +229,7 @@ async function loadPreview(): Promise<void> {
   transientError.value = false
   notFound.value = false
   try {
-    preview.value = await getCuratorGroupInvitePreview(String(route.params.token ?? ''))
+    preview.value = await getSchoolInvitePreview(String(route.params.token ?? ''))
   } catch (e) {
     if (e instanceof ApiResponseError && e.status === 404) {
       notFound.value = true
@@ -245,10 +245,8 @@ async function join(): Promise<void> {
   if (!preview.value) return
   joining.value = true
   try {
-    const res = await joinCuratorGroup(String(route.params.token ?? ''))
-    toast.success(
-      t('masterScreens.curatorGroupJoin.joinedToast', { name: preview.value.group.name }),
-    )
+    const res = await joinSchool(String(route.params.token ?? ''))
+    toast.success(t('masterScreens.schoolJoin.joinedToast', { name: preview.value.school.name }))
     // The hub probe may have settled BEFORE this join (the account's first
     // school): without a fresh read the dock tab stays hidden until a full
     // reload (FE-88). ensureCurator swallows its own probe failures -- the
@@ -258,10 +256,10 @@ async function join(): Promise<void> {
     // join, not before the invitation -- the gate let them straight in. The
     // joined school is remembered locally; the overlay consumes it on done.
     if (!authStore.user?.onboarding_completed) {
-      joinedSchoolId.value = res.group_id
+      joinedSchoolId.value = res.school_id
       return
     }
-    void router.replace(schoolRoute(res.group_id))
+    void router.replace(schoolRoute(res.school_id))
   } catch (e) {
     if (e instanceof ApiResponseError) {
       if (e.status === 404) {
@@ -271,14 +269,14 @@ async function join(): Promise<void> {
         return
       }
       if (e.status === 403 || e.status === 409) {
-        // Refused at the gate (blocked / own_group):
+        // Refused at the gate (blocked / own_school):
         // re-read the preview, which DESCRIBES the reason instead of us
         // guessing from the status code.
         await loadPreview()
         return
       }
     }
-    toast.error(extractApiError(e, t('masterScreens.curatorGroupJoin.toast.joinFailed')))
+    toast.error(extractApiError(e, t('masterScreens.schoolJoin.toast.joinFailed')))
   } finally {
     joining.value = false
   }
@@ -290,7 +288,7 @@ function decline(): void {
 }
 
 function openSchool(): void {
-  const id = preview.value?.group.id
+  const id = preview.value?.school.id
   if (id) void router.replace(schoolRoute(id))
 }
 

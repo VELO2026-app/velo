@@ -31,7 +31,7 @@
 
   Rotation is NOT surfaced here anymore (the mock carries no refresh
   seat): the server's revoke+create contract stands untouched in
-  api/curatorGroups.ts, it just has no entry point in this field. What
+  api/schools.ts, it just has no entry point in this field. What
   the copy tap keeps from that era is the lazy mint -- a failed probe or
   a fresh page is no reason to refuse the tap: it mints on demand and
   copies in one motion, so the button never sits dead-disabled; a failed
@@ -79,7 +79,7 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { onMounted, ref } from 'vue'
-import { createCuratorGroupInvite } from '@/api/curatorGroups'
+import { createSchoolInvite } from '@/api/schools'
 import { extractApiError } from '@/composables/useApiError'
 
 // tz-i18n 2.2b: chip label/copy-aria + result toasts via school.*.
@@ -103,7 +103,7 @@ onMounted(() => {
 
 async function load(): Promise<void> {
   try {
-    const res = await createCuratorGroupInvite(props.groupId)
+    const res = await createSchoolInvite(props.groupId)
     inviteUrl.value = res.invite_url
   } catch (e) {
     toast.error(extractApiError(e, t('school.inviteFetchFailed')))
@@ -118,7 +118,7 @@ async function onCopy(): Promise<void> {
   copying.value = true
   try {
     if (!inviteUrl.value) {
-      const res = await createCuratorGroupInvite(props.groupId)
+      const res = await createSchoolInvite(props.groupId)
       inviteUrl.value = res.invite_url
     }
     await navigator.clipboard.writeText(inviteUrl.value)

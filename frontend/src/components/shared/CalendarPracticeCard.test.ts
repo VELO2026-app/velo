@@ -2,7 +2,7 @@
 // VELO Frontend -- CalendarPracticeCard school-marker tests
 // =============================================================================
 //
-// School practices (audience_kind === 'curator_groups') are listed exactly
+// School practices (audience_kind === 'schools') are listed exactly
 // like every other practice: the muted «Для школы» badge (FE-24 / GT P5) was
 // retired by owner decision 2026-10-02. Asserted on the unavailable-school
 // case too -- the master zone carries the audience_unavailable warning, the
@@ -71,8 +71,8 @@ afterEach(() => {
 })
 
 describe('CalendarPracticeCard -- school practices carry no marker', () => {
-  it('curator_groups audience: no «Для школы» badge, card renders normally', async () => {
-    const text = await mountCard(practice({ audience_kind: 'curator_groups' }))
+  it('schools audience: no «Для школы» badge, card renders normally', async () => {
+    const text = await mountCard(practice({ audience_kind: 'schools' }))
     expect(text).toContain('Практика')
     expect(text).not.toContain('Для школы')
   })
@@ -80,10 +80,10 @@ describe('CalendarPracticeCard -- school practices carry no marker', () => {
   it('unavailable school audience: no badge either (the master zone keeps the warning)', async () => {
     const text = await mountCard(
       practice({
-        audience_kind: 'curator_groups',
+        audience_kind: 'schools',
         audience_unavailable: true,
-        curator_group_id: 'sc1',
-        curator_group_name: 'Тихая школа',
+        school_id: 'sc1',
+        school_name: 'Тихая школа',
       }),
     )
     expect(text).toContain('Практика')

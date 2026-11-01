@@ -60,7 +60,7 @@ export const DURATION_OPTIONS: { label: string; value: string }[] = [
 // doesn't duplicate the option list a second time.
 // GT-11: values are the CONTRACT type (generated.ts's AudienceKind via the
 // types.ts alias), so a typo'd kind stops compiling instead of silently
-// posting. The fourth kind ('curator_groups', schools) is backend-side since
+// posting. The fourth kind ('schools') is backend-side since
 // GT-11 and OFFERED by audienceOptions() below only when this master can
 // actually target at least one school (FE-24) -- an option without its
 // picker would let a master pick a kind whose targets they cannot set.
@@ -87,7 +87,7 @@ export const AUDIENCE_OPTIONS: { label: string; value: PracticeAudienceKind }[] 
 
 /** FE-24: the option list with the fourth kind added when the master
  *  belongs to at least one school (relation curator or master -- the two
- *  relations the backend validates curator_group_id against). Zero
+ *  relations the backend validates school_id against). Zero
  *  eligible schools -> the exact three options above, unchanged. */
 export function audienceOptions(
   hasSchools: boolean,
@@ -96,9 +96,9 @@ export function audienceOptions(
   return [
     ...AUDIENCE_OPTIONS,
     {
-      value: 'curator_groups',
+      value: 'schools',
       get label(): string {
-        return t('practice.audience.curator_groups')
+        return t('practice.audience.schools')
       },
     },
   ]

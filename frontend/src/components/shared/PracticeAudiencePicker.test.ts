@@ -38,7 +38,7 @@ let host: HTMLElement | null = null
 // Model state, held by the wrapper and readable from the assertions.
 const kind = ref<PracticeAudienceKind>('public')
 const groupIds = ref<string[]>([])
-const curatorGroupId = ref<string | null>(null)
+const schoolId = ref<string | null>(null)
 
 interface MountOpts {
   groups?: GroupListItem[]
@@ -51,7 +51,7 @@ interface MountOpts {
 function mount(opts: MountOpts = {}): HTMLElement {
   kind.value = 'public'
   groupIds.value = []
-  curatorGroupId.value = null
+  schoolId.value = null
   host = document.createElement('div')
   document.body.appendChild(host)
   const Wrapper = defineComponent({
@@ -66,9 +66,9 @@ function mount(opts: MountOpts = {}): HTMLElement {
           'onUpdate:groupIds': (v: string[]) => {
             groupIds.value = v
           },
-          curatorGroupId: curatorGroupId.value,
-          'onUpdate:curatorGroupId': (v: string | null) => {
-            curatorGroupId.value = v
+          schoolId: schoolId.value,
+          'onUpdate:schoolId': (v: string | null) => {
+            schoolId.value = v
           },
           groups: opts.groups ?? GROUPS,
           schools: opts.schools ?? [],
@@ -143,9 +143,9 @@ describe('PracticeAudiencePicker', () => {
     expect(chipWith('Тихая школа')).toBeFalsy()
   })
 
-  it('kind=curator_groups renders the school chips and NOT the group chips', async () => {
+  it('kind=schools renders the school chips and NOT the group chips', async () => {
     mount({ schools: SCHOOLS })
-    kind.value = 'curator_groups'
+    kind.value = 'schools'
     await flush()
 
     expect(chipWith('Тихая школа')).toBeTruthy()
@@ -160,22 +160,22 @@ describe('PracticeAudiencePicker', () => {
     // school) made that union false; the precise statement now is that the
     // second tap replaces the first, so the model can never hold two.
     mount({ schools: SCHOOLS })
-    kind.value = 'curator_groups'
+    kind.value = 'schools'
     await flush()
 
     chipWith('Тихая школа')?.click()
     await flush()
-    expect(curatorGroupId.value).toBe('sc1')
+    expect(schoolId.value).toBe('sc1')
 
     // A tick between taps: the emit updates the child's prop on re-render,
     // and no real user taps two chips within one tick.
     chipWith('Утренняя школа')?.click()
     await flush()
-    expect(curatorGroupId.value).toBe('sc2')
+    expect(schoolId.value).toBe('sc2')
 
     chipWith('Утренняя школа')?.click()
     await flush()
-    expect(curatorGroupId.value).toBeNull()
+    expect(schoolId.value).toBeNull()
     // The student-groups array is untouched by school taps.
     expect(groupIds.value).toEqual([])
   })
@@ -191,7 +191,7 @@ describe('PracticeAudiencePicker', () => {
 
   it('the defensive schools-empty state (list emptied after the kind was picked)', async () => {
     mount({ schools: [] })
-    kind.value = 'curator_groups'
+    kind.value = 'schools'
     await flush()
 
     expect(text()).toContain('Нет школ, доступных для выбора')
@@ -202,7 +202,7 @@ describe('PracticeAudiencePicker', () => {
     // school kinds is offered) with schoolLocked -- the school is a fact
     // there, not a choice, so neither chips nor the empty state may appear.
     mount({ schools: [{ id: 'sc1', name: 'Тихая школа' }], schoolLocked: true })
-    kind.value = 'curator_groups'
+    kind.value = 'schools'
     await flush()
 
     expect(optionWith('Публичная')).toBeTruthy()

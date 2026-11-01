@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- CuratorGroupTransferBanner Tests (schools FE-21 / GT P3)
+// VELO Frontend -- SchoolTransferBanner Tests (schools FE-21 / GT P3)
 // =============================================================================
 //
 // The banner's two faces and its silence: curator sees "sent + cancel",
@@ -12,12 +12,12 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, defineComponent, h, nextTick, type App } from 'vue'
-import CuratorGroupTransferBanner from '@/components/shared/CuratorGroupTransferBanner.vue'
-import * as cgApi from '@/api/curatorGroups'
+import SchoolTransferBanner from '@/components/shared/SchoolTransferBanner.vue'
+import * as cgApi from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
-import type { CuratorGroupPageResponse, CuratorGroupTransferRef } from '@/api/types'
+import type { SchoolPageResponse, SchoolTransferRef } from '@/api/types'
 
-vi.mock('@/api/curatorGroups')
+vi.mock('@/api/schools')
 
 const toastSuccess = vi.fn()
 const toastError = vi.fn()
@@ -25,13 +25,13 @@ vi.mock('@/composables/useToast', () => ({
   useToast: () => ({ success: toastSuccess, error: toastError, info: vi.fn() }),
 }))
 
-const transfer: CuratorGroupTransferRef = {
+const transfer: SchoolTransferRef = {
   to_user_id: 'u2',
   to_display_name: 'Пётр Сомов',
   requested_at: '2026-08-20T00:00:00Z',
 }
 
-const newCuratorPage: CuratorGroupPageResponse = {
+const newCuratorPage: SchoolPageResponse = {
   id: 'g1',
   name: 'Тихая школа',
   description: null,
@@ -50,8 +50,8 @@ let events: Record<string, unknown[]> = {}
 
 function mount(props: {
   relation: 'curator' | 'master' | 'student' | null
-  transfer?: CuratorGroupTransferRef | null
-  pending?: CuratorGroupTransferRef | null
+  transfer?: SchoolTransferRef | null
+  pending?: SchoolTransferRef | null
 }): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
@@ -59,13 +59,13 @@ function mount(props: {
   const Wrapper = defineComponent({
     setup() {
       return () =>
-        h(CuratorGroupTransferBanner, {
+        h(SchoolTransferBanner, {
           transfer: props.transfer ?? null,
           pending: props.pending ?? null,
           relation: props.relation,
           groupId: 'g1',
           onCancelled: () => events['cancelled']?.push(null) ?? (events['cancelled'] = [null]),
-          onAccepted: (page: CuratorGroupPageResponse) =>
+          onAccepted: (page: SchoolPageResponse) =>
             events['accepted']?.push(page) ?? (events['accepted'] = [page]),
           onDeclined: () => events['declined']?.push(null) ?? (events['declined'] = [null]),
         })
@@ -107,9 +107,9 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('CuratorGroupTransferBanner', () => {
+describe('SchoolTransferBanner', () => {
   it('CURATOR: names the addressee and cancels the offer on demand', async () => {
-    vi.mocked(cgApi.cancelCuratorGroupTransfer).mockResolvedValue(undefined)
+    vi.mocked(cgApi.cancelSchoolTransfer).mockResolvedValue(undefined)
     mount({ relation: 'curator', transfer })
     await flush()
 
@@ -117,7 +117,7 @@ describe('CuratorGroupTransferBanner', () => {
     buttonWith('Отменить')?.click()
     await flush()
 
-    expect(cgApi.cancelCuratorGroupTransfer).toHaveBeenCalledWith('g1')
+    expect(cgApi.cancelSchoolTransfer).toHaveBeenCalledWith('g1')
     expect(events['cancelled']).toBeTruthy()
   })
 
@@ -129,7 +129,7 @@ describe('CuratorGroupTransferBanner', () => {
   })
 
   it('ADDRESSEE: accept hands the NEW CURATOR page up (the page flips in place)', async () => {
-    vi.mocked(cgApi.acceptCuratorGroupTransfer).mockResolvedValue(newCuratorPage)
+    vi.mocked(cgApi.acceptSchoolTransfer).mockResolvedValue(newCuratorPage)
     mount({ relation: 'master', transfer })
     await flush()
 
@@ -137,19 +137,19 @@ describe('CuratorGroupTransferBanner', () => {
     buttonWith('Принять')?.click()
     await flush()
 
-    expect(cgApi.acceptCuratorGroupTransfer).toHaveBeenCalledWith('g1')
+    expect(cgApi.acceptSchoolTransfer).toHaveBeenCalledWith('g1')
     expect(events['accepted']?.[0]).toEqual(newCuratorPage)
   })
 
   it('ADDRESSEE: decline emits and toasts', async () => {
-    vi.mocked(cgApi.declineCuratorGroupTransfer).mockResolvedValue(undefined)
+    vi.mocked(cgApi.declineSchoolTransfer).mockResolvedValue(undefined)
     mount({ relation: 'master', transfer })
     await flush()
 
     buttonWith('Отклонить')?.click()
     await flush()
 
-    expect(cgApi.declineCuratorGroupTransfer).toHaveBeenCalledWith('g1')
+    expect(cgApi.declineSchoolTransfer).toHaveBeenCalledWith('g1')
     expect(events['declined']).toBeTruthy()
     expect(toastSuccess).toHaveBeenCalledWith('Предложение отклонено')
   })
@@ -165,8 +165,8 @@ describe('CuratorGroupTransferBanner', () => {
   })
 
   it('a failed accept shows the honest toast and emits nothing', async () => {
-    vi.mocked(cgApi.acceptCuratorGroupTransfer).mockRejectedValue(
-      new ApiResponseError(409, 'taken', 'curator_group_name_taken'),
+    vi.mocked(cgApi.acceptSchoolTransfer).mockRejectedValue(
+      new ApiResponseError(409, 'taken', 'school_name_taken'),
     )
     mount({ relation: 'master', transfer })
     await flush()

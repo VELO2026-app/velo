@@ -198,8 +198,8 @@ import { t } from '@/locales'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ApiResponseError } from '@/api/client'
-import { getCuratorGroupAnalytics, type SchoolAnalyticsPeriod } from '@/api/curatorGroups'
-import type { CuratorGroupAnalyticsResponse } from '@/api/types'
+import { getSchoolAnalytics, type SchoolAnalyticsPeriod } from '@/api/schools'
+import type { SchoolAnalyticsResponse } from '@/api/types'
 import { VAvatar, VButton, VCard, VEmptyState, VLoader, VSegmentTrack } from '@/components/ui'
 import DistributionCard from '@/components/shared/DistributionCard.vue'
 import VHeader from '@/components/layout/VHeader.vue'
@@ -276,7 +276,7 @@ const loading = ref(true)
 const refetching = ref(false)
 const error = ref(false)
 const notFound = ref(false)
-const data = ref<CuratorGroupAnalyticsResponse | null>(null)
+const data = ref<SchoolAnalyticsResponse | null>(null)
 
 // Out-of-order guard: rapid slider taps race their responses; the numbers
 // on screen must always answer the LAST selected period.
@@ -292,7 +292,7 @@ async function refresh(): Promise<void> {
   error.value = false
   notFound.value = false
   try {
-    const fresh = await getCuratorGroupAnalytics(groupId.value, period.value)
+    const fresh = await getSchoolAnalytics(groupId.value, period.value)
     if (seq === requestSeq) data.value = fresh
   } catch (e) {
     if (seq !== requestSeq) return
@@ -339,7 +339,7 @@ function openPractice(practiceId: string): void {
 
 function goBack(): void {
   void router.push({
-    name: 'master-curator-group',
+    name: 'master-school',
     params: { id: groupId.value },
   })
 }

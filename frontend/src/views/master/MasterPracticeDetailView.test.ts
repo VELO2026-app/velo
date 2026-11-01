@@ -1538,14 +1538,14 @@ describe('MasterPracticeDetailView -- audience_unavailable (FE-24 / GT P5)', () 
     // the edit screen -- right while a school audience could be swapped there.
     // BE-74 made a school practice's audience and school read-only on that
     // screen, and every flagged practice belongs to a school (the flag is set
-    // only for 'curator_groups', which the CHECK forbids without one). So the
+    // only for 'schools', which the CHECK forbids without one). So the
     // jump led to a screen with nothing to change: the advice and the button
     // are gone, the statement stays.
     vi.mocked(practicesApi.getPractice).mockResolvedValue(
       practice({
-        audience_kind: 'curator_groups',
-        curator_group_id: 'sc1',
-        curator_group_name: 'Тихая школа',
+        audience_kind: 'schools',
+        school_id: 'sc1',
+        school_name: 'Тихая школа',
         audience_unavailable: true,
       }),
     )

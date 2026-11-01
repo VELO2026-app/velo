@@ -42,11 +42,11 @@ import { useAuthStore } from '@/stores/auth'
 
 // The schools tab probe (tz-curator.md §1.2) is the one network seam the
 // shell touches; both branches drive it through this mock.
-const curatorGroupsMock = vi.hoisted(() => ({
-  getCuratorGroups: vi.fn(),
-  getMyCuratorGroups: vi.fn(),
+const schoolsMock = vi.hoisted(() => ({
+  getSchools: vi.fn(),
+  getMySchools: vi.fn(),
 }))
-vi.mock('@/api/curatorGroups', () => curatorGroupsMock)
+vi.mock('@/api/schools', () => schoolsMock)
 
 const keyboardOpenRef: Ref<boolean> = ref(false)
 vi.mock('@/composables/useKeyboardOpen', () => ({
@@ -62,12 +62,12 @@ function buildRouter(): Router {
       { path: '/master/practices', name: 'master-practices', component: StubChild },
       // §1.2: the master zone's schools TAB HUB -- no hideTabBar meta, the
       // dock stays visible with the fourth tab active (mirrors router/index.ts).
-      { path: '/master/curator-groups', name: 'master-curator-groups', component: StubChild },
+      { path: '/master/schools', name: 'master-schools', component: StubChild },
       // §1.11 (owner 2026-09-22): the participants screen -- a FOG_ROUTES
       // member (mirrors router/index.ts).
       {
-        path: '/master/curator-groups/g1/members',
-        name: 'master-curator-group-members',
+        path: '/master/schools/g1/members',
+        name: 'master-school-members',
         component: StubChild,
       },
       {
@@ -145,9 +145,9 @@ function activeTabLabel(): string | undefined {
 
 beforeEach(() => {
   keyboardOpenRef.value = false
-  // FE-88: the hub probes /curator-groups/mine for EVERY account on shell
+  // FE-88: the hub probes /schools/mine for EVERY account on shell
   // mount; the default fixture has no school memberships.
-  curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({ items: [] })
+  schoolsMock.getMySchools.mockResolvedValue({ items: [] })
 })
 
 afterEach(() => {
@@ -186,9 +186,9 @@ describe('MasterShell', () => {
     }
 
     it('a curator sees five tabs — Школы четвёртым, перед «Я»', async () => {
-      curatorGroupsMock.getCuratorGroups.mockResolvedValue({
+      schoolsMock.getSchools.mockResolvedValue({
         items: [],
-        can_create_groups: true,
+        can_create_schools: true,
       })
       await mount('master-dashboard', {}, seedMaster)
       await flush()
@@ -201,9 +201,9 @@ describe('MasterShell', () => {
     })
 
     it('a master without the right and without schools does not see it', async () => {
-      curatorGroupsMock.getCuratorGroups.mockResolvedValue({
+      schoolsMock.getSchools.mockResolvedValue({
         items: [],
-        can_create_groups: false,
+        can_create_schools: false,
       })
       await mount('master-dashboard', {}, seedMaster)
       await flush()
@@ -213,14 +213,14 @@ describe('MasterShell', () => {
         b.getAttribute('aria-label'),
       )
       expect(labels).toEqual(['Дашборд', 'Практики', 'Аналитика', 'Я'])
-      expect(curatorGroupsMock.getCuratorGroups).toHaveBeenCalledTimes(1)
+      expect(schoolsMock.getSchools).toHaveBeenCalledTimes(1)
     })
 
     it("a master of somebody else's school without the right sees the tab (FE-88)", async () => {
       // Membership alone now satisfies the master zone's condition too -- a
       // master teaching in somebody's school is exactly whom the old
       // isCurator probe silently dropped.
-      curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({
+      schoolsMock.getMySchools.mockResolvedValue({
         items: [{ id: 'g9', name: 'Чужая школа', relation: 'master' }],
       })
       await mount('master-dashboard', {}, seedMaster)
@@ -235,14 +235,14 @@ describe('MasterShell', () => {
 
     it('the hub screen itself keeps the dock visible with Школы active (§1.2 mockup)', async () => {
       // The mockup's normative line: «На /user/schools и
-      // /master/curator-groups активен четвёртый таб» -- the hub is the tab
+      // /master/schools активен четвёртый таб» -- the hub is the tab
       // bar's own screen, so the bar must render there (the FE-20-era
       // hideTabBar meta once hid it entirely).
-      curatorGroupsMock.getCuratorGroups.mockResolvedValue({
+      schoolsMock.getSchools.mockResolvedValue({
         items: [],
-        can_create_groups: true,
+        can_create_schools: true,
       })
-      await mount('master-curator-groups', {}, seedMaster)
+      await mount('master-schools', {}, seedMaster)
       await flush()
       await flush()
 
@@ -299,7 +299,7 @@ describe('MasterShell', () => {
     })
 
     it('the participants screen (§1.11) is a fog screen like the school page', async () => {
-      await mount('master-curator-group-members')
+      await mount('master-school-members')
       await flush()
 
       expect(mainEl().classList.contains('mobile-layout__main--fog')).toBe(true)

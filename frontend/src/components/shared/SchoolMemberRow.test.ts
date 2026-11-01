@@ -2,7 +2,7 @@
 // VELO Frontend -- SchoolMemberRow Component Tests (tz-curator.md §1.11)
 // =============================================================================
 //
-// The roster row is pure presentation over CuratorGroupMemberItem: the name
+// The roster row is pure presentation over SchoolMemberItem: the name
 // shows, a suspended master (is_visible=false, I-4) degrades to a
 // «Временно недоступен» subtitle instead of vanishing, and the whole row is
 // one touch target that hands the member up to the parent (which decides
@@ -13,9 +13,9 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { createApp, h, nextTick, type App } from 'vue'
 import SchoolMemberRow from '@/components/shared/SchoolMemberRow.vue'
-import type { CuratorGroupMemberItem, CuratorGroupRosterItem } from '@/api/types'
+import type { SchoolMemberItem, SchoolRosterItem } from '@/api/types'
 
-function member(overrides: Partial<CuratorGroupMemberItem> = {}): CuratorGroupMemberItem {
+function member(overrides: Partial<SchoolMemberItem> = {}): SchoolMemberItem {
   return {
     user_id: 'u1',
     name: 'Анна Петрова',
@@ -30,11 +30,11 @@ function member(overrides: Partial<CuratorGroupMemberItem> = {}): CuratorGroupMe
 let app: App | null = null
 let host: HTMLElement | null = null
 
-// The row emits the base CuratorGroupRosterItem (BE-76: it renders both the
+// The row emits the base SchoolRosterItem (BE-76: it renders both the
 // curator's and a school master's rows), so the listener takes the base type.
 function mountRow(
-  m: CuratorGroupMemberItem | CuratorGroupRosterItem,
-  onOpen: (m: CuratorGroupRosterItem) => void,
+  m: SchoolMemberItem | SchoolRosterItem,
+  onOpen: (m: SchoolRosterItem) => void,
 ): void {
   host = document.createElement('div')
   document.body.appendChild(host)
@@ -94,7 +94,7 @@ it.each([
 
 describe("SchoolMemberRow -- a school master's row (BE-76)", () => {
   it('a row WITHOUT the curator fields renders no subtitle, even for a master', () => {
-    const plain: CuratorGroupRosterItem = {
+    const plain: SchoolRosterItem = {
       user_id: 'm1',
       name: 'Борис Ветров',
       avatar_url: null,

@@ -118,7 +118,7 @@
         "windowClosedHint": "Check-in is closed — the practice has already started",
         "start": "Start the practice"
       },
-      "curatorGroupPage": {
+      "schoolPage": {
         "notFound": {
           "title": "School not found",
           "text": "It may have been deleted, or you are not a member."
@@ -692,7 +692,7 @@
         "gone": "This conversation is gone",
         "goneHint": "The conversation was deleted — for example, its support appeal was closed as spam"
       },
-      "userCuratorGroups": {
+      "userMySchools": {
         "loadFailedHint": "Check your connection and try again.",
         "empty": {
           "title": "No schools yet",

@@ -149,7 +149,7 @@
       "submit": "Create the practice",
       "legendSections": "sections with required fields"
     },
-    "curatorGroupJoin": {
+    "schoolJoin": {
       "invited": {
         "title": "You have been invited to a school!"
       },
@@ -180,7 +180,7 @@
       "open": "Open",
       "decline": "Decline"
     },
-    "curatorGroupMasterOffer": {
+    "schoolMasterOffer": {
       "invited": {
         "title": "An invitation to become a school's master!"
       },
@@ -335,7 +335,7 @@
       "gone": "This conversation is gone",
       "goneHint": "The conversation was deleted — for example, its support appeal was closed as spam"
     },
-    "masterCuratorGroupCreate": {
+    "masterSchoolCreate": {
       "unavailable": "Creating schools is unavailable",
       "unavailableHint": "Only a master granted this right by the administrator can create schools.",
       "fields": {
@@ -362,7 +362,7 @@
       "submit": "Create the school",
       "createdToast": "The school \"{name}\" has been created"
     },
-    "masterCuratorGroups": {
+    "masterSchools": {
       "createCta": "New school",
       "loadFailedHint": "Check your connection and try again.",
       "empty": {

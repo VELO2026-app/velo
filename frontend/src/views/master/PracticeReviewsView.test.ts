@@ -70,7 +70,7 @@ function summary(overrides: Partial<PracticeAnalyticsResponse> = {}): PracticeAn
     pairs_total: 3,
     reviews_total: 1,
     viewer_role: 'leader',
-    curator_group_id: null,
+    school_id: null,
     ...overrides,
   }
 }
@@ -273,14 +273,14 @@ describe('PracticeReviewsView', () => {
 
     it("curator: a school student's review opens the school student profile", async () => {
       vi.mocked(practicesApi.getPracticeAnalytics).mockResolvedValue(
-        summary({ viewer_role: 'curator', curator_group_id: 'g9' }),
+        summary({ viewer_role: 'curator', school_id: 'g9' }),
       )
       mount()
       await flush()
       host!.querySelector<HTMLElement>('.practice-analytics__review')!.click()
       await flush()
       expect(push).toHaveBeenCalledWith({
-        name: 'master-curator-group-student',
+        name: 'master-school-student',
         params: { groupId: 'g9', userId: 'r0' },
       })
     })

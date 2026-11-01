@@ -155,7 +155,7 @@ en, de, es**. *(Дополнение 2026-10-21: к выкатке добавл�
    Для en/de/es конструкция «с X» не переносима — фраза собирается иначе.
 5. **Плюрализация**: `plural.ts` — только русская тройка форм; для en/de/es
    нужен `Intl.PluralRules` / встроенные плюралы vue-i18n. Локальные
-   дубликаты: `CuratorGroupPageView.vue:439`, `MasterPublicView.vue:410-418`
+   дубликаты: `SchoolPageView.vue:439`, `MasterPublicView.vue:410-418`
    (включая капитализированные формы), псевдо-формы «практик(и)» в
    `AdminMasterReviewView.vue:691,695`, вложенные тернарники в
    `PracticeAnalytics.vue:87-95`.
@@ -319,7 +319,7 @@ Vue — для utils) + язык из `authStore.user.language` при стар�
 2.1 кодмод по `components/shared` (58 файлов: текстовые узлы, проп-литералы,
 toast); 2.2 вручную сложные места: `PracticeAnalytics` (плюралы),
 `FormShell` (падеж), `BookingPopup`, три фильтр-модалки,
-`TimezoneCityPicker`, `CuratorGroupTransferBanner`. *Приёмка: директория
+`TimezoneCityPicker`, `SchoolTransferBanner`. *Приёмка: директория
 чиста, все её тест-файлы зелёные без правок; для фаз 2–3 дополнительно —
 снапшот-диф: рендер всех маршрутов в happy-dom до кодмода и после,
 тексты DOM сравниваются скриптом, диф пуст.*

@@ -1,18 +1,18 @@
 // =============================================================================
-// VELO Frontend -- Curator Groups API (schools, FE-22 / GT P3)
+// VELO Frontend -- Schools API (FE-22 / GT P3)
 // =============================================================================
 //
-// Typed wrappers over api.get/post/patch/delete for the CURATOR GROUPS
-// ("schools") endpoints. Unlike groups.ts (which hand-wrote its types as a
+// Typed wrappers over api.get/post/patch/delete for the SCHOOLS
+// endpoints. Unlike groups.ts (which hand-wrote its types as a
 // stand-in before a regen existed), every shape here is ALREADY in
 // generated.ts -- this file wraps URLs and request bodies only; all types
 // come from @/api/types, per that file's own header rule.
 //
 // Three surfaces, one feature (tz-curator.md §3.4):
 //
-// CURATOR (verified master, prefix /api/v1/masters/me/curator-groups):
+// CURATOR (verified master, prefix /api/v1/masters/me/schools):
 //   GET    /                                     -- my schools + counts + transfer
-//          (+ can_create_groups, BE-18: the admin-issued right to FOUND a
+//          (+ can_create_schools, BE-18: the admin-issued right to FOUND a
 //          school rides on this list -- it is where the "create" button lives)
 //   POST   /                                     -- create {name, description?}
 //   PATCH  /{id}                                 -- rename/redescribe/avatar
@@ -35,7 +35,7 @@
 //                                                   scores as BUCKETS (BE-24)
 //   GET    /{id}/analytics                       -- the §6 MVP aggregate
 //
-// MEMBER / ANY USER (prefix /api/v1/curator-groups):
+// MEMBER / ANY USER (prefix /api/v1/schools):
 //   GET    /mine                                 -- my ACTIVE schools + relation
 //   GET    /invites/{token}                      -- invite preview (refusal is
 //                                                   DESCRIBED, not raised; 404
@@ -55,81 +55,78 @@
 //                                                  not yours)
 //
 // ADMIN:
-//   GET    /api/v1/admin/curator-groups          -- ALL schools incl. frozen
+//   GET    /api/v1/admin/schools          -- ALL schools incl. frozen
 // =============================================================================
 
 import { api } from '@/api/client'
 import { buildQuery } from '@/api/utils'
 import type {
-  CreateCuratorGroupRequest,
-  CuratorGroupAnalyticsResponse,
-  CuratorGroupDeletePreviewResponse,
-  CuratorGroupInvitePreviewResponse,
-  CuratorGroupInviteResponse,
-  CuratorGroupLeavePreviewResponse,
-  CuratorGroupListResponse,
-  CuratorGroupMasterOfferRequest,
-  CuratorGroupMineResponse,
-  CuratorGroupPageResponse,
-  CuratorGroupRemovePreviewResponse,
-  CuratorGroupResponse,
-  CuratorGroupTransferRef,
-  JoinCuratorGroupResponse,
-  OfferCuratorGroupTransferRequest,
-  PaginatedAdminCuratorGroupsResponse,
-  PaginatedCuratorGroupCheckinsResponse,
-  PaginatedCuratorGroupEventsResponse,
-  PaginatedCuratorGroupMastersResponse,
-  PaginatedCuratorGroupMembersResponse,
-  PaginatedCuratorGroupReviewsResponse,
-  PaginatedCuratorGroupRosterResponse,
-  PaginatedCuratorGroupBlocksResponse,
+  CreateSchoolRequest,
+  SchoolAnalyticsResponse,
+  SchoolDeletePreviewResponse,
+  SchoolInvitePreviewResponse,
+  SchoolInviteResponse,
+  SchoolLeavePreviewResponse,
+  SchoolListResponse,
+  SchoolMasterOfferRequest,
+  SchoolMineResponse,
+  SchoolPageResponse,
+  SchoolRemovePreviewResponse,
+  SchoolResponse,
+  SchoolTransferRef,
+  JoinSchoolResponse,
+  OfferSchoolTransferRequest,
+  PaginatedAdminSchoolsResponse,
+  PaginatedSchoolCheckinsResponse,
+  PaginatedSchoolEventsResponse,
+  PaginatedSchoolMastersResponse,
+  PaginatedSchoolMembersResponse,
+  PaginatedSchoolReviewsResponse,
+  PaginatedSchoolRosterResponse,
+  PaginatedSchoolBlocksResponse,
   PaginatedPracticesResponse,
   SchoolStudentProfileResponse,
-  UpdateCuratorGroupRequest,
+  UpdateSchoolRequest,
 } from '@/api/types'
 
-const CURATOR_BASE = '/api/v1/masters/me/curator-groups'
-const MEMBER_BASE = '/api/v1/curator-groups'
+const CURATOR_BASE = '/api/v1/masters/me/schools'
+const MEMBER_BASE = '/api/v1/schools'
 
 /** Which flavour of member/invite a call is about. A local convenience alias
  *  for the generated `'master' | 'student'` literals (both request schemas and
  *  the invite path parameter use it) -- not a re-declared backend union. */
-export type CuratorGroupMemberKind = 'master' | 'student'
+export type SchoolMemberKind = 'master' | 'student'
 
 // =============================================================================
 // Curator surface (requires a verified master token)
 // =============================================================================
 
-/** GET /masters/me/curator-groups -- schools I curate, newest first. Empty
+/** GET /masters/me/schools -- schools I curate, newest first. Empty
  *  list when I curate none. */
-/** GET /masters/me/curator-groups -- my schools as their curator. The
- *  response ALSO carries can_create_groups (BE-18): the admin-issued right to
+/** GET /masters/me/schools -- my schools as their curator. The
+ *  response ALSO carries can_create_schools (BE-18): the admin-issued right to
  *  found a school rides on this list because this is the screen the "create"
  *  button lives on -- no second request, no endpoint invented for one bool. */
-export function getCuratorGroups(): Promise<CuratorGroupListResponse> {
-  return api.get<CuratorGroupListResponse>(CURATOR_BASE)
+export function getSchools(): Promise<SchoolListResponse> {
+  return api.get<SchoolListResponse>(CURATOR_BASE)
 }
 
-/** POST /masters/me/curator-groups -- create a school. BE-18: founding is a
- *  RIGHT an admin grants (can_create_groups, set at verify or through
- *  PATCH /admin/masters/{id}/can-create-groups) -- without it the call is a
- *  403 group_creation_not_allowed. 409 curator_group_name_taken on a name
+/** POST /masters/me/schools -- create a school. BE-18: founding is a
+ *  RIGHT an admin grants (can_create_schools, set at verify or through
+ *  PATCH /admin/masters/{id}/can-create-schools) -- without it the call is a
+ *  403 school_creation_not_allowed. 409 school_name_taken on a name
  *  this curator already uses; the same name under a different curator is
  *  fine (I-7).
  *
  *  `description` is omitted from the body when undefined/blank -- the caller
  *  trims; the backend normalizes '' to NULL on its own. CREATION DOES NOT
  *  TAKE AN AVATAR (BE-20) -- the picture is attached by a PATCH afterwards. */
-export function createCuratorGroup(
-  name: string,
-  description?: string,
-): Promise<CuratorGroupResponse> {
-  const body: CreateCuratorGroupRequest = description ? { name, description } : { name }
-  return api.post<CuratorGroupResponse>(CURATOR_BASE, body)
+export function createSchool(name: string, description?: string): Promise<SchoolResponse> {
+  const body: CreateSchoolRequest = description ? { name, description } : { name }
+  return api.post<SchoolResponse>(CURATOR_BASE, body)
 }
 
-/** PATCH /masters/me/curator-groups/{id} -- rename and/or redescribe and/or
+/** PATCH /masters/me/schools/{id} -- rename and/or redescribe and/or
  *  re-avatar. 404 if not my group or gone. `name` is ALWAYS sent -- the
  *  backend requires it on every PATCH, so an edit sheet must state the
  *  current name too (the §12 trap: a stale screen would rename the school
@@ -146,72 +143,72 @@ export function createCuratorGroup(
  *  The server stores the avatar URL NORMALIZED (lowercase host, trailing
  *  slash, punycode) -- what comes back in the response is NOT byte-equal to
  *  what was sent, and callers are expected to surface «сохранено как …». */
-export function updateCuratorGroup(
+export function updateSchool(
   id: string,
   name: string,
   description?: string | null,
   avatarUrl?: string | null,
-): Promise<CuratorGroupResponse> {
-  const body: UpdateCuratorGroupRequest = { name }
+): Promise<SchoolResponse> {
+  const body: UpdateSchoolRequest = { name }
   if (description !== undefined) body.description = description
   if (avatarUrl !== undefined) body.avatar_url = avatarUrl
-  return api.patch<CuratorGroupResponse>(`${CURATOR_BASE}/${id}`, body)
+  return api.patch<SchoolResponse>(`${CURATOR_BASE}/${id}`, body)
 }
 
-/** DELETE /masters/me/curator-groups/{id} -- hard-delete with cascade over
+/** DELETE /masters/me/schools/{id} -- hard-delete with cascade over
  *  memberships, invites, a pending transfer and P5 target rows. NEVER blocked
  *  by other masters' practices: those go fail-closed instead (I-11) -- the
  *  delete-preview advisory is informational only. */
-export function deleteCuratorGroup(id: string): Promise<void> {
+export function deleteSchool(id: string): Promise<void> {
   return api.delete(`${CURATOR_BASE}/${id}`)
 }
 
-/** Query params of GET /masters/me/curator-groups/{id}/members. All optional:
+/** Query params of GET /masters/me/schools/{id}/members. All optional:
  *  omitting kind lists both masters and students. */
-export interface CuratorGroupMembersQuery {
-  kind?: CuratorGroupMemberKind
+export interface SchoolMembersQuery {
+  kind?: SchoolMemberKind
   search?: string
   limit?: number
   offset?: number
 }
 
-/** GET /masters/me/curator-groups/{id}/members -- the full roster as the
+/** GET /masters/me/schools/{id}/members -- the full roster as the
  *  curator sees it. A suspended master-member appears with is_visible=false
  *  ("in the shadow") rather than dropping out (I-4) -- only the roster and
  *  the page's masters_count know that predicate, so they cannot disagree. */
-export function getCuratorGroupMembers(
+export function getSchoolMembers(
   id: string,
-  query: CuratorGroupMembersQuery = {},
-): Promise<PaginatedCuratorGroupMembersResponse> {
+  query: SchoolMembersQuery = {},
+): Promise<PaginatedSchoolMembersResponse> {
   const qs = buildQuery({
     kind: query.kind,
     search: query.search,
     limit: query.limit,
     offset: query.offset,
   })
-  return api.get<PaginatedCuratorGroupMembersResponse>(`${CURATOR_BASE}/${id}/members${qs}`)
+  return api.get<PaginatedSchoolMembersResponse>(`${CURATOR_BASE}/${id}/members${qs}`)
 }
 
-/** GET /masters/me/curator-groups/{id}/roster -- the school's roster for ITS
+/** GET /masters/me/schools/{id}/roster -- the school's roster for ITS
  *  MASTERS (BE-76): everyone in the school, name / avatar / role, without the
  *  curator's working fields (is_visible, master_offer) and without the
  *  masters suspended right now. The same kind / search / paging as
- *  getCuratorGroupMembers (one query type). A master outside the school ->
+ *  getSchoolMembers (one query type). A master outside the school ->
  *  masked 404. */
-export function getCuratorGroupRoster(
+export function getSchoolRoster(
   id: string,
-  query: CuratorGroupMembersQuery = {},
-): Promise<PaginatedCuratorGroupRosterResponse> {
+  query: SchoolMembersQuery = {},
+): Promise<PaginatedSchoolRosterResponse> {
   const qs = buildQuery({
     kind: query.kind,
     search: query.search,
     limit: query.limit,
     offset: query.offset,
   })
-  return api.get<PaginatedCuratorGroupRosterResponse>(`${CURATOR_BASE}/${id}/roster${qs}`)
+  return api.get<PaginatedSchoolRosterResponse>(`${CURATOR_BASE}/${id}/roster${qs}`)
 }
 
-/** GET /masters/me/curator-groups/{id}/students/{user_id} -- the SCHOOL-scoped
+/** GET /masters/me/schools/{id}/students/{user_id} -- the SCHOOL-scoped
  *  profile of one student (BE-54, tz-curator.md §1.13): attended-practice and
  *  hours aggregates across EVERY practice of this school (BE-24's historical
  *  belonging rule -- masters who since left stay counted), plus recent PRE
@@ -220,83 +217,83 @@ export function getCuratorGroupRoster(
  *  server-rounded to one decimal -- format it, never recompute it (§1.13.3).
  *  The recent_* arrays are contract-carrying: the screen (owner 2026-09-22)
  *  does not render them yet. */
-export function getCuratorGroupStudentProfile(
+export function getSchoolStudentProfile(
   id: string,
   userId: string,
 ): Promise<SchoolStudentProfileResponse> {
   return api.get(`${CURATOR_BASE}/${id}/students/${userId}`)
 }
 
-/** DELETE /masters/me/curator-groups/{id}/members/{user_id} -- remove a member
+/** DELETE /masters/me/schools/{id}/members/{user_id} -- remove a member
  *  of either kind. Idempotent: a miss is still 204. 404 is only ever about
  *  the GROUP not being mine, never about the user. */
-export function removeCuratorGroupMember(id: string, userId: string): Promise<void> {
+export function removeSchoolMember(id: string, userId: string): Promise<void> {
   return api.delete(`${CURATOR_BASE}/${id}/members/${userId}`)
 }
 
-/** POST /masters/me/curator-groups/{id}/members/{user_id}/demote (BE-59 B1) --
+/** POST /masters/me/schools/{id}/members/{user_id}/demote (BE-59 B1) --
  *  a master of this school becomes a student of it again: membership kept,
  *  the handover offered to them dropped, the person notified by the backend.
  *  IDEMPOTENT 204: no master of this school by that id (already a student,
  *  not a member) writes nothing. 404 only for a school that is not the
  *  caller's (P-08). */
-export function demoteCuratorGroupMaster(id: string, userId: string): Promise<void> {
+export function demoteSchoolMaster(id: string, userId: string): Promise<void> {
   return api.post(`${CURATOR_BASE}/${id}/members/${userId}/demote`)
 }
 
-/** POST /masters/me/curator-groups/{id}/members/{user_id}/block (BE-79) --
+/** POST /masters/me/schools/{id}/members/{user_id}/block (BE-79) --
  *  the curator blocks a member (student OR master): they leave the roster,
  *  appear in /blocks, can no longer see the school or join it by link.
  *  204, repeat included. 409 `cannot_block_curator`; 404 for a non-member or
  *  a school that is not the caller's (P-08). The server decides by the
  *  caller's CURRENT role: in user mode it answers 403. */
-export function blockCuratorGroupMember(id: string, userId: string): Promise<void> {
+export function blockSchoolMember(id: string, userId: string): Promise<void> {
   return api.post(`${CURATOR_BASE}/${id}/members/${userId}/block`)
 }
 
-/** DELETE /masters/me/curator-groups/{id}/blocks/{user_id} (BE-79) -- back to
+/** DELETE /masters/me/schools/{id}/blocks/{user_id} (BE-79) -- back to
  *  the roster with the role they had. 204; 404 when not blocked. */
-export function unblockCuratorGroupMember(id: string, userId: string): Promise<void> {
+export function unblockSchoolMember(id: string, userId: string): Promise<void> {
   return api.delete(`${CURATOR_BASE}/${id}/blocks/${userId}`)
 }
 
-/** GET /masters/me/curator-groups/{id}/blocks (BE-79) -- the «Блок» tab.
+/** GET /masters/me/schools/{id}/blocks (BE-79) -- the «Блок» tab.
  *  limit/offset only: the endpoint has no search. */
-export function getCuratorGroupBlocks(
+export function getSchoolBlocks(
   id: string,
   query: { limit?: number; offset?: number } = {},
-): Promise<PaginatedCuratorGroupBlocksResponse> {
+): Promise<PaginatedSchoolBlocksResponse> {
   const qs = buildQuery({ limit: query.limit, offset: query.offset })
-  return api.get<PaginatedCuratorGroupBlocksResponse>(`${CURATOR_BASE}/${id}/blocks${qs}`)
+  return api.get<PaginatedSchoolBlocksResponse>(`${CURATOR_BASE}/${id}/blocks${qs}`)
 }
 
-/** POST /masters/me/curator-groups/{id}/master-offers (GT-27) -- offer a
+/** POST /masters/me/schools/{id}/master-offers (GT-27) -- offer a
  *  member of this school its master role. THE APPOINTMENT DOES NOT TAKE
  *  EFFECT HERE: the roster changes only when the appointee accepts, so this
  *  answering 204 never justifies mutating the row locally. Idempotent per
  *  candidate (re-sending is not a conflict). Errors: 404 not_found (not your
  *  school, or the candidate is not in it -- one answer, P-08);
  *  409 already_master. An unverified candidate receives a verification prompt. */
-export function offerCuratorGroupMaster(id: string, toUserId: string): Promise<void> {
-  const body: CuratorGroupMasterOfferRequest = { to_user_id: toUserId }
+export function offerSchoolMaster(id: string, toUserId: string): Promise<void> {
+  const body: SchoolMasterOfferRequest = { to_user_id: toUserId }
   return api.post<void>(`${CURATOR_BASE}/${id}/master-offers`, body)
 }
 
 /** Withdraw a pending offer in either state. Membership remains unchanged. */
-export function cancelCuratorGroupMasterOffer(id: string, userId: string): Promise<void> {
+export function cancelSchoolMasterOffer(id: string, userId: string): Promise<void> {
   return api.delete(`${CURATOR_BASE}/${id}/master-offers/${userId}`)
 }
 
-/** POST /masters/me/curator-groups/{id}/invites -- get-or-mint the school's
+/** POST /masters/me/schools/{id}/invites -- get-or-mint the school's
  *  reusable link for one kind. Repeat calls return the SAME url (the curator
  *  expects a shared link to keep working); rotation is revoke + create, on
  *  purpose. 503 bot_url_not_configured when the bot url is unset -- the
  *  caller must show the errorMessages phrase, never a made-up link. */
-export function createCuratorGroupInvite(id: string): Promise<CuratorGroupInviteResponse> {
-  return api.post<CuratorGroupInviteResponse>(`${CURATOR_BASE}/${id}/invites`, {})
+export function createSchoolInvite(id: string): Promise<SchoolInviteResponse> {
+  return api.post<SchoolInviteResponse>(`${CURATOR_BASE}/${id}/invites`, {})
 }
 
-/** DELETE /masters/me/curator-groups/{id}/invites -- revoke the school's link.
+/** DELETE /masters/me/schools/{id}/invites -- revoke the school's link.
  *  Idempotent. Afterwards the old token resolves nowhere: preview and join
  *  read the same row.
  *
@@ -304,54 +301,49 @@ export function createCuratorGroupInvite(id: string): Promise<CuratorGroupInvite
  *  master one promoted a student to master on join; GT-27 cancelled that
  *  path -- school masters are appointed by the curator with the appointee's
  *  confirmation. Do not confuse this with the `kind` in
- *  CuratorGroupMembersQuery above: that one filters the ROSTER and stays. */
-export function revokeCuratorGroupInvite(id: string): Promise<void> {
+ *  SchoolMembersQuery above: that one filters the ROSTER and stays. */
+export function revokeSchoolInvite(id: string): Promise<void> {
   return api.delete(`${CURATOR_BASE}/${id}/invites`)
 }
 
-/** POST /masters/me/curator-groups/{id}/transfer -- offer the school to one of
+/** POST /masters/me/schools/{id}/transfer -- offer the school to one of
  *  its visible master members. 409 transfer_pending while an offer is open
  *  (a second never silently replaces the first -- cancel first); 404
  *  transfer_target_not_member for a student, a stranger, a suspended master
  *  or the curator themselves, indistinguishably. */
-export function offerCuratorGroupTransfer(
-  id: string,
-  toUserId: string,
-): Promise<CuratorGroupTransferRef> {
-  const body: OfferCuratorGroupTransferRequest = { to_user_id: toUserId }
-  return api.post<CuratorGroupTransferRef>(`${CURATOR_BASE}/${id}/transfer`, body)
+export function offerSchoolTransfer(id: string, toUserId: string): Promise<SchoolTransferRef> {
+  const body: OfferSchoolTransferRequest = { to_user_id: toUserId }
+  return api.post<SchoolTransferRef>(`${CURATOR_BASE}/${id}/transfer`, body)
 }
 
-/** DELETE /masters/me/curator-groups/{id}/transfer -- withdraw the pending
+/** DELETE /masters/me/schools/{id}/transfer -- withdraw the pending
  *  offer. Idempotent: no offer is still 204. */
-export function cancelCuratorGroupTransfer(id: string): Promise<void> {
+export function cancelSchoolTransfer(id: string): Promise<void> {
   return api.delete(`${CURATOR_BASE}/${id}/transfer`)
 }
 
-/** GET /masters/me/curator-groups/{id}/delete-preview -- what deleting costs:
+/** GET /masters/me/schools/{id}/delete-preview -- what deleting costs:
  *  who is in the school and how many upcoming practices (across EVERY master
  *  of the school, curator included) are aimed at it. Same counters the page
  *  reports, from the same helper -- the dialog and the page cannot disagree. */
-export function getCuratorGroupDeletePreview(
-  id: string,
-): Promise<CuratorGroupDeletePreviewResponse> {
-  return api.get<CuratorGroupDeletePreviewResponse>(`${CURATOR_BASE}/${id}/delete-preview`)
+export function getSchoolDeletePreview(id: string): Promise<SchoolDeletePreviewResponse> {
+  return api.get<SchoolDeletePreviewResponse>(`${CURATOR_BASE}/${id}/delete-preview`)
 }
 
-/** GET /masters/me/curator-groups/{id}/members/{user_id}/remove-preview -- the
+/** GET /masters/me/schools/{id}/members/{user_id}/remove-preview -- the
  *  same advisory for one member. Zero -- not 404 -- for somebody who is not
  *  in the group at all: the removal itself is idempotent, so the advisory
  *  must not be stricter than the action it describes. */
-export function getCuratorGroupRemovePreview(
+export function getSchoolRemovePreview(
   id: string,
   userId: string,
-): Promise<CuratorGroupRemovePreviewResponse> {
-  return api.get<CuratorGroupRemovePreviewResponse>(
+): Promise<SchoolRemovePreviewResponse> {
+  return api.get<SchoolRemovePreviewResponse>(
     `${CURATOR_BASE}/${id}/members/${userId}/remove-preview`,
   )
 }
 
-/** GET /masters/me/curator-groups/{id}/journal -- what has happened in my
+/** GET /masters/me/schools/{id}/journal -- what has happened in my
  *  school, newest first (BE-19). CURATOR ONLY: a master member or a student
  *  gets 404 (never 403 -- the journal names who was removed and who walked
  *  out, and a 403 would confirm a school's existence to a stranger).
@@ -363,16 +355,16 @@ export function getCuratorGroupRemovePreview(
  *     created_at, which two events of one PATCH share to the byte;
  *   - `event` is a plain string that will grow (notifications next) -- render
  *     unknown kinds with an honest fallback, never crash on them. */
-export function getCuratorGroupJournal(
+export function getSchoolJournal(
   id: string,
   limit = 20,
   offset = 0,
-): Promise<PaginatedCuratorGroupEventsResponse> {
+): Promise<PaginatedSchoolEventsResponse> {
   const qs = buildQuery({ limit, offset })
-  return api.get<PaginatedCuratorGroupEventsResponse>(`${CURATOR_BASE}/${id}/journal${qs}`)
+  return api.get<PaginatedSchoolEventsResponse>(`${CURATOR_BASE}/${id}/journal${qs}`)
 }
 
-/** GET /masters/me/curator-groups/{id}/checkins -- PRE check-ins across EVERY
+/** GET /masters/me/schools/{id}/checkins -- PRE check-ins across EVERY
  *  practice of this school (BE-24), newest first, CURATOR ONLY. Scores arrive
  *  as ZONES (ScoreZone, the moodScale.ts keys -- BE-77), never the raw 1..10: the
  *  curator reads other masters' groups in distribution shape, deliberately
@@ -381,19 +373,19 @@ export function getCuratorGroupJournal(
  *  for practices the caller does not lead; build no link from it.
  *  practice_id narrows the feed to one practice; a practice outside the
  *  school answers an empty page, not an error. */
-export function getCuratorGroupCheckins(
+export function getSchoolCheckins(
   id: string,
   options: { practiceId?: string; limit?: number; offset?: number } = {},
-): Promise<PaginatedCuratorGroupCheckinsResponse> {
+): Promise<PaginatedSchoolCheckinsResponse> {
   const qs = buildQuery({
     practice_id: options.practiceId,
     limit: options.limit ?? 20,
     offset: options.offset ?? 0,
   })
-  return api.get<PaginatedCuratorGroupCheckinsResponse>(`${CURATOR_BASE}/${id}/checkins${qs}`)
+  return api.get<PaginatedSchoolCheckinsResponse>(`${CURATOR_BASE}/${id}/checkins${qs}`)
 }
 
-/** GET /masters/me/curator-groups/{id}/reviews -- NAMED reviews across every
+/** GET /masters/me/schools/{id}/reviews -- NAMED reviews across every
  *  practice of this school (BE-24), newest first, CURATOR ONLY. Same zone
  *  contract as the check-ins (ScoreZone -- the vocabulary the master's own
  *  review feeds render too): a raw rating
@@ -401,22 +393,22 @@ export function getCuratorGroupCheckins(
  *  purpose (owner ruling) -- do not anonymise. user_id: same rule as the
  *  check-ins -- disambiguation only, opens no screen. practice_id narrows
  *  the feed to one practice. */
-export function getCuratorGroupReviews(
+export function getSchoolReviews(
   id: string,
   options: { practiceId?: string; limit?: number; offset?: number } = {},
-): Promise<PaginatedCuratorGroupReviewsResponse> {
+): Promise<PaginatedSchoolReviewsResponse> {
   const qs = buildQuery({
     practice_id: options.practiceId,
     limit: options.limit ?? 20,
     offset: options.offset ?? 0,
   })
-  return api.get<PaginatedCuratorGroupReviewsResponse>(`${CURATOR_BASE}/${id}/reviews${qs}`)
+  return api.get<PaginatedSchoolReviewsResponse>(`${CURATOR_BASE}/${id}/reviews${qs}`)
 }
 
 // =============================================================================
 // School analytics (tz-curator.md §6 -- owner unblocked 2026-10-02)
 //
-// Types: CuratorGroupAnalyticsResponse is the GENERATED contract (re-exported
+// Types: SchoolAnalyticsResponse is the GENERATED contract (re-exported
 // via @/api/types) -- the hand-written stand-in that lived here until the
 // regen was removed by BE-77 when the zone schemas changed under it. Same
 // BE-24 rule as the feeds above: zones only, no per-student rows, no raw
@@ -435,29 +427,29 @@ export function getCuratorGroupReviews(
  *  master dashboard's toggle sends (core/periods.py bounds server-side). */
 export type SchoolAnalyticsPeriod = 'week' | 'month' | 'quarter'
 
-export function getCuratorGroupAnalytics(
+export function getSchoolAnalytics(
   id: string,
   period: SchoolAnalyticsPeriod = 'week',
-): Promise<CuratorGroupAnalyticsResponse> {
+): Promise<SchoolAnalyticsResponse> {
   const qs = buildQuery({ period })
-  return api.get<CuratorGroupAnalyticsResponse>(`${CURATOR_BASE}/${id}/analytics${qs}`)
+  return api.get<SchoolAnalyticsResponse>(`${CURATOR_BASE}/${id}/analytics${qs}`)
 }
 
 // =============================================================================
 // Member / any-user surface
 // =============================================================================
 
-/** GET /curator-groups/mine -- schools I belong to, curated first, then by
+/** GET /schools/mine -- schools I belong to, curated first, then by
  *  join time. Only ACTIVE groups (I-6): one whose curator is currently
  *  suspended disappears and comes back on re-verification, no row written
  *  either way. Each row carries MY relation and transfer_offered (true only
  *  for the person being offered a school -- the curator's own pending offer
  *  reads false here on purpose). */
-export function getMyCuratorGroups(): Promise<CuratorGroupMineResponse> {
-  return api.get<CuratorGroupMineResponse>(`${MEMBER_BASE}/mine`)
+export function getMySchools(): Promise<SchoolMineResponse> {
+  return api.get<SchoolMineResponse>(`${MEMBER_BASE}/mine`)
 }
 
-/** GET /curator-groups/invites/{token} -- the card behind an invite link, and
+/** GET /schools/invites/{token} -- the card behind an invite link, and
  *  WHY joining is refused, if it is. The endpoint DESCRIBES refusals
  *  (can_join=false + reason) instead of raising them; the one exception is
  *  404, which deliberately covers unknown token, revoked token, inactive
@@ -468,52 +460,50 @@ export function getMyCuratorGroups(): Promise<CuratorGroupMineResponse> {
  *  a student member opening a MASTER link gets can_join=true with
  *  relation="student" -- they are already inside and the link still has an
  *  effect (the upgrade). Render the Join button active for that case. */
-export function getCuratorGroupInvitePreview(
-  token: string,
-): Promise<CuratorGroupInvitePreviewResponse> {
-  return api.get<CuratorGroupInvitePreviewResponse>(`${MEMBER_BASE}/invites/${token}`)
+export function getSchoolInvitePreview(token: string): Promise<SchoolInvitePreviewResponse> {
+  return api.get<SchoolInvitePreviewResponse>(`${MEMBER_BASE}/invites/${token}`)
 }
 
-/** POST /curator-groups/join -- join by token. The preview is a hint and this
+/** POST /schools/join -- join by token. The preview is a hint and this
  *  is the gate: everything is revalidated, so a green preview can still end
  *  404/403/409 here -- handle those as real states, never as "impossible".
  *  already_member=true means "there WAS a row when this looked", nothing
  *  more: a student upgraded to master reports already_member=true with
  *  relation="master". */
-export function joinCuratorGroup(token: string): Promise<JoinCuratorGroupResponse> {
-  return api.post<JoinCuratorGroupResponse>(`${MEMBER_BASE}/join`, { token })
+export function joinSchool(token: string): Promise<JoinSchoolResponse> {
+  return api.post<JoinSchoolResponse>(`${MEMBER_BASE}/join`, { token })
 }
 
-/** GET /curator-groups/{id} -- the school page. 404 unless I have a relation
+/** GET /schools/{id} -- the school page. 404 unless I have a relation
  *  to it AND it is active: a school that does not exist, one whose curator is
  *  suspended, and one I simply do not belong to all answer identically.
  *  `transfer` is filled for exactly two people (the curator and the
  *  addressee); every other member sees null. */
-export function getCuratorGroupPage(id: string): Promise<CuratorGroupPageResponse> {
-  return api.get<CuratorGroupPageResponse>(`${MEMBER_BASE}/${id}`)
+export function getSchoolPage(id: string): Promise<SchoolPageResponse> {
+  return api.get<SchoolPageResponse>(`${MEMBER_BASE}/${id}`)
 }
 
-/** GET /curator-groups/{id}/masters -- the school's masters: the curator
+/** GET /schools/{id}/masters -- the school's masters: the curator
  *  first (is_curator=true; they lead the roster without being a member row,
  *  so total == masters_count + 1 by construction), then visible members.
  *  Fields are a strict subset of MasterPublicResponse -- same isolation
  *  boundary as the public master page. */
-export function getCuratorGroupMasters(
+export function getSchoolMasters(
   id: string,
   limit = 20,
   offset = 0,
-): Promise<PaginatedCuratorGroupMastersResponse> {
+): Promise<PaginatedSchoolMastersResponse> {
   const qs = buildQuery({ limit, offset })
-  return api.get<PaginatedCuratorGroupMastersResponse>(`${MEMBER_BASE}/${id}/masters${qs}`)
+  return api.get<PaginatedSchoolMastersResponse>(`${MEMBER_BASE}/${id}/masters${qs}`)
 }
 
-/** GET /curator-groups/{id}/practices -- upcoming practices by the school's
+/** GET /schools/{id}/practices -- upcoming practices by the school's
  *  masters. The PUBLIC FEED narrowed to a set of masters, not a new query:
  *  is_booked/is_paid, the audience clause and the block clause all come from
  *  list_public_practices unchanged. A master who blocked this viewer
  *  contributes no practices even though they still appear in the roster --
  *  blocking hides practices, not people. */
-export function getCuratorGroupPractices(
+export function getSchoolPractices(
   id: string,
   limit = 20,
   offset = 0,
@@ -522,43 +512,43 @@ export function getCuratorGroupPractices(
   return api.get<PaginatedPracticesResponse>(`${MEMBER_BASE}/${id}/practices${qs}`)
 }
 
-/** GET /curator-groups/{id}/leave-preview -- how many of MY OWN upcoming
+/** GET /schools/{id}/leave-preview -- how many of MY OWN upcoming
  *  practices target this school. A student always sees 0. On a FROZEN school
  *  this answers 404 while leave itself still works (I-5) -- treat that 404
  *  as "no advisory", never as an error, and never block the button on it. */
-export function getCuratorGroupLeavePreview(id: string): Promise<CuratorGroupLeavePreviewResponse> {
-  return api.get<CuratorGroupLeavePreviewResponse>(`${MEMBER_BASE}/${id}/leave-preview`)
+export function getSchoolLeavePreview(id: string): Promise<SchoolLeavePreviewResponse> {
+  return api.get<SchoolLeavePreviewResponse>(`${MEMBER_BASE}/${id}/leave-preview`)
 }
 
-/** DELETE /curator-groups/{id}/membership -- leave. Idempotent; 409
+/** DELETE /schools/{id}/membership -- leave. Idempotent; 409
  *  curator_cannot_leave for the owner (their exit is a transfer or a delete).
  *  Deliberately NOT gated on the school being active: a member of a frozen
  *  school must still be able to walk out. */
-export function leaveCuratorGroup(id: string): Promise<void> {
+export function leaveSchool(id: string): Promise<void> {
   return api.delete(`${MEMBER_BASE}/${id}/membership`)
 }
 
-/** POST /curator-groups/{id}/transfer/accept -- take over the school. One
+/** POST /schools/{id}/transfer/accept -- take over the school. One
  *  transaction: caller becomes curator, their member row disappears, the
  *  former curator GAINS a master member row (they stay a teacher of the
  *  school), the offer row is deleted, invite tokens are untouched. Returns
  *  the page AS THE NEW CURATOR (viewer.relation === 'curator') -- replace the
  *  caller's local state with it, no reload needed. 404 transfer_not_found
  *  covers "no offer"/"not addressed to you"/"inactive school" alike; 403
- *  master_required if no longer verified; 409 curator_group_name_taken if
+ *  master_required if no longer verified; 409 school_name_taken if
  *  the caller already curates a school by this name. */
-export function acceptCuratorGroupTransfer(id: string): Promise<CuratorGroupPageResponse> {
-  return api.post<CuratorGroupPageResponse>(`${MEMBER_BASE}/${id}/transfer/accept`)
+export function acceptSchoolTransfer(id: string): Promise<SchoolPageResponse> {
+  return api.post<SchoolPageResponse>(`${MEMBER_BASE}/${id}/transfer/accept`)
 }
 
-/** POST /curator-groups/{id}/transfer/decline -- refuse the offer. Idempotent,
+/** POST /schools/{id}/transfer/decline -- refuse the offer. Idempotent,
  *  and 204 even when it was not yours: it changes nothing, so reporting
  *  success is honest and says nothing about whether an offer existed. */
-export function declineCuratorGroupTransfer(id: string): Promise<void> {
+export function declineSchoolTransfer(id: string): Promise<void> {
   return api.post(`${MEMBER_BASE}/${id}/transfer/decline`)
 }
 
-/** POST /curator-groups/{id}/master-offer/accept -- consent to becoming a
+/** POST /schools/{id}/master-offer/accept -- consent to becoming a
  *  master of this school (BE-59/GT-27). This is where the appointment takes
  *  effect: the caller's member row becomes a master's. 204, no body. Errors:
  *  404 master_offer_not_found -- no offer for you here, the school is dark,
@@ -566,17 +556,17 @@ export function declineCuratorGroupTransfer(id: string): Promise<void> {
  *  or accepted elsewhere -- indistinguishable by design); 403
  *  master_required -- the caller's master verification lapsed since the
  *  offer, and the offer SURVIVES it: re-verify and it is still there. */
-export function acceptCuratorGroupMasterOffer(id: string): Promise<void> {
+export function acceptSchoolMasterOffer(id: string): Promise<void> {
   return api.post(`${MEMBER_BASE}/${id}/master-offer/accept`)
 }
 
-/** POST /curator-groups/{id}/master-offer/decline -- refuse the appointment.
+/** POST /schools/{id}/master-offer/decline -- refuse the appointment.
  *  Same asymmetry as the transfer pair: accept answers 404 to a
  *  non-addressee because it changes the roster, decline answers 204 because
  *  it changes nothing and so reveals nothing. Not gated on the school being
  *  active: an answer the appointee is entitled to give must not depend on
  *  somebody else's verification status. */
-export function declineCuratorGroupMasterOffer(id: string): Promise<void> {
+export function declineSchoolMasterOffer(id: string): Promise<void> {
   return api.post(`${MEMBER_BASE}/${id}/master-offer/decline`)
 }
 
@@ -586,15 +576,12 @@ export function declineCuratorGroupMasterOffer(id: string): Promise<void> {
 // schools at once; there is intentionally no admin delete/edit here)
 // =============================================================================
 
-/** GET /admin/curator-groups -- EVERY school, including frozen ones (the only
+/** GET /admin/schools -- EVERY school, including frozen ones (the only
  *  place in the system where an inactive school is visible at all: for its
  *  own members it is indistinguishable from a deleted one). is_active is a
  *  FIELD, not a filter, on purpose -- the admin is the person being asked
  *  "why has my school gone quiet". */
-export function getAdminCuratorGroups(
-  limit = 20,
-  offset = 0,
-): Promise<PaginatedAdminCuratorGroupsResponse> {
+export function getAdminSchools(limit = 20, offset = 0): Promise<PaginatedAdminSchoolsResponse> {
   const qs = buildQuery({ limit, offset })
-  return api.get<PaginatedAdminCuratorGroupsResponse>(`/api/v1/admin/curator-groups${qs}`)
+  return api.get<PaginatedAdminSchoolsResponse>(`/api/v1/admin/schools${qs}`)
 }

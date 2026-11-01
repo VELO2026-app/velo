@@ -376,7 +376,7 @@ const isMaster = computed(() => !!practice.value && practice.value.master_id ===
 // =========================================================================
 const schoolsHub = useSchoolsHubStore()
 const isCuratorOfSchool = computed((): boolean => {
-  const schoolId = practice.value?.curator_group_id
+  const schoolId = practice.value?.school_id
   if (!schoolId) return false
   return schoolsHub.mine.some((g) => g.relation === 'curator' && g.id === schoolId)
 })

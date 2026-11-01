@@ -149,7 +149,7 @@
       "submit": "Создать практику",
       "legendSections": "разделы с обязательными полями"
     },
-    "curatorGroupJoin": {
+    "schoolJoin": {
       "invited": {
         "title": "Вас пригласили в школу!"
       },
@@ -180,7 +180,7 @@
       "open": "Открыть",
       "decline": "Отказаться"
     },
-    "curatorGroupMasterOffer": {
+    "schoolMasterOffer": {
       "invited": {
         "title": "Приглашение стать мастером школы!"
       },
@@ -335,7 +335,7 @@
       "gone": "Этой переписки больше нет",
       "goneHint": "Переписка удалена — например, обращение в поддержке закрыли как спам"
     },
-    "masterCuratorGroupCreate": {
+    "masterSchoolCreate": {
       "unavailable": "Создание школ недоступно",
       "unavailableHint": "Заводить школы может мастер, которому администратор выдал это право.",
       "fields": {
@@ -362,7 +362,7 @@
       "submit": "Создать школу",
       "createdToast": "Школа «{name}» создана"
     },
-    "masterCuratorGroups": {
+    "masterSchools": {
       "createCta": "Новая школа",
       "loadFailedHint": "Проверьте соединение и попробуйте ещё раз.",
       "empty": {

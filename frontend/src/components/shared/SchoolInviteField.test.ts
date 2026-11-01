@@ -19,10 +19,10 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import SchoolInviteField from '@/components/shared/SchoolInviteField.vue'
-import * as cgApi from '@/api/curatorGroups'
+import * as cgApi from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
 
-vi.mock('@/api/curatorGroups')
+vi.mock('@/api/schools')
 
 const toastSuccess = vi.fn()
 const toastError = vi.fn()
@@ -56,11 +56,11 @@ function copyChip(): HTMLButtonElement | undefined {
   )
 }
 
-const URL_V1 = 'https://t.me/velopractice_bot?start=curator_group_invite__token-one-long'
+const URL_V1 = 'https://t.me/velopractice_bot?start=school__token-one-long'
 
 beforeEach(() => {
-  vi.mocked(cgApi.createCuratorGroupInvite).mockReset()
-  vi.mocked(cgApi.revokeCuratorGroupInvite).mockReset()
+  vi.mocked(cgApi.createSchoolInvite).mockReset()
+  vi.mocked(cgApi.revokeSchoolInvite).mockReset()
   writeText.mockReset()
   toastSuccess.mockReset()
   toastError.mockReset()
@@ -79,11 +79,11 @@ afterEach(() => {
 
 describe('SchoolInviteField', () => {
   it('mints on mount (get-or-mint); the chip is enabled once a link exists', async () => {
-    vi.mocked(cgApi.createCuratorGroupInvite).mockResolvedValue({ invite_url: URL_V1 })
+    vi.mocked(cgApi.createSchoolInvite).mockResolvedValue({ invite_url: URL_V1 })
     mount()
     await flush()
 
-    expect(cgApi.createCuratorGroupInvite).toHaveBeenCalledWith('g1')
+    expect(cgApi.createSchoolInvite).toHaveBeenCalledWith('g1')
     expect(copyChip()).toBeTruthy()
     expect(copyChip()?.disabled).toBe(false)
     // No input anywhere: the url itself is never displayed, the field IS
@@ -92,7 +92,7 @@ describe('SchoolInviteField', () => {
   })
 
   it('the chip writes the url to the clipboard and toasts (B2)', async () => {
-    vi.mocked(cgApi.createCuratorGroupInvite).mockResolvedValue({ invite_url: URL_V1 })
+    vi.mocked(cgApi.createSchoolInvite).mockResolvedValue({ invite_url: URL_V1 })
     writeText.mockResolvedValue(undefined)
     mount()
     await flush()
@@ -105,7 +105,7 @@ describe('SchoolInviteField', () => {
   })
 
   it('without a link a tap lazy-mints and honestly toasts on failure', async () => {
-    vi.mocked(cgApi.createCuratorGroupInvite).mockRejectedValue(
+    vi.mocked(cgApi.createSchoolInvite).mockRejectedValue(
       new ApiResponseError(503, 'bot_url_not_configured', 'not configured'),
     )
     mount()
@@ -117,13 +117,13 @@ describe('SchoolInviteField', () => {
     copyChip()?.click()
     await flush()
 
-    expect(cgApi.createCuratorGroupInvite).toHaveBeenCalledWith('g1')
+    expect(cgApi.createSchoolInvite).toHaveBeenCalledWith('g1')
     expect(toastError).toHaveBeenCalled()
     expect(writeText).not.toHaveBeenCalled()
   })
 
   it('a tap without a link lazy-mints, then copies in the same motion', async () => {
-    vi.mocked(cgApi.createCuratorGroupInvite)
+    vi.mocked(cgApi.createSchoolInvite)
       .mockRejectedValueOnce(new ApiResponseError(500, 'boom', 'internal'))
       .mockResolvedValueOnce({ invite_url: URL_V1 })
     writeText.mockResolvedValue(undefined)
@@ -139,7 +139,7 @@ describe('SchoolInviteField', () => {
 
     // The retry re-mints but NEVER revokes -- rotation has no seat in this
     // form; a retry is always just a mint.
-    expect(cgApi.revokeCuratorGroupInvite).not.toHaveBeenCalled()
+    expect(cgApi.revokeSchoolInvite).not.toHaveBeenCalled()
     expect(writeText).toHaveBeenCalledWith(URL_V1)
     expect(toastSuccess).toHaveBeenCalledWith('Ссылка скопирована')
   })

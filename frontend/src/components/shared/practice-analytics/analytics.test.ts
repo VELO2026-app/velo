@@ -83,7 +83,7 @@ function summary(overrides: Partial<PracticeAnalyticsResponse> = {}): PracticeAn
     pairs_total: 13,
     reviews_total: 1,
     viewer_role: 'leader',
-    curator_group_id: null,
+    school_id: null,
     ...overrides,
   }
 }
@@ -213,23 +213,23 @@ describe('personTarget -- what a tap on a person opens', () => {
   const guest = { user_id: 'u2', name: 'Гость', is_school_student: false }
   it('leader -> the student dossier, member or guest alike', () => {
     for (const p of [member, guest]) {
-      expect(personTarget({ viewer_role: 'leader', curator_group_id: null }, p)).toEqual({
+      expect(personTarget({ viewer_role: 'leader', school_id: null }, p)).toEqual({
         kind: 'route',
         to: { name: 'master-student-profile', params: { id: p.user_id } },
       })
     }
   })
   it('curator -> the school student profile for a member, nothing for anyone else', () => {
-    const s = { viewer_role: 'curator' as const, curator_group_id: 'g1' }
+    const s = { viewer_role: 'curator' as const, school_id: 'g1' }
     expect(personTarget(s, member)).toEqual({
       kind: 'route',
-      to: { name: 'master-curator-group-student', params: { groupId: 'g1', userId: 'u1' } },
+      to: { name: 'master-school-student', params: { groupId: 'g1', userId: 'u1' } },
     })
     expect(personTarget(s, guest)).toBeNull()
-    expect(personTarget({ viewer_role: 'curator', curator_group_id: null }, member)).toBeNull()
+    expect(personTarget({ viewer_role: 'curator', school_id: null }, member)).toBeNull()
   })
   it('school master -> a direct message to anyone', () => {
-    const s = { viewer_role: 'school_master' as const, curator_group_id: null }
+    const s = { viewer_role: 'school_master' as const, school_id: null }
     for (const p of [member, guest]) {
       expect(personTarget(s, p)).toEqual({ kind: 'chat', studentId: p.user_id, name: p.name })
     }
@@ -237,7 +237,7 @@ describe('personTarget -- what a tap on a person opens', () => {
   it('a row with no target is plain text: no button role, a click emits nothing', async () => {
     const wrapper = mount(Analytics, {
       props: {
-        summary: summary({ viewer_role: 'curator', curator_group_id: 'g1', pairs_total: 1 }),
+        summary: summary({ viewer_role: 'curator', school_id: 'g1', pairs_total: 1 }),
         pairs: [pair(0)], // not a school student
         reviews: [review], // a school student
       },

@@ -4,7 +4,7 @@
 
   A school student's profile IN THE SCHOOL CONTEXT, reached from the §1.11
   roster. BE-54's school-scoped endpoint
-  (GET /masters/me/curator-groups/{id}/students/{user_id}) feeds the screen:
+  (GET /masters/me/schools/{id}/students/{user_id}) feeds the screen:
   display name, avatar and the attended/hours aggregates (§1.13 -- the
   recent_* arrays ride the contract but the screen does not render them
   yet). A successful load IS the curator proof (the endpoint 404s everyone
@@ -16,11 +16,11 @@
     - «Изменить роль» (FE-87, tz-curator.md §1.12.3): the role-choice popup
       preselected on the member's CURRENT roster role (owner decision
       2026-09-22). «Мастер» sends the school's master offer
-      (offerCuratorGroupMaster, BE-59): a verified master answers yes / no,
+      (offerSchoolMaster, BE-59): a verified master answers yes / no,
       an unverified one is invited to get verified first; the toast is
       «Предложение отправлено». There is no admin role-request (owner
       ruling). Demotion lives on the master's public profile (MasterPublicView,
-      demoteCuratorGroupMaster), not here, so a current master sees no student
+      demoteSchoolMaster), not here, so a current master sees no student
       option. No optimistic changes: the roster moves server-side only.
     - «Заблокировать» (lock, owner ruling 2026-09-30): the ONLY way a
       curator ends a school membership now -- «Исключить из школы» is
@@ -253,13 +253,13 @@ import { t } from '@/locales'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  getCuratorGroupMembers,
-  getCuratorGroupPage,
-  getCuratorGroupStudentProfile,
-  offerCuratorGroupMaster,
-  blockCuratorGroupMember,
-  cancelCuratorGroupMasterOffer,
-} from '@/api/curatorGroups'
+  getSchoolMembers,
+  getSchoolPage,
+  getSchoolStudentProfile,
+  offerSchoolMaster,
+  blockSchoolMember,
+  cancelSchoolMasterOffer,
+} from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
 import type { SchoolStudentProfileResponse } from '@/api/types'
 import { masterOfferLabel } from '@/utils/masterOffers'
@@ -311,7 +311,7 @@ const hoursLabel = computed(() => (profile.value ? formatHours(profile.value.hou
 
 const rosterRoute = computed(() => ({
   // FE-93: this screen mounts in the master zone only.
-  name: 'master-curator-group-members',
+  name: 'master-school-members',
   params: { id: groupId.value },
   // Back lands on the roster the row came from (the §1.11 switcher tab).
   query: { kind: 'student' },
@@ -339,8 +339,8 @@ async function load(): Promise<void> {
   profileError.value = false
   try {
     const [student, school] = await Promise.all([
-      getCuratorGroupStudentProfile(groupId.value, userId.value),
-      getCuratorGroupPage(groupId.value),
+      getSchoolStudentProfile(groupId.value, userId.value),
+      getSchoolPage(groupId.value),
     ])
     if (version !== loadVersion) return
     profile.value = student
@@ -382,7 +382,7 @@ function onMessageClick(close: () => void): void {
 
 // -- «Изменить роль» (FE-87, tz-curator.md §1.12.3) ----------------------------
 //
-// Confirming «Мастер» sends the school's master offer (offerCuratorGroupMaster,
+// Confirming «Мастер» sends the school's master offer (offerSchoolMaster,
 // BE-59): a verified master answers yes / no, an unverified one is invited to
 // get verified first; toast «Предложение отправлено». No admin role-request
 // exists or is planned (owner ruling). NO optimistic changes: the roster
@@ -400,7 +400,7 @@ const roleKind = ref<MemberKind>('student')
 const roleBusy = computed(() => rolePending.value || kindResolving.value)
 
 // Demotion (master -> student) lives on the master's public profile
-// (MasterPublicView, demoteCuratorGroupMaster), not on this screen: a current
+// (MasterPublicView, demoteSchoolMaster), not on this screen: a current
 // master sees only the master option, which preselects itself and keeps
 // «Изменить» disabled -- the popup never offers a demotion it does not send.
 const roleOptions = computed(() =>
@@ -431,7 +431,7 @@ async function resolveCurrentKind(): Promise<void> {
     let offset = 0
     const limit = 100
     for (;;) {
-      const page = await getCuratorGroupMembers(groupId.value, {
+      const page = await getSchoolMembers(groupId.value, {
         kind: 'master',
         limit,
         offset,
@@ -469,7 +469,7 @@ async function onRoleConfirm(): Promise<void> {
   if (!isCurator.value || roleConfirmDisabled.value || rolePending.value) return
   rolePending.value = true
   try {
-    await offerCuratorGroupMaster(groupId.value, userId.value)
+    await offerSchoolMaster(groupId.value, userId.value)
     toast.success(t('user.screens.schoolStudentProfile.toast.offerSent'))
     roleOpen.value = false
     await load()
@@ -487,7 +487,7 @@ async function onCancelOffer(): Promise<void> {
   if (!isCurator.value || !masterOffer.value || cancellingOffer.value) return
   cancellingOffer.value = true
   try {
-    await cancelCuratorGroupMasterOffer(groupId.value, userId.value)
+    await cancelSchoolMasterOffer(groupId.value, userId.value)
     toast.success(t('user.screens.schoolStudentProfile.toast.offerCancelled'))
     cancelOfferOpen.value = false
     await load()
@@ -525,7 +525,7 @@ async function onBlockConfirm(): Promise<void> {
   if (blocking.value) return
   blocking.value = true
   try {
-    await blockCuratorGroupMember(groupId.value, userId.value)
+    await blockSchoolMember(groupId.value, userId.value)
     blockConfirmOpen.value = false
     blockedDialogOpen.value = true
   } catch (e) {

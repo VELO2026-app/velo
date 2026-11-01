@@ -73,7 +73,7 @@
       "totalRecords": "Total records",
       "checkedIn": "Checked in"
     },
-    "adminCuratorGroups": {
+    "adminSchools": {
       "active": "Active",
       "frozen": "Frozen",
       "countsLine": "Masters: {masters} • Students: {students} • since {since}",
@@ -147,7 +147,7 @@
       },
       "certificateEnter": "Add a certificate + Enter",
       "viewDocument": "View the document",
-      "allowSchoolCreation": "Allow creating schools (curator groups)",
+      "allowSchoolCreation": "Allow creating schools",
       "notFound": "Application not found",
       "notFoundHint": "It may have been deleted or already processed",
       "rejectCta": "Reject the application",

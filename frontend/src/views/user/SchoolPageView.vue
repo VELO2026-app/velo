@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- CuratorGroupPageView (schools FE-19/FE-20 / GT P3)
+  VELO Frontend -- SchoolPageView (schools FE-19/FE-20 / GT P3)
 
   ONE school page component mounted by BOTH zones (precedent: EditProfileView
   -- a user-zone view the master zone mounts directly). Member-facing blocks
@@ -10,12 +10,12 @@
   -- while every masters-surface call behind those blocks answers 403 there,
   so in user mode a curator reads the page as an ordinary member (TZ 6.3).
 
-  Data: GET /curator-groups/{id} (page + relation + transfer) + the school's
+  Data: GET /schools/{id} (page + relation + transfer) + the school's
   practices; the feed renders at most five of them and is the page's last
   element (owner 2026-09-19 -- no rosters, no journal below it).
 
-  Zone only decides the back target (master-curator-groups vs
-  user-curator-groups), read off route.name's prefix.
+  Zone only decides the back target (master-schools vs
+  user-my-schools), read off route.name's prefix.
 
   «Покинуть школу» for student/master lives in the header. The curator's
   page carries «Редактировать школу» (the edit sheet) and the four §1.6 nav
@@ -39,7 +39,7 @@
           :disabled="leaving"
           @click="onLeaveClick"
         >
-          {{ t('user.screens.curatorGroupPage.leaveCta') }}
+          {{ t('user.screens.schoolPage.leaveCta') }}
         </VButton>
       </template>
     </VHeader>
@@ -54,8 +54,8 @@
       <VEmptyState
         v-else-if="notFound"
         icon="notfound"
-        :title="t('user.screens.curatorGroupPage.notFound.title')"
-        :description="t('user.screens.curatorGroupPage.notFound.text')"
+        :title="t('user.screens.schoolPage.notFound.title')"
+        :description="t('user.screens.schoolPage.notFound.text')"
       >
         <template #action>
           <VButton variant="primary" @click="goBack">{{ t('common.backToSchools') }}</VButton>
@@ -66,15 +66,15 @@
                honest path left; DELETE /membership is idempotent, and for a
                mistyped or deleted id it changes nothing. -->
           <VButton variant="ghost" size="sm" :disabled="leaving" @click="onLeaveClick">
-            {{ t('user.screens.curatorGroupPage.leaveNote') }}
+            {{ t('user.screens.schoolPage.leaveNote') }}
           </VButton>
         </template>
       </VEmptyState>
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        :title="t('user.screens.curatorGroupPage.loadFailed')"
-        :description="t('user.screens.curatorGroupPage.loadFailedHint')"
+        :title="t('user.screens.schoolPage.loadFailed')"
+        :description="t('user.screens.schoolPage.loadFailedHint')"
       >
         <template #action>
           <VButton variant="outline" @click="load">{{ t('common.retry') }}</VButton>
@@ -99,14 +99,14 @@
              copied to the clipboard, rotated behind a confirm. Curator only:
              the invite is the curator's handle. This reverses the 2026-09-19
              "the invite has no entry point on this page" note -- the orphaned
-             CuratorGroupInviteSheet is removed, this field IS the entry. -->
+             SchoolInviteSheet is removed, this field IS the entry. -->
         <SchoolInviteField v-if="curatorSurface" :group-id="groupId" />
 
         <!-- FE-21: transfer offer banner. The ADDRESSEE (relation 'master')
              accepts/declines on the member surface -- any zone. The curator
              who SENT it only manages it from the master zone (FE-93).
              Renders nothing for everyone else. -->
-        <CuratorGroupTransferBanner
+        <SchoolTransferBanner
           v-if="page.transfer && (relation === 'master' || curatorSurface)"
           :transfer="page.transfer"
           :pending="null"
@@ -127,7 +127,7 @@
         <div class="cgp__actions">
           <VMenuRow
             v-if="curatorSurface"
-            :label="t('user.screens.curatorGroupPage.edit.title')"
+            :label="t('user.screens.schoolPage.edit.title')"
             :show-arrow="false"
             @click="openEdit"
           >
@@ -148,18 +148,18 @@
           <VMenuRow
             v-if="inMasterZone && canOpenRoster"
             class="cgp__nav-row"
-            :label="t('user.screens.curatorGroupPage.tabs.members')"
+            :label="t('user.screens.schoolPage.tabs.members')"
             @click="openRoster"
           />
           <VMenuRow
             class="cgp__nav-row"
-            :label="t('user.screens.curatorGroupPage.tabs.upcoming')"
+            :label="t('user.screens.schoolPage.tabs.upcoming')"
             @click="openPracticesCalendar"
           />
           <VMenuRow
             v-if="inMasterZone && isCurator"
             class="cgp__nav-row"
-            :label="t('user.screens.curatorGroupPage.tabs.analytics')"
+            :label="t('user.screens.schoolPage.tabs.analytics')"
             @click="openAnalytics"
           />
         </div>
@@ -181,7 +181,7 @@
             })
           "
         >
-          {{ t('user.screens.curatorGroupPage.createPractice') }}
+          {{ t('user.screens.schoolPage.createPractice') }}
         </VButton>
 
         <!-- §1.6 item 7 + owner 2026-09-19: «Ближайшие практики» is the
@@ -189,7 +189,7 @@
              most five upcoming school practices. The existing practice-card
              canon, no school-only variant. -->
         <h2 class="velo-section-title cgp__section">
-          {{ t('user.screens.curatorGroupPage.tabs.upcoming2') }}
+          {{ t('user.screens.schoolPage.tabs.upcoming2') }}
         </h2>
         <template v-if="upcomingPractices.length">
           <CalendarPracticeCard
@@ -200,7 +200,7 @@
             @click="router.push({ name: 'practice-detail', params: { id: $event } })"
           />
         </template>
-        <VEmptyState v-else variant="note" :title="t('user.screens.curatorGroupPage.noUpcoming')" />
+        <VEmptyState v-else variant="note" :title="t('user.screens.schoolPage.noUpcoming')" />
       </template>
     </div>
 
@@ -208,7 +208,7 @@
          sheet shape MasterGroupDetailView's rename uses. -->
     <VBottomSheet
       :open="editOpen"
-      :title="t('user.screens.curatorGroupPage.edit.nameAndDescription')"
+      :title="t('user.screens.schoolPage.edit.nameAndDescription')"
       compact-title
       :save-label="t('ui.save')"
       :save-disabled="!editName.trim()"
@@ -217,13 +217,13 @@
     >
       <VInput
         v-model="editName"
-        :label="t('user.screens.curatorGroupPage.fields.name')"
-        :placeholder="t('user.screens.curatorGroupPage.fields.namePlaceholder')"
+        :label="t('user.screens.schoolPage.fields.name')"
+        :placeholder="t('user.screens.schoolPage.fields.namePlaceholder')"
       />
       <VTextarea
         v-model="editDescription"
-        :label="t('user.screens.curatorGroupPage.edit.description')"
-        :placeholder="t('user.screens.curatorGroupPage.edit.descriptionPlaceholder')"
+        :label="t('user.screens.schoolPage.edit.description')"
+        :placeholder="t('user.screens.schoolPage.edit.descriptionPlaceholder')"
         :rows="3"
         autogrow
       />
@@ -233,21 +233,21 @@
            «сохранено как …» when it round-trips differently. -->
       <VInput
         v-model="editAvatar"
-        :label="t('user.screens.curatorGroupPage.edit.avatarLink')"
+        :label="t('user.screens.schoolPage.edit.avatarLink')"
         placeholder="https://example.com/school.png"
         inputmode="url"
       />
       <p class="cgp__edit-hint">
-        {{ t('user.screens.curatorGroupPage.imageHint') }}
+        {{ t('user.screens.schoolPage.imageHint') }}
       </p>
     </VBottomSheet>
 
     <!-- Leave confirm (student/master): advisory from leave-preview. -->
     <VConfirmDialog
       :open="leaveConfirmOpen"
-      :title="t('user.screens.curatorGroupPage.leave.confirmTitle')"
+      :title="t('user.screens.schoolPage.leave.confirmTitle')"
       :message="leaveMessage"
-      :confirm-label="t('user.screens.curatorGroupPage.leave.confirmCta')"
+      :confirm-label="t('user.screens.schoolPage.leave.confirmCta')"
       danger
       :loading="leaving"
       @confirm="onLeaveConfirm"
@@ -261,18 +261,18 @@ import { t } from '@/locales'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  getCuratorGroupLeavePreview,
-  getCuratorGroupPage,
-  getCuratorGroupPractices,
-  leaveCuratorGroup,
-  updateCuratorGroup,
-} from '@/api/curatorGroups'
+  getSchoolLeavePreview,
+  getSchoolPage,
+  getSchoolPractices,
+  leaveSchool,
+  updateSchool,
+} from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
-import type { CuratorGroupPageResponse, PracticeResponse } from '@/api/types'
+import type { SchoolPageResponse, PracticeResponse } from '@/api/types'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import CalendarPracticeCard from '@/components/shared/CalendarPracticeCard.vue'
-import CuratorGroupTransferBanner from '@/components/shared/CuratorGroupTransferBanner.vue'
+import SchoolTransferBanner from '@/components/shared/SchoolTransferBanner.vue'
 import SchoolHeroCard from '@/components/shared/SchoolHeroCard.vue'
 import SchoolInviteField from '@/components/shared/SchoolInviteField.vue'
 import { schoolHashFromName } from '@/utils/schoolBranding'
@@ -291,7 +291,7 @@ const groupId = computed(() => String(route.params.id ?? ''))
  *  server's viewer.relation, so both zones mount this same component. */
 const inMasterZone = computed(() => String(route.name ?? '').startsWith('master'))
 const listRoute = computed(() => ({
-  name: inMasterZone.value ? 'master-curator-groups' : 'user-curator-groups',
+  name: inMasterZone.value ? 'master-schools' : 'user-my-schools',
 }))
 
 function goBack(): void {
@@ -303,7 +303,7 @@ function goBack(): void {
 const loading = ref(true)
 const error = ref(false)
 const notFound = ref(false)
-const page = ref<CuratorGroupPageResponse | null>(null)
+const page = ref<SchoolPageResponse | null>(null)
 const practices = ref<PracticeResponse[]>([])
 
 const relation = computed(() => page.value?.viewer.relation ?? null)
@@ -322,7 +322,7 @@ const canOpenRoster = computed(
 // Owner 2026-10-05: the header carries ONLY the school's name (was
 // «Школа «{name}»», §1.6/§1.10 mockup). field.schoolFallback is the pre-load fallback.
 const pageTitle = computed(
-  () => page.value?.name ?? t('user.screens.curatorGroupPage.field.schoolFallback'),
+  () => page.value?.name ?? t('user.screens.schoolPage.field.schoolFallback'),
 )
 
 // §5.2: the payload carries no branding_hash yet -- variant A, the client
@@ -363,7 +363,7 @@ const upcomingPractices = computed(() => practices.value.slice(0, 5))
 // in the master zone only -- the user zone has no route for it anymore.
 function openAnalytics(): void {
   void router.push({
-    name: 'master-curator-group-analytics',
+    name: 'master-school-analytics',
     params: { id: groupId.value },
   })
 }
@@ -372,7 +372,7 @@ function openAnalytics(): void {
 // zone only, same as the analytics row above.
 function openRoster(): void {
   void router.push({
-    name: 'master-curator-group-members',
+    name: 'master-school-members',
     params: { id: groupId.value },
   })
 }
@@ -412,8 +412,8 @@ async function load(): Promise<void> {
   notFound.value = false
   try {
     const [pageRes, practicesItems] = await Promise.all([
-      getCuratorGroupPage(groupId.value),
-      fetchAllPages((offset) => getCuratorGroupPractices(groupId.value, PAGE, offset)),
+      getSchoolPage(groupId.value),
+      fetchAllPages((offset) => getSchoolPractices(groupId.value, PAGE, offset)),
     ])
     if (epoch !== loadEpoch) return
     page.value = pageRes
@@ -445,11 +445,11 @@ watch(groupId, () => {
 // reason to block the action.
 
 async function advisoryCount(
-  fetch: () => Promise<{ upcoming_practices_targeting_group: number }>,
+  fetch: () => Promise<{ upcoming_practices_targeting_school: number }>,
 ): Promise<number | null> {
   try {
     const res = await fetch()
-    return res.upcoming_practices_targeting_group
+    return res.upcoming_practices_targeting_school
   } catch {
     return null
   }
@@ -461,7 +461,7 @@ function advisoryLine(count: number | null): string {
   // hiddenCount is a CLDR pipe key: the whole sentence agrees per form
   // (предстанет/станут), so no noun-fragment threading is needed.
   // The joining space lives here, not in the catalog (no leading-space values).
-  return ` ${t('user.screens.curatorGroupPage.hiddenCount', count)}`
+  return ` ${t('user.screens.schoolPage.hiddenCount', count)}`
 }
 
 // -- Leave (student / master) --
@@ -475,9 +475,9 @@ const leaveMessage = computed(() => {
   // member of an inactive school by design (P-08) -- I-5 still guarantees the
   // exit itself works, so the not-found screen carries the one honest path.
   if (notFound.value) {
-    return t('user.screens.curatorGroupPage.leave.warning')
+    return t('user.screens.schoolPage.leave.warning')
   }
-  return t('user.screens.curatorGroupPage.leaveText', {
+  return t('user.screens.schoolPage.leaveText', {
     name: page.value?.name ?? '',
     advisory: advisoryLine(leaveAdvisory.value),
   })
@@ -487,7 +487,7 @@ function onLeaveClick(): void {
   leaveAdvisory.value = null
   leaveConfirmOpen.value = true
   // Lazy: only fetched when the dialog actually opens.
-  void advisoryCount(() => getCuratorGroupLeavePreview(groupId.value)).then((n) => {
+  void advisoryCount(() => getSchoolLeavePreview(groupId.value)).then((n) => {
     leaveAdvisory.value = n
   })
 }
@@ -495,12 +495,12 @@ function onLeaveClick(): void {
 async function onLeaveConfirm(): Promise<void> {
   leaving.value = true
   try {
-    await leaveCuratorGroup(groupId.value)
+    await leaveSchool(groupId.value)
     leaveConfirmOpen.value = false
-    toast.success(t('user.screens.curatorGroupPage.toast.left'))
+    toast.success(t('user.screens.schoolPage.toast.left'))
     void router.replace(listRoute.value)
   } catch (e) {
-    toast.error(extractApiError(e, t('user.screens.curatorGroupPage.toast.leaveFailed')))
+    toast.error(extractApiError(e, t('user.screens.schoolPage.toast.leaveFailed')))
   } finally {
     leaving.value = false
   }
@@ -538,8 +538,8 @@ async function onEditSave(): Promise<void> {
     const hadAvatar = !!page.value?.avatar_url
     const avatar: string | null | undefined =
       avatarInput !== '' ? avatarInput : hadAvatar ? null : undefined
-    const res = await updateCuratorGroup(groupId.value, name, desc === '' ? null : desc, avatar)
-    // PATCH answers with the CURATOR's own row (CuratorGroupResponse -- no
+    const res = await updateSchool(groupId.value, name, desc === '' ? null : desc, avatar)
+    // PATCH answers with the CURATOR's own row (SchoolResponse -- no
     // viewer/curator fields), so merge the renamed fields into the page
     // instead of replacing it; res.transfer carries the pending offer along
     // (an intended widening, see that schema's own docstring).
@@ -553,15 +553,15 @@ async function onEditSave(): Promise<void> {
       }
     }
     editOpen.value = false
-    toast.success(t('user.screens.curatorGroupPage.toast.updated'))
+    toast.success(t('user.screens.schoolPage.toast.updated'))
     // §12 trap: the server stores the URL NORMALIZED (lowercase host,
     // trailing slash, punycode) -- what returns is not what was typed, and
     // a silent difference reads as "the link got corrupted". Say it.
     if (typeof avatar === 'string' && (res.avatar_url ?? '') !== avatar && res.avatar_url) {
-      toast.info(t('user.screens.curatorGroupPage.toast.avatarSaved', { url: res.avatar_url }))
+      toast.info(t('user.screens.schoolPage.toast.avatarSaved', { url: res.avatar_url }))
     }
   } catch (e) {
-    toast.error(extractApiError(e, t('user.screens.curatorGroupPage.toast.updateFailed')))
+    toast.error(extractApiError(e, t('user.screens.schoolPage.toast.updateFailed')))
   } finally {
     saving.value = false
   }
@@ -575,11 +575,11 @@ function onTransferCancelled(): void {
   if (page.value) page.value = { ...page.value, transfer: null }
 }
 
-function onTransferAccepted(newPage: CuratorGroupPageResponse): void {
+function onTransferAccepted(newPage: SchoolPageResponse): void {
   // The accept response IS the page as the new curator sees it -- replace
   // local state wholesale (relation flips, no reload).
   page.value = newPage
-  toast.success(t('user.screens.curatorGroupPage.toast.transferredToYou'))
+  toast.success(t('user.screens.schoolPage.toast.transferredToYou'))
 }
 
 function onTransferDeclined(): void {

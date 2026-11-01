@@ -180,17 +180,17 @@
             }}</label>
             <!-- BE-74: a practice of a school keeps its school for good
                  (practice_school_immutable), and the backend allows such a
-                 practice only the 'public'/'curator_groups' pair
+                 practice only the 'public'/'schools' pair
                  (check_school_audience). FE-92 put that pair into the create
                  UI (curator-on-behalf), so Edit offers the same two radios:
                  the KIND is editable, the SCHOOL is not -- schoolLocked
                  suppresses the chips; the owning school is not shown at all
                  (owner 2026-10-05). -->
-            <template v-if="practice?.curator_group_id">
+            <template v-if="practice?.school_id">
               <PracticeAudiencePicker
                 v-model:kind="form.audience_kind"
                 v-model:group-ids="form.audience_group_ids"
-                :curator-group-id="practice.curator_group_id"
+                :school-id="practice.school_id"
                 :groups="customGroups"
                 :schools="practiceSchool"
                 :allowed-kinds="SCHOOL_AUDIENCE_KINDS"
@@ -206,7 +206,7 @@
               v-else
               v-model:kind="form.audience_kind"
               v-model:group-ids="form.audience_group_ids"
-              :curator-group-id="null"
+              :school-id="null"
               :groups="customGroups"
               :schools="[]"
               :error="errors.audience_group_ids"
@@ -477,7 +477,7 @@ const form = reactive({
   // P5 port (PROMPT №606): audience_kind + audience_group_ids, mirrors
   // CreatePracticeView's own form fields exactly.
   //
-  // GT-11 (P5/curator groups): the union is NO LONGER hand-typed here. It
+  // GT-11 (P5/schools): the union is NO LONGER hand-typed here. It
   // used to read `'public' | 'students' | 'groups'`, and the day the backend
   // added a fourth value the regenerated AudienceKind stopped fitting into
   // it -- loadPractice() below assigns straight from the API response, so
@@ -503,12 +503,12 @@ const customGroups = ref<GroupListItem[]>([])
 // (which makes audienceOptions() offer the pair) with schoolLocked on: no
 // chips. Exact mirror of CreatePracticeView's SCHOOL_AUDIENCE_KINDS; both
 // must track the backend pair.
-const SCHOOL_AUDIENCE_KINDS: PracticeAudienceKind[] = ['public', 'curator_groups']
+const SCHOOL_AUDIENCE_KINDS: PracticeAudienceKind[] = ['public', 'schools']
 
 const practiceSchool = computed<AudienceSchoolOption[]>(() => {
   const p = practice.value
-  if (!p?.curator_group_id) return []
-  return [{ id: p.curator_group_id, name: p.curator_group_name ?? '' }]
+  if (!p?.school_id) return []
+  return [{ id: p.school_id, name: p.school_name ?? '' }]
 })
 
 const errors = reactive({
@@ -714,7 +714,7 @@ function audienceChanged(): boolean {
   if (!practice.value) return false
   const savedKind = practice.value.audience_kind ?? 'public'
   if (form.audience_kind !== savedKind) return true
-  // A school practice's kind is editable within the public/'curator_groups'
+  // A school practice's kind is editable within the public/'schools'
   // pair (see the template); either way, with the kind unchanged only a
   // change of groups is left to detect.
   if (form.audience_kind !== 'groups') return false
@@ -818,7 +818,7 @@ async function commitSave(): Promise<void> {
       is_free: form.is_free,
       price_cents: form.is_free ? 0 : priceCents.value,
       // P5 port (PROMPT №606): group_ids is only meaningful (and only sent
-      // non-empty) for audience_kind='groups'. BE-74: curator_group_id is
+      // non-empty) for audience_kind='groups'. BE-74: school_id is
       // NOT sent -- the school is fixed at creation, and an absent field
       // leaves it as it is (any other value would be a 400).
       audience_kind: form.audience_kind,

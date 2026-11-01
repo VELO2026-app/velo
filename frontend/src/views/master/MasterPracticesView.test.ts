@@ -1320,9 +1320,9 @@ describe('MasterPracticesView', () => {
       const DARK = practice('u-dark', {
         title: 'Тёмная',
         scheduled_at: '2026-07-21T09:00:00Z',
-        audience_kind: 'curator_groups',
-        curator_group_id: 'sc1',
-        curator_group_name: 'Тихая школа',
+        audience_kind: 'schools',
+        school_id: 'sc1',
+        school_name: 'Тихая школа',
         audience_unavailable: true,
       })
       vi.mocked(mastersApi.getMyPractices).mockResolvedValue(page([DARK]))

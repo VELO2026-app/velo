@@ -247,11 +247,11 @@ function routeFor(
   const params = item.action_data?.params ?? {}
   const practiceId = typeof params.practice_id === 'string' ? params.practice_id : null
 
-  // Links (3 October): every school notice carries open_curator_group with
-  // group_id and opens the school page -- the Telegram button does the same.
+  // Links (3 October): every school notice carries open_school with
+  // school_id and opens the school page -- the Telegram button does the same.
   // The one exception is the block notice: the school is closed to the
   // person it is about, so it stays mark-read only (BE-79 (2)).
-  if (item.type === 'curator_group.member_blocked') return null
+  if (item.type === 'school.member_blocked') return null
 
   // BE-104: a rejection reads its verdict -- the «Отказ» screen of
   // master-pending shows the reason and «подать заново» (-> master-apply).
@@ -263,15 +263,16 @@ function routeFor(
   }
 
   switch (action) {
-    case 'open_curator_group':
-      return typeof params.group_id === 'string' && params.group_id
-        ? { name: 'user-curator-group', params: { id: params.group_id } }
+    case 'open_school':
+      return typeof params.school_id === 'string' && params.school_id
+        ? { name: 'user-school', params: { id: params.school_id } }
         : null
     case 'open_master_offer':
-      // Links: curator_group.master_offered has its own verb now -- the
-      // consent screen, by group_id (it was a type check on open_curator_group).
-      return typeof params.group_id === 'string' && params.group_id
-        ? { name: 'curator-group-master-offer', params: { id: params.group_id } }
+      // Links: school.master_offered has its own verb now -- the
+      // consent screen, by school_id (it used to be a type check on the
+      // school-page verb).
+      return typeof params.school_id === 'string' && params.school_id
+        ? { name: 'school-master-offer', params: { id: params.school_id } }
         : null
     case 'open_practice':
       return practiceId ? { name: 'practice-detail', params: { id: practiceId } } : null
@@ -286,12 +287,6 @@ function routeFor(
       // tz-whitelabel §4: an edition without the payments module has no
       // wallet route -- the tap degrades to no navigation, not the 404.
       return featureEnabled('payments') ? { name: 'user-topup' } : null
-    case 'open_curator_group_join': {
-      // The participant school invitation: routes by the invite TOKEN -- the
-      // join screen reads the school by it, exactly like the invite link.
-      const token = typeof params.token === 'string' ? params.token : null
-      return token ? { name: 'curator-group-join', params: { token } } : null
-    }
     case 'open_master_application':
       // BE-59: the «get verified» half of the master-appointment story --
       // the verb was named by the backend for exactly this mapping; the

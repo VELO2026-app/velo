@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- AdminCuratorGroupsView (schools FE-23 / GT P4)
+  VELO Frontend -- AdminSchoolsView (schools FE-23 / GT P4)
 
   Read-only list of EVERY school, including frozen ones -- the only place in
   the system where an inactive school is visible at all (for its own members
@@ -17,7 +17,7 @@
   <div class="admin-list">
     <header class="admin-list__top">
       <VBackButton @click="router.push({ name: 'admin-masters' })" />
-      <h1 class="admin-list__title">{{ t('adminScreens.adminCuratorGroups.title') }}</h1>
+      <h1 class="admin-list__title">{{ t('adminScreens.adminSchools.title') }}</h1>
       <span class="admin-list__count">{{ total || '—' }}</span>
     </header>
 
@@ -48,8 +48,8 @@
             <VBadge :variant="g.is_active ? 'success' : 'muted'">
               {{
                 g.is_active
-                  ? t('adminScreens.adminCuratorGroups.active')
-                  : t('adminScreens.adminCuratorGroups.frozen')
+                  ? t('adminScreens.adminSchools.active')
+                  : t('adminScreens.adminSchools.frozen')
               }}
             </VBadge>
           </div>
@@ -60,7 +60,7 @@
           }}</span>
           <span class="sg-card__meta">
             {{
-              t('adminScreens.adminCuratorGroups.countsLine', {
+              t('adminScreens.adminSchools.countsLine', {
                 masters: g.masters_count,
                 students: g.students_count,
                 since: createdLabel(g.created_at),
@@ -79,7 +79,7 @@
 
     <VCard v-else>
       <p class="admin-list__empty">
-        {{ t('adminScreens.adminCuratorGroups.emptyNote') }}
+        {{ t('adminScreens.adminSchools.emptyNote') }}
       </p>
     </VCard>
   </div>
@@ -90,8 +90,8 @@ import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { VBackButton, VBadge, VButton, VCard, VEmptyState, VLoader } from '@/components/ui'
-import { getAdminCuratorGroups } from '@/api/curatorGroups'
-import type { AdminCuratorGroupListItem } from '@/api/types'
+import { getAdminSchools } from '@/api/schools'
+import type { AdminSchoolListItem } from '@/api/types'
 import { useToast } from '@/composables/useToast'
 
 const PAGE = 100
@@ -99,7 +99,7 @@ const PAGE = 100
 const router = useRouter()
 const toast = useToast()
 
-const groups = ref<AdminCuratorGroupListItem[]>([])
+const groups = ref<AdminSchoolListItem[]>([])
 const total = ref(0)
 const loading = ref(false)
 const error = ref(false)
@@ -111,7 +111,7 @@ async function load(reset: boolean): Promise<void> {
   if (reset) error.value = false
   try {
     const offset = reset ? 0 : groups.value.length
-    const res = await getAdminCuratorGroups(PAGE, offset)
+    const res = await getAdminSchools(PAGE, offset)
     total.value = res.total
     groups.value = reset ? res.items : [...groups.value, ...res.items]
   } catch {

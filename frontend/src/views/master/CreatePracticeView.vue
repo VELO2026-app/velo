@@ -335,7 +335,7 @@
             <PracticeAudiencePicker
               v-model:kind="form.audience_kind"
               v-model:group-ids="form.audience_group_ids"
-              v-model:curator-group-id="form.audience_curator_group_id"
+              v-model:school-id="form.audience_school_id"
               :groups="customGroups"
               :schools="audienceSchools"
               :allowed-kinds="contextGroupId ? SCHOOL_AUDIENCE_KINDS : undefined"
@@ -454,10 +454,10 @@ import { useAuthStore } from '@/stores/auth'
 import { useMasterStore } from '@/stores/master'
 import { createPractice, updatePractice } from '@/api/practices'
 import { getGroups } from '@/api/groups'
-import { getMyCuratorGroups, getCuratorGroupMembers } from '@/api/curatorGroups'
+import { getMySchools, getSchoolMembers } from '@/api/schools'
 import { getPublicMaster } from '@/api/masters'
 import type { GroupListItem } from '@/api/groups'
-import type { CuratorGroupMemberItem } from '@/api/types'
+import type { SchoolMemberItem } from '@/api/types'
 import PracticeAudiencePicker from '@/components/shared/PracticeAudiencePicker.vue'
 import type { AudienceSchoolOption } from '@/components/shared/practiceAudience'
 import { formatShortDate, todayLocalISO } from '@/utils/format'
@@ -492,13 +492,13 @@ const toast = useToast()
 // context -> the caller owns the practice, the historical behavior.
 //
 // FE-92 (BE-102): a curator creates a practice FOR a master of a school --
-// POST /practices with master_id AND curator_group_id; the backend accepts
+// POST /practices with master_id AND school_id; the backend accepts
 // it only in that school, for a verified master of it, from its curator,
 // and the practice is born PUBLISHED there (owner, 3 October) -- one
 // «created and published» notice to the master, no second publish step.
 // Without the school in the context (?groupId=) another master is
 // never offered: the request would be refused (master_id_requires_school).
-// The audience kinds are the school's two (public / curator_groups --
+// The audience kinds are the school's two (public / schools --
 // check_school_audience) for the WHOLE school entry, «Я» included (owner
 // 2026-10-05) — the personal kinds («Все мои ученики» / «Конкретные
 // группы») are offered only by a no-context create.
@@ -522,7 +522,7 @@ const delegatedMethodsLoadId = ref(0)
 
 // Owner 2026-10-05 (renamed from FOREIGN_AUDIENCE_KINDS): the set is the
 // SCHOOL's, offered on the school entry regardless of the master picked.
-const SCHOOL_AUDIENCE_KINDS: PracticeAudienceKind[] = ['public', 'curator_groups']
+const SCHOOL_AUDIENCE_KINDS: PracticeAudienceKind[] = ['public', 'schools']
 
 const targetMasterId = computed(() => delegatedMaster.value?.id ?? (selectedMasterId.value || null))
 const targetsForeignMaster = computed(
@@ -542,8 +542,8 @@ const audienceSchools = computed((): AudienceSchoolOption[] => {
 watch(targetsForeignMaster, (foreign) => {
   if (!foreign) return
   if (!SCHOOL_AUDIENCE_KINDS.includes(form.audience_kind)) form.audience_kind = 'public'
-  if (form.audience_kind === 'curator_groups') {
-    form.audience_curator_group_id = contextGroupId.value
+  if (form.audience_kind === 'schools') {
+    form.audience_school_id = contextGroupId.value
   }
 })
 
@@ -587,10 +587,10 @@ async function loadPracticeMasterContext(): Promise<void> {
   }
   if (groupId) {
     try {
-      const page = await getCuratorGroupMembers(groupId, { kind: 'master' })
+      const page = await getSchoolMembers(groupId, { kind: 'master' })
       schoolMasterOptions.value = page.items
-        .filter((m: CuratorGroupMemberItem) => m.is_visible && m.user_id !== authStore.user?.id)
-        .map((m: CuratorGroupMemberItem) => ({
+        .filter((m: SchoolMemberItem) => m.is_visible && m.user_id !== authStore.user?.id)
+        .map((m: SchoolMemberItem) => ({
           label: m.name,
           value: m.user_id,
         }))
@@ -659,8 +659,8 @@ const catalog = ref<TaxonomyListResponse | null>(null)
 // P5 (PROMPT №594): the master's own custom groups (loaded in onMounted below).
 const customGroups = ref<GroupListItem[]>([])
 // FE-24 (GT P5): schools this master may target (relation curator or master
-// -- the two the backend validates curator_group_id against). Loaded from
-// /curator-groups/mine; empty for a master in no school, which simply keeps
+// -- the two the backend validates school_id against). Loaded from
+// /schools/mine; empty for a master in no school, which simply keeps
 // the fourth audience option out of the radio.
 const eligibleSchools = ref<AudienceSchoolOption[]>([])
 onMounted(() => {
@@ -693,7 +693,7 @@ onMounted(() => {
   // schools" (the fourth option stays hidden) -- honest, same discipline as
   // the groups catch above but quieter: there is no screen to point at from
   // a practice form, and the toast would claim a list the user never opened.
-  void getMyCuratorGroups()
+  void getMySchools()
     .then((res) => {
       eligibleSchools.value = res.items
         .filter((g) => g.relation === 'curator' || g.relation === 'master')
@@ -784,7 +784,7 @@ const form = reactive({
   // GT-11: the union comes from the CONTRACT (PracticeAudienceKind is a
   // re-export of generated.ts's AudienceKind), never hand-typed here. The
   // hand-typed triple this replaced is exactly what broke EditPracticeView's
-  // build the day the backend added the fourth value ('curator_groups') --
+  // build the day the backend added the fourth value ('schools') --
   // AUDIENCE_OPTIONS (practiceOptions.ts) still lists three until FE-24
   // ports the selector, but the TYPE no longer lies about what can come back.
   // Load-bearing assertion (see recurrence above).
@@ -793,10 +793,10 @@ const form = reactive({
   audience_group_ids: [],
   // BE-74: the ONE school the practice will belong to (a practice belongs to
   // exactly one school, and it cannot be changed after creation) -- sent
-  // ONLY when audience_kind === 'curator_groups'; null otherwise. The
+  // ONLY when audience_kind === 'schools'; null otherwise. The
   // backend refuses a school next to 'students'/'groups' (400), and this
   // screen offers no "public practice of a school" (owner Q2).
-  audience_curator_group_id: null as string | null,
+  audience_school_id: null as string | null,
   description: '',
   what_to_prepare: '',
   contraindications: '',
@@ -1233,9 +1233,9 @@ function validate(): boolean {
     errors.audience_group_ids = t('masterScreens.createPractice.validation.chooseGroup')
     ok = false
   }
-  // FE-24 (GT P5) / BE-74: the mirror check for schools -- curator_group_id
-  // is required when the kind is 'curator_groups' (same backend rule).
-  if (form.audience_kind === 'curator_groups' && form.audience_curator_group_id === null) {
+  // FE-24 (GT P5) / BE-74: the mirror check for schools -- school_id
+  // is required when the kind is 'schools' (same backend rule).
+  if (form.audience_kind === 'schools' && form.audience_school_id === null) {
     errors.audience_group_ids = t('masterScreens.createPractice.validation.chooseSchool')
     ok = false
   }
@@ -1329,15 +1329,15 @@ async function submit(): Promise<void> {
       recurrence: form.is_recurring ? buildRecurrence() : null,
       // P5 (PROMPT №594) / FE-24 (GT P5) / BE-74: audience_kind + the target
       // the chosen kind reads. group_ids is sent as an empty array for any
-      // other kind; curator_group_id is null for any other kind.
+      // other kind; school_id is null for any other kind.
       audience_kind: form.audience_kind,
       group_ids: form.audience_kind === 'groups' ? form.audience_group_ids : [],
       // FE-92: for another master the school is ALWAYS sent (the practice
       // belongs to it, with either of its two audiences), plus master_id.
-      curator_group_id: targetsForeignMaster.value
+      school_id: targetsForeignMaster.value
         ? contextGroupId.value
-        : form.audience_kind === 'curator_groups'
-          ? form.audience_curator_group_id
+        : form.audience_kind === 'schools'
+          ? form.audience_school_id
           : null,
       ...(targetsForeignMaster.value ? { master_id: targetMasterId.value } : {}),
     })
@@ -1368,7 +1368,7 @@ async function submit(): Promise<void> {
       clearDraft()
       if (created.deduplicated) toast.info(t('masterScreens.createPractice.toast.duplicate'))
       else toast.success(t('masterScreens.createPractice.toast.published'))
-      void router.replace({ name: 'master-curator-group', params: { id: contextGroupId.value } })
+      void router.replace({ name: 'master-school', params: { id: contextGroupId.value } })
       return
     }
 

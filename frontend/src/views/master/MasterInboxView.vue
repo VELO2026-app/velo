@@ -243,22 +243,23 @@ function routeFor(
   const params = item.action_data?.params ?? {}
   const practiceId = typeof params.practice_id === 'string' ? params.practice_id : null
 
-  // Links (3 October): every school notice carries open_curator_group with
-  // group_id and opens the school page -- the Telegram button does the same.
+  // Links (3 October): every school notice carries open_school with
+  // school_id and opens the school page -- the Telegram button does the same.
   // The one exception is the block notice: the school is closed to the
   // person it is about, so it stays mark-read only (BE-79 (2)).
-  if (item.type === 'curator_group.member_blocked') return null
+  if (item.type === 'school.member_blocked') return null
 
   switch (action) {
-    case 'open_curator_group':
-      return typeof params.group_id === 'string' && params.group_id
-        ? { name: 'master-curator-group', params: { id: params.group_id } }
+    case 'open_school':
+      return typeof params.school_id === 'string' && params.school_id
+        ? { name: 'master-school', params: { id: params.school_id } }
         : null
     case 'open_master_offer':
-      // Links: curator_group.master_offered has its own verb now -- the
-      // consent screen, by group_id (it was a type check on open_curator_group).
-      return typeof params.group_id === 'string' && params.group_id
-        ? { name: 'curator-group-master-offer', params: { id: params.group_id } }
+      // Links: school.master_offered has its own verb now -- the
+      // consent screen, by school_id (it used to be a type check on the
+      // school-page verb).
+      return typeof params.school_id === 'string' && params.school_id
+        ? { name: 'school-master-offer', params: { id: params.school_id } }
         : null
     case 'open_practice':
       return practiceId ? { name: 'master-practice-detail', params: { id: practiceId } } : null

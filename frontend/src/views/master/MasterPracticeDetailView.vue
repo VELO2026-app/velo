@@ -95,7 +95,7 @@
              The school's name still arrives filled -- on purpose, so the master
              knows WHAT went dark. BE-74: the banner offers no action. A flagged
              practice always belongs to a school (the flag is set only for
-             'curator_groups', and the CHECK forbids that audience without a
+             'schools', and the CHECK forbids that audience without a
              school), and a school practice's audience and school are read-only
              on the edit screen -- so there is nothing there to change. -->
         <div v-if="practice.audience_unavailable" class="pd-audience-warn">

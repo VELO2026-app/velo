@@ -1,17 +1,17 @@
 <!--
-  VELO Frontend -- MasterCuratorGroupCreateView (schools FE-20 / GT P3; §1.5)
+  VELO Frontend -- MasterSchoolCreateView (schools FE-20 / GT P3; §1.5)
 
   «Новая школа» -- banner+avatar (behind the kill-switch), «Название школы» +
-  optional «Описание школы», POST /masters/me/curator-groups, ON SUCCESS the
+  optional «Описание школы», POST /masters/me/schools, ON SUCCESS the
   TZ's §1.6 rule: creation lands on the SCHOOL PAGE, not the list. A close
   structural clone of MasterGroupCreateView (the custom student group's own
   create form): same required-fields legend, same pinned submit, same 409
-  handling (inline field error + toast -- curator_group_name_taken means
+  handling (inline field error + toast -- school_name_taken means
   "you already have a school by this name", a per-curator uniqueness, I-7).
 
   BE-18: founding is a right an admin grants, so the route is only
   offered with it (the lists' «+»). A direct visit without the right is
-  answered 403 group_creation_not_allowed -- rendered here as an honest
+  answered 403 school_creation_not_allowed -- rendered here as an honest
   refusal state, never as a retryable error (retrying a right cannot work).
 
   MEDIA (§1.5): the avatar/banner pickers render only behind
@@ -21,25 +21,21 @@
 
 <template>
   <div class="ncg">
-    <VHeader
-      :title="t('masterScreens.masterCuratorGroupCreate.title')"
-      show-back
-      @back="router.back()"
-    />
+    <VHeader :title="t('masterScreens.masterSchoolCreate.title')" show-back @back="router.back()" />
 
     <div class="ncg__content">
-      <!-- BE-18: 403 group_creation_not_allowed -- the right itself is
+      <!-- BE-18: 403 school_creation_not_allowed -- the right itself is
            missing, and no amount of retrying the POST changes that. The form
            is replaced by the refusal; only the back button remains. -->
       <VEmptyState
         v-if="refused"
         icon="warning"
-        :title="t('masterScreens.masterCuratorGroupCreate.unavailable')"
-        :description="t('masterScreens.masterCuratorGroupCreate.unavailableHint')"
+        :title="t('masterScreens.masterSchoolCreate.unavailable')"
+        :description="t('masterScreens.masterSchoolCreate.unavailableHint')"
       >
         <template #action>
-          <VButton variant="outline" @click="router.replace({ name: 'master-curator-groups' })">
-            {{ t('masterScreens.masterCuratorGroupCreate.backToSchools') }}
+          <VButton variant="outline" @click="router.replace({ name: 'master-schools' })">
+            {{ t('masterScreens.masterSchoolCreate.backToSchools') }}
           </VButton>
         </template>
       </VEmptyState>
@@ -56,14 +52,13 @@
         -->
 
         <h2 class="velo-section-title">
-          {{ t('masterScreens.masterCuratorGroupCreate.section.basics')
-          }}<span class="ncg__req">*</span>
+          {{ t('masterScreens.masterSchoolCreate.section.basics') }}<span class="ncg__req">*</span>
         </h2>
 
         <VInput
           v-model="name"
-          :label="t('masterScreens.masterCuratorGroupCreate.fields.name')"
-          :placeholder="t('masterScreens.masterCuratorGroupCreate.fields.name')"
+          :label="t('masterScreens.masterSchoolCreate.fields.name')"
+          :placeholder="t('masterScreens.masterSchoolCreate.fields.name')"
           hide-label
           :error="fieldError"
           @focus="onFieldFocus"
@@ -73,8 +68,8 @@
 
         <VTextarea
           v-model="description"
-          :label="t('masterScreens.masterCuratorGroupCreate.fields.description')"
-          :placeholder="t('masterScreens.masterCuratorGroupCreate.fields.description')"
+          :label="t('masterScreens.masterSchoolCreate.fields.description')"
+          :placeholder="t('masterScreens.masterSchoolCreate.fields.description')"
           hide-label
           :rows="3"
           autogrow
@@ -84,34 +79,34 @@
              sequential sections AFTER «Основное» (avatar first, then banner
              -- the mockup order), each a full-width upload card with its own
              hint. No overlay, no reserve when the flag is off; the modelValues
-             ride NOTHING to the server (createCuratorGroup takes
+             ride NOTHING to the server (createSchool takes
              name/description only). -->
         <template v-if="SCHOOL_MEDIA_UPLOAD_ENABLED">
           <h2 class="velo-section-title">
-            {{ t('masterScreens.masterCuratorGroupCreate.fields.avatar') }}
+            {{ t('masterScreens.masterSchoolCreate.fields.avatar') }}
           </h2>
           <p class="ncg__media-hint">
-            {{ t('masterScreens.masterCuratorGroupCreate.photoNote') }}
+            {{ t('masterScreens.masterSchoolCreate.photoNote') }}
           </p>
           <SchoolAvatarPicker
             v-model="avatarUrl"
-            :aria-label="t('masterScreens.masterCuratorGroupCreate.avatarAria')"
+            :aria-label="t('masterScreens.masterSchoolCreate.avatarAria')"
           />
 
           <h2 class="velo-section-title">
-            {{ t('masterScreens.masterCuratorGroupCreate.fields.background') }}
+            {{ t('masterScreens.masterSchoolCreate.fields.background') }}
           </h2>
           <p class="ncg__media-hint">
-            {{ t('masterScreens.masterCuratorGroupCreate.photoNote') }}
+            {{ t('masterScreens.masterSchoolCreate.photoNote') }}
           </p>
           <SchoolBannerPicker
             v-model="bannerUrl"
-            :aria-label="t('masterScreens.masterCuratorGroupCreate.bannerAria')"
+            :aria-label="t('masterScreens.masterSchoolCreate.bannerAria')"
           />
         </template>
 
         <VButton class="ncg__submit" variant="primary" block :loading="creating" @click="onCreate">
-          {{ t('masterScreens.masterCuratorGroupCreate.submit') }}
+          {{ t('masterScreens.masterSchoolCreate.submit') }}
         </VButton>
       </template>
     </div>
@@ -122,7 +117,7 @@
 import { t } from '@/locales'
 import { nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { createCuratorGroup } from '@/api/curatorGroups'
+import { createSchool } from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
@@ -152,7 +147,7 @@ watch(name, (v) => {
 // §1.5 media previews -- LOCAL object URLs only (see SCHOOL_MEDIA_UPLOAD_ENABLED).
 const avatarUrl = ref<string | null>(null)
 const bannerUrl = ref<string | null>(null)
-/** BE-18: set by 403 group_creation_not_allowed -- swaps the form for the
+/** BE-18: set by 403 school_creation_not_allowed -- swaps the form for the
  *  refusal state. Sticky: a right cannot appear mid-screen, so nothing
  *  resets it short of leaving the route. */
 const refused = ref(false)
@@ -172,7 +167,7 @@ async function onCreate(): Promise<void> {
   fieldError.value = ''
 
   if (!trimmed) {
-    await showFieldError(t('masterScreens.masterCuratorGroupCreate.validation.enterName'))
+    await showFieldError(t('masterScreens.masterSchoolCreate.validation.enterName'))
     return
   }
 
@@ -181,23 +176,23 @@ async function onCreate(): Promise<void> {
     // Blank description is normalized to undefined here; the backend's own
     // "never store ''" rule is the belt to this suspend (same as groups).
     const desc = description.value.trim()
-    const created = await createCuratorGroup(trimmed, desc || undefined)
-    toast.success(t('masterScreens.masterCuratorGroupCreate.createdToast', { name: trimmed }))
+    const created = await createSchool(trimmed, desc || undefined)
+    toast.success(t('masterScreens.masterSchoolCreate.createdToast', { name: trimmed }))
     // §1.6 (owner): after creating, the school PAGE is the destination -- one
     // page component for both zones; this master-zone route keeps the guard
     // chain the creator just passed.
-    void router.replace({ name: 'master-curator-group', params: { id: created.id } })
+    void router.replace({ name: 'master-school', params: { id: created.id } })
   } catch (e) {
-    if (e instanceof ApiResponseError && e.code === 'curator_group_name_taken') {
-      await showFieldError(t('masterScreens.masterCuratorGroupCreate.toast.nameTaken'))
+    if (e instanceof ApiResponseError && e.code === 'school_name_taken') {
+      await showFieldError(t('masterScreens.masterSchoolCreate.toast.nameTaken'))
     }
-    if (e instanceof ApiResponseError && e.code === 'group_creation_not_allowed') {
+    if (e instanceof ApiResponseError && e.code === 'school_creation_not_allowed') {
       // Not a field error and not a retryable failure -- the RIGHT is
       // missing. The refusal state replaces the form; the toast adds the
       // phrase errorMessages.ts already carries.
       refused.value = true
     }
-    toast.error(extractApiError(e, t('masterScreens.masterCuratorGroupCreate.toast.createFailed')))
+    toast.error(extractApiError(e, t('masterScreens.masterSchoolCreate.toast.createFailed')))
   } finally {
     creating.value = false
   }

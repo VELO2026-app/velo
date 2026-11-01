@@ -71,7 +71,7 @@ const FACADE = {
     finance: true,
     msg_participants: true,
     msg_support: true,
-    curator_groups: true,
+    schools: true,
   },
   schedule: null,
   timezone: null,
@@ -207,7 +207,7 @@ describe('MasterNotificationsView', () => {
       expect(prefsPut).toHaveBeenCalledWith({ categories: { bookings: false } })
     })
 
-    it('the Школы row toggles the curator_groups category through the proxy (FE-67)', async () => {
+    it('the Школы row toggles the schools category through the proxy (FE-67)', async () => {
       mount()
       await flush()
 
@@ -215,7 +215,25 @@ describe('MasterNotificationsView', () => {
       await flush()
 
       expect(isOn('События школ')).toBe(false)
-      expect(prefsPut).toHaveBeenCalledWith({ categories: { curator_groups: false } })
+      expect(prefsPut).toHaveBeenCalledWith({ categories: { schools: false } })
+    })
+
+    // FE-127: the category is `schools` on the read side too. Both keys in one
+    // answer -> `schools` decides; the former key is never read (owner: a mute
+    // stored under it is not carried over).
+    it.each([
+      [{ schools: false }, false],
+      [{ schools: true, curator_groups: false }, true],
+      [{ schools: false, curator_groups: true }, false],
+    ] as const)('FE-127: the Школы row reads %o -> on=%s', async (cats, on) => {
+      prefsGet.mockResolvedValueOnce({
+        ...structuredClone(FACADE),
+        categories: { ...FACADE.categories, ...cats },
+      })
+      mount()
+      await flush()
+
+      expect(isOn('События школ')).toBe(on)
     })
 
     it('reverts the toggle and toasts when the save FAILS', async () => {

@@ -239,14 +239,14 @@ const router = createRouter({
           component: () => import('@/views/user/UserInboxView.vue'),
         },
         {
-          // FE-19 (GT P3): "Мои группы" in the user zone means SCHOOLS
-          // (curator groups) -- the master's student groups are a master-zone
+          // FE-19 (GT P3): "Мои группы" in the user zone means SCHOOLS --
+          // the master's student groups are a master-zone
           // concept a plain user never sees. Entry row: UserProfileView,
           // «Аккаунт» section.
           path: 'groups',
-          name: 'user-curator-groups',
+          name: 'user-my-schools',
           meta: { hideTabBar: true },
-          component: () => import('@/views/user/UserCuratorGroupsView.vue'),
+          component: () => import('@/views/user/UserMySchoolsView.vue'),
         },
         {
           // tz-curator.md §1.2-1.4: the «Школы» TAB HUB (curator flow) --
@@ -259,12 +259,12 @@ const router = createRouter({
         },
         {
           path: 'groups/:id',
-          name: 'user-curator-group',
+          name: 'user-school',
           meta: { hideTabBar: true },
           // ONE page for both zones (TZ 6.3) -- the master zone mounts this
           // same view below; the action set keys off viewer.relation and the
           // zone only picks the back target.
-          component: () => import('@/views/user/CuratorGroupPageView.vue'),
+          component: () => import('@/views/user/SchoolPageView.vue'),
         },
         {
           // FE-93 (owner 2026-10-03): the curator-management screens
@@ -365,7 +365,7 @@ const router = createRouter({
         },
         {
           // Standalone F4: the master's practice screen -- ONE view for both
-          // zones (TZ 6.3 pattern, as CuratorGroupPageView): the user zone
+          // zones (TZ 6.3 pattern, as SchoolPageView): the user zone
           // mounts it as 'practice-live' below. Here the server's ladder
           // answers 'host' and the screen starts the meeting inside VELO
           // (Meeting SDK); the zone picks the back target and hides the
@@ -516,34 +516,34 @@ const router = createRouter({
           // sectioned schools list the dock tab lands on, same contract as
           // user-schools: the tab bar stays visible with the fourth tab
           // active, so no hideTabBar meta here.
-          path: 'curator-groups',
-          name: 'master-curator-groups',
+          path: 'schools',
+          name: 'master-schools',
           beforeEnter: masterStatusGuard,
-          component: () => import('@/views/master/MasterCuratorGroupsView.vue'),
+          component: () => import('@/views/master/MasterSchoolsView.vue'),
         },
         {
-          path: 'curator-groups/new',
-          name: 'master-curator-group-create',
+          path: 'schools/new',
+          name: 'master-school-create',
           beforeEnter: masterStatusGuard,
           meta: { hideTabBar: true },
-          component: () => import('@/views/master/MasterCuratorGroupCreateView.vue'),
+          component: () => import('@/views/master/MasterSchoolCreateView.vue'),
         },
         {
-          path: 'curator-groups/:id',
-          name: 'master-curator-group',
+          path: 'schools/:id',
+          name: 'master-school',
           beforeEnter: masterStatusGuard,
           meta: { hideTabBar: true },
           // The SAME page component the user zone mounts (TZ 6.3) -- the
           // server's viewer.relation drives the action set; this route's
           // name prefix is all the view reads to pick its back target.
-          component: () => import('@/views/user/CuratorGroupPageView.vue'),
+          component: () => import('@/views/user/SchoolPageView.vue'),
         },
         {
           // tz-curator.md §1.11 (owner 2026-09-22): the same participants
           // screen the user zone mounts; the zone only picks navigation
           // targets.
-          path: 'curator-groups/:id/members',
-          name: 'master-curator-group-members',
+          path: 'schools/:id/members',
+          name: 'master-school-members',
           beforeEnter: masterStatusGuard,
           meta: { hideTabBar: true },
           component: () => import('@/views/user/SchoolMembersView.vue'),
@@ -551,8 +551,8 @@ const router = createRouter({
         {
           // tz-curator.md §6 MVP: the same analytics screen the user zone
           // mounts; the zone only picks the back target.
-          path: 'curator-groups/:id/analytics',
-          name: 'master-curator-group-analytics',
+          path: 'schools/:id/analytics',
+          name: 'master-school-analytics',
           beforeEnter: masterStatusGuard,
           meta: { hideTabBar: true },
           component: () => import('@/views/user/SchoolAnalyticsView.vue'),
@@ -560,8 +560,8 @@ const router = createRouter({
         {
           // tz-curator.md §1.11.4 (owner 2026-09-22): same student profile
           // component as the user zone; the zone picks the back target.
-          path: 'curator-groups/:groupId/students/:userId',
-          name: 'master-curator-group-student',
+          path: 'schools/:groupId/students/:userId',
+          name: 'master-school-student',
           beforeEnter: masterStatusGuard,
           meta: { hideTabBar: true },
           component: () => import('@/views/user/SchoolStudentProfileView.vue'),
@@ -613,20 +613,20 @@ const router = createRouter({
       // no beforeEnter guard: any authenticated user may open the preview,
       // and the SERVER decides (preview can_join/reason) whether joining is
       // offered, refused, or an upgrade. The token carries no kind -- the
-      // master/student flavour is resolved by GET /curator-groups/invites/{token}.
-      path: '/curator-groups/join/:token',
-      name: 'curator-group-join',
-      component: () => import('@/views/master/CuratorGroupJoinView.vue'),
+      // master/student flavour is resolved by GET /schools/invites/{token}.
+      path: '/schools/join/:token',
+      name: 'school-join',
+      component: () => import('@/views/master/SchoolJoinView.vue'),
     },
     {
       // BE-59/GT-27 (owner mockup 2026-10-02): «Приглашение стать мастером
       // школы!» -- the consent screen of the curator's master-role
-      // appointment. Reached from the curator_group.master_offered notification
-      // (open_master_offer, bell + Telegram); standalone like curator-group-join, no guard: the
+      // appointment. Reached from the school.master_offered notification
+      // (open_master_offer, bell + Telegram); standalone like school-join, no guard: the
       // school page and the accept endpoint decide who sees what.
-      path: '/curator-groups/:id/master-offer',
-      name: 'curator-group-master-offer',
-      component: () => import('@/views/master/CuratorGroupMasterOfferView.vue'),
+      path: '/schools/:id/master-offer',
+      name: 'school-master-offer',
+      component: () => import('@/views/master/SchoolMasterOfferView.vue'),
     },
     {
       path: '/master/pending',
@@ -676,9 +676,9 @@ const router = createRouter({
           // only place an inactive school is visible. Entered from
           // AdminMastersView; a tap opens the curator's review page (the
           // existing revoke lever is the one moderation action for schools).
-          path: 'curator-groups',
-          name: 'admin-curator-groups',
-          component: () => import('@/views/admin/AdminCuratorGroupsView.vue'),
+          path: 'schools',
+          name: 'admin-schools',
+          component: () => import('@/views/admin/AdminSchoolsView.vue'),
         },
         {
           // M3: master methods change-request moderation queue.

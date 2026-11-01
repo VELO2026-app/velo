@@ -37,7 +37,7 @@ export interface AnalyticsPerson {
 }
 
 export function personTarget(
-  summary: Pick<PracticeAnalyticsResponse, 'viewer_role' | 'curator_group_id'>,
+  summary: Pick<PracticeAnalyticsResponse, 'viewer_role' | 'school_id'>,
   person: AnalyticsPerson,
 ): PersonTarget {
   switch (summary.viewer_role) {
@@ -47,12 +47,12 @@ export function personTarget(
         to: { name: 'master-student-profile', params: { id: person.user_id } },
       }
     case 'curator':
-      return person.is_school_student && summary.curator_group_id
+      return person.is_school_student && summary.school_id
         ? {
             kind: 'route',
             to: {
-              name: 'master-curator-group-student',
-              params: { groupId: summary.curator_group_id, userId: person.user_id },
+              name: 'master-school-student',
+              params: { groupId: summary.school_id, userId: person.user_id },
             },
           }
         : null

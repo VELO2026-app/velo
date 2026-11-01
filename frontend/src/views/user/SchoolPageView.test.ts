@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- CuratorGroupPageView Screen Tests (tz-curator.md §1.6)
+// VELO Frontend -- SchoolPageView Screen Tests (tz-curator.md §1.6)
 // =============================================================================
 //
 // ONE page, three viewers: member-facing differences key off the server's
@@ -21,18 +21,18 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, reactive, type App } from 'vue'
-import CuratorGroupPageView from '@/views/user/CuratorGroupPageView.vue'
-import * as cgApi from '@/api/curatorGroups'
+import SchoolPageView from '@/views/user/SchoolPageView.vue'
+import * as cgApi from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
-import type { CuratorGroupPageResponse, PracticeResponse } from '@/api/types'
+import type { SchoolPageResponse, PracticeResponse } from '@/api/types'
 
-vi.mock('@/api/curatorGroups')
+vi.mock('@/api/schools')
 
 const push = vi.fn()
 const replace = vi.fn()
 // Reactive: FE-78.4's race test flips `id` mid-test and the view's
 // computed(watch) chain must react exactly as vue-router's real route would.
-const routeState = reactive({ name: 'user-curator-group', params: { id: 'g1' } })
+const routeState = reactive({ name: 'user-school', params: { id: 'g1' } })
 vi.mock('vue-router', () => ({
   useRoute: () => routeState,
   useRouter: () => ({ push, replace }),
@@ -58,7 +58,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(CuratorGroupPageView).use(createTestI18n())
+  app = createApp(SchoolPageView).use(createTestI18n())
   app.mount(host)
   return host
 }
@@ -103,9 +103,9 @@ function rowWith(label: string): HTMLElement | undefined {
 
 function pageFixture(
   relation: 'curator' | 'master' | 'student',
-  transfer: CuratorGroupPageResponse['transfer'] = null,
+  transfer: SchoolPageResponse['transfer'] = null,
   avatarUrl: string | null = null,
-): CuratorGroupPageResponse {
+): SchoolPageResponse {
   return {
     id: 'g1',
     name: 'Тихая школа',
@@ -152,28 +152,28 @@ const transferFixture = {
 // Wire the default "everything green, student viewer" load.
 function mockHappyLoad(
   relation: 'curator' | 'master' | 'student',
-  transfer: CuratorGroupPageResponse['transfer'] = null,
+  transfer: SchoolPageResponse['transfer'] = null,
 ): void {
-  vi.mocked(cgApi.getCuratorGroupPage).mockResolvedValue(pageFixture(relation, transfer))
-  vi.mocked(cgApi.getCuratorGroupPractices).mockResolvedValue({
+  vi.mocked(cgApi.getSchoolPage).mockResolvedValue(pageFixture(relation, transfer))
+  vi.mocked(cgApi.getSchoolPractices).mockResolvedValue({
     items: [practiceFixture('p1')],
     total: 1,
     limit: 20,
     offset: 0,
   })
-  vi.mocked(cgApi.getCuratorGroupLeavePreview).mockResolvedValue({
-    upcoming_practices_targeting_group: 0,
+  vi.mocked(cgApi.getSchoolLeavePreview).mockResolvedValue({
+    upcoming_practices_targeting_school: 0,
   })
 }
 
 beforeEach(() => {
-  routeState.name = 'user-curator-group'
+  routeState.name = 'user-school'
   routeState.params.id = 'g1'
   Object.values(cgApi).forEach((fn) => vi.mocked(fn).mockReset())
   // §1.6 (owner 2026-09-22): the curator mounts SchoolInviteField under the
   // hero; give it an honest resolved link (the endpoint is get-or-mint).
-  vi.mocked(cgApi.createCuratorGroupInvite).mockResolvedValue({
-    invite_url: 'https://t.me/velopractice_bot?start=curator_group_invite__tok1',
+  vi.mocked(cgApi.createSchoolInvite).mockResolvedValue({
+    invite_url: 'https://t.me/velopractice_bot?start=school__tok1',
   })
   push.mockReset()
   replace.mockReset()
@@ -197,7 +197,7 @@ afterEach(() => {
 
 // -- The relation matrix ------------------------------------------------------
 
-describe('CuratorGroupPageView -- relation matrix', () => {
+describe('SchoolPageView -- relation matrix', () => {
   it('the header reads ONLY the school name (owner 2026-10-05, was «Школа «{name}»»)', async () => {
     mockHappyLoad('student')
     mount()
@@ -259,12 +259,12 @@ describe('CuratorGroupPageView -- relation matrix', () => {
     expect(text()).not.toContain('Ссылка-приглашение')
     // The silence is the point: no masters-surface call fired on mount, so
     // no 403 toast can appear (the bug this closing was cut for).
-    expect(cgApi.createCuratorGroupInvite).not.toHaveBeenCalled()
+    expect(cgApi.createSchoolInvite).not.toHaveBeenCalled()
     expect(text()).toContain('Практика p1')
   })
 
   it('CURATOR in the MASTER zone: management rows open the master-zone screens', async () => {
-    routeState.name = 'master-curator-group'
+    routeState.name = 'master-school'
     mockHappyLoad('curator')
     mount()
     await flush()
@@ -274,7 +274,7 @@ describe('CuratorGroupPageView -- relation matrix', () => {
     ;(roster as HTMLElement).click()
     await flush()
     expect(push).toHaveBeenCalledWith({
-      name: 'master-curator-group-members',
+      name: 'master-school-members',
       params: { id: 'g1' },
     })
 
@@ -283,7 +283,7 @@ describe('CuratorGroupPageView -- relation matrix', () => {
     ;(analytics as HTMLElement).click()
     await flush()
     expect(push).toHaveBeenCalledWith({
-      name: 'master-curator-group-analytics',
+      name: 'master-school-analytics',
       params: { id: 'g1' },
     })
   })
@@ -305,7 +305,7 @@ describe('CuratorGroupPageView -- relation matrix', () => {
   })
 
   it('a frozen/absent school is the honest 404', async () => {
-    vi.mocked(cgApi.getCuratorGroupPage).mockRejectedValue(
+    vi.mocked(cgApi.getSchoolPage).mockRejectedValue(
       new ApiResponseError(404, 'not_found', 'not_found'),
     )
     mount()
@@ -315,7 +315,7 @@ describe('CuratorGroupPageView -- relation matrix', () => {
   })
 
   it('transient failure: retry reloads', async () => {
-    vi.mocked(cgApi.getCuratorGroupPage).mockRejectedValueOnce(new Error('blip'))
+    vi.mocked(cgApi.getSchoolPage).mockRejectedValueOnce(new Error('blip'))
     mount()
     await flush()
 
@@ -326,7 +326,7 @@ describe('CuratorGroupPageView -- relation matrix', () => {
   })
 
   it('BE-76: a MASTER in the master zone sees «Участники» and opens the master-zone roster', async () => {
-    routeState.name = 'master-curator-group'
+    routeState.name = 'master-school'
     mockHappyLoad('master')
     mount()
     await flush()
@@ -336,13 +336,13 @@ describe('CuratorGroupPageView -- relation matrix', () => {
     ;(row as HTMLElement).click()
     await flush()
     expect(push).toHaveBeenCalledWith({
-      name: 'master-curator-group-members',
+      name: 'master-school-members',
       params: { id: 'g1' },
     })
   })
 
   it('BE-76: a STUDENT in the master zone still has no «Участники»', async () => {
-    routeState.name = 'master-curator-group'
+    routeState.name = 'master-school'
     mockHappyLoad('student')
     mount()
     await flush()
@@ -351,7 +351,7 @@ describe('CuratorGroupPageView -- relation matrix', () => {
   })
 
   it('zone picks only the back target: master route backs into the master list', async () => {
-    routeState.name = 'master-curator-group'
+    routeState.name = 'master-school'
     mockHappyLoad('master')
     mount()
     await flush()
@@ -360,17 +360,17 @@ describe('CuratorGroupPageView -- relation matrix', () => {
     await flush()
     buttonExact('Покинуть')?.click()
     await flush()
-    expect(cgApi.leaveCuratorGroup).toHaveBeenCalledWith('g1')
-    expect(replace).toHaveBeenCalledWith({ name: 'master-curator-groups' })
+    expect(cgApi.leaveSchool).toHaveBeenCalledWith('g1')
+    expect(replace).toHaveBeenCalledWith({ name: 'master-schools' })
   })
 })
 
 // -- Leave (student / master) -------------------------------------------------
 
-describe('CuratorGroupPageView -- leave', () => {
+describe('SchoolPageView -- leave', () => {
   it('leave-preview N>0 renders the advisory inside the confirm dialog', async () => {
-    vi.mocked(cgApi.getCuratorGroupLeavePreview).mockResolvedValue({
-      upcoming_practices_targeting_group: 2,
+    vi.mocked(cgApi.getSchoolLeavePreview).mockResolvedValue({
+      upcoming_practices_targeting_school: 2,
     })
     mount()
     await flush()
@@ -378,12 +378,12 @@ describe('CuratorGroupPageView -- leave', () => {
     buttonWith('Покинуть школу')?.click()
     await flush()
 
-    expect(cgApi.getCuratorGroupLeavePreview).toHaveBeenCalledWith('g1')
+    expect(cgApi.getSchoolLeavePreview).toHaveBeenCalledWith('g1')
     expect(text()).toContain('2 предстоящие практики для этой школы станут скрыты')
   })
 
   it('preview 404 while the page loads: the advisory stays silent and the leave still works', async () => {
-    vi.mocked(cgApi.getCuratorGroupLeavePreview).mockRejectedValue(
+    vi.mocked(cgApi.getSchoolLeavePreview).mockRejectedValue(
       new ApiResponseError(404, 'not_found', 'not_found'),
     )
     mount()
@@ -396,18 +396,18 @@ describe('CuratorGroupPageView -- leave', () => {
     buttonExact('Покинуть')?.click()
     await flush()
 
-    expect(cgApi.leaveCuratorGroup).toHaveBeenCalledWith('g1')
-    expect(replace).toHaveBeenCalledWith({ name: 'user-curator-groups' })
+    expect(cgApi.leaveSchool).toHaveBeenCalledWith('g1')
+    expect(replace).toHaveBeenCalledWith({ name: 'user-my-schools' })
   })
 
   it('FROZEN school (review P2 / I-5): the page itself 404s -- the not-found screen still offers the exit', async () => {
-    vi.mocked(cgApi.getCuratorGroupPage).mockRejectedValue(
+    vi.mocked(cgApi.getSchoolPage).mockRejectedValue(
       new ApiResponseError(404, 'not_found', 'not_found'),
     )
-    vi.mocked(cgApi.getCuratorGroupLeavePreview).mockRejectedValue(
+    vi.mocked(cgApi.getSchoolLeavePreview).mockRejectedValue(
       new ApiResponseError(404, 'not_found', 'not_found'),
     )
-    vi.mocked(cgApi.leaveCuratorGroup).mockResolvedValue(undefined)
+    vi.mocked(cgApi.leaveSchool).mockResolvedValue(undefined)
     mount()
     await flush()
 
@@ -420,18 +420,18 @@ describe('CuratorGroupPageView -- leave', () => {
     buttonExact('Покинуть')?.click()
     await flush()
 
-    expect(cgApi.leaveCuratorGroup).toHaveBeenCalledWith('g1')
-    expect(replace).toHaveBeenCalledWith({ name: 'user-curator-groups' })
+    expect(cgApi.leaveSchool).toHaveBeenCalledWith('g1')
+    expect(replace).toHaveBeenCalledWith({ name: 'user-my-schools' })
   })
 })
 
 // -- Edit school (curator, master zone -- FE-93) -------------------------------
 
-describe('CuratorGroupPageView -- edit', () => {
+describe('SchoolPageView -- edit', () => {
   it('the «Редактировать школу» row prefills the sheet; save PATCHes a trimmed name', async () => {
     // FE-93: the edit row mounts in the master zone only -- editing from
     // there PATCHes the masters surface.
-    routeState.name = 'master-curator-group'
+    routeState.name = 'master-school'
     mockHappyLoad('curator')
     mount()
     await flush()
@@ -448,24 +448,19 @@ describe('CuratorGroupPageView -- edit', () => {
     fields[0]!.dispatchEvent(new Event('input'))
     await flush()
 
-    vi.mocked(cgApi.updateCuratorGroup).mockResolvedValue({
+    vi.mocked(cgApi.updateSchool).mockResolvedValue({
       ...pageFixture('curator'),
       name: 'Новое имя',
     })
     buttonWith('Сохранить')?.click()
     await flush()
 
-    expect(cgApi.updateCuratorGroup).toHaveBeenCalledWith(
-      'g1',
-      'Новое имя',
-      'Практики тишины',
-      undefined,
-    )
+    expect(cgApi.updateSchool).toHaveBeenCalledWith('g1', 'Новое имя', 'Практики тишины', undefined)
     expect(text()).toContain('Новое имя')
   })
 
   it('BE-20: avatar link is PATCHed when typed, and «сохранено как …» surfaces the normalization', async () => {
-    routeState.name = 'master-curator-group'
+    routeState.name = 'master-school'
     mockHappyLoad('curator')
     mount()
     await flush()
@@ -480,13 +475,13 @@ describe('CuratorGroupPageView -- edit', () => {
     fields[2]!.dispatchEvent(new Event('input'))
     await flush()
 
-    vi.mocked(cgApi.updateCuratorGroup).mockResolvedValue(
+    vi.mocked(cgApi.updateSchool).mockResolvedValue(
       pageFixture('curator', null, 'https://cdn.example.com/school.png'),
     )
     buttonWith('Сохранить')?.click()
     await flush()
 
-    expect(cgApi.updateCuratorGroup).toHaveBeenCalledWith(
+    expect(cgApi.updateSchool).toHaveBeenCalledWith(
       'g1',
       'Тихая школа',
       'Практики тишины',
@@ -501,8 +496,8 @@ describe('CuratorGroupPageView -- edit', () => {
   })
 
   it('BE-20: clearing the link on a school that HAS an avatar PATCHes null (remove)', async () => {
-    routeState.name = 'master-curator-group'
-    vi.mocked(cgApi.getCuratorGroupPage).mockResolvedValue(
+    routeState.name = 'master-school'
+    vi.mocked(cgApi.getSchoolPage).mockResolvedValue(
       pageFixture('curator', null, 'https://cdn.example.com/old.png'),
     )
     mount()
@@ -523,16 +518,11 @@ describe('CuratorGroupPageView -- edit', () => {
     fields[2]!.dispatchEvent(new Event('input'))
     await flush()
 
-    vi.mocked(cgApi.updateCuratorGroup).mockResolvedValue(pageFixture('curator'))
+    vi.mocked(cgApi.updateSchool).mockResolvedValue(pageFixture('curator'))
     buttonWith('Сохранить')?.click()
     await flush()
 
-    expect(cgApi.updateCuratorGroup).toHaveBeenCalledWith(
-      'g1',
-      'Тихая школа',
-      'Практики тишины',
-      null,
-    )
+    expect(cgApi.updateSchool).toHaveBeenCalledWith('g1', 'Тихая школа', 'Практики тишины', null)
     expect(toastInfo).not.toHaveBeenCalled()
     // The logo falls back to the generated mandala: an <img> fed by a
     // data-URL SVG derived from the hash -- never the dead avatar URL.
@@ -548,14 +538,14 @@ describe('CuratorGroupPageView -- edit', () => {
 
 // -- Transfer banner (FE-21, server-driven) ------------------------------------
 
-describe('CuratorGroupPageView -- transfer banner', () => {
+describe('SchoolPageView -- transfer banner', () => {
   it('addressee accepts: the accept response REPLACES the page -- curator mode without a reload', async () => {
     // The accept itself works in any zone (member surface); the assertion
     // that the management rows appear afterwards is a master-zone claim
     // (FE-93), so the test runs there.
-    routeState.name = 'master-curator-group'
+    routeState.name = 'master-school'
     mockHappyLoad('master', transferFixture)
-    vi.mocked(cgApi.acceptCuratorGroupTransfer).mockResolvedValue(pageFixture('curator'))
+    vi.mocked(cgApi.acceptSchoolTransfer).mockResolvedValue(pageFixture('curator'))
     mount()
     await flush()
 
@@ -563,7 +553,7 @@ describe('CuratorGroupPageView -- transfer banner', () => {
     buttonWith('Принять')?.click()
     await flush()
 
-    expect(cgApi.acceptCuratorGroupTransfer).toHaveBeenCalledWith('g1')
+    expect(cgApi.acceptSchoolTransfer).toHaveBeenCalledWith('g1')
     // Flipped into curator mode in place: the management rows appeared, the
     // banner went.
     expect(rowWith('Редактировать школу')).toBeTruthy()
@@ -572,14 +562,14 @@ describe('CuratorGroupPageView -- transfer banner', () => {
 
   it('addressee declines: the banner clears, view stays a member view', async () => {
     mockHappyLoad('master', transferFixture)
-    vi.mocked(cgApi.declineCuratorGroupTransfer).mockResolvedValue(undefined)
+    vi.mocked(cgApi.declineSchoolTransfer).mockResolvedValue(undefined)
     mount()
     await flush()
 
     buttonWith('Отклонить')?.click()
     await flush()
 
-    expect(cgApi.declineCuratorGroupTransfer).toHaveBeenCalledWith('g1')
+    expect(cgApi.declineSchoolTransfer).toHaveBeenCalledWith('g1')
     expect(text()).not.toContain('Вам предлагают стать куратором')
     expect(buttonWith('Покинуть школу')).toBeTruthy()
   })
@@ -595,9 +585,9 @@ describe('CuratorGroupPageView -- transfer banner', () => {
   })
 
   it('curator cancels: the banner clears without a reload', async () => {
-    routeState.name = 'master-curator-group'
+    routeState.name = 'master-school'
     mockHappyLoad('curator', transferFixture)
-    vi.mocked(cgApi.cancelCuratorGroupTransfer).mockResolvedValue(undefined)
+    vi.mocked(cgApi.cancelSchoolTransfer).mockResolvedValue(undefined)
     mount()
     await flush()
 
@@ -605,7 +595,7 @@ describe('CuratorGroupPageView -- transfer banner', () => {
     buttonWith('Отменить')?.click()
     await flush()
 
-    expect(cgApi.cancelCuratorGroupTransfer).toHaveBeenCalledWith('g1')
+    expect(cgApi.cancelSchoolTransfer).toHaveBeenCalledWith('g1')
     expect(text()).not.toContain('Предложение передать школу отправлено')
   })
 
@@ -621,7 +611,7 @@ describe('CuratorGroupPageView -- transfer banner', () => {
 
 // -- §1.6 hero + rows + feed (tz-curator.md, ред. 13/14 text contract) --------
 
-describe('CuratorGroupPageView -- §1.6 page body', () => {
+describe('SchoolPageView -- §1.6 page body', () => {
   it('the hero counters read the page payload -- students first, then masters', async () => {
     mockHappyLoad('student')
     mount()
@@ -646,7 +636,7 @@ describe('CuratorGroupPageView -- §1.6 page body', () => {
   })
 
   it('the curator page carries the edit row, the nav rows and the create CTA (master zone, FE-93)', async () => {
-    routeState.name = 'master-curator-group'
+    routeState.name = 'master-school'
     mockHappyLoad('curator')
     mount()
     await flush()
@@ -689,7 +679,7 @@ describe('CuratorGroupPageView -- §1.6 page body', () => {
   })
 
   it('§1.11: the participants row opens the merged roster screen (master zone, FE-93)', async () => {
-    routeState.name = 'master-curator-group'
+    routeState.name = 'master-school'
     mockHappyLoad('curator')
     mount()
     await flush()
@@ -697,13 +687,13 @@ describe('CuratorGroupPageView -- §1.6 page body', () => {
     rowWith('Участники')?.click()
     await flush()
     expect(push).toHaveBeenCalledWith({
-      name: 'master-curator-group-members',
+      name: 'master-school-members',
       params: { id: 'g1' },
     })
   })
 
   it('§1.11: the zone picks the participants route family (master zone)', async () => {
-    routeState.name = 'master-curator-group'
+    routeState.name = 'master-school'
     mockHappyLoad('curator')
     mount()
     await flush()
@@ -711,13 +701,13 @@ describe('CuratorGroupPageView -- §1.6 page body', () => {
     rowWith('Участники')?.click()
     await flush()
     expect(push).toHaveBeenCalledWith({
-      name: 'master-curator-group-members',
+      name: 'master-school-members',
       params: { id: 'g1' },
     })
   })
 
   it('§6 MVP: the analytics row opens the school analytics screen (master zone, FE-93)', async () => {
-    routeState.name = 'master-curator-group'
+    routeState.name = 'master-school'
     mockHappyLoad('curator')
     mount()
     await flush()
@@ -725,7 +715,7 @@ describe('CuratorGroupPageView -- §1.6 page body', () => {
     rowWith('Аналитика')?.click()
     await flush()
     expect(push).toHaveBeenCalledWith({
-      name: 'master-curator-group-analytics',
+      name: 'master-school-analytics',
       params: { id: 'g1' },
     })
   })
@@ -733,7 +723,7 @@ describe('CuratorGroupPageView -- §1.6 page body', () => {
   it("the feed shows at most five practices and is the page's last section", async () => {
     const seven = Array.from({ length: 7 }, (_, i) => practiceFixture(`p${i + 1}`))
     mockHappyLoad('curator')
-    vi.mocked(cgApi.getCuratorGroupPractices).mockResolvedValue({
+    vi.mocked(cgApi.getSchoolPractices).mockResolvedValue({
       items: seven,
       total: 7,
       limit: 20,
@@ -760,11 +750,11 @@ describe('FE-78.4 -- a superseded load is a no-op', () => {
   it('a slow answer for the previous school never repaints the current one', async () => {
     // Navigation #1 resolves slowly; navigation #2 (same instance, id flipped)
     // resolves fast and wins.
-    let resolveSlow!: (page: CuratorGroupPageResponse) => void
-    vi.mocked(cgApi.getCuratorGroupPage)
+    let resolveSlow!: (page: SchoolPageResponse) => void
+    vi.mocked(cgApi.getSchoolPage)
       .mockImplementationOnce(
         () =>
-          new Promise<CuratorGroupPageResponse>((resolve) => {
+          new Promise<SchoolPageResponse>((resolve) => {
             resolveSlow = resolve
           }),
       )

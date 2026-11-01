@@ -33,9 +33,7 @@
     "bannerUpload": "Загрузить фото",
     "bannerReplace": "Заменить",
     "bannerRemove": "Убрать",
-    "loadFailed": "Не удалось загрузить школы"
-  },
-  "curatorGroup": {
+    "loadFailed": "Не удалось загрузить школы",
     "offerBadge": "Кураторство"
   },
   "distribution": {

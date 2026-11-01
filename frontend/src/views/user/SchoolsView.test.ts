@@ -2,8 +2,8 @@
 // VELO Frontend -- SchoolsView Screen Tests (tz-curator.md §1.2-1.4)
 // =============================================================================
 //
-// Standard screen-test idiom (UserCuratorGroupsView.test.ts): createApp/mount,
-// mocked @/api/curatorGroups + vue-router. Covers the four honest list states
+// Standard screen-test idiom (UserMySchoolsView.test.ts): createApp/mount,
+// mocked @/api/schools + vue-router. Covers the four honest list states
 // (loading / rows / empty+CTA / error+retry), the row -> school-page
 // navigation, and the create-right gating of the «+» and the CTA (BE-18).
 // FE-93: this zone lists PARTICIPATIONS (the curated rows /mine still
@@ -20,10 +20,10 @@ import { createApp, nextTick, type App } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import SchoolsView from '@/views/user/SchoolsView.vue'
 import { useAuthStore } from '@/stores/auth'
-import * as cgApi from '@/api/curatorGroups'
-import type { CuratorGroupMineResponse } from '@/api/types'
+import * as cgApi from '@/api/schools'
+import type { SchoolMineResponse } from '@/api/types'
 
-vi.mock('@/api/curatorGroups')
+vi.mock('@/api/schools')
 
 const push = vi.fn()
 const replace = vi.fn()
@@ -75,7 +75,7 @@ function buttonWith(label: string): HTMLElement | null {
   )
 }
 
-function mineResponse(items: CuratorGroupMineResponse['items']): CuratorGroupMineResponse {
+function mineResponse(items: SchoolMineResponse['items']): SchoolMineResponse {
   return { items }
 }
 
@@ -92,10 +92,10 @@ const row = (id: string, relation: 'curator' | 'master' | 'student') => ({
 })
 
 beforeEach(() => {
-  vi.mocked(cgApi.getMyCuratorGroups).mockReset().mockResolvedValue(mineResponse([]))
-  vi.mocked(cgApi.getCuratorGroups).mockReset().mockResolvedValue({
+  vi.mocked(cgApi.getMySchools).mockReset().mockResolvedValue(mineResponse([]))
+  vi.mocked(cgApi.getSchools).mockReset().mockResolvedValue({
     items: [],
-    can_create_groups: true,
+    can_create_schools: true,
   })
   push.mockReset()
   replace.mockReset()
@@ -111,7 +111,7 @@ afterEach(() => {
 
 describe('SchoolsView', () => {
   it('shows the loading state while /mine is in flight', async () => {
-    vi.mocked(cgApi.getMyCuratorGroups).mockReturnValue(new Promise(() => {}))
+    vi.mocked(cgApi.getMySchools).mockReturnValue(new Promise(() => {}))
     mount()
     await flush()
 
@@ -119,7 +119,7 @@ describe('SchoolsView', () => {
   })
 
   it('a return through the dock renders the cached schools at once, no loading state', async () => {
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue(mineResponse([row('g2', 'student')]))
+    vi.mocked(cgApi.getMySchools).mockResolvedValue(mineResponse([row('g2', 'student')]))
     mount()
     await flush()
     expect(text()).toContain('Школа g2')
@@ -127,17 +127,17 @@ describe('SchoolsView', () => {
     // Revisit while the background refresh is still in flight.
     app?.unmount()
     host?.remove()
-    vi.mocked(cgApi.getMyCuratorGroups).mockReturnValue(new Promise(() => {}))
+    vi.mocked(cgApi.getMySchools).mockReturnValue(new Promise(() => {}))
     mount()
     await flush()
 
     expect(host?.querySelector('.schools__state')).toBeNull()
     expect(text()).toContain('Школа g2')
-    expect(cgApi.getMyCuratorGroups).toHaveBeenCalledTimes(2) // still refreshed
+    expect(cgApi.getMySchools).toHaveBeenCalledTimes(2) // still refreshed
   })
 
   it('renders the PARTICIPATION rows only (FE-93) and navigates a row to the school page', async () => {
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue(
+    vi.mocked(cgApi.getMySchools).mockResolvedValue(
       mineResponse([row('g1', 'curator'), row('g2', 'student')]),
     )
     mount()
@@ -156,7 +156,7 @@ describe('SchoolsView', () => {
 
     firstRow.click()
     await flush()
-    expect(push).toHaveBeenCalledWith({ name: 'user-curator-group', params: { id: 'g2' } })
+    expect(push).toHaveBeenCalledWith({ name: 'user-school', params: { id: 'g2' } })
   })
 
   it('empty list with the create right: the quiet §1.3 state -- one CTA, no empty-state plate', async () => {
@@ -174,15 +174,15 @@ describe('SchoolsView', () => {
     expect(cta).toBeTruthy()
     cta?.click()
     await flush()
-    expect(push).toHaveBeenCalledWith({ name: 'master-curator-group-create' })
+    expect(push).toHaveBeenCalledWith({ name: 'master-school-create' })
   })
 
   it('FE-93: in user mode the master surface is not dialed -- no «+», no doomed 403', async () => {
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue(mineResponse([]))
+    vi.mocked(cgApi.getMySchools).mockResolvedValue(mineResponse([]))
     mount('user')
     await flush()
 
-    expect(cgApi.getCuratorGroups).not.toHaveBeenCalled()
+    expect(cgApi.getSchools).not.toHaveBeenCalled()
     expect(host?.querySelector('.schools__add-btn')).toBeFalsy()
     // Without the create right the settled empty list is the plain empty
     // state, not the quiet «Создать школу» screen.
@@ -190,18 +190,18 @@ describe('SchoolsView', () => {
   })
 
   it('the header «+» follows the create right (BE-18)', async () => {
-    vi.mocked(cgApi.getCuratorGroups).mockResolvedValue({
+    vi.mocked(cgApi.getSchools).mockResolvedValue({
       items: [],
-      can_create_groups: false,
+      can_create_schools: false,
     })
     mount('master')
     await flush()
 
     expect(host?.querySelector('.schools__add-btn')).toBeFalsy()
 
-    vi.mocked(cgApi.getCuratorGroups).mockResolvedValue({
+    vi.mocked(cgApi.getSchools).mockResolvedValue({
       items: [],
-      can_create_groups: true,
+      can_create_schools: true,
     })
     app?.unmount()
     mount('master')
@@ -210,7 +210,7 @@ describe('SchoolsView', () => {
   })
 
   it('load failure: error state with a retry that works', async () => {
-    vi.mocked(cgApi.getMyCuratorGroups).mockRejectedValueOnce(new Error('network'))
+    vi.mocked(cgApi.getMySchools).mockRejectedValueOnce(new Error('network'))
     mount()
     await flush()
 
@@ -218,7 +218,7 @@ describe('SchoolsView', () => {
 
     // The retry renders a PARTICIPATION row (FE-93: the curated relation
     // would be filtered out of this zone's list).
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValueOnce(mineResponse([row('g1', 'student')]))
+    vi.mocked(cgApi.getMySchools).mockResolvedValueOnce(mineResponse([row('g1', 'student')]))
     const retry = buttonWith('Повторить')
     retry?.click()
     await flush()

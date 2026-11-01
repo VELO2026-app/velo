@@ -8,7 +8,7 @@
   else with the same masked 404 as before (P-08), and the 404 state hides
   the switcher -- an unavailable school has no rosters to switch between.
 
-  Data: GET /masters/me/curator-groups/{id}/members?kind&search&limit&offset
+  Data: GET /masters/me/schools/{id}/members?kind&search&limit&offset
   (the curator handle). The server order is kept verbatim -- recently joined
   first; the client never re-sorts. Search re-queries the same endpoint after
   a 300ms debounce with the input trimmed; refresh()'s requestId bump is the
@@ -166,19 +166,15 @@ import { t } from '@/locales'
 import { computed, onMounted, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  getCuratorGroupBlocks,
-  getCuratorGroupMembers,
-  getCuratorGroupPage,
-  getCuratorGroupRoster,
-  unblockCuratorGroupMember,
-  type CuratorGroupMemberKind,
-} from '@/api/curatorGroups'
+  getSchoolBlocks,
+  getSchoolMembers,
+  getSchoolPage,
+  getSchoolRoster,
+  unblockSchoolMember,
+  type SchoolMemberKind,
+} from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
-import type {
-  CuratorGroupBlockedItem,
-  CuratorGroupRosterItem,
-  CuratorGroupViewer,
-} from '@/api/types'
+import type { SchoolBlockedItem, SchoolRosterItem, SchoolViewer } from '@/api/types'
 import SendMessageModal from '@/components/shared/SendMessageModal.vue'
 import { IconLock } from '@/components/icons'
 import SchoolMemberRow from '@/components/shared/SchoolMemberRow.vue'
@@ -197,9 +193,9 @@ import { formatShortDate } from '@/utils/format'
 // limit/offset only). «Разблокировать» sends DELETE …/blocks/{user_id} and
 // re-reads the first page -- the person leaves the list and is back in the
 // roster with their role (the other tabs re-read on switch). It is a
-// view-local MemberTab, NOT CuratorGroupMemberKind: «blocked» is no kind of
+// view-local MemberTab, NOT SchoolMemberKind: «blocked» is no kind of
 // membership in the API.
-type MemberTab = CuratorGroupMemberKind | 'blocked'
+type MemberTab = SchoolMemberKind | 'blocked'
 
 const KIND_OPTIONS: ReadonlyArray<{ value: MemberTab; label: string; icon?: Component }> = [
   { value: 'master', label: t('user.screens.schoolMembers.tabs.masters') },
@@ -214,27 +210,27 @@ const toast = useToast()
 const groupId = computed(() => String(route.params.id ?? ''))
 
 /** The zone decides only navigation targets -- the data and the row set come
- *  from the server, exactly like on CuratorGroupPageView. */
+ *  from the server, exactly like on SchoolPageView. */
 const inMasterZone = computed(() => String(route.name ?? '').startsWith('master'))
 
 // -- Who is looking (BE-76) -----------------------------------------------------
 //
-// The viewer's tie to the school is the SERVER's answer (GET /curator-groups/
+// The viewer's tie to the school is the SERVER's answer (GET /schools/
 // {id} -> viewer.relation), never a URL marker: it picks the endpoint and
 // what a tap does. The curator reads /members (with his working fields) and
 // opens the school-context profiles; a school MASTER, in the master zone only
 // (owner decision; the user zone is FE-93's), reads /roster and messages a
 // student directly. Fetched once per school, before the first roster page --
 // the roster fetcher awaits it, so a 404 here is the same masked rung.
-const relation = ref<CuratorGroupViewer['relation'] | null>(null)
-let relationFor: { id: string; promise: Promise<CuratorGroupViewer['relation']> } | null = null
+const relation = ref<SchoolViewer['relation'] | null>(null)
+let relationFor: { id: string; promise: Promise<SchoolViewer['relation']> } | null = null
 
-function loadRelation(): Promise<CuratorGroupViewer['relation']> {
+function loadRelation(): Promise<SchoolViewer['relation']> {
   if (relationFor?.id !== groupId.value) {
     const id = groupId.value
     relationFor = {
       id,
-      promise: getCuratorGroupPage(id).then((page) => {
+      promise: getSchoolPage(id).then((page) => {
         if (id === groupId.value) relation.value = page.viewer.relation
         return page.viewer.relation
       }),
@@ -292,7 +288,7 @@ const errorTitle = computed(() => {
 
 // FE-93: this screen mounts in the master zone only.
 const pageRoute = computed(() => ({
-  name: 'master-curator-group',
+  name: 'master-school',
   params: { id: groupId.value },
 }))
 
@@ -311,14 +307,14 @@ const trimmedSearch = computed(() => search.value.trim())
 const notFound = ref(false)
 
 const { items, loading, error, loadMoreError, hasMore, loadMore, refresh } = usePagination<
-  CuratorGroupRosterItem | CuratorGroupBlockedItem
+  SchoolRosterItem | SchoolBlockedItem
 >(async (limit, offset) => {
   try {
     const viewer = await loadRelation()
     // «Блок» is the curator's alone; anyone else who lands on ?kind=blocked
     // is moved to the masters tab.
     if (kind.value === 'blocked') {
-      if (viewer === 'curator') return await getCuratorGroupBlocks(groupId.value, { limit, offset })
+      if (viewer === 'curator') return await getSchoolBlocks(groupId.value, { limit, offset })
       kind.value = 'master'
       void router.replace({ ...route, query: { ...route.query, kind: 'master' } })
     }
@@ -329,8 +325,8 @@ const { items, loading, error, loadMoreError, hasMore, loadMore, refresh } = use
       offset,
     }
     return viewer === 'master' && inMasterZone.value
-      ? await getCuratorGroupRoster(groupId.value, query)
-      : await getCuratorGroupMembers(groupId.value, query)
+      ? await getSchoolRoster(groupId.value, query)
+      : await getSchoolMembers(groupId.value, query)
   } catch (e: unknown) {
     if (e instanceof ApiResponseError && e.status === 404) notFound.value = true
     throw e
@@ -372,7 +368,7 @@ async function switchKind(next: MemberTab): Promise<void> {
     search.value = ''
   }
   void router.replace({
-    name: 'master-curator-group-members',
+    name: 'master-school-members',
     params: { id: groupId.value },
     query: { kind: next },
   })
@@ -401,10 +397,10 @@ watch(
 // The one list holds either rows of the roster or rows of «Блок» -- the
 // tab decides which; these name it for the template.
 const rosterItems = computed(() =>
-  kind.value === 'blocked' ? [] : (items.value as CuratorGroupRosterItem[]),
+  kind.value === 'blocked' ? [] : (items.value as SchoolRosterItem[]),
 )
 const blockedItems = computed(() =>
-  kind.value === 'blocked' ? (items.value as CuratorGroupBlockedItem[]) : [],
+  kind.value === 'blocked' ? (items.value as SchoolBlockedItem[]) : [],
 )
 
 // BE-79 (2): «Разблокировать». 204 -> the first page is re-read, so the row
@@ -412,11 +408,11 @@ const blockedItems = computed(() =>
 // was simply stale; anything else -> the error toast, the row stays.
 const unblocking = ref<string | null>(null)
 
-async function onUnblock(person: CuratorGroupBlockedItem): Promise<void> {
+async function onUnblock(person: SchoolBlockedItem): Promise<void> {
   if (unblocking.value) return
   unblocking.value = person.user_id
   try {
-    await unblockCuratorGroupMember(groupId.value, person.user_id)
+    await unblockSchoolMember(groupId.value, person.user_id)
     toast.success(t('user.screens.schoolMembers.toast.unblocked'))
     await refresh()
   } catch (e) {
@@ -456,9 +452,9 @@ watch(groupId, () => {
 // -- Navigation: rows open the member's profile -------------------------------
 
 /** The student a school master is writing to; null when the sheet is shut. */
-const messageTo = ref<CuratorGroupRosterItem | null>(null)
+const messageTo = ref<SchoolRosterItem | null>(null)
 
-function openMember(member: CuratorGroupRosterItem): void {
+function openMember(member: SchoolRosterItem): void {
   // A master opens the EXISTING public profile (any zone can render it --
   // no guard on /user/masters/:id). A student has no public page, so their
   // school-context profile carries the curator actions instead.
@@ -484,7 +480,7 @@ function openMember(member: CuratorGroupRosterItem): void {
     return
   }
   void router.push({
-    name: 'master-curator-group-student',
+    name: 'master-school-student',
     params: { groupId: groupId.value, userId: member.user_id },
     // The profile renders instantly from the roster row's own data while its
     // real fetches run (the MasterGroupDetailView query canon).

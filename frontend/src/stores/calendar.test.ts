@@ -150,9 +150,9 @@ describe('useCalendarStore', () => {
 
     it('master scope with a school filter keeps only THAT school practices of the master (owner 2026-10-03)', async () => {
       const items = [
-        fakePractice({ id: 'school', curator_group_id: 'g1' }),
-        fakePractice({ id: 'personal', curator_group_id: null }),
-        fakePractice({ id: 'foreign', curator_group_id: 'g2' }),
+        fakePractice({ id: 'school', school_id: 'g1' }),
+        fakePractice({ id: 'personal', school_id: null }),
+        fakePractice({ id: 'foreign', school_id: 'g2' }),
       ]
       vi.mocked(practicesApi.getPractices).mockResolvedValue({
         items,
@@ -170,8 +170,8 @@ describe('useCalendarStore', () => {
 
     it('master scope WITHOUT a school filter keeps the whole master feed (owner 2026-10-03)', async () => {
       const items = [
-        fakePractice({ id: 'school', curator_group_id: 'g1' }),
-        fakePractice({ id: 'personal', curator_group_id: null }),
+        fakePractice({ id: 'school', school_id: 'g1' }),
+        fakePractice({ id: 'personal', school_id: null }),
       ]
       vi.mocked(practicesApi.getPractices).mockResolvedValue({
         items,

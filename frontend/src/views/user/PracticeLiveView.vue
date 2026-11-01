@@ -3,7 +3,7 @@
 
   The practice screen: where a person ENTERS the practice. Since Standalone
   F4 Zoom runs inside VELO -- the Meeting SDK (client view) -- and no Zoom
-  link is ever opened. ONE view, two zones (the CuratorGroupPageView
+  link is ever opened. ONE view, two zones (the SchoolPageView
   pattern): the user zone mounts it as 'practice-live', the master zone as
   'master-practice-live'. The zone only picks the back target and hides the
   student-only actions; WHAT the person may do is the server's answer.

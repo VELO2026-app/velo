@@ -16,22 +16,22 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import SchoolMembersView from '@/views/user/SchoolMembersView.vue'
-import * as cgApi from '@/api/curatorGroups'
+import * as cgApi from '@/api/schools'
 import * as chatsApi from '@/api/chats'
 import { ApiResponseError } from '@/api/client'
 import type {
-  CuratorGroupMemberItem,
-  CuratorGroupPageResponse,
-  PaginatedCuratorGroupMembersResponse,
+  SchoolMemberItem,
+  SchoolPageResponse,
+  PaginatedSchoolMembersResponse,
 } from '@/api/types'
 
-vi.mock('@/api/curatorGroups')
+vi.mock('@/api/schools')
 vi.mock('@/api/chats')
 
 const push = vi.fn()
 const replace = vi.fn()
 const routeState = {
-  name: 'master-curator-group-members',
+  name: 'master-school-members',
   id: 'g1',
   query: {} as Record<string, string>,
 }
@@ -83,17 +83,14 @@ function text(): string {
 }
 
 function page(
-  items: CuratorGroupMemberItem[],
+  items: SchoolMemberItem[],
   total = items.length,
   offset = 0,
-): PaginatedCuratorGroupMembersResponse {
+): PaginatedSchoolMembersResponse {
   return { items, total, limit: 20, offset }
 }
 
-function member(
-  id: string,
-  overrides: Partial<CuratorGroupMemberItem> = {},
-): CuratorGroupMemberItem {
+function member(id: string, overrides: Partial<SchoolMemberItem> = {}): SchoolMemberItem {
   return {
     user_id: id,
     name: `Участник ${id}`,
@@ -106,12 +103,12 @@ function member(
 }
 
 function viewerIs(relation: 'curator' | 'master' | 'student'): void {
-  vi.mocked(cgApi.getCuratorGroupPage)
+  vi.mocked(cgApi.getSchoolPage)
     .mockReset()
-    .mockResolvedValue({ viewer: { relation } } as unknown as CuratorGroupPageResponse)
+    .mockResolvedValue({ viewer: { relation } } as unknown as SchoolPageResponse)
 }
 
-function membersOf(kind: 'master' | 'student', ids: string[]): CuratorGroupMemberItem[] {
+function membersOf(kind: 'master' | 'student', ids: string[]): SchoolMemberItem[] {
   return ids.map((id) => member(id, { kind }))
 }
 
@@ -128,13 +125,13 @@ function showMore(): HTMLElement | null {
 }
 
 beforeEach(() => {
-  routeState.name = 'master-curator-group-members'
+  routeState.name = 'master-school-members'
   routeState.id = 'g1'
   routeState.query = {}
-  vi.mocked(cgApi.getCuratorGroupMembers).mockReset().mockResolvedValue(page([]))
-  vi.mocked(cgApi.getCuratorGroupRoster).mockReset().mockResolvedValue(page([]))
-  vi.mocked(cgApi.getCuratorGroupBlocks).mockReset()
-  vi.mocked(cgApi.unblockCuratorGroupMember).mockReset()
+  vi.mocked(cgApi.getSchoolMembers).mockReset().mockResolvedValue(page([]))
+  vi.mocked(cgApi.getSchoolRoster).mockReset().mockResolvedValue(page([]))
+  vi.mocked(cgApi.getSchoolBlocks).mockReset()
+  vi.mocked(cgApi.unblockSchoolMember).mockReset()
   // BE-76: the screen asks the server who is looking before the first page.
   // Every test above the BE-76 block is the CURATOR's screen, as before.
   viewerIs('curator')
@@ -154,13 +151,11 @@ afterEach(() => {
 
 describe('SchoolMembersView', () => {
   it('defaults to the Мастера tab and loads kind=master without ?kind', async () => {
-    vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue(
-      page(membersOf('master', ['m1', 'm2'])),
-    )
+    vi.mocked(cgApi.getSchoolMembers).mockResolvedValue(page(membersOf('master', ['m1', 'm2'])))
     mountWith()
     await flush()
 
-    expect(vi.mocked(cgApi.getCuratorGroupMembers)).toHaveBeenCalledWith('g1', {
+    expect(vi.mocked(cgApi.getSchoolMembers)).toHaveBeenCalledWith('g1', {
       kind: 'master',
       search: undefined,
       limit: 20,
@@ -173,11 +168,11 @@ describe('SchoolMembersView', () => {
   })
 
   it('?kind=student opens the Ученики roster; an unknown value falls back to Мастера', async () => {
-    vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue(page(membersOf('student', ['s1'])))
+    vi.mocked(cgApi.getSchoolMembers).mockResolvedValue(page(membersOf('student', ['s1'])))
     mountWith({ kind: 'student' })
     await flush()
 
-    expect(vi.mocked(cgApi.getCuratorGroupMembers)).toHaveBeenCalledWith(
+    expect(vi.mocked(cgApi.getSchoolMembers)).toHaveBeenCalledWith(
       'g1',
       expect.objectContaining({ kind: 'student' }),
     )
@@ -186,10 +181,10 @@ describe('SchoolMembersView', () => {
 
     app?.unmount()
     host?.remove()
-    vi.mocked(cgApi.getCuratorGroupMembers).mockClear()
+    vi.mocked(cgApi.getSchoolMembers).mockClear()
     mountWith({ kind: 'banana' })
     await flush()
-    expect(vi.mocked(cgApi.getCuratorGroupMembers)).toHaveBeenCalledWith(
+    expect(vi.mocked(cgApi.getSchoolMembers)).toHaveBeenCalledWith(
       'g1',
       expect.objectContaining({ kind: 'master' }),
     )
@@ -198,7 +193,7 @@ describe('SchoolMembersView', () => {
   it('switching tabs resets the search, replaces the query and reloads with the new kind', async () => {
     vi.useFakeTimers()
     try {
-      vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue(page(membersOf('student', ['s1'])))
+      vi.mocked(cgApi.getSchoolMembers).mockResolvedValue(page(membersOf('student', ['s1'])))
       mountWith({ kind: 'student' })
       await vi.advanceTimersByTimeAsync(0) // initial load
 
@@ -206,19 +201,19 @@ describe('SchoolMembersView', () => {
       input!.value = 'анна'
       input!.dispatchEvent(new Event('input'))
       await vi.advanceTimersByTimeAsync(300)
-      expect(vi.mocked(cgApi.getCuratorGroupMembers)).toHaveBeenLastCalledWith(
+      expect(vi.mocked(cgApi.getSchoolMembers)).toHaveBeenLastCalledWith(
         'g1',
         expect.objectContaining({ kind: 'student', search: 'анна' }),
       )
 
-      vi.mocked(cgApi.getCuratorGroupMembers).mockClear()
+      vi.mocked(cgApi.getSchoolMembers).mockClear()
       rosterTab('Мастера')?.click()
       await vi.advanceTimersByTimeAsync(0)
 
       // One fresh load per switch -- the programmatic search reset must not
       // race the switch's own refresh through the debounced watcher.
-      expect(vi.mocked(cgApi.getCuratorGroupMembers)).toHaveBeenCalledTimes(1)
-      expect(vi.mocked(cgApi.getCuratorGroupMembers)).toHaveBeenCalledWith('g1', {
+      expect(vi.mocked(cgApi.getSchoolMembers)).toHaveBeenCalledTimes(1)
+      expect(vi.mocked(cgApi.getSchoolMembers)).toHaveBeenCalledWith('g1', {
         kind: 'master',
         search: undefined,
         limit: 20,
@@ -226,7 +221,7 @@ describe('SchoolMembersView', () => {
       })
       // The tab is server truth in the URL -- replace, not history push.
       expect(replace).toHaveBeenCalledWith({
-        name: 'master-curator-group-members',
+        name: 'master-school-members',
         params: { id: 'g1' },
         query: { kind: 'master' },
       })
@@ -244,7 +239,7 @@ describe('SchoolMembersView', () => {
     await flush()
 
     expect(replace).not.toHaveBeenCalled()
-    expect(vi.mocked(cgApi.getCuratorGroupMembers)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(cgApi.getSchoolMembers)).toHaveBeenCalledTimes(1)
   })
 
   it('no members vs no search hits: two different empties (§1.11.3)', async () => {
@@ -254,7 +249,7 @@ describe('SchoolMembersView', () => {
 
     // A search that returns nothing is a DIFFERENT sentence. The debounce is
     // 300ms real -- wait it out, then let the re-query land.
-    vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue(page([]))
+    vi.mocked(cgApi.getSchoolMembers).mockResolvedValue(page([]))
     const input = inputEl()
     input!.value = 'гриб'
     input!.dispatchEvent(new Event('input'))
@@ -275,7 +270,7 @@ describe('SchoolMembersView', () => {
       input!.dispatchEvent(new Event('input'))
       await vi.advanceTimersByTimeAsync(300)
 
-      expect(vi.mocked(cgApi.getCuratorGroupMembers)).toHaveBeenLastCalledWith('g1', {
+      expect(vi.mocked(cgApi.getSchoolMembers)).toHaveBeenLastCalledWith('g1', {
         kind: 'student',
         search: 'анна',
         limit: 20,
@@ -287,7 +282,7 @@ describe('SchoolMembersView', () => {
   })
 
   it('a roster 404 is the SCHOOL being unavailable (P-08), not an empty list', async () => {
-    vi.mocked(cgApi.getCuratorGroupMembers).mockRejectedValue(
+    vi.mocked(cgApi.getSchoolMembers).mockRejectedValue(
       new ApiResponseError(404, 'not found', 'not_found'),
     )
     mountWith()
@@ -306,11 +301,11 @@ describe('SchoolMembersView', () => {
     ) ?? null) as HTMLButtonElement | null
     back?.click()
     await flush()
-    expect(push).toHaveBeenCalledWith({ name: 'master-curator-group', params: { id: 'g1' } })
+    expect(push).toHaveBeenCalledWith({ name: 'master-school', params: { id: 'g1' } })
   })
 
   it('student rows push the school-context profile with the row data in query', async () => {
-    vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue(
+    vi.mocked(cgApi.getSchoolMembers).mockResolvedValue(
       page([member('s9', { name: 'Пётр Сидоров', avatar_url: 'https://x/y.png' })]),
     )
     mountWith({ kind: 'student' })
@@ -320,14 +315,14 @@ describe('SchoolMembersView', () => {
     rows[0]?.click()
     await flush()
     expect(push).toHaveBeenCalledWith({
-      name: 'master-curator-group-student',
+      name: 'master-school-student',
       params: { groupId: 'g1', userId: 's9' },
       query: { name: 'Пётр Сидоров', avatar: 'https://x/y.png' },
     })
   })
 
   it('master roster rows push the public master profile WITH the school marker (owner 2026-09-30: the curator actions live in its menu)', async () => {
-    vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue(page(membersOf('master', ['m9'])))
+    vi.mocked(cgApi.getSchoolMembers).mockResolvedValue(page(membersOf('master', ['m9'])))
     mountWith()
     await flush()
 
@@ -342,7 +337,7 @@ describe('SchoolMembersView', () => {
   })
 
   it('«Показать ещё» pulls the next page and appends (§1.11.3)', async () => {
-    vi.mocked(cgApi.getCuratorGroupMembers)
+    vi.mocked(cgApi.getSchoolMembers)
       .mockResolvedValueOnce(page(membersOf('student', ['s1']), 25))
       .mockResolvedValueOnce({
         items: membersOf('student', ['s21']),
@@ -360,7 +355,7 @@ describe('SchoolMembersView', () => {
     await flush()
     // usePagination accumulates offset as the number of LOADED rows (1 after
     // a first page of one fixture row), not the server-echoed offset.
-    expect(vi.mocked(cgApi.getCuratorGroupMembers)).toHaveBeenLastCalledWith(
+    expect(vi.mocked(cgApi.getSchoolMembers)).toHaveBeenLastCalledWith(
       'g1',
       expect.objectContaining({ kind: 'student', offset: 1 }),
     )
@@ -370,7 +365,7 @@ describe('SchoolMembersView', () => {
   })
 
   it('a later-page failure keeps the list and reports through the toast', async () => {
-    vi.mocked(cgApi.getCuratorGroupMembers)
+    vi.mocked(cgApi.getSchoolMembers)
       .mockResolvedValueOnce(page(membersOf('student', ['s1']), 25))
       .mockRejectedValueOnce(new ApiResponseError(500, 'boom', 'internal'))
     mountWith({ kind: 'student' })
@@ -409,18 +404,18 @@ describe('SchoolMembersView', () => {
   }
 
   it('the Блок tab carries the lock glyph; switching reads GET …/blocks, not the roster', async () => {
-    vi.mocked(cgApi.getCuratorGroupBlocks).mockResolvedValue(blocksPage([blocked(1, 'master')]))
+    vi.mocked(cgApi.getSchoolBlocks).mockResolvedValue(blocksPage([blocked(1, 'master')]))
     mountWith()
     await flush()
 
     const blockTab = rosterTab('Блок')
     expect(blockTab?.querySelector('svg')).not.toBeNull()
-    const rosterCalls = vi.mocked(cgApi.getCuratorGroupMembers).mock.calls.length
+    const rosterCalls = vi.mocked(cgApi.getSchoolMembers).mock.calls.length
     blockTab!.click()
     await flush()
 
-    expect(cgApi.getCuratorGroupBlocks).toHaveBeenCalledWith('g1', { limit: 20, offset: 0 })
-    expect(vi.mocked(cgApi.getCuratorGroupMembers).mock.calls.length).toBe(rosterCalls)
+    expect(cgApi.getSchoolBlocks).toHaveBeenCalledWith('g1', { limit: 20, offset: 0 })
+    expect(vi.mocked(cgApi.getSchoolMembers).mock.calls.length).toBe(rosterCalls)
     expect(replace).toHaveBeenCalledWith(expect.objectContaining({ query: { kind: 'blocked' } }))
     expect(text()).toContain('Заблокированный 1')
     expect(text()).toContain('Мастер')
@@ -428,18 +423,18 @@ describe('SchoolMembersView', () => {
   })
 
   it('?kind=blocked deep link reads the blocks; an empty list says so', async () => {
-    vi.mocked(cgApi.getCuratorGroupBlocks).mockResolvedValue(blocksPage([]))
+    vi.mocked(cgApi.getSchoolBlocks).mockResolvedValue(blocksPage([]))
     mountWith({ kind: 'blocked' })
     await flush()
 
-    expect(cgApi.getCuratorGroupBlocks).toHaveBeenCalledTimes(1)
-    expect(vi.mocked(cgApi.getCuratorGroupMembers)).not.toHaveBeenCalled()
+    expect(cgApi.getSchoolBlocks).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(cgApi.getSchoolMembers)).not.toHaveBeenCalled()
     expect(rosterTab('Блок')?.getAttribute('aria-selected')).toBe('true')
     expect(text()).toContain('Пока нет заблокированных')
   })
 
   it('«Разблокировать»: DELETE for THAT person, then the re-read list no longer has them', async () => {
-    vi.mocked(cgApi.getCuratorGroupBlocks)
+    vi.mocked(cgApi.getSchoolBlocks)
       .mockResolvedValueOnce(blocksPage([blocked(1), blocked(2)]))
       .mockResolvedValueOnce(blocksPage([blocked(2)]))
     mountWith({ kind: 'blocked' })
@@ -448,17 +443,17 @@ describe('SchoolMembersView', () => {
     unblockButtons()[0]!.click()
     await flush()
 
-    expect(cgApi.unblockCuratorGroupMember).toHaveBeenCalledWith('g1', 'b1')
+    expect(cgApi.unblockSchoolMember).toHaveBeenCalledWith('g1', 'b1')
     expect(toastSuccess).toHaveBeenCalledWith('Участник разблокирован')
     expect(text()).not.toContain('Заблокированный 1')
     expect(text()).toContain('Заблокированный 2')
   })
 
   it('«Разблокировать» 404 (already unblocked): the list is re-read, no error toast', async () => {
-    vi.mocked(cgApi.getCuratorGroupBlocks)
+    vi.mocked(cgApi.getSchoolBlocks)
       .mockResolvedValueOnce(blocksPage([blocked(1)]))
       .mockResolvedValueOnce(blocksPage([]))
-    vi.mocked(cgApi.unblockCuratorGroupMember).mockRejectedValueOnce(
+    vi.mocked(cgApi.unblockSchoolMember).mockRejectedValueOnce(
       new ApiResponseError(404, 'not blocked', 'not_found'),
     )
     mountWith({ kind: 'blocked' })
@@ -467,14 +462,14 @@ describe('SchoolMembersView', () => {
     unblockButtons()[0]!.click()
     await flush()
 
-    expect(cgApi.getCuratorGroupBlocks).toHaveBeenCalledTimes(2)
+    expect(cgApi.getSchoolBlocks).toHaveBeenCalledTimes(2)
     expect(toastError).not.toHaveBeenCalled()
     expect(text()).toContain('Пока нет заблокированных')
   })
 
   it('«Разблокировать» failing otherwise: the error toast, the row stays', async () => {
-    vi.mocked(cgApi.getCuratorGroupBlocks).mockResolvedValue(blocksPage([blocked(1)]))
-    vi.mocked(cgApi.unblockCuratorGroupMember).mockRejectedValueOnce(new TypeError('net'))
+    vi.mocked(cgApi.getSchoolBlocks).mockResolvedValue(blocksPage([blocked(1)]))
+    vi.mocked(cgApi.unblockSchoolMember).mockRejectedValueOnce(new TypeError('net'))
     mountWith({ kind: 'blocked' })
     await flush()
 
@@ -488,13 +483,13 @@ describe('SchoolMembersView', () => {
   it('switching back to Мастера fetches with kind=master again', async () => {
     mountWith({ kind: 'blocked' })
     await flush()
-    expect(vi.mocked(cgApi.getCuratorGroupMembers)).not.toHaveBeenCalled()
+    expect(vi.mocked(cgApi.getSchoolMembers)).not.toHaveBeenCalled()
 
-    vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue(page(membersOf('master', ['m1'])))
+    vi.mocked(cgApi.getSchoolMembers).mockResolvedValue(page(membersOf('master', ['m1'])))
     rosterTab('Мастера')!.click()
     await flush()
 
-    expect(vi.mocked(cgApi.getCuratorGroupMembers)).toHaveBeenCalledWith('g1', {
+    expect(vi.mocked(cgApi.getSchoolMembers)).toHaveBeenCalledWith('g1', {
       kind: 'master',
       search: undefined,
       limit: 20,
@@ -508,7 +503,7 @@ describe('SchoolMembersView', () => {
 // BE-76: the roster for a MASTER of the school (master zone)
 // =============================================================================
 //
-// The viewer is the server's answer (getCuratorGroupPage -> viewer.relation).
+// The viewer is the server's answer (getSchoolPage -> viewer.relation).
 // A school master in the master zone reads /roster (no curator fields), sees
 // no «Блок» tab, messages a student straight away and opens a master's public
 // page WITHOUT the curator's ?groupId= marker. The user zone is untouched.
@@ -519,12 +514,12 @@ function rosterRow(id: string, kind: 'master' | 'student', name: string) {
 
 describe('SchoolMembersView -- a master of the school (BE-76)', () => {
   beforeEach(() => {
-    routeState.name = 'master-curator-group-members'
+    routeState.name = 'master-school-members'
     viewerIs('master')
   })
 
   it('reads /roster (not the curator /members) with the same kind / search / paging', async () => {
-    vi.mocked(cgApi.getCuratorGroupRoster).mockResolvedValue({
+    vi.mocked(cgApi.getSchoolRoster).mockResolvedValue({
       items: [rosterRow('m1', 'master', 'Борис')],
       total: 1,
       limit: 20,
@@ -533,14 +528,14 @@ describe('SchoolMembersView -- a master of the school (BE-76)', () => {
     mountWith()
     await flush()
 
-    expect(cgApi.getCuratorGroupPage).toHaveBeenCalledWith('g1')
-    expect(cgApi.getCuratorGroupRoster).toHaveBeenCalledWith('g1', {
+    expect(cgApi.getSchoolPage).toHaveBeenCalledWith('g1')
+    expect(cgApi.getSchoolRoster).toHaveBeenCalledWith('g1', {
       kind: 'master',
       search: undefined,
       limit: 20,
       offset: 0,
     })
-    expect(cgApi.getCuratorGroupMembers).not.toHaveBeenCalled()
+    expect(cgApi.getSchoolMembers).not.toHaveBeenCalled()
     expect(text()).toContain('Борис')
   })
 
@@ -551,7 +546,7 @@ describe('SchoolMembersView -- a master of the school (BE-76)', () => {
     expect(rosterTab('Мастера')).toBeTruthy()
     expect(rosterTab('Ученики')).toBeTruthy()
     expect(rosterTab('Блок')).toBeNull()
-    expect(cgApi.getCuratorGroupRoster).toHaveBeenCalledWith(
+    expect(cgApi.getSchoolRoster).toHaveBeenCalledWith(
       'g1',
       expect.objectContaining({ kind: 'master' }),
     )
@@ -559,7 +554,7 @@ describe('SchoolMembersView -- a master of the school (BE-76)', () => {
   })
 
   it('a tap on a student opens the message sheet and writes through openStudentChat -- no navigation', async () => {
-    vi.mocked(cgApi.getCuratorGroupRoster).mockResolvedValue({
+    vi.mocked(cgApi.getSchoolRoster).mockResolvedValue({
       items: [rosterRow('s9', 'student', 'Пётр Сидоров')],
       total: 1,
       limit: 20,
@@ -589,7 +584,7 @@ describe('SchoolMembersView -- a master of the school (BE-76)', () => {
   })
 
   it('a tap on a master opens his public page WITHOUT the curator marker', async () => {
-    vi.mocked(cgApi.getCuratorGroupRoster).mockResolvedValue({
+    vi.mocked(cgApi.getSchoolRoster).mockResolvedValue({
       items: [rosterRow('m9', 'master', 'Борис')],
       total: 1,
       limit: 20,

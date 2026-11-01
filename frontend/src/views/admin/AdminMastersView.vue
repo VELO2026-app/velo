@@ -37,7 +37,7 @@
     </VButton>
 
     <!-- FE-23 (GT P4): all schools incl. frozen, read-only. -->
-    <VButton variant="outline" block @click="router.push({ name: 'admin-curator-groups' })">
+    <VButton variant="outline" block @click="router.push({ name: 'admin-schools' })">
       {{ t('adminScreens.adminMasters.schoolsTab') }}
     </VButton>
 
@@ -70,7 +70,7 @@
             <!-- FE-23 (GT P4): schools badge -- counts ACTIVE and FROZEN
                  alike (revocation does not dissolve them, and the admin
                  needs to see what is still attached to the person). -->
-            <VBadge v-if="(m.curator_groups_count ?? 0) > 0" variant="blue" class="mcard__badge">
+            <VBadge v-if="(m.schools_count ?? 0) > 0" variant="blue" class="mcard__badge">
               {{ t('adminScreens.adminMasters.curatorRole') }}
             </VBadge>
           </div>

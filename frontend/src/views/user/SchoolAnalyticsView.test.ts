@@ -16,16 +16,16 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import SchoolAnalyticsView from '@/views/user/SchoolAnalyticsView.vue'
-import * as cgApi from '@/api/curatorGroups'
+import * as cgApi from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
-import type { CuratorGroupAnalyticsResponse } from '@/api/types'
+import type { SchoolAnalyticsResponse } from '@/api/types'
 
-vi.mock('@/api/curatorGroups')
+vi.mock('@/api/schools')
 
 const push = vi.fn()
 const replace = vi.fn()
 const routeState = {
-  name: 'user-curator-group-analytics',
+  name: 'user-school-analytics',
   id: 'g1',
 }
 vi.mock('vue-router', () => ({
@@ -62,7 +62,7 @@ function buttonWith(label: string): HTMLButtonElement | null {
   )
 }
 
-function analyticsFixture(): CuratorGroupAnalyticsResponse {
+function analyticsFixture(): SchoolAnalyticsResponse {
   return {
     practices: { total: 5, completed: 3, upcoming: 2 },
     members: { masters: 2, students: 7 },
@@ -122,7 +122,7 @@ function analyticsFixture(): CuratorGroupAnalyticsResponse {
 
 describe('SchoolAnalyticsView', () => {
   beforeEach(() => {
-    vi.mocked(cgApi.getCuratorGroupAnalytics).mockResolvedValue(analyticsFixture())
+    vi.mocked(cgApi.getSchoolAnalytics).mockResolvedValue(analyticsFixture())
   })
 
   afterEach(() => {
@@ -130,7 +130,7 @@ describe('SchoolAnalyticsView', () => {
     app = null
     host?.remove()
     host = null
-    vi.mocked(cgApi.getCuratorGroupAnalytics).mockReset()
+    vi.mocked(cgApi.getSchoolAnalytics).mockReset()
     vi.clearAllMocks()
   })
 
@@ -144,7 +144,7 @@ describe('SchoolAnalyticsView', () => {
     expect(text()).toContain('50%')
     expect(text()).toContain('Пришли еще раз, 2 из 4')
     expect(text()).toContain('Вступили и не пришли')
-    expect(vi.mocked(cgApi.getCuratorGroupAnalytics)).toHaveBeenCalledWith('g1', 'week')
+    expect(vi.mocked(cgApi.getSchoolAnalytics)).toHaveBeenCalledWith('g1', 'week')
   })
 
   it('renders the period practices: one line over a bare strip', async () => {
@@ -181,8 +181,8 @@ describe('SchoolAnalyticsView', () => {
       },
       // Deliberately WITHOUT conducted_practices: this fixture stands for
       // the not-yet-caught-up backend (see the assertion below).
-    } as unknown as CuratorGroupAnalyticsResponse
-    vi.mocked(cgApi.getCuratorGroupAnalytics).mockImplementation((_id, period) =>
+    } as unknown as SchoolAnalyticsResponse
+    vi.mocked(cgApi.getSchoolAnalytics).mockImplementation((_id, period) =>
       Promise.resolve(period === 'month' ? monthFixture : analyticsFixture()),
     )
     mount()
@@ -191,7 +191,7 @@ describe('SchoolAnalyticsView', () => {
     buttonWith('Месяц')?.click()
     await flush()
 
-    expect(vi.mocked(cgApi.getCuratorGroupAnalytics)).toHaveBeenCalledWith('g1', 'month')
+    expect(vi.mocked(cgApi.getSchoolAnalytics)).toHaveBeenCalledWith('g1', 'month')
     expect(text()).toContain('Человек приходило из 40 в школе')
     expect(text()).toContain('60%')
     expect(text()).toContain('Пришли еще раз, 7 из 8')
@@ -202,8 +202,8 @@ describe('SchoolAnalyticsView', () => {
   })
 
   it('an out-of-order response never lands under a newer period label', async () => {
-    let resolveMonth!: (value: CuratorGroupAnalyticsResponse) => void
-    const quarterFixture: CuratorGroupAnalyticsResponse = {
+    let resolveMonth!: (value: SchoolAnalyticsResponse) => void
+    const quarterFixture: SchoolAnalyticsResponse = {
       ...analyticsFixture(),
       engagement: {
         practices_conducted: 9,
@@ -218,7 +218,7 @@ describe('SchoolAnalyticsView', () => {
         conducted_practices: [],
       },
     }
-    vi.mocked(cgApi.getCuratorGroupAnalytics).mockImplementation((_id, period) => {
+    vi.mocked(cgApi.getSchoolAnalytics).mockImplementation((_id, period) => {
       if (period === 'month') {
         return new Promise((resolve) => {
           resolveMonth = resolve
@@ -246,7 +246,7 @@ describe('SchoolAnalyticsView', () => {
   })
 
   it('a failed switch is the honest retry state; retry recovers', async () => {
-    vi.mocked(cgApi.getCuratorGroupAnalytics)
+    vi.mocked(cgApi.getSchoolAnalytics)
       .mockResolvedValueOnce(analyticsFixture())
       .mockRejectedValueOnce(new Error('blip'))
     mount()
@@ -264,7 +264,7 @@ describe('SchoolAnalyticsView', () => {
   })
 
   it('an empty school renders honest zeros, not dashes', async () => {
-    vi.mocked(cgApi.getCuratorGroupAnalytics).mockResolvedValue({
+    vi.mocked(cgApi.getSchoolAnalytics).mockResolvedValue({
       ...analyticsFixture(),
       members: { masters: 0, students: 0 },
       engagement: {
@@ -318,7 +318,7 @@ describe('SchoolAnalyticsView', () => {
   })
 
   it('a period without reviews shows the honest empty state', async () => {
-    vi.mocked(cgApi.getCuratorGroupAnalytics).mockResolvedValue({
+    vi.mocked(cgApi.getSchoolAnalytics).mockResolvedValue({
       ...analyticsFixture(),
       engagement: {
         ...analyticsFixture().engagement,
@@ -345,7 +345,7 @@ describe('SchoolAnalyticsView', () => {
     // «Бек доедет»: until the real backend ships the contract, an older
     // payload renders the honest zero scaffold -- zero cards + the empty
     // feedback block -- and the screen stays alive.
-    vi.mocked(cgApi.getCuratorGroupAnalytics).mockResolvedValue({
+    vi.mocked(cgApi.getSchoolAnalytics).mockResolvedValue({
       practices: { total: 0, completed: 0, upcoming: 0 },
       members: { masters: 0, students: 7 },
       feedback: {
@@ -355,7 +355,7 @@ describe('SchoolAnalyticsView', () => {
         rating: { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 },
       },
       top_practices: [],
-    } as unknown as CuratorGroupAnalyticsResponse)
+    } as unknown as SchoolAnalyticsResponse)
     mount()
     await flush()
 
@@ -368,7 +368,7 @@ describe('SchoolAnalyticsView', () => {
   })
 
   it('404 is the school being unavailable; «К школе» follows the zone (user)', async () => {
-    vi.mocked(cgApi.getCuratorGroupAnalytics).mockRejectedValue(
+    vi.mocked(cgApi.getSchoolAnalytics).mockRejectedValue(
       new ApiResponseError(404, 'not found', 'not_found'),
     )
     mount()
@@ -379,12 +379,12 @@ describe('SchoolAnalyticsView', () => {
     await flush()
     // FE-93: the analytics screen mounts in the master zone only -- the back
     // target is the master school page unconditionally.
-    expect(push).toHaveBeenCalledWith({ name: 'master-curator-group', params: { id: 'g1' } })
+    expect(push).toHaveBeenCalledWith({ name: 'master-school', params: { id: 'g1' } })
   })
 
   it('the master zone backs into the master school page', async () => {
-    routeState.name = 'master-curator-group-analytics'
-    vi.mocked(cgApi.getCuratorGroupAnalytics).mockRejectedValue(
+    routeState.name = 'master-school-analytics'
+    vi.mocked(cgApi.getSchoolAnalytics).mockRejectedValue(
       new ApiResponseError(404, 'not found', 'not_found'),
     )
     mount()
@@ -392,13 +392,13 @@ describe('SchoolAnalyticsView', () => {
 
     buttonWith('К школе')?.click()
     await flush()
-    expect(push).toHaveBeenCalledWith({ name: 'master-curator-group', params: { id: 'g1' } })
+    expect(push).toHaveBeenCalledWith({ name: 'master-school', params: { id: 'g1' } })
   })
 
   // BE-78 (2): a practice card opens «Аналитика по практике» -- in the MASTER
   // zone only; the user-zone mount stays inert (FE-93 removes it).
   it('master zone: tapping a period practice opens its analytics by id', async () => {
-    routeState.name = 'master-curator-group-analytics'
+    routeState.name = 'master-school-analytics'
     mount()
     await flush()
 
@@ -408,7 +408,7 @@ describe('SchoolAnalyticsView', () => {
   })
 
   it('user zone: the same card is not a link', async () => {
-    routeState.name = 'user-curator-group-analytics'
+    routeState.name = 'user-school-analytics'
     mount()
     await flush()
 

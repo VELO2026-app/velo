@@ -174,7 +174,7 @@ const FOG_ROUTES = [
   'user-schools',
   // tz-curator.md §1.6 (owner 2026-09-19): the school PAGE is a fog screen
   // like every other detail feed -- content dissolves under the header.
-  'user-curator-group',
+  'user-school',
   // FE-11: the bell feed -- a scrolling list like bookings, dissolves under
   // the floating header; «Прочитать всё» sits in the header, not in-flow.
   'user-inbox',

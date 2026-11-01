@@ -37,11 +37,11 @@ import { useAuthStore } from '@/stores/auth'
 
 // The schools tab probe (tz-curator.md §1.2) is the one network seam the
 // shell touches; both branches below drive it through this mock.
-const curatorGroupsMock = vi.hoisted(() => ({
-  getCuratorGroups: vi.fn(),
-  getMyCuratorGroups: vi.fn(),
+const schoolsMock = vi.hoisted(() => ({
+  getSchools: vi.fn(),
+  getMySchools: vi.fn(),
 }))
-vi.mock('@/api/curatorGroups', () => curatorGroupsMock)
+vi.mock('@/api/schools', () => schoolsMock)
 
 const keyboardOpenRef: Ref<boolean> = ref(false)
 vi.mock('@/composables/useKeyboardOpen', () => ({
@@ -165,9 +165,9 @@ function activeTabLabel(): string | undefined {
 
 beforeEach(() => {
   keyboardOpenRef.value = false
-  // FE-88: the hub probes /curator-groups/mine for EVERY account; a plain
+  // FE-88: the hub probes /schools/mine for EVERY account; a plain
   // visitor with no schools is the default fixture.
-  curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({ items: [] })
+  schoolsMock.getMySchools.mockResolvedValue({ items: [] })
 })
 
 afterEach(() => {
@@ -306,7 +306,7 @@ describe('UserShell', () => {
     }
 
     it('a member of at least one school (any relation) sees five tabs in the mockup order', async () => {
-      curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({
+      schoolsMock.getMySchools.mockResolvedValue({
         items: [{ id: 'g1', name: 'Тихая школа', relation: 'student' }],
       })
       await mount('user-dashboard', {}, seedAccount(['user']))
@@ -320,10 +320,10 @@ describe('UserShell', () => {
       // Restores 2026-10-02: the surface set follows the ACTIVE ROLE -- a
       // curator-capable account in user mode keeps «Дневник» too. With no
       // schools, «Школы» still stays hidden (membership, FE-88).
-      curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({ items: [] })
-      curatorGroupsMock.getCuratorGroups.mockResolvedValue({
+      schoolsMock.getMySchools.mockResolvedValue({ items: [] })
+      schoolsMock.getSchools.mockResolvedValue({
         items: [],
-        can_create_groups: true,
+        can_create_schools: true,
       })
       await mount('user-dashboard', {}, seedAccount(['user', 'master']))
       await flush()
@@ -338,7 +338,7 @@ describe('UserShell', () => {
       // the curated rows /mine still returns are the master list's section
       // (every management surface behind them 403s in user mode), so a
       // curator with no JOINED schools reads as "no schools" here.
-      curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({
+      schoolsMock.getMySchools.mockResolvedValue({
         items: [{ id: 'g1', name: 'Тихая школа', relation: 'curator' }],
       })
       await mount('user-dashboard', {}, seedAccount(['user']))
@@ -352,7 +352,7 @@ describe('UserShell', () => {
       // The exact surface the curator diary report named still carries NO
       // dock at all (DETAIL_ROUTES) -- a route-level rule, independent of
       // the account's surfaces.
-      curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({
+      schoolsMock.getMySchools.mockResolvedValue({
         items: [{ id: 'g1', name: 'Тихая школа', relation: 'curator' }],
       })
       await mount('user-calendar-school', { groupId: 'g1' }, seedAccount(['user']))
@@ -366,7 +366,7 @@ describe('UserShell', () => {
       // Owner 2026-10-12: nothing gates «Дневник», so there is no hold to
       // wait out -- the dock is complete from the first paint. The Школы
       // tab still follows membership (fail-closed, FE-88).
-      curatorGroupsMock.getMyCuratorGroups.mockReturnValue(new Promise(() => {}))
+      schoolsMock.getMySchools.mockReturnValue(new Promise(() => {}))
       await mount('user-dashboard', {}, seedAccount(['user']))
       await flush()
       await flush()
@@ -375,12 +375,12 @@ describe('UserShell', () => {
     })
 
     it("a master of somebody else's school (no right) sees the tab too", async () => {
-      curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({
+      schoolsMock.getMySchools.mockResolvedValue({
         items: [{ id: 'g2', name: 'Чужая школа', relation: 'master' }],
       })
-      curatorGroupsMock.getCuratorGroups.mockResolvedValue({
+      schoolsMock.getSchools.mockResolvedValue({
         items: [],
-        can_create_groups: false,
+        can_create_schools: false,
       })
       await mount('user-dashboard', {}, seedAccount(['user', 'master']))
       await flush()
@@ -390,10 +390,10 @@ describe('UserShell', () => {
     })
 
     it('an account with no schools anywhere does not see it', async () => {
-      curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({ items: [] })
-      curatorGroupsMock.getCuratorGroups.mockResolvedValue({
+      schoolsMock.getMySchools.mockResolvedValue({ items: [] })
+      schoolsMock.getSchools.mockResolvedValue({
         items: [],
-        can_create_groups: false,
+        can_create_schools: false,
       })
       await mount('user-dashboard', {}, seedAccount(['user', 'master']))
       await flush()
@@ -403,15 +403,15 @@ describe('UserShell', () => {
     })
 
     it('a plain user is probed through /mine but never touches the master surface', async () => {
-      curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({
+      schoolsMock.getMySchools.mockResolvedValue({
         items: [{ id: 'g1', name: 'Тихая школа', relation: 'student' }],
       })
       await mount('user-dashboard', {}, seedAccount(['user']))
       await flush()
       await flush()
 
-      expect(curatorGroupsMock.getCuratorGroups).not.toHaveBeenCalled()
-      expect(curatorGroupsMock.getMyCuratorGroups).toHaveBeenCalledTimes(1)
+      expect(schoolsMock.getSchools).not.toHaveBeenCalled()
+      expect(schoolsMock.getMySchools).toHaveBeenCalledTimes(1)
       expect(tabLabels()).toContain('Школы')
     })
   })

@@ -1,8 +1,8 @@
 <!--
-  VELO Frontend -- CuratorGroupRow (schools FE-19/FE-20 / GT P3; §1.4 rework)
+  VELO Frontend -- SchoolRow (schools FE-19/FE-20 / GT P3; §1.4 rework)
 
   One school row of the lists, shared by BOTH zones' sectioned lists
-  (UserCuratorGroupsView / MasterCuratorGroupsView) and, since tz-curator.md
+  (UserMySchoolsView / MasterSchoolsView) and, since tz-curator.md
   §1.4, by the «Школы» tab hub (SchoolsView).
 
   The §1.4 contract (schools-list.png, text contract in tz-curator.md):
@@ -58,7 +58,7 @@
       </span>
     </span>
     <VChip v-if="group.transfer_offered" class="cg-row__offer" active
-      >{{ t('curatorGroup.offerBadge') }}
+      >{{ t('school.offerBadge') }}
     </VChip>
   </button>
 </template>
@@ -66,7 +66,7 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { onMounted, ref } from 'vue'
-import type { CuratorGroupMineItem } from '@/api/types'
+import type { SchoolMineItem } from '@/api/types'
 import { schoolHashFromName } from '@/utils/schoolBranding'
 import { IconMeditation, IconUsers } from '@/components/icons'
 import { VAvatar, VChip } from '@/components/ui'
@@ -74,7 +74,7 @@ import SchoolBrandBanner from '@/components/shared/SchoolBrandBanner.vue'
 import SchoolMandalaBadge from '@/components/shared/SchoolMandalaBadge.vue'
 
 const props = defineProps<{
-  group: CuratorGroupMineItem
+  group: SchoolMineItem
 }>()
 
 defineEmits<{

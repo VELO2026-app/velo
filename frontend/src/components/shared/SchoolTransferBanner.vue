@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- CuratorGroupTransferBanner (schools FE-21 / GT P3)
+  VELO Frontend -- SchoolTransferBanner (schools FE-21 / GT P3)
 
   The one banner with two faces, keyed off the viewer's relation:
     - CURATOR: «Предложение отправлено <имя>» + «Отменить». The name comes
@@ -40,12 +40,8 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { computed, ref } from 'vue'
-import {
-  acceptCuratorGroupTransfer,
-  cancelCuratorGroupTransfer,
-  declineCuratorGroupTransfer,
-} from '@/api/curatorGroups'
-import type { CuratorGroupPageResponse, CuratorGroupTransferRef } from '@/api/types'
+import { acceptSchoolTransfer, cancelSchoolTransfer, declineSchoolTransfer } from '@/api/schools'
+import type { SchoolPageResponse, SchoolTransferRef } from '@/api/types'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import { VButton } from '@/components/ui'
@@ -54,16 +50,16 @@ import { VButton } from '@/components/ui'
 
 const props = defineProps<{
   /** The server-filled offer (curator's own view or the addressee's). */
-  transfer: CuratorGroupTransferRef | null | undefined
+  transfer: SchoolTransferRef | null | undefined
   /** The curator's local echo right after offering, ahead of any reload. */
-  pending: CuratorGroupTransferRef | null
+  pending: SchoolTransferRef | null
   relation: 'curator' | 'master' | 'student' | null
   groupId: string
 }>()
 
 const emit = defineEmits<{
   cancelled: []
-  accepted: [page: CuratorGroupPageResponse]
+  accepted: [page: SchoolPageResponse]
   declined: []
 }>()
 
@@ -91,7 +87,7 @@ const text = computed(() => {
 async function onCancel(): Promise<void> {
   busy.value = true
   try {
-    await cancelCuratorGroupTransfer(props.groupId)
+    await cancelSchoolTransfer(props.groupId)
     toast.success(t('transfer.cancelled'))
     emit('cancelled')
   } catch (e) {
@@ -106,7 +102,7 @@ async function onAccept(): Promise<void> {
   try {
     // The response IS the page as the new curator sees it -- hand it up so
     // the page flips into curator mode without a reload.
-    const page = await acceptCuratorGroupTransfer(props.groupId)
+    const page = await acceptSchoolTransfer(props.groupId)
     emit('accepted', page)
   } catch (e) {
     toast.error(extractApiError(e, t('transfer.acceptFailed')))
@@ -118,7 +114,7 @@ async function onAccept(): Promise<void> {
 async function onDecline(): Promise<void> {
   busy.value = true
   try {
-    await declineCuratorGroupTransfer(props.groupId)
+    await declineSchoolTransfer(props.groupId)
     toast.success(t('transfer.declined'))
     emit('declined')
   } catch (e) {
