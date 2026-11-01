@@ -35,8 +35,8 @@
   /* --velo-bg-end removed PROMPT №437 (operator ruling): it was #ffffff with ZERO
      consumers -- a «white to white» gradient that never existed. --velo-bg-start
      stays: it is body's base colour (global.css:54) under the photo backdrop. */
-  --velo-bg-start: #ffffff;
-  --velo-bg-subtle: rgba(98, 122, 156, 0.06);
+  --velo-bg-start: var(--velo-white);
+  --velo-bg-subtle: color-mix(in srgb, var(--velo-blue-500) 6%, transparent);
   /* --velo-bg-card (glass blue) removed 2026-06-03 — legacy, 0 uses; white cards
      use --velo-bg-card-solid; glass surfaces use --velo-glass-*. */
   --velo-bg-card-solid: #ffffff; /* opaque white content card (Figma dashboard 10/11, flow screens) */
@@ -68,13 +68,13 @@
   --velo-text-placeholder-faint: #62748a;
 
   /* === Colors: Borders === */
-  --velo-border: #abbfda;
-  --velo-border-light: rgba(171, 191, 218, 0.3);
+  --velo-border: var(--velo-blue-200);
+  --velo-border-light: color-mix(in srgb, var(--velo-blue-200) 30%, transparent);
 
   /* === Colors: Semantic base === */
-  --velo-success: #76dde6;
-  --velo-warning: #fbc088;
-  --velo-error: #f795a2;
+  --velo-success: var(--velo-teal-400);
+  --velo-warning: var(--velo-peach-300);
+  --velo-error: var(--velo-pink-300);
   /* --velo-info removed PROMPT №437 (operator ruling). It was #76dde6 -- a
      byte-identical copy of --velo-success -- with ZERO consumers, so «info» was
      a semantic distinction that existed only in the name. The real info banner
@@ -91,22 +91,22 @@
    */
 
   /* Warning (amber) */
-  --velo-warning-bg: rgba(251, 192, 136, 0.4);
+  --velo-warning-bg: color-mix(in srgb, var(--velo-peach-300) 40%, transparent);
   --velo-warning-bg-hover: #fde68a;
-  --velo-warning-border: #fbc088;
-  --velo-warning-text: #a16124;
-  --velo-warning-text-light: #b45309;
+  --velo-warning-border: var(--velo-peach-300);
+  --velo-warning-text: var(--velo-peach-700);
+  --velo-warning-text-light: var(--velo-peach-800);
 
   /* Error / Alert (red) */
-  --velo-error-bg: rgba(253, 226, 226, 0.4);
+  --velo-error-bg: color-mix(in srgb, var(--velo-pink-100) 40%, transparent);
   /* Stronger error surface — alerts/legends that read too washed-out at the soft
      --velo-error-bg above (the error pink itself, not the desaturated tint). */
-  --velo-error-bg-strong: rgba(247, 149, 162, 0.25);
+  --velo-error-bg-strong: color-mix(in srgb, var(--velo-pink-300) 25%, transparent);
   --velo-error-bg-subtle: #fff5f5;
-  --velo-error-border: #f795a2;
+  --velo-error-border: var(--velo-pink-300);
   /* Destructive-action text/icon (Выйти, Удалить) — the product's red. Also the
      source for --velo-error-text below. */
-  --velo-danger-text: #ad3444;
+  --velo-danger-text: var(--velo-pink-700);
   /* PROMPT №437 (operator ruling): error text was #a16124 -- the SAME brown as
      --velo-warning-text and --velo-peach-700 -- so an error banner read as a
      warning: identical letters, only the background differed. Almost certainly a
@@ -124,7 +124,7 @@
 
   /* Success (green) */
   --velo-success-bg: rgba(118, 221, 230, 0.4);
-  --velo-success-text: #26767d;
+  --velo-success-text: var(--velo-teal-700);
 
   /* Info tints removed PROMPT №437 with --velo-info above -- zero consumers, and
      --velo-info-bg duplicated --velo-success-bg byte for byte. */
@@ -141,7 +141,7 @@
    * these are the icon accents on the feedback form, not the analytics bars.
    */
   --velo-rating-confused: var(--velo-primary-dark); /* #4c6589 */
-  --velo-rating-good: #d66674; /* new */
+  --velo-rating-good: var(--velo-pink-500); /* new */
   --velo-rating-fire: var(--velo-peach-500); /* #d4863c */
 
   /* === Colors: Analytics five-scale strip (tz-mood-scale) ===
@@ -163,21 +163,19 @@
   --font-heading: 'Marmelad', 'Noto Sans', sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'Roboto Mono', monospace;
 
-  /* Легаси семантическая шкала. --text-3xl удалён 2026-06-06 (был дубль
-     --text-xl = 32px). */
-  --text-xs: 14px;
-  --text-sm: 15px;
-  --text-base: 18px;
-  --text-lg: 20px;
-  --text-xl: 32px;
-  --text-2xl: 50px;
-
-  /* Чётная мелкая типо-шкала (дневник/мета): 8/10/12/16. 14px = --text-xs
-     (переиспользуем, отдельного --text-14 нет — без дублей). */
-  --text-8: 8px;
-  --text-10: 10px;
-  --text-12: 12px;
-  --text-16: 16px;
+  /* Legacy bare size names -- aliases of the --velo-fs-* ramp since
+     2026-11-01 (skin-addressable through it). Do not use in new code;
+     step 4b moves the call sites to --velo-fs-* and deletes these. */
+  --text-xs: var(--velo-fs-14);
+  --text-sm: var(--velo-fs-16); /* was 15px: +1px, owner 2026-11-01 */
+  --text-base: var(--velo-fs-18);
+  --text-lg: var(--velo-fs-20);
+  --text-xl: var(--velo-fs-32);
+  --text-2xl: var(--velo-fs-48); /* was 50px: -2px, owner-confirmed */
+  --text-8: var(--velo-fs-8);
+  --text-10: var(--velo-fs-10);
+  --text-12: var(--velo-fs-12);
+  --text-16: var(--velo-fs-16);
 
   /* === Spacing === */
   --space-1: 4px;
@@ -264,26 +262,32 @@
   /* === Transitions (frozen names; values come from the motion scale) === */
   --transition-fast: var(--velo-dur-fast) var(--velo-ease-out);
   --transition-base: var(--velo-dur-base) var(--velo-ease-out);
-  --transition-slow: var(--velo-dur-sheet) var(--velo-ease-out);
 
   /* === Z-index === */
-  --z-dropdown: 100;
   --z-sticky: 200;
   --z-modal: 300;
   --z-popup: 400;
   --z-toast: 500;
 
   /* === VELΘ: Glass colors === */
-  --velo-glass-blue-15: rgba(98, 122, 156, 0.15);
-  --velo-glass-blue-30: rgba(98, 122, 156, 0.3); /* VBottomSheet grab handle */
-  --velo-glass-blue-60: rgba(171, 191, 218, 0.6);
+  --velo-glass-blue-15: color-mix(in srgb, var(--velo-blue-500) 15%, transparent);
+  --velo-glass-blue-30: color-mix(
+    in srgb,
+    var(--velo-blue-500) 30%,
+    transparent
+  ); /* VBottomSheet grab handle */
+  --velo-glass-blue-60: color-mix(in srgb, var(--velo-blue-200) 60%, transparent);
   /* light glass (blue-200 @ .15) — dashboard secondary action button (design «1 Dashboard») */
-  --velo-glass-blue-200-15: rgba(171, 191, 218, 0.15);
-  --velo-glass-teal-30: rgba(118, 221, 230, 0.3);
-  --velo-glass-teal-40: rgba(118, 221, 230, 0.4);
-  --velo-glass-peach-40: rgba(251, 192, 136, 0.4);
-  --velo-glass-white-01: rgba(255, 255, 255, 0.01);
-  --velo-glass-white-25: rgba(255, 255, 255, 0.25); /* frosted modal panel (Figma 648:1861) */
+  --velo-glass-blue-200-15: color-mix(in srgb, var(--velo-blue-200) 15%, transparent);
+  --velo-glass-teal-30: color-mix(in srgb, var(--velo-teal-400) 30%, transparent);
+  --velo-glass-teal-40: color-mix(in srgb, var(--velo-teal-400) 40%, transparent);
+  --velo-glass-peach-40: color-mix(in srgb, var(--velo-peach-300) 40%, transparent);
+  --velo-glass-white-01: color-mix(in srgb, var(--velo-white) 1%, transparent);
+  --velo-glass-white-25: color-mix(
+    in srgb,
+    var(--velo-white) 25%,
+    transparent
+  ); /* frosted modal panel (Figma 648:1861) */
   --velo-write-frost: rgba(
     255,
     255,
@@ -302,7 +306,11 @@
   --velo-pink-300: #f795a2;
   --velo-pink-100: #fde2e2;
   --velo-pink-700: #ad3444; /* rose text — delete/undo bar */
-  --velo-glass-pink-40: rgba(247, 149, 162, 0.4); /* pink-300 @ 0.4 — undo bar fill */
+  --velo-glass-pink-40: color-mix(
+    in srgb,
+    var(--velo-pink-300) 40%,
+    transparent
+  ); /* pink-300 @ 0.4 — undo bar fill */
   --velo-blue-100: #e2f0fd;
   --velo-blue-200: #abbfda;
   --velo-blue-300: #91a2ba; /* mid blue-grey — admin check-in bar chart (light bars) + list avatars; operator SVG 2026-06-14 */
@@ -352,7 +360,7 @@
      files (PROMPT №604 recon, swept to this token in PROMPT №606). */
   --velo-content-width-narrow: 300px;
   --velo-screen-width: 402px;
-  --velo-screen-padding: 33px;
+  --velo-screen-padding: var(--space-8);
   /* Content "rail" side padding for the diary (messages/composer/header/undo),
      so all left/right edges align. Operator-approved 24px (was 33). The app
      frame is already capped at --velo-screen-width, so a flat value keeps a
@@ -429,26 +437,19 @@
      right top fade automatically. */
 
   /* === VELΘ: Navigation === */
-  --velo-nav-active-bg: #627a9c;
-  --velo-nav-active-bg-glass: rgba(
-    98,
-    122,
-    156,
-    0.6
+  --velo-nav-active-bg: var(--velo-primary);
+  --velo-nav-active-bg-glass: color-mix(
+    in srgb,
+    var(--velo-blue-500) 60%,
+    transparent
   ); /* Tab bar active circle (Figma 2212:390): primary with 60% alpha, gives a soft blue-grey on light bg, NOT a saturated solid colour. Distinct from --velo-nav-active-bg (used by VToggle/VMenu/VMenuItem/DiaryComposer) which is opaque. */
-  --velo-nav-inactive-bg: rgba(98, 122, 156, 0.15);
+  --velo-nav-inactive-bg: color-mix(in srgb, var(--velo-blue-500) 15%, transparent);
 
   /* === VELΘ: Border === */
-  --velo-border-input-focus: #abbfda;
-
-  /* === VELΘ: Z-index === */
-  --z-background: -1;
-  --z-content: 1;
+  --velo-border-input-focus: var(--velo-border);
 
   /* === VELΘ: Component sizes === */
   --size-success-icon: 80px; /* success screen emoji */
-  --size-practice-emoji: 56px; /* practice type emoji in form screens */
-  --size-option-btn-min: 90px; /* mood/rating button minimum width */
 
   /* === VELΘ: Card DS tokens (Figma 2026-05, F-2.x) ===
    * Единые значения для PracticeListCard, MasterCard, PracticeHeroCard.
@@ -458,36 +459,27 @@
   --velo-card-padding-y: 13px;
   --velo-card-padding-x: 15px;
   --velo-card-height-list: 104px; /* PracticeListCard, MasterCard */
-  --velo-card-height-hero: 142px; /* PracticeHeroCard без difficulty */
-  --velo-card-height-hero-full: 161px; /* PracticeHeroCard c difficulty */
   --velo-card-gap-icon-title: 5px;
-  --velo-card-gap-title-meta: 16px;
-  --velo-card-gap-meta-footer: 19px;
   --velo-card-meta-row-gap: 10px;
   --velo-card-letter-spacing-title: 0.36px;
   --velo-card-letter-spacing-meta: 0.28px;
-  /* Отступ начала текстовой колонки (title + master) от левого края
-   * PracticeListCard. = padding-x 15 + icon width 46 + 9px visual gap.
-   * Title и master выровнены по этой линии (text-align: left) — иначе
-   * при разной длине строк текст «прыгал» по горизонтали (фикс 2026-05-29). */
-  --velo-card-content-indent: 70px;
   /* Ширина левой колонки (иконка + дата под ней) в PracticeListCard.
    * 58px вмещает короткую дату «12 сент.» в одну строку; контент-колонка
    * (заголовок/мастер/длительность) идёт правее на padding-x + эту ширину + space-3. */
   --velo-card-iconcol-w: 58px;
   /* Единый бордер карточек (заменяет хардкод #fff / --velo-white в карточках). */
-  --velo-border-card: #ffffff;
+  --velo-border-card: var(--velo-white);
   /* Белый рим НЕ-карточных поверхностей: стекло, кнопки, пилюли, чипы, nav.
      Значение совпадает с --velo-border-card (#fff), но роль другая —
      «рим стекла» vs «бордер карты». Разделены, чтобы правка одного не задевала
      другое (напр. сделать стекло полупрозрачным одной строкой). */
-  --velo-glass-border: #ffffff;
+  --velo-glass-border: var(--velo-white);
 
   /* === VELΘ: Banner DS tokens === */
   --velo-banner-padding: 15px;
   --velo-banner-border-width: 2px;
   --velo-banner-min-height: 64px;
-  --velo-banner-gap-icon-text: 14px;
+  --velo-banner-gap-icon-text: var(--space-3);
 
   /* =========================================================================
    * Design System v1.0 — additive token layer (originally exported from the DS
@@ -539,11 +531,10 @@
   --velo-radius-10: 10px; /* Report-sheet target-user card (measured, PROMPT №610) */
   --velo-radius-4-5: 4.5px; /* Report-sheet textarea -- deliberately small, not --radius-md (measured, PROMPT №610) */
   /* Surfaces */
-  --velo-divider: rgba(
-    98,
-    122,
-    156,
-    0.3
+  --velo-divider: color-mix(
+    in srgb,
+    var(--velo-blue-500) 30%,
+    transparent
   ); /* dashed section divider; = former glass-blue-30 (grab-handle) reused as a divider */
   --velo-divider-width: 3px; /* dashed divider stroke width */
   /* Typography */
@@ -575,9 +566,6 @@
   --velo-gap-15: 15px; /* cross-component flex gap (dashboard / master-review / withdrawal) */
   --velo-gap-21: 21px; /* master-review history accordion header gap */
   --velo-inset-12: 12px; /* admin filter / list row horizontal inset */
-  --velo-inset-5: 5px; /* dashboard bell unread-badge horizontal padding -- distinct
-                          role from --velo-radius-badge/--velo-card-gap-icon-title,
-                          which are also 5px but a radius and a gap, not an inset */
 
   /* =========================================================================
    * E3 admin-zone DS-compliance tokens (appearance-preserving; value = prior
@@ -602,11 +590,6 @@
      Admin count-badges, avatars, id circles, week-nav button, review photo. */
   --velo-size-10: 10px; /* bell presence-dot diameter (user dashboard header bell) */
   --velo-size-16: 16px; /* practice-detail id circle */
-  --velo-size-18: 18px; /* MASTER dashboard bell count-badge diameter (min-width + height) --
-                             its OWN role, distinct from the count-badge family below
-                             (36/38/48): those are wide admin pills, this is a small
-                             round corner overlay. Not the user dashboard's bell --
-                             that one is presence-only and uses --velo-size-10 above */
   --velo-size-35: 35px; /* dashboard week-nav button height */
   --velo-size-36: 36px; /* list count-badge height */
   --velo-size-38: 38px; /* reports / method-requests count-badge min-width */
@@ -631,19 +614,35 @@
      roles (--velo-glass-white-01 / --velo-write-frost / --velo-glass-white-25);
      0.2 gets a glass-role twin here so the white ramp is complete and the
      write-mode role can drift independently. */
-  --velo-glass-white-05: rgba(255, 255, 255, 0.05);
-  --velo-glass-white-12: rgba(255, 255, 255, 0.12);
+  --velo-glass-white-05: color-mix(in srgb, var(--velo-white) 5%, transparent);
+  --velo-glass-white-12: color-mix(in srgb, var(--velo-white) 12%, transparent);
   --velo-glass-white-15: rgba(255, 255, 255, 0.15);
-  --velo-glass-white-16: rgba(255, 255, 255, 0.16);
-  --velo-glass-white-18: rgba(255, 255, 255, 0.18);
-  --velo-glass-white-20: rgba(255, 255, 255, 0.2); /* = write-frost value, glass role */
-  --velo-glass-white-30: rgba(255, 255, 255, 0.3); /* VSegment selected fill */
-  --velo-glass-white-35: rgba(255, 255, 255, 0.35); /* the glass rim (borders) */
+  --velo-glass-white-16: color-mix(in srgb, var(--velo-white) 16%, transparent);
+  --velo-glass-white-18: color-mix(in srgb, var(--velo-white) 18%, transparent);
+  --velo-glass-white-20: color-mix(
+    in srgb,
+    var(--velo-white) 20%,
+    transparent
+  ); /* = write-frost value, glass role */
+  --velo-glass-white-30: color-mix(
+    in srgb,
+    var(--velo-white) 30%,
+    transparent
+  ); /* VSegment selected fill */
+  --velo-glass-white-35: color-mix(
+    in srgb,
+    var(--velo-white) 35%,
+    transparent
+  ); /* the glass rim (borders) */
   --velo-glass-white-55: rgba(255, 255, 255, 0.55); /* inset top highlight */
-  --velo-glass-white-70: rgba(255, 255, 255, 0.7); /* active border */
+  --velo-glass-white-70: color-mix(in srgb, var(--velo-white) 70%, transparent); /* active border */
   --velo-glass-white-75: rgba(255, 255, 255, 0.75); /* inset active highlight */
   --velo-glass-white-80: rgba(255, 255, 255, 0.8); /* inset focus highlight */
-  --velo-glass-white-90: rgba(255, 255, 255, 0.9); /* DiarySearchBar active field */
+  --velo-glass-white-90: color-mix(
+    in srgb,
+    var(--velo-white) 90%,
+    transparent
+  ); /* DiarySearchBar active field */
 
   /* Fog — the ink of the dissolve masks (MobileLayout/global.css fog,
      VWheel, AdminLayout, SchoolBrandBanner). The gradient STOPS carry
@@ -672,7 +671,7 @@
   --velo-shadow-glow-sm: 0 0 13.167px 8.82px #ffffff;
   /* [F2.0 step-1 addendum] VPaginationDots inactive dot — the blue-alpha
      sibling of the white ramp above: primary-dark @ 0.6 (value 1:1). */
-  --velo-glass-blue-700-60: rgba(76, 101, 137, 0.6);
+  --velo-glass-blue-700-60: color-mix(in srgb, var(--velo-blue-700) 60%, transparent);
   /* [F2.0 step-2 addendum] ExternalActivityCreateView save-button focus ring
      — the glass sibling of --velo-effect-focus above (whole recipe, 1:1). */
   --velo-effect-focus-glass: 0 0 0 3px var(--velo-glass-blue-15);
@@ -684,21 +683,27 @@
   --velo-mood-fill-teal: #bdecf1;
   --velo-mood-fill-peach: #fddfc4;
 
-  /* Typography scale: the sizes components carry raw today (DiaryThreadCard,
-     VAvatar, VTabBar…). Deliberate overlap with the bare --text-8/10/12/16:
-     the skin contract speaks --velo-* only (§3.1), so every size a skin may
-     retheme needs a token in this family. 8px stays on --text-8 (no raw
-     carrier). Value-named, per the --velo-size-NN convention. */
+  /* Typography scale (owner decision 2026-11-01): ONE predictable ramp,
+     --velo-fs-N where N = px in the golden theme. Steps: 8 (micro: only
+     inside fixed <=20px circles/pills) / 10 / 12 / 14 / 16 / 18 / 20 / 22 /
+     24 / 28 / 32 / 48. A new size takes the NEAREST step (<=1px off); never
+     add a step without the owner. The bare --text-* names are aliases of
+     this ramp (removed in step 4b). --velo-fs-11/13/25 are deprecated
+     contract aliases: Gen-1 keeps the names, Gen-2 deletes them. */
+  --velo-fs-8: 8px;
   --velo-fs-10: 10px;
-  --velo-fs-11: 11px;
+  --velo-fs-11: var(--velo-fs-12); /* @deprecated 2026-11-01: 11 -> 12, delete in Gen-2 */
   --velo-fs-12: 12px;
-  --velo-fs-13: 13px;
+  --velo-fs-13: var(--velo-fs-12); /* @deprecated 2026-11-01: 13 -> 12, delete in Gen-2 */
   --velo-fs-14: 14px;
+  --velo-fs-16: 16px;
   --velo-fs-18: 18px;
+  --velo-fs-20: 20px;
   --velo-fs-22: 22px;
   --velo-fs-24: 24px;
-  --velo-fs-25: 25px;
+  --velo-fs-25: var(--velo-fs-24); /* @deprecated 2026-11-01: 25 -> 24, delete in Gen-2 */
   --velo-fs-28: 28px;
+  --velo-fs-32: 32px;
   --velo-fs-48: 48px;
 
   /* Radius ramp + compound shapes (value-named per --velo-radius-9/10/14
@@ -745,16 +750,14 @@
    *                    <-> velo.telegram.header / background / keyboard
    *                    (read by NAME via getComputedStyle -- renaming them
    *                    is a breaking platform change, not a retheme)
-   *   typography       --velo-fs-10..48 <-> velo.font.size.*; family via
+   *   typography       --velo-fs-8..48 <-> velo.font.size.*; family via
    *                    --font-body (bare, frozen) -- a skin swaps the family
    *                    through brand.json, which rewrites the link + token
-   *                    LEGACY CAVEAT (2026-10-26): a large pre-contract layer
-   *                    of bare --text-* size tokens stays in use (~60 files,
-   *                    frozen split, PROMPT №437) and is NOT skin-addressable;
-   *                    a skin overriding velo.font.size.* rethemes only the
-   *                    --velo-fs-* carriers -- the F2 validator/checklist must
-   *                    warn about the bare --text-* consumers (or the owner
-   *                    schedules a generation-2 sweep onto --velo-fs-*)
+   *                    SIZE ALIASES (2026-11-01): the bare --text-* size
+   *                    names are aliases of --velo-fs-*, so a skin
+   *                    overriding velo.font.size.* rethemes them too (step
+   *                    4b removes the bare names). --velo-fs-11/13/25 are
+   *                    deprecated aliases of 12/12/24, kept for Gen-1.
    *   radius           --velo-radius-* <-> velo.radius.*
    *   depth            --velo-shadow-glow(-sm)/glass/toast/switch,
    *                    --velo-write-shadow-*, --velo-effect-*
