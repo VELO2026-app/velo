@@ -118,7 +118,7 @@ const emit = defineEmits<{
 
 /* Toggle: compact auto-width pills (dashboard + analytics period toggles). */
 .v-segment-track--toggle {
-  padding: 2px;
+  padding: var(--velo-gap-2);
 }
 
 .v-segment-track--toggle .v-segment-track__btn {
@@ -129,14 +129,14 @@ const emit = defineEmits<{
 
 /* Tabs: full-width equal segments (analytics tab segment). */
 .v-segment-track--tabs {
-  padding: 3px;
+  padding: var(--velo-gap-3);
 }
 
 .v-segment-track--tabs .v-segment-track__btn {
   flex: 1;
   font-size: var(--text-sm);
   color: var(--velo-text-primary);
-  padding: 6px 10px;
+  padding: var(--velo-gap-6) var(--velo-gap-11);
 }
 
 /* Active label is white on the primary fill-pill. Declared at variant

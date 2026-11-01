@@ -375,7 +375,7 @@ const decodedReason = computed(() => decodeReportReason(report.value?.reason ?? 
 }
 
 .report-detail__meta-val--mono {
-  font-family: monospace;
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
 }
 

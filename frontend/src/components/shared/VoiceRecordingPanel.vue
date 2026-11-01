@@ -128,7 +128,7 @@ const formattedTime = computed(() => formatStopwatch(props.elapsedSec))
 .voice-panel--compact .voice-panel__disc::after {
   content: '';
   position: absolute;
-  inset: -4px;
+  inset: calc(-1 * var(--space-1));
 }
 
 /* [FE-26 kept] the skirt is pure hit area on an already-positioned element. */

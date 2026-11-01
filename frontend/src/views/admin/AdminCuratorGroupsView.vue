@@ -164,7 +164,7 @@ onMounted(() => load(true))
   color: var(--velo-text-secondary);
   background: var(--velo-glass-blue-15);
   border-radius: var(--radius-full);
-  padding: 2px 12px;
+  padding: var(--velo-gap-2) var(--velo-inset-12);
 }
 
 .admin-list__items {

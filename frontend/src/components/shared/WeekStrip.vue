@@ -575,7 +575,7 @@ function onDayClick(dateKey: string): void {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
+  gap: var(--space-hairline);
   min-height: 0;
 }
 

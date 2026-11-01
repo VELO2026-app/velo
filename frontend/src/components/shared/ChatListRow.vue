@@ -80,7 +80,7 @@ const unread = computed(() => props.unread ?? 0)
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--velo-gap-2);
 }
 
 .chat-row__name {

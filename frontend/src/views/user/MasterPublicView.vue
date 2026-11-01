@@ -667,7 +667,7 @@ watch(masterId, (id) => {
 }
 
 .master-public__content--with-cta {
-  padding-bottom: 140px;
+  padding-bottom: var(--size-cta-clearance);
 }
 
 /* Ближайшие практики: plain heading, --text-base like the other panel

@@ -202,7 +202,7 @@ onUnmounted(() => {
 .v-modal__close::after {
   content: '';
   position: absolute;
-  inset: -6px;
+  inset: calc(-1 * var(--velo-gap-6));
 }
 
 .v-modal__close:hover {

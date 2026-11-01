@@ -222,7 +222,7 @@ function onInput(e: Event): void {
   width: 1px;
   height: 1px;
   padding: 0;
-  margin: -1px;
+  margin: calc(-1 * var(--space-hairline));
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
@@ -326,7 +326,7 @@ function onInput(e: Event): void {
 .v-input__field--float {
   width: 100%;
   height: var(--velo-size-56);
-  padding: 20px var(--space-4) 0;
+  padding: var(--velo-gap-21) var(--space-4) 0;
 }
 
 .v-input__float-label {

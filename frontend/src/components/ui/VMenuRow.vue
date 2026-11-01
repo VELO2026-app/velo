@@ -124,7 +124,7 @@ defineEmits<{
   flex-shrink: 0;
   min-width: 22px;
   height: 22px;
-  padding: 0 6px;
+  padding: 0 var(--velo-gap-6);
   border-radius: var(--radius-full);
   background: var(--velo-error);
   color: var(--velo-white);

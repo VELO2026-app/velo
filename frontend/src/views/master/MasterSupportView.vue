@@ -364,7 +364,7 @@ function onGoHome(): void {
 .support__thumb {
   width: 54px;
   height: 54px;
-  padding: 4px;
+  padding: var(--space-1);
   border-radius: var(--velo-radius-9);
   background: var(--velo-glass-blue-15);
   border: 1px solid var(--velo-border-light);

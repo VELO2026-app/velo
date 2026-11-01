@@ -72,7 +72,7 @@ function toggle(): void {
 .v-switch::after {
   content: '';
   position: absolute;
-  inset: -10px -1px;
+  inset: calc(-1 * var(--velo-gap-11)) calc(-1 * var(--space-hairline));
 }
 
 .v-switch--on {

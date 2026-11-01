@@ -468,7 +468,7 @@ onUnmounted(() => {
 .mp-card__head {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--velo-inset-12);
 }
 
 .mp-card__icon {
@@ -493,7 +493,7 @@ onUnmounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2) var(--space-4);
-  margin-top: 13px;
+  margin-top: var(--space-3);
   font-size: var(--text-xs);
   color: var(--velo-text-primary);
 }
@@ -501,7 +501,7 @@ onUnmounted(() => {
 /* Second meta row («Осталось N из M занятий») sits tighter under the first and
    is centered in the card (operator 2026-06-25, Figma ref). */
 .mp-card__meta--row2 {
-  margin-top: 7px;
+  margin-top: var(--space-2);
   justify-content: center;
 }
 
@@ -525,6 +525,6 @@ onUnmounted(() => {
 /* Margin only — the five-zone badge row itself is the shared VRatingBadges
    component. */
 .mp-card__rbadges {
-  margin-top: 13px;
+  margin-top: var(--space-3);
 }
 </style>

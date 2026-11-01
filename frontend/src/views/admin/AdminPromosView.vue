@@ -353,7 +353,7 @@ onMounted(loadInitial)
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--velo-gap-2);
 }
 
 .pcard__owner-label {

@@ -210,16 +210,16 @@ const iconComponent = computed(
 }
 
 /* ===== Form variant — practice-header в Check-in / Feedback (F-3) =====
- * 19px (padding-top) и 5px (icon margin) — разовая пиксельная подгонка этого
- * варианта, точного --space-* токена под них нет; оставлены сырыми сознательно
- * (снап на ближайший токен сломал бы выверенный 1:1). */
+ * Было 19px (padding-top) + 5px (icon margin). Снап на шкалу 2026-10-31:
+ * 18 + 6 — сумма та же (24px), поэтому заголовок не сдвигается, иконка
+ * поднимается на 1px. */
 .hero-card--form {
-  padding: 19px var(--space-4) var(--space-5);
+  padding: var(--velo-inset-row) var(--space-4) var(--space-5);
   gap: 0;
 }
 
 .hero-card--form .hero-card__icon {
-  margin-bottom: 5px;
+  margin-bottom: var(--velo-gap-6);
 }
 
 .hero-card--form .hero-card__title {

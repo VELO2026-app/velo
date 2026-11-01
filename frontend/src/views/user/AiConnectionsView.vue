@@ -449,7 +449,7 @@ onMounted(load)
 }
 
 .ai-conn__item-prefix {
-  font-family: monospace;
+  font-family: var(--font-mono);
   overflow-wrap: anywhere;
 }
 
@@ -502,7 +502,7 @@ onMounted(load)
   padding: var(--space-3);
   border-radius: var(--radius-md);
   background: var(--velo-bg-subtle);
-  font-family: monospace;
+  font-family: var(--font-mono);
   overflow-wrap: anywhere;
   user-select: all;
   -webkit-user-select: all;

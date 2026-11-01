@@ -305,7 +305,7 @@ function onTap(): void {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
+  gap: var(--space-hairline);
   min-height: 44px;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
@@ -375,7 +375,7 @@ function onTap(): void {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
+  gap: var(--velo-gap-2);
   min-width: 0;
 }
 .tcard--checkin .tcard__bubble-body {
@@ -428,7 +428,7 @@ function onTap(): void {
   right: 9px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--velo-gap-2);
   min-width: 0;
 }
 .tcard__prac-title {
@@ -477,7 +477,7 @@ function onTap(): void {
 .tcard__prac-cell {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--velo-gap-3);
   font-size: var(--velo-fs-10);
   color: var(--velo-text-secondary);
   white-space: nowrap;
@@ -486,9 +486,9 @@ function onTap(): void {
   margin-left: auto;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--velo-gap-3);
   height: 16px;
-  padding: 0 7px;
+  padding: 0 var(--velo-gap-6);
   border-radius: var(--velo-radius-4);
   font-size: var(--velo-fs-10);
   font-weight: 600;
@@ -506,7 +506,7 @@ function onTap(): void {
 /* ---- note / dream: split entry (two surfaces, transparent gap) ---- */
 .tcard--entry {
   display: flex;
-  gap: 6px; /* the transparent gap between the two white surfaces */
+  gap: var(--velo-gap-6); /* the transparent gap between the two white surfaces */
   width: 267px;
   height: 47px;
 }
@@ -527,8 +527,8 @@ function onTap(): void {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
-  padding: 0 16px;
+  gap: var(--velo-gap-2);
+  padding: 0 var(--space-4);
   border-radius: var(--velo-radius-badge);
   background: var(--velo-bg-card-solid);
 }
@@ -560,7 +560,7 @@ function onTap(): void {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
+  gap: var(--space-hairline);
   max-width: 240px;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);

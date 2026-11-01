@@ -249,7 +249,7 @@ watch(voiceActive, (active) => {
   width: 1px;
   height: 1px;
   padding: 0;
-  margin: -1px;
+  margin: calc(-1 * var(--space-hairline));
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
@@ -289,7 +289,7 @@ watch(voiceActive, (active) => {
 .v-textarea__field {
   flex: 1;
   min-width: 0;
-  padding: 10px var(--space-4);
+  padding: var(--velo-gap-11) var(--space-4);
   font-family: var(--font-body);
   font-size: var(--text-base);
   color: var(--velo-text-primary);

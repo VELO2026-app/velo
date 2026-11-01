@@ -162,7 +162,7 @@ const practiceWhen = computed((): string => {
 .cpd__pmeta {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 12px;
+  gap: var(--space-1) var(--velo-inset-12);
   margin-top: var(--velo-gap-2);
   font-size: var(--text-xs);
   color: var(--velo-text-secondary);
@@ -185,7 +185,7 @@ const practiceWhen = computed((): string => {
   gap: var(--space-2);
   background: var(--velo-glass-blue-15);
   border-radius: var(--velo-radius-10);
-  padding: 11px var(--space-4);
+  padding: var(--velo-gap-11) var(--space-4);
   font-family: var(--font-body);
   font-size: var(--text-base);
   color: var(--velo-text-primary);

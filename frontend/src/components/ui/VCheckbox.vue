@@ -83,7 +83,7 @@ function toggle(): void {
 .v-checkbox::after {
   content: '';
   position: absolute;
-  inset: -12px -10px;
+  inset: calc(-1 * var(--velo-inset-12)) calc(-1 * var(--velo-gap-11));
 }
 
 .v-checkbox--disabled {

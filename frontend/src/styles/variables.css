@@ -188,6 +188,24 @@
   --space-8: 33px;
   --space-10: 48px;
 
+  /* Hairline (token gate 2026-10-31): the only off-scale spacing step --
+     1px sr-only clip / border-overlap / hairline offsets. Bare (not --velo-*):
+     spacing is not a skin-addressable Generation-1 branch. Everything else
+     snaps to --space-N / --velo-gap-* / --velo-inset-*. */
+  --space-hairline: 1px;
+  /* Fixed-geometry clearances (bare, named by meaning, not snapped). */
+  --size-required-seal-gutter: 30px; /* IconRequired 22px + --space-2 row gap */
+  --size-select-chevron-clearance: 40px; /* VSelect trailing chevron seat */
+  --size-field-disc-clearance: 46px; /* nested 36px disc + breathing room */
+
+  /* Layout clearances (bare, value = prior literal). */
+  --size-admin-fog-top: 60px; /* admin dashboard fog: flat top clearance */
+  --size-admin-tabbar-clearance: 112px; /* legacy admin screens: clears VAdminTabBar */
+  --size-tabbar-clearance: 160px; /* floating tab bar clearance (mirrors MobileLayout) */
+  --size-cta-clearance: 140px; /* content above a fixed bottom CTA (master public page) */
+  --size-school-logo-tile: 80px; /* school hero logo badge tile */
+  --size-school-logo-border: 4px; /* its thick card-colored ring */
+
   /* === Borders === */
   /* --radius-sm/lg удалены 2026-06-06 (были дубли --radius-md = 15px). */
   --radius-md: 15px;

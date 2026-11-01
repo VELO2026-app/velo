@@ -106,7 +106,7 @@ defineEmits<{
   flex: 1;
   min-width: 0;
   height: var(--velo-size-40);
-  padding: 0 40px 0 var(--space-4);
+  padding: 0 var(--size-select-chevron-clearance) 0 var(--space-4);
   font-family: var(--font-body);
   font-size: var(--text-base);
   color: var(--velo-text-primary);

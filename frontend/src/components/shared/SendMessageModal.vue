@@ -117,7 +117,7 @@ async function onSend(): Promise<void> {
   gap: var(--space-3);
   background: var(--velo-glass-blue-15);
   border-radius: var(--velo-radius-10);
-  padding: 10px var(--space-4);
+  padding: var(--velo-gap-11) var(--space-4);
 }
 
 .send-msg__name {

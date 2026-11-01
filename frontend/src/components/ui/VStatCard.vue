@@ -90,7 +90,7 @@ defineEmits<{
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 9px;
+  gap: var(--space-2);
   text-align: center;
   transition: transform var(--transition-base);
 }

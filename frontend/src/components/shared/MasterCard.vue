@@ -92,7 +92,7 @@ function onMore(): void {
    * (not fixed height) so many wrapped method tags grow the card instead of
    * spilling out of it; with the usual 3-4 tags it stays at 104. */
   min-height: var(--velo-card-height-list);
-  padding: 12px var(--space-3);
+  padding: var(--velo-inset-12) var(--space-3);
   display: flex;
   align-items: center;
   /* Figma: tags start at x=111 от card left = 14 padding + 80 avatar + 17 gap.

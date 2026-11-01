@@ -133,7 +133,7 @@ const dateLabel = computed(
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--velo-gap-2);
 }
 
 .dsr-row__title {
@@ -159,7 +159,7 @@ mark.dsr-row__hit {
   color: inherit;
   font-weight: 700;
   border-radius: var(--velo-radius-4);
-  padding: 0 1px;
+  padding: 0 var(--space-hairline);
 }
 
 .dsr-row__date {

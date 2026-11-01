@@ -89,7 +89,7 @@ defineEmits<{
   font-size: var(--text-xs);
   color: var(--velo-text-secondary);
   letter-spacing: 0.02em;
-  margin: -8px 0 0;
+  margin: calc(-1 * var(--space-2)) 0 0;
 }
 
 .cpm__box {

@@ -614,7 +614,7 @@ async function onSubmit(): Promise<void> {
   background: var(--velo-glass-pink-40);
   border: 1px solid var(--velo-pink-300);
   border-radius: var(--velo-radius-12);
-  padding: 10px var(--space-4);
+  padding: var(--velo-gap-11) var(--space-4);
   font-family: var(--font-body);
   font-size: var(--text-xs);
   color: var(--velo-pink-700);
@@ -790,7 +790,7 @@ async function onSubmit(): Promise<void> {
   min-width: 0;
   height: var(--velo-size-44);
   /* Right padding reserves the nested disc's seat (36px + breathing). */
-  padding: 0 46px 0 var(--space-4);
+  padding: 0 var(--size-field-disc-clearance) 0 var(--space-4);
   font-family: var(--font-body);
   font-size: var(--text-base);
   color: var(--velo-text-primary);

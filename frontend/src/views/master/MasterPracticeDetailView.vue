@@ -812,7 +812,7 @@ onMounted(load)
   background: var(--velo-bg-card-solid);
   border: 1px solid var(--velo-border-card);
   border-radius: var(--radius-md);
-  padding: 10px var(--space-4);
+  padding: var(--velo-gap-11) var(--space-4);
 }
 
 .pd-prow__ava {

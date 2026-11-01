@@ -48,7 +48,7 @@ const { toasts, dismiss } = useToast()
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 12px 24px;
+  padding: var(--velo-inset-12) var(--space-5);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
   max-width: 90%;

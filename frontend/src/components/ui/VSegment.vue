@@ -111,7 +111,7 @@ defineEmits<{
   background: var(--velo-glass-white-30);
   color: inherit;
   font-size: var(--text-xs);
-  padding: 1px 6px;
+  padding: var(--space-hairline) var(--velo-gap-6);
   border-radius: var(--radius-full);
 }
 

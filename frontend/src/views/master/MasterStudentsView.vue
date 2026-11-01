@@ -294,7 +294,7 @@ function openMessage(id: string, name: string): void {
   align-items: center;
   gap: var(--velo-card-gap-icon-title);
   margin-top: var(--velo-gap-6);
-  padding: 3px 10px;
+  padding: var(--velo-gap-3) var(--velo-gap-11);
   border-radius: var(--velo-radius-badge);
   background: var(--velo-warning-bg);
   color: var(--velo-peach-500);

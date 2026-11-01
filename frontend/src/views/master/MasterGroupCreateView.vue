@@ -256,7 +256,7 @@ html.is-keyboard-open .new-group {
    margin, not a fake seal) equalizes the two visible plates without touching
    VInput's shared required-seal layout used everywhere else. */
 .new-group__content :deep(.v-textarea__field) {
-  margin-right: 30px;
+  margin-right: var(--size-required-seal-gutter);
 }
 
 /* Pinned to the screen's bottom edge (owner Q5) -- mirrors

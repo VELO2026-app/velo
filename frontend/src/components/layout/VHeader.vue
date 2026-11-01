@@ -143,7 +143,7 @@ defineEmits<{
   background: var(--velo-primary);
   color: var(--velo-white);
   font-size: var(--text-xs);
-  padding: 2px 8px;
+  padding: var(--velo-gap-2) var(--space-2);
   border-radius: var(--radius-full);
   flex-shrink: 0;
 }

@@ -112,7 +112,7 @@ const emit = defineEmits<{ open: [] }>()
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--velo-gap-2);
   padding-top: var(--space-1);
 }
 

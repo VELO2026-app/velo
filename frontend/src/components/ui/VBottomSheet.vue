@@ -308,7 +308,7 @@ onUnmounted(() => {
   background: var(--velo-bg-card-solid);
   /* Flush to the bottom edge -> round the TOP corners only. */
   border-radius: var(--velo-radius-sheet-top);
-  padding: 8px var(--velo-rail-pad-x) 22px;
+  padding: var(--space-2) var(--velo-rail-pad-x) var(--velo-gap-21);
   overscroll-behavior: contain;
 }
 
@@ -319,7 +319,7 @@ onUnmounted(() => {
   flex-shrink: 0;
   border-radius: var(--velo-radius-3-5);
   background: var(--velo-glass-blue-30);
-  margin: 0 auto 14px;
+  margin: 0 auto var(--space-3);
   touch-action: none;
   cursor: grab;
 }
@@ -328,7 +328,7 @@ onUnmounted(() => {
 .v-sheet__handle::after {
   content: '';
   position: absolute;
-  inset: -12px -24px;
+  inset: calc(-1 * var(--velo-inset-12)) calc(-1 * var(--space-5));
 }
 
 .v-sheet__title {
@@ -337,7 +337,7 @@ onUnmounted(() => {
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
-  margin: 6px 0 18px;
+  margin: var(--velo-gap-6) 0 var(--velo-inset-row);
   touch-action: none;
 }
 
@@ -360,7 +360,7 @@ onUnmounted(() => {
 .v-sheet__save {
   flex-shrink: 0;
   height: 49px;
-  margin-top: 18px;
+  margin-top: var(--velo-inset-row);
   border-radius: var(--velo-radius-24-5);
   background: var(--velo-primary);
   color: var(--velo-white);
@@ -391,7 +391,7 @@ onUnmounted(() => {
 .v-sheet__actions {
   display: flex;
   gap: var(--space-3);
-  margin-top: 18px;
+  margin-top: var(--velo-inset-row);
 }
 
 .v-sheet__cancel {

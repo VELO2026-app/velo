@@ -672,7 +672,7 @@ onUnmounted(pause)
 .dashboard__bell::after {
   content: '';
   position: absolute;
-  inset: -4px;
+  inset: calc(-1 * var(--space-1));
   border-radius: var(--radius-full);
 }
 
@@ -732,7 +732,7 @@ onUnmounted(pause)
   grid-template-columns: 1fr 1fr;
   /* Figma: 15 — близко к --space-3 (14), но точно 15 для соответствия */
   gap: var(--velo-gap-15);
-  margin-top: 15px;
+  margin-top: var(--velo-gap-15);
 }
 
 /* [FE-47] Check-in unmounts while the session is live or already checked

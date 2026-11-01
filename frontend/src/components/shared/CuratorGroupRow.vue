@@ -155,7 +155,7 @@ onMounted(() => {
 .cg-row__stat {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--velo-gap-3);
   font-size: var(--text-xs);
   color: var(--velo-text-secondary);
   white-space: nowrap;

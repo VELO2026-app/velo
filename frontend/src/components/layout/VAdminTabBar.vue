@@ -121,7 +121,7 @@ defineEmits<{
   right: 6px;
   min-width: 28px;
   height: 28px;
-  padding: 0 6px;
+  padding: 0 var(--velo-gap-6);
   border-radius: var(--radius-full);
   background: var(--velo-pink-300);
   color: var(--velo-white);

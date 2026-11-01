@@ -220,7 +220,7 @@ function onTap(): void {
    * длине titles левый край плавал ±7px по горизонтали. */
   text-align: left;
   letter-spacing: 0.32px;
-  margin-left: calc(var(--space-4) + 46px + 9px);
+  margin-left: calc(var(--space-4) + var(--velo-size-46) + var(--space-2));
   padding-right: var(--space-4);
   white-space: nowrap;
   overflow: hidden;
@@ -234,7 +234,7 @@ function onTap(): void {
    * center — master row плавал ±27px при разной длине имени мастера. */
   justify-content: flex-start;
   gap: var(--space-1);
-  margin-left: calc(var(--space-4) + 46px + 9px);
+  margin-left: calc(var(--space-4) + var(--velo-size-46) + var(--space-2));
 }
 
 .feed-card__avatar {
@@ -277,7 +277,7 @@ function onTap(): void {
   flex: 1;
   min-width: 0;
   /* Same left offset as the title (icon 46 + gap) so the duration lines up under it. */
-  margin-left: calc(var(--space-4) + 9px);
+  margin-left: calc(var(--space-4) + var(--space-2));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -296,7 +296,7 @@ function onTap(): void {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  padding: 3px var(--space-2);
+  padding: var(--velo-gap-3) var(--space-2);
   border-radius: var(--velo-radius-badge);
   font-size: var(--text-12);
 }

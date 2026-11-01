@@ -1468,24 +1468,24 @@ html.is-keyboard-open .create-practice {
      (17px) + 2px IS the whole gap between consecutive inputs. Everything
      that is not an input (headings, banners, card stacks) compensates with
      its own margin below. */
-  gap: 2px;
+  gap: var(--velo-gap-2);
 }
 
 .create-practice__section > .velo-section-title {
-  margin-bottom: 6px;
+  margin-bottom: var(--velo-gap-6);
 }
 
 /* Non-input blocks after a plate need the breathing the 2px input gap
    cannot give (master-section warning banner, ...). */
 .cp-gap-top {
-  margin-top: 6px;
+  margin-top: var(--velo-gap-6);
 }
 
 /* «Описание» section: the textareas are spaced by the section gap alone — drop
    their own margin-bottom so Описание / Противопоказания / Что подготовить sit
    tight (one step, not the doubled gap + margin) (operator CP-A1). */
 .create-practice__section--desc :deep(.v-textarea) {
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 
 /* T21-1 (PROMPT №541): honest caption for the now-fallback Zoom field. */
@@ -1504,7 +1504,7 @@ html.is-keyboard-open .create-practice {
   background: var(--velo-glass-pink-40);
   border: 1px solid var(--velo-pink-300);
   border-radius: var(--velo-radius-12);
-  padding: 10px var(--space-4);
+  padding: var(--velo-gap-11) var(--space-4);
   font-family: var(--font-body);
   font-size: var(--text-xs);
   color: var(--velo-pink-700);
@@ -1622,7 +1622,7 @@ html.is-keyboard-open .create-practice {
 /* Stacked plates (repeat card / days / end) need breathing the 2px section
    gap cannot give them. */
 .create-practice__seal-row + .create-practice__seal-row {
-  margin-top: 6px;
+  margin-top: var(--velo-gap-6);
 }
 
 .create-practice__grow {

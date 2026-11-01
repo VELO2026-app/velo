@@ -168,7 +168,7 @@ const dayGroups = computed<DayGroup[]>(() => {
   display: flex;
   justify-content: center;
   color: var(--velo-text-primary);
-  padding: 1px 0;
+  padding: var(--space-hairline) 0;
 }
 
 /* -- Card rows (all centered) -- */

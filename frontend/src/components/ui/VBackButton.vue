@@ -94,7 +94,7 @@ defineEmits<{ click: [] }>()
 .v-back::after {
   content: '';
   position: absolute;
-  inset: -2px 0;
+  inset: calc(-1 * var(--velo-gap-2)) 0;
 }
 
 .v-back:hover,

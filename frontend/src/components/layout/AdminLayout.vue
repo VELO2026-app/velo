@@ -95,7 +95,8 @@ defineEmits<{
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   /* Legacy default (pre-rebuild admin screens): 16px box, clears the tab bar. */
-  padding: var(--space-4) var(--space-4) calc(112px + env(safe-area-inset-bottom, 0px));
+  padding: var(--space-4) var(--space-4)
+    calc(var(--size-admin-tabbar-clearance) + env(safe-area-inset-bottom, 0px));
 }
 
 /* New-design screens ride the 24px content rail (matches user/master). */
@@ -120,8 +121,8 @@ defineEmits<{
    FOG-TOKENS-UNIFY pass. Admin has no floating header island, so the top clearance
    is a flat 60 (no measured-island math). */
 .admin-layout__main--fog {
-  padding-top: 60px;
-  padding-bottom: calc(160px + env(safe-area-inset-bottom, 0px));
+  padding-top: var(--size-admin-fog-top);
+  padding-bottom: calc(var(--size-tabbar-clearance) + env(safe-area-inset-bottom, 0px));
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0,

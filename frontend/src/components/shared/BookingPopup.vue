@@ -330,7 +330,7 @@ async function onPurchase(): Promise<void> {
 
 .popup__promo-input {
   flex: 1;
-  padding: 10px var(--space-4);
+  padding: var(--velo-gap-11) var(--space-4);
   font-family: var(--font-body);
   font-size: var(--text-sm);
   color: var(--velo-text-primary);

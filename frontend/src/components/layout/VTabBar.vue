@@ -332,7 +332,7 @@ onBeforeUnmount(() => {
 .v-tabbar__item::after {
   content: '';
   position: absolute;
-  inset: -8px;
+  inset: calc(-1 * var(--space-2));
   border-radius: var(--radius-full);
 }
 

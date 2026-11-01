@@ -433,7 +433,7 @@ function goBack(): void {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--velo-gap-2);
 }
 
 .school-analytics__practice-title {
@@ -464,7 +464,7 @@ function goBack(): void {
    scales live in the blocks above). */
 .school-analytics__practice-strip {
   display: flex;
-  gap: 3px;
+  gap: var(--velo-gap-3);
   height: 10px;
   border-radius: var(--radius-full);
   overflow: hidden;

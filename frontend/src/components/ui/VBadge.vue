@@ -44,7 +44,7 @@ withDefaults(
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  padding: 4px 10px;
+  padding: var(--space-1) var(--velo-gap-11);
   font-size: var(--text-xs);
   border-radius: var(--velo-radius-badge);
   white-space: nowrap;

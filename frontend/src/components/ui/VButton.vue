@@ -112,7 +112,7 @@ const normalizedSize = computed(() => (props.size === 'lg' ? 'md' : props.size))
 }
 
 .v-btn--md {
-  padding: 12px 24px;
+  padding: var(--velo-inset-12) var(--space-5);
   font-size: var(--text-sm);
   min-height: var(--velo-size-50);
 }

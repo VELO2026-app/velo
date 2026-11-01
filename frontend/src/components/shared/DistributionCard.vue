@@ -153,7 +153,7 @@ const details = computed(() => [...props.bars].reverse().map((bar) => withPercen
 }
 .distribution__stack {
   display: flex;
-  gap: 3px;
+  gap: var(--velo-gap-3);
   height: 28px;
   font-size: var(--text-12);
 }

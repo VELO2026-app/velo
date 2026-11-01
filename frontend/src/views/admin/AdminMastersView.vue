@@ -447,7 +447,7 @@ onMounted(load)
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--velo-gap-2);
 }
 
 .mcard__stat + .mcard__stat {

@@ -593,7 +593,7 @@ defineExpose({ focus: focusField, discardDraft })
 .composer--single .composer__field {
   min-height: var(--velo-size-44);
   border-radius: var(--velo-radius-pill);
-  padding: var(--space-1) var(--space-1) var(--space-1) 20px;
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--velo-gap-21);
 }
 
 /* [owner pass] The discs shrink with the CAPSULE -- scoped to the root's
@@ -625,7 +625,7 @@ defineExpose({ focus: focusField, discardDraft })
 .composer--single .composer__btn::after {
   content: '';
   position: absolute;
-  inset: -4px;
+  inset: calc(-1 * var(--space-1));
 }
 
 /* The frost layer: white 12% surface over blur(18) saturate(180). On its own

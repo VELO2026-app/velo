@@ -73,10 +73,10 @@ const iconSize = computed((): number => (props.size === 'lg' ? 16 : 14))
 }
 
 .v-rating-badges--sm .v-rating-badges__badge {
-  padding: 4px 6px;
+  padding: var(--space-1) var(--velo-gap-6);
 }
 
 .v-rating-badges--lg .v-rating-badges__badge {
-  padding: 3px 8px;
+  padding: var(--velo-gap-3) var(--space-2);
 }
 </style>

@@ -4,11 +4,27 @@
   "ignoreFiles": ["src/styles/variables.css", "dist/**", "node_modules/**"],
   "rules": {
     "color-no-hex": true,
-    "declaration-property-value-allowed-list": {
-      "/^font-size$/": ["/^var\\(--/", "inherit"],
-      "/^border-radius$/": ["/^var\\(--/", "inherit", "0"],
-      "/^box-shadow$/": ["/^var\\(--/", "none"]
-    }
+    "declaration-property-value-allowed-list": [
+      {
+        "/^font-size$/": ["/^var\\(--/", "inherit"],
+        "/^border-radius$/": ["/^var\\(--/", "inherit", "0"],
+        "/^box-shadow$/": ["/^var\\(--/", "none"],
+        "/^font-family$/": ["/^var\\(--/", "inherit"]
+      },
+      {
+        "message": "Token gate (tz-whitelabel §3.1): font-size / border-radius / box-shadow / font-family take var(--…) tokens only (variables.css); font-family may also be inherit."
+      }
+    ],
+    "declaration-property-value-disallowed-list": [
+      {
+        "/^(padding|margin|inset|scroll-padding|scroll-margin)(-.+)?$|^(grid-)?(row-|column-)?gap$/": [
+          "/(?<!var\\(--[\\w-]+,\\s*-?)(?<![\\w.-])-?(?!0+(\\.0+)?[a-z]+\\b)\\d*\\.?\\d+(px|rem|em|pt|pc|ch|ex|cm|mm|in|q)\\b/i"
+        ]
+      },
+      {
+        "message": "Token gate (2026-10-31): padding / margin / inset / gap / scroll-padding / scroll-margin take spacing tokens -- var(--space-*), var(--velo-gap-*), var(--velo-inset-*) or calc() of them (calc(-1 * var(--space-2)) for a negative). Allowed raw: 0, auto, %, viewport units, env(), unitless calc factors, and a fallback inside var(--token, 12px). No other exceptions."
+      }
+    ]
   },
   "overrides": [
     {

@@ -146,9 +146,11 @@ const heroVars = computed(() =>
   position: relative;
   z-index: 1;
   display: inline-flex;
-  margin-top: calc(-3 / 4 * 80px - var(--space-1) - 4px);
+  margin-top: calc(
+    -3 / 4 * var(--size-school-logo-tile) - var(--space-1) - var(--size-school-logo-border)
+  );
   padding: var(--space-1);
-  border: 4px solid var(--velo-bg-card-solid);
+  border: var(--size-school-logo-border) solid var(--velo-bg-card-solid);
   border-radius: var(--radius-md);
   background: var(--velo-bg-card-solid);
 }

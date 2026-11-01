@@ -494,7 +494,7 @@ function goBack(): void {
 .entry__edit-title:focus {
   border-bottom-width: 2px;
   border-bottom-color: var(--velo-border-input-focus);
-  padding-bottom: calc(var(--space-1) - 1px);
+  padding-bottom: calc(var(--space-1) - var(--space-hairline));
 }
 
 /* [FE-94] The content field's row: textarea (flex:1) + the mic disc at its

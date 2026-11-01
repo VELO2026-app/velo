@@ -253,7 +253,7 @@ const cleanTitle = computed(() => (props.practice ? cleanPracticeTitle(props.pra
   background: var(--velo-bg-card-solid);
   border: 1px solid var(--velo-border-card);
   border-radius: var(--radius-md);
-  padding: 20px var(--space-4) 22px;
+  padding: var(--velo-gap-21) var(--space-4) var(--velo-gap-21);
 }
 
 .form-shell__question h3 {
@@ -262,7 +262,7 @@ const cleanTitle = computed(() => (props.practice ? cleanPracticeTitle(props.pra
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
-  margin-bottom: 13px;
+  margin-bottom: var(--space-3);
 }
 
 .form-shell__question p {
