@@ -27,7 +27,7 @@
       <div
         v-for="item in group.items"
         :key="itemKey ? itemKey(item) : item.id"
-        class="diary-list__item"
+        class="diary-list__item diary-entry-scale"
         :class="{
           'diary-list__item--sending': pendingState?.(item) === 'sending',
         }"

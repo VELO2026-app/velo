@@ -306,12 +306,12 @@ function onTap(): void {
   flex-direction: column;
   align-items: center;
   gap: var(--space-hairline);
-  min-height: 44px;
+  min-height: calc(44px * var(--velo-de-k, 1));
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
   border: 1.5px solid;
   text-align: center;
-  max-width: 240px;
+  max-width: min(calc(240px * var(--velo-de-k, 1)), 100%);
   cursor: default;
 }
 .tcard--banner-teal {
@@ -327,12 +327,12 @@ function onTap(): void {
 .tcard__banner-title {
   font-size: var(--velo-fs-12);
   font-weight: 600;
-  letter-spacing: 0.22px;
+  letter-spacing: calc(0.22px * var(--velo-de-k, 1));
 }
 .tcard__banner-subtitle {
   font-size: var(--velo-fs-12);
   font-weight: 600;
-  letter-spacing: 0.22px;
+  letter-spacing: calc(0.22px * var(--velo-de-k, 1));
   opacity: 0.85;
 }
 
@@ -343,8 +343,8 @@ function onTap(): void {
 .tcard--checkin,
 .tcard--feedback {
   position: relative;
-  width: 267px;
-  height: 47px;
+  width: calc(267px * var(--velo-de-k, 1));
+  height: calc(47px * var(--velo-de-k, 1));
   /* paints the silhouette SVG (fill=currentColor) solid white */
   color: var(--velo-bg-card-solid);
 }
@@ -353,20 +353,25 @@ function onTap(): void {
   /* 40px slot centered EXACTLY on the lobe center (23.29, 23.29): the lobe
      is ~46.6px across, so the glyph keeps a ~3px white rim (owner request)
      while its center stays pinned to the circle's center. */
-  top: 3.29px;
-  width: 40px;
-  height: 40px;
+  top: calc(3.29px * var(--velo-de-k, 1));
+  width: calc(40px * var(--velo-de-k, 1));
+  height: calc(40px * var(--velo-de-k, 1));
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
+
+.tcard__slot :deep(svg) {
+  width: 100%;
+  height: 100%;
+}
 .tcard--checkin .tcard__slot {
-  left: 3.29px;
+  left: calc(3.29px * var(--velo-de-k, 1));
 }
 .tcard--feedback .tcard__slot {
   /* The mirrored lobe center: the mirror maps x -> 267 - x, so the circle
      lands at 243.71 -- NOT the un-mirrored right-cap x (243.10). */
-  left: 223.71px;
+  left: calc(223.71px * var(--velo-de-k, 1));
 }
 .tcard__bubble-body {
   position: absolute;
@@ -379,12 +384,12 @@ function onTap(): void {
   min-width: 0;
 }
 .tcard--checkin .tcard__bubble-body {
-  left: 78px;
-  right: 16px;
+  left: calc(78px * var(--velo-de-k, 1));
+  right: calc(16px * var(--velo-de-k, 1));
 }
 .tcard--feedback .tcard__bubble-body {
-  left: 16px;
-  right: 78px;
+  left: calc(16px * var(--velo-de-k, 1));
+  right: calc(78px * var(--velo-de-k, 1));
 }
 .tcard__bubble-title {
   font-size: var(--velo-fs-12);
@@ -405,27 +410,32 @@ function onTap(): void {
 /* ---- practice outcome: 217x67 card ---- */
 .tcard--practice {
   position: relative;
-  width: 217px;
-  height: 67px;
+  width: calc(217px * var(--velo-de-k, 1));
+  height: calc(67px * var(--velo-de-k, 1));
   border-radius: var(--velo-radius-8);
   background: var(--velo-bg-card-solid);
 }
 .tcard__prac-icon {
   position: absolute;
-  left: 10px;
-  top: 9px;
-  width: 30px;
-  height: 30px;
+  left: calc(10px * var(--velo-de-k, 1));
+  top: calc(9px * var(--velo-de-k, 1));
+  width: calc(30px * var(--velo-de-k, 1));
+  height: calc(30px * var(--velo-de-k, 1));
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--velo-text-primary);
 }
+
+.tcard__prac-icon :deep(svg) {
+  width: 100%;
+  height: 100%;
+}
 .tcard__prac-head {
   position: absolute;
-  left: 49px;
-  top: 9px;
-  right: 9px;
+  left: calc(49px * var(--velo-de-k, 1));
+  top: calc(9px * var(--velo-de-k, 1));
+  right: calc(9px * var(--velo-de-k, 1));
   display: flex;
   flex-direction: column;
   gap: var(--velo-gap-2);
@@ -445,9 +455,9 @@ function onTap(): void {
   min-width: 0;
 }
 .tcard__prac-avatar {
-  flex: 0 0 12px;
-  width: 12px;
-  height: 12px;
+  flex: 0 0 calc(12px * var(--velo-de-k, 1));
+  width: calc(12px * var(--velo-de-k, 1));
+  height: calc(12px * var(--velo-de-k, 1));
   border-radius: var(--radius-full);
   background: var(--velo-glass-teal-40);
   overflow: hidden;
@@ -467,9 +477,9 @@ function onTap(): void {
 }
 .tcard__prac-meta {
   position: absolute;
-  left: 9px;
-  right: 9px;
-  bottom: 8px;
+  left: calc(9px * var(--velo-de-k, 1));
+  right: calc(9px * var(--velo-de-k, 1));
+  bottom: calc(8px * var(--velo-de-k, 1));
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -482,17 +492,27 @@ function onTap(): void {
   color: var(--velo-text-secondary);
   white-space: nowrap;
 }
+
+.tcard__prac-cell :deep(svg) {
+  width: calc(11px * var(--velo-de-k, 1));
+  height: calc(11px * var(--velo-de-k, 1));
+}
 .tcard__prac-status {
   margin-left: auto;
   display: inline-flex;
   align-items: center;
   gap: var(--velo-gap-3);
-  height: 16px;
+  height: calc(16px * var(--velo-de-k, 1));
   padding: 0 var(--velo-gap-6);
   border-radius: var(--velo-radius-4);
   font-size: var(--velo-fs-10);
   font-weight: 600;
   white-space: nowrap;
+}
+
+.tcard__prac-status :deep(svg) {
+  width: calc(10px * var(--velo-de-k, 1));
+  height: calc(10px * var(--velo-de-k, 1));
 }
 .tcard__prac-status--attended {
   background: var(--velo-glass-teal-30);
@@ -507,19 +527,24 @@ function onTap(): void {
 .tcard--entry {
   display: flex;
   gap: var(--velo-gap-6); /* the transparent gap between the two white surfaces */
-  width: 267px;
-  height: 47px;
+  width: calc(267px * var(--velo-de-k, 1));
+  height: calc(47px * var(--velo-de-k, 1));
 }
 .tcard__entry-icon {
-  flex: 0 0 47px;
-  width: 47px;
-  height: 47px;
+  flex: 0 0 calc(47px * var(--velo-de-k, 1));
+  width: calc(47px * var(--velo-de-k, 1));
+  height: calc(47px * var(--velo-de-k, 1));
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--velo-radius-badge);
   background: var(--velo-bg-card-solid);
   color: var(--velo-text-primary);
+}
+
+.tcard__entry-icon :deep(svg) {
+  width: calc(28px * var(--velo-de-k, 1));
+  height: calc(28px * var(--velo-de-k, 1));
 }
 .tcard__entry-body {
   flex: 1 1 auto;
@@ -561,7 +586,7 @@ function onTap(): void {
   flex-direction: column;
   align-items: center;
   gap: var(--space-hairline);
-  max-width: 240px;
+  max-width: min(calc(240px * var(--velo-de-k, 1)), 100%);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
   border: 1.5px solid var(--velo-border);

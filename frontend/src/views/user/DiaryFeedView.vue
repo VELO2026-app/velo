@@ -198,7 +198,10 @@
       <!-- Initial loading: entry-shaped placeholders settled at the bottom,
            where the newest entries (and the eye) are. Once seen they stay a
            visible minimum (useLoadingHold); the thread then fades in. -->
-      <div v-if="feedSkeleton" class="diary-feed__state diary-feed__state--skeleton">
+      <div
+        v-if="feedSkeleton"
+        class="diary-feed__state diary-feed__state--skeleton diary-entry-scale"
+      >
         <VSkeletonBubbles />
       </div>
 

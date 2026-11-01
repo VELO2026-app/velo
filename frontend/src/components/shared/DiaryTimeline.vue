@@ -52,7 +52,7 @@
              "failed" adds a caption and the card's tap retries. Delivery is a
              pure opacity change on the same node (itemKey keeps it). -->
         <div
-          class="timeline__row"
+          class="timeline__row diary-entry-scale"
           :class="pendingClass(item)"
           :data-entry-id="item.id"
           :data-state="pendingState?.(item)"

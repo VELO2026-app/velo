@@ -695,6 +695,12 @@
   --velo-fs-32: 32px;
   --velo-fs-48: 48px;
 
+  /* Diary entry scale (owner 2026-11-01): everything BETWEEN the date
+     separators in the diary (DiaryTimeline rows, DiaryList items, the
+     diary skeleton) renders at this factor. Dates stay 1:1. Consumed only
+     by styles/diary-entry-scale.css via --velo-de-k; 1 = off. */
+  --velo-diary-entry-scale: 1.15;
+
   /* Radius ramp + compound shapes (value-named per --velo-radius-9/10/14
      above; --velo-radius-10 already exists). */
   --velo-radius-3-5: 3.5px; /* VBottomSheet grab handle */

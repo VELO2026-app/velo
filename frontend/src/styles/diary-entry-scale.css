@@ -1,0 +1,55 @@
+/* =============================================================================
+ * Diary entry scale -- see --velo-diary-entry-scale in variables.css.
+ * Two levels on purpose: a custom property cannot reference itself
+ * (--x: calc(var(--x) * k) is a cycle -> invalid at computed time), and a
+ * hardcoded base would ignore skins (nightfall / test-contrast override
+ * --velo-fs-12). Level 1 captures the INHERITED value (root or skin) times
+ * k into --velo-de-*; level 2 re-points the real names for the subtree.
+ * ========================================================================== */
+.diary-entry-scale {
+  --velo-de-k: var(--velo-diary-entry-scale, 1);
+
+  --velo-de-fs-10: calc(var(--velo-fs-10) * var(--velo-de-k));
+  --velo-de-fs-12: calc(var(--velo-fs-12) * var(--velo-de-k));
+  --velo-de-fs-14: calc(var(--velo-fs-14) * var(--velo-de-k));
+  --velo-de-fs-16: calc(var(--velo-fs-16) * var(--velo-de-k));
+
+  --velo-de-space-1: calc(var(--space-1) * var(--velo-de-k));
+  --velo-de-space-2: calc(var(--space-2) * var(--velo-de-k));
+  --velo-de-space-3: calc(var(--space-3) * var(--velo-de-k));
+  --velo-de-space-4: calc(var(--space-4) * var(--velo-de-k));
+  --velo-de-gap-2: calc(var(--velo-gap-2) * var(--velo-de-k));
+  --velo-de-gap-3: calc(var(--velo-gap-3) * var(--velo-de-k));
+  --velo-de-gap-6: calc(var(--velo-gap-6) * var(--velo-de-k));
+
+  --velo-de-radius-md: calc(var(--radius-md) * var(--velo-de-k));
+  --velo-de-radius-4: calc(var(--velo-radius-4) * var(--velo-de-k));
+  --velo-de-radius-8: calc(var(--velo-radius-8) * var(--velo-de-k));
+  --velo-de-radius-badge: calc(var(--velo-radius-badge) * var(--velo-de-k));
+
+  --velo-de-size-40: calc(var(--velo-size-40) * var(--velo-de-k));
+  --velo-de-size-46: calc(var(--velo-size-46) * var(--velo-de-k));
+}
+
+.diary-entry-scale > * {
+  --velo-fs-10: var(--velo-de-fs-10);
+  --velo-fs-12: var(--velo-de-fs-12);
+  --velo-fs-14: var(--velo-de-fs-14);
+  --velo-fs-16: var(--velo-de-fs-16);
+
+  --space-1: var(--velo-de-space-1);
+  --space-2: var(--velo-de-space-2);
+  --space-3: var(--velo-de-space-3);
+  --space-4: var(--velo-de-space-4);
+  --velo-gap-2: var(--velo-de-gap-2);
+  --velo-gap-3: var(--velo-de-gap-3);
+  --velo-gap-6: var(--velo-de-gap-6);
+
+  --radius-md: var(--velo-de-radius-md);
+  --velo-radius-4: var(--velo-de-radius-4);
+  --velo-radius-8: var(--velo-de-radius-8);
+  --velo-radius-badge: var(--velo-de-radius-badge);
+
+  --velo-size-40: var(--velo-de-size-40);
+  --velo-size-46: var(--velo-de-size-46);
+}

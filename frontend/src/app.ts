@@ -35,6 +35,7 @@ import i18n from './locales'
 import './styles/variables.css'
 import './styles/global.css'
 import './styles/motion.css'
+import './styles/diary-entry-scale.css'
 // tz-whitelabel §3 cascade: the skin overrides ride LAST, mechanically --
 // this file is GENERATED at build time (public/skin/tokens.css when a skin
 // ships, an empty stub otherwise; see platform/skin.ts). The TZ sketch said

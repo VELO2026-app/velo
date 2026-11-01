@@ -24,10 +24,10 @@
 import VSkeleton from './VSkeleton.vue'
 
 const bubbles = [
-  { out: false, width: '62%', height: '56px' },
-  { out: true, width: '48%', height: '40px' },
-  { out: false, width: '74%', height: '72px' },
-  { out: true, width: '56%', height: '40px' },
+  { out: false, width: '62%', height: 'calc(56px * var(--velo-de-k, 1))' },
+  { out: true, width: '48%', height: 'calc(40px * var(--velo-de-k, 1))' },
+  { out: false, width: '74%', height: 'calc(72px * var(--velo-de-k, 1))' },
+  { out: true, width: '56%', height: 'calc(40px * var(--velo-de-k, 1))' },
 ] as const
 </script>
 

@@ -167,7 +167,7 @@ function onTap(): void {
   border: 1.829px solid;
   text-align: center;
   width: fit-content;
-  max-width: 290px;
+  max-width: min(calc(290px * var(--velo-de-k, 1)), 100%);
   margin-inline: auto;
 }
 
@@ -185,12 +185,12 @@ function onTap(): void {
 
 .feed-card__banner-title {
   font-size: var(--velo-fs-12);
-  letter-spacing: 0.24px;
+  letter-spacing: calc(0.24px * var(--velo-de-k, 1));
 }
 
 .feed-card__banner-subtitle {
   font-size: var(--velo-fs-12);
-  letter-spacing: 0.24px;
+  letter-spacing: calc(0.24px * var(--velo-de-k, 1));
   opacity: 0.85;
 }
 
@@ -202,7 +202,7 @@ function onTap(): void {
    x≈55, width 290). All other card forms stay full-width. */
 .feed-card--practice {
   position: relative;
-  width: 290px;
+  width: min(calc(290px * var(--velo-de-k, 1)), 100%);
   margin-left: auto;
   background: var(--velo-bg-card-solid);
   border: 1px solid var(--velo-border-card);
@@ -219,7 +219,7 @@ function onTap(): void {
    * аналогичную правку в PracticeListCard). Раньше center — при разной
    * длине titles левый край плавал ±7px по горизонтали. */
   text-align: left;
-  letter-spacing: 0.32px;
+  letter-spacing: calc(0.32px * var(--velo-de-k, 1));
   margin-left: calc(var(--space-4) + var(--velo-size-46) + var(--space-2));
   padding-right: var(--space-4);
   white-space: nowrap;
@@ -238,8 +238,8 @@ function onTap(): void {
 }
 
 .feed-card__avatar {
-  width: 14px;
-  height: 14px;
+  width: calc(14px * var(--velo-de-k, 1));
+  height: calc(14px * var(--velo-de-k, 1));
   border-radius: var(--radius-full);
   background: var(--velo-glass-teal-40);
   overflow: hidden;
@@ -292,6 +292,11 @@ function onTap(): void {
   color: var(--velo-text-secondary);
 }
 
+.feed-card__practice-cell :deep(svg) {
+  width: calc(14px * var(--velo-de-k, 1));
+  height: calc(14px * var(--velo-de-k, 1));
+}
+
 .feed-card__outcome {
   display: inline-flex;
   align-items: center;
@@ -299,6 +304,11 @@ function onTap(): void {
   padding: var(--velo-gap-3) var(--space-2);
   border-radius: var(--velo-radius-badge);
   font-size: var(--velo-fs-12);
+}
+
+.feed-card__outcome :deep(svg) {
+  width: calc(12px * var(--velo-de-k, 1));
+  height: calc(12px * var(--velo-de-k, 1));
 }
 
 .feed-card__outcome--attended {
@@ -315,6 +325,8 @@ function onTap(): void {
   position: absolute;
   top: var(--space-3);
   left: var(--space-4);
+  width: calc(46px * var(--velo-de-k, 1));
+  height: calc(46px * var(--velo-de-k, 1));
   /* Цвет — text-primary (Figma DS): иконка сама несёт circle-обводку. */
   color: var(--velo-text-primary);
 }
@@ -345,7 +357,7 @@ function onTap(): void {
 
 .feed-card__date {
   font-size: var(--velo-fs-12);
-  letter-spacing: 0.2475px;
+  letter-spacing: calc(0.2475px * var(--velo-de-k, 1));
   opacity: 0.6;
   white-space: nowrap;
 }
@@ -359,6 +371,11 @@ function onTap(): void {
      no longer looks cramped/squished (operator feedback, item 4). */
   width: var(--velo-size-40);
   height: var(--velo-size-40);
+}
+
+.feed-card__icon :deep(svg) {
+  width: 100%;
+  height: 100%;
 }
 
 /* Monochrome glyphs take the brand text color; mood faces carry their own
@@ -378,7 +395,7 @@ function onTap(): void {
 
 .feed-card__title {
   font-size: var(--velo-fs-16);
-  letter-spacing: 0.32px;
+  letter-spacing: calc(0.32px * var(--velo-de-k, 1));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -386,7 +403,7 @@ function onTap(): void {
 
 .feed-card__preview {
   font-size: var(--velo-fs-12);
-  letter-spacing: 0.2475px;
+  letter-spacing: calc(0.2475px * var(--velo-de-k, 1));
   opacity: 0.6;
   /* Two-line teaser; the full text opens on tap (Variant B). line-clamp
      supplies the ellipsis, so no white-space/text-overflow here. */

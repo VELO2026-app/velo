@@ -51,12 +51,14 @@ defineProps<{
   left: 0;
   display: block;
   pointer-events: none;
+  width: calc(267px * var(--velo-de-k, 1));
+  height: calc(47px * var(--velo-de-k, 1));
 }
 
 /* Exact horizontal reflection inside the same 267px box: scaleX(-1) around
    the left edge maps x -> -x, translateX(267px) folds it back into place. */
 .bubble--mirrored {
-  transform: translateX(267px) scaleX(-1);
+  transform: translateX(calc(267px * var(--velo-de-k, 1))) scaleX(-1);
   transform-origin: left top;
 }
 </style>
