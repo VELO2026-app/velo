@@ -9,8 +9,8 @@
 
 // -- Enums --------------------------------------------------------------------
 
-/** Who can see/book a practice (Master GROUPS P5, PROMPT №594). PUBLIC: everyone (default -- matches every practice's behavior before this column existed, see the migration's backfill). STUDENTS: anyone with >= 1 non-cancelled booking on this master's practices (the same "derived «Ученики»" rule groups_service.py already uses). GROUPS: members of at least one of the practice's target CUSTOM groups (practice_audience_group). CURATOR_GROUPS: the curator and every member of the school the practice BELONGS TO (Practice.curator_group_id, BE-74) -- AND only while the master still belongs to that school. That second half has no counterpart in the three kinds above and is the point of this one: a school's audience is lent to a teacher, not given. A master who leaves or is removed stops broadcasting to a room that is no longer theirs, without anyone editing the practice. Requires an owning school: a practice without one cannot carry this kind. A blocked student is EXCLUDED from all four -- see practices/audience_service.py, the single shared predicate every enforcement point reuses. */
-export type AudienceKind = 'public' | 'students' | 'groups' | 'curator_groups'
+/** Who can see/book a practice (Master GROUPS P5, PROMPT №594). PUBLIC: everyone (default -- matches every practice's behavior before this column existed, see the migration's backfill). STUDENTS: anyone with >= 1 non-cancelled booking on this master's practices (the same "derived «Ученики»" rule groups_service.py already uses). GROUPS: members of at least one of the practice's target CUSTOM groups (practice_audience_group). SCHOOLS: the curator and every member of the school the practice BELONGS TO (Practice.school_id, BE-74) -- AND only while the master still belongs to that school. That second half has no counterpart in the three kinds above and is the point of this one: a school's audience is lent to a teacher, not given. A master who leaves or is removed stops broadcasting to a room that is no longer theirs, without anyone editing the practice. Requires an owning school: a practice without one cannot carry this kind. A blocked student is EXCLUDED from all four -- see practices/audience_service.py, the single shared predicate every enforcement point reuses. */
+export type AudienceKind = 'public' | 'students' | 'groups' | 'schools'
 
 /** Booking lifecycle statuses. */
 export type BookingStatus = 'pending' | 'confirmed' | 'attended' | 'no_show' | 'cancelled'
@@ -60,23 +60,6 @@ export interface AddGroupMemberRequest {
   student_user_id: string
 }
 
-/** The school's owner, as the admin list shows them. Two fields, not the member-facing three: the admin list is a table, and avatar_url would cost a column nobody reads at this density. The admin who needs more opens the master's own page. */
-export interface AdminCuratorGroupCuratorRef {
-  user_id: string
-  display_name: string
-}
-
-/** One school in the admin list. is_active IS A FIELD, NOT A FILTER, and this is the only place in the system where a frozen school is visible at all. For its own members an inactive group is indistinguishable from a deleted one (404, I-6) -- which is right for them and useless for an admin, who is the person being asked "why has my school gone quiet". Both kinds live in one listing precisely so that question has an answer on screen. masters_count counts VISIBLE masters only (kind='master' whose profile is verified right now, I-4); students_count counts every kind='student' row. Same rule the group page reports, so the two cannot disagree about the same school. */
-export interface AdminCuratorGroupListItem {
-  id: string
-  name: string
-  curator: AdminCuratorGroupCuratorRef
-  masters_count: number
-  students_count: number
-  is_active: boolean
-  created_at: string
-}
-
 /** Response for verify/reject actions. */
 export interface AdminMasterActionResponse {
   user_id: string
@@ -96,9 +79,9 @@ export interface AdminMasterDetail {
   methods?: string[]
   practices_count?: number | null
   students_count?: number | null
-  curator_groups_count?: number | null
+  schools_count?: number | null
   available_cents?: number | null
-  can_create_groups?: boolean
+  can_create_schools?: boolean
   experience_years?: number
   bio?: string | null
   display_name?: string | null
@@ -108,7 +91,7 @@ export interface AdminMasterDetail {
   certifications?: string[]
 }
 
-/** Single item in admin masters list -- user data + master status. CR-01: role narrowed from str to UserRole for type safety. R8: rich-card fields, additive over the F8-fix shape. - methods: read straight off the already-joined MasterProfile.data.profile (zero extra cost -- see list_masters). - practices_count / students_count: real all-time aggregates, computed in ONE batched query each over the page's master_ids (no N+1, mirrors practices/enrichment_service.py attendance_counts_for_practices). None only if a master somehow falls outside the batch (should not happen; honest stub -- FE shows "-"). - available_cents: MasterProfile.available_cents, a plain column already loaded by the list_masters join -- zero extra cost. P4/GT-9: - curator_groups_count: how many curator groups this master OWNS, in the same batched shape as the two counts above. Counts ACTIVE AND FROZEN alike: revoking a master's verification does not dissolve their schools, and an admin looking at the person needs to see what is still attached to them. Same None semantics as its neighbours -- null only if a master somehow falls outside the batch, which should not happen; the FE shows "-". GT-15: - can_create_groups: whether the admin has granted this master the right to FOUND schools. Read off the profile row the list already joined -- zero extra cost, like methods and available_cents. ITS NONE-SEMANTICS DELIBERATELY DIFFER FROM ITS NEIGHBOURS above, which is why this says so out loud. Those are `int | None` because a count can genuinely be unknown: null means "this master fell outside the batch". A right cannot be unknown here -- the profile is in hand on every row -- so this is a plain bool defaulting to false, and false always means "no right", never "could not tell". A `| None` would invent a third state that the data cannot produce, and the FE would need a "-" branch that never renders. Distinct from curator_groups_count next to it: the count says what this master already owns (schools survive both a revoked right and a revoked verification), the flag says what they may found next. A master with three schools and no flag is a normal state. */
+/** Single item in admin masters list -- user data + master status. CR-01: role narrowed from str to UserRole for type safety. R8: rich-card fields, additive over the F8-fix shape. - methods: read straight off the already-joined MasterProfile.data.profile (zero extra cost -- see list_masters). - practices_count / students_count: real all-time aggregates, computed in ONE batched query each over the page's master_ids (no N+1, mirrors practices/enrichment_service.py attendance_counts_for_practices). None only if a master somehow falls outside the batch (should not happen; honest stub -- FE shows "-"). - available_cents: MasterProfile.available_cents, a plain column already loaded by the list_masters join -- zero extra cost. P4/GT-9: - schools_count: how many schools this master OWNS, in the same batched shape as the two counts above. Counts ACTIVE AND FROZEN alike: revoking a master's verification does not dissolve their schools, and an admin looking at the person needs to see what is still attached to them. Same None semantics as its neighbours -- null only if a master somehow falls outside the batch, which should not happen; the FE shows "-". GT-15: - can_create_schools: whether the admin has granted this master the right to FOUND schools. Read off the profile row the list already joined -- zero extra cost, like methods and available_cents. ITS NONE-SEMANTICS DELIBERATELY DIFFER FROM ITS NEIGHBOURS above, which is why this says so out loud. Those are `int | None` because a count can genuinely be unknown: null means "this master fell outside the batch". A right cannot be unknown here -- the profile is in hand on every row -- so this is a plain bool defaulting to false, and false always means "no right", never "could not tell". A `| None` would invent a third state that the data cannot produce, and the FE would need a "-" branch that never renders. Distinct from schools_count next to it: the count says what this master already owns (schools survive both a revoked right and a revoked verification), the flag says what they may found next. A master with three schools and no flag is a normal state. */
 export interface AdminMasterListItem {
   id: string
   telegram_id?: number | null
@@ -121,9 +104,9 @@ export interface AdminMasterListItem {
   methods?: string[]
   practices_count?: number | null
   students_count?: number | null
-  curator_groups_count?: number | null
+  schools_count?: number | null
   available_cents?: number | null
-  can_create_groups?: boolean
+  can_create_schools?: boolean
 }
 
 /** PATCH /admin/masters/{user_id}/profile -- partial admin edit of EVERY master-authored field (batch H). ALL fields optional; only the keys the client actually SENDS are applied (the service reads model_dump(exclude_unset=True)), so a partial PATCH never clobbers an unsent sibling. Constraints are reused from the apply form (MasterApplyProfile / MasterApplyExperience, masters/schemas.py:49-70) and users/me (UserUpdate first/last, users/schemas.py:577-578) so admin-edit validation can never drift from what the master could originally submit. Field homes: display_name / email / phone / bio / methods / experience_years / certifications / languages -> MasterProfile.data.profile.* first_name / last_name -> User.* (the account name shown in admin lists) */
@@ -249,6 +232,23 @@ export interface AdminRosterEntry {
   name: string
   avatar_url: string | null
   status: string
+}
+
+/** The school's owner, as the admin list shows them. Two fields, not the member-facing three: the admin list is a table, and avatar_url would cost a column nobody reads at this density. The admin who needs more opens the master's own page. */
+export interface AdminSchoolCuratorRef {
+  user_id: string
+  display_name: string
+}
+
+/** One school in the admin list. is_active IS A FIELD, NOT A FILTER, and this is the only place in the system where a frozen school is visible at all. For its own members an inactive group is indistinguishable from a deleted one (404, I-6) -- which is right for them and useless for an admin, who is the person being asked "why has my school gone quiet". Both kinds live in one listing precisely so that question has an answer on screen. masters_count counts VISIBLE masters only (kind='master' whose profile is verified right now, I-4); students_count counts every kind='student' row. Same rule the group page reports, so the two cannot disagree about the same school. */
+export interface AdminSchoolListItem {
+  id: string
+  name: string
+  curator: AdminSchoolCuratorRef
+  masters_count: number
+  students_count: number
+  is_active: boolean
+  created_at: string
 }
 
 /** GET /api/v1/admin/stats/overview?period=week|month. */
@@ -562,12 +562,6 @@ export interface CreateCompanyPromoRequest {
   first_purchase_only?: boolean
 }
 
-/** POST /masters/me/curator-groups. */
-export interface CreateCuratorGroupRequest {
-  name: string
-  description?: string | null
-}
-
 /** POST /api/v1/diary body. */
 export interface CreateDiaryEntryRequest {
   content: string
@@ -632,7 +626,7 @@ export interface CreatePracticeRequest {
   recurrence?: RecurrenceSpec | null
   audience_kind?: AudienceKind
   group_ids?: string[]
-  curator_group_id?: string | null
+  school_id?: string | null
   master_id?: string | null
 }
 
@@ -641,6 +635,12 @@ export interface CreateReportRequest {
   target_type: 'user' | 'master' | 'practice'
   target_id: string
   reason: string
+}
+
+/** POST /masters/me/schools. */
+export interface CreateSchoolRequest {
+  name: string
+  description?: string | null
 }
 
 /** POST /admin/taxonomy/directions/{direction_id}/styles. */
@@ -653,270 +653,6 @@ export interface CreateStyleRequest {
 /** POST /api/v1/masters/me/withdraw -- request body. amount_cents is the total withdrawal amount (fee deducted from it). Minimum enforced in service against settings.min_withdrawal_cents. */
 export interface CreateWithdrawalRequest {
   amount_cents: number
-}
-
-/** GET /masters/me/curator-groups/{group_id}/analytics (§6). `engagement` answers the request's ?period; every other group is the school's all-time shape and does not move with the slider. */
-export interface CuratorGroupAnalyticsResponse {
-  practices: CuratorGroupPracticeTotals
-  members: CuratorGroupMemberTotals
-  engagement: CuratorGroupEngagementTotals
-  feedback: CuratorGroupFeedbackTotals
-  top_practices: CuratorGroupTopPracticeItem[]
-}
-
-/** One row of the curator's "Блок" tab (BE-79). kind and joined_at are the membership the block replaced -- what an unblock will restore -- and blocked_at is when it was replaced. */
-export interface CuratorGroupBlockedItem {
-  user_id: string
-  name: string
-  avatar_url: string | null
-  kind: 'master' | 'student'
-  joined_at: string
-  blocked_at: string
-}
-
-/** One PRE check-in left on a practice of this school. `mood` is the stored 1..10 score mapped to its zone (ScoreZone, BE-77) -- the same five keys every distribution and feed uses. POST check-ins never appear here, and neither do check-ins whose booking was later cancelled: both are absent from the master's own roster for this practice, and the school widens a curator's reach without deepening it. user_id identifies the participant so that two students of the same name stay distinct; it opens no screen a curator would otherwise be refused. */
-export interface CuratorGroupCheckinItem {
-  user_id: string
-  student_name: string
-  avatar_url: string | null
-  mood: ScoreZone
-  comment: string | null
-  practice_id: string
-  practice_title: string
-  created_at: string
-}
-
-/** One COMPLETED practice of the window (part 3, owner 2026-10-02). The card the client renders: direction (schema-on-read data.taxonomy, for the direction icon), title, master, date, then the practice's own aggregates -- attendees (distinct ATTENDED: everyone who was there, «Ученики» in VELO's vocabulary), check-ins (PRE on non-cancelled bookings) and the reviews with their five zone counts. Same predicates as the totals, so a card reconciles with the cards around it. */
-export interface CuratorGroupConductedPracticeItem {
-  practice_id: string
-  title: string
-  direction: string | null
-  master_name: string
-  master_avatar_url: string | null
-  scheduled_at: string
-  timezone: string
-  attendees_count: number
-  checkins_count: number
-  reviews_count: number
-  rating: ScoreZoneCounts
-}
-
-/** The group's owner, as anyone in the group may see them. A strict subset of MasterPublicResponse -- the declared isolation boundary in masters/schemas.py. Nothing financial, nothing contact-like, and no status: a group is only ever visible while its curator is verified (I-6), so exposing the status would only ever print one value. */
-export interface CuratorGroupCuratorRef {
-  user_id: string
-  display_name: string | null
-  avatar_url: string | null
-}
-
-/** GET /masters/me/curator-groups/{id}/delete-preview. What deleting the school costs: who is in it, and how many upcoming practices -- across EVERY master of the school, the curator included -- are aimed at it. The counters are the same two the group page reports, from the same helper, so the dialog and the page cannot disagree. */
-export interface CuratorGroupDeletePreviewResponse {
-  masters_count: number
-  students_count: number
-  upcoming_practices_targeting_group: number
-}
-
-/** The period-scoped heart of the screen (owner brief 2026-10-02, BE-107 decisions). Everything here is scoped to the calendar period the request named, over the curator's own timezone (BE-34 bounds), and reads ONE set of practices: the school's COMPLETED practices scheduled in the window. The exact vocabulary is pinned once, in analytics_service's header. attendees / repeat_* count STUDENTS OF THE SCHOOL NOW (member rows of kind=student) -- the same population as members.students, the card's «из N». joined_never_came counts students who JOINED IN THE PERIOD and have not attended a school practice since joining (to the window's end). visits / reviews are EVERYONE on the period's practices, guests included -- one population for both, so reviews <= visits. */
-export interface CuratorGroupEngagementTotals {
-  practices_conducted: number
-  attendees: number
-  repeat_attendees: number
-  repeat_pct: number
-  joined_never_came: number
-  visits: number
-  reviews: number
-  reviews_pct: number
-  rating: ScoreZoneCounts
-  conducted_practices: CuratorGroupConductedPracticeItem[]
-}
-
-/** Who did the thing, as the journal recorded them at the time. NOT NULLABLE, and that is a consequence of how the row is built rather than an optimism about the data. All thirteen event kinds are somebody's action, actor_id is NOT NULL, and the name is frozen INTO the row when the event is written -- so there is no state in which the journal knows an event happened but cannot say who did it. A `| None` here would be a branch the frontend has to handle and the backend cannot produce. display_name IS A SNAPSHOT, NOT A LOOKUP. It is whatever the person was called when they acted, and it does not follow later renames -- deliberately: "Мария удалила Петра" is a record of the past and must keep saying Мария. See CuratorGroupEvent's docstring for the full argument, and do not replace this with a join to users. user_id is still the live handle: whoever reads the feed can go look the person up if they are still around. */
-export interface CuratorGroupEventActor {
-  user_id: string
-  display_name: string
-}
-
-/** One line of a school's journal. `event` is a plain str, not a Literal over the thirteen kinds. The set is expected to grow -- notifications next, practice publication after that -- and a Literal here would turn every new backend event into a frontend type error before anyone had decided how to render it. The vocabulary lives in CuratorGroupEventKind; this field carries whatever the backend wrote. `data` is a free-form object whose keys depend on `event`. The contract per kind is tabulated in CuratorGroupEvent's docstring and is written down there rather than modelled here for the reason JSONB is JSONB: thirteen small nested schemas would have to be edited in lockstep with a table that is going to gain rows. NO seq. The ordering column is not exposed and must not be: it is globally monotonic across every school, so handing it to a curator would hand them a counter of platform-wide activity -- read the feed twice and the gap tells you how busy everyone else was. `id` is the UUID, which identifies without measuring. created_at answers WHEN this happened. It does NOT establish the order within one request: two events from a single PATCH share it to the byte. The response is already in order -- newest first -- and that order comes from a column the client never sees. */
-export interface CuratorGroupEventItem {
-  id: string
-  event: string
-  actor: CuratorGroupEventActor
-  data: Record<string, unknown>
-  created_at: string
-}
-
-/** How the school's practices landed: counts plus the two distributions (five-zone ScoreZoneCounts, BE-77). */
-export interface CuratorGroupFeedbackTotals {
-  checkins_count: number
-  reviews_count: number
-  mood: ScoreZoneCounts
-  rating: ScoreZoneCounts
-}
-
-/** The card shown to someone who opened an invite link. curator_name is a STRING here, not the {user_id, display_name, avatar_url} object the group page returns: whoever is looking has no relation to the group yet, so they get the school's name and its curator's name, not a handle to go look the curator up with. */
-export interface CuratorGroupInvitePreviewGroup {
-  id: string
-  name: string
-  description: string | null
-  avatar_url?: string | null
-  curator_name: string | null
-  masters_count: number
-  students_count: number
-}
-
-/** GET /curator-groups/invites/{token}. This endpoint DESCRIBES a refusal instead of raising it: can_join=False plus a reason, so the screen can say why. The one exception is 404 -- an unknown token, a revoked one, an inactive group and a deleted group are one answer (P-08), here as everywhere else. can_join answers "would joining CHANGE anything", not "are you allowed in the door". Any member gets can_join=false, reason=already_member -- nothing would happen. Until GT-27 a STUDENT opening a MASTER link was the exception, getting can_join=true because the link would still promote them; with one link there is nothing left for it to do, and the `kind` field this model used to carry went with the second link. relation is the viewer's tie RIGHT NOW, before anything is done: null for someone who is not in the group yet. */
-export interface CuratorGroupInvitePreviewResponse {
-  group: CuratorGroupInvitePreviewGroup
-  can_join: boolean
-  reason: 'already_member' | 'own_group' | 'blocked_by_curator' | 'blocked_in_group' | null
-  relation: 'master' | 'student' | null
-}
-
-/** The group's ONE reusable link. THERE USED TO BE A REQUEST BODY, CreateCuratorGroupInviteRequest, whose only field was the link's kind, and this response echoed it back. GT-27 left schools with a single link, so both the field and the request model are gone rather than kept and ignored. The url carries the token and nothing else (`school__<token>`): a second copy of any fact in the url is a copy the sender can edit by hand. */
-export interface CuratorGroupInviteResponse {
-  invite_url: string
-}
-
-/** GET /curator-groups/{id}/leave-preview. How many of MY OWN upcoming practices target this school -- i.e. what I am about to switch off by walking out. A student always sees 0: they teach nothing, and that is a real answer rather than a reason to refuse the question. */
-export interface CuratorGroupLeavePreviewResponse {
-  upcoming_practices_targeting_group: number
-}
-
-/** GET /masters/me/curator-groups. can_create_groups (GT-15) rides on the LIST, not on an item: it is a property of the master, not of any one school, and this is the screen where the "create a school" button lives -- so the frontend learns whether to offer it from the call it already makes, with no second request and no endpoint invented for one boolean. A plain bool with a false default, NOT bool | None: its neighbours upstream (curator_groups_count and the other admin counters) use null for "this row fell outside the batch", and a right has no such state -- the profile is always in hand when this is answered. False here always means "no right", never "could not tell". */
-export interface CuratorGroupListResponse {
-  items: CuratorGroupResponse[]
-  can_create_groups?: boolean
-}
-
-/** One master in a group's roster. Fields are a STRICT SUBSET of MasterPublicResponse plus is_curator -- the isolation boundary is reused, not restated. reviews_count is deliberately absent: the roster card does not show it, and it would cost a second aggregate per page for nothing. Only VISIBLE masters appear here (verified right now, I-4), so a suspended master-member drops out of the list and out of the total -- the same predicate that drives masters_count, so the two cannot disagree. */
-export interface CuratorGroupMasterItem {
-  user_id: string
-  display_name: string | null
-  avatar_url: string | null
-  methods?: string[]
-  experience_years: number | null
-  practices_count: number
-  is_curator: boolean
-}
-
-/** POST /masters/me/curator-groups/{id}/master-offers (GT-27). The candidate, by id. Nothing else: a school master is appointed from the roster the curator is already looking at, so there is no name, no kind and no message to carry. */
-export interface CuratorGroupMasterOfferRequest {
-  to_user_id: string
-}
-
-/** One row of the CURATOR's roster: the member plus the curator's fields. is_visible is ALWAYS true for a student and reflects the live MasterProfile status for a master (I-4). The curator sees a suspended master as a row with is_visible=false -- "in the shadow" -- rather than watching them vanish, because the row is real and comes back by itself when the admin re-verifies. master_offer (BE-59) -- the curator's pending appointment of this member: awaiting_verification while they are not a verified master, awaiting_answer once they are; null when there is none. Live, like is_visible: a verification or a revocation moves it with no write. Neither field reaches the school's masters (BE-76, owner decision 2): their roster omits the suspended masters instead, and an appointment is the curator's business. */
-export interface CuratorGroupMemberItem {
-  user_id: string
-  name: string
-  avatar_url: string | null
-  kind: 'master' | 'student'
-  joined_at: string
-  is_visible: boolean
-  master_offer?: 'awaiting_verification' | 'awaiting_answer' | null
-}
-
-/** Active memberships by kind -- the same rows the roster pages. */
-export interface CuratorGroupMemberTotals {
-  masters: number
-  students: number
-}
-
-/** One row of GET /curator-groups/mine. `relation` is the viewer's own tie to this group and is what the frontend keys the row's chip off. `transfer_offered` is true ONLY for the person being offered the group, and it is a bool rather than the full ref on purpose: this is a list row, and everything the offer contains is already known to whoever it was made to. The curator sees false here even for their own pending offer -- the list says "somebody is waiting on YOU", and nobody is. Until GT-4 the field was absent because a field that is always false is a promise with no writer behind it. */
-export interface CuratorGroupMineItem {
-  id: string
-  name: string
-  description: string | null
-  avatar_url?: string | null
-  curator: CuratorGroupCuratorRef
-  masters_count: number
-  students_count: number
-  relation: 'curator' | 'master' | 'student'
-  transfer_offered?: boolean
-}
-
-/** GET /curator-groups/mine. */
-export interface CuratorGroupMineResponse {
-  items: CuratorGroupMineItem[]
-}
-
-/** GET /curator-groups/{id} -- the group as a member sees it. Deliberately NOT the same shape as CuratorGroupResponse (the curator's own row): that one is a management view keyed by ownership, this one carries `curator` and `viewer` because the reader is not necessarily the owner. Two shapes rather than one with half the fields null. `transfer` is filled for exactly two people -- the curator and the person being offered the group -- and is null for every other member (TZ 5.2). Null rather than an absent key: the field exists for everyone, only its value differs, which keeps one OpenAPI shape instead of two. A member who is not part of the deal learns nothing about it, not even that one is under way. */
-export interface CuratorGroupPageResponse {
-  id: string
-  name: string
-  description: string | null
-  avatar_url?: string | null
-  curator: CuratorGroupCuratorRef
-  masters_count: number
-  students_count: number
-  viewer: CuratorGroupViewer
-  transfer?: CuratorGroupTransferRef | null
-  created_at: string
-}
-
-/** The school's practices counted by lifecycle state. total = completed + upcoming; drafts, cancelled and deleted sessions are nobody's analytics and are absent from all three numbers. */
-export interface CuratorGroupPracticeTotals {
-  total: number
-  completed: number
-  upcoming: number
-}
-
-/** GET /masters/me/curator-groups/{id}/members/{user_id}/remove-preview. The same number for the member the curator is about to remove. Zero for a student, and zero -- not 404 -- for somebody who is not in the group at all: the removal itself is idempotent and answers 204 on that same target, so the advisory must not be stricter than the action it describes. */
-export interface CuratorGroupRemovePreviewResponse {
-  upcoming_practices_targeting_group: number
-}
-
-/** One curator group, as its curator sees it. masters_count counts only VISIBLE masters -- members with kind='master' whose MasterProfile is verified right now (I-4). A suspended master keeps their row and disappears from this number until re-verification; the number and the roster's is_visible flag are computed from the same predicate, so they cannot disagree. students_count counts every kind='student' row. Visibility is a rule about masters; a student has no MasterProfile to be verified. `transfer` describes the group's pending hand-over, or null when there is none. Until GT-4 this field did not exist at all -- deliberately, so that a hardcoded null could not become a promise the frontend built on. It appears now BECAUSE it acquired a writer, which is the only reason a field ever should. PATCH returns this schema too, so renaming a group now reports the pending transfer alongside the new name. That is an intended widening, not a leak: one response shape has one field set, and the alternative -- two flavours of CuratorGroupResponse, with and without -- is exactly the duplication CuratorGroupTransferRef exists to avoid. A rename does not touch the offer. */
-export interface CuratorGroupResponse {
-  id: string
-  name: string
-  description: string | null
-  avatar_url?: string | null
-  masters_count: number
-  students_count: number
-  transfer?: CuratorGroupTransferRef | null
-  created_at: string
-}
-
-/** One named review left on a practice of this school. `rating` is the stored 1..10 score mapped to its zone (ScoreZone, BE-77), identical to what the practice's master reads in their own per-practice and cross-practice review feeds. user_id identifies the reviewer, as it does in the master's own review items; the screens behind it enforce their own access. */
-export interface CuratorGroupReviewItem {
-  user_id: string
-  student_name: string
-  avatar_url: string | null
-  rating: ScoreZone
-  comment: string | null
-  practice_id: string
-  practice_title: string
-  created_at: string
-}
-
-/** One member of a school, as anyone allowed to see the roster sees it. The masters of the school read exactly this (GET .../roster, BE-76); the curator reads the same fact plus his own working fields (CuratorGroupMemberItem below). One class describes "a member", the curator's projection only widens it -- there is no second format of the same row. */
-export interface CuratorGroupRosterItem {
-  user_id: string
-  name: string
-  avatar_url: string | null
-  kind: 'master' | 'student'
-  joined_at: string
-}
-
-/** One completed practice of the school with its engagement counts. Ordered by engagement (check-ins + reviews), newest first on ties -- "what actually landed", not a second feed, so no comment text and no student names ride along. */
-export interface CuratorGroupTopPracticeItem {
-  practice_id: string
-  title: string
-  master_name: string
-  scheduled_at: string
-  checkins_count: number
-  reviews_count: number
-}
-
-/** A pending offer to hand the group over. ONE schema for all three places that report an offer (the curator's own row, that row after a PATCH, and the group page). Three flat triples of the same fields would drift the first time one of them gained a fourth. to_display_name uses display_name(first_name, last_name) from users/helpers.py, NOT the master-profile lookup _curator_display_name uses. The tree holds two different naming rules and this is a deliberate pick between them: the addressee here is a PERSON being offered something, not a public master card, and the profile-based rule may return None -- which would leave the confirm dialog reading "offer sent to —". display_name always yields something, falling back to the neutral «Участник». */
-export interface CuratorGroupTransferRef {
-  to_user_id: string
-  to_display_name: string
-  requested_at: string
-}
-
-/** The requesting user's own tie to the group being viewed. */
-export interface CuratorGroupViewer {
-  relation: 'curator' | 'master' | 'student'
 }
 
 /** GET /api/v1/diary/external-activities/custom-names. The person's own custom activity names, most recently used first, at most settings.external_activity_name_suggestions of them. Spellings that differ only in case are one name here, shown as it was typed the last time; an empty list means they have never used a custom type, not that something went wrong. */
@@ -1073,18 +809,6 @@ export interface InviteMasterResponse {
   issued_at: string
 }
 
-/** POST /curator-groups/join. */
-export interface JoinCuratorGroupRequest {
-  token: string
-}
-
-/** The outcome of joining. already_member answers exactly one question -- WAS THERE A ROW when this request looked -- and nothing else. Reading it as "nothing happened" would make the field lie about someone who has been a member for months, which is why the definition lives here rather than in a caller's head. THE PARAGRAPH THAT USED TO FOLLOW described the one case where already_member=true and something DID change: a student opening the master link reported already_member=true with relation="master", having just been promoted by the join. GT-27 cancelled that link -- school masters are appointed with the appointee's confirmation -- so a member joining now changes nothing at all, and the field's two readings have stopped being distinguishable on this endpoint. relation is the tie AFTER the call. */
-export interface JoinCuratorGroupResponse {
-  group_id: string
-  relation: 'master' | 'student'
-  already_member: boolean
-}
-
 /** POST /masters/groups/join -- the token from the group_invite__{token} deeplink. Same bound as ClaimMasterInviteRequest.token (masters/schemas.py) -- both are secrets.token_urlsafe(32) outputs. */
 export interface JoinGroupRequest {
   token: string
@@ -1095,6 +819,18 @@ export interface JoinGroupResponse {
   group_id: string
   group_name: string
   master_name: string
+}
+
+/** POST /schools/join. */
+export interface JoinSchoolRequest {
+  token: string
+}
+
+/** The outcome of joining. already_member answers exactly one question -- WAS THERE A ROW when this request looked -- and nothing else. Reading it as "nothing happened" would make the field lie about someone who has been a member for months, which is why the definition lives here rather than in a caller's head. THE PARAGRAPH THAT USED TO FOLLOW described the one case where already_member=true and something DID change: a student opening the master link reported already_member=true with relation="master", having just been promoted by the join. GT-27 cancelled that link -- school masters are appointed with the appointee's confirmation -- so a member joining now changes nothing at all, and the field's two readings have stopped being distinguishable on this endpoint. relation is the tie AFTER the call. */
+export interface JoinSchoolResponse {
+  school_id: string
+  relation: 'master' | 'student'
+  already_member: boolean
 }
 
 /** A practice with a low check-in rate in the period. */
@@ -1159,12 +895,6 @@ export interface MasterApplyResponse {
   created_at: string
 }
 
-/** PATCH /admin/masters/{user_id}/can-create-groups -- the right, after. Returns the flag rather than the account status: the status is not what this call changes, and echoing it would invite the reader to think it might be. The value is what was just written, so an idempotent second call answers exactly like the first. */
-export interface MasterGroupRightResponse {
-  user_id: string
-  can_create_groups: boolean
-}
-
 /** PATCH /api/v1/masters/me/languages -- freely-editable language set (E16). Q2=A: no moderation (unlike methods). Replaces data.profile.languages wholesale with the sent flat list. Empty list clears it. */
 export interface MasterLanguagesUpdate {
   languages?: string[]
@@ -1212,6 +942,12 @@ export interface MasterReviewItem {
   comment: string | null
   practice_title: string
   created_at: string
+}
+
+/** PATCH /admin/masters/{user_id}/can-create-schools -- the right, after. Returns the flag rather than the account status: the status is not what this call changes, and echoing it would invite the reader to think it might be. The value is what was just written, so an idempotent second call answers exactly like the first. */
+export interface MasterSchoolRightResponse {
+  user_id: string
+  can_create_schools: boolean
 }
 
 /** GET /api/v1/masters/me/stats?period=week|month|quarter. practices_count -- master's COMPLETED practices scheduled in the period. Completed only (GT-20): a practice that is still ahead, running, cancelled, draft or deleted does not count, so a period with nothing finished yet reads 0. The grid answers "what happened", not "what is scheduled". participants_count -- distinct users with an ATTENDED booking across those practices. An ATTENDED booking only ever exists on a completed practice, so this count and practices_count are always about the same sessions. income_cents -- gross booked turnover for the period, reused verbatim from the E2 finance projection. The dashboard renders practices/participants; the finance screen renders income. Each *_delta_pct is the signed percent change vs the previous period, or null when the previous period was non-positive (S-1). */
@@ -1295,22 +1031,22 @@ export interface MethodChangeRequestSubmit {
   proposed_methods: string[]
 }
 
-/** POST /masters/me/curator-groups/{id}/transfer. to_user_id only: the eligible set is the group's visible masters, and the service checks membership against exactly the roster it shows, so there is nothing else for the caller to state. */
-export interface OfferCuratorGroupTransferRequest {
+/** POST /masters/me/schools/{id}/transfer. to_user_id only: the eligible set is the group's visible masters, and the service checks membership against exactly the roster it shows, so there is nothing else for the caller to state. */
+export interface OfferSchoolTransferRequest {
   to_user_id: string
-}
-
-/** GET /api/v1/admin/curator-groups. */
-export interface PaginatedAdminCuratorGroupsResponse {
-  items: AdminCuratorGroupListItem[]
-  total: number
-  limit: number
-  offset: number
 }
 
 /** GET /api/v1/admin/practices -- paginated, scope-filtered list. */
 export interface PaginatedAdminPracticesResponse {
   items: AdminPracticeListItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** GET /api/v1/admin/schools. */
+export interface PaginatedAdminSchoolsResponse {
+  items: AdminSchoolListItem[]
   total: number
   limit: number
   offset: number
@@ -1335,62 +1071,6 @@ export interface PaginatedBookingsResponse {
 /** GET /api/v1/users/me/checkins -- paginated list. */
 export interface PaginatedCheckinsResponse {
   items: CheckinResponse[]
-  total: number
-  limit: number
-  offset: number
-}
-
-/** GET /masters/me/curator-groups/{id}/blocks (BE-79). */
-export interface PaginatedCuratorGroupBlocksResponse {
-  items: CuratorGroupBlockedItem[]
-  total: number
-  limit: number
-  offset: number
-}
-
-/** GET /masters/me/curator-groups/{id}/checkins. */
-export interface PaginatedCuratorGroupCheckinsResponse {
-  items: CuratorGroupCheckinItem[]
-  total: number
-  limit: number
-  offset: number
-}
-
-/** GET /masters/me/curator-groups/{id}/journal. */
-export interface PaginatedCuratorGroupEventsResponse {
-  items: CuratorGroupEventItem[]
-  total: number
-  limit: number
-  offset: number
-}
-
-/** GET /curator-groups/{id}/masters. `total` counts the curator too: they lead the roster (I-2 keeps them out of curator_group_member, but they are the school's first master), so total == masters_count + 1 by construction. */
-export interface PaginatedCuratorGroupMastersResponse {
-  items: CuratorGroupMasterItem[]
-  total: number
-  limit: number
-  offset: number
-}
-
-/** GET /masters/me/curator-groups/{id}/members. */
-export interface PaginatedCuratorGroupMembersResponse {
-  items: CuratorGroupMemberItem[]
-  total: number
-  limit: number
-  offset: number
-}
-
-/** GET /masters/me/curator-groups/{id}/reviews. */
-export interface PaginatedCuratorGroupReviewsResponse {
-  items: CuratorGroupReviewItem[]
-  total: number
-  limit: number
-  offset: number
-}
-
-/** GET /masters/me/curator-groups/{id}/roster (BE-76). */
-export interface PaginatedCuratorGroupRosterResponse {
-  items: CuratorGroupRosterItem[]
   total: number
   limit: number
   offset: number
@@ -1516,6 +1196,62 @@ export interface PaginatedReviewsResponse {
   offset: number
 }
 
+/** GET /masters/me/schools/{id}/blocks (BE-79). */
+export interface PaginatedSchoolBlocksResponse {
+  items: SchoolBlockedItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** GET /masters/me/schools/{id}/checkins. */
+export interface PaginatedSchoolCheckinsResponse {
+  items: SchoolCheckinItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** GET /masters/me/schools/{id}/journal. */
+export interface PaginatedSchoolEventsResponse {
+  items: SchoolEventItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** GET /schools/{id}/masters. `total` counts the curator too: they lead the roster (I-2 keeps them out of school_member, but they are the school's first master), so total == masters_count + 1 by construction. */
+export interface PaginatedSchoolMastersResponse {
+  items: SchoolMasterItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** GET /masters/me/schools/{id}/members. */
+export interface PaginatedSchoolMembersResponse {
+  items: SchoolMemberItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** GET /masters/me/schools/{id}/reviews. */
+export interface PaginatedSchoolReviewsResponse {
+  items: SchoolReviewItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** GET /masters/me/schools/{id}/roster (BE-76). */
+export interface PaginatedSchoolRosterResponse {
+  items: SchoolRosterItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
 /** GET /api/v1/masters/me/students -- paginated, searchable list. */
 export interface PaginatedStudentsResponse {
   items: StudentListItem[]
@@ -1590,7 +1326,7 @@ export interface PracticeAnalyticsPair {
 export interface PracticeAnalyticsResponse {
   practice_id: string
   viewer_role: PracticeAnalyticsViewerRole
-  curator_group_id: string | null
+  school_id: string | null
   title: string
   direction: string | null
   scheduled_at: string
@@ -1650,8 +1386,8 @@ export interface PracticeResponse {
   difficulty?: string | null
   audience_kind?: AudienceKind
   audience_group_names?: string[]
-  curator_group_id?: string | null
-  curator_group_name?: string | null
+  school_id?: string | null
+  school_name?: string | null
   audience_unavailable?: boolean
   recurrence_days?: number[] | null
   total_sessions?: number | null
@@ -1882,6 +1618,248 @@ export interface ScheduleIn {
   days: string[]
 }
 
+/** GET /masters/me/schools/{school_id}/analytics (§6). `engagement` answers the request's ?period; every other group is the school's all-time shape and does not move with the slider. */
+export interface SchoolAnalyticsResponse {
+  practices: SchoolPracticeTotals
+  members: SchoolMemberTotals
+  engagement: SchoolEngagementTotals
+  feedback: SchoolFeedbackTotals
+  top_practices: SchoolTopPracticeItem[]
+}
+
+/** One row of the curator's "Блок" tab (BE-79). kind and joined_at are the membership the block replaced -- what an unblock will restore -- and blocked_at is when it was replaced. */
+export interface SchoolBlockedItem {
+  user_id: string
+  name: string
+  avatar_url: string | null
+  kind: 'master' | 'student'
+  joined_at: string
+  blocked_at: string
+}
+
+/** One PRE check-in left on a practice of this school. `mood` is the stored 1..10 score mapped to its zone (ScoreZone, BE-77) -- the same five keys every distribution and feed uses. POST check-ins never appear here, and neither do check-ins whose booking was later cancelled: both are absent from the master's own roster for this practice, and the school widens a curator's reach without deepening it. user_id identifies the participant so that two students of the same name stay distinct; it opens no screen a curator would otherwise be refused. */
+export interface SchoolCheckinItem {
+  user_id: string
+  student_name: string
+  avatar_url: string | null
+  mood: ScoreZone
+  comment: string | null
+  practice_id: string
+  practice_title: string
+  created_at: string
+}
+
+/** One COMPLETED practice of the window (part 3, owner 2026-10-02). The card the client renders: direction (schema-on-read data.taxonomy, for the direction icon), title, master, date, then the practice's own aggregates -- attendees (distinct ATTENDED: everyone who was there, «Ученики» in VELO's vocabulary), check-ins (PRE on non-cancelled bookings) and the reviews with their five zone counts. Same predicates as the totals, so a card reconciles with the cards around it. */
+export interface SchoolConductedPracticeItem {
+  practice_id: string
+  title: string
+  direction: string | null
+  master_name: string
+  master_avatar_url: string | null
+  scheduled_at: string
+  timezone: string
+  attendees_count: number
+  checkins_count: number
+  reviews_count: number
+  rating: ScoreZoneCounts
+}
+
+/** The group's owner, as anyone in the group may see them. A strict subset of MasterPublicResponse -- the declared isolation boundary in masters/schemas.py. Nothing financial, nothing contact-like, and no status: a group is only ever visible while its curator is verified (I-6), so exposing the status would only ever print one value. */
+export interface SchoolCuratorRef {
+  user_id: string
+  display_name: string | null
+  avatar_url: string | null
+}
+
+/** GET /masters/me/schools/{id}/delete-preview. What deleting the school costs: who is in it, and how many upcoming practices -- across EVERY master of the school, the curator included -- are aimed at it. The counters are the same two the group page reports, from the same helper, so the dialog and the page cannot disagree. */
+export interface SchoolDeletePreviewResponse {
+  masters_count: number
+  students_count: number
+  upcoming_practices_targeting_school: number
+}
+
+/** The period-scoped heart of the screen (owner brief 2026-10-02, BE-107 decisions). Everything here is scoped to the calendar period the request named, over the curator's own timezone (BE-34 bounds), and reads ONE set of practices: the school's COMPLETED practices scheduled in the window. The exact vocabulary is pinned once, in analytics_service's header. attendees / repeat_* count STUDENTS OF THE SCHOOL NOW (member rows of kind=student) -- the same population as members.students, the card's «из N». joined_never_came counts students who JOINED IN THE PERIOD and have not attended a school practice since joining (to the window's end). visits / reviews are EVERYONE on the period's practices, guests included -- one population for both, so reviews <= visits. */
+export interface SchoolEngagementTotals {
+  practices_conducted: number
+  attendees: number
+  repeat_attendees: number
+  repeat_pct: number
+  joined_never_came: number
+  visits: number
+  reviews: number
+  reviews_pct: number
+  rating: ScoreZoneCounts
+  conducted_practices: SchoolConductedPracticeItem[]
+}
+
+/** Who did the thing, as the journal recorded them at the time. NOT NULLABLE, and that is a consequence of how the row is built rather than an optimism about the data. All thirteen event kinds are somebody's action, actor_id is NOT NULL, and the name is frozen INTO the row when the event is written -- so there is no state in which the journal knows an event happened but cannot say who did it. A `| None` here would be a branch the frontend has to handle and the backend cannot produce. display_name IS A SNAPSHOT, NOT A LOOKUP. It is whatever the person was called when they acted, and it does not follow later renames -- deliberately: "Мария удалила Петра" is a record of the past and must keep saying Мария. See SchoolEvent's docstring for the full argument, and do not replace this with a join to users. user_id is still the live handle: whoever reads the feed can go look the person up if they are still around. */
+export interface SchoolEventActor {
+  user_id: string
+  display_name: string
+}
+
+/** One line of a school's journal. `event` is a plain str, not a Literal over the thirteen kinds. The set is expected to grow -- notifications next, practice publication after that -- and a Literal here would turn every new backend event into a frontend type error before anyone had decided how to render it. The vocabulary lives in SchoolEventKind; this field carries whatever the backend wrote. `data` is a free-form object whose keys depend on `event`. The contract per kind is tabulated in SchoolEvent's docstring and is written down there rather than modelled here for the reason JSONB is JSONB: thirteen small nested schemas would have to be edited in lockstep with a table that is going to gain rows. NO seq. The ordering column is not exposed and must not be: it is globally monotonic across every school, so handing it to a curator would hand them a counter of platform-wide activity -- read the feed twice and the gap tells you how busy everyone else was. `id` is the UUID, which identifies without measuring. created_at answers WHEN this happened. It does NOT establish the order within one request: two events from a single PATCH share it to the byte. The response is already in order -- newest first -- and that order comes from a column the client never sees. */
+export interface SchoolEventItem {
+  id: string
+  event: string
+  actor: SchoolEventActor
+  data: Record<string, unknown>
+  created_at: string
+}
+
+/** How the school's practices landed: counts plus the two distributions (five-zone ScoreZoneCounts, BE-77). */
+export interface SchoolFeedbackTotals {
+  checkins_count: number
+  reviews_count: number
+  mood: ScoreZoneCounts
+  rating: ScoreZoneCounts
+}
+
+/** GET /schools/invites/{token}. This endpoint DESCRIBES a refusal instead of raising it: can_join=False plus a reason, so the screen can say why. The one exception is 404 -- an unknown token, a revoked one, an inactive group and a deleted group are one answer (P-08), here as everywhere else. can_join answers "would joining CHANGE anything", not "are you allowed in the door". Any member gets can_join=false, reason=already_member -- nothing would happen. Until GT-27 a STUDENT opening a MASTER link was the exception, getting can_join=true because the link would still promote them; with one link there is nothing left for it to do, and the `kind` field this model used to carry went with the second link. relation is the viewer's tie RIGHT NOW, before anything is done: null for someone who is not in the group yet. */
+export interface SchoolInvitePreviewResponse {
+  school: SchoolInvitePreviewSchool
+  can_join: boolean
+  reason: 'already_member' | 'own_school' | 'blocked_by_curator' | 'blocked_in_school' | null
+  relation: 'master' | 'student' | null
+}
+
+/** The card shown to someone who opened an invite link. curator_name is a STRING here, not the {user_id, display_name, avatar_url} object the group page returns: whoever is looking has no relation to the group yet, so they get the school's name and its curator's name, not a handle to go look the curator up with. */
+export interface SchoolInvitePreviewSchool {
+  id: string
+  name: string
+  description: string | null
+  avatar_url?: string | null
+  curator_name: string | null
+  masters_count: number
+  students_count: number
+}
+
+/** The school's ONE reusable link. THERE USED TO BE A REQUEST BODY whose only field was the link's kind, and this response echoed it back. GT-27 left schools with a single link, so both the field and the request model are gone rather than kept and ignored. The url carries the token and nothing else (`school__<token>`): a second copy of any fact in the url is a copy the sender can edit by hand. */
+export interface SchoolInviteResponse {
+  invite_url: string
+}
+
+/** GET /schools/{id}/leave-preview. How many of MY OWN upcoming practices target this school -- i.e. what I am about to switch off by walking out. A student always sees 0: they teach nothing, and that is a real answer rather than a reason to refuse the question. */
+export interface SchoolLeavePreviewResponse {
+  upcoming_practices_targeting_school: number
+}
+
+/** GET /masters/me/schools. can_create_schools (GT-15) rides on the LIST, not on an item: it is a property of the master, not of any one school, and this is the screen where the "create a school" button lives -- so the frontend learns whether to offer it from the call it already makes, with no second request and no endpoint invented for one boolean. A plain bool with a false default, NOT bool | None: its neighbours upstream (schools_count and the other admin counters) use null for "this row fell outside the batch", and a right has no such state -- the profile is always in hand when this is answered. False here always means "no right", never "could not tell". */
+export interface SchoolListResponse {
+  items: SchoolResponse[]
+  can_create_schools?: boolean
+}
+
+/** One master in a group's roster. Fields are a STRICT SUBSET of MasterPublicResponse plus is_curator -- the isolation boundary is reused, not restated. reviews_count is deliberately absent: the roster card does not show it, and it would cost a second aggregate per page for nothing. Only VISIBLE masters appear here (verified right now, I-4), so a suspended master-member drops out of the list and out of the total -- the same predicate that drives masters_count, so the two cannot disagree. */
+export interface SchoolMasterItem {
+  user_id: string
+  display_name: string | null
+  avatar_url: string | null
+  methods?: string[]
+  experience_years: number | null
+  practices_count: number
+  is_curator: boolean
+}
+
+/** POST /masters/me/schools/{id}/master-offers (GT-27). The candidate, by id. Nothing else: a school master is appointed from the roster the curator is already looking at, so there is no name, no kind and no message to carry. */
+export interface SchoolMasterOfferRequest {
+  to_user_id: string
+}
+
+/** One row of the CURATOR's roster: the member plus the curator's fields. is_visible is ALWAYS true for a student and reflects the live MasterProfile status for a master (I-4). The curator sees a suspended master as a row with is_visible=false -- "in the shadow" -- rather than watching them vanish, because the row is real and comes back by itself when the admin re-verifies. master_offer (BE-59) -- the curator's pending appointment of this member: awaiting_verification while they are not a verified master, awaiting_answer once they are; null when there is none. Live, like is_visible: a verification or a revocation moves it with no write. Neither field reaches the school's masters (BE-76, owner decision 2): their roster omits the suspended masters instead, and an appointment is the curator's business. */
+export interface SchoolMemberItem {
+  user_id: string
+  name: string
+  avatar_url: string | null
+  kind: 'master' | 'student'
+  joined_at: string
+  is_visible: boolean
+  master_offer?: 'awaiting_verification' | 'awaiting_answer' | null
+}
+
+/** Active memberships by kind -- the same rows the roster pages. */
+export interface SchoolMemberTotals {
+  masters: number
+  students: number
+}
+
+/** One row of GET /schools/mine. `relation` is the viewer's own tie to this group and is what the frontend keys the row's chip off. `transfer_offered` is true ONLY for the person being offered the group, and it is a bool rather than the full ref on purpose: this is a list row, and everything the offer contains is already known to whoever it was made to. The curator sees false here even for their own pending offer -- the list says "somebody is waiting on YOU", and nobody is. Until GT-4 the field was absent because a field that is always false is a promise with no writer behind it. */
+export interface SchoolMineItem {
+  id: string
+  name: string
+  description: string | null
+  avatar_url?: string | null
+  curator: SchoolCuratorRef
+  masters_count: number
+  students_count: number
+  relation: 'curator' | 'master' | 'student'
+  transfer_offered?: boolean
+}
+
+/** GET /schools/mine. */
+export interface SchoolMineResponse {
+  items: SchoolMineItem[]
+}
+
+/** GET /schools/{id} -- the group as a member sees it. Deliberately NOT the same shape as SchoolResponse (the curator's own row): that one is a management view keyed by ownership, this one carries `curator` and `viewer` because the reader is not necessarily the owner. Two shapes rather than one with half the fields null. `transfer` is filled for exactly two people -- the curator and the person being offered the group -- and is null for every other member (TZ 5.2). Null rather than an absent key: the field exists for everyone, only its value differs, which keeps one OpenAPI shape instead of two. A member who is not part of the deal learns nothing about it, not even that one is under way. */
+export interface SchoolPageResponse {
+  id: string
+  name: string
+  description: string | null
+  avatar_url?: string | null
+  curator: SchoolCuratorRef
+  masters_count: number
+  students_count: number
+  viewer: SchoolViewer
+  transfer?: SchoolTransferRef | null
+  created_at: string
+}
+
+/** The school's practices counted by lifecycle state. total = completed + upcoming; drafts, cancelled and deleted sessions are nobody's analytics and are absent from all three numbers. */
+export interface SchoolPracticeTotals {
+  total: number
+  completed: number
+  upcoming: number
+}
+
+/** GET /masters/me/schools/{id}/members/{user_id}/remove-preview. The same number for the member the curator is about to remove. Zero for a student, and zero -- not 404 -- for somebody who is not in the group at all: the removal itself is idempotent and answers 204 on that same target, so the advisory must not be stricter than the action it describes. */
+export interface SchoolRemovePreviewResponse {
+  upcoming_practices_targeting_school: number
+}
+
+/** One school, as its curator sees it. masters_count counts only VISIBLE masters -- members with kind='master' whose MasterProfile is verified right now (I-4). A suspended master keeps their row and disappears from this number until re-verification; the number and the roster's is_visible flag are computed from the same predicate, so they cannot disagree. students_count counts every kind='student' row. Visibility is a rule about masters; a student has no MasterProfile to be verified. `transfer` describes the group's pending hand-over, or null when there is none. Until GT-4 this field did not exist at all -- deliberately, so that a hardcoded null could not become a promise the frontend built on. It appears now BECAUSE it acquired a writer, which is the only reason a field ever should. PATCH returns this schema too, so renaming a group now reports the pending transfer alongside the new name. That is an intended widening, not a leak: one response shape has one field set, and the alternative -- two flavours of SchoolResponse, with and without -- is exactly the duplication SchoolTransferRef exists to avoid. A rename does not touch the offer. */
+export interface SchoolResponse {
+  id: string
+  name: string
+  description: string | null
+  avatar_url?: string | null
+  masters_count: number
+  students_count: number
+  transfer?: SchoolTransferRef | null
+  created_at: string
+}
+
+/** One named review left on a practice of this school. `rating` is the stored 1..10 score mapped to its zone (ScoreZone, BE-77), identical to what the practice's master reads in their own per-practice and cross-practice review feeds. user_id identifies the reviewer, as it does in the master's own review items; the screens behind it enforce their own access. */
+export interface SchoolReviewItem {
+  user_id: string
+  student_name: string
+  avatar_url: string | null
+  rating: ScoreZone
+  comment: string | null
+  practice_id: string
+  practice_title: string
+  created_at: string
+}
+
+/** One member of a school, as anyone allowed to see the roster sees it. The masters of the school read exactly this (GET .../roster, BE-76); the curator reads the same fact plus his own working fields (SchoolMemberItem below). One class describes "a member", the curator's projection only widens it -- there is no second format of the same row. */
+export interface SchoolRosterItem {
+  user_id: string
+  name: string
+  avatar_url: string | null
+  kind: 'master' | 'student'
+  joined_at: string
+}
+
 /** One PRE check-in the student left on a practice of this school. POST check-ins never appear, and neither do check-ins whose booking was cancelled: both are absent from the practice's own master's roster, and the school does not see deeper than the person who taught. */
 export interface SchoolStudentCheckinItem {
   mood: number
@@ -1900,7 +1878,7 @@ export interface SchoolStudentFeedbackItem {
   created_at: string
 }
 
-/** GET /masters/me/curator-groups/{group_id}/students/{user_id}. What the school knows about one of its students, across every practice of the school -- including practices taught by other masters, and including practices whose master has since left. Belonging is a fact about the practice, not about anybody's current membership (owner ruling, 10 September). practices_count -- practices of this school the student ATTENDED. hours -- their duration summed, in hours, one decimal, rounded on the server: the client does not compute this (TZ 1.13.3). Both are zero, and the arrays empty, for a student who has attended nothing -- a 200, never a 404. master_offer (BE-59) -- the state of the curator's pending appointment of this student, as on the roster. Filled for the CURATOR only; a master of the school reads null whatever the state, as a member outside a transfer reads null for it. */
+/** GET /masters/me/schools/{school_id}/students/{user_id}. What the school knows about one of its students, across every practice of the school -- including practices taught by other masters, and including practices whose master has since left. Belonging is a fact about the practice, not about anybody's current membership (owner ruling, 10 September). practices_count -- practices of this school the student ATTENDED. hours -- their duration summed, in hours, one decimal, rounded on the server: the client does not compute this (TZ 1.13.3). Both are zero, and the arrays empty, for a student who has attended nothing -- a 200, never a 404. master_offer (BE-59) -- the state of the curator's pending appointment of this student, as on the roster. Filled for the CURATOR only; a master of the school reads null whatever the state, as a member outside a transfer reads null for it. */
 export interface SchoolStudentProfileResponse {
   user_id: string
   display_name: string
@@ -1910,6 +1888,28 @@ export interface SchoolStudentProfileResponse {
   master_offer?: 'awaiting_verification' | 'awaiting_answer' | null
   recent_checkins: SchoolStudentCheckinItem[]
   recent_feedbacks: SchoolStudentFeedbackItem[]
+}
+
+/** One completed practice of the school with its engagement counts. Ordered by engagement (check-ins + reviews), newest first on ties -- "what actually landed", not a second feed, so no comment text and no student names ride along. */
+export interface SchoolTopPracticeItem {
+  practice_id: string
+  title: string
+  master_name: string
+  scheduled_at: string
+  checkins_count: number
+  reviews_count: number
+}
+
+/** A pending offer to hand the group over. ONE schema for all three places that report an offer (the curator's own row, that row after a PATCH, and the group page). Three flat triples of the same fields would drift the first time one of them gained a fourth. to_display_name uses display_name(first_name, last_name) from users/helpers.py, NOT the master-profile lookup _curator_display_name uses. The tree holds two different naming rules and this is a deliberate pick between them: the addressee here is a PERSON being offered something, not a public master card, and the profile-based rule may return None -- which would leave the confirm dialog reading "offer sent to —". display_name always yields something, falling back to the neutral «Участник». */
+export interface SchoolTransferRef {
+  to_user_id: string
+  to_display_name: string
+  requested_at: string
+}
+
+/** The requesting user's own tie to the group being viewed. */
+export interface SchoolViewer {
+  relation: 'curator' | 'master' | 'student'
 }
 
 /** Counts of 1..10 scores per zone (BE-77) -- THE distribution shape. One class for every server distribution, check-in moods and feedback ratings alike: the practice insights, the master's analytics, the admin feedback metric and the school aggregate. The keys are ScoreZone, the boundaries live in diary.insights_service.score_zone: bad 1-2, low 3-4, neutral 5-6, good 7-8, fire 9-10 -- the frontend's moodScale.ts keys. One class is also one OpenAPI component, so there is no module-qualified name collision to dodge. CR-01: fields are required (no default=0). This is a response-only schema -- the service always provides all five (zone_counts). */
@@ -1927,9 +1927,9 @@ export interface SeriesPoint {
   value: number
 }
 
-/** PATCH /admin/masters/{user_id}/can-create-groups -- request body. GT-15. ONE toggle rather than a grant endpoint and a revoke endpoint: the thing being set is a single boolean, and a pair of verbs would make "grant twice" and "revoke what was never granted" two separate questions to answer instead of one idempotent write. Not routed through a second verification: verify_master goes through _load_pending_profile, which answers 409 on anything that is not pending -- so an already-verified master could never be reached that way, which is precisely the master this endpoint exists for. */
-export interface SetMasterGroupRightRequest {
-  can_create_groups: boolean
+/** PATCH /admin/masters/{user_id}/can-create-schools -- request body. GT-15. ONE toggle rather than a grant endpoint and a revoke endpoint: the thing being set is a single boolean, and a pair of verbs would make "grant twice" and "revoke what was never granted" two separate questions to answer instead of one idempotent write. Not routed through a second verification: verify_master goes through _load_pending_profile, which answers 409 on anything that is not pending -- so an already-verified master could never be reached that way, which is precisely the master this endpoint exists for. */
+export interface SetMasterSchoolRightRequest {
+  can_create_schools: boolean
 }
 
 /** PUT /masters/me/students/{student_user_id}/tag. tag: null clears the tag (deletes the master_student row if it would otherwise be empty -- i.e. not blocked either). */
@@ -2078,13 +2078,6 @@ export interface TranscribeResponse {
   text: string
 }
 
-/** PATCH /masters/me/curator-groups/{id}. `name` is always required -- a group always has one. `description` is a PARTIAL update. The router computes `"description" in body.model_dump(exclude_unset=True)` and passes it as description_provided, which is the only way to tell "the key was absent" (leave the column alone) from "the key was sent as null/empty" (write NULL). A bare `str | None = None` cannot distinguish the two and would wipe an existing description on every plain rename -- the exact bug RenameGroupRequest was rewritten to prevent. avatar_url (GT-17) is a PARTIAL update by the same mechanism and for the same reason -- the router computes avatar_url_provided the same way. Absent key: the column is untouched. Present and null (or blank): the avatar is removed. Present and a url: it is replaced. CREATION DOES NOT TAKE AN AVATAR, only this update does. A school is founded with a name and a description; the picture is attached afterwards. Not an omission -- widening CreateCuratorGroupRequest would touch a schema five test files exercise, for a field the create screen has no input for. */
-export interface UpdateCuratorGroupRequest {
-  name: string
-  description?: string | null
-  avatar_url?: string | null
-}
-
 /** PATCH /api/v1/diary/{id} body. All fields optional. Only provided fields are updated. */
 export interface UpdateDiaryEntryRequest {
   content?: string | null
@@ -2119,12 +2112,19 @@ export interface UpdatePracticeRequest {
   style?: string | null
   audience_kind?: AudienceKind | null
   group_ids?: string[] | null
-  curator_group_id?: string | null
+  school_id?: string | null
 }
 
 /** User edits their own pending report (reason only). */
 export interface UpdateReportRequest {
   reason: string
+}
+
+/** PATCH /masters/me/schools/{id}. `name` is always required -- a group always has one. `description` is a PARTIAL update. The router computes `"description" in body.model_dump(exclude_unset=True)` and passes it as description_provided, which is the only way to tell "the key was absent" (leave the column alone) from "the key was sent as null/empty" (write NULL). A bare `str | None = None` cannot distinguish the two and would wipe an existing description on every plain rename -- the exact bug RenameGroupRequest was rewritten to prevent. avatar_url (GT-17) is a PARTIAL update by the same mechanism and for the same reason -- the router computes avatar_url_provided the same way. Absent key: the column is untouched. Present and null (or blank): the avatar is removed. Present and a url: it is replaced. CREATION DOES NOT TAKE AN AVATAR, only this update does. A school is founded with a name and a description; the picture is attached afterwards. Not an omission -- widening CreateSchoolRequest would touch a schema five test files exercise, for a field the create screen has no input for. */
+export interface UpdateSchoolRequest {
+  name: string
+  description?: string | null
+  avatar_url?: string | null
 }
 
 /** PATCH direction/style -- partial update. Only the fields the client actually sends are applied (service reads model_dump(exclude_unset=True), same partial-PATCH contract as editMasterProfile). is_active=false is how a direction/style is deactivated -- there is no separate hard-delete endpoint. */
@@ -2188,7 +2188,7 @@ export interface VerifyMasterRequest {
   notes?: string | null
   promote?: string[]
   master_only?: string[]
-  can_create_groups?: boolean
+  can_create_schools?: boolean
 }
 
 /** Response from POST /waitlist/{id}/confirm. Returns both the converted waitlist entry and the new booking id. */
