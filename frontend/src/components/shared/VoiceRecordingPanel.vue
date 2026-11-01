@@ -188,7 +188,7 @@ const formattedTime = computed(() => formatStopwatch(props.elapsedSec))
 
 .voice-panel__time {
   font-family: var(--font-body);
-  font-size: var(--text-16);
+  font-size: var(--velo-fs-16);
   letter-spacing: 0.32px;
   color: var(--velo-text-primary);
   /* The stopwatch must not breathe with digit changes. */
@@ -197,7 +197,7 @@ const formattedTime = computed(() => formatStopwatch(props.elapsedSec))
 
 .voice-panel__busy {
   font-family: var(--font-body);
-  font-size: var(--text-16);
+  font-size: var(--velo-fs-16);
   letter-spacing: 0.32px;
   color: var(--velo-text-secondary);
   white-space: nowrap;

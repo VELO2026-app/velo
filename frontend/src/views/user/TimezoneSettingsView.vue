@@ -208,7 +208,7 @@ async function onTimezoneChange(value: string): Promise<void> {
 
 .tz-settings__section-title {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -274,7 +274,7 @@ async function onTimezoneChange(value: string): Promise<void> {
 .tz-settings__subtitle {
   margin: calc(-1 * var(--space-2)) 0 0;
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   line-height: 1.35;
 }

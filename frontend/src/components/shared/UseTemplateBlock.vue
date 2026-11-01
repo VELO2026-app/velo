@@ -189,7 +189,7 @@ function select(p: PracticeResponse): void {
   background: transparent;
   border: none;
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   cursor: pointer;
 }
@@ -214,7 +214,7 @@ function select(p: PracticeResponse): void {
 .use-template__empty {
   text-align: center;
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-muted);
   padding: var(--space-2) var(--space-2) var(--space-3);
 }
@@ -298,7 +298,7 @@ function select(p: PracticeResponse): void {
 }
 
 .use-template__card-title {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   letter-spacing: 0.02em;
   white-space: nowrap;
   overflow: hidden;
@@ -306,7 +306,7 @@ function select(p: PracticeResponse): void {
 }
 
 .use-template__card-meta {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   letter-spacing: 0.02em;
 }

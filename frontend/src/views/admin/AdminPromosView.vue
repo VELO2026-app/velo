@@ -294,7 +294,7 @@ onMounted(loadInitial)
   flex: 1;
   font-family: var(--font-body);
   font-weight: 400;
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }
@@ -311,7 +311,7 @@ onMounted(loadInitial)
   align-items: center;
   justify-content: center;
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   letter-spacing: 0.02em;
 }
 
@@ -357,12 +357,12 @@ onMounted(loadInitial)
 }
 
 .pcard__owner-label {
-  font-size: var(--velo-fs-11);
+  font-size: var(--velo-fs-12);
   color: var(--velo-text-muted);
 }
 
 .pcard__owner-name {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -393,7 +393,7 @@ onMounted(loadInitial)
 }
 
 .pcard__code {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -402,7 +402,7 @@ onMounted(loadInitial)
 
 .pcard__meta {
   margin-top: var(--space-2);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   line-height: 1.6;
 }

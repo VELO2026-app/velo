@@ -147,7 +147,7 @@ const iconComponent = computed(
 
 .hero-card__title {
   font-family: var(--font-body);
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -156,7 +156,7 @@ const iconComponent = computed(
 
 /* Master-head canon (additive opt-in via titleSize="base"). */
 .hero-card__title--base {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
 }
 
 /* Optional below-meta row (master detail rating badges). */
@@ -172,7 +172,7 @@ const iconComponent = computed(
   flex-wrap: wrap;
   gap: var(--space-3);
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
 }
 
@@ -188,7 +188,7 @@ const iconComponent = computed(
   gap: var(--space-2);
   margin-top: var(--space-1);
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
 }
 
@@ -223,7 +223,7 @@ const iconComponent = computed(
 }
 
 .hero-card--form .hero-card__title {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   margin-bottom: var(--space-4);
 }
 

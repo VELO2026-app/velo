@@ -88,7 +88,7 @@ defineEmits<{
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-muted);
   background: var(--velo-glass-blue-15);
   border: 1px solid var(--velo-glass-border);
@@ -110,7 +110,7 @@ defineEmits<{
 .v-segment__badge {
   background: var(--velo-glass-white-30);
   color: inherit;
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   padding: var(--space-hairline) var(--velo-gap-6);
   border-radius: var(--radius-full);
 }
@@ -131,7 +131,7 @@ defineEmits<{
 .v-segment--compact .v-segment__item {
   flex: 0 0 auto;
   padding: var(--space-1) var(--space-3);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-primary);
   background: transparent;
   border: none;

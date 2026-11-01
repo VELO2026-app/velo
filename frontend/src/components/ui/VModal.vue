@@ -187,7 +187,7 @@ onUnmounted(() => {
   border: none;
   background: var(--velo-bg-subtle);
   border-radius: var(--radius-full);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-muted);
   cursor: pointer;
   transition:

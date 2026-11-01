@@ -38,7 +38,7 @@ const router = useRouter()
 }
 .not-found__title {
   font-family: var(--font-body);
-  font-size: var(--text-2xl);
+  font-size: var(--velo-fs-48);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -46,7 +46,7 @@ const router = useRouter()
 }
 .not-found__text {
   font-family: var(--font-body);
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   color: var(--velo-text-muted);
   margin-bottom: var(--space-5);
 }
@@ -55,7 +55,7 @@ const router = useRouter()
   background: var(--velo-primary);
   color: var(--velo-white);
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   border: 1px solid var(--velo-glass-border);
   border-radius: var(--radius-full);
   backdrop-filter: blur(2px);

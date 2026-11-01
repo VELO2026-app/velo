@@ -137,7 +137,7 @@ const dateLabel = computed(
 }
 
 .dsr-row__title {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -145,7 +145,7 @@ const dateLabel = computed(
 }
 
 .dsr-row__preview {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -166,7 +166,7 @@ mark.dsr-row__hit {
   flex-shrink: 0;
   align-self: flex-start;
   margin-top: var(--space-1);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   white-space: nowrap;
 }

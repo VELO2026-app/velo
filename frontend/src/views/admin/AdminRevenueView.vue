@@ -161,7 +161,7 @@ watch(period, load)
 }
 .admin-detail__title {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }
@@ -177,7 +177,7 @@ watch(period, load)
 }
 .admin-detail__section {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -192,12 +192,12 @@ watch(period, load)
   margin: 0;
   text-align: center;
   color: var(--velo-text-muted);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   padding: var(--space-4) var(--space-2);
 }
 .admin-revenue__earned {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
   white-space: nowrap;

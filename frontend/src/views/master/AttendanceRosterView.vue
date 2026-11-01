@@ -293,7 +293,7 @@ onMounted(load)
 }
 
 .roster__name {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }

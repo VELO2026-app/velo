@@ -284,7 +284,7 @@ async function onPurchase(): Promise<void> {
 <style scoped>
 .popup__title {
   font-family: var(--font-body);
-  font-size: var(--text-xl);
+  font-size: var(--velo-fs-32);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -309,13 +309,13 @@ async function onPurchase(): Promise<void> {
 
 .popup__label {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-muted);
 }
 
 .popup__value {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   text-align: right;
   max-width: 60%;
@@ -332,7 +332,7 @@ async function onPurchase(): Promise<void> {
   flex: 1;
   padding: var(--velo-gap-11) var(--space-4);
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   background: var(--velo-glass-blue-15);
   border: 2px solid transparent;
@@ -363,13 +363,13 @@ async function onPurchase(): Promise<void> {
 
 .popup__discount-label {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-success);
 }
 
 .popup__discount-value {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-success);
 }
 
@@ -385,13 +385,13 @@ async function onPurchase(): Promise<void> {
 
 .popup__total-label {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
 }
 
 .popup__total-value {
   font-family: var(--font-body);
-  font-size: var(--text-xl);
+  font-size: var(--velo-fs-32);
   color: var(--velo-primary);
 }
 
@@ -403,7 +403,7 @@ async function onPurchase(): Promise<void> {
   border: 1px solid var(--velo-warning);
   border-radius: var(--radius-md);
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-warning-text);
 }
 

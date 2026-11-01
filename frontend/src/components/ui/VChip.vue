@@ -80,7 +80,7 @@ defineEmits<{
   border: 1px solid var(--velo-glass-border);
   border-radius: var(--radius-full);
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-primary);
   white-space: nowrap;
 }

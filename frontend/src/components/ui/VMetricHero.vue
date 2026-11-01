@@ -61,14 +61,14 @@ defineProps<{
 
 .v-metric-hero__value {
   font-family: var(--font-heading);
-  font-size: var(--text-xl);
+  font-size: var(--velo-fs-32);
   color: var(--velo-text-primary);
   letter-spacing: 0.64px;
   line-height: 1.05;
 }
 
 .v-metric-hero__label {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-secondary);
   letter-spacing: 0.02em;
 }

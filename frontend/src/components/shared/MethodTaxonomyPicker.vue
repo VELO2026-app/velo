@@ -337,7 +337,7 @@ const customText = computed<string>({
 }
 
 .mtp__styles-title {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   letter-spacing: 0.02em;
 }

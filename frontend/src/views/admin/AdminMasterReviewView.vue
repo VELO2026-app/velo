@@ -1136,7 +1136,7 @@ onMounted(loadMaster)
 .mreview__title {
   font-family: var(--font-body);
   font-weight: 400;
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }
@@ -1171,20 +1171,20 @@ onMounted(loadMaster)
 }
 
 .mreview__name {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }
 
 .mreview__email {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   letter-spacing: 0.02em;
 }
 
 /* -- Section label -- */
 .mreview__seclabel {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
   margin: var(--velo-gap-2) var(--velo-gap-2) calc(-1 * var(--velo-gap-6));
@@ -1205,13 +1205,13 @@ onMounted(loadMaster)
 }
 
 .mreview__k {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   letter-spacing: 0.02em;
 }
 
 .mreview__v {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
   margin-top: var(--velo-gap-3);
@@ -1253,7 +1253,7 @@ onMounted(loadMaster)
 
 .mreview__methods-err {
   margin: 0;
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-error);
 }
 
@@ -1276,7 +1276,7 @@ onMounted(loadMaster)
 
 .mreview__edit-err {
   margin: 0;
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-error);
 }
 
@@ -1327,7 +1327,7 @@ onMounted(loadMaster)
 .mreview__doc-name {
   flex: 1;
   min-width: 0;
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   letter-spacing: 0.02em;
   white-space: nowrap;
   overflow: hidden;
@@ -1348,7 +1348,7 @@ onMounted(loadMaster)
   margin: 0;
   text-align: center;
   color: var(--velo-text-muted);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   padding: var(--space-3) var(--space-2);
 }
 
@@ -1366,7 +1366,7 @@ onMounted(loadMaster)
 
 :deep(.v-accordion__header) {
   padding: var(--velo-gap-15) var(--velo-inset-row);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
 }
 
 :deep(.v-accordion__lead) {
@@ -1409,20 +1409,20 @@ onMounted(loadMaster)
 }
 
 .mreview__hist-when {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-peach-500);
   letter-spacing: 0.02em;
 }
 
 .mreview__hist-title {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
   margin-top: var(--space-2);
 }
 
 .mreview__hist-q {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   letter-spacing: 0.02em;
   margin-top: var(--velo-gap-6);
@@ -1431,7 +1431,7 @@ onMounted(loadMaster)
 
 .mreview__first {
   margin: 0;
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-muted);
   letter-spacing: 0.02em;
 }
@@ -1459,7 +1459,7 @@ onMounted(loadMaster)
 .mreview__grant-note {
   flex-basis: 100%;
   margin: 0;
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   line-height: 1.5;
   color: var(--velo-text-muted);
 }
@@ -1482,7 +1482,7 @@ onMounted(loadMaster)
 /* -- Processed (non-pending) note -- */
 .mreview__processed {
   text-align: center;
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-muted);
 }
 </style>

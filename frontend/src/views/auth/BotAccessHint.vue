@@ -56,7 +56,7 @@ const botUrl = INSTANCE.telegramBotUrl
 
 .bot-hint__text {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   line-height: 1.4;
   margin: 0 0 var(--space-4) 0;
@@ -75,7 +75,7 @@ const botUrl = INSTANCE.telegramBotUrl
   justify-content: center;
   height: var(--velo-size-50);
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   border-radius: var(--radius-full);
   text-decoration: none;
   cursor: pointer;

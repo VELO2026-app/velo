@@ -556,7 +556,7 @@ async function submit(skipDocuments = false): Promise<void> {
 
 .apply-view__step-title {
   font-family: var(--font-body);
-  font-size: var(--text-xl);
+  font-size: var(--velo-fs-32);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -565,7 +565,7 @@ async function submit(skipDocuments = false): Promise<void> {
 }
 
 .apply-view__intro {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   /* Brightened from --velo-text-muted → secondary so the privacy copy is legible
      over the photo background (J3a). */
   color: var(--velo-text-secondary);
@@ -581,14 +581,14 @@ async function submit(skipDocuments = false): Promise<void> {
 }
 
 .apply-view__label {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
   -webkit-text-stroke: var(--velo-text-stroke-strong) var(--velo-text-primary);
 }
 
 .apply-view__hint {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   /* MA2 (operator 2026-07-12): brightened to match .apply-view__intro so the
      Step-3 upload captions (Паспорт/Сертификаты/Фото профиля) read at the same
      legibility as the top privacy paragraph, not the fainter muted tone. */
@@ -606,7 +606,7 @@ async function submit(skipDocuments = false): Promise<void> {
 .apply-view__field-error {
   min-height: 17px;
   margin: 0;
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   line-height: 1.2;
   color: var(--velo-error);
   opacity: 0;
@@ -655,7 +655,7 @@ async function submit(skipDocuments = false): Promise<void> {
 }
 
 .apply-view__upload-text {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   letter-spacing: 0.02em;
 }
 
@@ -675,7 +675,7 @@ async function submit(skipDocuments = false): Promise<void> {
 .apply-view__filechip-name {
   flex: 1;
   min-width: 0;
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -693,7 +693,7 @@ async function submit(skipDocuments = false): Promise<void> {
 /* Skip-documents info note (documents optional until E13 upload ships). */
 .apply-view__skip-note {
   padding: var(--space-3);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-muted);
   line-height: 1.4;
 }

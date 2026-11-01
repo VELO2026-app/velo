@@ -163,7 +163,7 @@ onMounted(load)
   flex: 1;
   font-family: var(--font-body);
   font-weight: 400;
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }
@@ -180,7 +180,7 @@ onMounted(load)
   align-items: center;
   justify-content: center;
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   letter-spacing: 0.02em;
 }
 
@@ -200,7 +200,7 @@ onMounted(load)
   margin: 0;
   text-align: center;
   color: var(--velo-text-muted);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   padding: var(--space-4) var(--space-2);
 }
 
@@ -209,7 +209,7 @@ onMounted(load)
   display: inline-flex;
   align-items: center;
   gap: var(--velo-gap-6);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
 }
 

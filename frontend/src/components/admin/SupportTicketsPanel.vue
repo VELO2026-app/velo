@@ -273,14 +273,14 @@ onMounted(loadInitial)
   background: var(--velo-primary);
   color: var(--velo-white);
   font-family: var(--font-body);
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   letter-spacing: 0.02em;
   cursor: pointer;
   box-shadow: var(--velo-shadow-glow);
 }
 
 .tickets__active {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
   margin: calc(-1 * var(--space-1)) var(--velo-gap-2);
@@ -325,7 +325,7 @@ onMounted(loadInitial)
 }
 
 .scard__title {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
   white-space: nowrap;
@@ -335,7 +335,7 @@ onMounted(loadInitial)
 
 .scard__sub,
 .scard__claim {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   letter-spacing: 0.02em;
   white-space: nowrap;

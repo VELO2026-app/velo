@@ -701,7 +701,7 @@ defineExpose({ focus: focusField, discardDraft })
   resize: none;
   background: transparent;
   font-family: var(--font-body);
-  font-size: var(--text-16);
+  font-size: var(--velo-fs-16);
   letter-spacing: 0.32px;
   line-height: 1.3;
   color: var(--velo-text-primary);
@@ -749,7 +749,7 @@ defineExpose({ focus: focusField, discardDraft })
   overflow: hidden;
   text-overflow: ellipsis;
   font-family: var(--font-body);
-  font-size: var(--text-16);
+  font-size: var(--velo-fs-16);
   letter-spacing: 0.32px;
   color: var(--velo-text-primary);
   opacity: 0.85;

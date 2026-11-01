@@ -109,7 +109,7 @@ defineEmits<{
 
 .welcome__message {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-secondary);
   margin: 0 0 var(--space-8) 0;
   max-width: 280px;
@@ -131,7 +131,7 @@ defineEmits<{
   width: 100%;
   height: var(--velo-size-50);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   cursor: pointer;
   border-radius: var(--radius-full);
   border: 1px solid var(--velo-glass-border);

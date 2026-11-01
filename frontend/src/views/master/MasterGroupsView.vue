@@ -376,7 +376,7 @@ const matchingGroups = computed((): GroupListItem[] => {
    both superseded by the owner's option-B ruling (probekit sweep 2026-08,
    item 9; variables.css:49). */
 .groups__search-field :deep(.v-input__field::placeholder) {
-  font-size: var(--text-16);
+  font-size: var(--velo-fs-16);
 }
 
 .groups__row-wrap {

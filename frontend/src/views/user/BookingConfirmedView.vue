@@ -248,7 +248,7 @@ onMounted(() => {
 
 .booking-confirmed__title {
   font-family: var(--font-body);
-  font-size: var(--text-xl);
+  font-size: var(--velo-fs-32);
   font-weight: 400;
   color: var(--velo-text-primary);
   margin: 0;
@@ -256,7 +256,7 @@ onMounted(() => {
 
 .booking-confirmed__text {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   line-height: 1.6;
   margin: 0;

@@ -240,7 +240,7 @@ function onMasterToggle(value: boolean): void {
 
 .notifications__section-title {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -267,13 +267,13 @@ function onMasterToggle(value: boolean): void {
 }
 
 .notifications__label {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }
 
 .notifications__sub {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   letter-spacing: 0.02em;
   line-height: 1.25;

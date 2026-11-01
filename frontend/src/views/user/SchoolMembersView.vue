@@ -511,7 +511,7 @@ function openMember(member: CuratorGroupRosterItem): void {
 }
 .school-members__blocked-meta {
   color: var(--velo-text-secondary);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
 }
 .school-members {
   min-height: 100%;

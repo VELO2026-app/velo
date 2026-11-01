@@ -314,7 +314,7 @@ onMounted(() => {
 
 .bookings__section-title {
   font-family: var(--font-body);
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;

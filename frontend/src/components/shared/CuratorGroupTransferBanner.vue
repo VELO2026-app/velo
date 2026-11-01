@@ -146,7 +146,7 @@ async function onDecline(): Promise<void> {
 }
 
 .cgt__text {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   line-height: 1.5;
   margin: 0;

@@ -120,7 +120,7 @@ const initials = computed(() => {
 .v-avatar--sm {
   width: 32px;
   height: 32px;
-  font-size: var(--text-12);
+  font-size: var(--velo-fs-12);
 }
 
 .v-avatar--md {

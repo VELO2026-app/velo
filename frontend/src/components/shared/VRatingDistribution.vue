@@ -86,7 +86,7 @@ const bars = computed((): RatingBar[] => {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
 }
 
@@ -104,7 +104,7 @@ const bars = computed((): RatingBar[] => {
 }
 
 .v-rating-dist__meta {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
 }
 </style>

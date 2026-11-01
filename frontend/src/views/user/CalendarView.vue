@@ -479,7 +479,7 @@ onActivated(() => {
 .calendar__heading {
   font-family: var(--font-body);
   /* Figma 2266:2307 — заголовок 18 (text-base), не text-lg. */
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -535,7 +535,7 @@ onActivated(() => {
 
 .calendar__select-label {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-white);
 }
 
@@ -568,7 +568,7 @@ onActivated(() => {
   border: none;
   border-radius: var(--radius-full);
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   cursor: pointer;
   transition: opacity var(--transition-fast);
   white-space: nowrap;
@@ -590,7 +590,7 @@ onActivated(() => {
 
 .calendar__chips-empty {
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   align-self: center;
 }
@@ -611,7 +611,7 @@ onActivated(() => {
 /* -- Day list -- */
 .calendar__date-header {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   font-weight: 400;
   color: var(--velo-text-primary);
   margin: var(--space-2) 0 var(--space-1);

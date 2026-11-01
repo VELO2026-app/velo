@@ -567,7 +567,7 @@ async function onSubmit(): Promise<void> {
   min-width: 0;
   margin: 0;
   font-family: var(--font-heading);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   letter-spacing: 0.36px;
   color: var(--velo-text-primary);
   white-space: nowrap;
@@ -616,7 +616,7 @@ async function onSubmit(): Promise<void> {
   border-radius: var(--velo-radius-12);
   padding: var(--velo-gap-11) var(--space-4);
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-pink-700);
 }
 
@@ -648,7 +648,7 @@ async function onSubmit(): Promise<void> {
   text-align: left;
   padding: 0 var(--space-4);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   background: var(--velo-bg-card-solid);
   border: 2px solid transparent;
@@ -679,7 +679,7 @@ async function onSubmit(): Promise<void> {
 .ea__field-error {
   display: block;
   min-height: 17px;
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   line-height: 1.2;
   color: var(--velo-error);
   margin-top: 0;
@@ -738,7 +738,7 @@ async function onSubmit(): Promise<void> {
   border-radius: var(--radius-full);
   color: var(--velo-white);
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
 }
 
 .ea__chip-remove {
@@ -792,7 +792,7 @@ async function onSubmit(): Promise<void> {
   /* Right padding reserves the nested disc's seat (36px + breathing). */
   padding: 0 var(--size-field-disc-clearance) 0 var(--space-4);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   background: transparent;
   border: 1.5px solid var(--velo-border);
@@ -915,7 +915,7 @@ async function onSubmit(): Promise<void> {
   transform: translateZ(0);
   box-shadow: var(--velo-shadow-glass);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   font-weight: 600;
   color: var(--velo-text-primary);
   cursor: pointer;

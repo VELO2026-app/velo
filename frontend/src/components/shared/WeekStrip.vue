@@ -496,7 +496,7 @@ function onDayClick(dateKey: string): void {
 
 .week-strip__weekday {
   font-family: var(--font-body);
-  font-size: var(--text-10);
+  font-size: var(--velo-fs-10);
   color: var(--velo-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.02em;
@@ -504,7 +504,7 @@ function onDayClick(dateKey: string): void {
 
 .week-strip__num {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   line-height: 1.2;
 }
@@ -581,7 +581,7 @@ function onDayClick(dateKey: string): void {
 
 .week-strip__month-chip-months span {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
   line-height: 1.1;

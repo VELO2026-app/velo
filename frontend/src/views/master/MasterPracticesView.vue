@@ -478,13 +478,13 @@ onUnmounted(() => {
 }
 
 .mp-card__title {
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   color: var(--velo-text-primary);
   letter-spacing: 0.3px;
 }
 
 .mp-card__sub {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   margin-top: var(--velo-gap-3);
 }
@@ -494,7 +494,7 @@ onUnmounted(() => {
   flex-wrap: wrap;
   gap: var(--space-2) var(--space-4);
   margin-top: var(--space-3);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-primary);
 }
 

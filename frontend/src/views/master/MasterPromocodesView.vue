@@ -232,12 +232,12 @@ onMounted(load)
 }
 
 .promo__code {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
 }
 
 .promo__meta {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   line-height: 1.6;
 }

@@ -185,7 +185,7 @@ const masterInitial = computed(() => {
 }
 
 .practice-list-card__title {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   font-weight: 400;
   letter-spacing: var(--velo-card-letter-spacing-title);
   line-height: 1.05;
@@ -198,7 +198,7 @@ const masterInitial = computed(() => {
   display: flex;
   align-items: center;
   gap: var(--velo-card-meta-row-gap);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   letter-spacing: var(--velo-card-letter-spacing-meta);
 }
@@ -212,7 +212,7 @@ const masterInitial = computed(() => {
   border-radius: var(--radius-full);
   background: var(--velo-glass-blue-15);
   color: var(--velo-text-secondary);
-  font-size: var(--text-8);
+  font-size: var(--velo-fs-8);
   flex-shrink: 0;
 }
 
@@ -240,7 +240,7 @@ const masterInitial = computed(() => {
   flex-shrink: 0;
   text-align: center;
   white-space: nowrap;
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   letter-spacing: var(--velo-card-letter-spacing-meta);
 }
@@ -255,7 +255,7 @@ const masterInitial = computed(() => {
   align-items: center;
   flex-shrink: 0;
   gap: var(--space-1);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   white-space: nowrap;
 }

@@ -321,13 +321,13 @@ const decodedReason = computed(() => decodeReportReason(report.value?.reason ?? 
 }
 
 .report-detail__type {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-muted);
   margin-left: auto;
 }
 
 .report-detail__section-title {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-muted);
   text-transform: uppercase;
   letter-spacing: var(--velo-letter-spacing-05);
@@ -335,7 +335,7 @@ const decodedReason = computed(() => decodeReportReason(report.value?.reason ?? 
 }
 
 .report-detail__reason {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   line-height: 1.6;
 }
@@ -363,20 +363,20 @@ const decodedReason = computed(() => decodeReportReason(report.value?.reason ?? 
 }
 
 .report-detail__meta-key {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-muted);
   flex-shrink: 0;
 }
 
 .report-detail__meta-val {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   text-align: right;
 }
 
 .report-detail__meta-val--mono {
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
 }
 
 .report-detail__meta-val--link {
@@ -389,7 +389,7 @@ const decodedReason = computed(() => decodeReportReason(report.value?.reason ?? 
 }
 
 .report-detail__meta-note {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   line-height: 1.5;
   margin-top: var(--space-1);
@@ -403,7 +403,7 @@ const decodedReason = computed(() => decodeReportReason(report.value?.reason ?? 
 
 .report-detail__processed {
   text-align: center;
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-muted);
 }
 

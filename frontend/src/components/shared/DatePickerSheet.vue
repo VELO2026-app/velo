@@ -282,7 +282,7 @@ function save(): void {
   align-items: center;
   gap: var(--space-2);
   font-family: var(--font-body);
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   color: var(--velo-primary);
   background: none;
   border: none;
@@ -339,7 +339,7 @@ function save(): void {
   height: 30px;
   display: flex;
   align-items: center;
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-primary);
   opacity: 0.7;
 }
@@ -352,7 +352,7 @@ function save(): void {
   align-items: center;
   justify-content: center;
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-primary);
   background: none;
   border: 1px solid var(--velo-primary);

@@ -118,7 +118,7 @@ async function onLogout(): Promise<void> {
 
 .admin-profile__name {
   font-family: var(--font-body);
-  font-size: var(--text-xl);
+  font-size: var(--velo-fs-32);
   font-weight: 400;
   color: var(--velo-text-primary);
   line-height: 1.2;
@@ -134,14 +134,14 @@ async function onLogout(): Promise<void> {
 }
 
 .admin-profile__section-title {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-muted);
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
 .admin-profile__section-desc {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   line-height: 1.5;
 }

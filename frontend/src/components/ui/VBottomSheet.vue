@@ -333,7 +333,7 @@ onUnmounted(() => {
 
 .v-sheet__title {
   font-family: var(--font-heading);
-  font-size: var(--text-xl);
+  font-size: var(--velo-fs-32);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -344,7 +344,7 @@ onUnmounted(() => {
 /* Opt-in (PROMPT №609, G11) -- see this component's own header for why
    this is a modifier, not a change to .v-sheet__title itself. */
 .v-sheet__title--compact {
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
 }
 
 /* T24-25/32 (PROMPT №634) -- see the file header for why this is a prop-
@@ -367,7 +367,7 @@ onUnmounted(() => {
   border: 1px solid var(--velo-glass-border);
   box-shadow: var(--velo-shadow-glow);
   font-family: var(--font-body);
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   letter-spacing: 0.02em;
   cursor: pointer;
   transition: background-color var(--transition-fast);
@@ -403,7 +403,7 @@ onUnmounted(() => {
   border: 1px solid var(--velo-glass-border);
   box-shadow: var(--velo-shadow-glow);
   font-family: var(--font-body);
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   letter-spacing: 0.02em;
   cursor: pointer;
   transition: background-color var(--transition-fast);

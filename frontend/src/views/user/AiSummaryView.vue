@@ -78,7 +78,7 @@ function goToDashboard(): void {
 
 .ai-summary__title {
   font-family: var(--font-body);
-  font-size: var(--text-xl);
+  font-size: var(--velo-fs-32);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -87,7 +87,7 @@ function goToDashboard(): void {
 
 .ai-summary__text {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   max-width: 280px;
   line-height: 1.5;

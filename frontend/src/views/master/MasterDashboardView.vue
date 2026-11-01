@@ -688,7 +688,7 @@ onUnmounted(() => {
   margin: 0;
   text-align: center;
   color: var(--velo-text-muted);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   line-height: 1.5;
   padding: var(--space-1) var(--space-2);
 }
@@ -746,7 +746,7 @@ onUnmounted(() => {
 
 .master-dashboard__practice-title {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: var(--velo-card-letter-spacing-title);
   white-space: nowrap;
@@ -756,7 +756,7 @@ onUnmounted(() => {
 
 .master-dashboard__practice-sub {
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   letter-spacing: var(--velo-card-letter-spacing-meta);
 }
@@ -769,7 +769,7 @@ onUnmounted(() => {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2) var(--space-4);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   letter-spacing: var(--velo-card-letter-spacing-meta);
   margin-top: var(--space-3);
@@ -808,7 +808,7 @@ onUnmounted(() => {
 /* Card action buttons: 20px label (design); secondary action is a light glass
    fill (blue-200 @ .15) — far more transparent than the default secondary. */
 .master-dashboard__practice-actions :deep(.v-btn) {
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
 }
 
 .master-dashboard__practice-actions :deep(.v-btn--secondary) {

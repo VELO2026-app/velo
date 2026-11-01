@@ -115,7 +115,7 @@ const dayGroups = computed<DayGroup[]>(() => {
 }
 
 .diary-list__divider span {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   white-space: nowrap;
 }
@@ -132,7 +132,7 @@ const dayGroups = computed<DayGroup[]>(() => {
 
 .diary-list__not-sent {
   margin: var(--space-1) 0 0;
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   text-align: center;
 }

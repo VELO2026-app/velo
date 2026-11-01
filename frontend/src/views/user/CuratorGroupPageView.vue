@@ -635,7 +635,7 @@ function onTransferDeclined(): void {
 
 /* The avatar-link hint inside the edit sheet (BE-20). */
 .cgp__edit-hint {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   margin: 0 0 var(--space-2);
 }

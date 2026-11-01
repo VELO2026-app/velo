@@ -277,7 +277,7 @@ watch(
   flex: 1;
   font-family: var(--font-body);
   font-weight: 400;
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }
@@ -295,14 +295,14 @@ watch(
   background: var(--velo-primary);
   color: var(--velo-white);
   font-family: var(--font-body);
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   letter-spacing: 0.02em;
   cursor: pointer;
   box-shadow: var(--velo-shadow-glow);
 }
 
 .admin-reports__active {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
   margin: calc(-1 * var(--space-1)) var(--velo-gap-2);
@@ -352,7 +352,7 @@ watch(
 }
 
 .rcard__title {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
   white-space: nowrap;
@@ -361,7 +361,7 @@ watch(
 }
 
 .rcard__sub {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   letter-spacing: 0.02em;
 }

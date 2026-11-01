@@ -131,7 +131,7 @@ const emit = defineEmits<{ open: [] }>()
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }
@@ -142,13 +142,13 @@ const emit = defineEmits<{ open: [] }>()
 
 .notif-row__time {
   flex-shrink: 0;
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
 }
 
 /* Full-width body, at most 2 lines, then an ellipsis. */
 .notif-row__text {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   display: -webkit-box;
   -webkit-box-orient: vertical;

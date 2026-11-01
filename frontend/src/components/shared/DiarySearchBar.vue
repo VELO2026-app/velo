@@ -360,7 +360,7 @@ defineExpose({ focus })
   outline: none;
   background: transparent;
   font-family: var(--font-body);
-  font-size: var(--text-16);
+  font-size: var(--velo-fs-16);
   letter-spacing: 0.32px;
   color: var(--velo-text-primary);
   /* Reserves the absolute clear-button zone so text never runs under the x
@@ -418,7 +418,7 @@ defineExpose({ focus })
 
 .diary-search__recent-label {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   font-weight: 400;
   color: var(--velo-text-secondary);
   margin: 0 0 var(--space-1) 0;
@@ -435,7 +435,7 @@ defineExpose({ focus })
   border-radius: var(--radius-full);
   background: transparent;
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   cursor: pointer;
   transition: opacity var(--transition-fast);

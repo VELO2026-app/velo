@@ -120,7 +120,7 @@ defineEmits<{
 }
 
 .v-stat--row .v-stat__label {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
 }
 
 .v-stat__icon {
@@ -133,7 +133,7 @@ defineEmits<{
 .v-stat__value {
   /* Match shipped user-dashboard stat value: heading font, 32px, primary. */
   font-family: var(--font-heading);
-  font-size: var(--text-xl);
+  font-size: var(--velo-fs-32);
   color: var(--velo-text-primary);
   letter-spacing: 0.64px;
   line-height: 1.1;
@@ -150,14 +150,14 @@ defineEmits<{
 
 .v-stat__label {
   /* 13px (slightly under --text-xs) + secondary, no-wrap — matches user dash. */
-  font-size: var(--velo-fs-13);
+  font-size: var(--velo-fs-12);
   color: var(--velo-text-secondary);
   white-space: nowrap;
 }
 
 /* Optional trend line (master dashboard stats: "+3" / "+12%"). */
 .v-stat__delta {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   line-height: 1;
 }
 

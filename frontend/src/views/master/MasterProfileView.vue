@@ -261,7 +261,7 @@ onMounted(async () => {
 
 .master-profile__name {
   font-family: var(--font-body);
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -270,7 +270,7 @@ onMounted(async () => {
 
 .master-profile__email {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   margin: var(--space-1) 0 0;
 }
@@ -291,7 +291,7 @@ onMounted(async () => {
 .master-profile__menu-title {
   font-family: var(--font-body);
   /* Figma: section labels are Marmelad 18, primary colour (not uppercase muted). */
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }
@@ -309,7 +309,7 @@ onMounted(async () => {
 
 .master-profile__logout-title {
   font-family: var(--font-body);
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   font-weight: 400;
   color: var(--velo-text-primary);
   margin: 0 0 var(--space-4);
@@ -326,7 +326,7 @@ onMounted(async () => {
   background: transparent;
   border: none;
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   cursor: pointer;
 }

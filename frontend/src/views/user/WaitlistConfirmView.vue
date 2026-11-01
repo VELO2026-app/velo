@@ -182,7 +182,7 @@ onMounted(load)
 }
 .waitlist-confirm__title {
   margin: 0 0 var(--space-1);
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
 }
 .waitlist-confirm__meta {
   margin: 0;

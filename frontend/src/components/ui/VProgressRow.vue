@@ -82,7 +82,7 @@ const valueDisplay = computed((): string =>
 }
 
 .v-progress-row__label {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -106,7 +106,7 @@ const valueDisplay = computed((): string =>
 }
 
 .v-progress-row__value {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-primary);
   min-width: 34px;
   text-align: right;

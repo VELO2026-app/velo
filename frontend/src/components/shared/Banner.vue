@@ -112,13 +112,13 @@ defineEmits<{ click: [] }>()
 }
 
 .banner__title {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   margin: 0;
   letter-spacing: var(--velo-card-letter-spacing-title);
 }
 
 .banner__body {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   margin: 0;
   letter-spacing: var(--velo-card-letter-spacing-meta);
   line-height: 1.4;

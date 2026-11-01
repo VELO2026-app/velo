@@ -477,7 +477,7 @@ onMounted(async () => {
 
 .live__title {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -485,7 +485,7 @@ onMounted(async () => {
 
 .live__master {
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
 }
 
@@ -499,7 +499,7 @@ onMounted(async () => {
   background: var(--velo-glass-teal-30);
   border: 1px solid var(--velo-teal-400);
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-teal-700);
 }
 
@@ -530,7 +530,7 @@ onMounted(async () => {
   margin: 0;
   text-align: center;
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
 }
 </style>

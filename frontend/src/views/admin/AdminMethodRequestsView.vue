@@ -347,7 +347,7 @@ onMounted(loadInitial)
   flex: 1;
   font-family: var(--font-body);
   font-weight: 400;
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }
@@ -364,7 +364,7 @@ onMounted(loadInitial)
   align-items: center;
   justify-content: center;
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   letter-spacing: 0.02em;
 }
 
@@ -399,13 +399,13 @@ onMounted(loadInitial)
 }
 
 .mrq__name {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }
 
 .mrq__when {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   letter-spacing: 0.02em;
 }
@@ -417,7 +417,7 @@ onMounted(loadInitial)
 }
 
 .mrq__blabel {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   letter-spacing: 0.02em;
 }
@@ -429,7 +429,7 @@ onMounted(loadInitial)
 }
 
 .mrq__empty {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-muted);
 }
 

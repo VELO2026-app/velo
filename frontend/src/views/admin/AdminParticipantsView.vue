@@ -197,7 +197,7 @@ function messageStub(): void {
   flex: 1;
   font-family: var(--font-body);
   font-weight: 400;
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }
@@ -214,7 +214,7 @@ function messageStub(): void {
   align-items: center;
   justify-content: center;
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   letter-spacing: 0.02em;
 }
 
@@ -234,7 +234,7 @@ function messageStub(): void {
   margin: 0;
   text-align: center;
   color: var(--velo-text-muted);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   padding: var(--space-4) var(--space-2);
 }
 
@@ -280,7 +280,7 @@ function messageStub(): void {
 }
 
 .prow__name {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
   white-space: nowrap;
@@ -289,7 +289,7 @@ function messageStub(): void {
 }
 
 .prow__sub {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
   white-space: nowrap;
@@ -298,7 +298,7 @@ function messageStub(): void {
 }
 
 .prow__meta {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   letter-spacing: 0.02em;
 }

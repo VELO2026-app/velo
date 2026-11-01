@@ -176,7 +176,7 @@ async function onCreate(): Promise<void> {
   display: block;
   min-height: 17px;
   margin-top: 0;
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   line-height: 1.2;
   color: var(--velo-error);
   opacity: 0;
@@ -224,7 +224,7 @@ html.is-keyboard-open .new-group {
   background: var(--velo-error-bg-strong);
   border: 1.5px solid var(--velo-error-border);
   color: var(--velo-danger-text);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
 }
 
 .new-group__legend-seal {

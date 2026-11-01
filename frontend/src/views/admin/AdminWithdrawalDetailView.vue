@@ -239,7 +239,7 @@ async function onReject(): Promise<void> {
 .wd__title {
   font-family: var(--font-body);
   font-weight: 400;
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }
@@ -257,18 +257,18 @@ async function onReject(): Promise<void> {
 }
 
 .wd__hero-label {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   letter-spacing: 0.02em;
   opacity: 0.85;
 }
 
 .wd__hero-amount {
-  font-size: var(--text-xl);
+  font-size: var(--velo-fs-32);
   letter-spacing: 0.02em;
 }
 
 .wd__hero-master {
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   letter-spacing: 0.02em;
 }
 
@@ -288,13 +288,13 @@ async function onReject(): Promise<void> {
 }
 
 .wd__k {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   letter-spacing: 0.02em;
 }
 
 .wd__v {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
   text-align: right;
@@ -318,7 +318,7 @@ async function onReject(): Promise<void> {
 
 .wd__processed {
   text-align: center;
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-muted);
 }
 
@@ -326,7 +326,7 @@ async function onReject(): Promise<void> {
   margin: 0;
   text-align: center;
   color: var(--velo-text-muted);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   padding: var(--space-4) var(--space-2);
 }
 </style>

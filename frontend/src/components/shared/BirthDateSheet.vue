@@ -209,7 +209,7 @@ function save(): void {
 
 .bds__label {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
 }
 </style>

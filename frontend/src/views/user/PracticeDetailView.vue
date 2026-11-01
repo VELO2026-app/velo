@@ -858,7 +858,7 @@ onUnmounted(() => {
 /* Accordion text body */
 .detail__accordion-text {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   line-height: 1.6;
 }
@@ -874,7 +874,7 @@ onUnmounted(() => {
 :deep(.v-accordion__header) {
   padding: var(--space-3) var(--space-4);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   font-weight: 400;
   color: var(--velo-text-primary);
 }
@@ -884,7 +884,7 @@ onUnmounted(() => {
 }
 
 :deep(.v-accordion__arrow) {
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   color: var(--velo-text-primary);
 }
 
@@ -901,14 +901,14 @@ onUnmounted(() => {
 
 .detail__status-label {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
 }
 
 /* ===== Zoom card (Batch 6: ported from BookingDetailView) ===== */
 .detail__zoom-card {
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   line-height: 1.5;
 }
@@ -923,7 +923,7 @@ onUnmounted(() => {
 
 .detail__section-title {
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   font-weight: 400;
   color: var(--velo-text-secondary);
   letter-spacing: var(--velo-card-letter-spacing-meta);
@@ -957,13 +957,13 @@ onUnmounted(() => {
 
 .detail__price-label {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
 }
 
 .detail__price-value {
   font-family: var(--font-body);
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   color: var(--velo-text-primary);
 }
 
@@ -976,7 +976,7 @@ onUnmounted(() => {
  * no new variant minted. Centered under the full-width button it follows. */
 .detail__recording-caption {
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   line-height: 1.5;
   text-align: center;

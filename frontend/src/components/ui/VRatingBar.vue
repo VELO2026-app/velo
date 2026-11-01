@@ -83,7 +83,7 @@ const valueDisplay = computed((): string =>
 }
 
 .v-rating-bar__label {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }
@@ -104,7 +104,7 @@ const valueDisplay = computed((): string =>
 }
 
 .v-rating-bar__value {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
 }
 </style>

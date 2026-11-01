@@ -113,13 +113,13 @@ const resolvedIcon = computed<Component | null>(() => ICON_MAP[props.icon] ?? nu
 }
 
 .v-empty__title {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-secondary);
   margin-bottom: var(--space-1);
 }
 
 .v-empty__desc {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-muted);
   line-height: 1.5;
 }
@@ -136,7 +136,7 @@ const resolvedIcon = computed<Component | null>(() => ICON_MAP[props.icon] ?? nu
   padding: var(--space-4);
   text-align: center;
   color: var(--velo-text-muted);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   line-height: 1.5;
 }
 </style>

@@ -176,7 +176,7 @@ async function onSend(): Promise<void> {
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-4);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   margin-bottom: var(--space-3);
 }
@@ -225,7 +225,7 @@ async function onSend(): Promise<void> {
 }
 
 .report-user__reason-label {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-primary);
 }
 
@@ -250,7 +250,7 @@ async function onSend(): Promise<void> {
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-4);
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-peach-500);
   line-height: 1.5;
   margin: var(--space-3) 0 0;

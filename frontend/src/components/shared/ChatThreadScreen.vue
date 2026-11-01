@@ -788,7 +788,7 @@ onBeforeUnmount(() => {
 .chat-thread__empty {
   margin: auto;
   color: var(--velo-text-muted);
-  font-size: var(--text-sm, 14px);
+  font-size: var(--velo-fs-16);
   text-align: center;
 }
 
@@ -833,7 +833,7 @@ onBeforeUnmount(() => {
   background: none;
   color: inherit;
   font: inherit;
-  font-size: var(--velo-fs-11);
+  font-size: var(--velo-fs-12);
   text-decoration: underline;
   cursor: pointer;
 }
@@ -845,7 +845,7 @@ onBeforeUnmount(() => {
 /* Support threads (BE-163): the «Поддержка» caption above the body -- the
    service, never an admin's name. */
 .chat-thread__sender {
-  font-size: var(--velo-fs-11);
+  font-size: var(--velo-fs-12);
   font-weight: 600;
   opacity: 0.65;
   margin-bottom: var(--space-1);
@@ -860,7 +860,7 @@ onBeforeUnmount(() => {
 
 .chat-thread__time {
   margin-top: var(--space-1);
-  font-size: var(--velo-fs-11);
+  font-size: var(--velo-fs-12);
   opacity: 0.6;
   text-align: right;
 }

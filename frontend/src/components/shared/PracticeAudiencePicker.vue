@@ -156,14 +156,14 @@ function toggleSchool(id: string): void {
 }
 
 .pap__empty {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   margin: 0;
   padding: 0 var(--space-3) var(--space-1);
 }
 
 .pap__error {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-error);
   padding: 0 var(--space-3);
 }

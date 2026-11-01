@@ -244,7 +244,7 @@ function applyAndClose(): void {
 
 .mfilter__heading {
   font-family: var(--font-body);
-  font-size: var(--text-xl);
+  font-size: var(--velo-fs-32);
   font-weight: 400;
   color: var(--velo-text-primary);
   margin: 0;
@@ -262,7 +262,7 @@ function applyAndClose(): void {
   background: var(--velo-primary);
   border-radius: var(--radius-full);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-white);
   letter-spacing: 0.02em;
   cursor: pointer;
@@ -288,7 +288,7 @@ function applyAndClose(): void {
 
 .mfilter__label {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;

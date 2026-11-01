@@ -106,7 +106,7 @@ function onPick(value: string): void {
 }
 
 .v-radio__label {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
 }
 </style>

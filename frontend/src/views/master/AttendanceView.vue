@@ -239,13 +239,13 @@ onMounted(load)
 
 .checkins__practice-title {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
 }
 
 .checkins__practice-sub {
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   margin-top: var(--velo-gap-2);
 }
@@ -273,7 +273,7 @@ onMounted(load)
   background: var(--velo-glass-blue-60);
   color: var(--velo-text-secondary);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
 }
 
 .checkins__body {
@@ -285,20 +285,20 @@ onMounted(load)
 
 .checkins__name {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
 }
 
 .checkins__comment {
   font-family: var(--font-body);
-  font-size: var(--text-12);
+  font-size: var(--velo-fs-12);
   color: var(--velo-text-secondary);
   margin-top: var(--velo-gap-3);
 }
 
 .checkins__meta {
   font-family: var(--font-body);
-  font-size: var(--text-12);
+  font-size: var(--velo-fs-12);
   color: var(--velo-text-muted);
   margin-top: var(--velo-gap-3);
 }

@@ -145,17 +145,17 @@ const details = computed(() => [...props.bars].reverse().map((bar) => withPercen
 }
 .distribution h2 {
   margin: 0;
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
 }
 .distribution__count {
   white-space: nowrap;
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
 }
 .distribution__stack {
   display: flex;
   gap: var(--velo-gap-3);
   height: 28px;
-  font-size: var(--text-12);
+  font-size: var(--velo-fs-12);
 }
 .distribution__segment {
   /* Подпись важнее пропорций: узкий сегмент расширяется под текст. */
@@ -165,7 +165,7 @@ const details = computed(() => [...props.bars].reverse().map((bar) => withPercen
   display: grid;
   place-items: center;
   border-radius: var(--velo-radius-badge);
-  font-size: var(--text-12);
+  font-size: var(--velo-fs-12);
 }
 .distribution__details {
   display: grid;
@@ -173,7 +173,7 @@ const details = computed(() => [...props.bars].reverse().map((bar) => withPercen
 }
 .distribution__label {
   margin-bottom: var(--space-1);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   flex-wrap: wrap;
 }
 .distribution__label svg {
@@ -182,7 +182,7 @@ const details = computed(() => [...props.bars].reverse().map((bar) => withPercen
 .distribution__value {
   margin-left: auto;
   color: var(--velo-text-secondary);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   overflow-wrap: anywhere;
 }
 .distribution__track {

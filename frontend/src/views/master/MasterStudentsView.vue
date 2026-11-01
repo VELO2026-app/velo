@@ -278,13 +278,13 @@ function openMessage(id: string, name: string): void {
 
 .students__name {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
 }
 
 .students__meta {
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   margin-top: var(--velo-gap-2);
 }
@@ -298,7 +298,7 @@ function openMessage(id: string, name: string): void {
   border-radius: var(--velo-radius-badge);
   background: var(--velo-warning-bg);
   color: var(--velo-peach-500);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
 }
 
 .students__attn svg {

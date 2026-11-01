@@ -324,7 +324,7 @@ function returnToNativeMode(): void {
   font-family: var(--font-body);
   /* Was --text-2xl (50px) — far too large for a name. Down to --text-lg (20px),
      matching the mockup. */
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -357,7 +357,7 @@ function returnToNativeMode(): void {
 .profile__menu-title {
   font-family: var(--font-body);
   /* Figma: section labels are Marmelad 18, primary colour (not uppercase muted). */
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }

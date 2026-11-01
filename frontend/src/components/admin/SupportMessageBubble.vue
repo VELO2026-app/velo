@@ -131,12 +131,12 @@ const shownText = computed<string>(() =>
 
 .bubble__body {
   white-space: pre-wrap;
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
 }
 
 .bubble__mark {
   margin-top: var(--space-1);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   opacity: 0.75;
 }
 
@@ -164,7 +164,7 @@ const shownText = computed<string>(() =>
   background: none;
   border: none;
   color: inherit;
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   text-decoration: underline;
   cursor: pointer;
 }
@@ -176,7 +176,7 @@ const shownText = computed<string>(() =>
 
 .bubble__time {
   margin-top: var(--space-1);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   opacity: 0.6;
   text-align: right;
 }

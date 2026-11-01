@@ -487,7 +487,7 @@ function stopGesture(): void {
 }
 
 .mood-slider__label {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-primary);
   text-align: center;
 }

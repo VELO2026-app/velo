@@ -42,7 +42,7 @@ withDefaults(
   background: var(--velo-bg-card-solid);
   border: 1px solid var(--velo-border-card);
   border-radius: var(--radius-md);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
 }
 
 .v-skeleton-row--bare {

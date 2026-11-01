@@ -723,7 +723,7 @@ onMounted(load)
 }
 
 .pd-audience-warn__text {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-peach-700);
   line-height: 1.5;
 }
@@ -741,7 +741,7 @@ onMounted(load)
 
 .pd-shared-link__label {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   line-height: 1.4;
 }
@@ -777,7 +777,7 @@ onMounted(load)
   gap: var(--space-3);
   padding: var(--space-4) 0;
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   font-weight: 600;
   color: var(--velo-text-primary);
   text-align: left;
@@ -799,7 +799,7 @@ onMounted(load)
   padding: var(--space-3) 0 var(--space-4);
   border-top: 1px solid var(--velo-border-light);
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   line-height: 1.5;
 }
@@ -827,7 +827,7 @@ onMounted(load)
   justify-content: center;
   overflow: hidden;
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
 }
 
 .pd-prow__ava-img {
@@ -839,7 +839,7 @@ onMounted(load)
 .pd-prow__name {
   flex: 1;
   min-width: 0;
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
 }
 
@@ -868,13 +868,13 @@ onMounted(load)
 }
 
 .practice-detail__review-name {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }
 
 .practice-detail__review-quote {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   line-height: 1.45;
 }

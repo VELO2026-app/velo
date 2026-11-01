@@ -164,7 +164,7 @@ const heroVars = computed(() =>
 
 .school-hero__name {
   margin: var(--space-2) 0 0;
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   color: var(--velo-text-primary);
   overflow-wrap: anywhere;
 }
@@ -176,7 +176,7 @@ const heroVars = computed(() =>
   gap: var(--space-4);
   margin-top: var(--space-2);
   color: var(--velo-text-secondary);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
 }
 
 .school-hero__stats span {
@@ -190,7 +190,7 @@ const heroVars = computed(() =>
   max-width: var(--velo-content-width-narrow);
   margin: var(--space-4) 0 0;
   color: var(--velo-text-primary);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   line-height: 1.45;
 }
 </style>

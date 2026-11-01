@@ -465,7 +465,7 @@ function onReset(): void {
 
 .diary-filter__heading {
   font-family: var(--font-body);
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   font-weight: 400;
   color: var(--velo-text-primary);
   margin: 0;
@@ -496,7 +496,7 @@ function onReset(): void {
   background: var(--velo-primary);
   border-radius: var(--radius-full);
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-white);
   cursor: pointer;
 }
@@ -554,7 +554,7 @@ function onReset(): void {
 
 .diary-filter__cal-title {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-primary);
 }
 
@@ -567,7 +567,7 @@ function onReset(): void {
 .diary-filter__cal-weekday {
   text-align: center;
   font-family: var(--font-body);
-  font-size: var(--text-10);
+  font-size: var(--velo-fs-10);
   color: var(--velo-text-secondary);
   padding-bottom: var(--space-1);
 }
@@ -585,7 +585,7 @@ function onReset(): void {
   background: transparent;
   border-radius: var(--radius-full);
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-primary);
   cursor: pointer;
   transition: background var(--transition-fast);
@@ -611,7 +611,7 @@ function onReset(): void {
   border: none;
   background: transparent;
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   cursor: pointer;
   padding: 0;

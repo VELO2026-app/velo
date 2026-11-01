@@ -408,7 +408,7 @@ function goBack(): void {
   flex: 1;
   text-align: left;
   font-family: var(--font-heading);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   letter-spacing: 0.36px;
   color: var(--velo-text-primary);
 }
@@ -441,7 +441,7 @@ function goBack(): void {
 }
 
 .entry__date {
-  font-size: var(--text-12);
+  font-size: var(--velo-fs-12);
   letter-spacing: 0.2475px;
   opacity: 0.6;
   color: var(--velo-text-primary);
@@ -449,13 +449,13 @@ function goBack(): void {
 
 .entry__heading {
   font-family: var(--font-heading);
-  font-size: var(--text-16);
+  font-size: var(--velo-fs-16);
   letter-spacing: 0.32px;
   color: var(--velo-text-primary);
 }
 
 .entry__content {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   line-height: 1.5;
   color: var(--velo-text-primary);
   white-space: pre-wrap;
@@ -464,7 +464,7 @@ function goBack(): void {
 
 /* Muted context line linking the note to its practice. */
 .entry__context {
-  font-size: var(--text-12);
+  font-size: var(--velo-fs-12);
   letter-spacing: 0.2475px;
   color: var(--velo-text-secondary);
 }
@@ -476,7 +476,7 @@ function goBack(): void {
   background: transparent;
   padding: var(--space-1) 0;
   font-family: var(--font-heading);
-  font-size: var(--text-16);
+  font-size: var(--velo-fs-16);
   letter-spacing: 0.32px;
   color: var(--velo-text-primary);
   outline: none;
@@ -521,7 +521,7 @@ function goBack(): void {
      any focused field below 16px, and that zoom reads as a viewport shrink
      (the keyboard detector now guards on scale, but the zoom itself is
      still disorienting). The title field above is already --text-16. */
-  font-size: var(--text-16);
+  font-size: var(--velo-fs-16);
   line-height: 1.5;
   color: var(--velo-text-primary);
   outline: none;

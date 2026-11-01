@@ -191,7 +191,7 @@ async function onSave(): Promise<void> {
 
 .remove-from-group__note {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   margin: var(--space-3) 0 0;
 }

@@ -209,7 +209,7 @@ function onInput(e: Event): void {
 .v-input__label {
   display: block;
   /* Figma form spec (2 Edit Profile.svg): label Marmelad 18, primary colour. */
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   margin-bottom: var(--space-2);
 }
@@ -242,7 +242,7 @@ function onInput(e: Event): void {
   height: var(--velo-size-40);
   padding: 0 var(--space-4);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   /* Figma: form fields are SOLID WHITE plates (was glass-blue, which read as
      "transparent" on the photo background). This is the single field standard. */
@@ -296,7 +296,7 @@ function onInput(e: Event): void {
 
 .v-input__affix {
   flex-shrink: 0;
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-placeholder);
 }
 
@@ -335,7 +335,7 @@ function onInput(e: Event): void {
   top: 50%;
   transform: translateY(-50%);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-placeholder);
   pointer-events: none;
   transition:
@@ -350,7 +350,7 @@ function onInput(e: Event): void {
 .v-input__float--filled .v-input__float-label {
   top: 9px;
   transform: none;
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
 }
 
@@ -368,7 +368,7 @@ function onInput(e: Event): void {
 
 .v-input__error {
   display: block;
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-error);
   margin-top: var(--space-1);
 }

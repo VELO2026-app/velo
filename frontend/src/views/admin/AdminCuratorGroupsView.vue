@@ -152,7 +152,7 @@ onMounted(() => load(true))
 
 .admin-list__title {
   font-family: var(--font-body);
-  font-size: var(--text-2xl);
+  font-size: var(--velo-fs-48);
   color: var(--velo-text-primary);
   margin: 0;
   flex: 1;
@@ -160,7 +160,7 @@ onMounted(() => load(true))
 
 .admin-list__count {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-secondary);
   background: var(--velo-glass-blue-15);
   border-radius: var(--radius-full);
@@ -212,17 +212,17 @@ onMounted(() => load(true))
 }
 
 .sg-card__name {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
 }
 
 .sg-card__curator {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
 }
 
 .sg-card__meta {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
 }
 </style>

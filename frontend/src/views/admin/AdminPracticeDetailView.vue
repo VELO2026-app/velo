@@ -313,7 +313,7 @@ onMounted(() => {
 
 .admin-detail__title {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }
@@ -335,7 +335,7 @@ onMounted(() => {
   border-radius: var(--radius-full);
   background: var(--velo-text-primary);
   color: var(--velo-white);
-  font-size: var(--text-8);
+  font-size: var(--velo-fs-8);
   letter-spacing: 0.02em;
 }
 
@@ -347,7 +347,7 @@ onMounted(() => {
 
 .admin-detail__section {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -374,7 +374,7 @@ onMounted(() => {
 
 .admin-detail__zoom-label {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
 }
 
@@ -388,7 +388,7 @@ onMounted(() => {
 
 .admin-detail__zoom-error {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-error-text);
   word-break: break-word;
 }
@@ -409,7 +409,7 @@ onMounted(() => {
   margin: 0;
   text-align: center;
   color: var(--velo-text-muted);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   padding: var(--space-4) var(--space-2);
 }
 

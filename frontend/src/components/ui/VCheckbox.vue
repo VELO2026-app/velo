@@ -112,13 +112,13 @@ function toggle(): void {
 }
 
 .v-checkbox__label {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
 }
 
 /* Compact variant (batch J): smaller label copy (e.g. consent text). */
 .v-checkbox--sm .v-checkbox__label {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   line-height: 1.35;
 }
 </style>

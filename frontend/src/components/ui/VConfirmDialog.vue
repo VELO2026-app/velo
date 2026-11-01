@@ -167,7 +167,7 @@ defineEmits<{
    line -- was --text-xl. */
 .v-confirm__title {
   font-family: var(--font-heading);
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   font-weight: 400;
   color: var(--velo-text-primary);
   text-align: center;
@@ -183,7 +183,7 @@ defineEmits<{
 
 .v-confirm__text {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   text-align: center;
   line-height: 1.5;
@@ -213,7 +213,7 @@ defineEmits<{
 
 .v-confirm__panel-text {
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-peach-500);
   text-align: left;
   /* T24-17/T24-30 (PROMPT №634): measured from the owner's SVG -- a 17px

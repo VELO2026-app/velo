@@ -93,7 +93,7 @@ function toggle(value: string): void {
   align-items: center;
   justify-content: center;
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   letter-spacing: 0.02em;
   color: var(--velo-text-primary);
   background: transparent;

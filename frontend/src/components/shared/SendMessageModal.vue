@@ -122,7 +122,7 @@ async function onSend(): Promise<void> {
 
 .send-msg__name {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
 }
 

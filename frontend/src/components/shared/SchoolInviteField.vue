@@ -178,7 +178,7 @@ async function onCopy(): Promise<void> {
   justify-content: center;
   gap: var(--space-2);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   white-space: nowrap;
   color: var(--velo-text-primary);
 }

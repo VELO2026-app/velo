@@ -551,7 +551,7 @@ function onConfirmDelete(): void {
   background: transparent;
   border: none;
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-primary);
   cursor: pointer;
 }
@@ -563,7 +563,7 @@ function onConfirmDelete(): void {
 
 .edit-profile__methods-label {
   display: block;
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   margin-bottom: var(--space-2);
 }
@@ -576,7 +576,7 @@ function onConfirmDelete(): void {
 
 .edit-profile__methods-note {
   margin: var(--space-2) 0 0;
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   line-height: 1.4;
 }
@@ -587,7 +587,7 @@ function onConfirmDelete(): void {
 
 .edit-profile__methods-reject {
   margin: var(--space-2) 0 0;
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-error);
   line-height: 1.4;
 }
@@ -595,7 +595,7 @@ function onConfirmDelete(): void {
 /* Inline field error (e-mail) — sibling <p> since VInput has no error prop. */
 .edit-profile__field-error {
   margin: calc(-1 * var(--space-3)) 0 var(--space-4);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-error);
 }
 
@@ -612,7 +612,7 @@ function onConfirmDelete(): void {
   background: transparent;
   border: none;
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-error);
   cursor: pointer;
 }
@@ -620,7 +620,7 @@ function onConfirmDelete(): void {
 /* -- Delete account modal (design «Delete account») -- */
 .edit-profile__del-title {
   font-family: var(--font-body);
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   font-weight: 400;
   color: var(--velo-text-primary);
   text-align: center;
@@ -635,12 +635,12 @@ function onConfirmDelete(): void {
   border-radius: var(--radius-md);
   background: var(--velo-error-bg);
   color: var(--velo-danger-text);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   margin-bottom: var(--space-4);
 }
 
 .edit-profile__del-intro {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   margin: 0 0 var(--space-2);
 }
@@ -648,7 +648,7 @@ function onConfirmDelete(): void {
 .edit-profile__del-list {
   margin: 0 0 var(--space-4);
   padding-left: var(--space-5);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   line-height: 1.7;
 }
@@ -658,7 +658,7 @@ function onConfirmDelete(): void {
   border-radius: var(--radius-md);
   background: var(--velo-warning-bg);
   color: var(--velo-warning-text-light);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   text-align: center;
   margin-bottom: var(--space-3);
 }
@@ -668,7 +668,7 @@ function onConfirmDelete(): void {
 }
 
 .edit-profile__del-confirm-hint {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   margin: var(--space-4) 0 var(--space-2);
 }

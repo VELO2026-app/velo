@@ -125,7 +125,7 @@ const practiceWhen = computed((): string => {
 
 .cpd__title {
   font-family: var(--font-heading);
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   font-weight: 400;
   color: var(--velo-text-primary);
   text-align: center;
@@ -155,7 +155,7 @@ const practiceWhen = computed((): string => {
 
 .cpd__ptitle {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
 }
 
@@ -164,7 +164,7 @@ const practiceWhen = computed((): string => {
   flex-wrap: wrap;
   gap: var(--space-1) var(--velo-inset-12);
   margin-top: var(--velo-gap-2);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
 }
 
@@ -187,7 +187,7 @@ const practiceWhen = computed((): string => {
   border-radius: var(--velo-radius-10);
   padding: var(--velo-gap-11) var(--space-4);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
 }
 

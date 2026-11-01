@@ -50,7 +50,7 @@ const { toasts, dismiss } = useToast()
   gap: var(--space-2);
   padding: var(--velo-inset-12) var(--space-5);
   border-radius: var(--radius-md);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   max-width: 90%;
   text-align: center;
   cursor: pointer;

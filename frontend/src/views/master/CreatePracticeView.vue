@@ -1491,7 +1491,7 @@ html.is-keyboard-open .create-practice {
 /* T21-1 (PROMPT №541): honest caption for the now-fallback Zoom field. */
 .create-practice__hint {
   margin: 0;
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   line-height: 1.4;
 }
@@ -1506,14 +1506,14 @@ html.is-keyboard-open .create-practice {
   border-radius: var(--velo-radius-12);
   padding: var(--velo-gap-11) var(--space-4);
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-pink-700);
 }
 
 /* -- Draft-restore banner (B2) -- */
 .create-practice__draft-text {
   margin: 0;
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   line-height: 1.4;
 }
@@ -1534,7 +1534,7 @@ html.is-keyboard-open .create-practice {
 
 .create-practice__repeat-title {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
 }
 
@@ -1556,7 +1556,7 @@ html.is-keyboard-open .create-practice {
   text-align: left;
   padding: 0 var(--space-4);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   background: var(--velo-bg-card-solid);
   border: 2px solid transparent;
@@ -1582,7 +1582,7 @@ html.is-keyboard-open .create-practice {
   display: block;
   min-height: 17px;
   margin-top: 0;
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   line-height: 1.2;
   color: var(--velo-error);
   opacity: 0;
@@ -1608,7 +1608,7 @@ html.is-keyboard-open .create-practice {
 
 .create-practice__audience-empty {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-muted);
   margin: var(--space-3) 0 0;
 }
@@ -1658,7 +1658,7 @@ html.is-keyboard-open .create-practice {
   height: var(--velo-size-40);
   padding: 0 var(--space-4);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   background: var(--velo-bg-card-solid);
   border: 2px solid var(--velo-border);

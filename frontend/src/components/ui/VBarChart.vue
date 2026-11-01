@@ -84,7 +84,7 @@ function heightFor(value: number): string {
 }
 
 .v-bar-chart__label {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-primary);
 }
 
@@ -96,6 +96,6 @@ function heightFor(value: number): string {
   margin: 0;
   text-align: center;
   color: var(--velo-text-muted);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
 }
 </style>

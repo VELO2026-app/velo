@@ -234,21 +234,21 @@ onMounted(() => {
 .topup__balance-label {
   display: block;
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-muted);
   margin-bottom: var(--space-2);
 }
 
 .topup__balance-value {
   font-family: var(--font-body);
-  font-size: var(--text-xl);
+  font-size: var(--velo-fs-32);
   color: var(--velo-primary);
 }
 
 /* Section title */
 .topup__section-title {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.02em;
@@ -267,7 +267,7 @@ onMounted(() => {
   border: 1px solid var(--velo-glass-border);
   border-radius: var(--radius-md);
   font-family: var(--font-body);
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   color: var(--velo-text-primary);
   cursor: pointer;
   transition:
@@ -292,7 +292,7 @@ onMounted(() => {
 .topup__custom-toggle {
   padding: var(--space-3) var(--space-4);
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-primary);
   cursor: pointer;
   text-align: center;
@@ -316,7 +316,7 @@ onMounted(() => {
 /* Error */
 .topup__error {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-error);
   text-align: center;
 }

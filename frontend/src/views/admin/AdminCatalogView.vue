@@ -340,14 +340,14 @@ onMounted(load)
 .admin-catalog__title {
   font-family: var(--font-body);
   font-weight: 400;
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }
 
 .admin-catalog__note {
   padding: var(--space-3);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   line-height: 1.4;
 }
@@ -416,7 +416,7 @@ onMounted(load)
      resort, same as any other real-content flex item in this app. */
   overflow-wrap: anywhere;
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }
@@ -465,7 +465,7 @@ onMounted(load)
 }
 
 .admin-catalog__none {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-muted);
 }
 

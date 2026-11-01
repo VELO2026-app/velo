@@ -155,7 +155,7 @@ async function onSave(): Promise<void> {
    + the same hairline-stroke faux-bold as the title. */
 .add-to-group__label {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-secondary);
   -webkit-text-stroke: var(--velo-text-stroke-strong) currentColor;
   margin: 0 0 var(--space-2);
@@ -170,7 +170,7 @@ async function onSave(): Promise<void> {
 
 .add-to-group__empty {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-muted);
   margin: 0 0 var(--space-4);
 }

@@ -89,7 +89,7 @@ const unread = computed(() => props.unread ?? 0)
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--velo-text-primary);
-  font-size: var(--text-md, 16px);
+  font-size: var(--velo-fs-16);
 }
 
 .chat-row__preview {
@@ -97,7 +97,7 @@ const unread = computed(() => props.unread ?? 0)
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--velo-text-secondary);
-  font-size: var(--text-sm, 14px);
+  font-size: var(--velo-fs-16);
 }
 
 .chat-row__aside {
@@ -110,7 +110,7 @@ const unread = computed(() => props.unread ?? 0)
 
 .chat-row__time {
   color: var(--velo-text-muted);
-  font-size: var(--text-xs, 12px);
+  font-size: var(--velo-fs-14);
 }
 
 .chat-row__badge {

@@ -78,7 +78,7 @@ defineEmits<{
 
 .cpm__title {
   font-family: var(--font-body);
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -86,7 +86,7 @@ defineEmits<{
 }
 
 .cpm__sub {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   letter-spacing: 0.02em;
   margin: calc(-1 * var(--space-2)) 0 0;
@@ -109,13 +109,13 @@ defineEmits<{
 }
 
 .cpm__k {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   letter-spacing: 0.02em;
 }
 
 .cpm__v {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
   text-align: right;

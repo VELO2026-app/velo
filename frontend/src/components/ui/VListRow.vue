@@ -77,7 +77,7 @@ defineEmits<{ click: [] }>()
 }
 
 .v-list-row__title {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
   white-space: nowrap;
@@ -86,14 +86,14 @@ defineEmits<{ click: [] }>()
 }
 
 .v-list-row__sub {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   letter-spacing: 0.02em;
 }
 
 .v-list-row__trailing {
   flex-shrink: 0;
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }

@@ -65,7 +65,7 @@ const botUrl = INSTANCE.telegramBotUrl
 
 .stub__title {
   font-family: var(--font-body);
-  font-size: var(--text-2xl);
+  font-size: var(--velo-fs-48);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -74,7 +74,7 @@ const botUrl = INSTANCE.telegramBotUrl
 
 .stub__message {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-secondary);
   margin: 0 0 var(--space-8) 0;
   max-width: 280px;
@@ -89,7 +89,7 @@ const botUrl = INSTANCE.telegramBotUrl
   max-width: var(--velo-content-width);
   height: var(--velo-size-50);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   text-decoration: none;
   border-radius: var(--radius-full);
   border: 1px solid var(--velo-glass-border);
@@ -110,7 +110,7 @@ const botUrl = INSTANCE.telegramBotUrl
 
 .stub__hint {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-muted);
   margin: var(--space-4) 0 0 0;
   max-width: 240px;

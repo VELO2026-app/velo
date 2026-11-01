@@ -1517,7 +1517,7 @@ onBeforeUnmount(() => {
 
 .diary-feed__undo-text {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-pink-700);
 }
 
@@ -1526,7 +1526,7 @@ onBeforeUnmount(() => {
   border: none;
   background: transparent;
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   font-weight: 600;
   color: var(--velo-pink-700);
   cursor: pointer;

@@ -132,14 +132,14 @@ onMounted(claim)
 
 .invite-claim__title {
   font-family: var(--font-body);
-  font-size: var(--text-xl);
+  font-size: var(--velo-fs-32);
   color: var(--velo-text-primary);
   text-align: center;
   -webkit-text-stroke: var(--velo-text-stroke-strong) var(--velo-text-primary);
 }
 
 .invite-claim__subtitle {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-secondary);
   text-align: center;
   max-width: var(--velo-content-width-narrow);

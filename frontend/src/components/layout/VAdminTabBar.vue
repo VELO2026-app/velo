@@ -126,7 +126,7 @@ defineEmits<{
   background: var(--velo-pink-300);
   color: var(--velo-white);
   border: 2px solid var(--velo-glass-border);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   line-height: 1;
   display: flex;
   align-items: center;

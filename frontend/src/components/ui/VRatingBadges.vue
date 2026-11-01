@@ -67,7 +67,7 @@ const iconSize = computed((): number => (props.size === 'lg' ? 16 : 14))
   align-items: center;
   gap: var(--velo-card-gap-icon-title);
   border-radius: var(--velo-radius-badge);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   background: var(--velo-glass-blue-15);
   color: var(--velo-text-primary);
 }

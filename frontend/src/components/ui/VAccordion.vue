@@ -70,7 +70,7 @@ const open = ref(props.defaultOpen)
   justify-content: space-between;
   width: 100%;
   padding: var(--space-3) 0;
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   text-align: left;
 }
@@ -93,7 +93,7 @@ const open = ref(props.defaultOpen)
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   color: var(--velo-text-muted);
 }
 
@@ -110,7 +110,7 @@ const open = ref(props.defaultOpen)
 
 .v-accordion__body {
   padding: 0 0 var(--space-3);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
 }
 </style>

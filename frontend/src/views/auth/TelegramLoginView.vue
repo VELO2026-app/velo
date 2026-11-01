@@ -107,7 +107,7 @@ async function onLogin(): Promise<void> {
 
 .login__title {
   font-family: var(--font-body);
-  font-size: var(--text-2xl);
+  font-size: var(--velo-fs-48);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -116,7 +116,7 @@ async function onLogin(): Promise<void> {
 
 .login__message {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-secondary);
   margin: 0 0 var(--space-8) 0;
   max-width: 280px;
@@ -131,7 +131,7 @@ async function onLogin(): Promise<void> {
   max-width: var(--velo-content-width);
   height: var(--velo-size-50);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   border-radius: var(--radius-full);
   border: 1px solid var(--velo-glass-border);
   backdrop-filter: blur(2px);
@@ -155,7 +155,7 @@ async function onLogin(): Promise<void> {
 .login__notice,
 .login__hint {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   margin: var(--space-4) 0 0 0;
   max-width: 280px;
   line-height: 1.4;

@@ -228,7 +228,7 @@ function goBack(): void {
 
 .detail__title-bar {
   font-family: var(--font-heading);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   letter-spacing: 0.36px;
   color: var(--velo-text-primary);
 }
@@ -270,7 +270,7 @@ function goBack(): void {
 }
 
 .detail__pill-title {
-  font-size: var(--text-16);
+  font-size: var(--velo-fs-16);
   letter-spacing: 0.32px;
   color: var(--velo-text-primary);
 }
@@ -283,14 +283,14 @@ function goBack(): void {
 }
 
 .detail__date {
-  font-size: var(--text-12);
+  font-size: var(--velo-fs-12);
   letter-spacing: 0.2475px;
   opacity: 0.6;
   color: var(--velo-text-primary);
 }
 
 .detail__content {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   line-height: 1.5;
   color: var(--velo-text-primary);
   white-space: pre-wrap;
@@ -299,13 +299,13 @@ function goBack(): void {
 
 /* Muted context line linking the entry to its practice. */
 .detail__context {
-  font-size: var(--text-12);
+  font-size: var(--velo-fs-12);
   letter-spacing: 0.2475px;
   color: var(--velo-text-secondary);
 }
 
 .detail__empty {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   opacity: 0.7;
 }

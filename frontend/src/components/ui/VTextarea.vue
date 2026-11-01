@@ -236,7 +236,7 @@ watch(voiceActive, (active) => {
 .v-textarea__label {
   display: block;
   /* Figma form spec (2 Edit Profile.svg): label Marmelad 18, primary colour. */
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   margin-bottom: var(--space-2);
 }
@@ -291,7 +291,7 @@ watch(voiceActive, (active) => {
   min-width: 0;
   padding: var(--velo-gap-11) var(--space-4);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   /* Figma: form fields are SOLID WHITE plates (was glass-blue). Single standard. */
   background: var(--velo-bg-card-solid);
@@ -363,7 +363,7 @@ watch(voiceActive, (active) => {
 
 .v-textarea__error {
   display: block;
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-error);
   margin-top: var(--space-1);
 }

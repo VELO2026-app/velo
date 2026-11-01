@@ -292,7 +292,7 @@ onMounted(async () => {
   border: none;
   padding: 0;
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
   cursor: pointer;

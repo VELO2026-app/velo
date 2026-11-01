@@ -193,7 +193,7 @@ const dayGroups = computed<DayGroup[]>(() => {
 .timeline__not-sent {
   margin: var(--space-1) 0 0;
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   text-align: center;
 }

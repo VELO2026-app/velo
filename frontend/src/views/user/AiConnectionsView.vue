@@ -383,7 +383,7 @@ onMounted(load)
 
 .ai-conn__heading {
   margin: 0;
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   font-weight: 600;
 }
 
@@ -456,7 +456,7 @@ onMounted(load)
 .ai-conn__item-sub,
 .ai-conn__item-meta,
 .ai-conn__item-revoked {
-  font-size: var(--velo-fs-13);
+  font-size: var(--velo-fs-12);
   color: var(--velo-text-secondary);
 }
 
@@ -468,7 +468,7 @@ onMounted(load)
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: var(--velo-fs-13);
+  font-size: var(--velo-fs-12);
   color: var(--velo-text-secondary);
 }
 

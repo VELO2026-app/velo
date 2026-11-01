@@ -398,7 +398,7 @@ onMounted(() => {
 
 .admin-dashboard__title {
   font-family: var(--font-heading);
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -441,7 +441,7 @@ onMounted(() => {
 
 .admin-dashboard__section-title {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }
@@ -494,7 +494,7 @@ onMounted(() => {
 
 .admin-dashboard__week-range {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }
@@ -508,7 +508,7 @@ onMounted(() => {
 
 .admin-dashboard__revenue-amount {
   font-family: var(--font-heading);
-  font-size: var(--text-xl);
+  font-size: var(--velo-fs-32);
   color: var(--velo-text-primary);
   letter-spacing: var(--velo-letter-spacing-064);
   line-height: 1.1;
@@ -516,7 +516,7 @@ onMounted(() => {
 
 .admin-dashboard__revenue-delta {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-teal-600);
 }
 

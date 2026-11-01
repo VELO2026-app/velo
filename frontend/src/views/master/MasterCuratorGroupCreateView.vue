@@ -219,7 +219,7 @@ async function onCreate(): Promise<void> {
   display: block;
   min-height: 17px;
   margin-top: 0;
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   line-height: 1.2;
   color: var(--velo-error);
   opacity: 0;
@@ -257,7 +257,7 @@ html.is-keyboard-open .ncg {
   background: var(--velo-error-bg-strong);
   border: 1.5px solid var(--velo-error-border);
   color: var(--velo-danger-text);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
 }
 
 .ncg__legend-seal {
@@ -276,7 +276,7 @@ html.is-keyboard-open .ncg {
 .ncg__media-hint {
   margin: calc(-1 * var(--space-2)) 0 0;
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   line-height: 1.5;
 }

@@ -14,7 +14,7 @@
  * EVERY NEW TOKEN GETS THE --velo-* PREFIX. No exceptions.
  *
  * This file carries two styles: 161 tokens named --velo-*, and 43 bare ones
- * (--space-*, --text-*, --radius-*, --shadow-*, --z-*, --font-*, --size-*,
+ * (--space-*, --radius-*, --shadow-*, --z-*, --font-*, --size-*,
  * --transition-*). The bare ones are NOT being renamed and are NOT deprecated:
  * they are correct, load-bearing, and heavily used (--font-body in 105 files,
  * --space-2 in 102). Renaming them would touch 149 files and 1110 call sites —
@@ -23,6 +23,9 @@
  *
  * So the split is FROZEN, not fixed: it stops growing, and what exists stays.
  * Do not "tidy" the bare tokens. Do not add a 44th.
+ * EXCEPTION (owner, 2026-11-01): the bare --text-* size names were migrated
+ * onto the --velo-fs-* ramp and deleted (tokens step 4b). Every other bare
+ * family above stays frozen.
  * ---------------------------------------------------------------------------
  * =========================================================================== */
 
@@ -162,20 +165,6 @@
   --font-body: 'Marmelad', 'Noto Sans', sans-serif;
   --font-heading: 'Marmelad', 'Noto Sans', sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'Roboto Mono', monospace;
-
-  /* Legacy bare size names -- aliases of the --velo-fs-* ramp since
-     2026-11-01 (skin-addressable through it). Do not use in new code;
-     step 4b moves the call sites to --velo-fs-* and deletes these. */
-  --text-xs: var(--velo-fs-14);
-  --text-sm: var(--velo-fs-16); /* was 15px: +1px, owner 2026-11-01 */
-  --text-base: var(--velo-fs-18);
-  --text-lg: var(--velo-fs-20);
-  --text-xl: var(--velo-fs-32);
-  --text-2xl: var(--velo-fs-48); /* was 50px: -2px, owner-confirmed */
-  --text-8: var(--velo-fs-8);
-  --text-10: var(--velo-fs-10);
-  --text-12: var(--velo-fs-12);
-  --text-16: var(--velo-fs-16);
 
   /* === Spacing === */
   --space-1: 4px;

@@ -944,7 +944,7 @@ async function remove(): Promise<void> {
 
 .edit-practice__readonly-text {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-muted);
 }
 
@@ -982,7 +982,7 @@ async function remove(): Promise<void> {
 
 .edit-practice__field-label {
   display: block;
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   margin-bottom: var(--space-2);
 }
@@ -999,14 +999,14 @@ async function remove(): Promise<void> {
 
 .edit-practice__audience-empty {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-muted);
   margin: var(--space-3) 0 0;
 }
 
 .edit-practice__field-error {
   display: block;
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-error);
   margin-top: var(--space-1);
 }
@@ -1014,7 +1014,7 @@ async function remove(): Promise<void> {
 /* T21-1 (PROMPT №541): honest caption for the now-fallback Zoom field. */
 .edit-practice__hint {
   margin: 0 0 var(--space-2);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   line-height: 1.4;
 }
@@ -1027,7 +1027,7 @@ async function remove(): Promise<void> {
   text-align: left;
   padding: 0 var(--space-4);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   background: var(--velo-bg-card-solid);
   border: 2px solid transparent;

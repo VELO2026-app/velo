@@ -193,7 +193,7 @@ function load(): void {
 }
 
 .mcg__hint {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   margin: 0;
   padding: 0 var(--space-1);

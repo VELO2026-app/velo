@@ -138,7 +138,7 @@ function skip(): void {
   border: none;
   cursor: pointer;
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   padding: var(--space-1) var(--space-2);
 }
@@ -161,7 +161,7 @@ function skip(): void {
 
 .master-onboarding__title {
   font-family: var(--font-body);
-  font-size: var(--text-xl);
+  font-size: var(--velo-fs-32);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -170,7 +170,7 @@ function skip(): void {
 
 .master-onboarding__text {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-secondary);
   margin: 0;
   max-width: var(--velo-content-width-narrow);
@@ -193,7 +193,7 @@ function skip(): void {
   max-width: var(--velo-content-width);
   height: var(--velo-size-50);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   cursor: pointer;
   border-radius: var(--radius-full);
   border: 1px solid var(--velo-glass-border);

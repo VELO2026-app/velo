@@ -622,7 +622,7 @@ onMounted(async () => {
 }
 
 .analytics__attention-name {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
 }
 
@@ -636,12 +636,12 @@ onMounted(async () => {
 }
 
 .analytics__attention-pr {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
 }
 
 .analytics__attention-quote {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   font-style: italic;
 }
@@ -675,7 +675,7 @@ onMounted(async () => {
   padding: var(--space-4);
   text-align: center;
   color: var(--velo-text-muted);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   line-height: 1.5;
 }
 
@@ -721,7 +721,7 @@ onMounted(async () => {
 }
 
 .analytics__pcard-title {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: var(--velo-card-letter-spacing-title);
   white-space: nowrap;
@@ -730,7 +730,7 @@ onMounted(async () => {
 }
 
 .analytics__pcard-meta {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   letter-spacing: 0.28px;
 }
@@ -776,18 +776,18 @@ onMounted(async () => {
 
 .analytics__income-value {
   font-family: var(--font-heading);
-  font-size: var(--text-xl);
+  font-size: var(--velo-fs-32);
   color: var(--velo-text-primary);
   letter-spacing: 0.5px;
 }
 
 .analytics__income-label {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
 }
 
 .analytics__income-delta {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   line-height: 1;
 }
 
@@ -832,17 +832,17 @@ onMounted(async () => {
 }
 
 .analytics__txn-title {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
 }
 
 .analytics__txn-meta {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-muted);
 }
 
 .analytics__txn-amt {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   white-space: nowrap;
 }
 

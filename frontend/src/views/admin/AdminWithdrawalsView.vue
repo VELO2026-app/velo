@@ -232,13 +232,13 @@ onMounted(loadInitial)
   flex: 1;
   font-family: var(--font-body);
   font-weight: 400;
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }
 
 .admin-withdrawals__count {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   letter-spacing: 0.02em;
 }
@@ -289,13 +289,13 @@ onMounted(loadInitial)
 }
 
 .wrow__amount {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }
 
 .wrow__sub {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   letter-spacing: 0.02em;
   white-space: nowrap;
@@ -312,13 +312,13 @@ onMounted(loadInitial)
 }
 
 .wrow__time {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   letter-spacing: 0.02em;
 }
 
 .wrow__net {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }

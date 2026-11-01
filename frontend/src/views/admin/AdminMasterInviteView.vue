@@ -115,7 +115,7 @@ async function onCopy(): Promise<void> {
   flex: 1;
   font-family: var(--font-body);
   font-weight: 400;
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }
@@ -128,7 +128,7 @@ async function onCopy(): Promise<void> {
 }
 
 .invite__section-title {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-muted);
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -136,14 +136,14 @@ async function onCopy(): Promise<void> {
 
 .invite__desc {
   margin: 0;
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   line-height: 1.5;
 }
 
 .invite__link {
   margin: 0;
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
   word-break: break-all;
@@ -153,7 +153,7 @@ async function onCopy(): Promise<void> {
 .invite__caption {
   margin: 0;
   text-align: center;
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-muted);
   letter-spacing: 0.02em;
 }

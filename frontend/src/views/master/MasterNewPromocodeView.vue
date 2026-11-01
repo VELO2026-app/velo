@@ -237,7 +237,7 @@ async function onCreate(): Promise<void> {
   display: block;
   min-height: 17px;
   margin-top: 0;
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   line-height: 1.2;
   color: var(--velo-error);
   opacity: 0;
@@ -263,7 +263,7 @@ async function onCreate(): Promise<void> {
 
 .new-promo__label {
   display: block;
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   margin-bottom: var(--space-2);
 }
@@ -281,7 +281,7 @@ async function onCreate(): Promise<void> {
   text-align: left;
   padding: 0 var(--space-4);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   background: var(--velo-bg-card-solid);
   border: 2px solid transparent;

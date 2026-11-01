@@ -41,7 +41,7 @@ import VSkeleton from './VSkeleton.vue'
   border: 1px solid var(--velo-border-card);
   border-radius: var(--radius-md);
   padding: var(--velo-card-padding-y) var(--velo-card-padding-x);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
 }
 
 .v-skeleton-practice__top {

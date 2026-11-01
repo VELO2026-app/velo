@@ -591,7 +591,7 @@ function onReportClose(): void {
 
 .ssp__name {
   font-family: var(--font-body);
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   font-weight: 400;
   color: var(--velo-text-primary);
   margin: 0;
@@ -614,13 +614,13 @@ function onReportClose(): void {
 
 .ssp__offer-title {
   margin: 0;
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
 }
 
 .ssp__offer-text {
   margin: 0;
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   line-height: 1.5;
   color: var(--velo-text-secondary);
 }
@@ -636,13 +636,13 @@ function onReportClose(): void {
   margin: 0;
   text-align: center;
   font-family: var(--font-body);
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   color: var(--velo-text-primary);
 }
 
 .ssp__role-sub {
   margin: 0;
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
 }
 

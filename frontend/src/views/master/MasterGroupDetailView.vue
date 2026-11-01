@@ -454,7 +454,7 @@ async function onDeleteConfirm(): Promise<void> {
    height, per the owner's own "no dead space" rule. */
 .group-detail__description {
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   line-height: 1.5;
   margin: 0;

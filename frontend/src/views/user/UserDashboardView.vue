@@ -634,7 +634,7 @@ onUnmounted(pause)
 
 .dashboard__section-title {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   /* Figma 2266:452 — все секционные заголовки 'Marmelad:Regular' (400),
    * не bold. Было 700 — баг-фикс. */
   font-weight: 400;
@@ -752,7 +752,7 @@ onUnmounted(pause)
 /* Zoom / Check-in buttons use a larger 20px label (Figma 2266:527, 2266:530)
    without changing the base VButton size variants. */
 .dashboard__practice-actions :deep(.v-btn) {
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
 }
 
 /* ===== Loader / empty ===== */
@@ -779,7 +779,7 @@ onUnmounted(pause)
 
 .dashboard__empty-text {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   margin: 0;
 }
@@ -809,7 +809,7 @@ onUnmounted(pause)
   box-sizing: border-box;
   border-radius: var(--radius-full);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   cursor: pointer;
   /* :active shrinks in place only -- no layout shift of the neighbours. */
   transition:

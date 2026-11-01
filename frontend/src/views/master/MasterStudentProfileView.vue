@@ -579,7 +579,7 @@ async function onUnblockConfirm(): Promise<void> {
 
 .profile__empty {
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
 }
 
@@ -598,12 +598,12 @@ async function onUnblockConfirm(): Promise<void> {
 .profile__hero-ava {
   width: 100px;
   height: 100px;
-  font-size: var(--text-xl);
+  font-size: var(--velo-fs-32);
 }
 
 .profile__hero-name {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
 }
 
@@ -642,13 +642,13 @@ async function onUnblockConfirm(): Promise<void> {
 
 .profile__ci-text {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
 }
 
 .profile__ci-date {
   font-family: var(--font-body);
-  font-size: var(--text-12);
+  font-size: var(--velo-fs-12);
   color: var(--velo-text-secondary);
   margin-top: var(--velo-gap-2);
 }
@@ -685,20 +685,20 @@ async function onUnblockConfirm(): Promise<void> {
 
 .profile__fb-title {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
 }
 
 .profile__fb-date {
   font-family: var(--font-body);
-  font-size: var(--text-12);
+  font-size: var(--velo-fs-12);
   color: var(--velo-text-secondary);
   flex-shrink: 0;
 }
 
 .profile__fb-text {
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   margin-top: var(--velo-gap-3);
 }

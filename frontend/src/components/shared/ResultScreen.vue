@@ -75,7 +75,7 @@ defineProps<{
 
 .result-screen__title {
   font-family: var(--font-body);
-  font-size: var(--text-xl);
+  font-size: var(--velo-fs-32);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -84,7 +84,7 @@ defineProps<{
 
 .result-screen__text {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   margin-bottom: var(--space-8);
   max-width: 280px;

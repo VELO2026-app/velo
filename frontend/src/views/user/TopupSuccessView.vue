@@ -64,7 +64,7 @@ onMounted(async () => {
 
 .topup-result__title {
   font-family: var(--font-body);
-  font-size: var(--text-2xl);
+  font-size: var(--velo-fs-48);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -73,14 +73,14 @@ onMounted(async () => {
 
 .topup-result__text {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-secondary);
   margin: 0 0 var(--space-3);
 }
 
 .topup-result__balance {
   font-family: var(--font-body);
-  font-size: var(--text-xl);
+  font-size: var(--velo-fs-32);
   color: var(--velo-primary);
   margin-bottom: var(--space-8);
   min-height: var(--velo-size-40);

@@ -124,14 +124,14 @@ const mastersLabel = computed(() => t('school.masters', { n: props.mastersCount 
 
 .school-invite__name {
   margin: var(--space-2) 0 0;
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   color: var(--velo-text-primary);
   overflow-wrap: anywhere;
 }
 
 .school-invite__curator {
   margin: 0;
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
 }
 
@@ -144,7 +144,7 @@ const mastersLabel = computed(() => t('school.masters', { n: props.mastersCount 
   gap: var(--space-4);
   margin-top: var(--space-2);
   color: var(--velo-text-secondary);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
 }
 
 .school-invite__stats span {
@@ -158,7 +158,7 @@ const mastersLabel = computed(() => t('school.masters', { n: props.mastersCount 
   max-width: var(--velo-content-width-narrow);
   margin: var(--space-3) 0 0;
   color: var(--velo-text-primary);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   line-height: 1.45;
 }
 
@@ -167,7 +167,7 @@ const mastersLabel = computed(() => t('school.masters', { n: props.mastersCount 
 .school-invite__heading {
   margin: var(--space-4) 0 0;
   font-family: var(--font-body);
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   line-height: 1.3;
   color: var(--velo-text-primary);
   -webkit-text-stroke: var(--velo-text-stroke-strong) var(--velo-text-primary);

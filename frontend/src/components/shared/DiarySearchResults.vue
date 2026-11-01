@@ -54,7 +54,7 @@ const emit = defineEmits<{
 .dsr__count {
   margin: 0 0 var(--space-1) var(--space-3);
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
 }
 </style>

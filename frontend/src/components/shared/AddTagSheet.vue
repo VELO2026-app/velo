@@ -96,14 +96,14 @@ async function onSave(): Promise<void> {
 <style scoped>
 .add-tag__name {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   margin: 0 0 var(--space-4);
 }
 
 .add-tag__label {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   margin: var(--space-4) 0 var(--space-2);
 }

@@ -142,7 +142,7 @@ defineEmits<{
 .v-header__badge {
   background: var(--velo-primary);
   color: var(--velo-white);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   padding: var(--velo-gap-2) var(--space-2);
   border-radius: var(--radius-full);
   flex-shrink: 0;

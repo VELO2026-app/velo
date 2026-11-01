@@ -290,13 +290,13 @@ function onGoHome(): void {
 
 .support__hero-title {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   -webkit-text-stroke: var(--velo-text-stroke-strong) currentColor;
 }
 
 .support__hero-sub {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
 }
 
@@ -309,7 +309,7 @@ function onGoHome(): void {
 
 .support__title {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -347,7 +347,7 @@ function onGoHome(): void {
   color: var(--velo-text-primary);
   cursor: pointer;
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
 }
 
 .support__file-input {
@@ -379,7 +379,7 @@ function onGoHome(): void {
 /* -- Email fallback + submit -- */
 .support__email {
   text-align: center;
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   text-decoration: none;
 }
@@ -430,7 +430,7 @@ function onGoHome(): void {
 }
 
 .support__ok-text {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   line-height: 1.35;
   max-width: 290px;

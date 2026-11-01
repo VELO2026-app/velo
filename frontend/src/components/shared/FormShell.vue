@@ -258,7 +258,7 @@ const cleanTitle = computed(() => (props.practice ? cleanPracticeTitle(props.pra
 
 .form-shell__question h3 {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -267,7 +267,7 @@ const cleanTitle = computed(() => (props.practice ? cleanPracticeTitle(props.pra
 
 .form-shell__question p {
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
 }
 
@@ -288,7 +288,7 @@ const cleanTitle = computed(() => (props.practice ? cleanPracticeTitle(props.pra
 .form-shell__disabled-hint {
   text-align: center;
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   margin: calc(-1 * var(--space-2)) 0 0;
 }

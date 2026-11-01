@@ -71,7 +71,7 @@ function toggle(slug: string): void {
 
 .ob-goals__title {
   font-family: var(--font-body);
-  font-size: var(--text-xl);
+  font-size: var(--velo-fs-32);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;

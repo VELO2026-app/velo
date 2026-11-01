@@ -90,7 +90,7 @@ defineEmits<{
 .v-select__label {
   display: block;
   /* Figma form spec: label Marmelad 18, primary — unified with VInput/VTextarea. */
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   margin-bottom: var(--space-2);
 }
@@ -108,7 +108,7 @@ defineEmits<{
   height: var(--velo-size-40);
   padding: 0 var(--size-select-chevron-clearance) 0 var(--space-4);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   /* White plate canon — the single field surface, unified with VInput. */
   background: var(--velo-bg-card-solid);
@@ -151,7 +151,7 @@ defineEmits<{
 
 .v-select__error {
   display: block;
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-error);
   margin-top: var(--space-1);
 }

@@ -90,7 +90,7 @@ defineEmits<{
 .v-menu-row__text {
   flex: 1;
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
 }
 
@@ -128,7 +128,7 @@ defineEmits<{
   border-radius: var(--radius-full);
   background: var(--velo-error);
   color: var(--velo-white);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   display: inline-flex;
   align-items: center;
   justify-content: center;

@@ -122,7 +122,7 @@ const emit = defineEmits<{
 }
 
 .v-segment-track--toggle .v-segment-track__btn {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-primary);
   padding: var(--space-1) var(--space-3);
 }
@@ -134,7 +134,7 @@ const emit = defineEmits<{
 
 .v-segment-track--tabs .v-segment-track__btn {
   flex: 1;
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   padding: var(--velo-gap-6) var(--velo-gap-11);
 }

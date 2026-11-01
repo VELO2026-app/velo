@@ -387,7 +387,7 @@ function onTap(): void {
   right: 78px;
 }
 .tcard__bubble-title {
-  font-size: var(--velo-fs-13);
+  font-size: var(--velo-fs-12);
   font-weight: 700;
   color: var(--velo-text-primary);
   white-space: nowrap;
@@ -432,7 +432,7 @@ function onTap(): void {
   min-width: 0;
 }
 .tcard__prac-title {
-  font-size: var(--velo-fs-13);
+  font-size: var(--velo-fs-12);
   color: var(--velo-text-primary);
   white-space: nowrap;
   overflow: hidden;

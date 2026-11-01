@@ -381,7 +381,7 @@ function onReset(): void {
 
 .cal-filter__heading {
   font-family: var(--font-body);
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   font-weight: 400;
   color: var(--velo-text-primary);
   margin: 0;
@@ -395,7 +395,7 @@ function onReset(): void {
 
 .cal-filter__label {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   font-weight: 400;
   color: var(--velo-text-secondary);
   margin: 0;

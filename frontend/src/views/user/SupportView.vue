@@ -212,13 +212,13 @@ function goHome(): void {
 
 .support__hero-title {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }
 
 .support__hero-sub {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
 }
 
@@ -231,7 +231,7 @@ function goHome(): void {
 
 .support__title {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -249,7 +249,7 @@ function goHome(): void {
 /* -- Email fallback + submit -- */
 .support__email {
   text-align: center;
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   text-decoration: none;
 }
@@ -282,7 +282,7 @@ function goHome(): void {
 
 .support__ok-title {
   font-family: var(--font-body);
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -290,7 +290,7 @@ function goHome(): void {
 }
 
 .support__ok-text {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   line-height: 1.4;
   max-width: var(--velo-content-width-narrow);

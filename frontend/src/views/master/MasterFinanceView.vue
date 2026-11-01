@@ -653,18 +653,18 @@ onMounted(async () => {
 }
 
 .finance-view__balance-label {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   opacity: 0.9;
 }
 
 .finance-view__balance-value {
   font-family: var(--font-body);
-  font-size: var(--text-xl);
+  font-size: var(--velo-fs-32);
   letter-spacing: -0.5px;
 }
 
 .finance-view__balance-frozen {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   opacity: 0.8;
 }
 
@@ -677,7 +677,7 @@ onMounted(async () => {
 
 .finance-view__title {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -686,7 +686,7 @@ onMounted(async () => {
 }
 
 .finance-view__hint {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   line-height: 1.45;
   margin: 0;
@@ -712,13 +712,13 @@ onMounted(async () => {
 }
 
 .finance-view__card-num {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.04em;
 }
 
 .finance-view__card-name {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   letter-spacing: 0.02em;
 }
@@ -774,7 +774,7 @@ onMounted(async () => {
 /* Constant-height error slot (owner 2026-10-01): the message fades in
    without growing its block. */
 .finance-view__error {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-error);
   margin: 0;
   min-height: 17px;
@@ -795,7 +795,7 @@ onMounted(async () => {
 }
 
 .finance-view__warning-text {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   line-height: 1.5;
   margin: 0;
@@ -809,7 +809,7 @@ onMounted(async () => {
 }
 
 .finance-view__empty-text {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-muted);
   text-align: center;
   padding: var(--space-5) 0;
@@ -860,12 +860,12 @@ onMounted(async () => {
 }
 
 .finance-view__hamt {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
 }
 
 .finance-view__hmeta {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
 }
 

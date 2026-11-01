@@ -85,7 +85,7 @@ function onPick(value: string): void {
 
 .ob-date__title {
   font-family: var(--font-body);
-  font-size: var(--text-xl);
+  font-size: var(--velo-fs-32);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -95,7 +95,7 @@ function onPick(value: string): void {
 
 .ob-date__text {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-secondary);
   margin: 0;
   max-width: var(--velo-content-width-narrow);
@@ -115,7 +115,7 @@ function onPick(value: string): void {
   height: var(--velo-size-50);
   padding: 0 var(--space-4);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   border-radius: var(--radius-full);
   border: 1px solid var(--velo-glass-border);

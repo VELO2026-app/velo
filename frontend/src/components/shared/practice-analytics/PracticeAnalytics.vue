@@ -266,7 +266,7 @@ const showPairsPager = computed(
 .practice-analytics h2,
 .practice-analytics h3 {
   margin: 0;
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
 }
 .practice-analytics__hero {
   margin-bottom: var(--space-3);
@@ -291,12 +291,12 @@ const showPairsPager = computed(
   gap: var(--space-1);
   margin-top: var(--space-1);
   color: var(--velo-text-secondary);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
 }
 .practice-analytics__author :deep(.v-avatar) {
   width: 18px;
   height: 18px;
-  font-size: var(--text-8);
+  font-size: var(--velo-fs-8);
 }
 .practice-analytics__meta {
   display: flex;
@@ -304,7 +304,7 @@ const showPairsPager = computed(
   gap: var(--space-3);
   margin-top: var(--space-3);
   color: var(--velo-text-secondary);
-  font-size: var(--text-12);
+  font-size: var(--velo-fs-12);
 }
 .practice-analytics__meta > span,
 .practice-analytics__heading > span {
@@ -323,7 +323,7 @@ const showPairsPager = computed(
   gap: var(--space-2);
 }
 .practice-analytics__heading > span {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   white-space: nowrap;
 }
 .practice-analytics__pairs,
@@ -356,7 +356,7 @@ const showPairsPager = computed(
   color: var(--velo-border);
 }
 .practice-analytics__name {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   /* Owner (FE-96): the row is ONE line at every width -- a long name never
      wraps; it truncates with an ellipsis inside the minmax(0, 1fr) column. */
   white-space: nowrap;
@@ -366,7 +366,7 @@ const showPairsPager = computed(
 .practice-analytics__transition {
   text-align: right;
   color: var(--velo-text-secondary);
-  font-size: var(--text-12);
+  font-size: var(--velo-fs-12);
   white-space: nowrap;
 }
 .practice-analytics__reviews {
@@ -383,14 +383,14 @@ const showPairsPager = computed(
 .practice-analytics__review-date {
   margin-left: auto;
   color: var(--velo-text-secondary);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
 }
 .practice-analytics__review h3 {
   font-weight: 400;
 }
 .practice-analytics__review p {
   margin: var(--space-2) 0 0;
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   white-space: pre-wrap;
   line-height: 1.4;

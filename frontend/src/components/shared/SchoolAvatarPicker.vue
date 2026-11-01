@@ -127,7 +127,7 @@ onBeforeUnmount(() => {
   border: 1.5px dashed var(--velo-border-card);
   border-radius: var(--radius-md);
   color: var(--velo-text-secondary);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
 }
 
 .sap__img {
@@ -150,7 +150,7 @@ onBeforeUnmount(() => {
   background: none;
   padding: 0;
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-primary);
   cursor: pointer;
 }

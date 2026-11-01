@@ -381,7 +381,7 @@ function onScheduleDays(days: string[]): void {
 
 .mn-section__title {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
@@ -390,7 +390,7 @@ function onScheduleDays(days: string[]): void {
 
 .mn-section__sub {
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   letter-spacing: 0.02em;
   margin: calc(-1 * var(--space-1)) 0 0;
@@ -422,13 +422,13 @@ function onScheduleDays(days: string[]): void {
 }
 
 .mn-card__title {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }
 
 .mn-card__sub {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   letter-spacing: 0.02em;
   line-height: 1.25;
@@ -451,7 +451,7 @@ function onScheduleDays(days: string[]): void {
   border: 2px solid transparent;
   border-radius: var(--velo-radius-badge);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   cursor: pointer;
   transition: border-color var(--transition-base);
@@ -463,7 +463,7 @@ function onScheduleDays(days: string[]): void {
 }
 
 .mn-sched__sep {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-secondary);
 }
 

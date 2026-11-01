@@ -537,7 +537,7 @@ watch(masterId, (id) => {
 
 .master-public__name {
   font-family: var(--font-body);
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   font-weight: 400;
   color: var(--velo-text-primary);
   margin: 0;
@@ -560,13 +560,13 @@ watch(masterId, (id) => {
   /* Owner 2026-09-30: #E2F0FD fill, #619CD2 text (--velo-blue-100/400). */
   background: var(--velo-blue-100);
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-blue-400);
 }
 
 .master-public__bio {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   line-height: 1.6;
   margin: var(--space-1) 0 0;
@@ -601,13 +601,13 @@ watch(masterId, (id) => {
   margin: 0;
   text-align: center;
   font-family: var(--font-body);
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   color: var(--velo-text-primary);
 }
 
 .master-public__role-sub {
   margin: 0;
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
 }
 
@@ -638,7 +638,7 @@ watch(masterId, (id) => {
   border-radius: var(--radius-md);
   color: var(--velo-text-primary);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   cursor: pointer;
 }
 
@@ -648,7 +648,7 @@ watch(masterId, (id) => {
 
 .master-public__note {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   line-height: 1.6;
   margin: 0;
@@ -674,7 +674,7 @@ watch(masterId, (id) => {
    headers (owner 2026-09-30), cards always open -- no accordion. */
 .master-public__section-title {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   font-weight: 400;
   color: var(--velo-text-primary);
   margin: 0 0 var(--space-3);
@@ -702,7 +702,7 @@ watch(masterId, (id) => {
 
 :deep(.v-accordion__header) {
   padding: var(--space-3) var(--space-4);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
 }
 
@@ -711,7 +711,7 @@ watch(masterId, (id) => {
 }
 
 :deep(.v-accordion__arrow) {
-  font-size: var(--text-lg);
+  font-size: var(--velo-fs-20);
   color: var(--velo-text-primary);
 }
 </style>

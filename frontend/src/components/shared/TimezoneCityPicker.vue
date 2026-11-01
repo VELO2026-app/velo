@@ -224,13 +224,13 @@ function select(iana: string): void {
 }
 
 .tz-picker__city {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   line-height: 22px;
   color: var(--velo-text-primary);
 }
 
 .tz-picker__zone {
-  font-size: var(--text-12);
+  font-size: var(--velo-fs-12);
   line-height: 16px;
   color: var(--velo-text-secondary);
 }
@@ -243,12 +243,12 @@ function select(iana: string): void {
 }
 
 .tz-picker__time {
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
 }
 
 .tz-picker__off {
-  font-size: var(--text-12);
+  font-size: var(--velo-fs-12);
   color: var(--velo-text-secondary);
 }
 
@@ -262,7 +262,7 @@ function select(iana: string): void {
 .tz-picker__empty {
   margin: var(--space-3) 0 0;
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-muted);
   text-align: center;
 }

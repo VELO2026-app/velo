@@ -398,14 +398,14 @@ function goBack(): void {
 
 .school-analytics__stat-value {
   font-family: var(--font-heading);
-  font-size: var(--text-xl);
+  font-size: var(--velo-fs-32);
   color: var(--velo-text-primary);
   letter-spacing: 0.64px;
   line-height: 1.1;
 }
 
 .school-analytics__stat-label {
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   line-height: 1.35;
 }
@@ -437,7 +437,7 @@ function goBack(): void {
 }
 
 .school-analytics__practice-title {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -448,7 +448,7 @@ function goBack(): void {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
 }
 
@@ -456,7 +456,7 @@ function goBack(): void {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
 }
 

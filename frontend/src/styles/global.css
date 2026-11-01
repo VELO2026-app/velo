@@ -37,7 +37,7 @@
    16ms window before Vue mounts. ALL scrolling moves into inner containers
    marked `.velo-kbd-scroll` (see the KEYBOARD CANON block below). */
 html {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
   /* [FE caret fix] The app is a LIGHT-UI app: every token is static light
@@ -62,7 +62,7 @@ html {
 
 body {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   line-height: 1.5;
   color: var(--velo-text-primary);
   background: var(--velo-bg-start);
@@ -568,7 +568,7 @@ html.is-keyboard-open .mobile-layout__main--fog {
    levels stay consistent (a11y). font-family / weight / colour inherit from the
    h2 reset above; this only pins size, tracking and margin. */
 .velo-section-title {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   letter-spacing: 0.02em;
   margin: 0;
 }

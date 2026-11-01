@@ -49,7 +49,7 @@ defineEmits<{ click: [] }>()
   justify-content: center;
   padding: var(--space-2) var(--space-5);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-primary);
   background: transparent;
   border: 1.5px solid var(--velo-primary);

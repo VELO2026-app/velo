@@ -364,7 +364,7 @@ function onRow(item: NotificationItem): void {
 
 .user-inbox__filter-empty {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--velo-fs-16);
   color: var(--velo-text-secondary);
   text-align: center;
   padding: 0 var(--space-4);
@@ -381,7 +381,7 @@ function onRow(item: NotificationItem): void {
   background: none;
   border: none;
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-primary);
   cursor: pointer;
   padding: var(--space-2);

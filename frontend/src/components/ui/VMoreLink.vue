@@ -62,7 +62,7 @@ defineEmits<{ click: [] }>()
 
 .v-more__text {
   font-family: var(--font-body);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   letter-spacing: var(--velo-card-letter-spacing-meta);
   color: var(--velo-text-primary);
 }

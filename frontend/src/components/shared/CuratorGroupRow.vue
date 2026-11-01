@@ -137,7 +137,7 @@ onMounted(() => {
 }
 
 .cg-row__name {
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
   white-space: nowrap;
@@ -156,7 +156,7 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   gap: var(--velo-gap-3);
-  font-size: var(--text-xs);
+  font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   white-space: nowrap;
 }

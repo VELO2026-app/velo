@@ -121,7 +121,7 @@ function onMore(): void {
 
 .master-card__name {
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   margin-bottom: var(--space-1);
 }
