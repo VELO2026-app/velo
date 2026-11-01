@@ -1497,7 +1497,9 @@ reload_bound_profile() {
     # The service validates its profile at startup and refuses to boot on
     # a bad one -- so by far the likeliest cause of a failure HERE is the
     # template commit that just arrived, and the operator is looking at a
-    # crash-looping service. Give them the way out, not just the verdict.
+    # crash-looping service. This function names the cause and where to
+    # look; the way out depends on what the update has already done by
+    # now, so the caller -- which knows that -- gives it.
     echo -e "${RED}✗ $name did not come back after the profile reload${NC}"
     echo ""
     echo -e "${YELLOW}Most likely cause: the profile that just arrived in this pull.${NC}"
@@ -1505,10 +1507,7 @@ reload_bound_profile() {
     echo "  (malformed types.yaml, a broken template placeholder, a type"
     echo "  declared without a category)."
     echo ""
-    echo "  Inspect:  bash $dir/$cli logs"
-    echo "  Recover:  revert the profile commit and roll out again --"
-    echo "    cd $COMPOSE_DIR && git revert <commit touching comms-profile/>"
-    echo "    git push && velo update"
+    echo "  Inspect:  velo logs $name"
     echo ""
     return 1
 }
@@ -1573,24 +1572,10 @@ update_all() {
         fi
     done
 
-    # -- Bound profiles: the SECOND restart (T-32 item 1) --------------------
-    # The registry order is "services -> product", and it stays that way:
-    # a service's CODE must be current before the product that calls it.
-    # But a service whose PROFILE is bind-mounted out of the product's
-    # checkout has a second dependency pointing the other way -- the data
-    # only arrived a moment ago, in update_product's pull, long after that
-    # service restarted. Without this pass a template edit would land on
-    # disk now and reach the running service one update LATER.
-    #
-    # So: same order, one extra restart, and only for services that are
-    # actually bound into this checkout. It is about DATA, not about the
-    # code contract -- which is why it lives here and not in the registry.
-    if [ "$frontend_only" -eq 0 ]; then
-        for record in "${VELO_SERVICES[@]}"; do
-            [ "$(svc_field "$record" 5)" = "internal" ] && continue
-            reload_bound_profile "$record" || exit 1
-        done
-    fi
+    # Bound profiles (T-32 item 1) are NOT reloaded here: that restart
+    # happens inside update_product, right after the new backend is up and
+    # migrated -- see "BOUND PROFILES" there for why it cannot wait until
+    # the end of the cycle.
 
     # A registry change arrives WITH the product update, but the list was
     # read before that -- so a newly declared service starts being managed
@@ -1945,6 +1930,101 @@ update_product() {
                 exit 1
             }
             echo -e "${GREEN}✓ Migrations applied${NC}"
+
+            # -- BOUND PROFILES (T-32 item 1) -----------------------------
+            # A registry service whose profile is bind-mounted out of this
+            # checkout (comms) reads that profile ONCE, when its processes
+            # start. The pull above put the new profile on disk; the service
+            # still runs the old one -- while the app just started emits the
+            # notification types of the new code. comms refuses a type its
+            # profile does not declare (rejected_at_intake, acked, no dead
+            # letter) and the relay has already marked the row published:
+            # the notification is lost without a trace. So the restart comes
+            # HERE, as soon as the new backend is up -- not at the end of
+            # the cycle, 15-20 minutes of tests, type-regen and frontend
+            # build later.
+            #
+            # After the migrations and not before them: a failed restart
+            # stops the update, and stopping here leaves velo consistent --
+            # new code on the migrated schema -- with only comms to fix.
+            # Stopping before the migrations would leave the new code
+            # serving users on the OLD schema until somebody fixes comms.
+            # The price is a few seconds (the migration) added to the
+            # window below.
+            #
+            # Once per update: nothing else in `velo update` reloads a bound
+            # profile, and an update with nothing to deploy (velo already up
+            # to date) pulled nothing, so it has nothing to reload either.
+            # Every run that pulled but did not finish -- this restart
+            # failing included -- is not recorded as deployed, so the next
+            # `velo update` runs this full cycle, and this step, again.
+            #
+            # ┌─ KNOWN CEILING ────────────────────────────────────────────
+            # │ (1) MECHANICS: between the new app's first relay pass (it
+            # │     ticks every COMMS_RELAY_INTERVAL_SECONDS, 2 s) and the
+            # │     moment the OLD comms-consumer stops inside the restart
+            # │     below, events of types only the new profile declares
+            # │     reach the old profile and are refused -- lost. The
+            # │     window is the app's start-up, the freshness check and
+            # │     the migration, then the restart's own create phase:
+            # │     seconds. Docker compose v5.6.1 (read in its source)
+            # │     stops the old consumer while it REPLACES containers,
+            # │     before the new comms-app is started and waited for, so
+            # │     comms-app's health wait is not in the window. The
+            # │     compose on a box is whatever docker-compose-plugin the
+            # │     installer got; other versions were not read.
+            # │     Entries written while comms is DOWN are not at risk:
+            # │     its consumer group reads on from where it stopped.
+            # │ (2) STATUS: acknowledged by design.
+            # │ (3) REFERENCE: BE-180.
+            # │ (4) UNCONSERVATION TRIGGER: a comms log line "Unregistered
+            # │     notification type" (rejected_at_intake) for a type that
+            # │     IS declared in comms-profile/types.yaml, timed inside a
+            # │     `velo update`.
+            # │ (5) SHAPE OF THE FIX: drain, then switch -- stop the old
+            # │     app, wait until the comms consumer group has no lag and
+            # │     nothing pending, stop comms, start the new app, start
+            # │     comms on the new profile.
+            # │ (6) REJECTED, AND WHY:
+            # │     - restarting comms BEFORE `up -d app`: the window does
+            # │       not close, it moves -- the old app's last events (and
+            # │       outbox rows it never shipped, which the new relay
+            # │       ships unchanged) then meet the NEW profile, which no
+            # │       longer declares a renamed type;
+            # │     - restarting it before the migrations: see above -- a
+            # │       failed restart would strand the new code on the old
+            # │       schema.
+            # └────────────────────────────────────────────────────────────
+            # `local`: update_service, our caller, keeps its own `record`.
+            local bound_record
+            for bound_record in "${VELO_SERVICES[@]}"; do
+                [ "$(svc_field "$bound_record" 5)" = "internal" ] && continue
+                reload_bound_profile "$bound_record" && continue
+
+                echo -e "${RED}✗ Update stopped at the profile reload of $(svc_field "$bound_record" 1)${NC}"
+                echo ""
+                echo "  Where this box is now:"
+                echo "    - the app runs the NEW code ($NEW_COMMIT), and the database is migrated;"
+                echo "    - nothing after the migrations ran: no backend tests, no type"
+                echo "      regeneration, no frontend build -- the site still serves the"
+                echo "      previous frontend;"
+                echo "    - this deploy is NOT recorded: the next 'velo update' runs the"
+                echo "      whole cycle again, this restart included."
+                echo ""
+                echo "  Notifications are not lost while comms is down: they wait in the"
+                echo "  comms stream (or in the velo outbox, if the stream is unreachable),"
+                echo "  and comms reads them on from where it stopped once it is up -- on"
+                echo "  whichever profile it then has."
+                echo ""
+                echo "  Way out:"
+                echo "    - fix the profile FORWARD: a new commit to comms-profile/, push,"
+                echo "      then: velo update"
+                echo "    - the cause was transient (see the comms logs): velo update"
+                echo "    - reverting the commit works too, but costs the queue: whatever"
+                echo "      queued meanwhile under a type only the new profile declares is"
+                echo "      refused by the old profile."
+                exit 1
+            done
 
             # Run backend tests (unless --skip-tests) -- TEST ROLE ONLY.
             # The suite runs in its own databases (BE-82/BE-86) and no
