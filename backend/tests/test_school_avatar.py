@@ -69,8 +69,8 @@ from tests.helpers import (
     login_user,
 )
 
-GROUPS_URL = "/api/v1/masters/me/schools"
-GROUP_URL = "/api/v1/masters/me/schools/{school_id}"
+SCHOOLS_URL = "/api/v1/masters/me/schools"
+SCHOOL_URL = "/api/v1/masters/me/schools/{school_id}"
 JOURNAL_URL = "/api/v1/masters/me/schools/{school_id}/journal"
 INVITES_URL = "/api/v1/masters/me/schools/{school_id}/invites"
 PREVIEW_URL = "/api/v1/schools/invites/{token}"
@@ -132,11 +132,11 @@ async def _make_verified_master(
     return auth
 
 
-async def _make_group(
+async def _make_school(
     client: AsyncClient, curator: dict, name: str = "Школа дыхания",
 ) -> str:
     resp = await client.post(
-        GROUPS_URL,
+        SCHOOLS_URL,
         json={"name": name},
         headers=auth_headers(curator["session_token"]),
     )
@@ -145,7 +145,7 @@ async def _make_group(
 
 
 async def _patch(
-    client: AsyncClient, curator: dict, group_id: str, **body,
+    client: AsyncClient, curator: dict, school_id: str, **body,
 ):
     """PATCH the school.
 
@@ -155,7 +155,7 @@ async def _patch(
     rather than tripping over a helper's convenience.
     """
     return await client.patch(
-        GROUP_URL.format(school_id=group_id),
+        SCHOOL_URL.format(school_id=school_id),
         json=body,
         headers=auth_headers(curator["session_token"]),
     )
@@ -164,36 +164,36 @@ async def _patch(
 async def _set_avatar(
     client: AsyncClient,
     curator: dict,
-    group_id: str,
+    school_id: str,
     url: str | None,
     name: str = "Школа дыхания",
 ):
     """The ordinary way to set or clear the picture: name + avatar_url."""
     return await _patch(
-        client, curator, group_id, name=name, avatar_url=url,
+        client, curator, school_id, name=name, avatar_url=url,
     )
 
 
-async def _stored_avatar(group_id: str) -> str | None:
+async def _stored_avatar(school_id: str) -> str | None:
     """Read the column, not the response.
 
     Used where the claim is about what is IN the database -- a response
     could agree with the test while the column held something else, which
     is exactly what normalisation makes possible.
     """
-    group = (
+    school = (
         await fresh_execute(
-            select(School).where(School.id == UUID(group_id))
+            select(School).where(School.id == UUID(school_id))
         )
     ).scalar_one()
-    return group.avatar_url
+    return school.avatar_url
 
 
 async def _events(
-    client: AsyncClient, curator: dict, group_id: str,
+    client: AsyncClient, curator: dict, school_id: str,
 ) -> list[dict]:
     resp = await client.get(
-        JOURNAL_URL.format(school_id=group_id),
+        JOURNAL_URL.format(school_id=school_id),
         params={"limit": 100},
         headers=auth_headers(curator["session_token"]),
     )
@@ -202,17 +202,17 @@ async def _events(
 
 
 async def _kinds(
-    client: AsyncClient, curator: dict, group_id: str,
+    client: AsyncClient, curator: dict, school_id: str,
 ) -> list[str]:
-    return [e["event"] for e in await _events(client, curator, group_id)]
+    return [e["event"] for e in await _events(client, curator, school_id)]
 
 
 async def _invite(
-    client: AsyncClient, curator: dict, group_id: str,
+    client: AsyncClient, curator: dict, school_id: str,
 ) -> str:
     with patch.object(settings, "telegram_bot_url", _BOT_URL):
         resp = await client.post(
-            INVITES_URL.format(school_id=group_id),
+            INVITES_URL.format(school_id=school_id),
             json={},
             headers=auth_headers(curator["session_token"]),
         )
@@ -221,11 +221,11 @@ async def _invite(
 
 
 async def _seed_member(
-    db_session: AsyncSession, group_id: str, auth: dict, kind: str,
+    db_session: AsyncSession, school_id: str, auth: dict, kind: str,
 ) -> None:
     db_session.add(
         SchoolMember(
-            school_id=UUID(group_id),
+            school_id=UUID(school_id),
             user_id=UUID(auth["user"]["id"]),
             kind=kind,
         )
@@ -273,19 +273,19 @@ async def test_setting_an_avatar_stores_it_and_records_one_event(
     "changed".
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
 
-    resp = await _set_avatar(client, curator, group_id, _URL)
+    resp = await _set_avatar(client, curator, school_id, _URL)
     assert resp.status_code == 200, resp.text
     assert resp.json()["avatar_url"] == _URL
 
-    assert await _stored_avatar(group_id) == _URL
+    assert await _stored_avatar(school_id) == _URL
 
-    events = await _events(client, curator, group_id)
+    events = await _events(client, curator, school_id)
     avatar = [
         e
         for e in events
-        if e["event"] == SchoolEventKind.GROUP_AVATAR_CHANGED.value
+        if e["event"] == SchoolEventKind.SCHOOL_AVATAR_CHANGED.value
     ]
     assert len(avatar) == 1
     assert avatar[0]["data"]["had_avatar_before"] is False
@@ -302,20 +302,20 @@ async def test_clearing_an_avatar_with_null_records_a_change(
     the one above -- same event kind, opposite direction.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
     assert (
-        await _set_avatar(client, curator, group_id, _URL)
+        await _set_avatar(client, curator, school_id, _URL)
     ).status_code == 200
 
-    cleared = await _set_avatar(client, curator, group_id, None)
+    cleared = await _set_avatar(client, curator, school_id, None)
     assert cleared.status_code == 200, cleared.text
     assert cleared.json()["avatar_url"] is None
-    assert await _stored_avatar(group_id) is None
+    assert await _stored_avatar(school_id) is None
 
     flags = [
         e["data"]["had_avatar_before"]
-        for e in await _events(client, curator, group_id)
-        if e["event"] == SchoolEventKind.GROUP_AVATAR_CHANGED.value
+        for e in await _events(client, curator, school_id)
+        if e["event"] == SchoolEventKind.SCHOOL_AVATAR_CHANGED.value
     ]
     # Newest first: the removal, then the attachment.
     assert flags == [True, False]
@@ -339,18 +339,18 @@ async def test_a_blank_avatar_becomes_null_and_never_an_empty_string(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
 
     for blank in ("", "   ", "\t"):
-        group_id = await _make_group(client, curator, name=f"Ш{blank!r}")
+        school_id = await _make_school(client, curator, name=f"Ш{blank!r}")
         assert (
             await _set_avatar(
-                client, curator, group_id, _URL, name=f"Ш{blank!r}",
+                client, curator, school_id, _URL, name=f"Ш{blank!r}",
             )
         ).status_code == 200
 
         resp = await _set_avatar(
-            client, curator, group_id, blank, name=f"Ш{blank!r}",
+            client, curator, school_id, blank, name=f"Ш{blank!r}",
         )
         assert resp.status_code == 200, resp.text
-        assert await _stored_avatar(group_id) is None
+        assert await _stored_avatar(school_id) is None
         assert resp.json()["avatar_url"] is None
 
 
@@ -367,18 +367,18 @@ async def test_sending_the_same_avatar_again_records_nothing(
     happen. So both spellings are sent, and neither adds an entry.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
 
     assert (
-        await _set_avatar(client, curator, group_id, "https://cdn.example.com")
+        await _set_avatar(client, curator, school_id, "https://cdn.example.com")
     ).status_code == 200
-    after_first = len(await _events(client, curator, group_id))
+    after_first = len(await _events(client, curator, school_id))
 
     for same in ("https://cdn.example.com", "https://cdn.example.com/"):
-        resp = await _set_avatar(client, curator, group_id, same)
+        resp = await _set_avatar(client, curator, school_id, same)
         assert resp.status_code == 200, resp.text
 
-    assert len(await _events(client, curator, group_id)) == after_first
+    assert len(await _events(client, curator, school_id)) == after_first
 
 
 @pytest.mark.asyncio
@@ -392,14 +392,14 @@ async def test_clearing_an_avatar_that_was_never_set_records_nothing(
     the request was going.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    group_id = await _make_group(client, curator)
-    before = await _kinds(client, curator, group_id)
+    school_id = await _make_school(client, curator)
+    before = await _kinds(client, curator, school_id)
 
-    resp = await _set_avatar(client, curator, group_id, None)
+    resp = await _set_avatar(client, curator, school_id, None)
     assert resp.status_code == 200, resp.text
 
-    assert await _kinds(client, curator, group_id) == before
-    assert SchoolEventKind.GROUP_AVATAR_CHANGED.value not in before
+    assert await _kinds(client, curator, school_id) == before
+    assert SchoolEventKind.SCHOOL_AVATAR_CHANGED.value not in before
 
 
 @pytest.mark.asyncio
@@ -414,20 +414,20 @@ async def test_a_patch_without_the_key_leaves_the_avatar_alone(
     cannot be satisfied by the PATCH having done nothing at all.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
     assert (
-        await _set_avatar(client, curator, group_id, _URL)
+        await _set_avatar(client, curator, school_id, _URL)
     ).status_code == 200
 
-    renamed = await _patch(client, curator, group_id, name="Тихое утро")
+    renamed = await _patch(client, curator, school_id, name="Тихое утро")
     assert renamed.status_code == 200, renamed.text
     assert renamed.json()["name"] == "Тихое утро"
     assert renamed.json()["avatar_url"] == _URL
-    assert await _stored_avatar(group_id) == _URL
+    assert await _stored_avatar(school_id) == _URL
 
-    kinds = await _kinds(client, curator, group_id)
-    assert kinds.count(SchoolEventKind.GROUP_RENAMED.value) == 1
-    assert kinds.count(SchoolEventKind.GROUP_AVATAR_CHANGED.value) == 1
+    kinds = await _kinds(client, curator, school_id)
+    assert kinds.count(SchoolEventKind.SCHOOL_RENAMED.value) == 1
+    assert kinds.count(SchoolEventKind.SCHOOL_AVATAR_CHANGED.value) == 1
 
 
 @pytest.mark.asyncio
@@ -436,30 +436,30 @@ async def test_renaming_and_re_picturing_at_once_writes_two_events(
 ) -> None:
     """One PATCH, two independent changes, two entries.
 
-    Not one "group updated": a rename may be worth telling members about
+    Not one "school updated": a rename may be worth telling members about
     and a new picture may not, and a combined event would force that
     decision to be re-derived from `data`. Both share created_at to the
     byte -- they are one transaction -- and their order in the feed comes
     from seq, which carries no meaning between them.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
     assert (
-        await _set_avatar(client, curator, group_id, _URL)
+        await _set_avatar(client, curator, school_id, _URL)
     ).status_code == 200
-    before = len(await _events(client, curator, group_id))
+    before = len(await _events(client, curator, school_id))
 
     resp = await _patch(
-        client, curator, group_id, name="Тихое утро", avatar_url=_URL_2,
+        client, curator, school_id, name="Тихое утро", avatar_url=_URL_2,
     )
     assert resp.status_code == 200, resp.text
 
-    items = await _events(client, curator, group_id)
+    items = await _events(client, curator, school_id)
     assert len(items) == before + 2
     fresh = items[:2]
     assert {e["event"] for e in fresh} == {
-        SchoolEventKind.GROUP_RENAMED.value,
-        SchoolEventKind.GROUP_AVATAR_CHANGED.value,
+        SchoolEventKind.SCHOOL_RENAMED.value,
+        SchoolEventKind.SCHOOL_AVATAR_CHANGED.value,
     }
     assert len({e["created_at"] for e in fresh}) == 1
     assert len({e["id"] for e in fresh}) == 2
@@ -479,12 +479,12 @@ async def test_the_stored_url_is_the_normalised_one_not_what_was_typed(
     silently break the journal.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
 
-    resp = await _set_avatar(client, curator, group_id, "https://CDN.Example.COM")
+    resp = await _set_avatar(client, curator, school_id, "https://CDN.Example.COM")
     assert resp.status_code == 200, resp.text
 
-    stored = await _stored_avatar(group_id)
+    stored = await _stored_avatar(school_id)
     assert stored == "https://cdn.example.com/"
     assert stored != "https://CDN.Example.COM"
     assert resp.json()["avatar_url"] == stored
@@ -511,7 +511,7 @@ async def test_only_https_is_accepted_and_the_dangerous_schemes_are_not(
     name, and the school still has its original one afterwards.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
 
     bad = [
         "http://cdn.example.com/a.png",
@@ -524,20 +524,20 @@ async def test_only_https_is_accepted_and_the_dangerous_schemes_are_not(
     ]
     for i, url in enumerate(bad):
         resp = await _patch(
-            client, curator, group_id, name=f"Переименовано {i}",
+            client, curator, school_id, name=f"Переименовано {i}",
             avatar_url=url,
         )
         assert resp.status_code == 422, f"{url}: {resp.text}"
 
     page = await client.get(
-        PAGE_URL.format(school_id=group_id),
+        PAGE_URL.format(school_id=school_id),
         headers=auth_headers(curator["session_token"]),
     )
     assert page.status_code == 200
     assert page.json()["name"] == "Школа дыхания"
     assert page.json()["avatar_url"] is None
-    assert await _kinds(client, curator, group_id) == [
-        SchoolEventKind.GROUP_CREATED.value
+    assert await _kinds(client, curator, school_id) == [
+        SchoolEventKind.SCHOOL_CREATED.value
     ]
 
 
@@ -552,7 +552,7 @@ async def test_a_url_too_long_on_the_wire_is_422(
     general.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
 
     prefix = "https://cdn.example.com/"
     fits = prefix + "a" * (500 - len(prefix))
@@ -560,13 +560,13 @@ async def test_a_url_too_long_on_the_wire_is_422(
     assert len(fits) == 500
     assert len(too_long) == 501
 
-    ok = await _set_avatar(client, curator, group_id, fits)
+    ok = await _set_avatar(client, curator, school_id, fits)
     assert ok.status_code == 200, ok.text
-    assert await _stored_avatar(group_id) == fits
+    assert await _stored_avatar(school_id) == fits
 
-    rejected = await _set_avatar(client, curator, group_id, too_long)
+    rejected = await _set_avatar(client, curator, school_id, too_long)
     assert rejected.status_code == 422, rejected.text
-    assert await _stored_avatar(group_id) == fits
+    assert await _stored_avatar(school_id) == fits
 
 
 @pytest.mark.asyncio
@@ -589,15 +589,15 @@ async def test_a_url_that_only_exceeds_500_after_normalisation_is_422(
     must not have written a truncated value either.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
 
     sneaky = "https://пример.рф/" + "я" * 200 + ".png"
     assert len(sneaky) < 500
 
-    resp = await _set_avatar(client, curator, group_id, sneaky)
+    resp = await _set_avatar(client, curator, school_id, sneaky)
     assert resp.status_code == 422, resp.text
     assert resp.status_code != 500
-    assert await _stored_avatar(group_id) is None
+    assert await _stored_avatar(school_id) is None
 
 
 @pytest.mark.asyncio
@@ -612,12 +612,12 @@ async def test_a_shorter_cyrillic_url_is_accepted_and_stored_punycoded(
     encoding, nothing else.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
 
-    resp = await _set_avatar(client, curator, group_id, "https://пример.рф/лого.png")
+    resp = await _set_avatar(client, curator, school_id, "https://пример.рф/лого.png")
     assert resp.status_code == 200, resp.text
 
-    stored = await _stored_avatar(group_id)
+    stored = await _stored_avatar(school_id)
     assert stored is not None
     assert stored.startswith("https://xn--")
     assert len(stored) <= 500
@@ -638,13 +638,13 @@ async def test_a_patch_carrying_only_an_avatar_is_422_for_the_missing_name(
     is shown to be about the missing field rather than about the avatar.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
 
-    without = await _patch(client, curator, group_id, avatar_url=_URL)
+    without = await _patch(client, curator, school_id, avatar_url=_URL)
     assert without.status_code == 422, without.text
-    assert await _stored_avatar(group_id) is None
+    assert await _stored_avatar(school_id) is None
 
-    with_name = await _set_avatar(client, curator, group_id, _URL)
+    with_name = await _set_avatar(client, curator, school_id, _URL)
     assert with_name.status_code == 200, with_name.text
 
 
@@ -666,12 +666,12 @@ async def test_a_non_master_is_refused_by_the_dependency(
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     plain = await login_user(client, telegram_id=_TID_OUTSIDER)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
 
-    resp = await _set_avatar(client, plain, group_id, _URL)
+    resp = await _set_avatar(client, plain, school_id, _URL)
     assert resp.status_code == 403, resp.text
     assert resp.json()["error"] == "forbidden"
-    assert await _stored_avatar(group_id) is None
+    assert await _stored_avatar(school_id) is None
 
 
 @pytest.mark.asyncio
@@ -689,16 +689,16 @@ async def test_another_master_cannot_set_the_avatar_of_a_school_they_do_not_own(
     member = await _make_verified_master(
         client, db_session, _TID_MASTER_MEMBER,
     )
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
     await _seed_member(
-        db_session, group_id, member, SchoolMemberKind.MASTER.value,
+        db_session, school_id, member, SchoolMemberKind.MASTER.value,
     )
 
-    for target in (group_id, str(uuid4())):
+    for target in (school_id, str(uuid4())):
         resp = await _set_avatar(client, member, target, _URL)
         assert resp.status_code == 404, resp.text
 
-    assert await _stored_avatar(group_id) is None
+    assert await _stored_avatar(school_id) is None
 
 
 # ===========================================================================
@@ -710,21 +710,21 @@ async def test_another_master_cannot_set_the_avatar_of_a_school_they_do_not_own(
 async def test_the_curators_own_list_carries_the_avatar(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """GET /masters/me/schools, built from _group_payload.
+    """GET /masters/me/schools, built from _school_payload.
 
     Two schools, one with a picture and one without, so the field is shown
     to follow the row rather than the request: a response that hard-coded
     either value would pass a single-school test.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    with_pic = await _make_group(client, curator, name="С картинкой")
-    without = await _make_group(client, curator, name="Без картинки")
+    with_pic = await _make_school(client, curator, name="С картинкой")
+    without = await _make_school(client, curator, name="Без картинки")
     assert (
         await _set_avatar(client, curator, with_pic, _URL, name="С картинкой")
     ).status_code == 200
 
     resp = await client.get(
-        GROUPS_URL, headers=auth_headers(curator["session_token"]),
+        SCHOOLS_URL, headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 200, resp.text
     by_id = {g["id"]: g for g in resp.json()["items"]}
@@ -745,24 +745,24 @@ async def test_a_member_sees_the_avatar_on_the_school_page_and_in_mine(
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     student = await login_user(client, telegram_id=_TID_STUDENT)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
     await _seed_member(
-        db_session, group_id, student, SchoolMemberKind.STUDENT.value,
+        db_session, school_id, student, SchoolMemberKind.STUDENT.value,
     )
     assert (
-        await _set_avatar(client, curator, group_id, _URL)
+        await _set_avatar(client, curator, school_id, _URL)
     ).status_code == 200
 
     headers = auth_headers(student["session_token"])
 
-    page = await client.get(PAGE_URL.format(school_id=group_id), headers=headers)
+    page = await client.get(PAGE_URL.format(school_id=school_id), headers=headers)
     assert page.status_code == 200, page.text
     assert page.json()["avatar_url"] == _URL
 
     mine = await client.get(MINE_URL, headers=headers)
     assert mine.status_code == 200, mine.text
     rows = {g["id"]: g for g in mine.json()["items"]}
-    assert rows[group_id]["avatar_url"] == _URL
+    assert rows[school_id]["avatar_url"] == _URL
 
 
 @pytest.mark.asyncio
@@ -784,8 +784,8 @@ async def test_the_invite_preview_carries_the_avatar(
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     stranger = await login_user(client, telegram_id=_TID_OUTSIDER)
-    with_pic = await _make_group(client, curator, name="С картинкой")
-    without = await _make_group(client, curator, name="Без картинки")
+    with_pic = await _make_school(client, curator, name="С картинкой")
+    without = await _make_school(client, curator, name="Без картинки")
     assert (
         await _set_avatar(client, curator, with_pic, _URL, name="С картинкой")
     ).status_code == 200
@@ -817,16 +817,16 @@ async def test_an_outsider_gets_no_school_and_therefore_no_avatar(
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     outsider = await login_user(client, telegram_id=_TID_OUTSIDER)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
     assert (
-        await _set_avatar(client, curator, group_id, _URL)
+        await _set_avatar(client, curator, school_id, _URL)
     ).status_code == 200
     headers = auth_headers(outsider["session_token"])
 
-    page = await client.get(PAGE_URL.format(school_id=group_id), headers=headers)
+    page = await client.get(PAGE_URL.format(school_id=school_id), headers=headers)
     assert page.status_code == 404, page.text
 
-    token = await _invite(client, curator, group_id)
+    token = await _invite(client, curator, school_id)
     preview = await client.get(
         PREVIEW_URL.format(token=token), headers=headers,
     )
@@ -849,7 +849,7 @@ async def test_creating_a_school_never_sets_an_avatar(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
 
     resp = await client.post(
-        GROUPS_URL,
+        SCHOOLS_URL,
         json={"name": "Школа дыхания", "avatar_url": _URL},
         headers=auth_headers(curator["session_token"]),
     )
@@ -872,17 +872,17 @@ async def test_a_school_with_no_avatar_reports_null_in_every_response(
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     student = await login_user(client, telegram_id=_TID_STUDENT)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
     await _seed_member(
-        db_session, group_id, student, SchoolMemberKind.STUDENT.value,
+        db_session, school_id, student, SchoolMemberKind.STUDENT.value,
     )
-    token = await _invite(client, curator, group_id)
+    token = await _invite(client, curator, school_id)
     curator_headers = auth_headers(curator["session_token"])
     student_headers = auth_headers(student["session_token"])
 
-    own_list = await client.get(GROUPS_URL, headers=curator_headers)
+    own_list = await client.get(SCHOOLS_URL, headers=curator_headers)
     page = await client.get(
-        PAGE_URL.format(school_id=group_id), headers=student_headers,
+        PAGE_URL.format(school_id=school_id), headers=student_headers,
     )
     mine = await client.get(MINE_URL, headers=student_headers)
     preview = await client.get(
@@ -895,7 +895,7 @@ async def test_a_school_with_no_avatar_reports_null_in_every_response(
     bodies = [
         own_list.json()["items"][0],
         page.json(),
-        {g["id"]: g for g in mine.json()["items"]}[group_id],
+        {g["id"]: g for g in mine.json()["items"]}[school_id],
         preview.json()["school"],
     ]
     for body in bodies:

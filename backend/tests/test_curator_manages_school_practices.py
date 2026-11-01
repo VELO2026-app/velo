@@ -703,7 +703,7 @@ async def test_a_handover_waits_for_a_creation_holding_the_school(
     result = await race(
         monkeypatch,
         holder=_create_for_master_call(s),
-        pause_in=(practice_service, "_lock_group_as_owner"),
+        pause_in=(practice_service, "_lock_school_as_owner"),
         pause="after",
         rival=_accept_call(s, "school_master"),
     )

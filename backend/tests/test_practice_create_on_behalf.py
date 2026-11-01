@@ -105,12 +105,12 @@ async def _user(
 
 
 async def _join(
-    db_session: AsyncSession, group_id: UUID, user_id: str,
+    db_session: AsyncSession, school_id: UUID, user_id: str,
     kind: SchoolMemberKind,
 ) -> None:
     db_session.add(
         SchoolMember(
-            school_id=group_id, user_id=UUID(user_id), kind=kind.value,
+            school_id=school_id, user_id=UUID(user_id), kind=kind.value,
         )
     )
     await db_session.flush()

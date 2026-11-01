@@ -32,7 +32,7 @@
 #      out-of-window attended booking neither counts as «приходило» nor
 #      flips «пришли ещё раз», an out-of-window review is neither a
 #      reviewer nor a rating bucket, «вступили и не пришли» is lifetime
-#      and STUDENT-only, and the all-time groups do not move with the
+#      and STUDENT-only, and the all-time schools do not move with the
 #      slider.
 #
 # ROWS ARE SEEDED, NOT DRIVEN THROUGH THE API (the test_school_
@@ -111,11 +111,11 @@ async def _make_student(client: AsyncClient, telegram_id: int) -> dict:
 
 
 async def _school(db_session: AsyncSession, curator: dict, name: str) -> School:
-    group = School(curator_user_id=UUID(curator["user"]["id"]), name=name)
-    db_session.add(group)
+    school = School(curator_user_id=UUID(curator["user"]["id"]), name=name)
+    db_session.add(school)
     await db_session.flush()
     await db_session.commit()
-    return group
+    return school
 
 
 async def _join_school(
@@ -325,7 +325,7 @@ async def _seed_lively_school(
     return curator, curator_b, school
 
 
-async def test_all_time_groups_on_a_seeded_history(
+async def test_all_time_schools_on_a_seeded_history(
     client: AsyncClient, db_session: AsyncSession,
 ):
     # BE-107: renamed from test_aggregate_reconciles_with_the_feed_predicates
@@ -586,7 +586,7 @@ async def test_engagement_is_scoped_to_the_requested_period(
     assert b["rating"] == {"bad": 0, "low": 0, "neutral": 0, "good": 0, "fire": 0}
     assert UUID(a["practice_id"]) and UUID(b["practice_id"])
     assert a["timezone"] and b["timezone"]
-    # The all-time groups do not move with the slider: the school's whole
+    # The all-time schools do not move with the slider: the school's whole
     # history is three completed practices, whatever the window says.
     assert data["practices"]["completed"] == 3
 

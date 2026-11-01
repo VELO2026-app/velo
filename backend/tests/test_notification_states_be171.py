@@ -393,11 +393,11 @@ async def test_a_curator_act_revokes_the_earlier_act_first(
     practice_id = await _publish(client, master)
     curator = await db_session.get(User, UUID(curator_auth["user"]["id"]))
     # A curator acts on a practice of their school.
-    group = School(curator_user_id=curator.id, name="BE-171 school")
-    db_session.add(group)
+    school = School(curator_user_id=curator.id, name="BE-171 school")
+    db_session.add(school)
     await db_session.flush()
     practice = await db_session.get(Practice, UUID(practice_id))
-    practice.school_id = group.id
+    practice.school_id = school.id
     await db_session.commit()
     await practices_service._tell_master_of_curator_act(
         curator,
@@ -428,16 +428,16 @@ async def test_a_school_block_revokes_the_booking_state(
     curator_auth = await login_user(client, telegram_id=BAND_MIN + 15, first_name="C")
     practice_id = await _publish(client, master)
     booking_id = await _book(client, student, practice_id)
-    group = School(
+    school = School(
         curator_user_id=UUID(curator_auth["user"]["id"]), name="BE-171 b"
     )
-    db_session.add(group)
+    db_session.add(school)
     await db_session.flush()
     practice = await db_session.get(Practice, UUID(practice_id))
-    practice.school_id = group.id
+    practice.school_id = school.id
     await db_session.commit()
 
-    await _close_school_practices_to(group.id, UUID(student["user"]["id"]), db_session)
+    await _close_school_practices_to(school.id, UUID(student["user"]["id"]), db_session)
     await db_session.commit()
 
     rows = await _outbox({booking_correlation(booking_id)})

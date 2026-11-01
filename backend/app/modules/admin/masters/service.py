@@ -164,11 +164,11 @@ async def verify_master(
     schools", made in this same dialog because verifying a master and
     deciding what they may do with the account is one decision, not a
     process with a queue. WRITTEN ONLY WHEN TRUE. False and absent read
-    identically (schools/service.py::master_can_create_groups), so
+    identically (schools/service.py::master_can_create_schools), so
     stamping an always-false key onto every profile the platform verifies
     would buy nothing and mean the key's presence stopped telling anyone
     anything. Later grants and revocations go through
-    set_master_group_right, not through here -- this path is reachable
+    set_master_school_right, not through here -- this path is reachable
     only while the application is still pending.
 
     BE-59: announces every school-master offer waiting for this
@@ -436,7 +436,7 @@ async def revoke_master(
     return advisory
 
 
-async def set_master_group_right(
+async def set_master_school_right(
     user_id: UUID,
     admin: User,
     can_create_schools: bool,

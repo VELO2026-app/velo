@@ -159,7 +159,7 @@ SchoolPracticeStatus = Literal[
 async def list_school_practices_for_curator(
     session: AsyncSession,
     user: User,
-    group_id: UUID,
+    school_id: UUID,
     *,
     status: str | None = None,
     limit: int = 20,
@@ -167,7 +167,7 @@ async def list_school_practices_for_curator(
 ) -> PaginatedPracticesResponse:
     """Every practice of a school, for its curator to manage (BE-63).
 
-    NOT the school page (list_group_practices_endpoint): that one is the
+    NOT the school page (list_school_practices_endpoint): that one is the
     public feed narrowed to the school, for members, upcoming and published
     only, by the school's PRESENT masters. This is the curator's working
     list (owner ruling Q6): every non-deleted practice that BELONGS to the
@@ -181,11 +181,11 @@ async def list_school_practices_for_curator(
     masters' (as on every curator-facing response): no host link, no
     public link -- unless the curator is the practice's own master.
     """
-    from app.modules.schools.service import _get_group_or_404
+    from app.modules.schools.service import _get_school_or_404
 
-    await _get_group_or_404(user.id, group_id, session)
+    await _get_school_or_404(user.id, school_id, session)
     base_filter = (
-        Practice.school_id == group_id,
+        Practice.school_id == school_id,
         Practice.status != PracticeStatus.DELETED.value,
     )
     if status is not None:
@@ -359,7 +359,7 @@ async def list_public_practices(
     # internal parameter, so no client can hand-pick an arbitrary master set.
     #
     # `is not None`, NOT truthiness. An EMPTY list is a real answer -- "this
-    # group has no visible masters" -- and must yield an empty page. Written
+    # school has no visible masters" -- and must yield an empty page. Written
     # as `if master_ids:` it would fall through and serve the entire
     # platform feed instead, which is the whole point of the distinction.
     # SQLAlchemy renders .in_([]) as a false predicate, so the empty case

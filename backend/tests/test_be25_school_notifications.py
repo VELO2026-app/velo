@@ -181,7 +181,7 @@ async def _make_student(
     )
 
 
-async def _create_group(
+async def _create_school(
     client: AsyncClient, curator: dict, name: str = "Школа дыхания",
 ) -> dict:
     resp = await client.post(
@@ -194,11 +194,11 @@ async def _create_group(
 
 
 async def _invite_token(
-    client: AsyncClient, curator: dict, group_id: str,
+    client: AsyncClient, curator: dict, school_id: str,
 ) -> str:
     with patch.object(settings, "telegram_bot_url", _BOT_URL):
         resp = await client.post(
-            INVITES_URL.format(school_id=group_id),
+            INVITES_URL.format(school_id=school_id),
             json={},
             headers=auth_headers(curator["session_token"]),
         )
@@ -217,7 +217,7 @@ async def _join(client: AsyncClient, auth: dict, token: str):
 
 
 async def _join_as(
-    client: AsyncClient, curator: dict, group_id: str, joiner: dict,
+    client: AsyncClient, curator: dict, school_id: str, joiner: dict,
     kind: SchoolMemberKind = SchoolMemberKind.STUDENT,
     *,
     db_session: AsyncSession | None = None,
@@ -236,7 +236,7 @@ async def _join_as(
         assert db_session is not None, "seeding a master needs the session"
         db_session.add(
             SchoolMember(
-                school_id=UUID(group_id),
+                school_id=UUID(school_id),
                 user_id=UUID(joiner["user"]["id"]),
                 kind=SchoolMemberKind.MASTER.value,
             )
@@ -244,45 +244,45 @@ async def _join_as(
         await db_session.flush()
         await db_session.commit()
         return
-    token = await _invite_token(client, curator, group_id)
+    token = await _invite_token(client, curator, school_id)
     resp = await _join(client, joiner, token)
     assert resp.status_code == 200, resp.text
 
 
-async def _offer(client: AsyncClient, curator: dict, group_id: str, to: dict):
+async def _offer(client: AsyncClient, curator: dict, school_id: str, to: dict):
     return await client.post(
-        OFFER_URL.format(school_id=group_id),
+        OFFER_URL.format(school_id=school_id),
         json={"to_user_id": to["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
 
 
-async def _accept(client: AsyncClient, auth: dict, group_id: str):
+async def _accept(client: AsyncClient, auth: dict, school_id: str):
     return await client.post(
-        ACCEPT_URL.format(school_id=group_id),
+        ACCEPT_URL.format(school_id=school_id),
         headers=auth_headers(auth["session_token"]),
     )
 
 
-async def _decline(client: AsyncClient, auth: dict, group_id: str):
+async def _decline(client: AsyncClient, auth: dict, school_id: str):
     return await client.post(
-        DECLINE_URL.format(school_id=group_id),
+        DECLINE_URL.format(school_id=school_id),
         headers=auth_headers(auth["session_token"]),
     )
 
 
 async def _remove(
-    client: AsyncClient, curator: dict, group_id: str, member: dict,
+    client: AsyncClient, curator: dict, school_id: str, member: dict,
 ):
     return await client.delete(
-        MEMBER_URL.format(school_id=group_id, user_id=member["user"]["id"]),
+        MEMBER_URL.format(school_id=school_id, user_id=member["user"]["id"]),
         headers=auth_headers(curator["session_token"]),
     )
 
 
-async def _leave(client: AsyncClient, auth: dict, group_id: str):
+async def _leave(client: AsyncClient, auth: dict, school_id: str):
     return await client.delete(
-        LEAVE_URL.format(school_id=group_id),
+        LEAVE_URL.format(school_id=school_id),
         headers=auth_headers(auth["session_token"]),
     )
 
@@ -309,11 +309,11 @@ async def _types_for(user: dict) -> list[str]:
     return [p.get("type", "") for p in await _notes_for(user)]
 
 
-async def _journal(group_id: str) -> list[str]:
+async def _journal(school_id: str) -> list[str]:
     rows = (
         await fresh_execute(
             select(SchoolEvent.event).where(
-                SchoolEvent.school_id == UUID(group_id)
+                SchoolEvent.school_id == UUID(school_id)
             )
         )
     ).all()
@@ -337,13 +337,13 @@ async def test_transfer_offer_reaches_the_addressee(
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
-    group = await _create_group(client, curator)
+    school = await _create_school(client, curator)
     await _join_as(
-        client, curator, group["id"], heir, SchoolMemberKind.MASTER,
+        client, curator, school["id"], heir, SchoolMemberKind.MASTER,
         db_session=db_session,
     )
 
-    assert (await _offer(client, curator, group["id"], heir)).status_code == 200
+    assert (await _offer(client, curator, school["id"], heir)).status_code == 200
 
     assert (await _types_for(heir)).count(
         "school.transfer_offered"
@@ -365,12 +365,12 @@ async def test_the_offer_names_the_school_and_points_at_it(
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
-    group = await _create_group(client, curator, name="Тихое утро")
+    school = await _create_school(client, curator, name="Тихое утро")
     await _join_as(
-        client, curator, group["id"], heir, SchoolMemberKind.MASTER,
+        client, curator, school["id"], heir, SchoolMemberKind.MASTER,
         db_session=db_session,
     )
-    await _offer(client, curator, group["id"], heir)
+    await _offer(client, curator, school["id"], heir)
 
     note = next(
         p for p in await _notes_for(heir)
@@ -378,7 +378,7 @@ async def test_the_offer_names_the_school_and_points_at_it(
     )
     action = note["action_data"]
     assert action["action"] == "open_school"
-    assert action["params"]["school_id"] == group["id"]
+    assert action["params"]["school_id"] == school["id"]
     assert action["school_name"] == "Тихое утро"
     assert "Тихое утро" in note["body"]
 
@@ -397,15 +397,15 @@ async def test_a_cancelled_offer_does_not_notify_again(
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
-    group = await _create_group(client, curator)
+    school = await _create_school(client, curator)
     await _join_as(
-        client, curator, group["id"], heir, SchoolMemberKind.MASTER,
+        client, curator, school["id"], heir, SchoolMemberKind.MASTER,
         db_session=db_session,
     )
-    await _offer(client, curator, group["id"], heir)
+    await _offer(client, curator, school["id"], heir)
 
     cancelled = await client.delete(
-        OFFER_URL.format(school_id=group["id"]),
+        OFFER_URL.format(school_id=school["id"]),
         headers=auth_headers(curator["session_token"]),
     )
     assert cancelled.status_code == 204
@@ -414,7 +414,7 @@ async def test_a_cancelled_offer_does_not_notify_again(
         "school.transfer_offered"
     ) == 1
     assert SchoolEventKind.TRANSFER_CANCELLED.value in await _journal(
-        group["id"]
+        school["id"]
     )
 
 
@@ -430,21 +430,21 @@ async def test_accept_tells_the_previous_curator_and_not_the_acceptor(
     """Losing a school is the one thing its former owner must not miss.
 
     The recipient is read from previous_curator_id, captured before the
-    ownership assignment. Reading "the group's curator" after it would
+    ownership assignment. Reading "the school's curator" after it would
     address the acceptor -- who would then be told he accepted from
     himself. Both halves asserted: the former owner gets exactly one, the
     acceptor gets none.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
-    group = await _create_group(client, curator)
+    school = await _create_school(client, curator)
     await _join_as(
-        client, curator, group["id"], heir, SchoolMemberKind.MASTER,
+        client, curator, school["id"], heir, SchoolMemberKind.MASTER,
         db_session=db_session,
     )
-    await _offer(client, curator, group["id"], heir)
+    await _offer(client, curator, school["id"], heir)
 
-    assert (await _accept(client, heir, group["id"])).status_code == 200
+    assert (await _accept(client, heir, school["id"])).status_code == 200
 
     assert (await _types_for(curator)).count(
         "school.transfer_accepted"
@@ -463,14 +463,14 @@ async def test_decline_tells_the_curator_and_not_the_decliner(
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
-    group = await _create_group(client, curator)
+    school = await _create_school(client, curator)
     await _join_as(
-        client, curator, group["id"], heir, SchoolMemberKind.MASTER,
+        client, curator, school["id"], heir, SchoolMemberKind.MASTER,
         db_session=db_session,
     )
-    await _offer(client, curator, group["id"], heir)
+    await _offer(client, curator, school["id"], heir)
 
-    assert (await _decline(client, heir, group["id"])).status_code == 204
+    assert (await _decline(client, heir, school["id"])).status_code == 204
 
     assert (await _types_for(curator)).count(
         "school.transfer_declined"
@@ -487,24 +487,24 @@ async def test_accept_notification_survives_the_ownership_change(
     Written because the accept transaction reassigns curator_user_id, drops
     the acceptor's member row and inserts one for the previous curator, all
     before the notification is queued. If the body were built from a re-read
-    group instead of the values in hand, this is where it would go wrong
+    school instead of the values in hand, this is where it would go wrong
     quietly -- the type would still be right.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
-    group = await _create_group(client, curator, name="Северный ветер")
+    school = await _create_school(client, curator, name="Северный ветер")
     await _join_as(
-        client, curator, group["id"], heir, SchoolMemberKind.MASTER,
+        client, curator, school["id"], heir, SchoolMemberKind.MASTER,
         db_session=db_session,
     )
-    await _offer(client, curator, group["id"], heir)
-    await _accept(client, heir, group["id"])
+    await _offer(client, curator, school["id"], heir)
+    await _accept(client, heir, school["id"])
 
     note = next(
         p for p in await _notes_for(curator)
         if p.get("type") == "school.transfer_accepted"
     )
-    assert note["action_data"]["params"]["school_id"] == group["id"]
+    assert note["action_data"]["params"]["school_id"] == school["id"]
     assert "Северный ветер" in note["body"]
 
 
@@ -525,9 +525,9 @@ async def test_a_join_tells_the_curator_and_not_the_joiner(
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     student = await _make_student(client, _TID_STUDENT)
-    group = await _create_group(client, curator)
+    school = await _create_school(client, curator)
 
-    await _join_as(client, curator, group["id"], student)
+    await _join_as(client, curator, school["id"], student)
 
     assert (await _types_for(curator)).count(
         "school.member_joined"
@@ -546,10 +546,10 @@ async def test_removal_tells_the_person_removed(
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     student = await _make_student(client, _TID_STUDENT)
-    group = await _create_group(client, curator)
-    await _join_as(client, curator, group["id"], student)
+    school = await _create_school(client, curator)
+    await _join_as(client, curator, school["id"], student)
 
-    assert (await _remove(client, curator, group["id"], student)).status_code == 204
+    assert (await _remove(client, curator, school["id"], student)).status_code == 204
 
     assert (await _types_for(student)).count(
         "school.member_removed"
@@ -574,16 +574,16 @@ async def test_leaving_on_your_own_notifies_nobody(
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     student = await _make_student(client, _TID_STUDENT)
-    group = await _create_group(client, curator)
-    await _join_as(client, curator, group["id"], student)
+    school = await _create_school(client, curator)
+    await _join_as(client, curator, school["id"], student)
     before = await _types_for(curator)
 
-    assert (await _leave(client, student, group["id"])).status_code == 204
+    assert (await _leave(client, student, school["id"])).status_code == 204
 
     assert await _types_for(student) == []
     assert await _types_for(curator) == before
     assert SchoolEventKind.MEMBER_LEFT.value in await _journal(
-        group["id"]
+        school["id"]
     )
 
 
@@ -607,20 +607,20 @@ async def test_every_recipient_was_already_a_party_to_the_school(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
     student = await _make_student(client, _TID_STUDENT)
-    group = await _create_group(client, curator)
+    school = await _create_school(client, curator)
     await _join_as(
-        client, curator, group["id"], heir, SchoolMemberKind.MASTER,
+        client, curator, school["id"], heir, SchoolMemberKind.MASTER,
         db_session=db_session,
     )
-    await _join_as(client, curator, group["id"], student)
+    await _join_as(client, curator, school["id"], student)
 
     insiders = {
         curator["user"]["id"], heir["user"]["id"], student["user"]["id"],
     }
 
-    await _offer(client, curator, group["id"], heir)
-    await _remove(client, curator, group["id"], student)
-    await _decline(client, heir, group["id"])
+    await _offer(client, curator, school["id"], heir)
+    await _remove(client, curator, school["id"], student)
+    await _decline(client, heir, school["id"])
 
     for person in (curator, heir, student):
         for payload in await _notes_for(person):
@@ -652,18 +652,18 @@ async def test_every_notifying_action_also_wrote_a_journal_line(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
     student = await _make_student(client, _TID_STUDENT)
-    group = await _create_group(client, curator)
+    school = await _create_school(client, curator)
 
     await _join_as(
-        client, curator, group["id"], heir, SchoolMemberKind.MASTER,
+        client, curator, school["id"], heir, SchoolMemberKind.MASTER,
         db_session=db_session,
     )
-    await _join_as(client, curator, group["id"], student)
-    await _remove(client, curator, group["id"], student)
-    await _offer(client, curator, group["id"], heir)
-    await _accept(client, heir, group["id"])
+    await _join_as(client, curator, school["id"], student)
+    await _remove(client, curator, school["id"], student)
+    await _offer(client, curator, school["id"], heir)
+    await _accept(client, heir, school["id"])
 
-    journal = await _journal(group["id"])
+    journal = await _journal(school["id"])
     for kind in (
         SchoolEventKind.MEMBER_JOINED,
         SchoolEventKind.MEMBER_REMOVED,
@@ -704,22 +704,22 @@ async def test_a_refused_action_writes_neither(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
     other = await _make_verified_master(client, db_session, _TID_MASTER_B)
-    group = await _create_group(client, curator)
+    school = await _create_school(client, curator)
     await _join_as(
-        client, curator, group["id"], heir, SchoolMemberKind.MASTER,
+        client, curator, school["id"], heir, SchoolMemberKind.MASTER,
         db_session=db_session,
     )
     await _join_as(
-        client, curator, group["id"], other, SchoolMemberKind.MASTER,
+        client, curator, school["id"], other, SchoolMemberKind.MASTER,
         db_session=db_session,
     )
-    await _offer(client, curator, group["id"], heir)
+    await _offer(client, curator, school["id"], heir)
 
-    second = await _offer(client, curator, group["id"], other)
+    second = await _offer(client, curator, school["id"], other)
     assert second.status_code == 409
 
     assert await _types_for(other) == []
-    assert (await _journal(group["id"])).count(
+    assert (await _journal(school["id"])).count(
         SchoolEventKind.TRANSFER_OFFERED.value
     ) == 1
 
@@ -741,8 +741,8 @@ async def test_repeated_join_notifies_once(
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     student = await _make_student(client, _TID_STUDENT)
-    group = await _create_group(client, curator)
-    token = await _invite_token(client, curator, group["id"])
+    school = await _create_school(client, curator)
+    token = await _invite_token(client, curator, school["id"])
 
     first = await _join(client, student, token)
     assert first.status_code == 200, first.text
@@ -768,11 +768,11 @@ async def test_removing_somebody_who_is_not_a_member_notifies_nobody(
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     stranger = await _make_student(client, _TID_STUDENT_B)
-    group = await _create_group(client, curator)
+    school = await _create_school(client, curator)
 
-    await _remove(client, curator, group["id"], stranger)
+    await _remove(client, curator, school["id"], stranger)
 
     assert await _types_for(stranger) == []
-    assert await _journal(group["id"]) == [
-        SchoolEventKind.GROUP_CREATED.value
+    assert await _journal(school["id"]) == [
+        SchoolEventKind.SCHOOL_CREATED.value
     ]

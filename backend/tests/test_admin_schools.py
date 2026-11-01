@@ -43,7 +43,7 @@ from tests.helpers import (
     login_user,
 )
 
-ADMIN_GROUPS_URL = "/api/v1/admin/schools"
+ADMIN_SCHOOLS_URL = "/api/v1/admin/schools"
 ADMIN_MASTERS_URL = "/api/v1/admin/masters/list"
 SCHOOLS_URL = "/api/v1/masters/me/schools"
 PAGE_URL = "/api/v1/schools/{school_id}"
@@ -88,7 +88,7 @@ async def _make_verified_master(
 
     # GT-15: founding a school is now a separate admin-granted right, not
     # a consequence of verification -- so a fixture that omitted it would
-    # build a master who is verified and still cannot create the group
+    # build a master who is verified and still cannot create the school
     # every test below starts by creating. Set here rather than asserted
     # on: this file is about what a curator does WITH a school, and the
     # right itself is covered in test_school_permission.py.
@@ -122,7 +122,7 @@ async def _make_admin(
     return auth["session_token"]
 
 
-async def _create_group(
+async def _create_school(
     client: AsyncClient, curator: dict, name: str = "Школа дыхания",
 ) -> dict:
     resp = await client.post(
@@ -136,13 +136,13 @@ async def _create_group(
 
 async def _seed_member(
     db_session: AsyncSession,
-    group_id: str,
+    school_id: str,
     user_id: str,
     kind: SchoolMemberKind,
 ) -> None:
     db_session.add(
         SchoolMember(
-            school_id=UUID(group_id), user_id=UUID(user_id), kind=kind.value,
+            school_id=UUID(school_id), user_id=UUID(user_id), kind=kind.value,
         )
     )
     await db_session.flush()
@@ -173,7 +173,7 @@ async def _admin_list(
     client: AsyncClient, admin_token: str, query: str = "",
 ) -> dict:
     resp = await client.get(
-        f"{ADMIN_GROUPS_URL}{query}", headers=auth_headers(admin_token),
+        f"{ADMIN_SCHOOLS_URL}{query}", headers=auth_headers(admin_token),
     )
     assert resp.status_code == 200, resp.text
     return resp.json()
@@ -225,9 +225,9 @@ async def _all_pages(
 
 
 async def _row_for(
-    client: AsyncClient, admin_token: str, group_id: str,
+    client: AsyncClient, admin_token: str, school_id: str,
 ) -> dict | None:
-    return await _find_paged(client, admin_token, ADMIN_GROUPS_URL, group_id)
+    return await _find_paged(client, admin_token, ADMIN_SCHOOLS_URL, school_id)
 
 
 async def _master_row(
@@ -270,12 +270,12 @@ async def test_a_non_admin_cannot_read_the_school_list(
 
     for who in (master, plain):
         resp = await client.get(
-            ADMIN_GROUPS_URL, headers=auth_headers(who["session_token"]),
+            ADMIN_SCHOOLS_URL, headers=auth_headers(who["session_token"]),
         )
         assert resp.status_code == 403, who["user"]["id"]
 
     ok = await client.get(
-        ADMIN_GROUPS_URL, headers=auth_headers(admin_token),
+        ADMIN_SCHOOLS_URL, headers=auth_headers(admin_token),
     )
     assert ok.status_code == 200
 
@@ -289,7 +289,7 @@ async def test_a_non_admin_cannot_read_the_school_list(
 async def test_the_list_carries_the_curator_and_both_counters(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """Counters follow the same visibility rule the group's own page uses --
+    """Counters follow the same visibility rule the school's own page uses --
     asserted by comparing the two answers, not by restating the rule."""
     curator = await _make_verified_master(
         client, db_session, _TID_CURATOR, first_name="Анна", last_name="Петрова",
@@ -300,17 +300,17 @@ async def test_the_list_carries_the_curator_and_both_counters(
     student_a = await login_user(client, telegram_id=_TID_STUDENT_A)
     student_b = await login_user(client, telegram_id=_TID_STUDENT_B)
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
-    group = await _create_group(client, curator, name="Школа дыхания")
+    school = await _create_school(client, curator, name="Школа дыхания")
     await _seed_member(
-        db_session, group["id"], teacher["user"]["id"], SchoolMemberKind.MASTER,
+        db_session, school["id"], teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     for who in (student_a, student_b):
         await _seed_member(
-            db_session, group["id"], who["user"]["id"],
+            db_session, school["id"], who["user"]["id"],
             SchoolMemberKind.STUDENT,
         )
 
-    row = await _row_for(client, admin_token, group["id"])
+    row = await _row_for(client, admin_token, school["id"])
     assert row is not None
     assert row["name"] == "Школа дыхания"
     assert row["curator"] == {
@@ -323,7 +323,7 @@ async def test_the_list_carries_the_curator_and_both_counters(
 
     page = (
         await client.get(
-            PAGE_URL.format(school_id=group["id"]),
+            PAGE_URL.format(school_id=school["id"]),
             headers=auth_headers(curator["session_token"]),
         )
     ).json()
@@ -344,23 +344,23 @@ async def test_a_frozen_school_stays_in_the_admin_list_while_members_get_404(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     student = await login_user(client, telegram_id=_TID_STUDENT_A)
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
-    group = await _create_group(client, curator)
+    school = await _create_school(client, curator)
     await _seed_member(
-        db_session, group["id"], student["user"]["id"],
+        db_session, school["id"], student["user"]["id"],
         SchoolMemberKind.STUDENT,
     )
-    before = await _row_for(client, admin_token, group["id"])
+    before = await _row_for(client, admin_token, school["id"])
     assert before["is_active"] is True
 
     await _revoke(client, admin_token, curator["user"]["id"])
 
-    frozen = await _row_for(client, admin_token, group["id"])
+    frozen = await _row_for(client, admin_token, school["id"])
     assert frozen is not None
     assert frozen["is_active"] is False
     assert frozen["students_count"] == before["students_count"] == 1
 
     members_view = await client.get(
-        PAGE_URL.format(school_id=group["id"]),
+        PAGE_URL.format(school_id=school["id"]),
         headers=auth_headers(student["session_token"]),
     )
     assert members_view.status_code == 404
@@ -371,12 +371,12 @@ async def test_a_frozen_school_stays_in_the_admin_list_while_members_get_404(
 
     await _re_verify(client, admin_token, curator["user"]["id"])
 
-    thawed = await _row_for(client, admin_token, group["id"])
+    thawed = await _row_for(client, admin_token, school["id"])
     assert thawed["is_active"] is True
     assert thawed["students_count"] == 1
     assert (
         await client.get(
-            PAGE_URL.format(school_id=group["id"]),
+            PAGE_URL.format(school_id=school["id"]),
             headers=auth_headers(student["session_token"]),
         )
     ).status_code == 200
@@ -393,24 +393,24 @@ async def test_a_revoked_member_drops_out_of_masters_count_but_keeps_the_row(
         client, db_session, _TID_MASTER_A, first_name="Teacher",
     )
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
-    group = await _create_group(client, curator)
+    school = await _create_school(client, curator)
     await _seed_member(
-        db_session, group["id"], teacher["user"]["id"], SchoolMemberKind.MASTER,
+        db_session, school["id"], teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
-    assert (await _row_for(client, admin_token, group["id"]))[
+    assert (await _row_for(client, admin_token, school["id"]))[
         "masters_count"
     ] == 1
 
     await _revoke(client, admin_token, teacher["user"]["id"])
 
-    row = await _row_for(client, admin_token, group["id"])
+    row = await _row_for(client, admin_token, school["id"])
     assert row["masters_count"] == 0
     assert row["is_active"] is True
 
     rows = (
         await fresh_execute(
             select(SchoolMember.user_id).where(
-                SchoolMember.school_id == UUID(group["id"])
+                SchoolMember.school_id == UUID(school["id"])
             )
         )
     ).scalars().all()
@@ -423,9 +423,9 @@ async def test_an_empty_school_reports_zeros_and_is_still_listed(
 ) -> None:
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
-    group = await _create_group(client, curator)
+    school = await _create_school(client, curator)
 
-    row = await _row_for(client, admin_token, group["id"])
+    row = await _row_for(client, admin_token, school["id"])
     assert row is not None
     assert (row["masters_count"], row["students_count"]) == (0, 0)
 
@@ -440,12 +440,12 @@ async def test_schools_of_different_curators_all_appear(
         client, db_session, _TID_CURATOR_B, first_name="Second",
     )
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
-    a = await _create_group(client, first, name="Первая школа")
-    b = await _create_group(client, second, name="Вторая школа")
+    a = await _create_school(client, first, name="Первая школа")
+    b = await _create_school(client, second, name="Вторая школа")
 
     found = {
         i["id"]: i["curator"]["user_id"]
-        for i in await _all_pages(client, admin_token, ADMIN_GROUPS_URL)
+        for i in await _all_pages(client, admin_token, ADMIN_SCHOOLS_URL)
     }
     assert found[a["id"]] == first["user"]["id"]
     assert found[b["id"]] == second["user"]["id"]
@@ -459,18 +459,18 @@ async def test_a_deleted_school_leaves_the_list(
     unlike freezing, which only flips a flag."""
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
-    group = await _create_group(client, curator)
-    assert await _row_for(client, admin_token, group["id"]) is not None
+    school = await _create_school(client, curator)
+    assert await _row_for(client, admin_token, school["id"]) is not None
 
     await client.delete(
-        f"{SCHOOLS_URL}/{group['id']}",
+        f"{SCHOOLS_URL}/{school['id']}",
         headers=auth_headers(curator["session_token"]),
     )
 
-    assert await _row_for(client, admin_token, group["id"]) is None
+    assert await _row_for(client, admin_token, school["id"]) is None
     left = (
         await fresh_execute(
-            select(School.id).where(School.id == UUID(group["id"]))
+            select(School.id).where(School.id == UUID(school["id"]))
         )
     ).scalars().all()
     assert left == []
@@ -484,12 +484,12 @@ async def test_the_list_is_newest_first(
     time order."""
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
-    older = await _create_group(client, curator, name="Старая")
-    newer = await _create_group(client, curator, name="Новая")
+    older = await _create_school(client, curator, name="Старая")
+    newer = await _create_school(client, curator, name="Новая")
 
     ours = [
         i["id"]
-        for i in await _all_pages(client, admin_token, ADMIN_GROUPS_URL)
+        for i in await _all_pages(client, admin_token, ADMIN_SCHOOLS_URL)
         if i["id"] in (older["id"], newer["id"])
     ]
     assert ours == [newer["id"], older["id"]]
@@ -504,7 +504,7 @@ async def test_pagination_walks_the_list_without_repeating_a_row(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
     for name in ("Первая", "Вторая", "Третья"):
-        await _create_group(client, curator, name=name)
+        await _create_school(client, curator, name=name)
 
     total = (await _admin_list(client, admin_token))["total"]
     assert total >= 3
@@ -531,7 +531,7 @@ async def test_an_out_of_range_limit_is_422(
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
     for query in ("?limit=0", "?limit=101", "?offset=-1"):
         resp = await client.get(
-            f"{ADMIN_GROUPS_URL}{query}", headers=auth_headers(admin_token),
+            f"{ADMIN_SCHOOLS_URL}{query}", headers=auth_headers(admin_token),
         )
         assert resp.status_code == 422, query
 
@@ -551,18 +551,18 @@ async def test_the_admin_list_says_nothing_about_transfers(
         client, db_session, _TID_MASTER_A, first_name="Heir",
     )
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
-    group = await _create_group(client, curator)
+    school = await _create_school(client, curator)
     await _seed_member(
-        db_session, group["id"], heir["user"]["id"], SchoolMemberKind.MASTER,
+        db_session, school["id"], heir["user"]["id"], SchoolMemberKind.MASTER,
     )
     offered = await client.post(
-        f"{SCHOOLS_URL}/{group['id']}/transfer",
+        f"{SCHOOLS_URL}/{school['id']}/transfer",
         json={"to_user_id": heir["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
     assert offered.status_code == 200, offered.text
 
-    row = await _row_for(client, admin_token, group["id"])
+    row = await _row_for(client, admin_token, school["id"])
     assert "transfer" not in row
     assert "transfer_offered" not in row
 
@@ -600,9 +600,9 @@ async def test_schools_count_counts_owned_schools_only(
         client, db_session, _TID_CURATOR, first_name="Other",
     )
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
-    await _create_group(client, owner, name="Своя первая")
-    await _create_group(client, owner, name="Своя вторая")
-    theirs = await _create_group(client, other, name="Чужая")
+    await _create_school(client, owner, name="Своя первая")
+    await _create_school(client, owner, name="Своя вторая")
+    theirs = await _create_school(client, other, name="Чужая")
     await _seed_member(
         db_session, theirs["id"], owner["user"]["id"], SchoolMemberKind.MASTER,
     )
@@ -627,8 +627,8 @@ async def test_revoking_a_master_does_not_change_their_school_count(
     """
     master = await _make_verified_master(client, db_session, _TID_MASTER_A)
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
-    first = await _create_group(client, master, name="Первая")
-    second = await _create_group(client, master, name="Вторая")
+    first = await _create_school(client, master, name="Первая")
+    second = await _create_school(client, master, name="Вторая")
     assert (await _master_row(client, admin_token, master["user"]["id"]))[
         "schools_count"
     ] == 2
@@ -641,7 +641,7 @@ async def test_revoking_a_master_does_not_change_their_school_count(
 
     states = {
         i["id"]: i["is_active"]
-        for i in await _all_pages(client, admin_token, ADMIN_GROUPS_URL)
+        for i in await _all_pages(client, admin_token, ADMIN_SCHOOLS_URL)
         if i["id"] in (first["id"], second["id"])
     }
     assert states == {first["id"]: False, second["id"]: False}
@@ -655,7 +655,7 @@ async def test_the_masters_list_still_carries_its_original_fields(
     still there and still filled, so nothing was displaced on the way in."""
     master = await _make_verified_master(client, db_session, _TID_MASTER_A)
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
-    await _create_group(client, master, name="Школа")
+    await _create_school(client, master, name="Школа")
 
     row = await _master_row(client, admin_token, master["user"]["id"])
     for field in (

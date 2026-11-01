@@ -152,11 +152,11 @@ async def _unverify(db_session: AsyncSession, user_id: str) -> None:
 async def _school(
     db_session: AsyncSession, curator_id: str, name: str = "Тихое утро",
 ) -> School:
-    group = School(curator_user_id=UUID(curator_id), name=name)
-    db_session.add(group)
+    school = School(curator_user_id=UUID(curator_id), name=name)
+    db_session.add(school)
     await db_session.flush()
     await db_session.commit()
-    return group
+    return school
 
 
 async def _create_practice(
@@ -229,11 +229,11 @@ async def _create_practice(
 
 
 async def _join_school(
-    db_session: AsyncSession, group_id, user_id: str,
+    db_session: AsyncSession, school_id, user_id: str,
     kind: SchoolMemberKind = SchoolMemberKind.STUDENT,
 ) -> SchoolMember:
     row = SchoolMember(
-        school_id=group_id, user_id=UUID(user_id), kind=kind.value,
+        school_id=school_id, user_id=UUID(user_id), kind=kind.value,
     )
     db_session.add(row)
     await db_session.flush()

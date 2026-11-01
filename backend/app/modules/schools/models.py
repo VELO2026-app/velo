@@ -12,7 +12,7 @@
 # places to keep in step, and the first divergence would be silent -- the same
 # reasoning that keeps «Ученики»/«Удалённые» out of master_group.
 #
-# A pending transfer is a ROW, not a pair of nullable columns on the group
+# A pending transfer is a ROW, not a pair of nullable columns on the school
 # (3.1): "no offer" is "no row", cancelling is a DELETE, and there is no
 # half-NULL state anyone has to interpret.
 # =============================================================================
@@ -80,7 +80,7 @@ class School(UUIDMixin, TimestampMixin, Base):
     """A school/community owned by one Master-Curator.
 
     UNIQUE (curator_user_id, name) -- names are unique WITHIN one curator,
-    not globally (I-7): two different curators may both run a group called
+    not globally (I-7): two different curators may both run a school called
     «Школа дыхания» and neither blocks the other. Enforced at the DB level,
     pre-checked in the service for a clean 409 and backstopped by catching
     the IntegrityError -- same three-part discipline as create_group()
@@ -193,11 +193,11 @@ class SchoolMember(UUIDMixin, Base):
 
     UNIQUE (group_id, user_id) -- ONE relation per pair, with `kind` inside
     it (I-2). Not UNIQUE (group_id, user_id, kind): that would permit the
-    same person to hold BOTH a master and a student row in one group, and
+    same person to hold BOTH a master and a student row in one school, and
     every counter, roster and predicate downstream would then have to decide
     which one wins.
 
-    ondelete=CASCADE on both FKs: deleting the group drops its memberships,
+    ondelete=CASCADE on both FKs: deleting the school drops its memberships,
     deleting the user drops theirs -- nothing else to reconcile, and the test
     cleanup relies on the user-side cascade rather than a step of its own.
     """
@@ -254,7 +254,7 @@ class SchoolBlock(UUIDMixin, Base):
     with no second join and no second verification (owner, 3 October).
 
     ONE OF THE TWO, NEVER BOTH -- a member row and a block row for the same
-    (group, user). The database cannot say that across two tables; the
+    (school, user). The database cannot say that across two tables; the
     writers do. Block and unblock swap the rows inside one transaction, and
     the one path that inserts a member row for a person who may be blocked
     -- joining by the link -- re-reads this table after its INSERT
@@ -266,7 +266,7 @@ class SchoolBlock(UUIDMixin, Base):
     pg_constraint, not assumed): the two columns hold the same values and
     one must not be stricter than the other.
 
-    ondelete: CASCADE from the group and from the blocked user -- nothing
+    ondelete: CASCADE from the school and from the blocked user -- nothing
     to keep once either is gone. SET NULL from the curator who blocked:
     the block outlives the account that made it.
     """
@@ -311,7 +311,7 @@ class SchoolBlock(UUIDMixin, Base):
 
 
 class SchoolInvite(UUIDMixin, Base):
-    """A group's ONE reusable join link. Everyone who opens it joins as a
+    """A school's ONE reusable join link. Everyone who opens it joins as a
     student.
 
     UNIQUE (group_id) -- one live link per school, so create-or-return is a
@@ -328,7 +328,7 @@ class SchoolInvite(UUIDMixin, Base):
     gt27a1b2c3d4 dropped the column and the master rows with it.
 
     Raw token, not a hash: mirrors group_invite's own reasoning -- the link
-    only grants "join this group", is revocable by the curator at any time,
+    only grants "join this school", is revocable by the curator at any time,
     and must keep resolving for whoever opens it days later.
     """
 
@@ -353,9 +353,9 @@ class SchoolInvite(UUIDMixin, Base):
 
 
 class SchoolTransfer(UUIDMixin, Base):
-    """A pending offer to hand the group to a master member (GT-4 writes it).
+    """A pending offer to hand the school to a master member (GT-4 writes it).
 
-    UNIQUE (group_id) -- at most one pending offer per group (I-10). A second
+    UNIQUE (group_id) -- at most one pending offer per school (I-10). A second
     offer is a 409 rather than a silent overwrite, and that is enforceable
     here rather than only in code.
 
@@ -467,7 +467,7 @@ class SchoolEventKind(enum.StrEnum):
     depend on which one a reader trusted.
 
     PRACTICE_CANCELLED (BE-21) is the first arrival on that promise, and it
-    is deliberately NOT "practice_cancelled_by_curator": _record_group_event
+    is deliberately NOT "practice_cancelled_by_curator": _record_school_event
     stamps actor_name into every row, so naming the actor in the value too
     would say it twice and would read wrong the day a second kind of actor
     can cancel. It also sits in the pair the paragraph above predicts, next
@@ -495,15 +495,15 @@ class SchoolEventKind(enum.StrEnum):
     demotion of the same person writes nothing.
 
     A DELETED SCHOOL HAS NO "school deleted" EVENT and never will. The
-    journal cascades with the group, so the row would be written and
+    journal cascades with the school, so the row would be written and
     dropped inside one transaction -- a value here for it would be a
     vocabulary entry no reader can ever meet.
     """
 
-    GROUP_CREATED = "school_created"
-    GROUP_RENAMED = "school_renamed"
-    GROUP_DESCRIPTION_CHANGED = "school_description_changed"
-    GROUP_AVATAR_CHANGED = "school_avatar_changed"
+    SCHOOL_CREATED = "school_created"
+    SCHOOL_RENAMED = "school_renamed"
+    SCHOOL_DESCRIPTION_CHANGED = "school_description_changed"
+    SCHOOL_AVATAR_CHANGED = "school_avatar_changed"
     MEMBER_JOINED = "member_joined"
     MEMBER_PROMOTED = "member_promoted"
     MEMBER_DEMOTED = "member_demoted"
@@ -548,7 +548,7 @@ class SchoolEvent(Base):
     it is a write-only desk. This is a read table with pagination and
     ownership, it records what MEMBERS did, and it dies with the school.
     That last one settles it on its own: audit_logs has no ON DELETE and
-    must not have one, while this table's whole lifetime is the group's.
+    must not have one, while this table's whole lifetime is the school's.
 
     What IS borrowed from AuditLog is its shape -- indexed `event` string,
     an `actor_id` with no ForeignKey, and a JSONB `data` for context.
@@ -674,8 +674,8 @@ class SchoolEvent(Base):
 
     On the four transfer events target_* is the OTHER party, and on
     transfer_accepted specifically that is the PREVIOUS curator -- by the
-    time the row is written the group already belongs to the actor, so
-    reading "the group's curator" there would record the actor twice.
+    time the row is written the school already belongs to the actor, so
+    reading "the school's curator" there would record the actor twice.
 
     == WHY NOT UUIDMixin / TimestampMixin ==
 
@@ -688,7 +688,7 @@ class SchoolEvent(Base):
 
     __tablename__ = "school_event"
     __table_args__ = (
-        # The ONE query this table serves: one group's feed, newest first,
+        # The ONE query this table serves: one school's feed, newest first,
         # limit/offset. group_id equality then seq descending -- the index
         # answers both the ordering and the COUNT(*) without touching the
         # heap.

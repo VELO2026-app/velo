@@ -19,8 +19,8 @@
 # or given a hook for the test.
 #
 # BE-74: for the practice writers the row they wait on is the PRACTICE,
-# not the group. delete_school clears the owner column of the
-# school's practices before it deletes the group (the trigger makes a
+# not the school. delete_school clears the owner column of the
+# school's practices before it deletes the school (the trigger makes a
 # 'schools' practice public in the same statement), so a writer
 # taking the practice FOR UPDATE waits for that UPDATE and then reads a
 # public practice with no school. The 500s these tests were written for
@@ -112,10 +112,10 @@ async def _school(
     s.heir = await _user(client, db_session, _TID_HEIR)
     s.third = await _user(client, db_session, _TID_THIRD)
     s.student = await _user(client, db_session, _TID_STUDENT)
-    group = School(curator_user_id=s.curator, name="Школа BE-95/2")
-    db_session.add(group)
+    school = School(curator_user_id=s.curator, name="Школа BE-95/2")
+    db_session.add(school)
     await db_session.flush()
-    s.id = group.id
+    s.id = school.id
     for uid, kind in (
         (s.heir, MASTER), (s.third, MASTER), (s.student, STUDENT),
     ):
@@ -164,7 +164,7 @@ async def _fresh_practice(db_session, practice_id: UUID) -> Practice:
     ).scalar_one()
 
 
-async def _group(db_session, s: SchoolSetup) -> School | None:
+async def _school_row(db_session, s: SchoolSetup) -> School | None:
     db_session.expire_all()
     return (
         await db_session.execute(
@@ -238,7 +238,7 @@ async def test_a_delete_waits_for_an_appointment_being_accepted(
     assert result.rival_waited, "the delete never met the accept's lock"
     assert result.holder.committed, result.holder.error
     assert result.rival.committed, result.rival.error
-    assert await _group(db_session, s) is None
+    assert await _school_row(db_session, s) is None
 
 
 @pytest.mark.asyncio
@@ -248,7 +248,7 @@ async def test_a_delete_meets_a_transfer_being_accepted(
     """accept holds the heir's member row and the claimed transfer.
 
     THE PAIR: the accept committed first, so by the time the delete reaches
-    the group row the school is the heir's -- the delete matches nothing,
+    the school row the school is the heir's -- the delete matches nothing,
     is refused, and the school is exactly as the accept left it.
     """
     s = await _school(client, db_session, transfer=True)
@@ -271,8 +271,8 @@ async def test_a_delete_meets_a_transfer_being_accepted(
     assert result.rival_waited, "the delete never met the accept's lock"
     assert result.holder.committed, result.holder.error
     assert isinstance(result.rival.error, NotFoundError), result.rival
-    group = await _group(db_session, s)
-    assert group is not None and group.curator_user_id == s.heir
+    school = await _school_row(db_session, s)
+    assert school is not None and school.curator_user_id == s.heir
     members = {
         uid: kind
         for uid, kind in (
@@ -297,7 +297,7 @@ async def test_a_rename_inside_an_accept_is_a_409_not_a_500(
     """The school is renamed to a name the heir already uses, mid-accept.
 
     The accept's name check had already passed against the OLD name; the
-    collision surfaced at the group row's UPDATE on UNIQUE (curator_user_id,
+    collision surfaced at the school row's UPDATE on UNIQUE (curator_user_id,
     name) and escaped as a 500.
 
     THE PAIR: refused with the module's own 409, AND nothing of the accept
@@ -322,7 +322,7 @@ async def test_a_rename_inside_an_accept_is_a_409_not_a_500(
     result = await race(
         monkeypatch,
         holder=rename,
-        pause_in=(school_service, "_lock_group_as_owner"),
+        pause_in=(school_service, "_lock_school_as_owner"),
         pause="after",
         rival=accept,
     )
@@ -331,8 +331,8 @@ async def test_a_rename_inside_an_accept_is_a_409_not_a_500(
     assert result.holder.committed, result.holder.error
     assert isinstance(result.rival.error, ConflictError), result.rival
     assert result.rival.error.code == "school_name_taken"
-    group = await _group(db_session, s)
-    assert group.curator_user_id == s.curator and group.name == "Новое имя"
+    school = await _school_row(db_session, s)
+    assert school.curator_user_id == s.curator and school.name == "Новое имя"
     pending = (
         await db_session.execute(
             select(SchoolTransfer.to_user_id).where(
@@ -376,7 +376,7 @@ async def test_publishing_into_a_school_being_deleted(
     """F3: publishing a practice used to answer 500 for a deleted school.
 
     Before BE-74 the rival was announce_published_practice called directly,
-    and it met the delete on the group row. BE-74 moved the meeting point:
+    and it met the delete on the school row. BE-74 moved the meeting point:
     the real publication (update_practice, draft -> scheduled) takes the
     practice FOR UPDATE first and waits on the delete's UPDATE of that row.
     After the wait the practice is public with no school, so the condition
@@ -417,7 +417,7 @@ async def test_publishing_into_a_school_being_deleted(
         )
     ).all()
     assert told == []
-    assert await _group(db_session, s) is None
+    assert await _school_row(db_session, s) is None
 
 
 @pytest.mark.asyncio
@@ -458,7 +458,7 @@ async def test_creating_a_practice_in_a_school_being_deleted(
     assert not result.rival.committed
     assert isinstance(result.rival.error, BadRequestError), result.rival.error
     assert result.rival.error.code == "school_not_usable"
-    assert await _group(db_session, s) is None
+    assert await _school_row(db_session, s) is None
     born = (
         await db_session.execute(
             select(Practice.id).where(Practice.master_id == s.third)
@@ -495,7 +495,7 @@ async def test_the_invite_link_of_a_school_being_deleted(
     )
     result = await _against_delete(monkeypatch, s, invite)
     assert isinstance(result.rival.error, NotFoundError), result.rival
-    assert await _group(db_session, s) is None
+    assert await _school_row(db_session, s) is None
 
 
 @pytest.mark.asyncio
@@ -504,7 +504,7 @@ async def test_a_curator_cancelling_into_a_school_being_deleted(
 ) -> None:
     """F8: the cancellation committed its refunds and then failed its FK.
 
-    Before BE-74 the curator's cancellation met the delete on the group row
+    Before BE-74 the curator's cancellation met the delete on the school row
     and, once the guard was in, the practice WAS cancelled with no journal
     row left for a school that is gone. BE-74 moved the meeting point to
     the practice row (cancel_practice takes it FOR UPDATE first), and after
@@ -539,4 +539,4 @@ async def test_a_curator_cancelling_into_a_school_being_deleted(
         )
     ).all()
     assert left == []
-    assert await _group(db_session, s) is None
+    assert await _school_row(db_session, s) is None

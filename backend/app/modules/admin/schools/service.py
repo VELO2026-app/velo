@@ -63,19 +63,19 @@ def _profile_verified(user_id_col: ColumnElement) -> ColumnElement[bool]:
 
 
 async def _member_counts(
-    group_ids: list[UUID], session: AsyncSession,
+    school_ids: list[UUID], session: AsyncSession,
 ) -> dict[UUID, tuple[int, int]]:
-    """(masters_count, students_count) for a page of groups in ONE query.
+    """(masters_count, students_count) for a page of schools in ONE query.
 
-    One statement for the whole page rather than one per group -- the shape
+    One statement for the whole page rather than one per school -- the shape
     _practices_counts_for_masters uses next door, and the lesson the curator
     line has now paid for twice.
 
     masters_count applies the visibility rule (I-4): a member whose master
     profile lapsed stops being counted while their row stays put, which is
-    what the group's own page reports too.
+    what the school's own page reports too.
     """
-    if not group_ids:
+    if not school_ids:
         return {}
 
     visible_master = (
@@ -103,7 +103,7 @@ async def _member_counts(
                     0,
                 ),
             )
-            .where(SchoolMember.school_id.in_(group_ids))
+            .where(SchoolMember.school_id.in_(school_ids))
             .group_by(SchoolMember.school_id)
         )
     ).all()
@@ -112,7 +112,7 @@ async def _member_counts(
 
 
 def _base_query() -> Select:
-    """Groups joined to their curators, newest first.
+    """Schools joined to their curators, newest first.
 
     created_at DESC matches every other admin listing that has a natural
     time order (masters, participants, promos, reports, users) -- read from
@@ -150,14 +150,14 @@ async def list_schools_for_admin(
         await session.execute(_base_query().limit(limit).offset(offset))
     ).all()
 
-    group_ids = [group.id for group, _curator in rows]
-    counts = await _member_counts(group_ids, session)
+    school_ids = [school.id for school, _curator in rows]
+    counts = await _member_counts(school_ids, session)
 
     active_ids = set(
         (
             await session.execute(
                 select(School.id).where(
-                    School.id.in_(group_ids),
+                    School.id.in_(school_ids),
                     _profile_verified(School.curator_user_id),
                 )
             )
@@ -168,20 +168,20 @@ async def list_schools_for_admin(
 
     items = [
         AdminSchoolListItem(
-            id=group.id,
-            name=group.name,
+            id=school.id,
+            name=school.name,
             curator=AdminSchoolCuratorRef(
                 user_id=curator.id,
                 display_name=display_name(
                     curator.first_name, curator.last_name
                 ),
             ),
-            masters_count=counts.get(group.id, (0, 0))[0],
-            students_count=counts.get(group.id, (0, 0))[1],
-            is_active=group.id in active_ids,
-            created_at=group.created_at,
+            masters_count=counts.get(school.id, (0, 0))[0],
+            students_count=counts.get(school.id, (0, 0))[1],
+            is_active=school.id in active_ids,
+            created_at=school.created_at,
         )
-        for group, curator in rows
+        for school, curator in rows
     ]
 
     return PaginatedAdminSchoolsResponse(

@@ -42,11 +42,11 @@ from app.modules.admin.masters.service import (
     reject_master,
     reject_method_change,
     revoke_master,
-    set_master_group_right,
+    set_master_school_right,
     verify_master,
 )
 from app.modules.auth.dependencies import get_current_admin
-from app.modules.schools.service import master_can_create_groups
+from app.modules.schools.service import master_can_create_schools
 from app.modules.users.models import User
 
 logger = structlog.get_logger()
@@ -168,7 +168,7 @@ async def revoke_master_endpoint(
     "/{user_id}/can-create-schools",
     response_model=MasterSchoolRightResponse,
 )
-async def set_master_group_right_endpoint(
+async def set_master_school_right_endpoint(
     user_id: UUID,
     body: SetMasterSchoolRightRequest,
     admin: User = Depends(get_current_admin),
@@ -181,7 +181,7 @@ async def set_master_group_right_endpoint(
     Idempotent both ways. Revoking closes the creation of NEW schools and
     touches nothing this master already built -- that lever is /revoke.
     """
-    profile = await set_master_group_right(
+    profile = await set_master_school_right(
         user_id, admin, body.can_create_schools, session,
     )
 
@@ -190,7 +190,7 @@ async def set_master_group_right_endpoint(
 
     return MasterSchoolRightResponse(
         user_id=profile.user_id,
-        can_create_schools=master_can_create_groups(profile.data),
+        can_create_schools=master_can_create_schools(profile.data),
     )
 
 

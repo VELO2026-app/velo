@@ -15,7 +15,7 @@
 # let anyone probe which school ids are real. The eighth -- a master whose
 # own verification was revoked -- is refused by get_current_master before
 # the handler runs, and is asserted AS a 403 rather than masked: it is
-# raised before any group is looked at and is identical on every path of the
+# raised before any school is looked at and is identical on every path of the
 # master router, so it says nothing about this school.
 #
 # THE STUDENT OF THE SCHOOL IS THE ONE THAT WAS NOT IN THE CARD.
@@ -128,13 +128,13 @@ async def _student(
 async def _school(
     db_session: AsyncSession, curator: dict, name: str = "Школа",
 ) -> School:
-    group = School(
+    school = School(
         curator_user_id=UUID(curator["user"]["id"]), name=name,
     )
-    db_session.add(group)
+    db_session.add(school)
     await db_session.flush()
     await db_session.commit()
-    return group
+    return school
 
 
 async def _join(
@@ -254,9 +254,9 @@ async def _feedback(
 async def _get(
     client: AsyncClient, viewer: dict, school, student_id: str,
 ):
-    group_id = school if isinstance(school, str) else str(school.id)
+    school_id = school if isinstance(school, str) else str(school.id)
     return await client.get(
-        PROFILE_URL.format(school_id=group_id, user_id=student_id),
+        PROFILE_URL.format(school_id=school_id, user_id=student_id),
         headers=auth_headers(viewer["session_token"]),
     )
 
@@ -616,9 +616,9 @@ async def test_seven_refusals_share_a_code_and_the_outside_ones_a_body(
     tests in this service answer "Student not found". Both are 404 with
     the same machine-readable code, and the split falls exactly on the
     access boundary: everybody who is refused from OUTSIDE the school gets
-    the group message and cannot tell the three outside reasons apart,
+    the school message and cannot tell the three outside reasons apart,
     which is what P-08 is for. The student message is reachable only by
-    somebody who already has the school -- telling them "group not found"
+    somebody who already has the school -- telling them "school not found"
     about a school they are standing in would be a worse answer, not a
     safer one.
 
@@ -681,7 +681,7 @@ async def test_a_suspended_master_is_refused_with_403_not_404(
     losing the master check -- or repeating the verification test, a second
     place to keep true.
 
-    IT LEAKS NOTHING. The 403 is raised before any group is looked at and
+    IT LEAKS NOTHING. The 403 is raised before any school is looked at and
     is identical on every path of the master router: it tells the caller
     about their own standing, which they already know, and nothing about
     whether this school exists. P-08 guards against an oracle of SCHOOLS.

@@ -135,7 +135,7 @@ def _school_blocked_clause(user_id: UUID) -> ColumnElement[bool]:
     is not a question of who the practice is for, but of who is shut out
     of the school.
 
-    The same fact as schools/service.py::_blocked_in_group, written
+    The same fact as schools/service.py::_blocked_in_school, written
     here as a correlated clause because this module imports models only.
     """
     return (
@@ -336,7 +336,7 @@ def _is_school_audience_clause(user_id: UUID) -> ColumnElement[bool]:
     )
 
 
-def master_broadcasts_to_group_clause(master_id: UUID) -> ColumnElement[bool]:
+def master_broadcasts_to_school_clause(master_id: UUID) -> ColumnElement[bool]:
     """_master_in_school_clause for a literal master id (BE-30).
 
     The same body and the same question -- "does this school still accept
@@ -350,7 +350,7 @@ def master_broadcasts_to_group_clause(master_id: UUID) -> ColumnElement[bool]:
     return _master_in_school_clause(master_id)
 
 
-def practice_in_school_clause(group_id: UUID) -> ColumnElement[bool]:
+def practice_in_school_clause(school_id: UUID) -> ColumnElement[bool]:
     """True iff the (correlated) Practice BELONGS TO this school (BE-74).
 
     THIS ONE ANSWERS "WHAT HAPPENED"; _master_in_school_clause above
@@ -379,10 +379,10 @@ def practice_in_school_clause(group_id: UUID) -> ColumnElement[bool]:
     _require_schools_enabled, and a flag answered in two places is a
     flag with a hole in it.
     """
-    return Practice.school_id == group_id
+    return Practice.school_id == school_id
 
 
-def practice_in_school_feedback_clause(group_id: UUID) -> ColumnElement[bool]:
+def practice_in_school_feedback_clause(school_id: UUID) -> ColumnElement[bool]:
     """True iff the (correlated) Practice counts in this school's FEEDBACK
     -- the curator's check-in and review feeds, the all-time feedback
     aggregate of the school's analytics, a student's dossier (BE-75).
@@ -430,7 +430,7 @@ def practice_in_school_feedback_clause(group_id: UUID) -> ColumnElement[bool]:
     master_is_curator = (
         select(School.id)
         .where(
-            School.id == group_id,
+            School.id == school_id,
             School.curator_user_id == Practice.master_id,
         )
         .exists()
@@ -438,13 +438,13 @@ def practice_in_school_feedback_clause(group_id: UUID) -> ColumnElement[bool]:
     master_is_member = (
         select(SchoolMember.id)
         .where(
-            SchoolMember.school_id == group_id,
+            SchoolMember.school_id == school_id,
             SchoolMember.user_id == Practice.master_id,
         )
         .exists()
     )
     return and_(
-        practice_in_school_clause(group_id),
+        practice_in_school_clause(school_id),
         or_(
             Practice.status == PracticeStatus.COMPLETED.value,
             master_is_curator,

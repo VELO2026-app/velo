@@ -480,7 +480,7 @@ async def ensure_practice(
 
     # P5/GT-12: a practice may be aimed at a school. The profile
     # names the SCHOOL, not a UUID -- nothing in a profile is a UUID, people
-    # and groups are all referred to by their own keys and names, and a seed
+    # and schools are all referred to by their own keys and names, and a seed
     # that demanded ids could not be written by hand.
     audience_spec = spec.get("audience") or {}
     school_name = audience_spec.get("school")
@@ -665,7 +665,7 @@ async def reset_seed_data(session: AsyncSession, profile: dict) -> dict:
 
     Schools follow the same principle for the same reason, and they
     NEED it: a school whose curator is a live master matches neither rule
-    above -- not the prefix (a group has no title) and not the synthetic id
+    above -- not the prefix (a school has no title) and not the synthetic id
     range (its owner is a real person) -- so without this step it would
     survive --reset and the next run would hit 409 school_name_taken
     on its own name.
@@ -710,7 +710,7 @@ async def reset_seed_data(session: AsyncSession, profile: dict) -> dict:
         )
         if curator_spec is None:
             continue
-        group_ids = list(
+        school_ids = list(
             (
                 await session.execute(
                     select(School.id)
@@ -722,16 +722,16 @@ async def reset_seed_data(session: AsyncSession, profile: dict) -> dict:
                 )
             ).scalars()
         )
-        if group_ids:
+        if school_ids:
             # Memberships, invites and any pending transfer cascade off the
-            # group (ON DELETE CASCADE on every FK), so one delete is
+            # school (ON DELETE CASCADE on every FK), so one delete is
             # enough -- and the members themselves are untouched, which is
             # the point: a live master loses their school, not their
             # account.
             await session.execute(
-                delete(School).where(School.id.in_(group_ids))
+                delete(School).where(School.id.in_(school_ids))
             )
-            counts["schools"] += len(group_ids)
+            counts["schools"] += len(school_ids)
 
     synth_ids = list(
         (
@@ -760,7 +760,7 @@ async def ensure_school(
     """A school with its roster, idempotent across runs.
 
     Matched by (curator_user_id, name) -- the same pair the table's UNIQUE
-    index uses -- so a second run finds the group instead of colliding with
+    index uses -- so a second run finds the school instead of colliding with
     a 409 on the name.
 
     Members are written as plain rows rather than through the invite/join
@@ -773,7 +773,7 @@ async def ensure_school(
     school.curator_user_id and nowhere else, and a row here would
     make every counter in the product disagree with itself.
     """
-    group = (
+    school = (
         await session.execute(
             select(School).where(
                 School.curator_user_id == curator.id,
@@ -782,20 +782,20 @@ async def ensure_school(
         )
     ).scalar_one_or_none()
 
-    if group is None:
-        group = School(
+    if school is None:
+        school = School(
             curator_user_id=curator.id,
             name=spec["name"],
             description=spec.get("description"),
         )
-        session.add(group)
+        session.add(school)
         await session.flush()
 
     existing = set(
         (
             await session.execute(
                 select(SchoolMember.user_id).where(
-                    SchoolMember.school_id == group.id
+                    SchoolMember.school_id == school.id
                 )
             )
         )
@@ -809,7 +809,7 @@ async def ensure_school(
             continue
         session.add(
             SchoolMember(
-                school_id=group.id,
+                school_id=school.id,
                 user_id=member.id,
                 kind=SchoolMemberKind.MASTER.value,
             )
@@ -822,7 +822,7 @@ async def ensure_school(
             continue
         session.add(
             SchoolMember(
-                school_id=group.id,
+                school_id=school.id,
                 user_id=member.id,
                 kind=SchoolMemberKind.STUDENT.value,
             )
@@ -830,7 +830,7 @@ async def ensure_school(
         existing.add(member.id)
 
     await session.flush()
-    return group
+    return school
 
 
 # ---------------------------------------------------------------------------

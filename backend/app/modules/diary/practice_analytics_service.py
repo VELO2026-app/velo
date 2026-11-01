@@ -8,7 +8,7 @@
 # WHO MAY READ (owner, BE-78): the practice's leading master; for a practice
 # OWNED by a school (Practice.school_id, BE-74) also that school's
 # curator and its masters who are verified right now. That second half is
-# the audience module's own predicate, master_broadcasts_to_group_clause --
+# the audience module's own predicate, master_broadcasts_to_school_clause --
 # "curator of the school, or a kind='master' member with a verified profile"
 # -- asked about the VIEWER instead of the teacher: the same people, one
 # definition, so a suspended master loses this screen exactly when the school
@@ -47,7 +47,7 @@ from app.modules.diary.insights_service import score_zone, zone_counts
 from app.modules.diary.models import Checkin, CheckType, Feedback
 from app.modules.diary.schemas import PracticeAnalyticsViewerRole
 from app.modules.practices.audience_service import (
-    master_broadcasts_to_group_clause,
+    master_broadcasts_to_school_clause,
 )
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.practices.service import master_full_name
@@ -87,7 +87,7 @@ async def _load_readable_practice(
         curator_user_id = await session.scalar(
             select(School.curator_user_id).where(
                 School.id == practice.school_id,
-                master_broadcasts_to_group_clause(user.id),
+                master_broadcasts_to_school_clause(user.id),
             )
         )
         if curator_user_id is not None:

@@ -47,7 +47,7 @@ from tests.helpers import (
 )
 
 SCHOOLS_URL = "/api/v1/masters/me/schools"
-GROUP_URL = "/api/v1/masters/me/schools/{school_id}"
+SCHOOL_URL = "/api/v1/masters/me/schools/{school_id}"
 MEMBER_URL = "/api/v1/masters/me/schools/{school_id}/members/{user_id}"
 INVITES_URL = "/api/v1/masters/me/schools/{school_id}/invites"
 OFFER_URL = "/api/v1/masters/me/schools/{school_id}/transfer"
@@ -99,7 +99,7 @@ async def _make_verified_master(
 
     # GT-15: founding a school is now a separate admin-granted right, not
     # a consequence of verification -- so a fixture that omitted it would
-    # build a master who is verified and still cannot create the group
+    # build a master who is verified and still cannot create the school
     # every test below starts by creating. Set here rather than asserted
     # on: this file is about what a curator does WITH a school, and the
     # right itself is covered in test_school_permission.py.
@@ -133,7 +133,7 @@ async def _make_admin(
     return auth["session_token"]
 
 
-async def _create_group(
+async def _create_school(
     client: AsyncClient, curator: dict, name: str = "Школа дыхания",
 ) -> dict:
     resp = await client.post(
@@ -147,13 +147,13 @@ async def _create_group(
 
 async def _seed_member(
     db_session: AsyncSession,
-    group_id: str,
+    school_id: str,
     user_id: str,
     kind: SchoolMemberKind,
     joined_at: datetime | None = None,
 ) -> None:
     row = SchoolMember(
-        school_id=UUID(group_id), user_id=UUID(user_id), kind=kind.value,
+        school_id=UUID(school_id), user_id=UUID(user_id), kind=kind.value,
     )
     if joined_at is not None:
         row.joined_at = joined_at
@@ -162,38 +162,38 @@ async def _seed_member(
     await db_session.commit()
 
 
-async def _offer(client: AsyncClient, curator: dict, group_id: str, to: dict):
+async def _offer(client: AsyncClient, curator: dict, school_id: str, to: dict):
     return await client.post(
-        OFFER_URL.format(school_id=group_id),
+        OFFER_URL.format(school_id=school_id),
         json={"to_user_id": to["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
 
 
-async def _cancel(client: AsyncClient, curator: dict, group_id: str):
+async def _cancel(client: AsyncClient, curator: dict, school_id: str):
     return await client.delete(
-        OFFER_URL.format(school_id=group_id),
+        OFFER_URL.format(school_id=school_id),
         headers=auth_headers(curator["session_token"]),
     )
 
 
-async def _accept(client: AsyncClient, auth: dict, group_id: str):
+async def _accept(client: AsyncClient, auth: dict, school_id: str):
     return await client.post(
-        ACCEPT_URL.format(school_id=group_id),
+        ACCEPT_URL.format(school_id=school_id),
         headers=auth_headers(auth["session_token"]),
     )
 
 
-async def _decline(client: AsyncClient, auth: dict, group_id: str):
+async def _decline(client: AsyncClient, auth: dict, school_id: str):
     return await client.post(
-        DECLINE_URL.format(school_id=group_id),
+        DECLINE_URL.format(school_id=school_id),
         headers=auth_headers(auth["session_token"]),
     )
 
 
-async def _page(client: AsyncClient, auth: dict, group_id: str):
+async def _page(client: AsyncClient, auth: dict, school_id: str):
     return await client.get(
-        PAGE_URL.format(school_id=group_id),
+        PAGE_URL.format(school_id=school_id),
         headers=auth_headers(auth["session_token"]),
     )
 
@@ -206,32 +206,32 @@ async def _mine(client: AsyncClient, auth: dict) -> list[dict]:
     return resp.json()["items"]
 
 
-async def _transfer_rows(group_id: str):
+async def _transfer_rows(school_id: str):
     return (
         await fresh_execute(
             select(SchoolTransfer.to_user_id).where(
-                SchoolTransfer.school_id == UUID(group_id)
+                SchoolTransfer.school_id == UUID(school_id)
             )
         )
     ).scalars().all()
 
 
-async def _member_rows(group_id: str):
+async def _member_rows(school_id: str):
     return (
         await fresh_execute(
             select(
                 SchoolMember.user_id,
                 SchoolMember.kind,
-            ).where(SchoolMember.school_id == UUID(group_id))
+            ).where(SchoolMember.school_id == UUID(school_id))
         )
     ).all()
 
 
-async def _curator_of(group_id: str):
+async def _curator_of(school_id: str):
     return (
         await fresh_execute(
             select(School.curator_user_id).where(
-                School.id == UUID(group_id)
+                School.id == UUID(school_id)
             )
         )
     ).scalar_one()
@@ -257,7 +257,7 @@ async def _re_verify(
     assert resp.status_code == 200, resp.text
 
 
-async def _group_with_heir(
+async def _school_with_heir(
     client: AsyncClient, db_session: AsyncSession,
 ) -> tuple[dict, dict, dict]:
     """Curator + one visible master member -- the setup most tests need."""
@@ -265,11 +265,11 @@ async def _group_with_heir(
     heir = await _make_verified_master(
         client, db_session, _TID_HEIR, first_name="Анна", last_name="Петрова",
     )
-    group = await _create_group(client, curator)
+    school = await _create_school(client, curator)
     await _seed_member(
-        db_session, group["id"], heir["user"]["id"], SchoolMemberKind.MASTER,
+        db_session, school["id"], heir["user"]["id"], SchoolMemberKind.MASTER,
     )
-    return curator, heir, group
+    return curator, heir, school
 
 
 # ===========================================================================
@@ -296,16 +296,16 @@ async def test_offering_to_a_visible_master_creates_the_row(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     """The reply names the addressee, and the row exists afterwards."""
-    curator, heir, group = await _group_with_heir(client, db_session)
+    curator, heir, school = await _school_with_heir(client, db_session)
 
-    resp = await _offer(client, curator, group["id"], heir)
+    resp = await _offer(client, curator, school["id"], heir)
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["to_user_id"] == heir["user"]["id"]
     assert body["to_display_name"] == "Анна Петрова"
     assert body["requested_at"]
 
-    assert await _transfer_rows(group["id"]) == [UUID(heir["user"]["id"])]
+    assert await _transfer_rows(school["id"]) == [UUID(heir["user"]["id"])]
 
 
 # ===========================================================================
@@ -323,23 +323,23 @@ async def test_a_second_offer_is_409_even_to_the_same_person(
     Both shapes are checked -- a different person AND the same person -- so
     "409" cannot be coming from a stray equality check on to_user_id.
     """
-    curator, heir, group = await _group_with_heir(client, db_session)
+    curator, heir, school = await _school_with_heir(client, db_session)
     other = await _make_verified_master(
         client, db_session, _TID_MASTER_B, first_name="Other",
     )
     await _seed_member(
-        db_session, group["id"], other["user"]["id"], SchoolMemberKind.MASTER,
+        db_session, school["id"], other["user"]["id"], SchoolMemberKind.MASTER,
     )
-    assert (await _offer(client, curator, group["id"], heir)).status_code == 200
+    assert (await _offer(client, curator, school["id"], heir)).status_code == 200
 
-    to_other = await _offer(client, curator, group["id"], other)
+    to_other = await _offer(client, curator, school["id"], other)
     assert to_other.status_code == 409
     assert to_other.json()["error"] == "transfer_pending"
 
-    to_same = await _offer(client, curator, group["id"], heir)
+    to_same = await _offer(client, curator, school["id"], heir)
     assert to_same.status_code == 409
 
-    assert await _transfer_rows(group["id"]) == [UUID(heir["user"]["id"])]
+    assert await _transfer_rows(school["id"]) == [UUID(heir["user"]["id"])]
 
 
 # ===========================================================================
@@ -352,9 +352,9 @@ async def test_student_stranger_hidden_master_and_self_are_all_404(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     """One answer for four situations (I-10), so nothing leaks about who is
-    in the group or whose verification lapsed.
+    in the school or whose verification lapsed.
 
-    Paired with a real offer succeeding on the same group, so "404" cannot
+    Paired with a real offer succeeding on the same school, so "404" cannot
     mean the endpoint is broken.
 
     AMENDED: this used to assert the generic `not_found`, and that was RIGHT
@@ -375,26 +375,26 @@ async def test_student_stranger_hidden_master_and_self_are_all_404(
     student = await login_user(client, telegram_id=_TID_STUDENT_A)
     stranger = await login_user(client, telegram_id=_TID_STRANGER)
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
-    group = await _create_group(client, curator)
+    school = await _create_school(client, curator)
     for who, kind in (
         (heir, SchoolMemberKind.MASTER),
         (hidden, SchoolMemberKind.MASTER),
         (student, SchoolMemberKind.STUDENT),
     ):
-        await _seed_member(db_session, group["id"], who["user"]["id"], kind)
+        await _seed_member(db_session, school["id"], who["user"]["id"], kind)
     await _revoke(client, admin_token, hidden["user"]["id"])
 
     for who in (student, stranger, hidden, curator):
-        resp = await _offer(client, curator, group["id"], who)
+        resp = await _offer(client, curator, school["id"], who)
         assert resp.status_code == 404, who["user"]["id"]
         assert resp.json()["error"] == "transfer_target_not_member"
 
-    assert await _transfer_rows(group["id"]) == []
-    assert (await _offer(client, curator, group["id"], heir)).status_code == 200
+    assert await _transfer_rows(school["id"]) == []
+    assert (await _offer(client, curator, school["id"], heir)).status_code == 200
 
 
 @pytest.mark.asyncio
-async def test_offering_in_a_group_with_no_members_is_404(
+async def test_offering_in_a_school_with_no_members_is_404(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     """Nobody to hand it to."""
@@ -402,36 +402,36 @@ async def test_offering_in_a_group_with_no_members_is_404(
     someone = await _make_verified_master(
         client, db_session, _TID_HEIR, first_name="Someone",
     )
-    group = await _create_group(client, curator)
+    school = await _create_school(client, curator)
 
-    assert (await _offer(client, curator, group["id"], someone)).status_code == 404
+    assert (await _offer(client, curator, school["id"], someone)).status_code == 404
 
 
 @pytest.mark.asyncio
-async def test_offering_on_someone_elses_group_is_404(
+async def test_offering_on_someone_elses_school_is_404(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    _curator, heir, group = await _group_with_heir(client, db_session)
+    _curator, heir, school = await _school_with_heir(client, db_session)
     outsider = await _make_verified_master(
         client, db_session, _TID_MASTER_B, first_name="Outsider",
     )
 
-    resp = await _offer(client, outsider, group["id"], heir)
+    resp = await _offer(client, outsider, school["id"], heir)
     assert resp.status_code == 404
-    assert (await _cancel(client, outsider, group["id"])).status_code == 404
+    assert (await _cancel(client, outsider, school["id"])).status_code == 404
 
 
 @pytest.mark.asyncio
-async def test_offering_on_a_deleted_group_is_404(
+async def test_offering_on_a_deleted_school_is_404(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    curator, heir, group = await _group_with_heir(client, db_session)
+    curator, heir, school = await _school_with_heir(client, db_session)
     await client.delete(
-        GROUP_URL.format(school_id=group["id"]),
+        SCHOOL_URL.format(school_id=school["id"]),
         headers=auth_headers(curator["session_token"]),
     )
 
-    assert (await _offer(client, curator, group["id"], heir)).status_code == 404
+    assert (await _offer(client, curator, school["id"], heir)).status_code == 404
 
 
 # ===========================================================================
@@ -445,33 +445,33 @@ async def test_cancel_removes_the_offer_and_repeats_are_still_204(
 ) -> None:
     """The first 204 is checked against the row actually going away, so
     "204" can never stand in for "did nothing"."""
-    curator, heir, group = await _group_with_heir(client, db_session)
-    await _offer(client, curator, group["id"], heir)
+    curator, heir, school = await _school_with_heir(client, db_session)
+    await _offer(client, curator, school["id"], heir)
 
-    first = await _cancel(client, curator, group["id"])
+    first = await _cancel(client, curator, school["id"])
     assert first.status_code == 204
-    assert await _transfer_rows(group["id"]) == []
+    assert await _transfer_rows(school["id"]) == []
 
-    assert (await _cancel(client, curator, group["id"])).status_code == 204
+    assert (await _cancel(client, curator, school["id"])).status_code == 204
 
-    # And the group can be offered again afterwards -- cancel is a
+    # And the school can be offered again afterwards -- cancel is a
     # withdrawal, not a lock.
-    assert (await _offer(client, curator, group["id"], heir)).status_code == 200
+    assert (await _offer(client, curator, school["id"], heir)).status_code == 200
 
 
 @pytest.mark.asyncio
 async def test_decline_removes_the_offer_and_repeats_are_still_204(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    curator, heir, group = await _group_with_heir(client, db_session)
-    await _offer(client, curator, group["id"], heir)
+    curator, heir, school = await _school_with_heir(client, db_session)
+    await _offer(client, curator, school["id"], heir)
 
-    first = await _decline(client, heir, group["id"])
+    first = await _decline(client, heir, school["id"])
     assert first.status_code == 204
-    assert await _transfer_rows(group["id"]) == []
-    assert await _curator_of(group["id"]) == UUID(curator["user"]["id"])
+    assert await _transfer_rows(school["id"]) == []
+    assert await _curator_of(school["id"]) == UUID(curator["user"]["id"])
 
-    assert (await _decline(client, heir, group["id"])).status_code == 204
+    assert (await _decline(client, heir, school["id"])).status_code == 204
 
 
 @pytest.mark.asyncio
@@ -485,19 +485,19 @@ async def test_declining_an_offer_that_is_not_yours_is_204_and_harmless(
     The pair is the row survival check -- a stranger's decline must not
     clear somebody else's offer.
     """
-    curator, heir, group = await _group_with_heir(client, db_session)
+    curator, heir, school = await _school_with_heir(client, db_session)
     stranger = await login_user(client, telegram_id=_TID_STRANGER)
     student = await login_user(client, telegram_id=_TID_STUDENT_A)
     await _seed_member(
-        db_session, group["id"], student["user"]["id"],
+        db_session, school["id"], student["user"]["id"],
         SchoolMemberKind.STUDENT,
     )
-    await _offer(client, curator, group["id"], heir)
+    await _offer(client, curator, school["id"], heir)
 
     for who in (stranger, student, curator):
-        assert (await _decline(client, who, group["id"])).status_code == 204
+        assert (await _decline(client, who, school["id"])).status_code == 204
 
-    assert await _transfer_rows(group["id"]) == [UUID(heir["user"]["id"])]
+    assert await _transfer_rows(school["id"]) == [UUID(heir["user"]["id"])]
 
 
 # ===========================================================================
@@ -506,23 +506,23 @@ async def test_declining_an_offer_that_is_not_yours_is_204_and_harmless(
 
 
 @pytest.mark.asyncio
-async def test_accept_moves_the_group_in_one_transaction(
+async def test_accept_moves_the_school_in_one_transaction(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     """The whole of TZ 3.5 asserted as ONE database state.
 
     Seven things must all hold together, and checking them in separate
     tests would let a half-applied transaction pass six of them: the new
-    curator owns the group, has no member row of their own (I-2), the
+    curator owns the school, has no member row of their own (I-2), the
     previous curator holds a kind='master' row, the offer is gone, both
     invite tokens are byte-identical, other memberships are untouched, and
     masters_count is unchanged -- one master became the curator while the
     curator became a master.
     """
-    curator, heir, group = await _group_with_heir(client, db_session)
+    curator, heir, school = await _school_with_heir(client, db_session)
     student = await login_user(client, telegram_id=_TID_STUDENT_A)
     await _seed_member(
-        db_session, group["id"], student["user"]["id"],
+        db_session, school["id"], student["user"]["id"],
         SchoolMemberKind.STUDENT,
     )
     # GT-27: one link per school. This used to mint both kinds, because the
@@ -530,7 +530,7 @@ async def test_accept_moves_the_group_in_one_transaction(
     # with one link the same claim needs one token, not two.
     with patch.object(settings, "telegram_bot_url", _BOT_URL):
         resp = await client.post(
-            INVITES_URL.format(school_id=group["id"]),
+            INVITES_URL.format(school_id=school["id"]),
             json={},
             headers=auth_headers(curator["session_token"]),
         )
@@ -539,15 +539,15 @@ async def test_accept_moves_the_group_in_one_transaction(
         (
             await fresh_execute(
                 select(SchoolInvite.token).where(
-                    SchoolInvite.school_id == UUID(group["id"])
+                    SchoolInvite.school_id == UUID(school["id"])
                 )
             )
         ).scalars().all()
     )
-    counts_before = (await _page(client, curator, group["id"])).json()
+    counts_before = (await _page(client, curator, school["id"])).json()
 
-    await _offer(client, curator, group["id"], heir)
-    accepted = await _accept(client, heir, group["id"])
+    await _offer(client, curator, school["id"], heir)
+    accepted = await _accept(client, heir, school["id"])
     assert accepted.status_code == 200, accepted.text
 
     page = accepted.json()
@@ -555,20 +555,20 @@ async def test_accept_moves_the_group_in_one_transaction(
     assert page["curator"]["user_id"] == heir["user"]["id"]
     assert page["transfer"] is None
 
-    assert await _curator_of(group["id"]) == UUID(heir["user"]["id"])
+    assert await _curator_of(school["id"]) == UUID(heir["user"]["id"])
 
-    rows = {str(uid): kind for uid, kind in await _member_rows(group["id"])}
+    rows = {str(uid): kind for uid, kind in await _member_rows(school["id"])}
     assert heir["user"]["id"] not in rows
     assert rows[curator["user"]["id"]] == "master"
     assert rows[student["user"]["id"]] == "student"
 
-    assert await _transfer_rows(group["id"]) == []
+    assert await _transfer_rows(school["id"]) == []
 
     tokens_after = sorted(
         (
             await fresh_execute(
                 select(SchoolInvite.token).where(
-                    SchoolInvite.school_id == UUID(group["id"])
+                    SchoolInvite.school_id == UUID(school["id"])
                 )
             )
         ).scalars().all()
@@ -586,33 +586,33 @@ async def test_the_previous_curator_can_leave_the_normal_way_afterwards(
     """Why step 4 is an invariant and not a courtesy: without the member row
     the previous curator would have vanished from the school silently, and
     leave would answer 204 to somebody with no tie to it at all."""
-    curator, heir, group = await _group_with_heir(client, db_session)
-    await _offer(client, curator, group["id"], heir)
-    await _accept(client, heir, group["id"])
+    curator, heir, school = await _school_with_heir(client, db_session)
+    await _offer(client, curator, school["id"], heir)
+    await _accept(client, heir, school["id"])
 
-    page = await _page(client, curator, group["id"])
+    page = await _page(client, curator, school["id"])
     assert page.status_code == 200
     assert page.json()["viewer"]["relation"] == "master"
 
     left = await client.delete(
-        MEMBERSHIP_URL.format(school_id=group["id"]),
+        MEMBERSHIP_URL.format(school_id=school["id"]),
         headers=auth_headers(curator["session_token"]),
     )
     assert left.status_code == 204
-    assert (await _page(client, curator, group["id"])).status_code == 404
+    assert (await _page(client, curator, school["id"])).status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_the_new_curator_cannot_leave_and_the_old_one_can(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """Ownership really moved: the 409 follows the group, not the person."""
-    curator, heir, group = await _group_with_heir(client, db_session)
-    await _offer(client, curator, group["id"], heir)
-    await _accept(client, heir, group["id"])
+    """Ownership really moved: the 409 follows the school, not the person."""
+    curator, heir, school = await _school_with_heir(client, db_session)
+    await _offer(client, curator, school["id"], heir)
+    await _accept(client, heir, school["id"])
 
     heirs_exit = await client.delete(
-        MEMBERSHIP_URL.format(school_id=group["id"]),
+        MEMBERSHIP_URL.format(school_id=school["id"]),
         headers=auth_headers(heir["session_token"]),
     )
     assert heirs_exit.status_code == 409
@@ -628,41 +628,41 @@ async def test_a_name_collision_refuses_before_anything_is_written(
     a clean 409 -- and this test asserts the "nothing happened" half, which
     is the part a caught IntegrityError would get wrong.
     """
-    curator, heir, group = await _group_with_heir(client, db_session)
-    own = await _create_group(client, heir, name=group["name"])
-    assert own["name"] == group["name"]
+    curator, heir, school = await _school_with_heir(client, db_session)
+    own = await _create_school(client, heir, name=school["name"])
+    assert own["name"] == school["name"]
 
-    await _offer(client, curator, group["id"], heir)
-    refused = await _accept(client, heir, group["id"])
+    await _offer(client, curator, school["id"], heir)
+    refused = await _accept(client, heir, school["id"])
     assert refused.status_code == 409
     assert refused.json()["error"] == "school_name_taken"
 
-    assert await _curator_of(group["id"]) == UUID(curator["user"]["id"])
-    rows = {str(uid): kind for uid, kind in await _member_rows(group["id"])}
+    assert await _curator_of(school["id"]) == UUID(curator["user"]["id"])
+    rows = {str(uid): kind for uid, kind in await _member_rows(school["id"])}
     assert rows == {heir["user"]["id"]: "master"}
-    assert await _transfer_rows(group["id"]) == [UUID(heir["user"]["id"])]
+    assert await _transfer_rows(school["id"]) == [UUID(heir["user"]["id"])]
 
 
 @pytest.mark.asyncio
-async def test_renaming_the_clashing_group_lets_the_accept_through(
+async def test_renaming_the_clashing_school_lets_the_accept_through(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     """The pair for the 409 above: the offer stays live, so the addressee
-    can rename their own group and try again."""
-    curator, heir, group = await _group_with_heir(client, db_session)
-    own = await _create_group(client, heir, name=group["name"])
-    await _offer(client, curator, group["id"], heir)
-    assert (await _accept(client, heir, group["id"])).status_code == 409
+    can rename their own school and try again."""
+    curator, heir, school = await _school_with_heir(client, db_session)
+    own = await _create_school(client, heir, name=school["name"])
+    await _offer(client, curator, school["id"], heir)
+    assert (await _accept(client, heir, school["id"])).status_code == 409
 
     renamed = await client.patch(
-        GROUP_URL.format(school_id=own["id"]),
+        SCHOOL_URL.format(school_id=own["id"]),
         json={"name": "Другая школа"},
         headers=auth_headers(heir["session_token"]),
     )
     assert renamed.status_code == 200
 
-    assert (await _accept(client, heir, group["id"])).status_code == 200
-    assert await _curator_of(group["id"]) == UUID(heir["user"]["id"])
+    assert (await _accept(client, heir, school["id"])).status_code == 200
+    assert await _curator_of(school["id"]) == UUID(heir["user"]["id"])
 
 
 # ===========================================================================
@@ -686,35 +686,35 @@ async def test_accept_by_anyone_but_the_addressee_is_404(
     so the refusal to distinguish them -- the whole point of this test --
     is untouched.
     """
-    curator, heir, group = await _group_with_heir(client, db_session)
+    curator, heir, school = await _school_with_heir(client, db_session)
     other = await _make_verified_master(
         client, db_session, _TID_MASTER_B, first_name="Other",
     )
     student = await login_user(client, telegram_id=_TID_STUDENT_A)
     await _seed_member(
-        db_session, group["id"], other["user"]["id"], SchoolMemberKind.MASTER,
+        db_session, school["id"], other["user"]["id"], SchoolMemberKind.MASTER,
     )
     await _seed_member(
-        db_session, group["id"], student["user"]["id"],
+        db_session, school["id"], student["user"]["id"],
         SchoolMemberKind.STUDENT,
     )
-    await _offer(client, curator, group["id"], heir)
+    await _offer(client, curator, school["id"], heir)
 
     for who in (other, student, curator):
-        resp = await _accept(client, who, group["id"])
+        resp = await _accept(client, who, school["id"])
         assert resp.status_code == 404, who["user"]["id"]
         assert resp.json()["error"] == "transfer_not_found"
 
-    assert await _curator_of(group["id"]) == UUID(curator["user"]["id"])
-    assert (await _accept(client, heir, group["id"])).status_code == 200
+    assert await _curator_of(school["id"]) == UUID(curator["user"]["id"])
+    assert (await _accept(client, heir, school["id"])).status_code == 200
 
 
 @pytest.mark.asyncio
 async def test_accept_with_no_offer_at_all_is_404(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    _curator, heir, group = await _group_with_heir(client, db_session)
-    assert (await _accept(client, heir, group["id"])).status_code == 404
+    _curator, heir, school = await _school_with_heir(client, db_session)
+    assert (await _accept(client, heir, school["id"])).status_code == 404
 
 
 @pytest.mark.asyncio
@@ -723,22 +723,22 @@ async def test_accepting_twice_gives_404_the_second_time(
 ) -> None:
     """The row is gone and the caller is now the curator -- who is by
     definition not the addressee of anything."""
-    curator, heir, group = await _group_with_heir(client, db_session)
-    await _offer(client, curator, group["id"], heir)
-    assert (await _accept(client, heir, group["id"])).status_code == 200
-    assert (await _accept(client, heir, group["id"])).status_code == 404
+    curator, heir, school = await _school_with_heir(client, db_session)
+    await _offer(client, curator, school["id"], heir)
+    assert (await _accept(client, heir, school["id"])).status_code == 200
+    assert (await _accept(client, heir, school["id"])).status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_accept_after_cancel_is_404(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    curator, heir, group = await _group_with_heir(client, db_session)
-    await _offer(client, curator, group["id"], heir)
-    await _cancel(client, curator, group["id"])
+    curator, heir, school = await _school_with_heir(client, db_session)
+    await _offer(client, curator, school["id"], heir)
+    await _cancel(client, curator, school["id"])
 
-    assert (await _accept(client, heir, group["id"])).status_code == 404
-    assert await _curator_of(group["id"]) == UUID(curator["user"]["id"])
+    assert (await _accept(client, heir, school["id"])).status_code == 404
+    assert await _curator_of(school["id"]) == UUID(curator["user"]["id"])
 
 
 # ===========================================================================
@@ -750,29 +750,29 @@ async def test_accept_after_cancel_is_404(
 async def test_a_suspended_addressee_keeps_the_offer_but_cannot_take_it(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """Being offered the group and being able to accept it are different
+    """Being offered the school and being able to accept it are different
     questions, asked at different times.
 
     The row survives (the curator sees it "in the shadow" and can withdraw
     it), accept gives 403, and re-verification makes the SAME offer work --
     proving nothing was rewritten in between.
     """
-    curator, heir, group = await _group_with_heir(client, db_session)
+    curator, heir, school = await _school_with_heir(client, db_session)
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
-    await _offer(client, curator, group["id"], heir)
+    await _offer(client, curator, school["id"], heir)
 
     await _revoke(client, admin_token, heir["user"]["id"])
 
-    refused = await _accept(client, heir, group["id"])
+    refused = await _accept(client, heir, school["id"])
     assert refused.status_code == 403
     assert refused.json()["error"] == "master_required"
-    assert await _transfer_rows(group["id"]) == [UUID(heir["user"]["id"])]
+    assert await _transfer_rows(school["id"]) == [UUID(heir["user"]["id"])]
 
-    seen = (await _page(client, curator, group["id"])).json()
+    seen = (await _page(client, curator, school["id"])).json()
     assert seen["transfer"]["to_user_id"] == heir["user"]["id"]
 
     await _re_verify(client, admin_token, heir["user"]["id"])
-    assert (await _accept(client, heir, group["id"])).status_code == 200
+    assert (await _accept(client, heir, school["id"])).status_code == 200
 
 
 @pytest.mark.asyncio
@@ -781,33 +781,33 @@ async def test_the_curator_can_withdraw_an_offer_made_to_a_suspended_master(
 ) -> None:
     """Cancel does not consult the addressee's status -- otherwise the
     curator would be stuck with an offer nobody can take."""
-    curator, heir, group = await _group_with_heir(client, db_session)
+    curator, heir, school = await _school_with_heir(client, db_session)
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
-    await _offer(client, curator, group["id"], heir)
+    await _offer(client, curator, school["id"], heir)
     await _revoke(client, admin_token, heir["user"]["id"])
 
-    assert (await _cancel(client, curator, group["id"])).status_code == 204
-    assert await _transfer_rows(group["id"]) == []
+    assert (await _cancel(client, curator, school["id"])).status_code == 204
+    assert await _transfer_rows(school["id"]) == []
 
 
 @pytest.mark.asyncio
 async def test_a_suspended_curator_hides_the_offer_and_reverification_restores_it(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """I-6 reaches accept too: an inactive group answers 404 to its own
-    addressee, and the offer is still there when the group comes back."""
-    curator, heir, group = await _group_with_heir(client, db_session)
+    """I-6 reaches accept too: an inactive school answers 404 to its own
+    addressee, and the offer is still there when the school comes back."""
+    curator, heir, school = await _school_with_heir(client, db_session)
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
-    await _offer(client, curator, group["id"], heir)
+    await _offer(client, curator, school["id"], heir)
 
     await _revoke(client, admin_token, curator["user"]["id"])
-    assert (await _accept(client, heir, group["id"])).status_code == 404
-    assert (await _page(client, heir, group["id"])).status_code == 404
-    assert await _transfer_rows(group["id"]) == [UUID(heir["user"]["id"])]
+    assert (await _accept(client, heir, school["id"])).status_code == 404
+    assert (await _page(client, heir, school["id"])).status_code == 404
+    assert await _transfer_rows(school["id"]) == [UUID(heir["user"]["id"])]
 
     await _re_verify(client, admin_token, curator["user"]["id"])
-    assert (await _accept(client, heir, group["id"])).status_code == 200
-    assert await _curator_of(group["id"]) == UUID(heir["user"]["id"])
+    assert (await _accept(client, heir, school["id"])).status_code == 200
+    assert await _curator_of(school["id"]) == UUID(heir["user"]["id"])
 
 
 # ===========================================================================
@@ -819,32 +819,32 @@ async def test_a_suspended_curator_hides_the_offer_and_reverification_restores_i
 async def test_the_addressee_leaving_retracts_the_offer(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    curator, heir, group = await _group_with_heir(client, db_session)
-    await _offer(client, curator, group["id"], heir)
+    curator, heir, school = await _school_with_heir(client, db_session)
+    await _offer(client, curator, school["id"], heir)
 
     left = await client.delete(
-        MEMBERSHIP_URL.format(school_id=group["id"]),
+        MEMBERSHIP_URL.format(school_id=school["id"]),
         headers=auth_headers(heir["session_token"]),
     )
     assert left.status_code == 204
-    assert await _transfer_rows(group["id"]) == []
+    assert await _transfer_rows(school["id"]) == []
 
 
 @pytest.mark.asyncio
 async def test_the_curator_removing_the_addressee_retracts_the_offer(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    curator, heir, group = await _group_with_heir(client, db_session)
-    await _offer(client, curator, group["id"], heir)
+    curator, heir, school = await _school_with_heir(client, db_session)
+    await _offer(client, curator, school["id"], heir)
 
     removed = await client.delete(
         MEMBER_URL.format(
-            school_id=group["id"], user_id=heir["user"]["id"],
+            school_id=school["id"], user_id=heir["user"]["id"],
         ),
         headers=auth_headers(curator["session_token"]),
     )
     assert removed.status_code == 204
-    assert await _transfer_rows(group["id"]) == []
+    assert await _transfer_rows(school["id"]) == []
 
 
 @pytest.mark.asyncio
@@ -852,85 +852,85 @@ async def test_somebody_else_leaving_does_not_touch_the_offer(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     """The pair that proves auto-cancel is scoped to the addressee, not to
-    the group: without the (group, to_user_id) filter this offer would die
+    the school: without the (school, to_user_id) filter this offer would die
     when an unrelated member walked out.
     """
-    curator, heir, group = await _group_with_heir(client, db_session)
+    curator, heir, school = await _school_with_heir(client, db_session)
     bystander = await _make_verified_master(
         client, db_session, _TID_MASTER_B, first_name="Bystander",
     )
     student = await login_user(client, telegram_id=_TID_STUDENT_B)
     await _seed_member(
-        db_session, group["id"], bystander["user"]["id"],
+        db_session, school["id"], bystander["user"]["id"],
         SchoolMemberKind.MASTER,
     )
     await _seed_member(
-        db_session, group["id"], student["user"]["id"],
+        db_session, school["id"], student["user"]["id"],
         SchoolMemberKind.STUDENT,
     )
-    await _offer(client, curator, group["id"], heir)
+    await _offer(client, curator, school["id"], heir)
 
     await client.delete(
-        MEMBERSHIP_URL.format(school_id=group["id"]),
+        MEMBERSHIP_URL.format(school_id=school["id"]),
         headers=auth_headers(bystander["session_token"]),
     )
     await client.delete(
         MEMBER_URL.format(
-            school_id=group["id"], user_id=student["user"]["id"],
+            school_id=school["id"], user_id=student["user"]["id"],
         ),
         headers=auth_headers(curator["session_token"]),
     )
 
-    assert await _transfer_rows(group["id"]) == [UUID(heir["user"]["id"])]
+    assert await _transfer_rows(school["id"]) == [UUID(heir["user"]["id"])]
 
 
 @pytest.mark.asyncio
-async def test_leaving_an_inactive_group_still_retracts_the_offer(
+async def test_leaving_an_inactive_school_still_retracts_the_offer(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """Auto-cancel follows the membership, not the group's visibility.
+    """Auto-cancel follows the membership, not the school's visibility.
 
-    leave deliberately never checks whether the group is active (I-5), and
+    leave deliberately never checks whether the school is active (I-5), and
     that must not turn into "the offer survives because nobody could see
-    the group at the time".
+    the school at the time".
     """
-    curator, heir, group = await _group_with_heir(client, db_session)
+    curator, heir, school = await _school_with_heir(client, db_session)
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
-    await _offer(client, curator, group["id"], heir)
+    await _offer(client, curator, school["id"], heir)
     await _revoke(client, admin_token, curator["user"]["id"])
 
     left = await client.delete(
-        MEMBERSHIP_URL.format(school_id=group["id"]),
+        MEMBERSHIP_URL.format(school_id=school["id"]),
         headers=auth_headers(heir["session_token"]),
     )
     assert left.status_code == 204
-    assert await _transfer_rows(group["id"]) == []
+    assert await _transfer_rows(school["id"]) == []
 
     await _re_verify(client, admin_token, curator["user"]["id"])
-    assert (await _accept(client, heir, group["id"])).status_code == 404
+    assert (await _accept(client, heir, school["id"])).status_code == 404
 
 
 # ===========================================================================
-# TZ 3.4 row 11 -- the group is deleted
+# TZ 3.4 row 11 -- the school is deleted
 # ===========================================================================
 
 
 @pytest.mark.asyncio
-async def test_deleting_the_group_takes_the_offer_with_it(
+async def test_deleting_the_school_takes_the_offer_with_it(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     """ON DELETE CASCADE, asserted rather than assumed -- the offer table
     has had this FK since GT-1 and this is its first writer."""
-    curator, heir, group = await _group_with_heir(client, db_session)
-    await _offer(client, curator, group["id"], heir)
-    assert await _transfer_rows(group["id"]) != []
+    curator, heir, school = await _school_with_heir(client, db_session)
+    await _offer(client, curator, school["id"], heir)
+    assert await _transfer_rows(school["id"]) != []
 
     deleted = await client.delete(
-        GROUP_URL.format(school_id=group["id"]),
+        SCHOOL_URL.format(school_id=school["id"]),
         headers=auth_headers(curator["session_token"]),
     )
     assert deleted.status_code == 204
-    assert await _transfer_rows(group["id"]) == []
+    assert await _transfer_rows(school["id"]) == []
 
 
 # ===========================================================================
@@ -947,27 +947,27 @@ async def test_the_offer_is_visible_to_exactly_two_people(
     Not a redacted object and not a missing key -- a member outside the deal
     does not learn that one is under way.
     """
-    curator, heir, group = await _group_with_heir(client, db_session)
+    curator, heir, school = await _school_with_heir(client, db_session)
     other = await _make_verified_master(
         client, db_session, _TID_MASTER_B, first_name="Other",
     )
     student = await login_user(client, telegram_id=_TID_STUDENT_A)
     await _seed_member(
-        db_session, group["id"], other["user"]["id"], SchoolMemberKind.MASTER,
+        db_session, school["id"], other["user"]["id"], SchoolMemberKind.MASTER,
     )
     await _seed_member(
-        db_session, group["id"], student["user"]["id"],
+        db_session, school["id"], student["user"]["id"],
         SchoolMemberKind.STUDENT,
     )
-    await _offer(client, curator, group["id"], heir)
+    await _offer(client, curator, school["id"], heir)
 
     for who in (curator, heir):
-        body = (await _page(client, who, group["id"])).json()
+        body = (await _page(client, who, school["id"])).json()
         assert body["transfer"] is not None, who["user"]["id"]
         assert body["transfer"]["to_user_id"] == heir["user"]["id"]
 
     for who in (other, student):
-        body = (await _page(client, who, group["id"])).json()
+        body = (await _page(client, who, school["id"])).json()
         assert body["transfer"] is None, who["user"]["id"]
 
 
@@ -978,25 +978,25 @@ async def test_transfer_offered_is_true_only_for_the_addressee(
     """Including for the curator, who sees false on their own offer: the
     flag means "somebody is waiting on you", and nobody is waiting on
     them."""
-    curator, heir, group = await _group_with_heir(client, db_session)
+    curator, heir, school = await _school_with_heir(client, db_session)
     other = await _make_verified_master(
         client, db_session, _TID_MASTER_B, first_name="Other",
     )
     await _seed_member(
-        db_session, group["id"], other["user"]["id"], SchoolMemberKind.MASTER,
+        db_session, school["id"], other["user"]["id"], SchoolMemberKind.MASTER,
     )
 
     before = {i["id"]: i["transfer_offered"] for i in await _mine(client, heir)}
-    assert before[group["id"]] is False
+    assert before[school["id"]] is False
 
-    await _offer(client, curator, group["id"], heir)
+    await _offer(client, curator, school["id"], heir)
 
     after = {i["id"]: i["transfer_offered"] for i in await _mine(client, heir)}
-    assert after[group["id"]] is True
+    assert after[school["id"]] is True
 
     for who in (curator, other):
         rows = {i["id"]: i["transfer_offered"] for i in await _mine(client, who)}
-        assert rows[group["id"]] is False, who["user"]["id"]
+        assert rows[school["id"]] is False, who["user"]["id"]
 
 
 @pytest.mark.asyncio
@@ -1006,30 +1006,30 @@ async def test_the_curator_list_and_patch_both_carry_the_offer(
     """One schema, one field set. PATCH returns SchoolResponse, so a
     rename reports the pending offer alongside the new name -- and does not
     disturb it."""
-    curator, heir, group = await _group_with_heir(client, db_session)
+    curator, heir, school = await _school_with_heir(client, db_session)
     headers = auth_headers(curator["session_token"])
 
     listed = (await client.get(SCHOOLS_URL, headers=headers)).json()
     assert listed["items"][0]["transfer"] is None
 
-    await _offer(client, curator, group["id"], heir)
+    await _offer(client, curator, school["id"], heir)
 
     listed = (await client.get(SCHOOLS_URL, headers=headers)).json()
     assert listed["items"][0]["transfer"]["to_user_id"] == heir["user"]["id"]
 
     renamed = await client.patch(
-        GROUP_URL.format(school_id=group["id"]),
+        SCHOOL_URL.format(school_id=school["id"]),
         json={"name": "Школа дыхания и покоя"},
         headers=headers,
     )
     assert renamed.status_code == 200
     assert renamed.json()["name"] == "Школа дыхания и покоя"
     assert renamed.json()["transfer"]["to_user_id"] == heir["user"]["id"]
-    assert await _transfer_rows(group["id"]) == [UUID(heir["user"]["id"])]
+    assert await _transfer_rows(school["id"]) == [UUID(heir["user"]["id"])]
 
 
 @pytest.mark.asyncio
-async def test_a_newly_created_group_reports_no_transfer(
+async def test_a_newly_created_school_reports_no_transfer(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     """The field is present and null, not absent."""
@@ -1049,29 +1049,29 @@ async def test_a_newly_created_group_reports_no_transfer(
 
 
 @pytest.mark.asyncio
-async def test_the_sole_master_can_take_the_group(
+async def test_the_sole_master_can_take_the_school(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     """The smallest possible school still transfers: afterwards the former
     curator is the only master member, and the counter has not moved."""
-    curator, heir, group = await _group_with_heir(client, db_session)
-    before = (await _page(client, curator, group["id"])).json()["masters_count"]
+    curator, heir, school = await _school_with_heir(client, db_session)
+    before = (await _page(client, curator, school["id"])).json()["masters_count"]
 
-    await _offer(client, curator, group["id"], heir)
-    page = (await _accept(client, heir, group["id"])).json()
+    await _offer(client, curator, school["id"], heir)
+    page = (await _accept(client, heir, school["id"])).json()
 
     assert page["masters_count"] == before == 1
-    rows = {str(uid): kind for uid, kind in await _member_rows(group["id"])}
+    rows = {str(uid): kind for uid, kind in await _member_rows(school["id"])}
     assert rows == {curator["user"]["id"]: "master"}
 
 
 @pytest.mark.asyncio
-async def test_a_malformed_group_id_is_422_and_an_unknown_one_is_404(
+async def test_a_malformed_school_id_is_422_and_an_unknown_one_is_404(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """{group_id} is a UUID in the path, so a malformed id never reaches the
+    """{school_id} is a UUID in the path, so a malformed id never reaches the
     service and 404 stays reserved for "not yours / not there"."""
-    curator, heir, _group = await _group_with_heir(client, db_session)
+    curator, heir, _school = await _school_with_heir(client, db_session)
 
     malformed = await client.post(
         OFFER_URL.format(school_id="not-a-uuid"),
@@ -1094,9 +1094,9 @@ async def test_a_malformed_group_id_is_422_and_an_unknown_one_is_404(
 async def test_a_malformed_to_user_id_is_422(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    curator, _heir, group = await _group_with_heir(client, db_session)
+    curator, _heir, school = await _school_with_heir(client, db_session)
     resp = await client.post(
-        OFFER_URL.format(school_id=group["id"]),
+        OFFER_URL.format(school_id=school["id"]),
         json={"to_user_id": "nobody"},
         headers=auth_headers(curator["session_token"]),
     )
@@ -1109,18 +1109,18 @@ async def test_a_plain_user_cannot_reach_the_curator_side_at_all(
 ) -> None:
     """get_current_master gates offer and cancel; nothing here re-implements
     that check."""
-    _curator, heir, group = await _group_with_heir(client, db_session)
+    _curator, heir, school = await _school_with_heir(client, db_session)
     plain = await login_user(client, telegram_id=_TID_STUDENT_A)
 
     offered = await client.post(
-        OFFER_URL.format(school_id=group["id"]),
+        OFFER_URL.format(school_id=school["id"]),
         json={"to_user_id": heir["user"]["id"]},
         headers=auth_headers(plain["session_token"]),
     )
     assert offered.status_code == 403
 
     cancelled = await client.delete(
-        OFFER_URL.format(school_id=group["id"]),
+        OFFER_URL.format(school_id=school["id"]),
         headers=auth_headers(plain["session_token"]),
     )
     assert cancelled.status_code == 403
@@ -1148,12 +1148,12 @@ async def test_accepting_a_transfer_clashes_by_the_name_rule(
     """The heir already curates a school whose name equals the transferred
     one BY THE RULE -> 409 school_name_taken; ё against е is a
     different name and goes through."""
-    curator, heir, group = await _group_with_heir(client, db_session)
+    curator, heir, school = await _school_with_heir(client, db_session)
     # A name with a space AND an «е», so every row of the grid has something
     # to change (the helper's default has no «е»).
     name = "Школа Елены"
     renamed = await client.patch(
-        GROUP_URL.format(school_id=group["id"]),
+        SCHOOL_URL.format(school_id=school["id"]),
         json={"name": name},
         headers=auth_headers(curator["session_token"]),
     )
@@ -1168,9 +1168,9 @@ async def test_accepting_a_transfer_clashes_by_the_name_rule(
     if expected == 200:
         # The pair: the probe really differs from the transferred name.
         assert own != name and "е" in name.lower()
-    await _create_group(client, heir, name=own)
-    await _offer(client, curator, group["id"], heir)
-    resp = await _accept(client, heir, group["id"])
+    await _create_school(client, heir, name=own)
+    await _offer(client, curator, school["id"], heir)
+    resp = await _accept(client, heir, school["id"])
     assert resp.status_code == expected, resp.text
     if expected == 409:
         assert resp.json()["error"] == "school_name_taken"

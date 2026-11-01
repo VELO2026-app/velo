@@ -153,18 +153,18 @@ def _practice_body(**overrides) -> dict:
 async def _school(
     db_session: AsyncSession, curator_id: str, name: str = "Тихое утро",
 ) -> School:
-    group = School(curator_user_id=UUID(curator_id), name=name)
-    db_session.add(group)
+    school = School(curator_user_id=UUID(curator_id), name=name)
+    db_session.add(school)
     await db_session.flush()
     await db_session.commit()
-    return group
+    return school
 
 
 async def _join_school(
-    db_session: AsyncSession, group_id, user_id: str, kind: SchoolMemberKind,
+    db_session: AsyncSession, school_id, user_id: str, kind: SchoolMemberKind,
 ) -> SchoolMember:
     row = SchoolMember(
-        school_id=group_id, user_id=UUID(user_id), kind=kind.value,
+        school_id=school_id, user_id=UUID(user_id), kind=kind.value,
     )
     db_session.add(row)
     await db_session.flush()
@@ -222,9 +222,9 @@ async def _revoke(client: AsyncClient, admin_token: str, user_id: str) -> None:
     assert resp.status_code == 200, resp.text
 
 
-async def _leave_preview(client: AsyncClient, auth: dict, group_id):
+async def _leave_preview(client: AsyncClient, auth: dict, school_id):
     return await client.get(
-        LEAVE_PREVIEW_URL.format(school_id=group_id),
+        LEAVE_PREVIEW_URL.format(school_id=school_id),
         headers=auth_headers(auth["session_token"]),
     )
 
@@ -796,7 +796,7 @@ async def test_the_curator_gets_a_number_even_though_they_cannot_leave(
 async def test_leave_preview_refuses_a_stranger_and_an_unknown_school(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """404 through the same resolver the group page uses -- a stranger must
+    """404 through the same resolver the school page uses -- a stranger must
     not learn the school exists, let alone how busy it is.
 
     Paired with a member's own 200 on the same school.
@@ -961,7 +961,7 @@ async def test_delete_preview_counts_everyone_including_the_curator(
 
     The curator holds no membership row (I-2), so a literal read of the
     roster would miss their practices -- and those go dark with the school
-    like anyone else's. Counters come from the same helper the group page
+    like anyone else's. Counters come from the same helper the school page
     uses, so the dialog and the page cannot disagree.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
@@ -1105,10 +1105,10 @@ async def test_the_advisory_endpoints_block_nothing(
 
 
 @pytest.mark.asyncio
-async def test_a_malformed_group_id_is_422_on_all_three_advisories(
+async def test_a_malformed_school_id_is_422_on_all_three_advisories(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """{group_id} is a UUID in the path, so a malformed one never reaches
+    """{school_id} is a UUID in the path, so a malformed one never reaches
     the service and 404 stays reserved for "not yours / not there"."""
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     headers = auth_headers(curator["session_token"])

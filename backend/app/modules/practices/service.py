@@ -108,7 +108,7 @@
 #   does not conflict with KEY SHARE (BE-64 follow-up, O2).
 #
 #   What comes after the practice rows stays as recorded elsewhere:
-#   practice -> group (schools/service.py, header) and
+#   practice -> school (schools/service.py, header) and
 #   practice -> booking (masters/groups_service.py, header).
 #
 # DELETE vs CANCEL:
@@ -304,10 +304,10 @@ async def _owned_root_parent_or_400(
 
     WHERE it is called is part of the order (PRACTICE ROW ORDER, and the
     schools module header: member -> master profile -> practice ->
-    group): before any group lock. On the path for another master that is
+    school): before any school lock. On the path for another master that is
     inside _effective_master_id_or_4xx, between the target's rows and the
     school; on the caller's own path, in create_practice, which locks no
-    group at all.
+    school at all.
 
     populate_existing: no read on today's create path loads the parent
     before this lock, but the session is the caller's, and a lock does not
@@ -370,7 +370,7 @@ _SCHOOL_NOT_USABLE_CODE = "school_not_usable"
 
 
 async def _usable_school_or_400(
-    master_id: UUID, group_id: UUID, session: AsyncSession,
+    master_id: UUID, school_id: UUID, session: AsyncSession,
 ) -> None:
     """Refuse a school this master may not create a practice in (BE-74).
 
@@ -414,7 +414,7 @@ async def _usable_school_or_400(
     usable = (
         await session.execute(
             select(School.id).where(
-                School.id == group_id, verified, master_belongs,
+                School.id == school_id, verified, master_belongs,
             )
         )
     ).scalar_one_or_none()
@@ -481,7 +481,7 @@ async def _effective_master_id_or_4xx(
     THE TARGET'S ROWS ARE TAKEN, NOT READ (BE-102, owner ruling Q5): the
     member row, then the master profile, both FOR SHARE, in the order of
     the schools module header (member -> master profile -> ... ->
-    practice -> group); the practice INSERT comes after both. A demotion
+    practice -> school); the practice INSERT comes after both. A demotion
     or removal of the target (an UPDATE / DELETE of the member row) and an
     admin taking verification away (an UPDATE of the profile) conflict
     with FOR SHARE, so either they commit first -- and READ COMMITTED
@@ -520,15 +520,15 @@ async def _effective_master_id_or_4xx(
     if curator_id != user.id:
         raise ForbiddenError(_CURATOR_ONLY, code="curator_only")
     await _lock_school_master_or_400(school_id, target_id, session)
-    # BE-63: the curator's right, re-checked UNDER THE GROUP LOCK, after the
+    # BE-63: the curator's right, re-checked UNDER THE SCHOOL LOCK, after the
     # target's rows (module order: member -> master profile -> practice ->
-    # group) and before the INSERT. The INSERT's FK checks are covered by
-    # locks already held: this group's here (no parent on this path). The
+    # school) and before the INSERT. The INSERT's FK checks are covered by
+    # locks already held: this school's here (no parent on this path). The
     # read above is the fast path; the school can change hands
     # between it and here (accept of a transfer), and a former curator must
     # not create in the new owner's school. Same 403 as the read: one fact,
     # one code.
-    if not await _lock_group_as_owner(user.id, school_id, session):
+    if not await _lock_school_as_owner(user.id, school_id, session):
         raise ForbiddenError(_CURATOR_ONLY, code="curator_only")
     return target_id
 
@@ -541,7 +541,7 @@ async def _lock_school_master_or_400(
     kind='master' member row of THIS school, then the master profile
     verified NOW -- both FOR SHARE, in the schools module order
     (member -> master profile), and before the caller locks the practice
-    or the group. A demotion / removal (UPDATE / DELETE of the member row)
+    or the school. A demotion / removal (UPDATE / DELETE of the member row)
     or a verification taken away (UPDATE of the profile) either commits
     first -- READ COMMITTED re-evaluates the predicates against it, and
     this refuses -- or waits for the caller's commit.
@@ -597,13 +597,13 @@ _CURATOR_ONLY = (
 _NOT_FOUND = "Practice not found"
 
 
-async def _lock_group_as_owner(
+async def _lock_school_as_owner(
     curator_user_id: UUID, school_id: UUID, session: AsyncSession,
 ) -> bool:
-    """schools' _lock_group_as_owner, imported lazily (import cycle:
+    """schools' _lock_school_as_owner, imported lazily (import cycle:
     schools/service.py imports practices/models.py)."""
     from app.modules.schools.service import (
-        _lock_group_as_owner as lock,
+        _lock_school_as_owner as lock,
     )
     return await lock(curator_user_id, school_id, session)
 
@@ -613,15 +613,15 @@ async def _curated_school_of(
 ) -> UUID | None:
     """The practice's school if the caller curates it right now, else None.
 
-    THE BODY OF THE RULE is curated_group_id_for_practice (BE-21): the
+    THE BODY OF THE RULE is curated_school_id_for_practice (BE-21): the
     killswitch, the practice's own school, the caller its curator, the
     school active. A READ -- the fast path; writers re-check it under the
-    group lock (_relock_school_or_404).
+    school lock (_relock_school_or_404).
     """
     from app.modules.schools.service import (
-        curated_group_id_for_practice,
+        curated_school_id_for_practice,
     )
-    return await curated_group_id_for_practice(practice, user.id, session)
+    return await curated_school_id_for_practice(practice, user.id, session)
 
 
 async def _refuse_blocked_in_school(
@@ -643,16 +643,16 @@ async def _refuse_blocked_in_school(
     either precedes the block entirely or sees it.
 
     No school -> nothing to be blocked in. Lazy import: the same shape as
-    _lock_group_as_owner's above.
+    _lock_school_as_owner's above.
     """
     if school_id is None:
         return
     from app.modules.schools.service import (
-        _blocked_in_group,
-        _blocked_in_group_error,
+        _blocked_in_school,
+        _blocked_in_school_error,
     )
-    if await _blocked_in_group(school_id, user_id, session):
-        raise _blocked_in_group_error()
+    if await _blocked_in_school(school_id, user_id, session):
+        raise _blocked_in_school_error()
 
 
 async def _manager_of_practice_or_404(
@@ -669,7 +669,7 @@ async def _manager_of_practice_or_404(
     one whose school was deleted -- is its master's only.
 
     Readers use the answer as it is; every WRITER that got a school id
-    re-checks it under the group lock before it writes (_relock_school_or_404).
+    re-checks it under the school lock before it writes (_relock_school_or_404).
     """
     if practice.master_id == user.id:
         return None
@@ -682,15 +682,15 @@ async def _manager_of_practice_or_404(
 async def _relock_school_or_404(
     user: User, school_id: UUID, session: AsyncSession,
 ) -> None:
-    """The curator's right, re-checked under the group lock (BE-63).
+    """The curator's right, re-checked under the school lock (BE-63).
 
     Called by a writer that holds the practice FOR UPDATE, before it writes
-    anything that takes the group (a journal row: KEY SHARE) -- the module
-    order practice -> group, the group taken once at the strength it ends
+    anything that takes the school (a journal row: KEY SHARE) -- the module
+    order practice -> school, the school taken once at the strength it ends
     up needing. A school that changed hands since the read answers 404;
     writes already made are undone by get_db_session's rollback (P-01).
     """
-    if not await _lock_group_as_owner(user.id, school_id, session):
+    if not await _lock_school_as_owner(user.id, school_id, session):
         raise NotFoundError(_NOT_FOUND)
 
 
@@ -931,7 +931,7 @@ async def _tell_master_of_curator_act(
         },
         session=session,
     )
-    group_name = (
+    school_name = (
         await session.execute(
             select(School.name).where(
                 School.id == practice.school_id,
@@ -965,13 +965,13 @@ async def _tell_master_of_curator_act(
         title=act.title,
         body=(
             f"{actor_name} {act.verb} «{practice.title}» ({when_text}) "
-            f"в школе «{group_name}». {act.tail}"
+            f"в школе «{school_name}». {act.tail}"
         ),
         action_data={
             **action,
             "practice_title": practice.title,
             "scheduled_at": when_text,
-            "school_name": group_name,
+            "school_name": school_name,
             "actor_name": actor_name,
         },
     )
@@ -1855,7 +1855,7 @@ async def create_practice(
             user.id, body.school_id, session,
         )
     # H-R2 (3.4): validate parent_practice_id BEFORE anything is inserted
-    # -- same placement discipline as the group check above. Only on the
+    # -- same placement discipline as the school check above. Only on the
     # caller's own path: for another master a parent is refused outright
     # (_effective_master_id_or_4xx, owner 3 October).
     parent = None
@@ -2046,7 +2046,7 @@ async def create_practice(
         # BE-102 publish: born scheduled, so the publication's effects run
         # here -- the SAME function update_practice runs on draft ->
         # scheduled (_after_publish), under the rows _effective_master_id_
-        # or_4xx took (member, profile, group) with the INSERT behind them.
+        # or_4xx took (member, profile, school) with the INSERT behind them.
         # The school hears it from the master (BE-63), not the curator.
         await _after_publish(
             practice, await session.get(User, master_id), session,
@@ -2269,7 +2269,7 @@ async def _after_publish(
     announcement. The CALLER decides that a publication happened and holds
     the locks it needs: update_practice the practice FOR UPDATE (and the
     school's master rows, _lock_school_master_or_400), create_practice the
-    target's member and profile rows and the school's group row
+    target's member and profile rows and the school's row
     (_effective_master_id_or_4xx) with the INSERT behind them -- the same
     rows, so the announcement's journal insert and the Zoom row meet no new
     lock order.
@@ -2346,7 +2346,7 @@ async def _after_publish(
     #
     # Lazy import: schools/service.py imports practices/models.py,
     # so a module-level import here closes a cycle -- the same reason
-    # cancel_service.py imports _record_group_event lazily.
+    # cancel_service.py imports _record_school_event lazily.
     if practice.school_id is not None:
         from app.modules.schools.service import (
             announce_published_practice,
@@ -2383,9 +2383,9 @@ async def update_practice(
         the school NOW (owner Q5): their member row and profile are taken
         FOR SHARE first (_lock_school_master_or_400), BEFORE the practice
         -- the module order is member -> master profile -> practice ->
-        group, and delete_school takes members and then practices;
+        school, and delete_school takes members and then practices;
       - the practice is then taken FOR UPDATE, and the curator's right is
-        re-checked under the group lock before anything is written;
+        re-checked under the school lock before anything is written;
       - "whose" stays the MASTER's everywhere it meant the owner: the
         confirmed methods, the master's own groups, the school fan-out's
         author (owner ruling: the master, and the fan-out skips them);
@@ -3120,7 +3120,7 @@ async def delete_practice(
 
     BE-63/BE-64: the owner is the master or the curator of the practice's
     school (_manager_of_practice_or_404). A curator's right is re-checked
-    under the group lock after the practice row (order practice -> group),
+    under the school lock after the practice row (order practice -> school),
     and the deletion is audited and told to the master. Only a draft is
     deleted, so there is no series cascade here: a series root's sessions
     are born at its publication, and a draft has none.

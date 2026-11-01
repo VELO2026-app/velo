@@ -66,7 +66,7 @@ from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 from tests.school_race_harness import race
 
-GROUPS_URL = "/api/v1/masters/me/schools"
+SCHOOLS_URL = "/api/v1/masters/me/schools"
 OFFER_URL = "/api/v1/masters/me/schools/{school_id}/transfer"
 MEMBER_URL = "/api/v1/masters/me/schools/{school_id}/members/{user_id}"
 ACCEPT_URL = "/api/v1/schools/{school_id}/transfer/accept"
@@ -122,16 +122,16 @@ async def _school_with_offer(
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
 
     created = await client.post(
-        GROUPS_URL,
+        SCHOOLS_URL,
         json={"name": "Школа перехода"},
         headers=auth_headers(curator["session_token"]),
     )
     assert created.status_code == 201, created.text
-    group_id = created.json()["id"]
+    school_id = created.json()["id"]
 
     db_session.add(
         SchoolMember(
-            school_id=UUID(group_id),
+            school_id=UUID(school_id),
             user_id=UUID(heir["user"]["id"]),
             kind=SchoolMemberKind.MASTER.value,
         )
@@ -140,16 +140,16 @@ async def _school_with_offer(
     await db_session.commit()
 
     offered = await client.post(
-        OFFER_URL.format(school_id=group_id),
+        OFFER_URL.format(school_id=school_id),
         json={"to_user_id": heir["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
     assert offered.status_code in (200, 201), offered.text
-    return curator, heir, group_id
+    return curator, heir, school_id
 
 
 async def _state(
-    db_session: AsyncSession, group_id: str, heir: dict,
+    db_session: AsyncSession, school_id: str, heir: dict,
 ) -> dict:
     """Who owns the school, and is the heir still a member row.
 
@@ -158,16 +158,16 @@ async def _state(
     not move" alone is satisfied by any failure, including one that left
     the heir's row deleted halfway through.
     """
-    group = (
+    school = (
         await db_session.execute(
-            select(School).where(School.id == UUID(group_id))
+            select(School).where(School.id == UUID(school_id))
         )
     ).scalar_one()
-    await db_session.refresh(group)
+    await db_session.refresh(school)
     member = (
         await db_session.execute(
             select(SchoolMember.id).where(
-                SchoolMember.school_id == UUID(group_id),
+                SchoolMember.school_id == UUID(school_id),
                 SchoolMember.user_id == UUID(heir["user"]["id"]),
             )
         )
@@ -175,12 +175,12 @@ async def _state(
     transfer = (
         await db_session.execute(
             select(SchoolTransfer.id).where(
-                SchoolTransfer.school_id == UUID(group_id)
+                SchoolTransfer.school_id == UUID(school_id)
             )
         )
     ).scalar_one_or_none()
     return {
-        "moved": str(group.curator_user_id) == heir["user"]["id"],
+        "moved": str(school.curator_user_id) == heir["user"]["id"],
         "heir_is_member": member is not None,
         "offer_left": transfer is not None,
     }
@@ -189,7 +189,7 @@ async def _state(
 async def _accept_with_competitor(
     monkeypatch: pytest.MonkeyPatch,
     heir: dict,
-    group_id: str,
+    school_id: str,
     competitor,
     effect,
 ):
@@ -206,7 +206,7 @@ async def _accept_with_competitor(
     async def _accept_call(session: AsyncSession) -> None:
         actor = await session.get(User, heir_id)
         await school_service.accept_school_transfer(
-            UUID(group_id), heir_id, session, actor=actor,
+            UUID(school_id), heir_id, session, actor=actor,
         )
 
     result = await race(
@@ -225,7 +225,7 @@ async def _accept_with_competitor(
         won = (
             await probe.execute(
                 select(SchoolEvent.id).where(
-                    SchoolEvent.school_id == UUID(group_id),
+                    SchoolEvent.school_id == UUID(school_id),
                     SchoolEvent.event == effect.value,
                 )
             )
@@ -289,13 +289,13 @@ async def test_an_offer_withdrawn_mid_accept_does_not_move_the_school(
     -- both halves true at once, which is the defect. Measured on that
     code before the fix was written, not inferred from it.
     """
-    curator, heir, group_id = await _school_with_offer(client, db_session)
+    curator, heir, school_id = await _school_with_offer(client, db_session)
 
     async def _cancel(rival: AsyncSession) -> None:
         actor = await rival.get(User, UUID(curator["user"]["id"]))
         await school_service.cancel_school_transfer(
             UUID(curator["user"]["id"]),
-            UUID(group_id),
+            UUID(school_id),
             rival,
             actor=actor,
         )
@@ -309,10 +309,10 @@ async def test_an_offer_withdrawn_mid_accept_does_not_move_the_school(
     # The competitor now runs INTO accept while accept holds its locks, so
     # the order of commits is known and each half can be asserted exactly.
     accept, competitor = await _accept_with_competitor(
-        monkeypatch, heir, group_id, _cancel, SchoolEventKind.TRANSFER_CANCELLED,
+        monkeypatch, heir, school_id, _cancel, SchoolEventKind.TRANSFER_CANCELLED,
     )
     assert accept.committed, accept.error
-    state = await _state(db_session, group_id, heir)
+    state = await _state(db_session, school_id, heir)
     # THE PAIR, now exact: accept committed first, so the competitor found
     # nothing to withdraw -- it wrote no journal line, the school moved,
     # and the heir is its curator, no longer a member row.
@@ -331,13 +331,13 @@ async def test_removing_the_heir_mid_accept_does_not_move_the_school(
     Removal retracts the pending offer in the same transaction (GT-4), so
     it reaches the same row by a different door -- and the same window.
     """
-    curator, heir, group_id = await _school_with_offer(client, db_session)
+    curator, heir, school_id = await _school_with_offer(client, db_session)
 
     async def _remove(rival: AsyncSession) -> None:
         actor = await rival.get(User, UUID(curator["user"]["id"]))
         await school_service.remove_school_member(
             UUID(curator["user"]["id"]),
-            UUID(group_id),
+            UUID(school_id),
             UUID(heir["user"]["id"]),
             rival,
             actor=actor,
@@ -352,10 +352,10 @@ async def test_removing_the_heir_mid_accept_does_not_move_the_school(
     # The competitor now runs INTO accept while accept holds its locks, so
     # the order of commits is known and each half can be asserted exactly.
     accept, competitor = await _accept_with_competitor(
-        monkeypatch, heir, group_id, _remove, SchoolEventKind.MEMBER_REMOVED,
+        monkeypatch, heir, school_id, _remove, SchoolEventKind.MEMBER_REMOVED,
     )
     assert accept.committed, accept.error
-    state = await _state(db_session, group_id, heir)
+    state = await _state(db_session, school_id, heir)
     # THE PAIR, now exact: accept committed first, so the competitor found
     # nothing to withdraw -- it wrote no journal line, the school moved,
     # and the heir is its curator, no longer a member row.
@@ -372,12 +372,12 @@ async def test_the_heir_leaving_mid_accept_does_not_move_the_school(
     """The heir walks out of the school while their own accept is in
     flight -- the fourth door onto the same row, named in the card's
     prose and missing from its table of work."""
-    _curator, heir, group_id = await _school_with_offer(client, db_session)
+    _curator, heir, school_id = await _school_with_offer(client, db_session)
 
     async def _leave(rival: AsyncSession) -> None:
         actor = await rival.get(User, UUID(heir["user"]["id"]))
         await school_service.leave_school(
-            UUID(group_id),
+            UUID(school_id),
             UUID(heir["user"]["id"]),
             rival,
             actor=actor,
@@ -392,10 +392,10 @@ async def test_the_heir_leaving_mid_accept_does_not_move_the_school(
     # The competitor now runs INTO accept while accept holds its locks, so
     # the order of commits is known and each half can be asserted exactly.
     accept, competitor = await _accept_with_competitor(
-        monkeypatch, heir, group_id, _leave, SchoolEventKind.MEMBER_LEFT,
+        monkeypatch, heir, school_id, _leave, SchoolEventKind.MEMBER_LEFT,
     )
     assert accept.committed, accept.error
-    state = await _state(db_session, group_id, heir)
+    state = await _state(db_session, school_id, heir)
     # THE PAIR, now exact: accept committed first, so the competitor found
     # nothing to withdraw -- it wrote no journal line, the school moved,
     # and the heir is its curator, no longer a member row.
@@ -426,15 +426,15 @@ async def test_two_simultaneous_accepts_give_one_200_and_one_404(
     A 500 is not merely ugly here -- it is a transfer whose outcome the
     caller cannot tell from a server fault.
     """
-    _curator, heir, group_id = await _school_with_offer(client, db_session)
+    _curator, heir, school_id = await _school_with_offer(client, db_session)
 
     first, second = await asyncio.gather(
         client.post(
-            ACCEPT_URL.format(school_id=group_id),
+            ACCEPT_URL.format(school_id=school_id),
             headers=auth_headers(heir["session_token"]),
         ),
         client.post(
-            ACCEPT_URL.format(school_id=group_id),
+            ACCEPT_URL.format(school_id=school_id),
             headers=auth_headers(heir["session_token"]),
         ),
     )
@@ -446,7 +446,7 @@ async def test_two_simultaneous_accepts_give_one_200_and_one_404(
     loser = first if first.status_code == 404 else second
     assert loser.json()["error"] == "transfer_not_found", loser.text
 
-    state = await _state(db_session, group_id, heir)
+    state = await _state(db_session, school_id, heir)
     assert state["moved"]
     assert not state["offer_left"]
     assert not state["heir_is_member"], (
@@ -468,16 +468,16 @@ async def test_a_second_accept_afterwards_is_404_but_proves_less(
     closed when it is open. The test above, with asyncio.gather, is the
     one that notices.
     """
-    _curator, heir, group_id = await _school_with_offer(client, db_session)
+    _curator, heir, school_id = await _school_with_offer(client, db_session)
 
     first = await client.post(
-        ACCEPT_URL.format(school_id=group_id),
+        ACCEPT_URL.format(school_id=school_id),
         headers=auth_headers(heir["session_token"]),
     )
     assert first.status_code == 200, first.text
 
     second = await client.post(
-        ACCEPT_URL.format(school_id=group_id),
+        ACCEPT_URL.format(school_id=school_id),
         headers=auth_headers(heir["session_token"]),
     )
     assert second.status_code == 404, second.text

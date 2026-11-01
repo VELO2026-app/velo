@@ -28,7 +28,7 @@
 #   - the actor and the target of one event are DIFFERENT PEOPLE where
 #     they should be, and transfer_accepted is where reversing them is a
 #     three-line mistake -- by the time the event is written the school
-#     already belongs to the actor, so reading "the group's curator" as
+#     already belongs to the actor, so reading "the school's curator" as
 #     the target records the actor twice. A test asserting only "an event
 #     was written" passes that bug happily.
 #
@@ -46,7 +46,7 @@
 # CLEANUP is full_cleanup_range(..., delete_users=True) and nothing else.
 # The helper knows nothing about curator tables and does not need to:
 # school.curator_user_id cascades from users, and
-# school_event.group_id cascades from school. Deleting the
+# school_event.school_id cascades from school. Deleting the
 # band's users therefore takes the schools and their journals with them.
 # That chain holds because every school here is owned by a curator inside
 # the band -- see the delivery report's note on the one shape it would not
@@ -79,11 +79,11 @@ from tests.helpers import (
     login_user,
 )
 
-GROUPS_URL = "/api/v1/masters/me/schools"
-GROUP_URL = "/api/v1/masters/me/schools/{school_id}"
+SCHOOLS_URL = "/api/v1/masters/me/schools"
+SCHOOL_URL = "/api/v1/masters/me/schools/{school_id}"
 JOURNAL_URL = "/api/v1/masters/me/schools/{school_id}/journal"
-# The group as a member of it sees it -- the only GET that serves one
-# group. GROUP_URL above carries only PATCH and DELETE, so a GET there
+# The school as a member of it sees it -- the only GET that serves one
+# school. SCHOOL_URL above carries only PATCH and DELETE, so a GET there
 # would be a 405 that looks like a failing assertion.
 PAGE_URL = "/api/v1/schools/{school_id}"
 MEMBER_URL = "/api/v1/masters/me/schools/{school_id}/members/{user_id}"
@@ -160,11 +160,11 @@ async def _make_verified_master(
     return auth
 
 
-async def _make_group(
+async def _make_school(
     client: AsyncClient, curator: dict, name: str = "Школа дыхания",
 ) -> str:
     resp = await client.post(
-        GROUPS_URL,
+        SCHOOLS_URL,
         json={"name": name},
         headers=auth_headers(curator["session_token"]),
     )
@@ -173,12 +173,12 @@ async def _make_group(
 
 
 async def _invite(
-    client: AsyncClient, curator: dict, group_id: str,
+    client: AsyncClient, curator: dict, school_id: str,
 ) -> str:
     """Mint a link under a patched bot url and return the raw token."""
     with patch.object(settings, "telegram_bot_url", _BOT_URL):
         resp = await client.post(
-            INVITES_URL.format(school_id=group_id),
+            INVITES_URL.format(school_id=school_id),
             json={},
             headers=auth_headers(curator["session_token"]),
         )
@@ -195,7 +195,7 @@ async def _join(client: AsyncClient, auth: dict, token: str):
 
 
 async def _seed_member(
-    db_session: AsyncSession, group_id: str, auth: dict, kind: str,
+    db_session: AsyncSession, school_id: str, auth: dict, kind: str,
 ) -> None:
     """Put somebody in the school without going through a link.
 
@@ -205,7 +205,7 @@ async def _seed_member(
     """
     db_session.add(
         SchoolMember(
-            school_id=UUID(group_id),
+            school_id=UUID(school_id),
             user_id=UUID(auth["user"]["id"]),
             kind=kind,
         )
@@ -214,31 +214,31 @@ async def _seed_member(
 
 
 async def _journal(
-    client: AsyncClient, curator: dict, group_id: str, **params,
+    client: AsyncClient, curator: dict, school_id: str, **params,
 ):
     return await client.get(
-        JOURNAL_URL.format(school_id=group_id),
+        JOURNAL_URL.format(school_id=school_id),
         params=params or None,
         headers=auth_headers(curator["session_token"]),
     )
 
 
 async def _events(
-    client: AsyncClient, curator: dict, group_id: str,
+    client: AsyncClient, curator: dict, school_id: str,
 ) -> list[dict]:
     """The whole feed, newest first, asserted 200 on the way through."""
-    resp = await _journal(client, curator, group_id, limit=100)
+    resp = await _journal(client, curator, school_id, limit=100)
     assert resp.status_code == 200, resp.text
     return resp.json()["items"]
 
 
 async def _kinds(
-    client: AsyncClient, curator: dict, group_id: str,
+    client: AsyncClient, curator: dict, school_id: str,
 ) -> list[str]:
-    return [e["event"] for e in await _events(client, curator, group_id)]
+    return [e["event"] for e in await _events(client, curator, school_id)]
 
 
-async def _row_count(group_id: str) -> int:
+async def _row_count(school_id: str) -> int:
     """Journal rows straight from the database, bypassing the endpoint.
 
     Used where the claim is "nothing was written": going through the
@@ -248,7 +248,7 @@ async def _row_count(group_id: str) -> int:
         await fresh_execute(
             select(func.count())
             .select_from(SchoolEvent)
-            .where(SchoolEvent.school_id == UUID(group_id))
+            .where(SchoolEvent.school_id == UUID(school_id))
         )
     ).scalar_one()
 
@@ -304,9 +304,9 @@ async def test_a_new_school_has_a_journal_with_one_entry_in_it(
     curator = await _make_verified_master(
         client, db_session, _TID_CURATOR, first_name="Мария",
     )
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
 
-    resp = await _journal(client, curator, group_id)
+    resp = await _journal(client, curator, school_id)
     assert resp.status_code == 200, resp.text
     body = resp.json()
 
@@ -316,7 +316,7 @@ async def test_a_new_school_has_a_journal_with_one_entry_in_it(
     assert len(body["items"]) == 1
 
     item = body["items"][0]
-    assert item["event"] == SchoolEventKind.GROUP_CREATED.value
+    assert item["event"] == SchoolEventKind.SCHOOL_CREATED.value
     assert item["actor"]["user_id"] == curator["user"]["id"]
     assert item["actor"]["display_name"] == "Мария"
     assert item["data"] == {"actor_name": "Мария"}
@@ -337,22 +337,22 @@ async def test_a_school_whose_only_event_was_pruned_reads_empty_not_404(
     produced by the school having gone missing.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
 
     await db_session.execute(
         SchoolEvent.__table__.delete().where(
-            SchoolEvent.school_id == UUID(group_id)
+            SchoolEvent.school_id == UUID(school_id)
         )
     )
     await db_session.commit()
 
-    resp = await _journal(client, curator, group_id)
+    resp = await _journal(client, curator, school_id)
     assert resp.status_code == 200, resp.text
     assert resp.json()["items"] == []
     assert resp.json()["total"] == 0
 
     page = await client.get(
-        PAGE_URL.format(school_id=group_id),
+        PAGE_URL.format(school_id=school_id),
         headers=auth_headers(curator["session_token"]),
     )
     assert page.status_code == 200
@@ -366,7 +366,7 @@ async def test_a_master_member_of_the_school_still_cannot_read_its_journal(
 
     This is the interesting half of "curator only" -- an outsider being
     refused proves nothing about ownership, since they would be refused by
-    any check at all. This master is a real member row of this very group
+    any check at all. This master is a real member row of this very school
     and is still refused, which is what pins the refusal to
     curator_user_id rather than to membership.
 
@@ -382,17 +382,17 @@ async def test_a_master_member_of_the_school_still_cannot_read_its_journal(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     member = await _make_verified_master(client, db_session, _TID_MASTER_B)
     stranger = await _make_verified_master(client, db_session, _TID_HEIR)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
 
     await _seed_member(
-        db_session, group_id, member, SchoolMemberKind.MASTER.value,
+        db_session, school_id, member, SchoolMemberKind.MASTER.value,
     )
 
     for auth in (member, stranger):
-        resp = await _journal(client, auth, group_id)
+        resp = await _journal(client, auth, school_id)
         assert resp.status_code == 404, resp.text
 
-    assert (await _journal(client, curator, group_id)).status_code == 200
+    assert (await _journal(client, curator, school_id)).status_code == 200
 
 
 @pytest.mark.asyncio
@@ -421,22 +421,22 @@ async def test_a_non_master_is_refused_by_the_dependency_not_by_ownership(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     student = await login_user(client, telegram_id=_TID_STUDENT)
     outsider = await login_user(client, telegram_id=_TID_OUTSIDER)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
 
     await _seed_member(
-        db_session, group_id, student, SchoolMemberKind.STUDENT.value,
+        db_session, school_id, student, SchoolMemberKind.STUDENT.value,
     )
 
     for auth in (student, outsider):
-        resp = await _journal(client, auth, group_id)
+        resp = await _journal(client, auth, school_id)
         assert resp.status_code == 403, resp.text
         assert resp.json()["error"] == "forbidden"
 
-    assert (await _journal(client, curator, group_id)).status_code == 200
+    assert (await _journal(client, curator, school_id)).status_code == 200
 
 
 @pytest.mark.asyncio
-async def test_the_journal_of_a_group_that_is_not_mine_is_404(
+async def test_the_journal_of_a_school_that_is_not_mine_is_404(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     """Another curator's school, and an id belonging to nobody.
@@ -448,15 +448,15 @@ async def test_the_journal_of_a_group_that_is_not_mine_is_404(
     """
     mine = await _make_verified_master(client, db_session, _TID_CURATOR)
     theirs = await _make_verified_master(client, db_session, _TID_HEIR)
-    their_group = await _make_group(client, theirs, name="Их школа")
+    their_school = await _make_school(client, theirs, name="Их школа")
 
-    for group_id in (their_group, str(uuid4())):
-        resp = await _journal(client, mine, group_id)
+    for school_id in (their_school, str(uuid4())):
+        resp = await _journal(client, mine, school_id)
         assert resp.status_code == 404, resp.text
 
 
 @pytest.mark.asyncio
-async def test_a_malformed_group_id_is_422_not_500(
+async def test_a_malformed_school_id_is_422_not_500(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     """FastAPI rejects the path parameter before the service is reached."""
@@ -493,21 +493,21 @@ async def test_three_single_row_pages_neither_repeat_nor_lose_anything(
     relative order would be arbitrary and this test would flake.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
 
     patched = await client.patch(
-        GROUP_URL.format(school_id=group_id),
+        SCHOOL_URL.format(school_id=school_id),
         json={"name": "Тихое утро", "description": "Мягкие практики"},
         headers=auth_headers(curator["session_token"]),
     )
     assert patched.status_code == 200, patched.text
 
-    total = (await _journal(client, curator, group_id)).json()["total"]
+    total = (await _journal(client, curator, school_id)).json()["total"]
     assert total == 3
 
     seen: list[str] = []
     for offset in (0, 1, 2):
-        resp = await _journal(client, curator, group_id, limit=1, offset=offset)
+        resp = await _journal(client, curator, school_id, limit=1, offset=offset)
         assert resp.status_code == 200, resp.text
         assert resp.json()["total"] == 3
         assert len(resp.json()["items"]) == 1
@@ -527,24 +527,24 @@ async def test_the_newest_event_is_first_and_the_oldest_is_last(
     were inserted inside one statement.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
 
     for name in ("Второе имя", "Третье имя"):
         resp = await client.patch(
-            GROUP_URL.format(school_id=group_id),
+            SCHOOL_URL.format(school_id=school_id),
             json={"name": name},
             headers=auth_headers(curator["session_token"]),
         )
         assert resp.status_code == 200, resp.text
 
-    kinds = await _kinds(client, curator, group_id)
+    kinds = await _kinds(client, curator, school_id)
     assert kinds == [
-        SchoolEventKind.GROUP_RENAMED.value,
-        SchoolEventKind.GROUP_RENAMED.value,
-        SchoolEventKind.GROUP_CREATED.value,
+        SchoolEventKind.SCHOOL_RENAMED.value,
+        SchoolEventKind.SCHOOL_RENAMED.value,
+        SchoolEventKind.SCHOOL_CREATED.value,
     ]
 
-    items = await _events(client, curator, group_id)
+    items = await _events(client, curator, school_id)
     assert items[0]["data"]["new_name"] == "Третье имя"
     assert items[1]["data"]["new_name"] == "Второе имя"
 
@@ -560,9 +560,9 @@ async def test_an_offset_past_the_end_is_an_empty_page_with_a_real_total(
     empty school.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
 
-    resp = await _journal(client, curator, group_id, limit=20, offset=50)
+    resp = await _journal(client, curator, school_id, limit=20, offset=50)
     assert resp.status_code == 200, resp.text
     assert resp.json()["items"] == []
     assert resp.json()["total"] == 1
@@ -580,9 +580,9 @@ async def test_the_ordering_column_is_not_exposed(
     SHOULD be there are" -- otherwise this passes on an empty payload.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
 
-    item = (await _events(client, curator, group_id))[0]
+    item = (await _events(client, curator, school_id))[0]
     assert "seq" not in item
     assert set(item) == {"id", "event", "actor", "data", "created_at"}
 
@@ -608,16 +608,16 @@ async def test_an_action_that_fails_leaves_no_event_behind(
     does.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    first = await _make_group(client, curator, name="Тихое утро")
+    first = await _make_school(client, curator, name="Тихое утро")
 
     clash = await client.post(
-        GROUPS_URL,
+        SCHOOLS_URL,
         json={"name": "Тихое утро"},
         headers=auth_headers(curator["session_token"]),
     )
     assert clash.status_code == 409, clash.text
 
-    groups = (
+    schools = (
         await fresh_execute(
             select(func.count())
             .select_from(School)
@@ -626,7 +626,7 @@ async def test_an_action_that_fails_leaves_no_event_behind(
             )
         )
     ).scalar_one()
-    assert groups == 1
+    assert schools == 1
 
     # BE-25: scoped to THIS curator's schools. The assertion was right and
     # stays right -- a failed create writes no event -- but it used to be
@@ -635,7 +635,7 @@ async def test_an_action_that_fails_leaves_no_event_behind(
     # That second claim is not about the code under test, it held only
     # while every school in the suite belonged to a band this file's
     # cleanup reached, and the very next line already asserts the precise
-    # version for the group in hand. What retired it: a new file
+    # version for the school in hand. What retired it: a new file
     # (test_be25_school_notifications.py) runs earlier in the session, so
     # the global number stopped being this test's business.
     events = (
@@ -673,13 +673,13 @@ async def test_removing_the_same_member_twice_records_one_removal(
     student = await login_user(
         client, telegram_id=_TID_STUDENT, first_name="Пётр",
     )
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
     await _seed_member(
-        db_session, group_id, student, SchoolMemberKind.STUDENT.value,
+        db_session, school_id, student, SchoolMemberKind.STUDENT.value,
     )
 
     url = MEMBER_URL.format(
-        school_id=group_id, user_id=student["user"]["id"],
+        school_id=school_id, user_id=student["user"]["id"],
     )
     for _ in range(2):
         resp = await client.delete(
@@ -689,7 +689,7 @@ async def test_removing_the_same_member_twice_records_one_removal(
 
     removals = [
         e
-        for e in await _events(client, curator, group_id)
+        for e in await _events(client, curator, school_id)
         if e["event"] == SchoolEventKind.MEMBER_REMOVED.value
     ]
     assert len(removals) == 1
@@ -711,18 +711,18 @@ async def test_removing_somebody_who_was_never_a_member_records_nothing(
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     outsider = await login_user(client, telegram_id=_TID_OUTSIDER)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
 
     resp = await client.delete(
         MEMBER_URL.format(
-            school_id=group_id, user_id=outsider["user"]["id"],
+            school_id=school_id, user_id=outsider["user"]["id"],
         ),
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 204, resp.text
 
-    assert await _kinds(client, curator, group_id) == [
-        SchoolEventKind.GROUP_CREATED.value
+    assert await _kinds(client, curator, school_id) == [
+        SchoolEventKind.SCHOOL_CREATED.value
     ]
 
 
@@ -738,15 +738,15 @@ async def test_leaving_a_school_you_were_never_in_records_nothing(
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     outsider = await login_user(client, telegram_id=_TID_OUTSIDER)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
 
     resp = await client.delete(
-        LEAVE_URL.format(school_id=group_id),
+        LEAVE_URL.format(school_id=school_id),
         headers=auth_headers(outsider["session_token"]),
     )
     assert resp.status_code == 204, resp.text
 
-    assert await _row_count(group_id) == 1
+    assert await _row_count(school_id) == 1
 
 
 @pytest.mark.asyncio
@@ -762,15 +762,15 @@ async def test_pressing_invite_twice_mints_one_link_and_records_one_event(
     field of the entry contains it.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
 
-    first = await _invite(client, curator, group_id)
-    second = await _invite(client, curator, group_id)
+    first = await _invite(client, curator, school_id)
+    second = await _invite(client, curator, school_id)
     assert first == second
 
     created = [
         e
-        for e in await _events(client, curator, group_id)
+        for e in await _events(client, curator, school_id)
         if e["event"] == SchoolEventKind.INVITE_CREATED.value
     ]
     assert len(created) == 1
@@ -795,26 +795,26 @@ async def test_renaming_to_the_current_name_records_nothing(
     unconditionally would fill a feed with entries saying nothing changed.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    group_id = await _make_group(client, curator, name="Тихое утро")
+    school_id = await _make_school(client, curator, name="Тихое утро")
 
     first = await client.patch(
-        GROUP_URL.format(school_id=group_id),
+        SCHOOL_URL.format(school_id=school_id),
         json={"name": "Тихое утро", "description": "Мягкие практики"},
         headers=auth_headers(curator["session_token"]),
     )
     assert first.status_code == 200, first.text
-    assert await _kinds(client, curator, group_id) == [
-        SchoolEventKind.GROUP_DESCRIPTION_CHANGED.value,
-        SchoolEventKind.GROUP_CREATED.value,
+    assert await _kinds(client, curator, school_id) == [
+        SchoolEventKind.SCHOOL_DESCRIPTION_CHANGED.value,
+        SchoolEventKind.SCHOOL_CREATED.value,
     ]
 
     again = await client.patch(
-        GROUP_URL.format(school_id=group_id),
+        SCHOOL_URL.format(school_id=school_id),
         json={"name": "Тихое утро", "description": "Мягкие практики"},
         headers=auth_headers(curator["session_token"]),
     )
     assert again.status_code == 200, again.text
-    assert await _row_count(group_id) == 2
+    assert await _row_count(school_id) == 2
 
 
 @pytest.mark.asyncio
@@ -823,34 +823,34 @@ async def test_a_rename_and_a_description_edit_are_two_separate_events(
 ) -> None:
     """One PATCH, two entries, each naming what it changed.
 
-    Not one "group updated": a rename may be worth telling members about
+    Not one "school updated": a rename may be worth telling members about
     and a description edit is not, and a combined event would force that
     decision to be re-derived from `data` by whoever builds notifications.
     The rename carries both the old and the new name -- the old one exists
     nowhere else once the row is written.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    group_id = await _make_group(client, curator, name="Старое имя")
+    school_id = await _make_school(client, curator, name="Старое имя")
 
     resp = await client.patch(
-        GROUP_URL.format(school_id=group_id),
+        SCHOOL_URL.format(school_id=school_id),
         json={"name": "Новое имя", "description": "Описание"},
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 200, resp.text
 
-    items = await _events(client, curator, group_id)
+    items = await _events(client, curator, school_id)
     kinds = [e["event"] for e in items]
-    assert kinds.count(SchoolEventKind.GROUP_RENAMED.value) == 1
+    assert kinds.count(SchoolEventKind.SCHOOL_RENAMED.value) == 1
     assert (
-        kinds.count(SchoolEventKind.GROUP_DESCRIPTION_CHANGED.value)
+        kinds.count(SchoolEventKind.SCHOOL_DESCRIPTION_CHANGED.value)
         == 1
     )
 
     renamed = next(
         e
         for e in items
-        if e["event"] == SchoolEventKind.GROUP_RENAMED.value
+        if e["event"] == SchoolEventKind.SCHOOL_RENAMED.value
     )
     assert renamed["data"]["old_name"] == "Старое имя"
     assert renamed["data"]["new_name"] == "Новое имя"
@@ -880,13 +880,13 @@ async def test_a_member_joining_and_leaving_leaves_both_records_intact(
     student = await login_user(
         client, telegram_id=_TID_STUDENT, first_name="Нина",
     )
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
 
-    token = await _invite(client, curator, group_id)
+    token = await _invite(client, curator, school_id)
     assert (await _join(client, student, token)).status_code == 200
 
     left = await client.delete(
-        LEAVE_URL.format(school_id=group_id),
+        LEAVE_URL.format(school_id=school_id),
         headers=auth_headers(student["session_token"]),
     )
     assert left.status_code == 204, left.text
@@ -895,12 +895,12 @@ async def test_a_member_joining_and_leaving_leaves_both_records_intact(
         await fresh_execute(
             select(func.count())
             .select_from(SchoolMember)
-            .where(SchoolMember.school_id == UUID(group_id))
+            .where(SchoolMember.school_id == UUID(school_id))
         )
     ).scalar_one()
     assert members == 0
 
-    items = await _events(client, curator, group_id)
+    items = await _events(client, curator, school_id)
     by_kind = {e["event"]: e for e in items}
     assert (
         by_kind[SchoolEventKind.MEMBER_LEFT.value]["actor"]["user_id"]
@@ -928,8 +928,8 @@ async def test_accepting_a_transfer_records_two_different_people(
     """The actor is the new curator, the target is the PREVIOUS one.
 
     THIS TEST EXISTS TO CATCH ONE REORDERING. By the time the event is
-    written the group already belongs to the actor, so recording "the
-    group's curator" as the target -- or moving the record above the
+    written the school already belongs to the actor, so recording "the
+    school's curator" as the target -- or moving the record above the
     capture of previous_curator_id -- produces "Пётр принял школу от
     Петра". A test asserting only that transfer_accepted was written
     passes that bug.
@@ -944,20 +944,20 @@ async def test_accepting_a_transfer_records_two_different_people(
     heir = await _make_verified_master(
         client, db_session, _TID_HEIR, first_name="Пётр",
     )
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
     await _seed_member(
-        db_session, group_id, heir, SchoolMemberKind.MASTER.value,
+        db_session, school_id, heir, SchoolMemberKind.MASTER.value,
     )
 
     offered = await client.post(
-        OFFER_URL.format(school_id=group_id),
+        OFFER_URL.format(school_id=school_id),
         json={"to_user_id": heir["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
     assert offered.status_code == 200, offered.text
 
     accepted = await client.post(
-        ACCEPT_URL.format(school_id=group_id),
+        ACCEPT_URL.format(school_id=school_id),
         headers=auth_headers(heir["session_token"]),
     )
     assert accepted.status_code == 200, accepted.text
@@ -965,7 +965,7 @@ async def test_accepting_a_transfer_records_two_different_people(
     # Read as the NEW curator: the old one is not the owner any more.
     event = next(
         e
-        for e in await _events(client, heir, group_id)
+        for e in await _events(client, heir, school_id)
         if e["event"] == SchoolEventKind.TRANSFER_ACCEPTED.value
     )
     assert event["actor"]["user_id"] == heir["user"]["id"]
@@ -981,7 +981,7 @@ async def test_the_new_curator_inherits_the_whole_history(
 ) -> None:
     """Every entry written under the previous owner is still readable.
 
-    A DECISION, not a side effect of the row hanging off group_id: a
+    A DECISION, not a side effect of the row hanging off school_id: a
     school is handed over WITH its history, because an owner who cannot
     see what they inherited cannot run it. The inherited feed here
     includes a removal the previous curator performed -- the kind of entry
@@ -995,42 +995,42 @@ async def test_the_new_curator_inherits_the_whole_history(
     )
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
     student = await login_user(client, telegram_id=_TID_STUDENT)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
 
     await _seed_member(
-        db_session, group_id, heir, SchoolMemberKind.MASTER.value,
+        db_session, school_id, heir, SchoolMemberKind.MASTER.value,
     )
     await _seed_member(
-        db_session, group_id, student, SchoolMemberKind.STUDENT.value,
+        db_session, school_id, student, SchoolMemberKind.STUDENT.value,
     )
 
     removed = await client.delete(
         MEMBER_URL.format(
-            school_id=group_id, user_id=student["user"]["id"],
+            school_id=school_id, user_id=student["user"]["id"],
         ),
         headers=auth_headers(curator["session_token"]),
     )
     assert removed.status_code == 204, removed.text
-    before = await _kinds(client, curator, group_id)
+    before = await _kinds(client, curator, school_id)
 
     offered = await client.post(
-        OFFER_URL.format(school_id=group_id),
+        OFFER_URL.format(school_id=school_id),
         json={"to_user_id": heir["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
     assert offered.status_code == 200, offered.text
     accepted = await client.post(
-        ACCEPT_URL.format(school_id=group_id),
+        ACCEPT_URL.format(school_id=school_id),
         headers=auth_headers(heir["session_token"]),
     )
     assert accepted.status_code == 200, accepted.text
 
-    inherited = await _kinds(client, heir, group_id)
+    inherited = await _kinds(client, heir, school_id)
     assert SchoolEventKind.MEMBER_REMOVED.value in inherited
     for kind in before:
         assert kind in inherited
 
-    former = await _journal(client, curator, group_id)
+    former = await _journal(client, curator, school_id)
     assert former.status_code == 404
 
 
@@ -1041,7 +1041,7 @@ async def test_declining_an_offer_names_the_curator_who_made_it(
     """The decliner is the actor; the target is the curator who offered.
 
     school_transfer has no from_user_id -- whoever offered is
-    IMPLICITLY the group's curator -- so this entry's target cannot be read
+    IMPLICITLY the school's curator -- so this entry's target cannot be read
     out of the row being deleted, and the service pays one SELECT for it.
     Asserting the target here is what proves that SELECT happens and
     fetches the right person.
@@ -1055,25 +1055,25 @@ async def test_declining_an_offer_names_the_curator_who_made_it(
     heir = await _make_verified_master(
         client, db_session, _TID_HEIR, first_name="Пётр",
     )
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
     await _seed_member(
-        db_session, group_id, heir, SchoolMemberKind.MASTER.value,
+        db_session, school_id, heir, SchoolMemberKind.MASTER.value,
     )
 
     offered = await client.post(
-        OFFER_URL.format(school_id=group_id),
+        OFFER_URL.format(school_id=school_id),
         json={"to_user_id": heir["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
     assert offered.status_code == 200, offered.text
 
     declined = await client.post(
-        DECLINE_URL.format(school_id=group_id),
+        DECLINE_URL.format(school_id=school_id),
         headers=auth_headers(heir["session_token"]),
     )
     assert declined.status_code == 204, declined.text
 
-    items = await _events(client, curator, group_id)
+    items = await _events(client, curator, school_id)
     event = next(
         e
         for e in items
@@ -1108,15 +1108,15 @@ async def test_declining_an_offer_that_was_never_made_records_nothing(
     # so mastery is not needed to reach it -- and `outsider` means a plain
     # user everywhere in this file, which is worth keeping true.
     nobody = await login_user(client, telegram_id=_TID_OUTSIDER)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
 
     resp = await client.post(
-        DECLINE_URL.format(school_id=group_id),
+        DECLINE_URL.format(school_id=school_id),
         headers=auth_headers(nobody["session_token"]),
     )
     assert resp.status_code == 204, resp.text
 
-    assert await _row_count(group_id) == 1
+    assert await _row_count(school_id) == 1
 
 
 @pytest.mark.asyncio
@@ -1133,19 +1133,19 @@ async def test_cancelling_an_offer_is_recorded_and_cancelling_nothing_is_not(
     heir = await _make_verified_master(
         client, db_session, _TID_HEIR, first_name="Пётр",
     )
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
     await _seed_member(
-        db_session, group_id, heir, SchoolMemberKind.MASTER.value,
+        db_session, school_id, heir, SchoolMemberKind.MASTER.value,
     )
 
     offered = await client.post(
-        OFFER_URL.format(school_id=group_id),
+        OFFER_URL.format(school_id=school_id),
         json={"to_user_id": heir["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
     assert offered.status_code == 200, offered.text
 
-    url = OFFER_URL.format(school_id=group_id)
+    url = OFFER_URL.format(school_id=school_id)
     for _ in range(2):
         resp = await client.delete(
             url, headers=auth_headers(curator["session_token"]),
@@ -1154,7 +1154,7 @@ async def test_cancelling_an_offer_is_recorded_and_cancelling_nothing_is_not(
 
     cancelled = [
         e
-        for e in await _events(client, curator, group_id)
+        for e in await _events(client, curator, school_id)
         if e["event"] == SchoolEventKind.TRANSFER_CANCELLED.value
     ]
     assert len(cancelled) == 1
@@ -1176,25 +1176,25 @@ async def test_a_departure_that_retracts_an_offer_says_so_in_one_event(
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
     await _seed_member(
-        db_session, group_id, heir, SchoolMemberKind.MASTER.value,
+        db_session, school_id, heir, SchoolMemberKind.MASTER.value,
     )
 
     offered = await client.post(
-        OFFER_URL.format(school_id=group_id),
+        OFFER_URL.format(school_id=school_id),
         json={"to_user_id": heir["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
     assert offered.status_code == 200, offered.text
 
     removed = await client.delete(
-        MEMBER_URL.format(school_id=group_id, user_id=heir["user"]["id"]),
+        MEMBER_URL.format(school_id=school_id, user_id=heir["user"]["id"]),
         headers=auth_headers(curator["session_token"]),
     )
     assert removed.status_code == 204, removed.text
 
-    items = await _events(client, curator, group_id)
+    items = await _events(client, curator, school_id)
     kinds = [e["event"] for e in items]
     assert SchoolEventKind.TRANSFER_CANCELLED.value not in kinds
 
@@ -1230,9 +1230,9 @@ async def test_an_entry_outlives_the_person_who_made_it(
     student = await login_user(
         client, telegram_id=_TID_STUDENT, first_name="Нина",
     )
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
 
-    token = await _invite(client, curator, group_id)
+    token = await _invite(client, curator, school_id)
     assert (await _join(client, student, token)).status_code == 200
     student_id = student["user"]["id"]
 
@@ -1243,7 +1243,7 @@ async def test_an_entry_outlives_the_person_who_made_it(
 
     joined = next(
         e
-        for e in await _events(client, curator, group_id)
+        for e in await _events(client, curator, school_id)
         if e["event"] == SchoolEventKind.MEMBER_JOINED.value
     )
     assert joined["actor"]["user_id"] == student_id
@@ -1265,15 +1265,15 @@ async def test_deleting_the_school_takes_its_journal_with_it(
     afterwards" would also pass if the DELETE had emptied the table.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    doomed = await _make_group(client, curator, name="Уходит")
-    kept = await _make_group(client, curator, name="Остаётся")
+    doomed = await _make_school(client, curator, name="Уходит")
+    kept = await _make_school(client, curator, name="Остаётся")
 
     await _invite(client, curator, doomed)
     assert await _row_count(doomed) == 2
     assert await _row_count(kept) == 1
 
     resp = await client.delete(
-        GROUP_URL.format(school_id=doomed),
+        SCHOOL_URL.format(school_id=doomed),
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 204, resp.text
@@ -1294,10 +1294,10 @@ async def test_a_suspended_curator_cannot_read_but_their_entries_survive(
     "unreachable" is not "gone".
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    group_id = await _make_group(client, curator)
+    school_id = await _make_school(client, curator)
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
 
-    before = await _row_count(group_id)
+    before = await _row_count(school_id)
     assert before == 1
 
     revoked = await client.post(
@@ -1306,10 +1306,10 @@ async def test_a_suspended_curator_cannot_read_but_their_entries_survive(
     )
     assert revoked.status_code == 200, revoked.text
 
-    blocked = await _journal(client, curator, group_id)
+    blocked = await _journal(client, curator, school_id)
     assert blocked.status_code == 403
 
-    assert await _row_count(group_id) == before
+    assert await _row_count(school_id) == before
 
 
 @pytest.mark.asyncio
@@ -1327,19 +1327,19 @@ async def test_revoking_a_link_is_recorded_and_revoking_nothing_is_not(
     what this still pins.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    group_id = await _make_group(client, curator)
-    await _invite(client, curator, group_id)
+    school_id = await _make_school(client, curator)
+    await _invite(client, curator, school_id)
 
     for _ in range(2):
         resp = await client.delete(
-            INVITE_REVOKE_URL.format(school_id=group_id),
+            INVITE_REVOKE_URL.format(school_id=school_id),
             headers=auth_headers(curator["session_token"]),
         )
         assert resp.status_code == 204, resp.text
 
     revoked = [
         e
-        for e in await _events(client, curator, group_id)
+        for e in await _events(client, curator, school_id)
         if e["event"] == SchoolEventKind.INVITE_REVOKED.value
     ]
     assert len(revoked) == 1

@@ -59,7 +59,7 @@ from app.modules.waitlist.models import Waitlist, WaitlistStatus
 from tests.helpers import auth_headers, fresh_execute, full_cleanup_range, login_user
 from tests.school_race_harness import race
 
-GROUPS_URL = "/api/v1/masters/me/schools"
+SCHOOLS_URL = "/api/v1/masters/me/schools"
 BLOCK_URL = "/api/v1/masters/me/schools/{school_id}/members/{user_id}/block"
 UNBLOCK_URL = "/api/v1/masters/me/schools/{school_id}/blocks/{user_id}"
 PRACTICES_URL = "/api/v1/practices"
@@ -123,20 +123,20 @@ def _uid(auth: dict) -> UUID:
 
 
 async def _school(client: AsyncClient, curator: dict, name: str = "Школа") -> str:
-    resp = await client.post(GROUPS_URL, json={"name": name}, headers=_h(curator))
+    resp = await client.post(SCHOOLS_URL, json={"name": name}, headers=_h(curator))
     assert resp.status_code == 201, resp.text
     return resp.json()["id"]
 
 
 async def _member(
     db_session: AsyncSession,
-    group_id: str | None,
+    school_id: str | None,
     auth: dict,
     kind: SchoolMemberKind = SchoolMemberKind.STUDENT,
 ) -> None:
     db_session.add(
         SchoolMember(
-            school_id=UUID(group_id),
+            school_id=UUID(school_id),
             user_id=_uid(auth),
             kind=kind.value,
         )
@@ -148,7 +148,7 @@ async def _member(
 async def _practice(
     db_session: AsyncSession,
     master: dict,
-    group_id: str | None,
+    school_id: str | None,
     *,
     hours: float = 48,
     status: str = PracticeStatus.SCHEDULED.value,
@@ -171,7 +171,7 @@ async def _practice(
         price_cents=0,
         currency="eur",
         audience_kind=audience,
-        school_id=UUID(group_id) if group_id is not None else None,
+        school_id=UUID(school_id) if school_id is not None else None,
     )
     db_session.add(practice)
     await db_session.flush()
@@ -237,16 +237,16 @@ async def _seed_queue(
     return entry.id
 
 
-async def _block(client, curator, group_id, person):
+async def _block(client, curator, school_id, person):
     return await client.post(
-        BLOCK_URL.format(school_id=group_id, user_id=person["user"]["id"]),
+        BLOCK_URL.format(school_id=school_id, user_id=person["user"]["id"]),
         headers=_h(curator),
     )
 
 
-async def _unblock(client, curator, group_id, person):
+async def _unblock(client, curator, school_id, person):
     return await client.delete(
-        UNBLOCK_URL.format(school_id=group_id, user_id=person["user"]["id"]),
+        UNBLOCK_URL.format(school_id=school_id, user_id=person["user"]["id"]),
         headers=_h(curator),
     )
 
@@ -327,19 +327,19 @@ async def world(client: AsyncClient, db_session: AsyncSession) -> dict:
     curator_b = await _verified_master(client, db_session, _TID_CURATOR_B)
     master = await _verified_master(client, db_session, _TID_MASTER)
     student = await _student(client, _TID_STUDENT)
-    group_id = await _school(client, curator)
-    other_group_id = await _school(client, curator_b, name="Другая школа")
-    await _member(db_session, group_id, master, SchoolMemberKind.MASTER)
-    await _member(db_session, group_id, student)
-    await _member(db_session, other_group_id, master, SchoolMemberKind.MASTER)
-    await _member(db_session, other_group_id, student)
+    school_id = await _school(client, curator)
+    other_school_id = await _school(client, curator_b, name="Другая школа")
+    await _member(db_session, school_id, master, SchoolMemberKind.MASTER)
+    await _member(db_session, school_id, student)
+    await _member(db_session, other_school_id, master, SchoolMemberKind.MASTER)
+    await _member(db_session, other_school_id, student)
     return {
         "curator": curator,
         "curator_b": curator_b,
         "master": master,
         "student": student,
-        "group_id": group_id,
-        "other_group_id": other_group_id,
+        "school_id": school_id,
+        "other_school_id": other_school_id,
     }
 
 
@@ -360,13 +360,13 @@ async def test_the_feed_loses_every_school_practice_public_ones_included(
     is about this person, not about the practice."""
     w = world
     stranger = await _student(client, _TID_STRANGER)
-    in_school = await _practice(db_session, w["master"], w["group_id"])
-    in_other = await _practice(db_session, w["master"], w["other_group_id"])
+    in_school = await _practice(db_session, w["master"], w["school_id"])
+    in_other = await _practice(db_session, w["master"], w["other_school_id"])
     no_school = await _practice(db_session, w["master"], None)
 
     assert str(in_school) in await _feed_ids(client, w["student"])
     assert (
-        await _block(client, w["curator"], w["group_id"], w["student"])
+        await _block(client, w["curator"], w["school_id"], w["student"])
     ).status_code == 204
 
     seen = await _feed_ids(client, w["student"])
@@ -393,21 +393,21 @@ async def test_booking_and_the_queue_refuse_with_blocked_in_school(
     w = world
     other_student = await _student(client, _TID_STUDENT_B)
     practice = await _practice(
-        db_session, w["master"], w["group_id"], audience=audience
+        db_session, w["master"], w["school_id"], audience=audience
     )
     full = await _practice(
         db_session,
         w["master"],
-        w["group_id"],
+        w["school_id"],
         audience=audience,
         max_participants=1,
     )
-    await _member(db_session, w["group_id"], other_student)
+    await _member(db_session, w["school_id"], other_student)
     await _booked(client, other_student, full)
-    open_practice = await _practice(db_session, w["master"], w["other_group_id"])
+    open_practice = await _practice(db_session, w["master"], w["other_school_id"])
 
     assert (
-        await _block(client, w["curator"], w["group_id"], w["student"])
+        await _block(client, w["curator"], w["school_id"], w["student"])
     ).status_code == 204
 
     resp = await _book(client, w["student"], practice)
@@ -429,7 +429,7 @@ async def test_the_masters_own_block_is_named_first(
     """Blocked by the practice's master AND in its school: the master's
     code, the older one the frontend maps (R3)."""
     w = world
-    practice = await _practice(db_session, w["master"], w["group_id"])
+    practice = await _practice(db_session, w["master"], w["school_id"])
     db_session.add(
         MasterStudent(
             master_id=_uid(w["master"]),
@@ -439,7 +439,7 @@ async def test_the_masters_own_block_is_named_first(
     )
     await db_session.commit()
     assert (
-        await _block(client, w["curator"], w["group_id"], w["student"])
+        await _block(client, w["curator"], w["school_id"], w["student"])
     ).status_code == 204
 
     resp = await _book(client, w["student"], practice)
@@ -458,18 +458,18 @@ async def test_the_card_closes_on_the_future_and_stays_open_on_history(
     practice: refused, blocked_in_school (R7) -- the history is kept, the
     action is not. Pair: the same probe passes for a person not blocked."""
     w = world
-    future = await _practice(db_session, w["master"], w["group_id"])
+    future = await _practice(db_session, w["master"], w["school_id"])
     past = await _practice(
         db_session,
         w["master"],
-        w["group_id"],
+        w["school_id"],
         hours=-3,
         status=PracticeStatus.COMPLETED.value,
     )
     await _seed_booking(db_session, past, w["student"], BookingStatus.ATTENDED.value)
     other = await _student(client, _TID_STUDENT_B)
     assert (
-        await _block(client, w["curator"], w["group_id"], w["student"])
+        await _block(client, w["curator"], w["school_id"], w["student"])
     ).status_code == 204
 
     resp = await client.get(
@@ -515,17 +515,17 @@ async def test_the_block_cancels_and_refunds_future_school_bookings_only(
     that dies if "future" is dropped from the filter (B6). A repeated block
     (204) refunds nothing a second time."""
     w = world
-    first = await _practice(db_session, w["master"], w["group_id"])
-    second = await _practice(db_session, w["master"], w["group_id"], hours=96)
-    elsewhere = await _practice(db_session, w["master"], w["other_group_id"])
+    first = await _practice(db_session, w["master"], w["school_id"])
+    second = await _practice(db_session, w["master"], w["school_id"], hours=96)
+    elsewhere = await _practice(db_session, w["master"], w["other_school_id"])
     attended = await _practice(
         db_session,
         w["master"],
-        w["group_id"],
+        w["school_id"],
         hours=-5,
         status=PracticeStatus.COMPLETED.value,
     )
-    unfinalized = await _practice(db_session, w["master"], w["group_id"], hours=-2)
+    unfinalized = await _practice(db_session, w["master"], w["school_id"], hours=-2)
     b_first = await _booked(client, w["student"], first)
     b_second = await _booked(client, w["student"], second)
     b_elsewhere = await _booked(client, w["student"], elsewhere)
@@ -543,7 +543,7 @@ async def test_the_block_cancels_and_refunds_future_school_bookings_only(
     )
 
     assert (
-        await _block(client, w["curator"], w["group_id"], w["student"])
+        await _block(client, w["curator"], w["school_id"], w["student"])
     ).status_code == 204
 
     for booking_id, practice_id in ((b_first, first), (b_second, second)):
@@ -562,7 +562,7 @@ async def test_the_block_cancels_and_refunds_future_school_bookings_only(
     assert (await _booking(b_unfinalized)).status == BookingStatus.CONFIRMED.value
 
     assert (
-        await _block(client, w["curator"], w["group_id"], w["student"])
+        await _block(client, w["curator"], w["school_id"], w["student"])
     ).status_code == 204
     assert await _refunds(first) == 1 and await _refunds(second) == 1
 
@@ -579,13 +579,13 @@ async def test_the_block_removes_queue_places_and_moves_a_held_spot_on(
     w = world
     other = await _student(client, _TID_STUDENT_B)
     waiting_on = await _practice(
-        db_session, w["master"], w["group_id"], max_participants=1
+        db_session, w["master"], w["school_id"], max_participants=1
     )
     held_on = await _practice(
-        db_session, w["master"], w["group_id"], max_participants=1
+        db_session, w["master"], w["school_id"], max_participants=1
     )
     elsewhere = await _practice(
-        db_session, w["master"], w["other_group_id"], max_participants=1
+        db_session, w["master"], w["other_school_id"], max_participants=1
     )
     waiting = await _seed_queue(
         db_session, waiting_on, w["student"], WaitlistStatus.WAITING.value, 1
@@ -601,7 +601,7 @@ async def test_the_block_removes_queue_places_and_moves_a_held_spot_on(
     )
 
     assert (
-        await _block(client, w["curator"], w["group_id"], w["student"])
+        await _block(client, w["curator"], w["school_id"], w["student"])
     ).status_code == 204
 
     assert await _queue_status(waiting) == WaitlistStatus.REMOVED.value
@@ -619,17 +619,17 @@ async def test_an_unblock_reopens_the_school_and_restores_nothing(
     """After the unblock the school's practices are bookable again; the
     bookings the block cancelled stay cancelled (block_student's rule)."""
     w = world
-    practice = await _practice(db_session, w["master"], w["group_id"])
+    practice = await _practice(db_session, w["master"], w["school_id"])
     booking_id = await _booked(client, w["student"], practice)
     assert (
-        await _block(client, w["curator"], w["group_id"], w["student"])
+        await _block(client, w["curator"], w["school_id"], w["student"])
     ).status_code == 204
     assert (
-        await _unblock(client, w["curator"], w["group_id"], w["student"])
+        await _unblock(client, w["curator"], w["school_id"], w["student"])
     ).status_code == 204
 
     assert (await _booking(booking_id)).status == BookingStatus.CANCELLED.value
-    fresh = await _practice(db_session, w["master"], w["group_id"], hours=120)
+    fresh = await _practice(db_session, w["master"], w["school_id"], hours=120)
     assert (await _book(client, w["student"], fresh)).status_code in (200, 201)
 
 
@@ -646,7 +646,7 @@ async def blocked_master(
 ) -> dict:
     w = world
     master = await _verified_master(client, db_session, _TID_BLOCKED_MASTER)
-    await _member(db_session, w["group_id"], master, SchoolMemberKind.MASTER)
+    await _member(db_session, w["school_id"], master, SchoolMemberKind.MASTER)
     return master
 
 
@@ -664,16 +664,16 @@ async def test_a_blocked_master_neither_edits_previews_nor_extends_his_series(
     school practice, DELETE removes his draft and he cancels his practice
     (B2)."""
     w, x = world, blocked_master
-    scheduled = await _practice(db_session, x, w["group_id"])
+    scheduled = await _practice(db_session, x, w["school_id"])
     draft = await _practice(
         db_session,
         x,
-        w["group_id"],
+        w["school_id"],
         status=PracticeStatus.DRAFT.value,
     )
-    to_cancel = await _practice(db_session, x, w["group_id"], hours=60)
+    to_cancel = await _practice(db_session, x, w["school_id"], hours=60)
     schoolless = await _practice(db_session, x, None)
-    assert (await _block(client, w["curator"], w["group_id"], x)).status_code == 204
+    assert (await _block(client, w["curator"], w["school_id"], x)).status_code == 204
 
     for practice_id, body in (
         (scheduled, {"title": "Новое"}),
@@ -733,7 +733,7 @@ def _block_call(w: dict, person: dict):
     return _actor_call(
         school_service.block_school_member,
         _uid(w["curator"]),
-        UUID(w["group_id"]),
+        UUID(w["school_id"]),
         _uid(person),
         actor_id=_uid(w["curator"]),
     )
@@ -762,7 +762,7 @@ async def test_k2_a_block_waits_for_a_booking_in_flight_and_then_cancels_it(
     booking, and the person keeps a live booking in a school that blocked
     them."""
     w = world
-    practice = await _practice(db_session, w["master"], w["group_id"])
+    practice = await _practice(db_session, w["master"], w["school_id"])
     result = await race(
         monkeypatch,
         holder=_as_user(bookings_service.create_booking, _uid(w["student"]), practice),
@@ -800,7 +800,7 @@ async def test_k2_a_booking_landing_inside_a_block_is_refused(
     booking waits on that row, and after the block commits it reads the
     block -> 403 blocked_in_school, no booking written."""
     w = world
-    practice = await _practice(db_session, w["master"], w["group_id"])
+    practice = await _practice(db_session, w["master"], w["school_id"])
     result = await race(
         monkeypatch,
         holder=_block_call(w, w["student"]),
@@ -825,8 +825,8 @@ async def test_k2_a_queue_entry_in_flight_is_removed_by_the_block(
     holds the member row; the block waits, then removes the entry."""
     w = world
     other = await _student(client, _TID_STUDENT_B)
-    await _member(db_session, w["group_id"], other)
-    full = await _practice(db_session, w["master"], w["group_id"], max_participants=1)
+    await _member(db_session, w["school_id"], other)
+    full = await _practice(db_session, w["master"], w["school_id"], max_participants=1)
     await _booked(client, other, full)
     result = await race(
         monkeypatch,
@@ -865,7 +865,7 @@ async def test_k2_a_confirmation_in_flight_ends_cancelled(
     the confirmation made."""
     w = world
     practice = await _practice(
-        db_session, w["master"], w["group_id"], max_participants=1
+        db_session, w["master"], w["school_id"], max_participants=1
     )
     entry = await _seed_queue(
         db_session, practice, w["student"], WaitlistStatus.NOTIFIED.value, 1
@@ -925,7 +925,7 @@ async def test_k3_an_edit_in_flight_lands_before_the_block(
     and has read "not blocked"; the block wants that practice (its K3 set)
     and waits, so the edit commits strictly before the block does."""
     w, x = world, blocked_master
-    practice = await _practice(db_session, x, w["group_id"])
+    practice = await _practice(db_session, x, w["school_id"])
     result = await race(
         monkeypatch,
         holder=_patch_call(practice, _uid(x), {"title": "До блока"}),
@@ -952,7 +952,7 @@ async def test_k3_an_edit_landing_inside_a_block_is_refused(
     practices in the block's lock set the PATCH does not wait, reads an
     uncommitted block as absent and lands its edit beside the block."""
     w, x = world, blocked_master
-    practice = await _practice(db_session, x, w["group_id"], title="Было")
+    practice = await _practice(db_session, x, w["school_id"], title="Было")
     result = await race(
         monkeypatch,
         holder=_block_call(w, x),
@@ -987,12 +987,12 @@ async def test_master_profile_after_the_practice_closes_no_cycle(
     start orders: the two meet on the profile (rival_waited in each), and
     both commit -- no 40P01."""
     w = world
-    booked = await _practice(db_session, w["master"], w["group_id"])
+    booked = await _practice(db_session, w["master"], w["school_id"])
     await _booked(client, w["student"], booked)
     draft = await _practice(
         db_session,
         w["master"],
-        w["group_id"],
+        w["school_id"],
         status=PracticeStatus.DRAFT.value,
     )
     publish = _patch_call(draft, _uid(w["curator"]), {"status": "scheduled"})
@@ -1037,7 +1037,7 @@ async def test_a_block_after_the_persons_own_cancellation_refunds_once(
     on that practice and, re-reading under its lock, no longer finds a
     live booking -- one refund, and the reason stays the person's."""
     w = world
-    practice = await _practice(db_session, w["master"], w["group_id"])
+    practice = await _practice(db_session, w["master"], w["school_id"])
     booking_id = await _booked(client, w["student"], practice)
 
     async def _cancel(session: AsyncSession):
@@ -1074,9 +1074,9 @@ async def test_a_blocked_masters_own_cancellation_meets_the_block_without_a_dead
     """B2 under a race: the block holds the master's practice (K3); his own
     cancellation of it waits and then goes through. Both commit."""
     w, x = world, blocked_master
-    practice = await _practice(db_session, x, w["group_id"])
+    practice = await _practice(db_session, x, w["school_id"])
     other = await _student(client, _TID_STUDENT_B)
-    await _member(db_session, w["group_id"], other)
+    await _member(db_session, w["school_id"], other)
     await _booked(client, other, practice)
 
     async def _cancel(session: AsyncSession):

@@ -32,14 +32,14 @@ class AdminSchoolListItem(BaseModel):
 
     is_active IS A FIELD, NOT A FILTER, and this is the only place in the
     system where a frozen school is visible at all. For its own members an
-    inactive group is indistinguishable from a deleted one (404, I-6) --
+    inactive school is indistinguishable from a deleted one (404, I-6) --
     which is right for them and useless for an admin, who is the person
     being asked "why has my school gone quiet". Both kinds live in one
     listing precisely so that question has an answer on screen.
 
     masters_count counts VISIBLE masters only (kind='master' whose profile
     is verified right now, I-4); students_count counts every kind='student'
-    row. Same rule the group page reports, so the two cannot disagree about
+    row. Same rule the school page reports, so the two cannot disagree about
     the same school.
     """
 

@@ -72,8 +72,8 @@ RIGHT_URL = "/api/v1/admin/masters/{user_id}/can-create-schools"
 REVOKE_URL = "/api/v1/admin/masters/{user_id}/revoke"
 MAKE_MASTER_URL = "/api/v1/admin/users/{user_id}/make-master"
 MASTERS_LIST_URL = "/api/v1/admin/masters/list"
-GROUPS_URL = "/api/v1/masters/me/schools"
-GROUP_URL = "/api/v1/masters/me/schools/{school_id}"
+SCHOOLS_URL = "/api/v1/masters/me/schools"
+SCHOOL_URL = "/api/v1/masters/me/schools/{school_id}"
 MEMBERS_URL = "/api/v1/masters/me/schools/{school_id}/members"
 OFFER_URL = "/api/v1/masters/me/schools/{school_id}/transfer"
 ACCEPT_URL = "/api/v1/schools/{school_id}/transfer/accept"
@@ -200,11 +200,11 @@ async def _account_block(user_id: str) -> dict:
     return (profile.data or {}).get("account", {})
 
 
-async def _create_group(
+async def _create_school(
     client: AsyncClient, auth: dict, name: str = "Школа дыхания",
 ):
     return await client.post(
-        GROUPS_URL,
+        SCHOOLS_URL,
         json={"name": name},
         headers=auth_headers(auth["session_token"]),
     )
@@ -280,7 +280,7 @@ async def test_verify_with_false_writes_nothing_and_verify_with_true_writes_it(
     """false and true in the SAME test, because the pair is the claim.
 
     An explicit false is not stored: absent and false are one state
-    (master_can_create_groups), and stamping an always-false key onto every
+    (master_can_create_schools), and stamping an always-false key onto every
     verified profile would mean the key's presence stopped telling anyone
     anything. Read as one test rather than two so that "false wrote
     nothing" can never pass because the write path was broken for
@@ -388,7 +388,7 @@ async def test_granting_the_right_later_needs_no_re_verification(
     )
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
 
-    refused = await _create_group(client, master)
+    refused = await _create_school(client, master)
     assert refused.status_code == 403
     assert refused.json()["error"] == _CODE
 
@@ -398,7 +398,7 @@ async def test_granting_the_right_later_needs_no_re_verification(
     assert granted.status_code == 200, granted.text
     assert granted.json()["can_create_schools"] is True
 
-    allowed = await _create_group(client, master)
+    allowed = await _create_school(client, master)
     assert allowed.status_code == 201, allowed.text
 
 
@@ -522,7 +522,7 @@ async def test_a_flagless_master_is_refused_with_its_own_code(
         client, db_session, _TID_CURATOR, can_create_schools=True,
     )
 
-    refused = await _create_group(client, denied, name="Тихое утро")
+    refused = await _create_school(client, denied, name="Тихое утро")
     assert refused.status_code == 403
     assert refused.json()["error"] == _CODE
 
@@ -535,7 +535,7 @@ async def test_a_flagless_master_is_refused_with_its_own_code(
     ).scalars().all()
     assert rows == []
 
-    created = await _create_group(client, allowed, name="Тихое утро")
+    created = await _create_school(client, allowed, name="Тихое утро")
     assert created.status_code == 201, created.text
 
 
@@ -555,10 +555,10 @@ async def test_the_right_is_checked_before_the_name_is_looked_up(
     )
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
 
-    first = await _create_group(client, master, name="Тихое утро")
+    first = await _create_school(client, master, name="Тихое утро")
     assert first.status_code == 201, first.text
 
-    dup_while_allowed = await _create_group(client, master, name="Тихое утро")
+    dup_while_allowed = await _create_school(client, master, name="Тихое утро")
     assert dup_while_allowed.status_code == 409
 
     revoked = await _set_right(
@@ -566,7 +566,7 @@ async def test_the_right_is_checked_before_the_name_is_looked_up(
     )
     assert revoked.status_code == 200, revoked.text
 
-    dup_while_denied = await _create_group(client, master, name="Тихое утро")
+    dup_while_denied = await _create_school(client, master, name="Тихое утро")
     assert dup_while_denied.status_code == 403
     assert dup_while_denied.json()["error"] == _CODE
 
@@ -609,7 +609,7 @@ async def test_absent_and_explicit_false_are_refused_identically(
     ] is False
 
     for auth in (absent, explicit):
-        resp = await _create_group(client, auth)
+        resp = await _create_school(client, auth)
         assert resp.status_code == 403, resp.text
         assert resp.json()["error"] == _CODE
 
@@ -640,35 +640,35 @@ async def test_revoking_the_right_leaves_the_existing_school_fully_operable(
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
     headers = auth_headers(master["session_token"])
 
-    created = await _create_group(client, master)
+    created = await _create_school(client, master)
     assert created.status_code == 201, created.text
-    group_id = created.json()["id"]
+    school_id = created.json()["id"]
 
     revoked = await _set_right(
         client, admin_token, master["user"]["id"], False,
     )
     assert revoked.status_code == 200, revoked.text
 
-    refused = await _create_group(client, master, name="Вторая")
+    refused = await _create_school(client, master, name="Вторая")
     assert refused.status_code == 403
     assert refused.json()["error"] == _CODE
 
-    listed = await client.get(GROUPS_URL, headers=headers)
+    listed = await client.get(SCHOOLS_URL, headers=headers)
     assert listed.status_code == 200
-    assert [g["id"] for g in listed.json()["items"]] == [group_id]
+    assert [g["id"] for g in listed.json()["items"]] == [school_id]
 
     page = await client.get(
-        PAGE_URL.format(school_id=group_id), headers=headers,
+        PAGE_URL.format(school_id=school_id), headers=headers,
     )
     assert page.status_code == 200
 
     roster = await client.get(
-        MEMBERS_URL.format(school_id=group_id), headers=headers,
+        MEMBERS_URL.format(school_id=school_id), headers=headers,
     )
     assert roster.status_code == 200
 
     renamed = await client.patch(
-        GROUP_URL.format(school_id=group_id),
+        SCHOOL_URL.format(school_id=school_id),
         json={"name": "Тихое утро"},
         headers=headers,
     )
@@ -701,7 +701,7 @@ async def test_the_flag_survives_revoke_master_and_the_re_verify_that_undoes_it(
     assert revoke.status_code == 200, revoke.text
     assert (await _account_block(user_id))["can_create_schools"] is True
 
-    while_suspended = await _create_group(client, master)
+    while_suspended = await _create_school(client, master)
     assert while_suspended.status_code == 403
     assert while_suspended.json()["error"] != _CODE
 
@@ -712,7 +712,7 @@ async def test_the_flag_survives_revoke_master_and_the_re_verify_that_undoes_it(
     assert back.status_code == 200, back.text
     assert (await _account_block(user_id))["can_create_schools"] is True
 
-    allowed = await _create_group(client, master)
+    allowed = await _create_school(client, master)
     assert allowed.status_code == 201, allowed.text
 
 
@@ -740,7 +740,7 @@ async def test_admin_make_master_alone_does_not_grant_the_right(
     assert account["status"] == "verified"
     assert "can_create_schools" not in account
 
-    refused = await _create_group(client, plain)
+    refused = await _create_school(client, plain)
     assert refused.status_code == 403
     assert refused.json()["error"] == _CODE
 
@@ -772,13 +772,13 @@ async def test_flagless_master_can_inherit_a_school_by_transfer(
         first_name="Анна",
     )
 
-    created = await _create_group(client, curator)
+    created = await _create_school(client, curator)
     assert created.status_code == 201, created.text
-    group_id = created.json()["id"]
+    school_id = created.json()["id"]
 
     db_session.add(
         SchoolMember(
-            school_id=UUID(group_id),
+            school_id=UUID(school_id),
             user_id=UUID(heir["user"]["id"]),
             kind=SchoolMemberKind.MASTER.value,
         )
@@ -786,31 +786,31 @@ async def test_flagless_master_can_inherit_a_school_by_transfer(
     await db_session.commit()
 
     offered = await client.post(
-        OFFER_URL.format(school_id=group_id),
+        OFFER_URL.format(school_id=school_id),
         json={"to_user_id": heir["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
     assert offered.status_code == 200, offered.text
 
     accepted = await client.post(
-        ACCEPT_URL.format(school_id=group_id),
+        ACCEPT_URL.format(school_id=school_id),
         headers=auth_headers(heir["session_token"]),
     )
     assert accepted.status_code == 200, accepted.text
 
     heir_headers = auth_headers(heir["session_token"])
-    mine = await client.get(GROUPS_URL, headers=heir_headers)
+    mine = await client.get(SCHOOLS_URL, headers=heir_headers)
     assert mine.status_code == 200
-    assert [g["id"] for g in mine.json()["items"]] == [group_id]
+    assert [g["id"] for g in mine.json()["items"]] == [school_id]
 
     renamed = await client.patch(
-        GROUP_URL.format(school_id=group_id),
+        SCHOOL_URL.format(school_id=school_id),
         json={"name": "Школа наследника"},
         headers=heir_headers,
     )
     assert renamed.status_code == 200, renamed.text
 
-    own = await _create_group(client, heir, name="Своя школа")
+    own = await _create_school(client, heir, name="Своя школа")
     assert own.status_code == 403
     assert own.json()["error"] == _CODE
 
@@ -837,7 +837,7 @@ async def test_the_master_sees_their_own_right_on_the_schools_list(
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
     headers = auth_headers(master["session_token"])
 
-    before = await client.get(GROUPS_URL, headers=headers)
+    before = await client.get(SCHOOLS_URL, headers=headers)
     assert before.status_code == 200
     assert before.json()["items"] == []
     assert before.json()["can_create_schools"] is False
@@ -847,7 +847,7 @@ async def test_the_master_sees_their_own_right_on_the_schools_list(
     )
     assert granted.status_code == 200, granted.text
 
-    after = await client.get(GROUPS_URL, headers=headers)
+    after = await client.get(SCHOOLS_URL, headers=headers)
     assert after.status_code == 200
     assert after.json()["can_create_schools"] is True
 
@@ -901,7 +901,7 @@ async def test_a_flagged_master_with_schools_reads_correctly_on_both_fields(
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
 
     for name in ("Первая", "Вторая", "Третья"):
-        resp = await _create_group(client, master, name=name)
+        resp = await _create_school(client, master, name=name)
         assert resp.status_code == 201, resp.text
 
     revoked = await _set_right(
@@ -921,6 +921,6 @@ async def test_a_flagged_master_with_schools_reads_correctly_on_both_fields(
     assert item["can_create_schools"] is False
 
     mine = await client.get(
-        GROUPS_URL, headers=auth_headers(master["session_token"]),
+        SCHOOLS_URL, headers=auth_headers(master["session_token"]),
     )
     assert len(mine.json()["items"]) == 3

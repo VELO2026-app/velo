@@ -31,8 +31,8 @@ from app.modules.schools.models import School, school_name_key
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 
-GROUPS_URL = "/api/v1/masters/me/schools"
-GROUP_URL = "/api/v1/masters/me/schools/{school_id}"
+SCHOOLS_URL = "/api/v1/masters/me/schools"
+SCHOOL_URL = "/api/v1/masters/me/schools/{school_id}"
 
 _TID_MIN = 70700
 _TID_MAX = 70799
@@ -85,7 +85,7 @@ async def _curator(
 
 async def _create(client: AsyncClient, who: dict, name: str):
     return await client.post(
-        GROUPS_URL, json={"name": name}, headers=auth_headers(who["session_token"])
+        SCHOOLS_URL, json={"name": name}, headers=auth_headers(who["session_token"])
     )
 
 
@@ -195,7 +195,7 @@ async def test_rename_onto_a_sibling_clashes_by_the_rule(
     headers = auth_headers(curator["session_token"])
     await _create(client, curator, "Школа Елены")
     other = (await _create(client, curator, "Вторая")).json()
-    url = GROUP_URL.format(school_id=other["id"])
+    url = SCHOOL_URL.format(school_id=other["id"])
 
     clash = await client.patch(
         url, json={"name": f"школа{NBSP} елены"}, headers=headers

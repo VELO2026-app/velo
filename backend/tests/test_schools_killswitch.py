@@ -85,8 +85,8 @@ from app.modules.schools.router import member_router, router
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 
-GROUPS_URL = "/api/v1/masters/me/schools"
-GROUP_URL = "/api/v1/masters/me/schools/{school_id}"
+SCHOOLS_URL = "/api/v1/masters/me/schools"
+SCHOOL_URL = "/api/v1/masters/me/schools/{school_id}"
 JOURNAL_URL = "/api/v1/masters/me/schools/{school_id}/journal"
 MEMBERS_URL = "/api/v1/masters/me/schools/{school_id}/members"
 INVITES_URL = "/api/v1/masters/me/schools/{school_id}/invites"
@@ -285,17 +285,17 @@ async def test_the_flag_defaults_to_on_and_the_feature_works_under_it(
     headers = auth_headers(curator["session_token"])
 
     created = await client.post(
-        GROUPS_URL, json={"name": "Школа дыхания"}, headers=headers,
+        SCHOOLS_URL, json={"name": "Школа дыхания"}, headers=headers,
     )
     assert created.status_code == 201, created.text
-    group_id = created.json()["id"]
+    school_id = created.json()["id"]
 
     assert (
-        await client.get(PAGE_URL.format(school_id=group_id), headers=headers)
+        await client.get(PAGE_URL.format(school_id=school_id), headers=headers)
     ).status_code == 200
     assert (
         await client.get(
-            JOURNAL_URL.format(school_id=group_id), headers=headers,
+            JOURNAL_URL.format(school_id=school_id), headers=headers,
         )
     ).status_code == 200
 
@@ -554,7 +554,7 @@ async def test_the_feature_answers_again_when_the_flag_returns(
     with _on():
         curator_headers = auth_headers(curator["session_token"])
         assert (
-            await client.get(GROUPS_URL, headers=curator_headers)
+            await client.get(SCHOOLS_URL, headers=curator_headers)
         ).status_code == 200
         assert (
             await client.get(
@@ -585,11 +585,11 @@ async def test_an_unauthenticated_caller_also_gets_404_not_401(
     from a route that simply does not exist.
     """
     with _off():
-        resp = await client.get(GROUPS_URL)
+        resp = await client.get(SCHOOLS_URL)
         assert resp.status_code == 404, resp.text
 
     with _on():
-        resp = await client.get(GROUPS_URL)
+        resp = await client.get(SCHOOLS_URL)
         assert resp.status_code in (401, 403), resp.text
 
 
@@ -609,11 +609,11 @@ async def test_a_plain_user_gets_404_where_they_would_get_403(
     headers = auth_headers(plain["session_token"])
 
     with _on():
-        resp = await client.get(GROUPS_URL, headers=headers)
+        resp = await client.get(SCHOOLS_URL, headers=headers)
         assert resp.status_code == 403, resp.text
 
     with _off():
-        resp = await client.get(GROUPS_URL, headers=headers)
+        resp = await client.get(SCHOOLS_URL, headers=headers)
         assert resp.status_code == 404, resp.text
 
 
@@ -921,7 +921,7 @@ async def test_switching_back_on_restores_everything_with_no_rows_touched(
     headers = auth_headers(curator["session_token"])
 
     created = await client.post(
-        GROUPS_URL, json={"name": "Школа дыхания"}, headers=headers,
+        SCHOOLS_URL, json={"name": "Школа дыхания"}, headers=headers,
     )
     assert created.status_code == 201, created.text
     gid = created.json()["id"]
@@ -998,12 +998,12 @@ async def test_the_switch_holds_with_no_schools_in_the_database(
     headers = auth_headers(curator["session_token"])
 
     with _on():
-        empty = await client.get(GROUPS_URL, headers=headers)
+        empty = await client.get(SCHOOLS_URL, headers=headers)
         assert empty.status_code == 200, empty.text
         assert empty.json()["items"] == []
 
     with _off():
-        gone = await client.get(GROUPS_URL, headers=headers)
+        gone = await client.get(SCHOOLS_URL, headers=headers)
         assert gone.status_code == 404, gone.text
 
     missing = str(uuid4())

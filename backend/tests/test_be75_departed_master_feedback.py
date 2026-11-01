@@ -143,11 +143,11 @@ def _uid(auth: dict) -> UUID:
 async def _school(
     db_session: AsyncSession, curator: dict, name: str = "Школа",
 ) -> School:
-    group = School(curator_user_id=_uid(curator), name=name)
-    db_session.add(group)
+    school = School(curator_user_id=_uid(curator), name=name)
+    db_session.add(school)
     await db_session.flush()
     await db_session.commit()
-    return group
+    return school
 
 
 async def _join(
@@ -295,21 +295,21 @@ async def _feedback_view(
     aggregate cannot be filtered by master, so it is returned whole and the
     callers assert it as a total over every trail in the school.
     """
-    group_id = str(school.id)
+    school_id = str(school.id)
     prefix = f"{label}:"
     checkins = await _get_ok(
-        client, CHECKINS_URL.format(school_id=group_id), curator, limit=100,
+        client, CHECKINS_URL.format(school_id=school_id), curator, limit=100,
     )
     reviews = await _get_ok(
-        client, REVIEWS_URL.format(school_id=group_id), curator, limit=100,
+        client, REVIEWS_URL.format(school_id=school_id), curator, limit=100,
     )
     profile = await _get_ok(
         client,
-        PROFILE_URL.format(school_id=group_id, user_id=student["user"]["id"]),
+        PROFILE_URL.format(school_id=school_id, user_id=student["user"]["id"]),
         curator,
     )
     analytics = await _get_ok(
-        client, ANALYTICS_URL.format(school_id=group_id), curator,
+        client, ANALYTICS_URL.format(school_id=school_id), curator,
     )
     return {
         "checkins": sorted(

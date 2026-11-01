@@ -8,7 +8,7 @@
 #
 # THE ACCESS RULE IS NOT feedback_service.py's, and the difference is the
 # first thing to know about this file. BE-24's two feeds resolve ownership
-# through _get_group_or_404, which admits the CURATOR AND NOBODY ELSE. Here
+# through _get_school_or_404, which admits the CURATOR AND NOBODY ELSE. Here
 # the door is wider by decision, so the check is _relation_or_404 plus one
 # more test. Their DATA rules are this file's canon -- PRE check-ins only,
 # cancelled bookings dropped, the practice belongs to the school by audience
@@ -70,7 +70,7 @@ _RECENT_LIMIT = 10
 
 async def get_school_student_profile(
     viewer_id: UUID,
-    group_id: UUID,
+    school_id: UUID,
     student_id: UUID,
     session: AsyncSession,
 ) -> dict:
@@ -78,7 +78,7 @@ async def get_school_student_profile(
 
     EIGHT REFUSALS, SEVEN OF THEM ONE 404. A stranger, a master of another
     school, a viewer who left, a frozen or deleted school -- all four are
-    _relation_or_404, which folds "no such group", "its curator is not
+    _relation_or_404, which folds "no such school", "its curator is not
     verified now" and "you have no tie to it" into one answer so that
     nobody can probe which school ids are real (P-08). A student of the
     school, a target who is not a student, a target who was removed or
@@ -90,7 +90,7 @@ async def get_school_student_profile(
     the way in. Masking that into a 404 would mean either hanging the
     handle off the member router (losing the master check) or repeating the
     verification test here (a second place to keep it true). The 403 says
-    nothing about this school: it is raised before any group is looked at
+    nothing about this school: it is raised before any school is looked at
     and is identical on every path of the master router.
 
     ATTENDED ONLY, for both numbers. CONFIRMED, NO_SHOW, CANCELLED, drafts
@@ -112,7 +112,7 @@ async def get_school_student_profile(
 
     Args:
         viewer_id: The authenticated master -- curator or member.
-        group_id: The school.
+        school_id: The school.
         student_id: The person whose profile is asked for.
         session: Read session.
 
@@ -122,7 +122,7 @@ async def get_school_student_profile(
     Raises:
         NotFoundError: Any of the seven refusals above.
     """
-    group, relation = await _relation_or_404(group_id, viewer_id, session)
+    school, relation = await _relation_or_404(school_id, viewer_id, session)
 
     # A student of the school is a member, so _relation_or_404 let them
     # through. This screen is the school's view OF students, not a view
@@ -136,7 +136,7 @@ async def get_school_student_profile(
     is_student = (
         await session.execute(
             select(SchoolMember.id).where(
-                SchoolMember.school_id == group.id,
+                SchoolMember.school_id == school.id,
                 SchoolMember.user_id == student_id,
                 SchoolMember.kind == SchoolMemberKind.STUDENT.value,
             )
@@ -159,7 +159,7 @@ async def get_school_student_profile(
             .where(
                 Booking.user_id == student_id,
                 Booking.status == BookingStatus.ATTENDED.value,
-                practice_in_school_feedback_clause(group.id),
+                practice_in_school_feedback_clause(school.id),
             )
         )
     ).one()
@@ -173,7 +173,7 @@ async def get_school_student_profile(
                 Checkin.user_id == student_id,
                 Checkin.check_type == CheckType.PRE.value,
                 Booking.status != BookingStatus.CANCELLED.value,
-                practice_in_school_feedback_clause(group.id),
+                practice_in_school_feedback_clause(school.id),
             )
             .order_by(Checkin.created_at.desc(), Checkin.id.desc())
             .limit(_RECENT_LIMIT)
@@ -186,7 +186,7 @@ async def get_school_student_profile(
             .join(Practice, Feedback.practice_id == Practice.id)
             .where(
                 Feedback.user_id == student_id,
-                practice_in_school_feedback_clause(group.id),
+                practice_in_school_feedback_clause(school.id),
             )
             .order_by(Feedback.created_at.desc(), Feedback.id.desc())
             .limit(_RECENT_LIMIT)
@@ -202,7 +202,7 @@ async def get_school_student_profile(
     if relation == CURATOR_RELATION:
         master_offer = (
             await session.execute(
-                select(_master_offer_state_expr(group.id, student_id))
+                select(_master_offer_state_expr(school.id, student_id))
             )
         ).scalar_one()
 

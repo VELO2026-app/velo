@@ -44,7 +44,7 @@ async def _cancel_one(
     session: AsyncSession,
     *,
     occurred_at: datetime | None = None,
-    curated_group_id: UUID | None = None,
+    curated_school_id: UUID | None = None,
 ) -> int:
     """Cancel a single, already-locked + already-validated practice occurrence.
 
@@ -58,7 +58,7 @@ async def _cancel_one(
     scope cancellation spanning several occurrences passes ONE shared instant so
     every diary card shares it (W-3); a lone call defaults to now.
 
-    curated_group_id (BE-21, BE-74) is what tells this function WHO is
+    curated_school_id (BE-21, BE-74) is what tells this function WHO is
     cancelling: set means the actor is the curator of the school the
     practice belongs to, and the caller holds that school's row locked as
     its owner; None means the actor is the practice's master. It is not a
@@ -67,7 +67,7 @@ async def _cancel_one(
     the actor was allowed in at all -- asking twice would let the two
     answers drift.
     """
-    acting_as_curator = curated_group_id is not None
+    acting_as_curator = curated_school_id is not None
     # Diary feed: collect the booked users BEFORE the refund flow runs --
     # refund_all_bookings_for_practice transitions bookings to cancelled, so
     # reading them afterwards would yield an empty set. Inline ORM query
@@ -143,13 +143,13 @@ async def _cancel_one(
     # me the cancellations a curator made" is a question the audit should
     # answer with an indexed equality on `event`, not with a JSONB probe.
     # AuditLog.event is String(100) with no CHECK, so a new value costs no
-    # migration. group_id carries WHICH school the right came from.
-    # BE-64: master_id beside group_id, as on every curator act of BE-63
+    # migration. school_id carries WHICH school the right came from.
+    # BE-64: master_id beside school_id, as on every curator act of BE-63
     # (_tell_master_of_curator_act): actor_id is the curator, master_id the
     # practice's owner -- two people, and the audit row must name both.
     audit_data: dict[str, object] = {"refunded_bookings": refunded_count}
     if acting_as_curator:
-        audit_data["school_id"] = str(curated_group_id)
+        audit_data["school_id"] = str(curated_school_id)
         audit_data["master_id"] = str(practice.master_id)
     await record_audit(
         event=(
@@ -307,15 +307,15 @@ async def _cancel_one(
     # school deleted after it was read failed the row's FK and the whole
     # cancellation with a 500. That state is now excluded by the lock
     # order: cancel_practice holds this practice FOR UPDATE and the
-    # school locked as its owner (_lock_group_as_owner) before calling
+    # school locked as its owner (_lock_school_as_owner) before calling
     # here, so delete_school -- which clears its practices'
     # owner before it deletes the school -- waits for this transaction.
     if acting_as_curator:
         from app.modules.schools.models import SchoolEventKind
-        from app.modules.schools.service import _record_group_event
+        from app.modules.schools.service import _record_school_event
 
-        _record_group_event(
-            curated_group_id,
+        _record_school_event(
+            curated_school_id,
             user,
             SchoolEventKind.PRACTICE_CANCELLED,
             session,
@@ -340,7 +340,7 @@ async def _cancel_one(
 
 async def _tell_master_cancelled_by_curator(
     primary: Practice,
-    group_id: UUID,
+    school_id: UUID,
     cancelled_count: int,
     session: AsyncSession,
 ) -> None:
@@ -372,7 +372,7 @@ async def _tell_master_cancelled_by_curator(
     from app.core.events.reminders import format_event_time, practice_correlation
     from app.modules.schools.models import School
 
-    group = await session.get(School, group_id)
+    school = await session.get(School, school_id)
     # The reader is the master -> the practice's zone (BE-102 notification time).
     when_text = format_event_time(primary.scheduled_at, primary.timezone)
     await emit_notification(
@@ -386,7 +386,7 @@ async def _tell_master_cancelled_by_curator(
         title="Вашу практику отменили",
         body=(
             f"Практику «{primary.title}» ({when_text}) отменил "
-            f"куратор школы «{group.name}». "
+            f"куратор школы «{school.name}». "
             f"Отменено занятий: {cancelled_count}. "
             f"Участникам возвращена оплата."
         ),
@@ -395,16 +395,16 @@ async def _tell_master_cancelled_by_curator(
             "params": {"practice_id": str(primary.id)},
             "practice_title": primary.title,
             "scheduled_at": when_text,
-            "school_name": group.name,
+            "school_name": school.name,
             "cancelled_count": cancelled_count,
         },
     )
 
 
-def _right_over_sibling(user: User, curated_group_id: UUID | None):
+def _right_over_sibling(user: User, curated_school_id: UUID | None):
     """THE ACTOR'S RIGHT OVER EACH OCCURRENCE OF THE SERIES, as a predicate
     -- the one rule (_manager_of_practice_or_404) asked of every row at once:
-      - the master (curated_group_id None): Practice.master_id == user.id
+      - the master (curated_school_id None): Practice.master_id == user.id
         (C2). Defense in depth since C2-b removed parent_practice_id from
         UpdatePracticeRequest: the series identity is set at birth only.
       - the curator (BE-64): Practice.school_id == the school.
@@ -422,15 +422,15 @@ def _right_over_sibling(user: User, curated_group_id: UUID | None):
     """
     return (
         Practice.master_id == user.id
-        if curated_group_id is None
-        else Practice.school_id == curated_group_id
+        if curated_school_id is None
+        else Practice.school_id == curated_school_id
     )
 
 
 async def _lock_cancel_set(
     read: Practice,
     user: User,
-    curated_group_id: UUID | None,
+    curated_school_id: UUID | None,
     scope: str,
     session: AsyncSession,
 ) -> list[Practice]:
@@ -463,7 +463,7 @@ async def _lock_cancel_set(
             wanted,
             and_(
                 root_expr == root_id,
-                _right_over_sibling(user, curated_group_id),
+                _right_over_sibling(user, curated_school_id),
                 Practice.status.in_(_CANCELLABLE_PRACTICE_STATUSES),
             ),
         )
@@ -567,31 +567,31 @@ async def cancel_practice(
     # the same 404 as "no such practice" (P-08). BE-64 removed the
     # audience restriction this function used to ask first. Asked on the
     # read: master_id and the school never change (BE-74), and the
-    # curator's hold on the school is re-checked under the group lock
+    # curator's hold on the school is re-checked under the school lock
     # below.
-    curated_group_id = await _manager_of_practice_or_404(
+    curated_school_id = await _manager_of_practice_or_404(
         read, user, session,
     )
 
     locked = await _lock_cancel_set(
-        read, user, curated_group_id, scope, session,
+        read, user, curated_school_id, scope, session,
     )
     primary, siblings = await _primary_and_later(practice_id, locked)
 
-    # The school comes AFTER every practice row (practice -> group,
+    # The school comes AFTER every practice row (practice -> school,
     # schools/service.py header).
     # BE-74 (the BE-59 finding, carried here): OWNERSHIP RE-CHECKED UNDER
-    # THE GROUP LOCK before anything is written. curated_group_id_for_
+    # THE SCHOOL LOCK before anything is written. curated_group_id_for_
     # practice is a read, and the school can change hands between it and
     # this point -- a former curator mid-handover would then cancel a
     # practice of the new owner's school, refund its participants and write
-    # into its journal. The group is taken once, at this strength, after
+    # into its journal. The school is taken once, at this strength, after
     # every practice row and before the journal rows _cancel_one inserts.
     # A refusal here has written nothing; the 404 is the stranger's, for
     # P-08's reason.
-    if curated_group_id is not None:
-        from app.modules.schools.service import _lock_group_as_owner
-        if not await _lock_group_as_owner(user.id, curated_group_id, session):
+    if curated_school_id is not None:
+        from app.modules.schools.service import _lock_school_as_owner
+        if not await _lock_school_as_owner(user.id, curated_school_id, session):
             raise NotFoundError("Practice not found")
 
     # W-3: one shared instant for every occurrence this action cancels, so the
@@ -603,12 +603,12 @@ async def cancel_practice(
             user,
             session,
             occurred_at=cancel_ts,
-            curated_group_id=curated_group_id,
+            curated_school_id=curated_school_id,
         )
 
-    if curated_group_id is not None:
+    if curated_school_id is not None:
         await _tell_master_cancelled_by_curator(
-            primary, curated_group_id, 1 + len(siblings), session,
+            primary, curated_school_id, 1 + len(siblings), session,
         )
 
     return primary

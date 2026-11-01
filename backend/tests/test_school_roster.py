@@ -103,10 +103,10 @@ async def _user(client: AsyncClient, telegram_id: int, first_name: str) -> dict:
 
 
 async def _school(db_session: AsyncSession, curator: dict, name: str) -> School:
-    group = School(curator_user_id=UUID(curator["user"]["id"]), name=name)
-    db_session.add(group)
+    school = School(curator_user_id=UUID(curator["user"]["id"]), name=name)
+    db_session.add(school)
     await db_session.commit()
-    return group
+    return school
 
 
 async def _join(

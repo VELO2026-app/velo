@@ -102,25 +102,25 @@ from app.modules.schools.service import (
     create_school,
     decline_school_master_offer,
     decline_school_transfer,
-    delete_group_preview,
     delete_school,
+    delete_school_preview,
     demote_school_master,
-    get_group_counts,
-    get_group_transfer_ref,
     get_or_create_school_invite,
+    get_school_counts,
     get_school_page,
+    get_school_transfer_ref,
     join_school_by_token,
     leave_preview,
     leave_school,
-    list_group_masters,
-    list_group_practice_master_ids,
     list_my_schools,
     list_school_blocks,
     list_school_events,
+    list_school_masters,
     list_school_members,
+    list_school_practice_master_ids,
     list_school_roster,
     list_schools,
-    master_can_create_groups,
+    master_can_create_schools,
     offer_school_master,
     offer_school_transfer,
     preview_school_invite,
@@ -195,7 +195,7 @@ async def list_schools_endpoint(
     master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
     session: AsyncSession = Depends(get_db_reader),
 ) -> SchoolListResponse:
-    """Groups I curate, newest first. Empty list when I curate none.
+    """Schools I curate, newest first. Empty list when I curate none.
 
     GT-15: also answers whether I may found a NEW one. Read off the profile
     get_current_master already loaded (in its own short session, closed
@@ -208,7 +208,7 @@ async def list_schools_endpoint(
     items = await list_schools(user.id, session)
     return SchoolListResponse(
         items=[SchoolResponse(**item) for item in items],
-        can_create_schools=master_can_create_groups(profile.data),
+        can_create_schools=master_can_create_schools(profile.data),
     )
 
 
@@ -222,36 +222,36 @@ async def create_school_endpoint(
     master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
     session: AsyncSession = Depends(get_db_session),
 ) -> SchoolResponse:
-    """Create a group -- this is also how a verified master becomes a curator.
+    """Create a school -- this is also how a verified master becomes a curator.
 
     409 school_name_taken on a name this curator already uses; the
     SAME name under a different curator is fine (I-7). 422 on a blank or
     over-long name, from SchoolNameStr.
     """
     user, _profile = master_tuple
-    group = await create_school(
+    school = await create_school(
         user.id, body.name, session, description=body.description,
         actor=user,
     )
     await session.flush()
-    await session.refresh(group)
+    await session.refresh(school)
     logger.info(
-        "school_created", group_id=str(group.id), curator_id=str(user.id),
+        "school_created", school_id=str(school.id), curator_id=str(user.id),
     )
-    # A group one statement old has no members and cannot have a pending
+    # A school one statement old has no members and cannot have a pending
     # transfer; counting or looking either up would be queries asked to
     # return nothing. It has no picture either -- creation does not take
     # one (GT-17) -- and that is stated rather than left to the default,
     # like the two counters above.
     return SchoolResponse(
-        id=group.id,
-        name=group.name,
-        description=group.description,
+        id=school.id,
+        name=school.name,
+        description=school.description,
         avatar_url=None,
         masters_count=0,
         students_count=0,
         transfer=None,
-        created_at=group.created_at,
+        created_at=school.created_at,
     )
 
 
@@ -283,7 +283,7 @@ async def update_school_endpoint(
     """
     user, _profile = master_tuple
     update_data = body.model_dump(exclude_unset=True)
-    group = await update_school(
+    school = await update_school(
         user.id,
         school_id,
         body.name,
@@ -297,19 +297,19 @@ async def update_school_endpoint(
         actor=user,
     )
     await session.flush()
-    masters_count, students_count = await get_group_counts(group.id, session)
+    masters_count, students_count = await get_school_counts(school.id, session)
     # A rename does not touch a pending offer, but the reply carries it:
     # this endpoint returns SchoolResponse, and that schema has one
     # field set for everyone who receives it (see its docstring).
     return SchoolResponse(
-        id=group.id,
-        name=group.name,
-        description=group.description,
-        avatar_url=group.avatar_url,
+        id=school.id,
+        name=school.name,
+        description=school.description,
+        avatar_url=school.avatar_url,
         masters_count=masters_count,
         students_count=students_count,
-        transfer=await get_group_transfer_ref(group.id, session),
-        created_at=group.created_at,
+        transfer=await get_school_transfer_ref(school.id, session),
+        created_at=school.created_at,
     )
 
 
@@ -321,16 +321,16 @@ async def delete_school_endpoint(
     master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
     session: AsyncSession = Depends(get_db_session),
 ) -> None:
-    """Delete my group; memberships, invites and any transfer cascade.
+    """Delete my school; memberships, invites and any transfer cascade.
 
-    Never 409 (I-11). A second delete is a 404 -- the group is gone, and
+    Never 409 (I-11). A second delete is a 404 -- the school is gone, and
     "gone" is indistinguishable from "never yours" by design (P-08).
     """
     user, _profile = master_tuple
     await delete_school(user.id, school_id, session)
     await session.flush()
     logger.info(
-        "school_deleted", group_id=str(school_id), curator_id=str(user.id),
+        "school_deleted", school_id=str(school_id), curator_id=str(user.id),
     )
 
 
@@ -347,7 +347,7 @@ async def list_school_members_endpoint(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> PaginatedSchoolMembersResponse:
-    """Roster of my group: masters and students, newest membership first.
+    """Roster of my school: masters and students, newest membership first.
 
     P-11: `kind` is a Literal, so an unknown value is a 422 from FastAPI
     rather than a hand-rolled Enum(value) lookup raising ValueError -> 500.
@@ -579,7 +579,7 @@ async def get_school_analytics_endpoint(
 ) -> SchoolAnalyticsResponse:
     """The school's analytics aggregate (tz-curator.md §6).
 
-    One read for the whole screen. `period` scopes the engagement group
+    One read for the whole screen. `period` scopes the engagement school
     (conducted / came / came again) to the curator's own calendar -- the
     same Literal + bounds the master dashboard's stats endpoint uses; an
     unknown value is a 422 from FastAPI. The rest of the payload (the
@@ -642,7 +642,7 @@ async def remove_school_member_endpoint(
 ) -> None:
     """Remove a member of either kind. Idempotent: a miss is still 204.
 
-    404 only for a group that is not mine (or does not exist) -- never for
+    404 only for a school that is not mine (or does not exist) -- never for
     the user, whose membership is exactly what the caller is asserting away.
     """
     user, _profile = master_tuple
@@ -672,7 +672,7 @@ async def block_school_member_endpoint(
     await session.flush()
     logger.info(
         "school_member_blocked",
-        group_id=str(school_id),
+        school_id=str(school_id),
         user_id=str(user_id),
         curator_id=str(user.id),
     )
@@ -697,7 +697,7 @@ async def unblock_school_member_endpoint(
     await session.flush()
     logger.info(
         "school_member_unblocked",
-        group_id=str(school_id),
+        school_id=str(school_id),
         user_id=str(user_id),
         curator_id=str(user.id),
     )
@@ -751,7 +751,7 @@ async def demote_school_master_endpoint(
     await session.flush()
     logger.info(
         "school_master_demoted",
-        group_id=str(school_id),
+        school_id=str(school_id),
         user_id=str(user_id),
         curator_id=str(user.id),
     )
@@ -766,7 +766,7 @@ async def create_school_invite_endpoint(
     master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
     session: AsyncSession = Depends(get_db_session),
 ) -> SchoolInviteResponse:
-    """Get (or mint) this group's reusable link. Everyone joins as a student.
+    """Get (or mint) this school's reusable link. Everyone joins as a student.
 
     IT USED TO TAKE A BODY, {kind}, and a school had two links -- the master
     one promoting a student on join. GT-27 cancelled that path, so the body
@@ -786,7 +786,7 @@ async def create_school_invite_endpoint(
     await session.flush()
     logger.info(
         "school_invite_issued",
-        group_id=str(school_id),
+        school_id=str(school_id),
         curator_id=str(user.id),
     )
     return SchoolInviteResponse(**invite)
@@ -801,7 +801,7 @@ async def revoke_school_invite_endpoint(
     master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
     session: AsyncSession = Depends(get_db_session),
 ) -> None:
-    """Revoke the group's link.
+    """Revoke the school's link.
 
     THE PATH USED TO END IN /{kind} and revoked one of two links, leaving
     the other working. GT-27 left one link, so there is nothing to choose
@@ -819,7 +819,7 @@ async def revoke_school_invite_endpoint(
     await session.flush()
     logger.info(
         "school_invite_revoked",
-        group_id=str(school_id),
+        school_id=str(school_id),
         curator_id=str(user.id),
     )
 
@@ -860,7 +860,7 @@ async def offer_school_master_endpoint(
     await session.flush()
     logger.info(
         "school_master_offered",
-        group_id=str(school_id),
+        school_id=str(school_id),
         to_user_id=str(body.to_user_id),
         curator_id=str(user.id),
     )
@@ -889,7 +889,7 @@ async def cancel_school_master_offer_endpoint(
     await session.flush()
     logger.info(
         "school_master_offer_cancelled",
-        group_id=str(school_id),
+        school_id=str(school_id),
         to_user_id=str(user_id),
         curator_id=str(user.id),
     )
@@ -905,7 +905,7 @@ async def offer_school_transfer_endpoint(
     master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
     session: AsyncSession = Depends(get_db_session),
 ) -> SchoolTransferRef:
-    """Offer the group to one of its visible master members (I-10).
+    """Offer the school to one of its visible master members (I-10).
 
     409 transfer_pending when an offer is already open -- a second offer
     never silently replaces the first. 404 transfer_target_not_member for a
@@ -919,7 +919,7 @@ async def offer_school_transfer_endpoint(
     await session.flush()
     logger.info(
         "school_transfer_offered",
-        group_id=str(school_id),
+        school_id=str(school_id),
         to_user_id=str(body.to_user_id),
         curator_id=str(user.id),
     )
@@ -943,7 +943,7 @@ async def cancel_school_transfer_endpoint(
     await session.flush()
     logger.info(
         "school_transfer_cancelled",
-        group_id=str(school_id),
+        school_id=str(school_id),
         curator_id=str(user.id),
     )
 
@@ -962,7 +962,7 @@ async def remove_member_preview_endpoint(
 
     ADVISORY: nothing is blocked and nothing is written. Removal itself is
     unchanged and still idempotent, so this answers 0 rather than 404 for a
-    target who is not in the group.
+    target who is not in the school.
     """
     user, _profile = master_tuple
     preview = await remove_member_preview(user.id, school_id, user_id, session)
@@ -973,7 +973,7 @@ async def remove_member_preview_endpoint(
     "/me/schools/{school_id}/delete-preview",
     response_model=SchoolDeletePreviewResponse,
 )
-async def delete_group_preview_endpoint(
+async def delete_school_preview_endpoint(
     school_id: UUID,
     master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
     session: AsyncSession = Depends(get_db_reader),
@@ -983,7 +983,7 @@ async def delete_group_preview_endpoint(
     ADVISORY: deletion is still never blocked (I-11).
     """
     user, _profile = master_tuple
-    preview = await delete_group_preview(user.id, school_id, session)
+    preview = await delete_school_preview(user.id, school_id, session)
     return SchoolDeletePreviewResponse(**preview)
 
 
@@ -1006,10 +1006,10 @@ async def delete_group_preview_endpoint(
 #
 # AUTH: get_current_user, not get_current_master -- a student member is not
 # a master and must still read the page. Authorization is the RELATION to
-# the group, resolved in the service; there is no role check here at all.
+# the school, resolved in the service; there is no role check here at all.
 #
 # /mine is declared BEFORE /{school_id}: a static path must win over a
-# dynamic sibling, or "mine" would be parsed as a group id and answer 422.
+# dynamic sibling, or "mine" would be parsed as a school id and answer 422.
 # =============================================================================
 
 member_router = APIRouter(
@@ -1024,9 +1024,9 @@ async def list_my_schools_endpoint(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_reader),
 ) -> SchoolMineResponse:
-    """Groups I belong to -- curated first, then by when I joined.
+    """Schools I belong to -- curated first, then by when I joined.
 
-    Only ACTIVE groups (I-6): one whose curator is currently suspended
+    Only ACTIVE schools (I-6): one whose curator is currently suspended
     disappears from this list and comes back on re-verification, with no row
     written either way.
     """
@@ -1051,8 +1051,8 @@ async def preview_school_invite_endpoint(
     and answer 422 for a path that is not a UUID.
 
     Refusals are described here, not raised -- except 404, which stays
-    indistinguishable across unknown token, revoked token, inactive group
-    and deleted group.
+    indistinguishable across unknown token, revoked token, inactive school
+    and deleted school.
     """
     preview = await preview_school_invite(token, user.id, session)
     return SchoolInvitePreviewResponse(**preview)
@@ -1079,7 +1079,7 @@ async def join_school_endpoint(
     await session.flush()
     logger.info(
         "school_joined",
-        group_id=str(result["school_id"]),
+        school_id=str(result["school_id"]),
         relation=result["relation"],
         already_member=result["already_member"],
         user_id=str(user.id),
@@ -1095,13 +1095,13 @@ async def accept_school_transfer_endpoint(
     user: User = Depends(get_current_user_write),
     session: AsyncSession = Depends(get_db_session),
 ) -> SchoolPageResponse:
-    """Take over the group. One transaction, checks before mutations.
+    """Take over the school. One transaction, checks before mutations.
 
     404 transfer_not_found covers "no offer", "not addressed to you" and
-    "group inactive" alike -- accept changes who owns a school, so it must
-    not confirm that an offer exists to somebody guessing at group ids.
+    "school inactive" alike -- accept changes who owns a school, so it must
+    not confirm that an offer exists to somebody guessing at school ids.
     403 master_required if the caller is no longer verified; 409
-    school_name_taken if they already curate a group by this name,
+    school_name_taken if they already curate a school by this name,
     checked BEFORE anything is written.
     """
     page = await accept_school_transfer(
@@ -1110,7 +1110,7 @@ async def accept_school_transfer_endpoint(
     await session.flush()
     logger.info(
         "school_transfer_accepted",
-        group_id=str(school_id),
+        school_id=str(school_id),
         new_curator_id=str(user.id),
     )
     return SchoolPageResponse(**page)
@@ -1211,9 +1211,9 @@ async def get_school_page_endpoint(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_reader),
 ) -> SchoolPageResponse:
-    """One group's page. 404 unless I have a relation to it and it is active.
+    """One school's page. 404 unless I have a relation to it and it is active.
 
-    A group that does not exist, one whose curator is suspended, and one I
+    A school that does not exist, one whose curator is suspended, and one I
     simply do not belong to all answer identically (P-08).
     """
     page = await get_school_page(school_id, user.id, session)
@@ -1224,7 +1224,7 @@ async def get_school_page_endpoint(
     "/{school_id}/masters",
     response_model=PaginatedSchoolMastersResponse,
 )
-async def list_group_masters_endpoint(
+async def list_school_masters_endpoint(
     school_id: UUID,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_reader),
@@ -1236,7 +1236,7 @@ async def list_group_masters_endpoint(
     Fields are a strict subset of MasterPublicResponse -- the isolation
     boundary is reused rather than restated.
     """
-    items, total = await list_group_masters(
+    items, total = await list_school_masters(
         school_id, user.id, session, limit=limit, offset=offset,
     )
     return PaginatedSchoolMastersResponse(
@@ -1250,7 +1250,7 @@ async def list_group_masters_endpoint(
 @member_router.get(
     "/{school_id}/practices", response_model=PaginatedPracticesResponse,
 )
-async def list_group_practices_endpoint(
+async def list_school_practices_endpoint(
     school_id: UUID,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_reader),
@@ -1275,7 +1275,7 @@ async def list_group_practices_endpoint(
     contributes no practices even though they still appear in the roster
     above -- blocking hides practices, not people.
     """
-    master_ids = await list_group_practice_master_ids(school_id, user.id, session)
+    master_ids = await list_school_practice_master_ids(school_id, user.id, session)
     return await list_public_practices(
         session,
         user=user,
@@ -1294,10 +1294,10 @@ async def leave_school_endpoint(
     user: User = Depends(get_current_user_write),
     session: AsyncSession = Depends(get_db_session),
 ) -> None:
-    """Leave a group. Idempotent; 409 curator_cannot_leave for the owner.
+    """Leave a school. Idempotent; 409 curator_cannot_leave for the owner.
 
-    Deliberately NOT gated on the group being active (I-5): a member of a
-    group whose curator is suspended must still be able to walk out, and a
+    Deliberately NOT gated on the school being active (I-5): a member of a
+    school whose curator is suspended must still be able to walk out, and a
     404 here would trap them until an admin re-verified somebody else.
     """
     await leave_school(school_id, user.id, session, actor=user)

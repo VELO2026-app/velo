@@ -55,7 +55,7 @@ from app.modules.schools.models import School
 # who may found a school.
 from app.modules.schools.service import (
     announce_pending_master_offers,
-    master_can_create_groups,
+    master_can_create_schools,
 )
 from app.modules.users.models import User, UserRole
 from app.modules.users.schemas import (
@@ -157,7 +157,7 @@ async def _schools_counts_for_masters(
     ONE bounded query regardless of page size (GROUP BY curator_user_id),
     same shape as the two counts around it.
 
-    ACTIVE AND FROZEN GROUPS BOTH COUNT. A revoked master's schools do not
+    ACTIVE AND FROZEN SCHOOLS BOTH COUNT. A revoked master's schools do not
     disappear -- they stop being visible to their members (I-6) and stay
     attached to the person, which is exactly what an admin looking at that
     person needs to know. Filtering by the curator's current status here
@@ -284,7 +284,7 @@ async def list_masters(
             students_count=students_by_master.get(user.id, 0),
             schools_count=schools_by_master.get(user.id, 0),
             available_cents=profile.available_cents,
-            can_create_schools=master_can_create_groups(profile.data),
+            can_create_schools=master_can_create_schools(profile.data),
         )
         for user, profile in rows
     ]
@@ -345,7 +345,7 @@ async def get_master_by_id(
         # GT-15: inherited from AdminMasterListItem, so it has to be filled
         # here too -- left to its default the detail screen would report
         # "no right" for every master, including the ones who have it.
-        can_create_schools=master_can_create_groups(profile.data),
+        can_create_schools=master_can_create_schools(profile.data),
     )
 
 

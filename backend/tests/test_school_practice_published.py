@@ -133,13 +133,13 @@ async def _student(
 async def _school(
     db_session: AsyncSession, curator: dict, name: str = "Тихое утро",
 ) -> School:
-    group = School(
+    school = School(
         curator_user_id=UUID(curator["user"]["id"]), name=name,
     )
-    db_session.add(group)
+    db_session.add(school)
     await db_session.flush()
     await db_session.commit()
-    return group
+    return school
 
 
 async def _join(
@@ -738,14 +738,14 @@ async def test_the_membership_predicate_ignores_the_curators_status(
 ) -> None:
     """One predicate, one subject: the master, never the curator.
 
-    If master_broadcasts_to_group_clause ever also required a verified
+    If master_broadcasts_to_school_clause ever also required a verified
     curator, the dark-school test above would pass while testing nothing --
     it would be asserting the departed-master path under another name. This
     checks the separation directly: the same author, the same school, with
     the curator verified and then not, keeps the same answer.
     """
     from app.modules.practices.audience_service import (
-        master_broadcasts_to_group_clause,
+        master_broadcasts_to_school_clause,
     )
 
     curator = await _master(client, db_session, _TID_CURATOR)
@@ -759,7 +759,7 @@ async def test_the_membership_predicate_ignores_the_curators_status(
                 await db_session.execute(
                     select(School.id).where(
                         School.id == school.id,
-                        master_broadcasts_to_group_clause(
+                        master_broadcasts_to_school_clause(
                             UUID(author["user"]["id"]),
                         ),
                     )

@@ -80,7 +80,7 @@ from app.modules.schools.models import (
     SchoolMember,
     SchoolMemberKind,
 )
-from app.modules.schools.service import _get_group_or_404
+from app.modules.schools.service import _get_school_or_404
 from app.modules.users.helpers import display_name
 from app.modules.users.models import User
 
@@ -91,13 +91,13 @@ TOP_PRACTICES_LIMIT = 5
 
 async def get_school_analytics(
     user: User,
-    group_id: UUID,
+    school_id: UUID,
     session: AsyncSession,
     period: str,
 ) -> dict:
     """The school's analytics aggregate (§6).
 
-    Ownership goes through _get_group_or_404: another curator's school and
+    Ownership goes through _get_school_or_404: another curator's school and
     a school that does not exist are the same 404 (P-08).
 
     Takes the whole User, not an id: the engagement window is the curator's
@@ -107,7 +107,7 @@ async def get_school_analytics(
 
     Returns a dict ready for SchoolAnalyticsResponse.
     """
-    group = await _get_group_or_404(user.id, group_id, session)
+    school = await _get_school_or_404(user.id, school_id, session)
     window_start, window_end, _prev_start = calendar_period_bounds_in_tz(
         period, datetime.now(UTC), user.timezone,
     )
@@ -118,7 +118,7 @@ async def get_school_analytics(
     status_rows = (
         await session.execute(
             select(Practice.status, func.count())
-            .where(Practice.school_id == group.id)
+            .where(Practice.school_id == school.id)
             .group_by(Practice.status)
         )
     ).all()
@@ -134,19 +134,21 @@ async def get_school_analytics(
     member_rows = (
         await session.execute(
             select(SchoolMember.kind, func.count())
-            .where(SchoolMember.school_id == group.id)
+            .where(SchoolMember.school_id == school.id)
             .group_by(SchoolMember.kind)
         )
     ).all()
     by_kind = {kind: count for kind, count in member_rows}
 
-    payload = await _feedback_and_top(group.id, session, completed, upcoming, by_kind)
-    payload["engagement"] = await _engagement(group.id, window_start, window_end, session)
+    payload = await _feedback_and_top(school.id, session, completed, upcoming, by_kind)
+    payload["engagement"] = await _engagement(
+        school.id, window_start, window_end, session,
+    )
     return payload
 
 
 async def _feedback_and_top(
-    group_id: UUID,
+    school_id: UUID,
     session: AsyncSession,
     completed: int,
     upcoming: int,
@@ -156,7 +158,7 @@ async def _feedback_and_top(
     the top-practices ranking. Split out only to keep each function's shape
     readable; there is no second caller."""
     # -- Mood zones over PRE check-ins on the school's practices. Grouped
-    #    by the RAW score (at most ten groups) and folded in Python
+    #    by the RAW score (at most ten schools) and folded in Python
     #    (zone_counts), so the zone boundaries live only in
     #    insights_service, exactly as the feeds do it.
     mood_rows = (
@@ -165,7 +167,7 @@ async def _feedback_and_top(
             .join(Practice, Checkin.practice_id == Practice.id)
             .join(Booking, Checkin.booking_id == Booking.id)
             .where(
-                practice_in_school_feedback_clause(group_id),
+                practice_in_school_feedback_clause(school_id),
                 Checkin.check_type == CheckType.PRE.value,
                 Booking.status != BookingStatus.CANCELLED.value,
             )
@@ -181,7 +183,7 @@ async def _feedback_and_top(
         await session.execute(
             select(Feedback.rating, func.count())
             .join(Practice, Feedback.practice_id == Practice.id)
-            .where(practice_in_school_feedback_clause(group_id))
+            .where(practice_in_school_feedback_clause(school_id))
             .group_by(Feedback.rating)
         )
     ).all()
@@ -194,7 +196,7 @@ async def _feedback_and_top(
     #    (BE-107): grouping the whole Checkin / Feedback tables to keep five
     #    rows would read every school's history.
     school_completed = (
-        Practice.school_id == group_id,
+        Practice.school_id == school_id,
         Practice.status == PracticeStatus.COMPLETED.value,
     )
     checkin_counts = (
@@ -267,7 +269,7 @@ async def _feedback_and_top(
 
 
 async def _engagement(
-    group_id: UUID,
+    school_id: UUID,
     window_start: datetime,
     window_end: datetime,
     session: AsyncSession,
@@ -282,7 +284,7 @@ async def _engagement(
     """
     # THE PERIOD'S PRACTICES -- one predicate for every period metric.
     period_practices = (
-        Practice.school_id == group_id,
+        Practice.school_id == school_id,
         Practice.status == PracticeStatus.COMPLETED.value,
         Practice.scheduled_at >= window_start,
         Practice.scheduled_at < window_end,
@@ -307,7 +309,7 @@ async def _engagement(
         .join(
             SchoolMember,
             and_(
-                SchoolMember.school_id == group_id,
+                SchoolMember.school_id == school_id,
                 SchoolMember.user_id == Booking.user_id,
                 SchoolMember.kind == SchoolMemberKind.STUDENT.value,
             ),
@@ -333,7 +335,7 @@ async def _engagement(
         .where(
             Booking.user_id == SchoolMember.user_id,
             Booking.status == BookingStatus.ATTENDED.value,
-            Practice.school_id == group_id,
+            Practice.school_id == school_id,
             Practice.scheduled_at >= SchoolMember.joined_at,
             Practice.scheduled_at < window_end,
         )
@@ -344,7 +346,7 @@ async def _engagement(
             select(func.count())
             .select_from(SchoolMember)
             .where(
-                SchoolMember.school_id == group_id,
+                SchoolMember.school_id == school_id,
                 SchoolMember.kind == SchoolMemberKind.STUDENT.value,
                 SchoolMember.joined_at >= window_start,
                 SchoolMember.joined_at < window_end,

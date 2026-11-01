@@ -105,10 +105,10 @@ async def _school(
     s.third = await _user(client, db_session, _TID_THIRD, master=True)
     s.student = await _user(client, db_session, _TID_STUDENT, master=True)
     s.joiner = await _user(client, db_session, _TID_JOINER, master=False)
-    group = School(curator_user_id=s.curator, name="Школа BE-95")
-    db_session.add(group)
+    school = School(curator_user_id=s.curator, name="Школа BE-95")
+    db_session.add(school)
     await db_session.flush()
-    s.id = group.id
+    s.id = school.id
     for uid, kind in (
         (s.heir, MASTER), (s.third, MASTER), (s.student, STUDENT),
     ):
@@ -130,7 +130,7 @@ async def _actor(session: AsyncSession, user_id: UUID) -> User:
     return await session.get(User, user_id)
 
 
-async def _group(db_session: AsyncSession, s: SchoolSetup) -> School | None:
+async def _school_row(db_session: AsyncSession, s: SchoolSetup) -> School | None:
     db_session.expire_all()
     return (
         await db_session.execute(
@@ -290,9 +290,9 @@ async def test_a_delete_waits_for_a_removal_instead_of_deadlocking(
 ) -> None:
     """remove holds the member row; the delete of the school runs into it.
 
-    ON THE OLD ORDER THIS WAS A DEADLOCK: the delete locked the group and
+    ON THE OLD ORDER THIS WAS A DEADLOCK: the delete locked the school and
     cascaded into the member row the removal held, the removal then wrote
-    its journal event and asked for the group. Measured on raw SQL before
+    its journal event and asked for the school. Measured on raw SQL before
     the fix; here the mutation (the cascade-only delete) turns this red.
 
     THE PAIR: the removal committed AND the delete committed after it --
@@ -309,7 +309,7 @@ async def test_a_delete_waits_for_a_removal_instead_of_deadlocking(
     assert result.rival_waited, "the delete never met the removal's lock"
     assert result.holder.committed, result.holder.error
     assert result.rival.committed, result.rival.error
-    assert await _group(db_session, s) is None
+    assert await _school_row(db_session, s) is None
 
 
 @pytest.mark.asyncio
@@ -320,7 +320,7 @@ async def test_a_delete_waits_for_a_declined_appointment(
 
     The same deadlock through a different child: the decline took the
     offer, the cascade reached the offer last and waited, the decline's
-    journal event asked for the group.
+    journal event asked for the school.
     """
     s = await _school(client, db_session, offer_to_student=True)
     result = await race(
@@ -333,7 +333,7 @@ async def test_a_delete_waits_for_a_declined_appointment(
     assert result.rival_waited, "the delete never met the decline's lock"
     assert result.holder.committed, result.holder.error
     assert result.rival.committed, result.rival.error
-    assert await _group(db_session, s) is None
+    assert await _school_row(db_session, s) is None
 
 
 # =============================================================================
@@ -359,15 +359,15 @@ async def test_a_curator_who_handed_the_school_over_cannot_delete_it(
     result = await race(
         monkeypatch,
         holder=_delete(s),
-        pause_in=(school_service, "_get_group_or_404"),
+        pause_in=(school_service, "_get_school_or_404"),
         pause="after",
         rival=_accept_transfer(s),
     )
     assert result.rival.committed, result.rival.error
     assert isinstance(result.holder.error, NotFoundError), result.holder
-    group = await _group(db_session, s)
-    assert group is not None, "the old curator deleted the heir's school"
-    assert group.curator_user_id == s.heir
+    school = await _school_row(db_session, s)
+    assert school is not None, "the old curator deleted the heir's school"
+    assert school.curator_user_id == s.heir
     assert await _members(db_session, s) == {
         s.curator: MASTER, s.third: MASTER, s.student: STUDENT,
     }
@@ -386,27 +386,27 @@ async def test_two_deletes_of_one_school_give_one_success(
     result = await race(
         monkeypatch,
         holder=_delete(s),
-        pause_in=(school_service, "_get_group_or_404"),
+        pause_in=(school_service, "_get_school_or_404"),
         pause="after",
         rival=_delete(s),
     )
     assert result.rival.committed, result.rival.error
     assert isinstance(result.holder.error, NotFoundError), result.holder
-    assert await _group(db_session, s) is None
+    assert await _school_row(db_session, s) is None
 
 
 @pytest.mark.asyncio
 async def test_deleting_a_school_with_no_children(client, db_session) -> None:
-    """ПУСТОТА: nothing to delete but the group -- still one clean delete."""
+    """ПУСТОТА: nothing to delete but the school -- still one clean delete."""
     curator = await _user(client, db_session, _TID_CURATOR, master=True)
-    group = School(curator_user_id=curator, name="Пустая BE-95")
-    db_session.add(group)
+    school = School(curator_user_id=curator, name="Пустая BE-95")
+    db_session.add(school)
     await db_session.commit()
-    group_id = group.id
-    await school_service.delete_school(curator, group_id, db_session)
+    school_id = school.id
+    await school_service.delete_school(curator, school_id, db_session)
     await db_session.commit()
     db_session.expire_all()
-    assert await db_session.get(School, group_id) is None
+    assert await db_session.get(School, school_id) is None
 
 
 # =============================================================================
@@ -548,7 +548,7 @@ async def test_a_former_curator_cannot_offer_the_school_away(
     )
     assert result.rival.committed, result.rival.error
     assert isinstance(result.holder.error, NotFoundError), result.holder
-    assert (await _group(db_session, s)).curator_user_id == s.heir
+    assert (await _school_row(db_session, s)).curator_user_id == s.heir
     assert await _transfers(db_session, s) == []
 
 
@@ -571,7 +571,7 @@ async def test_a_former_curator_cannot_withdraw_the_new_owners_offer(
     result = await race(
         monkeypatch,
         holder=_cancel_transfer(s),
-        pause_in=(school_service, "_get_group_or_404"),
+        pause_in=(school_service, "_get_school_or_404"),
         pause="after",
         rival=accept_then_offer_on,
     )
@@ -600,7 +600,7 @@ async def test_joining_a_school_deleted_mid_join_is_not_a_success(
     assert result.rival.committed, result.rival.error
     assert isinstance(result.holder.error, NotFoundError), result.holder
     assert result.holder.error.code == "invite_not_found"
-    assert await _group(db_session, s) is None
+    assert await _school_row(db_session, s) is None
 
 
 # =============================================================================
@@ -615,7 +615,7 @@ async def _renames(db_session: AsyncSession, s: SchoolSetup) -> list[tuple]:
             .where(
                 SchoolEvent.school_id == s.id,
                 SchoolEvent.event
-                == SchoolEventKind.GROUP_RENAMED.value,
+                == SchoolEventKind.SCHOOL_RENAMED.value,
             )
             .order_by(SchoolEvent.seq)
         )
@@ -637,7 +637,7 @@ async def test_two_renames_record_what_each_actually_replaced(
     result = await race(
         monkeypatch,
         holder=_rename(s, "А"),
-        pause_in=(school_service, "_lock_group_as_owner"),
+        pause_in=(school_service, "_lock_school_as_owner"),
         pause="after",
         rival=_rename(s, "Б"),
     )
@@ -648,7 +648,7 @@ async def test_two_renames_record_what_each_actually_replaced(
     assert await _renames(db_session, s) == [
         ("Школа BE-95", "А"), ("А", "Б"),
     ]
-    assert (await _group(db_session, s)).name == "Б"
+    assert (await _school_row(db_session, s)).name == "Б"
 
 
 @pytest.mark.asyncio
@@ -664,7 +664,7 @@ async def test_an_edit_and_a_delete_of_one_school(
     result = await race(
         monkeypatch,
         holder=_rename(s, "А"),
-        pause_in=(school_service, "_lock_group_as_owner"),
+        pause_in=(school_service, "_lock_school_as_owner"),
         pause="after",
         rival=_delete(s),
     )
@@ -672,18 +672,18 @@ async def test_an_edit_and_a_delete_of_one_school(
     assert result.rival_waited, "the delete never met the edit's lock"
     assert result.holder.committed, result.holder.error
     assert result.rival.committed, result.rival.error
-    assert await _group(db_session, s) is None
+    assert await _school_row(db_session, s) is None
 
 
 @pytest.mark.asyncio
 async def test_an_appointment_made_while_the_school_is_renamed(
     client, db_session, monkeypatch,
 ) -> None:
-    """The group row is taken once, at full strength -- never upgraded.
+    """The school row is taken once, at full strength -- never upgraded.
 
-    The rename holds the group to read it and then needs the stronger lock
+    The rename holds the school to read it and then needs the stronger lock
     to change its name. An offer that had inserted its row first (the FK
-    check takes KEY SHARE on the group) and only then asked for the group
+    check takes KEY SHARE on the school) and only then asked for the school
     to re-check ownership was upgrading the same lock the other way: a
     deadlock, measured on the first form of this delivery. The offer now
     checks ownership before the INSERT, so it waits on the rename holding
@@ -693,7 +693,7 @@ async def test_an_appointment_made_while_the_school_is_renamed(
     result = await race(
         monkeypatch,
         holder=_rename(s, "А"),
-        pause_in=(school_service, "_lock_group_as_owner"),
+        pause_in=(school_service, "_lock_school_as_owner"),
         pause="after",
         rival=_offer_master(s),
     )
@@ -702,14 +702,14 @@ async def test_an_appointment_made_while_the_school_is_renamed(
     assert result.holder.committed, result.holder.error
     assert result.rival.committed, result.rival.error
     assert await _offers(db_session, s) == [s.student]
-    assert (await _group(db_session, s)).name == "А"
+    assert (await _school_row(db_session, s)).name == "А"
 
 
 # ===========================================================================
 # BE-59 B1 finding: the curator-side takers that wrote WITHOUT re-checking
-# ownership under the group lock (remove, revoke). Reproduced red on the
+# ownership under the school lock (remove, revoke). Reproduced red on the
 # code before the fix; the holder is the accept that hands the school over,
-# paused after it has taken the group row.
+# paused after it has taken the school row.
 # ===========================================================================
 
 
@@ -750,13 +750,13 @@ async def test_a_curator_who_handed_the_school_over_cannot_remove_from_it(
     client, db_session, monkeypatch,
 ) -> None:
     """The old curator removes a member while the heir's accept holds the
-    group row it has just changed hands on.
+    school row it has just changed hands on.
 
     ON THE OLD CODE THE REMOVAL COMMITTED. Remove read ownership once
-    (_get_group_or_404, before the accept committed) and never again. It
+    (_get_school_or_404, before the accept committed) and never again. It
     DID wait -- measured, not assumed: the accept rewrites curator_user_id,
     a column of the UNIQUE (curator_user_id, name) index, which is a key
-    update, and the journal INSERT's FK check takes KEY SHARE on the group,
+    update, and the journal INSERT's FK check takes KEY SHARE on the school,
     which conflicts with it -- but waiting re-reads nothing, so once the
     accept committed the removal went on, and a person vanished from the
     NEW owner's school, removed by somebody who no longer owned it.
@@ -774,14 +774,14 @@ async def test_a_curator_who_handed_the_school_over_cannot_remove_from_it(
     )
     assert_no_deadlock(result)
     assert result.holder.committed, result.holder.error
-    assert result.rival_waited, "the removal never met the group's lock"
+    assert result.rival_waited, "the removal never met the school's lock"
     assert isinstance(result.rival.error, NotFoundError), result.rival
     db_session.expire_all()
     assert (await _members(db_session, s)).get(s.third) == MASTER
     assert SchoolEventKind.MEMBER_REMOVED.value not in (
         await _journal_events(db_session, s)
     )
-    assert (await _group(db_session, s)).curator_user_id == s.heir
+    assert (await _school_row(db_session, s)).curator_user_id == s.heir
 
 
 @pytest.mark.asyncio
@@ -789,9 +789,9 @@ async def test_a_curator_who_handed_the_school_over_cannot_revoke_its_link(
     client, db_session, monkeypatch,
 ) -> None:
     """The same window for the invite link: the old curator revokes it while
-    the heir's accept holds the group row.
+    the heir's accept holds the school row.
 
-    ON THE OLD CODE THE REVOCATION COMMITTED, after waiting on the group
+    ON THE OLD CODE THE REVOCATION COMMITTED, after waiting on the school
     for the same key-update reason as the removal above -- and then the new
     owner's link was gone and the journal said its curator revoked it.
 
@@ -808,7 +808,7 @@ async def test_a_curator_who_handed_the_school_over_cannot_revoke_its_link(
     )
     assert_no_deadlock(result)
     assert result.holder.committed, result.holder.error
-    assert result.rival_waited, "the revocation never met the group's lock"
+    assert result.rival_waited, "the revocation never met the school's lock"
     assert isinstance(result.rival.error, NotFoundError), result.rival
     db_session.expire_all()
     assert await _invites(db_session, s) == [s.token]

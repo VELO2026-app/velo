@@ -141,13 +141,13 @@ async def _make_student(
 async def _school(
     db_session: AsyncSession, curator: dict, name: str = "Тихое утро",
 ) -> School:
-    group = School(
+    school = School(
         curator_user_id=UUID(curator["user"]["id"]), name=name,
     )
-    db_session.add(group)
+    db_session.add(school)
     await db_session.flush()
     await db_session.commit()
-    return group
+    return school
 
 
 async def _join_school(
@@ -301,9 +301,9 @@ async def _get(
     school: School | str,
     **params,
 ):
-    group_id = school if isinstance(school, str) else str(school.id)
+    school_id = school if isinstance(school, str) else str(school.id)
     return await client.get(
-        url.format(school_id=group_id),
+        url.format(school_id=school_id),
         params=params or None,
         headers=auth_headers(auth["session_token"]),
     )

@@ -51,7 +51,7 @@ from app.modules.practices.audience_service import (
     practice_in_school_feedback_clause,
 )
 from app.modules.practices.models import Practice
-from app.modules.schools.service import _get_group_or_404
+from app.modules.schools.service import _get_school_or_404
 from app.modules.users.helpers import display_name
 from app.modules.users.models import User
 
@@ -60,7 +60,7 @@ logger = structlog.get_logger()
 
 async def list_school_checkins(
     curator_user_id: UUID,
-    group_id: UUID,
+    school_id: UUID,
     session: AsyncSession,
     *,
     practice_id: UUID | None = None,
@@ -69,7 +69,7 @@ async def list_school_checkins(
 ) -> tuple[list[dict], int]:
     """PRE check-ins on this school's practices, newest first.
 
-    Ownership goes through _get_group_or_404, so somebody else's school and
+    Ownership goes through _get_school_or_404, so somebody else's school and
     a school that does not exist are the same 404 (P-08) -- the curator of
     another school learns nothing about this one.
 
@@ -88,7 +88,7 @@ async def list_school_checkins(
 
     Args:
         curator_user_id: The authenticated curator (ownership scope).
-        group_id: The school.
+        school_id: The school.
         session: Read session.
         practice_id: Optional narrowing to one practice of the school. NOT
             a second access rule -- a practice outside the school stays
@@ -102,9 +102,9 @@ async def list_school_checkins(
         SchoolCheckinItem.
 
     Raises:
-        NotFoundError: The group does not exist or is not this curator's.
+        NotFoundError: The school does not exist or is not this curator's.
     """
-    group = await _get_group_or_404(curator_user_id, group_id, session)
+    school = await _get_school_or_404(curator_user_id, school_id, session)
 
     base = (
         select(Checkin, User, Practice.title)
@@ -112,7 +112,7 @@ async def list_school_checkins(
         .join(Booking, Checkin.booking_id == Booking.id)
         .join(User, Checkin.user_id == User.id)
         .where(
-            practice_in_school_feedback_clause(group.id),
+            practice_in_school_feedback_clause(school.id),
             Checkin.check_type == CheckType.PRE.value,
             Booking.status != BookingStatus.CANCELLED.value,
         )
@@ -160,7 +160,7 @@ async def list_school_checkins(
 
 async def list_school_reviews(
     curator_user_id: UUID,
-    group_id: UUID,
+    school_id: UUID,
     session: AsyncSession,
     *,
     practice_id: UUID | None = None,
@@ -179,13 +179,13 @@ async def list_school_reviews(
 
     Args, Returns, Raises: as list_school_checkins.
     """
-    group = await _get_group_or_404(curator_user_id, group_id, session)
+    school = await _get_school_or_404(curator_user_id, school_id, session)
 
     base = (
         select(Feedback, User, Practice.title)
         .join(Practice, Feedback.practice_id == Practice.id)
         .join(User, Feedback.user_id == User.id)
-        .where(practice_in_school_feedback_clause(group.id))
+        .where(practice_in_school_feedback_clause(school.id))
     )
     if practice_id is not None:
         base = base.where(Feedback.practice_id == practice_id)

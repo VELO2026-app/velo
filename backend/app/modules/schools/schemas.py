@@ -145,7 +145,7 @@ class CreateSchoolRequest(BaseModel):
 class UpdateSchoolRequest(BaseModel):
     """PATCH /masters/me/schools/{id}.
 
-    `name` is always required -- a group always has one.
+    `name` is always required -- a school always has one.
 
     `description` is a PARTIAL update. The router computes
     `"description" in body.model_dump(exclude_unset=True)` and passes it as
@@ -175,7 +175,7 @@ class UpdateSchoolRequest(BaseModel):
 class OfferSchoolTransferRequest(BaseModel):
     """POST /masters/me/schools/{id}/transfer.
 
-    to_user_id only: the eligible set is the group's visible masters, and
+    to_user_id only: the eligible set is the school's visible masters, and
     the service checks membership against exactly the roster it shows, so
     there is nothing else for the caller to state.
     """
@@ -184,10 +184,10 @@ class OfferSchoolTransferRequest(BaseModel):
 
 
 class SchoolTransferRef(BaseModel):
-    """A pending offer to hand the group over.
+    """A pending offer to hand the school over.
 
     ONE schema for all three places that report an offer (the curator's own
-    row, that row after a PATCH, and the group page). Three flat triples of
+    row, that row after a PATCH, and the school page). Three flat triples of
     the same fields would drift the first time one of them gained a fourth.
 
     to_display_name uses display_name(first_name, last_name) from
@@ -217,13 +217,13 @@ class SchoolResponse(BaseModel):
     students_count counts every kind='student' row. Visibility is a rule
     about masters; a student has no MasterProfile to be verified.
 
-    `transfer` describes the group's pending hand-over, or null when there
+    `transfer` describes the school's pending hand-over, or null when there
     is none. Until GT-4 this field did not exist at all -- deliberately, so
     that a hardcoded null could not become a promise the frontend built on.
     It appears now BECAUSE it acquired a writer, which is the only reason a
     field ever should.
 
-    PATCH returns this schema too, so renaming a group now reports the
+    PATCH returns this schema too, so renaming a school now reports the
     pending transfer alongside the new name. That is an intended widening,
     not a leak: one response shape has one field set, and the alternative --
     two flavours of SchoolResponse, with and without -- is exactly the
@@ -433,11 +433,11 @@ SchoolRelationLiteral = Literal["curator", "master", "student"]
 
 
 class SchoolCuratorRef(BaseModel):
-    """The group's owner, as anyone in the group may see them.
+    """The school's owner, as anyone in the school may see them.
 
     A strict subset of MasterPublicResponse -- the declared isolation
     boundary in masters/schemas.py. Nothing financial, nothing contact-like,
-    and no status: a group is only ever visible while its curator is
+    and no status: a school is only ever visible while its curator is
     verified (I-6), so exposing the status would only ever print one value.
     """
 
@@ -449,10 +449,10 @@ class SchoolCuratorRef(BaseModel):
 class SchoolMineItem(BaseModel):
     """One row of GET /schools/mine.
 
-    `relation` is the viewer's own tie to this group and is what the
+    `relation` is the viewer's own tie to this school and is what the
     frontend keys the row's chip off.
 
-    `transfer_offered` is true ONLY for the person being offered the group,
+    `transfer_offered` is true ONLY for the person being offered the school,
     and it is a bool rather than the full ref on purpose: this is a list
     row, and everything the offer contains is already known to whoever it
     was made to. The curator sees false here even for their own pending
@@ -479,13 +479,13 @@ class SchoolMineResponse(BaseModel):
 
 
 class SchoolViewer(BaseModel):
-    """The requesting user's own tie to the group being viewed."""
+    """The requesting user's own tie to the school being viewed."""
 
     relation: SchoolRelationLiteral
 
 
 class SchoolPageResponse(BaseModel):
-    """GET /schools/{id} -- the group as a member sees it.
+    """GET /schools/{id} -- the school as a member sees it.
 
     Deliberately NOT the same shape as SchoolResponse (the curator's
     own row): that one is a management view keyed by ownership, this one
@@ -493,7 +493,7 @@ class SchoolPageResponse(BaseModel):
     the owner. Two shapes rather than one with half the fields null.
 
     `transfer` is filled for exactly two people -- the curator and the
-    person being offered the group -- and is null for every other member
+    person being offered the school -- and is null for every other member
     (TZ 5.2). Null rather than an absent key: the field exists for everyone,
     only its value differs, which keeps one OpenAPI shape instead of two.
     A member who is not part of the deal learns nothing about it, not even
@@ -513,7 +513,7 @@ class SchoolPageResponse(BaseModel):
 
 
 class SchoolMasterItem(BaseModel):
-    """One master in a group's roster.
+    """One master in a school's roster.
 
     Fields are a STRICT SUBSET of MasterPublicResponse plus is_curator --
     the isolation boundary is reused, not restated. reviews_count is
@@ -585,8 +585,8 @@ class SchoolInvitePreviewSchool(BaseModel):
     """The card shown to someone who opened an invite link.
 
     curator_name is a STRING here, not the {user_id, display_name,
-    avatar_url} object the group page returns: whoever is looking has no
-    relation to the group yet, so they get the school's name and its
+    avatar_url} object the school page returns: whoever is looking has no
+    relation to the school yet, so they get the school's name and its
     curator's name, not a handle to go look the curator up with.
     """
 
@@ -604,7 +604,7 @@ class SchoolInvitePreviewResponse(BaseModel):
 
     This endpoint DESCRIBES a refusal instead of raising it: can_join=False
     plus a reason, so the screen can say why. The one exception is 404 --
-    an unknown token, a revoked one, an inactive group and a deleted group
+    an unknown token, a revoked one, an inactive school and a deleted school
     are one answer (P-08), here as everywhere else.
 
     can_join answers "would joining CHANGE anything", not "are you allowed
@@ -615,7 +615,7 @@ class SchoolInvitePreviewResponse(BaseModel):
     `kind` field this model used to carry went with the second link.
 
     relation is the viewer's tie RIGHT NOW, before anything is done: null
-    for someone who is not in the group yet.
+    for someone who is not in the school yet.
     """
 
     school: SchoolInvitePreviewSchool
@@ -681,7 +681,7 @@ class SchoolRemovePreviewResponse(BaseModel):
     """GET /masters/me/schools/{id}/members/{user_id}/remove-preview.
 
     The same number for the member the curator is about to remove. Zero for
-    a student, and zero -- not 404 -- for somebody who is not in the group
+    a student, and zero -- not 404 -- for somebody who is not in the school
     at all: the removal itself is idempotent and answers 204 on that same
     target, so the advisory must not be stricter than the action it
     describes.
@@ -695,7 +695,7 @@ class SchoolDeletePreviewResponse(BaseModel):
 
     What deleting the school costs: who is in it, and how many upcoming
     practices -- across EVERY master of the school, the curator included --
-    are aimed at it. The counters are the same two the group page reports,
+    are aimed at it. The counters are the same two the school page reports,
     from the same helper, so the dialog and the page cannot disagree.
     """
 
@@ -1003,7 +1003,7 @@ class SchoolTopPracticeItem(BaseModel):
 class SchoolAnalyticsResponse(BaseModel):
     """GET /masters/me/schools/{school_id}/analytics (§6).
 
-    `engagement` answers the request's ?period; every other group is the
+    `engagement` answers the request's ?period; every other school is the
     school's all-time shape and does not move with the slider.
     """
 

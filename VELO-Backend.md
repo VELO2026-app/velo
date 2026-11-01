@@ -130,7 +130,7 @@
 | `comms_proxy` | `app/modules/comms_proxy/` | In-app notification bell (unread feed, read/read-all) |
 | `chats` | `app/modules/chats/` | Real one-to-one messaging (threads, messages, unread-count) |
 | `diary` | `app/modules/diary/` | Check-ins, feedbacks, diary entries, insights; append-only `DiaryEvent` journal (`models.py`) + `projections.py` (единственный писатель журнала) + единая лента `GET /diary/feed` (cursor) |
-| `schools` | `app/modules/schools/` | Школы (кураторские группы). Куратор — НЕ участник: связь выводится из `school.curator_user_id` (I-2), строки участия нет. Пять своих таблиц: `school`, `_member`, `_invite`, `_transfer`, `_event`; шестая, `practice_audience_curator_group`, принадлежит `practices`. Append-only журнал `SchoolEvent` + единственный писатель `_record_group_event` (`service.py`) + чтение `GET /masters/me/schools/{id}/journal` (limit/offset, `ORDER BY seq DESC`). Право заводить школу — флаг в `MasterProfile.data.account`, гейт в одной точке (см. 3.17) |
+| `schools` | `app/modules/schools/` | Школы (кураторские группы). Куратор — НЕ участник: связь выводится из `school.curator_user_id` (I-2), строки участия нет. Пять своих таблиц: `school`, `_member`, `_invite`, `_transfer`, `_event`; шестая, `practice_audience_curator_group`, принадлежит `practices`. Append-only журнал `SchoolEvent` + единственный писатель `_record_school_event` (`service.py`) + чтение `GET /masters/me/schools/{id}/journal` (limit/offset, `ORDER BY seq DESC`). Право заводить школу — флаг в `MasterProfile.data.account`, гейт в одной точке (см. 3.17) |
 | `admin` | `app/modules/admin/` | Верификация мастеров, модерация (data-integrity semaphores built Phase 6.8, removed 2026-07-07 `9ca5619` — see §6) |
 | `ai` | `app/modules/ai/` | Розетка AI-саммари (Phase 9) |
 | `library` | `app/modules/library/` | Розетка: будущая библиотека записей практик (Phase 9.2, вне MVP — `models.py` целиком закомментирован, кода нет) |
@@ -482,7 +482,7 @@ GET    /api/v1/admin/schools                                       -- Все ш�
 
 `is_active` (админский список) — **производная**, не колонка. Школа активна
 ровно тогда, когда её куратор верифицирован ПРЯМО СЕЙЧАС:
-`_active_group_clause()` = `_verified_profile_exists(School.curator_user_id)`,
+`_active_school_clause()` = `_verified_profile_exists(School.curator_user_id)`,
 то есть тот же JSONB-путь к статусу, что у ростера и счётчиков, написанный в
 дереве один раз. Для самих участников неактивная школа неотличима от удалённой
 (404, I-6) — и это правильно для них и бесполезно для админа, которого как раз
@@ -1090,10 +1090,10 @@ ForeignKey, JSONB `data` под контекст. Что не взято — в�
 момент записи — это уже актор: получилась бы запись «Пётр принял школу от
 Петра».
 
-**Единственный писатель — `_record_group_event`.** Пересчитать:
+**Единственный писатель — `_record_school_event`.** Пересчитать:
 `grep -c "SchoolEvent(" app/modules/schools/service.py` → **1**,
 внутри хелпера; ORM-строку журнала не создаёт больше никто.
-`grep -c "_record_group_event(" …` → **16**, то есть **одно определение и 15
+`grep -c "_record_school_event(" …` → **16**, то есть **одно определение и 15
 вызовов** при **14** видах событий. Оба расхождения ожидаемы, и вот почему:
 15 вызовов на 14 видов — потому что `member_promoted` пишется из двух мест
 (обычное повышение и ветка проигранной гонки в `join_school_by_token`).
@@ -1123,7 +1123,7 @@ verify и тоггл, `scripts/seed.py`) и читателями. Причина
 нет.
 
 **Гейт — одна точка.** `create_school`, и только она: пересчитать —
-`_can_create_groups_exists` используется в `service.py:530` и больше нигде.
+`_can_create_schools_exists` используется в `service.py:530` и больше нигде.
 Остальные кураторские эндпоинты флаг **не проверяют**, они про уже
 существующую школу.
 

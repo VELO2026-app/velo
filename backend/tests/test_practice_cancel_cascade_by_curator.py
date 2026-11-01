@@ -111,10 +111,10 @@ async def _master(
 async def _school(
     db_session: AsyncSession, curator_id: str, name: str = "Каскад",
 ) -> School:
-    group = School(curator_user_id=UUID(curator_id), name=name)
-    db_session.add(group)
+    school = School(curator_user_id=UUID(curator_id), name=name)
+    db_session.add(school)
     await db_session.commit()
-    return group
+    return school
 
 
 async def _practice(
@@ -535,7 +535,7 @@ async def test_school_handed_over_in_the_window_cancels_nothing(
     committed (curator_user_id is the new owner's -- the end state of an
     accepted transfer), and the READ of the right answers as it did before
     it (_curated_school_of patched to the stale answer). Only the re-check
-    under the group lock can tell, and it must, before any write.
+    under the school lock can tell, and it must, before any write.
     """
     w = world
     mid_ = w["master"]["user"]["id"]
@@ -580,7 +580,7 @@ async def test_cascade_against_the_curators_edit_of_a_sibling_does_not_deadlock(
 ) -> None:
     """Holder: the curator edits the series' later occurrence -- it holds
     that practice FOR UPDATE and is paused just before it locks the school
-    as its owner (_relock_school_or_404 -> _lock_group_as_owner). Rival:
+    as its owner (_relock_school_or_404 -> _lock_school_as_owner). Rival:
     the same curator's cascade from the root -- it locks the series in one
     statement by id and waits at the held sibling.
 
@@ -618,7 +618,7 @@ async def test_cascade_against_the_curators_edit_of_a_sibling_does_not_deadlock(
     result = await race(
         monkeypatch,
         holder=holder,
-        pause_in=(practice_service, "_lock_group_as_owner"),
+        pause_in=(practice_service, "_lock_school_as_owner"),
         rival=rival,
     )
     assert_no_deadlock(result)
