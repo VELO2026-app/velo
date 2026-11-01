@@ -122,7 +122,7 @@ const router = createRouter({
           // the calendar scoped to that school. Stacked (not the tab hub) so
           // the floating island's back control is honest; mirrors
           // user-calendar-master above.
-          path: 'calendar/school/:groupId',
+          path: 'calendar/school/:schoolId',
           name: 'user-calendar-school',
           component: () => import('@/views/user/CalendarView.vue'),
         },
@@ -239,11 +239,11 @@ const router = createRouter({
           component: () => import('@/views/user/UserInboxView.vue'),
         },
         {
-          // FE-19 (GT P3): "Мои группы" in the user zone means SCHOOLS --
-          // the master's student groups are a master-zone
+          // FE-19 (GT P3): the user zone's «Мои школы» -- the schools I
+          // belong to. The master's student groups are a master-zone
           // concept a plain user never sees. Entry row: UserProfileView,
           // «Аккаунт» section.
-          path: 'groups',
+          path: 'my-schools',
           name: 'user-my-schools',
           meta: { hideTabBar: true },
           component: () => import('@/views/user/UserMySchoolsView.vue'),
@@ -258,7 +258,7 @@ const router = createRouter({
           component: () => import('@/views/user/SchoolsView.vue'),
         },
         {
-          path: 'groups/:id',
+          path: 'schools/:id',
           name: 'user-school',
           meta: { hideTabBar: true },
           // ONE page for both zones (TZ 6.3) -- the master zone mounts this
@@ -560,7 +560,7 @@ const router = createRouter({
         {
           // tz-curator.md §1.11.4 (owner 2026-09-22): same student profile
           // component as the user zone; the zone picks the back target.
-          path: 'schools/:groupId/students/:userId',
+          path: 'schools/:schoolId/students/:userId',
           name: 'master-school-student',
           beforeEnter: masterStatusGuard,
           meta: { hideTabBar: true },

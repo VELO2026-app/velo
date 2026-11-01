@@ -76,7 +76,7 @@ function buildRouter(): Router {
         // The «Предстоящие практики» target on the school page (owner
         // 2026-10-01): the school-scoped week grid. Owner 2026-10-05: a
         // DETAIL screen -- dock hidden (DETAIL_ROUTES) + fogged (FOG_ROUTES).
-        path: '/user/calendar/school/:groupId',
+        path: '/user/calendar/school/:schoolId',
         name: 'user-calendar-school',
         component: StubChild,
       },
@@ -229,7 +229,7 @@ describe('UserShell', () => {
       ['user-checkin', { practiceId: 'p1' }],
       // Owner 2026-10-05: the stacked school calendar + the practice detail
       // are detail screens (back control / own footer instead of the dock).
-      ['user-calendar-school', { groupId: 'g1' }],
+      ['user-calendar-school', { schoolId: 'g1' }],
       ['practice-detail', { id: 'p1' }],
     ] as const)('%s hides the tab bar', async (name, params) => {
       await mount(name, params as Record<string, string>)
@@ -256,7 +256,7 @@ describe('UserShell', () => {
       expect(host?.querySelector('.v-tabbar')).toBeNull()
     })
 
-    // Owner 2026-09-30: the master's page in the CURATOR context (?groupId=)
+    // Owner 2026-09-30: the master's page in the CURATOR context (?schoolId=)
     // hides the dock -- the hanging «Создать практику» CTA takes its place.
     // Without the marker the visitor keeps the dock.
     it('user-master-public hides the tab bar only in the curator context', async () => {
@@ -267,7 +267,7 @@ describe('UserShell', () => {
       await router.push({
         name: 'user-master-public',
         params: { id: 'm1' },
-        query: { groupId: 'g1' },
+        query: { schoolId: 'g1' },
       })
       await flush()
 
@@ -355,7 +355,7 @@ describe('UserShell', () => {
       schoolsMock.getMySchools.mockResolvedValue({
         items: [{ id: 'g1', name: 'Тихая школа', relation: 'curator' }],
       })
-      await mount('user-calendar-school', { groupId: 'g1' }, seedAccount(['user']))
+      await mount('user-calendar-school', { schoolId: 'g1' }, seedAccount(['user']))
       await flush()
       await flush()
 
@@ -446,7 +446,7 @@ describe('UserShell', () => {
     })
 
     it('the school-scoped calendar gets the fog as well (stacked list feed, owner 2026-10-05)', async () => {
-      await mount('user-calendar-school', { groupId: 'g1' })
+      await mount('user-calendar-school', { schoolId: 'g1' })
       await flush()
 
       expect(mainEl().classList.contains('mobile-layout__main--fog')).toBe(true)

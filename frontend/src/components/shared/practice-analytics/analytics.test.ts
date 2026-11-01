@@ -223,7 +223,7 @@ describe('personTarget -- what a tap on a person opens', () => {
     const s = { viewer_role: 'curator' as const, school_id: 'g1' }
     expect(personTarget(s, member)).toEqual({
       kind: 'route',
-      to: { name: 'master-school-student', params: { groupId: 'g1', userId: 'u1' } },
+      to: { name: 'master-school-student', params: { schoolId: 'g1', userId: 'u1' } },
     })
     expect(personTarget(s, guest)).toBeNull()
     expect(personTarget({ viewer_role: 'curator', school_id: null }, member)).toBeNull()

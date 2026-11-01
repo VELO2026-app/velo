@@ -77,9 +77,9 @@
 
       <template v-else>
         <SchoolRow
-          v-for="g in schools"
-          :key="g.id"
-          :group="g"
+          v-for="school in schools"
+          :key="school.id"
+          :school="school"
           @open="router.push({ name: 'user-school', params: { id: $event } })"
         />
       </template>

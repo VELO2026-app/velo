@@ -122,7 +122,7 @@ const push = vi.fn()
 const back = vi.fn()
 const replace = vi.fn()
 // §1.6 delegation: the entry points arrive as query params (masterId from the
-// master's public page, groupId from the school page). Mutable so a test
+// master's public page, schoolId from the school page). Mutable so a test
 // mounts WITH its query context.
 const routeQuery: Record<string, string> = {}
 vi.mock('vue-router', () => ({
@@ -1777,7 +1777,7 @@ describe('CreatePracticeView -- «Школы» audience (FE-24 / GT P5)', () => 
 // =============================================================================
 // §1.6 delegation: whose practice is being created (FE-92, BE-102)
 // =============================================================================
-// masterId + groupId (the master's public page CTA) and groupId (the school
+// masterId + schoolId (the master's public page CTA) and schoolId (the school
 // page CTA) surface the master context. The STUB tests that stood here
 // («warns and blocks submit») pinned the interim -- right until BE-102 let
 // POST /practices take master_id; their property no longer exists. Now: a
@@ -1789,9 +1789,9 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     return practice({ id: 'p_for_master', status: 'draft', ...overrides })
   }
 
-  it('masterId + groupId: the master is fixed; submit sends master_id AND the school, no second request', async () => {
+  it('masterId + schoolId: the master is fixed; submit sends master_id AND the school, no second request', async () => {
     routeQuery.masterId = 'm_pub'
-    routeQuery.groupId = 'g1'
+    routeQuery.schoolId = 'g1'
     // The target master confirms «Йога» — fillMinimalForm picks exactly that;
     // the master-vs-caller divergence is exercised by the picker tests below.
     vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
@@ -1837,7 +1837,7 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
 
   it('a dedup for the master: «Такая практика уже есть у мастера», back to the school', async () => {
     routeQuery.masterId = 'm_pub'
-    routeQuery.groupId = 'g1'
+    routeQuery.schoolId = 'g1'
     // fillMinimalForm needs the master's confirmed set to offer «Йога».
     vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
       display_name: 'Анна Ли',
@@ -1864,7 +1864,7 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     [400, 'school_not_usable', 'Школа недоступна: она отключена или вы в ней больше не состоите'],
   ] as const)('refusal %i %s -> its toast; the form keeps its input', async (status, code, msg) => {
     routeQuery.masterId = 'm_pub'
-    routeQuery.groupId = 'g1'
+    routeQuery.schoolId = 'g1'
     // fillMinimalForm needs the master's confirmed set to offer «Йога».
     vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
       display_name: 'Анна Ли',
@@ -1889,8 +1889,8 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     expect(second).toEqual(first)
   })
 
-  it('groupId query: lists visible school masters, «Я» stays creatable', async () => {
-    routeQuery.groupId = 'g1'
+  it('schoolId query: lists visible school masters, «Я» stays creatable', async () => {
+    routeQuery.schoolId = 'g1'
     vi.mocked(cgApi.getSchoolMembers).mockResolvedValue({
       items: [
         {
@@ -1940,8 +1940,8 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     expect('master_id' in sentBody()).toBe(false)
   })
 
-  it("groupId query: «Я» alone already sees only the school's two audience kinds (owner 2026-10-05)", async () => {
-    routeQuery.groupId = 'g1'
+  it("schoolId query: «Я» alone already sees only the school's two audience kinds (owner 2026-10-05)", async () => {
+    routeQuery.schoolId = 'g1'
     mount()
     await flush()
 
@@ -1956,8 +1956,28 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     expect(labels.some((l) => l.includes('Конкретные группы'))).toBe(false)
   })
 
-  it("groupId query: picking a school master limits the audience to the school's two and sends the school with «public» too", async () => {
-    routeQuery.groupId = 'g1'
+  // Step 3 of the school rename, the three twin axes of the entry's query:
+  // both keys -> schoolId decides; an empty schoolId is no school entry; the
+  // FORMER ?groupId alone (an old link, a history entry) is no school entry
+  // either -- owner: no legacy, so it opens the plain personal create.
+  it.each([
+    [{ schoolId: 'g1', groupId: 'gX' }, true],
+    [{ schoolId: '' }, false],
+    [{ groupId: 'g1' }, false],
+  ] as const)('entry query %o -> school entry: %s', async (query, schoolEntry) => {
+    Object.assign(routeQuery, query)
+    mount()
+    await flush()
+
+    const labels = Array.from(
+      host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? [],
+    ).map((b) => b.textContent ?? '')
+    expect(labels.some((l) => l.includes('Публичная'))).toBe(true)
+    expect(labels.some((l) => l.includes('Все мои ученики'))).toBe(!schoolEntry)
+  })
+
+  it("schoolId query: picking a school master limits the audience to the school's two and sends the school with «public» too", async () => {
+    routeQuery.schoolId = 'g1'
     vi.mocked(cgApi.getSchoolMembers).mockResolvedValue({
       items: [
         {
@@ -2009,16 +2029,16 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     return text().includes('Использовать шаблон')
   }
 
-  it('templates: hidden for a fixed foreign master (masterId + groupId)', async () => {
+  it('templates: hidden for a fixed foreign master (masterId + schoolId)', async () => {
     routeQuery.masterId = 'm_pub'
-    routeQuery.groupId = 'g1'
+    routeQuery.schoolId = 'g1'
     mount()
     await flush()
     expect(templateSection()).toBe(false)
   })
 
   it('templates: shown for «Я», hidden once a school master is picked', async () => {
-    routeQuery.groupId = 'g1'
+    routeQuery.schoolId = 'g1'
     vi.mocked(cgApi.getSchoolMembers).mockResolvedValue({
       items: [
         {
@@ -2056,9 +2076,9 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     )
   }
 
-  it("masterId + groupId: the pickers offer the MASTER's methods — a direction only he holds is creatable", async () => {
+  it("masterId + schoolId: the pickers offer the MASTER's methods — a direction only he holds is creatable", async () => {
     routeQuery.masterId = 'm_pub'
-    routeQuery.groupId = 'g1'
+    routeQuery.schoolId = 'g1'
     // The caller (beforeEach) is confirmed for Йога but NOT Медитация; the
     // target master is the reverse. Exactly the asymmetry that used to 400
     // on submit.
@@ -2090,8 +2110,8 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     expect(body.master_id).toBe('m_pub')
   })
 
-  it("groupId query: picking a school master swaps the direction filter to HIS methods; «Я» restores the caller's", async () => {
-    routeQuery.groupId = 'g1'
+  it("schoolId query: picking a school master swaps the direction filter to HIS methods; «Я» restores the caller's", async () => {
+    routeQuery.schoolId = 'g1'
     vi.mocked(cgApi.getSchoolMembers).mockResolvedValue({
       items: [
         {
@@ -2140,8 +2160,8 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     expect(opts).not.toContain('Медитация')
   })
 
-  it('groupId query: a direction the newly picked master does not confirm is cleared from the form', async () => {
-    routeQuery.groupId = 'g1'
+  it('schoolId query: a direction the newly picked master does not confirm is cleared from the form', async () => {
+    routeQuery.schoolId = 'g1'
     vi.mocked(cgApi.getSchoolMembers).mockResolvedValue({
       items: [
         {
@@ -2177,9 +2197,9 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     expect(selectByPlaceholder('Направление практики')?.value).toBe('')
   })
 
-  it("masterId + groupId: the master's methods failing to load keeps the pickers empty and says why", async () => {
+  it("masterId + schoolId: the master's methods failing to load keeps the pickers empty and says why", async () => {
     routeQuery.masterId = 'm_pub'
-    routeQuery.groupId = 'g1'
+    routeQuery.schoolId = 'g1'
     vi.mocked(mastersApi.getPublicMaster).mockRejectedValue(new Error('offline'))
     mount()
     await flush()

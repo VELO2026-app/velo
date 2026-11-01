@@ -300,7 +300,7 @@ describe('SchoolPageView -- relation matrix', () => {
 
     expect(push).toHaveBeenCalledWith({
       name: 'user-calendar-school',
-      params: { groupId: 'g1' },
+      params: { schoolId: 'g1' },
     })
   })
 
@@ -656,7 +656,7 @@ describe('SchoolPageView -- §1.6 page body', () => {
     await flush()
     expect(push).toHaveBeenCalledWith({
       name: 'master-practice-new',
-      query: { groupId: 'g1' },
+      query: { schoolId: 'g1' },
     })
   })
 

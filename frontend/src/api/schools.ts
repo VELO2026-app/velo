@@ -127,7 +127,7 @@ export function createSchool(name: string, description?: string): Promise<School
 }
 
 /** PATCH /masters/me/schools/{id} -- rename and/or redescribe and/or
- *  re-avatar. 404 if not my group or gone. `name` is ALWAYS sent -- the
+ *  re-avatar. 404 if not my school or gone. `name` is ALWAYS sent -- the
  *  backend requires it on every PATCH, so an edit sheet must state the
  *  current name too (the §12 trap: a stale screen would rename the school
  *  back to a stale name and journal a rename nobody asked for).
@@ -226,7 +226,7 @@ export function getSchoolStudentProfile(
 
 /** DELETE /masters/me/schools/{id}/members/{user_id} -- remove a member
  *  of either kind. Idempotent: a miss is still 204. 404 is only ever about
- *  the GROUP not being mine, never about the user. */
+ *  the SCHOOL not being mine, never about the user. */
 export function removeSchoolMember(id: string, userId: string): Promise<void> {
   return api.delete(`${CURATOR_BASE}/${id}/members/${userId}`)
 }
@@ -332,7 +332,7 @@ export function getSchoolDeletePreview(id: string): Promise<SchoolDeletePreviewR
 
 /** GET /masters/me/schools/{id}/members/{user_id}/remove-preview -- the
  *  same advisory for one member. Zero -- not 404 -- for somebody who is not
- *  in the group at all: the removal itself is idempotent, so the advisory
+ *  in the school at all: the removal itself is idempotent, so the advisory
  *  must not be stricter than the action it describes. */
 export function getSchoolRemovePreview(
   id: string,
@@ -440,7 +440,7 @@ export function getSchoolAnalytics(
 // =============================================================================
 
 /** GET /schools/mine -- schools I belong to, curated first, then by
- *  join time. Only ACTIVE groups (I-6): one whose curator is currently
+ *  join time. Only ACTIVE schools (I-6): one whose curator is currently
  *  suspended disappears and comes back on re-verification, no row written
  *  either way. Each row carries MY relation and transfer_offered (true only
  *  for the person being offered a school -- the curator's own pending offer

@@ -52,7 +52,7 @@ export function personTarget(
             kind: 'route',
             to: {
               name: 'master-school-student',
-              params: { groupId: summary.school_id, userId: person.user_id },
+              params: { schoolId: summary.school_id, userId: person.user_id },
             },
           }
         : null

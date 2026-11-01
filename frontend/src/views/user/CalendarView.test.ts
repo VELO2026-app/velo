@@ -123,7 +123,7 @@ vi.mock('@/api/schools')
 const push = vi.fn()
 const back = vi.fn()
 // Master mode (owner 2026-09-30): the stacked route carries :masterId.
-// Owner 2026-10-03: it may also carry ?groupId (the curator's school context).
+// Owner 2026-10-03: it may also carry ?schoolId (the curator's school context).
 const routeState = {
   params: {} as Record<string, string>,
   query: {} as Record<string, string | undefined>,
@@ -714,7 +714,7 @@ describe('CalendarView', () => {
       expect(text()).not.toContain('Выбрать практики')
     })
 
-    it('the back control is a true RETURN: history-back when the profile is behind (keeps its ?groupId), profile-push on a deep link', async () => {
+    it('the back control is a true RETURN: history-back when the profile is behind (keeps its ?schoolId), profile-push on a deep link', async () => {
       mount({ masterId: 'm9' })
       await flush()
 
@@ -723,7 +723,7 @@ describe('CalendarView', () => {
 
       // Arrived from the profile (Vue Router marked the in-app origin): true
       // back -- the profile re-enters WITH its query, curator context intact.
-      window.history.replaceState({ back: '/user/masters/m9?groupId=g1' }, '')
+      window.history.replaceState({ back: '/user/masters/m9?schoolId=g1' }, '')
       backBtn!.click()
       expect(back).toHaveBeenCalledTimes(1)
       expect(push).not.toHaveBeenCalled()
@@ -752,13 +752,13 @@ describe('CalendarView', () => {
       expect(store.masterScope).toBeNull()
     })
 
-    it('owner 2026-10-03: ?groupId on the master route scopes the feed to THAT school -- scope and school filter both reach the store, and reset together', async () => {
-      mount({ masterId: 'm9' }, { groupId: 'g1' })
+    it('owner 2026-10-03: ?schoolId on the master route scopes the feed to THAT school -- scope and school filter both reach the store, and reset together', async () => {
+      mount({ masterId: 'm9' }, { schoolId: 'g1' })
       await flush()
 
       const store = useCalendarStore()
       expect(store.masterScope).toBe('m9')
-      expect(store.masterGroupFilter).toBe('g1')
+      expect(store.masterSchoolFilter).toBe('g1')
 
       app?.unmount()
       host?.remove()
@@ -768,11 +768,11 @@ describe('CalendarView', () => {
       // The school filter resets WITH the scope -- a leaked filter would keep
       // hiding practices in the viewer's own tab calendar forever.
       expect(store.masterScope).toBeNull()
-      expect(store.masterGroupFilter).toBeNull()
+      expect(store.masterSchoolFilter).toBeNull()
     })
 
     it('owner 2026-10-03: the school filter is CLIENT-side -- the request is still the plain public master feed', async () => {
-      mount({ masterId: 'm9' }, { groupId: 'g1' })
+      mount({ masterId: 'm9' }, { schoolId: 'g1' })
       await flush()
 
       expect(practicesApi.getPractices).toHaveBeenCalledWith(
@@ -784,14 +784,14 @@ describe('CalendarView', () => {
   })
 
   describe('school mode (user-calendar-school, owner 2026-10-01)', () => {
-    it('mounts with :groupId, feeds off the school endpoint, and sits the personal filter UI out', async () => {
+    it('mounts with :schoolId, feeds off the school endpoint, and sits the personal filter UI out', async () => {
       vi.mocked(cgApi.getSchoolPractices).mockResolvedValue({
         items: [practice('sp1')],
         total: 1,
         limit: 100,
         offset: 0,
       })
-      mount({ groupId: 'g7' })
+      mount({ schoolId: 'g7' })
       await flush()
 
       // The feed comes from the school's own endpoint, never the personal
@@ -805,7 +805,7 @@ describe('CalendarView', () => {
     })
 
     it('the back control returns to the school page on a deep link', async () => {
-      mount({ groupId: 'g7' })
+      mount({ schoolId: 'g7' })
       await flush()
 
       const backBtn = host?.querySelector<HTMLButtonElement>('.calendar__back')
@@ -833,7 +833,7 @@ describe('CalendarView', () => {
         limit: 100,
         offset: 0,
       })
-      mount({ groupId: 'g7' })
+      mount({ schoolId: 'g7' })
       await flush()
 
       const store = useCalendarStore()

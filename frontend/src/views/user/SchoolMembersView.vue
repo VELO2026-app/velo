@@ -207,7 +207,7 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 
-const groupId = computed(() => String(route.params.id ?? ''))
+const schoolId = computed(() => String(route.params.id ?? ''))
 
 /** The zone decides only navigation targets -- the data and the row set come
  *  from the server, exactly like on SchoolPageView. */
@@ -226,12 +226,12 @@ const relation = ref<SchoolViewer['relation'] | null>(null)
 let relationFor: { id: string; promise: Promise<SchoolViewer['relation']> } | null = null
 
 function loadRelation(): Promise<SchoolViewer['relation']> {
-  if (relationFor?.id !== groupId.value) {
-    const id = groupId.value
+  if (relationFor?.id !== schoolId.value) {
+    const id = schoolId.value
     relationFor = {
       id,
       promise: getSchoolPage(id).then((page) => {
-        if (id === groupId.value) relation.value = page.viewer.relation
+        if (id === schoolId.value) relation.value = page.viewer.relation
         return page.viewer.relation
       }),
     }
@@ -289,7 +289,7 @@ const errorTitle = computed(() => {
 // FE-93: this screen mounts in the master zone only.
 const pageRoute = computed(() => ({
   name: 'master-school',
-  params: { id: groupId.value },
+  params: { id: schoolId.value },
 }))
 
 function goBack(): void {
@@ -314,7 +314,7 @@ const { items, loading, error, loadMoreError, hasMore, loadMore, refresh } = use
     // «Блок» is the curator's alone; anyone else who lands on ?kind=blocked
     // is moved to the masters tab.
     if (kind.value === 'blocked') {
-      if (viewer === 'curator') return await getSchoolBlocks(groupId.value, { limit, offset })
+      if (viewer === 'curator') return await getSchoolBlocks(schoolId.value, { limit, offset })
       kind.value = 'master'
       void router.replace({ ...route, query: { ...route.query, kind: 'master' } })
     }
@@ -325,8 +325,8 @@ const { items, loading, error, loadMoreError, hasMore, loadMore, refresh } = use
       offset,
     }
     return viewer === 'master' && inMasterZone.value
-      ? await getSchoolRoster(groupId.value, query)
-      : await getSchoolMembers(groupId.value, query)
+      ? await getSchoolRoster(schoolId.value, query)
+      : await getSchoolMembers(schoolId.value, query)
   } catch (e: unknown) {
     if (e instanceof ApiResponseError && e.status === 404) notFound.value = true
     throw e
@@ -369,7 +369,7 @@ async function switchKind(next: MemberTab): Promise<void> {
   }
   void router.replace({
     name: 'master-school-members',
-    params: { id: groupId.value },
+    params: { id: schoolId.value },
     query: { kind: next },
   })
   await refresh()
@@ -412,7 +412,7 @@ async function onUnblock(person: SchoolBlockedItem): Promise<void> {
   if (unblocking.value) return
   unblocking.value = person.user_id
   try {
-    await unblockSchoolMember(groupId.value, person.user_id)
+    await unblockSchoolMember(schoolId.value, person.user_id)
     toast.success(t('user.screens.schoolMembers.toast.unblocked'))
     await refresh()
   } catch (e) {
@@ -442,8 +442,8 @@ onMounted(() => {
 
 // Router reuse: navigating between this school's rosters reuses the mounted
 // instance, so re-read for the new id instead of waiting for a remount.
-watch(groupId, () => {
-  if (groupId.value) {
+watch(schoolId, () => {
+  if (schoolId.value) {
     notFound.value = false
     void refresh()
   }
@@ -461,7 +461,7 @@ function openMember(member: SchoolRosterItem): void {
   if (kind.value === 'master') {
     // Owner ruling 2026-09-30: the master's page carries the curator's action
     // menu when opened from the school context -- the roster passes the
-    // ?groupId= marker that turns the menu on (no new route, no new screen).
+    // ?schoolId= marker that turns the menu on (no new route, no new screen).
     // That marker is the CURATOR's: a school master opens the same public
     // page WITHOUT it, so no curator action shows up for him (BE-76).
     void router.push({
@@ -469,7 +469,7 @@ function openMember(member: SchoolRosterItem): void {
       params: { id: member.user_id },
       query: asSchoolMaster.value
         ? { name: member.name, avatar: member.avatar_url ?? '' }
-        : { groupId: groupId.value, name: member.name, avatar: member.avatar_url ?? '' },
+        : { schoolId: schoolId.value, name: member.name, avatar: member.avatar_url ?? '' },
     })
     return
   }
@@ -481,7 +481,7 @@ function openMember(member: SchoolRosterItem): void {
   }
   void router.push({
     name: 'master-school-student',
-    params: { groupId: groupId.value, userId: member.user_id },
+    params: { schoolId: schoolId.value, userId: member.user_id },
     // The profile renders instantly from the roster row's own data while its
     // real fetches run (the MasterGroupDetailView query canon).
     query: { name: member.name, avatar: member.avatar_url ?? '' },

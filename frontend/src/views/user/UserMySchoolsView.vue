@@ -1,7 +1,7 @@
 <!--
   VELO Frontend -- UserMySchoolsView (schools FE-19 / GT P3)
 
-  «Мои школы» for the user zone (route /user/groups, entry row in
+  «Мои школы» for the user zone (route /user/schools, entry row in
   UserProfileView's «Аккаунт» section). A FLAT list of GET /schools/mine
   -- the schools I PARTICIPATE in, by join time. FE-93: /mine's curated rows
   are the master list's «Я куратор» section and every management surface
@@ -38,7 +38,7 @@
       </VEmptyState>
 
       <VEmptyState
-        v-else-if="!groups.length"
+        v-else-if="!schools.length"
         icon="group"
         :title="t('user.screens.userMySchools.empty.title')"
         :description="t('user.screens.userMySchools.empty.text')"
@@ -46,9 +46,9 @@
 
       <template v-else>
         <SchoolRow
-          v-for="g in groups"
-          :key="g.id"
-          :group="g"
+          v-for="school in schools"
+          :key="school.id"
+          :school="school"
           @open="router.push({ name: 'user-school', params: { id: $event } })"
         />
       </template>
@@ -70,7 +70,7 @@ const router = useRouter()
 
 const loading = ref(true)
 const error = ref(false)
-const groups = ref<SchoolMineItem[]>([])
+const schools = ref<SchoolMineItem[]>([])
 
 async function load(): Promise<void> {
   loading.value = true
@@ -80,7 +80,7 @@ async function load(): Promise<void> {
     // FE-93: this zone lists the schools I PARTICIPATE in -- the curated
     // rows /mine still returns (relation is role-independent) are the
     // master list's «Я куратор» section.
-    groups.value = res.items.filter((g) => g.relation !== 'curator')
+    schools.value = res.items.filter((school) => school.relation !== 'curator')
   } catch {
     error.value = true
   } finally {

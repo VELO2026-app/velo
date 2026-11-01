@@ -316,7 +316,7 @@ describe('SchoolMembersView', () => {
     await flush()
     expect(push).toHaveBeenCalledWith({
       name: 'master-school-student',
-      params: { groupId: 'g1', userId: 's9' },
+      params: { schoolId: 'g1', userId: 's9' },
       query: { name: 'Пётр Сидоров', avatar: 'https://x/y.png' },
     })
   })
@@ -332,7 +332,7 @@ describe('SchoolMembersView', () => {
     expect(push).toHaveBeenCalledWith({
       name: 'user-master-public',
       params: { id: 'm9' },
-      query: { groupId: 'g1', name: 'Участник m9', avatar: '' },
+      query: { schoolId: 'g1', name: 'Участник m9', avatar: '' },
     })
   })
 
@@ -506,7 +506,7 @@ describe('SchoolMembersView', () => {
 // The viewer is the server's answer (getSchoolPage -> viewer.relation).
 // A school master in the master zone reads /roster (no curator fields), sees
 // no «Блок» tab, messages a student straight away and opens a master's public
-// page WITHOUT the curator's ?groupId= marker. The user zone is untouched.
+// page WITHOUT the curator's ?schoolId= marker. The user zone is untouched.
 
 function rosterRow(id: string, kind: 'master' | 'student', name: string) {
   return { user_id: id, name, avatar_url: null, kind, joined_at: '2026-09-01T00:00:00Z' }

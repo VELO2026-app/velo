@@ -54,7 +54,7 @@
       </VEmptyState>
 
       <VEmptyState
-        v-else-if="!groups.length && canCreate"
+        v-else-if="!schools.length && canCreate"
         icon="group"
         :title="t('masterScreens.masterSchools.empty.title')"
         :description="t('masterScreens.masterSchools.empty.text')"
@@ -70,7 +70,7 @@
            an invite link, and the screen says who issues the right instead
            of offering a button that would only ever answer 403. -->
       <VEmptyState
-        v-else-if="!groups.length"
+        v-else-if="!schools.length"
         icon="group"
         :title="t('masterScreens.masterSchools.empty.title')"
         :description="t('masterScreens.masterSchools.empty.joinHint')"
@@ -82,9 +82,9 @@
             {{ t('masterScreens.masterSchools.tab.curator') }}
           </h2>
           <SchoolRow
-            v-for="g in curated"
-            :key="g.id"
-            :group="g"
+            v-for="school in curated"
+            :key="school.id"
+            :school="school"
             @open="router.push({ name: 'master-school', params: { id: $event } })"
           />
         </template>
@@ -94,9 +94,9 @@
             {{ t('masterScreens.masterSchools.tab.member') }}
           </h2>
           <SchoolRow
-            v-for="g in memberOnly"
-            :key="g.id"
-            :group="g"
+            v-for="school in memberOnly"
+            :key="school.id"
+            :school="school"
             @open="router.push({ name: 'master-school', params: { id: $event } })"
           />
         </template>
@@ -104,7 +104,7 @@
 
       <!-- Membership is untouched by the right -- rows render either way;
            only the founding offer is gated (BE-18). -->
-      <p v-if="!loading && !error && groups.length && !canCreate" class="mcg__hint">
+      <p v-if="!loading && !error && schools.length && !canCreate" class="mcg__hint">
         {{ t('masterScreens.masterSchools.masterOnlyNote') }}
       </p>
     </div>
@@ -130,7 +130,7 @@ const router = useRouter()
 // through the dock renders the schools at once and refreshes them in the
 // background (staleTime 0: a school created a moment ago is there on the
 // next visit), no spinner on every visit.
-const groupsQuery = useQuery<{ groups: SchoolMineItem[]; canCreate: boolean }>({
+const schoolsQuery = useQuery<{ schools: SchoolMineItem[]; canCreate: boolean }>({
   key: ['schools', 'mine', 'master-hub'],
   query: async () => {
     // Two parallel calls, one payload split: /mine feeds the rows (it alone
@@ -143,27 +143,27 @@ const groupsQuery = useQuery<{ groups: SchoolMineItem[]; canCreate: boolean }>({
     const [mineRes, listRes] = await Promise.allSettled([getMySchools(), getSchools()])
     if (mineRes.status === 'rejected') throw mineRes.reason
     return {
-      groups: mineRes.value.items,
+      schools: mineRes.value.items,
       canCreate:
         listRes.status === 'fulfilled' ? (listRes.value.can_create_schools ?? false) : false,
     }
   },
   staleTime: 0,
 })
-const loading = groupsQuery.isPending
+const loading = schoolsQuery.isPending
 /** Only an error with nothing to show replaces the list. */
-const error = computed(() => groupsQuery.error.value != null && !groupsQuery.data.value)
-const groups = computed(() => groupsQuery.data.value?.groups ?? [])
+const error = computed(() => schoolsQuery.error.value != null && !schoolsQuery.data.value)
+const schools = computed(() => schoolsQuery.data.value?.schools ?? [])
 /** BE-18: the admin-issued right to found a school. False is the honest
  *  default on a failed flag fetch -- an offered «+» that only ever answers
  *  403 is worse than a missing one. */
-const canCreate = computed(() => groupsQuery.data.value?.canCreate ?? false)
+const canCreate = computed(() => schoolsQuery.data.value?.canCreate ?? false)
 
-const curated = computed(() => groups.value.filter((g) => g.relation === 'curator'))
-const memberOnly = computed(() => groups.value.filter((g) => g.relation !== 'curator'))
+const curated = computed(() => schools.value.filter((school) => school.relation === 'curator'))
+const memberOnly = computed(() => schools.value.filter((school) => school.relation !== 'curator'))
 
 function load(): void {
-  void groupsQuery.refresh()
+  void schoolsQuery.refresh()
 }
 </script>
 

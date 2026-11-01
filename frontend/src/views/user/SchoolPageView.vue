@@ -100,7 +100,7 @@
              the invite is the curator's handle. This reverses the 2026-09-19
              "the invite has no entry point on this page" note -- the orphaned
              SchoolInviteSheet is removed, this field IS the entry. -->
-        <SchoolInviteField v-if="curatorSurface" :group-id="groupId" />
+        <SchoolInviteField v-if="curatorSurface" :school-id="schoolId" />
 
         <!-- FE-21: transfer offer banner. The ADDRESSEE (relation 'master')
              accepts/declines on the member surface -- any zone. The curator
@@ -111,7 +111,7 @@
           :transfer="page.transfer"
           :pending="null"
           :relation="relation"
-          :group-id="groupId"
+          :school-id="schoolId"
           @cancelled="onTransferCancelled"
           @accepted="onTransferAccepted"
           @declined="onTransferDeclined"
@@ -177,7 +177,7 @@
           @click="
             router.push({
               name: 'master-practice-new',
-              query: { groupId },
+              query: { schoolId },
             })
           "
         >
@@ -285,7 +285,7 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 
-const groupId = computed(() => String(route.params.id ?? ''))
+const schoolId = computed(() => String(route.params.id ?? ''))
 
 /** The zone decides only the back target -- the action set comes from the
  *  server's viewer.relation, so both zones mount this same component. */
@@ -345,12 +345,12 @@ watch(
 // Owner 2026-10-01: «Предстоящие практики» opens the school-scoped calendar
 // (user-calendar-school) -- the school's full upcoming list on the week grid,
 // not the five-card preview below. The preview stays: it is the page's last
-// element (§1.6 item 7). The route's param is :groupId -- pushing it as :id
+// element (§1.6 item 7). The route's param is :schoolId -- pushing it as :id
 // rejects the navigation with "Missing required param" (silent under `void`).
 function openPracticesCalendar(): void {
   void router.push({
     name: 'user-calendar-school',
-    params: { groupId: groupId.value },
+    params: { schoolId: schoolId.value },
   })
 }
 
@@ -364,7 +364,7 @@ const upcomingPractices = computed(() => practices.value.slice(0, 5))
 function openAnalytics(): void {
   void router.push({
     name: 'master-school-analytics',
-    params: { id: groupId.value },
+    params: { id: schoolId.value },
   })
 }
 
@@ -373,7 +373,7 @@ function openAnalytics(): void {
 function openRoster(): void {
   void router.push({
     name: 'master-school-members',
-    params: { id: groupId.value },
+    params: { id: schoolId.value },
   })
 }
 
@@ -412,8 +412,8 @@ async function load(): Promise<void> {
   notFound.value = false
   try {
     const [pageRes, practicesItems] = await Promise.all([
-      getSchoolPage(groupId.value),
-      fetchAllPages((offset) => getSchoolPractices(groupId.value, PAGE, offset)),
+      getSchoolPage(schoolId.value),
+      fetchAllPages((offset) => getSchoolPractices(schoolId.value, PAGE, offset)),
     ])
     if (epoch !== loadEpoch) return
     page.value = pageRes
@@ -432,8 +432,8 @@ async function load(): Promise<void> {
 
 onMounted(load)
 // Remount data if the same component instance is reused for another id.
-watch(groupId, () => {
-  if (groupId.value) void load()
+watch(schoolId, () => {
+  if (schoolId.value) void load()
 })
 
 // -- Advisory preview (the leave dialog) -------------------------------------
@@ -487,7 +487,7 @@ function onLeaveClick(): void {
   leaveAdvisory.value = null
   leaveConfirmOpen.value = true
   // Lazy: only fetched when the dialog actually opens.
-  void advisoryCount(() => getSchoolLeavePreview(groupId.value)).then((n) => {
+  void advisoryCount(() => getSchoolLeavePreview(schoolId.value)).then((n) => {
     leaveAdvisory.value = n
   })
 }
@@ -495,7 +495,7 @@ function onLeaveClick(): void {
 async function onLeaveConfirm(): Promise<void> {
   leaving.value = true
   try {
-    await leaveSchool(groupId.value)
+    await leaveSchool(schoolId.value)
     leaveConfirmOpen.value = false
     toast.success(t('user.screens.schoolPage.toast.left'))
     void router.replace(listRoute.value)
@@ -538,7 +538,7 @@ async function onEditSave(): Promise<void> {
     const hadAvatar = !!page.value?.avatar_url
     const avatar: string | null | undefined =
       avatarInput !== '' ? avatarInput : hadAvatar ? null : undefined
-    const res = await updateSchool(groupId.value, name, desc === '' ? null : desc, avatar)
+    const res = await updateSchool(schoolId.value, name, desc === '' ? null : desc, avatar)
     // PATCH answers with the CURATOR's own row (SchoolResponse -- no
     // viewer/curator fields), so merge the renamed fields into the page
     // instead of replacing it; res.transfer carries the pending offer along

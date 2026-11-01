@@ -21,7 +21,7 @@
       <span class="admin-list__count">{{ total || '—' }}</span>
     </header>
 
-    <div v-if="loading && !groups.length" class="admin-list__loader"><VLoader size="lg" /></div>
+    <div v-if="loading && !schools.length" class="admin-list__loader"><VLoader size="lg" /></div>
 
     <VEmptyState
       v-else-if="error"
@@ -34,20 +34,22 @@
       >
     </VEmptyState>
 
-    <template v-else-if="groups.length">
+    <template v-else-if="schools.length">
       <div class="admin-list__items">
         <button
-          v-for="g in groups"
-          :key="g.id"
+          v-for="school in schools"
+          :key="school.id"
           type="button"
           class="sg-card"
-          @click="router.push({ name: 'admin-master-review', params: { id: g.curator.user_id } })"
+          @click="
+            router.push({ name: 'admin-master-review', params: { id: school.curator.user_id } })
+          "
         >
           <div class="sg-card__head">
-            <span class="sg-card__name">{{ g.name }}</span>
-            <VBadge :variant="g.is_active ? 'success' : 'muted'">
+            <span class="sg-card__name">{{ school.name }}</span>
+            <VBadge :variant="school.is_active ? 'success' : 'muted'">
               {{
-                g.is_active
+                school.is_active
                   ? t('adminScreens.adminSchools.active')
                   : t('adminScreens.adminSchools.frozen')
               }}
@@ -55,15 +57,15 @@
           </div>
           <span class="sg-card__curator">{{
             t('school.curator', {
-              name: g.curator.display_name || '—',
+              name: school.curator.display_name || '—',
             })
           }}</span>
           <span class="sg-card__meta">
             {{
               t('adminScreens.adminSchools.countsLine', {
-                masters: g.masters_count,
-                students: g.students_count,
-                since: createdLabel(g.created_at),
+                masters: school.masters_count,
+                students: school.students_count,
+                since: createdLabel(school.created_at),
               })
             }}
           </span>
@@ -99,21 +101,21 @@ const PAGE = 100
 const router = useRouter()
 const toast = useToast()
 
-const groups = ref<AdminSchoolListItem[]>([])
+const schools = ref<AdminSchoolListItem[]>([])
 const total = ref(0)
 const loading = ref(false)
 const error = ref(false)
-const hasMore = computed(() => groups.value.length < total.value)
+const hasMore = computed(() => schools.value.length < total.value)
 
 async function load(reset: boolean): Promise<void> {
   if (loading.value) return
   loading.value = true
   if (reset) error.value = false
   try {
-    const offset = reset ? 0 : groups.value.length
+    const offset = reset ? 0 : schools.value.length
     const res = await getAdminSchools(PAGE, offset)
     total.value = res.total
-    groups.value = reset ? res.items : [...groups.value, ...res.items]
+    schools.value = reset ? res.items : [...schools.value, ...res.items]
   } catch {
     toast.error(t('school.loadFailed'))
     // W12 discipline: only a failed FIRST page is an error state; a failed

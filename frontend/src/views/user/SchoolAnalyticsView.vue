@@ -211,7 +211,7 @@ import { formatShortDate } from '@/utils/format'
 const route = useRoute()
 const router = useRouter()
 
-const groupId = computed(() => String(route.params.id ?? ''))
+const schoolId = computed(() => String(route.params.id ?? ''))
 // Same zone pick as the school page and the roster screen: the route name's
 // prefix. It decides the back target only.
 const inMasterZone = computed(() => String(route.name ?? '').startsWith('master'))
@@ -292,7 +292,7 @@ async function refresh(): Promise<void> {
   error.value = false
   notFound.value = false
   try {
-    const fresh = await getSchoolAnalytics(groupId.value, period.value)
+    const fresh = await getSchoolAnalytics(schoolId.value, period.value)
     if (seq === requestSeq) data.value = fresh
   } catch (e) {
     if (seq !== requestSeq) return
@@ -318,8 +318,8 @@ watch(period, () => {
 // instance, so re-read for the new id instead of waiting for a remount.
 // A NEW school also drops the previous school's numbers: showing them under
 // the new route (even briefly) is the stale-data state this screen forbids.
-watch(groupId, () => {
-  if (groupId.value) {
+watch(schoolId, () => {
+  if (schoolId.value) {
     data.value = null
     void refresh()
   }
@@ -340,7 +340,7 @@ function openPractice(practiceId: string): void {
 function goBack(): void {
   void router.push({
     name: 'master-school',
-    params: { id: groupId.value },
+    params: { id: schoolId.value },
   })
 }
 </script>

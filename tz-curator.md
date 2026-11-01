@@ -127,7 +127,7 @@
 
 | Термин в UI | Что это | Код и контракты |
 | --- | --- | --- |
-| **Школа** | Кураторская школа: создаёт куратор; практики школы ведут сам куратор и назначенные им мастера; участники-мастера и ученики | модель `School`, модуль `backend/app/modules/schools/`, ручки `/masters/me/schools/*`, `/schools/*`, фронт `frontend/src/api/curatorGroups.ts` |
+| **Школа** | Кураторская школа: создаёт куратор; практики школы ведут сам куратор и назначенные им мастера; участники-мастера и ученики | модель `School`, модуль `backend/app/modules/schools/`, ручки `/masters/me/schools/*`, `/schools/*`, фронт `frontend/src/api/schools.ts` |
 | **Группа** | Легаси-сущность: группы мастера для своих учеников | `backend/app/modules/masters/groups_*`, ручки `/me/groups`, фронт `frontend/src/api/groups.ts` |
 
 Правила языка:
@@ -168,11 +168,11 @@
   Проверку делает `schoolsHub`: `/mine` опрашивается для всех,
   мастер-поверхность — только для мастер-способных токенов; при ошибке таб
   скрыт fail-closed и запрос повторяется при следующем монтировании шелла.
-  После успешного вступления по ссылке (`CuratorGroupJoinView`) хаб
+  После успешного вступления по ссылке (`SchoolJoinView`) хаб
   обновляется через `refreshCurator` — иначе таб появился бы только после
   перезагрузки.
 - В user-зоне таб ведёт в новый плоский хаб `/user/schools`; в master-зоне —
-  в существующий секционный список `/master/curator-groups`.
+  в существующий секционный список `/master/schools`.
 - Иконка — `IconSchool` («академическая шапка»), экспортированная через
   баррел `components/icons` и зарегистрированная в карте компонентов.
 
@@ -187,7 +187,7 @@
   белой. На отдельных school-screen PNG остался старый glyph «люди» — это
   устаревшая вариация; нормативная иконка нового таба — `IconSchool`;
 - изолированный макет показывает активным профиль только для демонстрации
-  набора. На `/user/schools` и `/master/curator-groups` активен четвёртый таб;
+  набора. На `/user/schools` и `/master/schools` активен четвёртый таб;
 - не создавать второй school-specific tabbar и не задавать его размеры во
   view: экран передаёт элементы в существующий `VTabBar`.
 
@@ -229,7 +229,7 @@
 Привязка к существующему:
 
 - Кнопка «Создать школу» и «+» ведут в существующий флоу создания школы
-  (`MasterCuratorGroupCreateView`), доступность — по `can_create_schools`
+  (`MasterSchoolCreateView`), доступность — по `can_create_schools`
   (у кого флага нет — обе кнопки скрыты).
 - Условие показа пустого состояния: пуст `GET /schools/mine`, то есть
   нет ни своей школы, ни принятого участия в чужой.
@@ -247,7 +247,7 @@
 Компоненты и точки вставки:
 
 - Каркас — `MobileLayout` + `VHeader` (титул «Школы»; круглая «+» —
-  в `#action`-слоте шапки, паттерн `MasterCuratorGroupsView`).
+  в `#action`-слоте шапки, паттерн `MasterSchoolsView`).
 - Основное curator-empty состояние — простой layout без `VEmptyState` и без
   нового иллюстративного ассета; защитное состояние без права — `VEmptyState`.
 - CTA «Создать школу» — `VButton` (`variant=primary`, `block`, `loading`).
@@ -280,7 +280,7 @@
 - карточка «Ураган» демонстрирует бирюзово-песочную волну, «Лотос» —
   розовую цветочную тему. Это примеры разных детерминированных брендов,
   не два зашитых ассета;
-- тап по любой части строки открывает `CuratorGroupPageView`. Длинное имя
+- тап по любой части строки открывает `SchoolPageView`. Длинное имя
   обрезается ellipsis до области декора, числа не переносятся.
 
 Контракт уже отдаёт `masters_count` и `students_count`; BE-добавок нет.
@@ -298,7 +298,7 @@
 
 Компоненты и точки вставки:
 
-- Строка — доработка фичевого композита `CuratorGroupRow`
+- Строка — доработка фичевого композита `SchoolRow`
   (`components/shared/`; по правилу карты сначала ищем готовое в
   `shared/`): квадратное lead-лого — `SchoolMandalaBadge` после §5;
   статистика находится под названием; справа зарезервирована лёгкая
@@ -349,7 +349,7 @@
   до появления бэка. При выключенном флаге обе секции удаляются из потока
   целиком, без пустых резервов. BE-задача — в §7.1 (поз. 4).
 - Создание школы без медиа работает уже сейчас (название/описание —
-  существующий флоу `MasterCuratorGroupCreateView`).
+  существующий флоу `MasterSchoolCreateView`).
 
 Открытые вопросы:
 
@@ -361,7 +361,7 @@
 
 Компоненты и точки вставки:
 
-- База — доработка `MasterCuratorGroupCreateView` (существующий флоу
+- База — доработка `MasterSchoolCreateView` (существующий флоу
   создания школы).
 - «Название школы» — `VInput`; «Описание школы» — `VTextarea`.
 - Аватар — отдельный `SchoolAvatarPicker`, фон — отдельный
@@ -375,7 +375,7 @@
 
 **Решение владельца:** после создания школы перемещаемся на страницу
 школы; выглядит по макету `Design_prototype/mockups/school-page.png`.
-Это редизайн существующей `CuratorGroupPageView` (одна страница на обе
+Это редизайн существующей `SchoolPageView` (одна страница на обе
 зоны, поведение по `viewer.relation` — принцип сохраняется).
 
 Макет показывает **кураторское состояние** страницы. Текстовое описание
@@ -409,7 +409,7 @@
    же круг — «Повторить». Ручка `POST /invites` идемпотентна — монтирование
    страницы никогда не меняет действующую ссылку; 503
    `bot_url_not_configured` показывается как есть, URL не фабрикуется, CTA
-   дизейблится. Бывшая модалка `CuratorGroupInviteSheet` удалена — кнопка и
+   дизейблится. Бывшая модалка-приглашение школы удалена — кнопка и
    есть её точка входа.
 6. Три самостоятельные белые menu-строки с крупным chevron справа:
    **«Участники»**, **«Предстоящие практики»**, **«Аналитика»**. Они не
@@ -437,7 +437,7 @@
 
 Компоненты и точки вставки:
 
-- База — редизайн `frontend/src/views/user/CuratorGroupPageView.vue`;
+- База — редизайн `frontend/src/views/user/SchoolPageView.vue`;
   шапка — `MobileLayout` (режим island/fog по канону) поверх
   `SchoolBrandBanner`.
 - Hero — `SchoolBrandBanner` + квадратный `SchoolMandalaBadge` + белая
@@ -490,8 +490,8 @@
 
 > Статус: все четыре пункта ниже приведены к контракту коммитом `91922d72`
 > (тихий empty и плоский список в SchoolsView, квадратное лого + brand crop в
-> CuratorGroupRow, порядок «Основное → Аватар → Фон → CTA» в create-форме,
-> hero-композит и menu-строки без левых иконок в CuratorGroupPageView).
+> SchoolRow, порядок «Основное → Аватар → Фон → CTA» в create-форме,
+> hero-композит и menu-строки без левых иконок в SchoolPageView).
 > Раздел оставлен как история; актуальные контракты — §1.3–1.6.
 
 Следующие уже написанные фрагменты появились из неверного чтения PNG и **не
@@ -502,13 +502,13 @@
   экран через `VEmptyState` с «Пока нет школ» и пояснением; curator-empty
   должен быть тихим фоном с одним CTA (§1.3). Защитный no-right вариант
   `VEmptyState` остаётся;
-- `frontend/src/components/shared/CuratorGroupRow.vue` уже исправлен до
+- `frontend/src/components/shared/SchoolRow.vue` уже исправлен до
   квадратного лого и единственной строки счётчиков; до §5 в нём закономерно
   отсутствует только брендовый crop справа (§1.4);
-- `frontend/src/views/master/MasterCuratorGroupCreateView.vue` сейчас
+- `frontend/src/views/master/MasterSchoolCreateView.vue` сейчас
   группирует banner и круглый avatar overlay перед основными полями;
   целевой порядок и две независимые upload-карточки заданы в §1.5;
-- `frontend/src/views/user/CuratorGroupPageView.vue` уже убрал page-level
+- `frontend/src/views/user/SchoolPageView.vue` уже убрал page-level
   «Пригласить» и `AvatarStack`, но hero пока остаётся нейтральной плашкой,
   description/curator выпадают отдельными строками, а navigation rows несут
   лишние левые иконки. Целевой композит и замена блока даны в §1.9–1.10;
@@ -536,7 +536,7 @@
 
 ### 1.10. Рекомендуемый кодовый каркас для исполнителя — ✅ реализовано (91922d72)
 
-Hero лучше вынести из перегруженного `CuratorGroupPageView.vue` в один
+Hero лучше вынести из перегруженного `SchoolPageView.vue` в один
 фичевой композит `frontend/src/components/shared/SchoolHeroCard.vue`. Так
 banner, шов, лого и body не смогут разъехаться независимо.
 
@@ -668,7 +668,7 @@ const copy = computed(() => props.summary?.trim() || props.description?.trim() |
 </style>
 ```
 
-В `CuratorGroupPageView.vue` hero и действия должны собираться так:
+В `SchoolPageView.vue` hero и действия должны собираться так:
 
 ```vue
 <SchoolHeroCard
@@ -739,7 +739,7 @@ const copy = computed(() => props.summary?.trim() || props.description?.trim() |
 }
 ```
 
-Из текущего верхнего потока `CuratorGroupPageView.vue` при этом удаляются
+Из текущего верхнего потока `SchoolPageView.vue` при этом удаляются
 отдельные `.cgp__description` и `.cgp__meta`: описание уже живёт в hero,
 а куратор входит в список мастеров. Остальные rosters, journal, transfer-
 banner, dialogs и API-логику не переписывать — меняется композиция, не домен.
@@ -750,7 +750,7 @@ banner, dialogs и API-логику не переписывать — меняе
 > «Участники», вкладка ростера в `?kind=`), стеклянный свитчер
 > `VSegmentTrack variant="tabs"` **Мастера/Ученики** над поиском,
 > `SchoolMemberRow`, профиль школьного ученика `SchoolStudentProfileView`,
-> 2 маршрута, обёртка `offerCuratorGroupMaster`. Строка входа на странице
+> 2 маршрута, обёртка `offerSchoolMaster`. Строка входа на странице
 > школы — одна, **«Участники»**, и видна только куратору (ростеры —
 > кураторский хендл на сервере; не-куратору счётчики видны в hero).
 > Решение владельца этого же дня: строки навигационные — тап по мастеру
@@ -883,7 +883,7 @@ banner, dialogs и API-логику не переписывать — меняе
   подтверждённого мастера платформы»); **«Заблокировать»** (см. выше).
 - Тап по мастеру открывает существующий публичный профиль мастера
   (`user-master-public`). В школьном контексте (переход из ростера, маркер
-  `?groupId=`) страница несёт меню куратора: **«Написать сообщение»**
+  `?schoolId=`) страница несёт меню куратора: **«Написать сообщение»**
   (open-or-get DM), **«Изменить роль»** (понижение мастер→ученик; контракта
   понижения пока нет — §7.1 №6, confirm видимый no-op до BE-59 + контракта)
   и **«Заблокировать»** (BE-79 стопер — видимый no-op; блокировка покрывает
@@ -913,8 +913,8 @@ banner, dialogs и API-логику не переписывать — меняе
 Один компонент экрана; вкладка ростера живёт в query, маршрутов — два,
 чтобы Back сохранял исходную зону:
 
-- `/user/groups/:id/members` — `user-curator-group-members`;
-- `/master/curator-groups/:id/members` — `master-curator-group-members`.
+- `/user/schools/:id/members` — `user-school-members`;
+- `/master/schools/:id/members` — `master-school-members`.
 
 Оба маршрута монтируют общий `SchoolMembersView.vue` и имеют
 `meta.hideTabBar=true`; master-маршрут сохраняет `masterStatusGuard`.
@@ -963,11 +963,11 @@ banner, dialogs и API-логику не переписывать — меняе
   безопасные публичные поля мастера, но имеет отдельную навигацию и
   кураторские действия.
 - Доступ к кураторскому варианту определяется не глобальной ролью `master`,
-  а фактом `viewer.relation=curator` для `groupId`. Обычный master-member,
+  а фактом `viewer.relation=curator` для `schoolId`. Обычный master-member,
   ученик и посторонний не видят строку аналитики и меню управления.
 - Целевая аналитика является аналитикой **работы этого мастера в выбранной
   школе**, а не доступом к его общей личной/финансовой статистике или данным
-  других школ. `groupId` и `masterId` обязательны во всех будущих маршрутах
+  других школ. `schoolId` и `masterId` обязательны во всех будущих маршрутах
   и API аналитики; сервер повторно проверяет, что вызывающий — текущий
   куратор школы, а мастер состоит в ней.
 
@@ -1105,7 +1105,7 @@ banner, dialogs и API-логику не переписывать — меняе
   `SCHOOL_MASTER_ANALYTICS_ENABLED=false`. Не показывать disabled-строку,
   «скоро», toast-заглушку или переход на общую аналитику мастера.
 - После включения строка ведёт на контекстный маршрут с обоими идентификаторами:
-  `/.../groups/:groupId/masters/:masterId/analytics`. Нельзя переиспользовать
+  `/.../schools/:schoolId/masters/:masterId/analytics`. Нельзя переиспользовать
   личный `AnalyticsView` мастера: он отвечает на другой вопрос и имеет другой
   уровень доступа.
 - Будущее ТЗ обязано определить метрики, период, практики каких статусов
@@ -1114,10 +1114,10 @@ banner, dialogs и API-логику не переписывать — меняе
 
 #### 1.12.5. Маршруты и компоненты
 
-- `/user/groups/:groupId/masters/:masterId` —
-  `user-curator-group-master`;
-- `/master/curator-groups/:groupId/masters/:masterId` —
-  `master-curator-group-master`.
+- `/user/schools/:schoolId/masters/:masterId` —
+  `user-school-master`;
+- `/master/schools/:schoolId/masters/:masterId` —
+  `master-school-master`.
 
 Оба маршрута монтируют общий `SchoolMasterProfileView.vue`, имеют
 `meta.hideTabBar=true`; master-маршрут сохраняет `masterStatusGuard`.
@@ -1167,7 +1167,7 @@ check-ins и feedbacks, а также SVG-эмоции, **пока не вход
 #### 1.13.1. Назначение, область данных и доступ
 
 - Экран отвечает на вопрос: **что происходило с этим учеником на практиках
-  этой школы в суммарных показателях**. `groupId` и `userId` обязательны;
+  этой школы в суммарных показателях**. `schoolId` и `userId` обязательны;
   данные другой школы, личный дневник, check-ins, feedbacks, переписки,
   финансы и практики вне аудитории школы не попадают сюда.
 - Экран доступен только текущему куратору выбранной школы. Master-member,
@@ -1181,7 +1181,7 @@ check-ins и feedbacks, а также SVG-эмоции, **пока не вход
 - Нельзя переиспользовать `GET /api/v1/masters/me/students/{id}`. Эта ручка
   считает только практики текущего мастера и является CRM-досье мастера;
   школьный профиль должен учитывать практики всех ведущих выбранной школы и
-  оставаться строго ограниченным `groupId`.
+  оставаться строго ограниченным `schoolId`.
 
 #### 1.13.2. Визуальная структура сверху вниз
 
@@ -1267,8 +1267,8 @@ check-ins, feedbacks, emotion keys, точные score, брони или пер
 - Очень длинное имя безопасно переносится и не расширяет страницу. На
   320–390 CSS px две stat cards остаются в одной строке и не перекрываются.
 - Экран продолжает использовать существующие маршруты
-  `/user/groups/:groupId/students/:userId` и
-  `/master/curator-groups/:groupId/students/:userId`, общий
+  `/user/schools/:schoolId/students/:userId` и
+  `/master/schools/:schoolId/students/:userId`, общий
   `SchoolStudentProfileView.vue`, `VHeader`, `VAvatar`, `VStatCard` и
   `VMenu`/`VMenuItem`. Визуальный рецепт hero/stat cards можно извлечь из
   `MasterStudentProfileView`, но его activity sections, mood icons, CRM-
@@ -1301,7 +1301,7 @@ check-ins, feedbacks, emotion keys, точные score, брони или пер
 
 - Не трогаем легаси-группы мастеров (`masters/groups_*`, `/me/students`).
 - Не делаем модерационные инструменты: админ read-only уже есть
-  (`AdminCuratorGroupsView`), рычаг модерации — существующий `revoke_master`.
+  (`AdminSchoolsView`), рычаг модерации — существующий `revoke_master`.
 - Не углубляем доступ куратора до чужих бронирований, check-ins, feedbacks,
   переписки или точных score 1–10. Профиль §1.13 получает только identity и
   два school-scoped агрегата; принцип минимально необходимой глубины BE-24
@@ -1412,7 +1412,7 @@ check-ins, feedbacks, emotion keys, точные score, брони или пер
 
 ### 3.6. Реализованные поверхности фронта
 
-- одна страница школы `CuratorGroupPageView`, используемая в обеих зонах;
+- одна страница школы `SchoolPageView`, используемая в обеих зонах;
   действия зависят от серверного `viewer.relation`, а не выводятся из роли;
 - списки школ куратора и участника, создание школы, инвайт и вступление,
   управление участниками, назначение мастера и передача;
@@ -1466,8 +1466,8 @@ GET /api/v1/masters/me/schools/{school_id}/reviews ?practice_id=&limit=&offset=
 
 ### 4.2. Фронт
 
-- Обёртки в `frontend/src/api/curatorGroups.ts`:
-  `getCuratorGroupCheckins / getCuratorGroupReviews(groupId, {practiceId?, limit, offset})`.
+- Обёртки в `frontend/src/api/schools.ts`:
+  `getSchoolCheckins / getSchoolReviews(schoolId, {practiceId?, limit, offset})`.
 - Типы из `@/api/types` (проверить наличие в `generated.ts`; нет — `make gen-types`).
 - Вход со страницы школы при `relation = curator`; компоновка — [ждёт макет].
 - Две ленты + фильтр по практике; пагинация `usePagination`; канон
@@ -1477,8 +1477,8 @@ GET /api/v1/masters/me/schools/{school_id}/reviews ?practice_id=&limit=&offset=
 
 ### 4.3. Тесты
 
-- Расширение `api/curatorGroups.test.ts` (обе обёртки, параметры, ошибки).
-- View-тест в идиоме `vi.mock('@/api/curatorGroups')` + createApp.
+- Расширение `api/schools.test.ts` (обе обёртки, параметры, ошибки).
+- View-тест в идиоме `vi.mock('@/api/schools')` + createApp.
 
 ### 4.4. Открытые вопросы
 
@@ -1688,7 +1688,7 @@ GET /api/v1/masters/me/schools/{school_id}/reviews ?practice_id=&limit=&offset=
   скриншот референса в репозиторий не сохраняется.
 - ред. 20 (2026-09-22): §1.11 реализован (в worktree, до коммита) — ростеры
   как отдельные экраны (один компонент, kind — роут-проп), поиск с debounce,
-  «Показать ещё», 404/empty-рунги, обёртка `offerCuratorGroupMaster` (GT-27,
+  «Показать ещё», 404/empty-рунги, обёртка `offerSchoolMaster` (GT-27,
   204). Решение владельца: строки навигационные — мастер открывается в
   существующем публичном профиле, ученик — в новом минимальном школьном
   профиле с «Предложить стать мастером»/«Исключить» в меню `…`; action sheet
@@ -1759,7 +1759,7 @@ GET /api/v1/masters/me/schools/{school_id}/reviews ?practice_id=&limit=&offset=
   указывает компоненты и точки вставки из карты
   `frontend/design/component-map.md`; блоки «Компоненты» добавлены в
   §1.2 (таббар/VTabBar/tabs.ts), §1.3 (VHeader/VEmptyState/VButton),
-  §1.4 (CuratorGroupRow/VAvatar/состояния), §1.5 (VInput/VTextarea/
+  §1.4 (SchoolRow/VAvatar/состояния), §1.5 (VInput/VTextarea/
   пикеры за флагом).
 - ред. 7 (2026-09-19): уточнение владельца — числа в строке школы (§1.4)
   это кол-во мастеров и кол-во учеников; счётчики уже в контракте,

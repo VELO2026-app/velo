@@ -199,7 +199,7 @@ describe('updateSchool -- avatar_url three-state (BE-20)', () => {
 })
 
 describe('invite + transfer + join bodies', () => {
-  it('createSchoolInvite posts an empty body under the group path', async () => {
+  it('createSchoolInvite posts an empty body under the school path', async () => {
     // It used to post { kind } and the assertion named the kind. GT-27 left
     // one link per school, so the body carries nothing -- asserted as {},
     // not skipped: a body that quietly regrew a field would pass a looser

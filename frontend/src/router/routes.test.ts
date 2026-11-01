@@ -11,12 +11,13 @@ import router from '@/router'
 // real app: "Missing required param" rejects under `void router.push` and the
 // tap silently does nothing. These tests resolve the REAL route table, so
 // name/param drift fails here. (Born from exactly that failure: the school
-// page pushed user-calendar-school with :id while the route wanted :groupId.)
+// page pushed user-calendar-school with :id while the route wanted its
+// school param.)
 // =============================================================================
 
 describe('route table: stacked calendars resolve by name + params', () => {
-  it('user-calendar-school resolves with :groupId', () => {
-    const r = router.resolve({ name: 'user-calendar-school', params: { groupId: 'g1' } })
+  it('user-calendar-school resolves with :schoolId', () => {
+    const r = router.resolve({ name: 'user-calendar-school', params: { schoolId: 'g1' } })
     expect(r.href).toBe('/user/calendar/school/g1')
     expect(r.name).toBe('user-calendar-school')
   })
@@ -52,4 +53,30 @@ describe('route table: module gates resolve in the golden build (tz-whitelabel �
     expect(router.resolve({ name: 'user-topup-success' }).href).toBe('/user/topup/success')
     expect(router.resolve({ name: 'user-topup-cancel' }).href).toBe('/user/topup/cancel')
   })
+})
+
+describe('route table: school pages by name + the param keys their builders push', () => {
+  // Step 3 of the school rename: the user-zone school pages and both school
+  // params moved off the word «group». Each row is the exact { name, params }
+  // shape a screen builds (SchoolPageView, SchoolMembersView, UserProfileView,
+  // practice-analytics) -- a param key that drifts from the route table makes
+  // resolve() throw here instead of a silent no-op tap in the app.
+  it.each([
+    ['user-my-schools', {}, '/user/my-schools'],
+    ['user-school', { id: 'g1' }, '/user/schools/g1'],
+    ['user-calendar-school', { schoolId: 'g1' }, '/user/calendar/school/g1'],
+    ['master-school-student', { schoolId: 'g1', userId: 'u1' }, '/master/schools/g1/students/u1'],
+  ] as const)('%s -> %s', (name, params, href) => {
+    expect(router.resolve({ name, params }).href).toBe(href)
+  })
+
+  // Owner (no legacy): a bookmark to a former school address is no route --
+  // it falls to the catch-all, which redirects to the 404 screen.
+  it.each(['/user/groups', '/user/groups/g1'])(
+    'the former address %s lands on the catch-all',
+    (path) => {
+      const r = router.resolve(path)
+      expect(r.matched.at(-1)?.path).toBe('/:pathMatch(.*)*')
+    },
+  )
 })

@@ -241,24 +241,24 @@ const viewerTz = useViewerTimezone()
 // -- Stacked scopes: master mode (owner 2026-09-30) / school mode (owner
 //    2026-10-01) --------------------------------------------------------------
 // Stacked routes user-calendar-master/:masterId and user-calendar-school/
-// :groupId: the week feed switches to one master's scheduled practices
+// :schoolId: the week feed switches to one master's scheduled practices
 // (store.setMasterScope folds master_id + status=scheduled into loadWeek) or
 // to one school's upcoming ones (store.setSchoolScope -- loadWeek feeds from
 // the school endpoint's full upcoming list, see the store), and the viewer's
 // facet UI sits out. The scopes MUST reset on unmount -- the store is a
 // singleton the tab calendar shares; a leaked scope would poison the
 // viewer's own week.
-// Owner 2026-10-03: the master route may carry ?groupId (the curator's school
+// Owner 2026-10-03: the master route may carry ?schoolId (the curator's school
 // context off the profile) -- the feed then keeps only the master's practices
 // in THAT school (the store's client-side filter, see setMasterScope).
 const masterMode = computed(() => String(route.params.masterId ?? '') !== '')
-const schoolMode = computed(() => String(route.params.groupId ?? '') !== '')
+const schoolMode = computed(() => String(route.params.schoolId ?? '') !== '')
 
 onMounted(() => {
   if (masterMode.value) {
-    store.setMasterScope(String(route.params.masterId), String(route.query.groupId ?? '') || null)
+    store.setMasterScope(String(route.params.masterId), String(route.query.schoolId ?? '') || null)
   } else if (schoolMode.value) {
-    store.setSchoolScope(String(route.params.groupId))
+    store.setSchoolScope(String(route.params.schoolId))
   }
 })
 
@@ -274,7 +274,7 @@ onUnmounted(() => {
 function goBack(): void {
   // RETURN semantics, not a push (owner bug 2026-09-30): the only in-app entry
   // to a stacked calendar is the row that opened it, so history-back restores
-  // it WITH its query -- ?groupId keeps the curator context (analytics, CTA,
+  // it WITH its query -- ?schoolId keeps the curator context (analytics, CTA,
   // the curator menu) alive. A pushed clone stripped the query (the page's own
   // router.back() then looped straight back into the calendar). A deep link
   // has no in-app history to return to -- land on the origin page.
@@ -288,7 +288,7 @@ function goBack(): void {
   } else {
     void router.push({
       name: 'user-school',
-      params: { id: String(route.params.groupId) },
+      params: { id: String(route.params.schoolId) },
     })
   }
 }

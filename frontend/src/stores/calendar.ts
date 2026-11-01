@@ -130,15 +130,15 @@ export const useCalendarStore = defineStore('calendar', () => {
   // is a singleton shared with the tab calendar, so the view resets it to null
   // on unmount; loadWeek folds it into the query.
   // Owner 2026-10-03: in the curator's school context the route carries
-  // ?groupId and the feed drops the master's practices OUTSIDE that school.
+  // ?schoolId and the feed drops the master's practices OUTSIDE that school.
   // The public endpoint has no school param, so loadWeek filters the response
   // client-side by the practices' own school_id (null on personal
   // practices, a foreign school's id otherwise). Cleared with the scope.
   const masterScope = ref<string | null>(null)
-  const masterGroupFilter = ref<string | null>(null)
-  function setMasterScope(masterId: string | null, groupFilter: string | null = null): void {
+  const masterSchoolFilter = ref<string | null>(null)
+  function setMasterScope(masterId: string | null, schoolFilter: string | null = null): void {
     masterScope.value = masterId
-    masterGroupFilter.value = groupFilter
+    masterSchoolFilter.value = schoolFilter
   }
 
   // SCHOOL scope (owner 2026-10-01): «Предстоящие практики» on the school page
@@ -152,8 +152,8 @@ export const useCalendarStore = defineStore('calendar', () => {
   // masterScope: the view clears both on unmount.
   const schoolScope = ref<string | null>(null)
   const schoolFeed = ref<PracticeResponse[] | null>(null)
-  function setSchoolScope(groupId: string | null): void {
-    schoolScope.value = groupId
+  function setSchoolScope(schoolId: string | null): void {
+    schoolScope.value = schoolId
     schoolFeed.value = null
   }
 
@@ -284,7 +284,7 @@ export const useCalendarStore = defineStore('calendar', () => {
       to: to.toISOString(),
       filters,
       master: masterScope.value,
-      group: masterGroupFilter.value,
+      schoolFilter: masterSchoolFilter.value,
       school: schoolScope.value,
     })
     const unscoped = masterScope.value === null && schoolScope.value === null
@@ -380,8 +380,8 @@ export const useCalendarStore = defineStore('calendar', () => {
       // Structural sharing: a quiet refresh with the same week is a no-op.
       weekPractices.value = replaceEqualDeep(
         weekPractices.value,
-        masterScope.value && masterGroupFilter.value
-          ? res.items.filter((p) => p.school_id === masterGroupFilter.value)
+        masterScope.value && masterSchoolFilter.value
+          ? res.items.filter((p) => p.school_id === masterSchoolFilter.value)
           : res.items,
       )
       seedPractices(res.items)
@@ -488,7 +488,7 @@ export const useCalendarStore = defineStore('calendar', () => {
     weekPractices,
     filters,
     masterScope,
-    masterGroupFilter,
+    masterSchoolFilter,
     schoolScope,
     schoolFeed,
     loading,

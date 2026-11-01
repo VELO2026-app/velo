@@ -39,7 +39,7 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(SchoolInviteField, { groupId: 'g1' }).use(createTestI18n())
+  app = createApp(SchoolInviteField, { schoolId: 'g1' }).use(createTestI18n())
   app.mount(host)
   return host
 }

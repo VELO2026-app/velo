@@ -86,7 +86,7 @@ const push = vi.fn()
 // course nothing re-fires, regardless of whether the source has a watch) --
 // caught by mutation-testing a simulated fix against the first draft.
 const routeParams = reactive<{ id: string }>({ id: 'm1' })
-const routeQuery = reactive<{ groupId?: string }>({})
+const routeQuery = reactive<{ schoolId?: string; groupId?: string }>({})
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push, back, replace: vi.fn() }),
   useRoute: () => ({ params: routeParams, query: routeQuery }),
@@ -229,6 +229,7 @@ beforeEach(() => {
   push.mockReset()
   back.mockReset()
   routeParams.id = 'm1'
+  routeQuery.schoolId = undefined
   routeQuery.groupId = undefined
 })
 
@@ -268,7 +269,7 @@ describe('MasterPublicView', () => {
       return flush()
     }
 
-    it('no ?groupId: the menu carries only «Написать сообщение» -- no curator actions', async () => {
+    it('no ?schoolId: the menu carries only «Написать сообщение» -- no curator actions', async () => {
       mount()
       await flush()
       await openMenu()
@@ -278,8 +279,8 @@ describe('MasterPublicView', () => {
       expect(menuItem('Заблокировать')).toBeUndefined()
     })
 
-    it('with ?groupId the «⋯» menu carries the three curator actions', async () => {
-      routeQuery.groupId = 'g1'
+    it('with ?schoolId the «⋯» menu carries the three curator actions', async () => {
+      routeQuery.schoolId = 'g1'
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
       mount()
@@ -291,8 +292,27 @@ describe('MasterPublicView', () => {
       expect(menuItem('Заблокировать')).toBeTruthy()
     })
 
+    // Step 3 of the school rename, the twin axes of the curator marker: both
+    // keys -> schoolId decides; an empty schoolId is no marker; the FORMER
+    // ?groupId alone (an old link, a history entry) is no marker either.
+    it.each([
+      [{ schoolId: 'g1', groupId: 'gX' }, true],
+      [{ schoolId: '' }, false],
+      [{ groupId: 'g1' }, false],
+    ] as const)('marker %o -> curator actions: %s', async (query, curator) => {
+      Object.assign(routeQuery, query)
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      mount()
+      await flush()
+      await openMenu()
+
+      expect(menuItem('Написать сообщение')).toBeTruthy()
+      expect(Boolean(menuItem('Заблокировать'))).toBe(curator)
+    })
+
     it('«Написать сообщение» opens the composer; sending opens the DM, posts the text and closes', async () => {
-      routeQuery.groupId = 'g1'
+      routeQuery.schoolId = 'g1'
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
       vi.mocked(chatsApi.openChat).mockResolvedValue({
@@ -333,7 +353,7 @@ describe('MasterPublicView', () => {
     })
 
     it('«Изменить роль»: preselects «Мастер»; the demote pick enables a marked no-op confirm (BE-59)', async () => {
-      routeQuery.groupId = 'g1'
+      routeQuery.schoolId = 'g1'
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
       mount()
@@ -362,7 +382,7 @@ describe('MasterPublicView', () => {
     })
 
     it('«Изменить роль»: a demote failure toasts the API error and keeps the modal open', async () => {
-      routeQuery.groupId = 'g1'
+      routeQuery.schoolId = 'g1'
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
       vi.mocked(cgApi.demoteSchoolMaster).mockRejectedValue(
@@ -386,7 +406,7 @@ describe('MasterPublicView', () => {
     // BE-79 (2): this pinned the INTERIM no-op (an info toast) -- right until
     // the block endpoint landed. Confirm now sends it and goes back.
     it('«Заблокировать»: confirm sends the block for THIS master in THIS school, then back', async () => {
-      routeQuery.groupId = 'g1'
+      routeQuery.schoolId = 'g1'
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
       mount()
@@ -411,7 +431,7 @@ describe('MasterPublicView', () => {
     })
 
     it('«Заблокировать» refused (409): the error toast, stay on the profile', async () => {
-      routeQuery.groupId = 'g1'
+      routeQuery.schoolId = 'g1'
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
       vi.mocked(cgApi.blockSchoolMember).mockRejectedValueOnce(
@@ -678,8 +698,8 @@ describe('MasterPublicView', () => {
       })
     })
 
-    it('school context: the nav row hands ?groupId to the calendar so its feed filters to THAT school (owner 2026-10-03)', async () => {
-      routeQuery.groupId = 'g1'
+    it('school context: the nav row hands ?schoolId to the calendar so its feed filters to THAT school (owner 2026-10-03)', async () => {
+      routeQuery.schoolId = 'g1'
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
       mount()
@@ -693,12 +713,12 @@ describe('MasterPublicView', () => {
       expect(push).toHaveBeenCalledWith({
         name: 'user-calendar-master',
         params: { masterId: 'm1' },
-        query: { groupId: 'g1' },
+        query: { schoolId: 'g1' },
       })
     })
 
     it('school context: «Ближайшие практики» lists only the practices of the master in THAT school -- a bigger page is fetched and filtered client-side (owner 2026-10-03)', async () => {
-      routeQuery.groupId = 'g1'
+      routeQuery.schoolId = 'g1'
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(
         page([
@@ -726,7 +746,7 @@ describe('MasterPublicView', () => {
       expect(titles).not.toContain('Практика p-foreign')
     })
 
-    it('no ?groupId: the «Ближайшие практики» feed stays whole -- every practice of the master renders on the small page (owner 2026-10-03)', async () => {
+    it('no ?schoolId: the «Ближайшие практики» feed stays whole -- every practice of the master renders on the small page (owner 2026-10-03)', async () => {
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(
         page([
@@ -749,7 +769,7 @@ describe('MasterPublicView', () => {
       expect(titles).toContain('Практика p-personal')
     })
 
-    it('the «Аналитика» panel is a curator-only placeholder: hidden without ?groupId, shown with it', async () => {
+    it('the «Аналитика» panel is a curator-only placeholder: hidden without ?schoolId, shown with it', async () => {
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
       mount()
@@ -758,7 +778,7 @@ describe('MasterPublicView', () => {
       expect(content()?.textContent).not.toContain('Аналитика')
 
       unmount()
-      routeQuery.groupId = 'g1'
+      routeQuery.schoolId = 'g1'
       mount()
       await flush()
 
@@ -784,7 +804,7 @@ describe('MasterPublicView', () => {
       expect(host?.querySelector('.master-public__cta')).toBeNull()
 
       unmount()
-      routeQuery.groupId = 'g1'
+      routeQuery.schoolId = 'g1'
       mount()
       await flush()
 
@@ -796,7 +816,7 @@ describe('MasterPublicView', () => {
       expect(push).toHaveBeenCalledWith({
         name: 'master-practice-new',
         // FE-92: the school travels with the master (BE-102 needs it).
-        query: { masterId: 'm1', groupId: 'g1' },
+        query: { masterId: 'm1', schoolId: 'g1' },
       })
     })
   })

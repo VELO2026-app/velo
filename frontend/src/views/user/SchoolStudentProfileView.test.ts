@@ -25,13 +25,13 @@ const push = vi.fn()
 const replace = vi.fn()
 const routeState = {
   name: 'master-school-student',
-  groupId: 'g1',
+  schoolId: 'g1',
   userId: 'u9',
   nameQuery: 'Пётр Сидоров',
 }
 vi.mock('vue-router', () => ({
   useRoute: () => ({
-    params: { groupId: routeState.groupId, userId: routeState.userId },
+    params: { schoolId: routeState.schoolId, userId: routeState.userId },
     name: routeState.name,
     query: { name: routeState.nameQuery, avatar: '' },
   }),
@@ -103,7 +103,7 @@ function profileFixture(
 
 beforeEach(() => {
   routeState.name = 'master-school-student'
-  routeState.groupId = 'g1'
+  routeState.schoolId = 'g1'
   routeState.userId = 'u9'
   routeState.nameQuery = 'Пётр Сидоров'
   Object.values(cgApi).forEach((fn) => vi.mocked(fn).mockReset())

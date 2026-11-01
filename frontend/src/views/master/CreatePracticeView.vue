@@ -79,7 +79,7 @@
            Мастер (§1.6 delegation, FE-92): whose practice this is. The
            master-card entry preselects one master; the school-page entry
            picks among that school's visible masters, «Я» first. Both need
-           the school (?groupId=): the backend creates for another master
+           the school (?schoolId=): the backend creates for another master
            only IN a school, for a master of that school (BE-102). No school
            -> the caller owns the practice and this section does not render.
            ================================================================ -->
@@ -338,7 +338,7 @@
               v-model:school-id="form.audience_school_id"
               :groups="customGroups"
               :schools="audienceSchools"
-              :allowed-kinds="contextGroupId ? SCHOOL_AUDIENCE_KINDS : undefined"
+              :allowed-kinds="contextSchoolId ? SCHOOL_AUDIENCE_KINDS : undefined"
               :error="errors.audience_group_ids"
               :students-label="t('masterScreens.createPractice.audience.allMyStudents')"
             />
@@ -487,7 +487,7 @@ const route = useRoute()
 const toast = useToast()
 
 // §1.6 delegation: whose practice is being created. `masterId` in the query
-// (the master's public page CTA) names the master; `groupId` (the school
+// (the master's public page CTA) names the master; `schoolId` (the school
 // page CTA) offers that school's visible masters with «Я» first. No query
 // context -> the caller owns the practice, the historical behavior.
 //
@@ -496,13 +496,13 @@ const toast = useToast()
 // it only in that school, for a verified master of it, from its curator,
 // and the practice is born PUBLISHED there (owner, 3 October) -- one
 // «created and published» notice to the master, no second publish step.
-// Without the school in the context (?groupId=) another master is
+// Without the school in the context (?schoolId=) another master is
 // never offered: the request would be refused (master_id_requires_school).
 // The audience kinds are the school's two (public / schools --
 // check_school_audience) for the WHOLE school entry, «Я» included (owner
 // 2026-10-05) — the personal kinds («Все мои ученики» / «Конкретные
 // группы») are offered only by a no-context create.
-const contextGroupId = computed(() => queryParam('groupId'))
+const contextSchoolId = computed(() => queryParam('schoolId'))
 const delegatedMaster = ref<{ id: string; name: string } | null>(null)
 const schoolMasterOptions = ref<{ label: string; value: string }[]>([])
 const selectedMasterId = ref('')
@@ -526,16 +526,16 @@ const SCHOOL_AUDIENCE_KINDS: PracticeAudienceKind[] = ['public', 'schools']
 
 const targetMasterId = computed(() => delegatedMaster.value?.id ?? (selectedMasterId.value || null))
 const targetsForeignMaster = computed(
-  () => contextGroupId.value !== '' && targetMasterId.value !== null,
+  () => contextSchoolId.value !== '' && targetMasterId.value !== null,
 )
 
 // The school list the picker offers: while targeting a foreign master, ONLY
 // the context school (the practice belongs to it); otherwise every eligible.
 const audienceSchools = computed((): AudienceSchoolOption[] => {
   if (!targetsForeignMaster.value) return eligibleSchools.value
-  const own = eligibleSchools.value.find((s) => s.id === contextGroupId.value)
+  const own = eligibleSchools.value.find((s) => s.id === contextSchoolId.value)
   return [
-    own ?? { id: contextGroupId.value, name: t('masterScreens.createPractice.fields.school') },
+    own ?? { id: contextSchoolId.value, name: t('masterScreens.createPractice.fields.school') },
   ]
 })
 
@@ -543,7 +543,7 @@ watch(targetsForeignMaster, (foreign) => {
   if (!foreign) return
   if (!SCHOOL_AUDIENCE_KINDS.includes(form.audience_kind)) form.audience_kind = 'public'
   if (form.audience_kind === 'schools') {
-    form.audience_school_id = contextGroupId.value
+    form.audience_school_id = contextSchoolId.value
   }
 })
 
@@ -559,10 +559,10 @@ function queryParam(key: string): string {
 
 async function loadPracticeMasterContext(): Promise<void> {
   const masterId = queryParam('masterId')
-  const groupId = queryParam('groupId')
+  const schoolId = queryParam('schoolId')
   // FE-92: a master named without the school cannot be created for -- no
   // «Мастер» section, the practice is the caller's own.
-  if (masterId && groupId) {
+  if (masterId && schoolId) {
     try {
       const profile = await getPublicMaster(masterId)
       delegatedMaster.value = {
@@ -585,9 +585,9 @@ async function loadPracticeMasterContext(): Promise<void> {
     }
     return
   }
-  if (groupId) {
+  if (schoolId) {
     try {
-      const page = await getSchoolMembers(groupId, { kind: 'master' })
+      const page = await getSchoolMembers(schoolId, { kind: 'master' })
       schoolMasterOptions.value = page.items
         .filter((m: SchoolMemberItem) => m.is_visible && m.user_id !== authStore.user?.id)
         .map((m: SchoolMemberItem) => ({
@@ -1335,7 +1335,7 @@ async function submit(): Promise<void> {
       // FE-92: for another master the school is ALWAYS sent (the practice
       // belongs to it, with either of its two audiences), plus master_id.
       school_id: targetsForeignMaster.value
-        ? contextGroupId.value
+        ? contextSchoolId.value
         : form.audience_kind === 'schools'
           ? form.audience_school_id
           : null,
@@ -1368,7 +1368,7 @@ async function submit(): Promise<void> {
       clearDraft()
       if (created.deduplicated) toast.info(t('masterScreens.createPractice.toast.duplicate'))
       else toast.success(t('masterScreens.createPractice.toast.published'))
-      void router.replace({ name: 'master-school', params: { id: contextGroupId.value } })
+      void router.replace({ name: 'master-school', params: { id: contextSchoolId.value } })
       return
     }
 

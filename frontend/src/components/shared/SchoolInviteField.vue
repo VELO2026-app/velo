@@ -87,7 +87,7 @@ import { useToast } from '@/composables/useToast'
 import { IconCopy, IconLink } from '@/components/icons'
 
 const props = defineProps<{
-  groupId: string
+  schoolId: string
 }>()
 
 const toast = useToast()
@@ -103,7 +103,7 @@ onMounted(() => {
 
 async function load(): Promise<void> {
   try {
-    const res = await createSchoolInvite(props.groupId)
+    const res = await createSchoolInvite(props.schoolId)
     inviteUrl.value = res.invite_url
   } catch (e) {
     toast.error(extractApiError(e, t('school.inviteFetchFailed')))
@@ -118,7 +118,7 @@ async function onCopy(): Promise<void> {
   copying.value = true
   try {
     if (!inviteUrl.value) {
-      const res = await createSchoolInvite(props.groupId)
+      const res = await createSchoolInvite(props.schoolId)
       inviteUrl.value = res.invite_url
     }
     await navigator.clipboard.writeText(inviteUrl.value)

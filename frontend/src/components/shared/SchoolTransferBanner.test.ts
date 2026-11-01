@@ -63,7 +63,7 @@ function mount(props: {
           transfer: props.transfer ?? null,
           pending: props.pending ?? null,
           relation: props.relation,
-          groupId: 'g1',
+          schoolId: 'g1',
           onCancelled: () => events['cancelled']?.push(null) ?? (events['cancelled'] = [null]),
           onAccepted: (page: SchoolPageResponse) =>
             events['accepted']?.push(page) ?? (events['accepted'] = [page]),

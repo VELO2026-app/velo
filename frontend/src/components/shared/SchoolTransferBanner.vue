@@ -54,7 +54,7 @@ const props = defineProps<{
   /** The curator's local echo right after offering, ahead of any reload. */
   pending: SchoolTransferRef | null
   relation: 'curator' | 'master' | 'student' | null
-  groupId: string
+  schoolId: string
 }>()
 
 const emit = defineEmits<{
@@ -87,7 +87,7 @@ const text = computed(() => {
 async function onCancel(): Promise<void> {
   busy.value = true
   try {
-    await cancelSchoolTransfer(props.groupId)
+    await cancelSchoolTransfer(props.schoolId)
     toast.success(t('transfer.cancelled'))
     emit('cancelled')
   } catch (e) {
@@ -102,7 +102,7 @@ async function onAccept(): Promise<void> {
   try {
     // The response IS the page as the new curator sees it -- hand it up so
     // the page flips into curator mode without a reload.
-    const page = await acceptSchoolTransfer(props.groupId)
+    const page = await acceptSchoolTransfer(props.schoolId)
     emit('accepted', page)
   } catch (e) {
     toast.error(extractApiError(e, t('transfer.acceptFailed')))
@@ -114,7 +114,7 @@ async function onAccept(): Promise<void> {
 async function onDecline(): Promise<void> {
   busy.value = true
   try {
-    await declineSchoolTransfer(props.groupId)
+    await declineSchoolTransfer(props.schoolId)
     toast.success(t('transfer.declined'))
     emit('declined')
   } catch (e) {

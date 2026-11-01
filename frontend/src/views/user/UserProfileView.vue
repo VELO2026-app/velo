@@ -81,10 +81,10 @@
           >
             <template #icon><IconMessages :size="20" /></template>
           </VMenuRow>
-          <!-- FE-19 (GT P3): schools. The only "groups" concept a plain user
-               meets -- the master's student groups are invisible to them. -->
+          <!-- FE-19 (GT P3): the schools I belong to. The master's student
+               groups are a master-zone concept a plain user never meets. -->
           <VMenuRow
-            :label="t('user.screens.userProfile.menu.groups')"
+            :label="t('user.screens.userProfile.menu.mySchools')"
             @click="router.push({ name: 'user-my-schools' })"
           >
             <template #icon><IconGroup :size="20" /></template>

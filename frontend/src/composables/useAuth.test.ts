@@ -190,12 +190,12 @@ describe('parseStartParam', () => {
   // school.master_offered. The former curator_group_master_offer__
   // was built by nothing and is no route any more (no legacy).
   it('parses open_master_offer__{uuid}; the former kind is gone', () => {
-    const groupId = '123e4567-e89b-12d3-a456-426614174000'
-    expect(parseStartParam(`open_master_offer__${groupId}`)).toEqual({
+    const schoolId = '123e4567-e89b-12d3-a456-426614174000'
+    expect(parseStartParam(`open_master_offer__${schoolId}`)).toEqual({
       name: 'school-master-offer',
-      params: { id: groupId },
+      params: { id: schoolId },
     })
-    expect(parseStartParam(`curator_group_master_offer__${groupId}`)).toBeNull()
+    expect(parseStartParam(`curator_group_master_offer__${schoolId}`)).toBeNull()
     expect(parseStartParam('open_master_offer__not-a-uuid')).toBeNull()
     expect(parseStartParam('open_master_offer')).toBeNull()
   })

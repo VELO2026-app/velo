@@ -138,11 +138,11 @@ const INBOX_ROUTES = ['user-inbox']
 const isInboxRoute = computed(() => INBOX_ROUTES.includes(route.name as string))
 
 // Owner 2026-09-30: the master's public page in the CURATOR context (the
-// roster's ?groupId= marker) hides the dock -- its place is taken by the
+// roster's ?schoolId= marker) hides the dock -- its place is taken by the
 // hanging «Создать практику» CTA (MasterPublicView renders it on the same
 // condition, so the shell and the view can never disagree).
 const isMasterCuratorRoute = computed(
-  () => route.name === 'user-master-public' && String(route.query.groupId ?? '') !== '',
+  () => route.name === 'user-master-public' && String(route.query.schoolId ?? '') !== '',
 )
 
 // Owner 2026-10-05: the stacked school calendar and the practice detail are

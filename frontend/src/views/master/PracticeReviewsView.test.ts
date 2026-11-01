@@ -281,7 +281,7 @@ describe('PracticeReviewsView', () => {
       await flush()
       expect(push).toHaveBeenCalledWith({
         name: 'master-school-student',
-        params: { groupId: 'g9', userId: 'r0' },
+        params: { schoolId: 'g9', userId: 'r0' },
       })
     })
 

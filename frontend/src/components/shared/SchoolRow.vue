@@ -21,7 +21,7 @@
 -->
 
 <template>
-  <button type="button" class="cg-row" @click="$emit('open', group.id)">
+  <button type="button" class="cg-row" @click="$emit('open', school.id)">
     <!-- The branding crop fades into the white card behind the text column. -->
     <SchoolBrandBanner
       v-if="brandingHash"
@@ -30,12 +30,12 @@
       class="cg-row__brand"
     />
     <VAvatar
-      v-if="group.avatar_url"
+      v-if="school.avatar_url"
       class="cg-row__logo"
       square
       size="lg"
-      :name="group.name"
-      :url="group.avatar_url"
+      :name="school.name"
+      :url="school.avatar_url"
     />
     <SchoolMandalaBadge
       v-else-if="brandingHash"
@@ -43,21 +43,21 @@
       :hash="brandingHash"
       :size="64"
     />
-    <VAvatar v-else class="cg-row__logo" square size="lg" :name="group.name" />
+    <VAvatar v-else class="cg-row__logo" square size="lg" :name="school.name" />
     <span class="cg-row__text">
-      <span class="cg-row__name">{{ group.name }}</span>
+      <span class="cg-row__name">{{ school.name }}</span>
       <span class="cg-row__stats">
         <span class="cg-row__stat">
           <IconUsers :size="13" />
-          {{ group.students_count }}
+          {{ school.students_count }}
         </span>
         <span class="cg-row__stat">
           <IconMeditation :size="13" />
-          {{ group.masters_count }}
+          {{ school.masters_count }}
         </span>
       </span>
     </span>
-    <VChip v-if="group.transfer_offered" class="cg-row__offer" active
+    <VChip v-if="school.transfer_offered" class="cg-row__offer" active
       >{{ t('school.offerBadge') }}
     </VChip>
   </button>
@@ -74,7 +74,7 @@ import SchoolBrandBanner from '@/components/shared/SchoolBrandBanner.vue'
 import SchoolMandalaBadge from '@/components/shared/SchoolMandalaBadge.vue'
 
 const props = defineProps<{
-  group: SchoolMineItem
+  school: SchoolMineItem
 }>()
 
 defineEmits<{
@@ -85,7 +85,7 @@ defineEmits<{
 // derives it from the name (async: one microtask after mount).
 const brandingHash = ref<string | null>(null)
 onMounted(() => {
-  void schoolHashFromName(props.group.name).then((h) => {
+  void schoolHashFromName(props.school.name).then((h) => {
     brandingHash.value = h
   })
 })

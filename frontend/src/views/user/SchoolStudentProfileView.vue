@@ -288,7 +288,7 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 
-const groupId = computed(() => String(route.params.groupId ?? ''))
+const schoolId = computed(() => String(route.params.schoolId ?? ''))
 const userId = computed(() => String(route.params.userId ?? ''))
 
 // Server truth once loaded; the roster query is only the instant-paint hint.
@@ -312,7 +312,7 @@ const hoursLabel = computed(() => (profile.value ? formatHours(profile.value.hou
 const rosterRoute = computed(() => ({
   // FE-93: this screen mounts in the master zone only.
   name: 'master-school-members',
-  params: { id: groupId.value },
+  params: { id: schoolId.value },
   // Back lands on the roster the row came from (the §1.11 switcher tab).
   query: { kind: 'student' },
 }))
@@ -339,8 +339,8 @@ async function load(): Promise<void> {
   profileError.value = false
   try {
     const [student, school] = await Promise.all([
-      getSchoolStudentProfile(groupId.value, userId.value),
-      getSchoolPage(groupId.value),
+      getSchoolStudentProfile(schoolId.value, userId.value),
+      getSchoolPage(schoolId.value),
     ])
     if (version !== loadVersion) return
     profile.value = student
@@ -365,10 +365,10 @@ onMounted(() => {
 })
 
 // Router reuse under the same record: reload for the new student.
-watch([groupId, userId], () => {
+watch([schoolId, userId], () => {
   roleOpen.value = false
   cancelOfferOpen.value = false
-  if (groupId.value && userId.value) void load()
+  if (schoolId.value && userId.value) void load()
 })
 
 // -- «Написать сообщение» ------------------------------------------------------
@@ -431,7 +431,7 @@ async function resolveCurrentKind(): Promise<void> {
     let offset = 0
     const limit = 100
     for (;;) {
-      const page = await getSchoolMembers(groupId.value, {
+      const page = await getSchoolMembers(schoolId.value, {
         kind: 'master',
         limit,
         offset,
@@ -469,7 +469,7 @@ async function onRoleConfirm(): Promise<void> {
   if (!isCurator.value || roleConfirmDisabled.value || rolePending.value) return
   rolePending.value = true
   try {
-    await offerSchoolMaster(groupId.value, userId.value)
+    await offerSchoolMaster(schoolId.value, userId.value)
     toast.success(t('user.screens.schoolStudentProfile.toast.offerSent'))
     roleOpen.value = false
     await load()
@@ -487,7 +487,7 @@ async function onCancelOffer(): Promise<void> {
   if (!isCurator.value || !masterOffer.value || cancellingOffer.value) return
   cancellingOffer.value = true
   try {
-    await cancelSchoolMasterOffer(groupId.value, userId.value)
+    await cancelSchoolMasterOffer(schoolId.value, userId.value)
     toast.success(t('user.screens.schoolStudentProfile.toast.offerCancelled'))
     cancelOfferOpen.value = false
     await load()
@@ -525,7 +525,7 @@ async function onBlockConfirm(): Promise<void> {
   if (blocking.value) return
   blocking.value = true
   try {
-    await blockSchoolMember(groupId.value, userId.value)
+    await blockSchoolMember(schoolId.value, userId.value)
     blockConfirmOpen.value = false
     blockedDialogOpen.value = true
   } catch (e) {

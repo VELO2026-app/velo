@@ -9,15 +9,15 @@
     - "Методы" accordion (method chips)
     - «Предстоящие практики» nav row (owner 2026-09-30) -> the stacked
       user-calendar-master route (the master's practice calendar)
-    - «Аналитика» accordion, curator-of-the-school only (?groupId=):
+    - «Аналитика» accordion, curator-of-the-school only (?schoolId=):
       PLACEHOLDER until the curator-analytics contract exists
     - «Ближайшие практики»: plain heading + up to 5 upcoming-practice cards
       (owner 2026-09-30 -- the collapsed accordion is retired; reuses
       getPractices with master_id -- no new endpoint, no dedicated store).
-      Owner 2026-10-03: in the curator's school context (?groupId=) only the
+      Owner 2026-10-03: in the curator's school context (?schoolId=) only the
       master's practices in THAT school are listed -- a larger page is fetched
       and filtered client-side by the practices' school_id (the public
-      feed has no school param); «Предстоящие практики» hands ?groupId to the
+      feed has no school param); «Предстоящие практики» hands ?schoolId to the
       master calendar for the same filter.
     - «⋯» меню: «Написать сообщение» -> ask-master flow (T2); в школьном
       контексте куратора — ещё «Изменить роль» и «Заблокировать» (владелец,
@@ -38,7 +38,7 @@
       <!-- The ⋯ menu: «Написать сообщение» for EVERY visitor (owner
            2026-09-30 -- replaced the «Задать вопрос» button). In the
            curator's school context (the roster's master rows navigate here
-           with ?groupId=) it also carries the curator's actions: «Изменить
+           with ?schoolId=) it also carries the curator's actions: «Изменить
            роль» (BE-59 demote) and «Заблокировать» (BE-79 (2) block). -->
       <template #action>
         <VMenu :aria-label="t('user.screens.masterPublic.actionsAria')">
@@ -157,7 +157,7 @@
         <IconChevronRight :size="16" />
       </button>
 
-      <!-- Аналитика: curator-of-THIS-school only (the ?groupId= marker).
+      <!-- Аналитика: curator-of-THIS-school only (the ?schoolId= marker).
            PLACEHOLDER until the curator-analytics contract exists (same
            pattern as the Блок tab) -- no endpoint serves a member master's
            figures to the school curator yet. -->
@@ -197,7 +197,7 @@
     </div>
 
     <!-- «Создать практику» (owner 2026-09-30): hangs above the tab bar,
-         curator-of-THIS-school only (?groupId=). Same §1.6 hand-off as the
+         curator-of-THIS-school only (?schoolId=). Same §1.6 hand-off as the
          school page: master AND school go to the create flow (FE-92). -->
     <div v-if="schoolContext" class="master-public__cta">
       <VButton variant="primary" block size="lg" @click="goCreatePractice">
@@ -321,13 +321,13 @@ const TAG_VARIANTS = ['blue', 'pink', 'sand'] as const
 
 // -- Curator's school-context actions (owner ruling 2026-09-30) ---------------
 //
-// The roster's master rows navigate here with ?groupId= -- that marker turns
+// The roster's master rows navigate here with ?schoolId= -- that marker turns
 // on the action menu for the curator of THAT school. The plain public profile
 // (any other entry) renders no menu. «Изменить роль» is the BE-59 demote
 // (wired); «Заблокировать» sends the BE-79 block (wired, BE-79 (2)).
 
-const groupId = computed(() => String(route.query.groupId ?? ''))
-const schoolContext = computed(() => groupId.value !== '')
+const schoolId = computed(() => String(route.query.schoolId ?? ''))
+const schoolContext = computed(() => schoolId.value !== '')
 
 const roleOpen = ref(false)
 type MemberKind = 'student' | 'master'
@@ -358,7 +358,7 @@ async function onRoleConfirm(): Promise<void> {
   if (demoting.value) return
   demoting.value = true
   try {
-    await demoteSchoolMaster(groupId.value, masterId.value)
+    await demoteSchoolMaster(schoolId.value, masterId.value)
     roleOpen.value = false
     toast.success(t('user.screens.masterPublic.toast.roleChanged'))
   } catch (e) {
@@ -388,7 +388,7 @@ async function onBlockConfirm(): Promise<void> {
   if (blocking.value) return
   blocking.value = true
   try {
-    await blockSchoolMember(groupId.value, masterId.value)
+    await blockSchoolMember(schoolId.value, masterId.value)
     blockConfirmOpen.value = false
     toast.success(t('user.screens.masterPublic.toast.blocked'))
     router.back()
@@ -420,13 +420,13 @@ function goToPractice(id: string): void {
 }
 
 // The «Предстоящие практики» row: the stacked MASTER-practice calendar. The
-// curator's school context travels along (?groupId) -- the calendar then shows
+// curator's school context travels along (?schoolId) -- the calendar then shows
 // only this master's practices in THAT school (owner 2026-10-03).
 function goToCalendar(): void {
   void router.push({
     name: 'user-calendar-master',
     params: { masterId: masterId.value },
-    query: schoolContext.value ? { groupId: groupId.value } : undefined,
+    query: schoolContext.value ? { schoolId: schoolId.value } : undefined,
   })
 }
 
@@ -437,7 +437,7 @@ function goToCalendar(): void {
 function goCreatePractice(): void {
   void router.push({
     name: 'master-practice-new',
-    query: { masterId: masterId.value, groupId: groupId.value },
+    query: { masterId: masterId.value, schoolId: schoolId.value },
   })
 }
 
@@ -449,7 +449,7 @@ async function loadMaster(id: string): Promise<void> {
     profile.value = await getPublicMaster(id)
     // Upcoming practices by this master: reuse the public feed with a
     // master_id filter + scheduled status. Owner 2026-10-03: in the curator's
-    // school context (?groupId=) only the master's practices in THAT school
+    // school context (?schoolId=) only the master's practices in THAT school
     // are listed -- the public feed has no school param, so the page is
     // fetched larger and filtered client-side by the practices' own
     // school_id (null on personal practices, a foreign school's id
@@ -468,7 +468,7 @@ async function loadMaster(id: string): Promise<void> {
       // The ≤5 cap is also enforced locally: the owner's 2026-09-30 spec is
       // "up to 5 cards", independent of any server limit regression.
       const items = schoolContext.value
-        ? res.items.filter((p) => p.school_id === groupId.value)
+        ? res.items.filter((p) => p.school_id === schoolId.value)
         : res.items
       upcoming.value = items.slice(0, 5)
     } catch {
