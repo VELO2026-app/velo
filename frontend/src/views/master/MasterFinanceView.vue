@@ -169,13 +169,13 @@
             :min="MIN_WITHDRAWAL_EUROS"
             step="0.01"
             placeholder="0.00"
+            :aria-invalid="!!amountError || undefined"
+            :aria-describedby="amountError ? 'err-amount' : undefined"
           />
         </div>
-        <!-- Constant-height slot (owner 2026-10-01): the message fades in
-             without growing its block. -->
-        <p class="finance-view__error" :class="{ 'finance-view__error--show': !!amountError }">
-          {{ amountError }}
-        </p>
+        <!-- Animated error row (owner TZ 2026-11-01): 0px while closed,
+             expanding smoothly -- no constant-height slot. -->
+        <VFieldError id="err-amount" :message="amountError" />
         <p v-if="!amountError && amountCents > 0" class="finance-view__hint">
           {{
             t('masterScreens.masterFinance.fields.feeBreakdown', {
@@ -258,7 +258,7 @@ import { t } from '@/locales'
 import { ref, computed, reactive, onMounted, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
-import { VButton, VLoader, VInput, VSelect } from '@/components/ui'
+import { VButton, VFieldError, VLoader, VInput, VSelect } from '@/components/ui'
 import { IconCheck, IconClose, IconPending } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { getLocale } from '@/locales'
@@ -771,20 +771,7 @@ onMounted(async () => {
   color: var(--velo-error);
 }
 
-/* Constant-height error slot (owner 2026-10-01): the message fades in
-   without growing its block. */
-.finance-view__error {
-  font-size: var(--velo-fs-14);
-  color: var(--velo-error);
-  margin: 0;
-  min-height: 17px;
-  line-height: 1.2;
-  opacity: 0;
-}
-
-.finance-view__error--show {
-  opacity: 1;
-}
+/* Animated error row (owner TZ 2026-11-01): VFieldError, 0px while closed. */
 
 .finance-view__all {
   align-self: flex-start;

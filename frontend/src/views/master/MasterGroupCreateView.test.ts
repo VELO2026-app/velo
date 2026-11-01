@@ -107,7 +107,7 @@ describe('MasterGroupCreateView', () => {
     submitBtn()?.click()
     await flush()
     expect(vi.mocked(groupsApi.createGroup)).not.toHaveBeenCalled()
-    const slot = host?.querySelector('.new-group__field-error--show')
+    const slot = host?.querySelector('.v-field-error--open')
     expect(slot?.textContent).toBe('Введите название группы')
     expect(scrollSpy).toHaveBeenCalled()
     scrollSpy.mockRestore()

@@ -75,13 +75,8 @@
         :error="fieldError"
         @focus="onFieldFocus"
       />
-      <!-- Constant-height slot (owner 2026-10-01): the message fades in
-           without growing its block, so an error never shifts the layout. -->
-      <span
-        class="new-group__field-error"
-        :class="{ 'new-group__field-error--show': !!fieldError }"
-        >{{ fieldError }}</span
-      >
+      <!-- The error line is VInput's own VFieldError row (owner TZ 2026-11-01):
+           0px while closed, expanding smoothly -- no constant-height slot. -->
 
       <VTextarea
         v-model="description"
@@ -108,7 +103,7 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { nextTick, ref } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import { VInput, VTextarea, VButton } from '@/components/ui'
@@ -127,6 +122,12 @@ const description = ref('')
 const creating = ref(false)
 const fieldError = ref('')
 
+// Owner TZ 2026-11-01 §6: once an error sits on the field, fixing it clears
+// the error immediately; typing never ADDS errors before a submit attempt.
+watch(name, (v) => {
+  if (fieldError.value && v.trim()) fieldError.value = ''
+})
+
 async function onCreate(): Promise<void> {
   if (creating.value) return
   if (!name.value.trim()) {
@@ -134,7 +135,7 @@ async function onCreate(): Promise<void> {
     // create form); the toast stays for the case when the slot is off-screen.
     fieldError.value = t('masterScreens.masterGroupCreate.validation.enterName')
     await nextTick()
-    queryDocument('.new-group__field-error--show')?.scrollIntoView({
+    queryDocument('.v-field-error--open')?.scrollIntoView({
       behavior: 'smooth',
       block: 'center',
     })
@@ -164,30 +165,11 @@ async function onCreate(): Promise<void> {
   flex-direction: column;
 }
 
-/* Section-title required marker + constant-height error slot (owner
-   2026-10-01 canon, same as the practice create form): the rosette is gone,
-   the message fades in without growing its block. VInput's own error line
-   is hidden -- its red border still marks the field. */
+/* Section-title required marker (owner 2026-10-01 canon, same as the practice
+   create form): the rosette is gone. The error line is VInput's own VFieldError
+   row (owner TZ 2026-11-01): 0px closed, smooth expand, red border unchanged. */
 .new-group__req {
   color: var(--velo-error);
-}
-
-.new-group__field-error {
-  display: block;
-  min-height: 17px;
-  margin-top: 0;
-  font-size: var(--velo-fs-14);
-  line-height: 1.2;
-  color: var(--velo-error);
-  opacity: 0;
-}
-
-.new-group__field-error--show {
-  opacity: 1;
-}
-
-.new-group :deep(.v-input__error) {
-  display: none;
 }
 
 /* [FE-45 follow-up, owner: t('masterScreens.masterGroupCreate.debug.moveHint')] While typing, the

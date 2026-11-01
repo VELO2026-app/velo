@@ -2273,18 +2273,20 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     scrollSpy.mockRestore()
   })
 
-  it('error slots are constant-height: a failed submit inserts no new nodes', async () => {
-    // The zero-shift contract (owner 2026-10-01): every error-capable field
-    // owns a permanent reserved slot -- the failed submit only toggles
-    // --show inside existing nodes, so nothing below can jump.
+  it('error rows are always mounted, 0px closed: a failed submit opens rows without inserting nodes', async () => {
+    // Owner TZ 2026-11-01: the 17px constant slots are gone -- every row is a
+    // VFieldError, closed = exactly 0px. The failed submit only OPENS rows
+    // that already exist (no node insertion, nothing below can jump), and
+    // clearing a field collapses its row smoothly instead of blinking.
     mount()
     await flush()
-    const slots = (): number => host?.querySelectorAll('.create-practice__field-error').length ?? 0
-    const before = slots()
+    const rows = (): number => host?.querySelectorAll('.v-field-error').length ?? 0
+    const before = rows()
     expect(before).toBeGreaterThan(0)
+    expect(host?.querySelectorAll('.v-field-error--open').length).toBe(0)
     submitForm()
     await flush()
-    expect(slots()).toBe(before)
-    expect(host?.querySelectorAll('.create-practice__field-error--show').length).toBeGreaterThan(0)
+    expect(rows()).toBe(before)
+    expect(host?.querySelectorAll('.v-field-error--open').length).toBeGreaterThan(0)
   })
 })

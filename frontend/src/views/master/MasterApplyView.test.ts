@@ -198,7 +198,10 @@ function inputByLabel(label: string): HTMLInputElement {
   return el
 }
 function inputErrorText(label: string): string {
-  return inputWrapByLabel(label).querySelector('.v-input__error')?.textContent?.trim() ?? ''
+  // Only an OPEN row counts: a collapsed VFieldError keeps its last text for
+  // the collapse animation.
+  const row = inputWrapByLabel(label).querySelector('.v-input__error')
+  return row?.classList.contains('v-field-error--open') ? (row.textContent?.trim() ?? '') : ''
 }
 
 function bioField(): HTMLTextAreaElement {
@@ -207,7 +210,8 @@ function bioField(): HTMLTextAreaElement {
   return el
 }
 function bioErrorText(): string {
-  return host?.querySelector('.v-textarea__error')?.textContent?.trim() ?? ''
+  const row = host?.querySelector('.v-textarea__error')
+  return row?.classList.contains('v-field-error--open') ? (row.textContent?.trim() ?? '') : ''
 }
 
 function selectField(): HTMLSelectElement {
@@ -221,7 +225,8 @@ function chooseExperience(value: string): void {
   el.dispatchEvent(new Event('change'))
 }
 function selectErrorText(): string {
-  return host?.querySelector('.v-select__error')?.textContent?.trim() ?? ''
+  const row = host?.querySelector('.v-select__error')
+  return row?.classList.contains('v-field-error--open') ? (row.textContent?.trim() ?? '') : ''
 }
 
 function checkboxByLabel(labelSubstr: string): HTMLButtonElement {
@@ -239,7 +244,9 @@ function chipByText(t: string): HTMLElement | undefined {
 }
 
 function fieldErrorText(substr: string): string | undefined {
-  return Array.from(host?.querySelectorAll<HTMLElement>('.apply-view__field-error') ?? [])
+  // The VFieldError rows keep their last text while collapsed (the collapse
+  // animation needs it), so match the message against OPEN rows only.
+  return Array.from(host?.querySelectorAll<HTMLElement>('.v-field-error--open') ?? [])
     .map((e) => e.textContent?.trim())
     .find((t) => t?.includes(substr))
 }

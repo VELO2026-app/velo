@@ -63,9 +63,11 @@
         label="E-mail"
         type="email"
         placeholder="you@example.com"
+        :aria-invalid="!!emailError || undefined"
+        :aria-describedby="emailError ? 'err-email' : undefined"
         @focus="onFieldFocus"
       />
-      <p v-if="emailError" class="edit-profile__field-error">{{ emailError }}</p>
+      <VFieldError id="err-email" :message="emailError" />
 
       <!-- Методы практик (мастер): flat set + admin-approved change-request (M3).
            Order (L2): below Имя/Фамилия/E-mail, above Языки/О себе. -->
@@ -228,6 +230,7 @@ import { computed, reactive, ref, onMounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import {
+  VFieldError,
   VInput,
   VTextarea,
   VButton,
@@ -592,12 +595,8 @@ function onConfirmDelete(): void {
   line-height: 1.4;
 }
 
-/* Inline field error (e-mail) — sibling <p> since VInput has no error prop. */
-.edit-profile__field-error {
-  margin: calc(-1 * var(--space-3)) 0 var(--space-4);
-  font-size: var(--velo-fs-14);
-  color: var(--velo-error);
-}
+/* Inline field error (e-mail): VFieldError row (owner TZ 2026-11-01) —
+   0px while closed, replacing the negative-margin <p> hack. */
 
 /* Submit button sits under the note with a little breathing room. */
 .edit-profile__methods :deep(.v-btn) {

@@ -19,6 +19,8 @@
         class="v-select__field"
         :value="modelValue"
         :disabled="disabled"
+        :aria-invalid="!!error || undefined"
+        :aria-describedby="error ? errorId : undefined"
         @change="$emit('update:modelValue', ($event.target as HTMLSelectElement).value)"
       >
         <option v-if="placeholder" value="" disabled>{{ placeholder }}</option>
@@ -38,13 +40,16 @@
         <IconRequiredDone v-else :size="22" />
       </span>
     </div>
-    <span v-if="error" class="v-select__error">{{ error }}</span>
+    <!-- Animated error row (owner TZ 2026-11-01): always mounted, 0px closed.
+         The legacy class stays so tests/view selectors keep resolving. -->
+    <VFieldError :id="errorId" class="v-select__error" :message="error" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { useId } from 'vue'
 import { IconRequired, IconRequiredDone } from '@/components/icons'
+import VFieldError from './VFieldError.vue'
 
 export interface SelectOption {
   value: string
@@ -55,6 +60,8 @@ export interface SelectOption {
 // does not forward $attrs to the inner <select> (no inheritAttrs:false here),
 // so there is no caller-supplied id to defer to on this element.
 const fieldId = useId()
+// The error row (VFieldError below) is aria-describedby'd from the select.
+const errorId = `${fieldId}-error`
 
 withDefaults(
   defineProps<{
@@ -147,12 +154,5 @@ defineEmits<{
 
 .v-select__seal--done {
   color: var(--velo-required-done);
-}
-
-.v-select__error {
-  display: block;
-  font-size: var(--velo-fs-14);
-  color: var(--velo-error);
-  margin-top: var(--space-1);
 }
 </style>

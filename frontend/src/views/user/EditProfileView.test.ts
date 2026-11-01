@@ -237,10 +237,17 @@ function bioField(): HTMLTextAreaElement {
   return el
 }
 function bioErrorText(): string {
-  return norm(host?.querySelector('.v-textarea__error')?.textContent).trim()
+  // The VFieldError row keeps its last text while collapsed (the collapse
+  // animation needs it), so only an OPEN row counts as a shown error.
+  const row = host?.querySelector('.v-textarea__error')
+  return row?.classList.contains('v-field-error--open') ? norm(row?.textContent).trim() : ''
 }
 function emailErrorText(): string {
-  return norm(host?.querySelector('.edit-profile__field-error')?.textContent).trim()
+  // #err-email is the inner <p> (the aria-describedby target); the --open
+  // class lives on its row root. Only an OPEN row counts: a collapsed
+  // VFieldError keeps its last text for the collapse animation.
+  const row = host?.querySelector('#err-email')?.closest('.v-field-error')
+  return row?.classList.contains('v-field-error--open') ? norm(row?.textContent).trim() : ''
 }
 function buttonByText(t: string): HTMLButtonElement | undefined {
   return Array.from(host?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(

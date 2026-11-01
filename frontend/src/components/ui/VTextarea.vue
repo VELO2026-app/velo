@@ -37,6 +37,8 @@
         :placeholder="placeholder"
         :rows="rows"
         :disabled="disabled"
+        :aria-invalid="!!error || undefined"
+        :aria-describedby="error ? errorId : undefined"
         v-bind="$attrs"
         @focus="onFieldFocus"
         @input="onInput"
@@ -79,13 +81,16 @@
            take and whenever the field is disabled. -->
       <VoiceMicButton v-if="voiceInput && !disabled && !voiceActive" @click="micTap" />
     </div>
-    <span v-if="error" class="v-textarea__error">{{ error }}</span>
+    <!-- Animated error row (owner TZ 2026-11-01): always mounted, 0px closed.
+         The legacy class stays so tests/view selectors keep resolving. -->
+    <VFieldError :id="errorId" class="v-textarea__error" :message="error" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch, onMounted, nextTick, useId, useAttrs } from 'vue'
 import { IconRequired, IconRequiredDone } from '@/components/icons'
+import VFieldError from './VFieldError.vue'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import { appendTranscript, useVoiceFieldInput } from '@/composables/useVoiceFieldInput'
 // Shared reach from ui (FE-94, a first for this folder): the voice family
@@ -108,6 +113,8 @@ const { onFieldFocus } = useKeyboardFieldScroll()
 
 // Label/input association (PROMPT №679), same pattern as VInput.vue.
 const fieldId = useId()
+// The error row (VFieldError below) is aria-describedby'd from the textarea.
+const errorId = `${fieldId}-error`
 
 const props = withDefaults(
   defineProps<{
@@ -359,12 +366,5 @@ watch(voiceActive, (active) => {
 
 .v-textarea__seal--done {
   color: var(--velo-required-done);
-}
-
-.v-textarea__error {
-  display: block;
-  font-size: var(--velo-fs-14);
-  color: var(--velo-error);
-  margin-top: var(--space-1);
 }
 </style>

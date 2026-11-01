@@ -1004,13 +1004,6 @@ async function remove(): Promise<void> {
   margin: var(--space-3) 0 0;
 }
 
-.edit-practice__field-error {
-  display: block;
-  font-size: var(--velo-fs-14);
-  color: var(--velo-error);
-  margin-top: var(--space-1);
-}
-
 /* T21-1 (PROMPT №541): honest caption for the now-fallback Zoom field. */
 .edit-practice__hint {
   margin: 0 0 var(--space-2);

@@ -65,12 +65,7 @@
             {{ t('masterScreens.masterApply.step1.privacyConsent') }}
           </VCheckbox>
         </VCard>
-        <p
-          class="apply-view__field-error"
-          :class="{ 'apply-view__field-error--show': !!errors.privacy }"
-        >
-          {{ errors.privacy }}
-        </p>
+        <VFieldError id="err-privacy" :message="errors.privacy" size="lg" />
 
         <VButton variant="primary" block size="lg" class="apply-view__next" @click="goToStep2">
           {{ t('masterScreens.masterApply.next') }}
@@ -95,12 +90,7 @@
             t('masterScreens.masterApply.fields.directions')
           }}</label>
           <MethodTaxonomyPicker v-model="methods" />
-          <p
-            class="apply-view__field-error"
-            :class="{ 'apply-view__field-error--show': !!errors.methods }"
-          >
-            {{ errors.methods }}
-          </p>
+          <VFieldError id="err-methods" :message="errors.methods" size="lg" />
         </div>
 
         <VSelect
@@ -217,12 +207,7 @@
             {{ t('masterScreens.masterApply.step3.docsConsent') }}
           </VCheckbox>
         </VCard>
-        <p
-          class="apply-view__field-error"
-          :class="{ 'apply-view__field-error--show': !!errors.docs }"
-        >
-          {{ errors.docs }}
-        </p>
+        <VFieldError id="err-docs" :message="errors.docs" size="lg" />
 
         <VButton
           variant="primary"
@@ -261,6 +246,7 @@ import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import {
   VButton,
+  VFieldError,
   VInput,
   VTextarea,
   VSelect,
@@ -353,6 +339,39 @@ const errors = reactive({
   bio: '',
   docs: '',
 })
+
+// Owner TZ 2026-11-01 §6: after a failed step attempt a field that became
+// valid loses its error immediately; typing never ADDS errors.
+watch(
+  () => form.display_name,
+  (v) => {
+    if (errors.display_name && v.trim()) errors.display_name = ''
+  },
+)
+watch(
+  () => form.privacyAccepted,
+  (v) => {
+    if (errors.privacy && v) errors.privacy = ''
+  },
+)
+watch(methods, (list) => {
+  if (errors.methods && list.length > 0) errors.methods = ''
+})
+watch(experienceLabel, (v) => {
+  if (errors.experience_years && v) errors.experience_years = ''
+})
+watch(
+  () => form.bio,
+  (v) => {
+    if (errors.bio && v.trim()) errors.bio = ''
+  },
+)
+watch(
+  () => form.docsConsent,
+  (v) => {
+    if (errors.docs && v) errors.docs = ''
+  },
+)
 
 // -- Experience years numeric value --
 const experienceYears = computed((): number => {
@@ -597,23 +616,11 @@ async function submit(skipDocuments = false): Promise<void> {
   margin: 0;
 }
 
-/* Step-title required marker + constant-height error slots (owner
-   2026-10-01 canon): the message fades in without growing its block. */
+/* Step-title required marker (owner 2026-10-01 canon). Error lines are
+   VFieldError rows (owner TZ 2026-11-01): 0px while closed, expanding
+   smoothly; the fs-16 text is the `size="lg"` variant. */
 .apply-view__req {
   color: var(--velo-error);
-}
-
-.apply-view__field-error {
-  min-height: 17px;
-  margin: 0;
-  font-size: var(--velo-fs-16);
-  line-height: 1.2;
-  color: var(--velo-error);
-  opacity: 0;
-}
-
-.apply-view__field-error--show {
-  opacity: 1;
 }
 
 /* -- Language stub card -- */

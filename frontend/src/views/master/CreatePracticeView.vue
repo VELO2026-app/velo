@@ -125,11 +125,6 @@
           :placeholder="t('masterScreens.createPractice.titlePlaceholder')"
           :error="errors.title"
         />
-        <span
-          class="create-practice__field-error"
-          :class="{ 'create-practice__field-error--show': !!errors.title }"
-          >{{ errors.title }}</span
-        >
 
         <!-- Направление = дисциплина (meditation/yoga/…). Подпись = плейсхолдер.
              Options catalog-first (T2 stage 2) -- see directionOptions. -->
@@ -140,11 +135,6 @@
           :error="errors.direction"
           @update:modelValue="onDirectionChange"
         />
-        <span
-          class="create-practice__field-error"
-          :class="{ 'create-practice__field-error--show': !!errors.direction }"
-          >{{ errors.direction }}</span
-        >
 
         <!-- Вид практики = style. Показываем только если у направления есть виды
              (Q4=А: без явного «Без вида», не выбрано = null, необязательное). -->
@@ -154,12 +144,6 @@
             :placeholder="t('masterScreens.createPractice.stylePlaceholder')"
             :options="styleOptionsForForm"
           />
-          <!-- Rhythm reserve (owner 2026-10-05): style never errors (optional),
-               but every other plate in a section is followed by the constant
-               17px error slot — without it «Вид практики» sat 2px off
-               «Уровень сложности» while all other input-to-input gaps were
-               slot + 2px. -->
-          <span class="create-practice__field-error" aria-hidden="true"></span>
         </div>
 
         <!-- Уровень сложности = difficulty (локальные мужские лейблы, Q1=Б). -->
@@ -169,11 +153,6 @@
           :options="DIFFICULTY_OPTIONS_CREATE"
           :error="errors.difficulty"
         />
-        <span
-          class="create-practice__field-error"
-          :class="{ 'create-practice__field-error--show': !!errors.difficulty }"
-          >{{ errors.difficulty }}</span
-        >
       </div>
 
       <!-- ================================================================
@@ -194,16 +173,14 @@
                 'create-practice__picker--empty': !form.date,
                 'create-practice__picker--error': !!errors.date,
               }"
+              :aria-invalid="!!errors.date || undefined"
+              :aria-describedby="errors.date ? 'err-date' : undefined"
               @click="showDate = true"
             >
               {{ form.date ? dateDisplay : t('ui.pickerDate') }}
             </button>
           </div>
-          <span
-            class="create-practice__field-error"
-            :class="{ 'create-practice__field-error--show': !!errors.date }"
-            >{{ errors.date }}</span
-          >
+          <VFieldError id="err-date" :message="errors.date" />
         </div>
 
         <!-- Время: открывает TimePickerSheet (24ч). Подпись = плейсхолдер. -->
@@ -216,16 +193,14 @@
                 'create-practice__picker--empty': !form.time,
                 'create-practice__picker--error': !!errors.time,
               }"
+              :aria-invalid="!!errors.time || undefined"
+              :aria-describedby="errors.time ? 'err-time' : undefined"
               @click="showTime = true"
             >
               {{ form.time || t('ui.pickerTime') }}
             </button>
           </div>
-          <span
-            class="create-practice__field-error"
-            :class="{ 'create-practice__field-error--show': !!errors.time }"
-            >{{ errors.time }}</span
-          >
+          <VFieldError id="err-time" :message="errors.time" />
         </div>
 
         <VSelect
@@ -234,11 +209,6 @@
           :options="DURATION_OPTIONS"
           :error="errors.duration_minutes"
         />
-        <span
-          class="create-practice__field-error"
-          :class="{ 'create-practice__field-error--show': !!errors.duration_minutes }"
-          >{{ errors.duration_minutes }}</span
-        >
         <!-- Часовой пояс убран: берётся из профиля мастера (form.timezone),
              расписание задаётся в его часовом поясе (operator 2026-06-18). -->
       </div>
@@ -286,11 +256,7 @@
                 />
               </div>
             </div>
-            <span
-              class="create-practice__field-error"
-              :class="{ 'create-practice__field-error--show': !!errors.recurrence_days }"
-              >{{ errors.recurrence_days }}</span
-            >
+            <VFieldError id="err-days" :message="errors.recurrence_days" />
           </template>
 
           <!-- Завершить -->
@@ -330,19 +296,10 @@
               />
             </VCard>
           </div>
-          <!-- Only the ACTIVE completion mode reserves an error line. -->
-          <span
-            v-if="form.recurrence_end === 'until_date'"
-            class="create-practice__field-error"
-            :class="{ 'create-practice__field-error--show': !!errors.recurrence_end_date }"
-            >{{ errors.recurrence_end_date }}</span
-          >
-          <span
-            v-else-if="form.recurrence_end === 'after_count'"
-            class="create-practice__field-error"
-            :class="{ 'create-practice__field-error--show': !!errors.recurrence_count }"
-            >{{ errors.recurrence_count }}</span
-          >
+          <!-- Both completion modes keep a (0px-closed) VFieldError row: the
+               inactive one simply never opens (owner TZ 2026-11-01). -->
+          <VFieldError id="err-end-date" :message="errors.recurrence_end_date" />
+          <VFieldError id="err-count" :message="errors.recurrence_count" />
         </template>
       </div>
 
@@ -361,11 +318,6 @@
             :placeholder="t('masterScreens.createPractice.fields.maxParticipants')"
             :error="errors.max_participants"
           />
-          <span
-            class="create-practice__field-error"
-            :class="{ 'create-practice__field-error--show': !!errors.max_participants }"
-            >{{ errors.max_participants }}</span
-          >
         </div>
       </div>
 
@@ -488,6 +440,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import {
   VButton,
+  VFieldError,
   VInput,
   VTextarea,
   VSelect,
@@ -866,6 +819,73 @@ const errors = reactive({
   recurrence_count: '',
   audience_group_ids: '',
 })
+
+// Owner TZ 2026-11-01 §6: after the FIRST failed submit, a field the person
+// fixed loses its own error immediately; typing never ADDS errors before a
+// submit. Each watch rechecks only its own field's condition from validate().
+const submitted = ref(false)
+watch(
+  () => form.title,
+  (v) => {
+    if (submitted.value && errors.title && v.trim()) errors.title = ''
+  },
+)
+watch(
+  () => form.direction,
+  () => {
+    if (submitted.value && errors.direction) errors.direction = ''
+  },
+)
+watch(
+  () => form.difficulty,
+  () => {
+    if (submitted.value && errors.difficulty) errors.difficulty = ''
+  },
+)
+// Date shares one error key with the future check (validate): both pickers
+// recheck the pair, the error clears only when the pair became valid.
+watch([() => form.date, () => form.time], ([d, tm]) => {
+  if (!submitted.value) return
+  if (d && tm) {
+    const dt = DateTime.fromISO(`${d}T${tm}`, { zone: form.timezone })
+    if (!dt.isValid || dt.toMillis() <= Date.now()) return
+  }
+  if (errors.date && d) errors.date = ''
+  if (errors.time && tm) errors.time = ''
+})
+watch(
+  () => form.duration_minutes,
+  () => {
+    if (submitted.value && errors.duration_minutes) errors.duration_minutes = ''
+  },
+)
+watch(
+  () => form.recurrence_days,
+  (days) => {
+    if (submitted.value && errors.recurrence_days && days.length > 0) errors.recurrence_days = ''
+  },
+)
+watch(
+  () => form.recurrence_end_date,
+  (v) => {
+    if (submitted.value && errors.recurrence_end_date && v) errors.recurrence_end_date = ''
+  },
+)
+watch(
+  () => form.recurrence_count,
+  (v) => {
+    if (submitted.value && errors.recurrence_count && v != null && v >= 1)
+      errors.recurrence_count = ''
+  },
+)
+watch(
+  () => form.max_participants_raw,
+  (v) => {
+    const n = v ? parseInt(v, 10) : NaN
+    if (submitted.value && errors.max_participants && (v === '' || (!isNaN(n) && n >= 1)))
+      errors.max_participants = ''
+  },
+)
 
 // «Использовать шаблон» source: all the master's practices, newest-created
 // first (operator Q2=А — backend list order isn't guaranteed, so sort here).
@@ -1258,11 +1278,14 @@ function buildRecurrence(): RecurrenceSpec {
 async function submit(): Promise<void> {
   if (submitting.value) return
   if (!validate()) {
+    // Owner TZ 2026-11-01 §6: from now on a fixed field clears its own error
+    // while the person types (the watch block under the errors declaration).
+    submitted.value = true
     // The first invalid field may sit far above the submit button on this
     // long form -- bring it into view instead of a silent dead click.
     await nextTick()
     queryDocument(
-      '.v-input--error, .v-select--error, .create-practice__picker--error, .create-practice__field-error--show',
+      '.v-input--error, .v-select--error, .create-practice__picker--error, .v-field-error--open',
     )?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     return
   }
@@ -1572,30 +1595,9 @@ html.is-keyboard-open .create-practice {
   border-color: var(--velo-error);
 }
 
-/* Error slots are CONSTANT-height (owner 2026-10-01): the message fades in
-   without growing its block -- activating an error must never shift the
-   layout below. The DS components' own error lines are hidden (their red
-   borders still mark the field); this screen renders the message in the
-   reserved slot instead. 14px x 1.2 = 16.8px fits the 17px reserve: the
-   shown state is pixel-identical to the empty one. */
-.create-practice__field-error {
-  display: block;
-  min-height: 17px;
-  margin-top: 0;
-  font-size: var(--velo-fs-14);
-  line-height: 1.2;
-  color: var(--velo-error);
-  opacity: 0;
-}
-
-.create-practice__field-error--show {
-  opacity: 1;
-}
-
-.create-practice :deep(.v-input__error),
-.create-practice :deep(.v-select__error) {
-  display: none;
-}
+/* Error lines are VFieldError rows (owner TZ 2026-11-01): 0px while closed,
+   expanding smoothly on appear; VInput/VSelect keep their red borders via
+   their own :error props. */
 
 /* -- Для кого практика (P5, PROMPT №594): group multi-select chips, same
    token recipe as AddToGroupSheet's .add-to-group__chips/__empty. -- */

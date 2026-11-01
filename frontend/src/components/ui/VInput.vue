@@ -44,6 +44,8 @@
           :type="type"
           :value="modelValue"
           :disabled="disabled"
+          :aria-invalid="!!error || undefined"
+          :aria-describedby="error ? errorId : undefined"
           v-bind="$attrs"
           @focus="onFieldFocus"
           @input="onInput"
@@ -63,6 +65,8 @@
           :value="modelValue"
           :placeholder="placeholder"
           :disabled="disabled"
+          :aria-invalid="!!error || undefined"
+          :aria-describedby="error ? errorId : undefined"
           v-bind="$attrs"
           @focus="onFieldFocus"
           @input="onInput"
@@ -80,6 +84,8 @@
         :value="modelValue"
         :placeholder="placeholder"
         :disabled="disabled"
+        :aria-invalid="!!error || undefined"
+        :aria-describedby="error ? errorId : undefined"
         v-bind="$attrs"
         @focus="onFieldFocus"
         @input="onInput"
@@ -94,13 +100,17 @@
       </span>
     </div>
 
-    <span v-if="error" class="v-input__error">{{ error }}</span>
+    <!-- Animated error row (owner TZ 2026-11-01): always mounted, exactly 0px
+         when closed -- no v-if jump. The legacy class stays on the row so
+         view-level deep selectors and tests keep resolving. -->
+    <VFieldError :id="errorId" class="v-input__error" :message="error" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, nextTick, useId } from 'vue'
 import { IconRequired, IconRequiredDone } from '@/components/icons'
+import VFieldError from './VFieldError.vue'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 
 // inheritAttrs:false — forward native attrs (min/max/step/inputmode/…) onto the
@@ -128,6 +138,8 @@ const { onFieldFocus } = useKeyboardFieldScroll()
 // template) still wins -- Vue resolves same-element plain attrs by source
 // order, so this is the fallback, not an override.
 const fieldId = useId()
+// The error row (VFieldError below) is aria-describedby'd from the input.
+const errorId = `${fieldId}-error`
 
 const props = withDefaults(
   defineProps<{
@@ -364,12 +376,5 @@ function onInput(e: Event): void {
 
 .v-input__seal--done {
   color: var(--velo-required-done);
-}
-
-.v-input__error {
-  display: block;
-  font-size: var(--velo-fs-14);
-  color: var(--velo-error);
-  margin-top: var(--space-1);
 }
 </style>

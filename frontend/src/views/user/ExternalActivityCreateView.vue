@@ -68,13 +68,13 @@
             type="button"
             class="ea__picker"
             :class="{ 'ea__picker--empty': !date, 'ea__picker--error': !!errors.date }"
+            :aria-invalid="!!errors.date || undefined"
+            :aria-describedby="errors.date ? 'err-date' : undefined"
             @click="showDate = true"
           >
             {{ date ? dateDisplay : t('ui.pickerDate') }}
           </button>
-          <span class="ea__field-error" :class="{ 'ea__field-error--show': !!errors.date }">{{
-            errors.date
-          }}</span>
+          <VFieldError id="err-date" :message="errors.date" />
         </div>
 
         <div class="ea__field" data-field="time">
@@ -85,15 +85,13 @@
               'ea__picker--empty': !time,
               'ea__picker--error': !!errors.time || !!errors.future,
             }"
+            :aria-invalid="!!(errors.time || errors.future) || undefined"
+            :aria-describedby="errors.time || errors.future ? 'err-time' : undefined"
             @click="showTime = true"
           >
             {{ time || t('ui.pickerTime') }}
           </button>
-          <span
-            class="ea__field-error"
-            :class="{ 'ea__field-error--show': !!(errors.time || errors.future) }"
-            >{{ errors.time || errors.future }}</span
-          >
+          <VFieldError id="err-time" :message="errors.time || errors.future" />
         </div>
       </section>
 
@@ -149,6 +147,8 @@
               :placeholder="t('practice.customVariant')"
               :maxlength="CUSTOM_NAME_MAX"
               :aria-label="t('user.screens.externalActivityCreate.custom.title')"
+              :aria-invalid="!!errors.custom || undefined"
+              :aria-describedby="errors.custom ? 'err-custom' : undefined"
               :disabled="!!customChip"
               @input="onCustomInput"
               @keydown.enter.prevent="commitCustom"
@@ -166,13 +166,9 @@
               </svg>
             </button>
           </div>
-          <span class="ea__field-error" :class="{ 'ea__field-error--show': !!errors.custom }">{{
-            errors.custom
-          }}</span>
+          <VFieldError id="err-custom" :message="errors.custom" />
         </div>
-        <span class="ea__field-error" :class="{ 'ea__field-error--show': !!errors.activity }">{{
-          errors.activity
-        }}</span>
+        <VFieldError id="err-activity" :message="errors.activity" />
       </section>
 
       <!-- ================= Мое состояние после =================
@@ -196,9 +192,7 @@
             :disabled="diaryStore.externalActivitySubmitting"
           />
         </div>
-        <span class="ea__field-error" :class="{ 'ea__field-error--show': !!errors.state }">{{
-          errors.state
-        }}</span>
+        <VFieldError id="err-state" :message="errors.state" />
       </section>
 
       <!-- ================= Мысли ================= -->
@@ -265,7 +259,7 @@ import { t } from '@/locales'
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { DateTime } from 'luxon'
-import { VBackButton, VChip, VTextarea } from '@/components/ui'
+import { VBackButton, VChip, VFieldError, VTextarea } from '@/components/ui'
 import DatePickerSheet from '@/components/shared/DatePickerSheet.vue'
 import TimePickerSheet from '@/components/shared/TimePickerSheet.vue'
 import MoodSlider from '@/components/shared/MoodSlider.vue'
@@ -670,24 +664,10 @@ async function onSubmit(): Promise<void> {
 }
 
 /* Required sections (owner 2026-10-01): the rosette is gone -- the red *
-   rides the section heading (.ea__req); error slots are constant-height so
-   an appearing message never shifts the layout. */
+   rides the section heading (.ea__req). Error lines are VFieldError rows
+   (owner TZ 2026-11-01): 0px while closed, expanding smoothly on appear. */
 .ea__req {
   color: var(--velo-error);
-}
-
-.ea__field-error {
-  display: block;
-  min-height: 17px;
-  font-size: var(--velo-fs-14);
-  line-height: 1.2;
-  color: var(--velo-error);
-  margin-top: 0;
-  opacity: 0;
-}
-
-.ea__field-error--show {
-  opacity: 1;
 }
 
 /* -- Activity card: solid white plate, chips wrap naturally (no grid).

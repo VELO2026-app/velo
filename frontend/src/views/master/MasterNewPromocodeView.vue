@@ -29,12 +29,10 @@
           v-model="form.code"
           :label="t('masterScreens.masterNewPromocode.fields.code')"
           :placeholder="t('masterScreens.masterNewPromocode.fields.codePlaceholder')"
+          :aria-invalid="!!codeError || undefined"
+          :aria-describedby="codeError ? 'err-code' : undefined"
         />
-        <span
-          class="new-promo__field-error"
-          :class="{ 'new-promo__field-error--show': !!codeError }"
-          >{{ codeError }}</span
-        >
+        <VFieldError id="err-code" :message="codeError" />
       </div>
       <div class="cp-req-label">
         <VSelect
@@ -55,16 +53,14 @@
               type="button"
               class="new-promo__picker"
               :class="{ 'new-promo__picker--empty': !form.until }"
+              :aria-invalid="!!untilError || undefined"
+              :aria-describedby="untilError ? 'err-until' : undefined"
               @click="showDate = true"
             >
               {{ form.until ? untilDisplay : t('ui.pickerChooseDate') }}
             </button>
           </div>
-          <span
-            class="new-promo__field-error"
-            :class="{ 'new-promo__field-error--show': !!untilError }"
-            >{{ untilError }}</span
-          >
+          <VFieldError id="err-until" :message="untilError" />
         </div>
       </div>
       <VInput
@@ -103,7 +99,7 @@ import { t } from '@/locales'
 import { reactive, computed, ref, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
-import { VInput, VSelect, VButton } from '@/components/ui'
+import { VFieldError, VInput, VSelect, VButton } from '@/components/ui'
 import DatePickerSheet from '@/components/shared/DatePickerSheet.vue'
 import { useToast } from '@/composables/useToast'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
@@ -115,16 +111,16 @@ import { queryDocument } from '@/platform/dom'
 const router = useRouter()
 const toast = useToast()
 
-// Inline field errors through the constant slots (owner 2026-10-01 canon):
-// the message fades in without growing its block; the scroll brings the
-// failing field into view.
+/* Inline field errors through VFieldError rows (owner 2026-10-01 canon, now
+   animated per owner TZ 2026-11-01): 0px while closed; the scroll brings the
+   failing field into view. */
 const codeError = ref('')
 const untilError = ref('')
 
 async function showFieldError(setter: () => void): Promise<void> {
   setter()
   await nextTick()
-  queryDocument('.new-promo__field-error--show')?.scrollIntoView({
+  queryDocument('.v-field-error--open')?.scrollIntoView({
     behavior: 'smooth',
     block: 'center',
   })
@@ -165,6 +161,21 @@ watch(
   () => form.limit,
   (v) => {
     if (v !== '' && Number(v) < 1) form.limit = '1'
+  },
+)
+
+// Owner TZ 2026-11-01 §6: once a field shows its error, fixing it clears the
+// error immediately; typing never ADDS errors before a submit attempt.
+watch(
+  () => form.code,
+  (v) => {
+    if (codeError.value && v.trim()) codeError.value = ''
+  },
+)
+watch(
+  () => form.until,
+  (v) => {
+    if (untilError.value && v) untilError.value = ''
   },
 )
 
@@ -222,33 +233,14 @@ async function onCreate(): Promise<void> {
   padding: var(--space-4) 0 var(--space-8);
 }
 
-/* Per-label required asterisk + constant-height error slots (owner
-   2026-10-01 canon): the rosette is gone; the message fades in without
-   growing its block. VInput's own error line is hidden -- its red border
-   still marks the field. */
+/* Per-label required asterisk (owner 2026-10-01 canon): the rosette is gone.
+   Error lines are VFieldError rows (owner TZ 2026-11-01): 0px while closed,
+   expanding smoothly; VInput's red border still marks a failing field. */
 .new-promo :deep(.cp-req-label .v-input__label)::after,
 .new-promo :deep(.cp-req-label .v-select__label)::after,
 .cp-req-label .new-promo__label::after {
   content: ' *';
   color: var(--velo-error);
-}
-
-.new-promo__field-error {
-  display: block;
-  min-height: 17px;
-  margin-top: 0;
-  font-size: var(--velo-fs-14);
-  line-height: 1.2;
-  color: var(--velo-error);
-  opacity: 0;
-}
-
-.new-promo__field-error--show {
-  opacity: 1;
-}
-
-.new-promo :deep(.v-input__error) {
-  display: none;
 }
 
 .new-promo__submit {
