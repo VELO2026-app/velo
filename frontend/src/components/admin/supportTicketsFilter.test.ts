@@ -45,6 +45,32 @@ describe('supportTicketQuery -- tabs and chips', () => {
   ] as const)('the «%s» chip -> categories %j', (group, categories) => {
     expect(supportTicketQuery('all', f({ group }), 'UTC')).toEqual({ categories })
   })
+
+  it('the rating chips go together as `ratings` -- "any of these" (FE-107)', () => {
+    expect(supportTicketQuery('all', f({ rating: ['4', '5'] }), 'UTC')).toEqual({
+      ratings: ['4', '5'],
+    })
+  })
+
+  it('«none» rides the same parameter as the stars', () => {
+    expect(supportTicketQuery('all', f({ rating: ['none'] }), 'UTC')).toEqual({
+      ratings: ['none'],
+    })
+  })
+
+  it('rating chips combine with a category and a status in ONE query', () => {
+    expect(
+      supportTicketQuery('all', f({ group: 'tech', status: 'resolved', rating: ['5'] }), 'UTC'),
+    ).toEqual({
+      categories: ['tech'],
+      status: 'resolved',
+      ratings: ['5'],
+    })
+  })
+
+  it('no rating chosen sends no `ratings` at all', () => {
+    expect(supportTicketQuery('all', f({ rating: [] }), 'UTC')).toEqual({})
+  })
 })
 
 describe('supportTicketQuery -- the day is the admin\u2019s', () => {

@@ -84,6 +84,8 @@ function ticket(overrides: Partial<AdminSupportTicket> = {}): AdminSupportTicket
     opener: { user_id: 'u_1', name: 'Алекс', avatar_url: null },
     claimed_by: null,
     history_thread_id: null,
+    resolved_by: null,
+    rating: null,
     ...overrides,
   }
 }
@@ -574,6 +576,116 @@ describe('SupportTicketsPanel', () => {
 
       expect(cards()).toHaveLength(1)
       expect(onlyCard().querySelector('.scard__title')?.textContent?.trim()).toBe('Другое')
+    })
+  })
+
+  // ===========================================================================
+  // FE-107 / BE-162 delivery 3: the person's rating in the row, the rating
+  // chips of the filter (multi-select -- the backend takes a repeatable
+  // `rating`), and the hop to the statistics screen.
+  // ===========================================================================
+  describe('the rating (FE-107)', () => {
+    /** The filter's LAST chip group is the rating one (category, status...). */
+    function ratingChips(): HTMLElement[] {
+      const groups = overlay()?.querySelectorAll<HTMLElement>('.sfilter__group') ?? []
+      return Array.from(groups[groups.length - 1]?.querySelectorAll<HTMLElement>('.v-chip') ?? [])
+    }
+
+    function ratingChip(label: string): HTMLElement | undefined {
+      return ratingChips().find((c) => c.textContent?.trim() === label)
+    }
+
+    it('a rated ticket carries its five stars, filled to the score; unrated carries none', async () => {
+      vi.mocked(supportApi.listAdminTickets).mockResolvedValue(
+        page([
+          ticket({
+            rating: {
+              stars: 4,
+              comment: 'Спасибо',
+              comment_locale: 'ru',
+              rated_at: '2026-10-26T10:00:00Z',
+              rated_resolver: null,
+            },
+          }),
+          ticket({ id: 't_2' }),
+        ]),
+      )
+      mount()
+      await flush()
+
+      const [rated, unrated] = cards()
+      if (!rated || !unrated) throw new Error('two cards expected')
+      expect(rated.querySelector('[data-testid="ticket-rating"]')).not.toBeNull()
+      expect(rated.querySelectorAll('.scard__star--on')).toHaveLength(4)
+      expect(rated.querySelectorAll('.scard__rating svg')).toHaveLength(5)
+      expect(unrated.querySelector('[data-testid="ticket-rating"]')).toBeNull()
+    })
+
+    it('star chips MULTI-select: «4» and «5» both go, as a repeated rating', async () => {
+      mount()
+      await flush()
+
+      await openFilter()
+      ratingChip('4')?.click()
+      ratingChip('5')?.click()
+      await flush()
+      await closeFilter()
+
+      expect(lastQuery()).toEqual({ limit: 20, ratings: ['4', '5'] })
+      expect(host?.querySelector('.tickets__active')?.textContent).toContain('4 ★, 5 ★')
+    })
+
+    it('«Без оценки» is the none filter, on its own or beside stars', async () => {
+      mount()
+      await flush()
+
+      await openFilter()
+      ratingChip('Без оценки')?.click()
+      await flush()
+      await closeFilter()
+
+      expect(lastQuery()).toEqual({ limit: 20, ratings: ['none'] })
+    })
+
+    it('a second tap takes a chip off again', async () => {
+      mount()
+      await flush()
+
+      await openFilter()
+      ratingChip('5')?.click()
+      await flush()
+      ratingChip('5')?.click()
+      await flush()
+      await closeFilter()
+
+      expect(lastQuery()).toEqual({ limit: 20 })
+    })
+
+    it('the rating group\u2019s «Все» clears the chosen ratings only', async () => {
+      mount()
+      await flush()
+      await openFilter()
+      ratingChip('4')?.click()
+      chip('Жалобы')?.click()
+      await flush()
+      await closeFilter()
+      expect(lastQuery()?.categories).toEqual(['complaint_master', 'complaint_user'])
+
+      await openFilter()
+      ratingChip('Все')?.click()
+      await flush()
+      await closeFilter()
+
+      expect(lastQuery()).toEqual({ limit: 20, categories: ['complaint_master', 'complaint_user'] })
+    })
+
+    it('«Статистика» opens the statistics screen', async () => {
+      mount()
+      await flush()
+
+      host?.querySelector<HTMLButtonElement>('.tickets__stats')?.click()
+
+      expect(push).toHaveBeenCalledWith({ name: 'admin-support-stats' })
     })
   })
 })

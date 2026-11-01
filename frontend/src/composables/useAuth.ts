@@ -204,6 +204,10 @@ const SCHOOL_INVITE_PARAM = /^school__([A-Za-z0-9_-]{16,128})$/
  *   school__{token}             -> { name: 'curator-group-join', params: { token } } (FE-18, Links)
  *   open_thread__{uuid}         -> { name: 'user-chat' | 'master-chat', params: { id } }
  *                                  (FE-103: Telegram twin of the bell's msg.* buttons)
+ *   open_support_rating__{uuid} -> the same chat route + ?rate=1: the rating
+ *                                  sheet on THAT resolved ticket (FE-107 /
+ *                                  BE-162 delivery 3; the chat resolves the
+ *                                  ticket id to the person's one support row)
  *   open_admin_support__{uuid}  -> { name: 'admin-support-detail', params: { id } }, admin only
  *                                  (FE-103/BE-172: the comms THREAD id -- owner
  *                                  ruling in the BE-172 fix)
@@ -221,7 +225,7 @@ const SCHOOL_INVITE_PARAM = /^school__([A-Za-z0-9_-]{16,128})$/
 export function parseStartParam(
   startParam: string | null,
   role: UserRole | null = null,
-): { name: string; params?: Record<string, string> } | null {
+): { name: string; params?: Record<string, string>; query?: Record<string, string> } | null {
   if (!startParam) return null
   // Links (3 October): a notification button carries no notification TYPE
   // and no viewer -- so roleRedirect parses it AFTER auth, with the session's
@@ -319,6 +323,19 @@ export function parseStartParam(
       // `open_thread__<thread_id>`, and the SAME routes open it (the thread
       // screen learns it is support from the row's `channel`).
       return id ? { name: asMaster ? 'master-chat' : 'user-chat', params: { id } } : null
+    case 'open_support_rating':
+      // FE-107 / BE-162 delivery 3: «Как мы помогли?» -- the notification's
+      // button opens the rating sheet on THAT ticket. The same chat route
+      // open_thread uses resolves the ticket id to the person's one support
+      // row; ?rate=1 is what asks the sheet to open on the ticket the link
+      // named (the route's own id).
+      return id
+        ? {
+            name: asMaster ? 'master-chat' : 'user-chat',
+            params: { id },
+            query: { rate: '1' },
+          }
+        : null
     case 'open_admin_support':
       // FE-103 / BE-172: the per-admin Telegram signal about a support
       // message deep-links the admin detail screen by the comms THREAD id

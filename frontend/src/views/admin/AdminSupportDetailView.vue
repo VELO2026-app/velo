@@ -77,12 +77,53 @@
             {{ supportStatusLabel(ticket.status) }}
           </VBadge>
           <span class="support-detail__topic">{{ supportTopicLabel(ticket.topic) }}</span>
+          <!-- FE-107: who moved it to «Решена» last -- the admin the
+               rating (when one comes) is most likely about. -->
+          <span
+            v-if="ticket.status === 'resolved' && ticket.resolved_by"
+            class="support-detail__resolved-by"
+          >
+            {{ resolvedByName }}
+          </span>
         </div>
 
         <!-- Status: an open ticket's actions live in the ⋯ menu (header). -->
         <VCard v-if="ticket.status !== 'open'" class="support-detail__processed">
           {{ t('adminScreens.adminSupportDetail.currentStatus') }}
           <strong>{{ supportStatusLabel(ticket.status) }}</strong>
+        </VCard>
+
+        <!-- FE-107: the person's rating of this ticket -- the stars, the
+             comment AS WRITTEN (the backend does not translate it; BE-175
+             will), the language the comment is most likely in, when, and
+             the admin whose resolution it rated. -->
+        <VCard v-if="ticket.rating" class="support-detail__rating" data-testid="ticket-rating">
+          <div class="support-detail__rating-stars">
+            <IconStar
+              v-for="n in STAR_VALUES"
+              :key="n"
+              :size="22"
+              :filled="n <= ticket.rating.stars"
+              :class="{ 'support-detail__star--on': n <= ticket.rating.stars }"
+            />
+          </div>
+          <p v-if="ticket.rating.comment" class="support-detail__rating-comment">
+            {{ ticket.rating.comment }}
+          </p>
+          <div class="support-detail__rating-meta">
+            <span v-if="ticket.rating.comment && ticket.rating.comment_locale">
+              {{
+                t('adminScreens.adminSupport.rating.commentIn', {
+                  language: localeName(ticket.rating.comment_locale),
+                })
+              }}
+            </span>
+            <span v-if="ratingResolverName">
+              {{
+                t('adminScreens.adminSupport.rating.aboutResolver', { name: ratingResolverName })
+              }}
+            </span>
+          </div>
         </VCard>
 
         <!-- Claim notice: shown whenever the caller is NOT the taker, so
@@ -289,7 +330,7 @@ import {
   VEmptyState,
   VLoader,
 } from '@/components/ui'
-import { IconDots } from '@/components/icons'
+import { IconDots, IconStar } from '@/components/icons'
 import SupportMessageBubble from '@/components/admin/SupportMessageBubble.vue'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
@@ -359,6 +400,37 @@ const claimPanelText = computed(() =>
 )
 
 const historyThreadId = computed(() => ticket.value?.history_thread_id ?? '')
+
+/** The rating's five stars, one row value at a time. */
+const STAR_VALUES = [1, 2, 3, 4, 5] as const
+
+/** Who moved the ticket to «Решена» last, by name (the fallback names an
+ *  admin the row could not name). */
+const resolvedByName = computed(() =>
+  ticket.value?.resolved_by
+    ? t('adminScreens.adminSupportDetail.resolvedBy', {
+        name:
+          ticket.value.resolved_by.name ?? t('adminScreens.adminSupport.claimedBy.adminFallback'),
+      })
+    : '',
+)
+
+/** The admin whose resolution the rating named (kept at rating time -- a
+ *  later reopen and another admin's resolution do not move it). */
+const ratingResolverName = computed(() => {
+  const resolver = ticket.value?.rating?.rated_resolver
+  if (!resolver) return ''
+  return resolver.name ?? t('adminScreens.adminSupport.claimedBy.adminFallback')
+})
+
+/** The comment's likely language, signed for the admin (owner's example:
+ *  «на русском»). An unknown code shows itself -- honest, never wrong.
+ *  t() is called with the template literal INLINE so the key audit sees
+ *  the dynamic prefix (scripts/key-audit.mjs). */
+function localeName(code: string): string {
+  const label = t(`adminScreens.adminSupport.rating.locales.${code}`)
+  return label === `adminScreens.adminSupport.rating.locales.${code}` ? code : label
+}
 
 /** A message of the person the ticket is about (not of support). */
 function isPerson(m: SupportMessage): boolean {
@@ -811,6 +883,47 @@ onMounted(async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.support-detail__resolved-by {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+  color: var(--velo-text-muted);
+  letter-spacing: 0.02em;
+}
+
+/* FE-107: the rating block -- stars, the comment as written, the meta line. */
+.support-detail__rating {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.support-detail__rating-stars {
+  display: flex;
+  gap: var(--space-1);
+  color: var(--velo-text-muted);
+}
+
+.support-detail__star--on {
+  color: var(--velo-peach-500);
+}
+
+.support-detail__rating-comment {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--velo-text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.support-detail__rating-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--velo-text-muted);
 }
 
 /* Peach warning panel, same convention as ReportUserSheet.vue's support

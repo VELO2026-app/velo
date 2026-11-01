@@ -19,7 +19,18 @@
     "goneTitle": "This conversation is gone",
     "goneHint": "The conversation was deleted — for example, its support appeal was closed as spam",
     "sending": "Sending…",
-    "notSent": "Not sent · Retry"
+    "notSent": "Not sent · Retry",
+    "rating": {
+      "title": "How did we help?",
+      "topicLine": "Request: {topic}",
+      "starsAria": "Support rating",
+      "starAria": "{stars} of 5",
+      "commentPlaceholder": "Comment (optional)",
+      "submit": "Send",
+      "later": "Later",
+      "thanks": "Thank you for the rating!",
+      "sendFailed": "Could not send the rating"
+    }
   },
   "composer": {
     "voiceAria": "Voice input",

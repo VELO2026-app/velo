@@ -33,6 +33,13 @@
       <IconFilter :size="22" />
     </button>
 
+    <!-- FE-107: the period statistics of the appeals -- the gate decides
+         where it lives (dashboard or its own screen); until then it is its
+         own, one hop from the list it sums. -->
+    <button type="button" class="tickets__stats" @click="openStats">
+      {{ t('adminScreens.adminSupportStats.title') }}
+    </button>
+
     <div class="tickets__active">{{ activeLabel }}</div>
 
     <div v-if="loading && items.length === 0" class="tickets__loader">
@@ -80,6 +87,18 @@
               {{ openerName(item) }} • {{ formatRelative(item.created_at) }}
             </div>
             <div class="scard__claim">{{ claimText(item) }}</div>
+            <!-- FE-107: the person's rating, when there is one -- five small
+                 stars, filled to the score. No rating shows nothing (the
+                 filter's «Без оценки» is how those are found). -->
+            <div v-if="item.rating" class="scard__rating" :data-testid="`ticket-rating`">
+              <IconStar
+                v-for="n in STAR_VALUES"
+                :key="n"
+                :size="14"
+                :filled="n <= item.rating.stars"
+                :class="{ 'scard__star--on': n <= item.rating.stars }"
+              />
+            </div>
           </div>
           <VBadge :variant="supportStatusBadge(item.status)" class="scard__badge">
             {{ supportStatusLabel(item.status) }}
@@ -110,10 +129,10 @@ import { toHistoryState } from '@/utils/historySnapshot'
 import { computed, ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { VButton, VLoader, VEmptyState, VCard, VBadge, VSegment } from '@/components/ui'
-import { IconFilter } from '@/components/icons'
+import { IconFilter, IconStar } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
-import { listAdminTickets, type AdminSupportTicket } from '@/api/support'
+import { listAdminTickets, type AdminSupportTicket, type SupportRatingFilter } from '@/api/support'
 import { extractApiError } from '@/composables/useApiError'
 import { formatRelative } from '@/utils/adminHelpers'
 import {
@@ -132,6 +151,9 @@ import {
 } from './supportTicketsFilter'
 
 const LIMIT = 20
+
+/** The rating's five stars, one row value at a time. */
+const STAR_VALUES = [1, 2, 3, 4, 5] as const
 
 const router = useRouter()
 const toast = useToast()
@@ -160,16 +182,25 @@ const pillLabel = computed<string>(() =>
 )
 
 /** The label above the list repeats the active filter (owner's mockup):
- *  «Все» without one, else the category, status and day that apply. */
+ *  «Все» without one, else the category, status, rating and day that
+ *  apply. */
 const activeLabel = computed<string>(() => {
   const parts: string[] = []
   if (filter.value.group) parts.push(supportCategoryGroupLabel(filter.value.group))
   if (tab.value === 'all' && filter.value.status) {
     parts.push(supportStatusLabel(filter.value.status))
   }
+  if (filter.value.rating.length) parts.push(ratingFilterLabel(filter.value.rating))
   if (filter.value.date) parts.push(formatDay(filter.value.date))
   return parts.length ? parts.join(' · ') : t('common.all')
 })
+
+/** The chosen rating chips as one label: «4 ★, 5 ★» / «4 ★, без оценки». */
+function ratingFilterLabel(values: readonly SupportRatingFilter[]): string {
+  return values
+    .map((v) => (v === 'none' ? t('adminScreens.adminSupport.rating.none') : `${v} ★`))
+    .join(', ')
+}
 
 function formatDay(day: string): string {
   return new Date(`${day}T12:00:00`).toLocaleDateString(getLocale(), {
@@ -250,6 +281,10 @@ function openDetail(item: AdminSupportTicket): void {
   })
 }
 
+function openStats(): void {
+  void router.push({ name: 'admin-support-stats' })
+}
+
 onMounted(loadInitial)
 </script>
 
@@ -284,6 +319,21 @@ onMounted(loadInitial)
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
   margin: calc(-1 * var(--space-1)) var(--velo-gap-2);
+}
+
+/* The statistics link (FE-107): a quiet text row right-aligned under the
+   filter pill -- an offer, not a competing action. */
+.tickets__stats {
+  align-self: flex-end;
+  margin: calc(-1 * var(--space-3)) 0;
+  background: none;
+  border: none;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--velo-primary);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
 }
 
 .tickets__loader {
@@ -345,6 +395,18 @@ onMounted(loadInitial)
 
 .scard__claim {
   color: var(--velo-text-muted);
+}
+
+/* The person's rating: five small stars -- empty outlines muted, the
+   filled ones to the score in the warm star tone. */
+.scard__rating {
+  display: flex;
+  gap: var(--space-1);
+  color: var(--velo-text-muted);
+}
+
+.scard__star--on {
+  color: var(--velo-peach-500);
 }
 
 .scard__badge {

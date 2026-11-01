@@ -45,6 +45,10 @@
       :support="isSupport"
       @back="router.back()"
     />
+
+    <!-- FE-107: the master's support row asks «Как мы помогли?» too -- the
+         same self-contained sheet the user's wrapper mounts. -->
+    <SupportRatingSheet :active="isSupport" :preferred-ticket-id="preferredRatingTicket" />
   </div>
 </template>
 
@@ -56,6 +60,7 @@ import { VHeader } from '@/components/layout'
 import { VButton, VEmptyState, VLoader } from '@/components/ui'
 import { IconMessages } from '@/components/icons'
 import ChatThreadScreen from '@/components/shared/ChatThreadScreen.vue'
+import SupportRatingSheet from '@/components/shared/SupportRatingSheet.vue'
 import { chatRowFor, listChats, type ChatPeer } from '@/api/chats'
 
 const route = useRoute()
@@ -68,6 +73,11 @@ const peer = ref<ChatPeer | null>(null)
 /** BE-163: the row's `channel` is the screen's identity -- a `support`
  *  thread is titled «Поддержка VELO», never the role fallback («Ученик»). */
 const isSupport = ref(false)
+
+/** FE-107: a bell row / Telegram button named THIS ticket (`?rate=1` -- the
+ *  id it travels with is the route's own). Without the flag the sheet asks
+ *  on its own whenever something waits; the id is then no one's. */
+const preferredRatingTicket = computed(() => (route.query.rate === '1' ? threadId : null))
 
 const peerFallback = computed(() =>
   isSupport.value ? t('chat.supportTitle') : t('masterScreens.masterChat.peerFallback'),

@@ -290,6 +290,32 @@ describe('UserInboxView', () => {
     expect(push).toHaveBeenCalledWith({ name: 'user-chat', params: { id: 'th_9' } })
   })
 
+  it('the «Как мы помогли?» row opens that ticket with the rating sheet (FE-107)', async () => {
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+      items: [
+        item({
+          id: 'r',
+          type: 'prompt.rate_support',
+          action_data: { action: 'open_support_rating', params: { thread_id: 'th_9' } },
+        }),
+      ],
+      next_cursor: null,
+      unread: 1,
+    })
+    vi.mocked(notificationsApi.markNotificationRead).mockResolvedValue({ unread: 0 })
+    mount()
+    await flush()
+
+    row(0).click()
+    await flush()
+
+    expect(push).toHaveBeenCalledWith({
+      name: 'user-chat',
+      params: { id: 'th_9' },
+      query: { rate: '1' },
+    })
+  })
+
   it('a msg.* row (no velo action) goes to the messages list', async () => {
     vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
       items: [item({ id: 'b', type: 'msg.participant_message', action_data: null })],

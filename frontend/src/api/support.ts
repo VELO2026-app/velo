@@ -14,11 +14,15 @@
 //
 // ADMIN HALF: the ticket list (velo's own table; without a status filter every
 // ticket but spam), one ticket by id, the status change (an OPEN ticket only),
-// the handover -- assign / release / reopen (BE-162 delivery 2) -- and --
+// the handover -- assign / release / reopen (BE-162 delivery 2), the rating
+// filter and the period statistics (BE-162 delivery 3) -- and --
 // unchanged routes, keyed by the ticket id -- the feed, the reply and the
 // claim. Claiming is what grants the right to reply: comms admits only
 // the client or the assignee, so a reply on an unclaimed ticket is comms' own
 // 403, forwarded (backend/app/core/comms.py forward_403).
+//
+// THE PERSON'S RATING (BE-162 delivery 3): the pending list that feeds the
+// rating sheet and the one-write POST that rates a ticket.
 //
 // The request bodies' closed sets come from generated.ts (TicketIn, StatusIn)
 // so a backend change of the sets shows up here at type-check time. The
@@ -71,6 +75,20 @@ export interface SupportTicket {
   status_changed_at: string
 }
 
+/** The person's rating of a resolved ticket (BE-162 delivery 3). The comment
+ *  is AS WRITTEN -- the backend does not translate it (owner ruling; the
+ *  translation is BE-175's); `comment_locale` is the person's interface
+ *  language, so a screen can sign the comment's language; `rated_resolver` is
+ *  the admin whose RESOLVED the rating is about (kept at rating time -- a
+ *  later reopen and another admin's resolution do not move it). */
+export interface SupportTicketRating {
+  stars: number
+  comment: string | null
+  comment_locale: string | null
+  rated_at: string | null
+  rated_resolver: SupportPerson | null
+}
+
 /** A ticket as the admin list and the one-ticket read return it. `opener`
  *  is null when the person's row is gone; `history_thread_id` names the
  *  person's pre-ticket support conversation (read-only), when they have one. */
@@ -78,6 +96,10 @@ export interface AdminSupportTicket extends SupportTicket {
   opener: SupportPerson | null
   claimed_by: SupportPerson | null
   history_thread_id: string | null
+  /** BE-162 delivery 3: the last admin who moved the ticket to «Решена». */
+  resolved_by: SupportPerson | null
+  /** The person's rating, null while there is none. */
+  rating: SupportTicketRating | null
 }
 
 export interface AdminSupportTicketList {
@@ -140,6 +162,51 @@ export interface SupportTicketCreated {
   message: SupportMessage
 }
 
+// -- The person's rating (BE-162 delivery 3) -----------------------------------
+
+/** A ticket waiting for the caller's rating (GET /support/ratings/pending):
+ *  «Решена» and not rated, most recently resolved first. A ticket the person
+ *  reopened with a message leaves the list until it is resolved again. */
+export interface PendingRatingTicket {
+  id: string
+  topic: SupportTopicCode
+  category: SupportCategory
+  status_changed_at: string
+}
+
+export interface PendingRatingList {
+  tickets: PendingRatingTicket[]
+}
+
+/** The answer of a successful rating. */
+export interface TicketRatingResult {
+  id: string
+  stars: number
+  comment: string | null
+  rated_at: string
+}
+
+/** The caller's tickets awaiting their rating, newest resolution first.
+ *  An empty answer is `{tickets: []}`. */
+export function listPendingRatings(): Promise<PendingRatingList> {
+  return api.get<PendingRatingList>('/api/v1/support/ratings/pending')
+}
+
+/** Rate one's own RESOLVED ticket, once: 1..5 stars and, if they like, a
+ *  comment (up to 1000 characters). 404 -- not the caller's ticket; 409 --
+ *  not «Решена» (a reopen beat the rating) or rated already; 422 -- the body
+ *  is wrong. The comment is sent as written, trimmed; empty is null. */
+export function rateTicket(
+  ticketId: string,
+  stars: number,
+  comment?: string,
+): Promise<TicketRatingResult> {
+  return api.post<TicketRatingResult>(`/api/v1/support/tickets/${ticketId}/rating`, {
+    stars,
+    comment: comment?.trim() || null,
+  })
+}
+
 /** An appeal through a support form: a NEW ticket and its first message.
  *  `idempotencyKey` names the appeal -- the caller keeps it across retries of
  *  the same (topic, body) and replaces it when either changes. 422 -- unknown
@@ -180,11 +247,14 @@ export function createAppealKeys(
 // -- Admin --------------------------------------------------------------------
 
 /** The filters of the admin ticket list. `categories` is "any of these"
- *  (repeatable `category`, BE-162 fix 2); without `status` the backend
- *  returns every ticket but spam. `createdFrom` inclusive, `createdTo`
- *  exclusive -- ISO with an offset (the backend refuses one without). */
+ *  (repeatable `category`, BE-162 fix 2); `ratings` likewise (BE-162
+ *  delivery 3): stars "1".."5" and "none" for a ticket nobody has rated.
+ *  Without `status` the backend returns every ticket but spam. `createdFrom`
+ *  inclusive, `createdTo` exclusive -- ISO with an offset (the backend
+ *  refuses one without). */
 export interface AdminTicketQuery {
   categories?: readonly SupportCategory[]
+  ratings?: readonly SupportRatingFilter[]
   status?: SupportTicketStatus
   createdFrom?: string
   createdTo?: string
@@ -192,10 +262,15 @@ export interface AdminTicketQuery {
   limit?: number
 }
 
+/** The closed set the rating filter accepts: one star value at a time or
+ *  "none" (no rating); repeatable on the wire, "any of these". */
+export type SupportRatingFilter = '1' | '2' | '3' | '4' | '5' | 'none'
+
 /** Tickets, newest appeal first. */
 export function listAdminTickets(query: AdminTicketQuery = {}): Promise<AdminSupportTicketList> {
   const qs = new URLSearchParams({ limit: String(query.limit ?? 20) })
   for (const c of query.categories ?? []) qs.append('category', c)
+  for (const r of query.ratings ?? []) qs.append('rating', r)
   if (query.status) qs.set('status', query.status)
   if (query.createdFrom) qs.set('created_from', query.createdFrom)
   if (query.createdTo) qs.set('created_to', query.createdTo)
@@ -303,4 +378,45 @@ export function retrySupportTranslation(
     `/api/v1/support/threads/${threadId}/messages/${messageId}/translation/retry`,
     {},
   )
+}
+
+// -- Statistics (BE-162 delivery 3) --------------------------------------------
+
+/** The rating columns of one statistics row: how many rated, the average
+ *  (two decimals) and the share of 4-5 star ratings (0..1, three decimals);
+ *  both null when nothing was rated -- no rating is not a zero. */
+export interface SupportStatsFigures {
+  rated: number
+  average: number | null
+  share_4_5: number | null
+}
+
+/** One category row -- all six are always present, zeros included. Spam is
+ *  not a category: it left the rows and stands as its own figure. */
+export interface SupportStatsCategory extends SupportStatsFigures {
+  category: SupportCategory
+  tickets: number
+}
+
+/** Per admin a rating is about (the resolver it named at rating time). */
+export interface SupportStatsResolver extends SupportStatsFigures {
+  admin: SupportPerson | null
+}
+
+export interface SupportStats {
+  period: { created_from: string; created_to: string }
+  categories: SupportStatsCategory[]
+  total: number
+  spam: number
+  resolvers: SupportStatsResolver[]
+}
+
+/** Support over a period of APPEALS -- tickets created in
+ *  [createdFrom, createdTo), the list's own date filter, so the categories
+ *  add up to the list for the same period. Both edges are required and must
+ *  carry a time zone (the backend refuses one without); `createdFrom` is
+ *  inclusive, `createdTo` exclusive. */
+export function getSupportStats(createdFrom: string, createdTo: string): Promise<SupportStats> {
+  const qs = new URLSearchParams({ created_from: createdFrom, created_to: createdTo })
+  return api.get<SupportStats>(`/api/v1/support/stats?${qs}`)
 }

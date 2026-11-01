@@ -24,7 +24,7 @@ const back = vi.fn()
 const routeParams: { id: string } = { id: '' }
 vi.mock('vue-router', () => ({
   useRouter: () => ({ back }),
-  useRoute: () => ({ params: routeParams }),
+  useRoute: () => ({ params: routeParams, query: {} }),
 }))
 
 const listChats = vi.fn()

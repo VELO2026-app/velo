@@ -238,7 +238,7 @@ async function markAll(): Promise<void> {
 // mark-read-only, never a push with an undefined param.
 function routeFor(
   item: NotificationItem,
-): { name: string; params?: Record<string, string> } | null {
+): { name: string; params?: Record<string, string>; query?: Record<string, string> } | null {
   const action = item.action_data?.action
   const params = item.action_data?.params ?? {}
   const practiceId = typeof params.practice_id === 'string' ? params.practice_id : null
@@ -278,6 +278,15 @@ function routeFor(
       // follow-up note as the user map).
       const threadId = typeof params.thread_id === 'string' ? params.thread_id : null
       return threadId ? { name: 'master-chat', params: { id: threadId } } : null
+    }
+    case 'open_support_rating': {
+      // FE-107 / BE-162 delivery 3: «Как мы помогли?» -- the rating sheet on
+      // THAT resolved ticket, in the master's own support conversation; the
+      // same shape as the user map (see UserInboxView.vue).
+      const threadId = typeof params.thread_id === 'string' ? params.thread_id : null
+      return threadId
+        ? { name: 'master-chat', params: { id: threadId }, query: { rate: '1' } }
+        : null
     }
     default:
       // msg.* without a thread reference: the messages list, one hop away.

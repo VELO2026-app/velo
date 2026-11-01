@@ -759,6 +759,13 @@ const router = createRouter({
           component: () => import('@/views/admin/AdminPromosView.vue'),
         },
         {
+          // FE-107 / BE-162 delivery 3: support statistics over a month of
+          // appeals. Declared BEFORE support/:id so the literal segment wins.
+          path: 'support/stats',
+          name: 'admin-support-stats',
+          component: () => import('@/views/admin/AdminSupportStatsView.vue'),
+        },
+        {
           // A support ticket's card (FE-100: the list is the «Обращения» tab
           // of «Модерация», admin-reports; the deep link of the BE-172
           // signal lands here directly).
