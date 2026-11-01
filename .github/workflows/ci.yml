@@ -21,9 +21,9 @@ name: CI
 
 on:
   push:
-    branches: [test, ai-dev-factory, curator]
+    branches: [test]
   pull_request:
-    branches: [test, ai-dev-factory, curator]
+    branches: [test]
 
 concurrency:
   group: ci-${{ github.ref }}
