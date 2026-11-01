@@ -217,7 +217,7 @@ async def create_booking(
     FOR KEY SHARE before the practice (lock_school_member_key_share), so
     a concurrent school block either sees this booking under its own
     practice lock and cancels it, or commits first and the gate below
-    refuses with blocked_in_group.
+    refuses with blocked_in_school.
     """
     await lock_school_member_key_share(user.id, practice_id, session)
     stmt = (

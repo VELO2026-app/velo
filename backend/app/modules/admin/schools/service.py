@@ -28,9 +28,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.modules.admin.schools.schemas import (
-    AdminCuratorGroupCuratorRef,
-    AdminCuratorGroupListItem,
-    PaginatedAdminCuratorGroupsResponse,
+    AdminSchoolCuratorRef,
+    AdminSchoolListItem,
+    PaginatedAdminSchoolsResponse,
 )
 from app.modules.masters.models import MasterProfile
 from app.modules.schools.models import School, SchoolMember
@@ -85,7 +85,7 @@ async def _member_counts(
     rows = (
         await session.execute(
             select(
-                SchoolMember.group_id,
+                SchoolMember.school_id,
                 func.coalesce(
                     func.sum(case((visible_master, 1), else_=0)), 0
                 ),
@@ -103,8 +103,8 @@ async def _member_counts(
                     0,
                 ),
             )
-            .where(SchoolMember.group_id.in_(group_ids))
-            .group_by(SchoolMember.group_id)
+            .where(SchoolMember.school_id.in_(group_ids))
+            .group_by(SchoolMember.school_id)
         )
     ).all()
 
@@ -133,7 +133,7 @@ async def list_schools_for_admin(
     *,
     limit: int = 20,
     offset: int = 0,
-) -> PaginatedAdminCuratorGroupsResponse:
+) -> PaginatedAdminSchoolsResponse:
     """Every school, active or frozen, with its counters.
 
     No status filter and no hidden exclusion: a frozen school is reported
@@ -167,10 +167,10 @@ async def list_schools_for_admin(
     )
 
     items = [
-        AdminCuratorGroupListItem(
+        AdminSchoolListItem(
             id=group.id,
             name=group.name,
-            curator=AdminCuratorGroupCuratorRef(
+            curator=AdminSchoolCuratorRef(
                 user_id=curator.id,
                 display_name=display_name(
                     curator.first_name, curator.last_name
@@ -184,7 +184,7 @@ async def list_schools_for_admin(
         for group, curator in rows
     ]
 
-    return PaginatedAdminCuratorGroupsResponse(
+    return PaginatedAdminSchoolsResponse(
         items=items,
         total=total,
         limit=limit,

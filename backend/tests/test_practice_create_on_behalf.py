@@ -41,7 +41,7 @@ from app.modules.practices.models import (
     PracticeType,
 )
 from app.modules.practices.schemas import CreatePracticeRequest
-from app.modules.schools import service as curator_service
+from app.modules.schools import service as school_service
 from app.modules.schools.models import (
     School,
     SchoolMember,
@@ -71,7 +71,7 @@ _TID_SCHOOL_MASTER = 89147
 _TID_OUTSIDER = 89148
 
 _EVENT = "practice_created_by_curator"
-_TYPE = "curator_group.practice_created_for_master"
+_TYPE = "school.practice_created_for_master"
 _SLOT = datetime(2031, 3, 4, 10, 0, tzinfo=UTC)
 
 
@@ -110,7 +110,7 @@ async def _join(
 ) -> None:
     db_session.add(
         SchoolMember(
-            group_id=group_id, user_id=UUID(user_id), kind=kind.value,
+            school_id=group_id, user_id=UUID(user_id), kind=kind.value,
         )
     )
     await db_session.flush()
@@ -274,7 +274,7 @@ async def _seed_practice(
             price_cents=0,
             currency="eur",
             audience_kind=AudienceKind.PUBLIC.value,
-            curator_group_id=school,
+            school_id=school,
             parent_practice_id=parent_id,
         )
         session.add(practice)
@@ -324,13 +324,13 @@ async def test_curator_creates_a_published_practice_led_by_a_master_of_the_schoo
 
     resp = await _post(
         client, s.token("curator"),
-        master_id=s.id("target"), curator_group_id=str(s.school),
+        master_id=s.id("target"), school_id=str(s.school),
     )
     assert resp.status_code == 201, resp.text
     data = resp.json()
     assert data["master_id"] == s.id("target")
     assert data["master_name"] == "Тимур"
-    assert data["curator_group_id"] == str(s.school)
+    assert data["school_id"] == str(s.school)
     assert data["status"] == PracticeStatus.SCHEDULED.value
     assert data["deduplicated"] is False
     assert "zoom_host_join_url" not in data
@@ -344,14 +344,14 @@ async def test_curator_creates_a_published_practice_led_by_a_master_of_the_schoo
         await fresh_execute(
             select(OutboxEvent).where(
                 OutboxEvent.payload["type"].astext
-                == "curator_group.practice_published",
+                == "school.practice_published",
                 OutboxEvent.payload["target_value"].astext == s.id("student"),
             )
         )
     ).scalars().all()
     assert len(announced) == 1
     listed = await client.get(
-        f"/api/v1/curator-groups/{s.school}/practices",
+        f"/api/v1/schools/{s.school}/practices",
         headers=auth_headers(s.token("student")),
     )
     assert listed.status_code == 200, listed.text
@@ -361,7 +361,7 @@ async def test_curator_creates_a_published_practice_led_by_a_master_of_the_schoo
     assert len(audits) == 1
     assert audits[0].actor_id == UUID(s.id("curator"))
     assert audits[0].data == {
-        "group_id": str(s.school), "master_id": s.id("target"),
+        "school_id": str(s.school), "master_id": s.id("target"),
     }
 
     # ONE message to the master: «created and published», no «published»
@@ -372,7 +372,7 @@ async def test_curator_creates_a_published_practice_led_by_a_master_of_the_schoo
         await fresh_execute(
             select(OutboxEvent).where(
                 OutboxEvent.payload["type"].astext
-                == "curator_group.master_practice_published",
+                == "school.master_practice_published",
                 OutboxEvent.payload["target_value"].astext == s.id("target"),
             )
         )
@@ -387,7 +387,7 @@ async def test_curator_creates_a_published_practice_led_by_a_master_of_the_schoo
     action = payload["action_data"]
     assert action["action"] == "open_practice"
     assert action["params"] == {"practice_id": data["id"]}
-    assert action["group_name"] == "Школа А"
+    assert action["school_name"] == "Школа А"
     assert action["actor_name"] == "Кира"
     assert action["practice_title"] == "Утренняя практика"
     assert action["scheduled_at"]
@@ -436,7 +436,7 @@ async def test_a_master_of_the_curators_other_school_is_refused_here(
     -- and CAN use B for them, so the refusal is about the school."""
     refused = await _post(
         client, s.token("curator"),
-        master_id=s.id("other_school_master"), curator_group_id=str(s.school),
+        master_id=s.id("other_school_master"), school_id=str(s.school),
     )
     assert refused.status_code == 400, refused.text
     assert refused.json()["error"] == "master_not_in_school"
@@ -444,7 +444,7 @@ async def test_a_master_of_the_curators_other_school_is_refused_here(
     allowed = await _post(
         client, s.token("curator"),
         master_id=s.id("other_school_master"),
-        curator_group_id=str(s.other_school),
+        school_id=str(s.other_school),
     )
     assert allowed.status_code == 201, allowed.text
     assert allowed.json()["master_id"] == s.id("other_school_master")
@@ -464,7 +464,7 @@ async def test_every_unfit_target_gets_one_and_the_same_refusal(
     target = str(uuid4()) if who == "nobody" else s.id(who)
     resp = await _post(
         client, s.token("curator"),
-        master_id=target, curator_group_id=str(s.school),
+        master_id=target, school_id=str(s.school),
     )
     assert resp.status_code == 400, resp.text
     assert resp.json()["error"] == "master_not_in_school"
@@ -478,13 +478,13 @@ async def test_a_master_of_the_school_is_not_its_curator(client, s: _S) -> None:
     practice in the school (BE-74), so the 403 is about the delegation."""
     refused = await _post(
         client, s.token("school_master"),
-        master_id=s.id("target"), curator_group_id=str(s.school),
+        master_id=s.id("target"), school_id=str(s.school),
     )
     assert refused.status_code == 403, refused.text
     assert refused.json()["error"] == "curator_only"
 
     own = await _post(
-        client, s.token("school_master"), curator_group_id=str(s.school),
+        client, s.token("school_master"), school_id=str(s.school),
     )
     assert own.status_code == 201, own.text
 
@@ -494,16 +494,16 @@ async def test_an_outsider_cannot_tell_the_school_exists(client, s: _S) -> None:
     """Same refusal as for a school that does not exist."""
     real = await _post(
         client, s.token("outsider"),
-        master_id=s.id("target"), curator_group_id=str(s.school),
+        master_id=s.id("target"), school_id=str(s.school),
     )
     missing = await _post(
         client, s.token("outsider"),
-        master_id=s.id("target"), curator_group_id=str(uuid4()),
+        master_id=s.id("target"), school_id=str(uuid4()),
     )
     assert real.status_code == missing.status_code == 400, real.text
     assert real.json() == missing.json()
     # FE-92 follow-up: one code for both -- still indistinguishable.
-    assert real.json()["error"] == "curator_group_not_usable"
+    assert real.json()["error"] == "school_not_usable"
 
 
 @pytest.mark.asyncio
@@ -511,14 +511,14 @@ async def test_the_killswitch_refuses_the_delegation(client, s: _S) -> None:
     with patch.object(settings, "schools_enabled", False):
         off = await _post(
             client, s.token("curator"),
-            master_id=s.id("target"), curator_group_id=str(s.school),
+            master_id=s.id("target"), school_id=str(s.school),
         )
     assert off.status_code == 400, off.text
-    assert off.json()["error"] == "curator_group_not_usable"
+    assert off.json()["error"] == "school_not_usable"
     assert await _practices_of(s.id("target")) == []
     on = await _post(
         client, s.token("curator"),
-        master_id=s.id("target"), curator_group_id=str(s.school),
+        master_id=s.id("target"), school_id=str(s.school),
     )
     assert on.status_code == 201, on.text
 
@@ -537,13 +537,13 @@ async def test_the_targets_confirmed_methods_decide_not_the_curators(
     refused -- read with the curator's id it would pass."""
     refused = await _post(
         client, s.token("curator"), direction="meditation",
-        master_id=s.id("target"), curator_group_id=str(s.school),
+        master_id=s.id("target"), school_id=str(s.school),
     )
     assert refused.status_code == 400, refused.text
     assert refused.json()["error"] == "direction_not_confirmed"
     allowed = await _post(
         client, s.token("curator"), direction="yoga",
-        master_id=s.id("target"), curator_group_id=str(s.school),
+        master_id=s.id("target"), school_id=str(s.school),
     )
     assert allowed.status_code == 201, allowed.text
 
@@ -560,7 +560,7 @@ async def test_dedup_is_by_the_master_and_announces_nothing_new(
     existing = await _seed_practice(s.id("target"), s.school)
     resp = await _post(
         client, s.token("curator"),
-        master_id=s.id("target"), curator_group_id=str(s.school),
+        master_id=s.id("target"), school_id=str(s.school),
     )
     assert resp.status_code == 201, resp.text
     data = resp.json()
@@ -587,11 +587,11 @@ async def test_the_same_create_twice_publishes_and_tells_once(
     monkeypatch.setattr(zoom_service, "create_meeting_for_practice", AsyncMock())
     first = await _post(
         client, s.token("curator"),
-        master_id=s.id("target"), curator_group_id=str(s.school),
+        master_id=s.id("target"), school_id=str(s.school),
     )
     again = await _post(
         client, s.token("curator"),
-        master_id=s.id("target"), curator_group_id=str(s.school),
+        master_id=s.id("target"), school_id=str(s.school),
     )
     assert first.status_code == again.status_code == 201, again.text
     assert again.json()["id"] == first.json()["id"]
@@ -601,7 +601,7 @@ async def test_the_same_create_twice_publishes_and_tells_once(
         await fresh_execute(
             select(OutboxEvent).where(
                 OutboxEvent.payload["type"].astext
-                == "curator_group.practice_published",
+                == "school.practice_published",
                 OutboxEvent.payload["target_value"].astext == s.id("student"),
             )
         )
@@ -616,7 +616,7 @@ async def test_the_masters_slot_outside_the_school_is_a_conflict(
     await _seed_practice(s.id("target"), None)
     resp = await _post(
         client, s.token("curator"),
-        master_id=s.id("target"), curator_group_id=str(s.school),
+        master_id=s.id("target"), school_id=str(s.school),
     )
     assert resp.status_code == 409, resp.text
     assert resp.json()["error"] == "practice_exists_in_other_school"
@@ -632,7 +632,7 @@ async def test_no_existing_practice_is_handed_over_before_the_checks(
     existing = await _seed_practice(s.id("target"), s.school)
     resp = await _post(
         client, s.token("school_master"),
-        master_id=s.id("target"), curator_group_id=str(s.school),
+        master_id=s.id("target"), school_id=str(s.school),
     )
     assert resp.status_code == 403, resp.text
     assert str(existing) not in resp.text
@@ -659,7 +659,7 @@ async def test_a_curator_cannot_add_an_occurrence_to_the_masters_series(
         client, s.token("curator"), practice_type=series,
         scheduled_at=(_SLOT + timedelta(days=7)).isoformat(),
         parent_practice_id=str(root),
-        master_id=s.id("target"), curator_group_id=str(s.school),
+        master_id=s.id("target"), school_id=str(s.school),
     )
     assert refused.status_code == 400, refused.text
     assert refused.json()["error"] == "curator_cannot_add_occurrence"
@@ -667,7 +667,7 @@ async def test_a_curator_cannot_add_an_occurrence_to_the_masters_series(
 
     standalone = await _post(
         client, s.token("curator"),
-        master_id=s.id("target"), curator_group_id=str(s.school),
+        master_id=s.id("target"), school_id=str(s.school),
     )
     assert standalone.status_code == 201, standalone.text
     assert standalone.json()["parent_practice_id"] is None
@@ -680,7 +680,7 @@ async def test_a_curator_cannot_add_an_occurrence_to_the_masters_series(
 
 def _create_call(s: _S):
     body = CreatePracticeRequest(
-        **_body(master_id=s.id("target"), curator_group_id=str(s.school)),
+        **_body(master_id=s.id("target"), school_id=str(s.school)),
     )
 
     async def call(session: AsyncSession):
@@ -691,7 +691,7 @@ def _create_call(s: _S):
 
 def _demote_call(s: _S):
     async def call(session: AsyncSession):
-        await curator_service.demote_school_master(
+        await school_service.demote_school_master(
             UUID(s.id("curator")), s.school, UUID(s.id("target")), session,
             actor=await session.get(User, UUID(s.id("curator"))),
         )
@@ -700,7 +700,7 @@ def _demote_call(s: _S):
 
 def _remove_call(s: _S):
     async def call(session: AsyncSession):
-        await curator_service.remove_school_member(
+        await school_service.remove_school_member(
             UUID(s.id("curator")), s.school, UUID(s.id("target")), session,
             actor=await session.get(User, UUID(s.id("curator"))),
         )
@@ -711,7 +711,7 @@ async def _target_kind(s: _S) -> str | None:
     return (
         await fresh_execute(
             select(SchoolMember.kind).where(
-                SchoolMember.group_id == s.school,
+                SchoolMember.school_id == s.school,
                 SchoolMember.user_id == UUID(s.id("target")),
             )
         )
@@ -742,7 +742,7 @@ async def test_the_target_cannot_leave_between_the_check_and_the_insert(
     assert result.holder.committed, result.holder.error
     assert result.rival.committed, result.rival.error
     practices = await _practices_of(s.id("target"))
-    assert [p.curator_group_id for p in practices] == [s.school]
+    assert [p.school_id for p in practices] == [s.school]
     expected = SchoolMemberKind.STUDENT.value if rival == "demote" else None
     assert await _target_kind(s) == expected
 
@@ -759,7 +759,7 @@ async def test_a_target_demoted_before_the_create_is_refused(
     assert await _target_kind(s) == SchoolMemberKind.STUDENT.value
     resp = await _post(
         client, s.token("curator"),
-        master_id=s.id("target"), curator_group_id=str(s.school),
+        master_id=s.id("target"), school_id=str(s.school),
     )
     assert resp.status_code == 400, resp.text
     assert resp.json()["error"] == "master_not_in_school"

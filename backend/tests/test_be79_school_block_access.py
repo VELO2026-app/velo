@@ -10,7 +10,7 @@
 # WHAT (1b) ADDS to the swap of (1a):
 #   (a) the school's practices close to the blocked person -- the feed, the
 #       card, booking, the waitlist (entry and confirm), check-in -- public
-#       ones included; code blocked_in_group, after blocked_by_master and
+#       ones included; code blocked_in_school, after blocked_by_master and
 #       before the audience;
 #   (b) the block cancels and refunds the person's FUTURE live bookings in
 #       the school and removes their queue places; the past stays history;
@@ -51,7 +51,7 @@ from app.modules.practices.models import (
     PracticeType,
 )
 from app.modules.practices.schemas import UpdatePracticeRequest
-from app.modules.schools import service as curator_service
+from app.modules.schools import service as school_service
 from app.modules.schools.models import SchoolMember, SchoolMemberKind
 from app.modules.users.models import User, UserRole
 from app.modules.waitlist import service as waitlist_service
@@ -59,9 +59,9 @@ from app.modules.waitlist.models import Waitlist, WaitlistStatus
 from tests.helpers import auth_headers, fresh_execute, full_cleanup_range, login_user
 from tests.school_race_harness import race
 
-GROUPS_URL = "/api/v1/masters/me/curator-groups"
-BLOCK_URL = "/api/v1/masters/me/curator-groups/{group_id}/members/{user_id}/block"
-UNBLOCK_URL = "/api/v1/masters/me/curator-groups/{group_id}/blocks/{user_id}"
+GROUPS_URL = "/api/v1/masters/me/schools"
+BLOCK_URL = "/api/v1/masters/me/schools/{school_id}/members/{user_id}/block"
+UNBLOCK_URL = "/api/v1/masters/me/schools/{school_id}/blocks/{user_id}"
 PRACTICES_URL = "/api/v1/practices"
 PRACTICE_URL = "/api/v1/practices/{practice_id}"
 CANCEL_URL = "/api/v1/practices/{practice_id}/cancel"
@@ -100,7 +100,7 @@ async def _verified_master(
         MasterProfile(
             user_id=user_id,
             data={
-                "account": {"status": "verified", "can_create_groups": True},
+                "account": {"status": "verified", "can_create_schools": True},
                 "profile": {"bio": "m"},
             },
         )
@@ -136,7 +136,7 @@ async def _member(
 ) -> None:
     db_session.add(
         SchoolMember(
-            group_id=UUID(group_id),
+            school_id=UUID(group_id),
             user_id=_uid(auth),
             kind=kind.value,
         )
@@ -171,7 +171,7 @@ async def _practice(
         price_cents=0,
         currency="eur",
         audience_kind=audience,
-        curator_group_id=UUID(group_id) if group_id is not None else None,
+        school_id=UUID(group_id) if group_id is not None else None,
     )
     db_session.add(practice)
     await db_session.flush()
@@ -239,14 +239,14 @@ async def _seed_queue(
 
 async def _block(client, curator, group_id, person):
     return await client.post(
-        BLOCK_URL.format(group_id=group_id, user_id=person["user"]["id"]),
+        BLOCK_URL.format(school_id=group_id, user_id=person["user"]["id"]),
         headers=_h(curator),
     )
 
 
 async def _unblock(client, curator, group_id, person):
     return await client.delete(
-        UNBLOCK_URL.format(group_id=group_id, user_id=person["user"]["id"]),
+        UNBLOCK_URL.format(school_id=group_id, user_id=person["user"]["id"]),
         headers=_h(curator),
     )
 
@@ -378,16 +378,16 @@ async def test_the_feed_loses_every_school_practice_public_ones_included(
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "audience",
-    [AudienceKind.PUBLIC.value, AudienceKind.CURATOR_GROUPS.value],
+    [AudienceKind.PUBLIC.value, AudienceKind.SCHOOLS.value],
 )
-async def test_booking_and_the_queue_refuse_with_blocked_in_group(
+async def test_booking_and_the_queue_refuse_with_blocked_in_school(
     client: AsyncClient,
     db_session: AsyncSession,
     world: dict,
     audience: str,
 ) -> None:
-    """Booking and joining the queue answer blocked_in_group -- for a
-    'curator_groups' practice too, where the missing member row would
+    """Booking and joining the queue answer blocked_in_school -- for a
+    'schools' practice too, where the missing member row would
     otherwise say not_in_audience (the check stands before the audience,
     R3). Pair: the same calls on the other school's practice go through."""
     w = world
@@ -411,12 +411,12 @@ async def test_booking_and_the_queue_refuse_with_blocked_in_group(
     ).status_code == 204
 
     resp = await _book(client, w["student"], practice)
-    assert resp.status_code == 403 and _code(resp) == "blocked_in_group", resp.text
+    assert resp.status_code == 403 and _code(resp) == "blocked_in_school", resp.text
     resp = await client.post(
         WAITLIST_JOIN_URL.format(practice_id=full),
         headers=_h(w["student"]),
     )
-    assert resp.status_code == 403 and _code(resp) == "blocked_in_group", resp.text
+    assert resp.status_code == 403 and _code(resp) == "blocked_in_school", resp.text
     assert (await _book(client, w["student"], open_practice)).status_code in (200, 201)
 
 
@@ -455,7 +455,7 @@ async def test_the_card_closes_on_the_future_and_stays_open_on_history(
     """The card answers 404 for a future practice of the school (R4: the
     detail gate turns a refusal into "no such practice"); a past one the
     person attended stays readable (B6). Then check-in of that past
-    practice: refused, blocked_in_group (R7) -- the history is kept, the
+    practice: refused, blocked_in_school (R7) -- the history is kept, the
     action is not. Pair: the same probe passes for a person not blocked."""
     w = world
     future = await _practice(db_session, w["master"], w["group_id"])
@@ -485,7 +485,7 @@ async def test_the_card_closes_on_the_future_and_stays_open_on_history(
         user = await session.get(User, _uid(w["student"]))
         with pytest.raises(ForbiddenError) as exc:
             await upsert_checkin(user, past, 3, session)
-        assert exc.value.code == "blocked_in_group"
+        assert exc.value.code == "blocked_in_school"
         practice = await session.get(Practice, past)
         await assert_viewer_not_blocked(_uid(other), practice, session)
         await session.rollback()
@@ -659,7 +659,7 @@ async def test_a_blocked_master_neither_edits_previews_nor_extends_his_series(
 ) -> None:
     """In the school: PATCH of his practice, PATCH of his draft to
     'deleted' (R5 -- the draft is deleted by DELETE), the audience preview
-    and a new session of his series -- all 403 blocked_in_group. Pairs: the
+    and a new session of his series -- all 403 blocked_in_school. Pairs: the
     same PATCH of his schoolless practice passes, the curator edits his
     school practice, DELETE removes his draft and he cancels his practice
     (B2)."""
@@ -684,19 +684,19 @@ async def test_a_blocked_master_neither_edits_previews_nor_extends_his_series(
             json=body,
             headers=_h(x),
         )
-        assert resp.status_code == 403 and _code(resp) == "blocked_in_group", resp.text
+        assert resp.status_code == 403 and _code(resp) == "blocked_in_school", resp.text
     resp = await client.post(
         PREVIEW_URL.format(practice_id=scheduled),
         json={"audience_kind": AudienceKind.PUBLIC.value, "group_ids": []},
         headers=_h(x),
     )
-    assert resp.status_code == 403 and _code(resp) == "blocked_in_group", resp.text
+    assert resp.status_code == 403 and _code(resp) == "blocked_in_school", resp.text
     resp = await client.post(
         PRACTICES_URL,
         json=_practice_body(parent_practice_id=str(scheduled)),
         headers=_h(x),
     )
-    assert resp.status_code == 403 and _code(resp) == "blocked_in_group", resp.text
+    assert resp.status_code == 403 and _code(resp) == "blocked_in_school", resp.text
 
     resp = await client.patch(
         PRACTICE_URL.format(practice_id=schoolless),
@@ -731,7 +731,7 @@ def _actor_call(fn, *args, actor_id: UUID, **kwargs):
 
 def _block_call(w: dict, person: dict):
     return _actor_call(
-        curator_service.block_school_member,
+        school_service.block_school_member,
         _uid(w["curator"]),
         UUID(w["group_id"]),
         _uid(person),
@@ -798,20 +798,20 @@ async def test_k2_a_booking_landing_inside_a_block_is_refused(
 ) -> None:
     """K2, block first: paused after its DELETE of the member row; the
     booking waits on that row, and after the block commits it reads the
-    block -> 403 blocked_in_group, no booking written."""
+    block -> 403 blocked_in_school, no booking written."""
     w = world
     practice = await _practice(db_session, w["master"], w["group_id"])
     result = await race(
         monkeypatch,
         holder=_block_call(w, w["student"]),
-        pause_in=(curator_service, "_close_school_practices_to"),
+        pause_in=(school_service, "_close_school_practices_to"),
         pause="before",
         rival=_as_user(bookings_service.create_booking, _uid(w["student"]), practice),
     )
     assert not result.holder.deadlocked and not result.rival.deadlocked
     assert result.holder.committed, result.holder.error
     assert result.rival_waited
-    assert getattr(result.rival.error, "code", None) == "blocked_in_group"
+    assert getattr(result.rival.error, "code", None) == "blocked_in_school"
 
 
 @pytest.mark.asyncio
@@ -948,7 +948,7 @@ async def test_k3_an_edit_landing_inside_a_block_is_refused(
 ) -> None:
     """K3, block first: paused after it took the master's practices; the
     PATCH waits on its practice and, once the block commits, reads it ->
-    403 blocked_in_group, the title unchanged. Without the master's own
+    403 blocked_in_school, the title unchanged. Without the master's own
     practices in the block's lock set the PATCH does not wait, reads an
     uncommitted block as absent and lands its edit beside the block."""
     w, x = world, blocked_master
@@ -956,14 +956,14 @@ async def test_k3_an_edit_landing_inside_a_block_is_refused(
     result = await race(
         monkeypatch,
         holder=_block_call(w, x),
-        pause_in=(curator_service, "_close_school_practices_to"),
+        pause_in=(school_service, "_close_school_practices_to"),
         pause="after",
         rival=_patch_call(practice, _uid(x), {"title": "Стало"}),
     )
     assert not result.holder.deadlocked and not result.rival.deadlocked
     assert result.holder.committed, result.holder.error
     assert result.rival_waited
-    assert getattr(result.rival.error, "code", None) == "blocked_in_group"
+    assert getattr(result.rival.error, "code", None) == "blocked_in_school"
     title = (
         await fresh_execute(select(Practice.title).where(Practice.id == practice))
     ).scalar_one()
@@ -1000,7 +1000,7 @@ async def test_master_profile_after_the_practice_closes_no_cycle(
         result = await race(
             monkeypatch,
             holder=_block_call(w, w["student"]),
-            pause_in=(curator_service, "_close_school_practices_to"),
+            pause_in=(school_service, "_close_school_practices_to"),
             pause="after",
             rival=publish,
         )
@@ -1088,7 +1088,7 @@ async def test_a_blocked_masters_own_cancellation_meets_the_block_without_a_dead
     result = await race(
         monkeypatch,
         holder=_block_call(w, x),
-        pause_in=(curator_service, "_close_school_practices_to"),
+        pause_in=(school_service, "_close_school_practices_to"),
         pause="after",
         rival=_cancel,
     )

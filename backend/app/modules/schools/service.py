@@ -48,7 +48,7 @@
 # with the block's DELETE.
 #
 # THE PRACTICE (BE-74) IS THE SECOND ROW HERE THIS MODULE DOES NOT OWN.
-# practices.curator_group_id names the school a practice belongs to, and
+# practices.school_id names the school a practice belongs to, and
 # the writers that meet both rows take the practice first: update_practice
 # and cancel_practice (practices/) hold it FOR UPDATE and then write a
 # journal row -- KEY SHARE on the group -- or, cancelling as the curator,
@@ -206,8 +206,8 @@ from app.modules.users.helpers import display_name
 from app.modules.users.models import User
 from app.modules.waitlist.models import ACTIVE_STATUSES, Waitlist, WaitlistStatus
 
-_NAME_TAKEN_CODE = "curator_group_name_taken"
-_NO_CREATE_RIGHT_CODE = "group_creation_not_allowed"
+_NAME_TAKEN_CODE = "school_name_taken"
+_NO_CREATE_RIGHT_CODE = "school_creation_not_allowed"
 
 # GT-15. THE ONE SPELLING of the admin-granted right, for the reason
 # masters/models.py gives about its own JSONB: data is a dict with no model
@@ -215,7 +215,7 @@ _NO_CREATE_RIGHT_CODE = "group_creation_not_allowed"
 # gate silently opens or silently shuts. Written here once and imported by
 # every writer (admin/masters verify + toggle, scripts/seed) and every reader
 # (this module's gate, admin/users' list, the router's list response).
-CAN_CREATE_GROUPS_KEY = "can_create_groups"
+CAN_CREATE_SCHOOLS_KEY = "can_create_schools"
 
 
 def master_can_create_groups(data: dict | None) -> bool:
@@ -233,7 +233,7 @@ def master_can_create_groups(data: dict | None) -> bool:
     ask the same question through the same body.
     """
     account = (data or {}).get("account") or {}
-    return bool(account.get(CAN_CREATE_GROUPS_KEY))
+    return bool(account.get(CAN_CREATE_SCHOOLS_KEY))
 
 
 def _can_create_groups_exists(
@@ -258,7 +258,7 @@ def _can_create_groups_exists(
         select(MasterProfile.user_id)
         .where(
             MasterProfile.user_id == user_id_col,
-            MasterProfile.data["account"][CAN_CREATE_GROUPS_KEY]
+            MasterProfile.data["account"][CAN_CREATE_SCHOOLS_KEY]
             .as_boolean()
             .is_(True),
         )
@@ -328,7 +328,7 @@ async def _get_group_or_404(
         )
     ).scalar_one_or_none()
     if group is None:
-        raise NotFoundError("Curator group not found")
+        raise NotFoundError("School not found")
     return group
 
 
@@ -382,7 +382,7 @@ async def _lock_member(
     from the row as it was before the competitor's commit.
     """
     conditions = [
-        SchoolMember.group_id == group_id,
+        SchoolMember.school_id == group_id,
         SchoolMember.user_id == user_id,
     ]
     if kind is not None:
@@ -422,7 +422,7 @@ async def _counts_for_groups(
     rows = (
         await session.execute(
             select(
-                SchoolMember.group_id,
+                SchoolMember.school_id,
                 func.coalesce(
                     func.sum(case((is_visible_master, 1), else_=0)), 0,
                 ),
@@ -440,8 +440,8 @@ async def _counts_for_groups(
                     0,
                 ),
             )
-            .where(SchoolMember.group_id.in_(group_ids))
-            .group_by(SchoolMember.group_id)
+            .where(SchoolMember.school_id.in_(group_ids))
+            .group_by(SchoolMember.school_id)
         )
     ).all()
 
@@ -538,7 +538,7 @@ def _record_group_event(
     # before anything is flushed. Returned so it can.
     row = SchoolEvent(
         id=uuid4(),
-        group_id=group_id,
+        school_id=group_id,
         actor_id=actor.id,
         event=event.value,
         data=payload,
@@ -587,7 +587,7 @@ async def _notify_group_event(
     before that must still reach the previous owner: silence there is not
     privacy, it is losing the only signal that your school is gone.
 
-    open_curator_group is a NEW action verb, and the inbox does not know it
+    open_school is a NEW action verb, and the inbox does not know it
     yet. That is safe by the inbox's own contract: "an unmapped action or a
     missing/malformed id falls back to mark-read-only -- honest, never a
     broken route" (UserInboxView.vue). Naming the intent now is what lets
@@ -595,25 +595,25 @@ async def _notify_group_event(
     """
     await _notify_school(
         session,
-        idempotency_key=f"curator-group-event:{journal_event_id}",
+        idempotency_key=f"school-event:{journal_event_id}",
         type=type,
         recipient_id=recipient_id,
         title=title,
         body=body,
         group_id=group_id,
-        variables={"group_name": group_name, "actor_name": actor_name},
+        variables={"school_name": group_name, "actor_name": actor_name},
         # None -> the shared school verb (defined below this function).
-        action=action or _OPEN_CURATOR_GROUP,
+        action=action or _OPEN_SCHOOL,
     )
 
 
-_OPEN_CURATOR_GROUP = "open_curator_group"
-# BE-59: a NEW action verb, on the same contract as open_curator_group was
+_OPEN_SCHOOL = "open_school"
+# BE-59: a NEW action verb, on the same contract as open_school was
 # when it arrived: an unmapped action falls back to mark-read-only in the
 # inbox, so naming the intent now lets the frontend map it to
 # /master/apply later without touching velo again.
 _OPEN_MASTER_APPLICATION = "open_master_application"
-# curator_group.master_offered (Links, 3 October): the front maps it to the
+# school.master_offered (Links, 3 October): the front maps it to the
 # consent screen, curator-group-master-offer, with group_id.
 _OPEN_MASTER_OFFER = "open_master_offer"
 
@@ -628,7 +628,7 @@ async def _notify_school(
     body: str,
     group_id: UUID,
     variables: dict[str, str],
-    action: str = _OPEN_CURATOR_GROUP,
+    action: str = _OPEN_SCHOOL,
 ) -> None:
     """Queue one notification about a school to one person, in-transaction.
 
@@ -654,7 +654,7 @@ async def _notify_school(
         body=body,
         action_data={
             "action": action,
-            "params": {"group_id": str(group_id)},
+            "params": {"school_id": str(group_id)},
             **variables,
         },
     )
@@ -666,8 +666,8 @@ async def _frozen_name(user_id: UUID, session: AsyncSession) -> str:
     Four events name two different people -- who removed whom, who offered
     the school to whom, who accepted it from whom, whose offer was
     declined. The actor's name is free (the caller holds the User), but
-    the target's is not: nothing in curator_group_member or
-    curator_group_transfer stores a name, so it has to be fetched.
+    the target's is not: nothing in school_member or
+    school_transfer stores a name, so it has to be fetched.
 
     ONE SELECT BY PRIMARY KEY, and it is bought on purpose. The
     alternative is storing target_user_id alone, which leaves the journal
@@ -677,7 +677,7 @@ async def _frozen_name(user_id: UUID, session: AsyncSession) -> str:
 
     display_name(first, last), NOT the master-profile lookup
     _curator_display_name uses. The tree holds two naming rules and this
-    is a deliberate pick between them, the same one CuratorGroupTransferRef
+    is a deliberate pick between them, the same one SchoolTransferRef
     made and for the same reason: a journal entry is about a PERSON, not a
     public master card, and the profile-based rule can return None -- which
     would put "Мария удалила —" in the feed. display_name always yields
@@ -742,7 +742,7 @@ async def list_school_events(
     group = await _get_group_or_404(curator_user_id, group_id, session)
 
     base = select(SchoolEvent).where(
-        SchoolEvent.group_id == group.id
+        SchoolEvent.school_id == group.id
     )
 
     total = (
@@ -864,7 +864,7 @@ async def create_school(
         # Deliberately NOT master_profile_not_verified: this master IS
         # verified, and the frontend owes them a different sentence.
         raise ForbiddenError(
-            "Creating curator groups is not allowed for this master",
+            "Creating schools is not allowed for this master",
             code=_NO_CREATE_RIGHT_CODE,
         )
 
@@ -881,7 +881,7 @@ async def create_school(
     ).scalar_one_or_none()
     if existing is not None:
         raise ConflictError(
-            f"A curator group named '{name}' already exists",
+            f"A school named '{name}' already exists",
             code=_NAME_TAKEN_CODE,
         )
 
@@ -896,7 +896,7 @@ async def create_school(
             await session.flush()
     except IntegrityError:
         raise ConflictError(
-            f"A curator group named '{name}' already exists",
+            f"A school named '{name}' already exists",
             code=_NAME_TAKEN_CODE,
         ) from None
 
@@ -935,7 +935,7 @@ async def update_school(
     """Rename and/or edit the description or the avatar of one of my groups.
 
     description_provided comes from the router's own exclude_unset check --
-    see UpdateCuratorGroupRequest. When it is False the column is not
+    see UpdateSchoolRequest. When it is False the column is not
     touched at all, byte for byte. avatar_url_provided (GT-17) is the same
     mechanism for the same reason.
 
@@ -979,7 +979,7 @@ async def update_school(
     # stronger lock than this one, because name is in a UNIQUE index. It is
     # safe only because this function holds no other row -- keep it so.
     if not await _lock_group_as_owner(curator_user_id, group_id, session):
-        raise NotFoundError("Curator group not found")
+        raise NotFoundError("School not found")
     group = (
         await session.execute(
             select(School)
@@ -1007,7 +1007,7 @@ async def update_school(
         ).scalar_one_or_none()
         if dup is not None:
             raise ConflictError(
-                f"A curator group named '{name}' already exists",
+                f"A school named '{name}' already exists",
                 code=_NAME_TAKEN_CODE,
             )
         group.name = name
@@ -1027,7 +1027,7 @@ async def update_school(
             await session.flush()
     except IntegrityError:
         raise ConflictError(
-            f"A curator group named '{name}' already exists",
+            f"A school named '{name}' already exists",
             code=_NAME_TAKEN_CODE,
         ) from None
 
@@ -1090,7 +1090,7 @@ async def delete_school(
 
     BE-74: THE SCHOOL'S PRACTICES LOSE THEIR OWNER, BY HAND, BEFORE THE
     GROUP. They are not the school's children to delete -- a practice is its
-    master's -- but practices.curator_group_id points here, and leaving it
+    master's -- but practices.school_id points here, and leaving it
     to ondelete="SET NULL" would lock those rows after the group: the order
     the BE-95 paragraph above removed for the child tables, now against
     update_practice and cancel_practice, which hold a practice and then
@@ -1123,7 +1123,7 @@ async def delete_school(
         SchoolMasterOffer,
         SchoolInvite,
     ):
-        await session.execute(delete(child).where(child.group_id == group.id))
+        await session.execute(delete(child).where(child.school_id == group.id))
     # The school's practices are LOCKED FIRST, in one statement by id
     # (PRACTICE ROW ORDER, practices/service.py), and only then cleared.
     # The UPDATE alone locks them in scan order, and against a writer that
@@ -1131,14 +1131,14 @@ async def delete_school(
     # needs next (BE-64 follow-up, O1/G7).
     await session.execute(
         select(Practice.id)
-        .where(Practice.curator_group_id == group.id)
+        .where(Practice.school_id == group.id)
         .order_by(Practice.id)
         .with_for_update()
     )
     await session.execute(
         update(Practice)
-        .where(Practice.curator_group_id == group.id)
-        .values(curator_group_id=None)
+        .where(Practice.school_id == group.id)
+        .values(school_id=None)
         .execution_options(synchronize_session=False)
     )
     deleted = (
@@ -1153,7 +1153,7 @@ async def delete_school(
         )
     ).first()
     if deleted is None:
-        raise NotFoundError("Curator group not found")
+        raise NotFoundError("School not found")
     session.expunge(group)
 
 
@@ -1194,11 +1194,11 @@ def _member_base_query(group_id: UUID) -> Select:
                 else_=_verified_profile_exists(SchoolMember.user_id),
             ).label("is_visible"),
             _master_offer_state_expr(
-                SchoolMember.group_id, SchoolMember.user_id,
+                SchoolMember.school_id, SchoolMember.user_id,
             ).label("master_offer"),
         )
         .join(SchoolMember, SchoolMember.user_id == User.id)
-        .where(SchoolMember.group_id == group_id)
+        .where(SchoolMember.school_id == group_id)
     )
 
 
@@ -1213,7 +1213,7 @@ async def _roster_page(
 ) -> tuple[list, int]:
     """Filter, count and page a roster query -- ONE copy for both viewers.
 
-    `base` selects FROM curator_group_member joined to users (either
+    `base` selects FROM school_member joined to users (either
     _member_base_query or _roster_base_query). kind is an exact match,
     search an ilike over "first last", order newest membership first with
     User.id as the tiebreak, total counted over the same filtered query.
@@ -1299,7 +1299,7 @@ def _roster_base_query(group_id: UUID) -> Select:
         select(User, SchoolMember.kind, SchoolMember.joined_at)
         .join(SchoolMember, SchoolMember.user_id == User.id)
         .where(
-            SchoolMember.group_id == group_id,
+            SchoolMember.school_id == group_id,
             or_(
                 SchoolMember.kind == SchoolMemberKind.STUDENT.value,
                 _verified_profile_exists(SchoolMember.user_id),
@@ -1341,7 +1341,7 @@ async def list_school_roster(
         )
     ).scalar_one_or_none()
     if group is None:
-        raise NotFoundError("Curator group not found")
+        raise NotFoundError("School not found")
 
     rows, total = await _roster_page(
         _roster_base_query(group.id),
@@ -1397,7 +1397,7 @@ async def remove_school_member(
         await session.execute(
             delete(SchoolMember)
             .where(
-                SchoolMember.group_id == group.id,
+                SchoolMember.school_id == group.id,
                 SchoolMember.user_id == user_id,
             )
             .returning(SchoolMember.kind)
@@ -1431,7 +1431,7 @@ async def remove_school_member(
     # nobody made twice.
     await session.execute(
         delete(SchoolMasterOffer).where(
-            SchoolMasterOffer.group_id == group.id,
+            SchoolMasterOffer.school_id == group.id,
             SchoolMasterOffer.to_user_id == user_id,
         )
     )
@@ -1448,7 +1448,7 @@ async def remove_school_member(
     # function. A miss above never gets here: nothing was taken, nothing is
     # written, and the idempotent 204 needs no lock.
     if not await _lock_group_as_owner(curator_user_id, group.id, session):
-        raise NotFoundError("Curator group not found")
+        raise NotFoundError("School not found")
     journal = _record_group_event(
         group.id, actor, SchoolEventKind.MEMBER_REMOVED, session,
         data=data,
@@ -1461,7 +1461,7 @@ async def remove_school_member(
     await _notify_group_event(
         session,
         journal_event_id=journal.id,
-        type="curator_group.member_removed",
+        type="school.member_removed",
         recipient_id=user_id,
         title="Вы больше не в школе",
         body=(
@@ -1489,7 +1489,7 @@ async def _blocked_in_group(
             select(
                 select(SchoolBlock.id)
                 .where(
-                    SchoolBlock.group_id == group_id,
+                    SchoolBlock.school_id == group_id,
                     SchoolBlock.user_id == user_id,
                 )
                 .exists()
@@ -1501,7 +1501,7 @@ async def _blocked_in_group(
 def _blocked_in_group_error() -> ForbiddenError:
     """The one refusal for a person blocked in this school (BE-79)."""
     return ForbiddenError(
-        "You are blocked in this school", code="blocked_in_group",
+        "You are blocked in this school", code="blocked_in_school",
     )
 
 
@@ -1526,7 +1526,7 @@ async def _close_school_practices_to(
     waitlist entry set to REMOVED and the queue moved on for a held spot --
     with three differences, each a gate ruling:
 
-      - the scope is the SCHOOL's practices (practices.curator_group_id),
+      - the scope is the SCHOOL's practices (practices.school_id),
         not one master's; only FUTURE bookings, the past stays history
         (B6); CONFIRMED and PENDING (B3);
       - THE PRACTICES OF THE QUEUE ARE TAKEN TOO (R1). block_student locks
@@ -1562,18 +1562,18 @@ async def _close_school_practices_to(
     """
     now = datetime.now(UTC)
     booking_filters = (
-        Practice.curator_group_id == group_id,
+        Practice.school_id == group_id,
         Practice.scheduled_at > now,
         Booking.user_id == user_id,
         Booking.status.in_(_SCHOOL_BLOCK_CANCELLED_STATUSES),
     )
     waitlist_filters = (
-        Practice.curator_group_id == group_id,
+        Practice.school_id == group_id,
         Waitlist.user_id == user_id,
         Waitlist.status.in_(ACTIVE_STATUSES),
     )
     own_filters = (
-        Practice.curator_group_id == group_id,
+        Practice.school_id == group_id,
         Practice.master_id == user_id,
         Practice.status != PracticeStatus.DELETED.value,
     )
@@ -1747,7 +1747,7 @@ async def block_school_member(
         await session.execute(
             delete(SchoolMember)
             .where(
-                SchoolMember.group_id == group.id,
+                SchoolMember.school_id == group.id,
                 SchoolMember.user_id == user_id,
             )
             .returning(SchoolMember.kind, SchoolMember.joined_at)
@@ -1760,7 +1760,7 @@ async def block_school_member(
 
     session.add(
         SchoolBlock(
-            group_id=group.id,
+            school_id=group.id,
             user_id=user_id,
             kind=removed.kind,
             joined_at=removed.joined_at,
@@ -1774,7 +1774,7 @@ async def block_school_member(
     )
     await session.execute(
         delete(SchoolMasterOffer).where(
-            SchoolMasterOffer.group_id == group.id,
+            SchoolMasterOffer.school_id == group.id,
             SchoolMasterOffer.to_user_id == user_id,
         )
     )
@@ -1795,7 +1795,7 @@ async def block_school_member(
     # remove_school_member; the rollback of the swap on refusal is
     # get_db_session's, as there.
     if not await _lock_group_as_owner(curator_user_id, group.id, session):
-        raise NotFoundError("Curator group not found")
+        raise NotFoundError("School not found")
     journal = _record_group_event(
         group.id, actor, SchoolEventKind.MEMBER_BLOCKED, session,
         data=data,
@@ -1804,7 +1804,7 @@ async def block_school_member(
     await _notify_group_event(
         session,
         journal_event_id=journal.id,
-        type="curator_group.member_blocked",
+        type="school.member_blocked",
         recipient_id=user_id,
         title="Вас заблокировали в школе",
         body=(
@@ -1848,7 +1848,7 @@ async def unblock_school_member(
         await session.execute(
             delete(SchoolBlock)
             .where(
-                SchoolBlock.group_id == group.id,
+                SchoolBlock.school_id == group.id,
                 SchoolBlock.user_id == user_id,
             )
             .returning(SchoolBlock.kind, SchoolBlock.joined_at)
@@ -1859,7 +1859,7 @@ async def unblock_school_member(
 
     session.add(
         SchoolMember(
-            group_id=group.id,
+            school_id=group.id,
             user_id=user_id,
             kind=lifted.kind,
             joined_at=lifted.joined_at,
@@ -1868,7 +1868,7 @@ async def unblock_school_member(
     await session.flush()
 
     if not await _lock_group_as_owner(curator_user_id, group.id, session):
-        raise NotFoundError("Curator group not found")
+        raise NotFoundError("School not found")
     journal = _record_group_event(
         group.id, actor, SchoolEventKind.MEMBER_UNBLOCKED, session,
         data={
@@ -1880,7 +1880,7 @@ async def unblock_school_member(
     await _notify_group_event(
         session,
         journal_event_id=journal.id,
-        type="curator_group.member_unblocked",
+        type="school.member_unblocked",
         recipient_id=user_id,
         title="Вас разблокировали в школе",
         body=(
@@ -1910,7 +1910,7 @@ async def list_school_blocks(
     base = (
         select(User, SchoolBlock)
         .join(SchoolBlock, SchoolBlock.user_id == User.id)
-        .where(SchoolBlock.group_id == group.id)
+        .where(SchoolBlock.school_id == group.id)
     )
     total = (
         await session.execute(
@@ -1985,7 +1985,7 @@ async def demote_school_master(
     await session.execute(
         update(SchoolMember)
         .where(
-            SchoolMember.group_id == group.id,
+            SchoolMember.school_id == group.id,
             SchoolMember.user_id == user_id,
         )
         .values(kind=SchoolMemberKind.STUDENT.value)
@@ -2006,7 +2006,7 @@ async def demote_school_master(
     # anybody in the new owner's school. The rollback (P-01) puts the kind
     # and the transfer back.
     if not await _lock_group_as_owner(curator_user_id, group.id, session):
-        raise NotFoundError("Curator group not found")
+        raise NotFoundError("School not found")
 
     data = _target_data(user_id, await _frozen_name(user_id, session))
     if transfer_cancelled:
@@ -2019,7 +2019,7 @@ async def demote_school_master(
     await _notify_group_event(
         session,
         journal_event_id=journal.id,
-        type="curator_group.member_demoted",
+        type="school.member_demoted",
         recipient_id=user_id,
         title="Вы больше не мастер школы",
         body=(
@@ -2112,12 +2112,12 @@ async def curated_group_id_for_practice(
     """
     if not settings.schools_enabled:
         return None
-    if practice.curator_group_id is None:
+    if practice.school_id is None:
         return None
     return (
         await session.execute(
             select(School.id).where(
-                School.id == practice.curator_group_id,
+                School.id == practice.school_id,
                 School.curator_user_id == user_id,
                 _active_group_clause(),
             )
@@ -2126,7 +2126,7 @@ async def curated_group_id_for_practice(
 
 
 # The relation value for someone who OWNS the group. A literal, because it
-# is not a curator_group_member.kind: the curator has no row (I-2), so this
+# is not a school_member.kind: the curator has no row (I-2), so this
 # string exists only in the CASE below and in the response schema's Literal.
 CURATOR_RELATION = "curator"
 
@@ -2139,7 +2139,7 @@ def _relation_expr(user_id: UUID) -> ColumnElement:
     turn into a 404.
 
     The curator branch comes first and does not consult the membership
-    table at all: I-2 keeps the curator out of curator_group_member, so
+    table at all: I-2 keeps the curator out of school_member, so
     there is no row to find and no chance of two answers for one person.
     """
     return case(
@@ -2153,7 +2153,7 @@ def _membership_outerjoin(user_id: UUID):
     return (
         SchoolMember,
         and_(
-            SchoolMember.group_id == School.id,
+            SchoolMember.school_id == School.id,
             SchoolMember.user_id == user_id,
         ),
     )
@@ -2183,7 +2183,7 @@ async def _relation_or_404(
     ).one_or_none()
 
     if row is None or row[1] is None:
-        raise NotFoundError("Curator group not found")
+        raise NotFoundError("School not found")
     return row[0], row[1]
 
 
@@ -2258,7 +2258,7 @@ async def list_my_schools(
             select(School, SchoolMember.kind)
             .join(
                 SchoolMember,
-                SchoolMember.group_id == School.id,
+                SchoolMember.school_id == School.id,
             )
             .where(
                 SchoolMember.user_id == user_id,
@@ -2333,7 +2333,7 @@ async def _visible_master_ids(
         await session.execute(
             select(SchoolMember.user_id)
             .where(
-                SchoolMember.group_id == group_id,
+                SchoolMember.school_id == group_id,
                 SchoolMember.kind == SchoolMemberKind.MASTER.value,
                 _verified_profile_exists(SchoolMember.user_id),
             )
@@ -2421,7 +2421,7 @@ async def list_group_masters(
 ) -> tuple[list[dict], int]:
     """The school's masters: the curator first, then visible members.
 
-    THE CURATOR IS NOT A ROW. They are not in curator_group_member (I-2), so
+    THE CURATOR IS NOT A ROW. They are not in school_member (I-2), so
     they are prepended here and counted in `total` -- which makes
     total == masters_count + 1 by construction, since masters_count counts
     exactly the member masters this function shows after the curator.
@@ -2508,7 +2508,7 @@ async def leave_school(
 
     if group.curator_user_id == user_id:
         raise ConflictError(
-            "A curator cannot leave their own group",
+            "A curator cannot leave their own school",
             code="curator_cannot_leave",
         )
 
@@ -2516,7 +2516,7 @@ async def leave_school(
         await session.execute(
             delete(SchoolMember)
             .where(
-                SchoolMember.group_id == group.id,
+                SchoolMember.school_id == group.id,
                 SchoolMember.user_id == user_id,
             )
             .returning(SchoolMember.kind)
@@ -2540,7 +2540,7 @@ async def leave_school(
     # source rather than found dangling at consent.
     await session.execute(
         delete(SchoolMasterOffer).where(
-            SchoolMasterOffer.group_id == group.id,
+            SchoolMasterOffer.school_id == group.id,
             SchoolMasterOffer.to_user_id == user_id,
         )
     )
@@ -2624,7 +2624,7 @@ async def _lock_master_profile(user_id: UUID, session: AsyncSession) -> None:
          profile-less member of a school at the same instant that school's
          curator appoints them, and no product line is open on it.
       4. Trigger to reopen: a school member whose offer reads
-         awaiting_answer with no curator_group.master_offered notification
+         awaiting_answer with no school.master_offered notification
          keyed on that offer in the outbox.
       5. Agreed fix shape: lock a row that always exists -- the users row,
          FOR SHARE here and by the profile-creating writers before their
@@ -2671,7 +2671,7 @@ async def _membership_row(
     return (
         await session.execute(
             select(SchoolMember).where(
-                SchoolMember.group_id == group_id,
+                SchoolMember.school_id == group_id,
                 SchoolMember.user_id == user_id,
             )
         )
@@ -2718,7 +2718,7 @@ async def get_or_create_school_invite(
     existing = (
         await session.execute(
             select(SchoolInvite).where(
-                SchoolInvite.group_id == group.id,
+                SchoolInvite.school_id == group.id,
             )
         )
     ).scalar_one_or_none()
@@ -2727,9 +2727,9 @@ async def get_or_create_school_invite(
         # BE-95: ownership re-checked under the group lock, before the
         # INSERT (header) -- only where something is about to be written.
         if not await _lock_group_as_owner(curator_user_id, group.id, session):
-            raise NotFoundError("Curator group not found")
+            raise NotFoundError("School not found")
         token = secrets.token_urlsafe(32)
-        invite = SchoolInvite(group_id=group.id, token=token)
+        invite = SchoolInvite(school_id=group.id, token=token)
         try:
             async with session.begin_nested():
                 session.add(invite)
@@ -2757,7 +2757,7 @@ async def get_or_create_school_invite(
             existing = (
                 await session.execute(
                     select(SchoolInvite).where(
-                        SchoolInvite.group_id == group.id,
+                        SchoolInvite.school_id == group.id,
                     )
                 )
             ).scalar_one_or_none()
@@ -2768,7 +2768,7 @@ async def get_or_create_school_invite(
                 # here, an FK failure because the school was deleted, no
                 # longer reaches this line: the group lock above makes a
                 # delete wait for this request instead.)
-                raise NotFoundError("Curator group not found") from None
+                raise NotFoundError("School not found") from None
             token = existing.token
     else:
         token = existing.token
@@ -2809,7 +2809,7 @@ async def revoke_school_invite(
     revoked = (
         await session.execute(
             delete(SchoolInvite)
-            .where(SchoolInvite.group_id == group.id)
+            .where(SchoolInvite.school_id == group.id)
             .returning(SchoolInvite.id)
         )
     ).first()
@@ -2820,7 +2820,7 @@ async def revoke_school_invite(
         # owner's link. The link comes back on the refusal only because
         # get_db_session rolls the request back (P-01).
         if not await _lock_group_as_owner(curator_user_id, group.id, session):
-            raise NotFoundError("Curator group not found")
+            raise NotFoundError("School not found")
         _record_group_event(
             group.id,
             actor,
@@ -2847,7 +2847,7 @@ async def _resolve_invite_or_404(
     row = (
         await session.execute(
             select(SchoolInvite, School)
-            .join(School, School.id == SchoolInvite.group_id)
+            .join(School, School.id == SchoolInvite.school_id)
             .where(SchoolInvite.token == token, _active_group_clause())
         )
     ).one_or_none()
@@ -2880,14 +2880,14 @@ async def preview_school_invite(
     reason: str | None = None
 
     if group.curator_user_id == user_id:
-        reason = "own_group"
+        reason = "own_school"
     elif await _blocked_by_curator(group.curator_user_id, user_id, session):
         reason = "blocked_by_curator"
     elif await _blocked_in_group(group.id, user_id, session):
         # BE-79: blocked in THIS school by its curator. A member row and a
         # block row never coexist (SchoolBlock), so this branch and
         # already_member below cannot both be true.
-        reason = "blocked_in_group"
+        reason = "blocked_in_school"
     elif member is not None:
         # Already inside, and with one link there is nothing left for it to
         # do. Until GT-27 a student holding a MASTER link fell through with
@@ -2896,7 +2896,7 @@ async def preview_school_invite(
         reason = "already_member"
 
     return {
-        "group": {
+        "school": {
             "id": group.id,
             "name": group.name,
             "description": group.description,
@@ -2933,12 +2933,12 @@ async def join_school_by_token(
     once depends on it:
 
       1. token / activity -- 404, and it hides everything below it
-      2. own_group (409)  -- BEFORE the block check, so a curator's answer
+      2. own_school (409)  -- BEFORE the block check, so a curator's answer
          cannot depend on whether a stale master_student row happens to
          exist for them
       3. blocked (403)    -- a block is about THIS school: first the
          curator's block as a master (blocked_by_curator, MasterStudent),
-         then the block in this school (blocked_in_group, BE-79)
+         then the block in this school (blocked_in_school, BE-79)
       4. membership       -- last: it decides what to write, not whether to
 
     THERE USED TO BE A CAPABILITY STEP between 3 and 4, refusing a master
@@ -2981,7 +2981,7 @@ async def join_school_by_token(
 
     if group.curator_user_id == user_id:
         raise ConflictError(
-            "This is your own group", code="own_group",
+            "This is your own school", code="own_school",
         )
 
     if await _blocked_by_curator(group.curator_user_id, user_id, session):
@@ -2997,7 +2997,7 @@ async def join_school_by_token(
 
     if member is None:
         row = SchoolMember(
-            group_id=group.id,
+            school_id=group.id,
             user_id=user_id,
             kind=SchoolMemberKind.STUDENT.value,
         )
@@ -3026,18 +3026,18 @@ async def join_school_by_token(
             )
             # BE-25: to the curator. This is the ONE school notification
             # that scales with the size of a school, which is why its type
-            # carries the curator_groups category and the other four carry
+            # carries the schools category and the other four carry
             # none -- see comms-profile/types.yaml.
             #
             # No "did the curator join his own school" guard, because he
-            # cannot: own_group above (and in the invite preview, and in
+            # cannot: own_school above (and in the invite preview, and in
             # leave) keeps a curator out of his own roster, so actor and
             # recipient are never the same person here. A branch for it
             # would document a state no caller can reach.
             await _notify_group_event(
                 session,
                 journal_event_id=journal.id,
-                type="curator_group.member_joined",
+                type="school.member_joined",
                 recipient_id=group.curator_user_id,
                 title="Новый участник школы",
                 body=(
@@ -3071,7 +3071,7 @@ async def join_school_by_token(
         relation = member.kind
 
     return {
-        "group_id": group.id,
+        "school_id": group.id,
         "relation": relation,
         "already_member": already_member,
     }
@@ -3080,7 +3080,7 @@ async def join_school_by_token(
 # ===========================================================================
 # Transfer of ownership (GT-4, tz-curator-groups.md 3.4 / 3.5)
 #
-# curator_group_transfer has held one invariant since GT-1 and no writer:
+# school_transfer has held one invariant since GT-1 and no writer:
 # UNIQUE (group_id) -- at most one pending offer per group. This section is
 # that writer. A row IS the offer: cancelling is a DELETE, declining is a
 # DELETE, and "no offer" is the absence of a row rather than a state anyone
@@ -3094,7 +3094,7 @@ async def _pending_transfer(
     return (
         await session.execute(
             select(SchoolTransfer).where(
-                SchoolTransfer.group_id == group_id
+                SchoolTransfer.school_id == group_id
             )
         )
     ).scalar_one_or_none()
@@ -3112,21 +3112,21 @@ async def _transfer_refs_for_groups(
     row, here as in the table.
 
     to_display_name comes from users/helpers.py::display_name, NOT the
-    master-profile rule -- see CuratorGroupTransferRef's docstring.
+    master-profile rule -- see SchoolTransferRef's docstring.
     """
     if not group_ids:
         return {}
     rows = (
         await session.execute(
             select(
-                SchoolTransfer.group_id,
+                SchoolTransfer.school_id,
                 SchoolTransfer.to_user_id,
                 SchoolTransfer.requested_at,
                 User.first_name,
                 User.last_name,
             )
             .outerjoin(User, User.id == SchoolTransfer.to_user_id)
-            .where(SchoolTransfer.group_id.in_(group_ids))
+            .where(SchoolTransfer.school_id.in_(group_ids))
         )
     ).all()
     return {
@@ -3145,8 +3145,8 @@ async def _transfer_ref(
     """One offer in the shape the responses report, or None."""
     if transfer is None:
         return None
-    refs = await _transfer_refs_for_groups([transfer.group_id], session)
-    return refs.get(transfer.group_id)
+    refs = await _transfer_refs_for_groups([transfer.school_id], session)
+    return refs.get(transfer.school_id)
 
 
 async def get_group_transfer_ref(
@@ -3154,7 +3154,7 @@ async def get_group_transfer_ref(
 ) -> dict | None:
     """This group's pending offer, or None -- for the curator's own replies.
 
-    Public because the router builds CuratorGroupResponse by hand on create
+    Public because the router builds SchoolResponse by hand on create
     and patch; every other caller goes through the batched form, which is
     what the list endpoint needs. No viewer filter here: the two callers are
     curator-only endpoints behind get_current_master with ownership already
@@ -3193,7 +3193,7 @@ async def _drop_pending_transfer_for(
     """
     result = await session.execute(
         delete(SchoolTransfer).where(
-            SchoolTransfer.group_id == group_id,
+            SchoolTransfer.school_id == group_id,
             SchoolTransfer.to_user_id == user_id,
         )
     )
@@ -3228,13 +3228,13 @@ async def offer_school_transfer(
 
     if await _pending_transfer(group.id, session) is not None:
         raise ConflictError(
-            "This group already has a pending transfer",
+            "This school already has a pending transfer",
             code="transfer_pending",
         )
 
     if to_user_id not in await _visible_master_ids(group.id, session):
         raise NotFoundError(
-            "Transfer target is not a member of this group",
+            "Transfer target is not a member of this school",
             code="transfer_target_not_member",
         )
 
@@ -3248,7 +3248,7 @@ async def offer_school_transfer(
         group.id, to_user_id, session, kind=SchoolMemberKind.MASTER.value,
     ):
         raise NotFoundError(
-            "Transfer target is not a member of this group",
+            "Transfer target is not a member of this school",
             code="transfer_target_not_member",
         )
 
@@ -3258,9 +3258,9 @@ async def offer_school_transfer(
     # then saw nothing, and a curator who no longer owned the school offered
     # it to a third person.
     if not await _lock_group_as_owner(curator_user_id, group.id, session):
-        raise NotFoundError("Curator group not found")
+        raise NotFoundError("School not found")
 
-    transfer = SchoolTransfer(group_id=group.id, to_user_id=to_user_id)
+    transfer = SchoolTransfer(school_id=group.id, to_user_id=to_user_id)
     try:
         async with session.begin_nested():
             session.add(transfer)
@@ -3270,7 +3270,7 @@ async def offer_school_transfer(
         # (group_id) is the real guard; the pre-check above is the fast
         # path that produces a clean 409 instead of a 500.
         raise ConflictError(
-            "This group already has a pending transfer",
+            "This school already has a pending transfer",
             code="transfer_pending",
         ) from None
 
@@ -3297,7 +3297,7 @@ async def offer_school_transfer(
     await _notify_group_event(
         session,
         journal_event_id=journal.id,
-        type="curator_group.transfer_offered",
+        type="school.transfer_offered",
         recipient_id=to_user_id,
         title="Вам предлагают школу",
         body=(
@@ -3334,7 +3334,7 @@ async def cancel_school_transfer(
     cancelled = (
         await session.execute(
             delete(SchoolTransfer)
-            .where(SchoolTransfer.group_id == group.id)
+            .where(SchoolTransfer.school_id == group.id)
             .returning(SchoolTransfer.to_user_id)
         )
     ).first()
@@ -3344,7 +3344,7 @@ async def cancel_school_transfer(
         # changed hands since _get_group_or_404, it would have withdrawn the
         # NEW owner's offer. The rollback (P-01) puts that offer back.
         if not await _lock_group_as_owner(curator_user_id, group.id, session):
-            raise NotFoundError("Curator group not found")
+            raise NotFoundError("School not found")
         _record_group_event(
             group.id,
             actor,
@@ -3462,7 +3462,7 @@ async def accept_school_transfer(
         await session.execute(
             delete(SchoolMember)
             .where(
-                SchoolMember.group_id == group.id,
+                SchoolMember.school_id == group.id,
                 SchoolMember.user_id == user_id,
             )
             .returning(SchoolMember.id)
@@ -3480,7 +3480,7 @@ async def accept_school_transfer(
     # school changed hands after its offer had been withdrawn. Two
     # simultaneous accepts by one heir were worse: both read the offer, both
     # inserted the previous curator's member row, and the second died on
-    # uq_curator_group_member_group_user -- a 500 where a 404 belongs. Since
+    # uq_school_member_school_user -- a 500 where a 404 belongs. Since
     # BE-95 the second of those blocks already on the member row above, and
     # finds nothing there.
     #
@@ -3491,7 +3491,7 @@ async def accept_school_transfer(
         await session.execute(
             delete(SchoolTransfer)
             .where(
-                SchoolTransfer.group_id == group.id,
+                SchoolTransfer.school_id == group.id,
                 SchoolTransfer.to_user_id == user_id,
             )
             .returning(SchoolTransfer.id)
@@ -3502,7 +3502,7 @@ async def accept_school_transfer(
 
     if not await _has_master_capability(user_id, session):
         raise ForbiddenError(
-            "Only a verified master can take over a group",
+            "Only a verified master can take over a school",
             code="master_required",
         )
 
@@ -3519,7 +3519,7 @@ async def accept_school_transfer(
     ).scalar_one_or_none()
     if clash is not None:
         raise ConflictError(
-            f"You already curate a group named '{group_name}'",
+            f"You already curate a school named '{group_name}'",
             code=_NAME_TAKEN_CODE,
         )
 
@@ -3534,7 +3534,7 @@ async def accept_school_transfer(
             await session.flush()
     except IntegrityError:
         raise ConflictError(
-            f"You already curate a group named '{group_name}'",
+            f"You already curate a school named '{group_name}'",
             code=_NAME_TAKEN_CODE,
         ) from None
 
@@ -3543,7 +3543,7 @@ async def accept_school_transfer(
     # no row (I-2), so the INSERT waits for nobody.
     session.add(
         SchoolMember(
-            group_id=group.id,
+            school_id=group.id,
             user_id=previous_curator_id,
             kind=SchoolMemberKind.MASTER.value,
         )
@@ -3568,7 +3568,7 @@ async def accept_school_transfer(
     await _notify_group_event(
         session,
         journal_event_id=journal.id,
-        type="curator_group.transfer_accepted",
+        type="school.transfer_accepted",
         recipient_id=previous_curator_id,
         title="Школа передана",
         body=(
@@ -3608,7 +3608,7 @@ async def decline_school_transfer(
 
     GT-16: THIS FUNCTION DELIBERATELY NEVER LOADED THE GROUP, and the
     journal needs it to -- but only after the DELETE reports that an offer
-    really died. curator_group_transfer has three columns (group_id,
+    really died. school_transfer has three columns (group_id,
     to_user_id, requested_at) and no from_user_id: whoever offered is
     IMPLICITLY the group's curator, so the target of this event cannot be
     read out of the row being deleted. Hence one SELECT, and it runs only
@@ -3622,10 +3622,10 @@ async def decline_school_transfer(
         await session.execute(
             delete(SchoolTransfer)
             .where(
-                SchoolTransfer.group_id == group_id,
+                SchoolTransfer.school_id == group_id,
                 SchoolTransfer.to_user_id == user_id,
             )
-            .returning(SchoolTransfer.group_id)
+            .returning(SchoolTransfer.school_id)
         )
     ).first()
     if declined is None:
@@ -3637,7 +3637,7 @@ async def decline_school_transfer(
     offer_row = (
         await session.execute(
             select(School.curator_user_id, School.name).where(
-                School.id == declined.group_id
+                School.id == declined.school_id
             )
         )
     ).first()
@@ -3649,7 +3649,7 @@ async def decline_school_transfer(
         return
 
     journal = _record_group_event(
-        declined.group_id,
+        declined.school_id,
         actor,
         SchoolEventKind.TRANSFER_DECLINED,
         session,
@@ -3664,14 +3664,14 @@ async def decline_school_transfer(
     await _notify_group_event(
         session,
         journal_event_id=journal.id,
-        type="curator_group.transfer_declined",
+        type="school.transfer_declined",
         recipient_id=offered_by,
         title="Передача отклонена",
         body=(
             f"{display_name(actor.first_name, actor.last_name)} отклонил "
             f"передачу школы «{declined_group_name}». Школа осталась за вами."
         ),
-        group_id=declined.group_id,
+        group_id=declined.school_id,
         group_name=declined_group_name,
         actor_name=display_name(actor.first_name, actor.last_name),
     )
@@ -3729,7 +3729,7 @@ async def _upcoming_practices_targeting_group(
         await session.execute(
             select(func.count(Practice.id))
             .where(
-                Practice.curator_group_id == group_id,
+                Practice.school_id == group_id,
                 Practice.master_id.in_(master_ids),
                 Practice.status.in_(_UPCOMING_PRACTICE_STATUSES),
                 Practice.scheduled_at > datetime.now(UTC),
@@ -3763,7 +3763,7 @@ async def leave_preview(
     count = await _upcoming_practices_targeting_group(
         group.id, [user_id], session,
     )
-    return {"upcoming_practices_targeting_group": count}
+    return {"upcoming_practices_targeting_school": count}
 
 
 async def remove_member_preview(
@@ -3783,7 +3783,7 @@ async def remove_member_preview(
     count = await _upcoming_practices_targeting_group(
         group.id, [user_id], session,
     )
-    return {"upcoming_practices_targeting_group": count}
+    return {"upcoming_practices_targeting_school": count}
 
 
 async def delete_group_preview(
@@ -3812,7 +3812,7 @@ async def delete_group_preview(
     return {
         "masters_count": masters_count,
         "students_count": students_count,
-        "upcoming_practices_targeting_group": count,
+        "upcoming_practices_targeting_school": count,
     }
 
 
@@ -3842,7 +3842,7 @@ async def delete_group_preview(
 # ===========================================================================
 
 
-_MASTER_OFFERED_TYPE = "curator_group.master_offered"
+_MASTER_OFFERED_TYPE = "school.master_offered"
 _MASTER_OFFERED_TITLE = "Вас приглашают вести школу"
 
 
@@ -3874,7 +3874,7 @@ def _master_offer_state_expr(
     has_offer = (
         select(SchoolMasterOffer.id)
         .where(
-            SchoolMasterOffer.group_id == group_id_col,
+            SchoolMasterOffer.school_id == group_id_col,
             SchoolMasterOffer.to_user_id == user_id_col,
         )
         .exists()
@@ -3896,7 +3896,7 @@ async def _master_offer_row(
     return (
         await session.execute(
             select(SchoolMasterOffer).where(
-                SchoolMasterOffer.group_id == group_id,
+                SchoolMasterOffer.school_id == group_id,
                 SchoolMasterOffer.to_user_id == user_id,
             )
         )
@@ -3921,9 +3921,9 @@ async def offer_school_master(
     So the offer is kept either way, and the candidate hears one of two
     things:
 
-      * verified -> curator_group.master_offered, "become a master of this
+      * verified -> school.master_offered, "become a master of this
         school? yes / no" -- the offer is awaiting their answer;
-      * not verified -> curator_group.master_verification_required, a
+      * not verified -> school.master_verification_required, a
         prompt to get verified as a master through the application -- the
         offer is awaiting their verification. One text for every status
         that is not "verified" (no application, pending, rejected,
@@ -3935,7 +3935,7 @@ async def offer_school_master(
     verifying the person announces every offer waiting for them
     (announce_pending_master_offers), rejecting their application closes
     every one and tells each curator (close_pending_master_offers).
-    can_create_groups is NOT consulted: that right is about founding
+    can_create_schools is NOT consulted: that right is about founding
     schools, not about teaching in someone else's.
 
     A NON-CURATOR GETS 404, not 403, and so does a request naming a
@@ -3961,7 +3961,7 @@ async def offer_school_master(
     member = await _membership_row(group.id, to_user_id, session)
     if member is None:
         raise NotFoundError(
-            "Curator group not found",
+            "School not found",
         )
     if member.kind == SchoolMemberKind.MASTER.value:
         raise ConflictError(
@@ -3984,7 +3984,7 @@ async def offer_school_master(
         group.id, to_user_id, session, kind=SchoolMemberKind.STUDENT.value,
     ):
         if await _membership_row(group.id, to_user_id, session) is None:
-            raise NotFoundError("Curator group not found")
+            raise NotFoundError("School not found")
         raise ConflictError(
             "This member is already a master of the school",
             code="already_master",
@@ -4010,9 +4010,9 @@ async def offer_school_master(
     # and here, and the INSERT's own FK lock on the group must not come
     # first and be upgraded by this one.
     if not await _lock_group_as_owner(curator_user_id, group.id, session):
-        raise NotFoundError("Curator group not found")
+        raise NotFoundError("School not found")
 
-    offer = SchoolMasterOffer(group_id=group.id, to_user_id=to_user_id)
+    offer = SchoolMasterOffer(school_id=group.id, to_user_id=to_user_id)
     try:
         async with session.begin_nested():
             session.add(offer)
@@ -4051,15 +4051,15 @@ async def offer_school_master(
             group_name=group.name,
             actor_name=actor_name,
             # Links (3 October): its OWN verb. The Telegram button carries no
-            # notification type, so the shared open_curator_group could only
+            # notification type, so the shared open_school could only
             # ever open the school page -- this one opens the offer screen.
             action=_OPEN_MASTER_OFFER,
         )
         return
     await _notify_school(
         session,
-        idempotency_key=f"curator-group-event:{journal.id}",
-        type="curator_group.master_verification_required",
+        idempotency_key=f"school-event:{journal.id}",
+        type="school.master_verification_required",
         recipient_id=to_user_id,
         title="Нужна верификация мастера",
         body=(
@@ -4069,7 +4069,7 @@ async def offer_school_master(
             f"придёт после верификации."
         ),
         group_id=group.id,
-        variables={"group_name": group.name, "actor_name": actor_name},
+        variables={"school_name": group.name, "actor_name": actor_name},
         action=_OPEN_MASTER_APPLICATION,
     )
 
@@ -4150,7 +4150,7 @@ async def accept_school_master_offer(
         await session.execute(
             delete(SchoolMasterOffer)
             .where(
-                SchoolMasterOffer.group_id == group.id,
+                SchoolMasterOffer.school_id == group.id,
                 SchoolMasterOffer.to_user_id == user_id,
             )
             .returning(SchoolMasterOffer.id)
@@ -4170,7 +4170,7 @@ async def accept_school_master_offer(
     await session.execute(
         update(SchoolMember)
         .where(
-            SchoolMember.group_id == group.id,
+            SchoolMember.school_id == group.id,
             SchoolMember.user_id == user_id,
         )
         .values(kind=SchoolMemberKind.MASTER.value)
@@ -4186,7 +4186,7 @@ async def accept_school_master_offer(
     await _notify_group_event(
         session,
         journal_event_id=journal.id,
-        type="curator_group.master_offer_accepted",
+        type="school.master_offer_accepted",
         recipient_id=group.curator_user_id,
         title="Назначение принято",
         body=(
@@ -4222,10 +4222,10 @@ async def decline_school_master_offer(
         await session.execute(
             delete(SchoolMasterOffer)
             .where(
-                SchoolMasterOffer.group_id == group_id,
+                SchoolMasterOffer.school_id == group_id,
                 SchoolMasterOffer.to_user_id == user_id,
             )
-            .returning(SchoolMasterOffer.group_id)
+            .returning(SchoolMasterOffer.school_id)
         )
     ).first()
     if declined is None:
@@ -4254,7 +4254,7 @@ async def decline_school_master_offer(
     await _notify_group_event(
         session,
         journal_event_id=journal.id,
-        type="curator_group.master_offer_declined",
+        type="school.master_offer_declined",
         recipient_id=curator_id,
         title="Назначение отклонено",
         body=(
@@ -4299,7 +4299,7 @@ async def cancel_school_master_offer(
         await session.execute(
             delete(SchoolMasterOffer)
             .where(
-                SchoolMasterOffer.group_id == group.id,
+                SchoolMasterOffer.school_id == group.id,
                 SchoolMasterOffer.to_user_id == to_user_id,
             )
             .returning(SchoolMasterOffer.to_user_id)
@@ -4312,7 +4312,7 @@ async def cancel_school_master_offer(
     # hands since _get_group_or_404, this would have withdrawn the NEW
     # owner's appointment. The rollback (P-01) puts it back.
     if not await _lock_group_as_owner(curator_user_id, group.id, session):
-        raise NotFoundError("Curator group not found")
+        raise NotFoundError("School not found")
     _record_group_event(
         group.id,
         actor,
@@ -4365,7 +4365,7 @@ async def announce_pending_master_offers(
     set_role to_master when the profile was not verified before, and
     apply_for_master's self-provision (no profile -> verified). seed does
     not call it: a seeded database has no pending appointments. Each offer
-    of the person gets curator_group.master_offered, "become a master of
+    of the person gets school.master_offered, "become a master of
     this school? yes / no", named after the school's CURRENT curator
     (_offer_schools). Returns how many were announced.
 
@@ -4404,7 +4404,7 @@ async def announce_pending_master_offers(
             .values(offered_at=SchoolMasterOffer.offered_at)
             .returning(
                 SchoolMasterOffer.id,
-                SchoolMasterOffer.group_id,
+                SchoolMasterOffer.school_id,
                 SchoolMasterOffer.offered_at,
             )
             .execution_options(synchronize_session=False)
@@ -4413,7 +4413,7 @@ async def announce_pending_master_offers(
     if not taken:
         return 0
 
-    schools = await _offer_schools([row.group_id for row in taken], session)
+    schools = await _offer_schools([row.school_id for row in taken], session)
     transition_id = uuid4()
     for offer_id, group_id, _offered_at in sorted(
         taken, key=lambda row: (row.offered_at, row.id),
@@ -4422,14 +4422,14 @@ async def announce_pending_master_offers(
         await _notify_school(
             session,
             idempotency_key=(
-                f"curator-master-offer-ready:{offer_id}:{transition_id}"
+                f"school-master-offer-ready:{offer_id}:{transition_id}"
             ),
             type=_MASTER_OFFERED_TYPE,
             recipient_id=user_id,
             title=_MASTER_OFFERED_TITLE,
             body=_master_offered_body(curator_name, group_name),
             group_id=group_id,
-            variables={"group_name": group_name, "actor_name": curator_name},
+            variables={"school_name": group_name, "actor_name": curator_name},
             action=_OPEN_MASTER_OFFER,  # Links: the offer screen, not the school
         )
     return len(taken)
@@ -4465,7 +4465,7 @@ async def close_pending_master_offers(
             .where(SchoolMasterOffer.to_user_id == user_id)
             .returning(
                 SchoolMasterOffer.id,
-                SchoolMasterOffer.group_id,
+                SchoolMasterOffer.school_id,
                 SchoolMasterOffer.offered_at,
             )
         )
@@ -4473,7 +4473,7 @@ async def close_pending_master_offers(
     if not closed:
         return 0
 
-    schools = await _offer_schools([row.group_id for row in closed], session)
+    schools = await _offer_schools([row.school_id for row in closed], session)
     candidate_name = await _frozen_name(user_id, session)
     for offer_id, group_id, _offered_at in sorted(
         closed, key=lambda row: (row.offered_at, row.id),
@@ -4481,8 +4481,8 @@ async def close_pending_master_offers(
         curator_id, group_name, _curator_name = schools[group_id]
         await _notify_school(
             session,
-            idempotency_key=f"curator-master-offer-closed:{offer_id}",
-            type="curator_group.master_offer_closed",
+            idempotency_key=f"school-master-offer-closed:{offer_id}",
+            type="school.master_offer_closed",
             recipient_id=curator_id,
             title="Назначение закрыто",
             body=(
@@ -4491,7 +4491,7 @@ async def close_pending_master_offers(
             ),
             group_id=group_id,
             variables={
-                "group_name": group_name,
+                "school_name": group_name,
                 "target_name": candidate_name,
             },
         )
@@ -4589,7 +4589,7 @@ async def announce_published_practice(
     group = (
         await session.execute(
             select(School).where(
-                School.id == practice.curator_group_id,
+                School.id == practice.school_id,
                 master_broadcasts_to_group_clause(actor.id),
             )
         )
@@ -4612,7 +4612,7 @@ async def announce_published_practice(
         (
             await session.execute(
                 select(SchoolMember.user_id).where(
-                    SchoolMember.group_id == group.id,
+                    SchoolMember.school_id == group.id,
                 )
             )
         ).scalars().all()
@@ -4624,8 +4624,8 @@ async def announce_published_practice(
     for recipient_id in sorted(recipients, key=str):
         await emit_notification(
             session,
-            idempotency_key=f"curator-practice-published:{practice.id}:{recipient_id}",
-            type="curator_group.practice_published",
+            idempotency_key=f"school-practice-published:{practice.id}:{recipient_id}",
+            type="school.practice_published",
             target_type="user",
             target_value=str(recipient_id),
             # BE-171: revoked, if undelivered, when the practice is cancelled.
@@ -4636,14 +4636,14 @@ async def announce_published_practice(
                 f"в школе «{group.name}»."
             ),
             action_data={
-                # open_practice, not open_curator_group: the message is
+                # open_practice, not open_school: the message is
                 # about a practice, and a link to the school page would
                 # leave the person hunting for it. Same choice, same
                 # reason, as practice.cancelled_by_curator (BE-21).
                 "action": "open_practice",
                 "params": {"practice_id": str(practice.id)},
                 "practice_title": practice.title,
-                "group_name": group.name,
+                "school_name": group.name,
                 "actor_name": actor_name,
             },
         )

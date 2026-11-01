@@ -52,7 +52,7 @@ from app.modules.practices.models import (
     PracticeType,
 )
 from app.modules.practices.schemas import UpdatePracticeRequest
-from app.modules.schools import service as curator_service
+from app.modules.schools import service as school_service
 from app.modules.schools.models import (
     School,
     SchoolMember,
@@ -126,7 +126,7 @@ async def w(client: AsyncClient, db_session: AsyncSession) -> dict:
     await db_session.flush()
     db_session.add(
         SchoolMember(
-            group_id=school.id, user_id=UUID(master["user"]["id"]),
+            school_id=school.id, user_id=UUID(master["user"]["id"]),
             kind=SchoolMemberKind.MASTER.value,
         )
     )
@@ -173,7 +173,7 @@ async def _practice(
             currency="eur",
             audience_kind=AudienceKind.PUBLIC.value,
             parent_practice_id=root,
-            curator_group_id=w["school"],
+            school_id=w["school"],
         )
     )
     await db_session.commit()
@@ -211,7 +211,7 @@ async def _scan_order(*pids: UUID) -> list[UUID]:
 async def _heap_in_time_order() -> None:
     """Rewrite the practices table in scheduled_at order (index name from
     pg_indexes, not from the model). After it the scan order of any plan
-    over these rows -- seq scan, or an index scan on curator_group_id,
+    over these rows -- seq scan, or an index scan on school_id,
     whose equal keys follow the heap -- is the time order."""
     async with get_session_factory()() as session:
         await session.execute(
@@ -231,7 +231,7 @@ def _cascade(w: dict, pid: UUID):
 
 def _delete_school(w: dict):
     async def call(session: AsyncSession):
-        await curator_service.delete_school(
+        await school_service.delete_school(
             w["cid"], w["school"], session,
         )
     return call
@@ -317,7 +317,7 @@ async def test_g1_cascade_against_deleting_the_school(
         PracticeStatus.CANCELLED.value,
     }
     schools = (await fresh_execute(
-        select(Practice.curator_group_id).where(
+        select(Practice.school_id).where(
             Practice.id.in_([primary, later]),
         ),
     )).scalars().all()
@@ -394,7 +394,7 @@ async def test_g7_deleting_the_school_against_blocking_through_a_gate(
     block, delete = await _through_gate(x1, _block(w), _delete_school(w))
     _no_deadlock(block, delete)
     schools = (await fresh_execute(
-        select(Practice.curator_group_id).where(Practice.id.in_([x1, x2])),
+        select(Practice.school_id).where(Practice.id.in_([x1, x2])),
     )).scalars().all()
     assert schools == [None, None]
 

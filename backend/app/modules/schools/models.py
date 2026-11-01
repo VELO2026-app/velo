@@ -4,11 +4,11 @@
 #
 # Four tables land in ONE migration, but only the first two have a writer in
 # this delivery. That is deliberate and not a "dead branch": the writers of
-# curator_group_invite (GT-3) and curator_group_transfer (GT-4) are named and
+# school_invite (GT-3) and school_transfer (GT-4) are named and
 # scheduled, and one migration per line is cheaper than three.
 #
-# The curator is NOT a curator_group_member row (I-2): their relation is
-# DERIVED from curator_group.curator_user_id. Storing it twice would mean two
+# The curator is NOT a school_member row (I-2): their relation is
+# DERIVED from school.curator_user_id. Storing it twice would mean two
 # places to keep in step, and the first divergence would be silent -- the same
 # reasoning that keeps «Ученики»/«Удалённые» out of master_group.
 #
@@ -45,8 +45,8 @@ from app.core.mixins import TimestampMixin, UUIDMixin
 class SchoolMemberKind(enum.StrEnum):
     """What kind of relation one membership row describes.
 
-    Types curator_group_member.kind and nothing else. Until GT-27 this enum
-    also served curator_group_invite.kind -- one enum for two columns, since
+    Types school_member.kind and nothing else. Until GT-27 this enum
+    also served school_invite.kind -- one enum for two columns, since
     the value sets were identical and a second spelling would have been a
     copy. That column is gone with the second invite link: everyone joins as
     a student and a curator appoints masters by offer.
@@ -114,14 +114,17 @@ class School(UUIDMixin, TimestampMixin, Base):
     solved.
     """
 
-    __tablename__ = "curator_group"
-    # The uniqueness of the name is uq_curator_group_curator_name_key, an
+    __tablename__ = "school"
+    # The uniqueness of the name is uq_school_curator_name_key, an
     # EXPRESSION index declared right after this class (it needs the
     # column objects): see school_name_key.
 
     curator_user_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
+        # Declared here so the model names the index the database has
+        # (BE-90 step 2); it was created by a migration and left out.
+        index=True,
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, default=None)
@@ -178,7 +181,7 @@ def school_name_key(value: ColumnElement[str] | str) -> ColumnElement[str]:
 # One curator, one school per name KEY. Replaces the exact-match
 # uq_curator_group_curator_name (BE-48 migration).
 Index(
-    "uq_curator_group_curator_name_key",
+    "uq_school_curator_name_key",
     School.curator_user_id,
     school_name_key(School.name),
     unique=True,
@@ -199,22 +202,25 @@ class SchoolMember(UUIDMixin, Base):
     cleanup relies on the user-side cascade rather than a step of its own.
     """
 
-    __tablename__ = "curator_group_member"
+    __tablename__ = "school_member"
     __table_args__ = (
         Index(
-            "uq_curator_group_member_group_user",
-            "group_id", "user_id",
+            "uq_school_member_school_user",
+            "school_id", "user_id",
             unique=True,
         ),
     )
 
-    group_id: Mapped[UUID] = mapped_column(
-        ForeignKey("curator_group.id", ondelete="CASCADE"),
+    school_id: Mapped[UUID] = mapped_column(
+        ForeignKey("school.id", ondelete="CASCADE"),
         nullable=False,
     )
     user_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
+        # Declared here so the model names the index the database has
+        # (BE-90 step 2); it was created by a migration and left out.
+        index=True,
     )
     kind: Mapped[str] = mapped_column(String(10), nullable=False)
     joined_at: Mapped[datetime] = mapped_column(
@@ -224,7 +230,7 @@ class SchoolMember(UUIDMixin, Base):
 
     def __repr__(self) -> str:
         return (
-            f"<SchoolMember group_id={self.group_id} "
+            f"<SchoolMember school_id={self.school_id} "
             f"user_id={self.user_id} kind={self.kind!r}>"
         )
 
@@ -234,7 +240,7 @@ class SchoolBlock(UUIDMixin, Base):
 
     BLOCKING DELETES THE MEMBERSHIP ROW AND WRITES THIS ONE IN ITS PLACE, in
     one transaction; unblocking does the reverse. Every rule that asks "is
-    this person in the school" reads curator_group_member, so a blocked
+    this person in the school" reads school_member, so a blocked
     person is, to all of them at once, somebody who is not in the school --
     the roster, the counters, "my schools", the audience, the departed
     master rule of the school's feedback (BE-75) -- with none of them
@@ -256,7 +262,7 @@ class SchoolBlock(UUIDMixin, Base):
     in two places.
 
     UNIQUE (group_id, user_id), the same pair as the membership's.
-    kind carries no CHECK, exactly like curator_group_member.kind (read from
+    kind carries no CHECK, exactly like school_member.kind (read from
     pg_constraint, not assumed): the two columns hold the same values and
     one must not be stricter than the other.
 
@@ -265,17 +271,17 @@ class SchoolBlock(UUIDMixin, Base):
     the block outlives the account that made it.
     """
 
-    __tablename__ = "curator_group_block"
+    __tablename__ = "school_block"
     __table_args__ = (
         Index(
-            "uq_curator_group_block_group_user",
-            "group_id", "user_id",
+            "uq_school_block_school_user",
+            "school_id", "user_id",
             unique=True,
         ),
     )
 
-    group_id: Mapped[UUID] = mapped_column(
-        ForeignKey("curator_group.id", ondelete="CASCADE"),
+    school_id: Mapped[UUID] = mapped_column(
+        ForeignKey("school.id", ondelete="CASCADE"),
         nullable=False,
     )
     user_id: Mapped[UUID] = mapped_column(
@@ -299,7 +305,7 @@ class SchoolBlock(UUIDMixin, Base):
 
     def __repr__(self) -> str:
         return (
-            f"<SchoolBlock group_id={self.group_id} "
+            f"<SchoolBlock school_id={self.school_id} "
             f"user_id={self.user_id} kind={self.kind!r}>"
         )
 
@@ -326,14 +332,14 @@ class SchoolInvite(UUIDMixin, Base):
     and must keep resolving for whoever opens it days later.
     """
 
-    __tablename__ = "curator_group_invite"
+    __tablename__ = "school_invite"
     __table_args__ = (
-        Index("uq_curator_group_invite_group", "group_id", unique=True),
-        Index("uq_curator_group_invite_token", "token", unique=True),
+        Index("uq_school_invite_school", "school_id", unique=True),
+        Index("uq_school_invite_token", "token", unique=True),
     )
 
-    group_id: Mapped[UUID] = mapped_column(
-        ForeignKey("curator_group.id", ondelete="CASCADE"),
+    school_id: Mapped[UUID] = mapped_column(
+        ForeignKey("school.id", ondelete="CASCADE"),
         nullable=False,
     )
     token: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -343,7 +349,7 @@ class SchoolInvite(UUIDMixin, Base):
     )
 
     def __repr__(self) -> str:
-        return f"<SchoolInvite group_id={self.group_id}>"
+        return f"<SchoolInvite school_id={self.school_id}>"
 
 
 class SchoolTransfer(UUIDMixin, Base):
@@ -356,18 +362,21 @@ class SchoolTransfer(UUIDMixin, Base):
     NO WRITER IN THIS DELIVERY -- see SchoolInvite.
     """
 
-    __tablename__ = "curator_group_transfer"
+    __tablename__ = "school_transfer"
     __table_args__ = (
-        Index("uq_curator_group_transfer_group", "group_id", unique=True),
+        Index("uq_school_transfer_school", "school_id", unique=True),
     )
 
-    group_id: Mapped[UUID] = mapped_column(
-        ForeignKey("curator_group.id", ondelete="CASCADE"),
+    school_id: Mapped[UUID] = mapped_column(
+        ForeignKey("school.id", ondelete="CASCADE"),
         nullable=False,
     )
     to_user_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
+        # Declared here so the model names the index the database has
+        # (BE-90 step 2); it was created by a migration and left out.
+        index=True,
     )
     requested_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -376,7 +385,7 @@ class SchoolTransfer(UUIDMixin, Base):
 
     def __repr__(self) -> str:
         return (
-            f"<SchoolTransfer group_id={self.group_id} "
+            f"<SchoolTransfer school_id={self.school_id} "
             f"to_user_id={self.to_user_id}>"
         )
 
@@ -387,7 +396,7 @@ class SchoolMasterOffer(UUIDMixin, Base):
     A ROW IS THE OFFER, same shape as SchoolTransfer above: accepting
     and declining both DELETE it, so there is no status column to interpret
     and no half-NULL pair on the membership row. It is a separate table and
-    not a `pending_master` flag on curator_group_member for the reason that
+    not a `pending_master` flag on school_member for the reason that
     flag would blur: the candidate ALREADY has a membership row, and putting
     the offer on it would mix "what this person is now" with "what they were
     offered".
@@ -410,22 +419,25 @@ class SchoolMasterOffer(UUIDMixin, Base):
     deleted.
     """
 
-    __tablename__ = "curator_group_master_offer"
+    __tablename__ = "school_master_offer"
     __table_args__ = (
         Index(
-            "uq_curator_group_master_offer_group_user",
-            "group_id", "to_user_id",
+            "uq_school_master_offer_school_user",
+            "school_id", "to_user_id",
             unique=True,
         ),
     )
 
-    group_id: Mapped[UUID] = mapped_column(
-        ForeignKey("curator_group.id", ondelete="CASCADE"),
+    school_id: Mapped[UUID] = mapped_column(
+        ForeignKey("school.id", ondelete="CASCADE"),
         nullable=False,
     )
     to_user_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
+        # Declared here so the model names the index the database has
+        # (BE-90 step 2); it was created by a migration and left out.
+        index=True,
     )
     offered_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -434,7 +446,7 @@ class SchoolMasterOffer(UUIDMixin, Base):
 
     def __repr__(self) -> str:
         return (
-            f"<SchoolMasterOffer group_id={self.group_id} "
+            f"<SchoolMasterOffer school_id={self.school_id} "
             f"to_user_id={self.to_user_id}>"
         )
 
@@ -488,10 +500,10 @@ class SchoolEventKind(enum.StrEnum):
     vocabulary entry no reader can ever meet.
     """
 
-    GROUP_CREATED = "group_created"
-    GROUP_RENAMED = "group_renamed"
-    GROUP_DESCRIPTION_CHANGED = "group_description_changed"
-    GROUP_AVATAR_CHANGED = "group_avatar_changed"
+    GROUP_CREATED = "school_created"
+    GROUP_RENAMED = "school_renamed"
+    GROUP_DESCRIPTION_CHANGED = "school_description_changed"
+    GROUP_AVATAR_CHANGED = "school_avatar_changed"
     MEMBER_JOINED = "member_joined"
     MEMBER_PROMOTED = "member_promoted"
     MEMBER_DEMOTED = "member_demoted"
@@ -620,10 +632,10 @@ class SchoolEvent(Base):
 
     | event                     | data keys                              |
     |---------------------------|----------------------------------------|
-    | group_created             | actor_name                             |
-    | group_renamed             | actor_name, old_name, new_name         |
-    | group_description_changed | actor_name                             |
-    | group_avatar_changed      | actor_name, had_avatar_before          |
+    | school_created             | actor_name                             |
+    | school_renamed             | actor_name, old_name, new_name         |
+    | school_description_changed | actor_name                             |
+    | school_avatar_changed      | actor_name, had_avatar_before          |
     | member_joined             | actor_name, kind                       |
     | member_promoted           | actor_name                             |
     | member_removed            | actor_name, kind, target_user_id,      |
@@ -674,15 +686,15 @@ class SchoolEvent(Base):
     happen.
     """
 
-    __tablename__ = "curator_group_event"
+    __tablename__ = "school_event"
     __table_args__ = (
         # The ONE query this table serves: one group's feed, newest first,
         # limit/offset. group_id equality then seq descending -- the index
         # answers both the ordering and the COUNT(*) without touching the
         # heap.
         Index(
-            "ix_curator_group_event_group_seq",
-            "group_id",
+            "ix_school_event_school_seq",
+            "school_id",
             sa_text("seq DESC"),
         ),
     )
@@ -702,8 +714,8 @@ class SchoolEvent(Base):
         unique=True,
     )
 
-    group_id: Mapped[UUID] = mapped_column(
-        ForeignKey("curator_group.id", ondelete="CASCADE"),
+    school_id: Mapped[UUID] = mapped_column(
+        ForeignKey("school.id", ondelete="CASCADE"),
         nullable=False,
     )
 
@@ -732,6 +744,6 @@ class SchoolEvent(Base):
 
     def __repr__(self) -> str:
         return (
-            f"<SchoolEvent seq={self.seq} group_id={self.group_id} "
+            f"<SchoolEvent seq={self.seq} school_id={self.school_id} "
             f"event={self.event!r}>"
         )

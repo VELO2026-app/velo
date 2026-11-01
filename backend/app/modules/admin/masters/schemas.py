@@ -54,18 +54,18 @@ class VerifyMasterRequest(BaseModel):
             "visible to another master's picker."
         ),
     )
-    can_create_groups: bool = Field(
+    can_create_schools: bool = Field(
         default=False,
         description=(
-            "GT-15: may this master found curator groups (schools)? The "
+            "GT-15: may this master found schools? The "
             "admin's second decision in the same dialog, defaulting to no. "
             "Absent or false writes nothing at all -- see verify_master."
         ),
     )
 
 
-class SetMasterGroupRightRequest(BaseModel):
-    """PATCH /admin/masters/{user_id}/can-create-groups -- request body.
+class SetMasterSchoolRightRequest(BaseModel):
+    """PATCH /admin/masters/{user_id}/can-create-schools -- request body.
 
     GT-15. ONE toggle rather than a grant endpoint and a revoke endpoint:
     the thing being set is a single boolean, and a pair of verbs would make
@@ -78,7 +78,7 @@ class SetMasterGroupRightRequest(BaseModel):
     way, which is precisely the master this endpoint exists for.
     """
 
-    can_create_groups: bool
+    can_create_schools: bool
 
 
 class RejectMasterRequest(BaseModel):
@@ -154,8 +154,8 @@ class AdminMasterActionResponse(BaseModel):
     status: str
 
 
-class MasterGroupRightResponse(BaseModel):
-    """PATCH /admin/masters/{user_id}/can-create-groups -- the right, after.
+class MasterSchoolRightResponse(BaseModel):
+    """PATCH /admin/masters/{user_id}/can-create-schools -- the right, after.
 
     Returns the flag rather than the account status: the status is not what
     this call changes, and echoing it would invite the reader to think it
@@ -164,7 +164,7 @@ class MasterGroupRightResponse(BaseModel):
     """
 
     user_id: UUID
-    can_create_groups: bool
+    can_create_schools: bool
 
 
 class RevokeMasterAdvisory(BaseModel):

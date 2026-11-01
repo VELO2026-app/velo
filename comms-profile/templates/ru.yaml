@@ -66,7 +66,7 @@ practice.cancelled_waitlist:
 practice.cancelled_by_curator:
   telegram:
     title: "Вашу практику отменили"
-    body: "❌ Практику <b>{practice_title}</b> {scheduled_at} отменил куратор школы <b>{group_name}</b>.\nОтменено занятий: {cancelled_count}\n\n💰 Участникам возвращена оплата."
+    body: "❌ Практику <b>{practice_title}</b> {scheduled_at} отменил куратор школы <b>{school_name}</b>.\nОтменено занятий: {cancelled_count}\n\n💰 Участникам возвращена оплата."
     button_text: "Открыть практику"
 
 # -- Waitlist --
@@ -237,109 +237,109 @@ msg.thread_closed:
 
 # BE-25: school notifications. Every one is addressed to a single person who
 # is a party to the event itself -- nobody learns a school exists from these.
-curator_group.transfer_offered:
+school.transfer_offered:
   telegram:
     title: "Вам предлагают школу"
-    body: "🏛 <b>{actor_name}</b> предлагает вам стать куратором школы <b>{group_name}</b>.\n\nОткройте приложение, чтобы принять или отклонить."
+    body: "🏛 <b>{actor_name}</b> предлагает вам стать куратором школы <b>{school_name}</b>.\n\nОткройте приложение, чтобы принять или отклонить."
     button_text: "Открыть школу"
 
-curator_group.transfer_accepted:
+school.transfer_accepted:
   telegram:
     title: "Школа передана"
-    body: "🏛 <b>{actor_name}</b> принял школу <b>{group_name}</b>. Вы больше не её куратор."
+    body: "🏛 <b>{actor_name}</b> принял школу <b>{school_name}</b>. Вы больше не её куратор."
     button_text: "Открыть школу"
 
-curator_group.transfer_declined:
+school.transfer_declined:
   telegram:
     title: "Передача отклонена"
-    body: "🏛 <b>{actor_name}</b> отклонил передачу школы <b>{group_name}</b>. Школа осталась за вами."
+    body: "🏛 <b>{actor_name}</b> отклонил передачу школы <b>{school_name}</b>. Школа осталась за вами."
     button_text: "Открыть школу"
 
-curator_group.member_removed:
+school.member_removed:
   telegram:
     title: "Вы больше не в школе"
-    body: "🏛 Вас удалили из школы <b>{group_name}</b>. Её практики больше не отображаются."
+    body: "🏛 Вас удалили из школы <b>{school_name}</b>. Её практики больше не отображаются."
     button_text: "Открыть школу"
 
 # BE-79: DRAFT TEXT -- the owner rewords it later.
-curator_group.member_blocked:
+school.member_blocked:
   telegram:
     title: "Вас заблокировали в школе"
-    body: "🏛 Куратор заблокировал вас в школе <b>{group_name}</b>. Её практики вам больше недоступны."
+    body: "🏛 Куратор заблокировал вас в школе <b>{school_name}</b>. Её практики вам больше недоступны."
     button_text: "Открыть VELO"
 
-curator_group.member_unblocked:
+school.member_unblocked:
   telegram:
     title: "Вас разблокировали в школе"
-    body: "🏛 Куратор снял блокировку в школе <b>{group_name}</b>. Вы снова участник, её практики вам доступны."
+    body: "🏛 Куратор снял блокировку в школе <b>{school_name}</b>. Вы снова участник, её практики вам доступны."
     button_text: "Открыть школу"
 
-curator_group.member_joined:
+school.member_joined:
   telegram:
     title: "Новый участник школы"
-    body: "🏛 <b>{actor_name}</b> вступил в школу <b>{group_name}</b>."
+    body: "🏛 <b>{actor_name}</b> вступил в школу <b>{school_name}</b>."
     button_text: "Открыть школу"
 
 # GT-27: appointing a school master. The offer goes to the candidate, both
 # outcomes go back to the curator who made it.
-curator_group.master_offered:
+school.master_offered:
   telegram:
     title: "Вас приглашают вести школу"
-    body: "🏛 <b>{actor_name}</b> предлагает вам стать мастером школы <b>{group_name}</b>.\n\nОткройте приложение, чтобы принять или отклонить."
+    body: "🏛 <b>{actor_name}</b> предлагает вам стать мастером школы <b>{school_name}</b>.\n\nОткройте приложение, чтобы принять или отклонить."
     button_text: "Посмотреть предложение"
 
-curator_group.member_demoted:
+school.member_demoted:
   telegram:
     title: "Вы больше не мастер школы"
-    body: "🏛 <b>{actor_name}</b> перевёл вас в ученики школы <b>{group_name}</b>.\n\nВы остаётесь в школе, но больше не ведёте в ней практики."
+    body: "🏛 <b>{actor_name}</b> перевёл вас в ученики школы <b>{school_name}</b>.\n\nВы остаётесь в школе, но больше не ведёте в ней практики."
     button_text: "Открыть школу"
 
-curator_group.master_verification_required:
+school.master_verification_required:
   telegram:
     title: "Нужна верификация мастера"
-    body: "🏛 <b>{actor_name}</b> предлагает вам стать мастером школы <b>{group_name}</b>.\n\nДля этого нужна верификация мастера: подайте заявку или дождитесь решения по уже поданной. Приглашение придёт после верификации."
+    body: "🏛 <b>{actor_name}</b> предлагает вам стать мастером школы <b>{school_name}</b>.\n\nДля этого нужна верификация мастера: подайте заявку или дождитесь решения по уже поданной. Приглашение придёт после верификации."
     button_text: "Открыть заявку"
 
-curator_group.master_offer_accepted:
+school.master_offer_accepted:
   telegram:
     title: "Назначение принято"
-    body: "🏛 <b>{actor_name}</b> принял назначение мастером школы <b>{group_name}</b>."
+    body: "🏛 <b>{actor_name}</b> принял назначение мастером школы <b>{school_name}</b>."
     button_text: "Открыть школу"
 
-curator_group.master_offer_declined:
+school.master_offer_declined:
   telegram:
     title: "Назначение отклонено"
-    body: "🏛 <b>{actor_name}</b> отклонил назначение мастером школы <b>{group_name}</b>."
+    body: "🏛 <b>{actor_name}</b> отклонил назначение мастером школы <b>{school_name}</b>."
     button_text: "Открыть школу"
 
-curator_group.master_offer_closed:
+school.master_offer_closed:
   telegram:
     title: "Назначение закрыто"
-    body: "🏛 <b>{target_name}</b> не прошёл верификацию мастера. Приглашение мастером школы <b>{group_name}</b> закрыто."
+    body: "🏛 <b>{target_name}</b> не прошёл верификацию мастера. Приглашение мастером школы <b>{school_name}</b> закрыто."
     button_text: "Открыть школу"
 
-curator_group.practice_created_for_master:
+school.practice_created_for_master:
   telegram:
     title: "Куратор создал и опубликовал практику от вашего имени"
-    body: "🏛 <b>{actor_name}</b> создал и опубликовал от вашего имени практику <b>{practice_title}</b> ({scheduled_at}) в школе <b>{group_name}</b>.\n\nОна видна в школе."
+    body: "🏛 <b>{actor_name}</b> создал и опубликовал от вашего имени практику <b>{practice_title}</b> ({scheduled_at}) в школе <b>{school_name}</b>.\n\nОна видна в школе."
     button_text: "Открыть практику"
 
-curator_group.master_practice_published:
+school.master_practice_published:
   telegram:
     title: "Куратор опубликовал вашу практику"
-    body: "🏛 <b>{actor_name}</b> опубликовал вашу практику <b>{practice_title}</b> ({scheduled_at}) в школе <b>{group_name}</b>.\n\nОна видна в школе."
+    body: "🏛 <b>{actor_name}</b> опубликовал вашу практику <b>{practice_title}</b> ({scheduled_at}) в школе <b>{school_name}</b>.\n\nОна видна в школе."
     button_text: "Открыть практику"
 
-curator_group.master_practice_edited:
+school.master_practice_edited:
   telegram:
     title: "Куратор изменил вашу практику"
-    body: "🏛 <b>{actor_name}</b> изменил вашу практику <b>{practice_title}</b> ({scheduled_at}) в школе <b>{group_name}</b>.\n\nПроверьте, всё ли верно."
+    body: "🏛 <b>{actor_name}</b> изменил вашу практику <b>{practice_title}</b> ({scheduled_at}) в школе <b>{school_name}</b>.\n\nПроверьте, всё ли верно."
     button_text: "Открыть практику"
 
-curator_group.master_practice_deleted:
+school.master_practice_deleted:
   telegram:
     title: "Куратор удалил ваш черновик"
-    body: "🏛 <b>{actor_name}</b> удалил ваш черновик <b>{practice_title}</b> ({scheduled_at}) в школе <b>{group_name}</b>.\n\nЧерновик больше недоступен."
+    body: "🏛 <b>{actor_name}</b> удалил ваш черновик <b>{practice_title}</b> ({scheduled_at}) в школе <b>{school_name}</b>.\n\nЧерновик больше недоступен."
     button_text: "Мои практики"
 
 # -- Master-facing (BE-33) --
@@ -369,8 +369,8 @@ practice.feedback_received:
 
 # -- The school hears about a new practice (BE-30) --
 
-curator_group.practice_published:
+school.practice_published:
   telegram:
     title: "Новая практика в школе"
-    body: "📣 {actor_name} опубликовал практику <b>{practice_title}</b> в школе «{group_name}»."
+    body: "📣 {actor_name} опубликовал практику <b>{practice_title}</b> в школе «{school_name}»."
     button_text: "Открыть практику"

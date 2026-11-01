@@ -28,7 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.modules.masters.models import MasterProfile
-from app.modules.schools import service as curator_service
+from app.modules.schools import service as school_service
 from app.modules.schools.models import (
     School,
     SchoolEvent,
@@ -67,7 +67,7 @@ async def _user(client, db_session, tid: int, *, master: bool) -> UUID:
                 data={
                     "account": {
                         "status": "verified",
-                        "can_create_groups": True,
+                        "can_create_schools": True,
                     },
                     "profile": {"bio": "m"},
                 },
@@ -112,15 +112,15 @@ async def _school(
     for uid, kind in (
         (s.heir, MASTER), (s.third, MASTER), (s.student, STUDENT),
     ):
-        db_session.add(SchoolMember(group_id=s.id, user_id=uid, kind=kind))
+        db_session.add(SchoolMember(school_id=s.id, user_id=uid, kind=kind))
     if transfer_to_heir:
-        db_session.add(SchoolTransfer(group_id=s.id, to_user_id=s.heir))
+        db_session.add(SchoolTransfer(school_id=s.id, to_user_id=s.heir))
     if offer_to_student:
         db_session.add(
-            SchoolMasterOffer(group_id=s.id, to_user_id=s.student)
+            SchoolMasterOffer(school_id=s.id, to_user_id=s.student)
         )
     if invite:
-        db_session.add(SchoolInvite(group_id=s.id, token=s.token))
+        db_session.add(SchoolInvite(school_id=s.id, token=s.token))
     await db_session.flush()
     await db_session.commit()
     return s
@@ -143,7 +143,7 @@ async def _members(db_session: AsyncSession, s: SchoolSetup) -> dict[UUID, str]:
     rows = (
         await db_session.execute(
             select(SchoolMember.user_id, SchoolMember.kind).where(
-                SchoolMember.group_id == s.id
+                SchoolMember.school_id == s.id
             )
         )
     ).all()
@@ -155,7 +155,7 @@ async def _offers(db_session: AsyncSession, s: SchoolSetup) -> list[UUID]:
         (
             await db_session.execute(
                 select(SchoolMasterOffer.to_user_id).where(
-                    SchoolMasterOffer.group_id == s.id
+                    SchoolMasterOffer.school_id == s.id
                 )
             )
         ).scalars()
@@ -167,7 +167,7 @@ async def _transfers(db_session: AsyncSession, s: SchoolSetup) -> list[UUID]:
         (
             await db_session.execute(
                 select(SchoolTransfer.to_user_id).where(
-                    SchoolTransfer.group_id == s.id
+                    SchoolTransfer.school_id == s.id
                 )
             )
         ).scalars()
@@ -192,13 +192,13 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
 
 def _delete(s: SchoolSetup):
     async def call(session):
-        await curator_service.delete_school(s.curator, s.id, session)
+        await school_service.delete_school(s.curator, s.id, session)
     return call
 
 
 def _remove(s: SchoolSetup, user_id: UUID):
     async def call(session):
-        await curator_service.remove_school_member(
+        await school_service.remove_school_member(
             s.curator, s.id, user_id, session,
             actor=await _actor(session, s.curator),
         )
@@ -207,7 +207,7 @@ def _remove(s: SchoolSetup, user_id: UUID):
 
 def _leave(s: SchoolSetup, user_id: UUID):
     async def call(session):
-        await curator_service.leave_school(
+        await school_service.leave_school(
             s.id, user_id, session, actor=await _actor(session, user_id),
         )
     return call
@@ -215,7 +215,7 @@ def _leave(s: SchoolSetup, user_id: UUID):
 
 def _decline_master(s: SchoolSetup):
     async def call(session):
-        await curator_service.decline_school_master_offer(
+        await school_service.decline_school_master_offer(
             s.id, s.student, session, actor=await _actor(session, s.student),
         )
     return call
@@ -223,7 +223,7 @@ def _decline_master(s: SchoolSetup):
 
 def _accept_master(s: SchoolSetup):
     async def call(session):
-        await curator_service.accept_school_master_offer(
+        await school_service.accept_school_master_offer(
             s.id, s.student, session, actor=await _actor(session, s.student),
         )
     return call
@@ -231,7 +231,7 @@ def _accept_master(s: SchoolSetup):
 
 def _offer_master(s: SchoolSetup):
     async def call(session):
-        await curator_service.offer_school_master(
+        await school_service.offer_school_master(
             s.curator, s.id, s.student, session,
             actor=await _actor(session, s.curator),
         )
@@ -240,7 +240,7 @@ def _offer_master(s: SchoolSetup):
 
 def _accept_transfer(s: SchoolSetup):
     async def call(session):
-        await curator_service.accept_school_transfer(
+        await school_service.accept_school_transfer(
             s.id, s.heir, session, actor=await _actor(session, s.heir),
         )
     return call
@@ -248,7 +248,7 @@ def _accept_transfer(s: SchoolSetup):
 
 def _offer_transfer(s: SchoolSetup, by: UUID, to: UUID):
     async def call(session):
-        await curator_service.offer_school_transfer(
+        await school_service.offer_school_transfer(
             by, s.id, to, session, actor=await _actor(session, by),
         )
     return call
@@ -256,7 +256,7 @@ def _offer_transfer(s: SchoolSetup, by: UUID, to: UUID):
 
 def _cancel_transfer(s: SchoolSetup):
     async def call(session):
-        await curator_service.cancel_school_transfer(
+        await school_service.cancel_school_transfer(
             s.curator, s.id, session, actor=await _actor(session, s.curator),
         )
     return call
@@ -264,7 +264,7 @@ def _cancel_transfer(s: SchoolSetup):
 
 def _join(s: SchoolSetup):
     async def call(session):
-        return await curator_service.join_school_by_token(
+        return await school_service.join_school_by_token(
             s.token, s.joiner, session, actor=await _actor(session, s.joiner),
         )
     return call
@@ -272,7 +272,7 @@ def _join(s: SchoolSetup):
 
 def _rename(s: SchoolSetup, name: str):
     async def call(session):
-        await curator_service.update_school(
+        await school_service.update_school(
             s.curator, s.id, name, session,
             actor=await _actor(session, s.curator),
         )
@@ -302,7 +302,7 @@ async def test_a_delete_waits_for_a_removal_instead_of_deadlocking(
     result = await race(
         monkeypatch,
         holder=_remove(s, s.student),
-        pause_in=(curator_service, "_drop_pending_transfer_for"),
+        pause_in=(school_service, "_drop_pending_transfer_for"),
         rival=_delete(s),
     )
     assert_no_deadlock(result)
@@ -326,7 +326,7 @@ async def test_a_delete_waits_for_a_declined_appointment(
     result = await race(
         monkeypatch,
         holder=_decline_master(s),
-        pause_in=(curator_service, "_frozen_name"),
+        pause_in=(school_service, "_frozen_name"),
         rival=_delete(s),
     )
     assert_no_deadlock(result)
@@ -359,7 +359,7 @@ async def test_a_curator_who_handed_the_school_over_cannot_delete_it(
     result = await race(
         monkeypatch,
         holder=_delete(s),
-        pause_in=(curator_service, "_get_group_or_404"),
+        pause_in=(school_service, "_get_group_or_404"),
         pause="after",
         rival=_accept_transfer(s),
     )
@@ -386,7 +386,7 @@ async def test_two_deletes_of_one_school_give_one_success(
     result = await race(
         monkeypatch,
         holder=_delete(s),
-        pause_in=(curator_service, "_get_group_or_404"),
+        pause_in=(school_service, "_get_group_or_404"),
         pause="after",
         rival=_delete(s),
     )
@@ -403,7 +403,7 @@ async def test_deleting_a_school_with_no_children(client, db_session) -> None:
     db_session.add(group)
     await db_session.commit()
     group_id = group.id
-    await curator_service.delete_school(curator, group_id, db_session)
+    await school_service.delete_school(curator, group_id, db_session)
     await db_session.commit()
     db_session.expire_all()
     assert await db_session.get(School, group_id) is None
@@ -432,7 +432,7 @@ async def test_an_appointment_cannot_outlive_the_membership(
     result = await race(
         monkeypatch,
         holder=_offer_master(s),
-        pause_in=(curator_service, "_master_offer_row"),
+        pause_in=(school_service, "_master_offer_row"),
         rival=_leave(s, s.student),
     )
     assert_no_deadlock(result)
@@ -467,7 +467,7 @@ async def test_reoffering_to_somebody_who_just_accepted(
     result = await race(
         monkeypatch,
         holder=_offer_master(s),
-        pause_in=(curator_service, "_membership_row"),
+        pause_in=(school_service, "_membership_row"),
         pause="after",
         rival=_accept_master(s),
     )
@@ -492,7 +492,7 @@ async def test_a_transfer_cannot_be_offered_to_somebody_who_just_left(
     result = await race(
         monkeypatch,
         holder=_offer_transfer(s, s.curator, s.third),
-        pause_in=(curator_service, "_visible_master_ids"),
+        pause_in=(school_service, "_visible_master_ids"),
         pause="after",
         rival=_leave(s, s.third),
     )
@@ -516,7 +516,7 @@ async def test_a_transfer_offered_while_the_addressee_leaves(
     result = await race(
         monkeypatch,
         holder=_offer_transfer(s, s.curator, s.third),
-        pause_in=(curator_service, "_lock_member"),
+        pause_in=(school_service, "_lock_member"),
         pause="after",
         rival=_leave(s, s.third),
     )
@@ -543,7 +543,7 @@ async def test_a_former_curator_cannot_offer_the_school_away(
     result = await race(
         monkeypatch,
         holder=_offer_transfer(s, s.curator, s.third),
-        pause_in=(curator_service, "_pending_transfer"),
+        pause_in=(school_service, "_pending_transfer"),
         rival=_accept_transfer(s),
     )
     assert result.rival.committed, result.rival.error
@@ -571,7 +571,7 @@ async def test_a_former_curator_cannot_withdraw_the_new_owners_offer(
     result = await race(
         monkeypatch,
         holder=_cancel_transfer(s),
-        pause_in=(curator_service, "_get_group_or_404"),
+        pause_in=(school_service, "_get_group_or_404"),
         pause="after",
         rival=accept_then_offer_on,
     )
@@ -594,7 +594,7 @@ async def test_joining_a_school_deleted_mid_join_is_not_a_success(
     result = await race(
         monkeypatch,
         holder=_join(s),
-        pause_in=(curator_service, "_membership_row"),
+        pause_in=(school_service, "_membership_row"),
         rival=_delete(s),
     )
     assert result.rival.committed, result.rival.error
@@ -613,7 +613,7 @@ async def _renames(db_session: AsyncSession, s: SchoolSetup) -> list[tuple]:
         await db_session.execute(
             select(SchoolEvent.data)
             .where(
-                SchoolEvent.group_id == s.id,
+                SchoolEvent.school_id == s.id,
                 SchoolEvent.event
                 == SchoolEventKind.GROUP_RENAMED.value,
             )
@@ -637,7 +637,7 @@ async def test_two_renames_record_what_each_actually_replaced(
     result = await race(
         monkeypatch,
         holder=_rename(s, "А"),
-        pause_in=(curator_service, "_lock_group_as_owner"),
+        pause_in=(school_service, "_lock_group_as_owner"),
         pause="after",
         rival=_rename(s, "Б"),
     )
@@ -664,7 +664,7 @@ async def test_an_edit_and_a_delete_of_one_school(
     result = await race(
         monkeypatch,
         holder=_rename(s, "А"),
-        pause_in=(curator_service, "_lock_group_as_owner"),
+        pause_in=(school_service, "_lock_group_as_owner"),
         pause="after",
         rival=_delete(s),
     )
@@ -693,7 +693,7 @@ async def test_an_appointment_made_while_the_school_is_renamed(
     result = await race(
         monkeypatch,
         holder=_rename(s, "А"),
-        pause_in=(curator_service, "_lock_group_as_owner"),
+        pause_in=(school_service, "_lock_group_as_owner"),
         pause="after",
         rival=_offer_master(s),
     )
@@ -715,7 +715,7 @@ async def test_an_appointment_made_while_the_school_is_renamed(
 
 def _revoke_invite(s: SchoolSetup):
     async def call(session):
-        await curator_service.revoke_school_invite(
+        await school_service.revoke_school_invite(
             s.curator, s.id, session, actor=await _actor(session, s.curator),
         )
     return call
@@ -726,7 +726,7 @@ async def _invites(db_session: AsyncSession, s: SchoolSetup) -> list[str]:
         (
             await db_session.execute(
                 select(SchoolInvite.token).where(
-                    SchoolInvite.group_id == s.id
+                    SchoolInvite.school_id == s.id
                 )
             )
         ).scalars()
@@ -738,7 +738,7 @@ async def _journal_events(db_session: AsyncSession, s: SchoolSetup) -> list[str]
         (
             await db_session.execute(
                 select(SchoolEvent.event).where(
-                    SchoolEvent.group_id == s.id
+                    SchoolEvent.school_id == s.id
                 )
             )
         ).scalars()
@@ -769,7 +769,7 @@ async def test_a_curator_who_handed_the_school_over_cannot_remove_from_it(
     result = await race(
         monkeypatch,
         holder=_accept_transfer(s),
-        pause_in=(curator_service, "_frozen_name"),
+        pause_in=(school_service, "_frozen_name"),
         rival=_remove(s, s.third),
     )
     assert_no_deadlock(result)
@@ -803,7 +803,7 @@ async def test_a_curator_who_handed_the_school_over_cannot_revoke_its_link(
     result = await race(
         monkeypatch,
         holder=_accept_transfer(s),
-        pause_in=(curator_service, "_frozen_name"),
+        pause_in=(school_service, "_frozen_name"),
         rival=_revoke_invite(s),
     )
     assert_no_deadlock(result)

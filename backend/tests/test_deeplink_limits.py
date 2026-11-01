@@ -53,7 +53,7 @@ ACTIONS: dict[str, bool] = {
     "open_feedback": True,
     "open_wallet": True,  # bare from payouts / top-ups, practice_id on refunds
     "confirm_waitlist": True,
-    "open_curator_group": True,
+    "open_school": True,
     "open_master_offer": True,
     "open_master_application": True,  # bare (BE-104) and group_id (BE-59)
     "open_thread": True,  # BE-163: support.translation_unavailable

@@ -46,16 +46,16 @@ from tests.helpers import (
     login_user,
 )
 
-CURATOR_GROUPS_URL = "/api/v1/masters/me/curator-groups"
-GROUP_URL = "/api/v1/masters/me/curator-groups/{group_id}"
-MEMBER_URL = "/api/v1/masters/me/curator-groups/{group_id}/members/{user_id}"
-INVITES_URL = "/api/v1/masters/me/curator-groups/{group_id}/invites"
-OFFER_URL = "/api/v1/masters/me/curator-groups/{group_id}/transfer"
-MINE_URL = "/api/v1/curator-groups/mine"
-PAGE_URL = "/api/v1/curator-groups/{group_id}"
-MEMBERSHIP_URL = "/api/v1/curator-groups/{group_id}/membership"
-ACCEPT_URL = "/api/v1/curator-groups/{group_id}/transfer/accept"
-DECLINE_URL = "/api/v1/curator-groups/{group_id}/transfer/decline"
+SCHOOLS_URL = "/api/v1/masters/me/schools"
+GROUP_URL = "/api/v1/masters/me/schools/{school_id}"
+MEMBER_URL = "/api/v1/masters/me/schools/{school_id}/members/{user_id}"
+INVITES_URL = "/api/v1/masters/me/schools/{school_id}/invites"
+OFFER_URL = "/api/v1/masters/me/schools/{school_id}/transfer"
+MINE_URL = "/api/v1/schools/mine"
+PAGE_URL = "/api/v1/schools/{school_id}"
+MEMBERSHIP_URL = "/api/v1/schools/{school_id}/membership"
+ACCEPT_URL = "/api/v1/schools/{school_id}/transfer/accept"
+DECLINE_URL = "/api/v1/schools/{school_id}/transfer/decline"
 REVOKE_URL = "/api/v1/admin/masters/{user_id}/revoke"
 MAKE_MASTER_URL = "/api/v1/admin/users/{user_id}/make-master"
 
@@ -109,7 +109,7 @@ async def _make_verified_master(
             data={
                 "account": {
                     "status": "verified",
-                    "can_create_groups": True,
+                    "can_create_schools": True,
                 },
                 "profile": {"bio": "m"},
             },
@@ -137,7 +137,7 @@ async def _create_group(
     client: AsyncClient, curator: dict, name: str = "Школа дыхания",
 ) -> dict:
     resp = await client.post(
-        CURATOR_GROUPS_URL,
+        SCHOOLS_URL,
         json={"name": name},
         headers=auth_headers(curator["session_token"]),
     )
@@ -153,7 +153,7 @@ async def _seed_member(
     joined_at: datetime | None = None,
 ) -> None:
     row = SchoolMember(
-        group_id=UUID(group_id), user_id=UUID(user_id), kind=kind.value,
+        school_id=UUID(group_id), user_id=UUID(user_id), kind=kind.value,
     )
     if joined_at is not None:
         row.joined_at = joined_at
@@ -164,7 +164,7 @@ async def _seed_member(
 
 async def _offer(client: AsyncClient, curator: dict, group_id: str, to: dict):
     return await client.post(
-        OFFER_URL.format(group_id=group_id),
+        OFFER_URL.format(school_id=group_id),
         json={"to_user_id": to["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
@@ -172,28 +172,28 @@ async def _offer(client: AsyncClient, curator: dict, group_id: str, to: dict):
 
 async def _cancel(client: AsyncClient, curator: dict, group_id: str):
     return await client.delete(
-        OFFER_URL.format(group_id=group_id),
+        OFFER_URL.format(school_id=group_id),
         headers=auth_headers(curator["session_token"]),
     )
 
 
 async def _accept(client: AsyncClient, auth: dict, group_id: str):
     return await client.post(
-        ACCEPT_URL.format(group_id=group_id),
+        ACCEPT_URL.format(school_id=group_id),
         headers=auth_headers(auth["session_token"]),
     )
 
 
 async def _decline(client: AsyncClient, auth: dict, group_id: str):
     return await client.post(
-        DECLINE_URL.format(group_id=group_id),
+        DECLINE_URL.format(school_id=group_id),
         headers=auth_headers(auth["session_token"]),
     )
 
 
 async def _page(client: AsyncClient, auth: dict, group_id: str):
     return await client.get(
-        PAGE_URL.format(group_id=group_id),
+        PAGE_URL.format(school_id=group_id),
         headers=auth_headers(auth["session_token"]),
     )
 
@@ -210,7 +210,7 @@ async def _transfer_rows(group_id: str):
     return (
         await fresh_execute(
             select(SchoolTransfer.to_user_id).where(
-                SchoolTransfer.group_id == UUID(group_id)
+                SchoolTransfer.school_id == UUID(group_id)
             )
         )
     ).scalars().all()
@@ -222,7 +222,7 @@ async def _member_rows(group_id: str):
             select(
                 SchoolMember.user_id,
                 SchoolMember.kind,
-            ).where(SchoolMember.group_id == UUID(group_id))
+            ).where(SchoolMember.school_id == UUID(group_id))
         )
     ).all()
 
@@ -427,7 +427,7 @@ async def test_offering_on_a_deleted_group_is_404(
 ) -> None:
     curator, heir, group = await _group_with_heir(client, db_session)
     await client.delete(
-        GROUP_URL.format(group_id=group["id"]),
+        GROUP_URL.format(school_id=group["id"]),
         headers=auth_headers(curator["session_token"]),
     )
 
@@ -530,7 +530,7 @@ async def test_accept_moves_the_group_in_one_transaction(
     # with one link the same claim needs one token, not two.
     with patch.object(settings, "telegram_bot_url", _BOT_URL):
         resp = await client.post(
-            INVITES_URL.format(group_id=group["id"]),
+            INVITES_URL.format(school_id=group["id"]),
             json={},
             headers=auth_headers(curator["session_token"]),
         )
@@ -539,7 +539,7 @@ async def test_accept_moves_the_group_in_one_transaction(
         (
             await fresh_execute(
                 select(SchoolInvite.token).where(
-                    SchoolInvite.group_id == UUID(group["id"])
+                    SchoolInvite.school_id == UUID(group["id"])
                 )
             )
         ).scalars().all()
@@ -568,7 +568,7 @@ async def test_accept_moves_the_group_in_one_transaction(
         (
             await fresh_execute(
                 select(SchoolInvite.token).where(
-                    SchoolInvite.group_id == UUID(group["id"])
+                    SchoolInvite.school_id == UUID(group["id"])
                 )
             )
         ).scalars().all()
@@ -595,7 +595,7 @@ async def test_the_previous_curator_can_leave_the_normal_way_afterwards(
     assert page.json()["viewer"]["relation"] == "master"
 
     left = await client.delete(
-        MEMBERSHIP_URL.format(group_id=group["id"]),
+        MEMBERSHIP_URL.format(school_id=group["id"]),
         headers=auth_headers(curator["session_token"]),
     )
     assert left.status_code == 204
@@ -612,7 +612,7 @@ async def test_the_new_curator_cannot_leave_and_the_old_one_can(
     await _accept(client, heir, group["id"])
 
     heirs_exit = await client.delete(
-        MEMBERSHIP_URL.format(group_id=group["id"]),
+        MEMBERSHIP_URL.format(school_id=group["id"]),
         headers=auth_headers(heir["session_token"]),
     )
     assert heirs_exit.status_code == 409
@@ -635,7 +635,7 @@ async def test_a_name_collision_refuses_before_anything_is_written(
     await _offer(client, curator, group["id"], heir)
     refused = await _accept(client, heir, group["id"])
     assert refused.status_code == 409
-    assert refused.json()["error"] == "curator_group_name_taken"
+    assert refused.json()["error"] == "school_name_taken"
 
     assert await _curator_of(group["id"]) == UUID(curator["user"]["id"])
     rows = {str(uid): kind for uid, kind in await _member_rows(group["id"])}
@@ -655,7 +655,7 @@ async def test_renaming_the_clashing_group_lets_the_accept_through(
     assert (await _accept(client, heir, group["id"])).status_code == 409
 
     renamed = await client.patch(
-        GROUP_URL.format(group_id=own["id"]),
+        GROUP_URL.format(school_id=own["id"]),
         json={"name": "Другая школа"},
         headers=auth_headers(heir["session_token"]),
     )
@@ -823,7 +823,7 @@ async def test_the_addressee_leaving_retracts_the_offer(
     await _offer(client, curator, group["id"], heir)
 
     left = await client.delete(
-        MEMBERSHIP_URL.format(group_id=group["id"]),
+        MEMBERSHIP_URL.format(school_id=group["id"]),
         headers=auth_headers(heir["session_token"]),
     )
     assert left.status_code == 204
@@ -839,7 +839,7 @@ async def test_the_curator_removing_the_addressee_retracts_the_offer(
 
     removed = await client.delete(
         MEMBER_URL.format(
-            group_id=group["id"], user_id=heir["user"]["id"],
+            school_id=group["id"], user_id=heir["user"]["id"],
         ),
         headers=auth_headers(curator["session_token"]),
     )
@@ -871,12 +871,12 @@ async def test_somebody_else_leaving_does_not_touch_the_offer(
     await _offer(client, curator, group["id"], heir)
 
     await client.delete(
-        MEMBERSHIP_URL.format(group_id=group["id"]),
+        MEMBERSHIP_URL.format(school_id=group["id"]),
         headers=auth_headers(bystander["session_token"]),
     )
     await client.delete(
         MEMBER_URL.format(
-            group_id=group["id"], user_id=student["user"]["id"],
+            school_id=group["id"], user_id=student["user"]["id"],
         ),
         headers=auth_headers(curator["session_token"]),
     )
@@ -900,7 +900,7 @@ async def test_leaving_an_inactive_group_still_retracts_the_offer(
     await _revoke(client, admin_token, curator["user"]["id"])
 
     left = await client.delete(
-        MEMBERSHIP_URL.format(group_id=group["id"]),
+        MEMBERSHIP_URL.format(school_id=group["id"]),
         headers=auth_headers(heir["session_token"]),
     )
     assert left.status_code == 204
@@ -926,7 +926,7 @@ async def test_deleting_the_group_takes_the_offer_with_it(
     assert await _transfer_rows(group["id"]) != []
 
     deleted = await client.delete(
-        GROUP_URL.format(group_id=group["id"]),
+        GROUP_URL.format(school_id=group["id"]),
         headers=auth_headers(curator["session_token"]),
     )
     assert deleted.status_code == 204
@@ -1003,22 +1003,22 @@ async def test_transfer_offered_is_true_only_for_the_addressee(
 async def test_the_curator_list_and_patch_both_carry_the_offer(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """One schema, one field set. PATCH returns CuratorGroupResponse, so a
+    """One schema, one field set. PATCH returns SchoolResponse, so a
     rename reports the pending offer alongside the new name -- and does not
     disturb it."""
     curator, heir, group = await _group_with_heir(client, db_session)
     headers = auth_headers(curator["session_token"])
 
-    listed = (await client.get(CURATOR_GROUPS_URL, headers=headers)).json()
+    listed = (await client.get(SCHOOLS_URL, headers=headers)).json()
     assert listed["items"][0]["transfer"] is None
 
     await _offer(client, curator, group["id"], heir)
 
-    listed = (await client.get(CURATOR_GROUPS_URL, headers=headers)).json()
+    listed = (await client.get(SCHOOLS_URL, headers=headers)).json()
     assert listed["items"][0]["transfer"]["to_user_id"] == heir["user"]["id"]
 
     renamed = await client.patch(
-        GROUP_URL.format(group_id=group["id"]),
+        GROUP_URL.format(school_id=group["id"]),
         json={"name": "Школа дыхания и покоя"},
         headers=headers,
     )
@@ -1035,7 +1035,7 @@ async def test_a_newly_created_group_reports_no_transfer(
     """The field is present and null, not absent."""
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     resp = await client.post(
-        CURATOR_GROUPS_URL,
+        SCHOOLS_URL,
         json={"name": "Новая"},
         headers=auth_headers(curator["session_token"]),
     )
@@ -1074,14 +1074,14 @@ async def test_a_malformed_group_id_is_422_and_an_unknown_one_is_404(
     curator, heir, _group = await _group_with_heir(client, db_session)
 
     malformed = await client.post(
-        OFFER_URL.format(group_id="not-a-uuid"),
+        OFFER_URL.format(school_id="not-a-uuid"),
         json={"to_user_id": heir["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
     assert malformed.status_code == 422
 
     unknown = await client.post(
-        OFFER_URL.format(group_id=uuid4()),
+        OFFER_URL.format(school_id=uuid4()),
         json={"to_user_id": heir["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
@@ -1096,7 +1096,7 @@ async def test_a_malformed_to_user_id_is_422(
 ) -> None:
     curator, _heir, group = await _group_with_heir(client, db_session)
     resp = await client.post(
-        OFFER_URL.format(group_id=group["id"]),
+        OFFER_URL.format(school_id=group["id"]),
         json={"to_user_id": "nobody"},
         headers=auth_headers(curator["session_token"]),
     )
@@ -1113,14 +1113,14 @@ async def test_a_plain_user_cannot_reach_the_curator_side_at_all(
     plain = await login_user(client, telegram_id=_TID_STUDENT_A)
 
     offered = await client.post(
-        OFFER_URL.format(group_id=group["id"]),
+        OFFER_URL.format(school_id=group["id"]),
         json={"to_user_id": heir["user"]["id"]},
         headers=auth_headers(plain["session_token"]),
     )
     assert offered.status_code == 403
 
     cancelled = await client.delete(
-        OFFER_URL.format(group_id=group["id"]),
+        OFFER_URL.format(school_id=group["id"]),
         headers=auth_headers(plain["session_token"]),
     )
     assert cancelled.status_code == 403
@@ -1146,14 +1146,14 @@ async def test_accepting_a_transfer_clashes_by_the_name_rule(
     client: AsyncClient, db_session: AsyncSession, own_spelling: str, expected: int,
 ) -> None:
     """The heir already curates a school whose name equals the transferred
-    one BY THE RULE -> 409 curator_group_name_taken; ё against е is a
+    one BY THE RULE -> 409 school_name_taken; ё against е is a
     different name and goes through."""
     curator, heir, group = await _group_with_heir(client, db_session)
     # A name with a space AND an «е», so every row of the grid has something
     # to change (the helper's default has no «е»).
     name = "Школа Елены"
     renamed = await client.patch(
-        GROUP_URL.format(group_id=group["id"]),
+        GROUP_URL.format(school_id=group["id"]),
         json={"name": name},
         headers=auth_headers(curator["session_token"]),
     )
@@ -1173,5 +1173,5 @@ async def test_accepting_a_transfer_clashes_by_the_name_rule(
     resp = await _accept(client, heir, group["id"])
     assert resp.status_code == expected, resp.text
     if expected == 409:
-        assert resp.json()["error"] == "curator_group_name_taken"
+        assert resp.json()["error"] == "school_name_taken"
 

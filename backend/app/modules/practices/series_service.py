@@ -168,7 +168,7 @@ def _build_child_occurrence(
         # the whole of it: propagate_audience_to_children has no school to
         # push down. Copied for every audience, public included: a public
         # course of a school is the school's in each of its sessions.
-        curator_group_id=root.curator_group_id,
+        school_id=root.school_id,
     )
     taxonomy = (root.data or {}).get("taxonomy")
     if taxonomy is not None:

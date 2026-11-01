@@ -77,7 +77,7 @@ from app.modules.practices.taxonomy_models import TaxonomyDirection
 # key nobody reads, and the master would be told they had a right they do
 # not have. schools owns the spelling because it owns the gate.
 from app.modules.schools.service import (
-    CAN_CREATE_GROUPS_KEY,
+    CAN_CREATE_SCHOOLS_KEY,
     announce_pending_master_offers,
     close_pending_master_offers,
 )
@@ -130,7 +130,7 @@ async def verify_master(
     session: AsyncSession,
     promote: list[str] | None = None,
     master_only: list[str] | None = None,
-    can_create_groups: bool = False,
+    can_create_schools: bool = False,
 ) -> MasterProfile:
     """Verify a pending master application (T4, PROMPT №295).
 
@@ -160,7 +160,7 @@ async def verify_master(
     master's own create-practice picker offers it even though no other
     master ever sees it.
 
-    can_create_groups (GT-15): the admin's tick for "this master may found
+    can_create_schools (GT-15): the admin's tick for "this master may found
     schools", made in this same dialog because verifying a master and
     deciding what they may do with the account is one decision, not a
     process with a queue. WRITTEN ONLY WHEN TRUE. False and absent read
@@ -184,8 +184,8 @@ async def verify_master(
         "verified_by": str(admin.id),
         "notes": notes,
     }
-    if can_create_groups:
-        new_data["account"][CAN_CREATE_GROUPS_KEY] = True
+    if can_create_schools:
+        new_data["account"][CAN_CREATE_SCHOOLS_KEY] = True
     profile.set_jsonb("data", new_data)
 
     # Phase 6 / T0: pending -> verified IS the master-capability delta
@@ -439,7 +439,7 @@ async def revoke_master(
 async def set_master_group_right(
     user_id: UUID,
     admin: User,
-    can_create_groups: bool,
+    can_create_schools: bool,
     session: AsyncSession,
 ) -> MasterProfile:
     """Grant or revoke the right to found schools, after verification (GT-15).
@@ -473,28 +473,28 @@ async def set_master_group_right(
 
     # -- P-03: deepcopy + set_jsonb --
     new_data = copy.deepcopy(profile.data)
-    new_data.setdefault("account", {})[CAN_CREATE_GROUPS_KEY] = (
-        can_create_groups
+    new_data.setdefault("account", {})[CAN_CREATE_SCHOOLS_KEY] = (
+        can_create_schools
     )
     profile.set_jsonb("data", new_data)
 
     # M-01: an admin decision about what an account may do is auditable for
     # the same reason verify/reject/revoke are.
     await record_audit(
-        event="master_group_right_set",
+        event="master_school_right_set",
         actor_id=admin.id,
         actor_type="admin",
         target_type="master_profile",
         target_id=user_id,
-        data={"can_create_groups": can_create_groups},
+        data={"can_create_schools": can_create_schools},
         session=session,
     )
 
     logger.info(
-        "master_group_right_set",
+        "master_school_right_set",
         user_id=str(user_id),
         admin_id=str(admin.id),
-        can_create_groups=can_create_groups,
+        can_create_schools=can_create_schools,
     )
 
     return profile
@@ -534,7 +534,7 @@ async def reject_master(
 
     # BE-59: the appointments waiting for this verification are closed, and
     # each school's curator is told. Under the same FOR UPDATE as the
-    # status write -- profile before offers, curator_groups' order.
+    # status write -- profile before offers, schools' order.
     await close_pending_master_offers(user_id, session)
 
     # M-01: audit trail for master rejection.

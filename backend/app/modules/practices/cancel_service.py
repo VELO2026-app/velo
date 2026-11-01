@@ -149,7 +149,7 @@ async def _cancel_one(
     # practice's owner -- two people, and the audit row must name both.
     audit_data: dict[str, object] = {"refunded_bookings": refunded_count}
     if acting_as_curator:
-        audit_data["group_id"] = str(curated_group_id)
+        audit_data["school_id"] = str(curated_group_id)
         audit_data["master_id"] = str(practice.master_id)
     await record_audit(
         event=(
@@ -395,7 +395,7 @@ async def _tell_master_cancelled_by_curator(
             "params": {"practice_id": str(primary.id)},
             "practice_title": primary.title,
             "scheduled_at": when_text,
-            "group_name": group.name,
+            "school_name": group.name,
             "cancelled_count": cancelled_count,
         },
     )
@@ -407,7 +407,7 @@ def _right_over_sibling(user: User, curated_group_id: UUID | None):
       - the master (curated_group_id None): Practice.master_id == user.id
         (C2). Defense in depth since C2-b removed parent_practice_id from
         UpdatePracticeRequest: the series identity is set at birth only.
-      - the curator (BE-64): Practice.curator_group_id == the school.
+      - the curator (BE-64): Practice.school_id == the school.
         Every occurrence of a series is born with its root's master and
         school (_owned_root_parent_or_400, the school check in
         create_practice, _build_child_occurrence), the school never
@@ -423,7 +423,7 @@ def _right_over_sibling(user: User, curated_group_id: UUID | None):
     return (
         Practice.master_id == user.id
         if curated_group_id is None
-        else Practice.curator_group_id == curated_group_id
+        else Practice.school_id == curated_group_id
     )
 
 

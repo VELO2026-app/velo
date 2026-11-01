@@ -15,7 +15,7 @@ from uuid import UUID
 from pydantic import BaseModel
 
 
-class AdminCuratorGroupCuratorRef(BaseModel):
+class AdminSchoolCuratorRef(BaseModel):
     """The school's owner, as the admin list shows them.
 
     Two fields, not the member-facing three: the admin list is a table, and
@@ -27,7 +27,7 @@ class AdminCuratorGroupCuratorRef(BaseModel):
     display_name: str
 
 
-class AdminCuratorGroupListItem(BaseModel):
+class AdminSchoolListItem(BaseModel):
     """One school in the admin list.
 
     is_active IS A FIELD, NOT A FILTER, and this is the only place in the
@@ -45,17 +45,17 @@ class AdminCuratorGroupListItem(BaseModel):
 
     id: UUID
     name: str
-    curator: AdminCuratorGroupCuratorRef
+    curator: AdminSchoolCuratorRef
     masters_count: int
     students_count: int
     is_active: bool
     created_at: datetime
 
 
-class PaginatedAdminCuratorGroupsResponse(BaseModel):
-    """GET /api/v1/admin/curator-groups."""
+class PaginatedAdminSchoolsResponse(BaseModel):
+    """GET /api/v1/admin/schools."""
 
-    items: list[AdminCuratorGroupListItem]
+    items: list[AdminSchoolListItem]
     total: int
     limit: int
     offset: int

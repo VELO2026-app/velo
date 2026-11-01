@@ -36,7 +36,7 @@ class AdminMasterListItem(BaseModel):
         loaded by the list_masters join -- zero extra cost.
 
     P4/GT-9:
-      - curator_groups_count: how many curator groups this master OWNS, in
+      - schools_count: how many schools this master OWNS, in
         the same batched shape as the two counts above. Counts ACTIVE AND
         FROZEN alike: revoking a master's verification does not dissolve
         their schools, and an admin looking at the person needs to see what
@@ -45,7 +45,7 @@ class AdminMasterListItem(BaseModel):
         not happen; the FE shows "-".
 
     GT-15:
-      - can_create_groups: whether the admin has granted this master the
+      - can_create_schools: whether the admin has granted this master the
         right to FOUND schools. Read off the profile row the list already
         joined -- zero extra cost, like methods and available_cents.
 
@@ -58,7 +58,7 @@ class AdminMasterListItem(BaseModel):
         A `| None` would invent a third state that the data cannot
         produce, and the FE would need a "-" branch that never renders.
 
-        Distinct from curator_groups_count next to it: the count says what
+        Distinct from schools_count next to it: the count says what
         this master already owns (schools survive both a revoked right and
         a revoked verification), the flag says what they may found next.
         A master with three schools and no flag is a normal state.
@@ -75,9 +75,9 @@ class AdminMasterListItem(BaseModel):
     methods: list[str] = Field(default_factory=list)
     practices_count: int | None = None
     students_count: int | None = None
-    curator_groups_count: int | None = None
+    schools_count: int | None = None
     available_cents: int | None = None
-    can_create_groups: bool = False
+    can_create_schools: bool = False
 
 
 class AdminMasterDetail(AdminMasterListItem):

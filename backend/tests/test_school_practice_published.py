@@ -66,7 +66,7 @@ from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 
 PRACTICES_URL = "/api/v1/practices"
-_TYPE = "curator_group.practice_published"
+_TYPE = "school.practice_published"
 _PROFILE_CANDIDATES = (
     Path(__file__).resolve().parents[2] / "comms-profile",
     Path("/comms-profile"),
@@ -149,7 +149,7 @@ async def _join(
     kind: SchoolMemberKind = SchoolMemberKind.STUDENT,
 ) -> SchoolMember:
     row = SchoolMember(
-        group_id=school.id,
+        school_id=school.id,
         user_id=UUID(auth["user"]["id"]),
         kind=kind.value,
     )
@@ -201,8 +201,8 @@ async def _draft(
         "currency": "eur",
     }
     if school is not None:
-        body["audience_kind"] = "curator_groups"
-        body["curator_group_id"] = str(school.id)
+        body["audience_kind"] = "schools"
+        body["school_id"] = str(school.id)
     if recurrence:
         body["recurrence"] = recurrence
     created = await client.post(
@@ -257,7 +257,7 @@ async def _lines(
             await session.execute(
                 select(SchoolEvent)
                 .where(
-                    SchoolEvent.group_id == school.id,
+                    SchoolEvent.school_id == school.id,
                     SchoolEvent.event
                     == SchoolEventKind.PRACTICE_PUBLISHED.value,
                 )
@@ -321,7 +321,7 @@ async def test_publishing_tells_the_school_and_writes_its_journal(
 ) -> None:
     """One line, one message, and the message points at the practice.
 
-    open_practice rather than open_curator_group: the person is being told
+    open_practice rather than open_school: the person is being told
     about a practice, and a link to the school page would leave them
     hunting for it on a list. Same choice and same reason as
     practice.cancelled_by_curator (BE-21).
@@ -341,7 +341,7 @@ async def test_publishing_tells_the_school_and_writes_its_journal(
     assert len(messages) == 1
     assert messages[0]["action_data"]["action"] == "open_practice"
     assert messages[0]["action_data"]["params"]["practice_id"] == practice_id
-    assert messages[0]["action_data"]["group_name"] == school.name
+    assert messages[0]["action_data"]["school_name"] == school.name
     assert messages[0]["action_data"]["actor_name"] == "Ната"
 
 
@@ -464,8 +464,8 @@ async def test_one_person_in_two_target_schools_is_told_once(
             "is_free": True,
             "price_cents": 0,
             "currency": "eur",
-            "audience_kind": "curator_groups",
-            "curator_group_id": [str(morning.id), str(evening.id)],
+            "audience_kind": "schools",
+            "school_id": [str(morning.id), str(evening.id)],
         },
         headers=auth_headers(author["session_token"]),
     )
@@ -589,7 +589,7 @@ async def test_an_author_who_left_the_school_announces_nothing(
 ) -> None:
     """The ownership survives the departure; the broadcast does not.
 
-    Nothing rewrites the practice's curator_group_id when a master leaves
+    Nothing rewrites the practice's school_id when a master leaves
     (BE-74: the owner column never moves), and the publish path does not re-check membership -- the gate that
     would sits on the audience branch, which a status-only PATCH never
     enters. So the publication itself SUCCEEDS, and it is
@@ -798,7 +798,7 @@ class TestProfile:
             assert set(sheets) <= set(types), locale
 
     def test_the_new_type_is_silenceable_with_the_school_family(self) -> None:
-        """curator_groups, and for the reason that made the category.
+        """schools, and for the reason that made the category.
 
         It scales: every published practice, from every master of the
         school, to every member. member_joined is in the same bucket for
@@ -810,14 +810,14 @@ class TestProfile:
         types = yaml.safe_load(
             (_profile_dir() / "types.yaml").read_text()
         )["types"]
-        assert types[_TYPE]["category"] == "curator_groups"
-        assert types["curator_group.member_joined"]["category"] == (
-            "curator_groups"
+        assert types[_TYPE]["category"] == "schools"
+        assert types["school.member_joined"]["category"] == (
+            "schools"
         )
         # "No category" used to read as an empty record (`is None`). Since
         # 3.0.0 the record also carries the type's channels, so it is not
         # empty any more -- the property is the absent category, paired
         # with the record actually being there.
-        offered = types["curator_group.transfer_offered"]
+        offered = types["school.transfer_offered"]
         assert "category" not in offered
         assert offered["channels"] == ["in_app", "telegram"]

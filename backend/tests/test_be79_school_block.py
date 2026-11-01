@@ -7,7 +7,7 @@
 # _TID_MIN/_TID_MAX, ONCE -- tests/telegram_id_bands.py parses it. Checked
 # free on 229f2f8: free_windows(space=(70000, 72999)) returned (70800, 70849).
 #
-# WHAT A BLOCK IS. The membership row is DELETED and a curator_group_block
+# WHAT A BLOCK IS. The membership row is DELETED and a school_block
 # row carrying its kind and joined_at takes its place, in one transaction;
 # an unblock swaps them back. So every assertion about "the person is not in
 # the school" is an assertion about a missing member row, and every one is
@@ -43,7 +43,7 @@ from app.core.config import settings
 from app.core.database import get_session_factory
 from app.core.events.models import OutboxEvent
 from app.modules.masters.models import MasterProfile
-from app.modules.schools import service as curator_service
+from app.modules.schools import service as school_service
 from app.modules.schools.models import (
     School,
     SchoolBlock,
@@ -57,15 +57,15 @@ from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, fresh_execute, full_cleanup_range, login_user
 from tests.school_race_harness import race
 
-GROUPS_URL = "/api/v1/masters/me/curator-groups"
-INVITES_URL = "/api/v1/masters/me/curator-groups/{group_id}/invites"
-PREVIEW_URL = "/api/v1/curator-groups/invites/{token}"
-JOIN_URL = "/api/v1/curator-groups/join"
-MINE_URL = "/api/v1/curator-groups/mine"
-MEMBERS_URL = "/api/v1/masters/me/curator-groups/{group_id}/members"
-BLOCK_URL = "/api/v1/masters/me/curator-groups/{group_id}/members/{user_id}/block"
-UNBLOCK_URL = "/api/v1/masters/me/curator-groups/{group_id}/blocks/{user_id}"
-BLOCKS_URL = "/api/v1/masters/me/curator-groups/{group_id}/blocks"
+GROUPS_URL = "/api/v1/masters/me/schools"
+INVITES_URL = "/api/v1/masters/me/schools/{school_id}/invites"
+PREVIEW_URL = "/api/v1/schools/invites/{token}"
+JOIN_URL = "/api/v1/schools/join"
+MINE_URL = "/api/v1/schools/mine"
+MEMBERS_URL = "/api/v1/masters/me/schools/{school_id}/members"
+BLOCK_URL = "/api/v1/masters/me/schools/{school_id}/members/{user_id}/block"
+UNBLOCK_URL = "/api/v1/masters/me/schools/{school_id}/blocks/{user_id}"
+BLOCKS_URL = "/api/v1/masters/me/schools/{school_id}/blocks"
 
 _BOT_URL = "https://t.me/velo_test_bot"
 _DEEPLINK = "?startapp=school__"
@@ -98,7 +98,7 @@ async def _verified_master(
         MasterProfile(
             user_id=user_id,
             data={
-                "account": {"status": "verified", "can_create_groups": True},
+                "account": {"status": "verified", "can_create_schools": True},
                 "profile": {"bio": "m"},
             },
         )
@@ -129,7 +129,7 @@ async def _school(client: AsyncClient, curator: dict, name: str = "Школа") 
 async def _token(client: AsyncClient, curator: dict, group_id: str) -> str:
     with patch.object(settings, "telegram_bot_url", _BOT_URL):
         resp = await client.post(
-            INVITES_URL.format(group_id=group_id), json={}, headers=_h(curator),
+            INVITES_URL.format(school_id=group_id), json={}, headers=_h(curator),
         )
     assert resp.status_code == 200, resp.text
     return resp.json()["invite_url"].split(_DEEPLINK, 1)[1]
@@ -144,7 +144,7 @@ async def _seed_member(
     joined_at: datetime | None = None,
 ) -> None:
     row = SchoolMember(
-        group_id=UUID(group_id), user_id=_uid(auth), kind=kind.value,
+        school_id=UUID(group_id), user_id=_uid(auth), kind=kind.value,
     )
     if joined_at is not None:
         row.joined_at = joined_at
@@ -155,14 +155,14 @@ async def _seed_member(
 
 async def _block(client, curator, group_id, person):
     return await client.post(
-        BLOCK_URL.format(group_id=group_id, user_id=person["user"]["id"]),
+        BLOCK_URL.format(school_id=group_id, user_id=person["user"]["id"]),
         headers=_h(curator),
     )
 
 
 async def _unblock(client, curator, group_id, person):
     return await client.delete(
-        UNBLOCK_URL.format(group_id=group_id, user_id=person["user"]["id"]),
+        UNBLOCK_URL.format(school_id=group_id, user_id=person["user"]["id"]),
         headers=_h(curator),
     )
 
@@ -172,7 +172,7 @@ async def _rows(group_id: str, person: dict) -> dict:
     member = (
         await fresh_execute(
             select(SchoolMember).where(
-                SchoolMember.group_id == UUID(group_id),
+                SchoolMember.school_id == UUID(group_id),
                 SchoolMember.user_id == _uid(person),
             )
         )
@@ -180,7 +180,7 @@ async def _rows(group_id: str, person: dict) -> dict:
     block = (
         await fresh_execute(
             select(SchoolBlock).where(
-                SchoolBlock.group_id == UUID(group_id),
+                SchoolBlock.school_id == UUID(group_id),
                 SchoolBlock.user_id == _uid(person),
             )
         )
@@ -192,7 +192,7 @@ async def _journal(group_id: str) -> list[str]:
     rows = (
         await fresh_execute(
             select(SchoolEvent.event).where(
-                SchoolEvent.group_id == UUID(group_id)
+                SchoolEvent.school_id == UUID(group_id)
             )
         )
     ).all()
@@ -218,7 +218,7 @@ async def _mine_ids(client: AsyncClient, auth: dict) -> list[str]:
 
 async def _member_ids(client, curator, group_id) -> list[str]:
     resp = await client.get(
-        MEMBERS_URL.format(group_id=group_id), headers=_h(curator),
+        MEMBERS_URL.format(school_id=group_id), headers=_h(curator),
         params={"limit": 100},
     )
     assert resp.status_code == 200, resp.text
@@ -226,7 +226,7 @@ async def _member_ids(client, curator, group_id) -> list[str]:
 
 
 async def _blocks(client, curator, group_id) -> dict:
-    resp = await client.get(BLOCKS_URL.format(group_id=group_id), headers=_h(curator))
+    resp = await client.get(BLOCKS_URL.format(school_id=group_id), headers=_h(curator))
     assert resp.status_code == 200, resp.text
     return resp.json()
 
@@ -312,14 +312,14 @@ async def test_journal_and_notifications_follow_the_block_once(
     journal = await _journal(group_id)
     assert journal.count(SchoolEventKind.MEMBER_BLOCKED.value) == 1
     types = await _types_for(person)
-    assert types.count("curator_group.member_blocked") == 1
-    assert "curator_group.member_unblocked" not in types
+    assert types.count("school.member_blocked") == 1
+    assert "school.member_unblocked" not in types
 
     assert (await _unblock(client, curator, group_id, person)).status_code == 204
 
     journal = await _journal(group_id)
     assert journal.count(SchoolEventKind.MEMBER_UNBLOCKED.value) == 1
-    assert (await _types_for(person)).count("curator_group.member_unblocked") == 1
+    assert (await _types_for(person)).count("school.member_unblocked") == 1
 
 
 @pytest.mark.asyncio
@@ -360,7 +360,7 @@ async def test_a_blocked_person_cannot_come_back_by_the_link(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     """Joined by the link, blocked, then the link again: 403
-    blocked_in_group, and the preview says why. A stranger holding the same
+    blocked_in_school, and the preview says why. A stranger holding the same
     link still joins -- the link works, it is the person who is refused.
     After an unblock the same person is a member and the preview says so."""
     curator = await _verified_master(client, db_session, _TID_CURATOR)
@@ -373,11 +373,11 @@ async def test_a_blocked_person_cannot_come_back_by_the_link(
 
     refused = await _join(client, person, token)
     assert refused.status_code == 403, refused.text
-    assert refused.json()["error"] == "blocked_in_group"
+    assert refused.json()["error"] == "blocked_in_school"
     preview = await client.get(PREVIEW_URL.format(token=token), headers=_h(person))
     assert preview.status_code == 200, preview.text
     assert preview.json()["can_join"] is False
-    assert preview.json()["reason"] == "blocked_in_group"
+    assert preview.json()["reason"] == "blocked_in_school"
     rows = await _rows(group_id, person)
     assert rows["member"] is None and rows["block"] is not None
 
@@ -423,7 +423,7 @@ def _actor_call(fn, *args, actor_id: UUID, **kwargs):
 
 async def _block_call(curator: dict, group_id: str, person: dict):
     return _actor_call(
-        curator_service.block_school_member,
+        school_service.block_school_member,
         _uid(curator), UUID(group_id), _uid(person),
         actor_id=_uid(curator),
     )
@@ -447,7 +447,7 @@ async def test_k1_a_block_landing_inside_a_join_does_not_let_the_person_back(
     blocked"; the block runs into that window and commits; the join resumes,
     finds no member row and inserts one. Without the re-read of the block
     after the INSERT the person is back in the school with a block row
-    beside the member row. With it: 403 blocked_in_group, and the block row
+    beside the member row. With it: 403 blocked_in_school, and the block row
     is the only row there."""
     curator = await _verified_master(client, db_session, _TID_CURATOR)
     person = await _student(client, _TID_STUDENT)
@@ -457,14 +457,14 @@ async def test_k1_a_block_landing_inside_a_join_does_not_let_the_person_back(
 
     async def _join_call(session: AsyncSession) -> None:
         actor = await session.get(User, _uid(person))
-        await curator_service.join_school_by_token(
+        await school_service.join_school_by_token(
             token, _uid(person), session, actor=actor,
         )
 
     result = await race(
         monkeypatch,
         holder=_join_call,
-        pause_in=(curator_service, "_blocked_in_group"),
+        pause_in=(school_service, "_blocked_in_group"),
         pause="after",
         rival=await _block_call(curator, group_id, person),
     )
@@ -472,7 +472,7 @@ async def test_k1_a_block_landing_inside_a_join_does_not_let_the_person_back(
     assert not result.holder.deadlocked and not result.rival.deadlocked
     assert result.rival.committed, result.rival.error
     assert not result.holder.committed
-    assert getattr(result.holder.error, "code", None) == "blocked_in_group"
+    assert getattr(result.holder.error, "code", None) == "blocked_in_school"
     rows = await _assert_one_of_two(group_id, person)
     assert rows["block"] is not None and rows["member"] is None
 
@@ -495,14 +495,14 @@ async def test_k4_leaving_while_being_blocked_leaves_only_the_block(
 
     async def _leave_call(session: AsyncSession) -> None:
         actor = await session.get(User, _uid(person))
-        await curator_service.leave_school(
+        await school_service.leave_school(
             UUID(group_id), _uid(person), session, actor=actor,
         )
 
     result = await race(
         monkeypatch,
         holder=await _block_call(curator, group_id, person),
-        pause_in=(curator_service, "_drop_pending_transfer_for"),
+        pause_in=(school_service, "_drop_pending_transfer_for"),
         rival=_leave_call,
     )
 
@@ -519,7 +519,7 @@ async def _heir_with_offer(client, db_session) -> tuple[dict, dict, str]:
     heir = await _verified_master(client, db_session, _TID_HEIR)
     group_id = await _school(client, curator)
     await _seed_member(db_session, group_id, heir, SchoolMemberKind.MASTER)
-    db_session.add(SchoolTransfer(group_id=UUID(group_id), to_user_id=_uid(heir)))
+    db_session.add(SchoolTransfer(school_id=UUID(group_id), to_user_id=_uid(heir)))
     await db_session.flush()
     await db_session.commit()
     return curator, heir, group_id
@@ -549,13 +549,13 @@ async def test_k5_a_block_inside_an_accepted_transfer_finds_the_heir_gone(
     curator, heir, group_id = await _heir_with_offer(client, db_session)
 
     accept = _actor_call(
-        curator_service.accept_school_transfer,
+        school_service.accept_school_transfer,
         UUID(group_id), _uid(heir), actor_id=_uid(heir),
     )
     result = await race(
         monkeypatch,
         holder=accept,
-        pause_in=(curator_service, "_has_master_capability"),
+        pause_in=(school_service, "_has_master_capability"),
         rival=await _block_call(curator, group_id, heir),
     )
 
@@ -583,13 +583,13 @@ async def test_k5_an_accept_inside_a_block_does_not_move_the_school(
     curator, heir, group_id = await _heir_with_offer(client, db_session)
 
     accept = _actor_call(
-        curator_service.accept_school_transfer,
+        school_service.accept_school_transfer,
         UUID(group_id), _uid(heir), actor_id=_uid(heir),
     )
     result = await race(
         monkeypatch,
         holder=await _block_call(curator, group_id, heir),
-        pause_in=(curator_service, "_drop_pending_transfer_for"),
+        pause_in=(school_service, "_drop_pending_transfer_for"),
         rival=accept,
     )
 
@@ -603,7 +603,7 @@ async def test_k5_an_accept_inside_a_block_does_not_move_the_school(
     transfers = (
         await fresh_execute(
             select(SchoolTransfer).where(
-                SchoolTransfer.group_id == UUID(group_id)
+                SchoolTransfer.school_id == UUID(group_id)
             )
         )
     ).scalars().all()
@@ -680,13 +680,13 @@ async def test_k5_a_former_curator_cannot_block_in_the_school_he_just_lost(
     await _seed_member(db_session, group_id, bystander, SchoolMemberKind.STUDENT)
 
     accept = _actor_call(
-        curator_service.accept_school_transfer,
+        school_service.accept_school_transfer,
         UUID(group_id), _uid(heir), actor_id=_uid(heir),
     )
     result = await race(
         monkeypatch,
         holder=accept,
-        pause_in=(curator_service, "_frozen_name"),
+        pause_in=(school_service, "_frozen_name"),
         rival=await _block_call(curator, group_id, bystander),
     )
 

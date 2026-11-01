@@ -66,7 +66,7 @@ _TID_MASTER = 69402
 _TID_STUDENT = 69410
 
 _FLAG = "schools_enabled"
-_ANNOUNCE_TYPE = "curator_group.practice_published"
+_ANNOUNCE_TYPE = "school.practice_published"
 
 
 def _off():
@@ -106,7 +106,7 @@ async def _verified_master(
             data={
                 "account": {
                     "status": "verified",
-                    "can_create_groups": True,
+                    "can_create_schools": True,
                 },
                 "profile": {"bio": "m"},
             },
@@ -145,7 +145,7 @@ async def _school_with_practice(
     ):
         db_session.add(
             SchoolMember(
-                group_id=school.id,
+                school_id=school.id,
                 user_id=UUID(auth["user"]["id"]),
                 kind=kind.value,
             )
@@ -170,8 +170,8 @@ async def _school_with_practice(
             "is_free": True,
             "price_cents": 0,
             "currency": "eur",
-            "audience_kind": "curator_groups",
-            "curator_group_id": str(school.id),
+            "audience_kind": "schools",
+            "school_id": str(school.id),
         },
         headers=auth_headers(master["session_token"]),
     )
@@ -196,7 +196,7 @@ async def _announcements(
     lines = (
         await db_session.execute(
             select(SchoolEvent.id).where(
-                SchoolEvent.group_id == school.id,
+                SchoolEvent.school_id == school.id,
                 SchoolEvent.event
                 == SchoolEventKind.PRACTICE_PUBLISHED.value,
             )
@@ -364,7 +364,7 @@ async def _school_with_practice_for_on(
     ):
         db_session.add(
             SchoolMember(
-                group_id=school.id,
+                school_id=school.id,
                 user_id=UUID(auth["user"]["id"]),
                 kind=kind.value,
             )
@@ -389,8 +389,8 @@ async def _school_with_practice_for_on(
             "is_free": True,
             "price_cents": 0,
             "currency": "eur",
-            "audience_kind": "curator_groups",
-            "curator_group_id": str(school.id),
+            "audience_kind": "schools",
+            "school_id": str(school.id),
         },
         headers=auth_headers(master["session_token"]),
     )
@@ -492,8 +492,8 @@ def _school_body(school: School, title: str) -> dict:
         "is_free": True,
         "price_cents": 0,
         "currency": "eur",
-        "audience_kind": "curator_groups",
-        "curator_group_id": str(school.id),
+        "audience_kind": "schools",
+        "school_id": str(school.id),
     }
 
 
@@ -520,7 +520,7 @@ async def test_creating_a_practice_in_a_school_stops_with_the_flag(
         )
     assert refused.status_code == 400, refused.text
     # FE-92 follow-up: the switched-off school is the same refusal, own code.
-    assert refused.json()["error"] == "curator_group_not_usable"
+    assert refused.json()["error"] == "school_not_usable"
     left = (
         await db_session.execute(
             select(Practice.id).where(Practice.title == "Выключено")
@@ -534,4 +534,4 @@ async def test_creating_a_practice_in_a_school_stops_with_the_flag(
             headers=headers,
         )
     assert created.status_code == 201, created.text
-    assert created.json()["curator_group_id"] == str(school.id)
+    assert created.json()["school_id"] == str(school.id)

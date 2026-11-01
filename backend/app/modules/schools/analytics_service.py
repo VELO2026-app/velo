@@ -21,7 +21,7 @@
 #
 # ENGAGEMENT VOCABULARY (BE-107, owner decisions 2026-10-02/03; pinned here
 # once, the cards' labels paraphrase it). Every period metric reads ONE set
-# of practices -- THE PERIOD'S PRACTICES: the school's (curator_group_id),
+# of practices -- THE PERIOD'S PRACTICES: the school's (school_id),
 # COMPLETED (the platform settled the session, GT-20), scheduled_at inside
 # the window [start, end) of the CURATOR'S OWN calendar (BE-34 bounds).
 #   conducted = the number of the period's practices;
@@ -105,7 +105,7 @@ async def get_school_analytics(
     that defines it lives on the same row as the id that scopes the query
     -- the same call get_master_analytics makes.
 
-    Returns a dict ready for CuratorGroupAnalyticsResponse.
+    Returns a dict ready for SchoolAnalyticsResponse.
     """
     group = await _get_group_or_404(user.id, group_id, session)
     window_start, window_end, _prev_start = calendar_period_bounds_in_tz(
@@ -118,7 +118,7 @@ async def get_school_analytics(
     status_rows = (
         await session.execute(
             select(Practice.status, func.count())
-            .where(Practice.curator_group_id == group.id)
+            .where(Practice.school_id == group.id)
             .group_by(Practice.status)
         )
     ).all()
@@ -134,7 +134,7 @@ async def get_school_analytics(
     member_rows = (
         await session.execute(
             select(SchoolMember.kind, func.count())
-            .where(SchoolMember.group_id == group.id)
+            .where(SchoolMember.school_id == group.id)
             .group_by(SchoolMember.kind)
         )
     ).all()
@@ -194,7 +194,7 @@ async def _feedback_and_top(
     #    (BE-107): grouping the whole Checkin / Feedback tables to keep five
     #    rows would read every school's history.
     school_completed = (
-        Practice.curator_group_id == group_id,
+        Practice.school_id == group_id,
         Practice.status == PracticeStatus.COMPLETED.value,
     )
     checkin_counts = (
@@ -282,7 +282,7 @@ async def _engagement(
     """
     # THE PERIOD'S PRACTICES -- one predicate for every period metric.
     period_practices = (
-        Practice.curator_group_id == group_id,
+        Practice.school_id == group_id,
         Practice.status == PracticeStatus.COMPLETED.value,
         Practice.scheduled_at >= window_start,
         Practice.scheduled_at < window_end,
@@ -307,7 +307,7 @@ async def _engagement(
         .join(
             SchoolMember,
             and_(
-                SchoolMember.group_id == group_id,
+                SchoolMember.school_id == group_id,
                 SchoolMember.user_id == Booking.user_id,
                 SchoolMember.kind == SchoolMemberKind.STUDENT.value,
             ),
@@ -333,7 +333,7 @@ async def _engagement(
         .where(
             Booking.user_id == SchoolMember.user_id,
             Booking.status == BookingStatus.ATTENDED.value,
-            Practice.curator_group_id == group_id,
+            Practice.school_id == group_id,
             Practice.scheduled_at >= SchoolMember.joined_at,
             Practice.scheduled_at < window_end,
         )
@@ -344,7 +344,7 @@ async def _engagement(
             select(func.count())
             .select_from(SchoolMember)
             .where(
-                SchoolMember.group_id == group_id,
+                SchoolMember.school_id == group_id,
                 SchoolMember.kind == SchoolMemberKind.STUDENT.value,
                 SchoolMember.joined_at >= window_start,
                 SchoolMember.joined_at < window_end,

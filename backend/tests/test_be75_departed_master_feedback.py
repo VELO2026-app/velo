@@ -70,12 +70,12 @@ from app.modules.schools.models import (
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 
-CHECKINS_URL = "/api/v1/masters/me/curator-groups/{group_id}/checkins"
-REVIEWS_URL = "/api/v1/masters/me/curator-groups/{group_id}/reviews"
-ANALYTICS_URL = "/api/v1/masters/me/curator-groups/{group_id}/analytics"
-PROFILE_URL = "/api/v1/masters/me/curator-groups/{group_id}/students/{user_id}"
-LEAVE_URL = "/api/v1/curator-groups/{group_id}/membership"
-MEMBER_URL = "/api/v1/masters/me/curator-groups/{group_id}/members/{user_id}"
+CHECKINS_URL = "/api/v1/masters/me/schools/{school_id}/checkins"
+REVIEWS_URL = "/api/v1/masters/me/schools/{school_id}/reviews"
+ANALYTICS_URL = "/api/v1/masters/me/schools/{school_id}/analytics"
+PROFILE_URL = "/api/v1/masters/me/schools/{school_id}/students/{user_id}"
+LEAVE_URL = "/api/v1/schools/{school_id}/membership"
+MEMBER_URL = "/api/v1/masters/me/schools/{school_id}/members/{user_id}"
 DEMOTE_URL = MEMBER_URL + "/demote"
 
 _TID_MIN = 70600
@@ -126,7 +126,7 @@ async def _make_verified_master(
         MasterProfile(
             user_id=user_id,
             data={
-                "account": {"status": "verified", "can_create_groups": True},
+                "account": {"status": "verified", "can_create_schools": True},
                 "profile": {"bio": "m"},
             },
         )
@@ -157,7 +157,7 @@ async def _join(
     kind: SchoolMemberKind,
 ) -> None:
     db_session.add(
-        SchoolMember(group_id=school.id, user_id=_uid(auth), kind=kind.value)
+        SchoolMember(school_id=school.id, user_id=_uid(auth), kind=kind.value)
     )
     await db_session.flush()
     await db_session.commit()
@@ -184,8 +184,8 @@ async def _practice(
         is_free=True,
         price_cents=0,
         currency="eur",
-        audience_kind=AudienceKind.CURATOR_GROUPS.value,
-        curator_group_id=school.id,
+        audience_kind=AudienceKind.SCHOOLS.value,
+        school_id=school.id,
     )
     db_session.add(practice)
     await db_session.flush()
@@ -298,18 +298,18 @@ async def _feedback_view(
     group_id = str(school.id)
     prefix = f"{label}:"
     checkins = await _get_ok(
-        client, CHECKINS_URL.format(group_id=group_id), curator, limit=100,
+        client, CHECKINS_URL.format(school_id=group_id), curator, limit=100,
     )
     reviews = await _get_ok(
-        client, REVIEWS_URL.format(group_id=group_id), curator, limit=100,
+        client, REVIEWS_URL.format(school_id=group_id), curator, limit=100,
     )
     profile = await _get_ok(
         client,
-        PROFILE_URL.format(group_id=group_id, user_id=student["user"]["id"]),
+        PROFILE_URL.format(school_id=group_id, user_id=student["user"]["id"]),
         curator,
     )
     analytics = await _get_ok(
-        client, ANALYTICS_URL.format(group_id=group_id), curator,
+        client, ANALYTICS_URL.format(school_id=group_id), curator,
     )
     return {
         "checkins": sorted(
@@ -383,7 +383,7 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
 
 async def _leave(client, school, teacher, curator) -> None:
     resp = await client.delete(
-        LEAVE_URL.format(group_id=school.id),
+        LEAVE_URL.format(school_id=school.id),
         headers=auth_headers(teacher["session_token"]),
     )
     assert resp.status_code == 204, resp.text
@@ -391,7 +391,7 @@ async def _leave(client, school, teacher, curator) -> None:
 
 async def _remove(client, school, teacher, curator) -> None:
     resp = await client.delete(
-        MEMBER_URL.format(group_id=school.id, user_id=teacher["user"]["id"]),
+        MEMBER_URL.format(school_id=school.id, user_id=teacher["user"]["id"]),
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 204, resp.text
@@ -447,7 +447,7 @@ async def test_the_checkin_feeds_practice_filter_follows_the_same_rule(
         client, db_session,
     )
     await _leave(client, school, teacher, curator)
-    url = CHECKINS_URL.format(group_id=school.id)
+    url = CHECKINS_URL.format(school_id=school.id)
 
     planned = await _get_ok(
         client, url, curator,
@@ -471,7 +471,7 @@ async def test_the_checkin_feeds_practice_filter_follows_the_same_rule(
 
 async def _demote(client, db_session, school, teacher, curator) -> None:
     resp = await client.post(
-        DEMOTE_URL.format(group_id=school.id, user_id=teacher["user"]["id"]),
+        DEMOTE_URL.format(school_id=school.id, user_id=teacher["user"]["id"]),
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code in (200, 204), resp.text
@@ -552,7 +552,7 @@ async def test_a_master_still_in_the_school_keeps_every_practice_in_its_feedback
 async def test_the_curators_own_practices_need_no_membership_row(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """The curator has no curator_group_member row (I-2); their scheduled,
+    """The curator has no school_member row (I-2); their scheduled,
     live and cancelled practices still count. The arm that says so is the
     curator test, not the member test."""
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)

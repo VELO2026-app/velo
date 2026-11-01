@@ -10,7 +10,7 @@
 # case and with whitespace collapsed (owner decisions, 2026-10-03). The rule
 # lives in SQL only -- schools.models.school_name_key -- and is
 # enforced twice: the service's pre-checks answer a clean 409 before any
-# write, and the unique index uq_curator_group_curator_name_key catches what
+# write, and the unique index uq_school_curator_name_key catches what
 # a race slips past the pre-check. The transfer row of the grid lives in
 # test_school_transfer.py beside its helpers.
 # =============================================================================
@@ -31,8 +31,8 @@ from app.modules.schools.models import School, school_name_key
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 
-GROUPS_URL = "/api/v1/masters/me/curator-groups"
-GROUP_URL = "/api/v1/masters/me/curator-groups/{group_id}"
+GROUPS_URL = "/api/v1/masters/me/schools"
+GROUP_URL = "/api/v1/masters/me/schools/{school_id}"
 
 _TID_MIN = 70700
 _TID_MAX = 70799
@@ -74,7 +74,7 @@ async def _curator(
         MasterProfile(
             user_id=user.id,
             data={
-                "account": {"status": "verified", "can_create_groups": True},
+                "account": {"status": "verified", "can_create_schools": True},
                 "profile": {"bio": "m"},
             },
         )
@@ -127,18 +127,23 @@ async def test_the_index_rejects_exactly_what_the_builder_calls_the_same(
 
 
 async def test_the_index_is_the_new_one_and_the_old_is_gone(db_session: AsyncSession):
-    """The migration's result, read from pg_indexes, not from the model."""
+    """The migration's result, read from pg_indexes, not from the model.
+
+    The LIKE spans both spellings of the table (BE-90 step 2 renamed
+    curator_group to school): the old exact-match index, under either name,
+    would show up here beside the key index and fail the equality.
+    """
     names = set(
         (
             await db_session.execute(
                 text(
-                    "SELECT indexname FROM pg_indexes WHERE tablename = 'curator_group'"
-                    " AND indexname LIKE 'uq_curator_group_curator_name%'"
+                    "SELECT indexname FROM pg_indexes WHERE tablename = 'school'"
+                    " AND indexname LIKE 'uq_%curator_name%'"
                 )
             )
         ).scalars()
     )
-    assert names == {"uq_curator_group_curator_name_key"}
+    assert names == {"uq_school_curator_name_key"}
 
 
 # =============================================================================
@@ -168,7 +173,7 @@ async def test_create_clashes_by_the_rule(
     resp = await _create(client, curator, second)
     assert resp.status_code == expected, resp.text
     if expected == 409:
-        assert resp.json()["error"] == "curator_group_name_taken"
+        assert resp.json()["error"] == "school_name_taken"
         # The same phrase on the client for both refusals (BE-50): one code.
 
 
@@ -190,13 +195,13 @@ async def test_rename_onto_a_sibling_clashes_by_the_rule(
     headers = auth_headers(curator["session_token"])
     await _create(client, curator, "Школа Елены")
     other = (await _create(client, curator, "Вторая")).json()
-    url = GROUP_URL.format(group_id=other["id"])
+    url = GROUP_URL.format(school_id=other["id"])
 
     clash = await client.patch(
         url, json={"name": f"школа{NBSP} елены"}, headers=headers
     )
     assert clash.status_code == 409
-    assert clash.json()["error"] == "curator_group_name_taken"
+    assert clash.json()["error"] == "school_name_taken"
     # ё against е is a different name: the rename goes through.
     fine = await client.patch(url, json={"name": "Школа Ёлены"}, headers=headers)
     assert fine.status_code == 200, fine.text
@@ -212,7 +217,7 @@ async def test_the_pre_check_refuses_before_any_insert(
     db_session: AsyncSession,
 ):
     """A clash by the rule is refused by the pre-check, not by the index: no
-    INSERT INTO curator_group is even attempted. (Without the pre-check the
+    INSERT INTO school is even attempted. (Without the pre-check the
     index would still answer 409 -- this is what tells the two apart.)"""
     curator = await _curator(client, db_session, 70740)
     assert (await _create(client, curator, "Школа Йоги")).status_code == 201
@@ -220,7 +225,7 @@ async def test_the_pre_check_refuses_before_any_insert(
     inserts: list[str] = []
 
     def _watch(conn, cursor, statement, parameters, context, executemany):
-        if statement.lstrip().upper().startswith("INSERT INTO CURATOR_GROUP "):
+        if statement.lstrip().upper().startswith("INSERT INTO SCHOOL "):
             inserts.append(statement)
 
     sync_engine = get_engine().sync_engine
@@ -254,7 +259,7 @@ async def test_two_spellings_racing_end_as_one_school(
     )
     assert sorted((a.status_code, b.status_code)) == [201, 409]
     loser = a if a.status_code == 409 else b
-    assert loser.json()["error"] == "curator_group_name_taken"
+    assert loser.json()["error"] == "school_name_taken"
     count = (
         await db_session.execute(
             select(func.count())

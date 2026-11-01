@@ -20,7 +20,7 @@
       "key": "main",
       "telegram_id": 600301,
       "display_name": "Мастер FE-54",
-      "can_create_groups": false,
+      "can_create_schools": false,
       "bio": "Тестовый мастер для проверки верстки карточек бронирований.",
       "methods": [
         "yoga — hatha",

@@ -136,7 +136,7 @@ async def get_school_student_profile(
     is_student = (
         await session.execute(
             select(SchoolMember.id).where(
-                SchoolMember.group_id == group.id,
+                SchoolMember.school_id == group.id,
                 SchoolMember.user_id == student_id,
                 SchoolMember.kind == SchoolMemberKind.STUDENT.value,
             )

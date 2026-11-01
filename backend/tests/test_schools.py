@@ -13,11 +13,11 @@
 # via pytest this session. See the delivery report for what WAS checked.
 #
 # CLEANUP is full_cleanup_range(..., delete_users=True) and NOTHING ELSE.
-# All four new tables FK into users / curator_group with ON DELETE CASCADE,
+# All four new tables FK into users / school with ON DELETE CASCADE,
 # so deleting the band's users takes their schools, memberships,
 # invites and transfers with them -- exactly the arrangement chat_threads
 # already relies on (test_master_groups.py's own cleanup comment). Plain
-# cleanup_range would NOT do: it keeps the users, curator_group rows would
+# cleanup_range would NOT do: it keeps the users, school rows would
 # survive the run, and the second run would hit 409 on the same group name.
 #
 # Coverage:
@@ -57,10 +57,10 @@ from tests.helpers import (
     login_user,
 )
 
-GROUPS_URL = "/api/v1/masters/me/curator-groups"
-GROUP_URL = "/api/v1/masters/me/curator-groups/{group_id}"
-MEMBERS_URL = "/api/v1/masters/me/curator-groups/{group_id}/members"
-MEMBER_URL = "/api/v1/masters/me/curator-groups/{group_id}/members/{user_id}"
+GROUPS_URL = "/api/v1/masters/me/schools"
+GROUP_URL = "/api/v1/masters/me/schools/{school_id}"
+MEMBERS_URL = "/api/v1/masters/me/schools/{school_id}/members"
+MEMBER_URL = "/api/v1/masters/me/schools/{school_id}/members/{user_id}"
 REVOKE_URL = "/api/v1/admin/masters/{user_id}/revoke"
 MAKE_MASTER_URL = "/api/v1/admin/users/{user_id}/make-master"
 
@@ -109,7 +109,7 @@ async def _make_verified_master(
     profile = MasterProfile(
         user_id=user_id,
         data={
-            "account": {"status": "verified", "can_create_groups": True},
+            "account": {"status": "verified", "can_create_schools": True},
             "profile": {"bio": "m"},
         },
     )
@@ -163,7 +163,7 @@ async def _add_member(
     next.
     """
     row = SchoolMember(
-        group_id=UUID(group_id),
+        school_id=UUID(group_id),
         user_id=UUID(user_id),
         kind=kind.value,
     )
@@ -282,13 +282,13 @@ async def test_suspended_curator_is_refused_on_all_six_endpoints(
         await client.get(GROUPS_URL, headers=headers),
         await client.post(GROUPS_URL, json={"name": "Вторая"}, headers=headers),
         await client.patch(
-            GROUP_URL.format(group_id=gid), json={"name": "Иная"},
+            GROUP_URL.format(school_id=gid), json={"name": "Иная"},
             headers=headers,
         ),
-        await client.delete(GROUP_URL.format(group_id=gid), headers=headers),
-        await client.get(MEMBERS_URL.format(group_id=gid), headers=headers),
+        await client.delete(GROUP_URL.format(school_id=gid), headers=headers),
+        await client.get(MEMBERS_URL.format(school_id=gid), headers=headers),
         await client.delete(
-            MEMBER_URL.format(group_id=gid, user_id=uuid4()), headers=headers,
+            MEMBER_URL.format(school_id=gid, user_id=uuid4()), headers=headers,
         ),
     ]
     assert [r.status_code for r in calls] == [403] * 6
@@ -338,7 +338,7 @@ async def test_create_duplicate_name_same_curator_conflicts(
         headers=auth_headers(master["session_token"]),
     )
     assert resp.status_code == 409
-    assert resp.json()["error"] == "curator_group_name_taken"
+    assert resp.json()["error"] == "school_name_taken"
 
 
 @pytest.mark.asyncio
@@ -533,7 +533,7 @@ async def test_patch_to_its_own_name_by_the_rule_is_200_and_keeps_the_new_spelli
     """
     master = await _make_verified_master(client, db_session, _TID_CURATOR)
     group = await _create_group(client, master, name="Школа йоги")
-    url = GROUP_URL.format(group_id=group["id"])
+    url = GROUP_URL.format(school_id=group["id"])
     headers = auth_headers(master["session_token"])
 
     same = await client.patch(url, json={"name": "Школа йоги"}, headers=headers)
@@ -556,12 +556,12 @@ async def test_patch_to_another_of_my_groups_names_conflicts(
     await _create_group(client, master, name="Вторая")
 
     resp = await client.patch(
-        GROUP_URL.format(group_id=first["id"]),
+        GROUP_URL.format(school_id=first["id"]),
         json={"name": "Вторая"},
         headers=auth_headers(master["session_token"]),
     )
     assert resp.status_code == 409
-    assert resp.json()["error"] == "curator_group_name_taken"
+    assert resp.json()["error"] == "school_name_taken"
 
 
 @pytest.mark.asyncio
@@ -576,7 +576,7 @@ async def test_patch_without_description_leaves_the_column_untouched(
         client, master, name="Школа", description="Про дыхание",
     )
     headers = auth_headers(master["session_token"])
-    url = GROUP_URL.format(group_id=group["id"])
+    url = GROUP_URL.format(school_id=group["id"])
 
     renamed = await client.patch(url, json={"name": "Школа-2"}, headers=headers)
     assert renamed.status_code == 200
@@ -614,7 +614,7 @@ async def test_patch_reports_live_counters(
     )
 
     resp = await client.patch(
-        GROUP_URL.format(group_id=group["id"]),
+        GROUP_URL.format(school_id=group["id"]),
         json={"name": "Школа+"},
         headers=auth_headers(master["session_token"]),
     )
@@ -642,7 +642,7 @@ async def test_delete_cascades_members_and_second_delete_is_404(
     )
 
     headers = auth_headers(master["session_token"])
-    url = GROUP_URL.format(group_id=group["id"])
+    url = GROUP_URL.format(school_id=group["id"])
 
     first = await client.delete(url, headers=headers)
     assert first.status_code == 204
@@ -650,7 +650,7 @@ async def test_delete_cascades_members_and_second_delete_is_404(
     left = (
         await fresh_execute(
             select(SchoolMember).where(
-                SchoolMember.group_id == UUID(group["id"])
+                SchoolMember.school_id == UUID(group["id"])
             )
         )
     ).scalars().all()
@@ -669,7 +669,7 @@ async def test_delete_of_an_empty_group_is_204(
     master = await _make_verified_master(client, db_session, _TID_CURATOR)
     group = await _create_group(client, master, name="Пустая")
     resp = await client.delete(
-        GROUP_URL.format(group_id=group["id"]),
+        GROUP_URL.format(school_id=group["id"]),
         headers=auth_headers(master["session_token"]),
     )
     assert resp.status_code == 204
@@ -695,7 +695,7 @@ async def test_delete_is_never_blocked_by_anything(
     )
 
     resp = await client.delete(
-        GROUP_URL.format(group_id=group["id"]),
+        GROUP_URL.format(school_id=group["id"]),
         headers=auth_headers(master["session_token"]),
     )
     assert resp.status_code == 204
@@ -726,25 +726,25 @@ async def test_another_curators_group_is_404_on_every_id_route(
     theirs = auth_headers(stranger["session_token"])
     assert (
         await client.patch(
-            GROUP_URL.format(group_id=gid), json={"name": "Моё"},
+            GROUP_URL.format(school_id=gid), json={"name": "Моё"},
             headers=theirs,
         )
     ).status_code == 404
     assert (
-        await client.get(MEMBERS_URL.format(group_id=gid), headers=theirs)
+        await client.get(MEMBERS_URL.format(school_id=gid), headers=theirs)
     ).status_code == 404
     assert (
         await client.delete(
-            MEMBER_URL.format(group_id=gid, user_id=uuid4()), headers=theirs,
+            MEMBER_URL.format(school_id=gid, user_id=uuid4()), headers=theirs,
         )
     ).status_code == 404
     assert (
-        await client.delete(GROUP_URL.format(group_id=gid), headers=theirs)
+        await client.delete(GROUP_URL.format(school_id=gid), headers=theirs)
     ).status_code == 404
 
     mine = auth_headers(owner["session_token"])
     assert (
-        await client.get(MEMBERS_URL.format(group_id=gid), headers=mine)
+        await client.get(MEMBERS_URL.format(school_id=gid), headers=mine)
     ).status_code == 200
 
 
@@ -760,12 +760,12 @@ async def test_unknown_group_id_is_404_and_a_malformed_one_is_422(
     headers = auth_headers(master["session_token"])
 
     missing = await client.get(
-        MEMBERS_URL.format(group_id=uuid4()), headers=headers,
+        MEMBERS_URL.format(school_id=uuid4()), headers=headers,
     )
     assert missing.status_code == 404
 
     malformed = await client.get(
-        MEMBERS_URL.format(group_id="not-a-uuid"), headers=headers,
+        MEMBERS_URL.format(school_id="not-a-uuid"), headers=headers,
     )
     assert malformed.status_code == 422
 
@@ -780,9 +780,9 @@ async def test_patch_after_delete_is_404(
     group = await _create_group(client, master, name="Школа")
     headers = auth_headers(master["session_token"])
 
-    await client.delete(GROUP_URL.format(group_id=group["id"]), headers=headers)
+    await client.delete(GROUP_URL.format(school_id=group["id"]), headers=headers)
     resp = await client.patch(
-        GROUP_URL.format(group_id=group["id"]),
+        GROUP_URL.format(school_id=group["id"]),
         json={"name": "Снова"},
         headers=headers,
     )
@@ -803,7 +803,7 @@ async def test_empty_roster_reports_zero_total(
     master = await _make_verified_master(client, db_session, _TID_CURATOR)
     group = await _create_group(client, master, name="Школа")
     resp = await client.get(
-        MEMBERS_URL.format(group_id=group["id"]),
+        MEMBERS_URL.format(school_id=group["id"]),
         headers=auth_headers(master["session_token"]),
     )
     assert resp.status_code == 200
@@ -829,7 +829,7 @@ async def test_verified_master_member_is_visible_and_counted(
 
     headers = auth_headers(curator["session_token"])
     roster = await client.get(
-        MEMBERS_URL.format(group_id=group["id"]), headers=headers,
+        MEMBERS_URL.format(school_id=group["id"]), headers=headers,
     )
     assert roster.status_code == 200
     item = roster.json()["items"][0]
@@ -864,7 +864,7 @@ async def test_student_member_with_a_verified_profile_is_still_a_student(
     headers = auth_headers(curator["session_token"])
     item = (
         await client.get(
-            MEMBERS_URL.format(group_id=group["id"]), headers=headers,
+            MEMBERS_URL.format(school_id=group["id"]), headers=headers,
         )
     ).json()["items"][0]
     assert item["kind"] == "student"
@@ -899,12 +899,12 @@ async def test_suspended_master_hides_and_returns_without_touching_rows(
     )
 
     headers = auth_headers(curator["session_token"])
-    members_url = MEMBERS_URL.format(group_id=group["id"])
+    members_url = MEMBERS_URL.format(school_id=group["id"])
 
     before = (
         await fresh_execute(
             select(SchoolMember.id, SchoolMember.joined_at).where(
-                SchoolMember.group_id == UUID(group["id"])
+                SchoolMember.school_id == UUID(group["id"])
             )
         )
     ).all()
@@ -935,7 +935,7 @@ async def test_suspended_master_hides_and_returns_without_touching_rows(
     after = (
         await fresh_execute(
             select(SchoolMember.id, SchoolMember.joined_at).where(
-                SchoolMember.group_id == UUID(group["id"])
+                SchoolMember.school_id == UUID(group["id"])
             )
         )
     ).all()
@@ -964,7 +964,7 @@ async def test_kind_filter_splits_the_roster(
     )
 
     headers = auth_headers(curator["session_token"])
-    url = MEMBERS_URL.format(group_id=group["id"])
+    url = MEMBERS_URL.format(school_id=group["id"])
 
     both = (await client.get(url, headers=headers)).json()
     assert both["total"] == 2
@@ -988,7 +988,7 @@ async def test_unknown_kind_is_422_from_the_literal(
     master = await _make_verified_master(client, db_session, _TID_CURATOR)
     group = await _create_group(client, master, name="Школа")
     resp = await client.get(
-        f"{MEMBERS_URL.format(group_id=group['id'])}?kind=foo",
+        f"{MEMBERS_URL.format(school_id=group['id'])}?kind=foo",
         headers=auth_headers(master["session_token"]),
     )
     assert resp.status_code == 422
@@ -1011,7 +1011,7 @@ async def test_search_matches_by_name_and_misses_cleanly(
     )
 
     headers = auth_headers(curator["session_token"])
-    url = MEMBERS_URL.format(group_id=group["id"])
+    url = MEMBERS_URL.format(school_id=group["id"])
 
     hit = (await client.get(f"{url}?search=ксен", headers=headers)).json()
     assert hit["total"] == 1
@@ -1037,7 +1037,7 @@ async def test_offset_past_total_returns_an_empty_page_with_a_live_total(
 
     body = (
         await client.get(
-            f"{MEMBERS_URL.format(group_id=group['id'])}?offset=50",
+            f"{MEMBERS_URL.format(school_id=group['id'])}?offset=50",
             headers=auth_headers(curator["session_token"]),
         )
     ).json()
@@ -1073,7 +1073,7 @@ async def test_roster_is_newest_membership_first(
 
     items = (
         await client.get(
-            MEMBERS_URL.format(group_id=group["id"]),
+            MEMBERS_URL.format(school_id=group["id"]),
             headers=auth_headers(curator["session_token"]),
         )
     ).json()["items"]
@@ -1105,14 +1105,14 @@ async def test_remove_member_is_idempotent(
 
     headers = auth_headers(curator["session_token"])
     url = MEMBER_URL.format(
-        group_id=group["id"], user_id=student["user"]["id"],
+        school_id=group["id"], user_id=student["user"]["id"],
     )
 
     first = await client.delete(url, headers=headers)
     assert first.status_code == 204
     assert (
         await client.get(
-            MEMBERS_URL.format(group_id=group["id"]), headers=headers,
+            MEMBERS_URL.format(school_id=group["id"]), headers=headers,
         )
     ).json()["total"] == 0
 
@@ -1138,21 +1138,21 @@ async def test_removing_the_curator_or_a_stranger_is_204_without_effect(
     headers = auth_headers(curator["session_token"])
     own = await client.delete(
         MEMBER_URL.format(
-            group_id=group["id"], user_id=curator["user"]["id"],
+            school_id=group["id"], user_id=curator["user"]["id"],
         ),
         headers=headers,
     )
     assert own.status_code == 204
 
     nobody = await client.delete(
-        MEMBER_URL.format(group_id=group["id"], user_id=uuid4()),
+        MEMBER_URL.format(school_id=group["id"], user_id=uuid4()),
         headers=headers,
     )
     assert nobody.status_code == 204
 
     assert (
         await client.get(
-            MEMBERS_URL.format(group_id=group["id"]), headers=headers,
+            MEMBERS_URL.format(school_id=group["id"]), headers=headers,
         )
     ).json()["total"] == 1
 
@@ -1187,7 +1187,7 @@ async def test_one_relation_per_pair_is_enforced_by_the_database(
 
     db_session.add(
         SchoolMember(
-            group_id=UUID(group["id"]),
+            school_id=UUID(group["id"]),
             user_id=UUID(student["user"]["id"]),
             kind=SchoolMemberKind.MASTER.value,
         )
@@ -1202,7 +1202,7 @@ async def test_only_one_pending_transfer_per_group(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """UNIQUE (group_id) on curator_group_transfer (I-10).
+    """UNIQUE (group_id) on school_transfer (I-10).
 
     The table has no writer until GT-4; this checks the promise the schema
     makes to that writer, so GT-4 does not discover it by shipping.
@@ -1218,7 +1218,7 @@ async def test_only_one_pending_transfer_per_group(
 
     db_session.add(
         SchoolTransfer(
-            group_id=UUID(group["id"]),
+            school_id=UUID(group["id"]),
             to_user_id=UUID(first["user"]["id"]),
         )
     )
@@ -1227,7 +1227,7 @@ async def test_only_one_pending_transfer_per_group(
 
     db_session.add(
         SchoolTransfer(
-            group_id=UUID(group["id"]),
+            school_id=UUID(group["id"]),
             to_user_id=UUID(second["user"]["id"]),
         )
     )
@@ -1265,7 +1265,7 @@ async def test_deleting_a_member_user_cascades_the_membership(
     left = (
         await fresh_execute(
             select(SchoolMember).where(
-                SchoolMember.group_id == UUID(group["id"])
+                SchoolMember.school_id == UUID(group["id"])
             )
         )
     ).scalars().all()

@@ -361,12 +361,12 @@ async def _owned_group_ids_or_400(
         )
 
 
-_SCHOOL_NOT_USABLE = "curator_group_id must be an active school you belong to"
+_SCHOOL_NOT_USABLE = "school_id must be an active school you belong to"
 # FE-92 follow-up: the refusal's own code, so the front can say «the school
 # is unavailable» instead of a generic «bad request». ONE code for every
 # cause (schools switched off, no such / inactive school, not a member of it,
 # the school deleted mid-create) -- the same reason the message is one.
-_SCHOOL_NOT_USABLE_CODE = "curator_group_not_usable"
+_SCHOOL_NOT_USABLE_CODE = "school_not_usable"
 
 
 async def _usable_school_or_400(
@@ -405,7 +405,7 @@ async def _usable_school_or_400(
         School.curator_user_id == master_id,
         select(SchoolMember.id)
         .where(
-            SchoolMember.group_id == School.id,
+            SchoolMember.school_id == School.id,
             SchoolMember.user_id == master_id,
             SchoolMember.kind == SchoolMemberKind.MASTER.value,
         )
@@ -445,7 +445,7 @@ async def _effective_master_id_or_4xx(
     a school curator creating a practice for a master of that school, and
     is accepted only when ALL of these hold (owner ruling, 2026-10-01):
 
-      1. the request names the school (curator_group_id, explicitly --
+      1. the request names the school (school_id, explicitly --
          a child's school inherited from its parent does not count: the
          rule is "created IN a school", said by the request itself);
       2. the school is usable by the caller at all -- schools switched on,
@@ -503,10 +503,10 @@ async def _effective_master_id_or_4xx(
             code="curator_cannot_add_occurrence",
         )
     target_id = body.master_id
-    school_id = body.curator_group_id
+    school_id = body.school_id
     if school_id is None:
         raise BadRequestError(
-            "master_id of another master requires curator_group_id",
+            "master_id of another master requires school_id",
             code="master_id_requires_school",
         )
     await _usable_school_or_400(user.id, school_id, session)
@@ -559,7 +559,7 @@ async def _lock_school_master_or_400(
         await session.execute(
             select(SchoolMember.id)
             .where(
-                SchoolMember.group_id == school_id,
+                SchoolMember.school_id == school_id,
                 SchoolMember.user_id == master_id,
                 SchoolMember.kind == SchoolMemberKind.MASTER.value,
             )
@@ -600,7 +600,7 @@ _NOT_FOUND = "Practice not found"
 async def _lock_group_as_owner(
     curator_user_id: UUID, school_id: UUID, session: AsyncSession,
 ) -> bool:
-    """curator_groups' _lock_group_as_owner, imported lazily (import cycle:
+    """schools' _lock_group_as_owner, imported lazily (import cycle:
     schools/service.py imports practices/models.py)."""
     from app.modules.schools.service import (
         _lock_group_as_owner as lock,
@@ -627,7 +627,7 @@ async def _curated_school_of(
 async def _refuse_blocked_in_school(
     school_id: UUID | None, user_id: UUID, session: AsyncSession,
 ) -> None:
-    """403 blocked_in_group if `user_id` is blocked in `school_id` (BE-79,
+    """403 blocked_in_school if `user_id` is blocked in `school_id` (BE-79,
     gate ruling 3, 3 October): a master blocked in a school neither edits
     nor publishes the school's practices -- his own included -- and does
     not add a session to his series there. Cancelling his own practice and
@@ -843,7 +843,7 @@ class _CuratorAct:
 # publication of a master's own draft by edit.
 _CURATOR_CREATED = _CuratorAct(
     event="practice_created_by_curator",
-    type="curator_group.practice_created_for_master",
+    type="school.practice_created_for_master",
     key="practice-created-by-curator",
     per_act=False,
     title="Куратор создал и опубликовал практику от вашего имени",
@@ -852,7 +852,7 @@ _CURATOR_CREATED = _CuratorAct(
 )
 _CURATOR_PUBLISHED = _CuratorAct(
     event="practice_published_by_curator",
-    type="curator_group.master_practice_published",
+    type="school.master_practice_published",
     key="practice-published-by-curator",
     per_act=False,
     title="Куратор опубликовал вашу практику",
@@ -861,7 +861,7 @@ _CURATOR_PUBLISHED = _CuratorAct(
 )
 _CURATOR_EDITED = _CuratorAct(
     event="practice_updated_by_curator",
-    type="curator_group.master_practice_edited",
+    type="school.master_practice_edited",
     key="practice-edited-by-curator",
     per_act=True,
     title="Куратор изменил вашу практику",
@@ -870,7 +870,7 @@ _CURATOR_EDITED = _CuratorAct(
 )
 _CURATOR_DELETED = _CuratorAct(
     event="practice_deleted_by_curator",
-    type="curator_group.master_practice_deleted",
+    type="school.master_practice_deleted",
     key="practice-deleted-by-curator",
     per_act=False,
     title="Куратор удалил ваш черновик",
@@ -926,7 +926,7 @@ async def _tell_master_of_curator_act(
         target_type="practice",
         target_id=practice.id,
         data={
-            "group_id": str(practice.curator_group_id),
+            "school_id": str(practice.school_id),
             "master_id": str(practice.master_id),
         },
         session=session,
@@ -934,7 +934,7 @@ async def _tell_master_of_curator_act(
     group_name = (
         await session.execute(
             select(School.name).where(
-                School.id == practice.curator_group_id,
+                School.id == practice.school_id,
             )
         )
     ).scalar_one()
@@ -971,7 +971,7 @@ async def _tell_master_of_curator_act(
             **action,
             "practice_title": practice.title,
             "scheduled_at": when_text,
-            "group_name": group_name,
+            "school_name": group_name,
             "actor_name": actor_name,
         },
     )
@@ -1020,13 +1020,13 @@ async def group_names_for_practice(
 async def school_name_for_practice(
     practice: Practice, session: AsyncSession,
 ) -> str | None:
-    """PracticeResponse.curator_group_name -- the OWNING school's name, or
+    """PracticeResponse.school_name -- the OWNING school's name, or
     None for a practice without one (BE-74).
 
-    For EVERY audience, not only 'curator_groups': a public practice of a
+    For EVERY audience, not only 'schools': a public practice of a
     school is still that school's, and the name is what the frontend shows
     next to it. Seen by everyone who can read the practice (owner ruling,
-    2026-10-01) -- for a public one that is anybody; for a 'curator_groups'
+    2026-10-01) -- for a public one that is anybody; for a 'schools'
     one it is the school's own people, plus a booked non-owner who reaches
     the detail by the H-R2-8 grandfather and needs the name to read
     "Вы не состоите в школе «...»". A stranger never gets that far: the
@@ -1038,12 +1038,12 @@ async def school_name_for_practice(
     the practice, the name says which school it belongs to, and a master
     given the first without the second cannot tell what to fix.
     """
-    if practice.curator_group_id is None:
+    if practice.school_id is None:
         return None
     return (
         await session.execute(
             select(School.name).where(
-                School.id == practice.curator_group_id,
+                School.id == practice.school_id,
             )
         )
     ).scalar_one_or_none()
@@ -1494,7 +1494,7 @@ def practice_to_response(
     zoom_meeting_status: str | None = None,
     deduplicated: bool = False,
     audience_group_names: list[str] | None = None,
-    curator_group_name: str | None = None,
+    school_name: str | None = None,
     audience_unavailable: bool | None = None,
 ) -> PracticeResponse:
     """Build PracticeResponse from ORM object with master_name and master_methods.
@@ -1569,13 +1569,13 @@ def practice_to_response(
     if audience_group_names is not None:
         resp.audience_group_names = audience_group_names
     # P5/GT-12, BE-74: same "no ORM attribute, set after model_validate"
-    # shape as the line above (curator_group_id itself IS a column and comes
+    # shape as the line above (school_id itself IS a column and comes
     # through from_attributes). None means "the caller did not compute it",
     # which is not the same as false -- a caller that skips the lookup
     # leaves the schema default in place rather than asserting the practice
     # is fine.
-    if curator_group_name is not None:
-        resp.curator_group_name = curator_group_name
+    if school_name is not None:
+        resp.school_name = school_name
     if audience_unavailable is not None:
         resp.audience_unavailable = audience_unavailable
 
@@ -1688,14 +1688,14 @@ async def _same_school_or_409(
     the parent is resolved. Same school (both none included) -> it IS the
     repeat, and the caller returns it as before.
     """
-    expected = body.curator_group_id
+    expected = body.school_id
     if (
-        "curator_group_id" not in body.model_fields_set
+        "school_id" not in body.model_fields_set
         and body.parent_practice_id is not None
     ):
         parent = await session.get(Practice, body.parent_practice_id)
-        expected = parent.curator_group_id if parent is not None else None
-    if candidate.curator_group_id != expected:
+        expected = parent.school_id if parent is not None else None
+    if candidate.school_id != expected:
         raise ConflictError(
             "A practice with the same title and time already exists "
             "outside this school",
@@ -1850,9 +1850,9 @@ async def create_practice(
     # cannot create a practice in before anything is inserted. BE-102: on
     # the path for another master the same check already ran, for the
     # caller, inside _effective_master_id_or_4xx.
-    if body.curator_group_id is not None and not for_another_master:
+    if body.school_id is not None and not for_another_master:
         await _usable_school_or_400(
-            user.id, body.curator_group_id, session,
+            user.id, body.school_id, session,
         )
     # H-R2 (3.4): validate parent_practice_id BEFORE anything is inserted
     # -- same placement discipline as the group check above. Only on the
@@ -1871,7 +1871,7 @@ async def create_practice(
         # no member row, and _effective_master_id_or_4xx refuses him.
         if parent is not None:
             await _refuse_blocked_in_school(
-                parent.curator_group_id, user.id, session,
+                parent.school_id, user.id, session,
             )
 
     # T-23 (owner-ruled 2026-08-17): a manually-attached child (this path;
@@ -1905,18 +1905,18 @@ async def create_practice(
     # another school's series, or a school child of a general series, is
     # the cross-school mix the one-school rule forbids. No parent -> the
     # request's own school (or none).
-    effective_school_id = body.curator_group_id
+    effective_school_id = body.school_id
     if parent is not None:
-        if "curator_group_id" in body.model_fields_set:
-            if body.curator_group_id != parent.curator_group_id:
+        if "school_id" in body.model_fields_set:
+            if body.school_id != parent.school_id:
                 raise BadRequestError(
-                    "curator_group_id conflicts with the parent practice's "
-                    "school -- omit curator_group_id to inherit it, or "
+                    "school_id conflicts with the parent practice's "
+                    "school -- omit school_id to inherit it, or "
                     "match it explicitly",
                     code="practice_school_immutable",
                 )
         else:
-            effective_school_id = parent.curator_group_id
+            effective_school_id = parent.school_id
 
     practice = Practice(
         master_id=master_id,
@@ -1934,7 +1934,7 @@ async def create_practice(
         price_cents=price_cents,
         currency=body.currency,
         audience_kind=effective_audience_kind,
-        curator_group_id=effective_school_id,
+        school_id=effective_school_id,
         # BE-102 publish (owner, 3 October): a practice a school's curator
         # creates for one of its masters is born PUBLISHED -- there is no
         # approval step for the master. Everything else starts a draft.
@@ -2233,7 +2233,7 @@ async def get_practice_detail(
     # with the line above -- the two answer different questions against
     # different tables, and saving one round trip on an owner-facing
     # response is not worth a join nobody can read.
-    curator_group_name = await school_name_for_practice(
+    school_name = await school_name_for_practice(
         practice, session,
     )
     audience_unavailable = await school_audience_is_dark(
@@ -2249,7 +2249,7 @@ async def get_practice_detail(
         zoom_public_link_visible=is_owner,
         zoom_meeting_status=zoom_meeting_status,
         audience_group_names=audience_group_names,
-        curator_group_name=curator_group_name,
+        school_name=school_name,
         audience_unavailable=audience_unavailable,
         **series_meta_kwargs(series_meta.get(practice.id)),
         **attendance_counts_kwargs(attendance.get(practice.id)),
@@ -2347,7 +2347,7 @@ async def _after_publish(
     # Lazy import: schools/service.py imports practices/models.py,
     # so a module-level import here closes a cycle -- the same reason
     # cancel_service.py imports _record_group_event lazily.
-    if practice.curator_group_id is not None:
+    if practice.school_id is not None:
         from app.modules.schools.service import (
             announce_published_practice,
         )
@@ -2437,7 +2437,7 @@ async def update_practice(
     # in his own school (block_school_member).
     if managing_school is None:
         await _refuse_blocked_in_school(
-            practice.curator_group_id, user.id, session,
+            practice.school_id, user.id, session,
         )
 
     if managing_school is not None:
@@ -2497,15 +2497,15 @@ async def update_practice(
     # flows through the loop unchanged.
     group_ids_sent = "group_ids" in update_data
     group_ids_value: list[UUID] = update_data.pop("group_ids", None) or []
-    # BE-74: curator_group_id IS a column, and that is exactly why it must
+    # BE-74: school_id IS a column, and that is exactly why it must
     # be pulled out here: left in update_data it would reach the setattr
     # loop and move the practice to another school. The owning school is
     # set at creation and never changes (owner ruling, 2026-10-01): the
     # stored value resent is a no-op, anything else is refused whole,
     # before any field of this request lands.
     if (
-        "curator_group_id" in update_data
-        and update_data.pop("curator_group_id") != practice.curator_group_id
+        "school_id" in update_data
+        and update_data.pop("school_id") != practice.school_id
     ):
         raise BadRequestError(
             "The practice's school is set when it is created and "
@@ -2523,7 +2523,7 @@ async def update_practice(
     if "audience_kind" in update_data:
         try:
             check_school_audience(
-                final_audience_kind, practice.curator_group_id,
+                final_audience_kind, practice.school_id,
             )
         except ValueError as exc:
             raise BadRequestError(str(exc)) from exc
@@ -2680,7 +2680,7 @@ async def update_practice(
         # silently resurrect.
         #
         # P5/GT-11: "away from groups" now INCLUDES away to
-        # 'curator_groups'. No code change was needed for that -- the
+        # 'schools'. No code change was needed for that -- the
         # condition was always written as "not GROUPS" rather than
         # "== PUBLIC" -- but it is worth saying out loud, because the
         # branch below is its new mirror and the pair only works if both
@@ -3058,7 +3058,7 @@ async def preview_audience_change(
     another master's group membership by feeding in group_ids they don't
     own.
 
-    BE-74: no school in the proposal. 'curator_groups' means the
+    BE-74: no school in the proposal. 'schools' means the
     practice's OWN school, which neither this preview nor the PATCH can
     change; count_stranded_active_bookings reads it off the practice. The
     proposed kind is held to the same rule the PATCH applies
@@ -3075,13 +3075,13 @@ async def preview_audience_change(
     # edit he may not save. A read: no lock to take.
     if managing_school is None:
         await _refuse_blocked_in_school(
-            practice.curator_group_id, user.id, session,
+            practice.school_id, user.id, session,
         )
 
     if group_ids:
         await _owned_group_ids_or_400(practice.master_id, group_ids, session)
     try:
-        check_school_audience(audience_kind, practice.curator_group_id)
+        check_school_audience(audience_kind, practice.school_id)
     except ValueError as exc:
         raise BadRequestError(str(exc)) from exc
 

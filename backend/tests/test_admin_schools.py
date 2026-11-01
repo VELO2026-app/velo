@@ -16,7 +16,7 @@
 # and the commands are in the delivery report.
 #
 # Coverage: the admin list (both kinds of school in one listing, counters,
-# pagination, auth), curator_groups_count in the masters list, and the pair
+# pagination, auth), schools_count in the masters list, and the pair
 # that makes is_active mean something -- a frozen school visible here and
 # 404 for its own members at the same moment.
 # =============================================================================
@@ -43,11 +43,11 @@ from tests.helpers import (
     login_user,
 )
 
-ADMIN_GROUPS_URL = "/api/v1/admin/curator-groups"
+ADMIN_GROUPS_URL = "/api/v1/admin/schools"
 ADMIN_MASTERS_URL = "/api/v1/admin/masters/list"
-CURATOR_GROUPS_URL = "/api/v1/masters/me/curator-groups"
-PAGE_URL = "/api/v1/curator-groups/{group_id}"
-MINE_URL = "/api/v1/curator-groups/mine"
+SCHOOLS_URL = "/api/v1/masters/me/schools"
+PAGE_URL = "/api/v1/schools/{school_id}"
+MINE_URL = "/api/v1/schools/mine"
 REVOKE_URL = "/api/v1/admin/masters/{user_id}/revoke"
 MAKE_MASTER_URL = "/api/v1/admin/users/{user_id}/make-master"
 
@@ -98,7 +98,7 @@ async def _make_verified_master(
             data={
                 "account": {
                     "status": "verified",
-                    "can_create_groups": True,
+                    "can_create_schools": True,
                 },
                 "profile": {"bio": "m"},
             },
@@ -126,7 +126,7 @@ async def _create_group(
     client: AsyncClient, curator: dict, name: str = "Школа дыхания",
 ) -> dict:
     resp = await client.post(
-        CURATOR_GROUPS_URL,
+        SCHOOLS_URL,
         json={"name": name},
         headers=auth_headers(curator["session_token"]),
     )
@@ -142,7 +142,7 @@ async def _seed_member(
 ) -> None:
     db_session.add(
         SchoolMember(
-            group_id=UUID(group_id), user_id=UUID(user_id), kind=kind.value,
+            school_id=UUID(group_id), user_id=UUID(user_id), kind=kind.value,
         )
     )
     await db_session.flush()
@@ -323,7 +323,7 @@ async def test_the_list_carries_the_curator_and_both_counters(
 
     page = (
         await client.get(
-            PAGE_URL.format(group_id=group["id"]),
+            PAGE_URL.format(school_id=group["id"]),
             headers=auth_headers(curator["session_token"]),
         )
     ).json()
@@ -360,7 +360,7 @@ async def test_a_frozen_school_stays_in_the_admin_list_while_members_get_404(
     assert frozen["students_count"] == before["students_count"] == 1
 
     members_view = await client.get(
-        PAGE_URL.format(group_id=group["id"]),
+        PAGE_URL.format(school_id=group["id"]),
         headers=auth_headers(student["session_token"]),
     )
     assert members_view.status_code == 404
@@ -376,7 +376,7 @@ async def test_a_frozen_school_stays_in_the_admin_list_while_members_get_404(
     assert thawed["students_count"] == 1
     assert (
         await client.get(
-            PAGE_URL.format(group_id=group["id"]),
+            PAGE_URL.format(school_id=group["id"]),
             headers=auth_headers(student["session_token"]),
         )
     ).status_code == 200
@@ -410,7 +410,7 @@ async def test_a_revoked_member_drops_out_of_masters_count_but_keeps_the_row(
     rows = (
         await fresh_execute(
             select(SchoolMember.user_id).where(
-                SchoolMember.group_id == UUID(group["id"])
+                SchoolMember.school_id == UUID(group["id"])
             )
         )
     ).scalars().all()
@@ -463,7 +463,7 @@ async def test_a_deleted_school_leaves_the_list(
     assert await _row_for(client, admin_token, group["id"]) is not None
 
     await client.delete(
-        f"{CURATOR_GROUPS_URL}/{group['id']}",
+        f"{SCHOOLS_URL}/{group['id']}",
         headers=auth_headers(curator["session_token"]),
     )
 
@@ -556,7 +556,7 @@ async def test_the_admin_list_says_nothing_about_transfers(
         db_session, group["id"], heir["user"]["id"], SchoolMemberKind.MASTER,
     )
     offered = await client.post(
-        f"{CURATOR_GROUPS_URL}/{group['id']}/transfer",
+        f"{SCHOOLS_URL}/{group['id']}/transfer",
         json={"to_user_id": heir["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
@@ -568,12 +568,12 @@ async def test_the_admin_list_says_nothing_about_transfers(
 
 
 # ===========================================================================
-# curator_groups_count in the masters list
+# schools_count in the masters list
 # ===========================================================================
 
 
 @pytest.mark.asyncio
-async def test_curator_groups_count_is_zero_not_null_without_schools(
+async def test_schools_count_is_zero_not_null_without_schools(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     """Zero is a real answer; null is reserved for "fell out of the batch",
@@ -583,11 +583,11 @@ async def test_curator_groups_count_is_zero_not_null_without_schools(
 
     row = await _master_row(client, admin_token, master["user"]["id"])
     assert row is not None
-    assert row["curator_groups_count"] == 0
+    assert row["schools_count"] == 0
 
 
 @pytest.mark.asyncio
-async def test_curator_groups_count_counts_owned_schools_only(
+async def test_schools_count_counts_owned_schools_only(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     """Two of their own -> 2. Teaching in somebody else's school does NOT
@@ -608,10 +608,10 @@ async def test_curator_groups_count_counts_owned_schools_only(
     )
 
     row = await _master_row(client, admin_token, owner["user"]["id"])
-    assert row["curator_groups_count"] == 2
+    assert row["schools_count"] == 2
 
     other_row = await _master_row(client, admin_token, other["user"]["id"])
-    assert other_row["curator_groups_count"] == 1
+    assert other_row["schools_count"] == 1
 
 
 @pytest.mark.asyncio
@@ -630,14 +630,14 @@ async def test_revoking_a_master_does_not_change_their_school_count(
     first = await _create_group(client, master, name="Первая")
     second = await _create_group(client, master, name="Вторая")
     assert (await _master_row(client, admin_token, master["user"]["id"]))[
-        "curator_groups_count"
+        "schools_count"
     ] == 2
 
     await _revoke(client, admin_token, master["user"]["id"])
 
     row = await _master_row(client, admin_token, master["user"]["id"])
     assert row is not None
-    assert row["curator_groups_count"] == 2
+    assert row["schools_count"] == 2
 
     states = {
         i["id"]: i["is_active"]
@@ -663,8 +663,8 @@ async def test_the_masters_list_still_carries_its_original_fields(
         "practices_count",
         "students_count",
         "available_cents",
-        "curator_groups_count",
+        "schools_count",
     ):
         assert field in row, field
     assert row["practices_count"] == 0
-    assert row["curator_groups_count"] == 1
+    assert row["schools_count"] == 1

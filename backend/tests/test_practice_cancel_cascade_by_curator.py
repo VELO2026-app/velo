@@ -133,7 +133,7 @@ async def _practice(
     member of the school (_usable_school_or_400)."""
     if audience_kind is None:
         audience_kind = (
-            AudienceKind.CURATOR_GROUPS.value
+            AudienceKind.SCHOOLS.value
             if school is not None
             else AudienceKind.PUBLIC.value
         )
@@ -156,7 +156,7 @@ async def _practice(
         currency="eur",
         audience_kind=audience_kind,
         parent_practice_id=parent.id if parent is not None else None,
-        curator_group_id=school.id if school is not None else None,
+        school_id=school.id if school is not None else None,
     )
     db_session.add(practice)
     await db_session.flush()
@@ -164,7 +164,7 @@ async def _practice(
         member = (
             await db_session.execute(
                 select(SchoolMember.id).where(
-                    SchoolMember.group_id == school.id,
+                    SchoolMember.school_id == school.id,
                     SchoolMember.user_id == practice.master_id,
                 )
             )
@@ -172,7 +172,7 @@ async def _practice(
         if member is None:
             db_session.add(
                 SchoolMember(
-                    group_id=school.id,
+                    school_id=school.id,
                     user_id=practice.master_id,
                     kind=SchoolMemberKind.MASTER.value,
                 )
@@ -210,7 +210,7 @@ async def _audits(event: str, *practices: Practice) -> list[AuditLog]:
 async def _journal(school: School) -> list[SchoolEvent]:
     return list((await fresh_execute(
         select(SchoolEvent).where(
-            SchoolEvent.group_id == school.id,
+            SchoolEvent.school_id == school.id,
         ),
     )).scalars().all())
 
@@ -248,7 +248,7 @@ async def world(client: AsyncClient, db_session: AsyncSession) -> dict:
     )
     db_session.add(
         SchoolMember(
-            group_id=school.id, user_id=UUID(school_master["user"]["id"]),
+            school_id=school.id, user_id=UUID(school_master["user"]["id"]),
             kind=SchoolMemberKind.MASTER.value,
         )
     )
@@ -267,7 +267,7 @@ async def world(client: AsyncClient, db_session: AsyncSession) -> dict:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("audience", [
-    AudienceKind.PUBLIC.value, AudienceKind.CURATOR_GROUPS.value,
+    AudienceKind.PUBLIC.value, AudienceKind.SCHOOLS.value,
 ])
 @pytest.mark.parametrize("scope", [None, "this", "this_and_future"])
 async def test_curator_cancels_a_single_practice_of_the_school(
@@ -290,7 +290,7 @@ async def test_curator_cancels_a_single_practice_of_the_school(
     audits = await _audits(_BY_CURATOR, p)
     assert len(audits) == 1
     assert audits[0].actor_id == UUID(w["curator"]["user"]["id"])
-    assert audits[0].data["group_id"] == str(w["school"].id)
+    assert audits[0].data["school_id"] == str(w["school"].id)
     assert audits[0].data["master_id"] == w["master"]["user"]["id"]
     assert [e.data["practice_id"] for e in await _journal(w["school"])] == [
         str(p.id),
@@ -346,7 +346,7 @@ async def test_curator_cascade_from_the_middle_cancels_what_is_ahead_once(
     audits = await _audits(_BY_CURATOR, root, middle, *ahead, gone, done)
     assert {a.target_id for a in audits} == cancelled
     assert len(audits) == len(cancelled)
-    assert all(a.data["group_id"] == str(w["school"].id) for a in audits)
+    assert all(a.data["school_id"] == str(w["school"].id) for a in audits)
     journal = await _journal(w["school"])
     assert sorted(e.data["practice_id"] for e in journal) == sorted(
         str(pid) for pid in cancelled

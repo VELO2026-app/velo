@@ -37,7 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.events.models import OutboxEvent
 from app.core.exceptions import NotFoundError
 from app.modules.masters.models import MasterProfile
-from app.modules.schools import service as curator_service
+from app.modules.schools import service as school_service
 from app.modules.schools.models import (
     School,
     SchoolEvent,
@@ -57,12 +57,12 @@ from tests.helpers import (
 )
 from tests.school_race_harness import assert_no_deadlock, race
 
-GROUPS_URL = "/api/v1/masters/me/curator-groups"
-DEMOTE_URL = GROUPS_URL + "/{group_id}/members/{user_id}/demote"
-OFFER_URL = GROUPS_URL + "/{group_id}/master-offers"
-TRANSFER_URL = GROUPS_URL + "/{group_id}/transfer"
-ACCEPT_OFFER_URL = "/api/v1/curator-groups/{group_id}/master-offer/accept"
-TRANSFER_ACCEPT_URL = "/api/v1/curator-groups/{group_id}/transfer/accept"
+GROUPS_URL = "/api/v1/masters/me/schools"
+DEMOTE_URL = GROUPS_URL + "/{school_id}/members/{user_id}/demote"
+OFFER_URL = GROUPS_URL + "/{school_id}/master-offers"
+TRANSFER_URL = GROUPS_URL + "/{school_id}/transfer"
+ACCEPT_OFFER_URL = "/api/v1/schools/{school_id}/master-offer/accept"
+TRANSFER_ACCEPT_URL = "/api/v1/schools/{school_id}/transfer/accept"
 
 _TID_MIN = 68900
 _TID_MAX = 68949
@@ -74,7 +74,7 @@ _TID_SECOND_MASTER = 68911
 _TID_STUDENT = 68912
 _TID_STRANGER = 68913
 
-DEMOTED = "curator_group.member_demoted"
+DEMOTED = "school.member_demoted"
 MASTER = SchoolMemberKind.MASTER.value
 STUDENT = SchoolMemberKind.STUDENT.value
 
@@ -107,7 +107,7 @@ async def _person(
             MasterProfile(
                 user_id=uid,
                 data={
-                    "account": {"status": "verified", "can_create_groups": True},
+                    "account": {"status": "verified", "can_create_schools": True},
                     "profile": {"bio": "m"},
                 },
             )
@@ -134,7 +134,7 @@ async def _seed(
     db_session: AsyncSession, group_id: str, auth: dict, kind: str,
 ) -> None:
     db_session.add(
-        SchoolMember(group_id=UUID(group_id), user_id=_uid(auth), kind=kind)
+        SchoolMember(school_id=UUID(group_id), user_id=_uid(auth), kind=kind)
     )
     await db_session.flush()
     await db_session.commit()
@@ -142,7 +142,7 @@ async def _seed(
 
 async def _demote(client, curator: dict, group_id: str, who: dict):
     return await client.post(
-        DEMOTE_URL.format(group_id=group_id, user_id=who["user"]["id"]),
+        DEMOTE_URL.format(school_id=group_id, user_id=who["user"]["id"]),
         headers=auth_headers(curator["session_token"]),
     )
 
@@ -151,7 +151,7 @@ async def _kind(group_id, user_id) -> str | None:
     return (
         await fresh_execute(
             select(SchoolMember.kind).where(
-                SchoolMember.group_id == UUID(str(group_id)),
+                SchoolMember.school_id == UUID(str(group_id)),
                 SchoolMember.user_id == UUID(str(user_id)),
             )
         )
@@ -162,7 +162,7 @@ async def _journal(group_id) -> list[tuple[str, dict]]:
     rows = (
         await fresh_execute(
             select(SchoolEvent.event, SchoolEvent.data)
-            .where(SchoolEvent.group_id == UUID(str(group_id)))
+            .where(SchoolEvent.school_id == UUID(str(group_id)))
             .order_by(SchoolEvent.seq)
         )
     ).all()
@@ -174,7 +174,7 @@ async def _events(group_id) -> list[str]:
 
 
 async def _school_notes_for(user_id) -> list[dict]:
-    """curator_group.* payloads queued for one person, oldest first.
+    """school.* payloads queued for one person, oldest first.
 
     Scoped by target_value (the cleanup's own access path) and by the
     school family, so a contact-book sync row can never decide a count.
@@ -190,7 +190,7 @@ async def _school_notes_for(user_id) -> list[dict]:
     ).scalars().all()
     return [
         r.payload for r in rows
-        if (r.payload or {}).get("type", "").startswith("curator_group.")
+        if (r.payload or {}).get("type", "").startswith("school.")
     ]
 
 
@@ -231,8 +231,8 @@ async def test_a_master_is_demoted_and_told(
     assert "transfer_cancelled" not in demotions[0]
 
     [note] = await _demoted_notes_for(_uid(master))
-    assert note["action_data"]["action"] == "open_curator_group"
-    assert note["action_data"]["group_name"] == "Школа понижения"
+    assert note["action_data"]["action"] == "open_school"
+    assert note["action_data"]["school_name"] == "Школа понижения"
     assert note["action_data"]["actor_name"] == f"P{_TID_CURATOR}"
     assert await _demoted_notes_for(_uid(curator)) == []
 
@@ -322,7 +322,7 @@ async def test_a_handover_offered_to_the_demoted_master_is_dropped(
     group = await _school(client, curator, "Школа наследника")
     await _seed(db_session, group, heir, MASTER)
     resp = await client.post(
-        TRANSFER_URL.format(group_id=group),
+        TRANSFER_URL.format(school_id=group),
         json={"to_user_id": heir["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
@@ -333,7 +333,7 @@ async def test_a_handover_offered_to_the_demoted_master_is_dropped(
     transfers = (
         await fresh_execute(
             select(SchoolTransfer.id).where(
-                SchoolTransfer.group_id == UUID(group)
+                SchoolTransfer.school_id == UUID(group)
             )
         )
     ).all()
@@ -344,7 +344,7 @@ async def test_a_handover_offered_to_the_demoted_master_is_dropped(
     ]
     assert data["transfer_cancelled"] is True
     resp = await client.post(
-        TRANSFER_ACCEPT_URL.format(group_id=group),
+        TRANSFER_ACCEPT_URL.format(school_id=group),
         headers=auth_headers(heir["session_token"]),
     )
     assert resp.status_code == 404
@@ -365,13 +365,13 @@ async def test_a_reappointed_master_can_be_demoted_again(
 
     assert (await _demote(client, curator, group, master)).status_code == 204
     resp = await client.post(
-        OFFER_URL.format(group_id=group),
+        OFFER_URL.format(school_id=group),
         json={"to_user_id": master["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 204, resp.text
     resp = await client.post(
-        ACCEPT_OFFER_URL.format(group_id=group),
+        ACCEPT_OFFER_URL.format(school_id=group),
         headers=auth_headers(master["session_token"]),
     )
     assert resp.status_code == 204, resp.text
@@ -412,16 +412,16 @@ async def _race_school(
     await db_session.flush()
     s.group = group.id
     db_session.add(
-        SchoolMember(group_id=s.group, user_id=s.master, kind=master_kind)
+        SchoolMember(school_id=s.group, user_id=s.master, kind=master_kind)
     )
     db_session.add(
-        SchoolMember(group_id=s.group, user_id=s.second, kind=MASTER)
+        SchoolMember(school_id=s.group, user_id=s.second, kind=MASTER)
     )
     if transfer_to_master:
-        db_session.add(SchoolTransfer(group_id=s.group, to_user_id=s.master))
+        db_session.add(SchoolTransfer(school_id=s.group, to_user_id=s.master))
     if offer_to_master:
         db_session.add(
-            SchoolMasterOffer(group_id=s.group, to_user_id=s.master)
+            SchoolMasterOffer(school_id=s.group, to_user_id=s.master)
         )
     await db_session.flush()
     await db_session.commit()
@@ -430,7 +430,7 @@ async def _race_school(
 
 def _demote_call(s: _S, by: UUID, who: UUID):
     async def call(session):
-        await curator_service.demote_school_master(
+        await school_service.demote_school_master(
             by, s.group, who, session, actor=await session.get(User, by),
         )
     return call
@@ -438,7 +438,7 @@ def _demote_call(s: _S, by: UUID, who: UUID):
 
 def _remove_call(s: _S):
     async def call(session):
-        await curator_service.remove_school_member(
+        await school_service.remove_school_member(
             s.curator, s.group, s.master, session,
             actor=await session.get(User, s.curator),
         )
@@ -447,7 +447,7 @@ def _remove_call(s: _S):
 
 def _leave_call(s: _S):
     async def call(session):
-        await curator_service.leave_school(
+        await school_service.leave_school(
             s.group, s.master, session, actor=await session.get(User, s.master),
         )
     return call
@@ -455,7 +455,7 @@ def _leave_call(s: _S):
 
 def _accept_transfer_call(s: _S):
     async def call(session):
-        await curator_service.accept_school_transfer(
+        await school_service.accept_school_transfer(
             s.group, s.master, session, actor=await session.get(User, s.master),
         )
     return call
@@ -463,7 +463,7 @@ def _accept_transfer_call(s: _S):
 
 def _accept_offer_call(s: _S):
     async def call(session):
-        await curator_service.accept_school_master_offer(
+        await school_service.accept_school_master_offer(
             s.group, s.master, session, actor=await session.get(User, s.master),
         )
     return call
@@ -483,7 +483,7 @@ async def test_a_removal_mid_demotion_neither_deadlocks_nor_demotes_a_ghost(
     result = await race(
         monkeypatch,
         holder=_remove_call(s),
-        pause_in=(curator_service, "_drop_pending_transfer_for"),
+        pause_in=(school_service, "_drop_pending_transfer_for"),
         rival=_demote_call(s, s.curator, s.master),
     )
     assert_no_deadlock(result)
@@ -506,7 +506,7 @@ async def test_leaving_mid_demotion_leaves_after_it(
     result = await race(
         monkeypatch,
         holder=_demote_call(s, s.curator, s.master),
-        pause_in=(curator_service, "_drop_pending_transfer_for"),
+        pause_in=(school_service, "_drop_pending_transfer_for"),
         rival=_leave_call(s),
     )
     assert_no_deadlock(result)
@@ -531,7 +531,7 @@ async def test_a_handover_accepted_mid_demotion_of_the_heir(
     result = await race(
         monkeypatch,
         holder=_accept_transfer_call(s),
-        pause_in=(curator_service, "_has_master_capability"),
+        pause_in=(school_service, "_has_master_capability"),
         rival=_demote_call(s, s.curator, s.master),
     )
     assert_no_deadlock(result)
@@ -556,7 +556,7 @@ async def test_a_demotion_landing_first_kills_the_handover(
     result = await race(
         monkeypatch,
         holder=_demote_call(s, s.curator, s.master),
-        pause_in=(curator_service, "_drop_pending_transfer_for"),
+        pause_in=(school_service, "_drop_pending_transfer_for"),
         rival=_accept_transfer_call(s),
     )
     assert_no_deadlock(result)
@@ -591,7 +591,7 @@ async def test_an_appointment_accepted_mid_demotion_is_serialised(
     result = await race(
         monkeypatch,
         holder=_accept_offer_call(s),
-        pause_in=(curator_service, "_has_master_capability"),
+        pause_in=(school_service, "_has_master_capability"),
         rival=_demote_call(s, s.curator, s.master),
     )
     assert_no_deadlock(result)
@@ -620,7 +620,7 @@ async def test_a_former_curator_cannot_demote_in_the_new_owners_school(
     result = await race(
         monkeypatch,
         holder=_accept_transfer_call(s),
-        pause_in=(curator_service, "_frozen_name"),
+        pause_in=(school_service, "_frozen_name"),
         rival=_demote_call(s, s.curator, s.second),
     )
     assert_no_deadlock(result)

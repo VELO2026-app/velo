@@ -60,7 +60,7 @@ from tests.helpers import auth_headers, full_cleanup_range, login_user
 PRACTICES_URL = "/api/v1/practices"
 
 PROFILE_URL = (
-    "/api/v1/masters/me/curator-groups/{group_id}/students/{user_id}"
+    "/api/v1/masters/me/schools/{school_id}/students/{user_id}"
 )
 
 _TID_MIN = 69500
@@ -102,7 +102,7 @@ async def _master(
             data={
                 "account": {
                     "status": "verified" if verified else "suspended",
-                    "can_create_groups": True,
+                    "can_create_schools": True,
                 },
                 "profile": {"bio": "m"},
             },
@@ -144,7 +144,7 @@ async def _join(
     kind: SchoolMemberKind,
 ) -> SchoolMember:
     row = SchoolMember(
-        group_id=school.id,
+        school_id=school.id,
         user_id=UUID(auth["user"]["id"]),
         kind=kind.value,
     )
@@ -177,9 +177,9 @@ async def _practice(
         price_cents=0,
         currency="eur",
         audience_kind=(
-            AudienceKind.CURATOR_GROUPS.value if school is not None else None
+            AudienceKind.SCHOOLS.value if school is not None else None
         ),
-        curator_group_id=school.id if school is not None else None,
+        school_id=school.id if school is not None else None,
     )
     db_session.add(practice)
     await db_session.flush()
@@ -256,7 +256,7 @@ async def _get(
 ):
     group_id = school if isinstance(school, str) else str(school.id)
     return await client.get(
-        PROFILE_URL.format(group_id=group_id, user_id=student_id),
+        PROFILE_URL.format(school_id=group_id, user_id=student_id),
         headers=auth_headers(viewer["session_token"]),
     )
 
@@ -540,8 +540,8 @@ async def test_a_second_school_is_refused_and_the_one_school_counts_once(
             "is_free": True,
             "price_cents": 0,
             "currency": "eur",
-            "audience_kind": "curator_groups",
-            "curator_group_id": [str(morning.id), str(evening.id)],
+            "audience_kind": "schools",
+            "school_id": [str(morning.id), str(evening.id)],
         },
         headers=auth_headers(curator["session_token"]),
     )
@@ -612,7 +612,7 @@ async def test_seven_refusals_share_a_code_and_the_outside_ones_a_body(
     """One 404 for every reason -- and NOT one body, which is correct.
 
     THE CARD PROMISED AN IDENTICAL BODY AND THE TREE DOES NOT GIVE ONE.
-    _relation_or_404 answers "Curator group not found"; the two membership
+    _relation_or_404 answers "School not found"; the two membership
     tests in this service answer "Student not found". Both are 404 with
     the same machine-readable code, and the split falls exactly on the
     access boundary: everybody who is refused from OUTSIDE the school gets

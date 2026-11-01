@@ -23,13 +23,13 @@ from app.modules.admin.masters.schemas import (
     ApproveMethodChangeRequest,
     EditMasterMethodsRequest,
     InviteMasterResponse,
-    MasterGroupRightResponse,
+    MasterSchoolRightResponse,
     MethodChangeActionResponse,
     PaginatedMethodChangeRequestsResponse,
     RejectMasterRequest,
     RejectMethodChangeRequest,
     RevokeMasterAdvisory,
-    SetMasterGroupRightRequest,
+    SetMasterSchoolRightRequest,
     VerifyMasterRequest,
 )
 from app.modules.admin.masters.service import (
@@ -111,14 +111,14 @@ async def verify_master_endpoint(
     optional custom method labels to add to the taxonomy catalog -- absent/
     empty writes nothing, identical to before this field existed.
 
-    body.can_create_groups (GT-15): may this master found schools? Absent
+    body.can_create_schools (GT-15): may this master found schools? Absent
     or false writes no key at all; the right is granted or taken back later
-    through PATCH /{user_id}/can-create-groups.
+    through PATCH /{user_id}/can-create-schools.
     """
     profile = await verify_master(
         user_id, admin, body.notes, session,
         promote=body.promote, master_only=body.master_only,
-        can_create_groups=body.can_create_groups,
+        can_create_schools=body.can_create_schools,
     )
 
     await session.flush()
@@ -165,15 +165,15 @@ async def revoke_master_endpoint(
 
 
 @router.patch(
-    "/{user_id}/can-create-groups",
-    response_model=MasterGroupRightResponse,
+    "/{user_id}/can-create-schools",
+    response_model=MasterSchoolRightResponse,
 )
 async def set_master_group_right_endpoint(
     user_id: UUID,
-    body: SetMasterGroupRightRequest,
+    body: SetMasterSchoolRightRequest,
     admin: User = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
-) -> MasterGroupRightResponse:
+) -> MasterSchoolRightResponse:
     """Grant or revoke this master's right to found schools (GT-15).
 
     Separate from verify because a master verified yesterday is exactly who
@@ -182,15 +182,15 @@ async def set_master_group_right_endpoint(
     touches nothing this master already built -- that lever is /revoke.
     """
     profile = await set_master_group_right(
-        user_id, admin, body.can_create_groups, session,
+        user_id, admin, body.can_create_schools, session,
     )
 
     await session.flush()
     await session.refresh(profile)
 
-    return MasterGroupRightResponse(
+    return MasterSchoolRightResponse(
         user_id=profile.user_id,
-        can_create_groups=master_can_create_groups(profile.data),
+        can_create_schools=master_can_create_groups(profile.data),
     )
 
 

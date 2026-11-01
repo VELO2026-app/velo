@@ -180,12 +180,12 @@ def master_link_clause(
                 person_school.c.user_id == person_id,
                 or_(
                     exists().where(
-                        master_school.c.group_id == person_school.c.group_id,
+                        master_school.c.school_id == person_school.c.school_id,
                         master_school.c.user_id == master_id,
                         master_school.c.kind == SchoolMemberKind.MASTER.value,
                     ),
                     exists().where(
-                        School.id == person_school.c.group_id,
+                        School.id == person_school.c.school_id,
                         School.curator_user_id == master_id,
                     ),
                 ),

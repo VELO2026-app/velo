@@ -726,7 +726,7 @@ def _verify_call(uid: str, admin_id: UUID):
             admin,
             "raced",
             session,
-            can_create_groups=True,
+            can_create_schools=True,
         )
 
     return _call
@@ -750,7 +750,7 @@ async def test_make_master_waits_for_a_verification_in_flight(
 
     Before BE-104 make_master read the profile unlocked: both passed their
     guards, the person got master.verified twice, and make_master's stale
-    copy overwrote verify's verification block and can_create_groups.
+    copy overwrote verify's verification block and can_create_schools.
     """
     _, admin_id = await _admin(client, db_session)
     uid = await _pending_applicant(client, _TID_C)
@@ -771,7 +771,7 @@ async def test_make_master_waits_for_a_verification_in_flight(
     assert account["status"] == "verified"
     assert account["verification"]["verified_by"] == str(admin_id)
     assert account["verification"]["notes"] == "raced"
-    assert account.get("can_create_groups") is True
+    assert account.get("can_create_schools") is True
     user = await fresh_get(User, UUID(uid))
     assert user is not None and user.role == UserRole.MASTER.value
 
@@ -803,7 +803,7 @@ async def test_a_verification_waits_for_make_master_in_flight(
     # make_master's grant, not the rival's verification, is what stands.
     assert account["verification"]["notes"] == "re-verified via admin make-master"
     assert account["verification"]["verified_by"] == str(admin_id)
-    assert account.get("can_create_groups") is not True
+    assert account.get("can_create_schools") is not True
 
 
 # ---------------------------------------------------------------------------

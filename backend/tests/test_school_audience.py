@@ -129,7 +129,7 @@ async def _join_school(
     db_session: AsyncSession, group_id, user_id: str, kind: SchoolMemberKind,
 ) -> SchoolMember:
     row = SchoolMember(
-        group_id=group_id, user_id=UUID(user_id), kind=kind.value,
+        school_id=group_id, user_id=UUID(user_id), kind=kind.value,
     )
     db_session.add(row)
     await db_session.flush()
@@ -141,7 +141,7 @@ async def _create_practice(
     db_session: AsyncSession,
     master_id: str,
     *,
-    audience_kind: str = AudienceKind.CURATOR_GROUPS.value,
+    audience_kind: str = AudienceKind.SCHOOLS.value,
     school: School | None = None,
     status: str = PracticeStatus.SCHEDULED.value,
     hours_from_now: float = 48,
@@ -163,7 +163,7 @@ async def _create_practice(
         price_cents=0,
         currency="eur",
         audience_kind=audience_kind,
-        curator_group_id=school.id if school is not None else None,
+        school_id=school.id if school is not None else None,
     )
     db_session.add(practice)
     await db_session.flush()
@@ -525,7 +525,7 @@ async def test_deleting_the_school_makes_its_practice_public_and_ownerless(
     Before BE-74 the audience rows went with the school and the practice
     went dark -- right while the school was a set of rows beside the
     practice. BE-74 (owner ruling Q3, 2026-10-01): the school is the
-    practice's own column, and losing it makes a 'curator_groups' practice
+    practice's own column, and losing it makes a 'schools' practice
     public in the same statement. The deletion here is a plain DELETE of
     the school row, so what clears the column is the FK's ON DELETE SET
     NULL and what changes the audience is the BEFORE UPDATE trigger
@@ -565,7 +565,7 @@ async def test_deleting_the_school_makes_its_practice_public_and_ownerless(
         await fresh_execute(select(Practice).where(Practice.id == practice.id))
     ).scalar_one()
     assert row.audience_kind == AudienceKind.PUBLIC.value
-    assert row.curator_group_id is None
+    assert row.school_id is None
     assert row.status == PracticeStatus.SCHEDULED.value
     await _assert_can_see_and_book(client, other, practice)
 
@@ -800,8 +800,8 @@ async def test_a_second_school_is_refused_and_a_viewer_in_both_sees_it_once(
     refused = await client.post(
         PRACTICES_URL,
         json=_practice_body(
-            audience_kind="curator_groups",
-            curator_group_id=[str(first.id), str(second.id)],
+            audience_kind="schools",
+            school_id=[str(first.id), str(second.id)],
         ),
         headers=auth_headers(teacher["session_token"]),
     )
@@ -874,18 +874,18 @@ async def test_creating_a_school_practice_through_the_api(
         PRACTICES_URL,
         json=_practice_body(
             title="Утро в школе",
-            audience_kind="curator_groups",
-            curator_group_id=str(school.id),
+            audience_kind="schools",
+            school_id=str(school.id),
         ),
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 201, resp.text
-    assert resp.json()["audience_kind"] == "curator_groups"
-    assert resp.json()["curator_group_id"] == str(school.id)
+    assert resp.json()["audience_kind"] == "schools"
+    assert resp.json()["school_id"] == str(school.id)
 
     owner = (
         await fresh_execute(
-            select(Practice.curator_group_id).where(
+            select(Practice.school_id).where(
                 Practice.id == UUID(resp.json()["id"])
             )
         )
@@ -900,7 +900,7 @@ async def test_a_missing_null_or_list_school_is_rejected(
     """422 at the schema, before anything is written -- and the pair is the
     same request with one school succeeding.
 
-    BE-74: the school is a scalar curator_group_id. Absent and null mean
+    BE-74: the school is a scalar school_id. Absent and null mean
     "the school's students of no school" (check_school_audience); an empty
     list -- the old way to say "no schools" -- is now refused by type.
     """
@@ -909,9 +909,9 @@ async def test_a_missing_null_or_list_school_is_rejected(
     headers = auth_headers(curator["session_token"])
 
     for payload in (
-        _practice_body(audience_kind="curator_groups"),
-        _practice_body(audience_kind="curator_groups", curator_group_id=None),
-        _practice_body(audience_kind="curator_groups", curator_group_id=[]),
+        _practice_body(audience_kind="schools"),
+        _practice_body(audience_kind="schools", school_id=None),
+        _practice_body(audience_kind="schools", school_id=[]),
     ):
         resp = await client.post(PRACTICES_URL, json=payload, headers=headers)
         assert resp.status_code == 422, resp.text
@@ -919,8 +919,8 @@ async def test_a_missing_null_or_list_school_is_rejected(
     ok = await client.post(
         PRACTICES_URL,
         json=_practice_body(
-            audience_kind="curator_groups",
-            curator_group_id=str(school.id),
+            audience_kind="schools",
+            school_id=str(school.id),
         ),
         headers=headers,
     )
@@ -948,7 +948,7 @@ async def test_a_school_with_the_masters_own_audiences_is_rejected(
         resp = await client.post(
             PRACTICES_URL,
             json=_practice_body(
-                audience_kind=kind, curator_group_id=str(school.id), **extra,
+                audience_kind=kind, school_id=str(school.id), **extra,
             ),
             headers=headers,
         )
@@ -957,13 +957,13 @@ async def test_a_school_with_the_masters_own_audiences_is_rejected(
     ok = await client.post(
         PRACTICES_URL,
         json=_practice_body(
-            audience_kind="public", curator_group_id=str(school.id),
+            audience_kind="public", school_id=str(school.id),
         ),
         headers=headers,
     )
     assert ok.status_code == 201, ok.text
     assert ok.json()["audience_kind"] == "public"
-    assert ok.json()["curator_group_id"] == str(school.id)
+    assert ok.json()["school_id"] == str(school.id)
 
 
 @pytest.mark.asyncio
@@ -971,16 +971,16 @@ async def test_group_ids_and_a_school_together_are_rejected(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     """Two target sets at once is not a narrower audience, it is an
-    ambiguous one. BE-74: the school is the scalar curator_group_id."""
+    ambiguous one. BE-74: the school is the scalar school_id."""
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     school = await _school(db_session, curator["user"]["id"])
 
     resp = await client.post(
         PRACTICES_URL,
         json=_practice_body(
-            audience_kind="curator_groups",
+            audience_kind="schools",
             group_ids=[str(uuid4())],
-            curator_group_id=str(school.id),
+            school_id=str(school.id),
         ),
         headers=auth_headers(curator["session_token"]),
     )
@@ -1022,19 +1022,19 @@ async def test_a_school_the_master_does_not_belong_to_is_rejected(
         resp = await client.post(
             PRACTICES_URL,
             json=_practice_body(
-                audience_kind="curator_groups", curator_group_id=school_id,
+                audience_kind="schools", school_id=school_id,
             ),
             headers=headers,
         )
         assert resp.status_code == 400, school_id
         # FE-92 follow-up: the refusal has its own code (was bad_request).
-        assert resp.json()["error"] == "curator_group_not_usable", school_id
+        assert resp.json()["error"] == "school_not_usable", school_id
 
     own = await _school(db_session, outsider["user"]["id"], name="Своя")
     ok = await client.post(
         PRACTICES_URL,
         json=_practice_body(
-            audience_kind="curator_groups", curator_group_id=str(own.id),
+            audience_kind="schools", school_id=str(own.id),
         ),
         headers=headers,
     )
@@ -1066,19 +1066,19 @@ async def test_patch_cannot_move_a_practice_to_another_school(
 
     for value in (str(second.id), None):
         resp = await client.patch(
-            url, json={"curator_group_id": value}, headers=headers,
+            url, json={"school_id": value}, headers=headers,
         )
         assert resp.status_code == 400, (value, resp.text)
         assert resp.json()["error"] == "practice_school_immutable", value
 
     same = await client.patch(
-        url, json={"curator_group_id": str(first.id)}, headers=headers,
+        url, json={"school_id": str(first.id)}, headers=headers,
     )
     assert same.status_code == 200, same.text
 
     owner = (
         await fresh_execute(
-            select(Practice.curator_group_id).where(Practice.id == practice.id)
+            select(Practice.school_id).where(Practice.id == practice.id)
         )
     ).scalar_one()
     assert owner == first.id
@@ -1093,7 +1093,7 @@ async def test_patch_cannot_move_a_practice_to_another_school(
 async def test_switching_the_audience_keeps_the_school(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """A school practice moves between 'curator_groups' and 'public' and
+    """A school practice moves between 'schools' and 'public' and
     stays the school's; the master's own audiences are refused.
 
     Before BE-74 this was the owner's "no litter" double: switching away
@@ -1103,7 +1103,7 @@ async def test_switching_the_audience_keeps_the_school(
     row to litter: the precise statement now is that the school SURVIVES
     every audience change. 'students' and 'groups' are refused with a 400
     (check_school_audience against the stored school), and the practice
-    comes back to 'curator_groups' with the same school.
+    comes back to 'schools' with the same school.
     """
     from app.modules.masters.groups_models import MasterGroup
 
@@ -1124,7 +1124,7 @@ async def test_switching_the_audience_keeps_the_school(
         row = (
             await fresh_execute(select(Practice).where(Practice.id == practice.id))
         ).scalar_one()
-        return row.audience_kind, row.curator_group_id
+        return row.audience_kind, row.school_id
 
     public = await client.patch(
         url, json={"audience_kind": "public"}, headers=headers,
@@ -1141,10 +1141,10 @@ async def test_switching_the_audience_keeps_the_school(
         assert await _stored() == (AudienceKind.PUBLIC.value, school.id)
 
     back = await client.patch(
-        url, json={"audience_kind": "curator_groups"}, headers=headers,
+        url, json={"audience_kind": "schools"}, headers=headers,
     )
     assert back.status_code == 200, back.text
-    assert await _stored() == (AudienceKind.CURATOR_GROUPS.value, school.id)
+    assert await _stored() == (AudienceKind.SCHOOLS.value, school.id)
 
 
 @pytest.mark.asyncio
@@ -1197,8 +1197,8 @@ async def test_a_practice_without_a_school_cannot_be_moved_into_one(
     resp = await client.patch(
         f"{PRACTICES_URL}/{practice.id}",
         json={
-            "audience_kind": "curator_groups",
-            "curator_group_id": str(school.id),
+            "audience_kind": "schools",
+            "school_id": str(school.id),
         },
         headers=auth_headers(curator["session_token"]),
     )
@@ -1217,7 +1217,7 @@ async def test_a_practice_without_a_school_cannot_be_moved_into_one(
         await fresh_execute(select(Practice).where(Practice.id == practice.id))
     ).scalar_one()
     assert row.audience_kind == AudienceKind.GROUPS.value
-    assert row.curator_group_id is None
+    assert row.school_id is None
 
 
 # ===========================================================================
@@ -1235,7 +1235,7 @@ async def test_a_series_child_is_no_wider_than_its_root(
     target rows -- reachable then, the C1 hole -- and asserted that
     propagation copied the rows. BE-74 made the school a column the child
     inherits at generation (_build_child_occurrence), and the CHECK forbids
-    'curator_groups' without a school, so the hand-built child is a state
+    'schools' without a school, so the hand-built child is a state
     that no longer exists. The reachable form drives the real generator: a
     school series is created and published through the API, and EVERY
     child names the root's school and audience. THE PAIR: a child is in a
@@ -1261,8 +1261,8 @@ async def test_a_series_child_is_no_wider_than_its_root(
         json=_practice_body(
             practice_type="series",
             title="Серия для школы",
-            audience_kind="curator_groups",
-            curator_group_id=str(school.id),
+            audience_kind="schools",
+            school_id=str(school.id),
             recurrence={"period": "daily", "end": "after_count", "count": 3},
         ),
         headers=headers,
@@ -1281,8 +1281,8 @@ async def test_a_series_child_is_no_wider_than_its_root(
         )
     ).scalars().all()
     assert len(children) == 2
-    assert {(c.curator_group_id, c.audience_kind) for c in children} == {
-        (school.id, AudienceKind.CURATOR_GROUPS.value),
+    assert {(c.school_id, c.audience_kind) for c in children} == {
+        (school.id, AudienceKind.SCHOOLS.value),
     }
     titles = await _feed_titles(client, student)
     assert titles.count("Серия для школы") == 3
@@ -1292,7 +1292,7 @@ async def test_a_series_child_is_no_wider_than_its_root(
 async def test_propagation_moves_the_childrens_audience_and_keeps_their_school(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """A root switched off 'curator_groups' takes its children with it --
+    """A root switched off 'schools' takes its children with it --
     and neither the root nor a child loses its school.
 
     Before BE-74 this test pinned the unconditional delete of the
@@ -1349,7 +1349,7 @@ async def test_propagation_moves_the_childrens_audience_and_keeps_their_school(
         await fresh_execute(select(Practice).where(Practice.id == child.id))
     ).scalar_one()
     assert row.audience_kind == AudienceKind.PUBLIC.value
-    assert row.curator_group_id == school.id
+    assert row.school_id == school.id
 
 
 # ===========================================================================
@@ -1368,7 +1368,7 @@ async def test_the_preview_counts_exactly_the_bookers_outside_the_school(
     so a literal mirror of the groups query would report the school's own
     owner as stranded by their own school.
 
-    BE-74: the preview names no school -- 'curator_groups' means the
+    BE-74: the preview names no school -- 'schools' means the
     practice's OWN school, read off the practice. So the practice here is a
     public practice of the school, and the preview asks what narrowing it
     to the school's students would strand.
@@ -1404,7 +1404,7 @@ async def test_the_preview_counts_exactly_the_bookers_outside_the_school(
 
     resp = await client.post(
         PREVIEW_URL.format(practice_id=practice.id),
-        json={"audience_kind": "curator_groups"},
+        json={"audience_kind": "schools"},
         headers=auth_headers(teacher["session_token"]),
     )
     assert resp.status_code == 200, resp.text
@@ -1441,7 +1441,7 @@ async def test_the_preview_reports_zero_when_nothing_narrows(
 
     resp = await client.post(
         PREVIEW_URL.format(practice_id=practice.id),
-        json={"audience_kind": "curator_groups"},
+        json={"audience_kind": "schools"},
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 200, resp.text
@@ -1458,7 +1458,7 @@ async def test_the_preview_refuses_the_school_audience_without_a_school(
     -- the anti-probing reflex of the PATCH, right while the preview took a
     list of schools. BE-74 took the school out of the preview: it reads the
     practice's own, which a master cannot choose. The reachable refusal is
-    a practice with no school asked about 'curator_groups' (400, the same
+    a practice with no school asked about 'schools' (400, the same
     check_school_audience the PATCH uses). THE PAIR: the same practice and
     the same master previewing 'students' get an answer.
     """
@@ -1473,7 +1473,7 @@ async def test_the_preview_refuses_the_school_audience_without_a_school(
 
     resp = await client.post(
         PREVIEW_URL.format(practice_id=practice.id),
-        json={"audience_kind": "curator_groups"},
+        json={"audience_kind": "schools"},
         headers=headers,
     )
     assert resp.status_code == 400, resp.text

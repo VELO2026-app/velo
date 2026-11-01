@@ -2,7 +2,7 @@
 # VELO Backend -- Schools Schemas (P1, tz-curator-groups.md 5.2)
 # =============================================================================
 #
-# EVERY schema in this module carries the CuratorGroup* prefix, including the
+# EVERY schema in this module carries the School* prefix, including the
 # paginated wrappers. Not decoration: these class names become the emitted
 # type names in generated.ts at the next regen, and a bare `GroupResponse`
 # here would collide with masters/groups_schemas.py's own -- the class of
@@ -135,15 +135,15 @@ SchoolAvatarUrlField = Annotated[
 ]
 
 
-class CreateCuratorGroupRequest(BaseModel):
-    """POST /masters/me/curator-groups."""
+class CreateSchoolRequest(BaseModel):
+    """POST /masters/me/schools."""
 
     name: SchoolNameStr
     description: SchoolDescriptionStr | None = None
 
 
-class UpdateCuratorGroupRequest(BaseModel):
-    """PATCH /masters/me/curator-groups/{id}.
+class UpdateSchoolRequest(BaseModel):
+    """PATCH /masters/me/schools/{id}.
 
     `name` is always required -- a group always has one.
 
@@ -162,7 +162,7 @@ class UpdateCuratorGroupRequest(BaseModel):
 
     CREATION DOES NOT TAKE AN AVATAR, only this update does. A school is
     founded with a name and a description; the picture is attached
-    afterwards. Not an omission -- widening CreateCuratorGroupRequest would
+    afterwards. Not an omission -- widening CreateSchoolRequest would
     touch a schema five test files exercise, for a field the create screen
     has no input for.
     """
@@ -172,8 +172,8 @@ class UpdateCuratorGroupRequest(BaseModel):
     avatar_url: SchoolAvatarUrlField = None
 
 
-class OfferCuratorGroupTransferRequest(BaseModel):
-    """POST /masters/me/curator-groups/{id}/transfer.
+class OfferSchoolTransferRequest(BaseModel):
+    """POST /masters/me/schools/{id}/transfer.
 
     to_user_id only: the eligible set is the group's visible masters, and
     the service checks membership against exactly the roster it shows, so
@@ -183,7 +183,7 @@ class OfferCuratorGroupTransferRequest(BaseModel):
     to_user_id: UUID
 
 
-class CuratorGroupTransferRef(BaseModel):
+class SchoolTransferRef(BaseModel):
     """A pending offer to hand the group over.
 
     ONE schema for all three places that report an offer (the curator's own
@@ -205,8 +205,8 @@ class CuratorGroupTransferRef(BaseModel):
     requested_at: datetime
 
 
-class CuratorGroupResponse(BaseModel):
-    """One curator group, as its curator sees it.
+class SchoolResponse(BaseModel):
+    """One school, as its curator sees it.
 
     masters_count counts only VISIBLE masters -- members with kind='master'
     whose MasterProfile is verified right now (I-4). A suspended master keeps
@@ -226,8 +226,8 @@ class CuratorGroupResponse(BaseModel):
     PATCH returns this schema too, so renaming a group now reports the
     pending transfer alongside the new name. That is an intended widening,
     not a leak: one response shape has one field set, and the alternative --
-    two flavours of CuratorGroupResponse, with and without -- is exactly the
-    duplication CuratorGroupTransferRef exists to avoid. A rename does not
+    two flavours of SchoolResponse, with and without -- is exactly the
+    duplication SchoolTransferRef exists to avoid. A rename does not
     touch the offer.
     """
 
@@ -244,36 +244,36 @@ class CuratorGroupResponse(BaseModel):
     avatar_url: str | None = None
     masters_count: int
     students_count: int
-    transfer: CuratorGroupTransferRef | None = None
+    transfer: SchoolTransferRef | None = None
     created_at: datetime
 
 
-class CuratorGroupListResponse(BaseModel):
-    """GET /masters/me/curator-groups.
+class SchoolListResponse(BaseModel):
+    """GET /masters/me/schools.
 
-    can_create_groups (GT-15) rides on the LIST, not on an item: it is a
+    can_create_schools (GT-15) rides on the LIST, not on an item: it is a
     property of the master, not of any one school, and this is the screen
     where the "create a school" button lives -- so the frontend learns
     whether to offer it from the call it already makes, with no second
     request and no endpoint invented for one boolean.
 
     A plain bool with a false default, NOT bool | None: its neighbours
-    upstream (curator_groups_count and the other admin counters) use null
+    upstream (schools_count and the other admin counters) use null
     for "this row fell outside the batch", and a right has no such state --
     the profile is always in hand when this is answered. False here always
     means "no right", never "could not tell".
     """
 
-    items: list[CuratorGroupResponse]
-    can_create_groups: bool = False
+    items: list[SchoolResponse]
+    can_create_schools: bool = False
 
 
-class CuratorGroupRosterItem(BaseModel):
+class SchoolRosterItem(BaseModel):
     """One member of a school, as anyone allowed to see the roster sees it.
 
     The masters of the school read exactly this (GET .../roster, BE-76);
     the curator reads the same fact plus his own working fields
-    (CuratorGroupMemberItem below). One class describes "a member", the
+    (SchoolMemberItem below). One class describes "a member", the
     curator's projection only widens it -- there is no second format of
     the same row.
     """
@@ -285,7 +285,7 @@ class CuratorGroupRosterItem(BaseModel):
     joined_at: datetime
 
 
-class CuratorGroupMemberItem(CuratorGroupRosterItem):
+class SchoolMemberItem(SchoolRosterItem):
     """One row of the CURATOR's roster: the member plus the curator's fields.
 
     is_visible is ALWAYS true for a student and reflects the live
@@ -308,25 +308,25 @@ class CuratorGroupMemberItem(CuratorGroupRosterItem):
     master_offer: SchoolMasterOfferStateLiteral | None = None
 
 
-class PaginatedCuratorGroupMembersResponse(BaseModel):
-    """GET /masters/me/curator-groups/{id}/members."""
+class PaginatedSchoolMembersResponse(BaseModel):
+    """GET /masters/me/schools/{id}/members."""
 
-    items: list[CuratorGroupMemberItem]
+    items: list[SchoolMemberItem]
     total: int
     limit: int
     offset: int
 
 
-class PaginatedCuratorGroupRosterResponse(BaseModel):
-    """GET /masters/me/curator-groups/{id}/roster (BE-76)."""
+class PaginatedSchoolRosterResponse(BaseModel):
+    """GET /masters/me/schools/{id}/roster (BE-76)."""
 
-    items: list[CuratorGroupRosterItem]
+    items: list[SchoolRosterItem]
     total: int
     limit: int
     offset: int
 
 
-class CuratorGroupBlockedItem(BaseModel):
+class SchoolBlockedItem(BaseModel):
     """One row of the curator's "Блок" tab (BE-79).
 
     kind and joined_at are the membership the block replaced -- what an
@@ -341,10 +341,10 @@ class CuratorGroupBlockedItem(BaseModel):
     blocked_at: datetime
 
 
-class PaginatedCuratorGroupBlocksResponse(BaseModel):
-    """GET /masters/me/curator-groups/{id}/blocks (BE-79)."""
+class PaginatedSchoolBlocksResponse(BaseModel):
+    """GET /masters/me/schools/{id}/blocks (BE-79)."""
 
-    items: list[CuratorGroupBlockedItem]
+    items: list[SchoolBlockedItem]
     total: int
     limit: int
     offset: int
@@ -355,7 +355,7 @@ class PaginatedCuratorGroupBlocksResponse(BaseModel):
 # ===========================================================================
 
 
-class CuratorGroupEventActor(BaseModel):
+class SchoolEventActor(BaseModel):
     """Who did the thing, as the journal recorded them at the time.
 
     NOT NULLABLE, and that is a consequence of how the row is built rather
@@ -369,7 +369,7 @@ class CuratorGroupEventActor(BaseModel):
     display_name IS A SNAPSHOT, NOT A LOOKUP. It is whatever the person
     was called when they acted, and it does not follow later renames --
     deliberately: "Мария удалила Петра" is a record of the past and must
-    keep saying Мария. See CuratorGroupEvent's docstring for the full
+    keep saying Мария. See SchoolEvent's docstring for the full
     argument, and do not replace this with a join to users.
 
     user_id is still the live handle: whoever reads the feed can go look
@@ -380,18 +380,18 @@ class CuratorGroupEventActor(BaseModel):
     display_name: str
 
 
-class CuratorGroupEventItem(BaseModel):
+class SchoolEventItem(BaseModel):
     """One line of a school's journal.
 
     `event` is a plain str, not a Literal over the thirteen kinds. The set
     is expected to grow -- notifications next, practice publication after
     that -- and a Literal here would turn every new backend event into a
     frontend type error before anyone had decided how to render it. The
-    vocabulary lives in CuratorGroupEventKind; this field carries whatever
+    vocabulary lives in SchoolEventKind; this field carries whatever
     the backend wrote.
 
     `data` is a free-form object whose keys depend on `event`. The contract
-    per kind is tabulated in CuratorGroupEvent's docstring and is written
+    per kind is tabulated in SchoolEvent's docstring and is written
     down there rather than modelled here for the reason JSONB is JSONB:
     thirteen small nested schemas would have to be edited in lockstep with
     a table that is going to gain rows.
@@ -410,15 +410,15 @@ class CuratorGroupEventItem(BaseModel):
 
     id: UUID
     event: str
-    actor: CuratorGroupEventActor
+    actor: SchoolEventActor
     data: dict[str, Any]
     created_at: datetime
 
 
-class PaginatedCuratorGroupEventsResponse(BaseModel):
-    """GET /masters/me/curator-groups/{id}/journal."""
+class PaginatedSchoolEventsResponse(BaseModel):
+    """GET /masters/me/schools/{id}/journal."""
 
-    items: list[CuratorGroupEventItem]
+    items: list[SchoolEventItem]
     total: int
     limit: int
     offset: int
@@ -432,7 +432,7 @@ class PaginatedCuratorGroupEventsResponse(BaseModel):
 SchoolRelationLiteral = Literal["curator", "master", "student"]
 
 
-class CuratorGroupCuratorRef(BaseModel):
+class SchoolCuratorRef(BaseModel):
     """The group's owner, as anyone in the group may see them.
 
     A strict subset of MasterPublicResponse -- the declared isolation
@@ -446,8 +446,8 @@ class CuratorGroupCuratorRef(BaseModel):
     avatar_url: str | None
 
 
-class CuratorGroupMineItem(BaseModel):
-    """One row of GET /curator-groups/mine.
+class SchoolMineItem(BaseModel):
+    """One row of GET /schools/mine.
 
     `relation` is the viewer's own tie to this group and is what the
     frontend keys the row's chip off.
@@ -465,29 +465,29 @@ class CuratorGroupMineItem(BaseModel):
     name: str
     description: str | None
     avatar_url: str | None = None
-    curator: CuratorGroupCuratorRef
+    curator: SchoolCuratorRef
     masters_count: int
     students_count: int
     relation: SchoolRelationLiteral
     transfer_offered: bool = False
 
 
-class CuratorGroupMineResponse(BaseModel):
-    """GET /curator-groups/mine."""
+class SchoolMineResponse(BaseModel):
+    """GET /schools/mine."""
 
-    items: list[CuratorGroupMineItem]
+    items: list[SchoolMineItem]
 
 
-class CuratorGroupViewer(BaseModel):
+class SchoolViewer(BaseModel):
     """The requesting user's own tie to the group being viewed."""
 
     relation: SchoolRelationLiteral
 
 
-class CuratorGroupPageResponse(BaseModel):
-    """GET /curator-groups/{id} -- the group as a member sees it.
+class SchoolPageResponse(BaseModel):
+    """GET /schools/{id} -- the group as a member sees it.
 
-    Deliberately NOT the same shape as CuratorGroupResponse (the curator's
+    Deliberately NOT the same shape as SchoolResponse (the curator's
     own row): that one is a management view keyed by ownership, this one
     carries `curator` and `viewer` because the reader is not necessarily
     the owner. Two shapes rather than one with half the fields null.
@@ -504,15 +504,15 @@ class CuratorGroupPageResponse(BaseModel):
     name: str
     description: str | None
     avatar_url: str | None = None
-    curator: CuratorGroupCuratorRef
+    curator: SchoolCuratorRef
     masters_count: int
     students_count: int
-    viewer: CuratorGroupViewer
-    transfer: CuratorGroupTransferRef | None = None
+    viewer: SchoolViewer
+    transfer: SchoolTransferRef | None = None
     created_at: datetime
 
 
-class CuratorGroupMasterItem(BaseModel):
+class SchoolMasterItem(BaseModel):
     """One master in a group's roster.
 
     Fields are a STRICT SUBSET of MasterPublicResponse plus is_curator --
@@ -535,15 +535,15 @@ class CuratorGroupMasterItem(BaseModel):
     is_curator: bool
 
 
-class PaginatedCuratorGroupMastersResponse(BaseModel):
-    """GET /curator-groups/{id}/masters.
+class PaginatedSchoolMastersResponse(BaseModel):
+    """GET /schools/{id}/masters.
 
     `total` counts the curator too: they lead the roster (I-2 keeps them out
-    of curator_group_member, but they are the school's first master), so
+    of school_member, but they are the school's first master), so
     total == masters_count + 1 by construction.
     """
 
-    items: list[CuratorGroupMasterItem]
+    items: list[SchoolMasterItem]
     total: int
     limit: int
     offset: int
@@ -555,9 +555,9 @@ class PaginatedCuratorGroupMastersResponse(BaseModel):
 
 
 SchoolInviteReasonLiteral = Literal[
-    "already_member", "own_group", "blocked_by_curator", "blocked_in_group"
+    "already_member", "own_school", "blocked_by_curator", "blocked_in_school"
 ]
-# BE-79: blocked_in_group -- the curator blocked this person in THIS school.
+# BE-79: blocked_in_school -- the curator blocked this person in THIS school.
 # Not blocked_by_curator, which is the curator's block as a MASTER.
 # GT-27: "master_required" left this list. It described a link refusing an
 # unverified account, and there is no master link any more; the same code is
@@ -565,13 +565,13 @@ SchoolInviteReasonLiteral = Literal[
 # than a described refusal.
 
 
-class CuratorGroupInviteResponse(BaseModel):
-    """The group's ONE reusable link.
+class SchoolInviteResponse(BaseModel):
+    """The school's ONE reusable link.
 
-    THERE USED TO BE A REQUEST BODY, CreateCuratorGroupInviteRequest, whose
-    only field was the link's kind, and this response echoed it back. GT-27
-    left schools with a single link, so both the field and the request model
-    are gone rather than kept and ignored.
+    THERE USED TO BE A REQUEST BODY whose only field was the link's kind,
+    and this response echoed it back. GT-27 left schools with a single link,
+    so both the field and the request model are gone rather than kept and
+    ignored.
 
     The url carries the token and nothing else
     (`school__<token>`): a second copy of any fact in the url
@@ -581,7 +581,7 @@ class CuratorGroupInviteResponse(BaseModel):
     invite_url: str
 
 
-class CuratorGroupInvitePreviewGroup(BaseModel):
+class SchoolInvitePreviewSchool(BaseModel):
     """The card shown to someone who opened an invite link.
 
     curator_name is a STRING here, not the {user_id, display_name,
@@ -599,8 +599,8 @@ class CuratorGroupInvitePreviewGroup(BaseModel):
     students_count: int
 
 
-class CuratorGroupInvitePreviewResponse(BaseModel):
-    """GET /curator-groups/invites/{token}.
+class SchoolInvitePreviewResponse(BaseModel):
+    """GET /schools/invites/{token}.
 
     This endpoint DESCRIBES a refusal instead of raising it: can_join=False
     plus a reason, so the screen can say why. The one exception is 404 --
@@ -618,19 +618,19 @@ class CuratorGroupInvitePreviewResponse(BaseModel):
     for someone who is not in the group yet.
     """
 
-    group: CuratorGroupInvitePreviewGroup
+    school: SchoolInvitePreviewSchool
     can_join: bool
     reason: SchoolInviteReasonLiteral | None
     relation: SchoolMemberKindLiteral | None
 
 
-class JoinCuratorGroupRequest(BaseModel):
-    """POST /curator-groups/join."""
+class JoinSchoolRequest(BaseModel):
+    """POST /schools/join."""
 
     token: str
 
 
-class JoinCuratorGroupResponse(BaseModel):
+class JoinSchoolResponse(BaseModel):
     """The outcome of joining.
 
     already_member answers exactly one question -- WAS THERE A ROW when this
@@ -649,7 +649,7 @@ class JoinCuratorGroupResponse(BaseModel):
     relation is the tie AFTER the call.
     """
 
-    group_id: UUID
+    school_id: UUID
     relation: SchoolMemberKindLiteral
     already_member: bool
 
@@ -665,8 +665,8 @@ class JoinCuratorGroupResponse(BaseModel):
 # find out afterwards.
 
 
-class CuratorGroupLeavePreviewResponse(BaseModel):
-    """GET /curator-groups/{id}/leave-preview.
+class SchoolLeavePreviewResponse(BaseModel):
+    """GET /schools/{id}/leave-preview.
 
     How many of MY OWN upcoming practices target this school -- i.e. what I
     am about to switch off by walking out. A student always sees 0: they
@@ -674,11 +674,11 @@ class CuratorGroupLeavePreviewResponse(BaseModel):
     the question.
     """
 
-    upcoming_practices_targeting_group: int
+    upcoming_practices_targeting_school: int
 
 
-class CuratorGroupRemovePreviewResponse(BaseModel):
-    """GET /masters/me/curator-groups/{id}/members/{user_id}/remove-preview.
+class SchoolRemovePreviewResponse(BaseModel):
+    """GET /masters/me/schools/{id}/members/{user_id}/remove-preview.
 
     The same number for the member the curator is about to remove. Zero for
     a student, and zero -- not 404 -- for somebody who is not in the group
@@ -687,11 +687,11 @@ class CuratorGroupRemovePreviewResponse(BaseModel):
     describes.
     """
 
-    upcoming_practices_targeting_group: int
+    upcoming_practices_targeting_school: int
 
 
-class CuratorGroupDeletePreviewResponse(BaseModel):
-    """GET /masters/me/curator-groups/{id}/delete-preview.
+class SchoolDeletePreviewResponse(BaseModel):
+    """GET /masters/me/schools/{id}/delete-preview.
 
     What deleting the school costs: who is in it, and how many upcoming
     practices -- across EVERY master of the school, the curator included --
@@ -701,11 +701,11 @@ class CuratorGroupDeletePreviewResponse(BaseModel):
 
     masters_count: int
     students_count: int
-    upcoming_practices_targeting_group: int
+    upcoming_practices_targeting_school: int
 
 
-class CuratorGroupMasterOfferRequest(BaseModel):
-    """POST /masters/me/curator-groups/{id}/master-offers (GT-27).
+class SchoolMasterOfferRequest(BaseModel):
+    """POST /masters/me/schools/{id}/master-offers (GT-27).
 
     The candidate, by id. Nothing else: a school master is appointed from
     the roster the curator is already looking at, so there is no name, no
@@ -732,7 +732,7 @@ class CuratorGroupMasterOfferRequest(BaseModel):
 # reason names are shown at all.
 
 
-class CuratorGroupCheckinItem(BaseModel):
+class SchoolCheckinItem(BaseModel):
     """One PRE check-in left on a practice of this school.
 
     `mood` is the stored 1..10 score mapped to its zone (ScoreZone, BE-77)
@@ -758,16 +758,16 @@ class CuratorGroupCheckinItem(BaseModel):
     created_at: datetime
 
 
-class PaginatedCuratorGroupCheckinsResponse(BaseModel):
-    """GET /masters/me/curator-groups/{id}/checkins."""
+class PaginatedSchoolCheckinsResponse(BaseModel):
+    """GET /masters/me/schools/{id}/checkins."""
 
-    items: list[CuratorGroupCheckinItem]
+    items: list[SchoolCheckinItem]
     total: int
     limit: int
     offset: int
 
 
-class CuratorGroupReviewItem(BaseModel):
+class SchoolReviewItem(BaseModel):
     """One named review left on a practice of this school.
 
     `rating` is the stored 1..10 score mapped to its zone (ScoreZone,
@@ -788,10 +788,10 @@ class CuratorGroupReviewItem(BaseModel):
     created_at: datetime
 
 
-class PaginatedCuratorGroupReviewsResponse(BaseModel):
-    """GET /masters/me/curator-groups/{id}/reviews."""
+class PaginatedSchoolReviewsResponse(BaseModel):
+    """GET /masters/me/schools/{id}/reviews."""
 
-    items: list[CuratorGroupReviewItem]
+    items: list[SchoolReviewItem]
     total: int
     limit: int
     offset: int
@@ -847,7 +847,7 @@ class SchoolStudentFeedbackItem(BaseModel):
 
 
 class SchoolStudentProfileResponse(BaseModel):
-    """GET /masters/me/curator-groups/{group_id}/students/{user_id}.
+    """GET /masters/me/schools/{school_id}/students/{user_id}.
 
     What the school knows about one of its students, across every practice
     of the school -- including practices taught by other masters, and
@@ -889,7 +889,7 @@ class SchoolStudentProfileResponse(BaseModel):
 # the payload. Refinement waits for PM-2.
 
 
-class CuratorGroupPracticeTotals(BaseModel):
+class SchoolPracticeTotals(BaseModel):
     """The school's practices counted by lifecycle state.
 
     total = completed + upcoming; drafts, cancelled and deleted sessions are
@@ -901,14 +901,14 @@ class CuratorGroupPracticeTotals(BaseModel):
     upcoming: int
 
 
-class CuratorGroupMemberTotals(BaseModel):
+class SchoolMemberTotals(BaseModel):
     """Active memberships by kind -- the same rows the roster pages."""
 
     masters: int
     students: int
 
 
-class CuratorGroupConductedPracticeItem(BaseModel):
+class SchoolConductedPracticeItem(BaseModel):
     """One COMPLETED practice of the window (part 3, owner 2026-10-02).
 
     The card the client renders: direction (schema-on-read data.taxonomy,
@@ -935,7 +935,7 @@ class CuratorGroupConductedPracticeItem(BaseModel):
     rating: ScoreZoneCounts
 
 
-class CuratorGroupEngagementTotals(BaseModel):
+class SchoolEngagementTotals(BaseModel):
     """The period-scoped heart of the screen (owner brief 2026-10-02,
     BE-107 decisions).
 
@@ -971,10 +971,10 @@ class CuratorGroupEngagementTotals(BaseModel):
     # Every COMPLETED practice of the window, newest first, no limit -- the
     # client renders a card per practice with its own five-zone strip.
     # Empty list on a window without practices.
-    conducted_practices: list[CuratorGroupConductedPracticeItem]
+    conducted_practices: list[SchoolConductedPracticeItem]
 
 
-class CuratorGroupFeedbackTotals(BaseModel):
+class SchoolFeedbackTotals(BaseModel):
     """How the school's practices landed: counts plus the two distributions
     (five-zone ScoreZoneCounts, BE-77)."""
 
@@ -984,7 +984,7 @@ class CuratorGroupFeedbackTotals(BaseModel):
     rating: ScoreZoneCounts
 
 
-class CuratorGroupTopPracticeItem(BaseModel):
+class SchoolTopPracticeItem(BaseModel):
     """One completed practice of the school with its engagement counts.
 
     Ordered by engagement (check-ins + reviews), newest first on ties --
@@ -1000,15 +1000,15 @@ class CuratorGroupTopPracticeItem(BaseModel):
     reviews_count: int
 
 
-class CuratorGroupAnalyticsResponse(BaseModel):
-    """GET /masters/me/curator-groups/{group_id}/analytics (§6).
+class SchoolAnalyticsResponse(BaseModel):
+    """GET /masters/me/schools/{school_id}/analytics (§6).
 
     `engagement` answers the request's ?period; every other group is the
     school's all-time shape and does not move with the slider.
     """
 
-    practices: CuratorGroupPracticeTotals
-    members: CuratorGroupMemberTotals
-    engagement: CuratorGroupEngagementTotals
-    feedback: CuratorGroupFeedbackTotals
-    top_practices: list[CuratorGroupTopPracticeItem]
+    practices: SchoolPracticeTotals
+    members: SchoolMemberTotals
+    engagement: SchoolEngagementTotals
+    feedback: SchoolFeedbackTotals
+    top_practices: list[SchoolTopPracticeItem]

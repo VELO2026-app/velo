@@ -53,7 +53,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session_factory
 from app.modules.masters.models import MasterProfile
-from app.modules.schools import service as curator_service
+from app.modules.schools import service as school_service
 from app.modules.schools.models import (
     School,
     SchoolEvent,
@@ -66,11 +66,11 @@ from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 from tests.school_race_harness import race
 
-GROUPS_URL = "/api/v1/masters/me/curator-groups"
-OFFER_URL = "/api/v1/masters/me/curator-groups/{group_id}/transfer"
-MEMBER_URL = "/api/v1/masters/me/curator-groups/{group_id}/members/{user_id}"
-ACCEPT_URL = "/api/v1/curator-groups/{group_id}/transfer/accept"
-MEMBERSHIP_URL = "/api/v1/curator-groups/{group_id}/membership"
+GROUPS_URL = "/api/v1/masters/me/schools"
+OFFER_URL = "/api/v1/masters/me/schools/{school_id}/transfer"
+MEMBER_URL = "/api/v1/masters/me/schools/{school_id}/members/{user_id}"
+ACCEPT_URL = "/api/v1/schools/{school_id}/transfer/accept"
+MEMBERSHIP_URL = "/api/v1/schools/{school_id}/membership"
 
 _TID_MIN = 69300
 _TID_MAX = 69399
@@ -103,7 +103,7 @@ async def _make_verified_master(
             data={
                 "account": {
                     "status": "verified",
-                    "can_create_groups": True,
+                    "can_create_schools": True,
                 },
                 "profile": {"bio": "m"},
             },
@@ -131,7 +131,7 @@ async def _school_with_offer(
 
     db_session.add(
         SchoolMember(
-            group_id=UUID(group_id),
+            school_id=UUID(group_id),
             user_id=UUID(heir["user"]["id"]),
             kind=SchoolMemberKind.MASTER.value,
         )
@@ -140,7 +140,7 @@ async def _school_with_offer(
     await db_session.commit()
 
     offered = await client.post(
-        OFFER_URL.format(group_id=group_id),
+        OFFER_URL.format(school_id=group_id),
         json={"to_user_id": heir["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
@@ -167,7 +167,7 @@ async def _state(
     member = (
         await db_session.execute(
             select(SchoolMember.id).where(
-                SchoolMember.group_id == UUID(group_id),
+                SchoolMember.school_id == UUID(group_id),
                 SchoolMember.user_id == UUID(heir["user"]["id"]),
             )
         )
@@ -175,7 +175,7 @@ async def _state(
     transfer = (
         await db_session.execute(
             select(SchoolTransfer.id).where(
-                SchoolTransfer.group_id == UUID(group_id)
+                SchoolTransfer.school_id == UUID(group_id)
             )
         )
     ).scalar_one_or_none()
@@ -205,14 +205,14 @@ async def _accept_with_competitor(
 
     async def _accept_call(session: AsyncSession) -> None:
         actor = await session.get(User, heir_id)
-        await curator_service.accept_school_transfer(
+        await school_service.accept_school_transfer(
             UUID(group_id), heir_id, session, actor=actor,
         )
 
     result = await race(
         monkeypatch,
         holder=_accept_call,
-        pause_in=(curator_service, "_has_master_capability"),
+        pause_in=(school_service, "_has_master_capability"),
         rival=competitor,
     )
     assert not result.holder.deadlocked and not result.rival.deadlocked, (
@@ -225,7 +225,7 @@ async def _accept_with_competitor(
         won = (
             await probe.execute(
                 select(SchoolEvent.id).where(
-                    SchoolEvent.group_id == UUID(group_id),
+                    SchoolEvent.school_id == UUID(group_id),
                     SchoolEvent.event == effect.value,
                 )
             )
@@ -293,7 +293,7 @@ async def test_an_offer_withdrawn_mid_accept_does_not_move_the_school(
 
     async def _cancel(rival: AsyncSession) -> None:
         actor = await rival.get(User, UUID(curator["user"]["id"]))
-        await curator_service.cancel_school_transfer(
+        await school_service.cancel_school_transfer(
             UUID(curator["user"]["id"]),
             UUID(group_id),
             rival,
@@ -335,7 +335,7 @@ async def test_removing_the_heir_mid_accept_does_not_move_the_school(
 
     async def _remove(rival: AsyncSession) -> None:
         actor = await rival.get(User, UUID(curator["user"]["id"]))
-        await curator_service.remove_school_member(
+        await school_service.remove_school_member(
             UUID(curator["user"]["id"]),
             UUID(group_id),
             UUID(heir["user"]["id"]),
@@ -376,7 +376,7 @@ async def test_the_heir_leaving_mid_accept_does_not_move_the_school(
 
     async def _leave(rival: AsyncSession) -> None:
         actor = await rival.get(User, UUID(heir["user"]["id"]))
-        await curator_service.leave_school(
+        await school_service.leave_school(
             UUID(group_id),
             UUID(heir["user"]["id"]),
             rival,
@@ -430,11 +430,11 @@ async def test_two_simultaneous_accepts_give_one_200_and_one_404(
 
     first, second = await asyncio.gather(
         client.post(
-            ACCEPT_URL.format(group_id=group_id),
+            ACCEPT_URL.format(school_id=group_id),
             headers=auth_headers(heir["session_token"]),
         ),
         client.post(
-            ACCEPT_URL.format(group_id=group_id),
+            ACCEPT_URL.format(school_id=group_id),
             headers=auth_headers(heir["session_token"]),
         ),
     )
@@ -471,13 +471,13 @@ async def test_a_second_accept_afterwards_is_404_but_proves_less(
     _curator, heir, group_id = await _school_with_offer(client, db_session)
 
     first = await client.post(
-        ACCEPT_URL.format(group_id=group_id),
+        ACCEPT_URL.format(school_id=group_id),
         headers=auth_headers(heir["session_token"]),
     )
     assert first.status_code == 200, first.text
 
     second = await client.post(
-        ACCEPT_URL.format(group_id=group_id),
+        ACCEPT_URL.format(school_id=group_id),
         headers=auth_headers(heir["session_token"]),
     )
     assert second.status_code == 404, second.text

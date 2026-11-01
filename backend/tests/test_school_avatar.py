@@ -10,7 +10,7 @@
 # before it was claimed: free_windows(space=(65000, 65999)) returned
 # [(65400, 65999)].
 #
-# WHAT THIS FILE IS ABOUT. curator_group.avatar_url is the first field in
+# WHAT THIS FILE IS ABOUT. school.avatar_url is the first field in
 # this backend that takes a URL FROM A USER -- every other avatar_url is
 # copied from Telegram and every zoom link is minted by the Zoom API. The
 # value lands in an <img src> in front of every member of the school, which
@@ -39,8 +39,8 @@
 # problem the client already solved.
 #
 # CLEANUP is full_cleanup_range(..., delete_users=True) and nothing else:
-# curator_group cascades from users, and the journal cascades from
-# curator_group, so deleting the band's users takes schools and entries with
+# school cascades from users, and the journal cascades from
+# school, so deleting the band's users takes schools and entries with
 # them.
 # =============================================================================
 
@@ -69,13 +69,13 @@ from tests.helpers import (
     login_user,
 )
 
-GROUPS_URL = "/api/v1/masters/me/curator-groups"
-GROUP_URL = "/api/v1/masters/me/curator-groups/{group_id}"
-JOURNAL_URL = "/api/v1/masters/me/curator-groups/{group_id}/journal"
-INVITES_URL = "/api/v1/masters/me/curator-groups/{group_id}/invites"
-PREVIEW_URL = "/api/v1/curator-groups/invites/{token}"
-MINE_URL = "/api/v1/curator-groups/mine"
-PAGE_URL = "/api/v1/curator-groups/{group_id}"
+GROUPS_URL = "/api/v1/masters/me/schools"
+GROUP_URL = "/api/v1/masters/me/schools/{school_id}"
+JOURNAL_URL = "/api/v1/masters/me/schools/{school_id}/journal"
+INVITES_URL = "/api/v1/masters/me/schools/{school_id}/invites"
+PREVIEW_URL = "/api/v1/schools/invites/{token}"
+MINE_URL = "/api/v1/schools/mine"
+PAGE_URL = "/api/v1/schools/{school_id}"
 
 _TID_MIN = 65400
 _TID_MAX = 65599
@@ -121,7 +121,7 @@ async def _make_verified_master(
             data={
                 "account": {
                     "status": "verified",
-                    "can_create_groups": True,
+                    "can_create_schools": True,
                 },
                 "profile": {"bio": "m"},
             },
@@ -149,13 +149,13 @@ async def _patch(
 ):
     """PATCH the school.
 
-    `name` is NOT defaulted here on purpose. UpdateCuratorGroupRequest
+    `name` is NOT defaulted here on purpose. UpdateSchoolRequest
     requires it -- a school always has one -- so every caller has to decide
     what name it is sending, and the test that omits it is asserting a 422
     rather than tripping over a helper's convenience.
     """
     return await client.patch(
-        GROUP_URL.format(group_id=group_id),
+        GROUP_URL.format(school_id=group_id),
         json=body,
         headers=auth_headers(curator["session_token"]),
     )
@@ -193,7 +193,7 @@ async def _events(
     client: AsyncClient, curator: dict, group_id: str,
 ) -> list[dict]:
     resp = await client.get(
-        JOURNAL_URL.format(group_id=group_id),
+        JOURNAL_URL.format(school_id=group_id),
         params={"limit": 100},
         headers=auth_headers(curator["session_token"]),
     )
@@ -212,7 +212,7 @@ async def _invite(
 ) -> str:
     with patch.object(settings, "telegram_bot_url", _BOT_URL):
         resp = await client.post(
-            INVITES_URL.format(group_id=group_id),
+            INVITES_URL.format(school_id=group_id),
             json={},
             headers=auth_headers(curator["session_token"]),
         )
@@ -225,7 +225,7 @@ async def _seed_member(
 ) -> None:
     db_session.add(
         SchoolMember(
-            group_id=UUID(group_id),
+            school_id=UUID(group_id),
             user_id=UUID(auth["user"]["id"]),
             kind=kind,
         )
@@ -530,7 +530,7 @@ async def test_only_https_is_accepted_and_the_dangerous_schemes_are_not(
         assert resp.status_code == 422, f"{url}: {resp.text}"
 
     page = await client.get(
-        PAGE_URL.format(group_id=group_id),
+        PAGE_URL.format(school_id=group_id),
         headers=auth_headers(curator["session_token"]),
     )
     assert page.status_code == 200
@@ -710,7 +710,7 @@ async def test_another_master_cannot_set_the_avatar_of_a_school_they_do_not_own(
 async def test_the_curators_own_list_carries_the_avatar(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """GET /masters/me/curator-groups, built from _group_payload.
+    """GET /masters/me/schools, built from _group_payload.
 
     Two schools, one with a picture and one without, so the field is shown
     to follow the row rather than the request: a response that hard-coded
@@ -755,7 +755,7 @@ async def test_a_member_sees_the_avatar_on_the_school_page_and_in_mine(
 
     headers = auth_headers(student["session_token"])
 
-    page = await client.get(PAGE_URL.format(group_id=group_id), headers=headers)
+    page = await client.get(PAGE_URL.format(school_id=group_id), headers=headers)
     assert page.status_code == 200, page.text
     assert page.json()["avatar_url"] == _URL
 
@@ -796,12 +796,12 @@ async def test_the_invite_preview_carries_the_avatar(
 
     a = await client.get(PREVIEW_URL.format(token=token_a), headers=headers)
     assert a.status_code == 200, a.text
-    assert a.json()["group"]["avatar_url"] == _URL
+    assert a.json()["school"]["avatar_url"] == _URL
 
     b = await client.get(PREVIEW_URL.format(token=token_b), headers=headers)
     assert b.status_code == 200, b.text
-    assert "avatar_url" in b.json()["group"]
-    assert b.json()["group"]["avatar_url"] is None
+    assert "avatar_url" in b.json()["school"]
+    assert b.json()["school"]["avatar_url"] is None
 
 
 @pytest.mark.asyncio
@@ -823,7 +823,7 @@ async def test_an_outsider_gets_no_school_and_therefore_no_avatar(
     ).status_code == 200
     headers = auth_headers(outsider["session_token"])
 
-    page = await client.get(PAGE_URL.format(group_id=group_id), headers=headers)
+    page = await client.get(PAGE_URL.format(school_id=group_id), headers=headers)
     assert page.status_code == 404, page.text
 
     token = await _invite(client, curator, group_id)
@@ -831,7 +831,7 @@ async def test_an_outsider_gets_no_school_and_therefore_no_avatar(
         PREVIEW_URL.format(token=token), headers=headers,
     )
     assert preview.status_code == 200, preview.text
-    assert preview.json()["group"]["avatar_url"] == _URL
+    assert preview.json()["school"]["avatar_url"] == _URL
 
 
 @pytest.mark.asyncio
@@ -882,7 +882,7 @@ async def test_a_school_with_no_avatar_reports_null_in_every_response(
 
     own_list = await client.get(GROUPS_URL, headers=curator_headers)
     page = await client.get(
-        PAGE_URL.format(group_id=group_id), headers=student_headers,
+        PAGE_URL.format(school_id=group_id), headers=student_headers,
     )
     mine = await client.get(MINE_URL, headers=student_headers)
     preview = await client.get(
@@ -896,7 +896,7 @@ async def test_a_school_with_no_avatar_reports_null_in_every_response(
         own_list.json()["items"][0],
         page.json(),
         {g["id"]: g for g in mine.json()["items"]}[group_id],
-        preview.json()["group"],
+        preview.json()["school"],
     ]
     for body in bodies:
         assert "avatar_url" in body

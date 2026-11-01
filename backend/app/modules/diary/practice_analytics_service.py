@@ -6,7 +6,7 @@
 # distributions, the «пришёл -> ушёл» pairs and the reviews with text.
 #
 # WHO MAY READ (owner, BE-78): the practice's leading master; for a practice
-# OWNED by a school (Practice.curator_group_id, BE-74) also that school's
+# OWNED by a school (Practice.school_id, BE-74) also that school's
 # curator and its masters who are verified right now. That second half is
 # the audience module's own predicate, master_broadcasts_to_group_clause --
 # "curator of the school, or a kind='master' member with a verified profile"
@@ -83,10 +83,10 @@ async def _load_readable_practice(
     role: PracticeAnalyticsViewerRole | None = None
     if practice.master_id == user.id:
         role = PracticeAnalyticsViewerRole.LEADER
-    elif practice.curator_group_id is not None:
+    elif practice.school_id is not None:
         curator_user_id = await session.scalar(
             select(School.curator_user_id).where(
-                School.id == practice.curator_group_id,
+                School.id == practice.school_id,
                 master_broadcasts_to_group_clause(user.id),
             )
         )
@@ -114,8 +114,8 @@ def _school_student_clause(practice_id: UUID):
     return (
         select(SchoolMember.id)
         .where(
-            SchoolMember.group_id
-            == select(Practice.curator_group_id)
+            SchoolMember.school_id
+            == select(Practice.school_id)
             .where(Practice.id == practice_id)
             .scalar_subquery(),
             SchoolMember.user_id == Booking.user_id,
@@ -170,8 +170,8 @@ async def get_practice_analytics(
         "viewer_role": role,
         # Only the curator's taps need the school (the school student
         # profile route); nobody else is handed it.
-        "curator_group_id": (
-            practice.curator_group_id
+        "school_id": (
+            practice.school_id
             if role is PracticeAnalyticsViewerRole.CURATOR
             else None
         ),

@@ -21,7 +21,7 @@
 # stops checking anything. The pair is the test; the absence alone is not.
 #
 # TWO PREDICATES THAT DISAGREE ON PURPOSE. A practice belongs to a school
-# for as long as its curator_group_id names it (history; BE-74 -- the
+# for as long as its school_id names it (history; BE-74 -- the
 # owner column, set at creation and never moved), while it reaches the
 # school's feed only while its master is still a member (state). Owner
 # ruling, 2026-09-10. The pair of tests around
@@ -35,7 +35,7 @@
 # one PRE check-in per booking, one feedback per (practice, user).
 #
 # CLEANUP is full_cleanup_range(..., delete_users=True). The helper knows
-# nothing about curator tables and does not need to: curator_group cascades
+# nothing about curator tables and does not need to: school cascades
 # from its curator, practice_audience_curator_group cascades from both
 # sides, and checkins/feedbacks/bookings hang off users in the band.
 # =============================================================================
@@ -67,8 +67,8 @@ from app.modules.schools.models import (
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 
-CHECKINS_URL = "/api/v1/masters/me/curator-groups/{group_id}/checkins"
-REVIEWS_URL = "/api/v1/masters/me/curator-groups/{group_id}/reviews"
+CHECKINS_URL = "/api/v1/masters/me/schools/{school_id}/checkins"
+REVIEWS_URL = "/api/v1/masters/me/schools/{school_id}/reviews"
 PRACTICES_URL = "/api/v1/practices"
 DETAIL_URL = "/api/v1/practices/{practice_id}"
 STUDENT_DOSSIER_URL = "/api/v1/masters/me/students/{student_id}"
@@ -118,7 +118,7 @@ async def _make_verified_master(
         MasterProfile(
             user_id=user_id,
             data={
-                "account": {"status": "verified", "can_create_groups": True},
+                "account": {"status": "verified", "can_create_schools": True},
                 "profile": {"bio": "m"},
             },
         )
@@ -157,7 +157,7 @@ async def _join_school(
     kind: SchoolMemberKind,
 ) -> SchoolMember:
     row = SchoolMember(
-        group_id=school.id,
+        school_id=school.id,
         user_id=UUID(auth["user"]["id"]),
         kind=kind.value,
     )
@@ -204,11 +204,11 @@ async def _practice(
         # practice without one is a practice of the general section --
         # public, the only shape a master builds outside any school.
         audience_kind=(
-            AudienceKind.CURATOR_GROUPS.value
+            AudienceKind.SCHOOLS.value
             if school is not None
             else AudienceKind.PUBLIC.value
         ),
-        curator_group_id=school.id if school is not None else None,
+        school_id=school.id if school is not None else None,
     )
     db_session.add(practice)
     await db_session.flush()
@@ -303,7 +303,7 @@ async def _get(
 ):
     group_id = school if isinstance(school, str) else str(school.id)
     return await client.get(
-        url.format(group_id=group_id),
+        url.format(school_id=group_id),
         params=params or None,
         headers=auth_headers(auth["session_token"]),
     )
@@ -549,8 +549,8 @@ async def _create_in_two_schools(
             "is_free": True,
             "price_cents": 0,
             "currency": "eur",
-            "audience_kind": "curator_groups",
-            "curator_group_id": [str(first.id), str(second.id)],
+            "audience_kind": "schools",
+            "school_id": [str(first.id), str(second.id)],
         },
         headers=auth_headers(author["session_token"]),
     )

@@ -104,16 +104,16 @@ from app.modules.schools.models import (  # noqa: E402
     SchoolMemberKind,
 )
 from app.modules.schools.service import (  # noqa: E402
-    CAN_CREATE_GROUPS_KEY,
+    CAN_CREATE_SCHOOLS_KEY,
 )
 
 # The seed profile's FIELD name, deliberately a separate constant from
-# CAN_CREATE_GROUPS_KEY above even though the two spell the same word: one
+# CAN_CREATE_SCHOOLS_KEY above even though the two spell the same word: one
 # is a key in a JSON file people edit by hand, the other is a key inside
 # stored JSONB. Named once because both readers of it fail SILENTLY on a
 # typo -- the demo curator would simply have no right, and the only symptom
 # would be a dead button on the stand.
-_PROFILE_FIELD_CAN_CREATE_GROUPS = "can_create_groups"
+_PROFILE_FIELD_CAN_CREATE_SCHOOLS = "can_create_schools"
 from app.modules.diary.models import Checkin, CheckType, Feedback  # noqa: E402
 from app.modules.masters.models import MasterProfile  # noqa: E402
 from app.modules.practices.models import (  # noqa: E402
@@ -229,8 +229,8 @@ def _verified_profile_data(fields: dict) -> dict:
             # because this literal spells out the whole account block, and a
             # reader comparing a seeded profile against a real one should
             # not have to wonder whether a missing key means anything.
-            CAN_CREATE_GROUPS_KEY: bool(
-                fields.get(_PROFILE_FIELD_CAN_CREATE_GROUPS, False)
+            CAN_CREATE_SCHOOLS_KEY: bool(
+                fields.get(_PROFILE_FIELD_CAN_CREATE_SCHOOLS, False)
             ),
         },
         "profile": {
@@ -372,11 +372,11 @@ async def ensure_master(
             }
             data.setdefault("availability", {})["is_accepting"] = True
 
-        if spec.get(_PROFILE_FIELD_CAN_CREATE_GROUPS) and not acct.get(
-            CAN_CREATE_GROUPS_KEY
+        if spec.get(_PROFILE_FIELD_CAN_CREATE_SCHOOLS) and not acct.get(
+            CAN_CREATE_SCHOOLS_KEY
         ):
-            acct[CAN_CREATE_GROUPS_KEY] = True
-            info("  can_create_groups granted on existing profile")
+            acct[CAN_CREATE_SCHOOLS_KEY] = True
+            info("  can_create_schools granted on existing profile")
 
         prof = data.setdefault("profile", {})
         existing_methods = list(prof.get("methods") or [])
@@ -492,10 +492,10 @@ async def ensure_practice(
         # takes with its people keys.
         school = (schools or {})[school_name]
         audience_kwargs = {
-            "audience_kind": AudienceKind.CURATOR_GROUPS,
+            "audience_kind": AudienceKind.SCHOOLS,
             # BE-74: the practice is created IN the school and belongs to
-            # it; 'curator_groups' then means that school's students.
-            "curator_group_id": school.id,
+            # it; 'schools' then means that school's students.
+            "school_id": school.id,
         }
 
     body = CreatePracticeRequest(
@@ -667,7 +667,7 @@ async def reset_seed_data(session: AsyncSession, profile: dict) -> dict:
     NEED it: a school whose curator is a live master matches neither rule
     above -- not the prefix (a group has no title) and not the synthetic id
     range (its owner is a real person) -- so without this step it would
-    survive --reset and the next run would hit 409 curator_group_name_taken
+    survive --reset and the next run would hit 409 school_name_taken
     on its own name.
 
     They are matched by (curator_user_id, name), not by name alone and not
@@ -770,7 +770,7 @@ async def ensure_school(
     of getting there.
 
     The curator is NOT given a membership row (I-2): ownership lives in
-    curator_group.curator_user_id and nowhere else, and a row here would
+    school.curator_user_id and nowhere else, and a row here would
     make every counter in the product disagree with itself.
     """
     group = (
@@ -795,7 +795,7 @@ async def ensure_school(
         (
             await session.execute(
                 select(SchoolMember.user_id).where(
-                    SchoolMember.group_id == group.id
+                    SchoolMember.school_id == group.id
                 )
             )
         )
@@ -809,7 +809,7 @@ async def ensure_school(
             continue
         session.add(
             SchoolMember(
-                group_id=group.id,
+                school_id=group.id,
                 user_id=member.id,
                 kind=SchoolMemberKind.MASTER.value,
             )
@@ -822,7 +822,7 @@ async def ensure_school(
             continue
         session.add(
             SchoolMember(
-                group_id=group.id,
+                school_id=group.id,
                 user_id=member.id,
                 kind=SchoolMemberKind.STUDENT.value,
             )

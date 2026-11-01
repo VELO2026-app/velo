@@ -163,7 +163,7 @@ async def _create_practice(
     db_session: AsyncSession,
     master_id: str,
     *,
-    audience_kind: str = AudienceKind.CURATOR_GROUPS.value,
+    audience_kind: str = AudienceKind.SCHOOLS.value,
     school: School | None = None,
     status: str = PracticeStatus.SCHEDULED.value,
     hours_from_now: float = 48,
@@ -186,7 +186,7 @@ async def _create_practice(
         currency="eur",
         audience_kind=audience_kind,
         parent_practice_id=parent_practice_id,
-        curator_group_id=school.id if school is not None else None,
+        school_id=school.id if school is not None else None,
     )
     db_session.add(practice)
     await db_session.flush()
@@ -210,7 +210,7 @@ async def _create_practice(
         existing = (
             await db_session.execute(
                 select(SchoolMember.id).where(
-                    SchoolMember.group_id == school.id,
+                    SchoolMember.school_id == school.id,
                     SchoolMember.user_id == practice.master_id,
                 )
             )
@@ -218,7 +218,7 @@ async def _create_practice(
         if existing is None:
             db_session.add(
                 SchoolMember(
-                    group_id=school.id,
+                    school_id=school.id,
                     user_id=practice.master_id,
                     kind=SchoolMemberKind.MASTER.value,
                 )
@@ -233,7 +233,7 @@ async def _join_school(
     kind: SchoolMemberKind = SchoolMemberKind.STUDENT,
 ) -> SchoolMember:
     row = SchoolMember(
-        group_id=group_id, user_id=UUID(user_id), kind=kind.value,
+        school_id=group_id, user_id=UUID(user_id), kind=kind.value,
     )
     db_session.add(row)
     await db_session.flush()
@@ -260,8 +260,8 @@ async def _create_in_two_schools(
             "is_free": True,
             "price_cents": 0,
             "currency": "eur",
-            "audience_kind": "curator_groups",
-            "curator_group_id": [str(first.id), str(second.id)],
+            "audience_kind": "schools",
+            "school_id": [str(first.id), str(second.id)],
         },
         headers=auth_headers(author["session_token"]),
     )
@@ -506,9 +506,9 @@ async def test_a_practice_whose_school_was_deleted_is_nobodys(
     rows -- reachable then: deleting a school cascaded the rows away and
     left audience_kind untouched -- and asserted that the right came from
     the ROWS, not from the kind. BE-74 made that state unreachable: deleting
-    a school clears the owner column, the trigger turns a 'curator_groups'
+    a school clears the owner column, the trigger turns a 'schools'
     practice public in the same statement, and the CHECK forbids
-    'curator_groups' without a school. The reachable successor is this one:
+    'schools' without a school. The reachable successor is this one:
     the practice survives the deletion as a public practice with no school
     (asserted, so the 404 is not a practice that is simply gone), and the
     curator of the deleted school is answered like a stranger.
@@ -530,7 +530,7 @@ async def test_a_practice_whose_school_was_deleted_is_nobodys(
     )).scalar_one()
     assert survived.status == PracticeStatus.SCHEDULED.value
     assert survived.audience_kind == AudienceKind.PUBLIC.value
-    assert survived.curator_group_id is None
+    assert survived.school_id is None
 
     baseline = await _missing_practice_code(client, curator["session_token"])
     resp = await client.post(
@@ -678,7 +678,7 @@ async def test_curator_cascades_the_series_of_the_school(
     assert sorted(a.target_id for a in audits) == sorted(ids)
     journal = (await fresh_execute(
         select(SchoolEvent).where(
-            SchoolEvent.group_id == school.id,
+            SchoolEvent.school_id == school.id,
         ),
     )).scalars().all()
     assert sorted(e.data["practice_id"] for e in journal) == sorted(
@@ -802,7 +802,7 @@ async def test_audit_says_curator_not_master(
 
     row = next(r for r in rows if r.event == "practice_cancelled_by_curator")
     assert row.actor_id == UUID(curator["user"]["id"])
-    assert row.data["group_id"] == str(school.id)
+    assert row.data["school_id"] == str(school.id)
 
 
 @pytest.mark.asyncio
@@ -901,7 +901,7 @@ async def test_the_school_journal_records_it_in_the_same_transaction(
 
     rows = (await fresh_execute(
         select(SchoolEvent).where(
-            SchoolEvent.group_id == school.id,
+            SchoolEvent.school_id == school.id,
             SchoolEvent.event
             == SchoolEventKind.PRACTICE_CANCELLED.value,
         ),
@@ -945,7 +945,7 @@ async def test_a_refused_cancellation_leaves_no_journal_row(
 
     rows = (await fresh_execute(
         select(SchoolEvent).where(
-            SchoolEvent.group_id == school.id,
+            SchoolEvent.school_id == school.id,
         ),
     )).scalars().all()
     assert rows == []
@@ -994,11 +994,11 @@ async def test_a_second_school_is_refused_and_only_the_owner_gets_a_journal_row(
     assert resp.status_code == 200, resp.text
 
     mine_rows = (await fresh_execute(
-        select(SchoolEvent).where(SchoolEvent.group_id == mine.id),
+        select(SchoolEvent).where(SchoolEvent.school_id == mine.id),
     )).scalars().all()
     theirs_rows = (await fresh_execute(
         select(SchoolEvent).where(
-            SchoolEvent.group_id == theirs.id,
+            SchoolEvent.school_id == theirs.id,
         ),
     )).scalars().all()
     assert len(mine_rows) == 1
@@ -1181,4 +1181,4 @@ async def test_two_schools_of_one_curator_are_refused_and_the_one_is_named(
         )
     ).scalars().all()
     assert len(rows) == 1
-    assert rows[0].payload["action_data"]["group_name"] == "Утро"
+    assert rows[0].payload["action_data"]["school_name"] == "Утро"

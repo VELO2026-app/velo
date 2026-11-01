@@ -73,14 +73,14 @@ from tests.helpers import (
     login_user,
 )
 
-CURATOR_GROUPS_URL = "/api/v1/masters/me/curator-groups"
-MEMBER_URL = "/api/v1/masters/me/curator-groups/{group_id}/members/{user_id}"
-INVITES_URL = "/api/v1/masters/me/curator-groups/{group_id}/invites"
-OFFER_URL = "/api/v1/masters/me/curator-groups/{group_id}/transfer"
-JOIN_URL = "/api/v1/curator-groups/join"
-LEAVE_URL = "/api/v1/curator-groups/{group_id}/membership"
-ACCEPT_URL = "/api/v1/curator-groups/{group_id}/transfer/accept"
-DECLINE_URL = "/api/v1/curator-groups/{group_id}/transfer/decline"
+SCHOOLS_URL = "/api/v1/masters/me/schools"
+MEMBER_URL = "/api/v1/masters/me/schools/{school_id}/members/{user_id}"
+INVITES_URL = "/api/v1/masters/me/schools/{school_id}/invites"
+OFFER_URL = "/api/v1/masters/me/schools/{school_id}/transfer"
+JOIN_URL = "/api/v1/schools/join"
+LEAVE_URL = "/api/v1/schools/{school_id}/membership"
+ACCEPT_URL = "/api/v1/schools/{school_id}/transfer/accept"
+DECLINE_URL = "/api/v1/schools/{school_id}/transfer/decline"
 
 # Read out of the service, not guessed: _INVITE_DEEPLINK_KIND at
 # schools/service.py:1473. The bot url is patched the same way
@@ -107,8 +107,8 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
     is what keeps the per-recipient counts below honest between tests.
 
     THE LEFTOVER CHECK AFTER THE SWEEP IS NOT DECORATION. Schools and their
-    journals are reached only through a cascade -- curator_group cascades
-    from users, curator_group_event cascades from curator_group -- and the
+    journals are reached only through a cascade -- school cascades
+    from users, school_event cascades from school -- and the
     helper never names either table. A school that ended up owned by
     somebody outside this band would survive the sweep silently, and the
     first symptom would be a FAILURE IN ANOTHER FILE: test_school_
@@ -140,7 +140,7 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
 #
 # All of them go through the REAL endpoints. Nothing here inserts a
 # SchoolMember or a SchoolTransfer by hand: the ladders in front
-# of those tables (own_group, capability, roster membership) are exactly what
+# of those tables (own_school, capability, roster membership) are exactly what
 # decides who ends up notified, and a helper that stepped around them would
 # be testing a state the API cannot produce.
 # ===========================================================================
@@ -163,7 +163,7 @@ async def _make_verified_master(
         MasterProfile(
             user_id=user_id,
             data={
-                "account": {"status": "verified", "can_create_groups": True},
+                "account": {"status": "verified", "can_create_schools": True},
                 "profile": {"bio": "m"},
             },
         )
@@ -185,7 +185,7 @@ async def _create_group(
     client: AsyncClient, curator: dict, name: str = "Школа дыхания",
 ) -> dict:
     resp = await client.post(
-        CURATOR_GROUPS_URL,
+        SCHOOLS_URL,
         json={"name": name},
         headers=auth_headers(curator["session_token"]),
     )
@@ -198,7 +198,7 @@ async def _invite_token(
 ) -> str:
     with patch.object(settings, "telegram_bot_url", _BOT_URL):
         resp = await client.post(
-            INVITES_URL.format(group_id=group_id),
+            INVITES_URL.format(school_id=group_id),
             json={},
             headers=auth_headers(curator["session_token"]),
         )
@@ -236,7 +236,7 @@ async def _join_as(
         assert db_session is not None, "seeding a master needs the session"
         db_session.add(
             SchoolMember(
-                group_id=UUID(group_id),
+                school_id=UUID(group_id),
                 user_id=UUID(joiner["user"]["id"]),
                 kind=SchoolMemberKind.MASTER.value,
             )
@@ -251,7 +251,7 @@ async def _join_as(
 
 async def _offer(client: AsyncClient, curator: dict, group_id: str, to: dict):
     return await client.post(
-        OFFER_URL.format(group_id=group_id),
+        OFFER_URL.format(school_id=group_id),
         json={"to_user_id": to["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
@@ -259,14 +259,14 @@ async def _offer(client: AsyncClient, curator: dict, group_id: str, to: dict):
 
 async def _accept(client: AsyncClient, auth: dict, group_id: str):
     return await client.post(
-        ACCEPT_URL.format(group_id=group_id),
+        ACCEPT_URL.format(school_id=group_id),
         headers=auth_headers(auth["session_token"]),
     )
 
 
 async def _decline(client: AsyncClient, auth: dict, group_id: str):
     return await client.post(
-        DECLINE_URL.format(group_id=group_id),
+        DECLINE_URL.format(school_id=group_id),
         headers=auth_headers(auth["session_token"]),
     )
 
@@ -275,14 +275,14 @@ async def _remove(
     client: AsyncClient, curator: dict, group_id: str, member: dict,
 ):
     return await client.delete(
-        MEMBER_URL.format(group_id=group_id, user_id=member["user"]["id"]),
+        MEMBER_URL.format(school_id=group_id, user_id=member["user"]["id"]),
         headers=auth_headers(curator["session_token"]),
     )
 
 
 async def _leave(client: AsyncClient, auth: dict, group_id: str):
     return await client.delete(
-        LEAVE_URL.format(group_id=group_id),
+        LEAVE_URL.format(school_id=group_id),
         headers=auth_headers(auth["session_token"]),
     )
 
@@ -313,7 +313,7 @@ async def _journal(group_id: str) -> list[str]:
     rows = (
         await fresh_execute(
             select(SchoolEvent.event).where(
-                SchoolEvent.group_id == UUID(group_id)
+                SchoolEvent.school_id == UUID(group_id)
             )
         )
     ).all()
@@ -346,9 +346,9 @@ async def test_transfer_offer_reaches_the_addressee(
     assert (await _offer(client, curator, group["id"], heir)).status_code == 200
 
     assert (await _types_for(heir)).count(
-        "curator_group.transfer_offered"
+        "school.transfer_offered"
     ) == 1
-    assert "curator_group.transfer_offered" not in await _types_for(curator)
+    assert "school.transfer_offered" not in await _types_for(curator)
 
 
 @pytest.mark.asyncio
@@ -374,12 +374,12 @@ async def test_the_offer_names_the_school_and_points_at_it(
 
     note = next(
         p for p in await _notes_for(heir)
-        if p.get("type") == "curator_group.transfer_offered"
+        if p.get("type") == "school.transfer_offered"
     )
     action = note["action_data"]
-    assert action["action"] == "open_curator_group"
-    assert action["params"]["group_id"] == group["id"]
-    assert action["group_name"] == "Тихое утро"
+    assert action["action"] == "open_school"
+    assert action["params"]["school_id"] == group["id"]
+    assert action["school_name"] == "Тихое утро"
     assert "Тихое утро" in note["body"]
 
 
@@ -405,13 +405,13 @@ async def test_a_cancelled_offer_does_not_notify_again(
     await _offer(client, curator, group["id"], heir)
 
     cancelled = await client.delete(
-        OFFER_URL.format(group_id=group["id"]),
+        OFFER_URL.format(school_id=group["id"]),
         headers=auth_headers(curator["session_token"]),
     )
     assert cancelled.status_code == 204
 
     assert (await _types_for(heir)).count(
-        "curator_group.transfer_offered"
+        "school.transfer_offered"
     ) == 1
     assert SchoolEventKind.TRANSFER_CANCELLED.value in await _journal(
         group["id"]
@@ -447,9 +447,9 @@ async def test_accept_tells_the_previous_curator_and_not_the_acceptor(
     assert (await _accept(client, heir, group["id"])).status_code == 200
 
     assert (await _types_for(curator)).count(
-        "curator_group.transfer_accepted"
+        "school.transfer_accepted"
     ) == 1
-    assert "curator_group.transfer_accepted" not in await _types_for(heir)
+    assert "school.transfer_accepted" not in await _types_for(heir)
 
 
 @pytest.mark.asyncio
@@ -473,9 +473,9 @@ async def test_decline_tells_the_curator_and_not_the_decliner(
     assert (await _decline(client, heir, group["id"])).status_code == 204
 
     assert (await _types_for(curator)).count(
-        "curator_group.transfer_declined"
+        "school.transfer_declined"
     ) == 1
-    assert "curator_group.transfer_declined" not in await _types_for(heir)
+    assert "school.transfer_declined" not in await _types_for(heir)
 
 
 @pytest.mark.asyncio
@@ -502,9 +502,9 @@ async def test_accept_notification_survives_the_ownership_change(
 
     note = next(
         p for p in await _notes_for(curator)
-        if p.get("type") == "curator_group.transfer_accepted"
+        if p.get("type") == "school.transfer_accepted"
     )
-    assert note["action_data"]["params"]["group_id"] == group["id"]
+    assert note["action_data"]["params"]["school_id"] == group["id"]
     assert "Северный ветер" in note["body"]
 
 
@@ -520,7 +520,7 @@ async def test_a_join_tells_the_curator_and_not_the_joiner(
     """The arrivals feed goes to the curator only.
 
     This is the one notification of the five that scales with the size of a
-    school, which is why its type carries the curator_groups category. The
+    school, which is why its type carries the schools category. The
     joiner gets nothing: he pressed the link.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
@@ -530,9 +530,9 @@ async def test_a_join_tells_the_curator_and_not_the_joiner(
     await _join_as(client, curator, group["id"], student)
 
     assert (await _types_for(curator)).count(
-        "curator_group.member_joined"
+        "school.member_joined"
     ) == 1
-    assert "curator_group.member_joined" not in await _types_for(student)
+    assert "school.member_joined" not in await _types_for(student)
 
 
 @pytest.mark.asyncio
@@ -552,9 +552,9 @@ async def test_removal_tells_the_person_removed(
     assert (await _remove(client, curator, group["id"], student)).status_code == 204
 
     assert (await _types_for(student)).count(
-        "curator_group.member_removed"
+        "school.member_removed"
     ) == 1
-    assert "curator_group.member_removed" not in await _types_for(curator)
+    assert "school.member_removed" not in await _types_for(curator)
 
 
 @pytest.mark.asyncio
@@ -624,7 +624,7 @@ async def test_every_recipient_was_already_a_party_to_the_school(
 
     for person in (curator, heir, student):
         for payload in await _notes_for(person):
-            if not payload.get("type", "").startswith("curator_group."):
+            if not payload.get("type", "").startswith("school."):
                 continue
             assert payload["target_value"] in insiders
 
@@ -676,7 +676,7 @@ async def test_every_notifying_action_also_wrote_a_journal_line(
     for person in (curator, heir, student):
         school_notes += sum(
             1 for t in await _types_for(person)
-            if t.startswith("curator_group.")
+            if t.startswith("school.")
         )
     # ONE arrival, one removal, one offer, one accept. It used to be two
     # arrivals: the heir became a school master by opening the master invite
@@ -752,7 +752,7 @@ async def test_repeated_join_notifies_once(
     assert second.status_code == 200, second.text
 
     assert (await _types_for(curator)).count(
-        "curator_group.member_joined"
+        "school.member_joined"
     ) == 1
 
 

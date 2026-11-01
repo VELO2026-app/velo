@@ -85,18 +85,18 @@ from app.modules.schools.router import member_router, router
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 
-GROUPS_URL = "/api/v1/masters/me/curator-groups"
-GROUP_URL = "/api/v1/masters/me/curator-groups/{group_id}"
-JOURNAL_URL = "/api/v1/masters/me/curator-groups/{group_id}/journal"
-MEMBERS_URL = "/api/v1/masters/me/curator-groups/{group_id}/members"
-INVITES_URL = "/api/v1/masters/me/curator-groups/{group_id}/invites"
-MINE_URL = "/api/v1/curator-groups/mine"
-PAGE_URL = "/api/v1/curator-groups/{group_id}"
-JOIN_URL = "/api/v1/curator-groups/join"
-LEAVE_URL = "/api/v1/curator-groups/{group_id}/membership"
+GROUPS_URL = "/api/v1/masters/me/schools"
+GROUP_URL = "/api/v1/masters/me/schools/{school_id}"
+JOURNAL_URL = "/api/v1/masters/me/schools/{school_id}/journal"
+MEMBERS_URL = "/api/v1/masters/me/schools/{school_id}/members"
+INVITES_URL = "/api/v1/masters/me/schools/{school_id}/invites"
+MINE_URL = "/api/v1/schools/mine"
+PAGE_URL = "/api/v1/schools/{school_id}"
+JOIN_URL = "/api/v1/schools/join"
+LEAVE_URL = "/api/v1/schools/{school_id}/membership"
 PRACTICES_URL = "/api/v1/practices"
 DETAIL_URL = "/api/v1/practices/{practice_id}"
-ADMIN_SCHOOLS_URL = "/api/v1/admin/curator-groups"
+ADMIN_SCHOOLS_URL = "/api/v1/admin/schools"
 
 _TID_MIN = 65600
 _TID_MAX = 65799
@@ -151,7 +151,7 @@ async def _make_verified_master(
             data={
                 "account": {
                     "status": "verified",
-                    "can_create_groups": True,
+                    "can_create_schools": True,
                 },
                 "profile": {"bio": "m"},
             },
@@ -197,7 +197,7 @@ async def _add_member(
 ) -> None:
     db_session.add(
         SchoolMember(
-            group_id=school.id,
+            school_id=school.id,
             user_id=UUID(auth["user"]["id"]),
             kind=kind,
         )
@@ -225,8 +225,8 @@ async def _make_school_practice(
         is_free=True,
         price_cents=0,
         currency="eur",
-        audience_kind=AudienceKind.CURATOR_GROUPS.value,
-        curator_group_id=school.id,
+        audience_kind=AudienceKind.SCHOOLS.value,
+        school_id=school.id,
     )
     db_session.add(practice)
     await db_session.flush()
@@ -291,11 +291,11 @@ async def test_the_flag_defaults_to_on_and_the_feature_works_under_it(
     group_id = created.json()["id"]
 
     assert (
-        await client.get(PAGE_URL.format(group_id=group_id), headers=headers)
+        await client.get(PAGE_URL.format(school_id=group_id), headers=headers)
     ).status_code == 200
     assert (
         await client.get(
-            JOURNAL_URL.format(group_id=group_id), headers=headers,
+            JOURNAL_URL.format(school_id=group_id), headers=headers,
         )
     ).status_code == 200
 
@@ -316,7 +316,7 @@ async def test_the_flag_defaults_to_on_and_the_feature_works_under_it(
 #
 # app.routes IS THE WRONG SOURCE AND WAS MEASURED TO BE. This application
 # mounts its routers rather than flattening them, so app.routes holds
-# _IncludedRouter objects and contains no curator-group path at all -- a
+# _IncludedRouter objects and contains no school path at all -- a
 # test built on it would derive an EMPTY list and pass, which is this very
 # defect rebuilt inside its own fix. The routers themselves carry the full
 # path (their prefix is set on the APIRouter), and the derived list is
@@ -482,14 +482,14 @@ async def test_a_route_added_to_a_school_router_joins_the_check() -> None:
         return None
 
     before = _operations(router)
-    router.add_api_route("/me/curator-groups/__probe__", _probe,
+    router.add_api_route("/me/schools/__probe__", _probe,
                          methods=["GET"], include_in_schema=False)
     try:
         after = _operations(router)
         assert len(after) == len(before) + 1
         assert (
             "GET",
-            "/api/v1/masters/me/curator-groups/__probe__",
+            "/api/v1/masters/me/schools/__probe__",
         ) in after
     finally:
         router.routes.pop()
@@ -558,7 +558,7 @@ async def test_the_feature_answers_again_when_the_flag_returns(
         ).status_code == 200
         assert (
             await client.get(
-                MEMBERS_URL.format(group_id=gid), headers=curator_headers,
+                MEMBERS_URL.format(school_id=gid), headers=curator_headers,
             )
         ).status_code == 200
 
@@ -629,7 +629,7 @@ async def test_a_school_practice_leaves_every_feed_except_its_masters(
     """THE LOAD-BEARING TEST OF THE WHOLE DELIVERY.
 
     The killswitch exists because schools change what OTHER people see: a
-    practice with audience_kind='curator_groups' is hidden from anyone
+    practice with audience_kind='schools' is hidden from anyone
     outside the target school, so a fault in schools removes practices from
     the calendars of people who never heard of schools. A brake that
     switched off the endpoints but left the audience filter running would
@@ -748,14 +748,14 @@ async def test_the_master_is_told_that_the_audience_is_unavailable(
     with _on():
         body = (await client.get(url, headers=headers)).json()
         assert body["audience_unavailable"] is False
-        assert body["curator_group_id"] == str(school.id)
-        assert body["curator_group_name"] == "Тихое утро"
+        assert body["school_id"] == str(school.id)
+        assert body["school_name"] == "Тихое утро"
 
     with _off():
         body = (await client.get(url, headers=headers)).json()
         assert body["audience_unavailable"] is True
-        assert body["curator_group_id"] == str(school.id)
-        assert body["curator_group_name"] == "Тихое утро"
+        assert body["school_id"] == str(school.id)
+        assert body["school_name"] == "Тихое утро"
 
 
 @pytest.mark.asyncio
@@ -927,18 +927,18 @@ async def test_switching_back_on_restores_everything_with_no_rows_touched(
     gid = created.json()["id"]
 
     before = (
-        await client.get(JOURNAL_URL.format(group_id=gid), headers=headers)
+        await client.get(JOURNAL_URL.format(school_id=gid), headers=headers)
     ).json()
 
     with _off():
         assert (
             await client.get(
-                JOURNAL_URL.format(group_id=gid), headers=headers,
+                JOURNAL_URL.format(school_id=gid), headers=headers,
             )
         ).status_code == 404
 
     after = await client.get(
-        JOURNAL_URL.format(group_id=gid), headers=headers,
+        JOURNAL_URL.format(school_id=gid), headers=headers,
     )
     assert after.status_code == 200, after.text
     assert after.json()["total"] == before["total"]
@@ -946,7 +946,7 @@ async def test_switching_back_on_restores_everything_with_no_rows_touched(
         e["event"] for e in before["items"]
     ]
 
-    page = await client.get(PAGE_URL.format(group_id=gid), headers=headers)
+    page = await client.get(PAGE_URL.format(school_id=gid), headers=headers)
     assert page.status_code == 200
     assert page.json()["name"] == "Школа дыхания"
 
@@ -968,18 +968,18 @@ async def test_pulling_the_switch_twice_changes_nothing_the_second_time(
 
     with _off():
         first = await client.get(
-            PAGE_URL.format(group_id=gid), headers=headers,
+            PAGE_URL.format(school_id=gid), headers=headers,
         )
         with _off():
             second = await client.get(
-                PAGE_URL.format(group_id=gid), headers=headers,
+                PAGE_URL.format(school_id=gid), headers=headers,
             )
     assert first.status_code == 404
     assert second.status_code == 404
 
     with _on():
         assert (
-            await client.get(PAGE_URL.format(group_id=gid), headers=headers)
+            await client.get(PAGE_URL.format(school_id=gid), headers=headers)
         ).status_code == 200
 
 
@@ -1010,6 +1010,6 @@ async def test_the_switch_holds_with_no_schools_in_the_database(
     with _off():
         assert (
             await client.get(
-                PAGE_URL.format(group_id=missing), headers=headers,
+                PAGE_URL.format(school_id=missing), headers=headers,
             )
         ).status_code == 404

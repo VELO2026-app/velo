@@ -42,7 +42,7 @@
 #     503 without bot_url, 404 on someone else's group
 #   Preview: all nine rows of the TZ 3.4 table, plus inactive/deleted/garbage
 #   Join: the same nine as codes, upgrade student -> master with joined_at
-#     untouched, no demotion, block, own_group, idempotency
+#     untouched, no demotion, block, own_school, idempotency
 #   Race: UNIQUE (group_id, user_id) is the real guard
 # =============================================================================
 
@@ -73,13 +73,13 @@ from tests.helpers import (
     login_user,
 )
 
-CURATOR_GROUPS_URL = "/api/v1/masters/me/curator-groups"
-INVITES_URL = "/api/v1/masters/me/curator-groups/{group_id}/invites"
+SCHOOLS_URL = "/api/v1/masters/me/schools"
+INVITES_URL = "/api/v1/masters/me/schools/{school_id}/invites"
 # GT-27: the revoke path lost its /{kind} segment with the second link.
-INVITE_REVOKE_URL = "/api/v1/masters/me/curator-groups/{group_id}/invites"
-PREVIEW_URL = "/api/v1/curator-groups/invites/{token}"
-JOIN_URL = "/api/v1/curator-groups/join"
-PAGE_URL = "/api/v1/curator-groups/{group_id}"
+INVITE_REVOKE_URL = "/api/v1/masters/me/schools/{school_id}/invites"
+PREVIEW_URL = "/api/v1/schools/invites/{token}"
+JOIN_URL = "/api/v1/schools/join"
+PAGE_URL = "/api/v1/schools/{school_id}"
 REVOKE_URL = "/api/v1/admin/masters/{user_id}/revoke"
 MAKE_MASTER_URL = "/api/v1/admin/users/{user_id}/make-master"
 
@@ -142,7 +142,7 @@ async def _make_verified_master(
             data={
                 "account": {
                     "status": "verified",
-                    "can_create_groups": True,
+                    "can_create_schools": True,
                 },
                 "profile": {"bio": "m"},
             },
@@ -170,7 +170,7 @@ async def _create_group(
     client: AsyncClient, curator: dict, name: str = "Школа дыхания",
 ) -> dict:
     resp = await client.post(
-        CURATOR_GROUPS_URL,
+        SCHOOLS_URL,
         json={"name": name},
         headers=auth_headers(curator["session_token"]),
     )
@@ -186,7 +186,7 @@ async def _invite(client: AsyncClient, curator: dict, group_id: str) -> str:
     """
     with patch.object(settings, "telegram_bot_url", _BOT_URL):
         resp = await client.post(
-            INVITES_URL.format(group_id=group_id),
+            INVITES_URL.format(school_id=group_id),
             json={},
             headers=auth_headers(curator["session_token"]),
         )
@@ -216,7 +216,7 @@ async def _seed_member(
     kind: SchoolMemberKind, joined_at: datetime | None = None,
 ) -> None:
     row = SchoolMember(
-        group_id=UUID(group_id), user_id=UUID(user_id), kind=kind.value,
+        school_id=UUID(group_id), user_id=UUID(user_id), kind=kind.value,
     )
     if joined_at is not None:
         row.joined_at = joined_at
@@ -267,7 +267,7 @@ async def _member_row(db_session: AsyncSession, group_id: str, user_id: str):
                 SchoolMember.kind,
                 SchoolMember.joined_at,
             ).where(
-                SchoolMember.group_id == UUID(group_id),
+                SchoolMember.school_id == UUID(group_id),
                 SchoolMember.user_id == UUID(user_id),
             )
         )
@@ -309,7 +309,7 @@ async def test_repeat_create_returns_the_same_link(
     rows = (
         await fresh_execute(
             select(SchoolInvite.id).where(
-                SchoolInvite.group_id == UUID(group["id"])
+                SchoolInvite.school_id == UUID(group["id"])
             )
         )
     ).scalars().all()
@@ -334,7 +334,7 @@ async def test_invite_url_carries_the_deeplink(
 
     with patch.object(settings, "telegram_bot_url", _BOT_URL):
         resp = await client.post(
-            INVITES_URL.format(group_id=group["id"]),
+            INVITES_URL.format(school_id=group["id"]),
             json={},
             headers=auth_headers(curator["session_token"]),
         )
@@ -360,7 +360,7 @@ async def test_missing_bot_url_is_503_and_writes_nothing(
 
     with patch.object(settings, "telegram_bot_url", ""):
         resp = await client.post(
-            INVITES_URL.format(group_id=group["id"]),
+            INVITES_URL.format(school_id=group["id"]),
             json={},
             headers=auth_headers(curator["session_token"]),
         )
@@ -370,7 +370,7 @@ async def test_missing_bot_url_is_503_and_writes_nothing(
     rows = (
         await fresh_execute(
             select(SchoolInvite.id).where(
-                SchoolInvite.group_id == UUID(group["id"])
+                SchoolInvite.school_id == UUID(group["id"])
             )
         )
     ).scalars().all()
@@ -392,14 +392,14 @@ async def test_invites_on_someone_elses_group_are_404(
 
     with patch.object(settings, "telegram_bot_url", _BOT_URL):
         created = await client.post(
-            INVITES_URL.format(group_id=group["id"]),
+            INVITES_URL.format(school_id=group["id"]),
             json={},
             headers=auth_headers(stranger["session_token"]),
         )
     assert created.status_code == 404
 
     revoked = await client.delete(
-        INVITE_REVOKE_URL.format(group_id=group["id"]),
+        INVITE_REVOKE_URL.format(school_id=group["id"]),
         headers=auth_headers(stranger["session_token"]),
     )
     assert revoked.status_code == 404
@@ -426,7 +426,7 @@ async def test_rotation_mints_a_new_token_and_kills_the_old_one(
     old = await _invite(client, curator, group["id"])
 
     await client.delete(
-        INVITE_REVOKE_URL.format(group_id=group["id"]),
+        INVITE_REVOKE_URL.format(school_id=group["id"]),
         headers=auth_headers(curator["session_token"]),
     )
     new = await _invite(client, curator, group["id"])
@@ -445,7 +445,7 @@ async def test_revoking_a_link_that_does_not_exist_is_204(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     group = await _create_group(client, curator)
     headers = auth_headers(curator["session_token"])
-    url = INVITE_REVOKE_URL.format(group_id=group["id"])
+    url = INVITE_REVOKE_URL.format(school_id=group["id"])
 
     assert (await client.delete(url, headers=headers)).status_code == 204
     await _invite(client, curator, group["id"])
@@ -498,7 +498,7 @@ async def test_token_of_an_inactive_group_is_404_and_comes_back(
     still = (
         await fresh_execute(
             select(SchoolInvite.token).where(
-                SchoolInvite.group_id == UUID(group["id"])
+                SchoolInvite.school_id == UUID(group["id"])
             )
         )
     ).scalars().all()
@@ -517,7 +517,7 @@ async def test_token_of_a_deleted_group_is_404(
     token = await _invite(client, curator, group["id"])
 
     await client.delete(
-        f"{CURATOR_GROUPS_URL}/{group['id']}",
+        f"{SCHOOLS_URL}/{group['id']}",
         headers=auth_headers(curator["session_token"]),
     )
 
@@ -558,7 +558,7 @@ async def test_preview_says_yes_then_the_world_moves_and_join_says_404(
     seen_again = await _preview(client, other, token)
     assert seen_again.json()["can_join"] is True
     await client.delete(
-        INVITE_REVOKE_URL.format(group_id=group["id"]),
+        INVITE_REVOKE_URL.format(school_id=group["id"]),
         headers=auth_headers(curator["session_token"]),
     )
     assert (await _join(client, other, token)).status_code == 404
@@ -591,7 +591,7 @@ async def test_a_plain_user_joins_as_a_student(
     assert joined.json()["relation"] == "student"
 
     page = await client.get(
-        PAGE_URL.format(group_id=group["id"]),
+        PAGE_URL.format(school_id=group["id"]),
         headers=auth_headers(plain["session_token"]),
     )
     assert page.status_code == 200
@@ -631,11 +631,11 @@ async def test_the_curator_gets_own_group_on_the_link(
     token = await _invite(client, curator, group["id"])
     preview = (await _preview(client, curator, token)).json()
     assert preview["can_join"] is False
-    assert preview["reason"] == "own_group"
+    assert preview["reason"] == "own_school"
 
     joined = await _join(client, curator, token)
     assert joined.status_code == 409
-    assert joined.json()["error"] == "own_group"
+    assert joined.json()["error"] == "own_school"
 
 
 @pytest.mark.asyncio
@@ -759,7 +759,7 @@ async def test_preview_carries_the_group_card_with_live_counters(
     )
     token = await _invite(client, curator, group["id"])
 
-    card = (await _preview(client, stranger, token)).json()["group"]
+    card = (await _preview(client, stranger, token)).json()["school"]
     assert card["name"] == "Школа дыхания"
     assert card["masters_count"] == 1
     assert card["students_count"] == 1
@@ -779,8 +779,8 @@ async def test_an_empty_group_still_previews_as_joinable(
 
     body = (await _preview(client, joiner, token)).json()
     assert body["can_join"] is True
-    assert body["group"]["masters_count"] == 0
-    assert body["group"]["students_count"] == 0
+    assert body["school"]["masters_count"] == 0
+    assert body["school"]["students_count"] == 0
 
 
 @pytest.mark.asyncio
@@ -803,7 +803,7 @@ async def test_one_relation_per_pair_is_enforced_by_the_database(
 
     db_session.add(
         SchoolMember(
-            group_id=UUID(group["id"]),
+            school_id=UUID(group["id"]),
             user_id=UUID(student["user"]["id"]),
             kind=SchoolMemberKind.MASTER.value,
         )

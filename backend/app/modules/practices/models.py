@@ -112,8 +112,8 @@ class AudienceKind(enum.StrEnum):
               already uses).
     GROUPS:   members of at least one of the practice's target CUSTOM groups
               (practice_audience_group).
-    CURATOR_GROUPS: the curator and every member of the school the
-              practice BELONGS TO (Practice.curator_group_id, BE-74) -- AND
+    SCHOOLS: the curator and every member of the school the
+              practice BELONGS TO (Practice.school_id, BE-74) -- AND
               only while the master still belongs to that school. That
               second half has no counterpart in the three kinds above and
               is the point of this one: a school's audience is lent to a
@@ -130,7 +130,7 @@ class AudienceKind(enum.StrEnum):
     PUBLIC = "public"
     STUDENTS = "students"
     GROUPS = "groups"
-    CURATOR_GROUPS = "curator_groups"
+    SCHOOLS = "schools"
 
 
 class Practice(JSONBMixin, UUIDMixin, TimestampMixin, Base):
@@ -161,11 +161,11 @@ class Practice(JSONBMixin, UUIDMixin, TimestampMixin, Base):
         ),
         # BE-74: "for the school's students" needs a school. The rule that
         # keeps this true when a practice loses its school lives in ONE
-        # place, the trigger of migration be74a1b2c3d4 (see curator_group_id
+        # place, the trigger of migration be74a1b2c3d4 (see school_id
         # below); this CHECK is the state it rules out, declared by the same
         # name so compare_metadata has nothing to report on it.
         CheckConstraint(
-            "audience_kind <> 'curator_groups' OR curator_group_id IS NOT NULL",
+            "audience_kind <> 'schools' OR school_id IS NOT NULL",
             name="ck_practices_school_audience_has_school",
         ),
     )
@@ -244,9 +244,9 @@ class Practice(JSONBMixin, UUIDMixin, TimestampMixin, Base):
     # -- Owning school (BE-74) --
     # The school this practice BELONGS TO, or NULL for a practice created
     # outside any school. THE ONE RECORD OF THE FACT: audience_kind
-    # 'curator_groups' ("students of the school") reads this column, and
+    # 'schools' ("students of the school") reads this column, and
     # there is no second table naming the school (practice_audience_
-    # curator_group is gone, BE-74 -- one practice, exactly one school,
+    # school is gone, BE-74 -- one practice, exactly one school,
     # owner ruling 2026-10-01).
     #
     # SET ONCE, AT CREATION, NEVER REWRITTEN BY A USER. update_practice
@@ -257,17 +257,17 @@ class Practice(JSONBMixin, UUIDMixin, TimestampMixin, Base):
     # the backstop for a row that reaches the column without passing
     # through that function). What NULL then means (owner ruling,
     # 2026-10-01): the practice becomes, or stays, an ordinary public
-    # practice of its master -- a 'curator_groups' one is turned 'public' by
+    # practice of its master -- a 'schools' one is turned 'public' by
     # the trigger of migration be74a1b2c3d4 on whichever path clears the
     # column, and the CHECK above forbids the other outcome.
     #
     # The FK is NAMED so the migration and the model carry the same name
     # and compare_metadata has nothing to report on it.
-    curator_group_id: Mapped[UUID | None] = mapped_column(
+    school_id: Mapped[UUID | None] = mapped_column(
         ForeignKey(
-            "curator_group.id",
+            "school.id",
             ondelete="SET NULL",
-            name="fk_practices_curator_group_id_curator_group",
+            name="fk_practices_school_id_school",
         ),
         default=None,
         index=True,

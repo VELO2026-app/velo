@@ -35,7 +35,7 @@
       "key": "main",
       "telegram_id": 6598660049,
       "display_name": "Мастер VELO",
-      "can_create_groups": true,
+      "can_create_schools": true,
       "bio": "Веду медитации: тишина, присутствие, звук и даосские практики. Куратор школы «Тихое утро».",
       "methods": [
         "Медитация — Медитация молчания",
@@ -49,7 +49,7 @@
       "key": "mira",
       "telegram_id": 600501,
       "display_name": "Ирина Соколова",
-      "can_create_groups": true,
+      "can_create_schools": true,
       "bio": "Хатха, инь, виньяса и йога-нидра. Куратор «Тёплого вечера».",
       "methods": [
         "Йога — Йога-нидра",
@@ -65,7 +65,7 @@
       "key": "gleb",
       "telegram_id": 600502,
       "display_name": "Глеб Орлов",
-      "can_create_groups": false,
+      "can_create_schools": false,
       "bio": "Соматика: возвращаю контакт с телом и учу отпускать напряжение.",
       "methods": [
         "Соматика"
@@ -76,7 +76,7 @@
       "key": "tony",
       "telegram_id": 8714855006,
       "display_name": "Тони",
-      "can_create_groups": true,
+      "can_create_schools": true,
       "bio": "Дыхательные практики для энергии, сна и спокойствия. Куратор школы «Утро с Тони».",
       "methods": [
         "Дыхательные практики"
@@ -87,7 +87,7 @@
       "key": "maya",
       "telegram_id": 600504,
       "display_name": "Майя Звонарёва",
-      "can_create_groups": false,
+      "can_create_schools": false,
       "bio": "Звуковые ванны: тибетские чаши, гонги, камертоны.",
       "methods": [
         "Саундхиллинг"
@@ -98,7 +98,7 @@
       "key": "natalia",
       "telegram_id": 600505,
       "display_name": "Наталья Перова",
-      "can_create_groups": false,
+      "can_create_schools": false,
       "bio": "Терапевтическое письмо: разбираться в себе через текст.",
       "methods": [
         "Нарративные практики"
@@ -109,7 +109,7 @@
       "key": "marta",
       "telegram_id": 600506,
       "display_name": "Марта Ветрова",
-      "can_create_groups": false,
+      "can_create_schools": false,
       "bio": "Веду женские круги и круги шеринга.",
       "methods": [
         "Круги — Женский круг",
@@ -121,7 +121,7 @@
       "key": "daniil",
       "telegram_id": 600507,
       "display_name": "Даниил Резник",
-      "can_create_groups": false,
+      "can_create_schools": false,
       "bio": "Интуитивное движение и танец без правил.",
       "methods": [
         "movement"
@@ -132,7 +132,7 @@
       "key": "eva",
       "telegram_id": 600508,
       "display_name": "Ева Красина",
-      "can_create_groups": false,
+      "can_create_schools": false,
       "bio": "Арт-практики: рисуем состояние, не умея рисовать.",
       "methods": [
         "art"
@@ -143,7 +143,7 @@
       "key": "lev",
       "telegram_id": 600509,
       "display_name": "Лев Аронов",
-      "can_create_groups": false,
+      "can_create_schools": false,
       "bio": "Тантра как практика внимания, чувствительности и доверия.",
       "methods": [
         "tantra"

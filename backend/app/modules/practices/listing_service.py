@@ -171,7 +171,7 @@ async def list_school_practices_for_curator(
     public feed narrowed to the school, for members, upcoming and published
     only, by the school's PRESENT masters. This is the curator's working
     list (owner ruling Q6): every non-deleted practice that BELONGS to the
-    school (Practice.curator_group_id), drafts included, whether or not its
+    school (Practice.school_id), drafts included, whether or not its
     master is still in the school -- a draft of a master who left is still
     the curator's to fix or throw away. Ordered by scheduled_at ascending,
     id as the tie-break so a page boundary is stable.
@@ -185,7 +185,7 @@ async def list_school_practices_for_curator(
 
     await _get_group_or_404(user.id, group_id, session)
     base_filter = (
-        Practice.curator_group_id == group_id,
+        Practice.school_id == group_id,
         Practice.status != PracticeStatus.DELETED.value,
     )
     if status is not None:
@@ -280,7 +280,7 @@ async def list_public_practices(
     offset: int = 0,
     master_id: UUID | None = None,
     master_ids: list[UUID] | None = None,
-    curator_group_id: UUID | None = None,
+    school_id: UUID | None = None,
     practice_type: list[str] | None = None,
     direction: list[str] | None = None,
     difficulty: list[str] | None = None,
@@ -310,7 +310,7 @@ async def list_public_practices(
     master_id filters to ONE master; master_ids to a SET of them (internal
     parameter, not exposed by the public route). An empty master_ids list
     means "nobody", not "everybody" -- it yields an empty page. Passing both
-    ANDs them. curator_group_id (internal too, BE-74) keeps only the
+    ANDs them. school_id (internal too, BE-74) keeps only the
     practices that BELONG TO that school; ANDed with the rest like any
     other filter.
 
@@ -371,15 +371,15 @@ async def list_public_practices(
     if master_ids is not None:
         filters.append(Practice.master_id.in_(master_ids))
 
-    # curator_group_id (BE-74): the school's page shows the practices that
+    # school_id (BE-74): the school's page shows the practices that
     # belong to the school, not every practice of its masters -- a public
     # practice a master of the school made in the general section is not
     # the school's, and neither is one of another school. The caller also
     # passes master_ids, and the two answer different questions: this one
     # "is it the school's", that one "is its master still in the school".
     # Not exposed by the public route, for master_ids' reason.
-    if curator_group_id is not None:
-        filters.append(Practice.curator_group_id == curator_group_id)
+    if school_id is not None:
+        filters.append(Practice.school_id == school_id)
 
     # practice_type: multi-select (OR within facet).
     if practice_type:

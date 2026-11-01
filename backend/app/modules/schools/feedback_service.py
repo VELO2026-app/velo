@@ -29,7 +29,7 @@
 #
 # WHICH PRACTICES COUNT is practice_in_school_feedback_clause
 # (practices/audience_service.py) -- the practices the school owns
-# (Practice.curator_group_id, BE-74), whatever their audience, public ones
+# (Practice.school_id, BE-74), whatever their audience, public ones
 # included, except those of a master who has since left the school that
 # were never conducted (BE-75). The same clause feeds the school's
 # analytics aggregate and the student dossier; see its docstring for the
@@ -99,7 +99,7 @@ async def list_school_checkins(
 
     Returns:
         Tuple of (items, total_count). Each item is a dict ready for
-        CuratorGroupCheckinItem.
+        SchoolCheckinItem.
 
     Raises:
         NotFoundError: The group does not exist or is not this curator's.

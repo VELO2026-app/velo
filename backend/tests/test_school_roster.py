@@ -6,7 +6,7 @@
 # (checked free against tests/telegram_id_bands.py before it was claimed).
 # Each test owns its own ids inside the band.
 #
-# GET /api/v1/masters/me/curator-groups/{id}/roster opens the school's
+# GET /api/v1/masters/me/schools/{id}/roster opens the school's
 # member list to the MASTERS OF THE SCHOOL (owner decisions, BE-76):
 #   - who reads it: an active school (its curator verified) AND the viewer
 #     belongs to it as a master -- the curator, or a kind='master' member
@@ -39,8 +39,8 @@ from app.modules.schools.models import (
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 
-ROSTER_URL = "/api/v1/masters/me/curator-groups/{group_id}/roster"
-MEMBERS_URL = "/api/v1/masters/me/curator-groups/{group_id}/members"
+ROSTER_URL = "/api/v1/masters/me/schools/{school_id}/roster"
+MEMBERS_URL = "/api/v1/masters/me/schools/{school_id}/members"
 
 _TID_MIN = 70500
 _TID_MAX = 70599
@@ -80,7 +80,7 @@ async def _master(
         MasterProfile(
             user_id=user.id,
             data={
-                "account": {"status": status, "can_create_groups": True},
+                "account": {"status": status, "can_create_schools": True},
                 "profile": {"bio": "m"},
             },
         )
@@ -118,7 +118,7 @@ async def _join(
 ) -> None:
     db_session.add(
         SchoolMember(
-            group_id=school.id,
+            school_id=school.id,
             user_id=UUID(who["user"]["id"]),
             kind=kind.value,
             joined_at=joined_at,
@@ -193,7 +193,7 @@ async def _school_with_people(client: AsyncClient, db_session: AsyncSession, bas
 async def test_who_reads_the_roster(client: AsyncClient, db_session: AsyncSession):
     """Every viewer of the gate's grid, one request each."""
     w = await _school_with_people(client, db_session, 70500)
-    url = ROSTER_URL.format(group_id=w["school"].id)
+    url = ROSTER_URL.format(school_id=w["school"].id)
 
     expected = {
         "curator": 200,
@@ -216,7 +216,7 @@ async def test_a_school_with_a_suspended_curator_is_404_for_its_masters(
     """The school is inactive once its curator is suspended (I-6): the
     roster answers its masters the same 404 as the school page does."""
     w = await _school_with_people(client, db_session, 70510)
-    url = ROSTER_URL.format(group_id=w["school"].id)
+    url = ROSTER_URL.format(school_id=w["school"].id)
     # The pair: the master reads it while the school is active.
     assert (await _get(client, url, w["boris"])).status_code == 200
 
@@ -235,7 +235,7 @@ async def test_a_master_reads_everyone_but_the_suspended_without_curator_fields(
 ):
     w = await _school_with_people(client, db_session, 70520)
     roster = (
-        await _get(client, ROSTER_URL.format(group_id=w["school"].id), w["boris"])
+        await _get(client, ROSTER_URL.format(school_id=w["school"].id), w["boris"])
     ).json()
 
     # Newest membership first; Сергей (suspended) is not there.
@@ -249,7 +249,7 @@ async def test_a_master_reads_everyone_but_the_suspended_without_curator_fields(
 
     # The curator's own list still shows Сергей, in the shadow (unchanged).
     members = (
-        await _get(client, MEMBERS_URL.format(group_id=w["school"].id), w["curator"])
+        await _get(client, MEMBERS_URL.format(school_id=w["school"].id), w["curator"])
     ).json()
     assert members["total"] == 5
     sergey = next(i for i in members["items"] if i["name"] == "Сергей")
@@ -266,7 +266,7 @@ async def test_filters_search_and_paging_match_the_curators_list(
     gid = w["school"].id
 
     async def names(who: str, url: str, **params: object) -> tuple[list[str], int]:
-        body = (await _get(client, url.format(group_id=gid), w[who], **params)).json()
+        body = (await _get(client, url.format(school_id=gid), w[who], **params)).json()
         return [i["name"] for i in body["items"]], body["total"]
 
     # kind
@@ -311,7 +311,7 @@ async def test_a_lone_master_reads_himself(
     )
     await _set_status(db_session, gone, "suspended")
 
-    body = (await _get(client, ROSTER_URL.format(group_id=school.id), me)).json()
+    body = (await _get(client, ROSTER_URL.format(school_id=school.id), me)).json()
     assert [i["name"] for i in body["items"]] == ["Я"]
     assert body["total"] == 1
 
@@ -322,7 +322,7 @@ async def test_the_killswitch_closes_the_roster(
     """/roster sits on the curator router, whose router-level dependency is
     the schools killswitch: with the flag off it is the same 404."""
     w = await _school_with_people(client, db_session, 70550)
-    url = ROSTER_URL.format(group_id=w["school"].id)
+    url = ROSTER_URL.format(school_id=w["school"].id)
     with patch.object(settings, "schools_enabled", True):
         assert (await _get(client, url, w["boris"])).status_code == 200
     with patch.object(settings, "schools_enabled", False):

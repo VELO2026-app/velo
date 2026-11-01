@@ -6,7 +6,7 @@
 // ones the frontend actually sends (read from frontend/src, 2026-10-11):
 //
 //   OPEN APP   App.vue initAuth -> restoreSession GET /users/me; UserShell ->
-//              GET /curator-groups/mine; UserDashboardView onMounted ->
+//              GET /schools/mine; UserDashboardView onMounted ->
 //              GET /notifications, /bookings/me, /bookings/me/upcoming,
 //              /bookings/me/stats (fired together -> one http.batch).
 //              A REAL cold open logs in first (the token lives in
@@ -91,7 +91,7 @@ function openApp(token, tags) {
   timedAction('open_app', tags, () => {
     call('GET', '/api/v1/users/me', { token, action: 'open_app', ep: 'users_me', tags });
     batchGet(token, 'open_app', [
-      ['curator_groups_mine', '/api/v1/curator-groups/mine'],
+      ['schools_mine', '/api/v1/schools/mine'],
       ['notifications', '/api/v1/notifications'],
       ['bookings_me', '/api/v1/bookings/me?limit=20&offset=0'],
       ['bookings_upcoming', '/api/v1/bookings/me/upcoming'],

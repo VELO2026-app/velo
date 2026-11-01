@@ -757,7 +757,7 @@ class Settings(BaseSettings):
     #
     # WHY SCHOOLS NEED A BRAKE AT ALL, unlike the four worker toggles above:
     # they change what OTHER PEOPLE see. A practice with
-    # audience_kind='curator_groups' is hidden from anyone outside the
+    # audience_kind='schools' is hidden from anyone outside the
     # school it belongs to, so a fault in school membership or in a curator's
     # verification state removes practices from the calendars of people who
     # have never heard of schools. That is the blast radius this flag is
@@ -766,7 +766,7 @@ class Settings(BaseSettings):
     # WHAT False MEANS -- schools cease to exist, not "freeze":
     #   - all 23 school endpoints answer 404 (router-level dependencies on
     #     both routers in schools/router.py);
-    #   - the 'curator_groups' audience becomes unreachable, so such a
+    #   - the 'schools' audience becomes unreachable, so such a
     #     practice is visible to its OWN MASTER only and disappears from
     #     everyone else's feed (practices/audience_service.py).
     # Freezing mutations while keeping reads (the other candidate) was

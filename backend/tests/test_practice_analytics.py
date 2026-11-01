@@ -124,7 +124,7 @@ async def _member(
 ) -> None:
     db_session.add(
         SchoolMember(
-            group_id=school.id,
+            school_id=school.id,
             user_id=UUID(auth["user"]["id"]),
             kind=kind.value,
         )
@@ -154,11 +154,11 @@ async def _practice(
         price_cents=0,
         currency="eur",
         audience_kind=(
-            AudienceKind.CURATOR_GROUPS.value
+            AudienceKind.SCHOOLS.value
             if school is not None
             else AudienceKind.PUBLIC.value
         ),
-        curator_group_id=school.id if school is not None else None,
+        school_id=school.id if school is not None else None,
     )
     db_session.add(practice)
     await db_session.commit()
@@ -542,9 +542,9 @@ async def test_the_server_names_the_readers_role_and_the_curator_gets_the_school
     assert seen["leader"]["viewer_role"] == "leader"
     assert seen["curator"]["viewer_role"] == "curator"
     assert seen["peer"]["viewer_role"] == "school_master"
-    assert seen["curator"]["curator_group_id"] == str(w["school"].id)
-    assert seen["leader"]["curator_group_id"] is None
-    assert seen["peer"]["curator_group_id"] is None
+    assert seen["curator"]["school_id"] == str(w["school"].id)
+    assert seen["leader"]["school_id"] is None
+    assert seen["peer"]["school_id"] is None
 
 
 @pytest.mark.asyncio
@@ -558,7 +558,7 @@ async def test_a_curator_who_led_the_practice_reads_it_as_its_leader(
     practice = await _practice(db_session, curator, school)
     body = (await _get(client, SUMMARY_URL, curator, practice.id)).json()
     assert body["viewer_role"] == "leader"
-    assert body["curator_group_id"] is None
+    assert body["school_id"] is None
 
 
 @pytest.mark.asyncio

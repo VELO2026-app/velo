@@ -143,7 +143,7 @@ async def _practice(
         is_free=True,
         price_cents=0,
         currency="eur",
-        curator_group_id=school_id,
+        school_id=school_id,
     )
     db_session.add(practice)
     await db_session.flush()
@@ -215,7 +215,7 @@ async def _school(
     await db_session.flush()
     for user_id, kind in members.items():
         db_session.add(
-            SchoolMember(group_id=school.id, user_id=user_id, kind=kind),
+            SchoolMember(school_id=school.id, user_id=user_id, kind=kind),
         )
     await db_session.commit()
     return school

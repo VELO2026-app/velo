@@ -21,7 +21,7 @@
 # BE-74: for the practice writers the row they wait on is the PRACTICE,
 # not the group. delete_school clears the owner column of the
 # school's practices before it deletes the group (the trigger makes a
-# 'curator_groups' practice public in the same statement), so a writer
+# 'schools' practice public in the same statement), so a writer
 # taking the practice FOR UPDATE waits for that UPDATE and then reads a
 # public practice with no school. The 500s these tests were written for
 # (an FK failure into a school that is gone) have no row left to fail on;
@@ -52,7 +52,7 @@ from app.modules.practices.schemas import (
     CreatePracticeRequest,
     UpdatePracticeRequest,
 )
-from app.modules.schools import service as curator_service
+from app.modules.schools import service as school_service
 from app.modules.schools.models import (
     School,
     SchoolEvent,
@@ -86,7 +86,7 @@ async def _user(client, db_session, tid: int) -> UUID:
         MasterProfile(
             user_id=user_id,
             data={
-                "account": {"status": "verified", "can_create_groups": True},
+                "account": {"status": "verified", "can_create_schools": True},
                 "profile": {"bio": "m"},
             },
         )
@@ -119,12 +119,12 @@ async def _school(
     for uid, kind in (
         (s.heir, MASTER), (s.third, MASTER), (s.student, STUDENT),
     ):
-        db_session.add(SchoolMember(group_id=s.id, user_id=uid, kind=kind))
+        db_session.add(SchoolMember(school_id=s.id, user_id=uid, kind=kind))
     if transfer:
-        db_session.add(SchoolTransfer(group_id=s.id, to_user_id=s.heir))
+        db_session.add(SchoolTransfer(school_id=s.id, to_user_id=s.heir))
     if offer:
         db_session.add(
-            SchoolMasterOffer(group_id=s.id, to_user_id=s.student)
+            SchoolMasterOffer(school_id=s.id, to_user_id=s.student)
         )
     await db_session.flush()
     await db_session.commit()
@@ -149,8 +149,8 @@ async def _practice(
         is_free=True,
         price_cents=0,
         currency="eur",
-        audience_kind=AudienceKind.CURATOR_GROUPS.value,
-        curator_group_id=s.id,
+        audience_kind=AudienceKind.SCHOOLS.value,
+        school_id=s.id,
     )
     db_session.add(practice)
     await db_session.commit()
@@ -193,7 +193,7 @@ async def _hold() -> None:
 
 def _delete_in_flight(s: SchoolSetup):
     async def call(session):
-        await curator_service.delete_school(s.curator, s.id, session)
+        await school_service.delete_school(s.curator, s.id, session)
         await _THIS._hold()
     return call
 
@@ -221,17 +221,17 @@ async def test_a_delete_waits_for_an_appointment_being_accepted(
     s = await _school(client, db_session, offer=True)
 
     async def accept(session):
-        await curator_service.accept_school_master_offer(
+        await school_service.accept_school_master_offer(
             s.id, s.student, session, actor=await _actor(session, s.student),
         )
 
     async def delete(session):
-        await curator_service.delete_school(s.curator, s.id, session)
+        await school_service.delete_school(s.curator, s.id, session)
 
     result = await race(
         monkeypatch,
         holder=accept,
-        pause_in=(curator_service, "_has_master_capability"),
+        pause_in=(school_service, "_has_master_capability"),
         rival=delete,
     )
     assert_no_deadlock(result)
@@ -254,17 +254,17 @@ async def test_a_delete_meets_a_transfer_being_accepted(
     s = await _school(client, db_session, transfer=True)
 
     async def accept(session):
-        await curator_service.accept_school_transfer(
+        await school_service.accept_school_transfer(
             s.id, s.heir, session, actor=await _actor(session, s.heir),
         )
 
     async def delete(session):
-        await curator_service.delete_school(s.curator, s.id, session)
+        await school_service.delete_school(s.curator, s.id, session)
 
     result = await race(
         monkeypatch,
         holder=accept,
-        pause_in=(curator_service, "_has_master_capability"),
+        pause_in=(school_service, "_has_master_capability"),
         rival=delete,
     )
     assert_no_deadlock(result)
@@ -278,7 +278,7 @@ async def test_a_delete_meets_a_transfer_being_accepted(
         for uid, kind in (
             await db_session.execute(
                 select(SchoolMember.user_id, SchoolMember.kind)
-                .where(SchoolMember.group_id == s.id)
+                .where(SchoolMember.school_id == s.id)
             )
         ).all()
     }
@@ -309,20 +309,20 @@ async def test_a_rename_inside_an_accept_is_a_409_not_a_500(
     await db_session.commit()
 
     async def rename(session):
-        await curator_service.update_school(
+        await school_service.update_school(
             s.curator, s.id, "Новое имя", session,
             actor=await _actor(session, s.curator),
         )
 
     async def accept(session):
-        await curator_service.accept_school_transfer(
+        await school_service.accept_school_transfer(
             s.id, s.heir, session, actor=await _actor(session, s.heir),
         )
 
     result = await race(
         monkeypatch,
         holder=rename,
-        pause_in=(curator_service, "_lock_group_as_owner"),
+        pause_in=(school_service, "_lock_group_as_owner"),
         pause="after",
         rival=accept,
     )
@@ -330,13 +330,13 @@ async def test_a_rename_inside_an_accept_is_a_409_not_a_500(
     assert result.rival_waited, "the accept never met the rename's lock"
     assert result.holder.committed, result.holder.error
     assert isinstance(result.rival.error, ConflictError), result.rival
-    assert result.rival.error.code == "curator_group_name_taken"
+    assert result.rival.error.code == "school_name_taken"
     group = await _group(db_session, s)
     assert group.curator_user_id == s.curator and group.name == "Новое имя"
     pending = (
         await db_session.execute(
             select(SchoolTransfer.to_user_id).where(
-                SchoolTransfer.group_id == s.id
+                SchoolTransfer.school_id == s.id
             )
         )
     ).scalars().all()
@@ -344,7 +344,7 @@ async def test_a_rename_inside_an_accept_is_a_409_not_a_500(
     heir_row = (
         await db_session.execute(
             select(SchoolMember.kind).where(
-                SchoolMember.group_id == s.id,
+                SchoolMember.school_id == s.id,
                 SchoolMember.user_id == s.heir,
             )
         )
@@ -406,12 +406,12 @@ async def test_publishing_into_a_school_being_deleted(
     practice = await _fresh_practice(db_session, practice_id)
     assert practice.status == PracticeStatus.SCHEDULED.value
     assert practice.audience_kind == AudienceKind.PUBLIC.value
-    assert practice.curator_group_id is None
+    assert practice.school_id is None
     told = (
         await db_session.execute(
             select(OutboxEvent.id).where(
                 OutboxEvent.payload["type"].astext
-                == "curator_group.practice_published",
+                == "school.practice_published",
                 OutboxEvent.payload["target_value"].astext == str(s.student),
             )
         )
@@ -430,7 +430,7 @@ async def test_creating_a_practice_in_a_school_being_deleted(
     INSERT then waits on the school row (the FK takes KEY SHARE) and fails
     the FK once the delete commits. BE-74 turned that from a 500 into the
     same refusal as the validation -- and since FE-92 follow-up it carries
-    the same code, curator_group_not_usable, not the generic bad_request.
+    the same code, school_not_usable, not the generic bad_request.
 
     THE PAIR: the delete went through (the school is gone) and no practice
     of the master was born.
@@ -448,8 +448,8 @@ async def test_creating_a_practice_in_a_school_being_deleted(
                 scheduled_at=datetime.now(UTC) + timedelta(days=3),
                 duration_minutes=60,
                 timezone="UTC",
-                audience_kind=AudienceKind.CURATOR_GROUPS.value,
-                curator_group_id=s.id,
+                audience_kind=AudienceKind.SCHOOLS.value,
+                school_id=s.id,
             ),
             session,
         )
@@ -457,7 +457,7 @@ async def test_creating_a_practice_in_a_school_being_deleted(
     result = await _against_delete(monkeypatch, s, create)
     assert not result.rival.committed
     assert isinstance(result.rival.error, BadRequestError), result.rival.error
-    assert result.rival.error.code == "curator_group_not_usable"
+    assert result.rival.error.code == "school_not_usable"
     assert await _group(db_session, s) is None
     born = (
         await db_session.execute(
@@ -486,12 +486,12 @@ async def test_the_invite_link_of_a_school_being_deleted(
     s = await _school(client, db_session)
 
     async def invite(session):
-        return await curator_service.get_or_create_school_invite(
+        return await school_service.get_or_create_school_invite(
             s.curator, s.id, session, actor=await _actor(session, s.curator),
         )
 
     monkeypatch.setattr(
-        curator_service.settings, "telegram_bot_url", "https://t.me/velo_bot",
+        school_service.settings, "telegram_bot_url", "https://t.me/velo_bot",
     )
     result = await _against_delete(monkeypatch, s, invite)
     assert isinstance(result.rival.error, NotFoundError), result.rival
@@ -509,7 +509,7 @@ async def test_a_curator_cancelling_into_a_school_being_deleted(
     row left for a school that is gone. BE-74 moved the meeting point to
     the practice row (cancel_practice takes it FOR UPDATE first), and after
     the wait the practice is public with no school: the curator's right --
-    a 'curator_groups' practice of their own school -- is gone with the
+    a 'schools' practice of their own school -- is gone with the
     school, so the answer is the same 404 a stranger gets (owner ruling,
     2026-10-01).
 
@@ -530,11 +530,11 @@ async def test_a_curator_cancelling_into_a_school_being_deleted(
     practice = await _fresh_practice(db_session, practice_id)
     assert practice.status == PracticeStatus.SCHEDULED.value
     assert practice.audience_kind == AudienceKind.PUBLIC.value
-    assert practice.curator_group_id is None
+    assert practice.school_id is None
     left = (
         await db_session.execute(
             select(SchoolEvent.id).where(
-                SchoolEvent.group_id == s.id
+                SchoolEvent.school_id == s.id
             )
         )
     ).all()

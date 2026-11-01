@@ -50,7 +50,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.masters.models import MasterProfile
-from app.modules.schools import service as curator_service
+from app.modules.schools import service as school_service
 from app.modules.schools.models import (
     School,
     SchoolEvent,
@@ -63,7 +63,7 @@ from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 from tests.school_race_harness import race
 
-ACCEPT_URL = "/api/v1/curator-groups/{group_id}/master-offer/accept"
+ACCEPT_URL = "/api/v1/schools/{school_id}/master-offer/accept"
 
 _TID_MIN = 69600
 _TID_MAX = 69699
@@ -97,7 +97,7 @@ async def _master(
             data={
                 "account": {
                     "status": "verified",
-                    "can_create_groups": True,
+                    "can_create_schools": True,
                 },
                 "profile": {"bio": "m"},
             },
@@ -130,14 +130,14 @@ async def _school_with_offer(
     await db_session.flush()
     db_session.add(
         SchoolMember(
-            group_id=school.id,
+            school_id=school.id,
             user_id=UUID(appointee["user"]["id"]),
             kind=SchoolMemberKind.STUDENT.value,
         )
     )
     db_session.add(
         SchoolMasterOffer(
-            group_id=school.id,
+            school_id=school.id,
             to_user_id=UUID(appointee["user"]["id"]),
         )
     )
@@ -148,7 +148,7 @@ async def _school_with_offer(
 
 async def _accept(client: AsyncClient, who: dict, school: School):
     return await client.post(
-        ACCEPT_URL.format(group_id=school.id),
+        ACCEPT_URL.format(school_id=school.id),
         headers=auth_headers(who["session_token"]),
     )
 
@@ -160,7 +160,7 @@ async def _membership(
     return (
         await db_session.execute(
             select(SchoolMember.kind).where(
-                SchoolMember.group_id == school.id,
+                SchoolMember.school_id == school.id,
                 SchoolMember.user_id == UUID(who["user"]["id"]),
             )
         )
@@ -173,7 +173,7 @@ async def _offer_left(
     return (
         await db_session.execute(
             select(SchoolMasterOffer.id).where(
-                SchoolMasterOffer.group_id == school.id,
+                SchoolMasterOffer.school_id == school.id,
                 SchoolMasterOffer.to_user_id
                 == UUID(who["user"]["id"]),
             )
@@ -220,14 +220,14 @@ async def _accept_with_competitor(
 
     async def _accept_call(session: AsyncSession) -> None:
         actor = await session.get(User, user_id)
-        await curator_service.accept_school_master_offer(
+        await school_service.accept_school_master_offer(
             school.id, user_id, session, actor=actor,
         )
 
     result = await race(
         monkeypatch,
         holder=_accept_call,
-        pause_in=(curator_service, "_has_master_capability"),
+        pause_in=(school_service, "_has_master_capability"),
         rival=competitor,
     )
     return result.holder, result.rival, result.rival_waited
@@ -240,7 +240,7 @@ async def _event_written(
     return (
         await db_session.execute(
             select(SchoolEvent.id).where(
-                SchoolEvent.group_id == school.id,
+                SchoolEvent.school_id == school.id,
                 SchoolEvent.event == kind.value,
             )
         )
@@ -269,7 +269,7 @@ async def test_a_removal_mid_accept_never_promotes_the_removed_person(
 
     async def _remove(rival: AsyncSession) -> None:
         actor = await rival.get(User, UUID(curator["user"]["id"]))
-        await curator_service.remove_school_member(
+        await school_service.remove_school_member(
             UUID(curator["user"]["id"]),
             school.id,
             UUID(appointee["user"]["id"]),
@@ -320,7 +320,7 @@ async def test_leaving_mid_accept_never_promotes_the_departed_person(
 
     async def _leave(rival: AsyncSession) -> None:
         actor = await rival.get(User, UUID(appointee["user"]["id"]))
-        await curator_service.leave_school(
+        await school_service.leave_school(
             school.id,
             UUID(appointee["user"]["id"]),
             rival,
@@ -372,7 +372,7 @@ async def test_declining_mid_accept_never_promotes_the_refuser(
 
     async def _decline(rival: AsyncSession) -> None:
         actor = await rival.get(User, UUID(appointee["user"]["id"]))
-        await curator_service.decline_school_master_offer(
+        await school_service.decline_school_master_offer(
             school.id,
             UUID(appointee["user"]["id"]),
             rival,
@@ -488,7 +488,7 @@ async def test_no_offer_and_somebody_elses_offer_are_both_refused(
     stranger = await _master(client, db_session, _TID_STRANGER)
     db_session.add(
         SchoolMember(
-            group_id=school.id,
+            school_id=school.id,
             user_id=UUID(stranger["user"]["id"]),
             kind=SchoolMemberKind.STUDENT.value,
         )

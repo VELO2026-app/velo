@@ -45,8 +45,8 @@
 #
 # CLEANUP is full_cleanup_range(..., delete_users=True) and nothing else.
 # The helper knows nothing about curator tables and does not need to:
-# curator_group.curator_user_id cascades from users, and
-# curator_group_event.group_id cascades from curator_group. Deleting the
+# school.curator_user_id cascades from users, and
+# school_event.group_id cascades from school. Deleting the
 # band's users therefore takes the schools and their journals with them.
 # That chain holds because every school here is owned by a curator inside
 # the band -- see the delivery report's note on the one shape it would not
@@ -79,22 +79,22 @@ from tests.helpers import (
     login_user,
 )
 
-GROUPS_URL = "/api/v1/masters/me/curator-groups"
-GROUP_URL = "/api/v1/masters/me/curator-groups/{group_id}"
-JOURNAL_URL = "/api/v1/masters/me/curator-groups/{group_id}/journal"
+GROUPS_URL = "/api/v1/masters/me/schools"
+GROUP_URL = "/api/v1/masters/me/schools/{school_id}"
+JOURNAL_URL = "/api/v1/masters/me/schools/{school_id}/journal"
 # The group as a member of it sees it -- the only GET that serves one
 # group. GROUP_URL above carries only PATCH and DELETE, so a GET there
 # would be a 405 that looks like a failing assertion.
-PAGE_URL = "/api/v1/curator-groups/{group_id}"
-MEMBER_URL = "/api/v1/masters/me/curator-groups/{group_id}/members/{user_id}"
-INVITES_URL = "/api/v1/masters/me/curator-groups/{group_id}/invites"
+PAGE_URL = "/api/v1/schools/{school_id}"
+MEMBER_URL = "/api/v1/masters/me/schools/{school_id}/members/{user_id}"
+INVITES_URL = "/api/v1/masters/me/schools/{school_id}/invites"
 # GT-27: the revoke path lost its /{kind} segment with the second link.
-INVITE_REVOKE_URL = "/api/v1/masters/me/curator-groups/{group_id}/invites"
-JOIN_URL = "/api/v1/curator-groups/join"
-LEAVE_URL = "/api/v1/curator-groups/{group_id}/membership"
-OFFER_URL = "/api/v1/masters/me/curator-groups/{group_id}/transfer"
-ACCEPT_URL = "/api/v1/curator-groups/{group_id}/transfer/accept"
-DECLINE_URL = "/api/v1/curator-groups/{group_id}/transfer/decline"
+INVITE_REVOKE_URL = "/api/v1/masters/me/schools/{school_id}/invites"
+JOIN_URL = "/api/v1/schools/join"
+LEAVE_URL = "/api/v1/schools/{school_id}/membership"
+OFFER_URL = "/api/v1/masters/me/schools/{school_id}/transfer"
+ACCEPT_URL = "/api/v1/schools/{school_id}/transfer/accept"
+DECLINE_URL = "/api/v1/schools/{school_id}/transfer/decline"
 
 _TID_MIN = 65200
 _TID_MAX = 65399
@@ -128,7 +128,7 @@ async def _make_verified_master(
 ) -> dict:
     """A verified master who may found schools.
 
-    can_create_groups is set (GT-15) because every test here starts by
+    can_create_schools is set (GT-15) because every test here starts by
     creating a school; the right itself is covered in
     test_school_permission.py.
     """
@@ -149,7 +149,7 @@ async def _make_verified_master(
             data={
                 "account": {
                     "status": "verified",
-                    "can_create_groups": True,
+                    "can_create_schools": True,
                 },
                 "profile": {"bio": "m"},
             },
@@ -178,7 +178,7 @@ async def _invite(
     """Mint a link under a patched bot url and return the raw token."""
     with patch.object(settings, "telegram_bot_url", _BOT_URL):
         resp = await client.post(
-            INVITES_URL.format(group_id=group_id),
+            INVITES_URL.format(school_id=group_id),
             json={},
             headers=auth_headers(curator["session_token"]),
         )
@@ -205,7 +205,7 @@ async def _seed_member(
     """
     db_session.add(
         SchoolMember(
-            group_id=UUID(group_id),
+            school_id=UUID(group_id),
             user_id=UUID(auth["user"]["id"]),
             kind=kind,
         )
@@ -217,7 +217,7 @@ async def _journal(
     client: AsyncClient, curator: dict, group_id: str, **params,
 ):
     return await client.get(
-        JOURNAL_URL.format(group_id=group_id),
+        JOURNAL_URL.format(school_id=group_id),
         params=params or None,
         headers=auth_headers(curator["session_token"]),
     )
@@ -248,7 +248,7 @@ async def _row_count(group_id: str) -> int:
         await fresh_execute(
             select(func.count())
             .select_from(SchoolEvent)
-            .where(SchoolEvent.group_id == UUID(group_id))
+            .where(SchoolEvent.school_id == UUID(group_id))
         )
     ).scalar_one()
 
@@ -331,7 +331,7 @@ async def test_a_school_whose_only_event_was_pruned_reads_empty_not_404(
     """An empty feed is 200 with total 0, never a 404.
 
     A school with no events is a normal school, so the emptiness has to be
-    reachable to test: the group_created row is deleted directly, which is
+    reachable to test: the school_created row is deleted directly, which is
     the only way to get there. Paired with a positive half -- the school
     itself still answers on its own endpoint -- so "empty" cannot be
     produced by the school having gone missing.
@@ -341,7 +341,7 @@ async def test_a_school_whose_only_event_was_pruned_reads_empty_not_404(
 
     await db_session.execute(
         SchoolEvent.__table__.delete().where(
-            SchoolEvent.group_id == UUID(group_id)
+            SchoolEvent.school_id == UUID(group_id)
         )
     )
     await db_session.commit()
@@ -352,7 +352,7 @@ async def test_a_school_whose_only_event_was_pruned_reads_empty_not_404(
     assert resp.json()["total"] == 0
 
     page = await client.get(
-        PAGE_URL.format(group_id=group_id),
+        PAGE_URL.format(school_id=group_id),
         headers=auth_headers(curator["session_token"]),
     )
     assert page.status_code == 200
@@ -463,7 +463,7 @@ async def test_a_malformed_group_id_is_422_not_500(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
 
     resp = await client.get(
-        JOURNAL_URL.format(group_id="not-a-uuid"),
+        JOURNAL_URL.format(school_id="not-a-uuid"),
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 422
@@ -496,7 +496,7 @@ async def test_three_single_row_pages_neither_repeat_nor_lose_anything(
     group_id = await _make_group(client, curator)
 
     patched = await client.patch(
-        GROUP_URL.format(group_id=group_id),
+        GROUP_URL.format(school_id=group_id),
         json={"name": "Тихое утро", "description": "Мягкие практики"},
         headers=auth_headers(curator["session_token"]),
     )
@@ -531,7 +531,7 @@ async def test_the_newest_event_is_first_and_the_oldest_is_last(
 
     for name in ("Второе имя", "Третье имя"):
         resp = await client.patch(
-            GROUP_URL.format(group_id=group_id),
+            GROUP_URL.format(school_id=group_id),
             json={"name": name},
             headers=auth_headers(curator["session_token"]),
         )
@@ -630,7 +630,7 @@ async def test_an_action_that_fails_leaves_no_event_behind(
 
     # BE-25: scoped to THIS curator's schools. The assertion was right and
     # stays right -- a failed create writes no event -- but it used to be
-    # spelled as a count over the WHOLE curator_group_event table, which
+    # spelled as a count over the WHOLE school_event table, which
     # additionally claimed that no other test file had left a row behind.
     # That second claim is not about the code under test, it held only
     # while every school in the suite belonged to a band this file's
@@ -642,7 +642,7 @@ async def test_an_action_that_fails_leaves_no_event_behind(
         await fresh_execute(
             select(func.count())
             .select_from(SchoolEvent)
-            .join(School, School.id == SchoolEvent.group_id)
+            .join(School, School.id == SchoolEvent.school_id)
             .where(
                 School.curator_user_id == UUID(curator["user"]["id"])
             )
@@ -679,7 +679,7 @@ async def test_removing_the_same_member_twice_records_one_removal(
     )
 
     url = MEMBER_URL.format(
-        group_id=group_id, user_id=student["user"]["id"],
+        school_id=group_id, user_id=student["user"]["id"],
     )
     for _ in range(2):
         resp = await client.delete(
@@ -715,7 +715,7 @@ async def test_removing_somebody_who_was_never_a_member_records_nothing(
 
     resp = await client.delete(
         MEMBER_URL.format(
-            group_id=group_id, user_id=outsider["user"]["id"],
+            school_id=group_id, user_id=outsider["user"]["id"],
         ),
         headers=auth_headers(curator["session_token"]),
     )
@@ -741,7 +741,7 @@ async def test_leaving_a_school_you_were_never_in_records_nothing(
     group_id = await _make_group(client, curator)
 
     resp = await client.delete(
-        LEAVE_URL.format(group_id=group_id),
+        LEAVE_URL.format(school_id=group_id),
         headers=auth_headers(outsider["session_token"]),
     )
     assert resp.status_code == 204, resp.text
@@ -798,7 +798,7 @@ async def test_renaming_to_the_current_name_records_nothing(
     group_id = await _make_group(client, curator, name="Тихое утро")
 
     first = await client.patch(
-        GROUP_URL.format(group_id=group_id),
+        GROUP_URL.format(school_id=group_id),
         json={"name": "Тихое утро", "description": "Мягкие практики"},
         headers=auth_headers(curator["session_token"]),
     )
@@ -809,7 +809,7 @@ async def test_renaming_to_the_current_name_records_nothing(
     ]
 
     again = await client.patch(
-        GROUP_URL.format(group_id=group_id),
+        GROUP_URL.format(school_id=group_id),
         json={"name": "Тихое утро", "description": "Мягкие практики"},
         headers=auth_headers(curator["session_token"]),
     )
@@ -833,7 +833,7 @@ async def test_a_rename_and_a_description_edit_are_two_separate_events(
     group_id = await _make_group(client, curator, name="Старое имя")
 
     resp = await client.patch(
-        GROUP_URL.format(group_id=group_id),
+        GROUP_URL.format(school_id=group_id),
         json={"name": "Новое имя", "description": "Описание"},
         headers=auth_headers(curator["session_token"]),
     )
@@ -886,7 +886,7 @@ async def test_a_member_joining_and_leaving_leaves_both_records_intact(
     assert (await _join(client, student, token)).status_code == 200
 
     left = await client.delete(
-        LEAVE_URL.format(group_id=group_id),
+        LEAVE_URL.format(school_id=group_id),
         headers=auth_headers(student["session_token"]),
     )
     assert left.status_code == 204, left.text
@@ -895,7 +895,7 @@ async def test_a_member_joining_and_leaving_leaves_both_records_intact(
         await fresh_execute(
             select(func.count())
             .select_from(SchoolMember)
-            .where(SchoolMember.group_id == UUID(group_id))
+            .where(SchoolMember.school_id == UUID(group_id))
         )
     ).scalar_one()
     assert members == 0
@@ -950,14 +950,14 @@ async def test_accepting_a_transfer_records_two_different_people(
     )
 
     offered = await client.post(
-        OFFER_URL.format(group_id=group_id),
+        OFFER_URL.format(school_id=group_id),
         json={"to_user_id": heir["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
     assert offered.status_code == 200, offered.text
 
     accepted = await client.post(
-        ACCEPT_URL.format(group_id=group_id),
+        ACCEPT_URL.format(school_id=group_id),
         headers=auth_headers(heir["session_token"]),
     )
     assert accepted.status_code == 200, accepted.text
@@ -1006,7 +1006,7 @@ async def test_the_new_curator_inherits_the_whole_history(
 
     removed = await client.delete(
         MEMBER_URL.format(
-            group_id=group_id, user_id=student["user"]["id"],
+            school_id=group_id, user_id=student["user"]["id"],
         ),
         headers=auth_headers(curator["session_token"]),
     )
@@ -1014,13 +1014,13 @@ async def test_the_new_curator_inherits_the_whole_history(
     before = await _kinds(client, curator, group_id)
 
     offered = await client.post(
-        OFFER_URL.format(group_id=group_id),
+        OFFER_URL.format(school_id=group_id),
         json={"to_user_id": heir["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
     assert offered.status_code == 200, offered.text
     accepted = await client.post(
-        ACCEPT_URL.format(group_id=group_id),
+        ACCEPT_URL.format(school_id=group_id),
         headers=auth_headers(heir["session_token"]),
     )
     assert accepted.status_code == 200, accepted.text
@@ -1040,7 +1040,7 @@ async def test_declining_an_offer_names_the_curator_who_made_it(
 ) -> None:
     """The decliner is the actor; the target is the curator who offered.
 
-    curator_group_transfer has no from_user_id -- whoever offered is
+    school_transfer has no from_user_id -- whoever offered is
     IMPLICITLY the group's curator -- so this entry's target cannot be read
     out of the row being deleted, and the service pays one SELECT for it.
     Asserting the target here is what proves that SELECT happens and
@@ -1061,14 +1061,14 @@ async def test_declining_an_offer_names_the_curator_who_made_it(
     )
 
     offered = await client.post(
-        OFFER_URL.format(group_id=group_id),
+        OFFER_URL.format(school_id=group_id),
         json={"to_user_id": heir["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
     assert offered.status_code == 200, offered.text
 
     declined = await client.post(
-        DECLINE_URL.format(group_id=group_id),
+        DECLINE_URL.format(school_id=group_id),
         headers=auth_headers(heir["session_token"]),
     )
     assert declined.status_code == 204, declined.text
@@ -1111,7 +1111,7 @@ async def test_declining_an_offer_that_was_never_made_records_nothing(
     group_id = await _make_group(client, curator)
 
     resp = await client.post(
-        DECLINE_URL.format(group_id=group_id),
+        DECLINE_URL.format(school_id=group_id),
         headers=auth_headers(nobody["session_token"]),
     )
     assert resp.status_code == 204, resp.text
@@ -1139,13 +1139,13 @@ async def test_cancelling_an_offer_is_recorded_and_cancelling_nothing_is_not(
     )
 
     offered = await client.post(
-        OFFER_URL.format(group_id=group_id),
+        OFFER_URL.format(school_id=group_id),
         json={"to_user_id": heir["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
     assert offered.status_code == 200, offered.text
 
-    url = OFFER_URL.format(group_id=group_id)
+    url = OFFER_URL.format(school_id=group_id)
     for _ in range(2):
         resp = await client.delete(
             url, headers=auth_headers(curator["session_token"]),
@@ -1182,14 +1182,14 @@ async def test_a_departure_that_retracts_an_offer_says_so_in_one_event(
     )
 
     offered = await client.post(
-        OFFER_URL.format(group_id=group_id),
+        OFFER_URL.format(school_id=group_id),
         json={"to_user_id": heir["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
     assert offered.status_code == 200, offered.text
 
     removed = await client.delete(
-        MEMBER_URL.format(group_id=group_id, user_id=heir["user"]["id"]),
+        MEMBER_URL.format(school_id=group_id, user_id=heir["user"]["id"]),
         headers=auth_headers(curator["session_token"]),
     )
     assert removed.status_code == 204, removed.text
@@ -1273,7 +1273,7 @@ async def test_deleting_the_school_takes_its_journal_with_it(
     assert await _row_count(kept) == 1
 
     resp = await client.delete(
-        GROUP_URL.format(group_id=doomed),
+        GROUP_URL.format(school_id=doomed),
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 204, resp.text
@@ -1332,7 +1332,7 @@ async def test_revoking_a_link_is_recorded_and_revoking_nothing_is_not(
 
     for _ in range(2):
         resp = await client.delete(
-            INVITE_REVOKE_URL.format(group_id=group_id),
+            INVITE_REVOKE_URL.format(school_id=group_id),
             headers=auth_headers(curator["session_token"]),
         )
         assert resp.status_code == 204, resp.text

@@ -147,7 +147,7 @@ async def scan(
 
 
 async def watch_pass(
-    session: AsyncSession, only: str | None, can_create_groups: bool, dry_run: bool
+    session: AsyncSession, only: str | None, can_create_schools: bool, dry_run: bool
 ) -> None:
     applications, method_changes = await scan(session, only)
     if not applications and not method_changes:
@@ -165,7 +165,7 @@ async def watch_pass(
                 actor,
                 f"{SIM_NOTES}: auto-approved master application",
                 session,
-                can_create_groups=can_create_groups,
+                can_create_schools=can_create_schools,
             )
             await session.commit()
             log(f"VERIFIED application: {label}")
@@ -192,12 +192,12 @@ async def watch_pass(
 
 
 async def run_watch(
-    once: bool, interval: float, only: str | None, can_create_groups: bool, dry_run: bool
+    once: bool, interval: float, only: str | None, can_create_schools: bool, dry_run: bool
 ) -> None:
     factory = get_session_factory()
     while True:
         async with factory() as session:
-            await watch_pass(session, only, can_create_groups, dry_run)
+            await watch_pass(session, only, can_create_schools, dry_run)
         if once:
             return
         try:
@@ -292,15 +292,15 @@ async def run_accept_offer(ref: str, dry_run: bool) -> None:
             raise SystemExit(f"no outstanding master offer for {user.first_name}")
         if dry_run:
             for o in offers:
-                log(f"[DRY] would accept master offer: group={o.group_id} for {user.first_name}")
+                log(f"[DRY] would accept master offer: group={o.school_id} for {user.first_name}")
             return
         for offer in offers:
             await accept_school_master_offer(
-                offer.group_id, user.id, session, actor=user
+                offer.school_id, user.id, session, actor=user
             )
             await session.commit()
             log(
-                f"ACCEPTED master offer: user={user.first_name} group={offer.group_id} "
+                f"ACCEPTED master offer: user={user.first_name} group={offer.school_id} "
                 "-- member promoted to master"
             )
 
@@ -327,7 +327,7 @@ async def main() -> None:
     )
     parser.add_argument("--interval", type=float, default=2.0, help="watch poll seconds (default 2)")
     parser.add_argument(
-        "--can-create-groups", action="store_true", help="grant the school-founding right on verify"
+        "--can-create-schools", action="store_true", help="grant the school-founding right on verify"
     )
     parser.add_argument("--dry-run", action="store_true", help="print actions without writing")
     args = parser.parse_args()
@@ -338,7 +338,7 @@ async def main() -> None:
                 once=args.once,
                 interval=args.interval,
                 only=args.only,
-                can_create_groups=args.can_create_groups,
+                can_create_schools=args.can_create_schools,
                 dry_run=args.dry_run,
             )
         elif args.promote:

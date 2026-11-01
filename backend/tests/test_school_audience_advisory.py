@@ -60,17 +60,17 @@ PRACTICES_URL = "/api/v1/practices"
 DETAIL_URL = "/api/v1/practices/{practice_id}"
 BOOKINGS_URL = "/api/v1/bookings"
 CHECKIN_URL = "/api/v1/practices/{practice_id}/checkin"
-LEAVE_PREVIEW_URL = "/api/v1/curator-groups/{group_id}/leave-preview"
-MEMBERSHIP_URL = "/api/v1/curator-groups/{group_id}/membership"
-CURATOR_GROUPS_URL = "/api/v1/masters/me/curator-groups"
+LEAVE_PREVIEW_URL = "/api/v1/schools/{school_id}/leave-preview"
+MEMBERSHIP_URL = "/api/v1/schools/{school_id}/membership"
+SCHOOLS_URL = "/api/v1/masters/me/schools"
 REMOVE_PREVIEW_URL = (
-    "/api/v1/masters/me/curator-groups/{group_id}"
+    "/api/v1/masters/me/schools/{school_id}"
     "/members/{user_id}/remove-preview"
 )
 DELETE_PREVIEW_URL = (
-    "/api/v1/masters/me/curator-groups/{group_id}/delete-preview"
+    "/api/v1/masters/me/schools/{school_id}/delete-preview"
 )
-MEMBER_URL = "/api/v1/masters/me/curator-groups/{group_id}/members/{user_id}"
+MEMBER_URL = "/api/v1/masters/me/schools/{school_id}/members/{user_id}"
 REVOKE_URL = "/api/v1/admin/masters/{user_id}/revoke"
 
 _TID_MIN = 68200
@@ -164,7 +164,7 @@ async def _join_school(
     db_session: AsyncSession, group_id, user_id: str, kind: SchoolMemberKind,
 ) -> SchoolMember:
     row = SchoolMember(
-        group_id=group_id, user_id=UUID(user_id), kind=kind.value,
+        school_id=group_id, user_id=UUID(user_id), kind=kind.value,
     )
     db_session.add(row)
     await db_session.flush()
@@ -177,7 +177,7 @@ async def _create_practice(
     master_id: str,
     *,
     school: School | None = None,
-    audience_kind: str = AudienceKind.CURATOR_GROUPS.value,
+    audience_kind: str = AudienceKind.SCHOOLS.value,
     status: str = PracticeStatus.SCHEDULED.value,
     hours_from_now: float = 48,
     title: str = "Практика школы",
@@ -200,7 +200,7 @@ async def _create_practice(
         price_cents=0,
         currency="eur",
         audience_kind=audience_kind,
-        curator_group_id=school.id if school is not None else None,
+        school_id=school.id if school is not None else None,
     )
     db_session.add(practice)
     await db_session.flush()
@@ -224,7 +224,7 @@ async def _revoke(client: AsyncClient, admin_token: str, user_id: str) -> None:
 
 async def _leave_preview(client: AsyncClient, auth: dict, group_id):
     return await client.get(
-        LEAVE_PREVIEW_URL.format(group_id=group_id),
+        LEAVE_PREVIEW_URL.format(school_id=group_id),
         headers=auth_headers(auth["session_token"]),
     )
 
@@ -267,7 +267,7 @@ async def test_a_live_school_practice_is_not_flagged_and_names_its_school(
 
     body = (await _detail(client, teacher, practice)).json()
     assert body["audience_unavailable"] is False
-    assert body["curator_group_name"] == "Тихое утро"
+    assert body["school_name"] == "Тихое утро"
 
 
 @pytest.mark.asyncio
@@ -317,7 +317,7 @@ async def test_leaving_the_only_school_darkens_the_practice(
     body = (await _detail(client, teacher, practice)).json()
     assert body["audience_unavailable"] is True
     # The name survives: the master must learn WHICH school went dark.
-    assert body["curator_group_name"] == "Тихое утро"
+    assert body["school_name"] == "Тихое утро"
 
     assert (await _detail(client, stranger, practice)).status_code == 404
     assert (await _detail(client, holder, practice)).status_code == 200
@@ -354,8 +354,8 @@ async def test_a_second_school_is_refused_and_only_the_owning_school_counts(
     refused = await client.post(
         PRACTICES_URL,
         json=_practice_body(
-            audience_kind="curator_groups",
-            curator_group_id=[str(first.id), str(second.id)],
+            audience_kind="schools",
+            school_id=[str(first.id), str(second.id)],
         ),
         headers=auth_headers(teacher["session_token"]),
     )
@@ -369,7 +369,7 @@ async def test_a_second_school_is_refused_and_only_the_owning_school_counts(
     await db_session.commit()
     body = (await _detail(client, teacher, practice)).json()
     assert body["audience_unavailable"] is False
-    assert body["curator_group_name"] == "Первая"
+    assert body["school_name"] == "Первая"
 
     await db_session.delete(await db_session.get(SchoolMember, m1.id))
     await db_session.commit()
@@ -407,7 +407,7 @@ async def test_a_frozen_school_darkens_the_practice_but_keeps_its_name(
 
     body = (await _detail(client, teacher, practice)).json()
     assert body["audience_unavailable"] is True
-    assert body["curator_group_name"] == "Тихое утро"
+    assert body["school_name"] == "Тихое утро"
 
 
 @pytest.mark.asyncio
@@ -452,7 +452,7 @@ async def test_deleting_the_school_makes_the_practice_public_not_dark(
     dark, it is public.
 
     Before BE-74 the audience rows went by cascade and the practice stayed
-    'curator_groups' with no target: dark, names empty. BE-74 (owner Q3):
+    'schools' with no target: dark, names empty. BE-74 (owner Q3):
     losing the school makes a school-audience practice public in the same
     statement (the migration's trigger), so there is nothing unavailable to
     report. Contrast with the frozen school above, where the school and its
@@ -476,8 +476,8 @@ async def test_deleting_the_school_makes_the_practice_public_not_dark(
     body = (await _detail(client, teacher, practice)).json()
     assert body["audience_kind"] == "public"
     assert body["audience_unavailable"] is False
-    assert body["curator_group_id"] is None
-    assert body["curator_group_name"] is None
+    assert body["school_id"] is None
+    assert body["school_name"] is None
 
 
 @pytest.mark.asyncio
@@ -501,8 +501,8 @@ async def test_the_other_three_audiences_are_never_flagged(
         )
         body = (await _detail(client, teacher, practice)).json()
         assert body["audience_unavailable"] is False, kind
-        assert body["curator_group_id"] is None, kind
-        assert body["curator_group_name"] is None, kind
+        assert body["school_id"] is None, kind
+        assert body["school_name"] is None, kind
 
 
 @pytest.mark.asyncio
@@ -519,14 +519,14 @@ async def test_create_and_update_carry_both_fields(
     created = await client.post(
         PRACTICES_URL,
         json=_practice_body(
-            audience_kind="curator_groups",
-            curator_group_id=str(school.id),
+            audience_kind="schools",
+            school_id=str(school.id),
         ),
         headers=headers,
     )
     assert created.status_code == 201, created.text
-    assert created.json()["curator_group_name"] == "Тихое утро"
-    assert created.json()["curator_group_id"] == str(school.id)
+    assert created.json()["school_name"] == "Тихое утро"
+    assert created.json()["school_id"] == str(school.id)
     assert created.json()["audience_unavailable"] is False
 
     updated = await client.patch(
@@ -535,7 +535,7 @@ async def test_create_and_update_carry_both_fields(
         headers=headers,
     )
     assert updated.status_code == 200, updated.text
-    assert updated.json()["curator_group_name"] == "Тихое утро"
+    assert updated.json()["school_name"] == "Тихое утро"
     assert updated.json()["audience_unavailable"] is False
 
 
@@ -579,7 +579,7 @@ async def test_a_school_member_reads_the_school_name_and_a_stranger_gets_404(
     for who in (student, colleague, curator):
         resp = await _detail(client, who, practice)
         assert resp.status_code == 200, who["user"]["id"]
-        assert resp.json()["curator_group_name"] == "Тихое утро"
+        assert resp.json()["school_name"] == "Тихое утро"
 
     assert (await _detail(client, stranger, practice)).status_code == 404
 
@@ -627,7 +627,7 @@ async def test_a_booked_viewer_keeps_reading_the_name_after_the_practice_darkens
     await db_session.commit()
 
     body = (await _detail(client, holder, practice)).json()
-    assert body["curator_group_name"] == "Тихое утро"
+    assert body["school_name"] == "Тихое утро"
     assert body["audience_unavailable"] is True
 
     # And the access the name explains is genuinely still there.
@@ -698,7 +698,7 @@ async def test_leave_preview_counts_only_my_own_upcoming_practices(
 
     resp = await _leave_preview(client, teacher, school.id)
     assert resp.status_code == 200, resp.text
-    assert resp.json()["upcoming_practices_targeting_group"] == 2
+    assert resp.json()["upcoming_practices_targeting_school"] == 2
 
 
 @pytest.mark.asyncio
@@ -728,10 +728,10 @@ async def test_the_advisory_number_matches_what_actually_goes_dark(
     )
 
     advised = (await _leave_preview(client, teacher, school.id)).json()
-    assert advised["upcoming_practices_targeting_group"] == 2
+    assert advised["upcoming_practices_targeting_school"] == 2
 
     left = await client.delete(
-        MEMBERSHIP_URL.format(group_id=school.id),
+        MEMBERSHIP_URL.format(school_id=school.id),
         headers=auth_headers(teacher["session_token"]),
     )
     assert left.status_code == 204, left.text
@@ -757,11 +757,11 @@ async def test_leave_preview_is_zero_for_a_student_and_for_an_empty_school(
 
     resp = await _leave_preview(client, student, school.id)
     assert resp.status_code == 200
-    assert resp.json()["upcoming_practices_targeting_group"] == 0
+    assert resp.json()["upcoming_practices_targeting_school"] == 0
 
     curator_resp = await _leave_preview(client, curator, school.id)
     assert curator_resp.status_code == 200
-    assert curator_resp.json()["upcoming_practices_targeting_group"] == 0
+    assert curator_resp.json()["upcoming_practices_targeting_school"] == 0
 
 
 @pytest.mark.asyncio
@@ -782,10 +782,10 @@ async def test_the_curator_gets_a_number_even_though_they_cannot_leave(
 
     advised = await _leave_preview(client, curator, school.id)
     assert advised.status_code == 200
-    assert advised.json()["upcoming_practices_targeting_group"] == 1
+    assert advised.json()["upcoming_practices_targeting_school"] == 1
 
     refused = await client.delete(
-        MEMBERSHIP_URL.format(group_id=school.id),
+        MEMBERSHIP_URL.format(school_id=school.id),
         headers=auth_headers(curator["session_token"]),
     )
     assert refused.status_code == 409
@@ -841,7 +841,7 @@ async def test_leave_preview_is_404_on_a_frozen_school_though_leaving_works(
 
     assert (await _leave_preview(client, student, school.id)).status_code == 404
     left = await client.delete(
-        MEMBERSHIP_URL.format(group_id=school.id),
+        MEMBERSHIP_URL.format(school_id=school.id),
         headers=auth_headers(student["session_token"]),
     )
     assert left.status_code == 204, left.text
@@ -876,12 +876,12 @@ async def test_remove_preview_counts_that_members_practices(
 
     resp = await client.get(
         REMOVE_PREVIEW_URL.format(
-            group_id=school.id, user_id=teacher["user"]["id"],
+            school_id=school.id, user_id=teacher["user"]["id"],
         ),
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 200, resp.text
-    assert resp.json()["upcoming_practices_targeting_group"] == 1
+    assert resp.json()["upcoming_practices_targeting_school"] == 1
 
 
 @pytest.mark.asyncio
@@ -901,15 +901,15 @@ async def test_remove_preview_is_zero_for_a_student_and_a_non_member(
 
     for user_id in (student["user"]["id"], str(uuid4())):
         resp = await client.get(
-            REMOVE_PREVIEW_URL.format(group_id=school.id, user_id=user_id),
+            REMOVE_PREVIEW_URL.format(school_id=school.id, user_id=user_id),
             headers=headers,
         )
         assert resp.status_code == 200, user_id
-        assert resp.json()["upcoming_practices_targeting_group"] == 0
+        assert resp.json()["upcoming_practices_targeting_school"] == 0
 
     # The pair: removal answers 204 on the very same non-member.
     removed = await client.delete(
-        MEMBER_URL.format(group_id=school.id, user_id=uuid4()),
+        MEMBER_URL.format(school_id=school.id, user_id=uuid4()),
         headers=headers,
     )
     assert removed.status_code == 204
@@ -932,7 +932,7 @@ async def test_remove_preview_refuses_someone_elses_school(
 
     resp = await client.get(
         REMOVE_PREVIEW_URL.format(
-            group_id=school.id, user_id=student["user"]["id"],
+            school_id=school.id, user_id=student["user"]["id"],
         ),
         headers=auth_headers(outsider["session_token"]),
     )
@@ -941,7 +941,7 @@ async def test_remove_preview_refuses_someone_elses_school(
     plain = await login_user(client, telegram_id=_TID_STUDENT_B)
     forbidden = await client.get(
         REMOVE_PREVIEW_URL.format(
-            group_id=school.id, user_id=student["user"]["id"],
+            school_id=school.id, user_id=student["user"]["id"],
         ),
         headers=auth_headers(plain["session_token"]),
     )
@@ -985,18 +985,18 @@ async def test_delete_preview_counts_everyone_including_the_curator(
     )
 
     resp = await client.get(
-        DELETE_PREVIEW_URL.format(group_id=school.id),
+        DELETE_PREVIEW_URL.format(school_id=school.id),
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["masters_count"] == 1
     assert body["students_count"] == 1
-    assert body["upcoming_practices_targeting_group"] == 2
+    assert body["upcoming_practices_targeting_school"] == 2
 
     page = (
         await client.get(
-            f"/api/v1/curator-groups/{school.id}",
+            f"/api/v1/schools/{school.id}",
             headers=auth_headers(curator["session_token"]),
         )
     ).json()
@@ -1013,14 +1013,14 @@ async def test_delete_preview_on_an_empty_school_is_all_zeros(
     school = await _school(db_session, curator["user"]["id"])
 
     resp = await client.get(
-        DELETE_PREVIEW_URL.format(group_id=school.id),
+        DELETE_PREVIEW_URL.format(school_id=school.id),
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 200
     assert resp.json() == {
         "masters_count": 0,
         "students_count": 0,
-        "upcoming_practices_targeting_group": 0,
+        "upcoming_practices_targeting_school": 0,
     }
 
 
@@ -1035,12 +1035,12 @@ async def test_delete_preview_refuses_someone_elses_school(
     school = await _school(db_session, curator["user"]["id"])
 
     theirs = await client.get(
-        DELETE_PREVIEW_URL.format(group_id=school.id),
+        DELETE_PREVIEW_URL.format(school_id=school.id),
         headers=auth_headers(outsider["session_token"]),
     )
     assert theirs.status_code == 404
     mine = await client.get(
-        DELETE_PREVIEW_URL.format(group_id=school.id),
+        DELETE_PREVIEW_URL.format(school_id=school.id),
         headers=auth_headers(curator["session_token"]),
     )
     assert mine.status_code == 200
@@ -1076,10 +1076,10 @@ async def test_the_advisory_endpoints_block_nothing(
     headers = auth_headers(curator["session_token"])
 
     assert (await _leave_preview(client, leaver, school.id)).json()[
-        "upcoming_practices_targeting_group"
+        "upcoming_practices_targeting_school"
     ] == 1
     left = await client.delete(
-        MEMBERSHIP_URL.format(group_id=school.id),
+        MEMBERSHIP_URL.format(school_id=school.id),
         headers=auth_headers(leaver["session_token"]),
     )
     assert left.status_code == 204
@@ -1087,19 +1087,19 @@ async def test_the_advisory_endpoints_block_nothing(
     assert (
         await client.get(
             REMOVE_PREVIEW_URL.format(
-                group_id=school.id, user_id=teacher["user"]["id"],
+                school_id=school.id, user_id=teacher["user"]["id"],
             ),
             headers=headers,
         )
-    ).json()["upcoming_practices_targeting_group"] == 1
+    ).json()["upcoming_practices_targeting_school"] == 1
     removed = await client.delete(
-        MEMBER_URL.format(group_id=school.id, user_id=teacher["user"]["id"]),
+        MEMBER_URL.format(school_id=school.id, user_id=teacher["user"]["id"]),
         headers=headers,
     )
     assert removed.status_code == 204
 
     deleted = await client.delete(
-        f"{CURATOR_GROUPS_URL}/{school.id}", headers=headers,
+        f"{SCHOOLS_URL}/{school.id}", headers=headers,
     )
     assert deleted.status_code == 204
 
@@ -1114,9 +1114,9 @@ async def test_a_malformed_group_id_is_422_on_all_three_advisories(
     headers = auth_headers(curator["session_token"])
 
     for url in (
-        LEAVE_PREVIEW_URL.format(group_id="not-a-uuid"),
-        DELETE_PREVIEW_URL.format(group_id="not-a-uuid"),
-        REMOVE_PREVIEW_URL.format(group_id="not-a-uuid", user_id=uuid4()),
+        LEAVE_PREVIEW_URL.format(school_id="not-a-uuid"),
+        DELETE_PREVIEW_URL.format(school_id="not-a-uuid"),
+        REMOVE_PREVIEW_URL.format(school_id="not-a-uuid", user_id=uuid4()),
     ):
         resp = await client.get(url, headers=headers)
         assert resp.status_code == 422, url

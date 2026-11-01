@@ -734,7 +734,7 @@ class TestProfileV2:
         # 51 since BE-162 delivery 3 (prompt.rate_support);
         # 50 since BE-166 (support.translate_for_support / _for_user, the
         # profile's first llm types, and support.translation_unavailable);
-        # 47 after BE-79 (1a) (curator_group.member_blocked/_unblocked);
+        # 47 after BE-79 (1a) (school.member_blocked/_unblocked);
         # 45 after BE-104 (3) (master.suspended); 44 after BE-104
         # (master.application_submitted); 43 after BE-63
         # (master_practice_published/_edited/_deleted); 40 after BE-102

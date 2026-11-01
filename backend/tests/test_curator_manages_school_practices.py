@@ -7,7 +7,7 @@
 # _TID_MIN/_TID_MAX, once (tests/telegram_id_bands.py parses it).
 #
 # ONE RULE: a practice may be acted on by its master OR by the curator of
-# the school it belongs to (practices.curator_group_id). The grid:
+# the school it belongs to (practices.school_id). The grid:
 # caller (master / this school's curator / another school's curator / a
 # master of the school / an outsider) x practice (draft / published /
 # without a school) x action (see / list / publish / edit / delete). Every
@@ -46,7 +46,7 @@ from app.modules.practices.schemas import (
     CreatePracticeRequest,
     UpdatePracticeRequest,
 )
-from app.modules.schools import service as curator_service
+from app.modules.schools import service as school_service
 from app.modules.schools.models import (
     School,
     SchoolMember,
@@ -65,7 +65,7 @@ PRACTICES_URL = "/api/v1/practices"
 DETAIL_URL = "/api/v1/practices/{practice_id}"
 PREVIEW_URL = "/api/v1/practices/{practice_id}/audience-preview"
 CANCEL_URL = "/api/v1/practices/{practice_id}/cancel"
-MANAGE_URL = "/api/v1/masters/me/curator-groups/{group_id}/practices/manage"
+MANAGE_URL = "/api/v1/masters/me/schools/{school_id}/practices/manage"
 
 _TID_MIN = 89200
 _TID_MAX = 89259
@@ -77,9 +77,9 @@ _TID_SCHOOL_MASTER = 89204
 _TID_OUTSIDER = 89205
 _TID_ADMIN = 89206
 
-_PUBLISHED = "curator_group.master_practice_published"
-_EDITED = "curator_group.master_practice_edited"
-_DELETED = "curator_group.master_practice_deleted"
+_PUBLISHED = "school.master_practice_published"
+_EDITED = "school.master_practice_edited"
+_DELETED = "school.master_practice_deleted"
 _SLOT = datetime(2031, 5, 6, 9, 0, tzinfo=UTC)
 
 
@@ -154,7 +154,7 @@ async def _seed(
             price_cents=0,
             currency="eur",
             audience_kind=AudienceKind.PUBLIC.value,
-            curator_group_id=school,
+            school_id=school,
         )
         practice.set_jsonb(
             "data",
@@ -190,7 +190,7 @@ async def s(client: AsyncClient, db_session: AsyncSession) -> _S:
     for who in (master, school_master):
         db_session.add(
             SchoolMember(
-                group_id=school.id, user_id=UUID(who["user"]["id"]),
+                school_id=school.id, user_id=UUID(who["user"]["id"]),
                 kind=SchoolMemberKind.MASTER.value,
             )
         )
@@ -325,7 +325,7 @@ async def test_the_manage_list_holds_every_practice_of_the_school(
         s.id("other_curator"), s.other_school, status="draft", title="Чужая",
     )
     resp = await client.get(
-        MANAGE_URL.format(group_id=s.school),
+        MANAGE_URL.format(school_id=s.school),
         headers=auth_headers(s.token("curator")),
     )
     assert resp.status_code == 200, resp.text
@@ -340,7 +340,7 @@ async def test_the_manage_list_holds_every_practice_of_the_school(
     assert "zoom.us" not in resp.text
 
     drafts = await client.get(
-        MANAGE_URL.format(group_id=s.school) + "?status=draft",
+        MANAGE_URL.format(school_id=s.school) + "?status=draft",
         headers=auth_headers(s.token("curator")),
     )
     assert [p["id"] for p in drafts.json()["items"]] == [str(s.draft), str(gone)]
@@ -350,7 +350,7 @@ async def test_the_manage_list_holds_every_practice_of_the_school(
 @pytest.mark.parametrize("who", ["other_curator", "school_master", "master"])
 async def test_the_manage_list_is_the_curators_only(client, s: _S, who: str) -> None:
     resp = await client.get(
-        MANAGE_URL.format(group_id=s.school), headers=auth_headers(s.token(who)),
+        MANAGE_URL.format(school_id=s.school), headers=auth_headers(s.token(who)),
     )
     assert resp.status_code == 404, resp.text
 
@@ -388,14 +388,14 @@ async def test_the_curator_publishes_the_masters_draft(client, s: _S) -> None:
     audit = await _audits("practice_published_by_curator", s.draft)
     assert len(audit) == 1
     assert audit[0].actor_id == s.uid("curator")
-    assert audit[0].data == {"group_id": str(s.school), "master_id": s.id("master")}
+    assert audit[0].data == {"school_id": str(s.school), "master_id": s.id("master")}
 
     fan_out = list(
         (
             await fresh_execute(
                 select(OutboxEvent.payload["target_value"].astext).where(
                     OutboxEvent.payload["type"].astext
-                    == "curator_group.practice_published",
+                    == "school.practice_published",
                 )
             )
         ).scalars().all()
@@ -584,7 +584,7 @@ async def test_a_public_school_practice_is_the_curators_to_cancel(
     audits = await _audits("practice_cancelled_by_curator", s.published)
     assert len(audits) == 1
     assert audits[0].actor_id == s.uid("curator")
-    assert audits[0].data["group_id"] == str(s.school)
+    assert audits[0].data["school_id"] == str(s.school)
     assert audits[0].data["master_id"] == s.id("master")
     assert len(
         await _notes("practice.cancelled_by_curator", s.id("master")),
@@ -598,7 +598,7 @@ async def test_a_public_school_practice_is_the_curators_to_cancel(
 
 async def _offer_school_to(s: _S, who: str) -> None:
     async with get_session_factory()() as session:
-        await curator_service.offer_school_transfer(
+        await school_service.offer_school_transfer(
             s.uid("curator"), s.school, s.uid(who), session,
             actor=await session.get(User, s.uid("curator")),
         )
@@ -607,7 +607,7 @@ async def _offer_school_to(s: _S, who: str) -> None:
 
 def _accept_call(s: _S, who: str):
     async def call(session: AsyncSession):
-        await curator_service.accept_school_transfer(
+        await school_service.accept_school_transfer(
             s.school, s.uid(who), session,
             actor=await session.get(User, s.uid(who)),
         )
@@ -630,7 +630,7 @@ def _create_for_master_call(s: _S):
         practice_type="live", direction="yoga", difficulty="beginner",
         title="От имени", scheduled_at=_SLOT + timedelta(days=3),
         duration_minutes=60, timezone="UTC", is_free=True,
-        master_id=s.uid("master"), curator_group_id=s.school,
+        master_id=s.uid("master"), school_id=s.school,
     )
 
     async def call(session: AsyncSession):

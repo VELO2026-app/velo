@@ -223,7 +223,7 @@ def test_every_listed_type_is_declared_and_the_acts_are_the_curators() -> None:
     assert set(CANCELLATION_REVOKES) == {
         "practice.rescheduled",
         "waitlist.spot_available",
-        "curator_group.practice_published",
+        "school.practice_published",
         *acts,
     }
 
@@ -397,7 +397,7 @@ async def test_a_curator_act_revokes_the_earlier_act_first(
     db_session.add(group)
     await db_session.flush()
     practice = await db_session.get(Practice, UUID(practice_id))
-    practice.curator_group_id = group.id
+    practice.school_id = group.id
     await db_session.commit()
     await practices_service._tell_master_of_curator_act(
         curator,
@@ -408,7 +408,7 @@ async def test_a_curator_act_revokes_the_earlier_act_first(
     await db_session.commit()
     rows = await _outbox({practice_correlation(practice_id)})
     (revoke,) = _revokes(rows, CURATOR_ACT_TYPES)
-    (edited,) = _notices(rows, "curator_group.master_practice_edited")
+    (edited,) = _notices(rows, "school.master_practice_edited")
     assert revoke.id < edited.id
     assert edited.payload["target_value"] == master["user"]["id"]
 
@@ -434,7 +434,7 @@ async def test_a_school_block_revokes_the_booking_state(
     db_session.add(group)
     await db_session.flush()
     practice = await db_session.get(Practice, UUID(practice_id))
-    practice.curator_group_id = group.id
+    practice.school_id = group.id
     await db_session.commit()
 
     await _close_school_practices_to(group.id, UUID(student["user"]["id"]), db_session)

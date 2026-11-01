@@ -89,17 +89,17 @@ from app.modules.practices.models import (
 # must not drift into two lists.
 SCHOOL_PRACTICE_AUDIENCES = frozenset({
     AudienceKind.PUBLIC.value,
-    AudienceKind.CURATOR_GROUPS.value,
+    AudienceKind.SCHOOLS.value,
 })
 
 
 def check_school_audience(
-    audience_kind: str, curator_group_id: UUID | None,
+    audience_kind: str, school_id: UUID | None,
 ) -> None:
     """Raise ValueError when audience_kind and the owning school disagree.
 
     Two refusals, no third:
-      - 'curator_groups' without a school -- "the school's students" of no
+      - 'schools' without a school -- "the school's students" of no
         school is an audience nobody is in;
       - a school with 'students' or 'groups' -- a school practice is for
         everyone or for the school's students; the master's own students
@@ -109,19 +109,19 @@ def check_school_audience(
     turns it into a 422; update_practice wraps it into a 400 itself.
     """
     if (
-        audience_kind == AudienceKind.CURATOR_GROUPS.value
-        and curator_group_id is None
+        audience_kind == AudienceKind.SCHOOLS.value
+        and school_id is None
     ):
         raise ValueError(
-            "audience_kind='curator_groups' requires curator_group_id"
+            "audience_kind='schools' requires school_id"
         )
     if (
-        curator_group_id is not None
+        school_id is not None
         and audience_kind not in SCHOOL_PRACTICE_AUDIENCES
     ):
         raise ValueError(
             "a school practice's audience_kind must be 'public' or "
-            "'curator_groups'"
+            "'schools'"
         )
 
 
@@ -255,16 +255,16 @@ class CreatePracticeRequest(BaseModel):
     # BE-74: the school this practice is created IN -- the frontend sends
     # it when the practice is made from a school's section, and the
     # practice then belongs to that school for good (Practice.
-    # curator_group_id). ONE id, not a list: a practice belongs to exactly
+    # school_id). ONE id, not a list: a practice belongs to exactly
     # one school (owner ruling, 2026-10-01), so a second school is not a
     # wider audience to validate but a shape this field cannot hold -- a
     # list is refused with 422 by the type itself.
     #
     # A school practice is for everyone ('public') or for the school's
-    # students ('curator_groups'); 'curator_groups' without a school is
+    # students ('schools'); 'schools' without a school is
     # nobody's audience. Both checked below; whether the master may use
     # this school is the service's question (_usable_school_or_400).
-    curator_group_id: UUID | None = None
+    school_id: UUID | None = None
 
     # BE-102: who LEADS this practice. Absent, null, or the caller's own
     # id -> the caller, the behaviour before this field existed. Another
@@ -302,7 +302,7 @@ class CreatePracticeRequest(BaseModel):
             raise ValueError(
                 "group_ids is only allowed when audience_kind='groups'"
             )
-        check_school_audience(self.audience_kind, self.curator_group_id)
+        check_school_audience(self.audience_kind, self.school_id)
         return self
 
     @field_validator("practice_type")
@@ -475,7 +475,7 @@ class UpdatePracticeRequest(BaseModel):
     # practice_school_immutable. Declared rather than left to the model's
     # extra="ignore", because ignoring it would answer 200 to "move this
     # practice to another school" and leave it where it was.
-    curator_group_id: UUID | None = None
+    school_id: UUID | None = None
 
     @field_validator("audience_kind")
     @classmethod
@@ -651,7 +651,7 @@ class AudiencePreviewRequest(BaseModel):
 
     @model_validator(mode="after")
     def _check_group_ids_match_audience_kind(self) -> "AudiencePreviewRequest":
-        # BE-74: no school field. The school a 'curator_groups' audience
+        # BE-74: no school field. The school a 'schools' audience
         # means is the practice's own, which a preview cannot change any
         # more than a PATCH can; the service reads it off the practice.
         if self.audience_kind == AudienceKind.GROUPS.value and not self.group_ids:
@@ -747,11 +747,11 @@ class PracticeResponse(BaseModel):
     #
     # The owning school (BE-74) and the dark-audience flag (P5/GT-12).
     #
-    # curator_group_id: the school the practice belongs to, or null.
+    # school_id: the school the practice belongs to, or null.
     # Auto-populated from the column (from_attributes), for every audience
     # -- a public practice of a school is still that school's.
     #
-    # curator_group_name: that school's name, or null. NOT auto-populated:
+    # school_name: that school's name, or null. NOT auto-populated:
     # filled at the same three call sites as audience_group_names, see
     # school_name_for_practice. Seen by everyone who can read the
     # practice, public ones included (owner ruling, 2026-10-01).
@@ -769,8 +769,8 @@ class PracticeResponse(BaseModel):
     # something is wrong and not what.
     audience_kind: AudienceKind = AudienceKind.PUBLIC
     audience_group_names: list[str] = []
-    curator_group_id: UUID | None = None
-    curator_group_name: str | None = None
+    school_id: UUID | None = None
+    school_name: str | None = None
     audience_unavailable: bool = False
 
     # -- Series meta (E3 batch 2; computed by the service for series roots) --

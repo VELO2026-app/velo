@@ -55,7 +55,7 @@ from app.modules.practices.schemas import (
     CreatePracticeRequest,
     UpdatePracticeRequest,
 )
-from app.modules.schools import service as curator_service
+from app.modules.schools import service as school_service
 from app.modules.schools.models import (
     School,
     SchoolMember,
@@ -123,7 +123,7 @@ async def w(client: AsyncClient, db_session: AsyncSession) -> dict:
     await db_session.flush()
     db_session.add(
         SchoolMember(
-            group_id=school.id, user_id=UUID(master["user"]["id"]),
+            school_id=school.id, user_id=UUID(master["user"]["id"]),
             kind=SchoolMemberKind.MASTER.value,
         )
     )
@@ -171,7 +171,7 @@ async def _practice(
             currency="eur",
             audience_kind=audience,
             parent_practice_id=root,
-            curator_group_id=w["school"] if school else None,
+            school_id=w["school"] if school else None,
         )
     )
     await db_session.commit()
@@ -208,7 +208,7 @@ async def _rows(*pids: UUID) -> dict[UUID, tuple[str, str, UUID | None]]:
     rows = (await fresh_execute(
         select(
             Practice.id, Practice.status, Practice.audience_kind,
-            Practice.curator_group_id,
+            Practice.school_id,
         ).where(Practice.id.in_(pids)),
     )).all()
     return {r[0]: (r[1], r[2], r[3]) for r in rows}
@@ -249,7 +249,7 @@ _PROPAGATION = (series_service, "propagate_audience_to_children")
 
 _STUDENTS = AudienceKind.STUDENTS.value
 _PUBLIC = AudienceKind.PUBLIC.value
-_SCHOOL_AUDIENCE = AudienceKind.CURATOR_GROUPS.value
+_SCHOOL_AUDIENCE = AudienceKind.SCHOOLS.value
 _CANCELLED = PracticeStatus.CANCELLED.value
 _SCHEDULED = PracticeStatus.SCHEDULED.value
 
@@ -425,7 +425,7 @@ async def test_g6_root_audience_edit_against_deleting_the_school(
     root, early, late = await _series(db_session, w, school=True)
 
     async def delete_school(session: AsyncSession):
-        await curator_service.delete_school(
+        await school_service.delete_school(
             w["cid"], w["school"], session,
         )
 

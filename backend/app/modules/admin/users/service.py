@@ -164,7 +164,7 @@ async def _schools_counts_for_masters(
     would make the number drop the moment it matters most.
 
     Ownership only: a master who merely teaches in somebody else's school
-    is not counted, because curator_group.curator_user_id is the single
+    is not counted, because school.curator_user_id is the single
     place ownership lives (I-2 keeps the curator out of the membership
     table).
     """
@@ -282,9 +282,9 @@ async def list_masters(
             methods=profile.data.get("profile", {}).get("methods", []),
             practices_count=practices_by_master.get(user.id, 0),
             students_count=students_by_master.get(user.id, 0),
-            curator_groups_count=schools_by_master.get(user.id, 0),
+            schools_count=schools_by_master.get(user.id, 0),
             available_cents=profile.available_cents,
-            can_create_groups=master_can_create_groups(profile.data),
+            can_create_schools=master_can_create_groups(profile.data),
         )
         for user, profile in rows
     ]
@@ -345,7 +345,7 @@ async def get_master_by_id(
         # GT-15: inherited from AdminMasterListItem, so it has to be filled
         # here too -- left to its default the detail screen would report
         # "no right" for every master, including the ones who have it.
-        can_create_groups=master_can_create_groups(profile.data),
+        can_create_schools=master_can_create_groups(profile.data),
     )
 
 
@@ -446,7 +446,7 @@ async def make_master(
     got master.verified twice (or master.rejected and master.verified for
     one application), and this function's stale copy overwrote what the
     other had written (verify_master's verification block and
-    can_create_groups). Under the lock it waits, then reads the committed
+    can_create_schools). Under the lock it waits, then reads the committed
     status: had_master is true after a verify that won the race, and the
     notification goes once. populate_existing: a locking SELECT does not
     refresh an instance the identity map already holds. No caller loads

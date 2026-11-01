@@ -43,7 +43,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.events.models import OutboxEvent
 from app.modules.admin.masters import service as admin_masters_service
 from app.modules.masters.models import MasterProfile
-from app.modules.schools import service as curator_service
+from app.modules.schools import service as school_service
 from app.modules.schools.models import (
     School,
     SchoolEvent,
@@ -62,15 +62,15 @@ from tests.helpers import (
 )
 from tests.school_race_harness import assert_no_deadlock, race
 
-GROUPS_URL = "/api/v1/masters/me/curator-groups"
-OFFER_URL = GROUPS_URL + "/{group_id}/master-offers"
-CANCEL_URL = GROUPS_URL + "/{group_id}/master-offers/{user_id}"
-MEMBERS_URL = GROUPS_URL + "/{group_id}/members"
-STUDENT_URL = GROUPS_URL + "/{group_id}/students/{user_id}"
-TRANSFER_URL = GROUPS_URL + "/{group_id}/transfer"
-ACCEPT_URL = "/api/v1/curator-groups/{group_id}/master-offer/accept"
-TRANSFER_ACCEPT_URL = "/api/v1/curator-groups/{group_id}/transfer/accept"
-LEAVE_URL = "/api/v1/curator-groups/{group_id}/membership"
+GROUPS_URL = "/api/v1/masters/me/schools"
+OFFER_URL = GROUPS_URL + "/{school_id}/master-offers"
+CANCEL_URL = GROUPS_URL + "/{school_id}/master-offers/{user_id}"
+MEMBERS_URL = GROUPS_URL + "/{school_id}/members"
+STUDENT_URL = GROUPS_URL + "/{school_id}/students/{user_id}"
+TRANSFER_URL = GROUPS_URL + "/{school_id}/transfer"
+ACCEPT_URL = "/api/v1/schools/{school_id}/master-offer/accept"
+TRANSFER_ACCEPT_URL = "/api/v1/schools/{school_id}/transfer/accept"
+LEAVE_URL = "/api/v1/schools/{school_id}/membership"
 APPLY_URL = "/api/v1/masters/apply"
 VERIFY_URL = "/api/v1/admin/masters/{user_id}/verify"
 REJECT_URL = "/api/v1/admin/masters/{user_id}/reject"
@@ -88,9 +88,9 @@ _TID_CANDIDATE = 68710
 _TID_SECOND_CURATOR = 68711
 _TID_BYSTANDER = 68712
 
-OFFERED = "curator_group.master_offered"
-VERIFY_PROMPT = "curator_group.master_verification_required"
-CLOSED = "curator_group.master_offer_closed"
+OFFERED = "school.master_offered"
+VERIFY_PROMPT = "school.master_verification_required"
+CLOSED = "school.master_offer_closed"
 
 
 @pytest.fixture(autouse=True)
@@ -137,7 +137,7 @@ async def _master(
         MasterProfile(
             user_id=uid,
             data={
-                "account": {"status": "verified", "can_create_groups": True},
+                "account": {"status": "verified", "can_create_schools": True},
                 "profile": {"bio": "m"},
             },
         )
@@ -177,7 +177,7 @@ async def _seed_member(
 ) -> None:
     db_session.add(
         SchoolMember(
-            group_id=UUID(group_id), user_id=UUID(auth["user"]["id"]),
+            school_id=UUID(group_id), user_id=UUID(auth["user"]["id"]),
             kind=kind.value,
         )
     )
@@ -187,7 +187,7 @@ async def _seed_member(
 
 async def _offer(client, curator: dict, group_id: str, to: dict):
     return await client.post(
-        OFFER_URL.format(group_id=group_id),
+        OFFER_URL.format(school_id=group_id),
         json={"to_user_id": to["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
@@ -238,7 +238,7 @@ async def _offers(group_id: str) -> list[UUID]:
         (
             await fresh_execute(
                 select(SchoolMasterOffer.to_user_id).where(
-                    SchoolMasterOffer.group_id == UUID(group_id)
+                    SchoolMasterOffer.school_id == UUID(group_id)
                 )
             )
         ).scalars().all()
@@ -249,7 +249,7 @@ async def _offer_id(group_id: str, auth: dict) -> UUID:
     return (
         await fresh_execute(
             select(SchoolMasterOffer.id).where(
-                SchoolMasterOffer.group_id == UUID(group_id),
+                SchoolMasterOffer.school_id == UUID(group_id),
                 SchoolMasterOffer.to_user_id == UUID(auth["user"]["id"]),
             )
         )
@@ -280,14 +280,14 @@ async def _types_for(auth: dict) -> list[str]:
 
 
 async def _school_types_for(auth: dict) -> list[str]:
-    return [t for t in await _types_for(auth) if t.startswith("curator_group.")]
+    return [t for t in await _types_for(auth) if t.startswith("school.")]
 
 
 async def _journal(group_id: str) -> list[tuple[str, dict]]:
     rows = (
         await fresh_execute(
             select(SchoolEvent.event, SchoolEvent.data)
-            .where(SchoolEvent.group_id == UUID(group_id))
+            .where(SchoolEvent.school_id == UUID(group_id))
             .order_by(SchoolEvent.seq)
         )
     ).all()
@@ -296,7 +296,7 @@ async def _journal(group_id: str) -> list[tuple[str, dict]]:
 
 async def _roster_state(client, curator: dict, group_id: str) -> dict:
     resp = await client.get(
-        MEMBERS_URL.format(group_id=group_id),
+        MEMBERS_URL.format(school_id=group_id),
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 200, resp.text
@@ -325,11 +325,11 @@ async def test_an_unverified_member_is_offered_and_asked_to_get_verified(
     assert await _offers(group) == [UUID(cand["user"]["id"])]
     [prompt] = [
         p for p in await _outbox_for(cand)
-        if p.get("type", "").startswith("curator_group.")
+        if p.get("type", "").startswith("school.")
     ]
     assert prompt["type"] == VERIFY_PROMPT
     assert prompt["action_data"]["action"] == "open_master_application"
-    assert prompt["action_data"]["group_name"] == "Школа верификации"
+    assert prompt["action_data"]["school_name"] == "Школа верификации"
     # The journal records the curator's act exactly as for a verified one.
     assert [e for e, _ in await _journal(group)][-1] == (
         SchoolEventKind.MASTER_OFFERED.value
@@ -383,21 +383,21 @@ async def test_verification_turns_the_offer_into_a_question(
     await _verify(client, admin, cand)
 
     offered = [p for p in await _outbox_for(cand) if p["type"] == OFFERED]
-    assert {p["action_data"]["group_name"] for p in offered} == {
+    assert {p["action_data"]["school_name"] for p in offered} == {
         "Первая школа", "Вторая школа",
     }
     assert {p["action_data"]["actor_name"] for p in offered} == {
         f"M{_TID_CURATOR}", f"M{_TID_SECOND_CURATOR}",
     }
     # Links (3 October): master_offered has its own verb -- the Telegram
-    # button carries no type, and open_curator_group could only open the
-    # school page. It used to be open_curator_group, right until then.
+    # button carries no type, and open_school could only open the
+    # school page. Until then it carried the shared school verb.
     for p in offered:
         assert p["action_data"]["action"] == "open_master_offer"
-        assert set(p["action_data"]["params"]) == {"group_id"}
+        assert set(p["action_data"]["params"]) == {"school_id"}
     keys = {p["idempotency_key"] for p in offered}
     assert keys == {
-        k for k in keys if k.startswith("curator-master-offer-ready:")
+        k for k in keys if k.startswith("school-master-offer-ready:")
     }
     assert len(keys) == 2
     # No journal line for the admin's decision -- the curator acted once.
@@ -409,7 +409,7 @@ async def test_verification_turns_the_offer_into_a_question(
         cand["user"]["id"]
     ] == "awaiting_answer"
     resp = await client.post(
-        ACCEPT_URL.format(group_id=g1),
+        ACCEPT_URL.format(school_id=g1),
         headers=auth_headers(cand["session_token"]),
     )
     assert resp.status_code == 204, resp.text
@@ -445,7 +445,7 @@ async def test_a_member_who_left_before_verification_is_not_asked(
     await _seed_member(db_session, group, cand)
     await _offer(client, curator, group, cand)
     resp = await client.delete(
-        LEAVE_URL.format(group_id=group),
+        LEAVE_URL.format(school_id=group),
         headers=auth_headers(cand["session_token"]),
     )
     assert resp.status_code == 204, resp.text
@@ -486,7 +486,7 @@ async def test_reverification_after_revoke_asks_again_under_a_new_key(
     offer_id = str(await _offer_id(group, cand))
     for p in offered:
         assert p["idempotency_key"].startswith(
-            f"curator-master-offer-ready:{offer_id}:"
+            f"school-master-offer-ready:{offer_id}:"
         )
 
 
@@ -642,9 +642,9 @@ async def test_a_rejection_closes_the_offer_and_tells_the_curator(
     closed = [p for p in await _outbox_for(curator) if p["type"] == CLOSED]
     assert len(closed) == 1
     assert closed[0]["idempotency_key"] == (
-        f"curator-master-offer-closed:{offer_id}"
+        f"school-master-offer-closed:{offer_id}"
     )
-    assert closed[0]["action_data"]["group_name"] == "Школа отказа"
+    assert closed[0]["action_data"]["school_name"] == "Школа отказа"
     assert closed[0]["action_data"]["target_name"] == "Отказник"
     # The candidate learns of the rejection from the application, not from
     # the school; the school's journal does not carry an admin's name.
@@ -690,13 +690,13 @@ async def test_a_rejection_after_a_handover_tells_the_new_curator(
     await _seed_member(db_session, group, cand)
     await _offer(client, curator, group, cand)
     resp = await client.post(
-        TRANSFER_URL.format(group_id=group),
+        TRANSFER_URL.format(school_id=group),
         json={"to_user_id": heir["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 200, resp.text
     resp = await client.post(
-        TRANSFER_ACCEPT_URL.format(group_id=group),
+        TRANSFER_ACCEPT_URL.format(school_id=group),
         headers=auth_headers(heir["session_token"]),
     )
     assert resp.status_code == 200, resp.text
@@ -785,7 +785,7 @@ async def test_the_curator_withdraws_an_offer(
     await _offer(client, curator, group, cand)
     cand_before = await _school_types_for(cand)
 
-    url = CANCEL_URL.format(group_id=group, user_id=cand["user"]["id"])
+    url = CANCEL_URL.format(school_id=group, user_id=cand["user"]["id"])
     for _ in range(2):
         resp = await client.delete(
             url, headers=auth_headers(curator["session_token"]),
@@ -801,7 +801,7 @@ async def test_the_curator_withdraws_an_offer(
     assert cancels[0]["target_user_id"] == cand["user"]["id"]
     assert await _school_types_for(cand) == cand_before
     resp = await client.post(
-        ACCEPT_URL.format(group_id=group),
+        ACCEPT_URL.format(school_id=group),
         headers=auth_headers(cand["session_token"]),
     )
     assert resp.status_code == 404
@@ -820,7 +820,7 @@ async def test_withdrawing_nothing_writes_nothing(
     await _seed_member(db_session, group, cand)
 
     resp = await client.delete(
-        CANCEL_URL.format(group_id=group, user_id=cand["user"]["id"]),
+        CANCEL_URL.format(school_id=group, user_id=cand["user"]["id"]),
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 204, resp.text
@@ -841,7 +841,7 @@ async def test_a_stranger_cannot_withdraw_somebody_elses_offer(
     await _offer(client, curator, group, cand)
 
     resp = await client.delete(
-        CANCEL_URL.format(group_id=group, user_id=cand["user"]["id"]),
+        CANCEL_URL.format(school_id=group, user_id=cand["user"]["id"]),
         headers=auth_headers(other["session_token"]),
     )
     assert resp.status_code == 404
@@ -885,7 +885,7 @@ async def test_the_student_profile_shows_the_offer_to_the_curator_only(
     await _seed_member(db_session, group, fellow, SchoolMemberKind.MASTER)
     await _seed_member(db_session, group, cand)
     await _offer(client, curator, group, cand)
-    url = STUDENT_URL.format(group_id=group, user_id=cand["user"]["id"])
+    url = STUDENT_URL.format(school_id=group, user_id=cand["user"]["id"])
 
     as_curator = await client.get(
         url, headers=auth_headers(curator["session_token"]),
@@ -942,12 +942,12 @@ async def _race_setup(
     r.group = group.id
     db_session.add(
         SchoolMember(
-            group_id=r.group, user_id=r.cand,
+            school_id=r.group, user_id=r.cand,
             kind=SchoolMemberKind.STUDENT.value,
         )
     )
     if offered:
-        db_session.add(SchoolMasterOffer(group_id=r.group, to_user_id=r.cand))
+        db_session.add(SchoolMasterOffer(school_id=r.group, to_user_id=r.cand))
     await db_session.flush()
     await db_session.commit()
     return r
@@ -955,7 +955,7 @@ async def _race_setup(
 
 def _offer_call(r: _Race):
     async def call(session):
-        await curator_service.offer_school_master(
+        await school_service.offer_school_master(
             r.curator, r.group, r.cand, session,
             actor=await session.get(User, r.curator),
         )
@@ -980,7 +980,7 @@ def _reject_call(r: _Race):
 
 def _accept_call(r: _Race):
     async def call(session):
-        await curator_service.accept_school_master_offer(
+        await school_service.accept_school_master_offer(
             r.group, r.cand, session, actor=await session.get(User, r.cand),
         )
     return call
@@ -988,7 +988,7 @@ def _accept_call(r: _Race):
 
 def _cancel_call(r: _Race):
     async def call(session):
-        await curator_service.cancel_school_master_offer(
+        await school_service.cancel_school_master_offer(
             r.curator, r.group, r.cand, session,
             actor=await session.get(User, r.curator),
         )
@@ -1015,7 +1015,7 @@ async def test_a_verification_landing_mid_offer_still_asks_the_candidate(
     result = await race(
         monkeypatch,
         holder=_offer_call(r),
-        pause_in=(curator_service, "_has_master_capability"),
+        pause_in=(school_service, "_has_master_capability"),
         rival=_verify_call(r),
     )
     assert_no_deadlock(result)
@@ -1056,7 +1056,7 @@ async def test_a_rejection_landing_mid_offer_closes_the_new_offer(
     result = await race(
         monkeypatch,
         holder=_offer_call(r),
-        pause_in=(curator_service, "_has_master_capability"),
+        pause_in=(school_service, "_has_master_capability"),
         rival=_reject_call(r),
     )
     assert_no_deadlock(result)
@@ -1066,7 +1066,7 @@ async def test_a_rejection_landing_mid_offer_closes_the_new_offer(
     offers = (
         await fresh_execute(
             select(SchoolMasterOffer.id).where(
-                SchoolMasterOffer.group_id == r.group
+                SchoolMasterOffer.school_id == r.group
             )
         )
     ).all()
@@ -1085,7 +1085,7 @@ async def test_a_withdrawal_mid_accept_neither_deadlocks_nor_double_counts(
     result = await race(
         monkeypatch,
         holder=_accept_call(r),
-        pause_in=(curator_service, "_has_master_capability"),
+        pause_in=(school_service, "_has_master_capability"),
         rival=_cancel_call(r),
     )
     assert_no_deadlock(result)
@@ -1095,7 +1095,7 @@ async def test_a_withdrawal_mid_accept_neither_deadlocks_nor_double_counts(
     kind = (
         await fresh_execute(
             select(SchoolMember.kind).where(
-                SchoolMember.group_id == r.group,
+                SchoolMember.school_id == r.group,
                 SchoolMember.user_id == r.cand,
             )
         )

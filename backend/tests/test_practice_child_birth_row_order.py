@@ -109,7 +109,7 @@ async def w(client: AsyncClient, db_session: AsyncSession) -> dict:
     await db_session.flush()
     db_session.add(
         SchoolMember(
-            group_id=school.id, user_id=UUID(master["user"]["id"]),
+            school_id=school.id, user_id=UUID(master["user"]["id"]),
             kind=SchoolMemberKind.MASTER.value,
         )
     )
@@ -148,7 +148,7 @@ async def _practice(
             currency="eur",
             audience_kind=audience,
             parent_practice_id=root,
-            curator_group_id=w["school"] if school else None,
+            school_id=w["school"] if school else None,
         )
     )
     await db_session.commit()
@@ -200,7 +200,7 @@ async def _rows(*pids: UUID) -> dict[UUID, tuple[str, str, UUID | None]]:
     rows = (await fresh_execute(
         select(
             Practice.id, Practice.status, Practice.audience_kind,
-            Practice.curator_group_id,
+            Practice.school_id,
         ).where(Practice.id.in_(pids)),
     )).all()
     return {r[0]: (r[1], r[2], r[3]) for r in rows}
@@ -224,7 +224,7 @@ _PARENT_LOCK = (practice_service, "_owned_root_parent_or_400")
 _PUBLIC = AudienceKind.PUBLIC.value
 _GROUPS = AudienceKind.GROUPS.value
 _STUDENTS = AudienceKind.STUDENTS.value
-_SCHOOL_AUDIENCE = AudienceKind.CURATOR_GROUPS.value
+_SCHOOL_AUDIENCE = AudienceKind.SCHOOLS.value
 
 
 # ===========================================================================
@@ -331,7 +331,7 @@ async def test_n1_a_curator_adding_an_occurrence_for_a_master_is_refused(
         with pytest.raises(BadRequestError) as refused:
             await practice_service.create_practice(
                 curator,
-                _child_body(root, master_id=w["mid"], curator_group_id=w["school"]),
+                _child_body(root, master_id=w["mid"], school_id=w["school"]),
                 session,
             )
         await session.rollback()

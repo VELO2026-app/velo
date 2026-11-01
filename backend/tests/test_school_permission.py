@@ -12,7 +12,7 @@
 #
 # WHAT THIS FILE IS ABOUT. Until GT-15 curatorship was a consequence of
 # being a verified master: anyone verified could found a school. Now the
-# right is a flag an admin grants -- data.account.can_create_groups -- and
+# right is a flag an admin grants -- data.account.can_create_schools -- and
 # it gates EXACTLY ONE operation, creating a new school. Everything else a
 # curator does is about a school that already exists and does not ask.
 #
@@ -27,9 +27,9 @@
 #
 # CLEANUP is full_cleanup_range(..., delete_users=True) and NOTHING ELSE,
 # for the reason test_schools.py states: every curator table FKs
-# into users / curator_group with ON DELETE CASCADE, so deleting the band's
+# into users / school with ON DELETE CASCADE, so deleting the band's
 # users takes their schools with them. Plain cleanup_range would keep the
-# users, leave curator_group rows behind, and the second run would hit 409
+# users, leave school rows behind, and the second run would hit 409
 # on the same school name.
 #
 # Coverage -- the states, not the endpoints:
@@ -68,16 +68,16 @@ from tests.helpers import (
 
 APPLY_URL = "/api/v1/masters/apply"
 VERIFY_URL = "/api/v1/admin/masters/{user_id}/verify"
-RIGHT_URL = "/api/v1/admin/masters/{user_id}/can-create-groups"
+RIGHT_URL = "/api/v1/admin/masters/{user_id}/can-create-schools"
 REVOKE_URL = "/api/v1/admin/masters/{user_id}/revoke"
 MAKE_MASTER_URL = "/api/v1/admin/users/{user_id}/make-master"
 MASTERS_LIST_URL = "/api/v1/admin/masters/list"
-GROUPS_URL = "/api/v1/masters/me/curator-groups"
-GROUP_URL = "/api/v1/masters/me/curator-groups/{group_id}"
-MEMBERS_URL = "/api/v1/masters/me/curator-groups/{group_id}/members"
-OFFER_URL = "/api/v1/masters/me/curator-groups/{group_id}/transfer"
-ACCEPT_URL = "/api/v1/curator-groups/{group_id}/transfer/accept"
-PAGE_URL = "/api/v1/curator-groups/{group_id}"
+GROUPS_URL = "/api/v1/masters/me/schools"
+GROUP_URL = "/api/v1/masters/me/schools/{school_id}"
+MEMBERS_URL = "/api/v1/masters/me/schools/{school_id}/members"
+OFFER_URL = "/api/v1/masters/me/schools/{school_id}/transfer"
+ACCEPT_URL = "/api/v1/schools/{school_id}/transfer/accept"
+PAGE_URL = "/api/v1/schools/{school_id}"
 
 _TID_MIN = 65000
 _TID_MAX = 65199
@@ -90,7 +90,7 @@ _TID_APPLICANT_B = 65005
 _TID_PLAIN = 65030
 _TID_ADMIN = 65090
 
-_CODE = "group_creation_not_allowed"
+_CODE = "school_creation_not_allowed"
 
 
 # ===========================================================================
@@ -107,12 +107,12 @@ async def _make_verified_master(
     db_session: AsyncSession,
     telegram_id: int,
     *,
-    can_create_groups: bool,
+    can_create_schools: bool,
     first_name: str = "Master",
 ) -> dict:
     """A verified master, with or without the right to found schools.
 
-    can_create_groups is REQUIRED, with no default, on purpose: in this
+    can_create_schools is REQUIRED, with no default, on purpose: in this
     file the two masters are not interchangeable, and a helper that
     silently picked one would let a test claim to be about the flagless
     case while building the flagged one.
@@ -127,8 +127,8 @@ async def _make_verified_master(
     await db_session.flush()
 
     account: dict = {"status": "verified"}
-    if can_create_groups:
-        account["can_create_groups"] = True
+    if can_create_schools:
+        account["can_create_schools"] = True
     db_session.add(
         MasterProfile(
             user_id=user_id,
@@ -215,7 +215,7 @@ async def _set_right(
 ):
     return await client.patch(
         RIGHT_URL.format(user_id=user_id),
-        json={"can_create_groups": value},
+        json={"can_create_schools": value},
         headers=auth_headers(admin_token),
     )
 
@@ -250,7 +250,7 @@ async def test_verify_without_the_field_grants_no_right(
     """A bare verify body behaves exactly as it did before GT-15.
 
     THE "NO X" HALF IS PAIRED WITH A "Y IS THERE AND NOT EMPTY" HALF, and
-    the pairing is the point: asserting only that can_create_groups is
+    the pairing is the point: asserting only that can_create_schools is
     absent would pass just as happily if verification had written nothing
     at all -- or if the profile had failed to load and this were reading an
     empty dict. The verification block proves the write happened and that
@@ -268,7 +268,7 @@ async def test_verify_without_the_field_grants_no_right(
     assert resp.status_code == 200, resp.text
 
     account = await _account_block(user_id)
-    assert "can_create_groups" not in account
+    assert "can_create_schools" not in account
     assert account["status"] == "verified"
     assert account["verification"]["verified_by"]
 
@@ -293,16 +293,16 @@ async def test_verify_with_false_writes_nothing_and_verify_with_true_writes_it(
     for auth, value in ((denied, False), (granted, True)):
         resp = await client.post(
             VERIFY_URL.format(user_id=auth["user"]["id"]),
-            json={"can_create_groups": value},
+            json={"can_create_schools": value},
             headers=auth_headers(admin_token),
         )
         assert resp.status_code == 200, resp.text
 
-    assert "can_create_groups" not in await _account_block(
+    assert "can_create_schools" not in await _account_block(
         denied["user"]["id"]
     )
     assert (await _account_block(granted["user"]["id"]))[
-        "can_create_groups"
+        "can_create_schools"
     ] is True
 
 
@@ -325,7 +325,7 @@ async def test_verify_rejects_a_value_that_is_not_a_boolean(
     for bad in ("maybe", None, []):
         resp = await client.post(
             VERIFY_URL.format(user_id=user_id),
-            json={"can_create_groups": bad},
+            json={"can_create_schools": bad},
             headers=auth_headers(admin_token),
         )
         assert resp.status_code == 422, f"{bad!r}: {resp.text}"
@@ -350,7 +350,7 @@ async def test_second_verify_is_409_and_leaves_the_account_block_intact(
 
     first = await client.post(
         VERIFY_URL.format(user_id=user_id),
-        json={"can_create_groups": True, "notes": "first"},
+        json={"can_create_schools": True, "notes": "first"},
         headers=auth_headers(admin_token),
     )
     assert first.status_code == 200, first.text
@@ -358,13 +358,13 @@ async def test_second_verify_is_409_and_leaves_the_account_block_intact(
 
     second = await client.post(
         VERIFY_URL.format(user_id=user_id),
-        json={"can_create_groups": False, "notes": "second"},
+        json={"can_create_schools": False, "notes": "second"},
         headers=auth_headers(admin_token),
     )
     assert second.status_code == 409, second.text
 
     assert await _account_block(user_id) == before
-    assert before["can_create_groups"] is True
+    assert before["can_create_schools"] is True
 
 
 # ===========================================================================
@@ -384,7 +384,7 @@ async def test_granting_the_right_later_needs_no_re_verification(
     of verification and never again.
     """
     master = await _make_verified_master(
-        client, db_session, _TID_CURATOR, can_create_groups=False,
+        client, db_session, _TID_CURATOR, can_create_schools=False,
     )
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
 
@@ -396,7 +396,7 @@ async def test_granting_the_right_later_needs_no_re_verification(
         client, admin_token, master["user"]["id"], True,
     )
     assert granted.status_code == 200, granted.text
-    assert granted.json()["can_create_groups"] is True
+    assert granted.json()["can_create_schools"] is True
 
     allowed = await _create_group(client, master)
     assert allowed.status_code == 201, allowed.text
@@ -414,7 +414,7 @@ async def test_granting_twice_and_revoking_twice_are_both_idempotent(
     it once.
     """
     master = await _make_verified_master(
-        client, db_session, _TID_CURATOR, can_create_groups=False,
+        client, db_session, _TID_CURATOR, can_create_schools=False,
     )
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
     user_id = master["user"]["id"]
@@ -422,9 +422,9 @@ async def test_granting_twice_and_revoking_twice_are_both_idempotent(
     for value, expected in ((True, True), (True, True), (False, False), (False, False)):
         resp = await _set_right(client, admin_token, user_id, value)
         assert resp.status_code == 200, resp.text
-        assert resp.json()["can_create_groups"] is expected
+        assert resp.json()["can_create_schools"] is expected
         assert (await _account_block(user_id))[
-            "can_create_groups"
+            "can_create_schools"
         ] is expected
 
 
@@ -446,7 +446,7 @@ async def test_the_toggle_refuses_a_master_who_is_not_verified(
     assert resp.status_code == 409, resp.text
 
     account = await _account_block(user_id)
-    assert "can_create_groups" not in account
+    assert "can_create_schools" not in account
     assert account["status"] == "pending"
 
 
@@ -479,13 +479,13 @@ async def test_a_master_cannot_grant_the_right_to_themselves(
     in the path, or by a 405 on the wrong verb.
     """
     master = await _make_verified_master(
-        client, db_session, _TID_CURATOR, can_create_groups=False,
+        client, db_session, _TID_CURATOR, can_create_schools=False,
     )
     user_id = master["user"]["id"]
 
     refused = await client.patch(
         RIGHT_URL.format(user_id=user_id),
-        json={"can_create_groups": True},
+        json={"can_create_schools": True},
         headers=auth_headers(master["session_token"]),
     )
     assert refused.status_code == 403
@@ -504,7 +504,7 @@ async def test_a_master_cannot_grant_the_right_to_themselves(
 async def test_a_flagless_master_is_refused_with_its_own_code(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """403 group_creation_not_allowed, and NOT master_profile_not_verified.
+    """403 school_creation_not_allowed, and NOT master_profile_not_verified.
 
     The code is asserted rather than just the status because the two
     refusals send the frontend to different screens: "your profile is not
@@ -516,10 +516,10 @@ async def test_a_flagless_master_is_refused_with_its_own_code(
     obstacle.
     """
     denied = await _make_verified_master(
-        client, db_session, _TID_OTHER, can_create_groups=False,
+        client, db_session, _TID_OTHER, can_create_schools=False,
     )
     allowed = await _make_verified_master(
-        client, db_session, _TID_CURATOR, can_create_groups=True,
+        client, db_session, _TID_CURATOR, can_create_schools=True,
     )
 
     refused = await _create_group(client, denied, name="Тихое утро")
@@ -551,7 +551,7 @@ async def test_the_right_is_checked_before_the_name_is_looked_up(
     the state a revoked master is in.
     """
     master = await _make_verified_master(
-        client, db_session, _TID_CURATOR, can_create_groups=True,
+        client, db_session, _TID_CURATOR, can_create_schools=True,
     )
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
 
@@ -589,10 +589,10 @@ async def test_absent_and_explicit_false_are_refused_identically(
     hand would be asserting against a world that does not exist.
     """
     absent = await _make_verified_master(
-        client, db_session, _TID_OTHER, can_create_groups=False,
+        client, db_session, _TID_OTHER, can_create_schools=False,
     )
     explicit = await _make_verified_master(
-        client, db_session, _TID_CURATOR, can_create_groups=True,
+        client, db_session, _TID_CURATOR, can_create_schools=True,
     )
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
 
@@ -601,11 +601,11 @@ async def test_absent_and_explicit_false_are_refused_identically(
     )
     assert revoked.status_code == 200, revoked.text
 
-    assert "can_create_groups" not in await _account_block(
+    assert "can_create_schools" not in await _account_block(
         absent["user"]["id"]
     )
     assert (await _account_block(explicit["user"]["id"]))[
-        "can_create_groups"
+        "can_create_schools"
     ] is False
 
     for auth in (absent, explicit):
@@ -635,7 +635,7 @@ async def test_revoking_the_right_leaves_the_existing_school_fully_operable(
     surviving school.
     """
     master = await _make_verified_master(
-        client, db_session, _TID_CURATOR, can_create_groups=True,
+        client, db_session, _TID_CURATOR, can_create_schools=True,
     )
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
     headers = auth_headers(master["session_token"])
@@ -658,17 +658,17 @@ async def test_revoking_the_right_leaves_the_existing_school_fully_operable(
     assert [g["id"] for g in listed.json()["items"]] == [group_id]
 
     page = await client.get(
-        PAGE_URL.format(group_id=group_id), headers=headers,
+        PAGE_URL.format(school_id=group_id), headers=headers,
     )
     assert page.status_code == 200
 
     roster = await client.get(
-        MEMBERS_URL.format(group_id=group_id), headers=headers,
+        MEMBERS_URL.format(school_id=group_id), headers=headers,
     )
     assert roster.status_code == 200
 
     renamed = await client.patch(
-        GROUP_URL.format(group_id=group_id),
+        GROUP_URL.format(school_id=group_id),
         json={"name": "Тихое утро"},
         headers=headers,
     )
@@ -689,7 +689,7 @@ async def test_the_flag_survives_revoke_master_and_the_re_verify_that_undoes_it(
     get_current_master, which never reaches the gate at all.
     """
     master = await _make_verified_master(
-        client, db_session, _TID_CURATOR, can_create_groups=True,
+        client, db_session, _TID_CURATOR, can_create_schools=True,
     )
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
     user_id = master["user"]["id"]
@@ -699,7 +699,7 @@ async def test_the_flag_survives_revoke_master_and_the_re_verify_that_undoes_it(
         headers=auth_headers(admin_token),
     )
     assert revoke.status_code == 200, revoke.text
-    assert (await _account_block(user_id))["can_create_groups"] is True
+    assert (await _account_block(user_id))["can_create_schools"] is True
 
     while_suspended = await _create_group(client, master)
     assert while_suspended.status_code == 403
@@ -710,7 +710,7 @@ async def test_the_flag_survives_revoke_master_and_the_re_verify_that_undoes_it(
         headers=auth_headers(admin_token),
     )
     assert back.status_code == 200, back.text
-    assert (await _account_block(user_id))["can_create_groups"] is True
+    assert (await _account_block(user_id))["can_create_schools"] is True
 
     allowed = await _create_group(client, master)
     assert allowed.status_code == 201, allowed.text
@@ -738,7 +738,7 @@ async def test_admin_make_master_alone_does_not_grant_the_right(
 
     account = await _account_block(user_id)
     assert account["status"] == "verified"
-    assert "can_create_groups" not in account
+    assert "can_create_schools" not in account
 
     refused = await _create_group(client, plain)
     assert refused.status_code == 403
@@ -765,10 +765,10 @@ async def test_flagless_master_can_inherit_a_school_by_transfer(
     along the way.
     """
     curator = await _make_verified_master(
-        client, db_session, _TID_CURATOR, can_create_groups=True,
+        client, db_session, _TID_CURATOR, can_create_schools=True,
     )
     heir = await _make_verified_master(
-        client, db_session, _TID_HEIR, can_create_groups=False,
+        client, db_session, _TID_HEIR, can_create_schools=False,
         first_name="Анна",
     )
 
@@ -778,7 +778,7 @@ async def test_flagless_master_can_inherit_a_school_by_transfer(
 
     db_session.add(
         SchoolMember(
-            group_id=UUID(group_id),
+            school_id=UUID(group_id),
             user_id=UUID(heir["user"]["id"]),
             kind=SchoolMemberKind.MASTER.value,
         )
@@ -786,14 +786,14 @@ async def test_flagless_master_can_inherit_a_school_by_transfer(
     await db_session.commit()
 
     offered = await client.post(
-        OFFER_URL.format(group_id=group_id),
+        OFFER_URL.format(school_id=group_id),
         json={"to_user_id": heir["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
     assert offered.status_code == 200, offered.text
 
     accepted = await client.post(
-        ACCEPT_URL.format(group_id=group_id),
+        ACCEPT_URL.format(school_id=group_id),
         headers=auth_headers(heir["session_token"]),
     )
     assert accepted.status_code == 200, accepted.text
@@ -804,7 +804,7 @@ async def test_flagless_master_can_inherit_a_school_by_transfer(
     assert [g["id"] for g in mine.json()["items"]] == [group_id]
 
     renamed = await client.patch(
-        GROUP_URL.format(group_id=group_id),
+        GROUP_URL.format(school_id=group_id),
         json={"name": "Школа наследника"},
         headers=heir_headers,
     )
@@ -832,7 +832,7 @@ async def test_the_master_sees_their_own_right_on_the_schools_list(
     derived from a school they happen to own.
     """
     master = await _make_verified_master(
-        client, db_session, _TID_CURATOR, can_create_groups=False,
+        client, db_session, _TID_CURATOR, can_create_schools=False,
     )
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
     headers = auth_headers(master["session_token"])
@@ -840,7 +840,7 @@ async def test_the_master_sees_their_own_right_on_the_schools_list(
     before = await client.get(GROUPS_URL, headers=headers)
     assert before.status_code == 200
     assert before.json()["items"] == []
-    assert before.json()["can_create_groups"] is False
+    assert before.json()["can_create_schools"] is False
 
     granted = await _set_right(
         client, admin_token, master["user"]["id"], True,
@@ -849,7 +849,7 @@ async def test_the_master_sees_their_own_right_on_the_schools_list(
 
     after = await client.get(GROUPS_URL, headers=headers)
     assert after.status_code == 200
-    assert after.json()["can_create_groups"] is True
+    assert after.json()["can_create_schools"] is True
 
 
 @pytest.mark.asyncio
@@ -858,17 +858,17 @@ async def test_the_admin_list_shows_who_holds_the_right(
 ) -> None:
     """Two masters, one flag, one row each -- and the count is not the flag.
 
-    curator_groups_count and can_create_groups sit next to each other and
+    schools_count and can_create_schools sit next to each other and
     answer different questions: what this master already owns versus what
     they may found next. The flagged master here owns nothing and the
     flagless one is left owning nothing too, so a screen that confused the
     two would show the same value for both and be caught.
     """
     granted = await _make_verified_master(
-        client, db_session, _TID_CURATOR, can_create_groups=True,
+        client, db_session, _TID_CURATOR, can_create_schools=True,
     )
     denied = await _make_verified_master(
-        client, db_session, _TID_OTHER, can_create_groups=False,
+        client, db_session, _TID_OTHER, can_create_schools=False,
     )
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
 
@@ -880,9 +880,9 @@ async def test_the_admin_list_shows_who_holds_the_right(
     assert resp.status_code == 200, resp.text
     by_id = {item["id"]: item for item in resp.json()["items"]}
 
-    assert by_id[granted["user"]["id"]]["can_create_groups"] is True
-    assert by_id[denied["user"]["id"]]["can_create_groups"] is False
-    assert by_id[granted["user"]["id"]]["curator_groups_count"] == 0
+    assert by_id[granted["user"]["id"]]["can_create_schools"] is True
+    assert by_id[denied["user"]["id"]]["can_create_schools"] is False
+    assert by_id[granted["user"]["id"]]["schools_count"] == 0
 
 
 @pytest.mark.asyncio
@@ -896,7 +896,7 @@ async def test_a_flagged_master_with_schools_reads_correctly_on_both_fields(
     either field from the other.
     """
     master = await _make_verified_master(
-        client, db_session, _TID_CURATOR, can_create_groups=True,
+        client, db_session, _TID_CURATOR, can_create_schools=True,
     )
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
 
@@ -917,8 +917,8 @@ async def test_a_flagged_master_with_schools_reads_correctly_on_both_fields(
     assert resp.status_code == 200, resp.text
     item = {i["id"]: i for i in resp.json()["items"]}[master["user"]["id"]]
 
-    assert item["curator_groups_count"] == 3
-    assert item["can_create_groups"] is False
+    assert item["schools_count"] == 3
+    assert item["can_create_schools"] is False
 
     mine = await client.get(
         GROUPS_URL, headers=auth_headers(master["session_token"]),

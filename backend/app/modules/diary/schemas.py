@@ -645,7 +645,7 @@ class PracticeAnalyticsResponse(BaseModel):
 
     practice_id: UUID
     viewer_role: PracticeAnalyticsViewerRole
-    curator_group_id: UUID | None = Field(
+    school_id: UUID | None = Field(
         description="The practice's school -- for viewer_role=curator only.",
     )
     title: str

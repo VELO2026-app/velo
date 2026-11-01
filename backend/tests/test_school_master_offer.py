@@ -76,10 +76,10 @@ from tests.helpers import (
     login_user,
 )
 
-GROUPS_URL = "/api/v1/masters/me/curator-groups"
-OFFER_URL = "/api/v1/masters/me/curator-groups/{group_id}/master-offers"
-ACCEPT_URL = "/api/v1/curator-groups/{group_id}/master-offer/accept"
-DECLINE_URL = "/api/v1/curator-groups/{group_id}/master-offer/decline"
+GROUPS_URL = "/api/v1/masters/me/schools"
+OFFER_URL = "/api/v1/masters/me/schools/{school_id}/master-offers"
+ACCEPT_URL = "/api/v1/schools/{school_id}/master-offer/accept"
+DECLINE_URL = "/api/v1/schools/{school_id}/master-offer/decline"
 
 _TID_MIN = 67600
 _TID_MAX = 67799
@@ -130,7 +130,7 @@ async def _master(
             data={
                 "account": {
                     "status": "verified" if verified else "suspended",
-                    "can_create_groups": can_create,
+                    "can_create_schools": can_create,
                 },
                 "profile": {"bio": "m"},
             },
@@ -173,7 +173,7 @@ async def _seed_member(
 ) -> None:
     db_session.add(
         SchoolMember(
-            group_id=UUID(group_id),
+            school_id=UUID(group_id),
             user_id=UUID(auth["user"]["id"]),
             kind=kind.value,
         )
@@ -184,7 +184,7 @@ async def _seed_member(
 
 async def _offer(client: AsyncClient, curator: dict, group_id: str, to: dict):
     return await client.post(
-        OFFER_URL.format(group_id=group_id),
+        OFFER_URL.format(school_id=group_id),
         json={"to_user_id": to["user"]["id"]},
         headers=auth_headers(curator["session_token"]),
     )
@@ -192,14 +192,14 @@ async def _offer(client: AsyncClient, curator: dict, group_id: str, to: dict):
 
 async def _accept(client: AsyncClient, auth: dict, group_id: str):
     return await client.post(
-        ACCEPT_URL.format(group_id=group_id),
+        ACCEPT_URL.format(school_id=group_id),
         headers=auth_headers(auth["session_token"]),
     )
 
 
 async def _decline(client: AsyncClient, auth: dict, group_id: str):
     return await client.post(
-        DECLINE_URL.format(group_id=group_id),
+        DECLINE_URL.format(school_id=group_id),
         headers=auth_headers(auth["session_token"]),
     )
 
@@ -209,7 +209,7 @@ async def _offers(group_id: str) -> list[UUID]:
         (
             await fresh_execute(
                 select(SchoolMasterOffer.to_user_id).where(
-                    SchoolMasterOffer.group_id == UUID(group_id)
+                    SchoolMasterOffer.school_id == UUID(group_id)
                 )
             )
         ).scalars().all()
@@ -220,7 +220,7 @@ async def _kind_of(group_id: str, auth: dict) -> str | None:
     return (
         await fresh_execute(
             select(SchoolMember.kind).where(
-                SchoolMember.group_id == UUID(group_id),
+                SchoolMember.school_id == UUID(group_id),
                 SchoolMember.user_id == UUID(auth["user"]["id"]),
             )
         )
@@ -231,7 +231,7 @@ async def _journal(group_id: str) -> list[str]:
     rows = (
         await fresh_execute(
             select(SchoolEvent.event).where(
-                SchoolEvent.group_id == UUID(group_id)
+                SchoolEvent.school_id == UUID(group_id)
             )
         )
     ).all()
@@ -303,7 +303,7 @@ async def test_accepting_changes_the_kind_and_not_the_arrival(
     before = (
         await fresh_execute(
             select(SchoolMember.joined_at).where(
-                SchoolMember.group_id == UUID(group),
+                SchoolMember.school_id == UUID(group),
                 SchoolMember.user_id == UUID(cand["user"]["id"]),
             )
         )
@@ -316,7 +316,7 @@ async def test_accepting_changes_the_kind_and_not_the_arrival(
     after = (
         await fresh_execute(
             select(SchoolMember.joined_at).where(
-                SchoolMember.group_id == UUID(group),
+                SchoolMember.school_id == UUID(group),
                 SchoolMember.user_id == UUID(cand["user"]["id"]),
             )
         )
@@ -452,7 +452,7 @@ async def test_a_plain_user_is_appointed_pending_verification(
     assert await _offers(group) == [UUID(plain["user"]["id"])]
     assert await _kind_of(group, plain) == SchoolMemberKind.STUDENT.value
     types = await _types_for(plain)
-    assert types == ["curator_group.master_verification_required"]
+    assert types == ["school.master_verification_required"]
 
 
 @pytest.mark.asyncio
@@ -475,7 +475,7 @@ async def test_a_candidate_who_lost_verification_is_asked_to_get_verified(
     assert resp.status_code == 204, resp.text
     assert await _offers(group) == [UUID(cand["user"]["id"])]
     assert await _types_for(cand) == [
-        "curator_group.master_verification_required",
+        "school.master_verification_required",
     ]
 
 
@@ -534,7 +534,7 @@ async def _missing_code(client: AsyncClient, auth: dict) -> str:
     real answer without any test noticing -- which is the drift P-08 guards.
     """
     resp = await client.post(
-        OFFER_URL.format(group_id=uuid4()),
+        OFFER_URL.format(school_id=uuid4()),
         json={"to_user_id": str(uuid4())},
         headers=auth_headers(auth["session_token"]),
     )
@@ -696,7 +696,7 @@ async def test_removal_from_the_school_kills_the_offer(
     assert await _offers(group) == [UUID(cand["user"]["id"])]
 
     removed = await client.delete(
-        f"/api/v1/masters/me/curator-groups/{group}/members/"
+        f"/api/v1/masters/me/schools/{group}/members/"
         f"{cand['user']['id']}",
         headers=auth_headers(curator["session_token"]),
     )
@@ -724,9 +724,9 @@ async def test_the_candidate_is_told_and_the_curator_is_not(
     await _offer(client, curator, group, cand)
 
     assert (await _types_for(cand)).count(
-        "curator_group.master_offered"
+        "school.master_offered"
     ) == 1
-    assert "curator_group.master_offered" not in await _types_for(curator)
+    assert "school.master_offered" not in await _types_for(curator)
 
 
 @pytest.mark.asyncio
@@ -751,10 +751,10 @@ async def test_both_outcomes_reach_the_curator_and_not_the_decider(
     await _decline(client, refuser, group)
 
     curator_types = await _types_for(curator)
-    assert curator_types.count("curator_group.master_offer_accepted") == 1
-    assert curator_types.count("curator_group.master_offer_declined") == 1
-    assert "curator_group.master_offer_accepted" not in await _types_for(taker)
-    assert "curator_group.master_offer_declined" not in await _types_for(
+    assert curator_types.count("school.master_offer_accepted") == 1
+    assert curator_types.count("school.master_offer_declined") == 1
+    assert "school.master_offer_accepted" not in await _types_for(taker)
+    assert "school.master_offer_declined" not in await _types_for(
         refuser
     )
 
@@ -809,12 +809,12 @@ async def test_no_notification_without_a_journal_line_and_the_reverse(
     for who in (curator, taker, refuser, plain):
         school_notes += sum(
             1 for t in await _types_for(who)
-            if t.startswith("curator_group.master_")
+            if t.startswith("school.master_")
         )
     # two offers + one accepted + one declined + one verification prompt.
     assert school_notes == 5
     assert await _types_for(plain) == [
-        "curator_group.master_verification_required",
+        "school.master_verification_required",
     ]
 
 
@@ -838,12 +838,12 @@ async def test_offer_body_axes(
     headers = auth_headers(curator["session_token"])
 
     empty = await client.post(
-        OFFER_URL.format(group_id=group), json={}, headers=headers,
+        OFFER_URL.format(school_id=group), json={}, headers=headers,
     )
     assert empty.status_code == 422
 
     garbage = await client.post(
-        OFFER_URL.format(group_id=group),
+        OFFER_URL.format(school_id=group),
         json={"to_user_id": "not-a-uuid"},
         headers=headers,
     )
@@ -887,7 +887,7 @@ async def test_a_plain_user_who_is_not_a_master_cannot_appoint_at_all(
     plain = await _plain(client, _TID_PLAIN)
 
     resp = await client.post(
-        OFFER_URL.format(group_id=group),
+        OFFER_URL.format(school_id=group),
         json={"to_user_id": cand["user"]["id"]},
         headers=auth_headers(plain["session_token"]),
     )
@@ -912,7 +912,7 @@ async def test_walking_out_takes_the_offer_too(
     await _offer(client, curator, group, cand)
 
     left = await client.delete(
-        f"/api/v1/curator-groups/{group}/membership",
+        f"/api/v1/schools/{group}/membership",
         headers=auth_headers(cand["session_token"]),
     )
     assert left.status_code == 204, left.text

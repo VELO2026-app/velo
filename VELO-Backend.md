@@ -130,7 +130,7 @@
 | `comms_proxy` | `app/modules/comms_proxy/` | In-app notification bell (unread feed, read/read-all) |
 | `chats` | `app/modules/chats/` | Real one-to-one messaging (threads, messages, unread-count) |
 | `diary` | `app/modules/diary/` | Check-ins, feedbacks, diary entries, insights; append-only `DiaryEvent` journal (`models.py`) + `projections.py` (единственный писатель журнала) + единая лента `GET /diary/feed` (cursor) |
-| `schools` | `app/modules/schools/` | Школы (кураторские группы). Куратор — НЕ участник: связь выводится из `curator_group.curator_user_id` (I-2), строки участия нет. Пять своих таблиц: `curator_group`, `_member`, `_invite`, `_transfer`, `_event`; шестая, `practice_audience_curator_group`, принадлежит `practices`. Append-only журнал `CuratorGroupEvent` + единственный писатель `_record_group_event` (`service.py`) + чтение `GET /masters/me/curator-groups/{id}/journal` (limit/offset, `ORDER BY seq DESC`). Право заводить школу — флаг в `MasterProfile.data.account`, гейт в одной точке (см. 3.17) |
+| `schools` | `app/modules/schools/` | Школы (кураторские группы). Куратор — НЕ участник: связь выводится из `school.curator_user_id` (I-2), строки участия нет. Пять своих таблиц: `school`, `_member`, `_invite`, `_transfer`, `_event`; шестая, `practice_audience_curator_group`, принадлежит `practices`. Append-only журнал `SchoolEvent` + единственный писатель `_record_group_event` (`service.py`) + чтение `GET /masters/me/schools/{id}/journal` (limit/offset, `ORDER BY seq DESC`). Право заводить школу — флаг в `MasterProfile.data.account`, гейт в одной точке (см. 3.17) |
 | `admin` | `app/modules/admin/` | Верификация мастеров, модерация (data-integrity semaphores built Phase 6.8, removed 2026-07-07 `9ca5619` — see §6) |
 | `ai` | `app/modules/ai/` | Розетка AI-саммари (Phase 9) |
 | `library` | `app/modules/library/` | Розетка: будущая библиотека записей практик (Phase 9.2, вне MVP — `models.py` целиком закомментирован, кода нет) |
@@ -436,41 +436,41 @@ newest-first, с курсорной пагинацией (`{ items, next_cursor 
 фича — не строка на брони; вне MVP, см. §9; чек-ин клиента мастеру уже
 отдаётся через attendance, см. §3.12).
 
-### Curator Groups
+### Schools
 
 Школы. **24 операции на 21 пути** — пересчитать: `app.openapi()`, фильтр
-`'curator-groups' in path`.
+`'schools' in path`.
 
 ```
 -- Куратор (за get_current_master + владение; чужая школа -> 404, не 403) --
-POST   /api/v1/masters/me/curator-groups                                  -- Завести школу (гейт права, см. 3.17)
-GET    /api/v1/masters/me/curator-groups                                  -- Мои школы (+ can_create_groups на СПИСКЕ)
-PATCH  /api/v1/masters/me/curator-groups/{id}                             -- Имя / описание / аватар (partial, name обязателен)
-DELETE /api/v1/masters/me/curator-groups/{id}                             -- Удалить школу (каскадом уходит и журнал)
-GET    /api/v1/masters/me/curator-groups/{id}/delete-preview              -- Что будет удалено
-GET    /api/v1/masters/me/curator-groups/{id}/members                     -- Ростер (limit/offset, фильтр kind, поиск)
-DELETE /api/v1/masters/me/curator-groups/{id}/members/{user_id}           -- Удалить участника (идемпотентно, 204 на промах)
-GET    /api/v1/masters/me/curator-groups/{id}/members/{user_id}/remove-preview
-POST   /api/v1/masters/me/curator-groups/{id}/invites                     -- Выпустить/вернуть ссылку (create-or-return)
-DELETE /api/v1/masters/me/curator-groups/{id}/invites/{kind}              -- Отозвать ссылку одного вида
-POST   /api/v1/masters/me/curator-groups/{id}/transfer                    -- Предложить передачу (UNIQUE на группу -> 409)
-DELETE /api/v1/masters/me/curator-groups/{id}/transfer                    -- Отменить своё предложение
-GET    /api/v1/masters/me/curator-groups/{id}/journal                     -- Журнал школы (см. 3.14-3.16)
+POST   /api/v1/masters/me/schools                                  -- Завести школу (гейт права, см. 3.17)
+GET    /api/v1/masters/me/schools                                  -- Мои школы (+ can_create_schools на СПИСКЕ)
+PATCH  /api/v1/masters/me/schools/{id}                             -- Имя / описание / аватар (partial, name обязателен)
+DELETE /api/v1/masters/me/schools/{id}                             -- Удалить школу (каскадом уходит и журнал)
+GET    /api/v1/masters/me/schools/{id}/delete-preview              -- Что будет удалено
+GET    /api/v1/masters/me/schools/{id}/members                     -- Ростер (limit/offset, фильтр kind, поиск)
+DELETE /api/v1/masters/me/schools/{id}/members/{user_id}           -- Удалить участника (идемпотентно, 204 на промах)
+GET    /api/v1/masters/me/schools/{id}/members/{user_id}/remove-preview
+POST   /api/v1/masters/me/schools/{id}/invites                     -- Выпустить/вернуть ссылку (create-or-return)
+DELETE /api/v1/masters/me/schools/{id}/invites/{kind}              -- Отозвать ссылку одного вида
+POST   /api/v1/masters/me/schools/{id}/transfer                    -- Предложить передачу (UNIQUE на группу -> 409)
+DELETE /api/v1/masters/me/schools/{id}/transfer                    -- Отменить своё предложение
+GET    /api/v1/masters/me/schools/{id}/journal                     -- Журнал школы (см. 3.14-3.16)
 
 -- Участник и приглашённый (за get_current_user) --
-GET    /api/v1/curator-groups/mine                                        -- Школы, где я куратор ИЛИ участник
-GET    /api/v1/curator-groups/{id}                                        -- Страница школы (только для своих; иначе 404)
-GET    /api/v1/curator-groups/{id}/masters                                -- Мастера школы (публично для своих)
-GET    /api/v1/curator-groups/{id}/practices                              -- Практики, нацеленные на школу
-DELETE /api/v1/curator-groups/{id}/membership                             -- Выйти (куратору -> 409 curator_cannot_leave)
-GET    /api/v1/curator-groups/{id}/leave-preview                          -- Чем обернётся выход
-GET    /api/v1/curator-groups/invites/{token}                             -- Карточка по ссылке + причина отказа
-POST   /api/v1/curator-groups/join                                        -- Вступить по токену
-POST   /api/v1/curator-groups/{id}/transfer/accept                        -- Принять школу
-POST   /api/v1/curator-groups/{id}/transfer/decline                       -- Отклонить (204, даже если предложения не было)
+GET    /api/v1/schools/mine                                        -- Школы, где я куратор ИЛИ участник
+GET    /api/v1/schools/{id}                                        -- Страница школы (только для своих; иначе 404)
+GET    /api/v1/schools/{id}/masters                                -- Мастера школы (публично для своих)
+GET    /api/v1/schools/{id}/practices                              -- Практики, нацеленные на школу
+DELETE /api/v1/schools/{id}/membership                             -- Выйти (куратору -> 409 curator_cannot_leave)
+GET    /api/v1/schools/{id}/leave-preview                          -- Чем обернётся выход
+GET    /api/v1/schools/invites/{token}                             -- Карточка по ссылке + причина отказа
+POST   /api/v1/schools/join                                        -- Вступить по токену
+POST   /api/v1/schools/{id}/transfer/accept                        -- Принять школу
+POST   /api/v1/schools/{id}/transfer/decline                       -- Отклонить (204, даже если предложения не было)
 
 -- Админ --
-GET    /api/v1/admin/curator-groups                                       -- Все школы (+ is_active)
+GET    /api/v1/admin/schools                                       -- Все школы (+ is_active)
 ```
 
 **Школьный админский путь стоит здесь, а не в `### Admin`.** Конвенции «все
@@ -497,9 +497,9 @@ GET    /api/v1/admin/curator-groups                                       -- В�
 
 `relation` (`curator` | `master` | `student`) — производная от
 `curator_user_id` и строк участия. Значение `curator` — литерал в `CASE`, его
-нет среди `curator_group_member.kind`, потому что у куратора нет строки участия.
+нет среди `school_member.kind`, потому что у куратора нет строки участия.
 
-`can_create_groups` — на **списке**, не на элементе: это свойство мастера, а не
+`can_create_schools` — на **списке**, не на элементе: это свойство мастера, а не
 школы, и экран берёт его из вызова, который уже делает.
 
 `transfer` в ответе видят **двое** — куратор, сделавший предложение, и адресат.
@@ -507,13 +507,13 @@ GET    /api/v1/admin/curator-groups                                       -- В�
 сделке, не узнаёт, что она идёт.
 
 **Аудитория практик — чужая таблица.** `practice_audience_curator_group` живёт
-в `practices/models.py`; школы её не владеют. `GET /curator-groups/{id}/practices`
+в `practices/models.py`; школы её не владеют. `GET /schools/{id}/practices`
 читает её, но пишет — `practices`.
 
 **Коды ошибок: 11, и все 11 уже во фронтовой таблице.** Пересчитать: греп
 `code="..."` по `schools/` даёт **9**, плюс **2** через константы
-(`_NAME_TAKEN_CODE` = `curator_group_name_taken`, `_NO_CREATE_RIGHT_CODE` =
-`group_creation_not_allowed`). **Греп только по литералам их не увидит** — ту же
+(`_NAME_TAKEN_CODE` = `school_name_taken`, `_NO_CREATE_RIGHT_CODE` =
+`school_creation_not_allowed`). **Греп только по литералам их не увидит** — ту же
 слепоту имеет команда сверки в шапке `frontend/src/api/errorMessages.ts`, и там
 про это написано.
 
@@ -989,7 +989,7 @@ Telegram-бот мастера с ответом юзеру). Строковое
 ### 3.14. Журнал школы — НЕ аудит, и объединять их нельзя (GT-16)
 
 В дереве две похожие таблицы: `audit_logs` (`core/audit.py`) и
-`curator_group_event` (`schools/models.py`). Увидев их рядом,
+`school_event` (`schools/models.py`). Увидев их рядом,
 естественно решить, что это одно и то же дважды. Это не так.
 
 | | `audit_logs` | журнал школы |
@@ -997,7 +997,7 @@ Telegram-бот мастера с ответом юзеру). Строковое
 | Кто читает | админ и юристы | куратор |
 | Зачем | доказательство для разбирательства | «что у меня происходит» |
 | Хранение | 5 лет по закону | живёт со школой, уходит с ней |
-| Удаление | запрещено кодом | каскад от `curator_group.id` |
+| Удаление | запрещено кодом | каскад от `school.id` |
 | Кто пишет | финансы и админские действия | действия участников |
 
 **Решающее — каскад.** Удалили школу — журнал уходит вместе с ней.
@@ -1022,7 +1022,7 @@ ForeignKey, JSONB `data` под контекст. Что не взято — в�
 
 ### 3.15. `seq` есть порядок и не есть счёт (GT-16)
 
-`curator_group_event` имеет UUID-первичный ключ **и** отдельную монотонную
+`school_event` имеет UUID-первичный ключ **и** отдельную монотонную
 колонку `seq` (`BigInteger, Identity(always=False), unique=True`). Сортировка и
 пагинация — `ORDER BY seq DESC` и ничего больше. Три «почему»:
 
@@ -1060,7 +1060,7 @@ ForeignKey, JSONB `data` под контекст. Что не взято — в�
 
 ### 3.16. Актор и объект заморожены в `data` — это денормализация, а не небрежность (GT-16)
 
-`curator_group_event.actor_id` — **без ForeignKey**, как `AuditLog.actor_id`
+`school_event.actor_id` — **без ForeignKey**, как `AuditLog.actor_id`
 (пересчитать: у обоих `len(column.foreign_keys) == 0`). Строка должна пережить
 человека, а FK с `ON DELETE SET NULL` пришёл бы к тому же ценой констрейнта,
 единственная работа которого — стирать историю.
@@ -1096,12 +1096,12 @@ ForeignKey, JSONB `data` под контекст. Что не взято — в�
 `grep -c "_record_group_event(" …` → **16**, то есть **одно определение и 15
 вызовов** при **14** видах событий. Оба расхождения ожидаемы, и вот почему:
 15 вызовов на 14 видов — потому что `member_promoted` пишется из двух мест
-(обычное повышение и ветка проигранной гонки в `join_curator_group_by_token`).
+(обычное повышение и ветка проигранной гонки в `join_school_by_token`).
 
 **Токен инвайта и URL аватара в `data` не попадают ни при каких условиях.**
 Токен — сырой секрет (`secrets.token_urlsafe(32)`), а журнал — читаемая лента с
 пагинацией; события инвайтов пишут ВИД ссылки, не значение. URL умрёт, а журнал
-живёт вечно, поэтому `group_avatar_changed` несёт `had_avatar_before: bool`, а не
+живёт вечно, поэтому `school_avatar_changed` несёт `had_avatar_before: bool`, а не
 ссылку. Контракт `data` по каждому виду — таблица в докстринге
 `SchoolEvent`, и она **сверяется машинно** (скрипт по AST против ключей,
 которые кладут писатели); копия здесь была бы вторым реестром.
@@ -1110,7 +1110,7 @@ ForeignKey, JSONB `data` под контекст. Что не взято — в�
 
 ### 3.17. Право заводить школы — флаг в JSONB, гейт в одной точке (GT-15)
 
-`MasterProfile.data.account.can_create_groups: bool` — право, выданное админом,
+`MasterProfile.data.account.can_create_schools: bool` — право, выданное админом,
 а не настройка мастера. Тот же класс schema-on-read, что **3.7** (onboarding в
 `credentials`) и **3.8** (taxonomy в `data`); лежит в `account`, потому что рядом
 уже `status`, `verification`, `rejections` — всё решения админа об аккаунте.
@@ -1122,7 +1122,7 @@ verify и тоггл, `scripts/seed.py`) и читателями. Причина
 падает, а тихо возвращает `None`, и мастеру сообщили бы о праве, которого у него
 нет.
 
-**Гейт — одна точка.** `create_curator_group`, и только она: пересчитать —
+**Гейт — одна точка.** `create_school`, и только она: пересчитать —
 `_can_create_groups_exists` используется в `service.py:530` и больше нигде.
 Остальные кураторские эндпоинты флаг **не проверяют**, они про уже
 существующую школу.
@@ -1138,7 +1138,7 @@ verify и тоггл, `scripts/seed.py`) и читателями. Причина
 собрал», — `revoke_master`, и он остаётся единственным. Второй способ сделать то
 же самое означал бы два механизма, обязанных согласовываться.
 
-Отказ — свой код `group_creation_not_allowed` (403), **не**
+Отказ — свой код `school_creation_not_allowed` (403), **не**
 `master_profile_not_verified`: мастер верифицирован, и «профиль не подтверждён»
 отправило бы его чинить то, что не сломано.
 
@@ -1147,7 +1147,7 @@ verify и тоггл, `scripts/seed.py`) и читателями. Причина
 ### 3.18. URL от пользователя: `max_length` меряет НЕ то, что ляжет в колонку
 
 Правило шире школ и адресовано тому, кто заведёт следующее URL-поле.
-`curator_group.avatar_url` — первый в этом бэкенде URL, приходящий **от
+`school.avatar_url` — первый в этом бэкенде URL, приходящий **от
 пользователя**: все остальные `avatar_url` копируются из Telegram, все
 zoom-ссылки строит Zoom API.
 
@@ -1169,7 +1169,7 @@ zoom-ссылки строит Zoom API.
 состоянием, которое сервис должен обрабатывать: его не существует.
 
 Побочно из этого следует форма колонки: `avatar_url` — `String(500)`, а не
-`Text` со схемной шапкой (как `curator_group.description`). Число должно быть в
+`Text` со схемной шапкой (как `school.description`). Число должно быть в
 колонке, потому что схеме нужно с чем сравнивать.
 
 **Схема URL — allow-list из одного `https`,** а не запрет трёх плохих:

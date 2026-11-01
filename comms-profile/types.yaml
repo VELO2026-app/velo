@@ -322,7 +322,7 @@ types:
 
   # ===========================================================================
   # CURATOR GROUPS -- school notifications (BE-25). Four of the five carry NO
-  # category, and the fifth is why the `curator_groups` category exists.
+  # category, and the fifth is why the `schools` category exists.
   #
   # The four without one -- transfer_offered / transfer_accepted /
   # transfer_declined / member_removed -- share a shape: each tells ONE person
@@ -347,20 +347,20 @@ types:
   # to move it out later costs more).
   # ===========================================================================
 
-  curator_group.transfer_offered:
+  school.transfer_offered:
     channels: [in_app, telegram]
 
-  curator_group.transfer_accepted:
+  school.transfer_accepted:
     channels: [in_app, telegram]
 
-  curator_group.transfer_declined:
+  school.transfer_declined:
     channels: [in_app, telegram]
 
-  curator_group.member_removed:
+  school.member_removed:
     channels: [in_app, telegram]
 
-  curator_group.member_joined:
-    category: curator_groups
+  school.member_joined:
+    category: schools
     channels: [in_app, telegram]
 
   # -- GT-27, appointing a school master. The split follows the ADDRESSEE, not
@@ -373,7 +373,7 @@ types:
   #    shape as the four BE-25 types above -- an event about your own standing,
   #    rare, irreversible by silence -- so no category.
   #
-  #    The two outcomes go to the CURATOR, and they belong in curator_groups
+  #    The two outcomes go to the CURATOR, and they belong in schools
   #    with member_joined for the same reason member_joined is there: a curator
   #    of a large school appoints repeatedly, so these are the ones that
   #    scale with the school. A curator who mutes them loses a convenience; a
@@ -384,9 +384,9 @@ types:
   #    waits for their verification, and missing the prompt means it waits
   #    forever -- so no category, like master_offered. master_offer_closed
   #    goes to the CURATOR when the admin rejected that verification: an
-  #    outcome, so curator_groups, like the other two. --
+  #    outcome, so schools, like the other two. --
 
-  curator_group.master_offered:
+  school.master_offered:
     channels: [in_app, telegram]
 
   # -- BE-59 B1: member_demoted goes to the FORMER MASTER, and it is about
@@ -395,7 +395,7 @@ types:
   #    and member_removed: silencing it would lose the only signal that the
   #    role is gone. --
 
-  curator_group.member_demoted:
+  school.member_demoted:
     channels: [in_app, telegram]
 
   # -- BE-79: member_blocked / member_unblocked go to the PERSON blocked, and
@@ -403,25 +403,25 @@ types:
   #    away by its curator, and given back -- so no category, like
   #    member_removed: silencing them would lose the only signal. --
 
-  curator_group.member_blocked:
+  school.member_blocked:
     channels: [in_app, telegram]
 
-  curator_group.member_unblocked:
+  school.member_unblocked:
     channels: [in_app, telegram]
 
-  curator_group.master_verification_required:
+  school.master_verification_required:
     channels: [in_app, telegram]
 
-  curator_group.master_offer_accepted:
-    category: curator_groups
+  school.master_offer_accepted:
+    category: schools
     channels: [in_app, telegram]
 
-  curator_group.master_offer_declined:
-    category: curator_groups
+  school.master_offer_declined:
+    category: schools
     channels: [in_app, telegram]
 
-  curator_group.master_offer_closed:
-    category: curator_groups
+  school.master_offer_closed:
+    category: schools
     channels: [in_app, telegram]
 
   # -- BE-102: practice_created_for_master goes to the MASTER a school's
@@ -431,7 +431,7 @@ types:
   #    (something now runs under their name), and silencing it would leave
   #    a published practice its own master does not know about. --
 
-  curator_group.practice_created_for_master:
+  school.practice_created_for_master:
     channels: [in_app, telegram]
 
   # -- BE-63/BE-64: the curator published, edited or deleted the MASTER's
@@ -439,17 +439,17 @@ types:
   #    practice_created_for_master: somebody else acted on what carries the
   #    master's name, and the master is the one party who must know. --
 
-  curator_group.master_practice_published:
+  school.master_practice_published:
     channels: [in_app, telegram]
 
-  curator_group.master_practice_edited:
+  school.master_practice_edited:
     channels: [in_app, telegram]
 
-  curator_group.master_practice_deleted:
+  school.master_practice_deleted:
     channels: [in_app, telegram]
 
   # -- BE-30, the school hears that its teacher opened something. The arrival
-  #    the comment above predicted, and it lands in curator_groups for the
+  #    the comment above predicted, and it lands in schools for the
   #    reason that made the category: it SCALES. member_joined scales with the
   #    school's intake; this one scales with its teaching -- every published
   #    practice, from every master of the school, to every member. A curator
@@ -461,8 +461,8 @@ types:
   #    one loses announcements a member can still find on the school's page,
   #    which is exactly the line between an event and a feed. --
 
-  curator_group.practice_published:
-    category: curator_groups
+  school.practice_published:
+    category: schools
     channels: [in_app, telegram]
 
   # -- Chat baseline (comms-native msg.* types; velo never emits these,

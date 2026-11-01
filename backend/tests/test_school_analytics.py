@@ -66,7 +66,7 @@ from app.modules.schools.models import (
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 
-ANALYTICS_URL = "/api/v1/masters/me/curator-groups/{group_id}/analytics"
+ANALYTICS_URL = "/api/v1/masters/me/schools/{school_id}/analytics"
 
 _TID_MIN = 89260
 _TID_MAX = 89399
@@ -96,7 +96,7 @@ async def _make_verified_master(
         MasterProfile(
             user_id=user_id,
             data={
-                "account": {"status": "verified", "can_create_groups": True},
+                "account": {"status": "verified", "can_create_schools": True},
                 "profile": {"bio": "m"},
             },
         )
@@ -128,7 +128,7 @@ async def _join_school(
 ) -> SchoolMember:
     """A membership row; joined_at defaults to the server's now()."""
     row = SchoolMember(
-        group_id=school.id,
+        school_id=school.id,
         user_id=UUID(auth["user"]["id"]),
         kind=kind.value,
     )
@@ -164,8 +164,8 @@ async def _practice(
         is_free=True,
         price_cents=0,
         currency="eur",
-        audience_kind=AudienceKind.CURATOR_GROUPS.value,
-        curator_group_id=school.id,
+        audience_kind=AudienceKind.SCHOOLS.value,
+        school_id=school.id,
         data={"taxonomy": {"direction": direction}} if direction else {},
     )
     db_session.add(practice)
@@ -334,7 +334,7 @@ async def test_all_time_groups_on_a_seeded_history(
     # test_aggregate_reconciles_with_the_real_feeds below.
     curator, _curator_b, school = await _seed_lively_school(client, db_session)
     resp = await client.get(
-        ANALYTICS_URL.format(group_id=school.id),
+        ANALYTICS_URL.format(school_id=school.id),
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 200, resp.text
@@ -390,7 +390,7 @@ async def test_empty_school_is_zeros_not_404(client: AsyncClient, db_session: As
     empty = await _school(db_session, curator, "Пустая")
 
     resp = await client.get(
-        ANALYTICS_URL.format(group_id=empty.id),
+        ANALYTICS_URL.format(school_id=empty.id),
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 200, resp.text
@@ -425,7 +425,7 @@ async def test_somebody_elses_school_is_the_masked_404(
     _curator, curator_b, school = await _seed_lively_school(client, db_session)
 
     resp = await client.get(
-        ANALYTICS_URL.format(group_id=school.id),
+        ANALYTICS_URL.format(school_id=school.id),
         headers=auth_headers(curator_b["session_token"]),
     )
     assert resp.status_code == 404, resp.text
@@ -436,7 +436,7 @@ async def test_a_plain_user_is_403(client: AsyncClient, db_session: AsyncSession
     outsider = await _make_student(client, _TID_OUTSIDER)
 
     resp = await client.get(
-        ANALYTICS_URL.format(group_id=school.id),
+        ANALYTICS_URL.format(school_id=school.id),
         headers=auth_headers(outsider["session_token"]),
     )
     assert resp.status_code == 403, resp.text
@@ -539,7 +539,7 @@ async def test_engagement_is_scoped_to_the_requested_period(
 ):
     curator, school = await _seed_engagement_school(client, db_session)
     resp = await client.get(
-        ANALYTICS_URL.format(group_id=school.id) + f"?period={period}",
+        ANALYTICS_URL.format(school_id=school.id) + f"?period={period}",
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 200, resp.text
@@ -594,7 +594,7 @@ async def test_engagement_is_scoped_to_the_requested_period(
 async def test_engagement_defaults_to_week(client: AsyncClient, db_session: AsyncSession):
     curator, school = await _seed_engagement_school(client, db_session)
     resp = await client.get(
-        ANALYTICS_URL.format(group_id=school.id),
+        ANALYTICS_URL.format(school_id=school.id),
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 200, resp.text
@@ -604,7 +604,7 @@ async def test_engagement_defaults_to_week(client: AsyncClient, db_session: Asyn
 async def test_unknown_period_is_a_422(client: AsyncClient, db_session: AsyncSession):
     curator, school = await _seed_engagement_school(client, db_session)
     resp = await client.get(
-        ANALYTICS_URL.format(group_id=school.id) + "?period=year",
+        ANALYTICS_URL.format(school_id=school.id) + "?period=year",
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 422, resp.text
@@ -618,8 +618,8 @@ async def test_unknown_period_is_a_422(client: AsyncClient, db_session: AsyncSes
 # and joined_at is set explicitly where the decision turns on it. Each test
 # owns its own telegram_ids inside the file band.
 
-FEED_CHECKINS_URL = "/api/v1/masters/me/curator-groups/{group_id}/checkins"
-FEED_REVIEWS_URL = "/api/v1/masters/me/curator-groups/{group_id}/reviews"
+FEED_CHECKINS_URL = "/api/v1/masters/me/schools/{school_id}/checkins"
+FEED_REVIEWS_URL = "/api/v1/masters/me/schools/{school_id}/reviews"
 
 
 def _hours_until(moment: datetime) -> float:
@@ -638,7 +638,7 @@ async def _analytics(
     client: AsyncClient, curator: dict, school: School, period: str = "week"
 ) -> dict:
     resp = await client.get(
-        ANALYTICS_URL.format(group_id=school.id) + f"?period={period}",
+        ANALYTICS_URL.format(school_id=school.id) + f"?period={period}",
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 200, resp.text
@@ -691,12 +691,12 @@ async def test_aggregate_reconciles_with_the_real_feeds(
     data = await _analytics(client, curator, school, "quarter")
 
     checkins = await client.get(
-        FEED_CHECKINS_URL.format(group_id=school.id),
+        FEED_CHECKINS_URL.format(school_id=school.id),
         params={"limit": 100},
         headers=headers,
     )
     reviews = await client.get(
-        FEED_REVIEWS_URL.format(group_id=school.id),
+        FEED_REVIEWS_URL.format(school_id=school.id),
         params={"limit": 100},
         headers=headers,
     )

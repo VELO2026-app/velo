@@ -457,10 +457,10 @@ BOOKING_STATE_TYPES = ["booking.confirmed", "practice.checkin_received"]
 # the practice's current state for the master. Carry the practice's
 # correlation.
 CURATOR_ACT_TYPES = [
-    "curator_group.practice_created_for_master",
-    "curator_group.master_practice_published",
-    "curator_group.master_practice_edited",
-    "curator_group.master_practice_deleted",
+    "school.practice_created_for_master",
+    "school.master_practice_published",
+    "school.master_practice_edited",
+    "school.master_practice_deleted",
 ]
 
 # A reschedule makes an earlier, undelivered reschedule stale.
@@ -472,7 +472,7 @@ RESCHEDULE_REVOKES = ["practice.rescheduled"]
 CANCELLATION_REVOKES = [
     "practice.rescheduled",
     "waitlist.spot_available",
-    "curator_group.practice_published",
+    "school.practice_published",
     *CURATOR_ACT_TYPES,
 ]
 
