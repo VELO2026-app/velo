@@ -98,12 +98,12 @@ from app.core.events import (  # noqa: E402
 )
 from app.modules.auth.service import upsert_user_on_login  # noqa: E402
 from app.modules.bookings.models import Booking  # noqa: E402
-from app.modules.curator_groups.models import (  # noqa: E402
-    CuratorGroup,
-    CuratorGroupMember,
-    CuratorMemberKind,
+from app.modules.schools.models import (  # noqa: E402
+    School,
+    SchoolMember,
+    SchoolMemberKind,
 )
-from app.modules.curator_groups.service import (  # noqa: E402
+from app.modules.schools.service import (  # noqa: E402
     CAN_CREATE_GROUPS_KEY,
 )
 
@@ -416,7 +416,7 @@ async def ensure_practice(
     session: AsyncSession,
     master: User,
     spec: dict,
-    schools: dict[str, CuratorGroup] | None = None,
+    schools: dict[str, School] | None = None,
 ) -> Practice | None:
     """Create one practice in the state the profile asks for.
 
@@ -478,17 +478,17 @@ async def ensure_practice(
         else scheduled_at
     )
 
-    # P5/GT-12: a practice may be aimed at a curator group. The profile
+    # P5/GT-12: a practice may be aimed at a school. The profile
     # names the SCHOOL, not a UUID -- nothing in a profile is a UUID, people
     # and groups are all referred to by their own keys and names, and a seed
     # that demanded ids could not be written by hand.
     audience_spec = spec.get("audience") or {}
-    school_name = audience_spec.get("curator_group")
+    school_name = audience_spec.get("school")
     audience_kwargs: dict = {}
     if school_name:
         # KeyError on an unknown name, exactly as a bad "master" key raises
         # today -- a profile typo should fail loudly, not seed a practice
-        # nobody can see. Same posture the curator_groups section already
+        # nobody can see. Same posture the schools section already
         # takes with its people keys.
         school = (schools or {})[school_name]
         audience_kwargs = {
@@ -663,7 +663,7 @@ async def reset_seed_data(session: AsyncSession, profile: dict) -> dict:
     profile owns the prefix, so a demo can be wiped without touching a
     practice somebody created by hand on the same stand.
 
-    Curator groups follow the same principle for the same reason, and they
+    Schools follow the same principle for the same reason, and they
     NEED it: a school whose curator is a live master matches neither rule
     above -- not the prefix (a group has no title) and not the synthetic id
     range (its owner is a real person) -- so without this step it would
@@ -677,7 +677,7 @@ async def reset_seed_data(session: AsyncSession, profile: dict) -> dict:
     by hand, which is the same mistake as deleting a live account.
     """
     prefix = profile.get("title_prefix", "[seed]")
-    counts = {"practices": 0, "students": 0, "curator_groups": 0}
+    counts = {"practices": 0, "students": 0, "schools": 0}
 
     practice_ids = list(
         (
@@ -699,7 +699,7 @@ async def reset_seed_data(session: AsyncSession, profile: dict) -> dict:
         )
         counts["practices"] = len(practice_ids)
 
-    for spec in profile.get("curator_groups", []):
+    for spec in profile.get("schools", []):
         curator_spec = next(
             (
                 m
@@ -713,11 +713,11 @@ async def reset_seed_data(session: AsyncSession, profile: dict) -> dict:
         group_ids = list(
             (
                 await session.execute(
-                    select(CuratorGroup.id)
-                    .join(User, User.id == CuratorGroup.curator_user_id)
+                    select(School.id)
+                    .join(User, User.id == School.curator_user_id)
                     .where(
                         User.telegram_id == curator_spec["telegram_id"],
-                        CuratorGroup.name == spec["name"],
+                        School.name == spec["name"],
                     )
                 )
             ).scalars()
@@ -729,9 +729,9 @@ async def reset_seed_data(session: AsyncSession, profile: dict) -> dict:
             # the point: a live master loses their school, not their
             # account.
             await session.execute(
-                delete(CuratorGroup).where(CuratorGroup.id.in_(group_ids))
+                delete(School).where(School.id.in_(group_ids))
             )
-            counts["curator_groups"] += len(group_ids)
+            counts["schools"] += len(group_ids)
 
     synth_ids = list(
         (
@@ -751,12 +751,12 @@ async def reset_seed_data(session: AsyncSession, profile: dict) -> dict:
     return counts
 
 
-async def ensure_curator_group(
+async def ensure_school(
     session: AsyncSession,
     curator: User,
     spec: dict,
     people: dict[str, User],
-) -> CuratorGroup:
+) -> School:
     """A school with its roster, idempotent across runs.
 
     Matched by (curator_user_id, name) -- the same pair the table's UNIQUE
@@ -775,15 +775,15 @@ async def ensure_curator_group(
     """
     group = (
         await session.execute(
-            select(CuratorGroup).where(
-                CuratorGroup.curator_user_id == curator.id,
-                CuratorGroup.name == spec["name"],
+            select(School).where(
+                School.curator_user_id == curator.id,
+                School.name == spec["name"],
             )
         )
     ).scalar_one_or_none()
 
     if group is None:
-        group = CuratorGroup(
+        group = School(
             curator_user_id=curator.id,
             name=spec["name"],
             description=spec.get("description"),
@@ -794,8 +794,8 @@ async def ensure_curator_group(
     existing = set(
         (
             await session.execute(
-                select(CuratorGroupMember.user_id).where(
-                    CuratorGroupMember.group_id == group.id
+                select(SchoolMember.user_id).where(
+                    SchoolMember.group_id == group.id
                 )
             )
         )
@@ -808,10 +808,10 @@ async def ensure_curator_group(
         if member.id == curator.id or member.id in existing:
             continue
         session.add(
-            CuratorGroupMember(
+            SchoolMember(
                 group_id=group.id,
                 user_id=member.id,
-                kind=CuratorMemberKind.MASTER.value,
+                kind=SchoolMemberKind.MASTER.value,
             )
         )
         existing.add(member.id)
@@ -821,10 +821,10 @@ async def ensure_curator_group(
         if member.id == curator.id or member.id in existing:
             continue
         session.add(
-            CuratorGroupMember(
+            SchoolMember(
                 group_id=group.id,
                 user_id=member.id,
-                kind=CuratorMemberKind.STUDENT.value,
+                kind=SchoolMemberKind.STUDENT.value,
             )
         )
         existing.add(member.id)
@@ -849,7 +849,7 @@ async def seed_profile(
         "bookings": 0,
         "checkins": 0,
         "feedbacks": 0,
-        "curator_groups": 0,
+        "schools": 0,
     }
     prefix = profile.get("title_prefix", "[seed]")
 
@@ -866,15 +866,15 @@ async def seed_profile(
                 f"{when:%Y-%m-%d %H:%M}  {p['duration_minutes']:>3} min  "
                 f"{prefix} {p['title']}"
                 + (
-                    f"  -> школа «{p['audience']['curator_group']}»"
-                    if (p.get("audience") or {}).get("curator_group")
+                    f"  -> школа «{p['audience']['school']}»"
+                    if (p.get("audience") or {}).get("school")
                     else ""
                 )
             )
         # A dry run that stays silent about a section it would write is a
         # dry run that lies, and the person reading it has no other way to
         # find out.
-        for g in profile.get("curator_groups", []):
+        for g in profile.get("schools", []):
             print(
                 f"  school  {g['name']}  "
                 f"curator={g['curator']}  "
@@ -902,9 +902,9 @@ async def seed_profile(
     await session.flush()
     ok(f"students {stats['students']}")
 
-    # -- curator groups, built from the people above --
+    # -- schools, built from the people above --
     # BEFORE practices, not after: a practice may target a school
-    # ("audience": {"curator_group": ...}), and create_practice validates
+    # ("audience": {"school": ...}), and create_practice validates
     # that the school exists and that this master belongs to it. Schools
     # need only the masters and students created above, so moving the
     # section up costs nothing and removes an ordering trap.
@@ -914,12 +914,12 @@ async def seed_profile(
     # invented here and a typo in a key fails loudly (KeyError), exactly as
     # it does for a practice's "master".
     people: dict[str, User] = {**masters, **students}
-    schools: dict[str, CuratorGroup] = {}
-    for spec in profile.get("curator_groups", []):
+    schools: dict[str, School] = {}
+    for spec in profile.get("schools", []):
         curator = masters[spec["curator"]]
-        school = await ensure_curator_group(session, curator, spec, people)
+        school = await ensure_school(session, curator, spec, people)
         schools[spec["name"]] = school
-        stats["curator_groups"] += 1
+        stats["schools"] += 1
         ok(f"school   {spec['name']}")
 
     # -- practices, and everything hanging off them --
@@ -1028,18 +1028,18 @@ async def main_async(args: argparse.Namespace) -> int:
                 await session.commit()
         finally:
             await dispose_engine()
-        totals = {"practices": 0, "curator_groups": 0, "students": 0}
+        totals = {"practices": 0, "schools": 0, "students": 0}
         for name, counts in per_profile.items():
             info(
                 f"  {name}: {counts['practices']} practices, "
-                f"{counts['curator_groups']} schools, "
+                f"{counts['schools']} schools, "
                 f"{counts['students']} synthetic students"
             )
             for key in totals:
                 totals[key] += counts[key]
         warn(
             f"reset-all ({len(per_profile)} profiles): removed "
-            f"{totals['practices']} practices, {totals['curator_groups']} "
+            f"{totals['practices']} practices, {totals['schools']} "
             f"schools, {totals['students']} synthetic students "
             f"(live accounts untouched)"
         )
@@ -1058,7 +1058,7 @@ async def main_async(args: argparse.Namespace) -> int:
                 removed_users = counts["students"]
                 warn(
                     f"reset: removed {counts['practices']} practices, "
-                    f"{counts['curator_groups']} schools, "
+                    f"{counts['schools']} schools, "
                     f"{counts['students']} synthetic students "
                     f"(live accounts untouched)"
                 )

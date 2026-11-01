@@ -33,11 +33,6 @@ from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.bookings.models import Booking, BookingStatus
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.diary.insights_service import score_zone
 from app.modules.diary.models import Checkin, CheckType, Feedback
 from app.modules.masters.models import MasterProfile
@@ -46,6 +41,11 @@ from app.modules.practices.models import (
     Practice,
     PracticeStatus,
     PracticeType,
+)
+from app.modules.schools.models import (
+    School,
+    SchoolMember,
+    SchoolMemberKind,
 )
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
@@ -109,8 +109,8 @@ async def _verified_master(
     return auth
 
 
-async def _school(db_session: AsyncSession, curator: dict) -> CuratorGroup:
-    group = CuratorGroup(curator_user_id=UUID(curator["user"]["id"]), name="Школа")
+async def _school(db_session: AsyncSession, curator: dict) -> School:
+    group = School(curator_user_id=UUID(curator["user"]["id"]), name="Школа")
     db_session.add(group)
     await db_session.commit()
     return group
@@ -118,12 +118,12 @@ async def _school(db_session: AsyncSession, curator: dict) -> CuratorGroup:
 
 async def _member(
     db_session: AsyncSession,
-    school: CuratorGroup,
+    school: School,
     auth: dict,
-    kind: CuratorMemberKind,
+    kind: SchoolMemberKind,
 ) -> None:
     db_session.add(
-        CuratorGroupMember(
+        SchoolMember(
             group_id=school.id,
             user_id=UUID(auth["user"]["id"]),
             kind=kind.value,
@@ -135,7 +135,7 @@ async def _member(
 async def _practice(
     db_session: AsyncSession,
     master: dict,
-    school: CuratorGroup | None,
+    school: School | None,
     *,
     status: str = PracticeStatus.COMPLETED.value,
 ) -> Practice:
@@ -233,9 +233,9 @@ async def _school_world(client: AsyncClient, db_session: AsyncSession) -> dict:
     curator = await _user(client, _TID_CURATOR, "Curator")
     school = await _school(db_session, curator)
     leader = await _verified_master(client, db_session, _TID_LEADER, "Leader")
-    await _member(db_session, school, leader, CuratorMemberKind.MASTER)
+    await _member(db_session, school, leader, SchoolMemberKind.MASTER)
     peer = await _verified_master(client, db_session, _TID_SCHOOL_MASTER, "Peer")
-    await _member(db_session, school, peer, CuratorMemberKind.MASTER)
+    await _member(db_session, school, peer, SchoolMemberKind.MASTER)
     practice = await _practice(db_session, leader, school)
     student = await _user(client, _TID_STUDENTS[0], "Анна")
     b = await _booking(db_session, practice, student, BookingStatus.ATTENDED.value)
@@ -572,7 +572,7 @@ async def test_is_school_student_marks_members_only(
     """
     w = await _school_world(client, db_session)  # Анна: attended, not a member yet
     practice, school = w["practice"], w["school"]
-    await _member(db_session, school, w["student"], CuratorMemberKind.STUDENT)
+    await _member(db_session, school, w["student"], SchoolMemberKind.STUDENT)
     guest = await _user(client, _TID_STUDENTS[1], "Гость")
     bk = await _booking(db_session, practice, guest, BookingStatus.ATTENDED.value)
     await _pre(db_session, practice, guest, bk, 5)
@@ -594,7 +594,7 @@ async def test_outside_any_school_nobody_is_a_school_student(
     db_session: AsyncSession,
 ) -> None:
     w = await _school_world(client, db_session)
-    await _member(db_session, w["school"], w["student"], CuratorMemberKind.STUDENT)
+    await _member(db_session, w["school"], w["student"], SchoolMemberKind.STUDENT)
     own = await _practice(db_session, w["leader"], None)
     bk = await _booking(db_session, own, w["student"], BookingStatus.ATTENDED.value)
     await _pre(db_session, own, w["student"], bk, 5)

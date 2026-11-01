@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_vali
 
 from app.modules.mcp.models import McpScope, McpTokenKind
 
-# Stripped BEFORE min_length (the CuratorGroupNameStr reasoning): a name of
+# Stripped BEFORE min_length (the SchoolNameStr reasoning): a name of
 # spaces is a 422, not a token labelled " ".
 McpTokenNameStr = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)

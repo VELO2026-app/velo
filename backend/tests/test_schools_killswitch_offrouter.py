@@ -9,7 +9,7 @@
 # test_blind_zone_has_not_grown. Checked free before it was claimed:
 # free_windows(space=(69000, 69999)) returned [(69400, 69999)].
 #
-# WHY test_curator_groups_killswitch.py DOES NOT COVER THIS, and why that
+# WHY test_schools_killswitch.py DOES NOT COVER THIS, and why that
 # is not a gap in it. BE-35 replaced its hand-written list of five calls
 # with one derived from the two school routers, and it honestly walks all
 # twenty-eight operations. The paths below are OUTSIDE those routers: a
@@ -43,15 +43,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.events.models import OutboxEvent
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupEvent,
-    CuratorGroupEventKind,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import Practice, PracticeStatus
+from app.modules.schools.models import (
+    School,
+    SchoolEvent,
+    SchoolEventKind,
+    SchoolMember,
+    SchoolMemberKind,
+)
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 
@@ -65,7 +65,7 @@ _TID_CURATOR = 69401
 _TID_MASTER = 69402
 _TID_STUDENT = 69410
 
-_FLAG = "curator_groups_enabled"
+_FLAG = "schools_enabled"
 _ANNOUNCE_TYPE = "curator_group.practice_published"
 
 
@@ -80,7 +80,7 @@ def _on():
     Written as a patch rather than relying on the ambient default, so the
     two halves of each test read symmetrically and neither depends on what
     another test left behind. Same helper pair, same reason, as
-    test_curator_groups_killswitch.py.
+    test_schools_killswitch.py.
     """
     return patch.object(settings, _FLAG, True)
 
@@ -121,7 +121,7 @@ async def _verified_master(
 
 async def _school_with_practice(
     client: AsyncClient, db_session: AsyncSession,
-) -> tuple[dict, dict, CuratorGroup, str]:
+) -> tuple[dict, dict, School, str]:
     """A school, a member master, and that master's published practice.
 
     Built with the flag in its default position: the fixture has to be
@@ -134,17 +134,17 @@ async def _school_with_practice(
         client, telegram_id=_TID_STUDENT, first_name="Ученик",
     )
 
-    school = CuratorGroup(
+    school = School(
         curator_user_id=UUID(curator["user"]["id"]), name="Школа BE-43",
     )
     db_session.add(school)
     await db_session.flush()
     for auth, kind in (
-        (master, CuratorMemberKind.MASTER),
-        (student, CuratorMemberKind.STUDENT),
+        (master, SchoolMemberKind.MASTER),
+        (student, SchoolMemberKind.STUDENT),
     ):
         db_session.add(
-            CuratorGroupMember(
+            SchoolMember(
                 group_id=school.id,
                 user_id=UUID(auth["user"]["id"]),
                 kind=kind.value,
@@ -190,15 +190,15 @@ async def _publish(
 
 
 async def _announcements(
-    db_session: AsyncSession, school: CuratorGroup,
+    db_session: AsyncSession, school: School,
 ) -> tuple[int, int]:
     """(journal lines, notifications) produced for one school."""
     lines = (
         await db_session.execute(
-            select(CuratorGroupEvent.id).where(
-                CuratorGroupEvent.group_id == school.id,
-                CuratorGroupEvent.event
-                == CuratorGroupEventKind.PRACTICE_PUBLISHED.value,
+            select(SchoolEvent.id).where(
+                SchoolEvent.group_id == school.id,
+                SchoolEvent.event
+                == SchoolEventKind.PRACTICE_PUBLISHED.value,
             )
         )
     ).scalars().all()
@@ -336,7 +336,7 @@ async def test_publishing_announces_nothing_with_the_flag_off(
 
 async def _school_with_practice_for_on(
     client: AsyncClient, db_session: AsyncSession,
-) -> tuple[dict, dict, CuratorGroup, str]:
+) -> tuple[dict, dict, School, str]:
     """A SECOND school and practice, for the "on" half of the pair above.
 
     A fresh fixture rather than the same one: publication is a one-way
@@ -352,18 +352,18 @@ async def _school_with_practice_for_on(
     student = await login_user(
         client, telegram_id=_TID_STUDENT, first_name="Ученик",
     )
-    school = CuratorGroup(
+    school = School(
         curator_user_id=UUID(curator["user"]["id"]),
         name="Школа BE-43 вторая",
     )
     db_session.add(school)
     await db_session.flush()
     for auth, kind in (
-        (master, CuratorMemberKind.MASTER),
-        (student, CuratorMemberKind.STUDENT),
+        (master, SchoolMemberKind.MASTER),
+        (student, SchoolMemberKind.STUDENT),
     ):
         db_session.add(
-            CuratorGroupMember(
+            SchoolMember(
                 group_id=school.id,
                 user_id=UUID(auth["user"]["id"]),
                 kind=kind.value,
@@ -478,7 +478,7 @@ async def test_a_practice_without_schools_is_unaffected_by_the_flag(
     assert messages == []
 
 
-def _school_body(school: CuratorGroup, title: str) -> dict:
+def _school_body(school: School, title: str) -> dict:
     return {
         "practice_type": "live",
         "direction": "meditation",
@@ -502,7 +502,7 @@ async def test_creating_a_practice_in_a_school_stops_with_the_flag(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     """BE-74: setting the owning school is a write path outside the school
-    routers, and it listens to the switch (_usable_curator_group_or_400).
+    routers, and it listens to the switch (_usable_school_or_400).
 
     Schools off: the same master, the same school, the same body -- 400,
     and no practice of that title exists. Schools on: 201. The pair is the

@@ -28,7 +28,7 @@
 # roster rows with no offer, a withdrawal of nothing. Shortage -- the
 # candidate left before verification, the school changed hands before
 # rejection. The races (the profile's FOR SHARE) are at the bottom, through
-# tests/curator_race_harness.py, in both start orders.
+# tests/school_race_harness.py, in both start orders.
 # =============================================================================
 
 from collections.abc import AsyncGenerator
@@ -42,18 +42,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events.models import OutboxEvent
 from app.modules.admin.masters import service as admin_masters_service
-from app.modules.curator_groups import service as curator_service
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupEvent,
-    CuratorGroupEventKind,
-    CuratorGroupMasterOffer,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.masters.models import MasterProfile
+from app.modules.schools import service as curator_service
+from app.modules.schools.models import (
+    School,
+    SchoolEvent,
+    SchoolEventKind,
+    SchoolMasterOffer,
+    SchoolMember,
+    SchoolMemberKind,
+)
 from app.modules.users.models import User, UserRole
-from tests.curator_race_harness import assert_no_deadlock, race
 from tests.helpers import (
     auth_headers,
     fresh_execute,
@@ -61,6 +60,7 @@ from tests.helpers import (
     full_cleanup_range,
     login_user,
 )
+from tests.school_race_harness import assert_no_deadlock, race
 
 GROUPS_URL = "/api/v1/masters/me/curator-groups"
 OFFER_URL = GROUPS_URL + "/{group_id}/master-offers"
@@ -173,10 +173,10 @@ async def _school(client: AsyncClient, curator: dict, name: str) -> str:
 
 async def _seed_member(
     db_session: AsyncSession, group_id: str, auth: dict,
-    kind: CuratorMemberKind = CuratorMemberKind.STUDENT,
+    kind: SchoolMemberKind = SchoolMemberKind.STUDENT,
 ) -> None:
     db_session.add(
-        CuratorGroupMember(
+        SchoolMember(
             group_id=UUID(group_id), user_id=UUID(auth["user"]["id"]),
             kind=kind.value,
         )
@@ -237,8 +237,8 @@ async def _offers(group_id: str) -> list[UUID]:
     return list(
         (
             await fresh_execute(
-                select(CuratorGroupMasterOffer.to_user_id).where(
-                    CuratorGroupMasterOffer.group_id == UUID(group_id)
+                select(SchoolMasterOffer.to_user_id).where(
+                    SchoolMasterOffer.group_id == UUID(group_id)
                 )
             )
         ).scalars().all()
@@ -248,9 +248,9 @@ async def _offers(group_id: str) -> list[UUID]:
 async def _offer_id(group_id: str, auth: dict) -> UUID:
     return (
         await fresh_execute(
-            select(CuratorGroupMasterOffer.id).where(
-                CuratorGroupMasterOffer.group_id == UUID(group_id),
-                CuratorGroupMasterOffer.to_user_id == UUID(auth["user"]["id"]),
+            select(SchoolMasterOffer.id).where(
+                SchoolMasterOffer.group_id == UUID(group_id),
+                SchoolMasterOffer.to_user_id == UUID(auth["user"]["id"]),
             )
         )
     ).scalar_one()
@@ -286,9 +286,9 @@ async def _school_types_for(auth: dict) -> list[str]:
 async def _journal(group_id: str) -> list[tuple[str, dict]]:
     rows = (
         await fresh_execute(
-            select(CuratorGroupEvent.event, CuratorGroupEvent.data)
-            .where(CuratorGroupEvent.group_id == UUID(group_id))
-            .order_by(CuratorGroupEvent.seq)
+            select(SchoolEvent.event, SchoolEvent.data)
+            .where(SchoolEvent.group_id == UUID(group_id))
+            .order_by(SchoolEvent.seq)
         )
     ).all()
     return [(e, d) for e, d in rows]
@@ -332,7 +332,7 @@ async def test_an_unverified_member_is_offered_and_asked_to_get_verified(
     assert prompt["action_data"]["group_name"] == "Школа верификации"
     # The journal records the curator's act exactly as for a verified one.
     assert [e for e, _ in await _journal(group)][-1] == (
-        CuratorGroupEventKind.MASTER_OFFERED.value
+        SchoolEventKind.MASTER_OFFERED.value
     )
     roster = await _roster_state(client, curator, group)
     assert roster[cand["user"]["id"]] == "awaiting_verification"
@@ -402,7 +402,7 @@ async def test_verification_turns_the_offer_into_a_question(
     assert len(keys) == 2
     # No journal line for the admin's decision -- the curator acted once.
     assert [e for e, _ in await _journal(g1)].count(
-        CuratorGroupEventKind.MASTER_OFFERED.value
+        SchoolEventKind.MASTER_OFFERED.value
     ) == 1
 
     assert (await _roster_state(client, curator, g1))[
@@ -650,8 +650,8 @@ async def test_a_rejection_closes_the_offer_and_tells_the_curator(
     # the school; the school's journal does not carry an admin's name.
     assert CLOSED not in await _types_for(cand)
     assert [e for e, _ in await _journal(group)] == [
-        CuratorGroupEventKind.GROUP_CREATED.value,
-        CuratorGroupEventKind.MASTER_OFFERED.value,
+        SchoolEventKind.GROUP_CREATED.value,
+        SchoolEventKind.MASTER_OFFERED.value,
     ]
     # Membership is untouched -- the person is still a student here.
     roster = await _roster_state(client, curator, group)
@@ -686,7 +686,7 @@ async def test_a_rejection_after_a_handover_tells_the_new_curator(
     admin = await _admin(client, db_session)
     cand = await _plain(client, _TID_CANDIDATE)
     group = await _school(client, curator, "Школа передачи")
-    await _seed_member(db_session, group, heir, CuratorMemberKind.MASTER)
+    await _seed_member(db_session, group, heir, SchoolMemberKind.MASTER)
     await _seed_member(db_session, group, cand)
     await _offer(client, curator, group, cand)
     resp = await client.post(
@@ -795,7 +795,7 @@ async def test_the_curator_withdraws_an_offer(
     assert await _offers(group) == []
     cancels = [
         d for e, d in await _journal(group)
-        if e == CuratorGroupEventKind.MASTER_OFFER_CANCELLED.value
+        if e == SchoolEventKind.MASTER_OFFER_CANCELLED.value
     ]
     assert len(cancels) == 1
     assert cancels[0]["target_user_id"] == cand["user"]["id"]
@@ -825,7 +825,7 @@ async def test_withdrawing_nothing_writes_nothing(
     )
     assert resp.status_code == 204, resp.text
     events = [e for e, _ in await _journal(group)]
-    assert events == [CuratorGroupEventKind.GROUP_CREATED.value]
+    assert events == [SchoolEventKind.GROUP_CREATED.value]
 
 
 @pytest.mark.asyncio
@@ -882,7 +882,7 @@ async def test_the_student_profile_shows_the_offer_to_the_curator_only(
     fellow = await _master(client, db_session, _TID_FELLOW)
     cand = await _plain(client, _TID_CANDIDATE)
     group = await _school(client, curator, "Школа профиля")
-    await _seed_member(db_session, group, fellow, CuratorMemberKind.MASTER)
+    await _seed_member(db_session, group, fellow, SchoolMemberKind.MASTER)
     await _seed_member(db_session, group, cand)
     await _offer(client, curator, group, cand)
     url = STUDENT_URL.format(group_id=group, user_id=cand["user"]["id"])
@@ -900,7 +900,7 @@ async def test_the_student_profile_shows_the_offer_to_the_curator_only(
 
 
 # ===========================================================================
-# Races -- the profile's FOR SHARE (tests/curator_race_harness.py)
+# Races -- the profile's FOR SHARE (tests/school_race_harness.py)
 # ===========================================================================
 
 
@@ -936,18 +936,18 @@ async def _race_setup(
             },
         )
     )
-    group = CuratorGroup(curator_user_id=r.curator, name="Школа гонки")
+    group = School(curator_user_id=r.curator, name="Школа гонки")
     db_session.add(group)
     await db_session.flush()
     r.group = group.id
     db_session.add(
-        CuratorGroupMember(
+        SchoolMember(
             group_id=r.group, user_id=r.cand,
-            kind=CuratorMemberKind.STUDENT.value,
+            kind=SchoolMemberKind.STUDENT.value,
         )
     )
     if offered:
-        db_session.add(CuratorGroupMasterOffer(group_id=r.group, to_user_id=r.cand))
+        db_session.add(SchoolMasterOffer(group_id=r.group, to_user_id=r.cand))
     await db_session.flush()
     await db_session.commit()
     return r
@@ -955,7 +955,7 @@ async def _race_setup(
 
 def _offer_call(r: _Race):
     async def call(session):
-        await curator_service.offer_curator_group_master(
+        await curator_service.offer_school_master(
             r.curator, r.group, r.cand, session,
             actor=await session.get(User, r.curator),
         )
@@ -980,7 +980,7 @@ def _reject_call(r: _Race):
 
 def _accept_call(r: _Race):
     async def call(session):
-        await curator_service.accept_curator_group_master_offer(
+        await curator_service.accept_school_master_offer(
             r.group, r.cand, session, actor=await session.get(User, r.cand),
         )
     return call
@@ -988,7 +988,7 @@ def _accept_call(r: _Race):
 
 def _cancel_call(r: _Race):
     async def call(session):
-        await curator_service.cancel_curator_group_master_offer(
+        await curator_service.cancel_school_master_offer(
             r.curator, r.group, r.cand, session,
             actor=await session.get(User, r.curator),
         )
@@ -1065,8 +1065,8 @@ async def test_a_rejection_landing_mid_offer_closes_the_new_offer(
     assert result.rival.committed, result.rival.error
     offers = (
         await fresh_execute(
-            select(CuratorGroupMasterOffer.id).where(
-                CuratorGroupMasterOffer.group_id == r.group
+            select(SchoolMasterOffer.id).where(
+                SchoolMasterOffer.group_id == r.group
             )
         )
     ).all()
@@ -1094,13 +1094,13 @@ async def test_a_withdrawal_mid_accept_neither_deadlocks_nor_double_counts(
     assert result.rival.committed, result.rival.error
     kind = (
         await fresh_execute(
-            select(CuratorGroupMember.kind).where(
-                CuratorGroupMember.group_id == r.group,
-                CuratorGroupMember.user_id == r.cand,
+            select(SchoolMember.kind).where(
+                SchoolMember.group_id == r.group,
+                SchoolMember.user_id == r.cand,
             )
         )
     ).scalar_one()
-    assert kind == CuratorMemberKind.MASTER.value
+    assert kind == SchoolMemberKind.MASTER.value
     events = [e for e, _ in await _journal(str(r.group))]
-    assert CuratorGroupEventKind.MASTER_OFFER_CANCELLED.value not in events
-    assert events.count(CuratorGroupEventKind.MEMBER_PROMOTED.value) == 1
+    assert SchoolEventKind.MASTER_OFFER_CANCELLED.value not in events
+    assert events.count(SchoolEventKind.MEMBER_PROMOTED.value) == 1

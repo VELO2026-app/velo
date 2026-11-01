@@ -10,7 +10,7 @@
 #   G4   W4 (curator) x the curator's series cascade -- the path through the
 #        practices; see its docstring for why not through the school
 #   G5   W4           x block_student
-#   G6   W4           x delete_curator_group
+#   G6   W4           x delete_school
 #   G9   a child cancelled while W4 waits for it -- not rewritten (item 2)
 #   G11  a child born while W4's lock waits on the root -- 409 (W-b)
 #   G12  the unlocked read says "no change", the locked root says "change"
@@ -39,12 +39,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError
 from app.modules.bookings.models import Booking, BookingStatus
-from app.modules.curator_groups import service as curator_service
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.masters import groups_service
 from app.modules.masters.groups_models import MasterGroup
 from app.modules.masters.models import MasterProfile
@@ -61,14 +55,20 @@ from app.modules.practices.schemas import (
     CreatePracticeRequest,
     UpdatePracticeRequest,
 )
+from app.modules.schools import service as curator_service
+from app.modules.schools.models import (
+    School,
+    SchoolMember,
+    SchoolMemberKind,
+)
 from app.modules.users.models import User, UserRole
-from tests.curator_race_harness import assert_no_deadlock, race
 from tests.helpers import (
     auth_headers,
     fresh_execute,
     full_cleanup_range,
     login_user,
 )
+from tests.school_race_harness import assert_no_deadlock, race
 
 BOOKINGS_URL = "/api/v1/bookings"
 
@@ -116,15 +116,15 @@ async def w(client: AsyncClient, db_session: AsyncSession) -> dict:
     master = await _master(client, db_session, _TID_MASTER)
     curator = await _master(client, db_session, _TID_CURATOR)
     student = await login_user(client, telegram_id=_TID_STUDENT, first_name="S")
-    school = CuratorGroup(
+    school = School(
         curator_user_id=UUID(curator["user"]["id"]), name="Аудитория",
     )
     db_session.add(school)
     await db_session.flush()
     db_session.add(
-        CuratorGroupMember(
+        SchoolMember(
             group_id=school.id, user_id=UUID(master["user"]["id"]),
-            kind=CuratorMemberKind.MASTER.value,
+            kind=SchoolMemberKind.MASTER.value,
         )
     )
     await db_session.commit()
@@ -363,7 +363,7 @@ async def test_g4_curators_root_audience_edit_against_the_curators_cascade(
 
 
 # ===========================================================================
-# G5 / G6 -- block_student, delete_curator_group
+# G5 / G6 -- block_student, delete_school
 # ===========================================================================
 
 
@@ -415,7 +415,7 @@ async def test_g6_root_audience_edit_against_deleting_the_school(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The master moves a school series root to the school's audience while
-    the curator deletes the school. delete_curator_group takes the school's
+    the curator deletes the school. delete_school takes the school's
     practices by id before its UPDATE of them.
 
     The invariant: both committed; the edit landed first, and the deletion
@@ -425,7 +425,7 @@ async def test_g6_root_audience_edit_against_deleting_the_school(
     root, early, late = await _series(db_session, w, school=True)
 
     async def delete_school(session: AsyncSession):
-        await curator_service.delete_curator_group(
+        await curator_service.delete_school(
             w["cid"], w["school"], session,
         )
 

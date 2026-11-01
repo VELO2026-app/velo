@@ -1,5 +1,5 @@
 # =============================================================================
-# VELO Backend -- Tests: Curator Groups (P1, tz-curator-groups.md 8.1 #1-3)
+# VELO Backend -- Tests: Schools (P1, tz-curator-groups.md 8.1 #1-3)
 # =============================================================================
 #
 # telegram_id band: 66000-66199 (curator 66001, second master 66002,
@@ -14,7 +14,7 @@
 #
 # CLEANUP is full_cleanup_range(..., delete_users=True) and NOTHING ELSE.
 # All four new tables FK into users / curator_group with ON DELETE CASCADE,
-# so deleting the band's users takes their curator groups, memberships,
+# so deleting the band's users takes their schools, memberships,
 # invites and transfers with them -- exactly the arrangement chat_threads
 # already relies on (test_master_groups.py's own cleanup comment). Plain
 # cleanup_range would NOT do: it keeps the users, curator_group rows would
@@ -42,13 +42,13 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupMember,
-    CuratorGroupTransfer,
-    CuratorMemberKind,
-)
 from app.modules.masters.models import MasterProfile
+from app.modules.schools.models import (
+    School,
+    SchoolMember,
+    SchoolMemberKind,
+    SchoolTransfer,
+)
 from app.modules.users.models import User, UserRole
 from tests.helpers import (
     auth_headers,
@@ -105,7 +105,7 @@ async def _make_verified_master(
     # build a master who is verified and still cannot create the group
     # every test below starts by creating. Set here rather than asserted
     # on: this file is about what a curator does WITH a school, and the
-    # right itself is covered in test_curator_group_permission.py.
+    # right itself is covered in test_school_permission.py.
     profile = MasterProfile(
         user_id=user_id,
         data={
@@ -151,18 +151,18 @@ async def _add_member(
     db_session: AsyncSession,
     group_id: str,
     user_id: str,
-    kind: CuratorMemberKind,
+    kind: SchoolMemberKind,
     joined_at: datetime | None = None,
 ) -> None:
     """Seed a membership row directly.
 
-    There is NO API path into a curator group in this delivery -- joining is
+    There is NO API path into a school in this delivery -- joining is
     by invite link and arrives in GT-3. The row is still a REACHABLE state
     (its writer is named), so seeding it here is not building an imaginary
     world; it is standing in for a writer that exists on paper and lands
     next.
     """
-    row = CuratorGroupMember(
+    row = SchoolMember(
         group_id=UUID(group_id),
         user_id=UUID(user_id),
         kind=kind.value,
@@ -317,7 +317,7 @@ async def test_create_group_makes_the_master_a_curator(
 
     row = (
         await fresh_execute(
-            select(CuratorGroup).where(CuratorGroup.id == UUID(body["id"]))
+            select(School).where(School.id == UUID(body["id"]))
         )
     ).scalar_one()
     assert str(row.curator_user_id) == master["user"]["id"]
@@ -369,7 +369,7 @@ async def test_blank_or_whitespace_name_is_422(
 ) -> None:
     """PUSTOTA: TZ 5.5 wants 422 for a blank name, and whitespace counts.
 
-    This is why CuratorGroupNameStr sets strip_whitespace=True while the
+    This is why SchoolNameStr sets strip_whitespace=True while the
     older GroupNameStr does not: without stripping, " " has length 1 and
     would pass min_length, creating a group whose name is a space.
     """
@@ -441,8 +441,8 @@ async def test_blank_description_becomes_null_and_absent_stays_null(
 
     rows = (
         await fresh_execute(
-            select(CuratorGroup.name, CuratorGroup.description).where(
-                CuratorGroup.curator_user_id == UUID(master["user"]["id"])
+            select(School.name, School.description).where(
+                School.curator_user_id == UUID(master["user"]["id"])
             )
         )
     ).all()
@@ -491,11 +491,11 @@ async def test_list_shows_only_my_groups_with_counts(
 
     await _add_member(
         db_session, mine["id"], member_master["user"]["id"],
-        CuratorMemberKind.MASTER,
+        SchoolMemberKind.MASTER,
     )
     await _add_member(
         db_session, mine["id"], student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
 
     resp = await client.get(
@@ -590,8 +590,8 @@ async def test_patch_without_description_leaves_the_column_untouched(
 
     row = (
         await fresh_execute(
-            select(CuratorGroup.description).where(
-                CuratorGroup.id == UUID(group["id"])
+            select(School.description).where(
+                School.id == UUID(group["id"])
             )
         )
     ).scalar_one()
@@ -610,7 +610,7 @@ async def test_patch_reports_live_counters(
     student = await login_user(client, telegram_id=_TID_STUDENT_A)
     await _add_member(
         db_session, group["id"], student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
 
     resp = await client.patch(
@@ -638,7 +638,7 @@ async def test_delete_cascades_members_and_second_delete_is_404(
     student = await login_user(client, telegram_id=_TID_STUDENT_A)
     await _add_member(
         db_session, group["id"], student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
 
     headers = auth_headers(master["session_token"])
@@ -649,8 +649,8 @@ async def test_delete_cascades_members_and_second_delete_is_404(
 
     left = (
         await fresh_execute(
-            select(CuratorGroupMember).where(
-                CuratorGroupMember.group_id == UUID(group["id"])
+            select(SchoolMember).where(
+                SchoolMember.group_id == UUID(group["id"])
             )
         )
     ).scalars().all()
@@ -691,7 +691,7 @@ async def test_delete_is_never_blocked_by_anything(
     )
     group = await _create_group(client, master, name="Школа")
     await _add_member(
-        db_session, group["id"], other["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, group["id"], other["user"]["id"], SchoolMemberKind.MASTER,
     )
 
     resp = await client.delete(
@@ -824,7 +824,7 @@ async def test_verified_master_member_is_visible_and_counted(
     group = await _create_group(client, curator, name="Школа")
     await _add_member(
         db_session, group["id"], teacher["user"]["id"],
-        CuratorMemberKind.MASTER,
+        SchoolMemberKind.MASTER,
     )
 
     headers = auth_headers(curator["session_token"])
@@ -858,7 +858,7 @@ async def test_student_member_with_a_verified_profile_is_still_a_student(
     group = await _create_group(client, curator, name="Школа")
     await _add_member(
         db_session, group["id"], teacher["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
 
     headers = auth_headers(curator["session_token"])
@@ -895,7 +895,7 @@ async def test_suspended_master_hides_and_returns_without_touching_rows(
     group = await _create_group(client, curator, name="Школа")
     await _add_member(
         db_session, group["id"], teacher["user"]["id"],
-        CuratorMemberKind.MASTER,
+        SchoolMemberKind.MASTER,
     )
 
     headers = auth_headers(curator["session_token"])
@@ -903,8 +903,8 @@ async def test_suspended_master_hides_and_returns_without_touching_rows(
 
     before = (
         await fresh_execute(
-            select(CuratorGroupMember.id, CuratorGroupMember.joined_at).where(
-                CuratorGroupMember.group_id == UUID(group["id"])
+            select(SchoolMember.id, SchoolMember.joined_at).where(
+                SchoolMember.group_id == UUID(group["id"])
             )
         )
     ).all()
@@ -934,8 +934,8 @@ async def test_suspended_master_hides_and_returns_without_touching_rows(
 
     after = (
         await fresh_execute(
-            select(CuratorGroupMember.id, CuratorGroupMember.joined_at).where(
-                CuratorGroupMember.group_id == UUID(group["id"])
+            select(SchoolMember.id, SchoolMember.joined_at).where(
+                SchoolMember.group_id == UUID(group["id"])
             )
         )
     ).all()
@@ -956,11 +956,11 @@ async def test_kind_filter_splits_the_roster(
     group = await _create_group(client, curator, name="Школа")
     await _add_member(
         db_session, group["id"], teacher["user"]["id"],
-        CuratorMemberKind.MASTER,
+        SchoolMemberKind.MASTER,
     )
     await _add_member(
         db_session, group["id"], student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
 
     headers = auth_headers(curator["session_token"])
@@ -1007,7 +1007,7 @@ async def test_search_matches_by_name_and_misses_cleanly(
     group = await _create_group(client, curator, name="Школа")
     await _add_member(
         db_session, group["id"], student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
 
     headers = auth_headers(curator["session_token"])
@@ -1032,7 +1032,7 @@ async def test_offset_past_total_returns_an_empty_page_with_a_live_total(
     group = await _create_group(client, curator, name="Школа")
     await _add_member(
         db_session, group["id"], student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
 
     body = (
@@ -1062,12 +1062,12 @@ async def test_roster_is_newest_membership_first(
     group = await _create_group(client, curator, name="Школа")
     await _add_member(
         db_session, group["id"], older["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
         joined_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
     await _add_member(
         db_session, group["id"], newer["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
         joined_at=datetime(2026, 6, 1, tzinfo=UTC),
     )
 
@@ -1100,7 +1100,7 @@ async def test_remove_member_is_idempotent(
     group = await _create_group(client, curator, name="Школа")
     await _add_member(
         db_session, group["id"], student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
 
     headers = auth_headers(curator["session_token"])
@@ -1132,7 +1132,7 @@ async def test_removing_the_curator_or_a_stranger_is_204_without_effect(
     group = await _create_group(client, curator, name="Школа")
     await _add_member(
         db_session, group["id"], student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
 
     headers = auth_headers(curator["session_token"])
@@ -1182,14 +1182,14 @@ async def test_one_relation_per_pair_is_enforced_by_the_database(
 
     await _add_member(
         db_session, group["id"], student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
 
     db_session.add(
-        CuratorGroupMember(
+        SchoolMember(
             group_id=UUID(group["id"]),
             user_id=UUID(student["user"]["id"]),
-            kind=CuratorMemberKind.MASTER.value,
+            kind=SchoolMemberKind.MASTER.value,
         )
     )
     with pytest.raises(IntegrityError):
@@ -1217,7 +1217,7 @@ async def test_only_one_pending_transfer_per_group(
     group = await _create_group(client, curator, name="Школа")
 
     db_session.add(
-        CuratorGroupTransfer(
+        SchoolTransfer(
             group_id=UUID(group["id"]),
             to_user_id=UUID(first["user"]["id"]),
         )
@@ -1226,7 +1226,7 @@ async def test_only_one_pending_transfer_per_group(
     await db_session.commit()
 
     db_session.add(
-        CuratorGroupTransfer(
+        SchoolTransfer(
             group_id=UUID(group["id"]),
             to_user_id=UUID(second["user"]["id"]),
         )
@@ -1255,7 +1255,7 @@ async def test_deleting_a_member_user_cascades_the_membership(
     group = await _create_group(client, curator, name="Школа")
     await _add_member(
         db_session, group["id"], student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
 
     user = await db_session.get(User, UUID(student["user"]["id"]))
@@ -1264,8 +1264,8 @@ async def test_deleting_a_member_user_cascades_the_membership(
 
     left = (
         await fresh_execute(
-            select(CuratorGroupMember).where(
-                CuratorGroupMember.group_id == UUID(group["id"])
+            select(SchoolMember).where(
+                SchoolMember.group_id == UUID(group["id"])
             )
         )
     ).scalars().all()

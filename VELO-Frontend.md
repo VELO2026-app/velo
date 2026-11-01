@@ -859,7 +859,7 @@ script-эмуляцию. Контр-тест (убрать фикс → ошиб
 не видит — там про эту слепоту написано.
 
 **Ловушка 1 — диплинк вступления не разбирается.** Бэк генерирует
-`?startapp=curator_group_invite__{token}` (`curator_groups/service.py:1498`), а
+`?startapp=curator_group_invite__{token}` (`schools/service.py:1498`), а
 парсер `parseStartParam` в `composables/useAuth.ts` знает четыре kind'а:
 `open_practice__`, `zoom__`, `master_onboarding__`, `group_invite__`. Пятый
 добавляется **вместе с экраном вступления** — до тех пор ссылка школы открывает

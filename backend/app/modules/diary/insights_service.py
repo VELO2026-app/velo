@@ -7,7 +7,7 @@
 # and named/de-anonymised reviews (list_practice_reviews) for a completed
 # practice. score_zone, zone_counts and ATTENTION_RATING_MAX are THE source
 # of the 1..10 -> zone boundaries (BE-77) and are consumed by masters
-# (reviews_service, students_service, stats_service), curator_groups
+# (reviews_service, students_service, stats_service), schools
 # (feedback_service, analytics_service), admin/metrics and
 # diary/notify_master -- the reason this area is public API, not just
 # internal to diary.

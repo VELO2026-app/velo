@@ -50,16 +50,6 @@ from sqlalchemy.orm import aliased
 from app.core.config import settings
 from app.core.exceptions import ForbiddenError
 from app.modules.bookings.models import Booking, BookingStatus
-
-# Model imports only. curator_groups/ is NOT imported here for its
-# helpers -- see _curator_profile_verified below for why the predicate is
-# written locally instead.
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupBlock,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.masters.groups_models import MasterGroupMembership, MasterStudent
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import (
@@ -67,6 +57,16 @@ from app.modules.practices.models import (
     Practice,
     PracticeAudienceGroup,
     PracticeStatus,
+)
+
+# Model imports only. schools/ is NOT imported here for its
+# helpers -- see _curator_profile_verified below for why the predicate is
+# written locally instead.
+from app.modules.schools.models import (
+    School,
+    SchoolBlock,
+    SchoolMember,
+    SchoolMemberKind,
 )
 
 # T-20: THE GATE's own booking-status set -- the single source for "does
@@ -135,14 +135,14 @@ def _school_blocked_clause(user_id: UUID) -> ColumnElement[bool]:
     is not a question of who the practice is for, but of who is shut out
     of the school.
 
-    The same fact as curator_groups/service.py::_blocked_in_group, written
+    The same fact as schools/service.py::_blocked_in_group, written
     here as a correlated clause because this module imports models only.
     """
     return (
-        select(CuratorGroupBlock.id)
+        select(SchoolBlock.id)
         .where(
-            CuratorGroupBlock.group_id == Practice.curator_group_id,
-            CuratorGroupBlock.user_id == user_id,
+            SchoolBlock.group_id == Practice.curator_group_id,
+            SchoolBlock.user_id == user_id,
         )
         .exists()
     )
@@ -197,8 +197,8 @@ def _curator_profile_verified(user_id_col: ColumnElement) -> ColumnElement[bool]
     """Correlated EXISTS: this user holds a verified MasterProfile right now.
 
     THIRD COPY OF THIS PREDICATE IN THE TREE, deliberately. The twins are
-    curator_groups/service.py::_verified_profile_exists (the schools module's
-    own) and admin/curator_groups/service.py::_profile_verified (ruled a
+    schools/service.py::_verified_profile_exists (the schools module's
+    own) and admin/schools/service.py::_profile_verified (ruled a
     considered duplicate in GT-9). Both are private to their modules, and
     importing a private helper across a module boundary would tie the
     audience gate -- the single predicate guarding every practice on the
@@ -219,10 +219,10 @@ def _curator_profile_verified(user_id_col: ColumnElement) -> ColumnElement[bool]
     )
 
 
-def _master_in_curator_group_clause(
+def _master_in_school_clause(
     master_id_col: ColumnElement,
 ) -> ColumnElement[bool]:
-    """True iff this master still belongs to the (correlated) CuratorGroup.
+    """True iff this master still belongs to the (correlated) School.
 
     THE HEART OF THIS AUDIENCE (owner ruling, 2026-08-22). The other three
     audience kinds ask only about the VIEWER; this one also asks about the
@@ -237,27 +237,27 @@ def _master_in_curator_group_clause(
     roster (I-4), and a hidden teacher whose practices still reached the
     school would contradict the page one screen away.
 
-    Correlated to CuratorGroup: the calling query must have curator_group in
+    Correlated to School: the calling query must have curator_group in
     its FROM.
 
-    Its history-side twin is practice_in_curator_group_clause below, which
+    Its history-side twin is practice_in_school_clause below, which
     deliberately does NOT ask this question; the reasoning lives there.
     """
     return or_(
-        CuratorGroup.curator_user_id == master_id_col,
-        select(CuratorGroupMember.id)
+        School.curator_user_id == master_id_col,
+        select(SchoolMember.id)
         .where(
-            CuratorGroupMember.group_id == CuratorGroup.id,
-            CuratorGroupMember.user_id == master_id_col,
-            CuratorGroupMember.kind == CuratorMemberKind.MASTER.value,
+            SchoolMember.group_id == School.id,
+            SchoolMember.user_id == master_id_col,
+            SchoolMember.kind == SchoolMemberKind.MASTER.value,
             _curator_profile_verified(master_id_col),
         )
         .exists(),
     )
 
 
-def _viewer_in_curator_group_clause(user_id: UUID) -> ColumnElement[bool]:
-    """True iff this viewer belongs to the (correlated) CuratorGroup at all.
+def _viewer_in_school_clause(user_id: UUID) -> ColumnElement[bool]:
+    """True iff this viewer belongs to the (correlated) School at all.
 
     ANY kind of membership counts, and so does being the curator -- the
     school sees its own practices whether you teach there or study there.
@@ -272,17 +272,17 @@ def _viewer_in_curator_group_clause(user_id: UUID) -> ColumnElement[bool]:
     the school's practices is not part of what suspension means.
     """
     return or_(
-        CuratorGroup.curator_user_id == user_id,
-        select(CuratorGroupMember.id)
+        School.curator_user_id == user_id,
+        select(SchoolMember.id)
         .where(
-            CuratorGroupMember.group_id == CuratorGroup.id,
-            CuratorGroupMember.user_id == user_id,
+            SchoolMember.group_id == School.id,
+            SchoolMember.user_id == user_id,
         )
         .exists(),
     )
 
 
-def _is_curator_group_audience_clause(user_id: UUID) -> ColumnElement[bool]:
+def _is_school_audience_clause(user_id: UUID) -> ColumnElement[bool]:
     """True iff `user_id` may see the (correlated) Practice through the
     school it BELONGS TO (Practice.curator_group_id, BE-74).
 
@@ -294,7 +294,7 @@ def _is_curator_group_audience_clause(user_id: UUID) -> ColumnElement[bool]:
       3. the practice's master still belongs to that school.
 
     EXISTS over curator_group rather than a join: the conditions below are
-    correlated to CuratorGroup, and the caller's query selects FROM
+    correlated to School, and the caller's query selects FROM
     Practice -- the EXISTS is what gives them a school row to stand on
     without adding one to the caller's FROM. A 'curator_groups' practice
     always has a school (ck_practices_school_audience_has_school; one that
@@ -321,23 +321,23 @@ def _is_curator_group_audience_clause(user_id: UUID) -> ColumnElement[bool]:
     brake exists to stop the audience from cutting into other people's
     calendars, not to cancel purchases.
     """
-    if not settings.curator_groups_enabled:
+    if not settings.schools_enabled:
         return false()
 
     return (
-        select(CuratorGroup.id)
+        select(School.id)
         .where(
-            CuratorGroup.id == Practice.curator_group_id,
-            _curator_profile_verified(CuratorGroup.curator_user_id),
-            _viewer_in_curator_group_clause(user_id),
-            _master_in_curator_group_clause(Practice.master_id),
+            School.id == Practice.curator_group_id,
+            _curator_profile_verified(School.curator_user_id),
+            _viewer_in_school_clause(user_id),
+            _master_in_school_clause(Practice.master_id),
         )
         .exists()
     )
 
 
 def master_broadcasts_to_group_clause(master_id: UUID) -> ColumnElement[bool]:
-    """_master_in_curator_group_clause for a literal master id (BE-30).
+    """_master_in_school_clause for a literal master id (BE-30).
 
     The same body and the same question -- "does this school still accept
     this teacher's practices" -- reachable from outside this module. The
@@ -347,13 +347,13 @@ def master_broadcasts_to_group_clause(master_id: UUID) -> ColumnElement[bool]:
     of this audience is exactly what the private one's docstring warns
     about.
     """
-    return _master_in_curator_group_clause(master_id)
+    return _master_in_school_clause(master_id)
 
 
-def practice_in_curator_group_clause(group_id: UUID) -> ColumnElement[bool]:
+def practice_in_school_clause(group_id: UUID) -> ColumnElement[bool]:
     """True iff the (correlated) Practice BELONGS TO this school (BE-74).
 
-    THIS ONE ANSWERS "WHAT HAPPENED"; _master_in_curator_group_clause above
+    THIS ONE ANSWERS "WHAT HAPPENED"; _master_in_school_clause above
     answers "what to show now", and the two are meant to disagree. Owner
     ruling, 2026-09-10: masters can be invited into a school for a season
     and collaboration between schools is normal, so a practice made in the
@@ -374,9 +374,9 @@ def practice_in_curator_group_clause(group_id: UUID) -> ColumnElement[bool]:
     verification, no status of the practice, and nothing to deduplicate.
     Correlated to the module-level Practice table: the calling query must
     select FROM Practice, the same contract the clauses above state. NO
-    KILLSWITCH CHECK HERE, unlike _is_curator_group_audience_clause: this
+    KILLSWITCH CHECK HERE, unlike _is_school_audience_clause: this
     predicate's callers sit behind the curator router's router-level
-    _require_curator_groups_enabled, and a flag answered in two places is a
+    _require_schools_enabled, and a flag answered in two places is a
     flag with a hole in it.
     """
     return Practice.curator_group_id == group_id
@@ -387,7 +387,7 @@ def practice_in_school_feedback_clause(group_id: UUID) -> ColumnElement[bool]:
     -- the curator's check-in and review feeds, the all-time feedback
     aggregate of the school's analytics, a student's dossier (BE-75).
 
-    THE SCHOOL'S PRACTICES (practice_in_curator_group_clause), MINUS the
+    THE SCHOOL'S PRACTICES (practice_in_school_clause), MINUS the
     practices a DEPARTED master never conducted. Owner ruling, 2026-10-03:
     what a departed master conducted is the school's history and stays
     (ruling of 2026-09-10); what they did not -- any status other than
@@ -397,18 +397,18 @@ def practice_in_school_feedback_clause(group_id: UUID) -> ColumnElement[bool]:
 
     DEPARTED = the practice's master is neither the school's curator nor
     holds a curator_group_member row in it, of ANY kind, RIGHT NOW. That is
-    exactly "left" (leave_curator_group) or "removed by the curator"
-    (remove_curator_group_member) -- both delete the row. Not departed:
+    exactly "left" (leave_school) or "removed by the curator"
+    (remove_school_member) -- both delete the row. Not departed:
       - the curator, who has no row by design (I-2) -- hence the separate
         arm; a transfer's new curator lost their row and gained this arm,
         the previous one gained a kind='master' row;
-      - a demoted master: demote_curator_group_master keeps the row and
+      - a demoted master: demote_school_master keeps the row and
         only sets kind='student';
       - a master whose status the platform revoked: revoke_master does not
         touch the school's tables;
       - a master who left and was let back in: the state is read now, not
         from the journal.
-    Deliberately NOT _master_in_curator_group_clause: that one requires
+    Deliberately NOT _master_in_school_clause: that one requires
     kind='master' and a verified profile, and would drop the demoted and the
     revoked -- both of whom the ruling keeps.
 
@@ -428,23 +428,23 @@ def practice_in_school_feedback_clause(group_id: UUID) -> ColumnElement[bool]:
     still in school B keep their unconducted practices of school A.
     """
     master_is_curator = (
-        select(CuratorGroup.id)
+        select(School.id)
         .where(
-            CuratorGroup.id == group_id,
-            CuratorGroup.curator_user_id == Practice.master_id,
+            School.id == group_id,
+            School.curator_user_id == Practice.master_id,
         )
         .exists()
     )
     master_is_member = (
-        select(CuratorGroupMember.id)
+        select(SchoolMember.id)
         .where(
-            CuratorGroupMember.group_id == group_id,
-            CuratorGroupMember.user_id == Practice.master_id,
+            SchoolMember.group_id == group_id,
+            SchoolMember.user_id == Practice.master_id,
         )
         .exists()
     )
     return and_(
-        practice_in_curator_group_clause(group_id),
+        practice_in_school_clause(group_id),
         or_(
             Practice.status == PracticeStatus.COMPLETED.value,
             master_is_curator,
@@ -471,7 +471,7 @@ def viewer_audience_clause(user_id: UUID) -> ColumnElement[bool]:
         ),
         and_(
             Practice.audience_kind == AudienceKind.CURATOR_GROUPS.value,
-            _is_curator_group_audience_clause(user_id),
+            _is_school_audience_clause(user_id),
         ),
     )
     return and_(
@@ -530,7 +530,7 @@ async def lock_school_member_key_share(
 
     Called by every path that creates a booking or a waitlist entry
     (create_booking, join_waitlist, confirm_waitlist). A school block
-    DELETEs exactly this row first thing (block_curator_group_member), and
+    DELETEs exactly this row first thing (block_school_member), and
     KEY SHARE conflicts with a DELETE and with nothing else a member row's
     writers do: a no-op UPDATE of _lock_member (transfers, offers) or a
     change of kind leaves the key alone. So the two serialise and nobody
@@ -540,14 +540,14 @@ async def lock_school_member_key_share(
       - this went first: the block's DELETE waits until the booking
         commits, and the block then finds that booking in its own re-read
         under the practice lock and cancels it.
-    Order: member -> practice, the order of curator_groups/service.py's
+    Order: member -> practice, the order of schools/service.py's
     header. A viewer with no member row (not in the school, or the
     curator) takes nothing -- a person who is not a member cannot be
     blocked by a concurrent call, the block of a non-member is a 404.
 
     The school is read off the practice WITHOUT a lock: the lock on the
     practice comes after this, by the order. curator_group_id has one
-    writer after creation -- delete_curator_group, which NULLs it -- and
+    writer after creation -- delete_school, which NULLs it -- and
     a practice that lost its school between this read and the caller's
     lock has no school to be blocked in; the gate reads the locked row.
     """
@@ -559,10 +559,10 @@ async def lock_school_member_key_share(
     if school_id is None:
         return
     await session.execute(
-        select(CuratorGroupMember.id)
+        select(SchoolMember.id)
         .where(
-            CuratorGroupMember.group_id == school_id,
-            CuratorGroupMember.user_id == user_id,
+            SchoolMember.group_id == school_id,
+            SchoolMember.user_id == user_id,
         )
         .with_for_update(key_share=True, read=True)
     )
@@ -657,7 +657,7 @@ async def assert_viewer_can_access_practice(
         # third has no equivalent in any branch above, and it is the reason
         # this audience can go dark with nobody touching the practice.
         if not await _clause_true_for(
-            practice.id, _is_curator_group_audience_clause(user_id), session,
+            practice.id, _is_school_audience_clause(user_id), session,
         ):
             raise ForbiddenError(
                 "You are not a member of this practice's school",
@@ -840,9 +840,9 @@ async def count_stranded_active_bookings(
         proposed_school_member_ids = set(
             (
                 await session.execute(
-                    select(CuratorGroupMember.user_id).where(
-                        CuratorGroupMember.group_id == school_id,
-                        CuratorGroupMember.user_id.in_(booker_ids),
+                    select(SchoolMember.user_id).where(
+                        SchoolMember.group_id == school_id,
+                        SchoolMember.user_id.in_(booker_ids),
                     )
                 )
             )
@@ -854,9 +854,9 @@ async def count_stranded_active_bookings(
         proposed_school_member_ids |= set(
             (
                 await session.execute(
-                    select(CuratorGroup.curator_user_id).where(
-                        CuratorGroup.id == school_id,
-                        CuratorGroup.curator_user_id.in_(booker_ids),
+                    select(School.curator_user_id).where(
+                        School.id == school_id,
+                        School.curator_user_id.in_(booker_ids),
                     )
                 )
             )
@@ -899,7 +899,7 @@ async def count_stranded_active_bookings(
     return stranded
 
 
-async def curator_group_audience_is_dark(
+async def school_audience_is_dark(
     practice: Practice, session: AsyncSession,
 ) -> bool:
     """Does this practice reach NOBODY through its school?
@@ -911,7 +911,7 @@ async def curator_group_audience_is_dark(
     below) -- i.e. the practice is visible only to its own master and to whoever
     already holds a booking (H-R2-8 grandfather).
 
-    NOT A NEGATION OF _is_curator_group_audience_clause, and deliberately a
+    NOT A NEGATION OF _is_school_audience_clause, and deliberately a
     separate function rather than a reuse of it: that clause asks about a
     VIEWER, and there is no viewer here. Two of its three conditions carry
     over (the school is active, the master still belongs to it) and the
@@ -922,7 +922,7 @@ async def curator_group_audience_is_dark(
     cannot change anyone's access.
 
     A dark practice whose school still exists has NOT lost its owner, and
-    the name is still reported (see curator_group_name_for_practice). The
+    the name is still reported (see school_name_for_practice). The
     master needs both halves: the flag says "nobody sees this", the name
     says WHICH school it belongs to. Reporting the flag while blanking the
     name would tell them something is broken without telling them what to
@@ -946,15 +946,15 @@ async def curator_group_audience_is_dark(
     # means exactly "nobody sees this". It leaks nothing -- the field
     # reaches the owner and whoever is being refused, never a stranger,
     # because the audience gate answers first.
-    if not settings.curator_groups_enabled:
+    if not settings.schools_enabled:
         return True
 
     usable = (
         await session.execute(
-            select(CuratorGroup.id).where(
-                CuratorGroup.id == practice.curator_group_id,
-                _curator_profile_verified(CuratorGroup.curator_user_id),
-                _master_in_curator_group_clause(practice.master_id),
+            select(School.id).where(
+                School.id == practice.curator_group_id,
+                _curator_profile_verified(School.curator_user_id),
+                _master_in_school_clause(practice.master_id),
             )
         )
     ).scalar_one_or_none()

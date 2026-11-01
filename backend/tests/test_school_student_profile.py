@@ -41,11 +41,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.modules.bookings.models import Booking, BookingStatus
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.diary.models import Checkin, CheckType, Feedback
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import (
@@ -53,6 +48,11 @@ from app.modules.practices.models import (
     Practice,
     PracticeStatus,
     PracticeType,
+)
+from app.modules.schools.models import (
+    School,
+    SchoolMember,
+    SchoolMemberKind,
 )
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
@@ -72,7 +72,7 @@ _TID_OUTSIDER = 69503
 _TID_STUDENT = 69510
 _TID_OTHER_STUDENT = 69511
 
-_FLAG = "curator_groups_enabled"
+_FLAG = "schools_enabled"
 
 
 # ===========================================================================
@@ -127,8 +127,8 @@ async def _student(
 
 async def _school(
     db_session: AsyncSession, curator: dict, name: str = "Школа",
-) -> CuratorGroup:
-    group = CuratorGroup(
+) -> School:
+    group = School(
         curator_user_id=UUID(curator["user"]["id"]), name=name,
     )
     db_session.add(group)
@@ -139,11 +139,11 @@ async def _school(
 
 async def _join(
     db_session: AsyncSession,
-    school: CuratorGroup,
+    school: School,
     auth: dict,
-    kind: CuratorMemberKind,
-) -> CuratorGroupMember:
-    row = CuratorGroupMember(
+    kind: SchoolMemberKind,
+) -> SchoolMember:
+    row = SchoolMember(
         group_id=school.id,
         user_id=UUID(auth["user"]["id"]),
         kind=kind.value,
@@ -157,7 +157,7 @@ async def _join(
 async def _practice(
     db_session: AsyncSession,
     master: dict,
-    school: CuratorGroup | None,
+    school: School | None,
     *,
     title: str = "Утренняя медитация",
     minutes: int = 60,
@@ -307,8 +307,8 @@ async def test_the_curator_and_a_master_of_the_school_see_the_same_thing(
     master = await _master(client, db_session, _TID_MASTER)
     student = await _student(client, _TID_STUDENT)
     school = await _school(db_session, curator)
-    await _join(db_session, school, master, CuratorMemberKind.MASTER)
-    await _join(db_session, school, student, CuratorMemberKind.STUDENT)
+    await _join(db_session, school, master, SchoolMemberKind.MASTER)
+    await _join(db_session, school, student, SchoolMemberKind.STUDENT)
 
     practice = await _practice(db_session, master, school, minutes=90)
     booking = await _attended(db_session, practice, student)
@@ -344,7 +344,7 @@ async def test_the_scores_are_raw_numbers_and_nothing_else(
     curator = await _master(client, db_session, _TID_CURATOR)
     student = await _student(client, _TID_STUDENT)
     school = await _school(db_session, curator)
-    await _join(db_session, school, student, CuratorMemberKind.STUDENT)
+    await _join(db_session, school, student, SchoolMemberKind.STUDENT)
 
     practice = await _practice(db_session, curator, school)
     booking = await _attended(db_session, practice, student)
@@ -382,7 +382,7 @@ async def test_a_student_with_nothing_yet_is_an_honest_zero(
     curator = await _master(client, db_session, _TID_CURATOR)
     student = await _student(client, _TID_STUDENT)
     school = await _school(db_session, curator)
-    await _join(db_session, school, student, CuratorMemberKind.STUDENT)
+    await _join(db_session, school, student, SchoolMemberKind.STUDENT)
 
     resp = await _get(client, curator, school, student["user"]["id"])
 
@@ -415,8 +415,8 @@ async def test_another_schools_practices_are_not_counted(
     student = await _student(client, _TID_STUDENT)
     mine = await _school(db_session, curator, name="Моя школа")
     theirs = await _school(db_session, outsider, name="Чужая школа")
-    await _join(db_session, mine, student, CuratorMemberKind.STUDENT)
-    await _join(db_session, theirs, student, CuratorMemberKind.STUDENT)
+    await _join(db_session, mine, student, SchoolMemberKind.STUDENT)
+    await _join(db_session, theirs, student, SchoolMemberKind.STUDENT)
 
     here = await _practice(
         db_session, curator, mine, title="Моя практика", minutes=60,
@@ -463,7 +463,7 @@ async def test_only_attended_bookings_count_and_cancelled_checkins_drop(
     curator = await _master(client, db_session, _TID_CURATOR)
     student = await _student(client, _TID_STUDENT)
     school = await _school(db_session, curator)
-    await _join(db_session, school, student, CuratorMemberKind.STUDENT)
+    await _join(db_session, school, student, SchoolMemberKind.STUDENT)
 
     attended = await _practice(
         db_session, curator, school, title="Посещённая", minutes=60,
@@ -522,8 +522,8 @@ async def test_a_second_school_is_refused_and_the_one_school_counts_once(
     student = await _student(client, _TID_STUDENT)
     morning = await _school(db_session, curator, name="Утро")
     evening = await _school(db_session, curator, name="Вечер")
-    await _join(db_session, morning, student, CuratorMemberKind.STUDENT)
-    await _join(db_session, evening, student, CuratorMemberKind.STUDENT)
+    await _join(db_session, morning, student, SchoolMemberKind.STUDENT)
+    await _join(db_session, evening, student, SchoolMemberKind.STUDENT)
 
     refused = await client.post(
         PRACTICES_URL,
@@ -565,7 +565,7 @@ async def test_a_departed_masters_practice_stays_in_the_schools_history(
 ) -> None:
     """The teacher walked out; what the school collected is still its own.
 
-    practice_in_curator_group_clause answers "what happened", not "what to
+    practice_in_school_clause answers "what happened", not "what to
     show now" -- owner ruling, 10 September, and the same rule the school's
     feeds already follow. Membership is a state; a practice's belonging to
     the school is a fact.
@@ -578,9 +578,9 @@ async def test_a_departed_masters_practice_stays_in_the_schools_history(
     student = await _student(client, _TID_STUDENT)
     school = await _school(db_session, curator)
     membership = await _join(
-        db_session, school, master, CuratorMemberKind.MASTER,
+        db_session, school, master, SchoolMemberKind.MASTER,
     )
-    await _join(db_session, school, student, CuratorMemberKind.STUDENT)
+    await _join(db_session, school, student, SchoolMemberKind.STUDENT)
 
     practice = await _practice(db_session, master, school, minutes=60)
     booking = await _attended(db_session, practice, student)
@@ -590,7 +590,7 @@ async def test_a_departed_masters_practice_stays_in_the_schools_history(
     assert before["practices_count"] == 1
 
     await db_session.delete(
-        await db_session.get(CuratorGroupMember, membership.id)
+        await db_session.get(SchoolMember, membership.id)
     )
     await db_session.commit()
 
@@ -639,7 +639,7 @@ async def test_seven_refusals_share_a_code_and_the_outside_ones_a_body(
     student = await _student(client, _TID_STUDENT)
     stranger = await _student(client, _TID_OTHER_STUDENT, first_name="Гость")
     school = await _school(db_session, curator)
-    await _join(db_session, school, student, CuratorMemberKind.STUDENT)
+    await _join(db_session, school, student, SchoolMemberKind.STUDENT)
 
     nowhere = await _get(client, curator, str(uuid4()), student["user"]["id"])
     assert nowhere.status_code == 404, nowhere.text
@@ -652,7 +652,7 @@ async def test_seven_refusals_share_a_code_and_the_outside_ones_a_body(
 
     # A student OF this school -- _relation_or_404 admits them, and this
     # test is the reason the service refuses them a second time.
-    await _join(db_session, school, stranger, CuratorMemberKind.STUDENT)
+    await _join(db_session, school, stranger, SchoolMemberKind.STUDENT)
     peer = await _get(client, stranger, school, student["user"]["id"])
     assert peer.status_code in (403, 404), peer.text
 
@@ -695,8 +695,8 @@ async def test_a_suspended_master_is_refused_with_403_not_404(
     )
     student = await _student(client, _TID_STUDENT)
     school = await _school(db_session, curator)
-    await _join(db_session, school, suspended, CuratorMemberKind.MASTER)
-    await _join(db_session, school, student, CuratorMemberKind.STUDENT)
+    await _join(db_session, school, suspended, SchoolMemberKind.MASTER)
+    await _join(db_session, school, student, SchoolMemberKind.STUDENT)
 
     refused = await _get(client, suspended, school, student["user"]["id"])
     assert refused.status_code == 403, refused.text
@@ -721,7 +721,7 @@ async def test_the_killswitch_takes_this_handle_with_it(
     curator = await _master(client, db_session, _TID_CURATOR)
     student = await _student(client, _TID_STUDENT)
     school = await _school(db_session, curator)
-    await _join(db_session, school, student, CuratorMemberKind.STUDENT)
+    await _join(db_session, school, student, SchoolMemberKind.STUDENT)
 
     with patch.object(settings, _FLAG, False):
         blocked = await _get(client, curator, school, student["user"]["id"])

@@ -1,5 +1,5 @@
 # =============================================================================
-# VELO Backend -- Curator Group Feedback Service (BE-24 / GT-28)
+# VELO Backend -- School Feedback Service (BE-24 / GT-28)
 # =============================================================================
 #
 # Two read-only feeds for the CURATOR of a school: the PRE check-ins and the
@@ -45,20 +45,20 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.bookings.models import Booking, BookingStatus
-from app.modules.curator_groups.service import _get_group_or_404
 from app.modules.diary.insights_service import score_zone
 from app.modules.diary.models import Checkin, CheckType, Feedback
 from app.modules.practices.audience_service import (
     practice_in_school_feedback_clause,
 )
 from app.modules.practices.models import Practice
+from app.modules.schools.service import _get_group_or_404
 from app.modules.users.helpers import display_name
 from app.modules.users.models import User
 
 logger = structlog.get_logger()
 
 
-async def list_curator_group_checkins(
+async def list_school_checkins(
     curator_user_id: UUID,
     group_id: UUID,
     session: AsyncSession,
@@ -158,7 +158,7 @@ async def list_curator_group_checkins(
     return items, total
 
 
-async def list_curator_group_reviews(
+async def list_school_reviews(
     curator_user_id: UUID,
     group_id: UUID,
     session: AsyncSession,
@@ -177,7 +177,7 @@ async def list_curator_group_reviews(
     omission: the master's own review feeds do not carry one either, and a
     review the master reads is a review the curator may read.
 
-    Args, Returns, Raises: as list_curator_group_checkins.
+    Args, Returns, Raises: as list_school_checkins.
     """
     group = await _get_group_or_404(curator_user_id, group_id, session)
 

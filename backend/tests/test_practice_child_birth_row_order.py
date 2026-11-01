@@ -37,11 +37,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session_factory
 from app.core.exceptions import BadRequestError, ConflictError
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.masters.groups_models import MasterGroup
 from app.modules.masters.models import MasterProfile
 from app.modules.practices import service as practice_service
@@ -56,9 +51,14 @@ from app.modules.practices.schemas import (
     CreatePracticeRequest,
     UpdatePracticeRequest,
 )
+from app.modules.schools.models import (
+    School,
+    SchoolMember,
+    SchoolMemberKind,
+)
 from app.modules.users.models import User, UserRole
-from tests.curator_race_harness import assert_no_deadlock, race
 from tests.helpers import fresh_execute, full_cleanup_range, login_user
+from tests.school_race_harness import assert_no_deadlock, race
 
 _TID_MIN = 70400
 _TID_MAX = 70499
@@ -102,15 +102,15 @@ async def _master(client, db_session: AsyncSession, telegram_id: int) -> dict:
 async def w(client: AsyncClient, db_session: AsyncSession) -> dict:
     master = await _master(client, db_session, _TID_MASTER)
     curator = await _master(client, db_session, _TID_CURATOR)
-    school = CuratorGroup(
+    school = School(
         curator_user_id=UUID(curator["user"]["id"]), name="Рождение",
     )
     db_session.add(school)
     await db_session.flush()
     db_session.add(
-        CuratorGroupMember(
+        SchoolMember(
             group_id=school.id, user_id=UUID(master["user"]["id"]),
-            kind=CuratorMemberKind.MASTER.value,
+            kind=SchoolMemberKind.MASTER.value,
         )
     )
     await db_session.commit()

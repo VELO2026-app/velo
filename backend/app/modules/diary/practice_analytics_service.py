@@ -21,7 +21,7 @@
 # check-in of a no-show is not «до»; a booking corrected away from ATTENDED
 # after its review drops out of every block at once.
 #
-# ZONES ONLY (BE-24, curator_groups/feedback_service.py): a curator must not
+# ZONES ONLY (BE-24, schools/feedback_service.py): a curator must not
 # see a stranger's stored 1..10, so the scores leave as ScoreZone -- for the
 # leading master too, one contract for every reader. score_zone / zone_counts
 # are the single source of the boundaries (BE-77).
@@ -43,11 +43,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BadRequestError, NotFoundError
 from app.modules.bookings.models import Booking, BookingStatus
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.diary.insights_service import score_zone, zone_counts
 from app.modules.diary.models import Checkin, CheckType, Feedback
 from app.modules.diary.schemas import PracticeAnalyticsViewerRole
@@ -56,6 +51,11 @@ from app.modules.practices.audience_service import (
 )
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.practices.service import master_full_name
+from app.modules.schools.models import (
+    School,
+    SchoolMember,
+    SchoolMemberKind,
+)
 from app.modules.users.helpers import display_name
 from app.modules.users.models import User
 
@@ -85,8 +85,8 @@ async def _load_readable_practice(
         role = PracticeAnalyticsViewerRole.LEADER
     elif practice.curator_group_id is not None:
         curator_user_id = await session.scalar(
-            select(CuratorGroup.curator_user_id).where(
-                CuratorGroup.id == practice.curator_group_id,
+            select(School.curator_user_id).where(
+                School.id == practice.curator_group_id,
                 master_broadcasts_to_group_clause(user.id),
             )
         )
@@ -112,14 +112,14 @@ def _school_student_clause(practice_id: UUID):
     any school: the scalar subquery is NULL and the EXISTS finds nothing.
     """
     return (
-        select(CuratorGroupMember.id)
+        select(SchoolMember.id)
         .where(
-            CuratorGroupMember.group_id
+            SchoolMember.group_id
             == select(Practice.curator_group_id)
             .where(Practice.id == practice_id)
             .scalar_subquery(),
-            CuratorGroupMember.user_id == Booking.user_id,
-            CuratorGroupMember.kind == CuratorMemberKind.STUDENT.value,
+            SchoolMember.user_id == Booking.user_id,
+            SchoolMember.kind == SchoolMemberKind.STUDENT.value,
         )
         .exists()
     )

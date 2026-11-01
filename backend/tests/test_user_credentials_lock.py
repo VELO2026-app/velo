@@ -21,7 +21,7 @@
 #   master_profiles is users -> master_profiles. Both are written once, in
 #   the header of app/modules/users/service.py (ROW LOCK ON users).
 #
-# HOW THE CROSSING IS BUILT. tests/curator_race_harness.race: the holder is
+# HOW THE CROSSING IS BUILT. tests/school_race_harness.race: the holder is
 # paused inside its window by wrapping a real call it makes there, the
 # rival runs until Postgres reports it waiting on a lock (pg_stat_activity)
 # or finishes, then the holder is released. The rival loads the user the
@@ -50,8 +50,8 @@ from app.modules.users import service as users_service
 from app.modules.users.models import User, UserRole
 from app.modules.users.schemas import UserUpdate
 from app.modules.users.service import switch_user_role, update_user
-from tests.curator_race_harness import race
 from tests.helpers import full_cleanup_range
+from tests.school_race_harness import race
 
 _TID_MIN = 70850
 _TID_MAX = 70899

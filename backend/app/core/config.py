@@ -749,7 +749,7 @@ class Settings(BaseSettings):
     guest_enter_rate_limit: int = 20
     guest_rate_limit_window_seconds: int = 600
 
-    # -- Curator groups / schools killswitch (GT-19) --
+    # -- Schools killswitch (GT-19) --
     # AN EMERGENCY BRAKE, NOT A ROLLOUT TOGGLE. Default True: the feature
     # ships on, and this exists so it can be taken off the air without a
     # revert. The opposite default ("off until switched on") would make it a
@@ -765,7 +765,7 @@ class Settings(BaseSettings):
     #
     # WHAT False MEANS -- schools cease to exist, not "freeze":
     #   - all 23 school endpoints answer 404 (router-level dependencies on
-    #     both routers in curator_groups/router.py);
+    #     both routers in schools/router.py);
     #   - the 'curator_groups' audience becomes unreachable, so such a
     #     practice is visible to its OWN MASTER only and disappears from
     #     everyone else's feed (practices/audience_service.py).
@@ -796,12 +796,12 @@ class Settings(BaseSettings):
     # Flipping this back to True restores everything with no rows touched:
     # the flag writes nothing and no journal event records it (the fact that
     # it was pulled lives in the deployment, not in a school's history).
-    curator_groups_enabled: bool = True
+    schools_enabled: bool = True
 
     # -- MCP (BE-138, phase 0: personal access tokens) --
     # Killswitch. False -> every endpoint of the token router answers 404,
     # unauthenticated callers included (a router-level dependency in
-    # app/modules/mcp/router.py, the same shape as curator_groups_enabled and
+    # app/modules/mcp/router.py, the same shape as schools_enabled and
     # for the same reasons: no 503, no machine code). Token verification
     # does not read it; the /mcp gate and the OAuth door (BE-141) do, in one
     # place: door_closed in app/modules/mcp/server.py.

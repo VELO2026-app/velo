@@ -15,7 +15,7 @@
 #
 # The race block puts a demotion and a removal of the target INTO the
 # window between the target check and the INSERT, with the harness that
-# can see a waiter (tests/curator_race_harness.py).
+# can see a waiter (tests/school_race_harness.py).
 # =============================================================================
 
 from collections.abc import AsyncGenerator
@@ -32,12 +32,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import AuditLog
 from app.core.config import settings
 from app.core.events.models import OutboxEvent
-from app.modules.curator_groups import service as curator_service
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.masters.models import MasterProfile
 from app.modules.practices import service as practice_service
 from app.modules.practices.models import (
@@ -47,14 +41,20 @@ from app.modules.practices.models import (
     PracticeType,
 )
 from app.modules.practices.schemas import CreatePracticeRequest
+from app.modules.schools import service as curator_service
+from app.modules.schools.models import (
+    School,
+    SchoolMember,
+    SchoolMemberKind,
+)
 from app.modules.users.models import User, UserRole
-from tests.curator_race_harness import assert_no_deadlock, race
 from tests.helpers import (
     auth_headers,
     fresh_execute,
     full_cleanup_range,
     login_user,
 )
+from tests.school_race_harness import assert_no_deadlock, race
 
 PRACTICES_URL = "/api/v1/practices"
 
@@ -106,10 +106,10 @@ async def _user(
 
 async def _join(
     db_session: AsyncSession, group_id: UUID, user_id: str,
-    kind: CuratorMemberKind,
+    kind: SchoolMemberKind,
 ) -> None:
     db_session.add(
-        CuratorGroupMember(
+        SchoolMember(
             group_id=group_id, user_id=UUID(user_id), kind=kind.value,
         )
     )
@@ -167,18 +167,18 @@ async def s(client: AsyncClient, db_session: AsyncSession) -> _S:
         client, db_session, _TID_OUTSIDER, "Павел", status="verified",
     )
     curator_id = UUID(curator["user"]["id"])
-    school = CuratorGroup(curator_user_id=curator_id, name="Школа А")
-    other_school = CuratorGroup(curator_user_id=curator_id, name="Школа Б")
+    school = School(curator_user_id=curator_id, name="Школа А")
+    other_school = School(curator_user_id=curator_id, name="Школа Б")
     db_session.add_all([school, other_school])
     await db_session.flush()
     await db_session.commit()
-    master = CuratorMemberKind.MASTER
+    master = SchoolMemberKind.MASTER
     await _join(db_session, school.id, target["user"]["id"], master)
     await _join(db_session, school.id, unverified["user"]["id"], master)
     await _join(db_session, school.id, no_profile["user"]["id"], master)
     await _join(db_session, school.id, school_master["user"]["id"], master)
     await _join(
-        db_session, school.id, student["user"]["id"], CuratorMemberKind.STUDENT,
+        db_session, school.id, student["user"]["id"], SchoolMemberKind.STUDENT,
     )
     await _join(db_session, other_school.id, other["user"]["id"], master)
     return _S(
@@ -508,7 +508,7 @@ async def test_an_outsider_cannot_tell_the_school_exists(client, s: _S) -> None:
 
 @pytest.mark.asyncio
 async def test_the_killswitch_refuses_the_delegation(client, s: _S) -> None:
-    with patch.object(settings, "curator_groups_enabled", False):
+    with patch.object(settings, "schools_enabled", False):
         off = await _post(
             client, s.token("curator"),
             master_id=s.id("target"), curator_group_id=str(s.school),
@@ -691,7 +691,7 @@ def _create_call(s: _S):
 
 def _demote_call(s: _S):
     async def call(session: AsyncSession):
-        await curator_service.demote_curator_group_master(
+        await curator_service.demote_school_master(
             UUID(s.id("curator")), s.school, UUID(s.id("target")), session,
             actor=await session.get(User, UUID(s.id("curator"))),
         )
@@ -700,7 +700,7 @@ def _demote_call(s: _S):
 
 def _remove_call(s: _S):
     async def call(session: AsyncSession):
-        await curator_service.remove_curator_group_member(
+        await curator_service.remove_school_member(
             UUID(s.id("curator")), s.school, UUID(s.id("target")), session,
             actor=await session.get(User, UUID(s.id("curator"))),
         )
@@ -710,9 +710,9 @@ def _remove_call(s: _S):
 async def _target_kind(s: _S) -> str | None:
     return (
         await fresh_execute(
-            select(CuratorGroupMember.kind).where(
-                CuratorGroupMember.group_id == s.school,
-                CuratorGroupMember.user_id == UUID(s.id("target")),
+            select(SchoolMember.kind).where(
+                SchoolMember.group_id == s.school,
+                SchoolMember.user_id == UUID(s.id("target")),
             )
         )
     ).scalar_one_or_none()
@@ -743,7 +743,7 @@ async def test_the_target_cannot_leave_between_the_check_and_the_insert(
     assert result.rival.committed, result.rival.error
     practices = await _practices_of(s.id("target"))
     assert [p.curator_group_id for p in practices] == [s.school]
-    expected = CuratorMemberKind.STUDENT.value if rival == "demote" else None
+    expected = SchoolMemberKind.STUDENT.value if rival == "demote" else None
     assert await _target_kind(s) == expected
 
 
@@ -756,7 +756,7 @@ async def test_a_target_demoted_before_the_create_is_refused(
     async with get_session_factory()() as session:
         await _demote_call(s)(session)
         await session.commit()
-    assert await _target_kind(s) == CuratorMemberKind.STUDENT.value
+    assert await _target_kind(s) == SchoolMemberKind.STUDENT.value
     resp = await _post(
         client, s.token("curator"),
         master_id=s.id("target"), curator_group_id=str(s.school),

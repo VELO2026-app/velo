@@ -36,7 +36,7 @@
 # journal line a MASTER INVITE LINK wrote -- one member_joined for a newcomer,
 # a member_promoted for an existing student. There is no master link any
 # more: school masters are appointed with confirmation, and member_promoted
-# is written by the acceptance (tests/test_curator_master_offer.py). The
+# is written by the acceptance (tests/test_school_master_offer.py). The
 # scenarios became impossible to build rather than changing shape.
 #
 # ⚠ BACKEND-ONLY, UNPROVEN LOCALLY -- no Postgres in the authoring
@@ -63,14 +63,14 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupEvent,
-    CuratorGroupEventKind,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.masters.models import MasterProfile
+from app.modules.schools.models import (
+    School,
+    SchoolEvent,
+    SchoolEventKind,
+    SchoolMember,
+    SchoolMemberKind,
+)
 from app.modules.users.models import User, UserRole
 from tests.helpers import (
     auth_headers,
@@ -130,7 +130,7 @@ async def _make_verified_master(
 
     can_create_groups is set (GT-15) because every test here starts by
     creating a school; the right itself is covered in
-    test_curator_group_permission.py.
+    test_school_permission.py.
     """
     auth = await login_user(
         client, telegram_id=telegram_id, first_name=first_name,
@@ -204,7 +204,7 @@ async def _seed_member(
     the assertions would have to step around it.
     """
     db_session.add(
-        CuratorGroupMember(
+        SchoolMember(
             group_id=UUID(group_id),
             user_id=UUID(auth["user"]["id"]),
             kind=kind,
@@ -247,8 +247,8 @@ async def _row_count(group_id: str) -> int:
     return (
         await fresh_execute(
             select(func.count())
-            .select_from(CuratorGroupEvent)
-            .where(CuratorGroupEvent.group_id == UUID(group_id))
+            .select_from(SchoolEvent)
+            .where(SchoolEvent.group_id == UUID(group_id))
         )
     ).scalar_one()
 
@@ -316,7 +316,7 @@ async def test_a_new_school_has_a_journal_with_one_entry_in_it(
     assert len(body["items"]) == 1
 
     item = body["items"][0]
-    assert item["event"] == CuratorGroupEventKind.GROUP_CREATED.value
+    assert item["event"] == SchoolEventKind.GROUP_CREATED.value
     assert item["actor"]["user_id"] == curator["user"]["id"]
     assert item["actor"]["display_name"] == "Мария"
     assert item["data"] == {"actor_name": "Мария"}
@@ -340,8 +340,8 @@ async def test_a_school_whose_only_event_was_pruned_reads_empty_not_404(
     group_id = await _make_group(client, curator)
 
     await db_session.execute(
-        CuratorGroupEvent.__table__.delete().where(
-            CuratorGroupEvent.group_id == UUID(group_id)
+        SchoolEvent.__table__.delete().where(
+            SchoolEvent.group_id == UUID(group_id)
         )
     )
     await db_session.commit()
@@ -385,7 +385,7 @@ async def test_a_master_member_of_the_school_still_cannot_read_its_journal(
     group_id = await _make_group(client, curator)
 
     await _seed_member(
-        db_session, group_id, member, CuratorMemberKind.MASTER.value,
+        db_session, group_id, member, SchoolMemberKind.MASTER.value,
     )
 
     for auth in (member, stranger):
@@ -424,7 +424,7 @@ async def test_a_non_master_is_refused_by_the_dependency_not_by_ownership(
     group_id = await _make_group(client, curator)
 
     await _seed_member(
-        db_session, group_id, student, CuratorMemberKind.STUDENT.value,
+        db_session, group_id, student, SchoolMemberKind.STUDENT.value,
     )
 
     for auth in (student, outsider):
@@ -539,9 +539,9 @@ async def test_the_newest_event_is_first_and_the_oldest_is_last(
 
     kinds = await _kinds(client, curator, group_id)
     assert kinds == [
-        CuratorGroupEventKind.GROUP_RENAMED.value,
-        CuratorGroupEventKind.GROUP_RENAMED.value,
-        CuratorGroupEventKind.GROUP_CREATED.value,
+        SchoolEventKind.GROUP_RENAMED.value,
+        SchoolEventKind.GROUP_RENAMED.value,
+        SchoolEventKind.GROUP_CREATED.value,
     ]
 
     items = await _events(client, curator, group_id)
@@ -620,9 +620,9 @@ async def test_an_action_that_fails_leaves_no_event_behind(
     groups = (
         await fresh_execute(
             select(func.count())
-            .select_from(CuratorGroup)
+            .select_from(School)
             .where(
-                CuratorGroup.curator_user_id == UUID(curator["user"]["id"])
+                School.curator_user_id == UUID(curator["user"]["id"])
             )
         )
     ).scalar_one()
@@ -641,10 +641,10 @@ async def test_an_action_that_fails_leaves_no_event_behind(
     events = (
         await fresh_execute(
             select(func.count())
-            .select_from(CuratorGroupEvent)
-            .join(CuratorGroup, CuratorGroup.id == CuratorGroupEvent.group_id)
+            .select_from(SchoolEvent)
+            .join(School, School.id == SchoolEvent.group_id)
             .where(
-                CuratorGroup.curator_user_id == UUID(curator["user"]["id"])
+                School.curator_user_id == UUID(curator["user"]["id"])
             )
         )
     ).scalar_one()
@@ -675,7 +675,7 @@ async def test_removing_the_same_member_twice_records_one_removal(
     )
     group_id = await _make_group(client, curator)
     await _seed_member(
-        db_session, group_id, student, CuratorMemberKind.STUDENT.value,
+        db_session, group_id, student, SchoolMemberKind.STUDENT.value,
     )
 
     url = MEMBER_URL.format(
@@ -690,10 +690,10 @@ async def test_removing_the_same_member_twice_records_one_removal(
     removals = [
         e
         for e in await _events(client, curator, group_id)
-        if e["event"] == CuratorGroupEventKind.MEMBER_REMOVED.value
+        if e["event"] == SchoolEventKind.MEMBER_REMOVED.value
     ]
     assert len(removals) == 1
-    assert removals[0]["data"]["kind"] == CuratorMemberKind.STUDENT.value
+    assert removals[0]["data"]["kind"] == SchoolMemberKind.STUDENT.value
     assert removals[0]["data"]["target_user_id"] == student["user"]["id"]
     assert removals[0]["data"]["target_name"] == "Пётр"
 
@@ -722,7 +722,7 @@ async def test_removing_somebody_who_was_never_a_member_records_nothing(
     assert resp.status_code == 204, resp.text
 
     assert await _kinds(client, curator, group_id) == [
-        CuratorGroupEventKind.GROUP_CREATED.value
+        SchoolEventKind.GROUP_CREATED.value
     ]
 
 
@@ -732,7 +732,7 @@ async def test_leaving_a_school_you_were_never_in_records_nothing(
 ) -> None:
     """204 for the caller, one entry in the feed.
 
-    leave_curator_group deletes blind for the same reason remove does, and
+    leave_school deletes blind for the same reason remove does, and
     the same no-op rule applies -- but through a different endpoint and a
     different actor, so it is a separate hole to close.
     """
@@ -771,7 +771,7 @@ async def test_pressing_invite_twice_mints_one_link_and_records_one_event(
     created = [
         e
         for e in await _events(client, curator, group_id)
-        if e["event"] == CuratorGroupEventKind.INVITE_CREATED.value
+        if e["event"] == SchoolEventKind.INVITE_CREATED.value
     ]
     assert len(created) == 1
     # GT-27: the row used to carry data.kind, and this asserted it was the
@@ -804,8 +804,8 @@ async def test_renaming_to_the_current_name_records_nothing(
     )
     assert first.status_code == 200, first.text
     assert await _kinds(client, curator, group_id) == [
-        CuratorGroupEventKind.GROUP_DESCRIPTION_CHANGED.value,
-        CuratorGroupEventKind.GROUP_CREATED.value,
+        SchoolEventKind.GROUP_DESCRIPTION_CHANGED.value,
+        SchoolEventKind.GROUP_CREATED.value,
     ]
 
     again = await client.patch(
@@ -841,16 +841,16 @@ async def test_a_rename_and_a_description_edit_are_two_separate_events(
 
     items = await _events(client, curator, group_id)
     kinds = [e["event"] for e in items]
-    assert kinds.count(CuratorGroupEventKind.GROUP_RENAMED.value) == 1
+    assert kinds.count(SchoolEventKind.GROUP_RENAMED.value) == 1
     assert (
-        kinds.count(CuratorGroupEventKind.GROUP_DESCRIPTION_CHANGED.value)
+        kinds.count(SchoolEventKind.GROUP_DESCRIPTION_CHANGED.value)
         == 1
     )
 
     renamed = next(
         e
         for e in items
-        if e["event"] == CuratorGroupEventKind.GROUP_RENAMED.value
+        if e["event"] == SchoolEventKind.GROUP_RENAMED.value
     )
     assert renamed["data"]["old_name"] == "Старое имя"
     assert renamed["data"]["new_name"] == "Новое имя"
@@ -894,8 +894,8 @@ async def test_a_member_joining_and_leaving_leaves_both_records_intact(
     members = (
         await fresh_execute(
             select(func.count())
-            .select_from(CuratorGroupMember)
-            .where(CuratorGroupMember.group_id == UUID(group_id))
+            .select_from(SchoolMember)
+            .where(SchoolMember.group_id == UUID(group_id))
         )
     ).scalar_one()
     assert members == 0
@@ -903,16 +903,16 @@ async def test_a_member_joining_and_leaving_leaves_both_records_intact(
     items = await _events(client, curator, group_id)
     by_kind = {e["event"]: e for e in items}
     assert (
-        by_kind[CuratorGroupEventKind.MEMBER_LEFT.value]["actor"]["user_id"]
+        by_kind[SchoolEventKind.MEMBER_LEFT.value]["actor"]["user_id"]
         == student["user"]["id"]
     )
     assert (
-        by_kind[CuratorGroupEventKind.MEMBER_JOINED.value]["actor"]["user_id"]
+        by_kind[SchoolEventKind.MEMBER_JOINED.value]["actor"]["user_id"]
         == student["user"]["id"]
     )
     assert (
-        by_kind[CuratorGroupEventKind.MEMBER_LEFT.value]["data"]["kind"]
-        == CuratorMemberKind.STUDENT.value
+        by_kind[SchoolEventKind.MEMBER_LEFT.value]["data"]["kind"]
+        == SchoolMemberKind.STUDENT.value
     )
 
 
@@ -946,7 +946,7 @@ async def test_accepting_a_transfer_records_two_different_people(
     )
     group_id = await _make_group(client, curator)
     await _seed_member(
-        db_session, group_id, heir, CuratorMemberKind.MASTER.value,
+        db_session, group_id, heir, SchoolMemberKind.MASTER.value,
     )
 
     offered = await client.post(
@@ -966,7 +966,7 @@ async def test_accepting_a_transfer_records_two_different_people(
     event = next(
         e
         for e in await _events(client, heir, group_id)
-        if e["event"] == CuratorGroupEventKind.TRANSFER_ACCEPTED.value
+        if e["event"] == SchoolEventKind.TRANSFER_ACCEPTED.value
     )
     assert event["actor"]["user_id"] == heir["user"]["id"]
     assert event["actor"]["display_name"] == "Пётр"
@@ -998,10 +998,10 @@ async def test_the_new_curator_inherits_the_whole_history(
     group_id = await _make_group(client, curator)
 
     await _seed_member(
-        db_session, group_id, heir, CuratorMemberKind.MASTER.value,
+        db_session, group_id, heir, SchoolMemberKind.MASTER.value,
     )
     await _seed_member(
-        db_session, group_id, student, CuratorMemberKind.STUDENT.value,
+        db_session, group_id, student, SchoolMemberKind.STUDENT.value,
     )
 
     removed = await client.delete(
@@ -1026,7 +1026,7 @@ async def test_the_new_curator_inherits_the_whole_history(
     assert accepted.status_code == 200, accepted.text
 
     inherited = await _kinds(client, heir, group_id)
-    assert CuratorGroupEventKind.MEMBER_REMOVED.value in inherited
+    assert SchoolEventKind.MEMBER_REMOVED.value in inherited
     for kind in before:
         assert kind in inherited
 
@@ -1057,7 +1057,7 @@ async def test_declining_an_offer_names_the_curator_who_made_it(
     )
     group_id = await _make_group(client, curator)
     await _seed_member(
-        db_session, group_id, heir, CuratorMemberKind.MASTER.value,
+        db_session, group_id, heir, SchoolMemberKind.MASTER.value,
     )
 
     offered = await client.post(
@@ -1077,7 +1077,7 @@ async def test_declining_an_offer_names_the_curator_who_made_it(
     event = next(
         e
         for e in items
-        if e["event"] == CuratorGroupEventKind.TRANSFER_DECLINED.value
+        if e["event"] == SchoolEventKind.TRANSFER_DECLINED.value
     )
     assert event["actor"]["user_id"] == heir["user"]["id"]
     assert event["data"]["target_user_id"] == curator["user"]["id"]
@@ -1086,7 +1086,7 @@ async def test_declining_an_offer_names_the_curator_who_made_it(
     offer_event = next(
         e
         for e in items
-        if e["event"] == CuratorGroupEventKind.TRANSFER_OFFERED.value
+        if e["event"] == SchoolEventKind.TRANSFER_OFFERED.value
     )
     assert offer_event["data"]["target_user_id"] == heir["user"]["id"]
     assert offer_event["data"]["target_name"] == "Пётр"
@@ -1135,7 +1135,7 @@ async def test_cancelling_an_offer_is_recorded_and_cancelling_nothing_is_not(
     )
     group_id = await _make_group(client, curator)
     await _seed_member(
-        db_session, group_id, heir, CuratorMemberKind.MASTER.value,
+        db_session, group_id, heir, SchoolMemberKind.MASTER.value,
     )
 
     offered = await client.post(
@@ -1155,7 +1155,7 @@ async def test_cancelling_an_offer_is_recorded_and_cancelling_nothing_is_not(
     cancelled = [
         e
         for e in await _events(client, curator, group_id)
-        if e["event"] == CuratorGroupEventKind.TRANSFER_CANCELLED.value
+        if e["event"] == SchoolEventKind.TRANSFER_CANCELLED.value
     ]
     assert len(cancelled) == 1
     assert cancelled[0]["data"]["target_user_id"] == heir["user"]["id"]
@@ -1178,7 +1178,7 @@ async def test_a_departure_that_retracts_an_offer_says_so_in_one_event(
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
     group_id = await _make_group(client, curator)
     await _seed_member(
-        db_session, group_id, heir, CuratorMemberKind.MASTER.value,
+        db_session, group_id, heir, SchoolMemberKind.MASTER.value,
     )
 
     offered = await client.post(
@@ -1196,12 +1196,12 @@ async def test_a_departure_that_retracts_an_offer_says_so_in_one_event(
 
     items = await _events(client, curator, group_id)
     kinds = [e["event"] for e in items]
-    assert CuratorGroupEventKind.TRANSFER_CANCELLED.value not in kinds
+    assert SchoolEventKind.TRANSFER_CANCELLED.value not in kinds
 
     removal = next(
         e
         for e in items
-        if e["event"] == CuratorGroupEventKind.MEMBER_REMOVED.value
+        if e["event"] == SchoolEventKind.MEMBER_REMOVED.value
     )
     assert removal["data"]["transfer_cancelled"] is True
 
@@ -1244,7 +1244,7 @@ async def test_an_entry_outlives_the_person_who_made_it(
     joined = next(
         e
         for e in await _events(client, curator, group_id)
-        if e["event"] == CuratorGroupEventKind.MEMBER_JOINED.value
+        if e["event"] == SchoolEventKind.MEMBER_JOINED.value
     )
     assert joined["actor"]["user_id"] == student_id
     assert joined["actor"]["display_name"] == "Нина"
@@ -1340,6 +1340,6 @@ async def test_revoking_a_link_is_recorded_and_revoking_nothing_is_not(
     revoked = [
         e
         for e in await _events(client, curator, group_id)
-        if e["event"] == CuratorGroupEventKind.INVITE_REVOKED.value
+        if e["event"] == SchoolEventKind.INVITE_REVOKED.value
     ]
     assert len(revoked) == 1

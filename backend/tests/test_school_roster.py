@@ -30,12 +30,12 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.masters.models import MasterProfile
+from app.modules.schools.models import (
+    School,
+    SchoolMember,
+    SchoolMemberKind,
+)
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 
@@ -102,8 +102,8 @@ async def _user(client: AsyncClient, telegram_id: int, first_name: str) -> dict:
     return await login_user(client, telegram_id=telegram_id, first_name=first_name)
 
 
-async def _school(db_session: AsyncSession, curator: dict, name: str) -> CuratorGroup:
-    group = CuratorGroup(curator_user_id=UUID(curator["user"]["id"]), name=name)
+async def _school(db_session: AsyncSession, curator: dict, name: str) -> School:
+    group = School(curator_user_id=UUID(curator["user"]["id"]), name=name)
     db_session.add(group)
     await db_session.commit()
     return group
@@ -111,13 +111,13 @@ async def _school(db_session: AsyncSession, curator: dict, name: str) -> Curator
 
 async def _join(
     db_session: AsyncSession,
-    school: CuratorGroup,
+    school: School,
     who: dict,
-    kind: CuratorMemberKind,
+    kind: SchoolMemberKind,
     joined_at: datetime,
 ) -> None:
     db_session.add(
-        CuratorGroupMember(
+        SchoolMember(
             group_id=school.id,
             user_id=UUID(who["user"]["id"]),
             kind=kind.value,
@@ -156,19 +156,19 @@ async def _school_with_people(client: AsyncClient, db_session: AsyncSession, bas
     await _school(db_session, other_curator, "Другая школа")
     # joined_at strictly ordered so the newest-first order is a fact, not luck.
     await _join(
-        db_session, school, mark, CuratorMemberKind.STUDENT, t0 + timedelta(days=1)
+        db_session, school, mark, SchoolMemberKind.STUDENT, t0 + timedelta(days=1)
     )
     await _join(
-        db_session, school, vera, CuratorMemberKind.STUDENT, t0 + timedelta(days=2)
+        db_session, school, vera, SchoolMemberKind.STUDENT, t0 + timedelta(days=2)
     )
     await _join(
-        db_session, school, anna, CuratorMemberKind.STUDENT, t0 + timedelta(days=3)
+        db_session, school, anna, SchoolMemberKind.STUDENT, t0 + timedelta(days=3)
     )
     await _join(
-        db_session, school, sergey, CuratorMemberKind.MASTER, t0 + timedelta(days=4)
+        db_session, school, sergey, SchoolMemberKind.MASTER, t0 + timedelta(days=4)
     )
     await _join(
-        db_session, school, boris, CuratorMemberKind.MASTER, t0 + timedelta(days=5)
+        db_session, school, boris, SchoolMemberKind.MASTER, t0 + timedelta(days=5)
     )
     await _set_status(db_session, sergey, "suspended")
     return {
@@ -305,9 +305,9 @@ async def test_a_lone_master_reads_himself(
     gone = await _master(client, db_session, base + 2, "Ушедший")
     school = await _school(db_session, curator, "Тихая")
     t0 = datetime.now(UTC) - timedelta(days=3)
-    await _join(db_session, school, gone, CuratorMemberKind.MASTER, t0)
+    await _join(db_session, school, gone, SchoolMemberKind.MASTER, t0)
     await _join(
-        db_session, school, me, CuratorMemberKind.MASTER, t0 + timedelta(days=1)
+        db_session, school, me, SchoolMemberKind.MASTER, t0 + timedelta(days=1)
     )
     await _set_status(db_session, gone, "suspended")
 
@@ -323,7 +323,7 @@ async def test_the_killswitch_closes_the_roster(
     the schools killswitch: with the flag off it is the same 404."""
     w = await _school_with_people(client, db_session, 70550)
     url = ROSTER_URL.format(group_id=w["school"].id)
-    with patch.object(settings, "curator_groups_enabled", True):
+    with patch.object(settings, "schools_enabled", True):
         assert (await _get(client, url, w["boris"])).status_code == 200
-    with patch.object(settings, "curator_groups_enabled", False):
+    with patch.object(settings, "schools_enabled", False):
         assert (await _get(client, url, w["boris"])).status_code == 404

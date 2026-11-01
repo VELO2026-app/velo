@@ -51,11 +51,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.modules.bookings.models import Booking, BookingStatus
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.diary.models import Checkin, CheckType, Feedback
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import (
@@ -63,6 +58,11 @@ from app.modules.practices.models import (
     Practice,
     PracticeStatus,
     PracticeType,
+)
+from app.modules.schools.models import (
+    School,
+    SchoolMember,
+    SchoolMemberKind,
 )
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
@@ -85,7 +85,7 @@ _TID_STUDENT_B = 65811
 _TID_STUDENT_C = 65812
 _TID_OUTSIDER = 65830
 
-_FLAG = "curator_groups_enabled"
+_FLAG = "schools_enabled"
 
 
 # ===========================================================================
@@ -140,8 +140,8 @@ async def _make_student(
 
 async def _school(
     db_session: AsyncSession, curator: dict, name: str = "Тихое утро",
-) -> CuratorGroup:
-    group = CuratorGroup(
+) -> School:
+    group = School(
         curator_user_id=UUID(curator["user"]["id"]), name=name,
     )
     db_session.add(group)
@@ -152,11 +152,11 @@ async def _school(
 
 async def _join_school(
     db_session: AsyncSession,
-    school: CuratorGroup,
+    school: School,
     auth: dict,
-    kind: CuratorMemberKind,
-) -> CuratorGroupMember:
-    row = CuratorGroupMember(
+    kind: SchoolMemberKind,
+) -> SchoolMember:
+    row = SchoolMember(
         group_id=school.id,
         user_id=UUID(auth["user"]["id"]),
         kind=kind.value,
@@ -168,11 +168,11 @@ async def _join_school(
 
 
 async def _leave_school(
-    db_session: AsyncSession, membership: CuratorGroupMember,
+    db_session: AsyncSession, membership: SchoolMember,
 ) -> None:
     """The teacher walks out -- the membership row goes, nothing else."""
     await db_session.delete(
-        await db_session.get(CuratorGroupMember, membership.id)
+        await db_session.get(SchoolMember, membership.id)
     )
     await db_session.commit()
 
@@ -180,7 +180,7 @@ async def _leave_school(
 async def _practice(
     db_session: AsyncSession,
     master: dict,
-    school: CuratorGroup | None,
+    school: School | None,
     *,
     title: str = "Утренняя практика",
     status: str = PracticeStatus.SCHEDULED.value,
@@ -298,7 +298,7 @@ async def _get(
     client: AsyncClient,
     url: str,
     auth: dict,
-    school: CuratorGroup | str,
+    school: School | str,
     **params,
 ):
     group_id = school if isinstance(school, str) else str(school.id)
@@ -310,7 +310,7 @@ async def _get(
 
 
 async def _checkins(
-    client: AsyncClient, auth: dict, school: CuratorGroup, **params,
+    client: AsyncClient, auth: dict, school: School, **params,
 ) -> list[dict]:
     resp = await _get(client, CHECKINS_URL, auth, school, **params)
     assert resp.status_code == 200, resp.text
@@ -318,7 +318,7 @@ async def _checkins(
 
 
 async def _reviews(
-    client: AsyncClient, auth: dict, school: CuratorGroup, **params,
+    client: AsyncClient, auth: dict, school: School, **params,
 ) -> list[dict]:
     resp = await _get(client, REVIEWS_URL, auth, school, **params)
     assert resp.status_code == 200, resp.text
@@ -370,7 +370,7 @@ async def test_the_curator_reads_practices_they_did_not_run(
     )
     student = await _make_student(client, _TID_STUDENT, first_name="Аня")
     school = await _school(db_session, curator)
-    await _join_school(db_session, school, teacher, CuratorMemberKind.MASTER)
+    await _join_school(db_session, school, teacher, SchoolMemberKind.MASTER)
 
     mine = await _practice(
         db_session, curator, school, title="Моя практика",
@@ -453,7 +453,7 @@ async def test_a_departed_masters_conducted_practice_stays_in_the_schools_feedba
     student = await _make_student(client, _TID_STUDENT)
     school = await _school(db_session, curator)
     membership = await _join_school(
-        db_session, school, teacher, CuratorMemberKind.MASTER,
+        db_session, school, teacher, SchoolMemberKind.MASTER,
     )
     conducted = await _practice(
         db_session, teacher, school, title="Проведённая ушедшего",
@@ -487,7 +487,7 @@ async def test_the_same_practice_leaves_the_school_feed_and_its_students(
 ) -> None:
     """...and the OTHER predicate still says no. Existing behaviour, pinned.
 
-    _master_in_curator_group_clause is untouched by BE-24, and this test is
+    _master_in_school_clause is untouched by BE-24, and this test is
     the proof rather than the claim: a departed master's practice is, the
     moment the membership row goes, gone from a school student's feed and
     refused at the detail gate. (Until BE-75 the test above kept this same
@@ -504,9 +504,9 @@ async def test_the_same_practice_leaves_the_school_feed_and_its_students(
     watcher = await _make_student(client, _TID_STUDENT_B)
     school = await _school(db_session, curator)
     membership = await _join_school(
-        db_session, school, teacher, CuratorMemberKind.MASTER,
+        db_session, school, teacher, SchoolMemberKind.MASTER,
     )
-    await _join_school(db_session, school, watcher, CuratorMemberKind.STUDENT)
+    await _join_school(db_session, school, watcher, SchoolMemberKind.STUDENT)
     practice = await _practice(
         db_session, teacher, school, title="Практика ушедшего",
     )
@@ -531,7 +531,7 @@ async def test_the_same_practice_leaves_the_school_feed_and_its_students(
 
 
 async def _create_in_two_schools(
-    client: AsyncClient, author: dict, first: CuratorGroup, second: CuratorGroup,
+    client: AsyncClient, author: dict, first: School, second: School,
 ):
     """POST a practice naming TWO schools -- the shape BE-74 refuses."""
     return await client.post(
@@ -579,8 +579,8 @@ async def test_a_second_school_is_refused_and_only_the_owner_curator_sees_it(
     student = await _make_student(client, _TID_STUDENT)
     school = await _school(db_session, curator, name="Первая")
     school_b = await _school(db_session, curator_b, name="Вторая")
-    await _join_school(db_session, school, teacher, CuratorMemberKind.MASTER)
-    await _join_school(db_session, school_b, teacher, CuratorMemberKind.MASTER)
+    await _join_school(db_session, school, teacher, SchoolMemberKind.MASTER)
+    await _join_school(db_session, school_b, teacher, SchoolMemberKind.MASTER)
 
     refused = await _create_in_two_schools(client, teacher, school, school_b)
     assert refused.status_code == 422, refused.text
@@ -646,7 +646,7 @@ async def test_a_student_who_left_the_school_keeps_their_feedback_there(
     student = await _make_student(client, _TID_STUDENT, first_name="Аня")
     school = await _school(db_session, curator)
     membership = await _join_school(
-        db_session, school, student, CuratorMemberKind.STUDENT,
+        db_session, school, student, SchoolMemberKind.STUDENT,
     )
     practice = await _practice(db_session, curator, school)
     await _attended(db_session, practice, student)
@@ -710,8 +710,8 @@ async def test_a_school_master_and_a_school_student_are_both_refused(
     teacher = await _make_verified_master(client, db_session, _TID_TEACHER)
     student = await _make_student(client, _TID_STUDENT)
     school = await _school(db_session, curator)
-    await _join_school(db_session, school, teacher, CuratorMemberKind.MASTER)
-    await _join_school(db_session, school, student, CuratorMemberKind.STUDENT)
+    await _join_school(db_session, school, teacher, SchoolMemberKind.MASTER)
+    await _join_school(db_session, school, student, SchoolMemberKind.STUDENT)
 
     assert (
         await _get(client, CHECKINS_URL, curator, school)
@@ -953,7 +953,7 @@ async def test_the_id_in_the_feed_does_not_open_the_students_dossier(
     teacher = await _make_verified_master(client, db_session, _TID_TEACHER)
     student = await _make_student(client, _TID_STUDENT, first_name="Аня")
     school = await _school(db_session, curator)
-    await _join_school(db_session, school, teacher, CuratorMemberKind.MASTER)
+    await _join_school(db_session, school, teacher, SchoolMemberKind.MASTER)
     practice = await _practice(db_session, teacher, school)
     await _attended(db_session, practice, student)
 
@@ -992,7 +992,7 @@ async def test_a_practice_outside_the_school_is_invisible_in_both_feeds(
     teacher = await _make_verified_master(client, db_session, _TID_TEACHER)
     student = await _make_student(client, _TID_STUDENT)
     school = await _school(db_session, curator)
-    await _join_school(db_session, school, teacher, CuratorMemberKind.MASTER)
+    await _join_school(db_session, school, teacher, SchoolMemberKind.MASTER)
 
     inside = await _practice(db_session, teacher, school, title="В школе")
     outside = await _practice(db_session, teacher, None, title="Вне школы")

@@ -20,7 +20,7 @@
 #       the school handed over mid-demotion: the race at the bottom
 #   the pending handover dies with the role:
 #       test_a_handover_offered_to_the_demoted_master_is_dropped
-#   races (tests/curator_race_harness.py, both sides waiting at once):
+#   races (tests/school_race_harness.py, both sides waiting at once):
 #       vs remove, vs leave, vs accept-transfer (both start orders),
 #       vs accept of a master offer (serialised without a wait -- see the
 #       test), and a handover landing mid-demotion.
@@ -36,19 +36,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events.models import OutboxEvent
 from app.core.exceptions import NotFoundError
-from app.modules.curator_groups import service as curator_service
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupEvent,
-    CuratorGroupEventKind,
-    CuratorGroupMasterOffer,
-    CuratorGroupMember,
-    CuratorGroupTransfer,
-    CuratorMemberKind,
-)
 from app.modules.masters.models import MasterProfile
+from app.modules.schools import service as curator_service
+from app.modules.schools.models import (
+    School,
+    SchoolEvent,
+    SchoolEventKind,
+    SchoolMasterOffer,
+    SchoolMember,
+    SchoolMemberKind,
+    SchoolTransfer,
+)
 from app.modules.users.models import User, UserRole
-from tests.curator_race_harness import assert_no_deadlock, race
 from tests.helpers import (
     auth_headers,
     fresh_execute,
@@ -56,6 +55,7 @@ from tests.helpers import (
     full_cleanup_range,
     login_user,
 )
+from tests.school_race_harness import assert_no_deadlock, race
 
 GROUPS_URL = "/api/v1/masters/me/curator-groups"
 DEMOTE_URL = GROUPS_URL + "/{group_id}/members/{user_id}/demote"
@@ -75,8 +75,8 @@ _TID_STUDENT = 68912
 _TID_STRANGER = 68913
 
 DEMOTED = "curator_group.member_demoted"
-MASTER = CuratorMemberKind.MASTER.value
-STUDENT = CuratorMemberKind.STUDENT.value
+MASTER = SchoolMemberKind.MASTER.value
+STUDENT = SchoolMemberKind.STUDENT.value
 
 
 @pytest.fixture(autouse=True)
@@ -134,7 +134,7 @@ async def _seed(
     db_session: AsyncSession, group_id: str, auth: dict, kind: str,
 ) -> None:
     db_session.add(
-        CuratorGroupMember(group_id=UUID(group_id), user_id=_uid(auth), kind=kind)
+        SchoolMember(group_id=UUID(group_id), user_id=_uid(auth), kind=kind)
     )
     await db_session.flush()
     await db_session.commit()
@@ -150,9 +150,9 @@ async def _demote(client, curator: dict, group_id: str, who: dict):
 async def _kind(group_id, user_id) -> str | None:
     return (
         await fresh_execute(
-            select(CuratorGroupMember.kind).where(
-                CuratorGroupMember.group_id == UUID(str(group_id)),
-                CuratorGroupMember.user_id == UUID(str(user_id)),
+            select(SchoolMember.kind).where(
+                SchoolMember.group_id == UUID(str(group_id)),
+                SchoolMember.user_id == UUID(str(user_id)),
             )
         )
     ).scalar_one_or_none()
@@ -161,9 +161,9 @@ async def _kind(group_id, user_id) -> str | None:
 async def _journal(group_id) -> list[tuple[str, dict]]:
     rows = (
         await fresh_execute(
-            select(CuratorGroupEvent.event, CuratorGroupEvent.data)
-            .where(CuratorGroupEvent.group_id == UUID(str(group_id)))
-            .order_by(CuratorGroupEvent.seq)
+            select(SchoolEvent.event, SchoolEvent.data)
+            .where(SchoolEvent.group_id == UUID(str(group_id)))
+            .order_by(SchoolEvent.seq)
         )
     ).all()
     return [(e, d) for e, d in rows]
@@ -224,7 +224,7 @@ async def test_a_master_is_demoted_and_told(
     assert await _kind(group, _uid(other)) == MASTER
     demotions = [
         d for e, d in await _journal(group)
-        if e == CuratorGroupEventKind.MEMBER_DEMOTED.value
+        if e == SchoolEventKind.MEMBER_DEMOTED.value
     ]
     assert len(demotions) == 1
     assert demotions[0]["target_user_id"] == master["user"]["id"]
@@ -255,7 +255,7 @@ async def test_demoting_twice_writes_once(
         assert (await _demote(client, curator, group, master)).status_code == 204
 
     assert (await _events(group)).count(
-        CuratorGroupEventKind.MEMBER_DEMOTED.value
+        SchoolEventKind.MEMBER_DEMOTED.value
     ) == 1
     assert len(await _demoted_notes_for(_uid(master))) == 1
 
@@ -291,7 +291,7 @@ async def test_demoting_a_stranger_to_the_school_writes_nothing(
     assert (await _demote(client, curator, group, stranger)).status_code == 204
 
     assert await _kind(group, _uid(stranger)) is None
-    assert await _events(group) == [CuratorGroupEventKind.GROUP_CREATED.value]
+    assert await _events(group) == [SchoolEventKind.GROUP_CREATED.value]
 
 
 @pytest.mark.asyncio
@@ -332,15 +332,15 @@ async def test_a_handover_offered_to_the_demoted_master_is_dropped(
 
     transfers = (
         await fresh_execute(
-            select(CuratorGroupTransfer.id).where(
-                CuratorGroupTransfer.group_id == UUID(group)
+            select(SchoolTransfer.id).where(
+                SchoolTransfer.group_id == UUID(group)
             )
         )
     ).all()
     assert transfers == []
     [data] = [
         d for e, d in await _journal(group)
-        if e == CuratorGroupEventKind.MEMBER_DEMOTED.value
+        if e == SchoolEventKind.MEMBER_DEMOTED.value
     ]
     assert data["transfer_cancelled"] is True
     resp = await client.post(
@@ -348,7 +348,7 @@ async def test_a_handover_offered_to_the_demoted_master_is_dropped(
         headers=auth_headers(heir["session_token"]),
     )
     assert resp.status_code == 404
-    group_row = await fresh_get(CuratorGroup, UUID(group))
+    group_row = await fresh_get(School, UUID(group))
     assert group_row.curator_user_id == _uid(curator)
 
 
@@ -380,15 +380,15 @@ async def test_a_reappointed_master_can_be_demoted_again(
 
     assert await _kind(group, _uid(master)) == STUDENT
     events = await _events(group)
-    assert events.count(CuratorGroupEventKind.MEMBER_DEMOTED.value) == 2
-    assert events.count(CuratorGroupEventKind.MEMBER_PROMOTED.value) == 1
+    assert events.count(SchoolEventKind.MEMBER_DEMOTED.value) == 2
+    assert events.count(SchoolEventKind.MEMBER_PROMOTED.value) == 1
     notes = await _demoted_notes_for(_uid(master))
     assert len(notes) == 2
     assert len({n["idempotency_key"] for n in notes}) == 2
 
 
 # ===========================================================================
-# Races (tests/curator_race_harness.py)
+# Races (tests/school_race_harness.py)
 # ===========================================================================
 
 
@@ -407,21 +407,21 @@ async def _race_school(
     s.curator = _uid(await _person(client, db_session, _TID_CURATOR))
     s.master = _uid(await _person(client, db_session, _TID_MASTER))
     s.second = _uid(await _person(client, db_session, _TID_SECOND_MASTER))
-    group = CuratorGroup(curator_user_id=s.curator, name="Школа гонки B1")
+    group = School(curator_user_id=s.curator, name="Школа гонки B1")
     db_session.add(group)
     await db_session.flush()
     s.group = group.id
     db_session.add(
-        CuratorGroupMember(group_id=s.group, user_id=s.master, kind=master_kind)
+        SchoolMember(group_id=s.group, user_id=s.master, kind=master_kind)
     )
     db_session.add(
-        CuratorGroupMember(group_id=s.group, user_id=s.second, kind=MASTER)
+        SchoolMember(group_id=s.group, user_id=s.second, kind=MASTER)
     )
     if transfer_to_master:
-        db_session.add(CuratorGroupTransfer(group_id=s.group, to_user_id=s.master))
+        db_session.add(SchoolTransfer(group_id=s.group, to_user_id=s.master))
     if offer_to_master:
         db_session.add(
-            CuratorGroupMasterOffer(group_id=s.group, to_user_id=s.master)
+            SchoolMasterOffer(group_id=s.group, to_user_id=s.master)
         )
     await db_session.flush()
     await db_session.commit()
@@ -430,7 +430,7 @@ async def _race_school(
 
 def _demote_call(s: _S, by: UUID, who: UUID):
     async def call(session):
-        await curator_service.demote_curator_group_master(
+        await curator_service.demote_school_master(
             by, s.group, who, session, actor=await session.get(User, by),
         )
     return call
@@ -438,7 +438,7 @@ def _demote_call(s: _S, by: UUID, who: UUID):
 
 def _remove_call(s: _S):
     async def call(session):
-        await curator_service.remove_curator_group_member(
+        await curator_service.remove_school_member(
             s.curator, s.group, s.master, session,
             actor=await session.get(User, s.curator),
         )
@@ -447,7 +447,7 @@ def _remove_call(s: _S):
 
 def _leave_call(s: _S):
     async def call(session):
-        await curator_service.leave_curator_group(
+        await curator_service.leave_school(
             s.group, s.master, session, actor=await session.get(User, s.master),
         )
     return call
@@ -455,7 +455,7 @@ def _leave_call(s: _S):
 
 def _accept_transfer_call(s: _S):
     async def call(session):
-        await curator_service.accept_curator_group_transfer(
+        await curator_service.accept_school_transfer(
             s.group, s.master, session, actor=await session.get(User, s.master),
         )
     return call
@@ -463,14 +463,14 @@ def _accept_transfer_call(s: _S):
 
 def _accept_offer_call(s: _S):
     async def call(session):
-        await curator_service.accept_curator_group_master_offer(
+        await curator_service.accept_school_master_offer(
             s.group, s.master, session, actor=await session.get(User, s.master),
         )
     return call
 
 
 async def _curator_of(s: _S) -> UUID:
-    return (await fresh_get(CuratorGroup, s.group)).curator_user_id
+    return (await fresh_get(School, s.group)).curator_user_id
 
 
 @pytest.mark.asyncio
@@ -492,8 +492,8 @@ async def test_a_removal_mid_demotion_neither_deadlocks_nor_demotes_a_ghost(
     assert result.rival.committed, result.rival.error
     assert await _kind(s.group, s.master) is None
     events = await _events(s.group)
-    assert CuratorGroupEventKind.MEMBER_REMOVED.value in events
-    assert CuratorGroupEventKind.MEMBER_DEMOTED.value not in events
+    assert SchoolEventKind.MEMBER_REMOVED.value in events
+    assert SchoolEventKind.MEMBER_DEMOTED.value not in events
 
 
 @pytest.mark.asyncio
@@ -515,8 +515,8 @@ async def test_leaving_mid_demotion_leaves_after_it(
     assert result.rival.committed, result.rival.error
     assert await _kind(s.group, s.master) is None
     events = await _events(s.group)
-    assert events.index(CuratorGroupEventKind.MEMBER_DEMOTED.value) < (
-        events.index(CuratorGroupEventKind.MEMBER_LEFT.value)
+    assert events.index(SchoolEventKind.MEMBER_DEMOTED.value) < (
+        events.index(SchoolEventKind.MEMBER_LEFT.value)
     )
 
 
@@ -539,7 +539,7 @@ async def test_a_handover_accepted_mid_demotion_of_the_heir(
     assert result.holder.committed, result.holder.error
     assert result.rival.committed, result.rival.error
     assert await _curator_of(s) == s.master
-    assert CuratorGroupEventKind.MEMBER_DEMOTED.value not in await _events(
+    assert SchoolEventKind.MEMBER_DEMOTED.value not in await _events(
         s.group
     )
 
@@ -598,9 +598,9 @@ async def test_an_appointment_accepted_mid_demotion_is_serialised(
     assert result.holder.committed, result.holder.error
     assert result.rival.committed, result.rival.error
     events = await _events(s.group)
-    demoted = CuratorGroupEventKind.MEMBER_DEMOTED.value in events
+    demoted = SchoolEventKind.MEMBER_DEMOTED.value in events
     assert demoted == (await _kind(s.group, s.master) == STUDENT)
-    assert events.count(CuratorGroupEventKind.MEMBER_PROMOTED.value) == 1
+    assert events.count(SchoolEventKind.MEMBER_PROMOTED.value) == 1
     # This start order, specifically: the no-op came first.
     assert not result.rival_waited
     assert not demoted
@@ -614,7 +614,7 @@ async def test_a_former_curator_cannot_demote_in_the_new_owners_school(
     """The school changes hands while its old curator demotes ANOTHER
     master. The accept holds the group row; the demotion's ownership check
     waits on it, re-reads, and refuses -- the rollback restores the kind.
-    This is the case _lock_group_as_owner is in demote_curator_group_master
+    This is the case _lock_group_as_owner is in demote_school_master
     for."""
     s = await _race_school(client, db_session, transfer_to_master=True)
     result = await race(

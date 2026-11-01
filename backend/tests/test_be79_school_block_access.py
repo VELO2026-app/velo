@@ -38,8 +38,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import ForbiddenError
 from app.modules.bookings import service as bookings_service
 from app.modules.bookings.models import Booking, BookingStatus
-from app.modules.curator_groups import service as curator_service
-from app.modules.curator_groups.models import CuratorGroupMember, CuratorMemberKind
 from app.modules.diary.checkins_service import upsert_checkin
 from app.modules.masters.groups_models import MasterStudent
 from app.modules.masters.models import MasterProfile
@@ -53,11 +51,13 @@ from app.modules.practices.models import (
     PracticeType,
 )
 from app.modules.practices.schemas import UpdatePracticeRequest
+from app.modules.schools import service as curator_service
+from app.modules.schools.models import SchoolMember, SchoolMemberKind
 from app.modules.users.models import User, UserRole
 from app.modules.waitlist import service as waitlist_service
 from app.modules.waitlist.models import Waitlist, WaitlistStatus
-from tests.curator_race_harness import race
 from tests.helpers import auth_headers, fresh_execute, full_cleanup_range, login_user
+from tests.school_race_harness import race
 
 GROUPS_URL = "/api/v1/masters/me/curator-groups"
 BLOCK_URL = "/api/v1/masters/me/curator-groups/{group_id}/members/{user_id}/block"
@@ -132,10 +132,10 @@ async def _member(
     db_session: AsyncSession,
     group_id: str | None,
     auth: dict,
-    kind: CuratorMemberKind = CuratorMemberKind.STUDENT,
+    kind: SchoolMemberKind = SchoolMemberKind.STUDENT,
 ) -> None:
     db_session.add(
-        CuratorGroupMember(
+        SchoolMember(
             group_id=UUID(group_id),
             user_id=_uid(auth),
             kind=kind.value,
@@ -329,9 +329,9 @@ async def world(client: AsyncClient, db_session: AsyncSession) -> dict:
     student = await _student(client, _TID_STUDENT)
     group_id = await _school(client, curator)
     other_group_id = await _school(client, curator_b, name="Другая школа")
-    await _member(db_session, group_id, master, CuratorMemberKind.MASTER)
+    await _member(db_session, group_id, master, SchoolMemberKind.MASTER)
     await _member(db_session, group_id, student)
-    await _member(db_session, other_group_id, master, CuratorMemberKind.MASTER)
+    await _member(db_session, other_group_id, master, SchoolMemberKind.MASTER)
     await _member(db_session, other_group_id, student)
     return {
         "curator": curator,
@@ -646,7 +646,7 @@ async def blocked_master(
 ) -> dict:
     w = world
     master = await _verified_master(client, db_session, _TID_BLOCKED_MASTER)
-    await _member(db_session, w["group_id"], master, CuratorMemberKind.MASTER)
+    await _member(db_session, w["group_id"], master, SchoolMemberKind.MASTER)
     return master
 
 
@@ -731,7 +731,7 @@ def _actor_call(fn, *args, actor_id: UUID, **kwargs):
 
 def _block_call(w: dict, person: dict):
     return _actor_call(
-        curator_service.block_curator_group_member,
+        curator_service.block_school_member,
         _uid(w["curator"]),
         UUID(w["group_id"]),
         _uid(person),

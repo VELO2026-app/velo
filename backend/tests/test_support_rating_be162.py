@@ -39,8 +39,8 @@ from app.core.exceptions import ConflictError
 from app.modules.support import service, translation
 from app.modules.support.models import TOPICS, SupportThread, SupportTicket
 from app.modules.users.models import User, UserRole
-from tests.curator_race_harness import assert_no_deadlock, race
 from tests.helpers import auth_headers, fresh_execute, full_cleanup_range, login_user
+from tests.school_race_harness import assert_no_deadlock, race
 
 BAND_MIN, BAND_MAX = 55000, 55039
 

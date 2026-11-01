@@ -54,8 +54,8 @@ from app.modules.admin.masters.service import (
     verify_master,
 )
 from app.modules.admin.users.service import make_master
-from app.modules.curator_groups.models import CuratorGroupMasterOffer
-from app.modules.curator_groups.service import accept_curator_group_master_offer
+from app.modules.schools.models import SchoolMasterOffer
+from app.modules.schools.service import accept_school_master_offer
 # MasterProfile.user is a STRING forward-ref relationship ("User"): a
 # standalone script only registers the classes it imports, and without User
 # mapped the first ORM operation dies in configure_mappers(). Same reason
@@ -283,8 +283,8 @@ async def run_accept_offer(ref: str, dry_run: bool) -> None:
         user = await resolve_user(session, ref)
         offers = (
             await session.execute(
-                select(CuratorGroupMasterOffer).where(
-                    CuratorGroupMasterOffer.to_user_id == user.id
+                select(SchoolMasterOffer).where(
+                    SchoolMasterOffer.to_user_id == user.id
                 )
             )
         ).scalars().all()
@@ -295,7 +295,7 @@ async def run_accept_offer(ref: str, dry_run: bool) -> None:
                 log(f"[DRY] would accept master offer: group={o.group_id} for {user.first_name}")
             return
         for offer in offers:
-            await accept_curator_group_master_offer(
+            await accept_school_master_offer(
                 offer.group_id, user.id, session, actor=user
             )
             await session.commit()

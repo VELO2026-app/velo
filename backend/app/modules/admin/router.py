@@ -14,7 +14,7 @@
 #   - practices/    -- global practices oversight (E9/4c)
 #   - participants/ -- global participants list (E1)
 #   - taxonomy/     -- direction/style catalog CRUD (R5, batch R)
-#   - curator_groups/ -- read-only oversight of the schools (P4, GT-9)
+#   - schools/ -- read-only oversight of the schools (P4, GT-9)
 #
 # Direct endpoints on this router:
 #   - POST /announcements -- system.announcement via comms (Phase 6/T1)
@@ -29,8 +29,8 @@ from uuid import uuid4
 import structlog
 from fastapi import APIRouter, Depends
 
-from app.modules.admin.curator_groups.router import (            # P4/GT-9
-    router as curator_groups_router,
+from app.modules.admin.schools.router import (            # P4/GT-9
+    router as schools_router,
 )
 from app.modules.admin.masters.router import router as masters_router
 from app.modules.admin.metrics.router import router as metrics_router
@@ -71,7 +71,7 @@ router.include_router(revenue_router)        # E9/4b
 router.include_router(practices_router)      # E9/4c
 router.include_router(participants_router)   # E1
 router.include_router(taxonomy_router)       # R5
-router.include_router(curator_groups_router)  # P4/GT-9
+router.include_router(schools_router)  # P4/GT-9
 
 
 # ---------------------------------------------------------------------------

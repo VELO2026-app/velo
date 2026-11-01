@@ -65,8 +65,8 @@ from app.modules.support.translation import (
     render_for_client,
 )
 from app.modules.users.models import User, UserRole
-from tests.curator_race_harness import assert_no_deadlock, race
 from tests.helpers import auth_headers, full_cleanup_range, login_user
+from tests.school_race_harness import assert_no_deadlock, race
 
 BAND_MIN, BAND_MAX = 79400, 79439
 

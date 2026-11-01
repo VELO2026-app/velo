@@ -33,12 +33,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import AuditLog
 from app.core.events.models import OutboxEvent
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupEvent,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.masters.models import MasterProfile
 from app.modules.practices import cancel_service
 from app.modules.practices import service as practice_service
@@ -49,14 +43,20 @@ from app.modules.practices.models import (
     PracticeType,
 )
 from app.modules.practices.schemas import UpdatePracticeRequest
+from app.modules.schools.models import (
+    School,
+    SchoolEvent,
+    SchoolMember,
+    SchoolMemberKind,
+)
 from app.modules.users.models import User, UserRole
-from tests.curator_race_harness import assert_no_deadlock, race
 from tests.helpers import (
     auth_headers,
     fresh_execute,
     full_cleanup_range,
     login_user,
 )
+from tests.school_race_harness import assert_no_deadlock, race
 
 CANCEL_URL = "/api/v1/practices/{practice_id}/cancel"
 
@@ -110,8 +110,8 @@ async def _master(
 
 async def _school(
     db_session: AsyncSession, curator_id: str, name: str = "Каскад",
-) -> CuratorGroup:
-    group = CuratorGroup(curator_user_id=UUID(curator_id), name=name)
+) -> School:
+    group = School(curator_user_id=UUID(curator_id), name=name)
     db_session.add(group)
     await db_session.commit()
     return group
@@ -121,7 +121,7 @@ async def _practice(
     db_session: AsyncSession,
     master_id: str,
     *,
-    school: CuratorGroup | None,
+    school: School | None,
     hours: float,
     audience_kind: str | None = None,
     status: str = PracticeStatus.SCHEDULED.value,
@@ -130,7 +130,7 @@ async def _practice(
 ) -> Practice:
     """A practice of the shape the API produces: a child has its root's
     master and school (BE-74), and the master of a school practice is a
-    member of the school (_usable_curator_group_or_400)."""
+    member of the school (_usable_school_or_400)."""
     if audience_kind is None:
         audience_kind = (
             AudienceKind.CURATOR_GROUPS.value
@@ -163,18 +163,18 @@ async def _practice(
     if school is not None and school.curator_user_id != practice.master_id:
         member = (
             await db_session.execute(
-                select(CuratorGroupMember.id).where(
-                    CuratorGroupMember.group_id == school.id,
-                    CuratorGroupMember.user_id == practice.master_id,
+                select(SchoolMember.id).where(
+                    SchoolMember.group_id == school.id,
+                    SchoolMember.user_id == practice.master_id,
                 )
             )
         ).scalar_one_or_none()
         if member is None:
             db_session.add(
-                CuratorGroupMember(
+                SchoolMember(
                     group_id=school.id,
                     user_id=practice.master_id,
-                    kind=CuratorMemberKind.MASTER.value,
+                    kind=SchoolMemberKind.MASTER.value,
                 )
             )
     await db_session.commit()
@@ -207,10 +207,10 @@ async def _audits(event: str, *practices: Practice) -> list[AuditLog]:
     )).scalars().all())
 
 
-async def _journal(school: CuratorGroup) -> list[CuratorGroupEvent]:
+async def _journal(school: School) -> list[SchoolEvent]:
     return list((await fresh_execute(
-        select(CuratorGroupEvent).where(
-            CuratorGroupEvent.group_id == school.id,
+        select(SchoolEvent).where(
+            SchoolEvent.group_id == school.id,
         ),
     )).scalars().all())
 
@@ -247,9 +247,9 @@ async def world(client: AsyncClient, db_session: AsyncSession) -> dict:
         db_session, other_curator["user"]["id"], name="Другая",
     )
     db_session.add(
-        CuratorGroupMember(
+        SchoolMember(
             group_id=school.id, user_id=UUID(school_master["user"]["id"]),
-            kind=CuratorMemberKind.MASTER.value,
+            kind=SchoolMemberKind.MASTER.value,
         )
     )
     await db_session.commit()
@@ -545,8 +545,8 @@ async def test_school_handed_over_in_the_window_cancels_nothing(
     )
     new_owner = await _master(client, db_session, _TID_NEW_OWNER)
     await db_session.execute(
-        update(CuratorGroup)
-        .where(CuratorGroup.id == w["school"].id)
+        update(School)
+        .where(School.id == w["school"].id)
         .values(curator_user_id=UUID(new_owner["user"]["id"]))
     )
     await db_session.commit()

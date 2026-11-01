@@ -5,9 +5,9 @@
 #
 # The pairs that were a 40P01 before this order (BE-64 follow-up, O1/O2):
 #
-#   G1  cancel_practice (series) x delete_curator_group  -- BE-103 (b)
+#   G1  cancel_practice (series) x delete_school  -- BE-103 (b)
 #   G2  cancel_practice (series) x block_student          -- BE-101 p.3
-#   G7  delete_curator_group     x block_student          -- gate
+#   G7  delete_school     x block_student          -- gate
 #   G8  cancel_practice (series) x block_student          -- gate
 #   plus the cascade's own NEHVATKA: the primary rescheduled between the
 #   unlocked read and the lock.
@@ -18,7 +18,7 @@
 # old shape (the primary first, the series after) it holds the primary only,
 # and the rival -- taking by id -- builds the cycle. But a holder that holds
 # its whole set is blind to the RIVAL's order: any rival just waits. So the
-# rivals' own order (delete_curator_group, block_student) is measured with a
+# rivals' own order (delete_school, block_student) is measured with a
 # GATE instead (G7/G8): a third session holds the lowest common row, the
 # id-ordered writer queues on it first holding nothing, the second writer
 # takes what its own order gives it and queues too; releasing the gate lets
@@ -26,7 +26,7 @@
 # in id order. Two single statements cannot be paused in between, so
 # without the gate their interleaving is not deterministic.
 #
-# The common harness (curator_race_harness.py) is used as it is; the gate is
+# The common harness (school_race_harness.py) is used as it is; the gate is
 # local to this file.
 # =============================================================================
 
@@ -41,12 +41,6 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session_factory
-from app.modules.curator_groups import service as curator_service
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.masters import groups_service
 from app.modules.masters.models import MasterProfile
 from app.modules.practices import cancel_service
@@ -58,19 +52,25 @@ from app.modules.practices.models import (
     PracticeType,
 )
 from app.modules.practices.schemas import UpdatePracticeRequest
-from app.modules.users.models import User, UserRole
-from tests.curator_race_harness import (
-    Outcome,
-    _run,
-    _waiting_on_lock,
-    assert_no_deadlock,
-    race,
+from app.modules.schools import service as curator_service
+from app.modules.schools.models import (
+    School,
+    SchoolMember,
+    SchoolMemberKind,
 )
+from app.modules.users.models import User, UserRole
 from tests.helpers import (
     auth_headers,
     fresh_execute,
     full_cleanup_range,
     login_user,
+)
+from tests.school_race_harness import (
+    Outcome,
+    _run,
+    _waiting_on_lock,
+    assert_no_deadlock,
+    race,
 )
 
 BOOKINGS_URL = "/api/v1/bookings"
@@ -119,15 +119,15 @@ async def w(client: AsyncClient, db_session: AsyncSession) -> dict:
     master = await _master(client, db_session, _TID_MASTER)
     curator = await _master(client, db_session, _TID_CURATOR)
     student = await login_user(client, telegram_id=_TID_STUDENT, first_name="S")
-    school = CuratorGroup(
+    school = School(
         curator_user_id=UUID(curator["user"]["id"]), name="Порядок",
     )
     db_session.add(school)
     await db_session.flush()
     db_session.add(
-        CuratorGroupMember(
+        SchoolMember(
             group_id=school.id, user_id=UUID(master["user"]["id"]),
-            kind=CuratorMemberKind.MASTER.value,
+            kind=SchoolMemberKind.MASTER.value,
         )
     )
     await db_session.commit()
@@ -231,7 +231,7 @@ def _cascade(w: dict, pid: UUID):
 
 def _delete_school(w: dict):
     async def call(session: AsyncSession):
-        await curator_service.delete_curator_group(
+        await curator_service.delete_school(
             w["cid"], w["school"], session,
         )
     return call
@@ -367,7 +367,7 @@ async def test_g2_cascade_against_blocking_the_student(
 async def test_g7_deleting_the_school_against_blocking_through_a_gate(
     client: AsyncClient, db_session: AsyncSession, w: dict,
 ) -> None:
-    """delete_curator_group must take the school's practices by id.
+    """delete_school must take the school's practices by id.
 
     Rows x1 < x2 by id, the student booked on both; x2 sits EARLIER in the
     heap, so an UPDATE without order meets it first. The heap order is

@@ -1,5 +1,5 @@
 # =============================================================================
-# VELO Backend -- Tests: Curator group transfer (GT-4, 8.2 #5-6)
+# VELO Backend -- Tests: School transfer (GT-4, 8.2 #5-6)
 # =============================================================================
 #
 # telegram_id band: 66600-66799 (curator 66601, masters 66602-66606,
@@ -30,14 +30,14 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupInvite,
-    CuratorGroupMember,
-    CuratorGroupTransfer,
-    CuratorMemberKind,
-)
 from app.modules.masters.models import MasterProfile
+from app.modules.schools.models import (
+    School,
+    SchoolInvite,
+    SchoolMember,
+    SchoolMemberKind,
+    SchoolTransfer,
+)
 from app.modules.users.models import User, UserRole
 from tests.helpers import (
     auth_headers,
@@ -102,7 +102,7 @@ async def _make_verified_master(
     # build a master who is verified and still cannot create the group
     # every test below starts by creating. Set here rather than asserted
     # on: this file is about what a curator does WITH a school, and the
-    # right itself is covered in test_curator_group_permission.py.
+    # right itself is covered in test_school_permission.py.
     db_session.add(
         MasterProfile(
             user_id=user_id,
@@ -149,10 +149,10 @@ async def _seed_member(
     db_session: AsyncSession,
     group_id: str,
     user_id: str,
-    kind: CuratorMemberKind,
+    kind: SchoolMemberKind,
     joined_at: datetime | None = None,
 ) -> None:
-    row = CuratorGroupMember(
+    row = SchoolMember(
         group_id=UUID(group_id), user_id=UUID(user_id), kind=kind.value,
     )
     if joined_at is not None:
@@ -209,8 +209,8 @@ async def _mine(client: AsyncClient, auth: dict) -> list[dict]:
 async def _transfer_rows(group_id: str):
     return (
         await fresh_execute(
-            select(CuratorGroupTransfer.to_user_id).where(
-                CuratorGroupTransfer.group_id == UUID(group_id)
+            select(SchoolTransfer.to_user_id).where(
+                SchoolTransfer.group_id == UUID(group_id)
             )
         )
     ).scalars().all()
@@ -220,9 +220,9 @@ async def _member_rows(group_id: str):
     return (
         await fresh_execute(
             select(
-                CuratorGroupMember.user_id,
-                CuratorGroupMember.kind,
-            ).where(CuratorGroupMember.group_id == UUID(group_id))
+                SchoolMember.user_id,
+                SchoolMember.kind,
+            ).where(SchoolMember.group_id == UUID(group_id))
         )
     ).all()
 
@@ -230,8 +230,8 @@ async def _member_rows(group_id: str):
 async def _curator_of(group_id: str):
     return (
         await fresh_execute(
-            select(CuratorGroup.curator_user_id).where(
-                CuratorGroup.id == UUID(group_id)
+            select(School.curator_user_id).where(
+                School.id == UUID(group_id)
             )
         )
     ).scalar_one()
@@ -267,7 +267,7 @@ async def _group_with_heir(
     )
     group = await _create_group(client, curator)
     await _seed_member(
-        db_session, group["id"], heir["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, group["id"], heir["user"]["id"], SchoolMemberKind.MASTER,
     )
     return curator, heir, group
 
@@ -328,7 +328,7 @@ async def test_a_second_offer_is_409_even_to_the_same_person(
         client, db_session, _TID_MASTER_B, first_name="Other",
     )
     await _seed_member(
-        db_session, group["id"], other["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, group["id"], other["user"]["id"], SchoolMemberKind.MASTER,
     )
     assert (await _offer(client, curator, group["id"], heir)).status_code == 200
 
@@ -377,9 +377,9 @@ async def test_student_stranger_hidden_master_and_self_are_all_404(
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
     group = await _create_group(client, curator)
     for who, kind in (
-        (heir, CuratorMemberKind.MASTER),
-        (hidden, CuratorMemberKind.MASTER),
-        (student, CuratorMemberKind.STUDENT),
+        (heir, SchoolMemberKind.MASTER),
+        (hidden, SchoolMemberKind.MASTER),
+        (student, SchoolMemberKind.STUDENT),
     ):
         await _seed_member(db_session, group["id"], who["user"]["id"], kind)
     await _revoke(client, admin_token, hidden["user"]["id"])
@@ -490,7 +490,7 @@ async def test_declining_an_offer_that_is_not_yours_is_204_and_harmless(
     student = await login_user(client, telegram_id=_TID_STUDENT_A)
     await _seed_member(
         db_session, group["id"], student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     await _offer(client, curator, group["id"], heir)
 
@@ -523,7 +523,7 @@ async def test_accept_moves_the_group_in_one_transaction(
     student = await login_user(client, telegram_id=_TID_STUDENT_A)
     await _seed_member(
         db_session, group["id"], student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     # GT-27: one link per school. This used to mint both kinds, because the
     # point below is that a transfer leaves the school's links untouched --
@@ -538,8 +538,8 @@ async def test_accept_moves_the_group_in_one_transaction(
     tokens_before = sorted(
         (
             await fresh_execute(
-                select(CuratorGroupInvite.token).where(
-                    CuratorGroupInvite.group_id == UUID(group["id"])
+                select(SchoolInvite.token).where(
+                    SchoolInvite.group_id == UUID(group["id"])
                 )
             )
         ).scalars().all()
@@ -567,8 +567,8 @@ async def test_accept_moves_the_group_in_one_transaction(
     tokens_after = sorted(
         (
             await fresh_execute(
-                select(CuratorGroupInvite.token).where(
-                    CuratorGroupInvite.group_id == UUID(group["id"])
+                select(SchoolInvite.token).where(
+                    SchoolInvite.group_id == UUID(group["id"])
                 )
             )
         ).scalars().all()
@@ -692,11 +692,11 @@ async def test_accept_by_anyone_but_the_addressee_is_404(
     )
     student = await login_user(client, telegram_id=_TID_STUDENT_A)
     await _seed_member(
-        db_session, group["id"], other["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, group["id"], other["user"]["id"], SchoolMemberKind.MASTER,
     )
     await _seed_member(
         db_session, group["id"], student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     await _offer(client, curator, group["id"], heir)
 
@@ -862,11 +862,11 @@ async def test_somebody_else_leaving_does_not_touch_the_offer(
     student = await login_user(client, telegram_id=_TID_STUDENT_B)
     await _seed_member(
         db_session, group["id"], bystander["user"]["id"],
-        CuratorMemberKind.MASTER,
+        SchoolMemberKind.MASTER,
     )
     await _seed_member(
         db_session, group["id"], student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     await _offer(client, curator, group["id"], heir)
 
@@ -953,11 +953,11 @@ async def test_the_offer_is_visible_to_exactly_two_people(
     )
     student = await login_user(client, telegram_id=_TID_STUDENT_A)
     await _seed_member(
-        db_session, group["id"], other["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, group["id"], other["user"]["id"], SchoolMemberKind.MASTER,
     )
     await _seed_member(
         db_session, group["id"], student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     await _offer(client, curator, group["id"], heir)
 
@@ -983,7 +983,7 @@ async def test_transfer_offered_is_true_only_for_the_addressee(
         client, db_session, _TID_MASTER_B, first_name="Other",
     )
     await _seed_member(
-        db_session, group["id"], other["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, group["id"], other["user"]["id"], SchoolMemberKind.MASTER,
     )
 
     before = {i["id"]: i["transfer_offered"] for i in await _mine(client, heir)}

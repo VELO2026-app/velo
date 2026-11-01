@@ -1,9 +1,9 @@
 # =============================================================================
-# VELO -- curator_groups: one lock order, and the windows it closes (BE-95)
+# VELO -- schools: one lock order, and the windows it closes (BE-95)
 # =============================================================================
 # The module's lock order is written once, in the header of
-# app/modules/curator_groups/service.py. Every test here puts two real
-# service calls in flight at once through tests/curator_race_harness.py:
+# app/modules/schools/service.py. Every test here puts two real
+# service calls in flight at once through tests/school_race_harness.py:
 # the holder is paused inside its window by wrapping a real function, the
 # rival runs into it, and the holder is released. THE ASSERTION IS AN
 # INVARIANT, not a winner, and each one carries its pair: not only "the
@@ -27,21 +27,21 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
-from app.modules.curator_groups import service as curator_service
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupEvent,
-    CuratorGroupEventKind,
-    CuratorGroupInvite,
-    CuratorGroupMasterOffer,
-    CuratorGroupMember,
-    CuratorGroupTransfer,
-    CuratorMemberKind,
-)
 from app.modules.masters.models import MasterProfile
+from app.modules.schools import service as curator_service
+from app.modules.schools.models import (
+    School,
+    SchoolEvent,
+    SchoolEventKind,
+    SchoolInvite,
+    SchoolMasterOffer,
+    SchoolMember,
+    SchoolMemberKind,
+    SchoolTransfer,
+)
 from app.modules.users.models import User, UserRole
-from tests.curator_race_harness import assert_no_deadlock, race
 from tests.helpers import full_cleanup_range, login_user
+from tests.school_race_harness import assert_no_deadlock, race
 
 _TID_MIN = 69850
 _TID_MAX = 69899
@@ -51,8 +51,8 @@ _TID_THIRD = 69853  # another master member
 _TID_STUDENT = 69854
 _TID_JOINER = 69855
 
-MASTER = CuratorMemberKind.MASTER.value
-STUDENT = CuratorMemberKind.STUDENT.value
+MASTER = SchoolMemberKind.MASTER.value
+STUDENT = SchoolMemberKind.STUDENT.value
 
 
 async def _user(client, db_session, tid: int, *, master: bool) -> UUID:
@@ -78,7 +78,7 @@ async def _user(client, db_session, tid: int, *, master: bool) -> UUID:
     return user_id
 
 
-class School:
+class SchoolSetup:
     """A school with a curator, two master members and a student."""
 
     def __init__(self) -> None:
@@ -98,29 +98,29 @@ async def _school(
     transfer_to_heir: bool = False,
     offer_to_student: bool = False,
     invite: bool = False,
-) -> School:
-    s = School()
+) -> SchoolSetup:
+    s = SchoolSetup()
     s.curator = await _user(client, db_session, _TID_CURATOR, master=True)
     s.heir = await _user(client, db_session, _TID_HEIR, master=True)
     s.third = await _user(client, db_session, _TID_THIRD, master=True)
     s.student = await _user(client, db_session, _TID_STUDENT, master=True)
     s.joiner = await _user(client, db_session, _TID_JOINER, master=False)
-    group = CuratorGroup(curator_user_id=s.curator, name="Школа BE-95")
+    group = School(curator_user_id=s.curator, name="Школа BE-95")
     db_session.add(group)
     await db_session.flush()
     s.id = group.id
     for uid, kind in (
         (s.heir, MASTER), (s.third, MASTER), (s.student, STUDENT),
     ):
-        db_session.add(CuratorGroupMember(group_id=s.id, user_id=uid, kind=kind))
+        db_session.add(SchoolMember(group_id=s.id, user_id=uid, kind=kind))
     if transfer_to_heir:
-        db_session.add(CuratorGroupTransfer(group_id=s.id, to_user_id=s.heir))
+        db_session.add(SchoolTransfer(group_id=s.id, to_user_id=s.heir))
     if offer_to_student:
         db_session.add(
-            CuratorGroupMasterOffer(group_id=s.id, to_user_id=s.student)
+            SchoolMasterOffer(group_id=s.id, to_user_id=s.student)
         )
     if invite:
-        db_session.add(CuratorGroupInvite(group_id=s.id, token=s.token))
+        db_session.add(SchoolInvite(group_id=s.id, token=s.token))
     await db_session.flush()
     await db_session.commit()
     return s
@@ -130,44 +130,44 @@ async def _actor(session: AsyncSession, user_id: UUID) -> User:
     return await session.get(User, user_id)
 
 
-async def _group(db_session: AsyncSession, s: School) -> CuratorGroup | None:
+async def _group(db_session: AsyncSession, s: SchoolSetup) -> School | None:
     db_session.expire_all()
     return (
         await db_session.execute(
-            select(CuratorGroup).where(CuratorGroup.id == s.id)
+            select(School).where(School.id == s.id)
         )
     ).scalar_one_or_none()
 
 
-async def _members(db_session: AsyncSession, s: School) -> dict[UUID, str]:
+async def _members(db_session: AsyncSession, s: SchoolSetup) -> dict[UUID, str]:
     rows = (
         await db_session.execute(
-            select(CuratorGroupMember.user_id, CuratorGroupMember.kind).where(
-                CuratorGroupMember.group_id == s.id
+            select(SchoolMember.user_id, SchoolMember.kind).where(
+                SchoolMember.group_id == s.id
             )
         )
     ).all()
     return {uid: kind for uid, kind in rows}
 
 
-async def _offers(db_session: AsyncSession, s: School) -> list[UUID]:
+async def _offers(db_session: AsyncSession, s: SchoolSetup) -> list[UUID]:
     return list(
         (
             await db_session.execute(
-                select(CuratorGroupMasterOffer.to_user_id).where(
-                    CuratorGroupMasterOffer.group_id == s.id
+                select(SchoolMasterOffer.to_user_id).where(
+                    SchoolMasterOffer.group_id == s.id
                 )
             )
         ).scalars()
     )
 
 
-async def _transfers(db_session: AsyncSession, s: School) -> list[UUID]:
+async def _transfers(db_session: AsyncSession, s: SchoolSetup) -> list[UUID]:
     return list(
         (
             await db_session.execute(
-                select(CuratorGroupTransfer.to_user_id).where(
-                    CuratorGroupTransfer.group_id == s.id
+                select(SchoolTransfer.to_user_id).where(
+                    SchoolTransfer.group_id == s.id
                 )
             )
         ).scalars()
@@ -190,89 +190,89 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
 # -- the callables, one per writer --------------------------------------------
 
 
-def _delete(s: School):
+def _delete(s: SchoolSetup):
     async def call(session):
-        await curator_service.delete_curator_group(s.curator, s.id, session)
+        await curator_service.delete_school(s.curator, s.id, session)
     return call
 
 
-def _remove(s: School, user_id: UUID):
+def _remove(s: SchoolSetup, user_id: UUID):
     async def call(session):
-        await curator_service.remove_curator_group_member(
+        await curator_service.remove_school_member(
             s.curator, s.id, user_id, session,
             actor=await _actor(session, s.curator),
         )
     return call
 
 
-def _leave(s: School, user_id: UUID):
+def _leave(s: SchoolSetup, user_id: UUID):
     async def call(session):
-        await curator_service.leave_curator_group(
+        await curator_service.leave_school(
             s.id, user_id, session, actor=await _actor(session, user_id),
         )
     return call
 
 
-def _decline_master(s: School):
+def _decline_master(s: SchoolSetup):
     async def call(session):
-        await curator_service.decline_curator_group_master_offer(
+        await curator_service.decline_school_master_offer(
             s.id, s.student, session, actor=await _actor(session, s.student),
         )
     return call
 
 
-def _accept_master(s: School):
+def _accept_master(s: SchoolSetup):
     async def call(session):
-        await curator_service.accept_curator_group_master_offer(
+        await curator_service.accept_school_master_offer(
             s.id, s.student, session, actor=await _actor(session, s.student),
         )
     return call
 
 
-def _offer_master(s: School):
+def _offer_master(s: SchoolSetup):
     async def call(session):
-        await curator_service.offer_curator_group_master(
+        await curator_service.offer_school_master(
             s.curator, s.id, s.student, session,
             actor=await _actor(session, s.curator),
         )
     return call
 
 
-def _accept_transfer(s: School):
+def _accept_transfer(s: SchoolSetup):
     async def call(session):
-        await curator_service.accept_curator_group_transfer(
+        await curator_service.accept_school_transfer(
             s.id, s.heir, session, actor=await _actor(session, s.heir),
         )
     return call
 
 
-def _offer_transfer(s: School, by: UUID, to: UUID):
+def _offer_transfer(s: SchoolSetup, by: UUID, to: UUID):
     async def call(session):
-        await curator_service.offer_curator_group_transfer(
+        await curator_service.offer_school_transfer(
             by, s.id, to, session, actor=await _actor(session, by),
         )
     return call
 
 
-def _cancel_transfer(s: School):
+def _cancel_transfer(s: SchoolSetup):
     async def call(session):
-        await curator_service.cancel_curator_group_transfer(
+        await curator_service.cancel_school_transfer(
             s.curator, s.id, session, actor=await _actor(session, s.curator),
         )
     return call
 
 
-def _join(s: School):
+def _join(s: SchoolSetup):
     async def call(session):
-        return await curator_service.join_curator_group_by_token(
+        return await curator_service.join_school_by_token(
             s.token, s.joiner, session, actor=await _actor(session, s.joiner),
         )
     return call
 
 
-def _rename(s: School, name: str):
+def _rename(s: SchoolSetup, name: str):
     async def call(session):
-        await curator_service.update_curator_group(
+        await curator_service.update_school(
             s.curator, s.id, name, session,
             actor=await _actor(session, s.curator),
         )
@@ -399,14 +399,14 @@ async def test_two_deletes_of_one_school_give_one_success(
 async def test_deleting_a_school_with_no_children(client, db_session) -> None:
     """ПУСТОТА: nothing to delete but the group -- still one clean delete."""
     curator = await _user(client, db_session, _TID_CURATOR, master=True)
-    group = CuratorGroup(curator_user_id=curator, name="Пустая BE-95")
+    group = School(curator_user_id=curator, name="Пустая BE-95")
     db_session.add(group)
     await db_session.commit()
     group_id = group.id
-    await curator_service.delete_curator_group(curator, group_id, db_session)
+    await curator_service.delete_school(curator, group_id, db_session)
     await db_session.commit()
     db_session.expire_all()
-    assert await db_session.get(CuratorGroup, group_id) is None
+    assert await db_session.get(School, group_id) is None
 
 
 # =============================================================================
@@ -608,16 +608,16 @@ async def test_joining_a_school_deleted_mid_join_is_not_a_success(
 # =============================================================================
 
 
-async def _renames(db_session: AsyncSession, s: School) -> list[tuple]:
+async def _renames(db_session: AsyncSession, s: SchoolSetup) -> list[tuple]:
     rows = (
         await db_session.execute(
-            select(CuratorGroupEvent.data)
+            select(SchoolEvent.data)
             .where(
-                CuratorGroupEvent.group_id == s.id,
-                CuratorGroupEvent.event
-                == CuratorGroupEventKind.GROUP_RENAMED.value,
+                SchoolEvent.group_id == s.id,
+                SchoolEvent.event
+                == SchoolEventKind.GROUP_RENAMED.value,
             )
-            .order_by(CuratorGroupEvent.seq)
+            .order_by(SchoolEvent.seq)
         )
     ).scalars().all()
     return [(d["old_name"], d["new_name"]) for d in rows]
@@ -713,32 +713,32 @@ async def test_an_appointment_made_while_the_school_is_renamed(
 # ===========================================================================
 
 
-def _revoke_invite(s: School):
+def _revoke_invite(s: SchoolSetup):
     async def call(session):
-        await curator_service.revoke_curator_group_invite(
+        await curator_service.revoke_school_invite(
             s.curator, s.id, session, actor=await _actor(session, s.curator),
         )
     return call
 
 
-async def _invites(db_session: AsyncSession, s: School) -> list[str]:
+async def _invites(db_session: AsyncSession, s: SchoolSetup) -> list[str]:
     return list(
         (
             await db_session.execute(
-                select(CuratorGroupInvite.token).where(
-                    CuratorGroupInvite.group_id == s.id
+                select(SchoolInvite.token).where(
+                    SchoolInvite.group_id == s.id
                 )
             )
         ).scalars()
     )
 
 
-async def _journal_events(db_session: AsyncSession, s: School) -> list[str]:
+async def _journal_events(db_session: AsyncSession, s: SchoolSetup) -> list[str]:
     return list(
         (
             await db_session.execute(
-                select(CuratorGroupEvent.event).where(
-                    CuratorGroupEvent.group_id == s.id
+                select(SchoolEvent.event).where(
+                    SchoolEvent.group_id == s.id
                 )
             )
         ).scalars()
@@ -778,7 +778,7 @@ async def test_a_curator_who_handed_the_school_over_cannot_remove_from_it(
     assert isinstance(result.rival.error, NotFoundError), result.rival
     db_session.expire_all()
     assert (await _members(db_session, s)).get(s.third) == MASTER
-    assert CuratorGroupEventKind.MEMBER_REMOVED.value not in (
+    assert SchoolEventKind.MEMBER_REMOVED.value not in (
         await _journal_events(db_session, s)
     )
     assert (await _group(db_session, s)).curator_user_id == s.heir
@@ -812,6 +812,6 @@ async def test_a_curator_who_handed_the_school_over_cannot_revoke_its_link(
     assert isinstance(result.rival.error, NotFoundError), result.rival
     db_session.expire_all()
     assert await _invites(db_session, s) == [s.token]
-    assert CuratorGroupEventKind.INVITE_REVOKED.value not in (
+    assert SchoolEventKind.INVITE_REVOKED.value not in (
         await _journal_events(db_session, s)
     )

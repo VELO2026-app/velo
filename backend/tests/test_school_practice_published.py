@@ -32,7 +32,7 @@
 #     sits on the audience path and this is not it, and because
 #     re-verification makes school and practice visible again;
 #   - the AUTHOR left the school -- nothing is announced, because
-#     _master_in_curator_group_clause already says the school no longer
+#     _master_in_school_clause already says the school no longer
 #     accepts his practices, and that is permanent until he rejoins.
 # One predicate separates them: it asks about the master, never about the
 # curator. That is checked here rather than assumed, because if it ever
@@ -53,15 +53,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events.models import OutboxEvent
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupEvent,
-    CuratorGroupEventKind,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import Practice
+from app.modules.schools.models import (
+    School,
+    SchoolEvent,
+    SchoolEventKind,
+    SchoolMember,
+    SchoolMemberKind,
+)
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 
@@ -132,8 +132,8 @@ async def _student(
 
 async def _school(
     db_session: AsyncSession, curator: dict, name: str = "Тихое утро",
-) -> CuratorGroup:
-    group = CuratorGroup(
+) -> School:
+    group = School(
         curator_user_id=UUID(curator["user"]["id"]), name=name,
     )
     db_session.add(group)
@@ -144,11 +144,11 @@ async def _school(
 
 async def _join(
     db_session: AsyncSession,
-    school: CuratorGroup,
+    school: School,
     auth: dict,
-    kind: CuratorMemberKind = CuratorMemberKind.STUDENT,
-) -> CuratorGroupMember:
-    row = CuratorGroupMember(
+    kind: SchoolMemberKind = SchoolMemberKind.STUDENT,
+) -> SchoolMember:
+    row = SchoolMember(
         group_id=school.id,
         user_id=UUID(auth["user"]["id"]),
         kind=kind.value,
@@ -181,7 +181,7 @@ async def _suspend_curator(
 async def _draft(
     client: AsyncClient,
     author: dict,
-    school: CuratorGroup | None,
+    school: School | None,
     *,
     title: str = "Утренняя практика",
     recurrence: dict | None = None,
@@ -250,18 +250,18 @@ async def _notified(session: AsyncSession, who: dict) -> list[dict]:
 
 
 async def _lines(
-    session: AsyncSession, school: CuratorGroup,
-) -> list[CuratorGroupEvent]:
+    session: AsyncSession, school: School,
+) -> list[SchoolEvent]:
     return list(
         (
             await session.execute(
-                select(CuratorGroupEvent)
+                select(SchoolEvent)
                 .where(
-                    CuratorGroupEvent.group_id == school.id,
-                    CuratorGroupEvent.event
-                    == CuratorGroupEventKind.PRACTICE_PUBLISHED.value,
+                    SchoolEvent.group_id == school.id,
+                    SchoolEvent.event
+                    == SchoolEventKind.PRACTICE_PUBLISHED.value,
                 )
-                .order_by(CuratorGroupEvent.id)
+                .order_by(SchoolEvent.id)
             )
         ).scalars().all()
     )
@@ -330,7 +330,7 @@ async def test_publishing_tells_the_school_and_writes_its_journal(
     author = await _master(client, db_session, _TID_AUTHOR, first_name="Ната")
     student = await _student(client, _TID_STUDENT)
     school = await _school(db_session, curator)
-    await _join(db_session, school, author, CuratorMemberKind.MASTER)
+    await _join(db_session, school, author, SchoolMemberKind.MASTER)
     await _join(db_session, school, student)
 
     practice_id = await _draft(client, author, school)
@@ -358,7 +358,7 @@ async def test_the_author_is_not_told_about_their_own_publication(
     author = await _master(client, db_session, _TID_AUTHOR)
     student = await _student(client, _TID_STUDENT)
     school = await _school(db_session, curator)
-    await _join(db_session, school, author, CuratorMemberKind.MASTER)
+    await _join(db_session, school, author, SchoolMemberKind.MASTER)
     await _join(db_session, school, student)
 
     await _publish_ok(
@@ -380,7 +380,7 @@ async def test_the_curator_is_told_and_is_not_when_they_published_it(
     curator = await _master(client, db_session, _TID_CURATOR)
     author = await _master(client, db_session, _TID_AUTHOR)
     school = await _school(db_session, curator)
-    await _join(db_session, school, author, CuratorMemberKind.MASTER)
+    await _join(db_session, school, author, SchoolMemberKind.MASTER)
 
     await _publish_ok(
         client, author, await _draft(client, author, school),
@@ -401,7 +401,7 @@ async def test_a_suspended_master_member_is_still_told(
     """Membership, not the roster.
 
     A suspended master is hidden from the school's roster (I-4) but still
-    sees its practices -- _viewer_in_curator_group_clause says losing sight
+    sees its practices -- _viewer_in_school_clause says losing sight
     of them is not part of what suspension means. Skipping him here would
     contradict the screen he can open.
     """
@@ -411,8 +411,8 @@ async def test_a_suspended_master_member_is_still_told(
         client, db_session, _TID_SUSPENDED, verified=False,
     )
     school = await _school(db_session, curator)
-    await _join(db_session, school, author, CuratorMemberKind.MASTER)
-    await _join(db_session, school, shadowed, CuratorMemberKind.MASTER)
+    await _join(db_session, school, author, SchoolMemberKind.MASTER)
+    await _join(db_session, school, shadowed, SchoolMemberKind.MASTER)
 
     await _publish_ok(
         client, author, await _draft(client, author, school),
@@ -446,7 +446,7 @@ async def test_one_person_in_two_target_schools_is_told_once(
     morning = await _school(db_session, curator, name="Утро")
     evening = await _school(db_session, curator, name="Вечер")
     for school in (morning, evening):
-        await _join(db_session, school, author, CuratorMemberKind.MASTER)
+        await _join(db_session, school, author, SchoolMemberKind.MASTER)
         await _join(db_session, school, student)
 
     created = await client.post(
@@ -499,7 +499,7 @@ async def test_a_series_of_forty_occurrences_announces_once(
     author = await _master(client, db_session, _TID_AUTHOR)
     student = await _student(client, _TID_STUDENT)
     school = await _school(db_session, curator)
-    await _join(db_session, school, author, CuratorMemberKind.MASTER)
+    await _join(db_session, school, author, SchoolMemberKind.MASTER)
     await _join(db_session, school, student)
 
     practice_id = await _draft(
@@ -536,7 +536,7 @@ async def test_a_school_with_no_members_gets_its_line_and_no_messages(
     curator = await _master(client, db_session, _TID_CURATOR)
     author = await _master(client, db_session, _TID_AUTHOR)
     empty = await _school(db_session, curator, name="Пустая")
-    await _join(db_session, empty, author, CuratorMemberKind.MASTER)
+    await _join(db_session, empty, author, SchoolMemberKind.MASTER)
 
     await _publish_ok(
         client, author, await _draft(client, author, empty),
@@ -570,7 +570,7 @@ async def test_a_practice_outside_any_school_announces_nothing(
     author = await _master(client, db_session, _TID_AUTHOR)
     student = await _student(client, _TID_STUDENT)
     school = await _school(db_session, curator)
-    await _join(db_session, school, author, CuratorMemberKind.MASTER)
+    await _join(db_session, school, author, SchoolMemberKind.MASTER)
     await _join(db_session, school, student)
 
     await _publish_ok(client, author, await _draft(client, author, None))
@@ -593,7 +593,7 @@ async def test_an_author_who_left_the_school_announces_nothing(
     (BE-74: the owner column never moves), and the publish path does not re-check membership -- the gate that
     would sits on the audience branch, which a status-only PATCH never
     enters. So the publication itself SUCCEEDS, and it is
-    _master_in_curator_group_clause that keeps the announcement from going
+    _master_in_school_clause that keeps the announcement from going
     out: the school can no longer see his practices, so telling its
     members one has arrived would be an arrival nobody can open.
 
@@ -605,14 +605,14 @@ async def test_an_author_who_left_the_school_announces_nothing(
     student = await _student(client, _TID_STUDENT)
     school = await _school(db_session, curator)
     membership = await _join(
-        db_session, school, author, CuratorMemberKind.MASTER,
+        db_session, school, author, SchoolMemberKind.MASTER,
     )
     await _join(db_session, school, student)
 
     practice_id = await _draft(client, author, school)
 
     await db_session.delete(
-        await db_session.get(CuratorGroupMember, membership.id)
+        await db_session.get(SchoolMember, membership.id)
     )
     await db_session.commit()
 
@@ -645,7 +645,7 @@ async def test_a_dark_school_is_still_announced_to(
     author = await _master(client, db_session, _TID_AUTHOR)
     student = await _student(client, _TID_STUDENT)
     school = await _school(db_session, curator)
-    await _join(db_session, school, author, CuratorMemberKind.MASTER)
+    await _join(db_session, school, author, SchoolMemberKind.MASTER)
     await _join(db_session, school, student)
 
     practice_id = await _draft(client, author, school)
@@ -671,7 +671,7 @@ async def test_rescheduling_after_publication_announces_nothing_again(
     author = await _master(client, db_session, _TID_AUTHOR)
     student = await _student(client, _TID_STUDENT)
     school = await _school(db_session, curator)
-    await _join(db_session, school, author, CuratorMemberKind.MASTER)
+    await _join(db_session, school, author, SchoolMemberKind.MASTER)
     await _join(db_session, school, student)
 
     practice_id = await _draft(client, author, school)
@@ -708,13 +708,13 @@ async def test_a_failed_publication_leaves_neither_half(
     author = await _master(client, db_session, _TID_AUTHOR)
     student = await _student(client, _TID_STUDENT)
     school = await _school(db_session, curator)
-    await _join(db_session, school, author, CuratorMemberKind.MASTER)
+    await _join(db_session, school, author, SchoolMemberKind.MASTER)
     await _join(db_session, school, student)
 
     practice_id = await _draft(client, author, school)
 
     with patch(
-        "app.modules.curator_groups.service.emit_notification",
+        "app.modules.schools.service.emit_notification",
         side_effect=RuntimeError("outbox exploded"),
     ), pytest.raises(RuntimeError, match="outbox exploded"):
         await _publish(client, author, practice_id)
@@ -751,14 +751,14 @@ async def test_the_membership_predicate_ignores_the_curators_status(
     curator = await _master(client, db_session, _TID_CURATOR)
     author = await _master(client, db_session, _TID_AUTHOR)
     school = await _school(db_session, curator)
-    await _join(db_session, school, author, CuratorMemberKind.MASTER)
+    await _join(db_session, school, author, SchoolMemberKind.MASTER)
 
     async def _accepts() -> bool:
         return bool(
             (
                 await db_session.execute(
-                    select(CuratorGroup.id).where(
-                        CuratorGroup.id == school.id,
+                    select(School.id).where(
+                        School.id == school.id,
                         master_broadcasts_to_group_clause(
                             UUID(author["user"]["id"]),
                         ),

@@ -8,11 +8,11 @@
 #
 # Two names of ONE curator are the same school name when they match ignoring
 # case and with whitespace collapsed (owner decisions, 2026-10-03). The rule
-# lives in SQL only -- curator_groups.models.curator_group_name_key -- and is
+# lives in SQL only -- schools.models.school_name_key -- and is
 # enforced twice: the service's pre-checks answer a clean 409 before any
 # write, and the unique index uq_curator_group_curator_name_key catches what
 # a race slips past the pre-check. The transfer row of the grid lives in
-# test_curator_transfer.py beside its helpers.
+# test_school_transfer.py beside its helpers.
 # =============================================================================
 
 import asyncio
@@ -26,8 +26,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_engine
-from app.modules.curator_groups.models import CuratorGroup, curator_group_name_key
 from app.modules.masters.models import MasterProfile
+from app.modules.schools.models import School, school_name_key
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 
@@ -106,19 +106,19 @@ async def test_the_index_rejects_exactly_what_the_builder_calls_the_same(
     on every pair: if the two literals ever drift, some pair here splits."""
     key_equal = (
         await db_session.execute(
-            select(curator_group_name_key(a) == curator_group_name_key(b))
+            select(school_name_key(a) == school_name_key(b))
         )
     ).scalar_one()
     assert key_equal is same
 
     curator = await _curator(client, db_session, 70701)
     owner = UUID(curator["user"]["id"])
-    db_session.add(CuratorGroup(curator_user_id=owner, name=a))
+    db_session.add(School(curator_user_id=owner, name=a))
     await db_session.commit()
     rejected = False
     try:
         async with db_session.begin_nested():
-            db_session.add(CuratorGroup(curator_user_id=owner, name=b))
+            db_session.add(School(curator_user_id=owner, name=b))
             await db_session.flush()
     except IntegrityError:
         rejected = True
@@ -258,8 +258,8 @@ async def test_two_spellings_racing_end_as_one_school(
     count = (
         await db_session.execute(
             select(func.count())
-            .select_from(CuratorGroup)
-            .where(CuratorGroup.curator_user_id == UUID(curator["user"]["id"]))
+            .select_from(School)
+            .where(School.curator_user_id == UUID(curator["user"]["id"]))
         )
     ).scalar_one()
     assert count == 1

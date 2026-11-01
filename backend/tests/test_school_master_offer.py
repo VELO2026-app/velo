@@ -11,8 +11,8 @@
 # WHAT REPLACED WHAT. A school used to have two invite links, and the master
 # one promoted an existing student to kind='master' on join. Cancelled by
 # owner ruling: the curator APPOINTS, and the appointment takes effect only
-# when the appointee confirms. Eleven tests left test_curator_invites.py and
-# two left test_curator_group_journal.py with that link.
+# when the appointee confirms. Eleven tests left test_school_invites.py and
+# two left test_school_journal.py with that link.
 #
 # FIVE PROPERTIES CAME WITH THEM, AND THIS FILE IS WHERE THEY LIVE NOW.
 # This list is the point of the header: a deleted test is visible in the
@@ -60,14 +60,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events.models import OutboxEvent
-from app.modules.curator_groups.models import (
-    CuratorGroupEvent,
-    CuratorGroupEventKind,
-    CuratorGroupMasterOffer,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.masters.models import MasterProfile
+from app.modules.schools.models import (
+    SchoolEvent,
+    SchoolEventKind,
+    SchoolMasterOffer,
+    SchoolMember,
+    SchoolMemberKind,
+)
 from app.modules.users.models import User, UserRole
 from tests.helpers import (
     auth_headers,
@@ -169,10 +169,10 @@ async def _school(client: AsyncClient, curator: dict) -> str:
 
 async def _seed_member(
     db_session: AsyncSession, group_id: str, auth: dict,
-    kind: CuratorMemberKind = CuratorMemberKind.STUDENT,
+    kind: SchoolMemberKind = SchoolMemberKind.STUDENT,
 ) -> None:
     db_session.add(
-        CuratorGroupMember(
+        SchoolMember(
             group_id=UUID(group_id),
             user_id=UUID(auth["user"]["id"]),
             kind=kind.value,
@@ -208,8 +208,8 @@ async def _offers(group_id: str) -> list[UUID]:
     return list(
         (
             await fresh_execute(
-                select(CuratorGroupMasterOffer.to_user_id).where(
-                    CuratorGroupMasterOffer.group_id == UUID(group_id)
+                select(SchoolMasterOffer.to_user_id).where(
+                    SchoolMasterOffer.group_id == UUID(group_id)
                 )
             )
         ).scalars().all()
@@ -219,9 +219,9 @@ async def _offers(group_id: str) -> list[UUID]:
 async def _kind_of(group_id: str, auth: dict) -> str | None:
     return (
         await fresh_execute(
-            select(CuratorGroupMember.kind).where(
-                CuratorGroupMember.group_id == UUID(group_id),
-                CuratorGroupMember.user_id == UUID(auth["user"]["id"]),
+            select(SchoolMember.kind).where(
+                SchoolMember.group_id == UUID(group_id),
+                SchoolMember.user_id == UUID(auth["user"]["id"]),
             )
         )
     ).scalar_one_or_none()
@@ -230,8 +230,8 @@ async def _kind_of(group_id: str, auth: dict) -> str | None:
 async def _journal(group_id: str) -> list[str]:
     rows = (
         await fresh_execute(
-            select(CuratorGroupEvent.event).where(
-                CuratorGroupEvent.group_id == UUID(group_id)
+            select(SchoolEvent.event).where(
+                SchoolEvent.group_id == UUID(group_id)
             )
         )
     ).all()
@@ -279,8 +279,8 @@ async def test_the_curator_appoints_and_nothing_changes_until_consent(
     assert (await _offer(client, curator, group, cand)).status_code == 204
 
     assert await _offers(group) == [UUID(cand["user"]["id"])]
-    assert await _kind_of(group, cand) == CuratorMemberKind.STUDENT.value
-    assert CuratorGroupEventKind.MEMBER_PROMOTED.value not in await _journal(
+    assert await _kind_of(group, cand) == SchoolMemberKind.STUDENT.value
+    assert SchoolEventKind.MEMBER_PROMOTED.value not in await _journal(
         group
     )
 
@@ -302,9 +302,9 @@ async def test_accepting_changes_the_kind_and_not_the_arrival(
     await _seed_member(db_session, group, cand)
     before = (
         await fresh_execute(
-            select(CuratorGroupMember.joined_at).where(
-                CuratorGroupMember.group_id == UUID(group),
-                CuratorGroupMember.user_id == UUID(cand["user"]["id"]),
+            select(SchoolMember.joined_at).where(
+                SchoolMember.group_id == UUID(group),
+                SchoolMember.user_id == UUID(cand["user"]["id"]),
             )
         )
     ).scalar_one()
@@ -312,18 +312,18 @@ async def test_accepting_changes_the_kind_and_not_the_arrival(
     await _offer(client, curator, group, cand)
     assert (await _accept(client, cand, group)).status_code == 204
 
-    assert await _kind_of(group, cand) == CuratorMemberKind.MASTER.value
+    assert await _kind_of(group, cand) == SchoolMemberKind.MASTER.value
     after = (
         await fresh_execute(
-            select(CuratorGroupMember.joined_at).where(
-                CuratorGroupMember.group_id == UUID(group),
-                CuratorGroupMember.user_id == UUID(cand["user"]["id"]),
+            select(SchoolMember.joined_at).where(
+                SchoolMember.group_id == UUID(group),
+                SchoolMember.user_id == UUID(cand["user"]["id"]),
             )
         )
     ).scalar_one()
     assert after == before
     assert await _offers(group) == []
-    assert CuratorGroupEventKind.MEMBER_PROMOTED.value in await _journal(group)
+    assert SchoolEventKind.MEMBER_PROMOTED.value in await _journal(group)
 
 
 @pytest.mark.asyncio
@@ -340,11 +340,11 @@ async def test_declining_changes_nothing_and_removes_the_offer(
     assert (await _decline(client, cand, group)).status_code == 204
 
     assert await _offers(group) == []
-    assert await _kind_of(group, cand) == CuratorMemberKind.STUDENT.value
-    assert CuratorGroupEventKind.MASTER_OFFER_DECLINED.value in (
+    assert await _kind_of(group, cand) == SchoolMemberKind.STUDENT.value
+    assert SchoolEventKind.MASTER_OFFER_DECLINED.value in (
         await _journal(group)
     )
-    assert CuratorGroupEventKind.MEMBER_PROMOTED.value not in await _journal(
+    assert SchoolEventKind.MEMBER_PROMOTED.value not in await _journal(
         group
     )
 
@@ -368,7 +368,7 @@ async def test_a_repeated_offer_is_not_a_second_row(
 
     assert await _offers(group) == [UUID(cand["user"]["id"])]
     assert (await _journal(group)).count(
-        CuratorGroupEventKind.MASTER_OFFERED.value
+        SchoolEventKind.MASTER_OFFERED.value
     ) == 1
 
 
@@ -450,7 +450,7 @@ async def test_a_plain_user_is_appointed_pending_verification(
     resp = await _offer(client, curator, group, plain)
     assert resp.status_code == 204, resp.text
     assert await _offers(group) == [UUID(plain["user"]["id"])]
-    assert await _kind_of(group, plain) == CuratorMemberKind.STUDENT.value
+    assert await _kind_of(group, plain) == SchoolMemberKind.STUDENT.value
     types = await _types_for(plain)
     assert types == ["curator_group.master_verification_required"]
 
@@ -500,7 +500,7 @@ async def test_verification_lost_between_offer_and_consent_refuses_but_keeps_it(
     resp = await _accept(client, cand, group)
     assert resp.status_code == 403
     assert resp.json()["error"] == "master_required"
-    assert await _kind_of(group, cand) == CuratorMemberKind.STUDENT.value
+    assert await _kind_of(group, cand) == SchoolMemberKind.STUDENT.value
     # The half that makes this a refusal and not a cancellation.
     assert await _offers(group) == [UUID(cand["user"]["id"])]
 
@@ -513,7 +513,7 @@ async def test_appointing_a_master_of_the_school_is_409(
     curator = await _master(client, db_session, _TID_CURATOR)
     cand = await _master(client, db_session, _TID_CANDIDATE)
     group = await _school(client, curator)
-    await _seed_member(db_session, group, cand, CuratorMemberKind.MASTER)
+    await _seed_member(db_session, group, cand, SchoolMemberKind.MASTER)
 
     resp = await _offer(client, curator, group, cand)
     assert resp.status_code == 409
@@ -622,7 +622,7 @@ async def test_declining_something_never_offered_is_204_and_writes_nothing(
     await _seed_member(db_session, group, cand)
 
     assert (await _decline(client, cand, group)).status_code == 204
-    assert CuratorGroupEventKind.MASTER_OFFER_DECLINED.value not in (
+    assert SchoolEventKind.MASTER_OFFER_DECLINED.value not in (
         await _journal(group)
     )
 
@@ -642,7 +642,7 @@ async def test_a_non_member_cannot_accept_an_offer_made_to_somebody_else(
 
     resp = await _accept(client, bystander, group)
     assert resp.status_code == 404
-    assert await _kind_of(group, bystander) == CuratorMemberKind.STUDENT.value
+    assert await _kind_of(group, bystander) == SchoolMemberKind.STUDENT.value
     assert await _offers(group) == [UUID(cand["user"]["id"])]
 
 
@@ -666,7 +666,7 @@ async def test_a_dark_school_refuses_the_consent_and_keeps_the_offer(
     await _unverify(db_session, curator)
 
     assert (await _accept(client, cand, group)).status_code == 404
-    assert await _kind_of(group, cand) == CuratorMemberKind.STUDENT.value
+    assert await _kind_of(group, cand) == SchoolMemberKind.STUDENT.value
     assert await _offers(group) == [UUID(cand["user"]["id"])]
 
 
@@ -799,10 +799,10 @@ async def test_no_notification_without_a_journal_line_and_the_reverse(
     assert await _types_for(taker) == taker_before
 
     journal = await _journal(group)
-    assert journal.count(CuratorGroupEventKind.MASTER_OFFERED.value) == 3
-    assert journal.count(CuratorGroupEventKind.MEMBER_PROMOTED.value) == 1
+    assert journal.count(SchoolEventKind.MASTER_OFFERED.value) == 3
+    assert journal.count(SchoolEventKind.MEMBER_PROMOTED.value) == 1
     assert journal.count(
-        CuratorGroupEventKind.MASTER_OFFER_DECLINED.value
+        SchoolEventKind.MASTER_OFFER_DECLINED.value
     ) == 1
 
     school_notes = 0

@@ -1,5 +1,5 @@
 # =============================================================================
-# VELO Backend -- Admin Curator Groups Service (P4, GT-9)
+# VELO Backend -- Admin Schools Service (P4, GT-9)
 # =============================================================================
 #
 # Read-only oversight of every school on the platform. There is no create,
@@ -8,11 +8,11 @@
 # second owner nobody agreed to.
 #
 # ON THE DUPLICATED PREDICATE. _verified_profile_exists in
-# app/modules/curator_groups/service.py answers exactly the question
+# app/modules/schools/service.py answers exactly the question
 # _profile_verified below answers, and this module deliberately does NOT
 # import it: the underscore is not decoration, and reaching across a module
 # boundary for a private helper would tie the admin panel to the internals
-# of curator_groups for good. The twin is named here so the next reader
+# of schools for good. The twin is named here so the next reader
 # finds both and knows the copy is a decision rather than an oversight.
 #
 # Inside THIS file the predicate is written once and applied twice -- to the
@@ -27,13 +27,13 @@ from sqlalchemy import Select, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
-from app.modules.admin.curator_groups.schemas import (
+from app.modules.admin.schools.schemas import (
     AdminCuratorGroupCuratorRef,
     AdminCuratorGroupListItem,
     PaginatedAdminCuratorGroupsResponse,
 )
-from app.modules.curator_groups.models import CuratorGroup, CuratorGroupMember
 from app.modules.masters.models import MasterProfile
+from app.modules.schools.models import School, SchoolMember
 from app.modules.users.helpers import display_name
 from app.modules.users.models import User
 
@@ -49,7 +49,7 @@ def _profile_verified(user_id_col: ColumnElement) -> ColumnElement[bool]:
     MasterProfile.id raises AttributeError while the query is being built,
     i.e. inside the request.
 
-    Twin: curator_groups/service.py::_verified_profile_exists. Same question,
+    Twin: schools/service.py::_verified_profile_exists. Same question,
     same JSONB path, deliberately not shared -- see this module's header.
     """
     return (
@@ -79,13 +79,13 @@ async def _member_counts(
         return {}
 
     visible_master = (
-        CuratorGroupMember.kind == _MEMBER_KIND_MASTER
-    ) & _profile_verified(CuratorGroupMember.user_id)
+        SchoolMember.kind == _MEMBER_KIND_MASTER
+    ) & _profile_verified(SchoolMember.user_id)
 
     rows = (
         await session.execute(
             select(
-                CuratorGroupMember.group_id,
+                SchoolMember.group_id,
                 func.coalesce(
                     func.sum(case((visible_master, 1), else_=0)), 0
                 ),
@@ -93,7 +93,7 @@ async def _member_counts(
                     func.sum(
                         case(
                             (
-                                CuratorGroupMember.kind
+                                SchoolMember.kind
                                 == _MEMBER_KIND_STUDENT,
                                 1,
                             ),
@@ -103,8 +103,8 @@ async def _member_counts(
                     0,
                 ),
             )
-            .where(CuratorGroupMember.group_id.in_(group_ids))
-            .group_by(CuratorGroupMember.group_id)
+            .where(SchoolMember.group_id.in_(group_ids))
+            .group_by(SchoolMember.group_id)
         )
     ).all()
 
@@ -122,13 +122,13 @@ def _base_query() -> Select:
     all.
     """
     return (
-        select(CuratorGroup, User)
-        .join(User, User.id == CuratorGroup.curator_user_id)
-        .order_by(CuratorGroup.created_at.desc(), CuratorGroup.id)
+        select(School, User)
+        .join(User, User.id == School.curator_user_id)
+        .order_by(School.created_at.desc(), School.id)
     )
 
 
-async def list_curator_groups_for_admin(
+async def list_schools_for_admin(
     session: AsyncSession,
     *,
     limit: int = 20,
@@ -142,7 +142,7 @@ async def list_curator_groups_for_admin(
     """
     total = (
         await session.execute(
-            select(func.count()).select_from(CuratorGroup)
+            select(func.count()).select_from(School)
         )
     ).scalar_one()
 
@@ -156,9 +156,9 @@ async def list_curator_groups_for_admin(
     active_ids = set(
         (
             await session.execute(
-                select(CuratorGroup.id).where(
-                    CuratorGroup.id.in_(group_ids),
-                    _profile_verified(CuratorGroup.curator_user_id),
+                select(School.id).where(
+                    School.id.in_(group_ids),
+                    _profile_verified(School.curator_user_id),
                 )
             )
         )

@@ -1,5 +1,5 @@
 # =============================================================================
-# VELO Backend -- Admin Curator Groups Router (P4, GT-9)
+# VELO Backend -- Admin Schools Router (P4, GT-9)
 # =============================================================================
 #
 # ENDPOINTS:
@@ -21,11 +21,11 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_reader
-from app.modules.admin.curator_groups.schemas import (
+from app.modules.admin.schools.schemas import (
     PaginatedAdminCuratorGroupsResponse,
 )
-from app.modules.admin.curator_groups.service import (
-    list_curator_groups_for_admin,
+from app.modules.admin.schools.service import (
+    list_schools_for_admin,
 )
 from app.modules.auth.dependencies import get_current_admin
 from app.modules.users.models import User
@@ -36,7 +36,7 @@ router = APIRouter(prefix="/curator-groups")
 
 
 @router.get("", response_model=PaginatedAdminCuratorGroupsResponse)
-async def list_curator_groups_endpoint(
+async def list_schools_endpoint(
     admin: User = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_reader),
     limit: int = Query(default=20, ge=1, le=100),
@@ -48,6 +48,6 @@ async def list_curator_groups_endpoint(
     members a frozen school is a 404 (I-6), and this listing is the only
     place it can be seen at all.
     """
-    return await list_curator_groups_for_admin(
+    return await list_schools_for_admin(
         session, limit=limit, offset=offset,
     )

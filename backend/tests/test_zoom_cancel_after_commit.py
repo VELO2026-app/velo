@@ -5,7 +5,7 @@
 #
 # telegram_id band: 69900-69949.
 #
-# BAND PROVENANCE. 69800-69849 was taken first by test_curator_lock_order_500
+# BAND PROVENANCE. 69800-69849 was taken first by test_school_lock_order_500
 # (BE-97, landed while BE-96 was being assembled). On 2026-10-01, on b8aa9cd,
 # free_windows(space=(69700, 79299)) returned [(69900, 79299)], and
 # 69900-69949 overlapped no declared band and no BLIND_ZONE cleanup range.

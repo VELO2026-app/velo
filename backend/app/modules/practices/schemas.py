@@ -263,7 +263,7 @@ class CreatePracticeRequest(BaseModel):
     # A school practice is for everyone ('public') or for the school's
     # students ('curator_groups'); 'curator_groups' without a school is
     # nobody's audience. Both checked below; whether the master may use
-    # this school is the service's question (_usable_curator_group_or_400).
+    # this school is the service's question (_usable_school_or_400).
     curator_group_id: UUID | None = None
 
     # BE-102: who LEADS this practice. Absent, null, or the caller's own
@@ -753,7 +753,7 @@ class PracticeResponse(BaseModel):
     #
     # curator_group_name: that school's name, or null. NOT auto-populated:
     # filled at the same three call sites as audience_group_names, see
-    # curator_group_name_for_practice. Seen by everyone who can read the
+    # school_name_for_practice. Seen by everyone who can read the
     # practice, public ones included (owner ruling, 2026-10-01).
     #
     # audience_unavailable: TRUE when this practice reaches nobody through

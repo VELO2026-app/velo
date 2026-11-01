@@ -1,5 +1,5 @@
 # =============================================================================
-# VELO Backend -- Curator Groups Schemas (P1, tz-curator-groups.md 5.2)
+# VELO Backend -- Schools Schemas (P1, tz-curator-groups.md 5.2)
 # =============================================================================
 #
 # EVERY schema in this module carries the CuratorGroup* prefix, including the
@@ -33,7 +33,7 @@ from app.modules.diary.schemas import ScoreZoneCounts
 # "  Школа  " to "Школа", which matches how description is normalized in the
 # service and keeps the UNIQUE (curator_user_id, name) check meaningful --
 # "Школа" and "Школа " would otherwise be two different names.
-CuratorGroupNameStr = Annotated[
+SchoolNameStr = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)
 ]
 
@@ -41,12 +41,12 @@ CuratorGroupNameStr = Annotated[
 # whitespace-only value is normalized to NULL in the service rather than
 # rejected -- "" must never reach the column, so that "no description" has
 # exactly one representation in the database.
-CuratorGroupDescriptionStr = Annotated[str, StringConstraints(max_length=500)]
+SchoolDescriptionStr = Annotated[str, StringConstraints(max_length=500)]
 
-CuratorMemberKindLiteral = Literal["master", "student"]
+SchoolMemberKindLiteral = Literal["master", "student"]
 
-# BE-59: models.py::CuratorMasterOfferState, as the response spells it.
-CuratorMasterOfferStateLiteral = Literal[
+# BE-59: models.py::SchoolMasterOfferState, as the response spells it.
+SchoolMasterOfferStateLiteral = Literal[
     "awaiting_verification", "awaiting_answer",
 ]
 
@@ -109,7 +109,7 @@ def _fits_the_column(value: AnyUrl) -> AnyUrl:
     return value
 
 
-CuratorGroupAvatarUrl = Annotated[
+SchoolAvatarUrl = Annotated[
     AnyUrl,
     # HTTPS ONLY, AS AN ALLOW-LIST AND NOT A DENY-LIST. javascript:, data:
     # and file: are closed by the same clause that closes every scheme
@@ -130,16 +130,16 @@ CuratorGroupAvatarUrl = Annotated[
 # them. NO HOST ALLOW-LIST, deliberately -- a curator hosts the picture on
 # their own site and we cannot know which, so a list would become support
 # nobody performs.
-CuratorGroupAvatarUrlField = Annotated[
-    CuratorGroupAvatarUrl | None, BeforeValidator(_blank_to_none)
+SchoolAvatarUrlField = Annotated[
+    SchoolAvatarUrl | None, BeforeValidator(_blank_to_none)
 ]
 
 
 class CreateCuratorGroupRequest(BaseModel):
     """POST /masters/me/curator-groups."""
 
-    name: CuratorGroupNameStr
-    description: CuratorGroupDescriptionStr | None = None
+    name: SchoolNameStr
+    description: SchoolDescriptionStr | None = None
 
 
 class UpdateCuratorGroupRequest(BaseModel):
@@ -167,9 +167,9 @@ class UpdateCuratorGroupRequest(BaseModel):
     has no input for.
     """
 
-    name: CuratorGroupNameStr
-    description: CuratorGroupDescriptionStr | None = None
-    avatar_url: CuratorGroupAvatarUrlField = None
+    name: SchoolNameStr
+    description: SchoolDescriptionStr | None = None
+    avatar_url: SchoolAvatarUrlField = None
 
 
 class OfferCuratorGroupTransferRequest(BaseModel):
@@ -281,7 +281,7 @@ class CuratorGroupRosterItem(BaseModel):
     user_id: UUID
     name: str
     avatar_url: str | None
-    kind: CuratorMemberKindLiteral
+    kind: SchoolMemberKindLiteral
     joined_at: datetime
 
 
@@ -305,7 +305,7 @@ class CuratorGroupMemberItem(CuratorGroupRosterItem):
     """
 
     is_visible: bool
-    master_offer: CuratorMasterOfferStateLiteral | None = None
+    master_offer: SchoolMasterOfferStateLiteral | None = None
 
 
 class PaginatedCuratorGroupMembersResponse(BaseModel):
@@ -336,7 +336,7 @@ class CuratorGroupBlockedItem(BaseModel):
     user_id: UUID
     name: str
     avatar_url: str | None
-    kind: CuratorMemberKindLiteral
+    kind: SchoolMemberKindLiteral
     joined_at: datetime
     blocked_at: datetime
 
@@ -429,7 +429,7 @@ class PaginatedCuratorGroupEventsResponse(BaseModel):
 # ===========================================================================
 
 
-CuratorGroupRelationLiteral = Literal["curator", "master", "student"]
+SchoolRelationLiteral = Literal["curator", "master", "student"]
 
 
 class CuratorGroupCuratorRef(BaseModel):
@@ -468,7 +468,7 @@ class CuratorGroupMineItem(BaseModel):
     curator: CuratorGroupCuratorRef
     masters_count: int
     students_count: int
-    relation: CuratorGroupRelationLiteral
+    relation: SchoolRelationLiteral
     transfer_offered: bool = False
 
 
@@ -481,7 +481,7 @@ class CuratorGroupMineResponse(BaseModel):
 class CuratorGroupViewer(BaseModel):
     """The requesting user's own tie to the group being viewed."""
 
-    relation: CuratorGroupRelationLiteral
+    relation: SchoolRelationLiteral
 
 
 class CuratorGroupPageResponse(BaseModel):
@@ -554,7 +554,7 @@ class PaginatedCuratorGroupMastersResponse(BaseModel):
 # ===========================================================================
 
 
-CuratorInviteReasonLiteral = Literal[
+SchoolInviteReasonLiteral = Literal[
     "already_member", "own_group", "blocked_by_curator", "blocked_in_group"
 ]
 # BE-79: blocked_in_group -- the curator blocked this person in THIS school.
@@ -620,8 +620,8 @@ class CuratorGroupInvitePreviewResponse(BaseModel):
 
     group: CuratorGroupInvitePreviewGroup
     can_join: bool
-    reason: CuratorInviteReasonLiteral | None
-    relation: CuratorMemberKindLiteral | None
+    reason: SchoolInviteReasonLiteral | None
+    relation: SchoolMemberKindLiteral | None
 
 
 class JoinCuratorGroupRequest(BaseModel):
@@ -650,7 +650,7 @@ class JoinCuratorGroupResponse(BaseModel):
     """
 
     group_id: UUID
-    relation: CuratorMemberKindLiteral
+    relation: SchoolMemberKindLiteral
     already_member: bool
 
 
@@ -873,7 +873,7 @@ class SchoolStudentProfileResponse(BaseModel):
     avatar_url: str | None
     practices_count: int
     hours: float
-    master_offer: CuratorMasterOfferStateLiteral | None = None
+    master_offer: SchoolMasterOfferStateLiteral | None = None
     recent_checkins: list[SchoolStudentCheckinItem]
     recent_feedbacks: list[SchoolStudentFeedbackItem]
 

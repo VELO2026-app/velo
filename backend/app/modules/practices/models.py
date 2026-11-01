@@ -252,7 +252,7 @@ class Practice(JSONBMixin, UUIDMixin, TimestampMixin, Base):
     # SET ONCE, AT CREATION, NEVER REWRITTEN BY A USER. update_practice
     # refuses any other value (practice_school_immutable); series children
     # copy it from their root at birth. The only writer after creation is
-    # the school's own deletion, which sets it NULL (delete_curator_group,
+    # the school's own deletion, which sets it NULL (delete_school,
     # explicitly and under the module's lock order; ondelete="SET NULL" is
     # the backstop for a row that reaches the column without passing
     # through that function). What NULL then means (owner ruling,

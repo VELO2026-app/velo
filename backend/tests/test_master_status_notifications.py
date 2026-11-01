@@ -36,7 +36,6 @@ from app.modules.admin.masters import service as admin_masters_service
 from app.modules.admin.users import service as admin_users_service
 from app.modules.masters.models import MasterProfile
 from app.modules.users.models import User, UserRole
-from tests.curator_race_harness import assert_no_deadlock, race
 from tests.helpers import (
     auth_headers,
     fresh_execute,
@@ -44,6 +43,7 @@ from tests.helpers import (
     full_cleanup_range,
     login_user,
 )
+from tests.school_race_harness import assert_no_deadlock, race
 
 _TID_MIN = 70900
 _TID_MAX = 70999

@@ -42,7 +42,7 @@
 # that the expensive way in GT-25 and does not repeat it.
 #
 # ⚠ BACKEND-ONLY, NOT RUN LOCALLY -- no docker/postgres in this environment
-# (same standing caveat as test_curator_transfer.py). Written for the deploy
+# (same standing caveat as test_school_transfer.py). Written for the deploy
 # battery; collection success is not passing.
 # =============================================================================
 
@@ -57,14 +57,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.events.models import OutboxEvent
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupEvent,
-    CuratorGroupEventKind,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.masters.models import MasterProfile
+from app.modules.schools.models import (
+    School,
+    SchoolEvent,
+    SchoolEventKind,
+    SchoolMember,
+    SchoolMemberKind,
+)
 from app.modules.users.models import User, UserRole
 from tests.helpers import (
     auth_headers,
@@ -83,8 +83,8 @@ ACCEPT_URL = "/api/v1/curator-groups/{group_id}/transfer/accept"
 DECLINE_URL = "/api/v1/curator-groups/{group_id}/transfer/decline"
 
 # Read out of the service, not guessed: _INVITE_DEEPLINK_KIND at
-# curator_groups/service.py:1473. The bot url is patched the same way
-# test_curator_invites.py patches it -- the real settings value is not
+# schools/service.py:1473. The bot url is patched the same way
+# test_school_invites.py patches it -- the real settings value is not
 # guaranteed on a test stand, and the token is what we are after.
 _BOT_URL = "https://t.me/velo_test_bot"
 _DEEPLINK = "?startapp=school__"
@@ -111,7 +111,7 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
     from users, curator_group_event cascades from curator_group -- and the
     helper never names either table. A school that ended up owned by
     somebody outside this band would survive the sweep silently, and the
-    first symptom would be a FAILURE IN ANOTHER FILE: test_curator_group_
+    first symptom would be a FAILURE IN ANOTHER FILE: test_school_
     journal.py counts journal rows and this file runs before it. That is
     exactly how BE-25 was found. Asserting here turns "somebody else's test
     is red" into "this file leaked", which is the difference between an
@@ -124,8 +124,8 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
     await db_session.commit()
     leftovers = (
         await fresh_execute(
-            select(CuratorGroup.id)
-            .join(User, User.id == CuratorGroup.curator_user_id)
+            select(School.id)
+            .join(User, User.id == School.curator_user_id)
             .where(User.telegram_id.between(_TID_MIN, _TID_MAX))
         )
     ).scalars().all()
@@ -139,7 +139,7 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
 # Local helpers -- copied, not imported, as every test file in this tree does.
 #
 # All of them go through the REAL endpoints. Nothing here inserts a
-# CuratorGroupMember or a CuratorGroupTransfer by hand: the ladders in front
+# SchoolMember or a SchoolTransfer by hand: the ladders in front
 # of those tables (own_group, capability, roster membership) are exactly what
 # decides who ends up notified, and a helper that stepped around them would
 # be testing a state the API cannot produce.
@@ -218,7 +218,7 @@ async def _join(client: AsyncClient, auth: dict, token: str):
 
 async def _join_as(
     client: AsyncClient, curator: dict, group_id: str, joiner: dict,
-    kind: CuratorMemberKind = CuratorMemberKind.STUDENT,
+    kind: SchoolMemberKind = SchoolMemberKind.STUDENT,
     *,
     db_session: AsyncSession | None = None,
 ) -> None:
@@ -228,17 +228,17 @@ async def _join_as(
     master link is gone and everyone who opens the one that remains joins as
     a student. School masters are appointed with confirmation, which is a
     different feature and not what these tests are about, so a master member
-    is seeded directly here, the way test_curator_transfer.py already does.
+    is seeded directly here, the way test_school_transfer.py already does.
     The STUDENT path still goes through the real endpoint, because that is
     the path under test in the join notifications below.
     """
-    if kind is CuratorMemberKind.MASTER:
+    if kind is SchoolMemberKind.MASTER:
         assert db_session is not None, "seeding a master needs the session"
         db_session.add(
-            CuratorGroupMember(
+            SchoolMember(
                 group_id=UUID(group_id),
                 user_id=UUID(joiner["user"]["id"]),
-                kind=CuratorMemberKind.MASTER.value,
+                kind=SchoolMemberKind.MASTER.value,
             )
         )
         await db_session.flush()
@@ -312,8 +312,8 @@ async def _types_for(user: dict) -> list[str]:
 async def _journal(group_id: str) -> list[str]:
     rows = (
         await fresh_execute(
-            select(CuratorGroupEvent.event).where(
-                CuratorGroupEvent.group_id == UUID(group_id)
+            select(SchoolEvent.event).where(
+                SchoolEvent.group_id == UUID(group_id)
             )
         )
     ).all()
@@ -339,7 +339,7 @@ async def test_transfer_offer_reaches_the_addressee(
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
     group = await _create_group(client, curator)
     await _join_as(
-        client, curator, group["id"], heir, CuratorMemberKind.MASTER,
+        client, curator, group["id"], heir, SchoolMemberKind.MASTER,
         db_session=db_session,
     )
 
@@ -367,7 +367,7 @@ async def test_the_offer_names_the_school_and_points_at_it(
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
     group = await _create_group(client, curator, name="Тихое утро")
     await _join_as(
-        client, curator, group["id"], heir, CuratorMemberKind.MASTER,
+        client, curator, group["id"], heir, SchoolMemberKind.MASTER,
         db_session=db_session,
     )
     await _offer(client, curator, group["id"], heir)
@@ -399,7 +399,7 @@ async def test_a_cancelled_offer_does_not_notify_again(
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
     group = await _create_group(client, curator)
     await _join_as(
-        client, curator, group["id"], heir, CuratorMemberKind.MASTER,
+        client, curator, group["id"], heir, SchoolMemberKind.MASTER,
         db_session=db_session,
     )
     await _offer(client, curator, group["id"], heir)
@@ -413,7 +413,7 @@ async def test_a_cancelled_offer_does_not_notify_again(
     assert (await _types_for(heir)).count(
         "curator_group.transfer_offered"
     ) == 1
-    assert CuratorGroupEventKind.TRANSFER_CANCELLED.value in await _journal(
+    assert SchoolEventKind.TRANSFER_CANCELLED.value in await _journal(
         group["id"]
     )
 
@@ -439,7 +439,7 @@ async def test_accept_tells_the_previous_curator_and_not_the_acceptor(
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
     group = await _create_group(client, curator)
     await _join_as(
-        client, curator, group["id"], heir, CuratorMemberKind.MASTER,
+        client, curator, group["id"], heir, SchoolMemberKind.MASTER,
         db_session=db_session,
     )
     await _offer(client, curator, group["id"], heir)
@@ -465,7 +465,7 @@ async def test_decline_tells_the_curator_and_not_the_decliner(
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
     group = await _create_group(client, curator)
     await _join_as(
-        client, curator, group["id"], heir, CuratorMemberKind.MASTER,
+        client, curator, group["id"], heir, SchoolMemberKind.MASTER,
         db_session=db_session,
     )
     await _offer(client, curator, group["id"], heir)
@@ -494,7 +494,7 @@ async def test_accept_notification_survives_the_ownership_change(
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
     group = await _create_group(client, curator, name="Северный ветер")
     await _join_as(
-        client, curator, group["id"], heir, CuratorMemberKind.MASTER,
+        client, curator, group["id"], heir, SchoolMemberKind.MASTER,
         db_session=db_session,
     )
     await _offer(client, curator, group["id"], heir)
@@ -582,7 +582,7 @@ async def test_leaving_on_your_own_notifies_nobody(
 
     assert await _types_for(student) == []
     assert await _types_for(curator) == before
-    assert CuratorGroupEventKind.MEMBER_LEFT.value in await _journal(
+    assert SchoolEventKind.MEMBER_LEFT.value in await _journal(
         group["id"]
     )
 
@@ -609,7 +609,7 @@ async def test_every_recipient_was_already_a_party_to_the_school(
     student = await _make_student(client, _TID_STUDENT)
     group = await _create_group(client, curator)
     await _join_as(
-        client, curator, group["id"], heir, CuratorMemberKind.MASTER,
+        client, curator, group["id"], heir, SchoolMemberKind.MASTER,
         db_session=db_session,
     )
     await _join_as(client, curator, group["id"], student)
@@ -655,7 +655,7 @@ async def test_every_notifying_action_also_wrote_a_journal_line(
     group = await _create_group(client, curator)
 
     await _join_as(
-        client, curator, group["id"], heir, CuratorMemberKind.MASTER,
+        client, curator, group["id"], heir, SchoolMemberKind.MASTER,
         db_session=db_session,
     )
     await _join_as(client, curator, group["id"], student)
@@ -665,10 +665,10 @@ async def test_every_notifying_action_also_wrote_a_journal_line(
 
     journal = await _journal(group["id"])
     for kind in (
-        CuratorGroupEventKind.MEMBER_JOINED,
-        CuratorGroupEventKind.MEMBER_REMOVED,
-        CuratorGroupEventKind.TRANSFER_OFFERED,
-        CuratorGroupEventKind.TRANSFER_ACCEPTED,
+        SchoolEventKind.MEMBER_JOINED,
+        SchoolEventKind.MEMBER_REMOVED,
+        SchoolEventKind.TRANSFER_OFFERED,
+        SchoolEventKind.TRANSFER_ACCEPTED,
     ):
         assert kind.value in journal
 
@@ -706,11 +706,11 @@ async def test_a_refused_action_writes_neither(
     other = await _make_verified_master(client, db_session, _TID_MASTER_B)
     group = await _create_group(client, curator)
     await _join_as(
-        client, curator, group["id"], heir, CuratorMemberKind.MASTER,
+        client, curator, group["id"], heir, SchoolMemberKind.MASTER,
         db_session=db_session,
     )
     await _join_as(
-        client, curator, group["id"], other, CuratorMemberKind.MASTER,
+        client, curator, group["id"], other, SchoolMemberKind.MASTER,
         db_session=db_session,
     )
     await _offer(client, curator, group["id"], heir)
@@ -720,7 +720,7 @@ async def test_a_refused_action_writes_neither(
 
     assert await _types_for(other) == []
     assert (await _journal(group["id"])).count(
-        CuratorGroupEventKind.TRANSFER_OFFERED.value
+        SchoolEventKind.TRANSFER_OFFERED.value
     ) == 1
 
 
@@ -774,5 +774,5 @@ async def test_removing_somebody_who_is_not_a_member_notifies_nobody(
 
     assert await _types_for(stranger) == []
     assert await _journal(group["id"]) == [
-        CuratorGroupEventKind.GROUP_CREATED.value
+        SchoolEventKind.GROUP_CREATED.value
     ]

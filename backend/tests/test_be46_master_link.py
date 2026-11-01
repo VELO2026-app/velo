@@ -45,11 +45,6 @@ from app.core.database import get_engine, get_session_factory
 from app.core.exceptions import NotFoundError
 from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.chats.models import ChatThread
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.masters import groups_service
 from app.modules.masters.groups_models import (
     MasterGroup,
@@ -59,6 +54,11 @@ from app.modules.masters.groups_models import (
 from app.modules.masters.groups_service import MasterLinkAction, has_master_link
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import Practice, PracticeStatus, PracticeType
+from app.modules.schools.models import (
+    School,
+    SchoolMember,
+    SchoolMemberKind,
+)
 from app.modules.users.models import User, UserRole
 from app.modules.waitlist.models import Waitlist, WaitlistStatus
 from tests.helpers import auth_headers, fresh_execute, full_cleanup_range, login_user
@@ -209,13 +209,13 @@ async def _thread(
 
 async def _school(
     db_session: AsyncSession, curator_id: UUID, members: dict[UUID, str],
-) -> CuratorGroup:
-    school = CuratorGroup(curator_user_id=curator_id, name=f"BE-46 {uuid4().hex[:6]}")
+) -> School:
+    school = School(curator_user_id=curator_id, name=f"BE-46 {uuid4().hex[:6]}")
     db_session.add(school)
     await db_session.flush()
     for user_id, kind in members.items():
         db_session.add(
-            CuratorGroupMember(group_id=school.id, user_id=user_id, kind=kind),
+            SchoolMember(group_id=school.id, user_id=user_id, kind=kind),
         )
     await db_session.commit()
     return school
@@ -302,7 +302,7 @@ async def test_a_booking_on_his_school_practice_links(
     curator = await _master(client, db_session, 71352)
     person = await _person(client, 71351)
     school = await _school(
-        db_session, _id(curator), {_id(master): CuratorMemberKind.MASTER.value},
+        db_session, _id(curator), {_id(master): SchoolMemberKind.MASTER.value},
     )
     practice = await _practice(db_session, _id(master), school_id=school.id)
     db_session.add(Booking(
@@ -351,9 +351,9 @@ async def test_a_shared_school_links_for_chat_only(
     caller = await _master(client, db_session, 71350)
     curator = await _master(client, db_session, 71352)
     person = await _person(client, 71351)
-    members = {_id(person): CuratorMemberKind.STUDENT.value}
+    members = {_id(person): SchoolMemberKind.STUDENT.value}
     if caller_role == "school_master":
-        members[_id(caller)] = CuratorMemberKind.MASTER.value
+        members[_id(caller)] = SchoolMemberKind.MASTER.value
         await _school(db_session, _id(curator), members)
     else:
         await _school(db_session, _id(caller), members)
@@ -371,8 +371,8 @@ async def test_a_school_where_the_caller_is_only_a_student_does_not_link(
     curator = await _master(client, db_session, 71352)
     person = await _person(client, 71351)
     await _school(db_session, _id(curator), {
-        _id(caller): CuratorMemberKind.STUDENT.value,
-        _id(person): CuratorMemberKind.STUDENT.value,
+        _id(caller): SchoolMemberKind.STUDENT.value,
+        _id(person): SchoolMemberKind.STUDENT.value,
     })
 
     assert await _link(db_session, _id(caller), _id(person), CHAT) is False
@@ -388,8 +388,8 @@ async def test_a_guest_of_a_school_practice_outside_the_school_does_not_link(
     curator = await _master(client, db_session, 71352)
     guest = await _person(client, 71351)
     school = await _school(db_session, _id(curator), {
-        _id(caller): CuratorMemberKind.MASTER.value,
-        _id(colleague): CuratorMemberKind.MASTER.value,
+        _id(caller): SchoolMemberKind.MASTER.value,
+        _id(colleague): SchoolMemberKind.MASTER.value,
     })
     practice = await _practice(db_session, _id(colleague), school_id=school.id)
     db_session.add(Booking(
@@ -719,8 +719,8 @@ async def test_open_chat_with_a_member_of_his_school(
     curator = await _master(client, db_session, 71352)
     student = await _person(client, 71351)
     await _school(db_session, _id(curator), {
-        _id(master): CuratorMemberKind.MASTER.value,
-        _id(student): CuratorMemberKind.STUDENT.value,
+        _id(master): SchoolMemberKind.MASTER.value,
+        _id(student): SchoolMemberKind.STUDENT.value,
     })
     comms = AsyncMock(return_value=_thread_payload())
     monkeypatch.setattr(_COMMS_SEAM, comms)

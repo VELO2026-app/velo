@@ -73,7 +73,7 @@ from app.modules.auth.dependencies import (
 from app.modules.masters.models import MasterProfile
 from app.modules.masters.service import get_master_display_name
 from app.modules.practices.audience_service import (
-    curator_group_audience_is_dark,
+    school_audience_is_dark,
 )
 from app.modules.practices.cancel_service import cancel_practice
 from app.modules.practices.listing_service import list_public_practices
@@ -91,12 +91,12 @@ from app.modules.practices.schemas import (
 )
 from app.modules.practices.service import (
     create_practice,
-    curator_group_name_for_practice,
     delete_practice,
     get_practice_detail,
     group_names_for_practice,
     practice_to_response,
     preview_audience_change,
+    school_name_for_practice,
     update_practice,
 )
 from app.modules.users.models import User
@@ -275,10 +275,10 @@ async def create_practice_endpoint(
     # returned practice IS already published and DOES have a real status.
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
     audience_group_names = await group_names_for_practice(practice, session)
-    curator_group_name = await curator_group_name_for_practice(
+    curator_group_name = await school_name_for_practice(
         practice, session,
     )
-    audience_unavailable = await curator_group_audience_is_dark(
+    audience_unavailable = await school_audience_is_dark(
         practice, session,
     )
     # The master's row exists: practices.master_id is a FK, read in the
@@ -567,10 +567,10 @@ async def update_practice_endpoint(
     # meeting) sees "готовится" immediately instead of a stale None.
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
     audience_group_names = await group_names_for_practice(practice, session)
-    curator_group_name = await curator_group_name_for_practice(
+    curator_group_name = await school_name_for_practice(
         practice, session,
     )
-    audience_unavailable = await curator_group_audience_is_dark(
+    audience_unavailable = await school_audience_is_dark(
         practice, session,
     )
     return practice_to_response(

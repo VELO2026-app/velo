@@ -46,7 +46,7 @@ from app.modules.admin.masters.service import (
     verify_master,
 )
 from app.modules.auth.dependencies import get_current_admin
-from app.modules.curator_groups.service import master_can_create_groups
+from app.modules.schools.service import master_can_create_groups
 from app.modules.users.models import User
 
 logger = structlog.get_logger()

@@ -57,13 +57,13 @@ from app.core.events.models import (  # noqa: F401  # Phase 6 / T0, BE-134
     OutboxEvent,
 )
 from app.modules.chats.models import ChatThread  # noqa: F401  # Phase 6 / T2
-from app.modules.curator_groups.models import (  # noqa: F401  # Curator GROUPS P1
-    CuratorGroup,
-    CuratorGroupBlock,
-    CuratorGroupEvent,
-    CuratorGroupInvite,
-    CuratorGroupMember,
-    CuratorGroupTransfer,
+from app.modules.schools.models import (  # noqa: F401  # Curator GROUPS P1
+    School,
+    SchoolBlock,
+    SchoolEvent,
+    SchoolInvite,
+    SchoolMember,
+    SchoolTransfer,
 )
 from app.modules.zoom.models import (  # noqa: F401  # E21 + GT-21
     ZoomAttendanceSegment,

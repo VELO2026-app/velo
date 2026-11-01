@@ -1,7 +1,7 @@
 # =============================================================================
 # VELO -- a race harness that can build a deadlock (BE-95)
 # =============================================================================
-# The races in curator_groups are asymmetric, so asyncio.gather of two
+# The races in schools are asymmetric, so asyncio.gather of two
 # requests is green before a fix and after it (BE-42, measured). The first
 # answer to that -- run the competitor INSIDE a wrap of the holder and wait
 # for it to finish under lock_timeout -- could prove a data invariant but

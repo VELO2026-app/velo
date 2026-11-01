@@ -1,5 +1,5 @@
 # =============================================================================
-# VELO Backend -- Curator Group Analytics Service (tz-curator.md §6 MVP)
+# VELO Backend -- School Analytics Service (tz-curator.md §6 MVP)
 # =============================================================================
 #
 # ONE aggregate for the curator's "how is my school doing" screen. The §6
@@ -70,17 +70,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.periods import calendar_period_bounds_in_tz
 from app.modules.bookings.models import Booking, BookingStatus
-from app.modules.curator_groups.models import (
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
-from app.modules.curator_groups.service import _get_group_or_404
 from app.modules.diary.insights_service import zone_counts
 from app.modules.diary.models import Checkin, CheckType, Feedback
 from app.modules.practices.audience_service import (
     practice_in_school_feedback_clause,
 )
 from app.modules.practices.models import Practice, PracticeStatus
+from app.modules.schools.models import (
+    SchoolMember,
+    SchoolMemberKind,
+)
+from app.modules.schools.service import _get_group_or_404
 from app.modules.users.helpers import display_name
 from app.modules.users.models import User
 
@@ -89,7 +89,7 @@ logger = structlog.get_logger()
 TOP_PRACTICES_LIMIT = 5
 
 
-async def get_curator_group_analytics(
+async def get_school_analytics(
     user: User,
     group_id: UUID,
     session: AsyncSession,
@@ -133,9 +133,9 @@ async def get_curator_group_analytics(
     #    the same rows; the two screens must never disagree).
     member_rows = (
         await session.execute(
-            select(CuratorGroupMember.kind, func.count())
-            .where(CuratorGroupMember.group_id == group.id)
-            .group_by(CuratorGroupMember.kind)
+            select(SchoolMember.kind, func.count())
+            .where(SchoolMember.group_id == group.id)
+            .group_by(SchoolMember.kind)
         )
     ).all()
     by_kind = {kind: count for kind, count in member_rows}
@@ -305,11 +305,11 @@ async def _engagement(
         )
         .join(Practice, Booking.practice_id == Practice.id)
         .join(
-            CuratorGroupMember,
+            SchoolMember,
             and_(
-                CuratorGroupMember.group_id == group_id,
-                CuratorGroupMember.user_id == Booking.user_id,
-                CuratorGroupMember.kind == CuratorMemberKind.STUDENT.value,
+                SchoolMember.group_id == group_id,
+                SchoolMember.user_id == Booking.user_id,
+                SchoolMember.kind == SchoolMemberKind.STUDENT.value,
             ),
         )
         .where(*period_practices, Booking.status == BookingStatus.ATTENDED.value)
@@ -331,10 +331,10 @@ async def _engagement(
         select(Booking.id)
         .join(Practice, Booking.practice_id == Practice.id)
         .where(
-            Booking.user_id == CuratorGroupMember.user_id,
+            Booking.user_id == SchoolMember.user_id,
             Booking.status == BookingStatus.ATTENDED.value,
             Practice.curator_group_id == group_id,
-            Practice.scheduled_at >= CuratorGroupMember.joined_at,
+            Practice.scheduled_at >= SchoolMember.joined_at,
             Practice.scheduled_at < window_end,
         )
         .exists()
@@ -342,12 +342,12 @@ async def _engagement(
     never_came = (
         await session.execute(
             select(func.count())
-            .select_from(CuratorGroupMember)
+            .select_from(SchoolMember)
             .where(
-                CuratorGroupMember.group_id == group_id,
-                CuratorGroupMember.kind == CuratorMemberKind.STUDENT.value,
-                CuratorGroupMember.joined_at >= window_start,
-                CuratorGroupMember.joined_at < window_end,
+                SchoolMember.group_id == group_id,
+                SchoolMember.kind == SchoolMemberKind.STUDENT.value,
+                SchoolMember.joined_at >= window_start,
+                SchoolMember.joined_at < window_end,
                 ~came_since_joining,
             )
         )

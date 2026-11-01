@@ -43,8 +43,8 @@ from app.modules.users.models import User
 def _require_mcp_enabled() -> None:
     """The MCP killswitch on this router (settings.mcp_enabled).
 
-    Same shape as _require_curator_groups_enabled in
-    curator_groups/router.py, for the reasons written there: a router-level
+    Same shape as _require_schools_enabled in
+    schools/router.py, for the reasons written there: a router-level
     dependency so no endpoint can forget it; 404 with no machine code, so a
     client cannot tell "switched off" from "never existed"; it runs before
     the path dependencies, so an unauthenticated caller gets 404 too.

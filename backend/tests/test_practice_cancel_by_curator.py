@@ -39,13 +39,13 @@
 # reads go through fresh_execute, which opens its OWN session and therefore
 # needs no help from the test's one. Calling expire_all() first is worse than
 # redundant: the test session runs with expire_on_commit=False, so expiring it
-# also expires the local Practice/CuratorGroup objects these tests hold, and
+# also expires the local Practice/School objects these tests hold, and
 # the next `practice.id` becomes a lazy reload -- sync IO inside an async test,
 # i.e. sqlalchemy MissingGreenlet. That is exactly how the first version of
 # this file failed, in nine tests at once, all of them pointing at a `.id`.
 #
 # ⚠ BACKEND-ONLY, NOT RUN LOCALLY -- no docker/postgres in this environment
-# (same standing caveat as test_curator_audience.py and test_cancellation.py).
+# (same standing caveat as test_school_audience.py and test_cancellation.py).
 # Written for the deploy battery; collection success is not passing.
 # =============================================================================
 
@@ -60,19 +60,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import AuditLog
 from app.core.events.models import OutboxEvent
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupEvent,
-    CuratorGroupEventKind,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import (
     AudienceKind,
     Practice,
     PracticeStatus,
     PracticeType,
+)
+from app.modules.schools.models import (
+    School,
+    SchoolEvent,
+    SchoolEventKind,
+    SchoolMember,
+    SchoolMemberKind,
 )
 from app.modules.users.models import User, UserRole
 from tests.helpers import (
@@ -151,8 +151,8 @@ async def _unverify(db_session: AsyncSession, user_id: str) -> None:
 
 async def _school(
     db_session: AsyncSession, curator_id: str, name: str = "Тихое утро",
-) -> CuratorGroup:
-    group = CuratorGroup(curator_user_id=UUID(curator_id), name=name)
+) -> School:
+    group = School(curator_user_id=UUID(curator_id), name=name)
     db_session.add(group)
     await db_session.flush()
     await db_session.commit()
@@ -164,7 +164,7 @@ async def _create_practice(
     master_id: str,
     *,
     audience_kind: str = AudienceKind.CURATOR_GROUPS.value,
-    school: CuratorGroup | None = None,
+    school: School | None = None,
     status: str = PracticeStatus.SCHEDULED.value,
     hours_from_now: float = 48,
     parent_practice_id: UUID | None = None,
@@ -193,15 +193,15 @@ async def _create_practice(
     # THE MASTER JOINS THE SCHOOL, and this is not decoration.
     #
     # POST /practices refuses to create in a school the master does not
-    # belong to -- _usable_curator_group_or_400, practices/service.py
+    # belong to -- _usable_school_or_400, practices/service.py
     # (BE-74). So a school practice whose master is an outsider
     # is a state the API cannot produce, and building one here by hand
     # would be testing a shape that does not exist.
     #
     # It also has a consequence that is invisible until something
-    # books: _is_curator_group_audience_clause requires FOUR things at
+    # books: _is_school_audience_clause requires FOUR things at
     # once -- the owning school, a verified curator, the VIEWER in the
-    # school, and _master_in_curator_group_clause, i.e. the master
+    # school, and _master_in_school_clause, i.e. the master
     # being the curator or a kind='master' member with a verified
     # profile. Miss the last one and the practice has no audience at
     # all: nobody can book it, and the 403 says not_in_audience while
@@ -209,18 +209,18 @@ async def _create_practice(
     if school is not None and school.curator_user_id != practice.master_id:
         existing = (
             await db_session.execute(
-                select(CuratorGroupMember.id).where(
-                    CuratorGroupMember.group_id == school.id,
-                    CuratorGroupMember.user_id == practice.master_id,
+                select(SchoolMember.id).where(
+                    SchoolMember.group_id == school.id,
+                    SchoolMember.user_id == practice.master_id,
                 )
             )
         ).scalar_one_or_none()
         if existing is None:
             db_session.add(
-                CuratorGroupMember(
+                SchoolMember(
                     group_id=school.id,
                     user_id=practice.master_id,
-                    kind=CuratorMemberKind.MASTER.value,
+                    kind=SchoolMemberKind.MASTER.value,
                 )
             )
     await db_session.flush()
@@ -230,9 +230,9 @@ async def _create_practice(
 
 async def _join_school(
     db_session: AsyncSession, group_id, user_id: str,
-    kind: CuratorMemberKind = CuratorMemberKind.STUDENT,
-) -> CuratorGroupMember:
-    row = CuratorGroupMember(
+    kind: SchoolMemberKind = SchoolMemberKind.STUDENT,
+) -> SchoolMember:
+    row = SchoolMember(
         group_id=group_id, user_id=UUID(user_id), kind=kind.value,
     )
     db_session.add(row)
@@ -242,7 +242,7 @@ async def _join_school(
 
 
 async def _create_in_two_schools(
-    client: AsyncClient, author: dict, first: CuratorGroup, second: CuratorGroup,
+    client: AsyncClient, author: dict, first: School, second: School,
 ):
     """POST a practice naming TWO schools -- the shape BE-74 refuses."""
     return await client.post(
@@ -406,7 +406,7 @@ async def test_a_second_school_is_refused_and_the_owning_curator_may_cancel(
     mine = await _school(db_session, curator["user"]["id"], name="Моя")
     theirs = await _school(db_session, other["user"]["id"], name="Чужая")
     await _join_school(
-        db_session, theirs.id, master["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, theirs.id, master["user"]["id"], SchoolMemberKind.MASTER,
     )
 
     refused = await _create_in_two_schools(client, master, theirs, mine)
@@ -521,7 +521,7 @@ async def test_a_practice_whose_school_was_deleted_is_nobodys(
     )
     practice_id = practice.id
     await db_session.execute(
-        delete(CuratorGroup).where(CuratorGroup.id == school.id),
+        delete(School).where(School.id == school.id),
     )
     await db_session.commit()
 
@@ -677,8 +677,8 @@ async def test_curator_cascades_the_series_of_the_school(
     )).scalars().all()
     assert sorted(a.target_id for a in audits) == sorted(ids)
     journal = (await fresh_execute(
-        select(CuratorGroupEvent).where(
-            CuratorGroupEvent.group_id == school.id,
+        select(SchoolEvent).where(
+            SchoolEvent.group_id == school.id,
         ),
     )).scalars().all()
     assert sorted(e.data["practice_id"] for e in journal) == sorted(
@@ -900,10 +900,10 @@ async def test_the_school_journal_records_it_in_the_same_transaction(
     assert resp.status_code == 200
 
     rows = (await fresh_execute(
-        select(CuratorGroupEvent).where(
-            CuratorGroupEvent.group_id == school.id,
-            CuratorGroupEvent.event
-            == CuratorGroupEventKind.PRACTICE_CANCELLED.value,
+        select(SchoolEvent).where(
+            SchoolEvent.group_id == school.id,
+            SchoolEvent.event
+            == SchoolEventKind.PRACTICE_CANCELLED.value,
         ),
     )).scalars().all()
     assert len(rows) == 1
@@ -944,8 +944,8 @@ async def test_a_refused_cancellation_leaves_no_journal_row(
     assert resp.status_code == 400
 
     rows = (await fresh_execute(
-        select(CuratorGroupEvent).where(
-            CuratorGroupEvent.group_id == school.id,
+        select(SchoolEvent).where(
+            SchoolEvent.group_id == school.id,
         ),
     )).scalars().all()
     assert rows == []
@@ -977,7 +977,7 @@ async def test_a_second_school_is_refused_and_only_the_owner_gets_a_journal_row(
     mine = await _school(db_session, curator["user"]["id"], name="Моя")
     theirs = await _school(db_session, other["user"]["id"], name="Чужая")
     await _join_school(
-        db_session, theirs.id, master["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, theirs.id, master["user"]["id"], SchoolMemberKind.MASTER,
     )
 
     refused = await _create_in_two_schools(client, master, mine, theirs)
@@ -994,11 +994,11 @@ async def test_a_second_school_is_refused_and_only_the_owner_gets_a_journal_row(
     assert resp.status_code == 200, resp.text
 
     mine_rows = (await fresh_execute(
-        select(CuratorGroupEvent).where(CuratorGroupEvent.group_id == mine.id),
+        select(SchoolEvent).where(SchoolEvent.group_id == mine.id),
     )).scalars().all()
     theirs_rows = (await fresh_execute(
-        select(CuratorGroupEvent).where(
-            CuratorGroupEvent.group_id == theirs.id,
+        select(SchoolEvent).where(
+            SchoolEvent.group_id == theirs.id,
         ),
     )).scalars().all()
     assert len(mine_rows) == 1
@@ -1154,7 +1154,7 @@ async def test_two_schools_of_one_curator_are_refused_and_the_one_is_named(
     morning = await _school(db_session, curator["user"]["id"], name="Утро")
     evening = await _school(db_session, curator["user"]["id"], name="Вечер")
     await _join_school(
-        db_session, evening.id, master["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, evening.id, master["user"]["id"], SchoolMemberKind.MASTER,
     )
 
     refused = await _create_in_two_schools(client, master, morning, evening)

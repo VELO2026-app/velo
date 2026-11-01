@@ -26,7 +26,7 @@
 # via pytest this session. See the delivery report for what WAS checked.
 #
 # CLEANUP is full_cleanup_range(..., delete_users=True) and NOTHING ELSE,
-# for the reason test_curator_groups.py states: every curator table FKs
+# for the reason test_schools.py states: every curator table FKs
 # into users / curator_group with ON DELETE CASCADE, so deleting the band's
 # users takes their schools with them. Plain cleanup_range would keep the
 # users, leave curator_group rows behind, and the second run would hit 409
@@ -52,12 +52,12 @@ from httpx import AsyncClient
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.masters.models import MasterProfile
+from app.modules.schools.models import (
+    School,
+    SchoolMember,
+    SchoolMemberKind,
+)
 from app.modules.users.models import User, UserRole
 from tests.helpers import (
     auth_headers,
@@ -528,8 +528,8 @@ async def test_a_flagless_master_is_refused_with_its_own_code(
 
     rows = (
         await fresh_execute(
-            select(CuratorGroup).where(
-                CuratorGroup.curator_user_id == UUID(denied["user"]["id"])
+            select(School).where(
+                School.curator_user_id == UUID(denied["user"]["id"])
             )
         )
     ).scalars().all()
@@ -777,10 +777,10 @@ async def test_flagless_master_can_inherit_a_school_by_transfer(
     group_id = created.json()["id"]
 
     db_session.add(
-        CuratorGroupMember(
+        SchoolMember(
             group_id=UUID(group_id),
             user_id=UUID(heir["user"]["id"]),
-            kind=CuratorMemberKind.MASTER.value,
+            kind=SchoolMemberKind.MASTER.value,
         )
     )
     await db_session.commit()

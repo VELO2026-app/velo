@@ -26,7 +26,7 @@
 # way would have proven nothing while looking like proof.
 #
 # SO THE COMPETITOR IS SCHEDULED, NOT RACED -- and since BE-95 it is
-# scheduled INTO accept rather than inside it. tests/curator_race_harness.py
+# scheduled INTO accept rather than inside it. tests/school_race_harness.py
 # pauses accept at _has_master_capability (wrapped, not replaced: the real
 # function still runs and still decides), lets the competitor run until
 # Postgres reports it waiting on accept's lock, and only then releases
@@ -52,19 +52,19 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session_factory
-from app.modules.curator_groups import service as curator_service
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupEvent,
-    CuratorGroupEventKind,
-    CuratorGroupMember,
-    CuratorGroupTransfer,
-    CuratorMemberKind,
-)
 from app.modules.masters.models import MasterProfile
+from app.modules.schools import service as curator_service
+from app.modules.schools.models import (
+    School,
+    SchoolEvent,
+    SchoolEventKind,
+    SchoolMember,
+    SchoolMemberKind,
+    SchoolTransfer,
+)
 from app.modules.users.models import User, UserRole
-from tests.curator_race_harness import race
 from tests.helpers import auth_headers, full_cleanup_range, login_user
+from tests.school_race_harness import race
 
 GROUPS_URL = "/api/v1/masters/me/curator-groups"
 OFFER_URL = "/api/v1/masters/me/curator-groups/{group_id}/transfer"
@@ -130,10 +130,10 @@ async def _school_with_offer(
     group_id = created.json()["id"]
 
     db_session.add(
-        CuratorGroupMember(
+        SchoolMember(
             group_id=UUID(group_id),
             user_id=UUID(heir["user"]["id"]),
-            kind=CuratorMemberKind.MASTER.value,
+            kind=SchoolMemberKind.MASTER.value,
         )
     )
     await db_session.flush()
@@ -160,22 +160,22 @@ async def _state(
     """
     group = (
         await db_session.execute(
-            select(CuratorGroup).where(CuratorGroup.id == UUID(group_id))
+            select(School).where(School.id == UUID(group_id))
         )
     ).scalar_one()
     await db_session.refresh(group)
     member = (
         await db_session.execute(
-            select(CuratorGroupMember.id).where(
-                CuratorGroupMember.group_id == UUID(group_id),
-                CuratorGroupMember.user_id == UUID(heir["user"]["id"]),
+            select(SchoolMember.id).where(
+                SchoolMember.group_id == UUID(group_id),
+                SchoolMember.user_id == UUID(heir["user"]["id"]),
             )
         )
     ).scalar_one_or_none()
     transfer = (
         await db_session.execute(
-            select(CuratorGroupTransfer.id).where(
-                CuratorGroupTransfer.group_id == UUID(group_id)
+            select(SchoolTransfer.id).where(
+                SchoolTransfer.group_id == UUID(group_id)
             )
         )
     ).scalar_one_or_none()
@@ -205,7 +205,7 @@ async def _accept_with_competitor(
 
     async def _accept_call(session: AsyncSession) -> None:
         actor = await session.get(User, heir_id)
-        await curator_service.accept_curator_group_transfer(
+        await curator_service.accept_school_transfer(
             UUID(group_id), heir_id, session, actor=actor,
         )
 
@@ -224,9 +224,9 @@ async def _accept_with_competitor(
     async with factory() as probe:
         won = (
             await probe.execute(
-                select(CuratorGroupEvent.id).where(
-                    CuratorGroupEvent.group_id == UUID(group_id),
-                    CuratorGroupEvent.event == effect.value,
+                select(SchoolEvent.id).where(
+                    SchoolEvent.group_id == UUID(group_id),
+                    SchoolEvent.event == effect.value,
                 )
             )
         ).first() is not None
@@ -293,7 +293,7 @@ async def test_an_offer_withdrawn_mid_accept_does_not_move_the_school(
 
     async def _cancel(rival: AsyncSession) -> None:
         actor = await rival.get(User, UUID(curator["user"]["id"]))
-        await curator_service.cancel_curator_group_transfer(
+        await curator_service.cancel_school_transfer(
             UUID(curator["user"]["id"]),
             UUID(group_id),
             rival,
@@ -309,7 +309,7 @@ async def test_an_offer_withdrawn_mid_accept_does_not_move_the_school(
     # The competitor now runs INTO accept while accept holds its locks, so
     # the order of commits is known and each half can be asserted exactly.
     accept, competitor = await _accept_with_competitor(
-        monkeypatch, heir, group_id, _cancel, CuratorGroupEventKind.TRANSFER_CANCELLED,
+        monkeypatch, heir, group_id, _cancel, SchoolEventKind.TRANSFER_CANCELLED,
     )
     assert accept.committed, accept.error
     state = await _state(db_session, group_id, heir)
@@ -335,7 +335,7 @@ async def test_removing_the_heir_mid_accept_does_not_move_the_school(
 
     async def _remove(rival: AsyncSession) -> None:
         actor = await rival.get(User, UUID(curator["user"]["id"]))
-        await curator_service.remove_curator_group_member(
+        await curator_service.remove_school_member(
             UUID(curator["user"]["id"]),
             UUID(group_id),
             UUID(heir["user"]["id"]),
@@ -352,7 +352,7 @@ async def test_removing_the_heir_mid_accept_does_not_move_the_school(
     # The competitor now runs INTO accept while accept holds its locks, so
     # the order of commits is known and each half can be asserted exactly.
     accept, competitor = await _accept_with_competitor(
-        monkeypatch, heir, group_id, _remove, CuratorGroupEventKind.MEMBER_REMOVED,
+        monkeypatch, heir, group_id, _remove, SchoolEventKind.MEMBER_REMOVED,
     )
     assert accept.committed, accept.error
     state = await _state(db_session, group_id, heir)
@@ -376,7 +376,7 @@ async def test_the_heir_leaving_mid_accept_does_not_move_the_school(
 
     async def _leave(rival: AsyncSession) -> None:
         actor = await rival.get(User, UUID(heir["user"]["id"]))
-        await curator_service.leave_curator_group(
+        await curator_service.leave_school(
             UUID(group_id),
             UUID(heir["user"]["id"]),
             rival,
@@ -392,7 +392,7 @@ async def test_the_heir_leaving_mid_accept_does_not_move_the_school(
     # The competitor now runs INTO accept while accept holds its locks, so
     # the order of commits is known and each half can be asserted exactly.
     accept, competitor = await _accept_with_competitor(
-        monkeypatch, heir, group_id, _leave, CuratorGroupEventKind.MEMBER_LEFT,
+        monkeypatch, heir, group_id, _leave, SchoolEventKind.MEMBER_LEFT,
     )
     assert accept.committed, accept.error
     state = await _state(db_session, group_id, heir)

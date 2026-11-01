@@ -6,7 +6,7 @@
 # curator 89264, students 89270-89272). Declared module-level below as
 # _TID_MIN/_TID_MAX, ONCE -- tests/telegram_id_bands.py parses that
 # declaration out of the AST on every run. First claimed (65900, 65999)
-# after test_curator_group_feedback.py took (65800, 65899); re-claimed
+# after test_school_feedback.py took (65800, 65899); re-claimed
 # here 2026-10-02 -- the test branch's test_master_notifications.py
 # declares the same 65900-65999 window, and the bands meta-test forbids
 # the unrecorded collision, so this file moved (the other side is pushed).
@@ -35,7 +35,7 @@
 #      and STUDENT-only, and the all-time groups do not move with the
 #      slider.
 #
-# ROWS ARE SEEDED, NOT DRIVEN THROUGH THE API (the test_curator_group_
+# ROWS ARE SEEDED, NOT DRIVEN THROUGH THE API (the test_school_
 # feedback.py reasoning: check-ins/feedbacks are window-bound and immutable,
 # so an API-built history would mean moving the clock in every test).
 # =============================================================================
@@ -50,11 +50,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.periods import calendar_period_bounds
 from app.modules.bookings.models import Booking, BookingStatus
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.diary.models import Checkin, CheckType, Feedback
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import (
@@ -62,6 +57,11 @@ from app.modules.practices.models import (
     Practice,
     PracticeStatus,
     PracticeType,
+)
+from app.modules.schools.models import (
+    School,
+    SchoolMember,
+    SchoolMemberKind,
 )
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
@@ -110,8 +110,8 @@ async def _make_student(client: AsyncClient, telegram_id: int) -> dict:
     return await login_user(client, telegram_id=telegram_id, first_name="Student")
 
 
-async def _school(db_session: AsyncSession, curator: dict, name: str) -> CuratorGroup:
-    group = CuratorGroup(curator_user_id=UUID(curator["user"]["id"]), name=name)
+async def _school(db_session: AsyncSession, curator: dict, name: str) -> School:
+    group = School(curator_user_id=UUID(curator["user"]["id"]), name=name)
     db_session.add(group)
     await db_session.flush()
     await db_session.commit()
@@ -120,14 +120,14 @@ async def _school(db_session: AsyncSession, curator: dict, name: str) -> Curator
 
 async def _join_school(
     db_session: AsyncSession,
-    school: CuratorGroup,
+    school: School,
     auth: dict,
-    kind: CuratorMemberKind,
+    kind: SchoolMemberKind,
     *,
     joined_at: datetime | None = None,
-) -> CuratorGroupMember:
+) -> SchoolMember:
     """A membership row; joined_at defaults to the server's now()."""
-    row = CuratorGroupMember(
+    row = SchoolMember(
         group_id=school.id,
         user_id=UUID(auth["user"]["id"]),
         kind=kind.value,
@@ -143,7 +143,7 @@ async def _join_school(
 async def _practice(
     db_session: AsyncSession,
     master: dict,
-    school: CuratorGroup,
+    school: School,
     *,
     title: str,
     status: str = PracticeStatus.SCHEDULED.value,
@@ -254,7 +254,7 @@ _TID_OUTSIDER = 89290
 async def _seed_lively_school(
     client: AsyncClient,
     db_session: AsyncSession,
-) -> tuple[dict, dict, CuratorGroup]:
+) -> tuple[dict, dict, School]:
     """The one history every number in the aggregate test is read off.
 
     P1 «Дыхание» completed: three attended students (mood 9/5/2, rating
@@ -273,9 +273,9 @@ async def _seed_lively_school(
     s3 = await _make_student(client, _TID_STUDENT_C)
 
     school = await _school(db_session, curator, "Аналитическая")
-    await _join_school(db_session, school, teacher, CuratorMemberKind.MASTER)
+    await _join_school(db_session, school, teacher, SchoolMemberKind.MASTER)
     for student in (s1, s2, s3):
-        await _join_school(db_session, school, student, CuratorMemberKind.STUDENT)
+        await _join_school(db_session, school, student, SchoolMemberKind.STUDENT)
 
     p1 = await _practice(
         db_session, teacher, school,
@@ -449,7 +449,7 @@ async def test_a_plain_user_is_403(client: AsyncClient, db_session: AsyncSession
 async def _seed_engagement_school(
     client: AsyncClient,
     db_session: AsyncSession,
-) -> tuple[dict, CuratorGroup]:
+) -> tuple[dict, School]:
     """A window-shaped history the period cards are read off.
 
     Two completed practices at `now` land inside the week, the month and
@@ -478,7 +478,7 @@ async def _seed_engagement_school(
     s3 = await _make_student(client, _TID_STUDENT_C)
 
     school = await _school(db_session, curator, "Вовлечённая")
-    await _join_school(db_session, school, teacher, CuratorMemberKind.MASTER)
+    await _join_school(db_session, school, teacher, SchoolMemberKind.MASTER)
     now = datetime.now(UTC)
     starts = [
         calendar_period_bounds(kind, now)[0] for kind in ("week", "month", "quarter")
@@ -486,10 +486,10 @@ async def _seed_engagement_school(
     before_every_window = min(starts) - timedelta(days=2)
     for student in (s1, s2):
         await _join_school(
-            db_session, school, student, CuratorMemberKind.STUDENT,
+            db_session, school, student, SchoolMemberKind.STUDENT,
             joined_at=before_every_window,
         )
-    await _join_school(db_session, school, s3, CuratorMemberKind.STUDENT)
+    await _join_school(db_session, school, s3, SchoolMemberKind.STUDENT)
     before_every_window_hours = (
         (min(starts) - timedelta(days=1)) - now
     ).total_seconds() / 3600
@@ -635,7 +635,7 @@ async def _set_user(db_session: AsyncSession, auth: dict, **fields: object) -> N
 
 
 async def _analytics(
-    client: AsyncClient, curator: dict, school: CuratorGroup, period: str = "week"
+    client: AsyncClient, curator: dict, school: School, period: str = "week"
 ) -> dict:
     resp = await client.get(
         ANALYTICS_URL.format(group_id=school.id) + f"?period={period}",
@@ -668,7 +668,7 @@ async def _week_school(
         client, db_session, base + 1, first_name="Teacher"
     )
     school = await _school(db_session, curator, name)
-    await _join_school(db_session, school, teacher, CuratorMemberKind.MASTER)
+    await _join_school(db_session, school, teacher, SchoolMemberKind.MASTER)
     return curator, teacher, school
 
 
@@ -745,7 +745,7 @@ async def test_periods_differ_on_a_practice_in_one_window_only(
         db_session,
         school,
         student,
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
         joined_at=min(starts.values()) - timedelta(days=1),
     )
     moment = starts[wide] + (starts[narrow] - starts[wide]) / 2
@@ -828,10 +828,10 @@ async def test_came_counts_students_of_the_school_only(
         db_session,
         school,
         s,
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
         joined_at=week_start - timedelta(days=1),
     )
-    await _join_school(db_session, school, m, CuratorMemberKind.MASTER)
+    await _join_school(db_session, school, m, SchoolMemberKind.MASTER)
     p1 = await _practice(
         db_session,
         teacher,
@@ -901,18 +901,18 @@ async def test_joined_in_period_and_never_came(
         db_session,
         school,
         early,
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
         joined_at=week_start - timedelta(days=1),
     )
     for who in (came, before, none):
         await _join_school(
-            db_session, school, who, CuratorMemberKind.STUDENT, joined_at=at(0.4)
+            db_session, school, who, SchoolMemberKind.STUDENT, joined_at=at(0.4)
         )
     left_row = await _join_school(
         db_session,
         school,
         left,
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
         joined_at=at(0.4),
     )
     await db_session.delete(left_row)

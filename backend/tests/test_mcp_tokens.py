@@ -15,7 +15,7 @@
 #     its race;
 #   - create: the token once, only its hash stored (every table scanned for
 #     the secret), canonical scopes, the refused bodies, the limit on live
-#     tokens and its race (curator_race_harness);
+#     tokens and its race (school_race_harness);
 #   - list: own only, revoked included, newest first, never the secret;
 #   - revoke: own, repeated (idempotent, one audit row), someone else's and a
 #     missing one (the same 404), the race of two revokes;
@@ -56,8 +56,8 @@ from app.modules.mcp.router import router as mcp_router
 from app.modules.mcp.schemas import McpTokenCreate
 from app.modules.users import service as users_service
 from app.modules.users.models import User
-from tests.curator_race_harness import assert_no_deadlock, race
 from tests.helpers import auth_headers, full_cleanup_range, login_user
+from tests.school_race_harness import assert_no_deadlock, race
 
 _TID_MIN = 89033
 _TID_MAX = 89067

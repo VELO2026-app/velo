@@ -45,12 +45,12 @@ from app.core.events.reminders import (
     booking_correlation,
     practice_correlation,
 )
-from app.modules.curator_groups.models import CuratorGroup
 from app.modules.diary.models import Checkin
 from app.modules.diary.notify_master import notify_master_of_checkin
 from app.modules.masters.models import MasterProfile
 from app.modules.practices import service as practices_service
 from app.modules.practices.models import Practice
+from app.modules.schools.models import School
 from app.modules.users.models import User, UserRole
 from app.modules.waitlist.models import Waitlist
 from app.modules.waitlist.service import process_waitlist
@@ -393,7 +393,7 @@ async def test_a_curator_act_revokes_the_earlier_act_first(
     practice_id = await _publish(client, master)
     curator = await db_session.get(User, UUID(curator_auth["user"]["id"]))
     # A curator acts on a practice of their school.
-    group = CuratorGroup(curator_user_id=curator.id, name="BE-171 school")
+    group = School(curator_user_id=curator.id, name="BE-171 school")
     db_session.add(group)
     await db_session.flush()
     practice = await db_session.get(Practice, UUID(practice_id))
@@ -421,14 +421,14 @@ async def test_a_school_block_revokes_the_booking_state(
     practices (BE-79): each booking's reminder series is cancelled and,
     since BE-171, its undelivered state revoked -- the school path, next to
     the master's (tests/test_master_groups.py)."""
-    from app.modules.curator_groups.service import _close_school_practices_to
+    from app.modules.schools.service import _close_school_practices_to
 
     master = await _master(client, db_session, 13)
     student = await login_user(client, telegram_id=BAND_MIN + 14, first_name="S")
     curator_auth = await login_user(client, telegram_id=BAND_MIN + 15, first_name="C")
     practice_id = await _publish(client, master)
     booking_id = await _book(client, student, practice_id)
-    group = CuratorGroup(
+    group = School(
         curator_user_id=UUID(curator_auth["user"]["id"]), name="BE-171 b"
     )
     db_session.add(group)

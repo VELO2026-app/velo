@@ -67,11 +67,11 @@ from app.core.events import (  # noqa: E402  # Phase 6 / T0
     GROUP_MASTERS,
     sync_membership_delta,
 )
-from app.modules.curator_groups.service import (  # noqa: E402  # BE-59
-    announce_pending_master_offers,
-)
 from app.modules.masters.models import MasterProfile  # noqa: E402
 from app.modules.practices.models import Practice, PracticeStatus  # noqa: E402
+from app.modules.schools.service import (  # noqa: E402  # BE-59
+    announce_pending_master_offers,
+)
 from app.modules.users.models import User, UserRole  # noqa: E402
 from app.modules.users.schemas import (  # noqa: E402
     credentials_without_admin_home,

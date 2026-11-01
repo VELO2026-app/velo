@@ -30,7 +30,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.modules.curator_groups.service import _INVITE_DEEPLINK_KIND
+from app.modules.schools.service import _INVITE_DEEPLINK_KIND
 from app.modules.zoom.service import encode_practice_code
 
 APP = Path(__file__).resolve().parents[1] / "app"
@@ -41,7 +41,7 @@ TOKEN_LEN = len(secrets.token_urlsafe(32))  # 43
 
 # kind (as written in the source) -> length of the value after it.
 KINDS: dict[str, int] = {
-    "{_INVITE_DEEPLINK_KIND}": TOKEN_LEN,  # school invite (curator_groups)
+    "{_INVITE_DEEPLINK_KIND}": TOKEN_LEN,  # school invite (schools)
     "group_invite__": TOKEN_LEN,  # master's group invite (masters)
     "master_onboarding__": TOKEN_LEN,  # admin master invite (admin/masters)
     "zoom__": len(encode_practice_code(uuid4())),  # public practice page

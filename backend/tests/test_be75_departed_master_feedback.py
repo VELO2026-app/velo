@@ -54,11 +54,6 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.bookings.models import Booking, BookingStatus
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.diary.models import Checkin, CheckType, Feedback
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import (
@@ -66,6 +61,11 @@ from app.modules.practices.models import (
     Practice,
     PracticeStatus,
     PracticeType,
+)
+from app.modules.schools.models import (
+    School,
+    SchoolMember,
+    SchoolMemberKind,
 )
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
@@ -142,8 +142,8 @@ def _uid(auth: dict) -> UUID:
 
 async def _school(
     db_session: AsyncSession, curator: dict, name: str = "Школа",
-) -> CuratorGroup:
-    group = CuratorGroup(curator_user_id=_uid(curator), name=name)
+) -> School:
+    group = School(curator_user_id=_uid(curator), name=name)
     db_session.add(group)
     await db_session.flush()
     await db_session.commit()
@@ -152,12 +152,12 @@ async def _school(
 
 async def _join(
     db_session: AsyncSession,
-    school: CuratorGroup,
+    school: School,
     auth: dict,
-    kind: CuratorMemberKind,
+    kind: SchoolMemberKind,
 ) -> None:
     db_session.add(
-        CuratorGroupMember(group_id=school.id, user_id=_uid(auth), kind=kind.value)
+        SchoolMember(group_id=school.id, user_id=_uid(auth), kind=kind.value)
     )
     await db_session.flush()
     await db_session.commit()
@@ -166,7 +166,7 @@ async def _join(
 async def _practice(
     db_session: AsyncSession,
     master: dict,
-    school: CuratorGroup,
+    school: School,
     title: str,
     status: str,
 ) -> Practice:
@@ -222,7 +222,7 @@ async def _checked_in(
 async def _trail(
     db_session: AsyncSession,
     master: dict,
-    school: CuratorGroup,
+    school: School,
     student: dict,
     label: str,
 ) -> dict[str, Practice]:
@@ -284,7 +284,7 @@ async def _get_ok(client: AsyncClient, url: str, auth: dict, **params) -> dict:
 async def _feedback_view(
     client: AsyncClient,
     curator: dict,
-    school: CuratorGroup,
+    school: School,
     student: dict,
     label: str,
 ) -> dict:
@@ -345,9 +345,9 @@ async def _scene(client: AsyncClient, db_session: AsyncSession):
         client, telegram_id=_TID_STUDENT, first_name="Аня",
     )
     school = await _school(db_session, curator)
-    await _join(db_session, school, teacher, CuratorMemberKind.MASTER)
-    await _join(db_session, school, peer, CuratorMemberKind.MASTER)
-    await _join(db_session, school, student, CuratorMemberKind.STUDENT)
+    await _join(db_session, school, teacher, SchoolMemberKind.MASTER)
+    await _join(db_session, school, peer, SchoolMemberKind.MASTER)
+    await _join(db_session, school, student, SchoolMemberKind.STUDENT)
     teacher_trail = await _trail(db_session, teacher, school, student, "T")
     await _trail(db_session, peer, school, student, "P")
     return curator, teacher, peer, student, school, teacher_trail
@@ -498,11 +498,11 @@ async def _left_and_back(client, db_session, school, teacher, curator) -> None:
     SEEDED as kind='student': the member link admits a student, and the
     rule takes any kind (the state now, not the history)."""
     await _leave(client, school, teacher, curator)
-    await _join(db_session, school, teacher, CuratorMemberKind.STUDENT)
+    await _join(db_session, school, teacher, SchoolMemberKind.STUDENT)
 
 
 async def _previous_curator(client, db_session, school, teacher, curator):
-    """SEEDED: the shape accept_curator_group_transfer leaves -- the school
+    """SEEDED: the shape accept_school_transfer leaves -- the school
     goes to another curator, the previous one keeps a kind='master' row.
     Here the TEACHER plays the previous curator: their row is already
     kind='master', and the school's curator_user_id moves to a third
@@ -528,7 +528,7 @@ async def test_a_master_still_in_the_school_keeps_every_practice_in_its_feedback
     still in the school, so nothing moves.
 
     The demoted case is the one a narrower rule would get wrong:
-    _master_in_curator_group_clause (kind='master' and verified) already
+    _master_in_school_clause (kind='master' and verified) already
     says "no" for the demoted and the revoked, and borrowing it here would
     drop their unconducted practices from the curator's feedback.
     """
@@ -560,7 +560,7 @@ async def test_the_curators_own_practices_need_no_membership_row(
         client, telegram_id=_TID_STUDENT, first_name="Аня",
     )
     school = await _school(db_session, curator)
-    await _join(db_session, school, student, CuratorMemberKind.STUDENT)
+    await _join(db_session, school, student, SchoolMemberKind.STUDENT)
     await _trail(db_session, curator, school, student, "C")
 
     view = await _feedback_view(client, curator, school, student, "C")
@@ -592,8 +592,8 @@ async def test_a_master_who_left_one_school_is_departed_only_there(
     school_a = await _school(db_session, curator_a, "А")
     school_b = await _school(db_session, curator_b, "Б")
     for school in (school_a, school_b):
-        await _join(db_session, school, teacher, CuratorMemberKind.MASTER)
-        await _join(db_session, school, student, CuratorMemberKind.STUDENT)
+        await _join(db_session, school, teacher, SchoolMemberKind.MASTER)
+        await _join(db_session, school, student, SchoolMemberKind.STUDENT)
     await _trail(db_session, teacher, school_a, student, "A")
     await _trail(db_session, teacher, school_b, student, "B")
 

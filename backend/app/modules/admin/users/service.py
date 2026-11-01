@@ -41,22 +41,22 @@ from app.modules.admin.users.schemas import (
     PaginatedUsersResponse,
 )
 from app.modules.bookings.models import Booking, BookingStatus
+from app.modules.masters.models import MasterProfile
+from app.modules.masters.service import emit_master_verified
+from app.modules.practices.models import Practice, PracticeStatus
 
-# Model import only -- the curator_groups module's own service is not
+# Model import only -- the schools module's own service is not
 # touched from here (its helpers are private and stay that way).
-from app.modules.curator_groups.models import CuratorGroup
+from app.modules.schools.models import School
 
 # GT-15: the reader is imported, not re-implemented. The rule that an
 # absent key and an explicit false are the same state has to be stated in
 # ONE body, or the admin list will one day disagree with the gate about
 # who may found a school.
-from app.modules.curator_groups.service import (
+from app.modules.schools.service import (
     announce_pending_master_offers,
     master_can_create_groups,
 )
-from app.modules.masters.models import MasterProfile
-from app.modules.masters.service import emit_master_verified
-from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.users.models import User, UserRole
 from app.modules.users.schemas import (
     UserResponse,
@@ -148,11 +148,11 @@ async def _practices_counts_for_masters(
     return dict(rows)
 
 
-async def _curator_groups_counts_for_masters(
+async def _schools_counts_for_masters(
     master_ids: list[UUID],
     session: AsyncSession,
 ) -> dict[UUID, int]:
-    """Map master_id -> number of curator groups they OWN, for a page.
+    """Map master_id -> number of schools they OWN, for a page.
 
     ONE bounded query regardless of page size (GROUP BY curator_user_id),
     same shape as the two counts around it.
@@ -172,9 +172,9 @@ async def _curator_groups_counts_for_masters(
         return {}
     rows = (
         await session.execute(
-            select(CuratorGroup.curator_user_id, func.count(CuratorGroup.id))
-            .where(CuratorGroup.curator_user_id.in_(master_ids))
-            .group_by(CuratorGroup.curator_user_id)
+            select(School.curator_user_id, func.count(School.id))
+            .where(School.curator_user_id.in_(master_ids))
+            .group_by(School.curator_user_id)
         )
     ).all()
     return dict(rows)
@@ -263,7 +263,7 @@ async def list_masters(
     students_by_master = await _students_counts_for_masters(
         master_ids, session
     )
-    curator_groups_by_master = await _curator_groups_counts_for_masters(
+    schools_by_master = await _schools_counts_for_masters(
         master_ids, session
     )
 
@@ -282,7 +282,7 @@ async def list_masters(
             methods=profile.data.get("profile", {}).get("methods", []),
             practices_count=practices_by_master.get(user.id, 0),
             students_count=students_by_master.get(user.id, 0),
-            curator_groups_count=curator_groups_by_master.get(user.id, 0),
+            curator_groups_count=schools_by_master.get(user.id, 0),
             available_cents=profile.available_cents,
             can_create_groups=master_can_create_groups(profile.data),
         )
@@ -535,7 +535,7 @@ async def make_master(
     # verify_master then. The profile is held FOR UPDATE since it was
     # loaded (or, freshly created, by its INSERT, flushed by the autoflush
     # in front of the call) -- profile before offers, the order of
-    # curator_groups/service.py's header. BE-104: the person is told
+    # schools/service.py's header. BE-104: the person is told
     # before the schools ask.
     if not had_master:
         await emit_master_verified(session, user_id)

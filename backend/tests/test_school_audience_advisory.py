@@ -8,18 +8,18 @@
 # _TID_MIN/_TID_MAX, ONCE -- tests/telegram_id_bands.py parses that
 # declaration out of the AST on every run, and a file that uses ids without
 # declaring a band fails test_blind_zone_has_not_grown.
-# The neighbour 68000-68199 belongs to test_curator_audience.py (GT-11).
+# The neighbour 68000-68199 belongs to test_school_audience.py (GT-11).
 #
 # ⚠ BACKEND-ONLY, UNPROVEN LOCALLY -- no Postgres in the authoring
 # environment. Written to be read and to run on the server.
 #
 # FIXTURES OBEY OTHER PEOPLE'S RULES, read from their bodies rather than
 # remembered -- the GT-11 lesson, where five of twenty-six tests were built
-# wrong and none of the five was about curator groups:
+# wrong and none of the five was about schools:
 #   * POST /practices REQUIRES direction and difficulty
 #     (CreatePracticeRequest) -- _practice_body below carries them;
 #   * the school must be active AND the master must belong to it
-#     (_usable_curator_group_or_400, BE-74), or creation is a 400;
+#     (_usable_school_or_400, BE-74), or creation is a 400;
 #   * "upcoming" is {scheduled, live} + scheduled_at STRICTLY in the future
 #     (listing_service.py) -- a draft and a past practice are not upcoming;
 #   * the taxonomy gate fails OPEN on an empty profile.methods, which is
@@ -41,17 +41,17 @@ from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.bookings.models import Booking, BookingStatus
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import (
     AudienceKind,
     Practice,
     PracticeStatus,
     PracticeType,
+)
+from app.modules.schools.models import (
+    School,
+    SchoolMember,
+    SchoolMemberKind,
 )
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
@@ -152,8 +152,8 @@ def _practice_body(**overrides) -> dict:
 
 async def _school(
     db_session: AsyncSession, curator_id: str, name: str = "Тихое утро",
-) -> CuratorGroup:
-    group = CuratorGroup(curator_user_id=UUID(curator_id), name=name)
+) -> School:
+    group = School(curator_user_id=UUID(curator_id), name=name)
     db_session.add(group)
     await db_session.flush()
     await db_session.commit()
@@ -161,9 +161,9 @@ async def _school(
 
 
 async def _join_school(
-    db_session: AsyncSession, group_id, user_id: str, kind: CuratorMemberKind,
-) -> CuratorGroupMember:
-    row = CuratorGroupMember(
+    db_session: AsyncSession, group_id, user_id: str, kind: SchoolMemberKind,
+) -> SchoolMember:
+    row = SchoolMember(
         group_id=group_id, user_id=UUID(user_id), kind=kind.value,
     )
     db_session.add(row)
@@ -176,7 +176,7 @@ async def _create_practice(
     db_session: AsyncSession,
     master_id: str,
     *,
-    school: CuratorGroup | None = None,
+    school: School | None = None,
     audience_kind: str = AudienceKind.CURATOR_GROUPS.value,
     status: str = PracticeStatus.SCHEDULED.value,
     hours_from_now: float = 48,
@@ -259,7 +259,7 @@ async def test_a_live_school_practice_is_not_flagged_and_names_its_school(
     )
     school = await _school(db_session, curator["user"]["id"], name="Тихое утро")
     await _join_school(
-        db_session, school.id, teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, school.id, teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     practice = await _create_practice(
         db_session, teacher["user"]["id"], school=school,
@@ -290,11 +290,11 @@ async def test_leaving_the_only_school_darkens_the_practice(
     stranger = await login_user(client, telegram_id=_TID_STRANGER)
     school = await _school(db_session, curator["user"]["id"])
     membership = await _join_school(
-        db_session, school.id, teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, school.id, teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     await _join_school(
         db_session, school.id, holder["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     practice = await _create_practice(
         db_session, teacher["user"]["id"], school=school,
@@ -310,7 +310,7 @@ async def test_leaving_the_only_school_darkens_the_practice(
     ] is False
 
     await db_session.delete(
-        await db_session.get(CuratorGroupMember, membership.id)
+        await db_session.get(SchoolMember, membership.id)
     )
     await db_session.commit()
 
@@ -345,10 +345,10 @@ async def test_a_second_school_is_refused_and_only_the_owning_school_counts(
     first = await _school(db_session, curator["user"]["id"], name="Первая")
     second = await _school(db_session, curator["user"]["id"], name="Вторая")
     m1 = await _join_school(
-        db_session, first.id, teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, first.id, teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     m2 = await _join_school(
-        db_session, second.id, teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, second.id, teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
 
     refused = await client.post(
@@ -365,13 +365,13 @@ async def test_a_second_school_is_refused_and_only_the_owning_school_counts(
         db_session, teacher["user"]["id"], school=first,
     )
 
-    await db_session.delete(await db_session.get(CuratorGroupMember, m2.id))
+    await db_session.delete(await db_session.get(SchoolMember, m2.id))
     await db_session.commit()
     body = (await _detail(client, teacher, practice)).json()
     assert body["audience_unavailable"] is False
     assert body["curator_group_name"] == "Первая"
 
-    await db_session.delete(await db_session.get(CuratorGroupMember, m1.id))
+    await db_session.delete(await db_session.get(SchoolMember, m1.id))
     await db_session.commit()
     assert (await _detail(client, teacher, practice)).json()[
         "audience_unavailable"
@@ -397,7 +397,7 @@ async def test_a_frozen_school_darkens_the_practice_but_keeps_its_name(
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
     school = await _school(db_session, curator["user"]["id"], name="Тихое утро")
     await _join_school(
-        db_session, school.id, teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, school.id, teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     practice = await _create_practice(
         db_session, teacher["user"]["id"], school=school,
@@ -427,7 +427,7 @@ async def test_a_suspended_master_darkens_their_own_school_practice(
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
     school = await _school(db_session, curator["user"]["id"])
     membership = await _join_school(
-        db_session, school.id, teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, school.id, teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     practice = await _create_practice(
         db_session, teacher["user"]["id"], school=school,
@@ -441,7 +441,7 @@ async def test_a_suspended_master_darkens_their_own_school_practice(
     assert (await _detail(client, teacher, practice)).json()[
         "audience_unavailable"
     ] is True
-    assert await db_session.get(CuratorGroupMember, membership.id) is not None
+    assert await db_session.get(SchoolMember, membership.id) is not None
 
 
 @pytest.mark.asyncio
@@ -464,13 +464,13 @@ async def test_deleting_the_school_makes_the_practice_public_not_dark(
     )
     school = await _school(db_session, curator["user"]["id"])
     await _join_school(
-        db_session, school.id, teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, school.id, teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     practice = await _create_practice(
         db_session, teacher["user"]["id"], school=school,
     )
 
-    await db_session.delete(await db_session.get(CuratorGroup, school.id))
+    await db_session.delete(await db_session.get(School, school.id))
     await db_session.commit()
 
     body = (await _detail(client, teacher, practice)).json()
@@ -564,11 +564,11 @@ async def test_a_school_member_reads_the_school_name_and_a_stranger_gets_404(
     for who in (teacher, colleague):
         await _join_school(
             db_session, school.id, who["user"]["id"],
-            CuratorMemberKind.MASTER,
+            SchoolMemberKind.MASTER,
         )
     await _join_school(
         db_session, school.id, student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     practice = await _create_practice(
         db_session, teacher["user"]["id"], school=school,
@@ -602,11 +602,11 @@ async def test_a_booked_viewer_keeps_reading_the_name_after_the_practice_darkens
     holder = await login_user(client, telegram_id=_TID_STUDENT_A)
     school = await _school(db_session, curator["user"]["id"], name="Тихое утро")
     membership = await _join_school(
-        db_session, school.id, teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, school.id, teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     await _join_school(
         db_session, school.id, holder["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     practice = await _create_practice(
         db_session, teacher["user"]["id"], school=school, hours_from_now=1,
@@ -622,7 +622,7 @@ async def test_a_booked_viewer_keeps_reading_the_name_after_the_practice_darkens
     await db_session.commit()
 
     await db_session.delete(
-        await db_session.get(CuratorGroupMember, membership.id)
+        await db_session.get(SchoolMember, membership.id)
     )
     await db_session.commit()
 
@@ -668,7 +668,7 @@ async def test_leave_preview_counts_only_my_own_upcoming_practices(
     for who in (teacher, colleague):
         for g in (school, other_school):
             await _join_school(
-                db_session, g.id, who["user"]["id"], CuratorMemberKind.MASTER,
+                db_session, g.id, who["user"]["id"], SchoolMemberKind.MASTER,
             )
 
     await _create_practice(
@@ -717,7 +717,7 @@ async def test_the_advisory_number_matches_what_actually_goes_dark(
     )
     school = await _school(db_session, curator["user"]["id"])
     await _join_school(
-        db_session, school.id, teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, school.id, teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     first = await _create_practice(
         db_session, teacher["user"]["id"], school=school, title="Первая",
@@ -752,7 +752,7 @@ async def test_leave_preview_is_zero_for_a_student_and_for_an_empty_school(
     school = await _school(db_session, curator["user"]["id"])
     await _join_school(
         db_session, school.id, student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
 
     resp = await _leave_preview(client, student, school.id)
@@ -807,7 +807,7 @@ async def test_leave_preview_refuses_a_stranger_and_an_unknown_school(
     school = await _school(db_session, curator["user"]["id"])
     await _join_school(
         db_session, school.id, student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
 
     assert (await _leave_preview(client, stranger, school.id)).status_code == 404
@@ -833,7 +833,7 @@ async def test_leave_preview_is_404_on_a_frozen_school_though_leaving_works(
     school = await _school(db_session, curator["user"]["id"])
     await _join_school(
         db_session, school.id, student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     assert (await _leave_preview(client, student, school.id)).status_code == 200
 
@@ -865,7 +865,7 @@ async def test_remove_preview_counts_that_members_practices(
     )
     school = await _school(db_session, curator["user"]["id"])
     await _join_school(
-        db_session, school.id, teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, school.id, teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     await _create_practice(
         db_session, teacher["user"]["id"], school=school, title="Его",
@@ -895,7 +895,7 @@ async def test_remove_preview_is_zero_for_a_student_and_a_non_member(
     school = await _school(db_session, curator["user"]["id"])
     await _join_school(
         db_session, school.id, student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     headers = auth_headers(curator["session_token"])
 
@@ -927,7 +927,7 @@ async def test_remove_preview_refuses_someone_elses_school(
     school = await _school(db_session, curator["user"]["id"])
     await _join_school(
         db_session, school.id, student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
 
     resp = await client.get(
@@ -971,11 +971,11 @@ async def test_delete_preview_counts_everyone_including_the_curator(
     student = await login_user(client, telegram_id=_TID_STUDENT_A)
     school = await _school(db_session, curator["user"]["id"])
     await _join_school(
-        db_session, school.id, teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, school.id, teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     await _join_school(
         db_session, school.id, student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     await _create_practice(
         db_session, curator["user"]["id"], school=school, title="Кураторская",
@@ -1067,7 +1067,7 @@ async def test_the_advisory_endpoints_block_nothing(
     for who in (teacher, leaver):
         await _join_school(
             db_session, school.id, who["user"]["id"],
-            CuratorMemberKind.MASTER,
+            SchoolMemberKind.MASTER,
         )
         await _create_practice(
             db_session, who["user"]["id"], school=school,

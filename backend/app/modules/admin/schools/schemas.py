@@ -1,5 +1,5 @@
 # =============================================================================
-# VELO Backend -- Admin Curator Groups Schemas (P4, GT-9)
+# VELO Backend -- Admin Schools Schemas (P4, GT-9)
 # =============================================================================
 #
 # Response shapes for the admin's read-only view of every school on the

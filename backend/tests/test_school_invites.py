@@ -1,5 +1,5 @@
 # =============================================================================
-# VELO Backend -- Tests: Curator group invites and joining (GT-3, 8.2 #1-4)
+# VELO Backend -- Tests: School invites and joining (GT-3, 8.2 #1-4)
 # =============================================================================
 #
 # telegram_id band: 66400-66599 (curator 66401, masters 66402-66405,
@@ -8,15 +8,15 @@
 # parses that declaration out of the AST on every run, and a file that uses
 # ids without declaring a band fails test_blind_zone_has_not_grown.
 #
-# Neighbours in the same module: 66000-66199 (test_curator_groups.py, the
-# curator CRUD) and 66200-66399 (test_curator_groups_page.py, the member
+# Neighbours in the same module: 66000-66199 (test_schools.py, the
+# curator CRUD) and 66200-66399 (test_schools_page.py, the member
 # page). Three files, three disjoint bands.
 #
 # GT-27: ELEVEN TESTS WERE REMOVED FROM THIS FILE, NOT WEAKENED. A school used
 # to have TWO reusable links, and the master one promoted an existing student
 # to kind='master' on join. That path was cancelled by owner ruling -- school
 # masters are appointed by the curator and the appointment takes effect only
-# on the appointee's confirmation (tests/test_curator_master_offer.py).
+# on the appointee's confirmation (tests/test_school_master_offer.py).
 #
 # The removed eleven all asserted things about the second link: that the two
 # kinds were different links, that revoking one left the other working, that
@@ -58,13 +58,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.modules.curator_groups.models import (
-    CuratorGroupInvite,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.masters.groups_models import MasterStudent
 from app.modules.masters.models import MasterProfile
+from app.modules.schools.models import (
+    SchoolInvite,
+    SchoolMember,
+    SchoolMemberKind,
+)
 from app.modules.users.models import User, UserRole
 from tests.helpers import (
     auth_headers,
@@ -135,7 +135,7 @@ async def _make_verified_master(
     # build a master who is verified and still cannot create the group
     # every test below starts by creating. Set here rather than asserted
     # on: this file is about what a curator does WITH a school, and the
-    # right itself is covered in test_curator_group_permission.py.
+    # right itself is covered in test_school_permission.py.
     db_session.add(
         MasterProfile(
             user_id=user_id,
@@ -213,9 +213,9 @@ async def _preview(client: AsyncClient, auth: dict, token: str):
 
 async def _seed_member(
     db_session: AsyncSession, group_id: str, user_id: str,
-    kind: CuratorMemberKind, joined_at: datetime | None = None,
+    kind: SchoolMemberKind, joined_at: datetime | None = None,
 ) -> None:
-    row = CuratorGroupMember(
+    row = SchoolMember(
         group_id=UUID(group_id), user_id=UUID(user_id), kind=kind.value,
     )
     if joined_at is not None:
@@ -263,12 +263,12 @@ async def _member_row(db_session: AsyncSession, group_id: str, user_id: str):
     return (
         await fresh_execute(
             select(
-                CuratorGroupMember.id,
-                CuratorGroupMember.kind,
-                CuratorGroupMember.joined_at,
+                SchoolMember.id,
+                SchoolMember.kind,
+                SchoolMember.joined_at,
             ).where(
-                CuratorGroupMember.group_id == UUID(group_id),
-                CuratorGroupMember.user_id == UUID(user_id),
+                SchoolMember.group_id == UUID(group_id),
+                SchoolMember.user_id == UUID(user_id),
             )
         )
     ).one_or_none()
@@ -308,8 +308,8 @@ async def test_repeat_create_returns_the_same_link(
 
     rows = (
         await fresh_execute(
-            select(CuratorGroupInvite.id).where(
-                CuratorGroupInvite.group_id == UUID(group["id"])
+            select(SchoolInvite.id).where(
+                SchoolInvite.group_id == UUID(group["id"])
             )
         )
     ).scalars().all()
@@ -369,8 +369,8 @@ async def test_missing_bot_url_is_503_and_writes_nothing(
 
     rows = (
         await fresh_execute(
-            select(CuratorGroupInvite.id).where(
-                CuratorGroupInvite.group_id == UUID(group["id"])
+            select(SchoolInvite.id).where(
+                SchoolInvite.group_id == UUID(group["id"])
             )
         )
     ).scalars().all()
@@ -497,8 +497,8 @@ async def test_token_of_an_inactive_group_is_404_and_comes_back(
 
     still = (
         await fresh_execute(
-            select(CuratorGroupInvite.token).where(
-                CuratorGroupInvite.group_id == UUID(group["id"])
+            select(SchoolInvite.token).where(
+                SchoolInvite.group_id == UUID(group["id"])
             )
         )
     ).scalars().all()
@@ -524,8 +524,8 @@ async def test_token_of_a_deleted_group_is_404(
     assert (await _preview(client, joiner, token)).status_code == 404
     rows = (
         await fresh_execute(
-            select(CuratorGroupInvite.id).where(
-                CuratorGroupInvite.token == token
+            select(SchoolInvite.id).where(
+                SchoolInvite.token == token
             )
         )
     ).scalars().all()
@@ -694,7 +694,7 @@ async def test_a_master_member_reopening_the_link_keeps_the_role(
     group = await _create_group(client, curator)
     await _seed_member(
         db_session, group["id"], teacher["user"]["id"],
-        CuratorMemberKind.MASTER,
+        SchoolMemberKind.MASTER,
     )
     student_token = await _invite(client, curator, group["id"])
 
@@ -751,11 +751,11 @@ async def test_preview_carries_the_group_card_with_live_counters(
     stranger = await login_user(client, telegram_id=_TID_STRANGER)
     group = await _create_group(client, curator, name="Школа дыхания")
     await _seed_member(
-        db_session, group["id"], teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, group["id"], teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     await _seed_member(
         db_session, group["id"], student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     token = await _invite(client, curator, group["id"])
 
@@ -802,10 +802,10 @@ async def test_one_relation_per_pair_is_enforced_by_the_database(
     assert (await _join(client, student, token)).status_code == 200
 
     db_session.add(
-        CuratorGroupMember(
+        SchoolMember(
             group_id=UUID(group["id"]),
             user_id=UUID(student["user"]["id"]),
-            kind=CuratorMemberKind.MASTER.value,
+            kind=SchoolMemberKind.MASTER.value,
         )
     )
     with pytest.raises(IntegrityError):

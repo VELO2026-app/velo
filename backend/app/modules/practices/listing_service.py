@@ -181,7 +181,7 @@ async def list_school_practices_for_curator(
     masters' (as on every curator-facing response): no host link, no
     public link -- unless the curator is the practice's own master.
     """
-    from app.modules.curator_groups.service import _get_group_or_404
+    from app.modules.schools.service import _get_group_or_404
 
     await _get_group_or_404(user.id, group_id, session)
     base_filter = (
@@ -354,8 +354,8 @@ async def list_public_practices(
         filters.append(Practice.master_id == master_id)
 
     # master_ids (Curator GROUPS GT-2): the SET form of the filter above,
-    # for callers that show one feed across several masters -- a curator
-    # group's page is the first. NOT exposed by the public route: it is an
+    # for callers that show one feed across several masters -- a
+    # school's page is the first. NOT exposed by the public route: it is an
     # internal parameter, so no client can hand-pick an arbitrary master set.
     #
     # `is not None`, NOT truthiness. An EMPTY list is a real answer -- "this

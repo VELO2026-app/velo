@@ -21,7 +21,7 @@
 # member row alone ("my schools", the roster) is asserted here because it
 # comes with the swap, not with any new check.
 #
-# THE RACES use tests/curator_race_harness.py: the holder is paused at a
+# THE RACES use tests/school_race_harness.py: the holder is paused at a
 # named call inside its window, the rival runs into it, and Postgres --
 # not a sleep -- says whether the rival waited. Each race asserts the ONE
 # invariant the code promises: a member row and a block row of one person
@@ -42,20 +42,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_session_factory
 from app.core.events.models import OutboxEvent
-from app.modules.curator_groups import service as curator_service
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupBlock,
-    CuratorGroupEvent,
-    CuratorGroupEventKind,
-    CuratorGroupMember,
-    CuratorGroupTransfer,
-    CuratorMemberKind,
-)
 from app.modules.masters.models import MasterProfile
+from app.modules.schools import service as curator_service
+from app.modules.schools.models import (
+    School,
+    SchoolBlock,
+    SchoolEvent,
+    SchoolEventKind,
+    SchoolMember,
+    SchoolMemberKind,
+    SchoolTransfer,
+)
 from app.modules.users.models import User, UserRole
-from tests.curator_race_harness import race
 from tests.helpers import auth_headers, fresh_execute, full_cleanup_range, login_user
+from tests.school_race_harness import race
 
 GROUPS_URL = "/api/v1/masters/me/curator-groups"
 INVITES_URL = "/api/v1/masters/me/curator-groups/{group_id}/invites"
@@ -140,10 +140,10 @@ async def _join(client: AsyncClient, auth: dict, token: str):
 
 
 async def _seed_member(
-    db_session: AsyncSession, group_id: str, auth: dict, kind: CuratorMemberKind,
+    db_session: AsyncSession, group_id: str, auth: dict, kind: SchoolMemberKind,
     joined_at: datetime | None = None,
 ) -> None:
-    row = CuratorGroupMember(
+    row = SchoolMember(
         group_id=UUID(group_id), user_id=_uid(auth), kind=kind.value,
     )
     if joined_at is not None:
@@ -171,17 +171,17 @@ async def _rows(group_id: str, person: dict) -> dict:
     """The two rows the invariant is about, read through a fresh session."""
     member = (
         await fresh_execute(
-            select(CuratorGroupMember).where(
-                CuratorGroupMember.group_id == UUID(group_id),
-                CuratorGroupMember.user_id == _uid(person),
+            select(SchoolMember).where(
+                SchoolMember.group_id == UUID(group_id),
+                SchoolMember.user_id == _uid(person),
             )
         )
     ).scalar_one_or_none()
     block = (
         await fresh_execute(
-            select(CuratorGroupBlock).where(
-                CuratorGroupBlock.group_id == UUID(group_id),
-                CuratorGroupBlock.user_id == _uid(person),
+            select(SchoolBlock).where(
+                SchoolBlock.group_id == UUID(group_id),
+                SchoolBlock.user_id == _uid(person),
             )
         )
     ).scalar_one_or_none()
@@ -191,8 +191,8 @@ async def _rows(group_id: str, person: dict) -> dict:
 async def _journal(group_id: str) -> list[str]:
     rows = (
         await fresh_execute(
-            select(CuratorGroupEvent.event).where(
-                CuratorGroupEvent.group_id == UUID(group_id)
+            select(SchoolEvent.event).where(
+                SchoolEvent.group_id == UUID(group_id)
             )
         )
     ).all()
@@ -246,9 +246,9 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("kind", [CuratorMemberKind.STUDENT, CuratorMemberKind.MASTER])
+@pytest.mark.parametrize("kind", [SchoolMemberKind.STUDENT, SchoolMemberKind.MASTER])
 async def test_a_block_swaps_the_membership_for_a_block_and_an_unblock_swaps_it_back(
-    client: AsyncClient, db_session: AsyncSession, kind: CuratorMemberKind,
+    client: AsyncClient, db_session: AsyncSession, kind: SchoolMemberKind,
 ) -> None:
     """Student and master alike: the row goes, the block keeps its kind and
     its joined_at, and an unblock restores exactly that -- the same
@@ -256,14 +256,14 @@ async def test_a_block_swaps_the_membership_for_a_block_and_an_unblock_swaps_it_
     curator = await _verified_master(client, db_session, _TID_CURATOR)
     person = (
         await _verified_master(client, db_session, _TID_MASTER)
-        if kind is CuratorMemberKind.MASTER
+        if kind is SchoolMemberKind.MASTER
         else await _student(client, _TID_STUDENT)
     )
     bystander = await _student(client, _TID_STUDENT_B)
     group_id = await _school(client, curator)
     joined = datetime.now(UTC) - timedelta(days=30)
     await _seed_member(db_session, group_id, person, kind, joined_at=joined)
-    await _seed_member(db_session, group_id, bystander, CuratorMemberKind.STUDENT)
+    await _seed_member(db_session, group_id, bystander, SchoolMemberKind.STUDENT)
 
     resp = await _block(client, curator, group_id, person)
     assert resp.status_code == 204, resp.text
@@ -304,13 +304,13 @@ async def test_journal_and_notifications_follow_the_block_once(
     curator = await _verified_master(client, db_session, _TID_CURATOR)
     person = await _student(client, _TID_STUDENT)
     group_id = await _school(client, curator)
-    await _seed_member(db_session, group_id, person, CuratorMemberKind.STUDENT)
+    await _seed_member(db_session, group_id, person, SchoolMemberKind.STUDENT)
 
     assert (await _block(client, curator, group_id, person)).status_code == 204
     assert (await _block(client, curator, group_id, person)).status_code == 204
 
     journal = await _journal(group_id)
-    assert journal.count(CuratorGroupEventKind.MEMBER_BLOCKED.value) == 1
+    assert journal.count(SchoolEventKind.MEMBER_BLOCKED.value) == 1
     types = await _types_for(person)
     assert types.count("curator_group.member_blocked") == 1
     assert "curator_group.member_unblocked" not in types
@@ -318,7 +318,7 @@ async def test_journal_and_notifications_follow_the_block_once(
     assert (await _unblock(client, curator, group_id, person)).status_code == 204
 
     journal = await _journal(group_id)
-    assert journal.count(CuratorGroupEventKind.MEMBER_UNBLOCKED.value) == 1
+    assert journal.count(SchoolEventKind.MEMBER_UNBLOCKED.value) == 1
     assert (await _types_for(person)).count("curator_group.member_unblocked") == 1
 
 
@@ -335,8 +335,8 @@ async def test_who_cannot_be_blocked_or_unblocked(
     stranger = await _student(client, _TID_STRANGER)
     group_id = await _school(client, curator)
     other_group = await _school(client, other_curator, "Чужая")
-    await _seed_member(db_session, group_id, member, CuratorMemberKind.STUDENT)
-    await _seed_member(db_session, other_group, stranger, CuratorMemberKind.STUDENT)
+    await _seed_member(db_session, group_id, member, SchoolMemberKind.STUDENT)
+    await _seed_member(db_session, other_group, stranger, SchoolMemberKind.STUDENT)
 
     own = await _block(client, curator, group_id, curator)
     assert own.status_code == 409, own.text
@@ -399,7 +399,7 @@ async def test_my_schools_loses_the_blocked_school_and_keeps_the_others(
     other_curator = await _verified_master(client, db_session, _TID_CURATOR_B)
     group_id = await _school(client, curator)
     own_group = await _school(client, other_curator, "Своя")
-    await _seed_member(db_session, group_id, other_curator, CuratorMemberKind.MASTER)
+    await _seed_member(db_session, group_id, other_curator, SchoolMemberKind.MASTER)
     assert set(await _mine_ids(client, other_curator)) == {group_id, own_group}
 
     assert (await _block(client, curator, group_id, other_curator)).status_code == 204
@@ -423,7 +423,7 @@ def _actor_call(fn, *args, actor_id: UUID, **kwargs):
 
 async def _block_call(curator: dict, group_id: str, person: dict):
     return _actor_call(
-        curator_service.block_curator_group_member,
+        curator_service.block_school_member,
         _uid(curator), UUID(group_id), _uid(person),
         actor_id=_uid(curator),
     )
@@ -457,7 +457,7 @@ async def test_k1_a_block_landing_inside_a_join_does_not_let_the_person_back(
 
     async def _join_call(session: AsyncSession) -> None:
         actor = await session.get(User, _uid(person))
-        await curator_service.join_curator_group_by_token(
+        await curator_service.join_school_by_token(
             token, _uid(person), session, actor=actor,
         )
 
@@ -491,11 +491,11 @@ async def test_k4_leaving_while_being_blocked_leaves_only_the_block(
     curator = await _verified_master(client, db_session, _TID_CURATOR)
     person = await _student(client, _TID_STUDENT)
     group_id = await _school(client, curator)
-    await _seed_member(db_session, group_id, person, CuratorMemberKind.STUDENT)
+    await _seed_member(db_session, group_id, person, SchoolMemberKind.STUDENT)
 
     async def _leave_call(session: AsyncSession) -> None:
         actor = await session.get(User, _uid(person))
-        await curator_service.leave_curator_group(
+        await curator_service.leave_school(
             UUID(group_id), _uid(person), session, actor=actor,
         )
 
@@ -511,15 +511,15 @@ async def test_k4_leaving_while_being_blocked_leaves_only_the_block(
     assert result.holder.committed, result.holder.error
     rows = await _assert_one_of_two(group_id, person)
     assert rows["block"] is not None
-    assert CuratorGroupEventKind.MEMBER_LEFT.value not in await _journal(group_id)
+    assert SchoolEventKind.MEMBER_LEFT.value not in await _journal(group_id)
 
 
 async def _heir_with_offer(client, db_session) -> tuple[dict, dict, str]:
     curator = await _verified_master(client, db_session, _TID_CURATOR)
     heir = await _verified_master(client, db_session, _TID_HEIR)
     group_id = await _school(client, curator)
-    await _seed_member(db_session, group_id, heir, CuratorMemberKind.MASTER)
-    db_session.add(CuratorGroupTransfer(group_id=UUID(group_id), to_user_id=_uid(heir)))
+    await _seed_member(db_session, group_id, heir, SchoolMemberKind.MASTER)
+    db_session.add(SchoolTransfer(group_id=UUID(group_id), to_user_id=_uid(heir)))
     await db_session.flush()
     await db_session.commit()
     return curator, heir, group_id
@@ -528,8 +528,8 @@ async def _heir_with_offer(client, db_session) -> tuple[dict, dict, str]:
 async def _curator_of(group_id: str) -> UUID:
     return (
         await fresh_execute(
-            select(CuratorGroup.curator_user_id).where(
-                CuratorGroup.id == UUID(group_id)
+            select(School.curator_user_id).where(
+                School.id == UUID(group_id)
             )
         )
     ).scalar_one()
@@ -543,13 +543,13 @@ async def test_k5_a_block_inside_an_accepted_transfer_finds_the_heir_gone(
 ) -> None:
     """K5, accept first. The heir's accept holds his member row and the
     claimed offer (paused at _has_master_capability, the pause point of
-    test_curator_transfer_race.py); the curator's block of the heir waits on
+    test_school_transfer_race.py); the curator's block of the heir waits on
     that member row. Released, the school changes hands; the block finds no
     member row and no block row -> 404, nothing written."""
     curator, heir, group_id = await _heir_with_offer(client, db_session)
 
     accept = _actor_call(
-        curator_service.accept_curator_group_transfer,
+        curator_service.accept_school_transfer,
         UUID(group_id), _uid(heir), actor_id=_uid(heir),
     )
     result = await race(
@@ -583,7 +583,7 @@ async def test_k5_an_accept_inside_a_block_does_not_move_the_school(
     curator, heir, group_id = await _heir_with_offer(client, db_session)
 
     accept = _actor_call(
-        curator_service.accept_curator_group_transfer,
+        curator_service.accept_school_transfer,
         UUID(group_id), _uid(heir), actor_id=_uid(heir),
     )
     result = await race(
@@ -602,8 +602,8 @@ async def test_k5_an_accept_inside_a_block_does_not_move_the_school(
     assert rows["block"] is not None
     transfers = (
         await fresh_execute(
-            select(CuratorGroupTransfer).where(
-                CuratorGroupTransfer.group_id == UUID(group_id)
+            select(SchoolTransfer).where(
+                SchoolTransfer.group_id == UUID(group_id)
             )
         )
     ).scalars().all()
@@ -643,7 +643,7 @@ async def test_deleting_the_school_takes_its_blocks_with_it(
     curator = await _verified_master(client, db_session, _TID_CURATOR)
     person = await _student(client, _TID_STUDENT)
     group_id = await _school(client, curator)
-    await _seed_member(db_session, group_id, person, CuratorMemberKind.STUDENT)
+    await _seed_member(db_session, group_id, person, SchoolMemberKind.STUDENT)
     assert (await _block(client, curator, group_id, person)).status_code == 204
     assert (await _rows(group_id, person))["block"] is not None
 
@@ -653,7 +653,7 @@ async def test_deleting_the_school_takes_its_blocks_with_it(
     assert (await _rows(group_id, person))["block"] is None
     factory = get_session_factory()
     async with factory() as probe:
-        assert await probe.get(CuratorGroup, UUID(group_id)) is None
+        assert await probe.get(School, UUID(group_id)) is None
 
 
 @pytest.mark.asyncio
@@ -664,7 +664,7 @@ async def test_k5_a_former_curator_cannot_block_in_the_school_he_just_lost(
 ) -> None:
     """K5, a bystander. The heir's accept is paused AFTER it wrote the new
     owner onto the group row (at _frozen_name, the pause point
-    test_curator_lock_order.py uses for removal); the outgoing curator,
+    test_school_lock_order.py uses for removal); the outgoing curator,
     who still owns the school by every committed row, blocks an ordinary
     student meanwhile. The block swaps the student's rows and then waits on
     the group row in _lock_group_as_owner. Released, the school belongs to
@@ -677,10 +677,10 @@ async def test_k5_a_former_curator_cannot_block_in_the_school_he_just_lost(
     still the old curator's -- a legitimate order, not this window."""
     curator, heir, group_id = await _heir_with_offer(client, db_session)
     bystander = await _student(client, _TID_STUDENT)
-    await _seed_member(db_session, group_id, bystander, CuratorMemberKind.STUDENT)
+    await _seed_member(db_session, group_id, bystander, SchoolMemberKind.STUDENT)
 
     accept = _actor_call(
-        curator_service.accept_curator_group_transfer,
+        curator_service.accept_school_transfer,
         UUID(group_id), _uid(heir), actor_id=_uid(heir),
     )
     result = await race(

@@ -14,7 +14,7 @@
 # person could never reach it, and the explanation was true -- OF ONE
 # REQUEST AT A TIME. A removal committing in between left the write meeting
 # None, and the answer was a 500. Nothing held the row: with_for_update
-# appears nowhere in curator_groups/ and the isolation level is READ
+# appears nowhere in schools/ and the isolation level is READ
 # COMMITTED.
 #
 # asyncio.gather CANNOT SHOW THIS, and that was measured in BE-42 rather
@@ -24,7 +24,7 @@
 # built that way is green before the fix and after it.
 #
 # SO THE COMPETITOR IS SCHEDULED, NOT RACED -- and since BE-95 it is
-# scheduled INTO accept rather than inside it. tests/curator_race_harness.py
+# scheduled INTO accept rather than inside it. tests/school_race_harness.py
 # pauses accept at _has_master_capability (wrapped, not replaced: the real
 # function still runs and still decides), lets the competitor run until
 # Postgres reports it waiting on accept's lock, and only then releases
@@ -49,19 +49,19 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.curator_groups import service as curator_service
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupEvent,
-    CuratorGroupEventKind,
-    CuratorGroupMasterOffer,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.masters.models import MasterProfile
+from app.modules.schools import service as curator_service
+from app.modules.schools.models import (
+    School,
+    SchoolEvent,
+    SchoolEventKind,
+    SchoolMasterOffer,
+    SchoolMember,
+    SchoolMemberKind,
+)
 from app.modules.users.models import User, UserRole
-from tests.curator_race_harness import race
 from tests.helpers import auth_headers, full_cleanup_range, login_user
+from tests.school_race_harness import race
 
 ACCEPT_URL = "/api/v1/curator-groups/{group_id}/master-offer/accept"
 
@@ -112,7 +112,7 @@ async def _master(
 
 async def _school_with_offer(
     client: AsyncClient, db_session: AsyncSession,
-) -> tuple[dict, dict, CuratorGroup]:
+) -> tuple[dict, dict, School]:
     """A school, a student member, and a pending master offer to them.
 
     The appointee is a STUDENT of the school: the offer upgrades an
@@ -123,20 +123,20 @@ async def _school_with_offer(
     curator = await _master(client, db_session, _TID_CURATOR)
     appointee = await _master(client, db_session, _TID_APPOINTEE)
 
-    school = CuratorGroup(
+    school = School(
         curator_user_id=UUID(curator["user"]["id"]), name="Школа BE-81",
     )
     db_session.add(school)
     await db_session.flush()
     db_session.add(
-        CuratorGroupMember(
+        SchoolMember(
             group_id=school.id,
             user_id=UUID(appointee["user"]["id"]),
-            kind=CuratorMemberKind.STUDENT.value,
+            kind=SchoolMemberKind.STUDENT.value,
         )
     )
     db_session.add(
-        CuratorGroupMasterOffer(
+        SchoolMasterOffer(
             group_id=school.id,
             to_user_id=UUID(appointee["user"]["id"]),
         )
@@ -146,7 +146,7 @@ async def _school_with_offer(
     return curator, appointee, school
 
 
-async def _accept(client: AsyncClient, who: dict, school: CuratorGroup):
+async def _accept(client: AsyncClient, who: dict, school: School):
     return await client.post(
         ACCEPT_URL.format(group_id=school.id),
         headers=auth_headers(who["session_token"]),
@@ -154,27 +154,27 @@ async def _accept(client: AsyncClient, who: dict, school: CuratorGroup):
 
 
 async def _membership(
-    db_session: AsyncSession, school: CuratorGroup, who: dict,
+    db_session: AsyncSession, school: School, who: dict,
 ) -> str | None:
     """The appointee's membership kind, or None if the row is gone."""
     return (
         await db_session.execute(
-            select(CuratorGroupMember.kind).where(
-                CuratorGroupMember.group_id == school.id,
-                CuratorGroupMember.user_id == UUID(who["user"]["id"]),
+            select(SchoolMember.kind).where(
+                SchoolMember.group_id == school.id,
+                SchoolMember.user_id == UUID(who["user"]["id"]),
             )
         )
     ).scalar_one_or_none()
 
 
 async def _offer_left(
-    db_session: AsyncSession, school: CuratorGroup, who: dict,
+    db_session: AsyncSession, school: School, who: dict,
 ) -> bool:
     return (
         await db_session.execute(
-            select(CuratorGroupMasterOffer.id).where(
-                CuratorGroupMasterOffer.group_id == school.id,
-                CuratorGroupMasterOffer.to_user_id
+            select(SchoolMasterOffer.id).where(
+                SchoolMasterOffer.group_id == school.id,
+                SchoolMasterOffer.to_user_id
                 == UUID(who["user"]["id"]),
             )
         )
@@ -207,7 +207,7 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
 async def _accept_with_competitor(
     monkeypatch: pytest.MonkeyPatch,
     appointee: dict,
-    school: CuratorGroup,
+    school: School,
     competitor,
 ):
     """Accept in flight and paused holding its locks; `competitor` runs into it.
@@ -220,7 +220,7 @@ async def _accept_with_competitor(
 
     async def _accept_call(session: AsyncSession) -> None:
         actor = await session.get(User, user_id)
-        await curator_service.accept_curator_group_master_offer(
+        await curator_service.accept_school_master_offer(
             school.id, user_id, session, actor=actor,
         )
 
@@ -234,14 +234,14 @@ async def _accept_with_competitor(
 
 
 async def _event_written(
-    db_session: AsyncSession, school: CuratorGroup, kind,
+    db_session: AsyncSession, school: School, kind,
 ) -> bool:
     """Did the competitor's action take effect -- is its journal line there."""
     return (
         await db_session.execute(
-            select(CuratorGroupEvent.id).where(
-                CuratorGroupEvent.group_id == school.id,
-                CuratorGroupEvent.event == kind.value,
+            select(SchoolEvent.id).where(
+                SchoolEvent.group_id == school.id,
+                SchoolEvent.event == kind.value,
             )
         )
     ).first() is not None
@@ -269,7 +269,7 @@ async def test_a_removal_mid_accept_never_promotes_the_removed_person(
 
     async def _remove(rival: AsyncSession) -> None:
         actor = await rival.get(User, UUID(curator["user"]["id"]))
-        await curator_service.remove_curator_group_member(
+        await curator_service.remove_school_member(
             UUID(curator["user"]["id"]),
             school.id,
             UUID(appointee["user"]["id"]),
@@ -298,7 +298,7 @@ async def test_a_removal_mid_accept_never_promotes_the_removed_person(
     assert await _membership(db_session, school, appointee) is None
     assert not await _offer_left(db_session, school, appointee)
     assert await _event_written(
-        db_session, school, CuratorGroupEventKind.MEMBER_REMOVED,
+        db_session, school, SchoolEventKind.MEMBER_REMOVED,
     )
 
 @pytest.mark.asyncio
@@ -309,7 +309,7 @@ async def test_leaving_mid_accept_never_promotes_the_departed_person(
 ) -> None:
     """The second competitor: the appointee walks out by their own hand.
 
-    leave_curator_group drops the same offer in the same transaction as the
+    leave_school drops the same offer in the same transaction as the
     membership, so it reaches the identical window by a different door.
     Named in the comment above the write since GT-27 and missing from the
     card's table of work.
@@ -320,7 +320,7 @@ async def test_leaving_mid_accept_never_promotes_the_departed_person(
 
     async def _leave(rival: AsyncSession) -> None:
         actor = await rival.get(User, UUID(appointee["user"]["id"]))
-        await curator_service.leave_curator_group(
+        await curator_service.leave_school(
             school.id,
             UUID(appointee["user"]["id"]),
             rival,
@@ -345,7 +345,7 @@ async def test_leaving_mid_accept_never_promotes_the_departed_person(
     assert await _membership(db_session, school, appointee) is None
     assert not await _offer_left(db_session, school, appointee)
     assert await _event_written(
-        db_session, school, CuratorGroupEventKind.MEMBER_LEFT,
+        db_session, school, SchoolEventKind.MEMBER_LEFT,
     )
 
 @pytest.mark.asyncio
@@ -372,7 +372,7 @@ async def test_declining_mid_accept_never_promotes_the_refuser(
 
     async def _decline(rival: AsyncSession) -> None:
         actor = await rival.get(User, UUID(appointee["user"]["id"]))
-        await curator_service.decline_curator_group_master_offer(
+        await curator_service.decline_school_master_offer(
             school.id,
             UUID(appointee["user"]["id"]),
             rival,
@@ -398,10 +398,10 @@ async def test_declining_mid_accept_never_promotes_the_refuser(
     # found no offer once accept had committed, so it wrote no journal
     # line. "Declined and promoted" are not both true.
     assert await _membership(db_session, school, appointee) == (
-        CuratorMemberKind.MASTER.value
+        SchoolMemberKind.MASTER.value
     )
     assert not await _event_written(
-        db_session, school, CuratorGroupEventKind.MASTER_OFFER_DECLINED,
+        db_session, school, SchoolEventKind.MASTER_OFFER_DECLINED,
     )
 
 @pytest.mark.asyncio
@@ -435,7 +435,7 @@ async def test_two_simultaneous_accepts_give_one_204_and_one_404(
     assert loser.json()["error"] == "master_offer_not_found", loser.text
 
     assert await _membership(db_session, school, appointee) == (
-        CuratorMemberKind.MASTER.value
+        SchoolMemberKind.MASTER.value
     )
     assert not await _offer_left(db_session, school, appointee)
 
@@ -487,10 +487,10 @@ async def test_no_offer_and_somebody_elses_offer_are_both_refused(
     )
     stranger = await _master(client, db_session, _TID_STRANGER)
     db_session.add(
-        CuratorGroupMember(
+        SchoolMember(
             group_id=school.id,
             user_id=UUID(stranger["user"]["id"]),
-            kind=CuratorMemberKind.STUDENT.value,
+            kind=SchoolMemberKind.STUDENT.value,
         )
     )
     await db_session.flush()
@@ -501,14 +501,14 @@ async def test_no_offer_and_somebody_elses_offer_are_both_refused(
     assert theirs.status_code == 404, theirs.text
     assert theirs.json()["error"] == "master_offer_not_found", theirs.text
     assert await _membership(db_session, school, stranger) == (
-        CuratorMemberKind.STUDENT.value
+        SchoolMemberKind.STUDENT.value
     )
 
     # And the offer that really was made still works.
     mine = await _accept(client, appointee, school)
     assert mine.status_code == 204, mine.text
     assert await _membership(db_session, school, appointee) == (
-        CuratorMemberKind.MASTER.value
+        SchoolMemberKind.MASTER.value
     )
 
 
@@ -561,7 +561,7 @@ async def test_a_lapsed_master_is_refused_and_the_offer_is_still_there(
         "the 403 took the offer with it"
     )
     assert await _membership(db_session, school, appointee) == (
-        CuratorMemberKind.STUDENT.value
+        SchoolMemberKind.STUDENT.value
     )
 
     profile.data = {
@@ -574,5 +574,5 @@ async def test_a_lapsed_master_is_refused_and_the_offer_is_still_there(
     accepted = await _accept(client, appointee, school)
     assert accepted.status_code == 204, accepted.text
     assert await _membership(db_session, school, appointee) == (
-        CuratorMemberKind.MASTER.value
+        SchoolMemberKind.MASTER.value
     )

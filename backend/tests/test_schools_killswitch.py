@@ -65,16 +65,10 @@ from fastapi import APIRouter, FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import app.modules.curator_groups.router as curator_groups_router_module
+import app.modules.schools.router as schools_router_module
 from app.core.config import settings
 from app.main import app
 from app.modules.bookings.models import Booking, BookingStatus
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
-from app.modules.curator_groups.router import member_router, router
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import (
     AudienceKind,
@@ -82,6 +76,12 @@ from app.modules.practices.models import (
     PracticeStatus,
     PracticeType,
 )
+from app.modules.schools.models import (
+    School,
+    SchoolMember,
+    SchoolMemberKind,
+)
+from app.modules.schools.router import member_router, router
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 
@@ -108,7 +108,7 @@ _TID_BOOKER = 65611
 _TID_OUTSIDER = 65630
 _TID_ADMIN = 65690
 
-_FLAG = "curator_groups_enabled"
+_FLAG = "schools_enabled"
 
 
 def _off():
@@ -175,7 +175,7 @@ async def _make_admin(
 
 async def _make_school(
     db_session: AsyncSession, curator: dict, name: str = "Школа дыхания",
-) -> CuratorGroup:
+) -> School:
     """Build the school with the ORM, not through the API.
 
     Deliberate: with the flag off the creation endpoint answers 404, so a
@@ -183,7 +183,7 @@ async def _make_school(
     the API while the flag is off, and creating it with the flag on would
     make every test carry two flag states before it even starts.
     """
-    school = CuratorGroup(
+    school = School(
         curator_user_id=UUID(curator["user"]["id"]), name=name,
     )
     db_session.add(school)
@@ -193,10 +193,10 @@ async def _make_school(
 
 
 async def _add_member(
-    db_session: AsyncSession, school: CuratorGroup, auth: dict, kind: str,
+    db_session: AsyncSession, school: School, auth: dict, kind: str,
 ) -> None:
     db_session.add(
-        CuratorGroupMember(
+        SchoolMember(
             group_id=school.id,
             user_id=UUID(auth["user"]["id"]),
             kind=kind,
@@ -208,7 +208,7 @@ async def _add_member(
 async def _make_school_practice(
     db_session: AsyncSession,
     master_id: str,
-    school: CuratorGroup,
+    school: School,
     title: str = "Практика школы",
 ) -> Practice:
     practice = Practice(
@@ -269,7 +269,7 @@ async def test_the_flag_defaults_to_on_and_the_feature_works_under_it(
     """The default is True, and under the default a school works end to end.
 
     TWO ASSERTIONS, AND THE SECOND IS WHY THE FIRST IS NOT ENOUGH. The
-    literal `settings.curator_groups_enabled is True` catches somebody
+    literal `settings.schools_enabled is True` catches somebody
     flipping the default -- which would 404 every school endpoint and take
     down the 213 tests across the five curator files plus the three GT-15..17
     files, with nothing in the failure output pointing at a config line.
@@ -279,7 +279,7 @@ async def test_the_flag_defaults_to_on_and_the_feature_works_under_it(
     feature: create, read the page, read the journal. If the killswitch is
     wired wrong, this fails here rather than in 213 places.
     """
-    assert settings.curator_groups_enabled is True
+    assert settings.schools_enabled is True
 
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     headers = auth_headers(curator["session_token"])
@@ -459,7 +459,7 @@ def test_the_module_still_exposes_exactly_two_routers() -> None:
     """
     routers = {
         name
-        for name, value in vars(curator_groups_router_module).items()
+        for name, value in vars(schools_router_module).items()
         if isinstance(value, APIRouter)
     }
     assert routers == {"router", "member_router"}, sorted(routers)
@@ -547,7 +547,7 @@ async def test_the_feature_answers_again_when_the_flag_returns(
     student = await login_user(client, telegram_id=_TID_STUDENT)
     school = await _make_school(db_session, curator)
     await _add_member(
-        db_session, school, student, CuratorMemberKind.STUDENT.value,
+        db_session, school, student, SchoolMemberKind.STUDENT.value,
     )
     gid = str(school.id)
 
@@ -646,10 +646,10 @@ async def test_a_school_practice_leaves_every_feed_except_its_masters(
 
     school = await _make_school(db_session, curator)
     await _add_member(
-        db_session, school, teacher, CuratorMemberKind.MASTER.value,
+        db_session, school, teacher, SchoolMemberKind.MASTER.value,
     )
     await _add_member(
-        db_session, school, student, CuratorMemberKind.STUDENT.value,
+        db_session, school, student, SchoolMemberKind.STUDENT.value,
     )
     await _make_school_practice(
         db_session, teacher["user"]["id"], school, title="Практика школы",
@@ -685,7 +685,7 @@ async def test_a_school_practice_detail_is_refused_by_the_audience_gate(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     school = await _make_school(db_session, curator)
     await _add_member(
-        db_session, school, teacher, CuratorMemberKind.MASTER.value,
+        db_session, school, teacher, SchoolMemberKind.MASTER.value,
     )
     practice = await _make_school_practice(
         db_session, teacher["user"]["id"], school,
@@ -737,7 +737,7 @@ async def test_the_master_is_told_that_the_audience_is_unavailable(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     school = await _make_school(db_session, curator, name="Тихое утро")
     await _add_member(
-        db_session, school, teacher, CuratorMemberKind.MASTER.value,
+        db_session, school, teacher, SchoolMemberKind.MASTER.value,
     )
     practice = await _make_school_practice(
         db_session, teacher["user"]["id"], school,
@@ -774,7 +774,7 @@ async def test_a_public_practice_is_untouched_by_the_flag(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     school = await _make_school(db_session, curator)
     await _add_member(
-        db_session, school, teacher, CuratorMemberKind.MASTER.value,
+        db_session, school, teacher, SchoolMemberKind.MASTER.value,
     )
     await _make_school_practice(
         db_session, teacher["user"]["id"], school, title="Школьная",
@@ -831,10 +831,10 @@ async def test_a_booking_holder_keeps_reading_the_practice_they_paid_for(
     booker = await login_user(client, telegram_id=_TID_BOOKER)
     school = await _make_school(db_session, curator)
     await _add_member(
-        db_session, school, teacher, CuratorMemberKind.MASTER.value,
+        db_session, school, teacher, SchoolMemberKind.MASTER.value,
     )
     await _add_member(
-        db_session, school, booker, CuratorMemberKind.STUDENT.value,
+        db_session, school, booker, SchoolMemberKind.STUDENT.value,
     )
     practice = await _make_school_practice(
         db_session, teacher["user"]["id"], school,
@@ -843,7 +843,7 @@ async def test_a_booking_holder_keeps_reading_the_practice_they_paid_for(
     db_session.add(
         # Three columns and no money: the price lives on the Purchase,
         # not the Booking (see bookings/models.py). Same construction as
-        # test_curator_audience_advisory.py, which builds a booking for the
+        # test_school_audience_advisory.py, which builds a booking for the
         # same purpose next door.
         Booking(
             user_id=UUID(booker["user"]["id"]),

@@ -296,7 +296,7 @@ async def _mood_distribution(
     writing the zone boundaries into a query, which is the copy zone_counts
     exists to prevent.
     Only PRE check-ins, like every other reader of this table
-    (checkins_service, bookings/service, curator_groups/feedback_service,
+    (checkins_service, bookings/service, schools/feedback_service,
     practices/enrichment_service). Not defensive decoration: uq_checkin_booking
     _type is unique on (booking_id, check_type), so a POST check-in would be a
     SECOND row for the same booking, and the denominator below counts bookings.

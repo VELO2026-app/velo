@@ -1,5 +1,5 @@
 # =============================================================================
-# VELO Backend -- Tests: Curator Group page, member side (GT-2, 8.1 #4-5)
+# VELO Backend -- Tests: School page, member side (GT-2, 8.1 #4-5)
 # =============================================================================
 #
 # telegram_id band: 66200-66399 (curator 66201, masters 66202-66205,
@@ -8,7 +8,7 @@
 # declaration out of the AST on every run, and a file that uses ids without
 # declaring a band fails test_blind_zone_has_not_grown.
 #
-# The neighbouring band 66000-66199 belongs to test_curator_groups.py (GT-1,
+# The neighbouring band 66000-66199 belongs to test_schools.py (GT-1,
 # the curator-facing half). Same module, two files, two disjoint bands.
 #
 # ⚠ BACKEND-ONLY, UNPROVEN LOCALLY -- no Postgres in the authoring
@@ -38,11 +38,6 @@ from httpx import AsyncClient
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.masters.groups_models import MasterStudent
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import (
@@ -50,6 +45,11 @@ from app.modules.practices.models import (
     Practice,
     PracticeStatus,
     PracticeType,
+)
+from app.modules.schools.models import (
+    School,
+    SchoolMember,
+    SchoolMemberKind,
 )
 from app.modules.users.models import User, UserRole
 from tests.helpers import (
@@ -124,7 +124,7 @@ async def _make_verified_master(
     # build a master who is verified and still cannot create the group
     # every test below starts by creating. Set here rather than asserted
     # on: this file is about what a curator does WITH a school, and the
-    # right itself is covered in test_curator_group_permission.py.
+    # right itself is covered in test_school_permission.py.
     db_session.add(
         MasterProfile(
             user_id=UUID(user_id),
@@ -172,7 +172,7 @@ async def _join(
     db_session: AsyncSession,
     group_id: str,
     user_id: str,
-    kind: CuratorMemberKind,
+    kind: SchoolMemberKind,
     joined_at: datetime | None = None,
 ) -> None:
     """Seed a membership row directly.
@@ -181,7 +181,7 @@ async def _join(
     invite link is GT-3. The row is a reachable state with a named writer,
     not an invented one.
     """
-    row = CuratorGroupMember(
+    row = SchoolMember(
         group_id=UUID(group_id), user_id=UUID(user_id), kind=kind.value,
     )
     if joined_at is not None:
@@ -337,11 +337,11 @@ async def test_master_and_student_members_each_see_their_own_relation(
     student = await login_user(client, telegram_id=_TID_STUDENT_A)
     group = await _create_group(client, curator)
     await _join(
-        db_session, group["id"], teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, group["id"], teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     await _join(
         db_session, group["id"], student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
 
     url = PAGE_URL.format(group_id=group["id"])
@@ -416,14 +416,14 @@ async def test_suspended_curator_hides_the_group_and_reverification_restores_it(
     group = await _create_group(client, curator)
     await _join(
         db_session, group["id"], student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
 
     headers = auth_headers(student["session_token"])
     before_rows = (
         await fresh_execute(
-            select(CuratorGroupMember.id, CuratorGroupMember.joined_at).where(
-                CuratorGroupMember.group_id == UUID(group["id"])
+            select(SchoolMember.id, SchoolMember.joined_at).where(
+                SchoolMember.group_id == UUID(group["id"])
             )
         )
     ).all()
@@ -445,8 +445,8 @@ async def test_suspended_curator_hides_the_group_and_reverification_restores_it(
 
     after_rows = (
         await fresh_execute(
-            select(CuratorGroupMember.id, CuratorGroupMember.joined_at).where(
-                CuratorGroupMember.group_id == UUID(group["id"])
+            select(SchoolMember.id, SchoolMember.joined_at).where(
+                SchoolMember.group_id == UUID(group["id"])
             )
         )
     ).all()
@@ -488,7 +488,7 @@ async def test_deleted_group_is_404_like_any_other(
     group = await _create_group(client, curator)
     await _join(
         db_session, group["id"], student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     headers = auth_headers(student["session_token"])
     assert (
@@ -540,7 +540,7 @@ async def test_mine_lists_curated_first_then_joined(
     their_group = await _create_group(client, other, name="Чужая школа")
     await _join(
         db_session, their_group["id"], me["user"]["id"],
-        CuratorMemberKind.MASTER,
+        SchoolMemberKind.MASTER,
     )
 
     items = (
@@ -566,12 +566,12 @@ async def test_mine_orders_joined_groups_by_most_recent_membership(
     newer = await _create_group(client, newer_curator, name="Новая")
     await _join(
         db_session, older["id"], student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
         joined_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
     await _join(
         db_session, newer["id"], student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
         joined_at=datetime(2026, 6, 1, tzinfo=UTC),
     )
 
@@ -603,7 +603,7 @@ async def test_roster_puts_the_curator_first_and_carries_public_fields(
     )
     group = await _create_group(client, curator)
     await _join(
-        db_session, group["id"], teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, group["id"], teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     await _create_practice(db_session, teacher["user"]["id"])
 
@@ -641,11 +641,11 @@ async def test_suspended_master_leaves_the_roster_and_the_total(
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
     group = await _create_group(client, curator)
     await _join(
-        db_session, group["id"], teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, group["id"], teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     await _join(
         db_session, group["id"], student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     headers = auth_headers(student["session_token"])
     url = MASTERS_URL.format(group_id=group["id"])
@@ -660,8 +660,8 @@ async def test_suspended_master_leaves_the_roster_and_the_total(
 
     rows = (
         await fresh_execute(
-            select(CuratorGroupMember.user_id).where(
-                CuratorGroupMember.group_id == UUID(group["id"])
+            select(SchoolMember.user_id).where(
+                SchoolMember.group_id == UUID(group["id"])
             )
         )
     ).scalars().all()
@@ -684,7 +684,7 @@ async def test_roster_total_equals_masters_count_plus_the_curator(
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
     group = await _create_group(client, curator)
     await _join(
-        db_session, group["id"], teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, group["id"], teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     headers = auth_headers(curator["session_token"])
 
@@ -725,11 +725,11 @@ async def test_pagination_never_repeats_the_curator(
     )
     group = await _create_group(client, curator)
     await _join(
-        db_session, group["id"], first["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, group["id"], first["user"]["id"], SchoolMemberKind.MASTER,
         joined_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
     await _join(
-        db_session, group["id"], second["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, group["id"], second["user"]["id"], SchoolMemberKind.MASTER,
         joined_at=datetime(2026, 6, 1, tzinfo=UTC),
     )
     headers = auth_headers(curator["session_token"])
@@ -779,7 +779,7 @@ async def test_roster_practices_count_matches_the_public_master_profile(
     )
     group = await _create_group(client, curator)
     await _join(
-        db_session, group["id"], teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, group["id"], teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     await _create_practice(db_session, teacher["user"]["id"], title="Live")
     await _create_practice(
@@ -832,11 +832,11 @@ async def test_feed_shows_the_schools_masters_and_nobody_else(
     student = await login_user(client, telegram_id=_TID_STUDENT_A)
     group = await _create_group(client, curator)
     await _join(
-        db_session, group["id"], teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, group["id"], teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     await _join(
         db_session, group["id"], student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     await _create_practice(
         db_session, curator["user"]["id"], title="By curator",
@@ -916,12 +916,12 @@ async def test_a_master_who_blocked_the_viewer_gives_no_practices(
     other = await login_user(client, telegram_id=_TID_STUDENT_B)
     group = await _create_group(client, curator)
     await _join(
-        db_session, group["id"], teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, group["id"], teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     for who in (blocked, other):
         await _join(
             db_session, group["id"], who["user"]["id"],
-            CuratorMemberKind.STUDENT,
+            SchoolMemberKind.STUDENT,
         )
     await _create_practice(
         db_session, teacher["user"]["id"], title="By teacher",
@@ -971,11 +971,11 @@ async def test_group_with_no_visible_masters_yields_an_empty_feed(
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
     group = await _create_group(client, curator)
     await _join(
-        db_session, group["id"], teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, group["id"], teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     await _join(
         db_session, group["id"], student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     await _create_practice(
         db_session, teacher["user"]["id"], title="By teacher",
@@ -1028,7 +1028,7 @@ async def test_leaving_removes_the_row_and_repeats_are_still_204(
     group = await _create_group(client, curator)
     await _join(
         db_session, group["id"], student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     headers = auth_headers(student["session_token"])
     url = MEMBERSHIP_URL.format(group_id=group["id"])
@@ -1094,7 +1094,7 @@ async def test_the_curator_cannot_leave_their_own_group(
 
     still = (
         await fresh_execute(
-            select(CuratorGroup).where(CuratorGroup.id == UUID(group["id"]))
+            select(School).where(School.id == UUID(group["id"]))
         )
     ).scalar_one_or_none()
     assert still is not None
@@ -1120,7 +1120,7 @@ async def test_a_member_can_leave_a_group_that_is_inactive(
     for who in (student, stayer):
         await _join(
             db_session, group["id"], who["user"]["id"],
-            CuratorMemberKind.STUDENT,
+            SchoolMemberKind.STUDENT,
         )
 
     await _revoke(client, admin_token, curator["user"]["id"])

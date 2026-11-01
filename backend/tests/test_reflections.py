@@ -13,7 +13,7 @@
 #     (booking status, empty comment forms, length, repeat, other user,
 #     cancelled + no_show, auth), the row read back by SQL, the audit row.
 #   - has_reflection on GET /bookings/me and /bookings/me/upcoming.
-#   - The race of two first submissions (curator_race_harness): the second
+#   - The race of two first submissions (school_race_harness): the second
 #     waits on the unique index and gets 409, one row.
 #
 # NOT BUILT, deliberately: a race of create_reflection against cancel_booking
@@ -46,8 +46,8 @@ from app.modules.diary import service as diary_service
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import Practice, PracticeStatus, PracticeType
 from app.modules.users.models import User, UserRole
-from tests.curator_race_harness import assert_no_deadlock, race
 from tests.helpers import auth_headers, full_cleanup_range, login_user
+from tests.school_race_harness import assert_no_deadlock, race
 
 _TID_MIN = 72800
 _TID_MAX = 72849

@@ -308,16 +308,16 @@ async def _cancel_one(
     # cancellation with a 500. That state is now excluded by the lock
     # order: cancel_practice holds this practice FOR UPDATE and the
     # school locked as its owner (_lock_group_as_owner) before calling
-    # here, so delete_curator_group -- which clears its practices'
+    # here, so delete_school -- which clears its practices'
     # owner before it deletes the school -- waits for this transaction.
     if acting_as_curator:
-        from app.modules.curator_groups.models import CuratorGroupEventKind
-        from app.modules.curator_groups.service import _record_group_event
+        from app.modules.schools.models import SchoolEventKind
+        from app.modules.schools.service import _record_group_event
 
         _record_group_event(
             curated_group_id,
             user,
-            CuratorGroupEventKind.PRACTICE_CANCELLED,
+            SchoolEventKind.PRACTICE_CANCELLED,
             session,
             data={
                 "practice_id": str(practice.id),
@@ -370,9 +370,9 @@ async def _tell_master_cancelled_by_curator(
     """
     from app.core.events.notify import emit_notification
     from app.core.events.reminders import format_event_time, practice_correlation
-    from app.modules.curator_groups.models import CuratorGroup
+    from app.modules.schools.models import School
 
-    group = await session.get(CuratorGroup, group_id)
+    group = await session.get(School, group_id)
     # The reader is the master -> the practice's zone (BE-102 notification time).
     when_text = format_event_time(primary.scheduled_at, primary.timezone)
     await emit_notification(
@@ -411,7 +411,7 @@ def _right_over_sibling(user: User, curated_group_id: UUID | None):
         Every occurrence of a series is born with its root's master and
         school (_owned_root_parent_or_400, the school check in
         create_practice, _build_child_occurrence), the school never
-        changes afterwards and delete_curator_group clears it from all of
+        changes afterwards and delete_school clears it from all of
         a school's practices in one statement (BE-74). So no series has a
         sibling outside the school, and this predicate is not a guard
         against such a state: it is the curator's right, stated where the
@@ -552,7 +552,7 @@ async def cancel_practice(
     # READ, not lock: the right and the shape of the set are decided on an
     # unlocked copy, and every row is then taken in ONE statement by id
     # (PRACTICE ROW ORDER, practices/service.py). Taking the primary first
-    # and its series after was a 40P01 against delete_curator_group and
+    # and its series after was a 40P01 against delete_school and
     # block_student (BE-64 follow-up, O1/O2).
     read = (
         await session.execute(select(Practice).where(Practice.id == practice_id))
@@ -579,7 +579,7 @@ async def cancel_practice(
     primary, siblings = await _primary_and_later(practice_id, locked)
 
     # The school comes AFTER every practice row (practice -> group,
-    # curator_groups/service.py header).
+    # schools/service.py header).
     # BE-74 (the BE-59 finding, carried here): OWNERSHIP RE-CHECKED UNDER
     # THE GROUP LOCK before anything is written. curated_group_id_for_
     # practice is a read, and the school can change hands between it and
@@ -590,7 +590,7 @@ async def cancel_practice(
     # A refusal here has written nothing; the 404 is the stranger's, for
     # P-08's reason.
     if curated_group_id is not None:
-        from app.modules.curator_groups.service import _lock_group_as_owner
+        from app.modules.schools.service import _lock_group_as_owner
         if not await _lock_group_as_owner(user.id, curated_group_id, session):
             raise NotFoundError("Practice not found")
 

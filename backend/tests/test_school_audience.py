@@ -1,5 +1,5 @@
 # =============================================================================
-# VELO Backend -- Tests: the fourth audience, curator groups (P5/GT-11)
+# VELO Backend -- Tests: the fourth audience, schools (P5/GT-11)
 # =============================================================================
 #
 # telegram_id band: 68000-68199 (masters 68001-68005, students 68010-68019,
@@ -34,11 +34,6 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.bookings.models import Booking, BookingStatus
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.masters.groups_models import MasterStudent
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import (
@@ -46,6 +41,11 @@ from app.modules.practices.models import (
     Practice,
     PracticeStatus,
     PracticeType,
+)
+from app.modules.schools.models import (
+    School,
+    SchoolMember,
+    SchoolMemberKind,
 )
 from app.modules.users.models import User, UserRole
 from app.modules.waitlist.models import Waitlist, WaitlistStatus
@@ -117,8 +117,8 @@ async def _make_admin(
 
 async def _school(
     db_session: AsyncSession, curator_id: str, name: str = "Тихое утро",
-) -> CuratorGroup:
-    group = CuratorGroup(curator_user_id=UUID(curator_id), name=name)
+) -> School:
+    group = School(curator_user_id=UUID(curator_id), name=name)
     db_session.add(group)
     await db_session.flush()
     await db_session.commit()
@@ -126,9 +126,9 @@ async def _school(
 
 
 async def _join_school(
-    db_session: AsyncSession, group_id, user_id: str, kind: CuratorMemberKind,
-) -> CuratorGroupMember:
-    row = CuratorGroupMember(
+    db_session: AsyncSession, group_id, user_id: str, kind: SchoolMemberKind,
+) -> SchoolMember:
+    row = SchoolMember(
         group_id=group_id, user_id=UUID(user_id), kind=kind.value,
     )
     db_session.add(row)
@@ -142,7 +142,7 @@ async def _create_practice(
     master_id: str,
     *,
     audience_kind: str = AudienceKind.CURATOR_GROUPS.value,
-    school: CuratorGroup | None = None,
+    school: School | None = None,
     status: str = PracticeStatus.SCHEDULED.value,
     hours_from_now: float = 48,
     max_participants: int | None = 20,
@@ -332,11 +332,11 @@ async def test_the_school_sees_the_practice_and_a_stranger_does_not(
     stranger = await login_user(client, telegram_id=_TID_STRANGER)
     school = await _school(db_session, curator["user"]["id"])
     await _join_school(
-        db_session, school.id, teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, school.id, teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     await _join_school(
         db_session, school.id, student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     practice = await _create_practice(
         db_session, teacher["user"]["id"], school=school,
@@ -364,7 +364,7 @@ async def test_a_master_member_of_the_school_sees_another_masters_practice(
     for who in (teacher, colleague):
         await _join_school(
             db_session, school.id, who["user"]["id"],
-            CuratorMemberKind.MASTER,
+            SchoolMemberKind.MASTER,
         )
     practice = await _create_practice(
         db_session, teacher["user"]["id"], school=school,
@@ -384,7 +384,7 @@ async def test_a_practice_by_the_curator_themselves_is_visible_to_the_school(
     school = await _school(db_session, curator["user"]["id"])
     await _join_school(
         db_session, school.id, student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     practice = await _create_practice(
         db_session, curator["user"]["id"], school=school,
@@ -418,12 +418,12 @@ async def test_a_master_who_leaves_the_school_stops_broadcasting_to_it(
     other = await login_user(client, telegram_id=_TID_STUDENT_B)
     school = await _school(db_session, curator["user"]["id"])
     membership = await _join_school(
-        db_session, school.id, teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, school.id, teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     for who in (student, other):
         await _join_school(
             db_session, school.id, who["user"]["id"],
-            CuratorMemberKind.STUDENT,
+            SchoolMemberKind.STUDENT,
         )
     practice = await _create_practice(
         db_session, teacher["user"]["id"], school=school,
@@ -432,7 +432,7 @@ async def test_a_master_who_leaves_the_school_stops_broadcasting_to_it(
     await _assert_can_see_and_book(client, student, practice)
 
     await db_session.delete(
-        await db_session.get(CuratorGroupMember, membership.id)
+        await db_session.get(SchoolMember, membership.id)
     )
     await db_session.commit()
 
@@ -460,12 +460,12 @@ async def test_a_suspended_master_member_stops_broadcasting_too(
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
     school = await _school(db_session, curator["user"]["id"])
     await _join_school(
-        db_session, school.id, teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, school.id, teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     for who in (student, other):
         await _join_school(
             db_session, school.id, who["user"]["id"],
-            CuratorMemberKind.STUDENT,
+            SchoolMemberKind.STUDENT,
         )
     practice = await _create_practice(
         db_session, teacher["user"]["id"], school=school,
@@ -497,12 +497,12 @@ async def test_a_frozen_school_takes_the_practice_dark(
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
     school = await _school(db_session, curator["user"]["id"])
     await _join_school(
-        db_session, school.id, teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, school.id, teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     for who in (student, other):
         await _join_school(
             db_session, school.id, who["user"]["id"],
-            CuratorMemberKind.STUDENT,
+            SchoolMemberKind.STUDENT,
         )
     practice = await _create_practice(
         db_session, teacher["user"]["id"], school=school,
@@ -544,12 +544,12 @@ async def test_deleting_the_school_makes_its_practice_public_and_ownerless(
     other = await login_user(client, telegram_id=_TID_STUDENT_B)
     school = await _school(db_session, curator["user"]["id"])
     await _join_school(
-        db_session, school.id, teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, school.id, teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     for who in (student, other):
         await _join_school(
             db_session, school.id, who["user"]["id"],
-            CuratorMemberKind.STUDENT,
+            SchoolMemberKind.STUDENT,
         )
     practice = await _create_practice(
         db_session, teacher["user"]["id"], school=school,
@@ -557,7 +557,7 @@ async def test_deleting_the_school_makes_its_practice_public_and_ownerless(
     await _assert_can_see_and_book(client, student, practice)
 
     await db_session.execute(
-        delete(CuratorGroup).where(CuratorGroup.id == school.id),
+        delete(School).where(School.id == school.id),
     )
     await db_session.commit()
 
@@ -591,12 +591,12 @@ async def test_a_blocked_member_is_refused_with_the_block_code(
     welcome = await login_user(client, telegram_id=_TID_STUDENT_B)
     school = await _school(db_session, curator["user"]["id"])
     await _join_school(
-        db_session, school.id, teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, school.id, teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     for who in (blocked, welcome):
         await _join_school(
             db_session, school.id, who["user"]["id"],
-            CuratorMemberKind.STUDENT,
+            SchoolMemberKind.STUDENT,
         )
     practice = await _create_practice(
         db_session, teacher["user"]["id"], school=school,
@@ -642,11 +642,11 @@ async def test_a_confirmed_booking_survives_leaving_the_school(
     holder = await login_user(client, telegram_id=_TID_STUDENT_A)
     school = await _school(db_session, curator["user"]["id"])
     await _join_school(
-        db_session, school.id, teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, school.id, teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     membership = await _join_school(
         db_session, school.id, holder["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     # Check-in is open on the interval [scheduled_at - checkin_window_hours,
     # scheduled_at) -- diary/checkins_service.py. The first version of this
@@ -670,7 +670,7 @@ async def test_a_confirmed_booking_survives_leaving_the_school(
     await db_session.commit()
 
     await db_session.delete(
-        await db_session.get(CuratorGroupMember, membership.id)
+        await db_session.get(SchoolMember, membership.id)
     )
     await db_session.commit()
 
@@ -708,15 +708,15 @@ async def test_waitlist_confirm_refuses_someone_who_left_while_queued(
     queued_user = await login_user(client, telegram_id=_TID_STUDENT_B)
     school = await _school(db_session, curator["user"]["id"])
     await _join_school(
-        db_session, school.id, teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, school.id, teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     await _join_school(
         db_session, school.id, taker["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     membership = await _join_school(
         db_session, school.id, queued_user["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     practice = await _create_practice(
         db_session, teacher["user"]["id"], school=school,
@@ -748,7 +748,7 @@ async def test_waitlist_confirm_refuses_someone_who_left_while_queued(
     await db_session.commit()
 
     await db_session.delete(
-        await db_session.get(CuratorGroupMember, membership.id)
+        await db_session.get(SchoolMember, membership.id)
     )
     await db_session.commit()
 
@@ -790,11 +790,11 @@ async def test_a_second_school_is_refused_and_a_viewer_in_both_sees_it_once(
     for school in (first, second):
         await _join_school(
             db_session, school.id, teacher["user"]["id"],
-            CuratorMemberKind.MASTER,
+            SchoolMemberKind.MASTER,
         )
         await _join_school(
             db_session, school.id, student["user"]["id"],
-            CuratorMemberKind.STUDENT,
+            SchoolMemberKind.STUDENT,
         )
 
     refused = await client.post(
@@ -839,11 +839,11 @@ async def test_membership_in_another_school_is_not_enough(
     for school in (first, second):
         await _join_school(
             db_session, school.id, teacher["user"]["id"],
-            CuratorMemberKind.MASTER,
+            SchoolMemberKind.MASTER,
         )
     await _join_school(
         db_session, second.id, inside["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     practice = await _create_practice(
         db_session, teacher["user"]["id"], school=first,
@@ -852,7 +852,7 @@ async def test_membership_in_another_school_is_not_enough(
     await _assert_all_gates_refuse(client, inside, practice)
 
     await _join_school(
-        db_session, first.id, inside["user"]["id"], CuratorMemberKind.STUDENT,
+        db_session, first.id, inside["user"]["id"], SchoolMemberKind.STUDENT,
     )
     await _assert_can_see_and_book(client, inside, practice)
 
@@ -1012,7 +1012,7 @@ async def test_a_school_the_master_does_not_belong_to_is_rejected(
     )
     await _join_school(
         db_session, frozen.id, outsider["user"]["id"],
-        CuratorMemberKind.MASTER,
+        SchoolMemberKind.MASTER,
     )
     await _revoke(client, admin_token, frozen_curator["user"]["id"])
 
@@ -1248,11 +1248,11 @@ async def test_a_series_child_is_no_wider_than_its_root(
     student = await login_user(client, telegram_id=_TID_STUDENT_A)
     school = await _school(db_session, curator["user"]["id"])
     await _join_school(
-        db_session, school.id, teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, school.id, teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     await _join_school(
         db_session, school.id, student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     headers = auth_headers(teacher["session_token"])
 
@@ -1381,11 +1381,11 @@ async def test_the_preview_counts_exactly_the_bookers_outside_the_school(
     outside = await login_user(client, telegram_id=_TID_STUDENT_B)
     school = await _school(db_session, curator["user"]["id"])
     await _join_school(
-        db_session, school.id, teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, school.id, teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     await _join_school(
         db_session, school.id, inside["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     practice = await _create_practice(
         db_session, teacher["user"]["id"], school=school,
@@ -1423,7 +1423,7 @@ async def test_the_preview_reports_zero_when_nothing_narrows(
     school = await _school(db_session, curator["user"]["id"])
     await _join_school(
         db_session, school.id, student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     practice = await _create_practice(
         db_session, curator["user"]["id"], school=school,

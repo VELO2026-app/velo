@@ -84,11 +84,11 @@
 #     cancel_practice, this_and_future (practices/cancel_service.py):
 #       the primary and its series in one statement, the time boundary
 #       applied after the lock (_lock_cancel_set);
-#     delete_curator_group (curator_groups/service.py): the school's
+#     delete_school (schools/service.py): the school's
 #       practices, before its UPDATE of them;
 #     block_student (masters/groups_service.py): the student's future
 #       practices of the master (BE-99, already in this form).
-#     block_curator_group_member (curator_groups/service.py,
+#     block_school_member (schools/service.py,
 #       _close_school_practices_to, BE-79): the school's practices where the
 #       blocked person has a future booking or a queue entry, and his own
 #       practices of the school (K3), in one statement, before their
@@ -108,7 +108,7 @@
 #   does not conflict with KEY SHARE (BE-64 follow-up, O2).
 #
 #   What comes after the practice rows stays as recorded elsewhere:
-#   practice -> group (curator_groups/service.py, header) and
+#   practice -> group (schools/service.py, header) and
 #   practice -> booking (masters/groups_service.py, header).
 #
 # DELETE vs CANCEL:
@@ -138,16 +138,11 @@ from app.core.exceptions import (
     NotFoundError,
 )
 from app.modules.bookings.models import Booking, BookingStatus
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.masters.groups_models import MasterGroup
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.audience_service import (
     count_stranded_active_bookings,
-    curator_group_audience_is_dark,
+    school_audience_is_dark,
 )
 from app.modules.practices.enrichment_service import (
     attendance_counts_for_practices,
@@ -173,6 +168,11 @@ from app.modules.practices.series_service import (
     generate_series_occurrences,
 )
 from app.modules.practices.taxonomy_models import TaxonomyDirection, TaxonomyStyle
+from app.modules.schools.models import (
+    School,
+    SchoolMember,
+    SchoolMemberKind,
+)
 from app.modules.users.models import User
 
 logger = structlog.get_logger()
@@ -303,7 +303,7 @@ async def _owned_root_parent_or_400(
     and the edit is refused with 409 (_refuse_unheld_children_or_409).
 
     WHERE it is called is part of the order (PRACTICE ROW ORDER, and the
-    curator_groups module header: member -> master profile -> practice ->
+    schools module header: member -> master profile -> practice ->
     group): before any group lock. On the path for another master that is
     inside _effective_master_id_or_4xx, between the target's rows and the
     school; on the caller's own path, in create_practice, which locks no
@@ -369,7 +369,7 @@ _SCHOOL_NOT_USABLE = "curator_group_id must be an active school you belong to"
 _SCHOOL_NOT_USABLE_CODE = "curator_group_not_usable"
 
 
-async def _usable_curator_group_or_400(
+async def _usable_school_or_400(
     master_id: UUID, group_id: UUID, session: AsyncSession,
 ) -> None:
     """Refuse a school this master may not create a practice in (BE-74).
@@ -383,7 +383,7 @@ async def _usable_curator_group_or_400(
 
     THE KILLSWITCH IS READ HERE (BE-74, new). Setting the owning school is
     a new write path outside the school routers, and a path that does not
-    listen to curator_groups_enabled is the hole BE-43 closed twice. With
+    listen to schools_enabled is the hole BE-43 closed twice. With
     schools off, "this school" is not a school you can use.
 
     Single 400 with one message, no split by cause -- P-08 does not apply
@@ -391,30 +391,30 @@ async def _usable_curator_group_or_400(
     else's). The same message as a school deleted between this check and
     the INSERT (create_practice), because it is the same fact.
     """
-    if not settings.curator_groups_enabled:
+    if not settings.schools_enabled:
         raise BadRequestError(_SCHOOL_NOT_USABLE, code=_SCHOOL_NOT_USABLE_CODE)
     verified = (
         select(MasterProfile.user_id)
         .where(
-            MasterProfile.user_id == CuratorGroup.curator_user_id,
+            MasterProfile.user_id == School.curator_user_id,
             MasterProfile.data["account"]["status"].as_string() == "verified",
         )
         .exists()
     )
     master_belongs = or_(
-        CuratorGroup.curator_user_id == master_id,
-        select(CuratorGroupMember.id)
+        School.curator_user_id == master_id,
+        select(SchoolMember.id)
         .where(
-            CuratorGroupMember.group_id == CuratorGroup.id,
-            CuratorGroupMember.user_id == master_id,
-            CuratorGroupMember.kind == CuratorMemberKind.MASTER.value,
+            SchoolMember.group_id == School.id,
+            SchoolMember.user_id == master_id,
+            SchoolMember.kind == SchoolMemberKind.MASTER.value,
         )
         .exists(),
     )
     usable = (
         await session.execute(
-            select(CuratorGroup.id).where(
-                CuratorGroup.id == group_id, verified, master_belongs,
+            select(School.id).where(
+                School.id == group_id, verified, master_belongs,
             )
         )
     ).scalar_one_or_none()
@@ -449,7 +449,7 @@ async def _effective_master_id_or_4xx(
          a child's school inherited from its parent does not count: the
          rule is "created IN a school", said by the request itself);
       2. the school is usable by the caller at all -- schools switched on,
-         the school active, the caller in it (_usable_curator_group_or_400,
+         the school active, the caller in it (_usable_school_or_400,
          unchanged: the caller is the "author" it was written for);
       3. the caller is THIS school's curator. A curator of several schools
          is checked against the school of the practice, not against "any
@@ -462,7 +462,7 @@ async def _effective_master_id_or_4xx(
         series to add to (owner, 3 October) -- nothing was read;
       - 1 -> 400 master_id_requires_school: nothing was read, nothing
         about anybody is revealed;
-      - 2 -> the existing 400 of _usable_curator_group_or_400: an outsider
+      - 2 -> the existing 400 of _usable_school_or_400: an outsider
         cannot tell "this school exists, it is not yours" from "no such
         school", the same as on the caller's own path;
       - 3 -> 403 curator_only: only a member of the school gets this far,
@@ -476,11 +476,11 @@ async def _effective_master_id_or_4xx(
     is the mode a verified master is currently browsing in (they switch it
     themselves, users/service.py), so a verified master in the student
     zone is still a master; the profile is the capability, the same test
-    _usable_curator_group_or_400 and the school's audience apply.
+    _usable_school_or_400 and the school's audience apply.
 
     THE TARGET'S ROWS ARE TAKEN, NOT READ (BE-102, owner ruling Q5): the
     member row, then the master profile, both FOR SHARE, in the order of
-    the curator_groups module header (member -> master profile -> ... ->
+    the schools module header (member -> master profile -> ... ->
     practice -> group); the practice INSERT comes after both. A demotion
     or removal of the target (an UPDATE / DELETE of the member row) and an
     admin taking verification away (an UPDATE of the profile) conflict
@@ -509,11 +509,11 @@ async def _effective_master_id_or_4xx(
             "master_id of another master requires curator_group_id",
             code="master_id_requires_school",
         )
-    await _usable_curator_group_or_400(user.id, school_id, session)
+    await _usable_school_or_400(user.id, school_id, session)
     curator_id = (
         await session.execute(
-            select(CuratorGroup.curator_user_id).where(
-                CuratorGroup.id == school_id,
+            select(School.curator_user_id).where(
+                School.id == school_id,
             )
         )
     ).scalar_one_or_none()
@@ -539,7 +539,7 @@ async def _lock_school_master_or_400(
     """Take this master's place in this school, or refuse (BE-102, BE-63).
 
     kind='master' member row of THIS school, then the master profile
-    verified NOW -- both FOR SHARE, in the curator_groups module order
+    verified NOW -- both FOR SHARE, in the schools module order
     (member -> master profile), and before the caller locks the practice
     or the group. A demotion / removal (UPDATE / DELETE of the member row)
     or a verification taken away (UPDATE of the profile) either commits
@@ -557,11 +557,11 @@ async def _lock_school_master_or_400(
     """
     member = (
         await session.execute(
-            select(CuratorGroupMember.id)
+            select(SchoolMember.id)
             .where(
-                CuratorGroupMember.group_id == school_id,
-                CuratorGroupMember.user_id == master_id,
-                CuratorGroupMember.kind == CuratorMemberKind.MASTER.value,
+                SchoolMember.group_id == school_id,
+                SchoolMember.user_id == master_id,
+                SchoolMember.kind == SchoolMemberKind.MASTER.value,
             )
             .with_for_update(read=True)
         )
@@ -601,8 +601,8 @@ async def _lock_group_as_owner(
     curator_user_id: UUID, school_id: UUID, session: AsyncSession,
 ) -> bool:
     """curator_groups' _lock_group_as_owner, imported lazily (import cycle:
-    curator_groups/service.py imports practices/models.py)."""
-    from app.modules.curator_groups.service import (
+    schools/service.py imports practices/models.py)."""
+    from app.modules.schools.service import (
         _lock_group_as_owner as lock,
     )
     return await lock(curator_user_id, school_id, session)
@@ -618,7 +618,7 @@ async def _curated_school_of(
     school active. A READ -- the fast path; writers re-check it under the
     group lock (_relock_school_or_404).
     """
-    from app.modules.curator_groups.service import (
+    from app.modules.schools.service import (
         curated_group_id_for_practice,
     )
     return await curated_group_id_for_practice(practice, user.id, session)
@@ -639,7 +639,7 @@ async def _refuse_blocked_in_school(
     change (a read, no lock), create_practice on the series-child path (on
     the parent it holds FOR SHARE). The two writers read the block AFTER
     their practice lock: the block takes the blocked master's practices in
-    the school FOR UPDATE (block_curator_group_member, K3), so the read
+    the school FOR UPDATE (block_school_member, K3), so the read
     either precedes the block entirely or sees it.
 
     No school -> nothing to be blocked in. Lazy import: the same shape as
@@ -647,7 +647,7 @@ async def _refuse_blocked_in_school(
     """
     if school_id is None:
         return
-    from app.modules.curator_groups.service import (
+    from app.modules.schools.service import (
         _blocked_in_group,
         _blocked_in_group_error,
     )
@@ -933,8 +933,8 @@ async def _tell_master_of_curator_act(
     )
     group_name = (
         await session.execute(
-            select(CuratorGroup.name).where(
-                CuratorGroup.id == practice.curator_group_id,
+            select(School.name).where(
+                School.id == practice.curator_group_id,
             )
         )
     ).scalar_one()
@@ -1017,7 +1017,7 @@ async def group_names_for_practice(
     return list((await session.execute(stmt)).scalars().all())
 
 
-async def curator_group_name_for_practice(
+async def school_name_for_practice(
     practice: Practice, session: AsyncSession,
 ) -> str | None:
     """PracticeResponse.curator_group_name -- the OWNING school's name, or
@@ -1042,8 +1042,8 @@ async def curator_group_name_for_practice(
         return None
     return (
         await session.execute(
-            select(CuratorGroup.name).where(
-                CuratorGroup.id == practice.curator_group_id,
+            select(School.name).where(
+                School.id == practice.curator_group_id,
             )
         )
     ).scalar_one_or_none()
@@ -1816,7 +1816,7 @@ async def create_practice(
     master's), the confirmed-methods check (the master teaches it), the
     master's own groups and root parent, Practice.master_id and the logs'
     master_id. The CALLER stays the one who acted: the logs' actor_id, the
-    school check of _usable_curator_group_or_400, and the audit row plus
+    school check of _usable_school_or_400, and the audit row plus
     the master's notification written when a practice was really created
     for somebody else (_tell_master_of_curator_act).
     """
@@ -1851,7 +1851,7 @@ async def create_practice(
     # the path for another master the same check already ran, for the
     # caller, inside _effective_master_id_or_4xx.
     if body.curator_group_id is not None and not for_another_master:
-        await _usable_curator_group_or_400(
+        await _usable_school_or_400(
             user.id, body.curator_group_id, session,
         )
     # H-R2 (3.4): validate parent_practice_id BEFORE anything is inserted
@@ -1865,7 +1865,7 @@ async def create_practice(
         )
         # BE-79: a new session of a school series is a publication in that
         # school, and the series inherits the school without naming it --
-        # so _usable_curator_group_or_400 below never sees it. Read on the
+        # so _usable_school_or_400 below never sees it. Read on the
         # parent held FOR SHARE: the block takes it FOR UPDATE (K3). For
         # another master this path is closed earlier: a blocked master has
         # no member row, and _effective_master_id_or_4xx refuses him.
@@ -1905,7 +1905,7 @@ async def create_practice(
     # another school's series, or a school child of a general series, is
     # the cross-school mix the one-school rule forbids. No parent -> the
     # request's own school (or none).
-    effective_curator_group_id = body.curator_group_id
+    effective_school_id = body.curator_group_id
     if parent is not None:
         if "curator_group_id" in body.model_fields_set:
             if body.curator_group_id != parent.curator_group_id:
@@ -1916,7 +1916,7 @@ async def create_practice(
                     code="practice_school_immutable",
                 )
         else:
-            effective_curator_group_id = parent.curator_group_id
+            effective_school_id = parent.curator_group_id
 
     practice = Practice(
         master_id=master_id,
@@ -1934,7 +1934,7 @@ async def create_practice(
         price_cents=price_cents,
         currency=body.currency,
         audience_kind=effective_audience_kind,
-        curator_group_id=effective_curator_group_id,
+        curator_group_id=effective_school_id,
         # BE-102 publish (owner, 3 October): a practice a school's curator
         # creates for one of its masters is born PUBLISHED -- there is no
         # approval step for the master. Everything else starts a draft.
@@ -1981,7 +1981,7 @@ async def create_practice(
             )
             return winner, True
         # BE-74: the OTHER constraint this INSERT can fail. The school was
-        # validated above, and delete_curator_group may have deleted it
+        # validated above, and delete_school may have deleted it
         # since: the INSERT waited on the school row's lock (the FK check
         # takes KEY SHARE) and then failed the FK. That used to fall
         # through to the bare `raise` below -- a 500 because somebody
@@ -1996,10 +1996,10 @@ async def create_practice(
         # A SELECT, not session.get: get answers from the identity map,
         # and a school object loaded earlier in this session would still
         # be there after the row was deleted.
-        if effective_curator_group_id is not None and (
+        if effective_school_id is not None and (
             await session.execute(
-                select(CuratorGroup.id).where(
-                    CuratorGroup.id == effective_curator_group_id,
+                select(School.id).where(
+                    School.id == effective_school_id,
                 )
             )
         ).scalar_one_or_none() is None:
@@ -2233,10 +2233,10 @@ async def get_practice_detail(
     # with the line above -- the two answer different questions against
     # different tables, and saving one round trip on an owner-facing
     # response is not worth a join nobody can read.
-    curator_group_name = await curator_group_name_for_practice(
+    curator_group_name = await school_name_for_practice(
         practice, session,
     )
-    audience_unavailable = await curator_group_audience_is_dark(
+    audience_unavailable = await school_audience_is_dark(
         practice, session,
     )
     return practice_to_response(
@@ -2344,11 +2344,11 @@ async def _after_publish(
     # Series children never pass this branch (born scheduled), so the
     # single hook gives exactly one announcement per publication.
     #
-    # Lazy import: curator_groups/service.py imports practices/models.py,
+    # Lazy import: schools/service.py imports practices/models.py,
     # so a module-level import here closes a cycle -- the same reason
     # cancel_service.py imports _record_group_event lazily.
     if practice.curator_group_id is not None:
-        from app.modules.curator_groups.service import (
+        from app.modules.schools.service import (
             announce_published_practice,
         )
         await announce_published_practice(practice, author, session)
@@ -2383,7 +2383,7 @@ async def update_practice(
         the school NOW (owner Q5): their member row and profile are taken
         FOR SHARE first (_lock_school_master_or_400), BEFORE the practice
         -- the module order is member -> master profile -> practice ->
-        group, and delete_curator_group takes members and then practices;
+        group, and delete_school takes members and then practices;
       - the practice is then taken FOR UPDATE, and the curator's right is
         re-checked under the group lock before anything is written;
       - "whose" stays the MASTER's everywhere it meant the owner: the
@@ -2434,7 +2434,7 @@ async def update_practice(
     # (gate ruling R5: the draft is deleted by DELETE /practices/{id}).
     # Read on the locked row, see _refuse_blocked_in_school. A curator
     # acting here is never the blocked one: the curator cannot be blocked
-    # in his own school (block_curator_group_member).
+    # in his own school (block_school_member).
     if managing_school is None:
         await _refuse_blocked_in_school(
             practice.curator_group_id, user.id, session,

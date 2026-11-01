@@ -61,11 +61,6 @@ from app.core.exceptions import (
 from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.bookings.service import recalculate_participants
 from app.modules.chats.models import ChatThread
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.masters.groups_models import (
     GroupInvite,
     MasterGroup,
@@ -74,6 +69,11 @@ from app.modules.masters.groups_models import (
 )
 from app.modules.payments.refund import refund_booking
 from app.modules.practices.models import Practice, PracticeAudienceGroup, PracticeStatus
+from app.modules.schools.models import (
+    School,
+    SchoolMember,
+    SchoolMemberKind,
+)
 from app.modules.users.helpers import display_name
 from app.modules.users.models import User
 from app.modules.waitlist.models import ACTIVE_STATUSES, Waitlist, WaitlistStatus
@@ -173,8 +173,8 @@ def master_link_clause(
         )
 
     if action is MasterLinkAction.OPEN_CHAT:
-        person_school = CuratorGroupMember.__table__.alias("person_school")
-        master_school = CuratorGroupMember.__table__.alias("master_school")
+        person_school = SchoolMember.__table__.alias("person_school")
+        master_school = SchoolMember.__table__.alias("master_school")
         sources.append(
             exists().where(
                 person_school.c.user_id == person_id,
@@ -182,11 +182,11 @@ def master_link_clause(
                     exists().where(
                         master_school.c.group_id == person_school.c.group_id,
                         master_school.c.user_id == master_id,
-                        master_school.c.kind == CuratorMemberKind.MASTER.value,
+                        master_school.c.kind == SchoolMemberKind.MASTER.value,
                     ),
                     exists().where(
-                        CuratorGroup.id == person_school.c.group_id,
-                        CuratorGroup.curator_user_id == master_id,
+                        School.id == person_school.c.group_id,
+                        School.curator_user_id == master_id,
                     ),
                 ),
             )
@@ -247,7 +247,7 @@ async def has_master_link(
 
     OPEN_CHAT also accepts a shared school: the person has a member row
     (student or master) in a school where this master has a master row or
-    is the curator. The curator is not a member row (curator_groups/
+    is the curator. The curator is not a member row (schools/
     models.py, I-2), so the school's own curator_user_id is read for that.
 
     ONE STATEMENT, by design: every caller turns False into the same

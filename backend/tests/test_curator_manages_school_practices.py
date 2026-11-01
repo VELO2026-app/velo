@@ -35,12 +35,6 @@ from app.core.config import settings
 from app.core.database import get_session_factory
 from app.core.events.models import OutboxEvent
 from app.modules.admin.masters import service as admin_masters_service
-from app.modules.curator_groups import service as curator_service
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.masters.models import MasterProfile
 from app.modules.practices import service as practice_service
 from app.modules.practices.models import (
@@ -52,14 +46,20 @@ from app.modules.practices.schemas import (
     CreatePracticeRequest,
     UpdatePracticeRequest,
 )
+from app.modules.schools import service as curator_service
+from app.modules.schools.models import (
+    School,
+    SchoolMember,
+    SchoolMemberKind,
+)
 from app.modules.users.models import User, UserRole
-from tests.curator_race_harness import assert_no_deadlock, race
 from tests.helpers import (
     auth_headers,
     fresh_execute,
     full_cleanup_range,
     login_user,
 )
+from tests.school_race_harness import assert_no_deadlock, race
 
 PRACTICES_URL = "/api/v1/practices"
 DETAIL_URL = "/api/v1/practices/{practice_id}"
@@ -181,17 +181,17 @@ async def s(client: AsyncClient, db_session: AsyncSession) -> _S:
     admin = await login_user(client, telegram_id=_TID_ADMIN, first_name="Admin")
     admin_user = await db_session.get(User, UUID(admin["user"]["id"]))
     admin_user.role = UserRole.ADMIN
-    school = CuratorGroup(curator_user_id=UUID(curator["user"]["id"]), name="Школа А")
-    other_school = CuratorGroup(
+    school = School(curator_user_id=UUID(curator["user"]["id"]), name="Школа А")
+    other_school = School(
         curator_user_id=UUID(other_curator["user"]["id"]), name="Школа Б",
     )
     db_session.add_all([school, other_school])
     await db_session.flush()
     for who in (master, school_master):
         db_session.add(
-            CuratorGroupMember(
+            SchoolMember(
                 group_id=school.id, user_id=UUID(who["user"]["id"]),
-                kind=CuratorMemberKind.MASTER.value,
+                kind=SchoolMemberKind.MASTER.value,
             )
         )
     await db_session.commit()
@@ -412,9 +412,9 @@ async def test_publication_needs_the_master_to_be_a_master_of_the_school_now(
     same draft still goes through (no such check on edits)."""
     async with get_session_factory()() as session:
         await session.execute(
-            update(CuratorGroupMember)
-            .where(CuratorGroupMember.user_id == s.uid("master"))
-            .values(kind=CuratorMemberKind.STUDENT.value)
+            update(SchoolMember)
+            .where(SchoolMember.user_id == s.uid("master"))
+            .values(kind=SchoolMemberKind.STUDENT.value)
         )
         await session.commit()
     refused = await _patch(client, s.token("curator"), s.draft, status="scheduled")
@@ -499,7 +499,7 @@ async def test_the_master_editing_their_own_practice_tells_nobody(
 
 @pytest.mark.asyncio
 async def test_the_killswitch_takes_the_curators_right_away(client, s: _S) -> None:
-    with patch.object(settings, "curator_groups_enabled", False):
+    with patch.object(settings, "schools_enabled", False):
         read = await client.get(
             DETAIL_URL.format(practice_id=s.draft),
             headers=auth_headers(s.token("curator")),
@@ -598,7 +598,7 @@ async def test_a_public_school_practice_is_the_curators_to_cancel(
 
 async def _offer_school_to(s: _S, who: str) -> None:
     async with get_session_factory()() as session:
-        await curator_service.offer_curator_group_transfer(
+        await curator_service.offer_school_transfer(
             s.uid("curator"), s.school, s.uid(who), session,
             actor=await session.get(User, s.uid("curator")),
         )
@@ -607,7 +607,7 @@ async def _offer_school_to(s: _S, who: str) -> None:
 
 def _accept_call(s: _S, who: str):
     async def call(session: AsyncSession):
-        await curator_service.accept_curator_group_transfer(
+        await curator_service.accept_school_transfer(
             s.school, s.uid(who), session,
             actor=await session.get(User, s.uid(who)),
         )

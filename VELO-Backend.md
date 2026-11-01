@@ -130,7 +130,7 @@
 | `comms_proxy` | `app/modules/comms_proxy/` | In-app notification bell (unread feed, read/read-all) |
 | `chats` | `app/modules/chats/` | Real one-to-one messaging (threads, messages, unread-count) |
 | `diary` | `app/modules/diary/` | Check-ins, feedbacks, diary entries, insights; append-only `DiaryEvent` journal (`models.py`) + `projections.py` (единственный писатель журнала) + единая лента `GET /diary/feed` (cursor) |
-| `curator_groups` | `app/modules/curator_groups/` | Школы (кураторские группы). Куратор — НЕ участник: связь выводится из `curator_group.curator_user_id` (I-2), строки участия нет. Пять своих таблиц: `curator_group`, `_member`, `_invite`, `_transfer`, `_event`; шестая, `practice_audience_curator_group`, принадлежит `practices`. Append-only журнал `CuratorGroupEvent` + единственный писатель `_record_group_event` (`service.py`) + чтение `GET /masters/me/curator-groups/{id}/journal` (limit/offset, `ORDER BY seq DESC`). Право заводить школу — флаг в `MasterProfile.data.account`, гейт в одной точке (см. 3.17) |
+| `schools` | `app/modules/schools/` | Школы (кураторские группы). Куратор — НЕ участник: связь выводится из `curator_group.curator_user_id` (I-2), строки участия нет. Пять своих таблиц: `curator_group`, `_member`, `_invite`, `_transfer`, `_event`; шестая, `practice_audience_curator_group`, принадлежит `practices`. Append-only журнал `CuratorGroupEvent` + единственный писатель `_record_group_event` (`service.py`) + чтение `GET /masters/me/curator-groups/{id}/journal` (limit/offset, `ORDER BY seq DESC`). Право заводить школу — флаг в `MasterProfile.data.account`, гейт в одной точке (см. 3.17) |
 | `admin` | `app/modules/admin/` | Верификация мастеров, модерация (data-integrity semaphores built Phase 6.8, removed 2026-07-07 `9ca5619` — see §6) |
 | `ai` | `app/modules/ai/` | Розетка AI-саммари (Phase 9) |
 | `library` | `app/modules/library/` | Розетка: будущая библиотека записей практик (Phase 9.2, вне MVP — `models.py` целиком закомментирован, кода нет) |
@@ -482,7 +482,7 @@ GET    /api/v1/admin/curator-groups                                       -- В�
 
 `is_active` (админский список) — **производная**, не колонка. Школа активна
 ровно тогда, когда её куратор верифицирован ПРЯМО СЕЙЧАС:
-`_active_group_clause()` = `_verified_profile_exists(CuratorGroup.curator_user_id)`,
+`_active_group_clause()` = `_verified_profile_exists(School.curator_user_id)`,
 то есть тот же JSONB-путь к статусу, что у ростера и счётчиков, написанный в
 дереве один раз. Для самих участников неактивная школа неотличима от удалённой
 (404, I-6) — и это правильно для них и бесполезно для админа, которого как раз
@@ -511,7 +511,7 @@ GET    /api/v1/admin/curator-groups                                       -- В�
 читает её, но пишет — `practices`.
 
 **Коды ошибок: 11, и все 11 уже во фронтовой таблице.** Пересчитать: греп
-`code="..."` по `curator_groups/` даёт **9**, плюс **2** через константы
+`code="..."` по `schools/` даёт **9**, плюс **2** через константы
 (`_NAME_TAKEN_CODE` = `curator_group_name_taken`, `_NO_CREATE_RIGHT_CODE` =
 `group_creation_not_allowed`). **Греп только по литералам их не увидит** — ту же
 слепоту имеет команда сверки в шапке `frontend/src/api/errorMessages.ts`, и там
@@ -989,7 +989,7 @@ Telegram-бот мастера с ответом юзеру). Строковое
 ### 3.14. Журнал школы — НЕ аудит, и объединять их нельзя (GT-16)
 
 В дереве две похожие таблицы: `audit_logs` (`core/audit.py`) и
-`curator_group_event` (`curator_groups/models.py`). Увидев их рядом,
+`curator_group_event` (`schools/models.py`). Увидев их рядом,
 естественно решить, что это одно и то же дважды. Это не так.
 
 | | `audit_logs` | журнал школы |
@@ -1011,7 +1011,7 @@ Telegram-бот мастера с ответом юзеру). Строковое
 > **Грепать `select(AuditLog`, а не `AuditLog` — второе ловит докстринги.**
 > Не теория: первая попытка проверить это утверждение дала два вхождения в
 > `app/modules` — и оба оказались **прозой из докстринга
-> `CuratorGroupEvent`**, где `AuditLog` упомянут как образец формы. Проверка
+> `SchoolEvent`**, где `AuditLog` упомянут как образец формы. Проверка
 > поймала собственный текст автора. Тот же класс, что «AST с вырезанными
 > докстрингами» в правилах исполнителя.
 
@@ -1091,7 +1091,7 @@ ForeignKey, JSONB `data` под контекст. Что не взято — в�
 Петра».
 
 **Единственный писатель — `_record_group_event`.** Пересчитать:
-`grep -c "CuratorGroupEvent(" app/modules/curator_groups/service.py` → **1**,
+`grep -c "SchoolEvent(" app/modules/schools/service.py` → **1**,
 внутри хелпера; ORM-строку журнала не создаёт больше никто.
 `grep -c "_record_group_event(" …` → **16**, то есть **одно определение и 15
 вызовов** при **14** видах событий. Оба расхождения ожидаемы, и вот почему:
@@ -1103,7 +1103,7 @@ ForeignKey, JSONB `data` под контекст. Что не взято — в�
 пагинацией; события инвайтов пишут ВИД ссылки, не значение. URL умрёт, а журнал
 живёт вечно, поэтому `group_avatar_changed` несёт `had_avatar_before: bool`, а не
 ссылку. Контракт `data` по каждому виду — таблица в докстринге
-`CuratorGroupEvent`, и она **сверяется машинно** (скрипт по AST против ключей,
+`SchoolEvent`, и она **сверяется машинно** (скрипт по AST против ключей,
 которые кладут писатели); копия здесь была бы вторым реестром.
 
 ---
@@ -1116,7 +1116,7 @@ ForeignKey, JSONB `data` под контекст. Что не взято — в�
 уже `status`, `verification`, `rejections` — всё решения админа об аккаунте.
 
 **Ключ написан один раз.** `CAN_CREATE_GROUPS_KEY` объявлен в
-`curator_groups/service.py` и импортируется всеми писателями (`admin/masters`
+`schools/service.py` и импортируется всеми писателями (`admin/masters`
 verify и тоггл, `scripts/seed.py`) и читателями. Причина — та, что названа в
 докстринге `masters/models.py`: `data` — словарь без модели, опечатка в ключе не
 падает, а тихо возвращает `None`, и мастеру сообщили бы о праве, которого у него

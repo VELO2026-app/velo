@@ -1,8 +1,8 @@
 # =============================================================================
-# VELO -- curator_groups: the windows that answered 500 (BE-95 F1, F3-F8)
+# VELO -- schools: the windows that answered 500 (BE-95 F1, F3-F8)
 # =============================================================================
-# Same harness and the same lock order as test_curator_lock_order.py (the
-# order itself is written once, in the header of curator_groups/service.py).
+# Same harness and the same lock order as test_school_lock_order.py (the
+# order itself is written once, in the header of schools/service.py).
 # These are the windows whose LOUD outcome was a 500: a deadlock between a
 # delete and an accept, or an FK failure escaping from a writer that read
 # a school a moment before somebody deleted it.
@@ -11,7 +11,7 @@
 # curator's cancellation, the invite link) have no async call inside their
 # window to pause at. Their window is the other way round: it is open while
 # a delete of the school holds its rows and has not yet committed. So the
-# delete is the holder: the real delete_curator_group runs, and then the
+# delete is the holder: the real delete_school runs, and then the
 # test's own _delete_in_flight pauses before returning -- before the
 # harness commits it. The writer runs into a row the delete holds, Postgres
 # reports it waiting, the delete is released and commits, and the writer
@@ -19,7 +19,7 @@
 # or given a hook for the test.
 #
 # BE-74: for the practice writers the row they wait on is the PRACTICE,
-# not the group. delete_curator_group clears the owner column of the
+# not the group. delete_school clears the owner column of the
 # school's practices before it deletes the group (the trigger makes a
 # 'curator_groups' practice public in the same statement), so a writer
 # taking the practice FOR UPDATE waits for that UPDATE and then reads a
@@ -39,15 +39,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events.models import OutboxEvent
 from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
-from app.modules.curator_groups import service as curator_service
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupEvent,
-    CuratorGroupMasterOffer,
-    CuratorGroupMember,
-    CuratorGroupTransfer,
-    CuratorMemberKind,
-)
 from app.modules.masters.models import MasterProfile
 from app.modules.practices import cancel_service
 from app.modules.practices import service as practices_service
@@ -61,9 +52,18 @@ from app.modules.practices.schemas import (
     CreatePracticeRequest,
     UpdatePracticeRequest,
 )
+from app.modules.schools import service as curator_service
+from app.modules.schools.models import (
+    School,
+    SchoolEvent,
+    SchoolMasterOffer,
+    SchoolMember,
+    SchoolMemberKind,
+    SchoolTransfer,
+)
 from app.modules.users.models import User, UserRole
-from tests.curator_race_harness import assert_no_deadlock, race
 from tests.helpers import full_cleanup_range, login_user
+from tests.school_race_harness import assert_no_deadlock, race
 
 _TID_MIN = 69800
 _TID_MAX = 69849
@@ -72,8 +72,8 @@ _TID_HEIR = 69802
 _TID_THIRD = 69803
 _TID_STUDENT = 69804
 
-MASTER = CuratorMemberKind.MASTER.value
-STUDENT = CuratorMemberKind.STUDENT.value
+MASTER = SchoolMemberKind.MASTER.value
+STUDENT = SchoolMemberKind.STUDENT.value
 _THIS = sys.modules[__name__]
 
 
@@ -96,7 +96,7 @@ async def _user(client, db_session, tid: int) -> UUID:
     return user_id
 
 
-class School:
+class SchoolSetup:
     id: UUID
     curator: UUID
     heir: UUID
@@ -106,25 +106,25 @@ class School:
 
 async def _school(
     client, db_session, *, transfer=False, offer=False,
-) -> School:
-    s = School()
+) -> SchoolSetup:
+    s = SchoolSetup()
     s.curator = await _user(client, db_session, _TID_CURATOR)
     s.heir = await _user(client, db_session, _TID_HEIR)
     s.third = await _user(client, db_session, _TID_THIRD)
     s.student = await _user(client, db_session, _TID_STUDENT)
-    group = CuratorGroup(curator_user_id=s.curator, name="Школа BE-95/2")
+    group = School(curator_user_id=s.curator, name="Школа BE-95/2")
     db_session.add(group)
     await db_session.flush()
     s.id = group.id
     for uid, kind in (
         (s.heir, MASTER), (s.third, MASTER), (s.student, STUDENT),
     ):
-        db_session.add(CuratorGroupMember(group_id=s.id, user_id=uid, kind=kind))
+        db_session.add(SchoolMember(group_id=s.id, user_id=uid, kind=kind))
     if transfer:
-        db_session.add(CuratorGroupTransfer(group_id=s.id, to_user_id=s.heir))
+        db_session.add(SchoolTransfer(group_id=s.id, to_user_id=s.heir))
     if offer:
         db_session.add(
-            CuratorGroupMasterOffer(group_id=s.id, to_user_id=s.student)
+            SchoolMasterOffer(group_id=s.id, to_user_id=s.student)
         )
     await db_session.flush()
     await db_session.commit()
@@ -132,7 +132,7 @@ async def _school(
 
 
 async def _practice(
-    db_session, s: School, *, status: str = PracticeStatus.SCHEDULED.value,
+    db_session, s: SchoolSetup, *, status: str = PracticeStatus.SCHEDULED.value,
 ) -> UUID:
     """A practice of the third master, owned by the school (BE-74)."""
     practice = Practice(
@@ -164,11 +164,11 @@ async def _fresh_practice(db_session, practice_id: UUID) -> Practice:
     ).scalar_one()
 
 
-async def _group(db_session, s: School) -> CuratorGroup | None:
+async def _group(db_session, s: SchoolSetup) -> School | None:
     db_session.expire_all()
     return (
         await db_session.execute(
-            select(CuratorGroup).where(CuratorGroup.id == s.id)
+            select(School).where(School.id == s.id)
         )
     ).scalar_one_or_none()
 
@@ -191,9 +191,9 @@ async def _hold() -> None:
     run and before the harness commits it. Does nothing by itself."""
 
 
-def _delete_in_flight(s: School):
+def _delete_in_flight(s: SchoolSetup):
     async def call(session):
-        await curator_service.delete_curator_group(s.curator, s.id, session)
+        await curator_service.delete_school(s.curator, s.id, session)
         await _THIS._hold()
     return call
 
@@ -221,12 +221,12 @@ async def test_a_delete_waits_for_an_appointment_being_accepted(
     s = await _school(client, db_session, offer=True)
 
     async def accept(session):
-        await curator_service.accept_curator_group_master_offer(
+        await curator_service.accept_school_master_offer(
             s.id, s.student, session, actor=await _actor(session, s.student),
         )
 
     async def delete(session):
-        await curator_service.delete_curator_group(s.curator, s.id, session)
+        await curator_service.delete_school(s.curator, s.id, session)
 
     result = await race(
         monkeypatch,
@@ -254,12 +254,12 @@ async def test_a_delete_meets_a_transfer_being_accepted(
     s = await _school(client, db_session, transfer=True)
 
     async def accept(session):
-        await curator_service.accept_curator_group_transfer(
+        await curator_service.accept_school_transfer(
             s.id, s.heir, session, actor=await _actor(session, s.heir),
         )
 
     async def delete(session):
-        await curator_service.delete_curator_group(s.curator, s.id, session)
+        await curator_service.delete_school(s.curator, s.id, session)
 
     result = await race(
         monkeypatch,
@@ -277,8 +277,8 @@ async def test_a_delete_meets_a_transfer_being_accepted(
         uid: kind
         for uid, kind in (
             await db_session.execute(
-                select(CuratorGroupMember.user_id, CuratorGroupMember.kind)
-                .where(CuratorGroupMember.group_id == s.id)
+                select(SchoolMember.user_id, SchoolMember.kind)
+                .where(SchoolMember.group_id == s.id)
             )
         ).all()
     }
@@ -305,17 +305,17 @@ async def test_a_rename_inside_an_accept_is_a_409_not_a_500(
     is still there and the heir is still a member.
     """
     s = await _school(client, db_session, transfer=True)
-    db_session.add(CuratorGroup(curator_user_id=s.heir, name="Новое имя"))
+    db_session.add(School(curator_user_id=s.heir, name="Новое имя"))
     await db_session.commit()
 
     async def rename(session):
-        await curator_service.update_curator_group(
+        await curator_service.update_school(
             s.curator, s.id, "Новое имя", session,
             actor=await _actor(session, s.curator),
         )
 
     async def accept(session):
-        await curator_service.accept_curator_group_transfer(
+        await curator_service.accept_school_transfer(
             s.id, s.heir, session, actor=await _actor(session, s.heir),
         )
 
@@ -335,17 +335,17 @@ async def test_a_rename_inside_an_accept_is_a_409_not_a_500(
     assert group.curator_user_id == s.curator and group.name == "Новое имя"
     pending = (
         await db_session.execute(
-            select(CuratorGroupTransfer.to_user_id).where(
-                CuratorGroupTransfer.group_id == s.id
+            select(SchoolTransfer.to_user_id).where(
+                SchoolTransfer.group_id == s.id
             )
         )
     ).scalars().all()
     assert pending == [s.heir]
     heir_row = (
         await db_session.execute(
-            select(CuratorGroupMember.kind).where(
-                CuratorGroupMember.group_id == s.id,
-                CuratorGroupMember.user_id == s.heir,
+            select(SchoolMember.kind).where(
+                SchoolMember.group_id == s.id,
+                SchoolMember.user_id == s.heir,
             )
         )
     ).scalar_one_or_none()
@@ -357,7 +357,7 @@ async def test_a_rename_inside_an_accept_is_a_409_not_a_500(
 # =============================================================================
 
 
-async def _against_delete(monkeypatch, s: School, rival):
+async def _against_delete(monkeypatch, s: SchoolSetup, rival):
     result = await race(
         monkeypatch,
         holder=_delete_in_flight(s),
@@ -486,7 +486,7 @@ async def test_the_invite_link_of_a_school_being_deleted(
     s = await _school(client, db_session)
 
     async def invite(session):
-        return await curator_service.get_or_create_curator_group_invite(
+        return await curator_service.get_or_create_school_invite(
             s.curator, s.id, session, actor=await _actor(session, s.curator),
         )
 
@@ -533,8 +533,8 @@ async def test_a_curator_cancelling_into_a_school_being_deleted(
     assert practice.curator_group_id is None
     left = (
         await db_session.execute(
-            select(CuratorGroupEvent.id).where(
-                CuratorGroupEvent.group_id == s.id
+            select(SchoolEvent.id).where(
+                SchoolEvent.group_id == s.id
             )
         )
     ).all()

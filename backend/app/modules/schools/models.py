@@ -1,5 +1,5 @@
 # =============================================================================
-# VELO Backend -- Curator Groups Models (P1, tz-curator-groups.md 3.1)
+# VELO Backend -- Schools Models (P1, tz-curator-groups.md 3.1)
 # =============================================================================
 #
 # Four tables land in ONE migration, but only the first two have a writer in
@@ -42,7 +42,7 @@ from app.core.database import Base
 from app.core.mixins import TimestampMixin, UUIDMixin
 
 
-class CuratorMemberKind(enum.StrEnum):
+class SchoolMemberKind(enum.StrEnum):
     """What kind of relation one membership row describes.
 
     Types curator_group_member.kind and nothing else. Until GT-27 this enum
@@ -60,12 +60,12 @@ class CuratorMemberKind(enum.StrEnum):
     STUDENT = "student"
 
 
-class CuratorMasterOfferState(enum.StrEnum):
+class SchoolMasterOfferState(enum.StrEnum):
     """Where a pending school-master offer stands, as its curator sees it.
 
-    NOT A COLUMN (BE-59). CuratorGroupMasterOffer stays "a row is the
+    NOT A COLUMN (BE-59). SchoolMasterOffer stays "a row is the
     offer", and this is computed from the candidate's live verification
-    (curator_groups/service.py::_master_offer_state_expr): a verification
+    (schools/service.py::_master_offer_state_expr): a verification
     or a revocation moves every offer of the person without a write here,
     and a stored copy would be one more thing to keep in step with
     master_profiles. "No offer" is the absence of a value, not a third
@@ -76,7 +76,7 @@ class CuratorMasterOfferState(enum.StrEnum):
     AWAITING_ANSWER = "awaiting_answer"
 
 
-class CuratorGroup(UUIDMixin, TimestampMixin, Base):
+class School(UUIDMixin, TimestampMixin, Base):
     """A school/community owned by one Master-Curator.
 
     UNIQUE (curator_user_id, name) -- names are unique WITHIN one curator,
@@ -87,7 +87,7 @@ class CuratorGroup(UUIDMixin, TimestampMixin, Base):
     in masters/groups_service.py.
 
     description is Text, not String(N): the 500-char cap lives at the schema
-    layer (CuratorGroupDescriptionStr), same split as MasterGroup.description
+    layer (SchoolDescriptionStr), same split as MasterGroup.description
     and Practice.description.
 
     avatar_url (GT-17) BREAKS THAT SPLIT ON PURPOSE -- String(500), not
@@ -97,7 +97,7 @@ class CuratorGroup(UUIDMixin, TimestampMixin, Base):
     times longer than what was typed. The schema therefore has to check the
     length of the STORED string against this exact number, so the number
     has to be here, once, rather than implied by a Text column with no
-    limit at all. See CuratorGroupAvatarUrl in schemas.py.
+    limit at all. See SchoolAvatarUrl in schemas.py.
 
     Mirrors User.avatar_url (users/models.py:86) in every other respect:
     String(500), nullable, an EXTERNAL url, no index. Not indexed because
@@ -117,7 +117,7 @@ class CuratorGroup(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "curator_group"
     # The uniqueness of the name is uq_curator_group_curator_name_key, an
     # EXPRESSION index declared right after this class (it needs the
-    # column objects): see curator_group_name_key.
+    # column objects): see school_name_key.
 
     curator_user_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
@@ -129,7 +129,7 @@ class CuratorGroup(UUIDMixin, TimestampMixin, Base):
 
     def __repr__(self) -> str:
         return (
-            f"<CuratorGroup id={self.id} "
+            f"<School id={self.id} "
             f"curator_user_id={self.curator_user_id} name={self.name!r}>"
         )
 
@@ -150,7 +150,7 @@ class CuratorGroup(UUIDMixin, TimestampMixin, Base):
 # The unique index below and the three pre-checks in service.py (create,
 # rename, accepting a transfer) call this builder; the migration that created
 # the index carries its literal as DDL history, and
-# tests/test_curator_group_name_rule.py holds the two to the same answers.
+# tests/test_school_name_rule.py holds the two to the same answers.
 #
 #   whitespace: Postgres's \s (space, tab, newlines, U+2003, U+3000 ...)
 #               PLUS U+00A0 explicitly -- a no-break space pasted from a
@@ -161,7 +161,7 @@ class CuratorGroup(UUIDMixin, TimestampMixin, Base):
 _NAME_WHITESPACE_RUN = "[\\s\u00a0]+"
 
 
-def curator_group_name_key(value: ColumnElement[str] | str) -> ColumnElement[str]:
+def school_name_key(value: ColumnElement[str] | str) -> ColumnElement[str]:
     """SQL expression: the comparison key of a school name.
 
     lower(btrim(regexp_replace(value, '[\\s<U+00A0>]+', ' ', 'g'))) -- every
@@ -179,14 +179,14 @@ def curator_group_name_key(value: ColumnElement[str] | str) -> ColumnElement[str
 # uq_curator_group_curator_name (BE-48 migration).
 Index(
     "uq_curator_group_curator_name_key",
-    CuratorGroup.curator_user_id,
-    curator_group_name_key(CuratorGroup.name),
+    School.curator_user_id,
+    school_name_key(School.name),
     unique=True,
 )
 
 
-class CuratorGroupMember(UUIDMixin, Base):
-    """One person's membership in one curator group.
+class SchoolMember(UUIDMixin, Base):
+    """One person's membership in one school.
 
     UNIQUE (group_id, user_id) -- ONE relation per pair, with `kind` inside
     it (I-2). Not UNIQUE (group_id, user_id, kind): that would permit the
@@ -224,12 +224,12 @@ class CuratorGroupMember(UUIDMixin, Base):
 
     def __repr__(self) -> str:
         return (
-            f"<CuratorGroupMember group_id={self.group_id} "
+            f"<SchoolMember group_id={self.group_id} "
             f"user_id={self.user_id} kind={self.kind!r}>"
         )
 
 
-class CuratorGroupBlock(UUIDMixin, Base):
+class SchoolBlock(UUIDMixin, Base):
     """A person the curator blocked in this school (BE-79).
 
     BLOCKING DELETES THE MEMBERSHIP ROW AND WRITES THIS ONE IN ITS PLACE, in
@@ -252,7 +252,7 @@ class CuratorGroupBlock(UUIDMixin, Base):
     writers do. Block and unblock swap the rows inside one transaction, and
     the one path that inserts a member row for a person who may be blocked
     -- joining by the link -- re-reads this table after its INSERT
-    (join_curator_group_by_token, K1). No trigger: the rule would then live
+    (join_school_by_token, K1). No trigger: the rule would then live
     in two places.
 
     UNIQUE (group_id, user_id), the same pair as the membership's.
@@ -299,12 +299,12 @@ class CuratorGroupBlock(UUIDMixin, Base):
 
     def __repr__(self) -> str:
         return (
-            f"<CuratorGroupBlock group_id={self.group_id} "
+            f"<SchoolBlock group_id={self.group_id} "
             f"user_id={self.user_id} kind={self.kind!r}>"
         )
 
 
-class CuratorGroupInvite(UUIDMixin, Base):
+class SchoolInvite(UUIDMixin, Base):
     """A group's ONE reusable join link. Everyone who opens it joins as a
     student.
 
@@ -316,7 +316,7 @@ class CuratorGroupInvite(UUIDMixin, Base):
     UNIQUE (group_id, kind): a master link promoted an existing student to
     kind='master' on join. That path was cancelled by owner ruling (GT-27) --
     a school master is now APPOINTED by the curator and the appointment only
-    takes effect once the appointee confirms it (CuratorGroupMasterOffer
+    takes effect once the appointee confirms it (SchoolMasterOffer
     below). Removed rather than left as a second way in: two ways to become a
     school master is exactly the shape "no legacy" forbids. Migration
     gt27a1b2c3d4 dropped the column and the master rows with it.
@@ -343,17 +343,17 @@ class CuratorGroupInvite(UUIDMixin, Base):
     )
 
     def __repr__(self) -> str:
-        return f"<CuratorGroupInvite group_id={self.group_id}>"
+        return f"<SchoolInvite group_id={self.group_id}>"
 
 
-class CuratorGroupTransfer(UUIDMixin, Base):
+class SchoolTransfer(UUIDMixin, Base):
     """A pending offer to hand the group to a master member (GT-4 writes it).
 
     UNIQUE (group_id) -- at most one pending offer per group (I-10). A second
     offer is a 409 rather than a silent overwrite, and that is enforceable
     here rather than only in code.
 
-    NO WRITER IN THIS DELIVERY -- see CuratorGroupInvite.
+    NO WRITER IN THIS DELIVERY -- see SchoolInvite.
     """
 
     __tablename__ = "curator_group_transfer"
@@ -376,15 +376,15 @@ class CuratorGroupTransfer(UUIDMixin, Base):
 
     def __repr__(self) -> str:
         return (
-            f"<CuratorGroupTransfer group_id={self.group_id} "
+            f"<SchoolTransfer group_id={self.group_id} "
             f"to_user_id={self.to_user_id}>"
         )
 
 
-class CuratorGroupMasterOffer(UUIDMixin, Base):
+class SchoolMasterOffer(UUIDMixin, Base):
     """A pending offer to make a school member a MASTER of that school (GT-27).
 
-    A ROW IS THE OFFER, same shape as CuratorGroupTransfer above: accepting
+    A ROW IS THE OFFER, same shape as SchoolTransfer above: accepting
     and declining both DELETE it, so there is no status column to interpret
     and no half-NULL pair on the membership row. It is a separate table and
     not a `pending_master` flag on curator_group_member for the reason that
@@ -399,7 +399,7 @@ class CuratorGroupMasterOffer(UUIDMixin, Base):
     offer to the SAME person is therefore idempotent rather than a 409.
 
     NOTHING HERE CHANGES member.kind. The promotion happens on confirmation,
-    in accept_curator_group_master_offer, and the member_promoted journal
+    in accept_school_master_offer, and the member_promoted journal
     line is written by the FACT OF CONSENT rather than by the appointment --
     which is why appointing somebody who never answers leaves no trace in
     the roster.
@@ -434,16 +434,16 @@ class CuratorGroupMasterOffer(UUIDMixin, Base):
 
     def __repr__(self) -> str:
         return (
-            f"<CuratorGroupMasterOffer group_id={self.group_id} "
+            f"<SchoolMasterOffer group_id={self.group_id} "
             f"to_user_id={self.to_user_id}>"
         )
 
 
-class CuratorGroupEventKind(enum.StrEnum):
+class SchoolEventKind(enum.StrEnum):
     """What happened in a school. The vocabulary of its journal (GT-16).
 
     Stored as String(50), never a PG ENUM -- same choice as
-    CuratorMemberKind above and Practice.audience_kind: this set is
+    SchoolMemberKind above and Practice.audience_kind: this set is
     EXPECTED to grow (notifications land on it next, practice publication
     after that), and a varchar gains a value without a migration.
 
@@ -464,7 +464,7 @@ class CuratorGroupEventKind(enum.StrEnum):
     PRACTICE_PUBLISHED (BE-30) is the second half of the pair predicted
     above, and it is written ONLY where the practice's audience still
     accepts its master: a teacher who left the school stops broadcasting
-    into it (_master_in_curator_group_clause), so a line here about a
+    into it (_master_in_school_clause), so a line here about a
     practice the school can no longer see would be a journal entry with
     nothing behind it. A SERIES leaves ONE line, on the root -- forty
     occurrences are one decision to open a course, not forty arrivals.
@@ -512,7 +512,7 @@ class CuratorGroupEventKind(enum.StrEnum):
     MASTER_OFFER_CANCELLED = "master_offer_cancelled"
 
 
-# The keys of CuratorGroupEvent.data, spelled ONCE. JSONB has no model
+# The keys of SchoolEvent.data, spelled ONCE. JSONB has no model
 # behind it, so a mistyped key does not fail -- it writes a key nobody
 # reads and the journal quietly loses the half of the sentence it was
 # supposed to carry. Only the keys written from MORE THAN ONE place are
@@ -527,7 +527,7 @@ EVENT_DATA_TARGET_USER_ID = "target_user_id"
 EVENT_DATA_TARGET_NAME = "target_name"
 
 
-class CuratorGroupEvent(Base):
+class SchoolEvent(Base):
     """One thing that happened in one school, for its curator to read.
 
     NOT audit_logs, and the difference is not stylistic. audit_logs is a
@@ -732,6 +732,6 @@ class CuratorGroupEvent(Base):
 
     def __repr__(self) -> str:
         return (
-            f"<CuratorGroupEvent seq={self.seq} group_id={self.group_id} "
+            f"<SchoolEvent seq={self.seq} group_id={self.group_id} "
             f"event={self.event!r}>"
         )

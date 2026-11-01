@@ -54,13 +54,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupEventKind,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.masters.models import MasterProfile
+from app.modules.schools.models import (
+    School,
+    SchoolEventKind,
+    SchoolMember,
+    SchoolMemberKind,
+)
 from app.modules.users.models import User, UserRole
 from tests.helpers import (
     auth_headers,
@@ -183,7 +183,7 @@ async def _stored_avatar(group_id: str) -> str | None:
     """
     group = (
         await fresh_execute(
-            select(CuratorGroup).where(CuratorGroup.id == UUID(group_id))
+            select(School).where(School.id == UUID(group_id))
         )
     ).scalar_one()
     return group.avatar_url
@@ -224,7 +224,7 @@ async def _seed_member(
     db_session: AsyncSession, group_id: str, auth: dict, kind: str,
 ) -> None:
     db_session.add(
-        CuratorGroupMember(
+        SchoolMember(
             group_id=UUID(group_id),
             user_id=UUID(auth["user"]["id"]),
             kind=kind,
@@ -285,7 +285,7 @@ async def test_setting_an_avatar_stores_it_and_records_one_event(
     avatar = [
         e
         for e in events
-        if e["event"] == CuratorGroupEventKind.GROUP_AVATAR_CHANGED.value
+        if e["event"] == SchoolEventKind.GROUP_AVATAR_CHANGED.value
     ]
     assert len(avatar) == 1
     assert avatar[0]["data"]["had_avatar_before"] is False
@@ -315,7 +315,7 @@ async def test_clearing_an_avatar_with_null_records_a_change(
     flags = [
         e["data"]["had_avatar_before"]
         for e in await _events(client, curator, group_id)
-        if e["event"] == CuratorGroupEventKind.GROUP_AVATAR_CHANGED.value
+        if e["event"] == SchoolEventKind.GROUP_AVATAR_CHANGED.value
     ]
     # Newest first: the removal, then the attachment.
     assert flags == [True, False]
@@ -399,7 +399,7 @@ async def test_clearing_an_avatar_that_was_never_set_records_nothing(
     assert resp.status_code == 200, resp.text
 
     assert await _kinds(client, curator, group_id) == before
-    assert CuratorGroupEventKind.GROUP_AVATAR_CHANGED.value not in before
+    assert SchoolEventKind.GROUP_AVATAR_CHANGED.value not in before
 
 
 @pytest.mark.asyncio
@@ -426,8 +426,8 @@ async def test_a_patch_without_the_key_leaves_the_avatar_alone(
     assert await _stored_avatar(group_id) == _URL
 
     kinds = await _kinds(client, curator, group_id)
-    assert kinds.count(CuratorGroupEventKind.GROUP_RENAMED.value) == 1
-    assert kinds.count(CuratorGroupEventKind.GROUP_AVATAR_CHANGED.value) == 1
+    assert kinds.count(SchoolEventKind.GROUP_RENAMED.value) == 1
+    assert kinds.count(SchoolEventKind.GROUP_AVATAR_CHANGED.value) == 1
 
 
 @pytest.mark.asyncio
@@ -458,8 +458,8 @@ async def test_renaming_and_re_picturing_at_once_writes_two_events(
     assert len(items) == before + 2
     fresh = items[:2]
     assert {e["event"] for e in fresh} == {
-        CuratorGroupEventKind.GROUP_RENAMED.value,
-        CuratorGroupEventKind.GROUP_AVATAR_CHANGED.value,
+        SchoolEventKind.GROUP_RENAMED.value,
+        SchoolEventKind.GROUP_AVATAR_CHANGED.value,
     }
     assert len({e["created_at"] for e in fresh}) == 1
     assert len({e["id"] for e in fresh}) == 2
@@ -537,7 +537,7 @@ async def test_only_https_is_accepted_and_the_dangerous_schemes_are_not(
     assert page.json()["name"] == "Школа дыхания"
     assert page.json()["avatar_url"] is None
     assert await _kinds(client, curator, group_id) == [
-        CuratorGroupEventKind.GROUP_CREATED.value
+        SchoolEventKind.GROUP_CREATED.value
     ]
 
 
@@ -691,7 +691,7 @@ async def test_another_master_cannot_set_the_avatar_of_a_school_they_do_not_own(
     )
     group_id = await _make_group(client, curator)
     await _seed_member(
-        db_session, group_id, member, CuratorMemberKind.MASTER.value,
+        db_session, group_id, member, SchoolMemberKind.MASTER.value,
     )
 
     for target in (group_id, str(uuid4())):
@@ -747,7 +747,7 @@ async def test_a_member_sees_the_avatar_on_the_school_page_and_in_mine(
     student = await login_user(client, telegram_id=_TID_STUDENT)
     group_id = await _make_group(client, curator)
     await _seed_member(
-        db_session, group_id, student, CuratorMemberKind.STUDENT.value,
+        db_session, group_id, student, SchoolMemberKind.STUDENT.value,
     )
     assert (
         await _set_avatar(client, curator, group_id, _URL)
@@ -874,7 +874,7 @@ async def test_a_school_with_no_avatar_reports_null_in_every_response(
     student = await login_user(client, telegram_id=_TID_STUDENT)
     group_id = await _make_group(client, curator)
     await _seed_member(
-        db_session, group_id, student, CuratorMemberKind.STUDENT.value,
+        db_session, group_id, student, SchoolMemberKind.STUDENT.value,
     )
     token = await _invite(client, curator, group_id)
     curator_headers = auth_headers(curator["session_token"])

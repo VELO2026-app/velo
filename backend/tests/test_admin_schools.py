@@ -29,12 +29,12 @@ from httpx import AsyncClient
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.curator_groups.models import (
-    CuratorGroup,
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
 from app.modules.masters.models import MasterProfile
+from app.modules.schools.models import (
+    School,
+    SchoolMember,
+    SchoolMemberKind,
+)
 from app.modules.users.models import User, UserRole
 from tests.helpers import (
     auth_headers,
@@ -91,7 +91,7 @@ async def _make_verified_master(
     # build a master who is verified and still cannot create the group
     # every test below starts by creating. Set here rather than asserted
     # on: this file is about what a curator does WITH a school, and the
-    # right itself is covered in test_curator_group_permission.py.
+    # right itself is covered in test_school_permission.py.
     db_session.add(
         MasterProfile(
             user_id=user_id,
@@ -138,10 +138,10 @@ async def _seed_member(
     db_session: AsyncSession,
     group_id: str,
     user_id: str,
-    kind: CuratorMemberKind,
+    kind: SchoolMemberKind,
 ) -> None:
     db_session.add(
-        CuratorGroupMember(
+        SchoolMember(
             group_id=UUID(group_id), user_id=UUID(user_id), kind=kind.value,
         )
     )
@@ -302,12 +302,12 @@ async def test_the_list_carries_the_curator_and_both_counters(
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
     group = await _create_group(client, curator, name="Школа дыхания")
     await _seed_member(
-        db_session, group["id"], teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, group["id"], teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     for who in (student_a, student_b):
         await _seed_member(
             db_session, group["id"], who["user"]["id"],
-            CuratorMemberKind.STUDENT,
+            SchoolMemberKind.STUDENT,
         )
 
     row = await _row_for(client, admin_token, group["id"])
@@ -347,7 +347,7 @@ async def test_a_frozen_school_stays_in_the_admin_list_while_members_get_404(
     group = await _create_group(client, curator)
     await _seed_member(
         db_session, group["id"], student["user"]["id"],
-        CuratorMemberKind.STUDENT,
+        SchoolMemberKind.STUDENT,
     )
     before = await _row_for(client, admin_token, group["id"])
     assert before["is_active"] is True
@@ -395,7 +395,7 @@ async def test_a_revoked_member_drops_out_of_masters_count_but_keeps_the_row(
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
     group = await _create_group(client, curator)
     await _seed_member(
-        db_session, group["id"], teacher["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, group["id"], teacher["user"]["id"], SchoolMemberKind.MASTER,
     )
     assert (await _row_for(client, admin_token, group["id"]))[
         "masters_count"
@@ -409,8 +409,8 @@ async def test_a_revoked_member_drops_out_of_masters_count_but_keeps_the_row(
 
     rows = (
         await fresh_execute(
-            select(CuratorGroupMember.user_id).where(
-                CuratorGroupMember.group_id == UUID(group["id"])
+            select(SchoolMember.user_id).where(
+                SchoolMember.group_id == UUID(group["id"])
             )
         )
     ).scalars().all()
@@ -470,7 +470,7 @@ async def test_a_deleted_school_leaves_the_list(
     assert await _row_for(client, admin_token, group["id"]) is None
     left = (
         await fresh_execute(
-            select(CuratorGroup.id).where(CuratorGroup.id == UUID(group["id"]))
+            select(School.id).where(School.id == UUID(group["id"]))
         )
     ).scalars().all()
     assert left == []
@@ -553,7 +553,7 @@ async def test_the_admin_list_says_nothing_about_transfers(
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
     group = await _create_group(client, curator)
     await _seed_member(
-        db_session, group["id"], heir["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, group["id"], heir["user"]["id"], SchoolMemberKind.MASTER,
     )
     offered = await client.post(
         f"{CURATOR_GROUPS_URL}/{group['id']}/transfer",
@@ -604,7 +604,7 @@ async def test_curator_groups_count_counts_owned_schools_only(
     await _create_group(client, owner, name="Своя вторая")
     theirs = await _create_group(client, other, name="Чужая")
     await _seed_member(
-        db_session, theirs["id"], owner["user"]["id"], CuratorMemberKind.MASTER,
+        db_session, theirs["id"], owner["user"]["id"], SchoolMemberKind.MASTER,
     )
 
     row = await _master_row(client, admin_token, owner["user"]["id"])

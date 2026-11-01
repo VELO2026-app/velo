@@ -353,7 +353,7 @@
       "first_name": "Маргарита"
     }
   ],
-  "curator_groups": [
+  "schools": [
     {
       "curator": "main",
       "name": "Тихое утро",
@@ -7044,7 +7044,7 @@
       "difficulty": "medium",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Начинаем день вместе: дыхание, тишина, намерение.",
       "attendees": [
@@ -7309,7 +7309,7 @@
       "difficulty": "medium",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Начинаем день вместе: дыхание, тишина, намерение.",
       "attendees": [
@@ -7554,7 +7554,7 @@
       "difficulty": "beginner",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Начинаем день вместе: дыхание, тишина, намерение.",
       "attendees": [
@@ -7771,7 +7771,7 @@
       "difficulty": "medium",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Начинаем день вместе: дыхание, тишина, намерение.",
       "attendees": [
@@ -7966,7 +7966,7 @@
       "difficulty": "beginner",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Начинаем день вместе: дыхание, тишина, намерение.",
       "attendees": [
@@ -8146,7 +8146,7 @@
       "difficulty": "beginner",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Плавные позы, чтобы разбудить спину и суставы.",
       "attendees": [
@@ -8368,7 +8368,7 @@
       "difficulty": "beginner",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Плавные позы, чтобы разбудить спину и суставы.",
       "attendees": [
@@ -8594,7 +8594,7 @@
       "difficulty": "beginner",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Будим тело мягкими движениями.",
       "attendees": [
@@ -8751,7 +8751,7 @@
       "difficulty": "beginner",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Пятнадцать минут дыхания вместо второй чашки кофе.",
       "attendees": [
@@ -9003,7 +9003,7 @@
       "difficulty": "beginner",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Короткая звуковая практика, чтобы закрыть день.",
       "attendees": [
@@ -9186,7 +9186,7 @@
       "difficulty": "medium",
       "max_participants": 30,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Тридцать минут движения, чтобы проснуться.",
       "attendees": [
@@ -9417,7 +9417,7 @@
       "difficulty": "beginner",
       "max_participants": 16,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Делимся тем, как проходит неделя.",
       "attendees": [
@@ -10066,7 +10066,7 @@
       "difficulty": "beginner",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Утреннее дыхание, чтобы проснуться без кофе.",
       "_why": "Первая практика школы Тони.",
@@ -10261,7 +10261,7 @@
       "difficulty": "beginner",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Утреннее дыхание, чтобы проснуться без кофе.",
       "attendees": [
@@ -10536,7 +10536,7 @@
       "difficulty": "medium",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Утреннее дыхание с задержками.",
       "attendees": [
@@ -10735,7 +10735,7 @@
       "difficulty": "beginner",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Утреннее дыхание, чтобы проснуться без кофе.",
       "attendees": [
@@ -11003,7 +11003,7 @@
       "difficulty": "beginner",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Плавные позы, чтобы разбудить спину.",
       "attendees": [
@@ -11245,7 +11245,7 @@
       "difficulty": "medium",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Плавные позы, чтобы разбудить спину.",
       "attendees": [
@@ -11497,7 +11497,7 @@
       "difficulty": "beginner",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Будим тело мягкими движениями.",
       "attendees": [
@@ -11712,7 +11712,7 @@
       "difficulty": "medium",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Будим тело мягкими движениями.",
       "attendees": [
@@ -11887,7 +11887,7 @@
       "difficulty": "beginner",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Звуковая практика, чтобы закрыть день.",
       "attendees": [
@@ -12131,7 +12131,7 @@
       "difficulty": "beginner",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Звуковая практика, чтобы закрыть день.",
       "attendees": [
@@ -12386,7 +12386,7 @@
       "difficulty": "beginner",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Тридцать минут движения, чтобы проснуться.",
       "attendees": [
@@ -12546,7 +12546,7 @@
       "difficulty": "beginner",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Делимся тем, как проходит неделя.",
       "attendees": [
@@ -14333,7 +14333,7 @@
       "difficulty": "medium",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Начинаем день вместе: дыхание, тишина, намерение.",
       "what_to_prepare": "Подушка для сидения или стул с прямой спинкой, плед. Выключите уведомления на телефоне.",
@@ -14365,7 +14365,7 @@
       "difficulty": "medium",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Начинаем день вместе: дыхание, тишина, намерение.",
       "attendees": [
@@ -14400,7 +14400,7 @@
       "difficulty": "beginner",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Начинаем день вместе: дыхание, тишина, намерение.",
       "what_to_prepare": "Подушка для сидения или стул с прямой спинкой, плед. Выключите уведомления на телефоне.",
@@ -14444,7 +14444,7 @@
       "difficulty": "medium",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Начинаем день вместе: дыхание, тишина, намерение.",
       "what_to_prepare": "Тихое место, где вас не потревожат. Удобная подушка или стул, плед. Наушники — по желанию.",
@@ -14504,7 +14504,7 @@
       "difficulty": "beginner",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Начинаем день вместе: дыхание, тишина, намерение.",
       "attendees": [
@@ -14555,7 +14555,7 @@
       "difficulty": "beginner",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Начинаем день вместе: дыхание, тишина, намерение.",
       "what_to_prepare": "Тихое место, где вас не потревожат. Удобная подушка или стул, плед. Наушники — по желанию.",
@@ -14595,7 +14595,7 @@
       "difficulty": "beginner",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Начинаем день вместе: дыхание, тишина, намерение.",
       "attendees": [
@@ -14658,7 +14658,7 @@
       "difficulty": "high",
       "max_participants": 30,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Два часа практики тишины с короткими паузами. Для тех, у кого есть опыт медитации.",
       "what_to_prepare": "Подушка для сидения или стул с прямой спинкой, плед. Выключите уведомления на телефоне.",
@@ -14719,7 +14719,7 @@
       "difficulty": "beginner",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Плавные позы, чтобы разбудить спину и суставы.",
       "what_to_prepare": "Коврик, ремень или пояс, два блока (можно заменить книгами), вода.",
@@ -14779,7 +14779,7 @@
       "difficulty": "beginner",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Плавные позы, чтобы разбудить спину и суставы.",
       "what_to_prepare": "Коврик, удобная одежда, плед и подушка или блоки. Не ешьте плотно за два часа до практики.",
@@ -14827,7 +14827,7 @@
       "difficulty": "beginner",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Плавные позы, чтобы разбудить спину и суставы.",
       "what_to_prepare": "Коврик, удобная одежда, плед и подушка или блоки. Не ешьте плотно за два часа до практики.",
@@ -14879,7 +14879,7 @@
       "difficulty": "beginner",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Плавные позы, чтобы разбудить спину и суставы.",
       "attendees": [
@@ -14922,7 +14922,7 @@
       "difficulty": "beginner",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Глубокое расслабление лёжа — помогает уснуть.",
       "attendees": [
@@ -14980,7 +14980,7 @@
       "style": "hatha",
       "difficulty": "beginner",
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Утренняя хатха: мягко разогреваем тело и выравниваем дыхание.",
       "_why": "Школьный черновик (автор mira): куратор (main) публикует его на показе.",
@@ -14998,7 +14998,7 @@
       "difficulty": "medium",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Пятнадцать минут дыхания вместо второй чашки кофе.",
       "what_to_prepare": "Удобное положение сидя, бумажные салфетки, вода. Свободная одежда, не стесняющая живот.",
@@ -15058,7 +15058,7 @@
       "difficulty": "medium",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Пятнадцать минут дыхания вместо второй чашки кофе.",
       "what_to_prepare": "Коврик или стул с прямой спинкой, вода. Практикуйте не раньше чем через два часа после еды.",
@@ -15106,7 +15106,7 @@
       "difficulty": "medium",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Пятнадцать минут дыхания вместо второй чашки кофе.",
       "what_to_prepare": "Удобное положение сидя, бумажные салфетки, вода. Свободная одежда, не стесняющая живот.",
@@ -15142,7 +15142,7 @@
       "difficulty": "medium",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Будим тело мягкими движениями, без нагрузки.",
       "what_to_prepare": "Коврик, удобная одежда без ремней, немного свободного места вокруг.",
@@ -15177,7 +15177,7 @@
       "difficulty": "medium",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Будим тело мягкими движениями, без нагрузки.",
       "what_to_prepare": "Коврик, удобная одежда без ремней, немного свободного места вокруг.",
@@ -15232,7 +15232,7 @@
       "difficulty": "medium",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Будим тело мягкими движениями, без нагрузки.",
       "what_to_prepare": "Коврик, удобная одежда без ремней, немного свободного места вокруг.",
@@ -15267,7 +15267,7 @@
       "difficulty": "beginner",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Короткая звуковая практика, чтобы закрыть день.",
       "what_to_prepare": "Наушники, тёплые носки и плед — во время звука тело остывает.",
@@ -15306,7 +15306,7 @@
       "difficulty": "beginner",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Короткая звуковая практика, чтобы закрыть день.",
       "what_to_prepare": "Наушники, тёплые носки и плед — во время звука тело остывает.",
@@ -15345,7 +15345,7 @@
       "difficulty": "beginner",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Короткая звуковая практика, чтобы закрыть день.",
       "what_to_prepare": "Наушники, тёплые носки и плед — во время звука тело остывает.",
@@ -15396,7 +15396,7 @@
       "difficulty": "beginner",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Короткая звуковая практика, чтобы закрыть день.",
       "what_to_prepare": "Наушники, тёплые носки и плед — во время звука тело остывает.",
@@ -15427,7 +15427,7 @@
       "difficulty": "beginner",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Короткая звуковая практика, чтобы закрыть день.",
       "what_to_prepare": "Наушники, тёплые носки и плед — во время звука тело остывает.",
@@ -15467,7 +15467,7 @@
       "difficulty": "medium",
       "max_participants": 30,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Тридцать минут движения, чтобы проснуться.",
       "what_to_prepare": "Около двух на два метра свободного места, вода, удобная одежда. Можно босиком.",
@@ -15519,7 +15519,7 @@
       "difficulty": "beginner",
       "max_participants": 30,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Тридцать минут движения, чтобы проснуться.",
       "attendees": [
@@ -15566,7 +15566,7 @@
       "difficulty": "medium",
       "max_participants": 30,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Тридцать минут движения, чтобы проснуться.",
       "what_to_prepare": "Около двух на два метра свободного места, вода, удобная одежда. Можно босиком.",
@@ -15630,7 +15630,7 @@
       "difficulty": "beginner",
       "max_participants": 16,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Делимся тем, как проходит неделя.",
       "what_to_prepare": "Тихое место, где можно говорить свободно, и наушники. Камера — по желанию.",
@@ -15682,7 +15682,7 @@
       "difficulty": "beginner",
       "max_participants": 16,
       "audience": {
-        "curator_group": "Тихое утро"
+        "school": "Тихое утро"
       },
       "description": "Делимся тем, как проходит неделя.",
       "attendees": [
@@ -15716,7 +15716,7 @@
       "difficulty": "medium",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Утреннее дыхание, чтобы проснуться без кофе.",
       "what_to_prepare": "Коврик или стул с прямой спинкой, вода. Практикуйте не раньше чем через два часа после еды.",
@@ -15803,7 +15803,7 @@
       "difficulty": "beginner",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Утреннее дыхание, чтобы проснуться без кофе.",
       "what_to_prepare": "Коврик или стул с прямой спинкой, вода. Практикуйте не раньше чем через два часа после еды.",
@@ -15850,7 +15850,7 @@
       "difficulty": "beginner",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Утреннее дыхание, чтобы проснуться без кофе.",
       "attendees": [
@@ -15888,7 +15888,7 @@
       "difficulty": "medium",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Утреннее дыхание, чтобы проснуться без кофе.",
       "what_to_prepare": "Коврик или стул с прямой спинкой, вода. Практикуйте не раньше чем через два часа после еды.",
@@ -15951,7 +15951,7 @@
       "difficulty": "beginner",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Утреннее дыхание, чтобы проснуться без кофе.",
       "what_to_prepare": "Коврик или стул с прямой спинкой, вода. Практикуйте не раньше чем через два часа после еды.",
@@ -16014,7 +16014,7 @@
       "difficulty": "beginner",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Утреннее дыхание, чтобы проснуться без кофе.",
       "what_to_prepare": "Коврик или стул с прямой спинкой, вода. Практикуйте не раньше чем через два часа после еды.",
@@ -16053,7 +16053,7 @@
       "difficulty": "beginner",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Утреннее дыхание, чтобы проснуться без кофе.",
       "what_to_prepare": "Коврик или стул с прямой спинкой, вода. Практикуйте не раньше чем через два часа после еды.",
@@ -16092,7 +16092,7 @@
       "difficulty": "beginner",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Медленное дыхание, чтобы спокойно уснуть.",
       "what_to_prepare": "Коврик или стул с прямой спинкой, вода. Практикуйте не раньше чем через два часа после еды.",
@@ -16154,7 +16154,7 @@
       "direction": "breathwork",
       "difficulty": "medium",
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Новая дыхательная техника: ритм, задержка, восстановление.",
       "_why": "Черновик Тони: он публикует его сам на показе.",
@@ -16173,7 +16173,7 @@
       "difficulty": "medium",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Плавные позы, чтобы разбудить спину.",
       "attendees": [
@@ -16236,7 +16236,7 @@
       "difficulty": "beginner",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Плавные позы, чтобы разбудить спину.",
       "what_to_prepare": "Коврик, удобная одежда, плед и подушка или блоки. Не ешьте плотно за два часа до практики.",
@@ -16292,7 +16292,7 @@
       "difficulty": "medium",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Плавные позы, чтобы разбудить спину.",
       "what_to_prepare": "Коврик, удобная одежда, плед и подушка или блоки. Не ешьте плотно за два часа до практики.",
@@ -16348,7 +16348,7 @@
       "difficulty": "medium",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Плавные позы, чтобы разбудить спину.",
       "attendees": [
@@ -16387,7 +16387,7 @@
       "difficulty": "beginner",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Глубокое расслабление лёжа перед сном.",
       "what_to_prepare": "Коврик или кровать, плед, подушка под колени, маска для глаз.",
@@ -16418,7 +16418,7 @@
       "difficulty": "beginner",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Будим тело мягкими движениями.",
       "what_to_prepare": "Коврик, удобная одежда без ремней, немного свободного места вокруг.",
@@ -16469,7 +16469,7 @@
       "difficulty": "beginner",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Будим тело мягкими движениями.",
       "what_to_prepare": "Коврик, удобная одежда без ремней, немного свободного места вокруг.",
@@ -16528,7 +16528,7 @@
       "difficulty": "beginner",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Будим тело мягкими движениями.",
       "what_to_prepare": "Коврик, удобная одежда без ремней, немного свободного места вокруг.",
@@ -16575,7 +16575,7 @@
       "difficulty": "beginner",
       "max_participants": 25,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Будим тело мягкими движениями.",
       "what_to_prepare": "Коврик, удобная одежда без ремней, немного свободного места вокруг.",
@@ -16638,7 +16638,7 @@
       "difficulty": "beginner",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Звуковая практика, чтобы закрыть день.",
       "what_to_prepare": "Наушники, тёплые носки и плед — во время звука тело остывает.",
@@ -16673,7 +16673,7 @@
       "difficulty": "beginner",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Звуковая практика, чтобы закрыть день.",
       "what_to_prepare": "Наушники, тёплые носки и плед — во время звука тело остывает.",
@@ -16704,7 +16704,7 @@
       "difficulty": "beginner",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Звуковая практика, чтобы закрыть день.",
       "attendees": [
@@ -16762,7 +16762,7 @@
       "difficulty": "beginner",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Звуковая практика, чтобы закрыть день.",
       "what_to_prepare": "Наушники, тёплые носки и плед — во время звука тело остывает.",
@@ -16821,7 +16821,7 @@
       "difficulty": "beginner",
       "max_participants": 40,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Звуковая практика, чтобы закрыть день.",
       "what_to_prepare": "Наушники, тёплые носки и плед — во время звука тело остывает.",
@@ -16860,7 +16860,7 @@
       "difficulty": "medium",
       "max_participants": 30,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Тридцать минут движения, чтобы проснуться.",
       "attendees": [
@@ -16922,7 +16922,7 @@
       "difficulty": "medium",
       "max_participants": 30,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Тридцать минут движения, чтобы проснуться.",
       "what_to_prepare": "Около двух на два метра свободного места, вода, удобная одежда. Можно босиком.",
@@ -16973,7 +16973,7 @@
       "difficulty": "medium",
       "max_participants": 30,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Тридцать минут движения, чтобы проснуться.",
       "what_to_prepare": "Около двух на два метра свободного места, вода, удобная одежда. Можно босиком.",
@@ -17037,7 +17037,7 @@
       "difficulty": "beginner",
       "max_participants": 16,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Делимся тем, как проходит неделя.",
       "what_to_prepare": "Тихое место, где можно говорить свободно, и наушники. Камера — по желанию.",
@@ -17101,7 +17101,7 @@
       "difficulty": "beginner",
       "max_participants": 16,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Делимся тем, как проходит неделя.",
       "what_to_prepare": "Тихое место, где можно говорить свободно, и наушники. Камера — по желанию.",
@@ -17141,7 +17141,7 @@
       "difficulty": "beginner",
       "max_participants": 16,
       "audience": {
-        "curator_group": "Утро с Тони"
+        "school": "Утро с Тони"
       },
       "description": "Делимся тем, как проходит неделя.",
       "what_to_prepare": "Тихое место, где можно говорить свободно, и наушники. Камера — по желанию.",

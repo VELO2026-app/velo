@@ -205,10 +205,10 @@ async def apply_for_master(
         )
         # BE-59: a verified profile out of nothing is a verification, so
         # every school that offered this person a master role asks them
-        # now. Imported here, not at the top: curator_groups/service.py
+        # now. Imported here, not at the top: schools/service.py
         # imports this module at load, and a top-level import back would
         # be a cycle.
-        from app.modules.curator_groups.service import (
+        from app.modules.schools.service import (
             announce_pending_master_offers,
         )
 
@@ -364,7 +364,7 @@ async def _emit_application_received(
 #       construction; a data stamp names it only for as long as every path
 #       into "verified" keeps writing a fresh one, and a key must not rest on
 #       what each future writer remembers to stamp. The same remedy as
-#       announce_pending_master_offers (curator_groups/service.py). A uuid4
+#       announce_pending_master_offers (schools/service.py). A uuid4
 #       does not send twice: a rolled-back request takes its outbox row with
 #       it, and a request repeated after a commit meets its own guard (409)
 #       before it gets here.

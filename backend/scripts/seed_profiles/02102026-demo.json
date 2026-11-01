@@ -169,7 +169,7 @@
     { "key": "yulia",  "telegram_id": 600523, "first_name": "Юлия" },
     { "key": "timur",  "telegram_id": 600524, "first_name": "Тимур" }
   ],
-  "curator_groups": [
+  "schools": [
     {
       "curator": "main",
       "name": "Тихое утро",
@@ -699,7 +699,7 @@
       "difficulty": "beginner",
       "max_participants": 10,
       "description": "Медленная практика школы «Тихое утро». Доступна только ученикам школы.",
-      "audience": { "curator_group": "Тихое утро" },
+      "audience": { "school": "Тихое утро" },
       "_why": "ШКОЛЬНАЯ (BE-74): создана В «Тихом утре», принадлежит ему навсегда, аудитория curator_groups = ученики школы. Автор mira — мастер-участник, валидация пропустит. olga/nina (в школе) её видят, sergey/dmitry/timur (вне) — нет."
     ,
       "attendees": [
@@ -778,7 +778,7 @@
       "difficulty": "beginner",
       "max_participants": 16,
       "description": "Школьное утро «Тихого утра»: мягкая соматика перед началом дня.",
-      "audience": { "curator_group": "Тихое утро" },
+      "audience": { "school": "Тихое утро" },
       "_why": "ВТОРАЯ школьная практика от ВТОРОГО мастера-участника (gleb): фид школы собирается из нескольких мастеров, а не из одного. Брони у школьных учениц katya/vera."
     ,
       "attendees": [
@@ -960,7 +960,7 @@
       "difficulty": "beginner",
       "max_participants": 14,
       "description": "Школьный черновик. Публикуется куратором школы из управления школой.",
-      "audience": { "curator_group": "Тихое утро" },
+      "audience": { "school": "Тихое утро" },
       "_why": "Черновик №3 — ШКОЛЬНЫЙ, звезда новой механики (BE-63/64): под main (куратор «Тихого утра») он виден в управлении школы, и куратор публикует его на камеру. Мастер mira — школьный мастер, правило «master must be a school master» соблюдено."
     }
   ]

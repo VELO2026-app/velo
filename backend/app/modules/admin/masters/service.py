@@ -63,16 +63,6 @@ from app.modules.admin.masters.schemas import (
     PaginatedMethodChangeRequestsResponse,
     RevokeMasterAdvisory,
 )
-
-# GT-15: the key is imported, never retyped. MasterProfile.data has no
-# model behind it, so a typo in a writer would not fail -- it would write a
-# key nobody reads, and the master would be told they had a right they do
-# not have. curator_groups owns the spelling because it owns the gate.
-from app.modules.curator_groups.service import (
-    CAN_CREATE_GROUPS_KEY,
-    announce_pending_master_offers,
-    close_pending_master_offers,
-)
 from app.modules.masters.models import MasterProfile
 from app.modules.masters.service import (
     emit_master_rejected,
@@ -81,6 +71,16 @@ from app.modules.masters.service import (
 )
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.practices.taxonomy_models import TaxonomyDirection
+
+# GT-15: the key is imported, never retyped. MasterProfile.data has no
+# model behind it, so a typo in a writer would not fail -- it would write a
+# key nobody reads, and the master would be told they had a right they do
+# not have. schools owns the spelling because it owns the gate.
+from app.modules.schools.service import (
+    CAN_CREATE_GROUPS_KEY,
+    announce_pending_master_offers,
+    close_pending_master_offers,
+)
 from app.modules.users.models import User, UserRole
 from app.modules.users.schemas import (
     credentials_without_admin_home,
@@ -164,7 +164,7 @@ async def verify_master(
     schools", made in this same dialog because verifying a master and
     deciding what they may do with the account is one decision, not a
     process with a queue. WRITTEN ONLY WHEN TRUE. False and absent read
-    identically (curator_groups/service.py::master_can_create_groups), so
+    identically (schools/service.py::master_can_create_groups), so
     stamping an always-false key onto every profile the platform verifies
     would buy nothing and mean the key's presence stopped telling anyone
     anything. Later grants and revocations go through
@@ -172,7 +172,7 @@ async def verify_master(
     only while the application is still pending.
 
     BE-59: announces every school-master offer waiting for this
-    verification (curator_groups announce_pending_master_offers).
+    verification (schools announce_pending_master_offers).
     """
     profile = await _load_pending_profile(user_id, session)
 
@@ -212,7 +212,7 @@ async def verify_master(
     # BE-59: every school that offered this person a master role while
     # they were not verified now asks them "yes / no". Here, while the
     # profile is held FOR UPDATE (_load_pending_profile) -- the order of
-    # curator_groups/service.py's header, profile before offers.
+    # schools/service.py's header, profile before offers.
     await announce_pending_master_offers(user_id, session)
 
     promoted = await _promote_custom_methods(promote or [], session)
@@ -512,7 +512,7 @@ async def reject_master(
     Does NOT change User.role -- user stays as USER and can reapply.
 
     BE-59: closes every school-master offer waiting for this verification
-    and tells each curator (curator_groups close_pending_master_offers).
+    and tells each curator (schools close_pending_master_offers).
     A later reapplication does not revive them.
     """
     profile = await _load_pending_profile(user_id, session)

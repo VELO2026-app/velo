@@ -44,20 +44,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
 from app.modules.bookings.models import Booking, BookingStatus
-from app.modules.curator_groups.models import (
-    CuratorGroupMember,
-    CuratorMemberKind,
-)
-from app.modules.curator_groups.service import (
-    CURATOR_RELATION,
-    _master_offer_state_expr,
-    _relation_or_404,
-)
 from app.modules.diary.models import Checkin, CheckType, Feedback
 from app.modules.practices.audience_service import (
     practice_in_school_feedback_clause,
 )
 from app.modules.practices.models import Practice
+from app.modules.schools.models import (
+    SchoolMember,
+    SchoolMemberKind,
+)
+from app.modules.schools.service import (
+    CURATOR_RELATION,
+    _master_offer_state_expr,
+    _relation_or_404,
+)
 from app.modules.users.helpers import display_name
 from app.modules.users.models import User
 
@@ -127,7 +127,7 @@ async def get_school_student_profile(
     # A student of the school is a member, so _relation_or_404 let them
     # through. This screen is the school's view OF students, not a view
     # FOR them.
-    if relation not in (CURATOR_RELATION, CuratorMemberKind.MASTER.value):
+    if relation not in (CURATOR_RELATION, SchoolMemberKind.MASTER.value):
         raise NotFoundError("Student not found")
 
     # The target must be a student of THIS school right now. Removed,
@@ -135,10 +135,10 @@ async def get_school_student_profile(
     # three answer exactly as a missing school does.
     is_student = (
         await session.execute(
-            select(CuratorGroupMember.id).where(
-                CuratorGroupMember.group_id == group.id,
-                CuratorGroupMember.user_id == student_id,
-                CuratorGroupMember.kind == CuratorMemberKind.STUDENT.value,
+            select(SchoolMember.id).where(
+                SchoolMember.group_id == group.id,
+                SchoolMember.user_id == student_id,
+                SchoolMember.kind == SchoolMemberKind.STUDENT.value,
             )
         )
     ).scalar_one_or_none()
