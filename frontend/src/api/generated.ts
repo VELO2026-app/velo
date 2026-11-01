@@ -240,7 +240,7 @@ export interface AdminSchoolCuratorRef {
   display_name: string
 }
 
-/** One school in the admin list. is_active IS A FIELD, NOT A FILTER, and this is the only place in the system where a frozen school is visible at all. For its own members an inactive group is indistinguishable from a deleted one (404, I-6) -- which is right for them and useless for an admin, who is the person being asked "why has my school gone quiet". Both kinds live in one listing precisely so that question has an answer on screen. masters_count counts VISIBLE masters only (kind='master' whose profile is verified right now, I-4); students_count counts every kind='student' row. Same rule the group page reports, so the two cannot disagree about the same school. */
+/** One school in the admin list. is_active IS A FIELD, NOT A FILTER, and this is the only place in the system where a frozen school is visible at all. For its own members an inactive school is indistinguishable from a deleted one (404, I-6) -- which is right for them and useless for an admin, who is the person being asked "why has my school gone quiet". Both kinds live in one listing precisely so that question has an answer on screen. masters_count counts VISIBLE masters only (kind='master' whose profile is verified right now, I-4); students_count counts every kind='student' row. Same rule the school page reports, so the two cannot disagree about the same school. */
 export interface AdminSchoolListItem {
   id: string
   name: string
@@ -1031,7 +1031,7 @@ export interface MethodChangeRequestSubmit {
   proposed_methods: string[]
 }
 
-/** POST /masters/me/schools/{id}/transfer. to_user_id only: the eligible set is the group's visible masters, and the service checks membership against exactly the roster it shows, so there is nothing else for the caller to state. */
+/** POST /masters/me/schools/{id}/transfer. to_user_id only: the eligible set is the school's visible masters, and the service checks membership against exactly the roster it shows, so there is nothing else for the caller to state. */
 export interface OfferSchoolTransferRequest {
   to_user_id: string
 }
@@ -1618,7 +1618,7 @@ export interface ScheduleIn {
   days: string[]
 }
 
-/** GET /masters/me/schools/{school_id}/analytics (§6). `engagement` answers the request's ?period; every other group is the school's all-time shape and does not move with the slider. */
+/** GET /masters/me/schools/{school_id}/analytics (§6). `engagement` answers the request's ?period; every other school is the school's all-time shape and does not move with the slider. */
 export interface SchoolAnalyticsResponse {
   practices: SchoolPracticeTotals
   members: SchoolMemberTotals
@@ -1664,14 +1664,14 @@ export interface SchoolConductedPracticeItem {
   rating: ScoreZoneCounts
 }
 
-/** The group's owner, as anyone in the group may see them. A strict subset of MasterPublicResponse -- the declared isolation boundary in masters/schemas.py. Nothing financial, nothing contact-like, and no status: a group is only ever visible while its curator is verified (I-6), so exposing the status would only ever print one value. */
+/** The school's owner, as anyone in the school may see them. A strict subset of MasterPublicResponse -- the declared isolation boundary in masters/schemas.py. Nothing financial, nothing contact-like, and no status: a school is only ever visible while its curator is verified (I-6), so exposing the status would only ever print one value. */
 export interface SchoolCuratorRef {
   user_id: string
   display_name: string | null
   avatar_url: string | null
 }
 
-/** GET /masters/me/schools/{id}/delete-preview. What deleting the school costs: who is in it, and how many upcoming practices -- across EVERY master of the school, the curator included -- are aimed at it. The counters are the same two the group page reports, from the same helper, so the dialog and the page cannot disagree. */
+/** GET /masters/me/schools/{id}/delete-preview. What deleting the school costs: who is in it, and how many upcoming practices -- across EVERY master of the school, the curator included -- are aimed at it. The counters are the same two the school page reports, from the same helper, so the dialog and the page cannot disagree. */
 export interface SchoolDeletePreviewResponse {
   masters_count: number
   students_count: number
@@ -1715,7 +1715,7 @@ export interface SchoolFeedbackTotals {
   rating: ScoreZoneCounts
 }
 
-/** GET /schools/invites/{token}. This endpoint DESCRIBES a refusal instead of raising it: can_join=False plus a reason, so the screen can say why. The one exception is 404 -- an unknown token, a revoked one, an inactive group and a deleted group are one answer (P-08), here as everywhere else. can_join answers "would joining CHANGE anything", not "are you allowed in the door". Any member gets can_join=false, reason=already_member -- nothing would happen. Until GT-27 a STUDENT opening a MASTER link was the exception, getting can_join=true because the link would still promote them; with one link there is nothing left for it to do, and the `kind` field this model used to carry went with the second link. relation is the viewer's tie RIGHT NOW, before anything is done: null for someone who is not in the group yet. */
+/** GET /schools/invites/{token}. This endpoint DESCRIBES a refusal instead of raising it: can_join=False plus a reason, so the screen can say why. The one exception is 404 -- an unknown token, a revoked one, an inactive school and a deleted school are one answer (P-08), here as everywhere else. can_join answers "would joining CHANGE anything", not "are you allowed in the door". Any member gets can_join=false, reason=already_member -- nothing would happen. Until GT-27 a STUDENT opening a MASTER link was the exception, getting can_join=true because the link would still promote them; with one link there is nothing left for it to do, and the `kind` field this model used to carry went with the second link. relation is the viewer's tie RIGHT NOW, before anything is done: null for someone who is not in the school yet. */
 export interface SchoolInvitePreviewResponse {
   school: SchoolInvitePreviewSchool
   can_join: boolean
@@ -1723,7 +1723,7 @@ export interface SchoolInvitePreviewResponse {
   relation: 'master' | 'student' | null
 }
 
-/** The card shown to someone who opened an invite link. curator_name is a STRING here, not the {user_id, display_name, avatar_url} object the group page returns: whoever is looking has no relation to the group yet, so they get the school's name and its curator's name, not a handle to go look the curator up with. */
+/** The card shown to someone who opened an invite link. curator_name is a STRING here, not the {user_id, display_name, avatar_url} object the school page returns: whoever is looking has no relation to the school yet, so they get the school's name and its curator's name, not a handle to go look the curator up with. */
 export interface SchoolInvitePreviewSchool {
   id: string
   name: string
@@ -1750,7 +1750,7 @@ export interface SchoolListResponse {
   can_create_schools?: boolean
 }
 
-/** One master in a group's roster. Fields are a STRICT SUBSET of MasterPublicResponse plus is_curator -- the isolation boundary is reused, not restated. reviews_count is deliberately absent: the roster card does not show it, and it would cost a second aggregate per page for nothing. Only VISIBLE masters appear here (verified right now, I-4), so a suspended master-member drops out of the list and out of the total -- the same predicate that drives masters_count, so the two cannot disagree. */
+/** One master in a school's roster. Fields are a STRICT SUBSET of MasterPublicResponse plus is_curator -- the isolation boundary is reused, not restated. reviews_count is deliberately absent: the roster card does not show it, and it would cost a second aggregate per page for nothing. Only VISIBLE masters appear here (verified right now, I-4), so a suspended master-member drops out of the list and out of the total -- the same predicate that drives masters_count, so the two cannot disagree. */
 export interface SchoolMasterItem {
   user_id: string
   display_name: string | null
@@ -1783,7 +1783,7 @@ export interface SchoolMemberTotals {
   students: number
 }
 
-/** One row of GET /schools/mine. `relation` is the viewer's own tie to this group and is what the frontend keys the row's chip off. `transfer_offered` is true ONLY for the person being offered the group, and it is a bool rather than the full ref on purpose: this is a list row, and everything the offer contains is already known to whoever it was made to. The curator sees false here even for their own pending offer -- the list says "somebody is waiting on YOU", and nobody is. Until GT-4 the field was absent because a field that is always false is a promise with no writer behind it. */
+/** One row of GET /schools/mine. `relation` is the viewer's own tie to this school and is what the frontend keys the row's chip off. `transfer_offered` is true ONLY for the person being offered the school, and it is a bool rather than the full ref on purpose: this is a list row, and everything the offer contains is already known to whoever it was made to. The curator sees false here even for their own pending offer -- the list says "somebody is waiting on YOU", and nobody is. Until GT-4 the field was absent because a field that is always false is a promise with no writer behind it. */
 export interface SchoolMineItem {
   id: string
   name: string
@@ -1801,7 +1801,7 @@ export interface SchoolMineResponse {
   items: SchoolMineItem[]
 }
 
-/** GET /schools/{id} -- the group as a member sees it. Deliberately NOT the same shape as SchoolResponse (the curator's own row): that one is a management view keyed by ownership, this one carries `curator` and `viewer` because the reader is not necessarily the owner. Two shapes rather than one with half the fields null. `transfer` is filled for exactly two people -- the curator and the person being offered the group -- and is null for every other member (TZ 5.2). Null rather than an absent key: the field exists for everyone, only its value differs, which keeps one OpenAPI shape instead of two. A member who is not part of the deal learns nothing about it, not even that one is under way. */
+/** GET /schools/{id} -- the school as a member sees it. Deliberately NOT the same shape as SchoolResponse (the curator's own row): that one is a management view keyed by ownership, this one carries `curator` and `viewer` because the reader is not necessarily the owner. Two shapes rather than one with half the fields null. `transfer` is filled for exactly two people -- the curator and the person being offered the school -- and is null for every other member (TZ 5.2). Null rather than an absent key: the field exists for everyone, only its value differs, which keeps one OpenAPI shape instead of two. A member who is not part of the deal learns nothing about it, not even that one is under way. */
 export interface SchoolPageResponse {
   id: string
   name: string
@@ -1822,12 +1822,12 @@ export interface SchoolPracticeTotals {
   upcoming: number
 }
 
-/** GET /masters/me/schools/{id}/members/{user_id}/remove-preview. The same number for the member the curator is about to remove. Zero for a student, and zero -- not 404 -- for somebody who is not in the group at all: the removal itself is idempotent and answers 204 on that same target, so the advisory must not be stricter than the action it describes. */
+/** GET /masters/me/schools/{id}/members/{user_id}/remove-preview. The same number for the member the curator is about to remove. Zero for a student, and zero -- not 404 -- for somebody who is not in the school at all: the removal itself is idempotent and answers 204 on that same target, so the advisory must not be stricter than the action it describes. */
 export interface SchoolRemovePreviewResponse {
   upcoming_practices_targeting_school: number
 }
 
-/** One school, as its curator sees it. masters_count counts only VISIBLE masters -- members with kind='master' whose MasterProfile is verified right now (I-4). A suspended master keeps their row and disappears from this number until re-verification; the number and the roster's is_visible flag are computed from the same predicate, so they cannot disagree. students_count counts every kind='student' row. Visibility is a rule about masters; a student has no MasterProfile to be verified. `transfer` describes the group's pending hand-over, or null when there is none. Until GT-4 this field did not exist at all -- deliberately, so that a hardcoded null could not become a promise the frontend built on. It appears now BECAUSE it acquired a writer, which is the only reason a field ever should. PATCH returns this schema too, so renaming a group now reports the pending transfer alongside the new name. That is an intended widening, not a leak: one response shape has one field set, and the alternative -- two flavours of SchoolResponse, with and without -- is exactly the duplication SchoolTransferRef exists to avoid. A rename does not touch the offer. */
+/** One school, as its curator sees it. masters_count counts only VISIBLE masters -- members with kind='master' whose MasterProfile is verified right now (I-4). A suspended master keeps their row and disappears from this number until re-verification; the number and the roster's is_visible flag are computed from the same predicate, so they cannot disagree. students_count counts every kind='student' row. Visibility is a rule about masters; a student has no MasterProfile to be verified. `transfer` describes the school's pending hand-over, or null when there is none. Until GT-4 this field did not exist at all -- deliberately, so that a hardcoded null could not become a promise the frontend built on. It appears now BECAUSE it acquired a writer, which is the only reason a field ever should. PATCH returns this schema too, so renaming a school now reports the pending transfer alongside the new name. That is an intended widening, not a leak: one response shape has one field set, and the alternative -- two flavours of SchoolResponse, with and without -- is exactly the duplication SchoolTransferRef exists to avoid. A rename does not touch the offer. */
 export interface SchoolResponse {
   id: string
   name: string
@@ -1900,14 +1900,14 @@ export interface SchoolTopPracticeItem {
   reviews_count: number
 }
 
-/** A pending offer to hand the group over. ONE schema for all three places that report an offer (the curator's own row, that row after a PATCH, and the group page). Three flat triples of the same fields would drift the first time one of them gained a fourth. to_display_name uses display_name(first_name, last_name) from users/helpers.py, NOT the master-profile lookup _curator_display_name uses. The tree holds two different naming rules and this is a deliberate pick between them: the addressee here is a PERSON being offered something, not a public master card, and the profile-based rule may return None -- which would leave the confirm dialog reading "offer sent to —". display_name always yields something, falling back to the neutral «Участник». */
+/** A pending offer to hand the school over. ONE schema for all three places that report an offer (the curator's own row, that row after a PATCH, and the school page). Three flat triples of the same fields would drift the first time one of them gained a fourth. to_display_name uses display_name(first_name, last_name) from users/helpers.py, NOT the master-profile lookup _curator_display_name uses. The tree holds two different naming rules and this is a deliberate pick between them: the addressee here is a PERSON being offered something, not a public master card, and the profile-based rule may return None -- which would leave the confirm dialog reading "offer sent to —". display_name always yields something, falling back to the neutral «Участник». */
 export interface SchoolTransferRef {
   to_user_id: string
   to_display_name: string
   requested_at: string
 }
 
-/** The requesting user's own tie to the group being viewed. */
+/** The requesting user's own tie to the school being viewed. */
 export interface SchoolViewer {
   relation: 'curator' | 'master' | 'student'
 }
@@ -2120,7 +2120,7 @@ export interface UpdateReportRequest {
   reason: string
 }
 
-/** PATCH /masters/me/schools/{id}. `name` is always required -- a group always has one. `description` is a PARTIAL update. The router computes `"description" in body.model_dump(exclude_unset=True)` and passes it as description_provided, which is the only way to tell "the key was absent" (leave the column alone) from "the key was sent as null/empty" (write NULL). A bare `str | None = None` cannot distinguish the two and would wipe an existing description on every plain rename -- the exact bug RenameGroupRequest was rewritten to prevent. avatar_url (GT-17) is a PARTIAL update by the same mechanism and for the same reason -- the router computes avatar_url_provided the same way. Absent key: the column is untouched. Present and null (or blank): the avatar is removed. Present and a url: it is replaced. CREATION DOES NOT TAKE AN AVATAR, only this update does. A school is founded with a name and a description; the picture is attached afterwards. Not an omission -- widening CreateSchoolRequest would touch a schema five test files exercise, for a field the create screen has no input for. */
+/** PATCH /masters/me/schools/{id}. `name` is always required -- a school always has one. `description` is a PARTIAL update. The router computes `"description" in body.model_dump(exclude_unset=True)` and passes it as description_provided, which is the only way to tell "the key was absent" (leave the column alone) from "the key was sent as null/empty" (write NULL). A bare `str | None = None` cannot distinguish the two and would wipe an existing description on every plain rename -- the exact bug RenameGroupRequest was rewritten to prevent. avatar_url (GT-17) is a PARTIAL update by the same mechanism and for the same reason -- the router computes avatar_url_provided the same way. Absent key: the column is untouched. Present and null (or blank): the avatar is removed. Present and a url: it is replaced. CREATION DOES NOT TAKE AN AVATAR, only this update does. A school is founded with a name and a description; the picture is attached afterwards. Not an omission -- widening CreateSchoolRequest would touch a schema five test files exercise, for a field the create screen has no input for. */
 export interface UpdateSchoolRequest {
   name: string
   description?: string | null
