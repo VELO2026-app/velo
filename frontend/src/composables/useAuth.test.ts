@@ -70,14 +70,14 @@ describe('parseStartParam', () => {
       expect(parseStartParam(param, role)).toEqual(route)
     })
 
-    // tz-whitelabel §4: an edition without payments has no wallet route --
-    // the user-side tap degrades to no navigation; the master's finance
-    // screen is not part of the gated module and stays.
-    it('open_wallet without the payments module -> user: no route, master: finance', () => {
+    // tz-whitelabel §4 (FE-112): an edition without payments has no wallet
+    // route in ANY zone -- the user's top-up and the master's finance
+    // screen are the same module; both taps degrade to no navigation.
+    it('open_wallet without the payments module -> no route in either zone', () => {
       vi.stubEnv('VITE_FEATURES', 'ai')
       try {
         expect(parseStartParam('open_wallet', 'user')).toBeNull()
-        expect(parseStartParam('open_wallet', 'master')).toEqual({ name: 'master-finance' })
+        expect(parseStartParam('open_wallet', 'master')).toBeNull()
       } finally {
         vi.unstubAllEnvs()
       }

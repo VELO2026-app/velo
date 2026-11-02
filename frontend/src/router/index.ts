@@ -75,6 +75,34 @@ const PAYMENTS_USER_ROUTES: RouteRecordRaw[] = [
   },
 ]
 
+// FE-112 (tz-whitelabel §4): the payments module is ALL of its surfaces --
+// the user's top-ups above, the master's finance screen and the admin's
+// payout queue here. An edition without payments registers none of them,
+// so a feature-cut build carries no chunk of any payment screen
+// (ConfirmPaymentModal rides AdminWithdrawalDetailView's chunk).
+const PAYMENTS_MASTER_ROUTES: RouteRecordRaw[] = [
+  {
+    path: 'finance',
+    name: 'master-finance',
+    beforeEnter: masterStatusGuard,
+    meta: { hideTabBar: true },
+    component: () => import('@/views/master/MasterFinanceView.vue'),
+  },
+]
+
+const PAYMENTS_ADMIN_ROUTES: RouteRecordRaw[] = [
+  {
+    path: 'withdrawals',
+    name: 'admin-withdrawals',
+    component: () => import('@/views/admin/AdminWithdrawalsView.vue'),
+  },
+  {
+    path: 'withdrawals/:id',
+    name: 'admin-withdrawal-detail',
+    component: () => import('@/views/admin/AdminWithdrawalDetailView.vue'),
+  },
+]
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -469,13 +497,9 @@ const router = createRouter({
           meta: { hideTabBar: true },
           component: () => import('@/views/master/MasterNewPromocodeView.vue'),
         },
-        {
-          path: 'finance',
-          name: 'master-finance',
-          beforeEnter: masterStatusGuard,
-          meta: { hideTabBar: true },
-          component: () => import('@/views/master/MasterFinanceView.vue'),
-        },
+        // FE-112 (tz-whitelabel §4): the finance screen is the payments
+        // module's master surface -- cut from editions without it.
+        ...(__VELO_FEATURE_PAYMENTS__ ? PAYMENTS_MASTER_ROUTES : []),
         {
           path: 'students',
           name: 'master-students',
@@ -743,16 +767,9 @@ const router = createRouter({
           name: 'admin-practice-detail',
           component: () => import('@/views/admin/AdminPracticeDetailView.vue'),
         },
-        {
-          path: 'withdrawals',
-          name: 'admin-withdrawals',
-          component: () => import('@/views/admin/AdminWithdrawalsView.vue'),
-        },
-        {
-          path: 'withdrawals/:id',
-          name: 'admin-withdrawal-detail',
-          component: () => import('@/views/admin/AdminWithdrawalDetailView.vue'),
-        },
+        // FE-112 (tz-whitelabel §4): the payout queue is the payments
+        // module's admin surface -- cut from editions without it.
+        ...(__VELO_FEATURE_PAYMENTS__ ? PAYMENTS_ADMIN_ROUTES : []),
         {
           path: 'promos',
           name: 'admin-promos',

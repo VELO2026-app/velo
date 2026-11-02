@@ -138,7 +138,11 @@
         :label="t('adminScreens.adminDashboard.mastersBalance')"
         @click="router.push({ name: 'admin-revenue' })"
       />
+      <!-- FE-112 (tz-whitelabel §4): the payout queue is the payments
+           module's admin surface -- an edition without payments has no
+           dashboard entry leading to an unregistered route. -->
       <VListRow
+        v-if="paymentsEnabled"
         :title="t('adminScreens.adminDashboard.payoutsSection')"
         :subtitle="t('adminScreens.adminDashboard.withdrawalRequestsLink')"
         clickable
@@ -243,10 +247,15 @@ import { getCheckinMetric, getFeedbackMetric, getReturnMetric, getAdminRevenue }
 import { formatMoney } from '@/utils/format'
 import { formatPeriodRange } from '@/utils/periodRange'
 import { useToast } from '@/composables/useToast'
+import { featureEnabled } from '@/platform/features'
 
 const router = useRouter()
 const adminStore = useAdminStore()
 const toast = useToast()
+
+// FE-112 (tz-whitelabel §4): hides the payouts card in editions without
+// the payments module (see the template comment at the row).
+const paymentsEnabled = featureEnabled('payments')
 
 // Period toggle (Неделя/Месяц) + stepper offset (0 = current, -1 = previous …).
 const period = ref<'week' | 'month'>('week')

@@ -191,7 +191,11 @@
           <div class="edit-profile__del-balance">
             {{ t('user.screens.editProfile.balanceLine', { amount: formattedBalance }) }}
           </div>
-          <VButton variant="primary" block @click="onWithdrawFirst">
+          <!-- FE-112 (tz-whitelabel §4): the withdraw step leads to the
+               payments module's finance screen; without the module there is
+               nothing to withdraw through -- the balance line and the
+               forfeit consent below still tell the truth. -->
+          <VButton v-if="paymentsEnabled" variant="primary" block @click="onWithdrawFirst">
             {{ t('user.screens.editProfile.withdrawFirst') }}
           </VButton>
           <VCheckbox
@@ -247,11 +251,16 @@ import { useMasterStore } from '@/stores/master'
 import { extractApiError } from '@/composables/useApiError'
 import { submitMethodChangeRequest, updateMasterLanguages } from '@/api/masters'
 import { formatMoney } from '@/utils/format'
+import { featureEnabled } from '@/platform/features'
 import { LANGUAGES } from '@/utils/languages'
 import MethodTaxonomyPicker from '@/components/shared/MethodTaxonomyPicker.vue'
 import { flattenMethods, parseMethods, primeMethodTaxonomyCatalog } from '@/utils/methodTaxonomy'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import type { UserUpdate } from '@/api/types'
+
+// FE-112 (tz-whitelabel §4): hides the «Сначала вывести» step in editions
+// without the payments module (see the template comment at the button).
+const paymentsEnabled = featureEnabled('payments')
 
 const router = useRouter()
 

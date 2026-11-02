@@ -52,7 +52,14 @@
           <VMenuRow :label="t('masterScreens.masterProfile.menu.promocodes')" @click="onPromocodes">
             <template #icon><IconPromo :size="20" /></template>
           </VMenuRow>
-          <VMenuRow :label="t('masterScreens.masterProfile.menu.withdraw')" @click="onWithdraw">
+          <!-- FE-112 (tz-whitelabel §4): the finance screen is the payments
+               module's master surface -- an edition without payments has no
+               menu entry leading to an unregistered route. -->
+          <VMenuRow
+            v-if="paymentsEnabled"
+            :label="t('masterScreens.masterProfile.menu.withdraw')"
+            @click="onWithdraw"
+          >
             <template #icon><IconFinance :size="20" /></template>
           </VMenuRow>
         </div>
@@ -149,10 +156,15 @@ import {
 import { useMasterStore } from '@/stores/master'
 import { useAuthStore } from '@/stores/auth'
 import { getChatUnreadSummary } from '@/api/chats'
+import { featureEnabled } from '@/platform/features'
 
 const router = useRouter()
 const masterStore = useMasterStore()
 const authStore = useAuthStore()
+
+// FE-112 (tz-whitelabel §4): hides the «Вывести» entry in editions without
+// the payments module (see the template comment at the menu row).
+const paymentsEnabled = featureEnabled('payments')
 
 const displayName = computed(
   () =>

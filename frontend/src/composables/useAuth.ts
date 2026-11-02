@@ -293,10 +293,12 @@ export function parseStartParam(
     case 'open_feedback':
       return id ? { name: 'user-feedback', params: { practiceId: id } } : null
     case 'open_wallet': // bare (payouts, top-ups) or __<practice_id> (refunds)
-      if (asMaster) return { name: 'master-finance' }
       // tz-whitelabel §4: an edition without the payments module has no
-      // wallet route -- the tap degrades to no navigation, not the 404.
-      return featureEnabled('payments') ? { name: 'user-topup' } : null
+      // wallet route in ANY zone -- the master's finance screen and the
+      // user's top-up are the same module (FE-112) -- the tap degrades
+      // to no navigation, not the 404.
+      if (!featureEnabled('payments')) return null
+      return asMaster ? { name: 'master-finance' } : { name: 'user-topup' }
     case 'confirm_waitlist':
       return id ? { name: 'waitlist-confirm', params: { id } } : null
     case 'open_school':

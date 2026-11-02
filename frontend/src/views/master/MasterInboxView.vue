@@ -118,6 +118,7 @@
 import { t } from '@/locales'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { featureEnabled } from '@/platform/features'
 import { VHeader } from '@/components/layout'
 import { VButton, VEmptyState, VLoader, VSegmentTrack } from '@/components/ui'
 import { IconBellPlain } from '@/components/icons'
@@ -264,7 +265,10 @@ function routeFor(
     case 'open_practice':
       return practiceId ? { name: 'master-practice-detail', params: { id: practiceId } } : null
     case 'open_wallet':
-      return { name: 'master-finance' }
+      // tz-whitelabel §4 (FE-112): no payments module -- no finance screen
+      // in the master zone either; the tap degrades to no navigation
+      // (the same rule as useAuth's open_wallet).
+      return featureEnabled('payments') ? { name: 'master-finance' } : null
     case 'open_master_zone':
       // BE-104 master.verified read in master mode (make_master already set
       // role='master'): the zone is this shell's own dashboard.
