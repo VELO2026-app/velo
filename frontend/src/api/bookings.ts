@@ -135,6 +135,11 @@ export function joinBooking(bookingId: string): Promise<BookingResponse> {
  *
  * Backend rules: requires joined_at to be set (400 otherwise),
  * returns 409 if already left.
+ *
+ * FE-49 (продакт-решение 2.11): the only UI caller -- the «Покинуть практику»
+ * button on PracticeLiveView -- is deleted: to the person the button did
+ * nothing but leave the screen, which «Назад» already does. The wrapper and
+ * the endpoint stay; the backend is not touched.
  */
 export function leaveBooking(bookingId: string): Promise<BookingResponse> {
   return api.post<BookingResponse>(`/api/v1/bookings/${bookingId}/leave`)

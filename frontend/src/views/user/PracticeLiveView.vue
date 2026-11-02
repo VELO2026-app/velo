@@ -18,7 +18,10 @@
         guest     -- not booked: «Вы не записаны» and the way to the practice
                      (owner decision 12: no guest entry from the app)
         pending / failed / unavailable / cancelled -- honest states
-      + «Check-in», «Покинуть практику» -- student actions, user zone only
+      + «Check-in» -- the student action, user zone only; hidden once done or
+        once the practice has started (FE-49, продакт 2.11 -- same decision
+        removed «Покинуть практику»: it only ever left the screen, which
+        «Назад» above already does)
       + the camera hint where the host app blocks the camera (Telegram iOS)
 
   Entering (onEnter / onStart): POST .../zoom/sdk-join for the parameters,
@@ -165,35 +168,29 @@
         </VButton>
       </template>
 
-      <!-- Student actions -- the user zone only, and not for the practice's
-           own master (he checks no one in to his own practice). -->
-      <template v-if="studentActions">
-        <!-- One check-in per practice: once done, the button locks and shows
-             why (so it does not read as a random disabled control). -->
-        <VButton
-          variant="secondary"
-          size="lg"
-          block
-          :disabled="alreadyCheckedIn"
-          @click="onCheckin"
-        >
-          <template v-if="alreadyCheckedIn">{{
-            t('user.screens.practiceLive.checkinDone')
-          }}</template>
-          <template v-else>Check-in</template>
-        </VButton>
-
-        <VButton variant="danger" size="lg" block :loading="leaving" @click="onLeave">
-          {{ t('user.screens.practiceLive.leave') }}
-        </VButton>
-      </template>
+      <!-- Student action -- the user zone only, and not for the practice's
+           own master (he checks no one in to his own practice).
+           FE-49 (продакт 2.11): HIDDEN, not locked, once the check-in is done
+           or the practice has started -- a locked «Check-in сделан» told a
+           person what he already knew. «Покинуть практику» used to sit here
+           and is gone entirely: it never cancelled anything, and «Назад»
+           above already leaves the screen. -->
+      <VButton
+        v-if="studentActions && !alreadyCheckedIn && !practiceStarted"
+        variant="secondary"
+        size="lg"
+        block
+        @click="onCheckin"
+      >
+        Check-in
+      </VButton>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'
 import { useBookingsStore } from '@/stores/bookings'
@@ -228,7 +225,11 @@ const practiceId = route.params.practiceId as string
 const isMasterZone = route.name === 'master-practice-live'
 
 const entering = ref(false)
-const leaving = ref(false)
+
+/** Reactive clock (60s tick -- the PracticeDetailView pattern) so the check-in
+ * button disappears live if the start time passes while the screen is open. */
+const now = ref(Date.now())
+let clockInterval: ReturnType<typeof setInterval> | null = null
 
 /** F4 fix: the top safe area the meeting's root keeps clear -- the SAME
  * source as every screen of ours (Telegram fullscreen controls, or
@@ -248,8 +249,19 @@ const myBooking = computed(() =>
   bookingsStore.bookings.find((b) => b.practice_id === practiceId && b.status !== 'cancelled'),
 )
 
-/** One check-in per practice: once the booking has it, the button locks. */
+/** One check-in per practice: once the booking has it, the button hides
+ * (FE-49 -- it used to lock with a «Check-in сделан» label). */
 const alreadyCheckedIn = computed(() => !!myBooking.value?.has_checkin)
+
+/**
+ * FE-49 (продакт 2.11): true once the practice's start time has passed -- the
+ * check-in button hides with it, the same boundary CheckinView's submit
+ * fail-closes on (№444). Same predicate as PracticeDetailView.practiceStarted.
+ */
+const practiceStarted = computed((): boolean => {
+  if (!practice.value) return false
+  return new Date(practice.value.scheduled_at).getTime() <= now.value
+})
 
 /**
  * T-35: the server's answer for THIS user on THIS practice. null until the
@@ -266,8 +278,8 @@ const sdkNotConfigured = ref(false)
  * entry for this person. */
 const canJoin = computed(() => zoomEntry.value?.kind === 'personal')
 
-/** Check-in and «Покинуть» belong to a student in the user zone; never to
- * the practice's own master. */
+/** Check-in belongs to a student in the user zone; never to the practice's
+ * own master. */
 const studentActions = computed(
   () => !isMasterZone && !resolveFailed.value && zoomEntry.value?.kind !== 'host',
 )
@@ -371,7 +383,6 @@ async function onStart(): Promise<void> {
 }
 
 function onCheckin(): void {
-  if (alreadyCheckedIn.value) return
   void router.push({ name: 'user-checkin', params: { practiceId } })
 }
 
@@ -383,27 +394,6 @@ function goToPractice(): void {
 /** Back arrow -> the zone's dashboard (breaks the check-in <-> live loop). */
 function goBack(): void {
   void router.push({ name: isMasterZone ? 'master-dashboard' : 'user-dashboard' })
-}
-
-/**
- * t('user.screens.practiceLive.leave'): always returns to the dashboard. We only call the
- * leave API if the user had actually joined (otherwise the backend returns
- * 400 "Cannot leave without joining first").
- */
-async function onLeave(): Promise<void> {
-  if (leaving.value) return
-
-  leaving.value = true
-  try {
-    const booking = myBooking.value
-    if (booking && booking.joined_at !== null && booking.left_at === null) {
-      const result = await bookingsStore.leaveBooking(booking.id)
-      if (!result.ok) toast.error(result.error)
-    }
-  } finally {
-    leaving.value = false
-    void router.push({ name: 'user-dashboard' })
-  }
 }
 
 /** T-35: how THIS user enters. Failure here is not a toast -- this screen's
@@ -428,11 +418,22 @@ onBeforeRouteLeave(() => {
   return true
 })
 
+onUnmounted(() => {
+  if (clockInterval) clearInterval(clockInterval)
+})
+
 onMounted(async () => {
+  // The 60s clock keeps practiceStarted honest while the screen stays open.
+  // Started BEFORE the first await: if the person leaves before the resolve
+  // call answers, onUnmounted must already have an interval to clear.
+  clockInterval = setInterval(() => {
+    now.value = Date.now()
+  }, 60_000)
+
   if (practicesStore.selected?.id !== practiceId) {
     void practicesStore.fetchPractice(practiceId)
   }
-  // Needed to resolve the user's booking id for join/leave.
+  // Needed to resolve the user's booking id for the join gate and has_checkin.
   void bookingsStore.fetchMyBookings()
   await loadEntry()
 })
