@@ -86,7 +86,9 @@ function knownVeloTokens(frontendDir) {
   return new Set([...css.matchAll(/(--velo-[a-zA-Z0-9-]+)\s*:/g)].map((m) => m[1]))
 }
 
-function pngInfo(file) {
+/** PNG IHDR facts (width/height/colorType); null when not a readable PNG.
+ *  Exported for scripts/instance-checklist.mjs (dist icon dimension facts). */
+export function pngInfo(file) {
   const buf = readFileSync(file)
   const signature = '89504e470d0a1a0a'
   if (buf.subarray(0, 8).toString('hex') !== signature) return null
