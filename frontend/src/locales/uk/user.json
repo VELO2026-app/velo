@@ -273,6 +273,9 @@
         "relatedLine": "Пов'язано з практикою: {title} з {name}"
       },
       "externalActivityCreate": {
+        "mine": {
+          "caption": "Мої варіанти"
+        },
         "custom": {
           "remove": "Прибрати свій варіант",
           "title": "Свій варіант активності",

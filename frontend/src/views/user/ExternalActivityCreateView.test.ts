@@ -237,6 +237,22 @@ function typeCustom(value: string): void {
   el.dispatchEvent(new Event('input'))
 }
 
+// -- «Мои варианты» (FE-77): the person's own past custom names ---------------
+
+function mineRow(): HTMLElement {
+  const el = host?.querySelector<HTMLElement>('[data-field="mine"]')
+  if (!el) throw new Error('the «Мои варианты» row did not render')
+  return el
+}
+
+function mineChip(label: string): HTMLButtonElement {
+  const el = Array.from(
+    host?.querySelectorAll<HTMLButtonElement>('[data-field="mine"] button') ?? [],
+  ).find((b) => b.textContent?.trim() === label)
+  if (!el) throw new Error(`«Мои варианты» chip «${label}» did not render`)
+  return el
+}
+
 function typeThoughts(value: string): void {
   const el = thoughtTextarea()
   el.value = value
@@ -271,6 +287,9 @@ beforeEach(() => {
     created_at: '2026-07-20T08:00:05Z',
   })
   vi.mocked(diaryApi.listDiaryFeed).mockReset().mockResolvedValue({ items: [], next_cursor: null })
+  // FE-77: empty by default -- «never used custom» is the NORMAL state every
+  // other test below starts from; the hint block fills it case by case.
+  vi.mocked(diaryApi.getExternalActivityCustomNames).mockReset().mockResolvedValue({ items: [] })
 
   push.mockReset()
   replace.mockReset()
@@ -464,6 +483,104 @@ describe('ExternalActivityCreateView', () => {
 
       expect(screenText()).toContain('Укажите ваш вариант')
       expect(host?.querySelector('.ea__chip--custom')).toBeNull()
+    })
+  })
+
+  describe('«Мои варианты» -- own past custom names (FE-77 / BE-37)', () => {
+    it('renders the served names directly ABOVE the custom field, in the server order, with NO × on them', async () => {
+      vi.mocked(diaryApi.getExternalActivityCustomNames).mockResolvedValue({
+        items: ['Бальные танцы', 'Йога-нидра', 'Контрастный душ'],
+      })
+      mount()
+      await flush()
+
+      const row = mineRow()
+      // Position: the hints sit between the preset board and the «Укажите
+      // ваш вариант» field -- the next sibling IS the field row.
+      expect(row.nextElementSibling?.classList.contains('ea__custom')).toBe(true)
+      expect(row.querySelector('.ea__mine-caption')?.textContent?.trim()).toBe('Мои варианты')
+      // The order is the backend's product (most recent first) -- the screen
+      // renders it verbatim, it does not re-sort.
+      expect(Array.from(row.querySelectorAll('button')).map((b) => b.textContent?.trim())).toEqual([
+        'Бальные танцы',
+        'Йога-нидра',
+        'Контрастный душ',
+      ])
+      // Owner's ruling: no removal cross -- the backend has no DELETE.
+      expect(row.querySelector('.ea__chip-remove')).toBeNull()
+      // Hints are not choices: no pressed state ever rides them.
+      expect(row.querySelector('[aria-pressed]')).toBeNull()
+    })
+
+    it('a tap FILLS the input as an editable draft -- it never selects custom by itself', async () => {
+      vi.mocked(diaryApi.getExternalActivityCustomNames).mockResolvedValue({
+        items: ['Бальные танцы'],
+      })
+      mount()
+      await flush()
+      typeCustom('Растяжка')
+
+      mineChip('Бальные танцы').click()
+      await nextTick()
+
+      // The tap REPLACES whatever draft was in the field...
+      expect(customInput().value).toBe('Бальные танцы')
+      // ...and commits nothing: the board shows no custom chip, no preset is
+      // selected -- the commit (arrow/Enter) stays the person's own act.
+      expect(host?.querySelector('.ea__chip--custom')).toBeNull()
+      expect(host?.querySelector('[aria-pressed="true"]')).toBeNull()
+
+      // The normal commit path then carries the hinted name.
+      commitBtn().click()
+      await nextTick()
+      expect(host?.querySelector('.ea__chip--custom')?.textContent).toContain('Бальные танцы')
+    })
+
+    it('a tap while a custom chip is on the board takes the chip off and lands the name in the freed input', async () => {
+      vi.mocked(diaryApi.getExternalActivityCustomNames).mockResolvedValue({
+        items: ['Бальные танцы'],
+      })
+      mount()
+      await flush()
+      typeCustom('Растяжка')
+      commitBtn().click()
+      await nextTick()
+      expect(customInput().disabled).toBe(true)
+
+      mineChip('Бальные танцы').click()
+      await nextTick()
+
+      // The old chip came off (the same as its ×); the field is free again
+      // and holds the hinted name as a DRAFT, not a committed chip.
+      expect(host?.querySelector('.ea__chip--custom')).toBeNull()
+      expect(customInput().disabled).toBe(false)
+      expect(customInput().value).toBe('Бальные танцы')
+    })
+
+    it('an EMPTY list is a normal state: no row, the field alone, one request', async () => {
+      mount()
+      await flush()
+
+      expect(diaryApi.getExternalActivityCustomNames).toHaveBeenCalledTimes(1)
+      expect(host?.querySelector('[data-field="mine"]')).toBeNull()
+      // The field itself is right there -- the screen is complete without hints.
+      expect(host?.querySelector('.ea__custom')).not.toBeNull()
+    })
+
+    it('a failed request never breaks the screen: no row, and the form still submits', async () => {
+      vi.mocked(diaryApi.getExternalActivityCustomNames).mockRejectedValue(
+        new ApiResponseError(401, 'Session expired', 'unauthorized'),
+      )
+      mount()
+      await flush()
+
+      expect(host?.querySelector('[data-field="mine"]')).toBeNull()
+      expect(screenText()).toContain('Новое событие')
+
+      await fillValidForm()
+      saveBtn().click()
+      await flush()
+      expect(diaryApi.createExternalActivity).toHaveBeenCalledTimes(1)
     })
   })
 
