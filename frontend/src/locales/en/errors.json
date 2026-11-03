@@ -46,6 +46,7 @@
     "mcp_token_limit_reached": "There are already 10 active tokens — revoke an unneeded one to create a new",
     "mcp_token_not_found": "Token not found — refresh the list",
     "mcp_token_name_taken": "A token with this name already exists — choose another",
+    "delivery_window_empty": "The delivery start and end times cannot be the same",
     "unauthorized": "Your session has expired — log in again",
     "not_found": "The requested resource was not found",
     "forbidden": "The action is not available",
