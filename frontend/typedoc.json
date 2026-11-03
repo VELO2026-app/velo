@@ -1,0 +1,69 @@
+{
+  // API reference built from JSDoc comments (FE-136, stage A of FE-135).
+  // Regenerate with `pnpm run docs` (plain `pnpm docs` is shadowed by the
+  // pnpm builtin that opens a package's site); the output is a build
+  // artifact, see docs/api/ in .gitignore.
+  "$schema": "https://typedoc.org/schema.json",
+
+  // TS module areas from the FE-136 scope: every file becomes its own
+  // module page (expand strategy). .vue components are NOT covered --
+  // typedoc cannot parse SFCs without a vue plugin (out of scope for
+  // FE-135); imports of *.vue resolve through the env.d.ts wildcard
+  // declaration and render as plain DefineComponent references.
+  "entryPoints": [
+    "src/composables",
+    "src/stores",
+    "src/api",
+    "src/utils",
+    "src/platform",
+    "src/router"
+  ],
+  "entryPointStrategy": "expand",
+
+  // FE-136 exclusions, kept out of both entry expansion (exclude) and the
+  // converted documentation set (externalPattern; imported files re-enter
+  // the program through imports, where exclude does not apply):
+  //   - generated.ts / *.generated.ts -- the openapi client and skin-brand
+  //     codegen; note `**/generated.ts` must be listed separately: the
+  //     `*.generated.ts` glob requires a basename prefix before the dot;
+  //   - src/locales/** -- translation catalogs, not API surface;
+  //   - *.test.ts / *.golden-test-stub.ts -- unit-test internals.
+  // externalPattern replaces the default, so node_modules is restated.
+  "exclude": [
+    "**/*.test.ts",
+    "**/generated.ts",
+    "**/*.generated.ts",
+    "**/*.golden-test-stub.ts",
+    "**/locales/**"
+  ],
+  "externalPattern": [
+    "**/node_modules/**",
+    "**/*.test.ts",
+    "**/generated.ts",
+    "**/*.generated.ts",
+    "**/*.golden-test-stub.ts",
+    "**/locales/**"
+  ],
+
+  // typedoc's program is plain tsc over the whole tsconfig, and plain tsc
+  // cannot see named type exports of *.vue (TS2614 on components/ui's
+  // `export type ... from './X.vue'`) nor the component-typed props in
+  // test fixtures -- vue-tsc handles both, and type safety is gated by
+  // `pnpm typecheck`. So this check is off here; it would only produce
+  // false positives from the SFC half of the codebase.
+  "skipErrorChecking": true,
+
+  "out": "docs/api",
+  "name": "VELO Frontend API",
+  "excludePrivate": true,
+  "excludeInternal": true,
+
+  // With the openapi client (src/api/generated.ts) deliberately external,
+  // every reference to its types warns "referenced but not included" (132
+  // on the first run) -- pure noise until the export-coverage policy
+  // lands. Re-enable notExported at stage D (FE-135) together with that
+  // policy.
+  "validation": {
+    "notExported": false
+  }
+}
