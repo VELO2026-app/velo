@@ -1,13 +1,14 @@
 <!--
-  VELO Frontend -- UserChatView (Phase 6 / T2, H-T2-UI phase «а», 2026-08-08)
+  VELO Frontend -- UserChatView (Phase 6 / T2, H-T2-UI phase A, 2026-08-08)
 
   The student's side of the eternal DM with one master. Thin wrapper over the
   shared ChatThreadScreen: this view only resolves WHICH conversation and WHO
   the peer is, then hands over.
 
   Route: /user/profile/messages/:id (name 'user-chat', meta.hideTabBar --
-  detail screen). Reached from the list AND from «Задать вопрос» on the
-  master's public profile (which just opened/looked up the thread).
+  detail screen). Reached from the list AND from the master's public profile
+  ask-a-question control
+  (which just opened/looked up the thread).
 
   Peer resolution: one GET /api/v1/chats and find the row -- the student's
   list is the local pointer set (small by construction, no pagination behind
@@ -18,7 +19,8 @@
   FE-108: a support appeal deleted with its spam ticket (30 days past the
   verdict) leaves a delivered `open_thread__<id>` notification pointing at
   an id the list no longer carries -- that same not-found state becomes the
-  «Этой переписки больше нет» screen. "Deleted with the ticket" and "never
+  conversation-gone screen (i18n:user.screens.userChat.gone). "Deleted with
+  the ticket" and "never
   the caller's" are indistinguishable by design (the backend's 404 never
   says which), so the screen says neither -- it only says the conversation
   is not there to open.
@@ -52,7 +54,8 @@
       @back="router.back()"
     />
 
-    <!-- FE-107: the support row asks «Как мы помогли?» -- the sheet is
+    <!-- FE-107: the support row asks the rating question
+         (i18n:chat.rating.title) -- the sheet is
          self-contained (the pending queue, the POST, the queue's advance);
          this wrapper only gates it on the row being support and names the
          ticket a ?rate=1 deep link brought with it. -->
@@ -79,7 +82,8 @@ const resolving = ref(true)
 const notFound = ref(false)
 const peer = ref<ChatPeer | null>(null)
 /** BE-163: the row's `channel` is the screen's identity -- a `support`
- *  thread is titled «Поддержка VELO», never the role fallback («Мастер»). */
+ *  thread is titled with the support title (i18n:chat.supportTitle), never
+ *  the role fallback (i18n:user.screens.userChat.peerFallback). */
 const isSupport = ref(false)
 
 /** FE-107: a bell row / Telegram button named THIS ticket (`?rate=1` -- the

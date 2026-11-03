@@ -14,8 +14,9 @@
 //      NotificationsView.vue's toggle revert, T-26).
 //   3. TAPPING AN ALREADY-READ ROW is a no-op -- no network call. Nothing
 //      to mark, nothing to revert.
-//   4. "ПРОЧИТАТЬ ВСЁ" only renders when unread > 0, marks every row read,
-//      and reverts EVERY row (not just the failing one) on failure.
+//   4. The read-all button (i18n:masterScreens.masterInbox.readAll) only
+//      renders when unread > 0, marks every row read, and reverts EVERY
+//      row (not just the failing one) on failure.
 //   5. DEEP LINKS (master parity 2026-09-08 -- the T-26 tap=read boundary
 //      is lifted): a tap navigates by action_data.action, same vocabulary
 //      as the user map but into MASTER-zone routes -- open_practice ->
@@ -27,9 +28,11 @@
 //      master, so this inbox is where the offer is accepted. Unmapped
 //      action / malformed id -> mark-read only, never a broken route.
 //      A READ row still navigates.
-//   6. TYPE SLIDER (Сообщения / Практики / Финансы / Другое): prefix
-//      buckets over the emit vocabulary, «Сообщения» first/default, the
-//      per-filter empty note, and no slider over an empty feed.
+//   6. TYPE SLIDER (messages / practices / finances / other; labels
+//      i18n:masterScreens.masterInbox.filter.messages, .practices,
+//      .finances, i18n:common.other): prefix buckets over the emit
+//      vocabulary, the messages bucket first/default, the per-filter empty
+//      note, and no slider over an empty feed.
 // =============================================================================
 
 import { createTestI18n } from '@/locales/testing'
@@ -59,9 +62,10 @@ vi.mock('@/composables/useToast', () => ({
 function item(overrides: Partial<NotificationItem> = {}): NotificationItem {
   return {
     id: 'n1',
-    // The default tab is «Сообщения», so the DEFAULT fixture is a msg row --
+    // The default tab is messages (i18n:masterScreens.masterInbox.filter.messages),
+    // so the DEFAULT fixture is a msg.* row --
     // the base states (loading/error/empty/mark-read/mark-all) all see
-    // their rows without touching the slider. Non-msg cases switch the tab
+    // their rows without touching the slider. Non-msg.* cases switch the tab
     // or override the type.
     type: 'msg.support_message',
     title: 'Сообщение от Ани',
@@ -428,7 +432,8 @@ describe('MasterInboxView', () => {
     mount()
     await flush()
 
-    // school.* has no bucket of its own -- the row lives in «Другое»
+    // school.* has no bucket of its own -- the row lives in the other
+    // bucket (i18n:common.other)
     segment('Другое')?.click()
     await flush()
 
@@ -632,8 +637,9 @@ describe('MasterInboxView', () => {
   describe('type slider (Сообщения / Практики / Финансы / Другое)', () => {
     // One row per bucket + the "other" case: the buckets are PREFIX rules
     // over velo's emit vocabulary (msg.* / booking.* / practice.* /
-    // waitlist.* / wallet.*), and «Другое» owns every kind with no bucket
-    // of its own (announcements and future kinds).
+    // waitlist.* / wallet.*), and the other bucket (i18n:common.other)
+    // owns every kind with no bucket of its own (announcements and future
+    // kinds).
     function mixed(): NotificationItem[] {
       return [
         item({ id: 'a', type: 'msg.support_message' }),
@@ -716,7 +722,7 @@ describe('MasterInboxView', () => {
       mount()
       await flush()
 
-      // default tab «Сообщения» has nothing to show
+      // default tab (messages) has nothing to show
       expect(rows()).toHaveLength(0)
       expect(host?.textContent).toContain('В этой категории пока нет уведомлений')
       expect(host?.textContent).not.toContain('Здесь появятся уведомления')

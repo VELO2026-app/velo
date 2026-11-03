@@ -24,23 +24,24 @@
 //      (ZoomMeetingStatus.create_failed): waiting is pointless until the
 //      master retries. Kept distinct from 3 by A4 V2 -- create_failed is
 //      routine (series children are created in the background), and before
-//      that both rendered the same «готовится» spinner forever.
+//      that both rendered the same "still preparing" spinner forever.
 //   3. pending -- not ready yet, meeting still pending_creation (or no
 //      ZoomMeeting row at all): an honest "being prepared".
 // =============================================================================
 
+/** Whether a list row's Zoom entry is ready, still being prepared, or permanently failed. */
 export type ZoomEntryStateKind = 'ready' | 'pending' | 'failed'
 
 /** Name the Zoom entry state of one list row.
  *
- * ready: whether the row can be entered (see the header for what that means
- * per role). Anything but `true` -- false, undefined (a fixture without the
- * field), null -- is not ready.
+ * @param ready - Whether the row can be entered (see the header for what that
+ *  means per role). Anything but `true` -- false, undefined (a fixture
+ *  without the field), null -- is not ready.
  *
- * meetingStatus: PracticeResponse/PracticeSummary's zoom_meeting_status
- * verbatim -- 'create_failed' is the only value that changes the outcome of
- * a not-ready row (-> 'failed'). Every other value, including
- * undefined/null, falls through to 'pending'.
+ * @param meetingStatus - PracticeResponse/PracticeSummary's
+ *  zoom_meeting_status verbatim -- 'create_failed' is the only value that
+ *  changes the outcome of a not-ready row (`-> 'failed'`). Every other
+ *  value, including undefined/null, falls through to 'pending'.
  */
 export function zoomEntryState(
   ready: boolean | null | undefined,

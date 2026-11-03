@@ -1,9 +1,12 @@
 <!--
-  VELO Frontend -- PracticeReviewsView: «Аналитика по практике» (BE-78)
+  VELO Frontend -- PracticeReviewsView: practice analytics
+  (i18n:shared.analytics.title; BE-78)
 
   Route: /master/analytics/practice/:id (nested under analytics so the
-  Аналитика tab stays active). Reached by tapping a practice card in
-  AnalyticsView -> «Прошедшие практики».
+  analytics tab, i18n:tabs.analytics, stays active). Reached by tapping a
+  practice card in
+  AnalyticsView -> the past-practices section
+  (i18n:masterScreens.analytics.sections.past).
 
   One screen for every entitled reader, on the server's data
   (GET /practices/{id}/analytics + /analytics/pairs + /analytics/reviews):
@@ -13,7 +16,8 @@
   A tap on a person (pairs and reviews) follows the reader's role from the
   server (BE-78 (2), personTarget): leader -> student dossier, curator ->
   school student profile (members only), school master -> a direct message.
-  «Назад» is router.back(): the screen returns to wherever it was entered
+  The back button (i18n:ui.back) is router.back(): the screen returns to
+  wherever it was entered
   from (master analytics or the school's analytics).
   The demo mode (ANALYTICS_SIMULATION) and the previous insights/reviews
   screen of this route are gone (owner, BE-78). This view owns the requests

@@ -10,7 +10,7 @@
 //
 // useAdminStore ON THIS SCREEN: read for EXACTLY ONE value,
 // `adminStore.stats?.users_count` (.vue:103), feeding the header count badge
-// AND the "Все" segment badge (.vue:104-112). It does NOT drive the list --
+// AND the "all" segment badge (i18n:common.all, .vue:104-112). It does NOT drive the list --
 // same thin-read shape as AdminPracticesView (№485's sibling precedent), not
 // assumed, confirmed by reading the whole script.
 //
@@ -19,8 +19,8 @@
 // import, no `.v-loader`/`admin-list__loader` anywhere in the template,
 // confirmed by grep). The template is only three branches:
 //   v-if="participants.length"           -- rows + load-more
-//   v-else-if="error"                    -- VEmptyState + Повторить
-//   v-else-if="!loading"                 -- "Данных пока нет" card
+//   v-else-if="error"                    -- VEmptyState + retry (i18n:common.retry)
+//   v-else-if="!loading"                 -- no-data card (i18n:common.noData)
 // During the INITIAL fetch (participants=[], error=false, loading=true), NONE
 // of the three branches match -- the screen shows literally nothing below
 // the header/segment until the fetch settles. The `!loading` guard on the
@@ -31,8 +31,9 @@
 // THE ERROR PATH IS ALSO A REAL DIVERGENCE FROM THIS PROJECT'S NEAR-UNIVERSAL
 // PATTERN -- READ, NOT ASSUMED: `catch { ... }` (.vue:123) has NO bound error
 // parameter at all -- no `ApiResponseError -> e.detail` discrimination is
-// even POSSIBLE here. Both the toast ('Не удалось загрузить участников') and
-// the VEmptyState description ("Проверьте соединение и попробуйте ещё раз",
+// even POSSIBLE here. Both the toast
+// (i18n:adminScreens.adminParticipants.toast.loadMembersFailed) and
+// the VEmptyState description (i18n:common.checkConnection,
 // .vue:61, a template-literal-free hardcoded string, NOT bound to any error
 // variable) are FIXED regardless of failure cause. Every other admin screen
 // covered this session discriminates ApiResponseError vs generic -- this one
@@ -57,17 +58,18 @@
 // joinedLabel (.vue:143-149) is a PURE function of its ISO input -- `new
 // Date(iso)` + a fixed `timeZone: 'UTC'` Intl call, no `new Date()` (no
 // "now") anywhere in it. Deterministic, hardcoded exactly below (verified via
-// node before writing the assertion, not guessed): 2025-12-15 -> "Дек 2025".
+// node before writing the assertion, not guessed): 2025-12-15 -> a fixed
+// ru-locale short month + year string (a "Dec 2025" shape).
 //
 // lastActiveLabel (.vue:152-154) delegates to `dayLabelOf` (@/utils/format),
-// which DOES read `new Date()` internally for its Сегодня/Вчера comparison --
+// which DOES read `new Date()` internally for its today/yesterday comparison --
 // Date.now-dependent, CORRECTING the possibility of hardcoding a relative
 // string against a fixed clock. Sidestepped by computing "today"/"yesterday"
 // at TEST-RUN time (`new Date().toISOString()`, legal inside a Vitest test
 // file -- the Date.now-in-scripts ban applies to Workflow scripts, not this),
-// so the Сегодня/Вчера branches are asserted for real, not assumed; the
+// so the today/yesterday branches are asserted for real, not assumed; the
 // "plain date" branch uses a fixed far-past ISO verified via node
-// (2019-06-10 -> "10 июня").
+// (2019-06-10 -> a fixed ru-locale "June 10" plain date).
 //
 // Cyrillic fixtures/expected strings below were typed via the Write tool,
 // never a shell heredoc.
@@ -108,8 +110,8 @@ function participant(overrides: Partial<AdminParticipant> = {}): AdminParticipan
     telegram_id: 123456,
     avatar_url: null,
     practices_count: 5,
-    created_at: '2025-12-15T00:00:00Z', // matches the .vue header's own "Дек 2025" example
-    last_login_at: '2019-06-10T00:00:00Z', // far-past, deterministic "10 июня"
+    created_at: '2025-12-15T00:00:00Z', // matches the .vue header's own Dec 2025 example
+    last_login_at: '2019-06-10T00:00:00Z', // far-past, deterministic "June 10" plain date
     ...overrides,
   }
 }

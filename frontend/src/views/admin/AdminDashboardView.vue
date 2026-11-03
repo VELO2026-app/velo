@@ -1,22 +1,27 @@
 <!--
   VELO Frontend -- AdminDashboardView (Admin DS rebuild 2026-06-14)
 
-  Admin dashboard, rebuilt to the operator's design (SVG: ПАНЕЛЬ / 1 Dashboard).
+  Admin dashboard, rebuilt to the operator's design (SVG: Panel / 1 Dashboard).
   Rendered inside AdminShell -> AdminLayout (fog feed + 24px rail + VAdminTabBar).
 
   Structure (DS-first — every value is a --velo-* token / DS component):
     - Header: "Admin" + an eye/observe button (stub until its target screen lands).
     - Alert banners: masters awaiting verification (warning) + reports awaiting
       moderation (alert) — shown only when their count > 0.
-    - Статистика: title + period toggle (Неделя / Месяц, user/master pattern) +
-      3 VStatCard + a week stepper.
-    - Выручка: amount card + "Баланс по мастерам" link.
+    - Statistics (i18n:adminScreens.adminDashboard.statistics): title + period
+      toggle (i18n:common.periodWeek / i18n:common.periodMonth, user/master
+      pattern) + 3 VStatCard + a week stepper.
+    - Revenue (i18n:adminScreens.adminDashboard.revenue): amount card + the
+      masters-balance link (i18n:adminScreens.adminDashboard.mastersBalance).
     - Engagement: 3 VProgressRow (Check-in / Feedback / Return rate).
 
   DATA SOURCES:
-    - Stat cards (Практик/Мастеров/Участников) + percent deltas + revenue come
-      from the period-scoped /admin/stats/overview (E7), refetched on the
-      Неделя/Месяц toggle and the ← / → period stepper (offset).
+    - Stat cards (i18n:adminScreens.adminDashboard.practicesStat /
+      i18n:adminScreens.adminDashboard.mastersStat /
+      i18n:adminScreens.adminDashboard.participantsStat) + percent deltas +
+      revenue come from the period-scoped /admin/stats/overview (E7),
+      refetched on the i18n:common.periodWeek / i18n:common.periodMonth toggle
+      and the ← / → period stepper (offset).
     - Alert banners + tab badges come from /admin/stats (cumulative pending
       counts) via adminStore.fetchDashboard.
     - Engagement rates (Check-in/Feedback/Return) still use the per-metric
@@ -63,7 +68,7 @@
         <template #icon><IconWarning :size="28" /></template>
       </Banner>
 
-      <!-- Статистика: title + period toggle -->
+      <!-- Statistics (i18n:adminScreens.adminDashboard.statistics): title + period toggle -->
       <div class="admin-dashboard__section">
         <span class="admin-dashboard__section-title">{{
           t('adminScreens.adminDashboard.statistics')
@@ -124,7 +129,7 @@
         </button>
       </div>
 
-      <!-- Выручка -->
+      <!-- Revenue (i18n:adminScreens.adminDashboard.revenue) -->
       <div class="admin-dashboard__section">
         <span class="admin-dashboard__section-title">{{
           t('adminScreens.adminDashboard.revenue')
@@ -184,7 +189,7 @@
         />
       </VCard>
 
-      <!-- Система: пользователи + заявки на смену методов -->
+      <!-- System (i18n:adminScreens.adminDashboard.system): users + method-change requests (i18n:adminScreens.adminDashboard.methodRequestsLink) -->
       <div class="admin-dashboard__section">
         <span class="admin-dashboard__section-title">{{
           t('adminScreens.adminDashboard.system')
@@ -257,7 +262,8 @@ const toast = useToast()
 // the payments module (see the template comment at the row).
 const paymentsEnabled = featureEnabled('payments')
 
-// Period toggle (Неделя/Месяц) + stepper offset (0 = current, -1 = previous …).
+// Period toggle (i18n:common.periodWeek / i18n:common.periodMonth) + stepper
+// offset (0 = current, -1 = previous …).
 const period = ref<'week' | 'month'>('week')
 const periodOffset = ref(0)
 
@@ -295,10 +301,12 @@ const moderationTitle = computed(() =>
 )
 
 // =========================================================================
-// Stat cards (period-new, option А): values + percent deltas come from the
-// period-scoped overview (E7). Практик = practices scheduled in period,
-// Мастеров = new masters, Участников = new users. Deltas are period-over-period
-// percent (green up / rose down); null (no prior base) hides the trend line.
+// Stat cards (period-new, option A): values + percent deltas come from the
+// period-scoped overview (E7). Practices (i18n:adminScreens.adminDashboard.practicesStat)
+// = practices scheduled in period, masters (i18n:adminScreens.adminDashboard.mastersStat)
+// = new masters, participants (i18n:adminScreens.adminDashboard.participantsStat) = new
+// users. Deltas are period-over-period percent (green up / rose down); null
+// (no prior base) hides the trend line.
 // =========================================================================
 const overview = computed(() => adminStore.overview)
 

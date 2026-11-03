@@ -1,11 +1,12 @@
 <!--
   VELO Frontend -- IconLock
 
-  The owner's own artwork for «Заблокировать» (MasterStudentProfileView menu,
-  2026-09-30). Kept 1:1 from the provided source SVG -- viewBox, the two-path
-  structure (body + shackle, keyhole) and the exact geometry; the baked
-  #4C6589 fills became currentColor per the icon-set canon (monochrome, no
-  baked colours -- the same rule IconYoga records in its own header).
+  The owner's own artwork for the block action (i18n:common.block;
+  MasterStudentProfileView menu, 2026-09-30). Kept 1:1 from the provided
+  source SVG -- viewBox, the two-path structure (body + shackle, keyhole) and
+  the exact geometry; the baked #4C6589 fills became currentColor per the
+  icon-set canon (monochrome, no baked colours -- the same rule IconYoga
+  records in its own header).
   Root fill="none" preserved on purpose: each path carries its own fill.
 -->
 

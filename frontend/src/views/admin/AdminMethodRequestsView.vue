@@ -1,7 +1,8 @@
 <!--
   VELO Frontend -- AdminMethodRequestsView (M3, FLAT)
 
-  The «Заявки на смену методов» admin moderation screen. Lists masters with a
+  The method-change-request admin moderation screen
+  (i18n:adminScreens.adminMethodRequests.methodRequestsLink). Lists masters with a
   pending method change-request (GET /admin/masters/method-change-requests) and
   lets an admin approve (methods go live) or reject (with a reason). DS-composed
   from the AdminReports / AdminMasterReview patterns — no operator mockup (the
@@ -114,7 +115,7 @@
       />
     </VBottomSheet>
 
-    <!-- Custom method not in the catalog (R5 stage 4, operator decision 3=Б) -->
+    <!-- Custom method not in the catalog (R5 stage 4, operator decision 3=B) -->
     <VConfirmDialog
       :open="!!promoteTarget"
       :message="promoteMessage"
@@ -170,7 +171,7 @@ const rejectTarget = ref<AdminMethodChangeItem | null>(null)
 const rejectReason = ref('')
 const rejectError = ref('')
 
-// R5 stage 4 (operator decision 3=Б): a proposed_methods entry that doesn't
+// R5 stage 4 (operator decision 3=B): a proposed_methods entry that doesn't
 // match the taxonomy (parseMethods surfaces it as customText) pauses the
 // approval on a confirm -- add the custom label to the catalog, or approve
 // as-is (this master only, today's behavior). Dismissing the dialog (overlay
@@ -275,7 +276,8 @@ async function doApprove(
   }
 }
 
-/** «Добавить в каталог» -- approve AND promote the custom labels (each its
+/** Add-to-catalog confirm (i18n:adminScreens.adminMethodRequests.addToCatalog) --
+ *  approve AND promote the custom labels (each its
  *  own catalog row). */
 function onPromoteConfirm(): void {
   const item = promoteTarget.value
@@ -283,7 +285,8 @@ function onPromoteConfirm(): void {
   void doApprove(item, [...promoteLabels.value])
 }
 
-/** «Только этому мастеру» (or dialog dismissed) -- approve, scoped to this
+/** This-master-only cancel (i18n:adminScreens.adminMethodRequests.thisMasterOnly;
+ *  or dialog dismissed) -- approve, scoped to this
  *  master only (T22-6, PROMPT №561): a real taxonomy row per label, just not
  *  a shared one -- was silently nothing before this. FE-89: per-label, so
  *  the master's earlier private direction is re-scoped idempotently and the

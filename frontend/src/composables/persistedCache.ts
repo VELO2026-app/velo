@@ -26,7 +26,9 @@ import { readSessionJson, removeSessionKeys, writeSessionString } from '@/platfo
 // Bumped whenever a persisted payload changes shape. 2 (FE-127): the school
 // rename moved the practice school fields and the schools-list fields, so
 // every v1 copy is a payload this build no longer reads.
+/** Format version of the persisted screen cache; a bump orphans every older copy. */
 export const PERSIST_VERSION = 2
+/** sessionStorage key prefix shared by every persisted-cache slot. */
 export const PERSIST_PREFIX = 'velo:screen-cache:'
 /** Total budget for the serialized cache (sessionStorage is ~5 MB). */
 export const PERSIST_MAX_BYTES = 256 * 1024

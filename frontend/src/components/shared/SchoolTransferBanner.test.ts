@@ -45,7 +45,7 @@ const newCuratorPage: SchoolPageResponse = {
 
 let app: App | null = null
 let host: HTMLElement | null = null
-/** Component emits, captured via a wrapper (no @vue/test-utils here). */
+/** Component emits, captured via a wrapper (no `@vue/test-utils` here). */
 let events: Record<string, unknown[]> = {}
 
 function mount(props: {

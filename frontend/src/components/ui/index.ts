@@ -2,7 +2,7 @@
  * VELO Frontend -- UI Components barrel export (Phase F2.1 + F4.1)
  *
  * Usage:
- *   import { VButton, VInput, VCard, VModal } from '@/components/ui'
+ *   `import { VButton, VInput, VCard, VModal } from '@/components/ui'`
  */
 
 export { default as VButton } from './VButton.vue'

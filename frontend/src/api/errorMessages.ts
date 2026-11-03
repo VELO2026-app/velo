@@ -75,6 +75,7 @@
 
 import i18n from '@/locales'
 
+/** Machine-readable list of backend error codes the errors catalog must cover (checked by the key audit). */
 export const ERROR_CODES = [
   'bot_url_not_configured',
   'direction_not_confirmed',

@@ -44,6 +44,7 @@ export function warmRoute(router: Router, path: string): void {
   }
 }
 
+/** Warm the current zone's tab-screen chunks once, when the app goes idle. */
 export function installTabPrefetch(router: Router): void {
   const warmed = new Set<readonly TabItem[]>()
   router.afterEach((to, _from, failure) => {

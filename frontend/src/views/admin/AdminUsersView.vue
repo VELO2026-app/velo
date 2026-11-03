@@ -1,17 +1,20 @@
 <!--
   VELO Frontend -- AdminUsersView (all-users list + make-master, PROMPT №292)
 
-  The «Пользователи» admin screen: lists ALL users (any role), mirroring the
+  The all-users admin screen (i18n:adminScreens.adminUsers.title): lists ALL
+  users (any role), mirroring the
   AdminMastersView DS (header + count + fog-feed cards). Reached from the admin
-  dashboard «Система» section.
+  dashboard system section (i18n:adminScreens.adminDashboard.system).
 
   DATA IS REAL: GET /admin/users -> avatar + name + telegram_id + role badge.
   The server has no search endpoint, so the search box filters the fetched
   (accumulated) pages client-side (by name OR telegram id) — a query only
-  matches users already loaded; «Показать ещё» loads more. Paginated
-  («Показать ещё»), mirroring AdminParticipantsView's load-more.
+  matches users already loaded; the show-more button (i18n:common.showMore)
+  loads more. Paginated
+  (show-more), mirroring AdminParticipantsView's load-more.
 
-  Per-row «Сделать мастером» (role='user' only) -> confirm dialog -> POST
+  Per-row make-master action (i18n:adminScreens.adminUsers.makeMaster,
+  role='user' only) -> confirm dialog -> POST
   /admin/users/{id}/make-master (creates a verified MasterProfile + role flip).
   The button is gated to role='user' so an admin can't be demoted to master by
   accident.

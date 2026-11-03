@@ -55,17 +55,19 @@
      unreviewed places to fix four. This token is 90% opacity of the same base hue, the minimum
      clean value that clears 4.5:1 (measured 4.75:1; 85% measures 4.26:1 and still fails).
      [FE-79] This GLOBAL value stays №679's: a fainter placeholder ride is scoped to the
-     «Новое событие» screen via the faint sibling just below, pending the owner's global-vs-
+     new-event screen (i18n:user.screens.externalActivityCreate.title) via the faint
+     sibling just below, pending the owner's global-vs-
      screen ruling -- re-theming the other placeholder consumers (~10 places) is the owner's
      call, not this ticket's. Pinned byte-exact by placeholder-contrast.test.ts. */
   --velo-text-placeholder: rgba(76, 101, 137, 0.9);
-  /* [FE-79] The screen-scoped paler placeholder -- the audit's «бледнее, но контрастно»
-     third way, WITHOUT its predicted 4.5:1 violation: a desaturated, lighter blue-grey
+  /* [FE-79] The screen-scoped paler placeholder -- the audit's "paler, yet
+     contrasting" third way, WITHOUT its predicted 4.5:1 violation: a desaturated, lighter blue-grey
      measuring 4.79:1 on --velo-bg-card-solid (№679's own level), paler than the typed
      text (#4c6589: 5.95:1) on the axis same-hue alpha could not move -- saturation
      (HSL S 29%→17%; the text keeps its blue cast, the hint reads grey). Consumed ONLY
      by ExternalActivityCreateView's scoped --velo-text-placeholder override; every hint
-     on that screen («Мысли», «Укажите ваш вариант», the «Дата»/«Время» pickers) rides
+     on that screen -- the thoughts field, the custom-variant input, the
+     date/time pickers -- rides
      it. Invariants (≥4.5:1; saturation ≥8pp under the text's) live in
      placeholder-contrast.test.ts, calibrated so №679's 0.9-alpha FAILS them. */
   --velo-text-placeholder-faint: #62748a;
@@ -107,21 +109,22 @@
   --velo-error-bg-strong: color-mix(in srgb, var(--velo-pink-300) 25%, transparent);
   --velo-error-bg-subtle: #fff5f5;
   --velo-error-border: var(--velo-pink-300);
-  /* Destructive-action text/icon (Выйти, Удалить) — the product's red. Also the
+  /* Destructive-action text/icon (log out, delete) — the product's red. Also the
      source for --velo-error-text below. */
   --velo-danger-text: var(--velo-pink-700);
   /* PROMPT №437 (operator ruling): error text was #a16124 -- the SAME brown as
      --velo-warning-text and --velo-peach-700 -- so an error banner read as a
      warning: identical letters, only the background differed. Almost certainly a
      copy-paste from the warning block above.
-     Aliased to the red that already carries «this is bad» in this product,
-     rather than copying its hex: one edit re-themes both, and the intent is
+     Aliased to the red that already carries the "this is bad" meaning in this
+     product, rather than copying its hex: one edit re-themes both, and the intent is
      stated instead of coincidental. (Declared AFTER its source, matching this
      file's convention -- var() resolution does not care, readers do.)
      Zero visual change TODAY -- the only consumer is Banner.vue:172's
      `.banner--error`, and <Banner variant="error"> is rendered on no screen. This
      closes the trap before the first error banner walks into it.
-     If «ошибка» and «удалить» should ever differ, give this its own value -- that
+     If error text and destructive text should ever need to differ, give this
+     its own value -- that
      would then be a decision, not a leftover. */
   --velo-error-text: var(--velo-danger-text);
 
@@ -149,11 +152,12 @@
 
   /* === Colors: Analytics five-scale strip (tz-mood-scale) ===
    * Segment fills of the analytics distributions (DistributionCard: the
-   * school «Процент фидбеков» block, the practice «До/После практики»
-   * strips). Owner canon 2026-10-02 -- these hexes ARE the standard, not
-   * approximations; the TS fallbacks in MOOD_SCALE_FILLS mirror them.
-   * Keys follow utils/moodScale.ts: bad «Плохо», low «Не очень»,
-   * neutral «Нормально», good «Хорошо», fire «Огонь».
+   * school feedback-percent block (i18n:user.screens.schoolAnalytics.feedbackPercent),
+   * the practice before/after strips). Owner canon 2026-10-02 -- these hexes
+   * ARE the standard, not approximations; the TS fallbacks in MOOD_SCALE_FILLS
+   * mirror them. Keys follow utils/moodScale.ts: bad (i18n:mood.bad),
+   * low (i18n:mood.low), neutral (i18n:mood.neutral), good (i18n:mood.good),
+   * fire (i18n:mood.fire).
    */
   --velo-analytics-bad: #fe9093;
   --velo-analytics-low: #faaa63;
@@ -194,11 +198,11 @@
   --size-school-logo-border: 4px; /* its thick card-colored ring */
 
   /* === Borders === */
-  /* --radius-sm/lg удалены 2026-06-06 (были дубли --radius-md = 15px). */
+  /* --radius-sm/lg removed 2026-06-06 (they duplicated --radius-md = 15px). */
   --radius-md: 15px;
   --radius-xl: 100px;
   --radius-full: 9999px;
-  --velo-radius-badge: 5px; /* единый радиус карточных бейджей-статусов (rect) */
+  --velo-radius-badge: 5px; /* the single radius of card status badges (rect) */
 
   /* === Shadows ===
    * The elevation ladder (--shadow-sm/md/lg/xl + --velo-effect-elevation-1..3,
@@ -303,7 +307,7 @@
   --velo-blue-100: #e2f0fd;
   --velo-blue-200: #abbfda;
   --velo-blue-300: #91a2ba; /* mid blue-grey — admin check-in bar chart (light bars) + list avatars; operator SVG 2026-06-14 */
-  --velo-blue-400: #619cd2; /* analytics rating-bar "Есть вопросы"; operator SVG 2026-06-11 (no prior token) */
+  --velo-blue-400: #619cd2; /* analytics rating-bar "have questions" option; operator SVG 2026-06-11 (no prior token) */
   --velo-sand-100: #fdf3e2;
 
   /* === VELΘ: Telegram app chrome (PROMPT №437) ===
@@ -381,8 +385,9 @@
   --velo-fog-list-z3: 48px;
   --velo-fog-list-z4: 0px;
   /* practice-detail fog override (operator-tuned 2026-06-09): softer top dissolve
-     under the header + tighter bottom so the «Записаться бесплатно» CTA stays crisp
-     над таб-баром. Read by UserShell → passed to MobileLayout (values flow through
+     under the header + tighter bottom so the book-free CTA
+     (i18n:user.screens.practiceDetail.cta.bookFree) stays crisp
+     above the tab bar. Read by UserShell → passed to MobileLayout (values flow through
      JS, hence tokens declared here as the single reusable source).
        pd-top-gap  — px added below the measured header island (clearance)
        pd-top-hard — fully-transparent top zone
@@ -441,8 +446,8 @@
   --size-success-icon: 80px; /* success screen emoji */
 
   /* === VELΘ: Card DS tokens (Figma 2026-05, F-2.x) ===
-   * Единые значения для PracticeListCard, MasterCard, PracticeHeroCard.
-   * Источник: Figma SVGs (dashboard, calendar-list, booked-practice,
+   * Shared values for PracticeListCard, MasterCard, PracticeHeroCard.
+   * Source: Figma SVGs (dashboard, calendar-list, booked-practice,
    * booking-detail, my-reservations).
    */
   --velo-card-padding-y: 13px;
@@ -452,16 +457,16 @@
   --velo-card-meta-row-gap: 10px;
   --velo-card-letter-spacing-title: 0.36px;
   --velo-card-letter-spacing-meta: 0.28px;
-  /* Ширина левой колонки (иконка + дата под ней) в PracticeListCard.
-   * 58px вмещает короткую дату «12 сент.» в одну строку; контент-колонка
-   * (заголовок/мастер/длительность) идёт правее на padding-x + эту ширину + space-3. */
+  /* Width of the left column (icon + date under it) in PracticeListCard.
+   * 58px fits a short date like "Sep 12" on one line; the content column
+   * (title/master/duration) starts further right at padding-x + this width + space-3. */
   --velo-card-iconcol-w: 58px;
-  /* Единый бордер карточек (заменяет хардкод #fff / --velo-white в карточках). */
+  /* The shared card border (replaces the hardcoded #fff / --velo-white in cards). */
   --velo-border-card: var(--velo-white);
-  /* Белый рим НЕ-карточных поверхностей: стекло, кнопки, пилюли, чипы, nav.
-     Значение совпадает с --velo-border-card (#fff), но роль другая —
-     «рим стекла» vs «бордер карты». Разделены, чтобы правка одного не задевала
-     другое (напр. сделать стекло полупрозрачным одной строкой). */
+  /* White rim of NON-card surfaces: glass, buttons, pills, chips, nav.
+     The value matches --velo-border-card (#fff), but the role differs --
+     "glass rim" vs "card border". Kept separate so editing one never touches
+     the other (e.g. making the glass translucent in one line). */
   --velo-glass-border: var(--velo-white);
 
   /* === VELΘ: Banner DS tokens === */
@@ -539,7 +544,7 @@
   /* Off-scale row inset (between --space-4=16 / --space-5=24): section/row h-padding */
   --velo-inset-row: 18px;
   /* Auto-grow textarea cap (~9 rows) before the field switches to internal
-     scroll. No SVG source for the cap (operator F1=А); single-role -> semantic. */
+     scroll. No SVG source for the cap (operator F1=A); single-role -> semantic. */
   --velo-textarea-autogrow-max: 240px;
   /* [FE-4] Chat-thread top fog + feed clearance, ONE number: 88px floating
      VHeader (HEADER_FALLBACK) + --space-2 gap = 96px. Consumed by BOTH the
@@ -590,8 +595,8 @@
   /* =========================================================================
    * F2.0 token-lock foundation (tz-whitelabel §3.1, step 0, 2026-10-25).
    * Appearance-preserving: every value below equals a literal that components
-   * carry today; the step-1/2 batches migrate the call sites (значения
-   * переносятся 1:1, «заодно нормализуем» запрещено). New names use the
+   * carry today; the step-1/2 batches migrate the call sites (values move
+   * 1:1; no "normalize while we're at it"). New names use the
    * --velo-* prefix per the frozen naming rule at the top of this file.
    * From step 3 this section becomes part of the skin-package contract,
    * generation 1 (§3.1): additions are free, renames/removals are generation 2.
@@ -638,8 +643,8 @@
      positions; only the colour routes through this token. */
   --velo-fog-color: #000000;
 
-  /* Shadows — whole recipes as ONE token (по образцу --velo-shadow-glow
-     above). The TZ sketch named them sheet/card; after the parallel cleanups
+  /* Shadows — whole recipes as ONE token (after the pattern of
+     --velo-shadow-glow above). The TZ sketch named them sheet/card; after the parallel cleanups
      the surviving carriers are glass pills, the composer's active/focus
      states, the toast and the switch — named for those roles instead. */
   --velo-shadow-glass:
@@ -712,7 +717,7 @@
   --velo-radius-31: 31px; /* VAdminTabBar pills */
   /* Fully-round capsules (VTabBar, Composer). NOT the bare --radius-full
      (9999px): 999 is the designers' literal; both clamp to a pill, values
-     migrate 1:1 — «заодно нормализуем» запрещено. */
+     migrate 1:1; no "normalize while we're at it". */
   --velo-radius-pill: 999px;
   --velo-radius-sheet-top: 30px 30px 0 0; /* VBottomSheet top corners */
   --velo-radius-bar-top: 6px 6px 0 0; /* VBarChart columns */

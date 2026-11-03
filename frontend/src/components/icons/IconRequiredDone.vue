@@ -5,8 +5,8 @@
   in both states), but with a check instead of the «!». Rendered green via
   `color: var(--velo-success)` on the host (currentColor). The check is the
   glyph's intrinsic white contrast mark (same convention as IconBell's white
-  fill). Shown once a required field is filled — positive «заполнено»
-  confirmation — replacing the red IconRequired WITHOUT changing the field width
+  fill). Shown once a required field is filled in (the positive confirmation),
+  replacing the red IconRequired WITHOUT changing the field width
   (the marker gutter is always reserved). Operator-approved 2026-06-23.
 -->
 <template>

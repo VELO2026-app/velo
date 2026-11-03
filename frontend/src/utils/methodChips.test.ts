@@ -2,7 +2,7 @@
 // VELO Frontend -- methodChips unit tests (FE-61/62/63/64)
 // =============================================================================
 // Boundary cases of the stored-string -> chip mapping: the FE-64 dedup pairs
-// the product named («Медитация/Молчания», «Йога/Кундалини»), a style without
+// the product named ("Meditation/of silence", "Yoga/Kundalini"), a style without
 // the direction word, a bare direction, the degenerate style==direction, and
 // the honest fallbacks (custom text, legacy bare style string). Icon identity
 // is asserted by component reference — the same barrel imports the view uses.
@@ -38,11 +38,12 @@ describe('methodChipFor -- stored string -> icon + short label', () => {
   })
 
   it('«Медитация — Медитация» is not a producible pair: the parser surfaces it verbatim under the fallback glyph', () => {
-    // parseMethods maps a «Направление — Вид» string only when BOTH halves
-    // resolve — «Медитация» is not a known style under meditation, so the
-    // whole string is custom text. The wizard cannot emit such a pair; the
-    // style==direction collapse lives in shortStyleLabel (tested above) for
-    // catalog-provided styles whose label repeats the direction.
+    // parseMethods maps a "Direction — Style" string only when BOTH halves
+    // resolve — the direction label "Meditation" is not a known style under
+    // meditation, so the whole string is custom text. The wizard cannot emit
+    // such a pair; the style==direction collapse lives in shortStyleLabel
+    // (tested above) for catalog-provided styles whose label repeats the
+    // direction.
     const chip = methodChipFor('Медитация — Медитация')
     expect(chip.icon).toBe(IconDots)
     expect(chip.label).toBe('Медитация — Медитация')

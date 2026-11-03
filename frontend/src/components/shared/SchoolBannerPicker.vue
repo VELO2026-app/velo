@@ -4,7 +4,8 @@
   The school's background upload section: the SAME full-width white card with
   a rectangular outline zone as SchoolAvatarPicker (§1.5: two independent
   sequential sections, no overlay); a chosen file previews inside the card
-  with «Заменить / Убрать». Rendered ONLY behind the
+  with the replace / remove actions (i18n:school.bannerReplace,
+  i18n:school.bannerRemove). Rendered ONLY behind the
   SCHOOL_MEDIA_UPLOAD_ENABLED kill-switch (utils/constants.ts): there is no
   upload backend yet (§7.1 №4), so the picker holds a LOCAL object-URL
   preview and persists nothing -- the same contract as SchoolAvatarPicker.
@@ -114,7 +115,7 @@ onBeforeUnmount(() => {
   opacity: 0.85;
 }
 
-/* The §1.5 zone: rectangular outline, centred icon + «+ Загрузить фото». */
+/* The §1.5 zone: rectangular outline, centred icon + the upload copy (i18n:school.bannerUpload). */
 .sbp__zone {
   display: flex;
   flex-direction: column;

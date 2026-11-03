@@ -11,6 +11,7 @@
 
 import { onActivated, onDeactivated, readonly, ref, type Ref } from 'vue'
 
+/** Whether this screen is on stage under KeepAlive, so a teleporting child can disable its teleport while off-stage. */
 export function useKeptActive(): Readonly<Ref<boolean>> {
   const active = ref(true)
   onActivated(() => {

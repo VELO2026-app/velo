@@ -54,7 +54,8 @@ function buildRouter(): Router {
     history: createMemoryHistory(),
     routes: [
       // Mirrors router/index.ts: user-dashboard's headerless meta is RETIRED
-      // (the VHeader «Главная» + bell floats again, 2026-09-08), so the route
+      // (the VHeader home title (i18n:user.screens.userDashboard.headerTitle)
+      // + bell floats again, 2026-09-08), so the route
       // carries no meta -- and StubChild teleports nothing into the island,
       // which is exactly the pre-measurement frame the headered contract
       // below pins (HEADER_FALLBACK + gap).
@@ -73,7 +74,8 @@ function buildRouter(): Router {
       },
       { path: '/user/calendar', name: 'user-calendar', component: StubChild },
       {
-        // The «Предстоящие практики» target on the school page (owner
+        // The upcoming-practices target (i18n:user.screens.schoolPage.tabs.upcoming)
+        // on the school page (owner
         // 2026-10-01): the school-scoped week grid. Owner 2026-10-05: a
         // DETAIL screen -- dock hidden (DETAIL_ROUTES) + fogged (FOG_ROUTES).
         path: '/user/calendar/school/:schoolId',
@@ -257,7 +259,8 @@ describe('UserShell', () => {
     })
 
     // Owner 2026-09-30: the master's page in the CURATOR context (?schoolId=)
-    // hides the dock -- the hanging «Создать практику» CTA takes its place.
+    // hides the dock -- the hanging create-practice CTA
+    // (i18n:user.screens.masterPublic.createPractice) takes its place.
     // Without the marker the visitor keeps the dock.
     it('user-master-public hides the tab bar only in the curator context', async () => {
       await mount('user-master-public', { id: 'm1' })
@@ -276,7 +279,7 @@ describe('UserShell', () => {
 
     it('the dock carries exactly the four unconditional tabs for a plain visitor', async () => {
       // tz-curator.md §1.2: USER_TABS now holds five items, but the
-      // conditional «Школы» tab is filtered out unless the account belongs
+      // conditional Schools tab (i18n:tabs.schools) is filtered out unless the account belongs
       // to at least one school. No schools in this fixture -> four.
       await mount('user-dashboard')
       await flush()
@@ -318,8 +321,9 @@ describe('UserShell', () => {
 
     it('a founding-right holder keeps the full user dock in user mode (owner 2026-10-12)', async () => {
       // Restores 2026-10-02: the surface set follows the ACTIVE ROLE -- a
-      // curator-capable account in user mode keeps «Дневник» too. With no
-      // schools, «Школы» still stays hidden (membership, FE-88).
+      // curator-capable account in user mode keeps the Diary tab
+      // (i18n:tabs.diary) too. With no
+      // schools, the Schools tab still stays hidden (membership, FE-88).
       schoolsMock.getMySchools.mockResolvedValue({ items: [] })
       schoolsMock.getSchools.mockResolvedValue({
         items: [],
@@ -363,9 +367,10 @@ describe('UserShell', () => {
     })
 
     it('a plain member of no school sees the unconditional dock paint at once', async () => {
-      // Owner 2026-10-12: nothing gates «Дневник», so there is no hold to
-      // wait out -- the dock is complete from the first paint. The Школы
-      // tab still follows membership (fail-closed, FE-88).
+      // Owner 2026-10-12: nothing gates the Diary tab (i18n:tabs.diary), so
+      // there is no hold to wait out -- the dock is complete from the first
+      // paint. The Schools tab
+      // still follows membership (fail-closed, FE-88).
       schoolsMock.getMySchools.mockReturnValue(new Promise(() => {}))
       await mount('user-dashboard', {}, seedAccount(['user']))
       await flush()
@@ -476,7 +481,8 @@ describe('UserShell', () => {
       expect(mainEl().style.paddingTop).toBe('34px')
     })
 
-    // [2026-09-08] The dashboard's floating header is BACK (VHeader «Главная»
+    // [2026-09-08] The dashboard's floating header is BACK (the VHeader home
+    // title, i18n:user.screens.userDashboard.headerTitle
     // + the bell in its action slot), so its headerless meta is dropped per
     // the [FE-3] contract. With StubChild teleporting nothing, this frame is
     // the pre-measurement one: the HEADER_FALLBACK (68) + z1 gap (8)

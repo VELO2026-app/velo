@@ -37,8 +37,9 @@ const router = useRouter()
 // tz-curator.md §1.2 (owner 2026-09-22): the SAME conditional tab contract
 // as UserShell -- membership in at least one school (any relation) -- widened
 // for this zone by the admin-issued founding right: a can_create_schools
-// holder with zero schools keeps their entrance (the empty hub's «Создать
-// школу» is their only path to a first school). Fail-closed: the tab is
+// holder with zero schools keeps their entrance (the empty hub's create CTA
+// (i18n:masterScreens.masterSchools.create) is their only path to a first
+// school). Fail-closed: the tab is
 // absent until a probe settles.
 const schoolsHub = useSchoolsHubStore()
 onMounted(() => {
@@ -56,7 +57,8 @@ const visibleTabs = computed<TabItem[]>(() =>
 )
 
 // Hide the floating tab bar while the soft keyboard is open, so it does not ride
-// up over a focused input (parity with UserShell — e.g. the «Мои ученики» search).
+// up over a focused input (parity with UserShell — e.g. the my-students
+// screen's search, i18n:masterScreens.masterStudents.title).
 const { keyboardOpen } = useKeyboardOpen()
 
 const activeTab = computed(() => {
@@ -72,10 +74,11 @@ const activeTab = computed(() => {
 const isFillRoute = computed(() => route.name === 'master-chat')
 
 // Edge-to-edge fog on the long scrolling master LIST/feed screens, matching the
-// User zone (operator tester-fix 2026-06-17, scope А). Forms / profile / create-
+// User zone (operator tester-fix 2026-06-17, scope A). Forms / profile / create-
 // edit / single-detail / message-thread composer stay CRISP (DS rule: their
 // CTAs/footers must not fade) — so notifications (settings toggles) and finance
-// (payout form + «Запросить вывод» CTA) are deliberately NOT fogged.
+// (payout form + the request-withdrawal CTA,
+// i18n:masterScreens.masterFinance.fields.requestWithdrawal) are deliberately NOT fogged.
 // Every hideTabBar list below gets the compact bottom fade automatically:
 // MobileLayout substitutes --velo-fog-list-z3/z4 when fog && hideTabBar, so the
 // dissolve lands at the real content bottom (this also fixes the latent
@@ -99,11 +102,13 @@ const FOG_ROUTES = [
   // Master GROUPS (P2, PROMPT №591): list + per-group member list are both
   // long scrolling lists, same treatment as master-students. The create form
   // is fogged too, but through the FORMS block below with the taller top-hard
-  // ([FE-45]: its floating «Новая группа» VHeader overlapped the legend row
+  // ([FE-45]: its floating new-group VHeader
+  // (i18n:masterScreens.masterGroupCreate.title) overlapped the legend row
   // while typing -- same rationale as the practice/promocode forms).
   'master-groups',
   'master-group-detail',
-  // Notifications: long settings list — fog so the «Уведомления» header doesn't
+  // Notifications: long settings list — fog so the notifications header
+  // (i18n:masterScreens.masterNotifications.title) doesn't
   // overlap the rows on scroll (operator 2026-06-19).
   'master-notifications',
   // Detail / form screens with a transparent floating header — fog so content
@@ -125,7 +130,8 @@ const FOG_ROUTES = [
   'master-practice-edit',
   'master-promocode-new',
   // [FE-45] The group-create form joins the other create forms here: with the
-  // keyboard open its floating «Новая группа» header rode over the form's
+  // keyboard open its floating new-group header
+  // (i18n:masterScreens.masterGroupCreate.title) rode over the form's
   // legend/first fields. Fog brings the keyboard-safe mask; the pixel tuning
   // comes from FORM_FOG_ROUTES below (the taller form top-hard).
   'master-group-create',
@@ -153,8 +159,9 @@ const FOG_ROUTES = [
   'master-timezone',
   // Support (SP-2, 2026-07-01): RE-FOGGED after being un-fogged in #8/#9 (5d74c8c,
   // where the pre-keyboard-aware fog clipped the form into a band). Safe now: the
-  // «убрать туман при вводе» rule (global.css) drops the mask while typing, and the
-  // CTA-safe bottom (below) keeps the «Отправить» button crisp at rest. Fixes the
+  // drop-the-fog-while-typing rule (global.css) drops the mask while typing, and the
+  // CTA-safe bottom (below) keeps the send button (i18n:common.submitSend)
+  // crisp at rest. Fixes the
   // header-overlap-on-scroll the operator flagged.
   'master-support',
   // NB: master-chat is NOT here — it runs in MobileLayout `fill` mode (isFillRoute),
@@ -197,9 +204,11 @@ function ctaSafeFog() {
 // for hideTabBar screens whose in-flow CTA sits just above a short bottom fade.
 //   • master-practice-detail (FOG-2, 2026-06-30): the pd bottom (fade 50 + hard 90
 //     = 140px, sized for a tab bar the screen hides) wasted screen; the past-state
-//     «Посещаемость» CTA still clears the 48px fade.
+//     attendance CTA (i18n:masterScreens.masterPracticeDetail.sections.attendance)
+//     still clears the 48px fade.
 //   • create / edit practice + new promocode (PROMPT №233): same 140px read as a
-//     "too-wide" bottom fog band; the in-flow «Создать …» CTA clears the shorter
+//     "too-wide" bottom fog band; the in-flow create CTA
+//     (e.g. i18n:masterScreens.createPractice.submit) clears the shorter
 //     48px fade the same way. Master-scoped; finance keeps the full pd bottom.
 // Reuses existing tokens, no new token. Device-tunable via --velo-fog-list-z3/z4.
 let compactBottomFogCache: {
@@ -229,11 +238,12 @@ const COMPACT_BOTTOM_FOG_ROUTES = ['master-practice-detail']
 // Form-only fog (M7, PROMPT №275; joined by finance, PC2b 2026-07-12): the create /
 // edit practice + new promocode FORMS carry a TRANSPARENT floating VHeader
 // (~88px). The shared pd-top-hard (60) is shorter than the header, so form
-// content ghosted UNDER the header's lower half on scroll (operator «наезжает
-// заголовок при скролле»). Same tuning as compactBottomFog but with the taller
+// content ghosted UNDER the header's lower half on scroll (the operator's
+// "header rides over it on scroll" complaint). Same tuning as compactBottomFog but with the taller
 // --velo-fog-pd-top-hard-form so content fully dissolves before the header.
-// Finance uses the identical VHeader pattern (`<VHeader title="Вывод средств"
-// show-back />`) and had the same "too much fog" complaint on its bottom pd —
+// Finance uses the identical VHeader pattern (the withdraw-funds header,
+// i18n:masterScreens.masterFinance.title, with show-back)
+// and had the same "too much fog" complaint on its bottom pd —
 // moved here rather than to COMPACT_BOTTOM_FOG_ROUTES (that one's tuned for
 // practice-detail's non-VHeader hero header). practice-detail stays on
 // compactBottomFog. Reuses the fogPx reader; the header stays transparent (no
@@ -247,11 +257,13 @@ const FORM_FOG_ROUTES = [
   'master-promocode-new',
   'master-finance',
   // [FE-45] Group-create carries the same ~88px transparent floating VHeader
-  // (`<VHeader title="Новая группа" show-back />`) -- without the form-grade
+  // (the new-group header, i18n:masterScreens.masterGroupCreate.title,
+  // with show-back) -- without the form-grade
   // top-hard its legend/fields ghosted under the header's lower half on
   // scroll. Same treatment, no view-side margin hacks.
   // tz-curator.md §1.5: the school-create form is the same shape (floating
-  // «Новая школа» header over a required-fields legend), so it joins here too.
+  // new-school header (i18n:masterScreens.masterSchoolCreate.title)
+  // over a required-fields legend), so it joins here too.
   'master-group-create',
   'master-school-create',
 ]

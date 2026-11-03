@@ -27,8 +27,10 @@
 
 import { api } from '@/api/client'
 
+/** What a report targets: a user, a master or a practice. */
 export type ReportTargetType = 'user' | 'master' | 'practice'
 
+/** Report creation body: target type, target id, reason. */
 export interface CreateReportRequest {
   target_type: ReportTargetType
   target_id: string

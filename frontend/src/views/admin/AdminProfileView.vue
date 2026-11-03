@@ -1,7 +1,7 @@
 <!--
   VELO Frontend -- AdminProfileView (TD-FE-ROLE-SWITCH)
 
-  Minimal admin profile screen. Route: /admin/profile (tab "Я").
+  Minimal admin profile screen. Route: /admin/profile (tab i18n:tabs.profile).
 
   Sections:
     1. Profile header -- avatar, display name, admin badge.

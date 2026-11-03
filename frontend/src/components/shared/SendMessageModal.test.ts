@@ -2,8 +2,9 @@
 // VELO Frontend -- SendMessageModal Tests
 // =============================================================================
 //
-// The master's «Написать сообщение» sheet. REAL since the T3 chat backend:
-// «Отправить» open-or-gets the eternal DM with the student and posts the text
+// The master's write-message sheet (i18n:common.writeMessage). REAL since
+// the T3 chat backend: Send (i18n:common.submitSend) open-or-gets the
+// eternal DM with the student and posts the text
 // (BookingConfirmedView.onSendRequest's open-then-send split, moved into a
 // sheet). Seam: @/api/chats, mocked whole -- BOTH calls asserted.
 //
@@ -15,7 +16,8 @@
 //      dedups on the pair). No success toast, no close.
 //   3. PENDING -- one send at a time: while the first send is unresolved, a
 //      second tap adds no API call.
-//   4. EMPTY -- «Отправить» with a blank field is a no-op, not an empty DM.
+//   4. EMPTY -- the send button (i18n:common.submitSend) with a blank field
+//      is a no-op, not an empty DM.
 //
 // SC-07: VModal teleports to body, so every query goes to document.body, never
 // to the mount host. SC-13b: a closed VModal parks at v-modal-leave-active in

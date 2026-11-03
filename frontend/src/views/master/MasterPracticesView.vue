@@ -4,27 +4,30 @@
   Master's own practice list. masterStatusGuard; rendered inside MasterShell.
 
   Tabs (VSegment):
-    - "Предстоящие" -- draft + scheduled + live  (asc by scheduled_at)
-    - "Прошедшие"   -- completed ONLY            (desc by scheduled_at)
+    - upcoming (i18n:masterScreens.masterPractices.tab.upcoming) --
+      draft + scheduled + live  (asc by scheduled_at)
+    - past (i18n:masterScreens.masterPractices.tab.past) --
+      completed ONLY            (desc by scheduled_at)
     Cancelled practices appear in NEITHER tab — a cancelled practice did not
     happen, so it is hidden from the list (server-side data is untouched;
     operator 2026-06-25).
 
   Card (operator SVG 2026-06-11):
-    - direction icon + title + "когда, время • N мин"
-    - meta row: участники / check-ins / «Регулярная» (series)
-    - upcoming: «Изменить» + «Check-ins» buttons BELOW the card
-    - past: ✓/✗ attendance + rating-distribution badges INSIDE the card
+    - direction icon + title + "date, time • N min"
+    - meta row: participants / check-ins / "Regular" (i18n:practice.regular,
+      series)
+    - past: rating-distribution badges INSIDE the card
 
-  Data reality (Q4=А):
+  Data reality (Q4=A):
     REAL  -- participants, date/time/duration, practice icon; check-in count
              (checkin_count / max, owner-only -- E12 swap, PROMPT №419: was
              insights.checkins mood tally, now distinct PRE check-ins, see
              practiceCardMeta.ts) + rating distribution (insights.feedbacks,
              reused from diaryStore cache like AnalyticsView, PAST tab only).
              Also REAL (practiceCardMeta.ts): recurrence days from
-             recurrence_days («Регулярная» only for a series without a day
-             list) and «Осталось N из M занятий» from total_sessions /
+             recurrence_days ("Regular" i18n:practice.regular only for a
+             series without a day list) and the remaining-sessions line
+             (i18n:practice.remainingSessions) from total_sessions /
              completed_sessions.
     NOT SHOWN -- attended/no-show counts: no aggregate field, so the card
              renders nothing for them (no placeholder).
@@ -151,8 +154,9 @@
               <span class="mp-card__icon"><component :is="practiceIconFor(p)" :size="46" /></span>
               <div class="mp-card__titles">
                 <div class="mp-card__title">{{ p.title }}</div>
-                <!-- Date • participant count (operator SVG «1 Analytics (reviews) 2»).
-                     The ✓/✗ presence row is removed — attendance lives in Посещаемость
+                <!-- Date • participant count (operator SVG "1 Analytics (reviews) 2").
+                     The ✓/✗ presence row is removed — attendance lives on the
+                     attendance screen (i18n:masterScreens.masterPracticeDetail.sections.attendance)
                      / the practice detail (operator PL-E1). -->
                 <div class="mp-card__sub">{{ whenLabel(p) }} • {{ participantsCount(p) }}</div>
               </div>
@@ -218,7 +222,8 @@ const insightsCache = diaryStore.insightsCache
 
 // Active tab is mirrored in the URL query (?tab=past) so that returning from a
 // practice detail via router.back() restores the tab the user left from
-// (otherwise a fresh mount always reset to «Предстоящие»).
+// (otherwise a fresh mount always reset to the upcoming tab
+// i18n:masterScreens.masterPractices.tab.upcoming).
 const activeTab = ref<'upcoming' | 'past'>(route.query.tab === 'past' ? 'past' : 'upcoming')
 
 // T22-3/T22-5 (PROMPT №561): the server now owns both the filter AND the
@@ -292,7 +297,8 @@ function participantsLabel(p: PracticeResponse): string {
     : `${p.current_participants}`
 }
 
-/** «N участников» with Russian plural agreement — past-card sub-line (PL-E1). */
+/** The participants line (i18n:masterScreens.masterPractices.participantsLine)
+ *  with Russian plural agreement — past-card sub-line (PL-E1). */
 function participantsCount(p: PracticeResponse): string {
   return t('masterScreens.masterPractices.participantsLine', p.current_participants)
 }
@@ -455,7 +461,7 @@ onUnmounted(() => {
   flex-direction: column;
 }
 
-/* Past cards are tappable → practice detail (Р1=А). */
+/* Past cards are tappable → practice detail (R1=A). */
 .mp-card--clickable {
   cursor: pointer;
   transition: transform var(--transition-fast);
@@ -498,7 +504,8 @@ onUnmounted(() => {
   color: var(--velo-text-primary);
 }
 
-/* Second meta row («Осталось N из M занятий») sits tighter under the first and
+/* Second meta row (the remaining-sessions line,
+   i18n:practice.remainingSessions) sits tighter under the first and
    is centered in the card (operator 2026-06-25, Figma ref). */
 .mp-card__meta--row2 {
   margin-top: var(--space-2);

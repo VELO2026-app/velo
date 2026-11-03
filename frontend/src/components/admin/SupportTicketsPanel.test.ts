@@ -1,9 +1,12 @@
 // =============================================================================
-// VELO Frontend -- SupportTicketsPanel Tests (PROMPT №713; tickets FE-100 A; «Модерация» FE-100 B)
+// VELO Frontend -- SupportTicketsPanel Tests (PROMPT №713; tickets FE-100 A;
+// moderation tab FE-100 B, i18n:adminScreens.adminReports.moderationTab)
 // =============================================================================
 //
-// Was AdminSupportView.test.ts: the list moved into «Модерация» as the
-// «Обращения» tab (owner ruling 25.10), its own screen and route are gone.
+// Was AdminSupportView.test.ts: the list moved into the moderation screen
+// (i18n:adminScreens.adminReports.moderationTab) as the
+// tickets tab (i18n:adminScreens.adminReports.tabTickets; owner ruling 25.10),
+// its own screen and route are gone.
 // What stayed the same is asserted the same way (opener fallbacks, the claim
 // line, the status badge, the cursor, the hand-off); what changed is said at
 // each test.
@@ -12,7 +15,8 @@
 // timezone -- the day filter is the admin's own day), and DatePickerSheet
 // (a stub that picks a fixed day: the calendar itself is not this file's
 // subject). The filter sheet (VModal) is driven through the real UI --
-// closing IS applying, as in «Жалобы».
+// closing IS applying, as in the complaints filter
+// (i18n:adminScreens.adminReports.tabComplaints).
 // =============================================================================
 
 import { createTestI18n } from '@/locales/testing'

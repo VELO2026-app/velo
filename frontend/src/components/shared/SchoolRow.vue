@@ -3,7 +3,7 @@
 
   One school row of the lists, shared by BOTH zones' sectioned lists
   (UserMySchoolsView / MasterSchoolsView) and, since tz-curator.md
-  §1.4, by the «Школы» tab hub (SchoolsView).
+  §1.4, by the Schools tab hub (i18n:tabs.schools, SchoolsView).
 
   The §1.4 contract (schools-list.png, text contract in tz-curator.md):
     - a SQUARE school logo (rounded corners, NOT a round avatar) as the lead:
@@ -14,7 +14,7 @@
       (IconMeditation). The numbers are NOT duplicated on the right and NOT
       spelled out as words;
     - the mockup has no relation chip and no chevron; the one surviving
-      badge is transfer_offered («Кураторство», compact, peach) -- it must
+      badge is transfer_offered (i18n:school.offerBadge, compact, peach) -- it must
       not displace the counters line (§1.4);
     - the right third carries the light branding crop (SchoolBrandBanner
       variant="row") that fades into the white card (§5).

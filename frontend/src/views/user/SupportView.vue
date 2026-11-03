@@ -1,7 +1,8 @@
 <!--
   VELO Frontend -- SupportView (USER zone, batch I)
 
-  User support / contact form, reached from the user profile hub («Поддержка»).
+  User support / contact form, reached from the user profile hub (menu item
+  i18n:user.screens.userProfile.menu.support).
   Mirrors MasterSupportView's structure (topic picker + message + submit) but with
   the USER-facing topic catalog and an INTERNAL priority per topic (P0/P1/P2 — NOT
   shown to the user, and NOT sent anywhere yet either; see PROMPT №712's own
@@ -11,12 +12,15 @@
   as a CODE and the message, one call (@/api/support::createTicket) under the
   appeal's Idempotency-Key (::createAppealKeys: the same key while the topic and
   the text stay the same, so a retry after a failed send is the same ticket).
-  «Другое» has no free text of its own (owner): the substance is the message.
+  The "other" topic (i18n:supportTopics.other) has no free text of its own
+  (owner): the substance is the message.
   The person still sees ONE conversation -- every ticket is the one support
-  row in «Сообщения» (BE-163). The terminal screen's copy was written for the old stub, became FALSE the
+  row in the messages screen (i18n:user.screens.userMessages.title, BE-163).
+  The terminal screen's copy was written for the old stub, became FALSE the
   moment this screen started delivering, was rewritten at PROMPT №712, and is
   REWRITTEN AGAIN at FE-103 (owner ruling 25.10): the reply now arrives in
-  «Сообщения» (BE-163), and after the send the form opens that conversation
+  the messages screen (i18n:user.screens.userMessages.title, BE-163), and
+  after the send the form opens that conversation
   itself. ⚠ Do not "improve" this wording. Words a human reads are the owner's
   call on this project, and this screen already cost two rounds of exactly that.
 
@@ -24,7 +28,8 @@
 -->
 <template>
   <div class="support">
-    <!-- Header hidden on the terminal screen (no back — «На главную» is the exit). -->
+    <!-- Header hidden on the terminal screen (no back — the home CTA
+         (i18n:common.backHome) is the exit). -->
     <VHeader
       v-if="!submitted"
       :title="t('user.screens.support.title')"
@@ -105,7 +110,8 @@ import { supportTopicLabel } from '@/utils/supportTopics'
 const router = useRouter()
 const toast = useToast()
 
-// Lift the «Сообщение» textarea above the soft keyboard once it settles (shared M5).
+// Lift the message textarea (i18n:user.screens.support.message.label) above
+// the soft keyboard once it settles (shared M5).
 const { onFieldFocus } = useKeyboardFieldScroll()
 
 // -- Topic catalog (batch I). priority is INTERNAL routing/sort metadata — it is
@@ -165,8 +171,9 @@ async function openConversation(): Promise<void> {
     const support = threads.find((t) => t.channel === 'support')
     if (support) await router.push({ name: 'user-chat', params: { id: support.id } })
   } catch {
-    // The terminal screen is the honest fallback (the reply lands in
-    // «Сообщения» regardless); a failed lookup must not toast over success.
+    // The terminal screen is the honest fallback (the reply lands in the
+    // messages screen, i18n:user.screens.userMessages.title, regardless); a
+    // failed lookup must not toast over success.
   }
 }
 
@@ -258,7 +265,8 @@ function goHome(): void {
   margin-top: var(--space-1);
 }
 
-/* -- Terminal screen (honest — no «отправлено» server claim) -- */
+/* -- Terminal screen (honest — no server-side "sent" claim; the title is
+   the ticket-submitted thanks copy, i18n:user.screens.support.toast.thanks) -- */
 .support__done {
   display: flex;
   flex-direction: column;

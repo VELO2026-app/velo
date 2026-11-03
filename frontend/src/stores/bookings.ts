@@ -40,6 +40,7 @@ import { readPersisted, writePersisted } from '@/composables/persistedCache'
 import { useDiaryStore } from '@/stores/diary'
 import type { BookingWithPracticeResponse, BookingDetailResponse, BookingStatus } from '@/api/types'
 
+/** Result of a booking cancel: ok plus a user-facing error string. */
 export interface CancelResult {
   ok: boolean
   error: string
@@ -58,6 +59,7 @@ export interface ActionResult {
 /** persistedCache slot of the dashboard's upcoming bookings. */
 const UPCOMING_PERSIST = 'bookings.upcoming'
 
+/** The user's bookings: paginated list, the dashboard's upcoming slice, join/leave/cancel actions. */
 export const useBookingsStore = defineStore('bookings', () => {
   // -- Status filter --
   const statusFilter = ref<BookingStatus | undefined>(undefined)
@@ -67,7 +69,8 @@ export const useBookingsStore = defineStore('bookings', () => {
     getMyBookings(statusFilter.value, limit, offset),
   )
 
-  // -- Live-or-upcoming set for the dashboard «Ближайшая практика» widget --
+  // -- Live-or-upcoming set for the dashboard's nearest-practices widget
+  // (i18n:user.screens.userDashboard.sections.upcoming) --
   // Separate from the paginated list: fetched from the dedicated
   // /bookings/me/upcoming endpoint (confirmed + not-ended, scheduled_at ASC) so
   // the nearest-selection is not capped/mis-sorted by the created_at page (B1).
@@ -91,7 +94,8 @@ export const useBookingsStore = defineStore('bookings', () => {
   const selectedError = ref('')
 
   // Practices whose check-in the user SKIPPED this session — used to hide the
-  // dashboard "Пора на check-in" banner immediately. Session-only: there is no
+  // dashboard check-in banner (i18n:user.screens.userDashboard.checkinBanner.title)
+  // immediately. Session-only: there is no
   // backend skip state yet (logged as a backend task), so it is lost on reload.
   const dismissedCheckins = ref<string[]>([])
   function dismissCheckin(practiceId: string): void {
@@ -193,8 +197,8 @@ export const useBookingsStore = defineStore('bookings', () => {
   /**
    * Cancel a booking by ID, then refresh the list.
    *
-   * W-25: Returns { ok, error } with specific error message
-   * instead of silent boolean. Caller shows toast with error detail.
+   * @returns W-25: `{ ok, error }` with specific error message instead of
+   *   silent boolean. Caller shows toast with error detail.
    */
   async function cancelBooking(bookingId: string): Promise<CancelResult> {
     try {
@@ -215,8 +219,9 @@ export const useBookingsStore = defineStore('bookings', () => {
   /**
    * Check in to a practice (sets joined_at on the backend).
    * Refreshes the list so joined_at is reflected locally.
-   * Returns { ok, error } -- caller decides how to surface errors
-   * (e.g. 409 "Already joined" can be treated as a no-op success).
+   *
+   * @returns `{ ok, error }` -- caller decides how to surface errors
+   *   (e.g. 409 "Already joined" can be treated as a no-op success).
    */
   async function joinBooking(bookingId: string): Promise<ActionResult> {
     try {

@@ -5,14 +5,19 @@
   Guard: masterStatusGuard (verified masters only).
 
   Rebuilt to the operator SVG «8 Withdrawal» + «8 Withdrawal (add card)».
-  Decision Б (operator 2026-06-13): the WORKING payout backend is KEPT — the
-  «saved card» is the configured payout method (IBAN/PayPal/Revolut) shown as a
-  card, «+ Добавить новую карту» opens the EXISTING method form (not literal card
-  fields, which have no backend), so «Запросить вывод» stays real. Currency € (В2=А;
-  ₽ on the mockup is illustrative).
+  Decision B (operator 2026-06-13): the WORKING payout backend is KEPT — the
+  "saved card" is the configured payout method (IBAN/PayPal/Revolut) shown as a
+  card, the add-method button (i18n:masterScreens.masterFinance.method.add)
+  opens the EXISTING method form (not literal card
+  fields, which have no backend), so the request-withdrawal action
+  (i18n:masterScreens.masterFinance.fields.requestWithdrawal) stays real.
+  Currency € (V2=A; the ₽ on the mockup is illustrative).
 
-  Sections: balance · «Метод оплаты» (method-as-card + add) · «Сумма вывода»
-  (always visible — the toggle was removed) · «История выводов» (status icons).
+  Sections: balance · payment method
+  (i18n:masterScreens.masterFinance.method.label) (method-as-card + add) ·
+  withdrawal amount (i18n:masterScreens.masterFinance.fields.amount)
+  (always visible — the toggle was removed) · withdrawal history
+  (i18n:masterScreens.masterFinance.withdrawalHistory) (status icons).
 
   Stub → Zod (roadmap Screen 17): X removes the saved method — no delete-payout
   endpoint (only update) → toasts «later»; literal cards (number + holder, multiple
@@ -39,7 +44,7 @@
       </div>
     </div>
 
-    <!-- ===================== PAYMENT METHOD (= configured payout, Б) ===================== -->
+    <!-- ===================== PAYMENT METHOD (= configured payout, B) ===================== -->
     <section class="finance-view__section">
       <h2 class="finance-view__title">{{ t('masterScreens.masterFinance.method.label') }}</h2>
 
@@ -72,8 +77,9 @@
       </template>
 
       <div v-else class="finance-view__payout-form">
-        <!-- No own label — the section heading «Метод оплаты» is the single title
-             (operator 2026-06-19: drop the duplicate «Способ выплаты»). -->
+        <!-- No own label — the section heading
+             (i18n:masterScreens.masterFinance.method.label) is the single title
+             (operator 2026-06-19: drop the duplicate payout-method label). -->
         <VSelect
           v-model="payoutForm.method"
           :options="METHOD_OPTIONS"
@@ -118,10 +124,10 @@
           />
         </template>
 
-        <!-- Card transfer (operator SVG «8 Withdrawal (add card)»). В1=А: only the
+        <!-- Card transfer (operator SVG «8 Withdrawal (add card)»). V1=A: only the
              card NUMBER is persisted as the payout method (no CVV, no expiry) via
-             the same freeform PATCH /me/payout the other methods use. Имя владельца
-             stays a display-only field. -->
+             the same freeform PATCH /me/payout the other methods use. The card
+             holder name stays a display-only field. -->
         <template v-else-if="payoutForm.method === 'card'">
           <VInput
             v-model="payoutForm.cardNumber"
@@ -302,7 +308,7 @@ const formattedAvailable = computed(() =>
 const formattedFrozen = computed(() => formatMoney(frozenCents.value, 'EUR', getLocale(), true))
 
 // ---------------------------------------------------------------------------
-// Payout method ("saved card" = configured payout, Б — working backend kept)
+// Payout method ("saved card" = configured payout, B — working backend kept)
 // ---------------------------------------------------------------------------
 
 const METHOD_OPTIONS = [
@@ -322,7 +328,7 @@ const payoutForm = reactive({
   swift: '',
   email: '',
   tag: '',
-  // Card transfer (М4, В1=А): only cardNumber is persisted; cardHolder is
+  // Card transfer (M4, V1=A): only cardNumber is persisted; cardHolder is
   // display-only.
   cardNumber: '',
   cardHolder: '',
@@ -359,7 +365,7 @@ function openPayoutForm(editing: boolean): void {
     payoutForm.tag = ''
     payoutForm.cardNumber = ''
   }
-  // cardHolder is display-only (never persisted — В1=А stores only the number).
+  // cardHolder is display-only (never persisted — V1=A stores only the number).
   payoutForm.cardHolder = ''
   showPayoutForm.value = true
 }
@@ -403,7 +409,7 @@ function buildPayoutBody(): PayoutDetails | null {
     return { method: 'revolut', details: { [key]: value } }
   }
   if (payoutForm.method === 'card') {
-    // В1=А: persist ONLY the card number (no CVV, no expiry). Digits only.
+    // V1=A: persist ONLY the card number (no CVV, no expiry). Digits only.
     const digits = payoutForm.cardNumber.replace(/\D/g, '')
     if (digits.length < 12 || digits.length > 19) {
       formErrors.card = t('masterScreens.masterFinance.validation.cardInvalid')
@@ -469,7 +475,8 @@ function payoutHolder(payout: PayoutDetails): string {
 
 /** Remove the saved payout method (X on the card) — real DELETE /me/payout (M3).
  *  Idempotent server-side; on success the local profile.payout is cleared so the
- *  UI reverts to the «не настроен» state. */
+ *  UI reverts to the not-configured state
+ *  (i18n:masterScreens.masterFinance.method.notConfiguredHint). */
 async function removePayout(): Promise<void> {
   if (savingPayout.value) return
   savingPayout.value = true

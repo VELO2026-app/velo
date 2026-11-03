@@ -4,7 +4,7 @@
 // The stylelint gate (pnpm lint:css) covers *.css and *.vue <style> blocks.
 // TypeScript is NOT visible to it -- so a raw hex smuggled into a .ts literal
 // (an SVG fill, a canvas paint, a manifest color) would ship a color the skin
-// cannot retheme, exactly the «один зашитый #334D6E» hole §3.1 describes.
+// cannot retheme, exactly the "single hardcoded #334D6E" hole §3.1 describes.
 // This suite is that side of the lock: a raw color in ANY *.ts outside the
 // exception registry is red.
 //
@@ -13,13 +13,13 @@
 //                            palettes/logo hex ARE the product data (the same
 //                            exemption no-cyrillic.mjs carries)
 //   platform/telegram.ts     platform boundary; tokenColor('--velo-…',
-//                            fallback) is the «токен-первым» pattern
+//                            fallback) is the token-first pattern
 //   platform/zoom-sdk.ts     same boundary, same pattern
 //   pwa/manifest.ts          build-time instance metadata; moves into the
 //                            brand.json materialization (§1)
 //   utils/displayHelpers.ts  MOOD_SCALE_FILLS -- the TS mirror of the
 //                            analytics tokens (variables.css comment points
-//                            back); same «токен-первым» fallback shape
+//                            back); same token-first fallback shape
 //
 // Comments are stripped before scanning (a ticket reference like «recon
 // #589» is not a color; the TZ audit likewise excluded comment hits), with

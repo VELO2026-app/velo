@@ -3,9 +3,10 @@
 
   Route /master/promocodes, «4 Promo codes» design. E10 (2026-07-01): wired to
   the delivered backend — GET /masters/me/promos (list) + PATCH .../deactivate.
-  Shows the master's ACTIVE promo codes; «Удалить» soft-deactivates (backend has
-  no hard delete), which drops it from the active list. Create still routes to
-  the create form; copy writes to the clipboard.
+  Shows the master's ACTIVE promo codes; the delete CTA (i18n:ui.delete)
+  soft-deactivates (backend has no hard delete), which drops it from the
+  active list. Create still routes to the create form; copy writes to the
+  clipboard.
 -->
 
 <template>

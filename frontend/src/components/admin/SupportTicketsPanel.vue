@@ -1,15 +1,22 @@
 <!--
-  VELO Frontend -- SupportTicketsPanel (B34 PROMPT №713; tickets FE-100 A; «Модерация» FE-100 B)
+  VELO Frontend -- SupportTicketsPanel (B34 PROMPT №713; tickets FE-100 A;
+  moderation tab FE-100 B, i18n:adminScreens.adminReports.moderationTab)
 
-  The «Обращения» side of «Модерация» (AdminReportsView, owner ruling 25.10):
+  The tickets side (i18n:adminScreens.adminReports.tabTickets) of the
+  moderation screen (i18n:adminScreens.adminReports.moderationTab;
+  AdminReportsView, owner ruling 25.10):
   every support ticket (BE-162 -- each appeal through a form is its own),
   newest appeal first, from velo's own table (GET /api/v1/support/tickets).
   Was the standalone admin-support screen reached from the dashboard; the
   route is gone, the list lives here (FE-100).
 
-  SHAPE follows «Жалобы» next to it (filter pill -> sheet, «Все» echo label,
-  VCard rows, loading/error/empty ladder, «Показать ещё»), plus a «Все | Спам»
-  segment: without a status the backend returns every ticket but spam, so
+  SHAPE follows the complaints side
+  (i18n:adminScreens.adminReports.tabComplaints) next to it (filter pill ->
+  sheet, "all" echo label (i18n:common.all),
+  VCard rows, loading/error/empty ladder, show-more (i18n:common.showMore)),
+  plus an all | spam segment (i18n:common.all |
+  i18n:adminScreens.adminSupport.statuses.spam):
+  without a status the backend returns every ticket but spam, so
   spam is a tab of its own (owner ruling). The filter is
   SupportTicketsFilterModal -- category (five chips over six categories),
   status, the day of the appeal.
@@ -89,7 +96,8 @@
             <div class="scard__claim">{{ claimText(item) }}</div>
             <!-- FE-107: the person's rating, when there is one -- five small
                  stars, filled to the score. No rating shows nothing (the
-                 filter's «Без оценки» is how those are found). -->
+                 filter's no-rating chip
+                 (i18n:adminScreens.adminSupport.rating.none) is how those are found). -->
             <div v-if="item.rating" class="scard__rating" :data-testid="`ticket-rating`">
               <IconStar
                 v-for="n in STAR_VALUES"
@@ -174,7 +182,9 @@ const loading = ref(false)
 const loadingMore = ref(false)
 const error = ref(false)
 
-/** The pill echoes the chosen category (as «Жалобы» does); «Фильтр» without. */
+/** The pill echoes the chosen category (as the complaints side,
+ *  i18n:adminScreens.adminReports.tabComplaints, does); the filter label
+ *  (i18n:adminScreens.adminReports.filter) without. */
 const pillLabel = computed<string>(() =>
   filter.value.group
     ? supportCategoryGroupLabel(filter.value.group)
@@ -182,7 +192,7 @@ const pillLabel = computed<string>(() =>
 )
 
 /** The label above the list repeats the active filter (owner's mockup):
- *  «Все» without one, else the category, status, rating and day that
+ *  "all" (i18n:common.all) without one, else the category, status, rating and day that
  *  apply. */
 const activeLabel = computed<string>(() => {
   const parts: string[] = []
@@ -195,7 +205,8 @@ const activeLabel = computed<string>(() => {
   return parts.length ? parts.join(' · ') : t('common.all')
 })
 
-/** The chosen rating chips as one label: «4 ★, 5 ★» / «4 ★, без оценки». */
+/** The chosen rating chips as one label: star values as "4 ★, 5 ★", the
+ *  no-rating chip via i18n:adminScreens.adminSupport.rating.none. */
 function ratingFilterLabel(values: readonly SupportRatingFilter[]): string {
   return values
     .map((v) => (v === 'none' ? t('adminScreens.adminSupport.rating.none') : `${v} ★`))
@@ -295,7 +306,8 @@ onMounted(loadInitial)
   gap: var(--space-4);
 }
 
-/* Filter pill -- the same as «Жалобы» (AdminReportsView .admin-reports__filter). */
+/* Filter pill -- the same as the complaints side
+   (i18n:adminScreens.adminReports.tabComplaints; AdminReportsView .admin-reports__filter). */
 .tickets__filter {
   display: flex;
   align-items: center;

@@ -3,7 +3,9 @@
   «Withdrawal request» + «Confirm payment» + «Confirm payment 2»)
 
   Admin reviews a single payout request: hero (amount + master) + breakdown (bank /
-  provider fee / net) + Отклонить / Подтвердить. Подтвердить -> ConfirmPaymentModal
+  provider fee / net) + the reject / confirm buttons
+  (i18n:adminScreens.adminWithdrawalDetail.openReject, i18n:ui.confirm).
+  Confirm -> ConfirmPaymentModal
   (the recap the admin checks before an irreversible payout) -> approve. There is no
   2FA step: the approve endpoint takes no code, so the window that asked for one was
   removed (owner 2026-10-02).

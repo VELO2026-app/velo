@@ -2,15 +2,16 @@
 // VELO Frontend -- No-show reflection copy variants (PROMPT №269, U4)
 // =============================================================================
 //
-// A no-show booking («Не состоялась») prompts a gentle reflection instead of a
-// practice rating. To avoid boring returning users with identical wording, the
-// dashboard banner + the reflection screen draw their copy from a small pool,
-// picked by a STABLE hash of the practiceId: the same booking always shows the
-// same variant (no flicker on the dashboard's 60s clock re-eval), while
-// different practices rotate through the set.
+// A booking with the no-show status (`no_show`) prompts a gentle reflection
+// instead of a practice rating. To avoid boring returning users with
+// identical wording, the dashboard banner + the reflection screen draw their
+// copy from a small pool, picked by a STABLE hash of the practiceId: the
+// same booking always shows the same variant (no flicker on the dashboard's
+// 60s clock re-eval), while different practices rotate through the set.
 //
 // Copy source = operator SVGs (3 ReflectionView screens + 2 banner plates,
-// PROMPT №269). V2 bannerTitle defaults to «Поделитесь состоянием» (F5=А).
+// PROMPT №269). V2 bannerTitle defaults to the share-your-state copy
+// (i18n:reflection.v3.bannerTitle) (F5=A).
 // Text-only: no backend, no new component.
 // Fields resolve at ACCESS time (getters): the active locale's copy, and the
 // stable-hash pick stays as-is (tz-i18n 1.1).
@@ -20,6 +21,7 @@ import i18n from '@/locales'
 
 const { t } = i18n.global
 
+/** One no-show reflection copy set: dashboard plate title plus the reflection screen's question pair. */
 export interface ReflectionVariant {
   /** Dashboard plate title (operator banner SVGs). */
   bannerTitle: string
@@ -43,6 +45,7 @@ const VARIANT_WELLBEING: ReflectionVariant = {
   },
 }
 
+/** The reflection copy pool, picked per practice by a stable hash. */
 export const REFLECTION_VARIANTS: readonly ReflectionVariant[] = [
   VARIANT_WELLBEING,
   {
@@ -83,7 +86,7 @@ function stableHash(key: string): number {
 
 /**
  * Pick a reflection variant for a booking by a stable hash of its practiceId.
- * Same practiceId -> same variant every time.
+ * `Same practiceId -> same variant` every time.
  */
 export function pickReflectionVariant(practiceId: string): ReflectionVariant {
   const idx = stableHash(practiceId) % REFLECTION_VARIANTS.length

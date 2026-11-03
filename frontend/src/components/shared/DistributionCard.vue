@@ -5,8 +5,9 @@
   (tz-practice-analytics.md, the 30-Sep reference): the title and the count
   label share ONE heading line, below it the stacked colored strip with every
   non-zero category's percentage INSIDE its segment, an expandable
-  «Расшифровка» with one labeled bar per category (zero-count categories keep
-  their place there), and an honest empty state when nothing was answered.
+  breakdown list (i18n:distribution.breakdown) with one labeled bar per
+  category (zero-count categories keep their place there), and an honest
+  empty state when nothing was answered.
 
   API = COUNTS-IN: the caller passes bars with raw counts and each bar's fill
   color (a CSS color or var()). The card owns the percentage maths, the
@@ -15,12 +16,16 @@
   the details; the segment's min-width yields to its label, never the other
   way around.
 
-  Usage:
+  Usage (strings are caller props; SchoolAnalyticsView passes the title
+  i18n:user.screens.schoolAnalytics.feedbackPercent, the count line
+  i18n:user.screens.schoolAnalytics.conversion and the empty text
+  i18n:user.screens.schoolAnalytics.noFeedbacks; bar labels are the mood
+  zones, e.g. i18n:mood.fire):
     <DistributionCard
-      title="Процент фидбеков"
-      count-label="14% · 1 из 7"
-      empty-text="Пока нет отзывов"
-      :bars="[{ key: 'fire', label: 'Огонь!', count: 1, fill: 'var(--velo-peach-300)' }]"
+      title="<heading title>"
+      count-label="<percent · answered-of-total line>"
+      empty-text="<empty-state text>"
+      :bars="[{ key: 'fire', label: '<category label>', count: 1, fill: 'var(--velo-peach-300)' }]"
     />
 -->
 <template>
@@ -88,7 +93,8 @@ import { formatPercent } from '@/utils/format'
 export interface DistributionBar {
   /** Stable identity for the strip's list items and details rows. */
   key: string
-  /** Category label, shown in the details («Огонь!», «Хорошо»...). */
+  /** Category label, shown in the details (the mood zone labels, e.g.
+   *  i18n:mood.fire, i18n:mood.good). */
   label: string
   /** Raw answer count; the card derives shares from these. */
   count: number
@@ -101,7 +107,9 @@ export interface DistributionBar {
 const props = withDefaults(
   defineProps<{
     title: string
-    /** Right side of the heading line, e.g. «14% · 1 из 7» or «4 из 9». */
+    /** Right side of the heading line, e.g. the conversion line
+     *  (i18n:user.screens.schoolAnalytics.conversion) or a plain
+     *  answered-of-total pair (i18n:shared.components.moodOf). */
     countLabel: string
     bars: ReadonlyArray<DistributionBar>
     emptyText: string
@@ -158,7 +166,8 @@ const details = computed(() => [...props.bars].reverse().map((bar) => withPercen
   font-size: var(--velo-fs-12);
 }
 .distribution__segment {
-  /* Подпись важнее пропорций: узкий сегмент расширяется под текст. */
+  /* The label matters more than the proportions: a narrow segment widens
+     to fit its text. */
   min-width: max-content;
   padding-inline: var(--space-1);
   white-space: nowrap;

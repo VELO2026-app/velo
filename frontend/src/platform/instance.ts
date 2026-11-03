@@ -13,10 +13,13 @@
 // User.language is the source of truth the UI follows (locales/index.ts).
 // =============================================================================
 
+/** Locale codes this build supports (mirrors the backend's Telegram normalization). */
 export const SUPPORTED_LOCALES = ['ru', 'en', 'uk', 'de', 'es'] as const
 
+/** One supported locale code. */
 export type Locale = (typeof SUPPORTED_LOCALES)[number]
 
+/** Whether the value is one of the supported locale codes. */
 export function isSupportedLocale(value: string | null | undefined): value is Locale {
   return (SUPPORTED_LOCALES as readonly string[]).includes(value ?? '')
 }
@@ -46,6 +49,7 @@ function parseFeatures(value: string | undefined): FeatureSet {
   return { all: false, enabled: new Set(list.split(',').map((name) => name.trim())) }
 }
 
+/** Whether a parsed feature set enables the named module. */
 export function hasFeature(features: FeatureSet, name: string): boolean {
   return features.all || features.enabled.has(name)
 }

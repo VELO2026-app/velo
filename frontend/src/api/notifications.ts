@@ -34,11 +34,11 @@ import { api } from '@/api/client'
  *  key below is ALWAYS present on the wire; `action_data` and `read_at` are
  *  the two that may be null. `action_data` is the navigational intent,
  *  read by BOTH inbox deep-link maps (FE-11 + master parity 2026-09-08):
- *  the user inbox routes open_practice / confirm_waitlist -> the practice
- *  page, open_feedback -> feedback, open_wallet -> top-up, open_thread ->
- *  that message dialog (msg.* falls back to the messages list); the master
- *  inbox routes the same vocabulary into master-zone routes
- *  (MasterInboxView.vue). */
+ *  the user inbox routes `open_practice / confirm_waitlist -> the practice page`,
+ *  `open_feedback -> feedback`, `open_wallet -> top-up`,
+ *  `open_thread -> that message dialog` (msg.* falls back to the messages
+ *  list); the master inbox routes the same vocabulary into master-zone
+ *  routes (MasterInboxView.vue). */
 export interface NotificationItem {
   id: string
   type: string
@@ -51,6 +51,7 @@ export interface NotificationItem {
   created_at: string
 }
 
+/** One page of the bell feed: items, next-page cursor and the unread badge in the same response. */
 export interface NotificationList {
   items: NotificationItem[]
   /** Opaque keyset cursor for the next page. UNUSED in v1 -- the bell loads
@@ -60,10 +61,12 @@ export interface NotificationList {
   unread: number
 }
 
+/** The fresh unread badge, as returned by the mark-read calls. */
 export interface NotificationUnread {
   unread: number
 }
 
+/** Fetch the bell feed: newest-first page plus the unread badge. */
 export function listNotifications(cursor?: string): Promise<NotificationList> {
   const qs = new URLSearchParams()
   if (cursor) qs.set('cursor', cursor)
@@ -71,10 +74,12 @@ export function listNotifications(cursor?: string): Promise<NotificationList> {
   return api.get<NotificationList>(`/api/v1/notifications${suffix}`)
 }
 
+/** Mark one notification read (idempotent); returns the fresh badge. */
 export function markNotificationRead(id: string): Promise<NotificationUnread> {
   return api.post<NotificationUnread>(`/api/v1/notifications/${id}/read`, {})
 }
 
+/** Mark every unread notification read; the badge returns to zero. */
 export function markAllNotificationsRead(): Promise<NotificationUnread> {
   return api.post<NotificationUnread>('/api/v1/notifications/read-all', {})
 }
@@ -88,15 +93,18 @@ export interface NotificationPrefsResponse {
   timezone: string | null
 }
 
+/** Partial notification-prefs write: only the parts sent change; a present schedule replaces fully. */
 export interface NotificationPrefsUpdate {
   categories?: Record<string, boolean>
   schedule?: { from: string; to: string; days: string[] } | null
 }
 
+/** Read the notification preferences: category toggles, delivery window, timezone. */
 export function getNotificationPrefs(): Promise<NotificationPrefsResponse> {
   return api.get<NotificationPrefsResponse>('/api/v1/notifications/prefs')
 }
 
+/** Partially update the notification preferences; returns the full preferences. */
 export function updateNotificationPrefs(
   body: NotificationPrefsUpdate,
 ): Promise<NotificationPrefsResponse> {

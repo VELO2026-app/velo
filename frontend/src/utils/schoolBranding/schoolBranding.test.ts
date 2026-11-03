@@ -88,7 +88,8 @@ describe('schoolBranding -- render determinism', () => {
     expect(svg.startsWith('<svg')).toBe(true)
     expect(svg).toContain('viewBox="0 0 200 200"')
     expect(svg).toContain('rx="44"')
-    // The letter is stripped to safe chars: no raw '<Ш' rides into the markup.
+    // The letter is stripped to safe chars: no raw "<" + U+0428 (Cyrillic
+    // Sha) rides into the markup.
     expect(svg).not.toContain('<Ш')
     expect(mandalaSvg(brandingParams(HASH))).toContain('viewBox="0 0 200 200"')
   })

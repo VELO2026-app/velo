@@ -260,7 +260,7 @@ describe('TimezoneSettingsView', () => {
 
       // The GUARD holds for the API call: only Berlin (the first tap) is ever
       // persisted. Mutation-confirmed: commenting out .vue:147's guard makes
-      // this go from 1 call to 2 (Лондон's tap also reaching updateMe).
+      // this go from 1 call to 2 (London's tap also reaching updateMe).
       expect(usersApi.updateMe).toHaveBeenCalledTimes(1)
       expect(usersApi.updateMe).toHaveBeenCalledWith({ timezone: 'Europe/Berlin' })
 
@@ -380,7 +380,7 @@ describe('language: optimistic switch with revert on failure', () => {
     )
     expect(labels).toEqual(['Русский', 'English', 'Українська'])
     // de/es have no catalogs -- the switcher never advertises fallback-only
-    // locales (the old «появится позже» stub pattern is deliberately gone).
+    // locales (the old coming-soon stub pattern is deliberately gone).
     expect(labels).not.toContain('Deutsch')
     expect(labels).not.toContain('Español')
     expect(langRow('Русский')?.classList.contains('tz-settings__lang--active')).toBe(true)
@@ -395,8 +395,9 @@ describe('language: optimistic switch with revert on failure', () => {
 
     expect(usersApi.updateMe).toHaveBeenCalledWith({ language: 'en' })
     // The optimistic switch runs BEFORE the toast -- the whole screen (this
-    // toast included) is already in the NEW locale: 'Language saved', not
-    // «Язык сохранён». The failure twin below toasts in the OLD locale
+    // toast included) is already in the NEW locale: the en rendering of the
+    // saved-language toast (i18n:user.screens.timezoneSettings.language.toastSaved),
+    // not its ru form. The failure twin below toasts in the OLD locale
     // because the revert precedes its toast.
     expect(toastInfo).toHaveBeenCalledWith('Language saved')
     expect(langRow('English')?.classList.contains('tz-settings__lang--active')).toBe(true)

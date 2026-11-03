@@ -1,19 +1,22 @@
 <!--
-  VELO Frontend -- VMoreLink (единый контрол «Подробнее»)
+  VELO Frontend -- VMoreLink (the single "more" control, i18n:ui.more)
 
-  ОДИН вид «forward»-ссылки на весь проект: текст-лейбл слева + белый pill
-  со стрелкой `IconArrowRight` справа (тот же белый pill 63×40, что у
-  VBackButton — «понятная стрелка на белом фоне»). Слово идёт ПЕРЕД стрелкой.
+  The ONE forward-link look for the whole project: a text label on the left +
+  a white pill with the `IconArrowRight` arrow on the right (the same white
+  63×40 pill as VBackButton -- the canon: a clear arrow on a white
+  background). The word comes BEFORE the arrow.
 
-  Канон зафиксирован оператором 2026-06-04: чтобы «Подробнее» нигде не
-  разъезжался — все use-sites берут этот компонент, а не верстают вручную.
+  Canon fixed by the operator 2026-06-04: so the more link (i18n:ui.more)
+  never drifts out of shape across screens -- every use-site takes this
+  component instead of hand-rolling its own.
 
-  Use-sites: MasterCard («Подробнее» -> профиль мастера), UserDashboardView
-  (AI-саммари -> детальный экран). Навигация — на стороне вызывающего (emit click).
+  Use-sites: MasterCard (the more link -> the master's profile),
+  UserDashboardView (AI summary -> the detail screen). Navigation stays with
+  the caller (emits click).
 
   Usage:
     <VMoreLink @click="router.push(...)" />
-    <VMoreLink label="Все отзывы" @click="..." />
+    <VMoreLink label="All reviews" @click="..." />
 -->
 
 <template>
@@ -32,7 +35,7 @@ import { IconArrowRight } from '@/components/icons'
 // tz-i18n 1.3: label fallback resolves at render time (?? t() in template).
 
 defineProps<{
-  /** Текст слева от стрелки. По умолчанию «Подробнее» (ui.more). */
+  /** Text to the left of the arrow. Defaults to the more copy (i18n:ui.more). */
   label?: string
 }>()
 
@@ -43,8 +46,8 @@ defineEmits<{ click: [] }>()
 .v-more {
   display: flex;
   align-items: center;
-  /* Контент (текст + pill) прижат вправо; width:100% — чтобы прижатие
-   * работало в любом родителе (не только при stretch-колонке). */
+  /* The content (text + pill) is flushed right; width:100% -- so the flush
+   * works in any parent (not only a stretch column). */
   justify-content: flex-end;
   width: 100%;
   gap: var(--space-3);
@@ -67,8 +70,9 @@ defineEmits<{ click: [] }>()
   color: var(--velo-text-primary);
 }
 
-/* Белый pill со стрелкой — те же размеры/вид, что у VBackButton (канон
- * «понятная стрелка на белом фоне»). Стрелка вправо = вперёд. */
+/* White pill with the arrow -- the same size/look as VBackButton (the
+ * canon: a clear arrow on a white background). A right-pointing arrow
+ * means forward. */
 .v-more__pill {
   display: inline-flex;
   align-items: center;

@@ -25,6 +25,7 @@ const REQUEST_TIMEOUT_MS = 15_000
 
 // -- Error classes --
 
+/** A backend-answered failure: status, human detail, machine code, optional 422 validation entries. */
 export class ApiResponseError extends Error {
   constructor(
     public status: number,
@@ -33,7 +34,7 @@ export class ApiResponseError extends Error {
     /** Machine-readable error code from backend (e.g. "insufficient_balance"). */
     public code: string = 'unknown',
     /**
-     * Raw Pydantic 422 entries ({loc, msg, type}) when the failure is a
+     * Raw Pydantic 422 entries (`{loc, msg, type}`) when the failure is a
      * validation error, else undefined. FE-70: the external-activity form
      * binds each 422 to its control (the backend deliberately returns
      * SEVERAL field errors at once), which a joined string cannot express.
@@ -46,6 +47,7 @@ export class ApiResponseError extends Error {
   }
 }
 
+/** The request never reached the backend (network failure). */
 export class ApiNetworkError extends Error {
   constructor() {
     super('Network error -- check your connection')
@@ -53,6 +55,7 @@ export class ApiNetworkError extends Error {
   }
 }
 
+/** The request exceeded the client timeout and was aborted. */
 export class ApiTimeoutError extends Error {
   constructor() {
     super(`Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`)
@@ -218,7 +221,8 @@ async function request<T>(
 // -- the log line carries the full id, so a prefix match finds it with one
 // grep. No header (network/timeout failures, which never reach this
 // function) -> no suffix; never render an empty or placeholder code.
-// tz-i18n 1.2: the word «код» comes from common.traceSuffix.
+// tz-i18n 1.2: the "code" word in the rendered suffix is catalog copy
+// (i18n:common.traceSuffix).
 function suffixWithTraceId(message: string, traceId: string | null): string {
   return traceId
     ? i18n.global.t('common.traceSuffix', { message, code: traceId.slice(0, 6) })
@@ -227,6 +231,7 @@ function suffixWithTraceId(message: string, traceId: string | null): string {
 
 // -- Public API --
 
+/** The app's typed REST surface: token header, timeout, in-flight GET dedupe, error mapping. */
 export const api = {
   get<T>(path: string): Promise<T> {
     // F-09: deduplicate simultaneous identical GET requests.

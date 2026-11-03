@@ -10,8 +10,10 @@
 // The old unconditional scrollIntoView({block:'center'}) re-centered the field
 // in the scrollport EVEN WHEN IT ALREADY FIT -- on the group-create form
 // (whose column keeps its at-rest height while typing, see that SFC) focusing
-// «Описание» used to sweep the legend/title/name field up out of view
-// («улетает наверх, хотя место есть»). scrollIntoViewIfNeeded(false) is the
+// the description field (i18n:masterScreens.masterGroupCreate.fields.description)
+// used to sweep the legend/title/name field up out of view (the owner's
+// report: it "flies off the top even though there is room").
+// scrollIntoViewIfNeeded(false) is the
 // exact "only if needed, nearest edge" primitive, present in every WebKit and
 // Chromium this app runs in (Safari 4+); scrollIntoView({block:'nearest'}) is
 // the standard-spelled fallback for anything else. A field genuinely under
@@ -38,6 +40,7 @@ import { onUnmounted } from 'vue'
  *  settled and scroll the field into view. */
 const SETTLE_MS = 120
 
+/** Scroll a focused text field into view once the soft keyboard settles; returns the handler to bind on the field. */
 export function useKeyboardFieldScroll() {
   // The listener this composable currently has attached to the (long-lived,
   // global) window.visualViewport, if any. Normally removed on the field's

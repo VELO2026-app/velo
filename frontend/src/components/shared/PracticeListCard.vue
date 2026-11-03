@@ -2,7 +2,8 @@
   VELO Frontend -- PracticeListCard (DS, unified 2026-06)
 
   Shared list-item card for a practice. Used in:
-    - UserDashboardView "Ближайшая практика"
+    - UserDashboardView: the nearest-practices list
+      (i18n:user.screens.userDashboard.sections.upcoming)
     - CalendarPracticeCard (calendar day list / master public upcoming)
     - BookingCard (my reservations list)
     - DetailView / EntryView (diary linked-practice header)
@@ -11,19 +12,20 @@
     - White card, --velo-border-card, --radius-md, adaptive min-height 104.
     - Left column (--velo-card-iconcol-w): direction icon on top, and the
       date/time (`when`) centered UNDER it on the bottom meta line — no leading
-      calendar icon. Short date via formatShortDate ("9 июня" / "12 сент.").
+      calendar icon. Short date via formatShortDate (short month-day forms).
     - Content column (icon col + space-3): title (ellipsis) + master row.
     - Bottom meta line: `when` (under the icon) · duration with clock icon
       (under the title) · #badge slot (status, right edge). Every cell is atomic
       (nowrap, no shrink); when the badge cannot share the row it wraps whole
       onto its own right-aligned line (FE-54) instead of the meta text breaking
-      mid-phrase ("мин" orphan).
+      mid-phrase (an orphaned minutes fragment).
 
   Props:
     practice     -- icon/title/master source.
-    title?       -- override title (e.g. cleaned of "(эфир)").
+    title?       -- override title (e.g. cleaned of the live-broadcast suffix).
     when         -- pre-formatted date OR time string shown under the icon.
-    duration?    -- pre-formatted duration ("45 мин"); omitted = no duration cell.
+    duration?    -- pre-formatted duration string (e.g. a formatted minutes
+                    value); omitted = no duration cell.
     clickable    -- whole card is a button emitting @click (default true).
 
   Slot:
@@ -68,8 +70,8 @@
       </span>
     </div>
 
-    <!-- Optional action row (e.g. master "Явка"). @click.stop so action
-         buttons don't trigger the card/parent click. -->
+    <!-- Optional action row (e.g. the master's attendance action). @click.stop
+         so action buttons don't trigger the card/parent click. -->
     <div v-if="$slots.action" class="practice-list-card__actions" @click.stop>
       <slot name="action" />
     </div>
@@ -87,25 +89,25 @@ import { practiceIconFor } from '@/utils/displayHelpers'
 interface PracticeLike {
   /** Direction picks the icon. */
   direction?: string | null
-  /** Title; can be overridden via `title` prop (e.g. strip "(эфир)" suffix). */
+  /** Title; can be overridden via `title` prop (e.g. strip the live-broadcast suffix). */
   title?: string | null
-  /** Master name; defaults to "Мастер" if missing. */
+  /** Master name; defaults to the master fallback word (i18n:booking.masterFallback) if missing. */
   master_name?: string | null
 }
 
 const props = withDefaults(
   defineProps<{
     practice: PracticeLike
-    /** Override title (e.g. cleaned of "(эфир)"). Defaults to practice.title. */
+    /** Override title (e.g. cleaned of the live-broadcast suffix). Defaults to practice.title. */
     title?: string
-    /** Pre-formatted date or time shown under the icon (e.g. "9 июня" / "19:00"). */
+    /** Pre-formatted date or time shown under the icon (e.g. a short date or a "19:00" time). */
     when?: string
-    /** Pre-formatted duration ("45 мин"); omitted = no duration cell. */
+    /** Pre-formatted duration string (a formatted minutes value); omitted = no duration cell. */
     duration?: string
     /** Optional second line shown UNDER `when` (e.g. the time on the dashboard
      *  nearest-practice card, so date + time are both visible). Omit = single line. */
     whenTime?: string
-    /** When true (default), the whole card is a button and emits @click. */
+    /** When true (default), the whole card is a button and emits `@click`. */
     clickable?: boolean
   }>(),
   {
@@ -126,7 +128,7 @@ const icon = computed(() => practiceIconFor(props.practice))
 const titleText = computed(() => props.title ?? props.practice.title ?? '')
 
 // Master name with sensible fallback (the fallback word/initial is the
-// localized «Мастер» -- tz-i18n 2.2b)
+// localized master fallback, i18n:booking.masterFallback -- tz-i18n 2.2b)
 const masterName = computed(() => props.practice.master_name ?? t('booking.masterFallback'))
 
 // First letter of master name for the avatar placeholder
@@ -172,7 +174,7 @@ const masterInitial = computed(() => {
   flex-shrink: 0;
   display: flex;
   justify-content: center;
-  /* Иконка сама несёт circle-обводку — подложки на обёртке не нужны. */
+  /* The icon itself carries the circle outline — no backdrop needed on the wrapper. */
   color: var(--velo-text-primary);
 }
 
@@ -245,7 +247,7 @@ const masterInitial = computed(() => {
   letter-spacing: var(--velo-card-letter-spacing-meta);
 }
 
-/* Separator between the optional time and the duration ("06:00 · 1 ч"). */
+/* Separator between the optional time and the duration ("06:00 · 1h"-style pair). */
 .practice-list-card__dur-sep {
   color: var(--velo-text-muted);
 }
@@ -269,7 +271,7 @@ const masterInitial = computed(() => {
   margin-left: auto;
 }
 
-/* Optional action row (master "Явка" etc.) */
+/* Optional action row (the master's attendance action etc.) */
 .practice-list-card__actions {
   display: flex;
   gap: var(--space-2);

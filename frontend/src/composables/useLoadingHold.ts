@@ -32,6 +32,7 @@ import {
   type Ref,
 } from 'vue'
 
+/** Knobs of the delayed-flag rule: how long to wait before turning on, and the minimum time on once shown. */
 export interface DelayedFlagOptions {
   /** How long `source` must stay true before the flag turns on (ms). */
   delay?: number
@@ -39,9 +40,12 @@ export interface DelayedFlagOptions {
   minDuration?: number
 }
 
+/** Nothing shows before this wait (ms): a faster answer never renders a placeholder. */
 export const LOADING_DELAY_MS = 300
+/** Once shown, a placeholder stays at least this long (ms), so it never blinks off right after blinking on. */
 export const LOADING_MIN_DURATION_MS = 450
 
+/** A boolean that turns on only after a delay and stays on a minimum duration -- the no-flash loading rule. */
 export function useDelayedFlag(
   source: MaybeRefOrGetter<boolean>,
   { delay = LOADING_DELAY_MS, minDuration = LOADING_MIN_DURATION_MS }: DelayedFlagOptions = {},
@@ -92,6 +96,7 @@ export function useDelayedFlag(
   return readonly(shown)
 }
 
+/** Screen-facing skeleton contract: when the placeholder shows, when content fades in, and when it has settled. */
 export interface LoadingHold {
   /** Render the placeholder: while loading, and through the minimum display
    *  once it became visible. The content renders when this is false. */
@@ -103,6 +108,7 @@ export interface LoadingHold {
   settled: () => Promise<void>
 }
 
+/** Delayed, minimum-duration skeleton hold over a pending flag (the loading system every screen uses). */
 export function useLoadingHold(
   pending: MaybeRefOrGetter<boolean>,
   options: DelayedFlagOptions = {},

@@ -1,14 +1,17 @@
 <!--
   VELO Frontend -- AdminMasterInviteView (Batch-INVITE, generic link)
 
-  Standalone admin screen «Пригласить мастера» (admin-master-invite), reached
-  from the «Мастера» tab. Header (back + title) -> form-card (section
-  «ОДНОРАЗОВАЯ ССЫЛКА», «Создать ссылку») -> result-card (the composed
-  t.me/… deeplink + «Скопировать» via the B2 clipboard pattern).
+  Standalone admin screen i18n:adminScreens.adminMasterInvite.title
+  (admin-master-invite), reached from the Masters screen
+  (i18n:adminScreens.adminMasters.masters). Header (back + title) -> form-card
+  (section i18n:adminScreens.adminMasterInvite.oneTimeLinkLabel, button
+  i18n:adminScreens.adminMasterInvite.create) -> result-card (the composed
+  t.me/… deeplink + i18n:adminScreens.adminMasterInvite.copy via the B2
+  clipboard pattern).
 
   The link is GENERIC (no target): it works for any authenticated opener
-  until the first claim burns it. Each «Создать ссылку» mints a fresh link
-  and replaces the result card in place.
+  until the first claim burns it. Each i18n:adminScreens.adminMasterInvite.create
+  mints a fresh link and replaces the result card in place.
 
   Error contract (machine codes from POST /admin/masters/invite):
     - bot_url_not_configured (503) -> toast (server-side ops gap)

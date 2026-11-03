@@ -3,9 +3,10 @@
 
   Branded confirm for cancelling a whole practice (master). Built on the shared
   <VModal> + DS pieces, per the operator SVG «Abolish the practice»:
-    - practice card (icon + title + when + N участников)
-    - warning Banner (DS warning variant, kept as-is per Q3=А)
-    - recurring block + scope radio (Только эту / Эту и будущие) — shown only for
+    - practice card (icon + title + when + participant count)
+    - warning Banner (DS warning variant, kept as-is per Q3=A)
+    - recurring block + scope radio (i18n:practiceCancel.scopeOne /
+      i18n:practiceCancel.scopeFuture) — shown only for
       a `series` practice. The chosen scope is emitted on @confirm ('this' /
       'this_and_future'); the parent forwards it into cancelPractice (full
       refund). A non-series practice emits 'this' (it has no siblings).
@@ -32,7 +33,7 @@
         </div>
       </div>
 
-      <!-- Warning banner (DS Banner, warning variant — kept as-is, Q3=А) -->
+      <!-- Warning banner (DS Banner, warning variant — kept as-is, Q3=A) -->
       <Banner variant="warning" :body="t('practiceCancel.notify')">
         <template #icon><IconWarning :size="28" /></template>
       </Banner>

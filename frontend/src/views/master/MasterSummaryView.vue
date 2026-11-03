@@ -1,8 +1,9 @@
 <!--
   VELO Frontend -- MasterSummaryView (Master DS, 2026-06-11; E6 wiring PROMPT №420)
 
-  "Саммари недели" — the master's weekly summary, reached from the dashboard
-  summary card ("Подробнее"). Rendered inside MasterShell.
+  The weekly summary (i18n:masterScreens.masterSummary.title) — what the
+  master reaches from the dashboard summary card (i18n:ui.more). Rendered
+  inside MasterShell.
 
   E6 = three pieces (insight + key feedbacks + needs attention). Recon
   (PROMPT №420) found two of three already real, just not wired together on
@@ -14,7 +15,8 @@
       (MasterReviewItem) already carries a real reviewer user_id (E1
       "remainder", already shipped -- the roadmap doc calling this open was
       stale), so cards are fully navigable to the student profile. No new
-      backend needed -- same endpoint AnalyticsView's «Требуют внимания»
+      backend needed -- same endpoint AnalyticsView's needs-attention section
+      (i18n:masterScreens.analytics.sections.attention)
       already calls, just without the attention=true filter (this section
       wants a highlight reel, not only the negative bucket).
     - needs attention: was ALREADY real (E5, GET /masters/me/students) before
@@ -162,7 +164,8 @@ const router = useRouter()
 const insight = ref(t('masterScreens.masterSummary.summaryAfterConnect'))
 
 // -- Key feedbacks — REAL (E6, PROMPT №420): GET /masters/me/reviews, same
-//    cross-practice named feed AnalyticsView's «Требуют внимания» uses, but
+//    cross-practice named feed AnalyticsView's needs-attention section
+//    (i18n:masterScreens.analytics.sections.attention) uses, but
 //    WITHOUT the attention=true filter -- this section is a highlight reel
 //    (positive included), not only the attention zones. The zone's face
 //    via the shared utils/ratingIcons MOOD_SCALE_ICON (BE-77). --
@@ -194,7 +197,8 @@ function goStudentFromReview(item: MasterReviewItem): void {
   })
 }
 
-// -- «Требуют внимания» — REAL (E5: GET /masters/me/students). Same source as
+// -- Needs attention (i18n:masterScreens.masterSummary.needsAttention) — REAL
+//    (E5: GET /masters/me/students). Same source as
 //    MasterStudentsView; show only students flagged needs_attention. --
 const students = ref<StudentListItem[]>([])
 const attnLoading = ref(true)
@@ -357,7 +361,7 @@ function openMessage(id: string, name: string): void {
   margin-top: var(--velo-gap-2);
 }
 
-/* «Требует внимания» chip — same DS treatment as MasterStudentsView. */
+/* Needs-attention chip (i18n:masterScreens.masterSummary.needsAttentionSingular) — same DS treatment as MasterStudentsView. */
 .summary__attn-badge {
   display: inline-flex;
   align-items: center;

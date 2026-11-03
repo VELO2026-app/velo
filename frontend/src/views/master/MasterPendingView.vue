@@ -6,15 +6,20 @@
   master here. Restyled to the operator Figma — three distinct states keyed on
   the application status:
 
-    1. «Заявка отправлена» (pending) — SVG-6. role='user' just applied (can't
-       fetch /masters/me yet) OR role='master' pending. Keeps the polling
-       («Обновить статус») + «Вернуться к каталогу».
-    2. «Ваша заявка одобрена!» (verified) — SVG-7. Explicit approved screen with
-       a single «Войти в кабинет» CTA → master dashboard (which chains into the
-       post-approval onboarding carousel). Replaces the old auto-redirect.
-    3. «Отказ» (rejected) — SVG-8. Amber, generic reason until rejection_reason
-       is exposed (Zod E14); TWO CTAs (FORK-4, restored 2026-07-12): «Написать
-       в поддержку» AND «Подать новую заявку» — reapply is backend-supported
+    1. Application sent (pending; i18n:masterScreens.masterPending.toast.sent)
+       — SVG-6. role='user' just applied (can't fetch /masters/me yet) OR
+       role='master' pending. Keeps the polling
+       (i18n:masterScreens.masterPending.refreshStatus) + the back-home
+       button (i18n:common.backHome).
+    2. Approved (verified; i18n:masterScreens.masterPending.approved.title)
+       — SVG-7. Explicit approved screen with a single enter-the-cabinet CTA
+       (i18n:masterScreens.masterPending.enterCabinet) → master dashboard
+       (which chains into the post-approval onboarding carousel). Replaces
+       the old auto-redirect.
+    3. Rejected — SVG-8. Amber, generic reason until rejection_reason
+       is exposed (Zod E14); TWO CTAs (FORK-4, restored 2026-07-12): contact
+       support (i18n:masterScreens.masterPending.contactSupport) AND reapply
+       (i18n:masterScreens.masterPending.reapply) — reapply is backend-supported
        (POST /masters/apply updates the existing rejected profile in place,
        see test_apply_master_reapply_after_rejection) and /master/apply is
        reachable for a rejected role='user' (applyGuard only intercepts
@@ -43,9 +48,10 @@
       </VCard>
 
       <!-- ================= APPROVED (verified) =================
-           White VCard подложка (R1 fix, PROMPT №391 — operator-approved preview
-           .tmp/batch-r/r1-application-states.html): was rendering directly on
-           the transparent fog bg, unlike SENT below which already had it. -->
+           White VCard backing plate (R1 fix, PROMPT №391 — operator-approved
+           preview .tmp/batch-r/r1-application-states.html): was rendering
+           directly on the transparent fog bg, unlike SENT below which
+           already had it. -->
       <template v-else-if="profileStatus === 'verified'">
         <VCard class="pending-view__card">
           <img
@@ -101,7 +107,7 @@
       </template>
 
       <!-- ================= SENT (pending) =================
-           White VCard подложка, vertically centered (K2). A discreet text
+           White VCard backing plate, vertically centered (K2). A discreet text
            link (F4, not a block button -- PROMPT №418: this screen exists so
            a person waits calmly; a full-width button would read as an
            invitation to leave). -->
@@ -329,7 +335,7 @@ async function onWithdraw(): Promise<void> {
   padding-top: var(--space-5);
 }
 
-/* Pending card подложка (K2b): icon + title + subtext on a white plate. */
+/* Pending card backing plate (K2b): icon + title + subtext on a white plate. */
 .pending-view__card {
   width: 100%;
   display: flex;

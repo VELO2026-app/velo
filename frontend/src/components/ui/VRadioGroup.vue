@@ -7,9 +7,9 @@
 
   Usage:
     <VRadioGroup v-model="recurrence" :options="[
-      { label: 'Каждый день',    value: 'daily' },
-      { label: 'Каждую неделю',  value: 'weekly' },
-      { label: 'Раз в две недели', value: 'biweekly' },
+      { label: 'Daily',       value: 'daily' },
+      { label: 'Weekly',      value: 'weekly' },
+      { label: 'Every two weeks', value: 'biweekly' },
     ]" />
     <VRadioGroup v-model="role" :options="..." disabled />
 -->

@@ -2,7 +2,7 @@
   VELO Frontend -- TimePickerSheet (Phase-3 master DS)
 
   Bottom-sheet time picker for the practice form (operator SVG 2026-06-11,
-  "Время практики"). 24-hour (Q1=А): two VWheel columns — hours 00–23, minutes
+  i18n:timePicker.title). 24-hour (Q1=A): two VWheel columns — hours 00–23, minutes
   in 5-minute steps. No AM/PM (the app is 24h/ru everywhere).
 
   v-model is 'HH:MM' (24h) — exactly what the form stores. Emits update:modelValue

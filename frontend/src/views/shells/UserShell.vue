@@ -47,14 +47,16 @@ import { featureEnabled } from '@/platform/features'
 const route = useRoute()
 const router = useRouter()
 
-// tz-curator.md §1.2 (owner 2026-09-22): the «Школы» tab follows SCHOOL
+// tz-curator.md §1.2 (owner 2026-09-22): the Schools tab (i18n:tabs.schools)
+// follows SCHOOL
 // MEMBERSHIP -- the shell (not VTabBar) drops `requires: 'schools'` tabs
 // unless the schoolsHub store sees the account in at least one school (any
 // relation). The probe starts on mount; until it settles the tab is simply
 // absent (fail-closed), then appears without a reload.
 // Owner 2026-10-12 (restores 2026-10-02's 77a98d04, supersedes 2026-10-04):
 // the user zone's surface set follows the ACTIVE INTERFACE ROLE only -- every
-// account in user mode keeps the full plain-user set («Дневник» tab, the
+// account in user mode keeps the full plain-user set (the Diary tab,
+// i18n:tabs.diary, the
 // dashboard's quick access), curator capability or not.
 const schoolsHub = useSchoolsHubStore()
 onMounted(() => {
@@ -77,7 +79,8 @@ const keptTabs = computed(() =>
 )
 
 // Hide the floating tab bar while the soft keyboard is open, so it does not ride
-// up over a focused input (e.g. the "запрос мастеру" field on booking-confirmed).
+// up over a focused input (e.g. the request-to-master field
+// (i18n:user.screens.bookingConfirmed.request.placeholder) on booking-confirmed).
 const { keyboardOpen } = useKeyboardOpen()
 
 // Active tab: a route may pin one via meta.activeTab (e.g. the post-booking
@@ -111,7 +114,8 @@ const isDiaryRoute = computed(() => DIARY_ROUTES.includes(route.name as string))
 // clearance). The feed was already fill; the entry + check-in/feedback detail
 // join it. Non-fill previously reserved a phantom ~104px header fallback (no
 // VHeader teleports on these screens) that collapsed their content into a
-// cramped, pushed-down box (G2: «Запись» скукоженный).
+// cramped, pushed-down box (G2: the entry-detail screen,
+// i18n:user.screens.detail.title, read scrunched).
 // user-chat (T2 messaging): same fill contract as master-chat in MasterShell
 // (MC-2 precedent) -- the thread owns its internal scroll + composer, and a
 // reserved floating-header clearance would push the feed down. The tab bar
@@ -139,7 +143,8 @@ const isInboxRoute = computed(() => INBOX_ROUTES.includes(route.name as string))
 
 // Owner 2026-09-30: the master's public page in the CURATOR context (the
 // roster's ?schoolId= marker) hides the dock -- its place is taken by the
-// hanging «Создать практику» CTA (MasterPublicView renders it on the same
+// hanging create-practice CTA (i18n:user.screens.masterPublic.createPractice;
+// MasterPublicView renders it on the same
 // condition, so the shell and the view can never disagree).
 const isMasterCuratorRoute = computed(
   () => route.name === 'user-master-public' && String(route.query.schoolId ?? '') !== '',
@@ -164,7 +169,8 @@ const isDetailRoute = computed(() => DETAIL_ROUTES.includes(route.name as string
 const FOG_ROUTES = [
   'user-dashboard',
   'user-calendar',
-  // Owner 2026-10-05: the stacked school calendar («Практики школы») is the
+  // Owner 2026-10-05: the stacked school calendar
+  // (i18n:user.screens.calendar.titleSchool) is the
   // same scrolling week feed as the tab one — content dissolves under the
   // floating island instead of scrolling sharply through it.
   'user-calendar-school',
@@ -176,25 +182,29 @@ const FOG_ROUTES = [
   // like every other detail feed -- content dissolves under the header.
   'user-school',
   // FE-11: the bell feed -- a scrolling list like bookings, dissolves under
-  // the floating header; «Прочитать всё» sits in the header, not in-flow.
+  // the floating header; read-all (i18n:user.screens.userInbox.readAll)
+  // sits in the header, not in-flow.
   'user-inbox',
   'user-master-public',
   'practice-detail',
   // Edit-profile (operator PE-2a, 2026-07-01): parity with the fogged master
-  // variant — top+bottom dissolve under the floating header. «Сохранить» + the
+  // variant — top+bottom dissolve under the floating header. Save
+  // (i18n:ui.save) + the
   // delete link are in-flow at the list bottom and rest above the bottom fade
   // (like the profile hub), so they stay crisp. At rest the fog dissolves content
   // under the floating title; on keyboard-open the mask drops (global.css) and the
   // focused field scrolls above the keyboard (PE-2c). No solid header — the design
   // has no white plates (operator, no-plate call).
   'user-edit-profile',
-  // Support (batch O, O3 / operator Q3=А): the «Поддержка» screen is a form like
+  // Support (batch O, O3 / operator Q3=A): the support screen
+  // (i18n:user.screens.userProfile.menu.support) is a form like
   // edit-profile — fog dissolves content under the floating header so it no longer
   // overlaps on scroll. Default form-safe tuning: the submit button + inputs sit
   // above the bottom fade (the tab-bar clearance), so they stay crisp.
   'user-support',
   // AI connections (BE-139 item 12, owner's check on the stand): the token
-  // list scrolls, and without the fog its intro and «Создать токен» showed
+  // list scrolls, and without the fog its intro and the create-token CTA
+  // (i18n:user.screens.aiConnections.create.cta) showed
   // through the transparent floating header. Same fix and same default
   // tuning as user-support above. The timezone screen it sits next to is
   // not listed because it does not scroll as a page, not because the two
@@ -205,7 +215,8 @@ const isFogRoute = computed(() => FOG_ROUTES.includes(route.name as string))
 
 // Per-screen fog tuning. The list feeds keep MobileLayout's defaults
 // (16/40/70/90 — omitted = unchanged). practice-detail uses a softer top
-// dissolve + tighter bottom so the «Записаться бесплатно» CTA stays crisp above
+// dissolve + tighter bottom so the book-free CTA
+// (i18n:user.screens.practiceDetail.cta.bookFree) stays crisp above
 // the tab bar. The four numbers live as --velo-fog-pd-* tokens (variables.css,
 // single reusable source); read once here since the values flow through JS into
 // MobileLayout. Confirmed on the .tmp preview 2026-06-09.

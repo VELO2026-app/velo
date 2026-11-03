@@ -1,16 +1,16 @@
 <!--
-  VELO Frontend -- ChatThreadScreen (Phase 6 / T2, H-T2-UI phase «а»)
+  VELO Frontend -- ChatThreadScreen (Phase 6 / T2, H-T2-UI phase a)
 
   THE chat thread, shared by both roles: UserChatView and MasterChatView are
   thin wrappers that resolve the peer and hand over threadId + peer display
   props. Function-first skeleton on existing primitives (VHeader / VAvatar /
   VTextarea / VButton / VLoader / VEmptyState) -- the «3 Students» restyle is
-  phase «б» and does not change this component's contract.
+  phase b and does not change this component's contract.
 
   Data contract (api/chats.ts over the T2 proxy):
     - history: GET messages, NEWEST-FIRST from comms -> reversed here so the
       feed reads top-down; one page of 100 (deeper history pagination is
-      outside phase «а» -- recorded in the handoff report).
+      outside phase a -- recorded in the handoff report).
     - send: POST message -> the returned message is appended locally (no
       refetch round-trip for one's own words).
     - read: POST read on mount AND whenever the poll delivers new messages
@@ -18,24 +18,28 @@
       messages were actually seen.
     - updates: polling of the visible thread only (approved plan §4) -- the
       plain 12s cadence, tightening to 3s while any support message is
-      still «Переводится…» (BE-166). Paused while document.hidden; an
+      still in the translating state (i18n:chat.translating, BE-166).
+      Paused while document.hidden; an
       immediate refetch on return. No websockets -- behind the fence.
 
   Bubbles align by sender === my user id; the peer's name falls back to the
-  role wording the PARENT supplies (a student sees «Мастер», a master sees
-  «Ученик») -- peer may be null when the proxy could not resolve the user.
+  role wording the PARENT supplies (a student sees the master fallback
+  i18n:user.screens.userChat.peerFallback, a master sees the student
+  fallback i18n:masterScreens.masterChat.peerFallback) -- peer may be null
+  when the proxy could not resolve the user.
 
   BE-163 support conversation: the wrapper passes `support` (the row's
   `channel === 'support'`) and the screen then renders the VELO logo in the
-  header, the «Поддержка» caption on peer bubbles (never an admin's name),
+  header, the support caption (i18n:chat.supportSender) on peer bubbles
+  (never an admin's name),
   the BE-166 translation states for body-less messages, and sends with an
   Idempotency-Key minted HERE (a failed draft's key rides its retry, so a
   lost answer can never become a twin message).
 
   FE-108: a support appeal deleted with its spam ticket takes its thread
   along; a delivered notification then lands here and the messages read
-  answers 404. That is not a load failure -- the screen becomes «Этой
-  переписки больше нет» (chat.goneTitle), with a way back and no retry.
+  answers 404. That is not a load failure -- the screen becomes the
+  gone-thread title (i18n:chat.goneTitle), with a way back and no retry.
   The same holds for a deletion discovered MID-SESSION by the poll: the
   404 flips the very same flag, the feed and composer give way, and the
   ticks stop (a missed poll is silent, a gone thread is not a miss).
@@ -156,8 +160,8 @@
       <!-- Composer -- shared with DiaryComposer (PROMPT №740, track 2). B38:
            the send control lives INSIDE the bordered field. B47: this
            consumer's own placeholder wording. B48: the control renders only
-           once there is text, replacing the old always-present "Отправить"
-           button. `send-test-id` preserves the existing `chat-send` hook.
+           once there is text, replacing the old always-present send button.
+           `send-test-id` preserves the existing `chat-send` hook.
            `grow-cap` (PROMPT №741, track 3): the SAME viewport-aware formula
            diary uses, via useComposerGrowCap -- see that file for the numbers
            and the CHROME_OFFSET caveat (diary-measured, reused here as an
@@ -214,11 +218,15 @@ const props = defineProps<{
   threadId: string
   /** P-1 display block; null when the proxy could not resolve the user. */
   peer?: ChatPeer | null
-  /** Role-appropriate fallback when peer/name is absent («Мастер»/«Ученик»);
-   *  the support thread's wrapper passes «Поддержка {brand}» here. */
+  /** Role-appropriate fallback when peer/name is absent (the master fallback
+   *  i18n:user.screens.userChat.peerFallback for a student, the student
+   *  fallback i18n:masterScreens.masterChat.peerFallback for a master); the
+   *  support thread's wrapper passes the support title
+   *  (i18n:chat.supportTitle, resolves with the brand) here. */
   peerFallback: string
   /** BE-163: the thread is the caller's own support conversation -- the
-   *  header carries the VELO logo and peer bubbles the «Поддержка» caption. */
+   *  header carries the VELO logo and peer bubbles the support caption
+   *  (i18n:chat.supportSender). */
   support?: boolean
 }>()
 
@@ -226,7 +234,8 @@ const emit = defineEmits<{ back: [] }>()
 
 const POLL_MS = 12_000
 
-/** BE-166: while any support message is still «Переводится…», the feed is
+/** BE-166: while any support message is still in the translating state
+ *  (i18n:chat.translating), the feed is
  *  re-read on a short leash until the state resolves (owner ruling 24.10,
  *  variant 1) -- the plain 12s cadence would leave the placeholder hanging
  *  up to a quarter minute past the translated answer. The leash is bounded
@@ -382,13 +391,13 @@ function attachKeepBottom(): void {
   feedWrapObserver.observe(wrapEl.value)
 }
 
-/** One page, newest-first from comms -> stored oldest-first for rendering. */
+/** One page, `newest-first from comms -> stored oldest-first` for rendering. */
 async function fetchMessages(): Promise<ChatMessage[]> {
   const page = await listChatMessages(props.threadId)
   return [...page.messages].reverse()
 }
 
-/** The newest message's id (oldest-first storage -> it's the tail).
+/** The newest message's id (`oldest-first storage -> it's the tail`).
  *  CH-1: THIS, not the array length, is what says "something arrived" --
  *  on an eternal DM past one page the length is pinned at the page size
  *  (100 === 100 forever), and a length compare silently blinds the poll
@@ -398,7 +407,8 @@ function newestId(list: ChatMessage[]): string | null {
 }
 
 /** The page's translation shape -- per message, null-body+state or plain
- *  string. BE-166: a state can flip on the SAME id («Переводится…» lands as
+ *  string. BE-166: a state can flip on the SAME id (the translating
+ *  placeholder, i18n:chat.translating, lands as
  *  the translated text) without moving newestId or the length, exactly the
  *  drift the id/length compares are blind to. */
 function translationShape(list: ChatMessage[]): string {
@@ -430,7 +440,8 @@ async function reload(): Promise<void> {
     // [owner pass] keep-bottom: the wrap is mounted only now (v-else branch).
     attachKeepBottom()
     // The feed's translation shape is known only now -- re-time the tick
-    // (a thread opened straight into «Переводится…» must not wait 12s).
+    // (a thread opened straight into the translating state
+    // (i18n:chat.translating) must not wait 12s).
     schedulePoll()
   } catch (e) {
     // FE-108: a 404 is not a failure to load -- the conversation itself is
@@ -449,7 +460,7 @@ async function reload(): Promise<void> {
 
 /** Self-scheduling poll loop (was a flat 12s interval): the next tick is
  *  TRANSLATING_POLL_MS while any message is still translating and the 2-minute
- *  lease is young, else the plain cadence. Hidden screen -> the loop PARKS
+ *  lease is young, else the plain cadence. `Hidden screen -> the loop PARKS`
  *  (no timer booked); onVisibility re-kicks it with an immediate poll.
  *  Idempotent -- re-booking clears the pending tick first, so reload()
  *  (which resolves AFTER the mount-time bootstrap booking, and is what
@@ -546,7 +557,7 @@ interface PendingSend {
 
 /** Own messages not yet in `messages`, in send order. */
 const pendingSends = ref<PendingSend[]>([])
-/** Server id -> the client key its bubble was rendered under (stable rows). */
+/** `Server id -> the client key` its bubble was rendered under (stable rows). */
 const clientKeyById = new Map<string, string>()
 
 interface FeedRow {
@@ -842,8 +853,8 @@ onBeforeUnmount(() => {
   white-space: pre-wrap;
 }
 
-/* Support threads (BE-163): the «Поддержка» caption above the body -- the
-   service, never an admin's name. */
+/* Support threads (BE-163): the support caption (i18n:chat.supportSender)
+   above the body -- the service, never an admin's name. */
 .chat-thread__sender {
   font-size: var(--velo-fs-12);
   font-weight: 600;
@@ -851,8 +862,8 @@ onBeforeUnmount(() => {
   margin-bottom: var(--space-1);
 }
 
-/* BE-166 placeholder («Переводится…» / «Перевод недоступен»): not the
-   sender's words -- visibly provisional. */
+/* BE-166 placeholder (i18n:chat.translating / i18n:chat.translationUnavailable):
+   not the sender's words -- visibly provisional. */
 .chat-thread__body--state {
   font-style: italic;
   opacity: 0.7;

@@ -7,7 +7,7 @@
   with the masked 404.
 
   Owner form (fifth iteration, 2026-10-01 -- the hand-drawn junction is
-  GONE, owner ruling «возьми за основу сущность из дневника»): the
+  GONE, owner ruling "take the diary's own entity as the basis"): the
   silhouette IS the diary's bubble entity -- the check-in / feedback
   bead's exact Figma path (DiaryBubbleShape, screen 40), lobe mirrored
   to the right where the mock's disc sits. One continuous
@@ -20,11 +20,11 @@
   other width; the mirror here is transform="translate(267 0)
   scale(-1 1)" in viewBox units, which scales with the shape. The lobe
   carries a PRIMARY disc with the white copy glyph (the mock's disc),
-  inset by a white rim (owner 2026-10-01: «увеличить ободок» -- ~4.5
-  viewBox units, ≈5-6px); the capsule carries the link glyph +
-  «Ссылка-приглашение» centered at 18px. The whole chip is ONE button --
-  one tap, one copy (owner 2026-10-01: both seats were the same motion
-  anyway).
+  inset by a white rim (owner 2026-10-01: "enlarge the rim" -- ~4.5
+  viewBox units, ≈5-6px); the capsule carries the link glyph + the
+  invite-link label (i18n:school.inviteLabel) centered at 18px. The whole
+  chip is ONE button -- one tap, one copy (owner 2026-10-01: both seats
+  were the same motion anyway).
 
   The raw URL is NOT displayed anywhere: copying is the whole point, the
   clipboard gets the full link, the toast confirms it.
@@ -189,7 +189,7 @@ async function onCopy(): Promise<void> {
 
 /* The lobe disc: PRIMARY, centered on the mirrored lobe circle (viewBox
    center 243.71, 23.29 / r 23.29) and inset by the WHITE RIM (owner
-   2026-10-01 «увеличить ободок»: 4.5 viewBox units ≈ 5-6px each side).
+   2026-10-01 "enlarge the rim": 4.5 viewBox units ≈ 5-6px each side).
    All positions in % so the disc scales with the fluid width. */
 .sif__lobe {
   position: absolute;

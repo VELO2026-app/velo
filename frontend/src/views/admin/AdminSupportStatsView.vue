@@ -8,9 +8,11 @@
   users.timezone), ISO with the offset -- the backend refuses a time without
   a zone; `from` inclusive, `to` exclusive, everything by the appeal's date.
 
-  WHERE THIS LIVES IS THE GATE'S CALL (the ticket's own words: dashboard of
-  «Модерация» or its own screen). Until the gate rules, it is its own screen
-  one hop from the «Обращения» list whose filters it sums; the look is
+  WHERE THIS LIVES IS THE GATE'S CALL (the ticket's own words: a dashboard of
+  the moderation tab (i18n:adminScreens.adminReports.moderationTab) or its
+  own screen). Until the gate rules, it is its own screen
+  one hop from the appeals list (i18n:adminScreens.adminReports.tabTickets)
+  whose filters it sums; the look is
   functional, on the existing components and --velo-* tokens.
 
   `average` arrives rounded to hundredths, `share_4_5` as 0..1 to
@@ -154,7 +156,9 @@ async function load(): Promise<void> {
 
 onMounted(load)
 
-/** One row's figures: «12 обращений · 3 с оценкой · ср. 4.33 · 4–5: 67%»
+/** One row's figures: a "12 tickets · 3 rated · avg 4.33 · 4–5: 67%" line
+ *  built from the adminScreens.adminSupportStats ticketsCount / ratedCount /
+ *  average / share entries
  *  (a resolver row has no tickets of its own -- the rated count leads). */
 function figuresLine(row: SupportStatsFigures & { tickets?: number }): string {
   const parts: string[] = []

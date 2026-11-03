@@ -18,6 +18,7 @@
 import type { App, ComponentPublicInstance } from 'vue'
 import type { Router } from 'vue-router'
 
+/** localStorage key that turns the dev-only render log on. */
 export const RENDER_DEBUG_FLAG = 'velo:debug-renders'
 
 /** Components worth logging: screens, shells, layout, loading/motion blocks. */
@@ -26,6 +27,7 @@ const WATCHED =
 
 const SUMMARY_AT_MS = 6000
 
+/** Whether the dev render log is switched on (dev builds, flag set). */
 export function renderDebugEnabled(): boolean {
   if (!import.meta.env.DEV) return false
   try {
@@ -40,6 +42,7 @@ function nameOf(vm: ComponentPublicInstance): string {
   return options.name ?? options.__name ?? ''
 }
 
+/** Install the render log mixin and route stamps (no-op unless enabled). */
 export function installRenderDebug(app: App, router: Router): void {
   if (!renderDebugEnabled()) return
   const counts = new Map<string, { mount: number; update: number }>()

@@ -33,7 +33,7 @@ describe('zoomEntryState', () => {
 
   // A4 V2 (PROMPT №572): create_failed became routine once series children
   // started being created in the background, and before this distinction both
-  // it and pending_creation rendered the identical «готовится» spinner --
+  // it and pending_creation rendered the identical "still preparing" spinner --
   // forever, for a meeting that would never appear on its own.
   it('reports failed (not pending) when not ready and the meeting permanently failed', () => {
     expect(zoomEntryState(false, 'create_failed')).toBe('failed')

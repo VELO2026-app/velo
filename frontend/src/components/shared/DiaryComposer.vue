@@ -100,7 +100,7 @@ async function handleSend(content: string): Promise<ComposerSendResult> {
 }
 
 // FE-70: proxy the shared Composer's focus() so DiaryFeedView can enter write
-// mode on arrival (dashboard "Добавить запись" -> /user/diary?compose=note).
+// mode on arrival (the dashboard's add-entry tap -> /user/diary?compose=note).
 const composerRef = ref<InstanceType<typeof Composer> | null>(null)
 
 function focus(): void {

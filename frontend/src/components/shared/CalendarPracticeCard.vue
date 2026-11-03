@@ -24,8 +24,9 @@
       </VBadge>
     </template>
     <!-- No school-audience marker here: school practices are listed like any
-         other practice (owner 2026-10-02 retired the FE-24 «Для школы» badge);
-         the master zone keeps its audience_unavailable warning instead. -->
+         other practice (owner 2026-10-02 retired the FE-24 "For school"
+         badge); the master zone keeps its audience_unavailable warning
+         instead. -->
   </PracticeListCard>
 </template>
 
@@ -42,9 +43,9 @@ import type { PracticeResponse } from '@/api/types'
 const props = withDefaults(
   defineProps<{
     practice: PracticeResponse
-    /** Показать дату+время вместо только времени. Календарь группирует по дню,
-     *  поэтому там дата не нужна (default). На странице мастера практики идут
-     *  в разные дни — там показываем дату (showDate). */
+    /** Show date+time instead of time only. The calendar groups by day, so
+     *  the date is not needed there (default). On the master's page
+     *  practices span different days — show the date there (showDate). */
     showDate?: boolean
   }>(),
   { showDate: false },
@@ -57,18 +58,20 @@ defineEmits<{
 // F5: render the time in the viewer's own profile timezone (the profile decides).
 const viewerTz = useViewerTimezone()
 
-// Под иконкой (when): короткая дата (showDate, страница мастера — практики идут
-// в разные дни) либо только время (календарь — уже сгруппирован по дню).
+// Under the icon (the `when` slot): a short date (showDate, the master's
+// page — practices span different days) or time only (the calendar —
+// already grouped by day).
 const time = computed(() =>
   props.showDate
     ? formatShortDate(props.practice.scheduled_at, viewerTz.value)
     : formatTime(props.practice.scheduled_at, viewerTz.value),
 )
 
-// Мета-ячейка длительности. На странице мастера (showDate) под иконкой стоит
-// ДАТА, поэтому время суток складываем сюда: «09:00 · 1 ч 15 мин» — иначе
-// практики одного дня в разное время были бы неразличимы. В календаре время
-// уже под иконкой, поэтому остаётся только длительность.
+// The duration meta cell. On the master's page (showDate) the DATE sits
+// under the icon, so the time of day is folded in here:
+// `09:00 · <duration>` — otherwise same-day practices at different times
+// would be indistinguishable. In the calendar the time is already under
+// the icon, so only the duration remains.
 const duration = computed(() => {
   const dur = formatDuration(props.practice.duration_minutes)
   if (!props.showDate) return dur
