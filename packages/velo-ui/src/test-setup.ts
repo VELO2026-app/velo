@@ -17,8 +17,11 @@
 //
 // Package-wide test plumbing lands together with the seams that need it:
 // P3 injects the i18n translator here (configureUi({ t })); P5 wires the
-// toast provider. Nothing to reset in P1 -- the package owns no module
-// state yet.
+// toast provider. The package has owned ONE piece of module state since
+// FE-143 -- the body-scroll lock's reference count (src/useBodyScrollLock).
+// No reset hook for it: that suite pairs every lock/unlock so the count
+// returns to zero on its own (order-independent), the same discipline the
+// file carried in the application.
 // =============================================================================
 
 export {}

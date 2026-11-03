@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- useKeyboardFieldScroll (M5/M6, PROMPT №273)
+// VELO Frontend -- useKeyboardFieldScroll (M5/M6, PROMPT №273; FE-143 seam)
 // =============================================================================
 //
 // A @focus handler that scrolls a text field into view AFTER the soft keyboard
@@ -29,16 +29,35 @@
 // shared keyboard state (--velo-vvh / is-keyboard-open stay owned by
 // useBackgroundStabilizer / keyboardViewportState) — no new global machinery.
 // Desktop / no visualViewport → a single deferred scroll (unchanged fallback).
+//
+// [FE-143] INVERSION: the implementation stays here (it reads the app's
+// platform/host seam -- host machinery a kit must not carry), but consumers
+// now resolve it through the kit's provide/inject seam
+// (@velo/ui keyboardFieldScroll): App.vue calls provideKeyboardFieldScroll()
+// once, every useKeyboardFieldScroll() below injects the factory. The kit's
+// VInput/VTextarea (P6) will inject the SAME key, so the dependency arrow
+// flips app-impl -> kit-consumer before the components move. The seam's
+// default is a no-op: a mount outside App.vue (standalone tests) simply
+// gets no keyboard-aware scrolling.
 // =============================================================================
 
 import { host } from '@/platform/host'
-import { onUnmounted } from 'vue'
+import { onUnmounted, provide } from 'vue'
+import {
+  KEYBOARD_FIELD_SCROLL_INJECTION_KEY,
+  useKeyboardFieldScroll as useKitKeyboardFieldScroll,
+} from '@velo/ui'
 
 /** Time (ms) with no visualViewport resize before we treat the keyboard as
  *  settled and scroll the field into view. */
 const SETTLE_MS = 120
 
-export function useKeyboardFieldScroll() {
+/**
+ * The real implementation, a FACTORY since FE-143: each consumer's setup()
+ * runs it (through the kit seam), so the onUnmounted cleanup below binds to
+ * the component that owns the focused field.
+ */
+export function createKeyboardFieldScroll() {
   // The listener this composable currently has attached to the (long-lived,
   // global) window.visualViewport, if any. Normally removed on the field's
   // own `blur` -- but if the component unmounts first (nav away with the
@@ -105,3 +124,21 @@ export function useKeyboardFieldScroll() {
 
   return { onFieldFocus }
 }
+
+/**
+ * FE-143 host wiring -- App.vue calls this once in its setup. Provides the
+ * real factory under the kit's injection key; every
+ * useKeyboardFieldScroll() below (host views and shared pickers today, the
+ * kit's VInput/VTextarea after P6) resolves to it through @velo/ui.
+ */
+export function provideKeyboardFieldScroll(): void {
+  provide(KEYBOARD_FIELD_SCROLL_INJECTION_KEY, createKeyboardFieldScroll)
+}
+
+/**
+ * The consumer door, unchanged name and import: resolves through the kit
+ * seam (the provided factory), or the kit's no-op default when mounted
+ * outside App.vue. Existing test mocks of this module keep intercepting
+ * exactly as before.
+ */
+export const useKeyboardFieldScroll = useKitKeyboardFieldScroll

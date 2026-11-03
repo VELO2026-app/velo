@@ -32,6 +32,19 @@ export { default as VWheel } from './components/VWheel'
 // switch their consumers.
 export * from './icons'
 
+// Seams & shared composables (FE-143, tz-ui-package.md §4 P5 -- the P6
+// prerequisites): the ref-counted body-scroll lock moved from the app
+// (VModal/VBottomSheet import it from here; its document writes go through
+// the kit's own document seam, src/platform/dom.ts, which stays
+// package-internal until a kit resident needs it), and the keyboard
+// field-scroll INVERSION -- the injection key the host provides at its
+// root (the app: provideKeyboardFieldScroll() in App.vue) plus the
+// consumer door with a no-op default. Kit fields (VInput/VTextarea, P6)
+// and host views resolve the same key.
+export { lockBodyScroll, unlockBodyScroll, SCROLL_LOCK_CLASS } from './useBodyScrollLock'
+export { KEYBOARD_FIELD_SCROLL_INJECTION_KEY, useKeyboardFieldScroll } from './keyboardFieldScroll'
+export type { KeyboardFieldScrollApi, KeyboardFieldScrollFactory } from './keyboardFieldScroll'
+
 // Types re-exported for barrel consumers (verbatimModuleSyntax-aware); the
 // VSegment option contract travels with its component (FE-140 batch B).
 export type { SegmentOption } from './components/VSegment'

@@ -1,7 +1,7 @@
 // =============================================================================
 // VELO Frontend -- @velo/ui boundary (FE-116 raised it, FE-117 batch A opens
-// the first legitimate door, FE-119 P4 opens the second, tz-ui-package.md
-// §3/§4 P2/P4)
+// the first legitimate door, FE-119 P4 opens the second, FE-143 opens the
+// third -- the seam module, tz-ui-package.md §3/§4 P2/P4/P5)
 // =============================================================================
 //
 // From batch A on, the application's UI barrel (src/components/ui/index.ts)
@@ -10,11 +10,20 @@
 // change an import). FE-119 (P4) moves the 12 cross-cutting glyphs into the
 // kit's icon family and opens the same door for the icon barrel
 // (src/components/icons/index.ts): it re-exports them from '@velo/ui' while
-// the domain icons stay local. The boundary law around those doors:
+// the domain icons stay local. FE-143 (P5) moves the kit's first shared
+// COMPOSABLE (the body-scroll lock -- it travels the ui barrel like the
+// components) and inverts useKeyboardFieldScroll into a kit provide/inject
+// seam: the app half of that seam
+// (src/composables/useKeyboardFieldScroll.ts) must import the kit's
+// injection key directly -- a provide/inject key cannot travel a barrel
+// that components cycle back into -- so it becomes the third door.
 //
-//   1. ONLY the two barrels -- src/components/ui/index.ts and
-//      src/components/icons/index.ts -- may import '@velo/ui'; no view,
-//      store, composable or any other source touches the package directly;
+// The boundary law around those doors:
+//
+//   1. ONLY the three doors -- src/components/ui/index.ts,
+//      src/components/icons/index.ts and
+//      src/composables/useKeyboardFieldScroll.ts -- may import '@velo/ui';
+//      no view, store, or any other source touches the package directly;
 //   2. the specifier must be the EXACT barrel '@velo/ui' -- a deep subpath
 //      ('@velo/ui/...') stays banned until P8 reviews the eslint boundary.
 //
@@ -30,7 +39,11 @@ const files = import.meta.glob<string>('/src/**/*.{ts,vue}', {
 })
 
 const UI_PACKAGE_IMPORT = /from\s+['"](@velo\/ui[^'"]*)['"]/
-const BARREL_PATHS = new Set(['components/ui/index.ts', 'components/icons/index.ts'])
+const BARREL_PATHS = new Set([
+  'components/ui/index.ts',
+  'components/icons/index.ts',
+  'composables/useKeyboardFieldScroll.ts',
+])
 
 describe('@velo/ui boundary (FE-117/FE-119: the barrels flip, nothing else touches the package)', () => {
   it('the detector works: real and deep imports are found in a fixture', () => {

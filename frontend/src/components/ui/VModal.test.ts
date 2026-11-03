@@ -17,8 +17,11 @@
 //   - the close triggers: the × button, an overlay tap (the .self guard),
 //     Escape -- a DOCUMENT keydown, so it fires with focus anywhere; there is
 //     NO focus trap in this component (see the FE-142 report);
-//   - the body-scroll lock seam: @/composables/useBodyScrollLock is MOCKED
-//     (per FE-142) -- the lock/unlock CALLS are asserted, never the DOM.
+//   - the body-scroll lock seam: the lock module is MOCKED (per FE-142) --
+//     the lock/unlock CALLS are asserted, never the DOM. FE-143 moved the
+//     module into @velo/ui (the component now reads it through the app's
+//     ui barrel), so the mock targets the kit module and the spies travel
+//     the same barrel the component does.
 //
 // SC-07/SC-13b (SendMessageModal.test.ts): content teleports to body, so
 // every query goes to document.body, never to the mount host. A closed modal
@@ -36,11 +39,17 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { createApp, nextTick, ref, h, type App, type Ref, type VNode } from 'vue'
 import VModal from '@/components/ui/VModal.vue'
-import { lockBodyScroll, unlockBodyScroll } from '@/composables/useBodyScrollLock'
+import { lockBodyScroll, unlockBodyScroll } from '@/components/ui'
 
 // FE-142: assert the lock CALLS, never body.overflow -- the ref-counted
-// composable itself has its own unit tests (useBodyScrollLock.test.ts).
-vi.mock('@/composables/useBodyScrollLock', () => ({
+// composable itself has its own unit tests (useBodyScrollLock.test.ts,
+// living in @velo/ui since FE-143). FE-143 moved the module into the kit
+// and the component onto the app barrel, so the mock overrides the kit
+// module itself (spread + override: everything else stays real) -- the
+// barrel's re-export then hands this file and the component the SAME
+// mocked pair.
+vi.mock('@velo/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@velo/ui')>()),
   lockBodyScroll: vi.fn(),
   unlockBodyScroll: vi.fn(),
 }))

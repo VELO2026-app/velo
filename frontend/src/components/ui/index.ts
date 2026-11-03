@@ -75,5 +75,14 @@ export { default as VAccordion } from './VAccordion.vue'
 export { default as VMenu } from './VMenu.vue'
 export { default as VMenuItem } from './VMenuItem.vue'
 
+// FE-143: the kit's shared composable surface travels the same door as the
+// components. The ref-counted body-scroll lock moved into @velo/ui with its
+// tests (the P6 overlays VModal/VBottomSheet -- still app residents until
+// P6 -- keep their lock through this barrel; the class name SCROLL_LOCK_CLASS
+// stays exported because the host layout CSS freezes on it). The keyboard
+// field-scroll seam lives behind its own door instead: see
+// composables/useKeyboardFieldScroll.ts (the app half of the seam).
+export { lockBodyScroll, unlockBodyScroll, SCROLL_LOCK_CLASS } from '@velo/ui'
+
 // Types re-exported for barrel consumers (verbatimModuleSyntax-aware).
 export type { SegmentOption } from '@velo/ui'

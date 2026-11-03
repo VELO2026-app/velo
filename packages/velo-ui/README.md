@@ -1,8 +1,10 @@
 # `@velo/ui` — UI-кит VELO (приватный пакет монорепы)
 
 > P1-каркас (FE-116) + P2 батч A (FE-117) + P2 хвост A/батч B (FE-140) +
-> P4 иконки (FE-119): каркас, контракт токенов и Storybook подняты до
-> переноса; **батч A (FE-117) перенёс первые 7 компонентов** (VAvatar,
+> P4 иконки (FE-119) + P5-швы FE-143 (dom mini-seam, перенос
+> useBodyScrollLock, инверсия useKeyboardFieldScroll): каркас, контракт
+> токенов и Storybook подняты до переноса; **батч A (FE-117) перенёс первые
+> 7 компонентов** (VAvatar,
 > VBadge, VButton, VCard, VChip, VListRow, VTag); **FE-140 доложил хвост A
 >
 > - батч B — 9 компонентов** (VLoader, VSegment c типом `SegmentOption`,
@@ -174,6 +176,29 @@ src/icons/
 Домен-иконки (IconBrain, IconBreathwork, IconMoodScale*, …) остаются в
 `frontend/src/components/icons`; баррел приложения ре-экспортирует 12
 сквозных из пакета — потребители не меняют импортов до P6/P8.
+
+## Швы (FE-143, §4 P5 — предпосылки P6)
+
+Три шва под перенос оверлеев и полей (VModal/VBottomSheet/VInput/VTextarea):
+
+- **dom mini-seam — `src/platform/dom.ts`**: единственная дверь пакета к
+  `document`, зеркало закона фронтенда (`no-restricted-globals`, включён в
+  eslint пакета тем же FE-143). Мини-набор ровно под резидентов: пара
+  `onDocumentEvent`/`offDocumentEvent` (Escape-keydown оверлеев в P6) и пара
+  `setBodyOverflow`/`toggleRootClass` (записи скролл-лока). Пакет-внутренний:
+  из баррела не экспортируется, приложение продолжает ходить через свой
+  `@/platform/dom`.
+- **`useBodyScrollLock` переехал** (`src/useBodyScrollLock.ts`, тесты вместе
+  с кодом, контракт байт-в-байт): реф-счётчик и класс `velo-scroll-locked` —
+  собственность кита, записи идут через dom-seam пакета. Потребители в
+  приложении (VModal/VBottomSheet) меняют импорт на `@velo/ui`.
+- **Инверсия `useKeyboardFieldScroll`** (`src/keyboardFieldScroll.ts`):
+  provide-ключ `KEYBOARD_FIELD_SCROLL_INJECTION_KEY` + `useKeyboardFieldScroll()`
+  с **дефолтом no-op**. Реализация остаётся в хосте (читает его
+  platform/host); приложение даёт фабрику один раз в корне
+  (`provideKeyboardFieldScroll()` в App.vue). Хост даёт именно ФАБРИКУ:
+  каждый потребитель запускает её в своём setup, чтобы пер-компонентный
+  unmount-cleanup (выселение visualViewport-листенера) сохранился.
 
 ## Storybook (§3.4)
 

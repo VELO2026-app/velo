@@ -13,9 +13,11 @@
 // Deliberate differences from the frontend config:
 //   - no barrel/icons deep-import rules (the §7.2 conventions -- data-velo-*,
 //     attrs-root, slots -- arrive with each component's переносной PR, P2+)
-//   - no platform seam yet: the package meets window/document only through
-//     its own dom-seam in P5, which will carry the same no-restricted-globals
-//     law as the frontend's platform/**
+//   - the platform seam landed in FE-143 as a MINI-dom-seam
+//     (src/platform/dom.ts: onDocumentEvent/offDocumentEvent for the P6
+//     overlays, setBodyOverflow/toggleRootClass for the moved body-scroll
+//     lock) and carries the same no-restricted-globals law as the
+//     frontend's platform/** -- see the rule below.
 // =============================================================================
 
 import js from '@eslint/js'
@@ -57,6 +59,16 @@ export default [
       // console.warn/error allowed; console.log is a hard lint failure.
       'no-console': ['error', { allow: ['warn', 'error'] }],
 
+      // --- Platform seam (FE-143): window/document live only inside
+      // src/platform/ -- the kit's own door to the DOM, mirroring the
+      // frontend's law word for word. Exempted below: src/platform/** and
+      // tests (happy-dom fixtures).
+      'no-restricted-globals': [
+        'error',
+        { name: 'window', message: 'Go through src/platform/dom.ts (the kit dom-seam).' },
+        { name: 'document', message: 'Go through src/platform/dom.ts (the kit dom-seam).' },
+      ],
+
       // Template FORMATTING belongs to prettier (same carve-out and reasoning
       // as the frontend config: prettier runs in this package too).
       'vue/max-attributes-per-line': 'off',
@@ -85,6 +97,9 @@ export default [
     rules: {
       'vue/one-component-per-file': 'off',
       'vue/component-definition-name-casing': 'off',
+      // happy-dom fixtures use window/document (same carve-out as the
+      // frontend's tests).
+      'no-restricted-globals': 'off',
       '@typescript-eslint/unbound-method': 'off',
       '@typescript-eslint/require-await': 'off',
       '@typescript-eslint/no-unnecessary-type-assertion': 'off',
@@ -93,6 +108,15 @@ export default [
       '@typescript-eslint/no-unsafe-call': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
       '@typescript-eslint/no-unsafe-return': 'off',
+    },
+  },
+
+  {
+    // The platform seam owns the host objects (FE-143) -- the kit's mirror
+    // of the frontend's src/platform exemption.
+    files: ['src/platform/**'],
+    rules: {
+      'no-restricted-globals': 'off',
     },
   },
 

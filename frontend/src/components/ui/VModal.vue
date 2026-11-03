@@ -53,7 +53,7 @@ import { t } from '@/locales'
 import { onDocumentEvent, offDocumentEvent } from '@/platform/dom'
 import { onMounted, onUnmounted, watch, onDeactivated } from 'vue'
 import { IconClose } from '@/components/icons'
-import { lockBodyScroll, unlockBodyScroll } from '@/composables/useBodyScrollLock'
+import { lockBodyScroll, unlockBodyScroll } from '@/components/ui'
 
 const props = withDefaults(
   defineProps<{

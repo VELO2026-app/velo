@@ -89,6 +89,7 @@ import { platform } from '@/platform'
 import { useBackgroundStabilizer } from '@/composables/useBackgroundStabilizer'
 import { useViewportGeometry } from '@/composables/useViewportGeometry'
 import { useKeyboardDismiss } from '@/composables/useKeyboardDismiss'
+import { provideKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import { startRoleFreshnessPoll } from '@/composables/useRoleFreshness'
 import { VToast } from '@/components/ui'
 import AppFrame from '@/components/layout/AppFrame.vue'
@@ -150,6 +151,13 @@ useViewportGeometry()
 // GLOBAL tap-to-dismiss keyboard (batch L, B1): one app-level owner replacing
 // the per-view dismissKeyboardOnBlank copies. Installed once here.
 useKeyboardDismiss()
+
+// FE-143: the kit field-scroll seam -- provides the real keyboard-aware
+// focus-scroll factory once at the root. Every useKeyboardFieldScroll()
+// below (views and shared pickers today, the kit's VInput/VTextarea after
+// the P6 move) resolves to it through @velo/ui; without a provider the kit
+// seam is a silent no-op, so this line is what keeps the feature alive.
+provideKeyboardFieldScroll()
 
 /**
  * Entry stage after a successful auth. Null until initAuth() resolves and

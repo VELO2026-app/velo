@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- useBodyScrollLock Unit Tests
+// @velo/ui -- useBodyScrollLock Unit Tests
 // =============================================================================
 // W16 (PROMPT №409): VModal/VBottomSheet each used to set
 // document.body.style.overflow directly -- with two overlays open at once,
@@ -10,10 +10,16 @@
 // Module-level state (the whole point -- a shared lock across every VModal/
 // VBottomSheet instance). Each test below pairs its own lock/unlock calls so
 // the count returns to 0 at the end -- order-independent, no reset needed.
+//
+// Moved from the app together with the module (FE-143, "tests travel with
+// the code"): the four cases are byte-for-byte the app's -- the move must
+// change WHERE the lock lives, not WHAT it does. The import is the kit's
+// relative one; the document writes go through the kit's own dom seam now
+// (src/platform/dom.ts), which is what these assertions read back.
 // =============================================================================
 
 import { describe, it, expect, beforeEach } from 'vitest'
-import { lockBodyScroll, unlockBodyScroll } from '@/composables/useBodyScrollLock'
+import { lockBodyScroll, unlockBodyScroll } from './useBodyScrollLock'
 
 describe('useBodyScrollLock (W16 -- ref-counted, no premature unlock)', () => {
   beforeEach(() => {
