@@ -143,7 +143,7 @@ async function onLoadMore(): Promise<void> {
 const UPCOMING_STATUSES = ['confirmed', 'pending'] as const
 
 /**
- * True once the practice has ENDED (scheduled_at + duration < now).
+ * True once the practice has ENDED (`scheduled_at + duration < now`).
  *
  * A booking whose practice is over belongs in t('user.screens.myBookings.tabs.past') even while its status
  * is still confirmed/pending: the backend deliberately keeps that status until
@@ -161,7 +161,7 @@ function isUpcoming(b: BookingWithPracticeResponse): boolean {
 }
 
 /**
- * True if the practice is in progress — by CLIENT TIME (start ≤ now < end) via
+ * True if the practice is in progress — by CLIENT TIME (`start ≤ now < end`) via
  * the shared isLiveNow, in sync with the dashboard's nearest-practice card.
  * (Was practice.status==='live', which depended on the master's manual flip.)
  */

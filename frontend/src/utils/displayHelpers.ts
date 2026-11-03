@@ -150,7 +150,7 @@ export const DIRECTION_ICON_FALLBACK: Component = IconDots
  * Works for both PracticeResponse and PracticeSummary — backend B-1 added
  * `direction` to PracticeSummary on 2026-05-28, so the title-heuristic
  * fallback that used to live here is no longer needed (removed 2026-05-29).
- * Unknown direction -> neutral IconDots fallback.
+ * `Unknown direction -> neutral IconDots fallback`.
  *
  * `title` prop kept in the signature for call-site compatibility (some
  * legacy callers pass it); ignored internally.
@@ -300,7 +300,7 @@ export const EXTERNAL_ACTIVITY_ICON: Component = IconCalendarStar
 
 /**
  * Outcome badge label for a practice_outcome card.
- * attended -> "Done" (teal), no_show -> the missed-you label
+ * `attended -> "Done"` (teal), `no_show -> the missed-you label`
  * (i18n:display.outcome.no_show).
  *
  * B30 (PROMPT №747): the no_show label was previously the "did not take
@@ -324,7 +324,7 @@ export const OUTCOME_LABEL: Record<string, string> = {
 /**
  * Recurrence label for a series from its ISO weekday list: the daily label
  * (i18n:display.recurrenceDaily) when all seven days are present, otherwise
- * the short weekday list resolving via `t(\`display.weekdayAbbr.${d}\`)`
+ * the short weekday list resolving via \`t(\`display.weekdayAbbr.$\{d\}\`)\`
  * (de-duplicated, ordered Mon→Sun).
  *
  * @returns Null when there are no valid days so the caller can fall back

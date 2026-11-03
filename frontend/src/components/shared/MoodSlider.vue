@@ -134,15 +134,15 @@ const emit = defineEmits<{
 // behind the neighbors and crop against the stage edges.
 const CARD_WIDTH = 96
 /** Nearest neighbors: 0.75 x card width. Their scaled half-width
- *  (48 * 0.8 = 38.4) puts the inner edge at 72 - 38.4 = 33.6 < 48 -- hidden
+ *  (48 * 0.8 = 38.4) puts the inner edge at `72 - 38.4 = 33.6 < 48` -- hidden
  *  behind the active card by ~14px of overlap. */
 const NEAR_SHIFT = 0.75 * CARD_WIDTH // 72px
 /** Far cards: 1.3 x card width, BEHIND the neighbors (their inner edge at
- *  125 - 31 = 94 < 110 = the neighbor's outer edge). */
+ *  `125 - 31 = 94 < 110` = the neighbor's outer edge). */
 const FAR_SHIFT = 1.3 * CARD_WIDTH // ~125px
 /** Tier scales: active / nearest / far. */
 const TIER_SCALE = [1, 0.8, 0.65] as const
-/** Layer order: active -> neighbors -> far cards. */
+/** Layer order: `active -> neighbors -> far cards`. */
 const TIER_Z = [10, 9, 8] as const
 /** Per-tier slide from the stage centerline. */
 /** Rendered face size -- scales with its CARD now, no inner face scaling. */

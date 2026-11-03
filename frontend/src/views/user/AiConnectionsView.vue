@@ -228,7 +228,7 @@ import { formatDate } from '@/utils/format'
 import { bearerHeaderValue, mcpServerUrl } from '@/utils/mcpServerUrl'
 import { INSTANCE } from '@/platform/instance'
 
-/** <API base>/mcp, or null when no base is configured (fails closed). */
+/** `<API base>/mcp`, or null when no base is configured (fails closed). */
 const mcpUrl = mcpServerUrl(INSTANCE.apiBaseUrl)
 
 const router = useRouter()

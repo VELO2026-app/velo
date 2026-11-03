@@ -80,7 +80,7 @@ const EXTERNAL_ACTIVITY_FIELDS = [
 ] as const
 
 /** Field-attributed 422 errors: the backend's `loc` (minus the "body" prefix)
- *  -> that entry's msg. FE-70: the endpoint deliberately answers with SEVERAL
+ *  `->` that entry's msg. FE-70: the endpoint deliberately answers with SEVERAL
  *  field errors at once, so the form must be able to highlight two controls
  *  simultaneously instead of walking them one at a time. */
 export type ExternalActivityFieldErrors = Partial<
@@ -106,7 +106,8 @@ export const useDiaryStore = defineStore('diary', () => {
 
   /**
    * Submit a check-in for a practice.
-   * Returns { ok, error } so the view can show a toast on failure.
+   *
+   * @returns `{ ok, error }` so the view can show a toast on failure.
    */
   async function submitCheckin(practiceId: string, body: CheckinRequest): Promise<SubmitResult> {
     if (checkinSubmitting.value) return { ok: false, error: '' }
@@ -136,7 +137,8 @@ export const useDiaryStore = defineStore('diary', () => {
 
   /**
    * Submit a feedback for a practice.
-   * Returns { ok, error } so the view can show a toast on failure.
+   *
+   * @returns `{ ok, error }` so the view can show a toast on failure.
    */
   async function submitFeedback(practiceId: string, body: FeedbackRequest): Promise<SubmitResult> {
     if (feedbackSubmitting.value) return { ok: false, error: '' }
@@ -164,7 +166,8 @@ export const useDiaryStore = defineStore('diary', () => {
 
   /**
    * Submit a no-show reflection for a practice.
-   * Returns { ok, error } so the view can show a toast on failure.
+   *
+   * @returns `{ ok, error }` so the view can show a toast on failure.
    *
    * The reflection projects nothing into the diary feed, so there is no feed
    * to refresh here. The booking's has_reflection flag is refreshed by the
@@ -424,7 +427,7 @@ export const useDiaryStore = defineStore('diary', () => {
    * (callers fire it without awaiting; it never rejects).
    *
    * W27 (PROMPT №438): this used to ALSO call
-   * `useBookingsStore().refreshBookings()`, which was the diary->bookings half of
+   * `useBookingsStore().refreshBookings()`, which was the `diary->bookings` half of
    * a circular store dependency (bookings.ts imports this store in return). That
    * call was REDUNDANT, not merely circular: `refreshAfterDiaryMutation` is
    * reached only from submitCheckin/submitFeedback, and the sole caller of each
@@ -432,7 +435,7 @@ export const useDiaryStore = defineStore('diary', () => {
    * `bookingsStore.refreshBookings()` itself the moment the submit resolves, and
    * says so in its own comment. So every check-in and every feedback issued TWO
    * sequential GET /bookings: this one, awaited, then the view's. Deleting it
-   * removes the duplicate request AND leaves bookings -> diary as a plain
+   * removes the duplicate request AND leaves `bookings -> diary` as a plain
    * one-way dependency. The cycle is gone, not deferred.
    *
    * Keeping bookings fresh after a diary mutation is therefore the VIEW's job --
@@ -509,7 +512,7 @@ export const useDiaryStore = defineStore('diary', () => {
   const PENDING_ID_PREFIX = 'pending:'
 
   const pendingEntries = ref<PendingDiaryEntry[]>([])
-  /** Server entry id -> the client key its row was rendered under. */
+  /** `Server entry id -> the client key its row was rendered under.` */
   const keyByEntryId = new Map<string, string>()
 
   /** The v-for key of a feed row: a delivered optimistic entry keeps the key

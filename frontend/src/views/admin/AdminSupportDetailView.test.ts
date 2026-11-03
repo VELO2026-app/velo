@@ -213,7 +213,7 @@ function sheetOpen(): boolean {
   return !!el && !el.classList.contains('v-sheet-leave-active')
 }
 /** What the ⋯ menu offers: opens it, reads the rows, closes it again. No
- *  menu button -> nothing is offered. */
+ *  `menu button -> nothing is offered`. */
 async function statusOffer(): Promise<string[]> {
   const button = menuButton()
   if (!button) return []

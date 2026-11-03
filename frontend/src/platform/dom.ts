@@ -136,7 +136,7 @@ export function supportsViewTransitions(): boolean {
 
 /**
  * document.startViewTransition, or null where the host has no View
- * Transitions (iOS < 18, older Android WebView) -- the caller then applies the
+ * Transitions (iOS `< 18`, older Android WebView) -- the caller then applies the
  * update directly. The promises are pre-handled: a skipped transition rejects
  * `ready`/`finished`, which is a normal outcome here, not an error.
  */

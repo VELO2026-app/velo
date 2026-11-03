@@ -129,7 +129,7 @@ function rowValue(key: string): string {
   return row?.querySelector('.wd__v')?.textContent?.trim() ?? ''
 }
 
-/** Walk the real gate: confirm (i18n:ui.confirm) -> ConfirmPaymentModal. */
+/** Walk the real gate: `confirm (i18n:ui.confirm) -> ConfirmPaymentModal`. */
 async function openConfirm(): Promise<void> {
   button('Подтвердить')?.click()
   await flush()

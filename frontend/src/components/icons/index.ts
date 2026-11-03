@@ -7,7 +7,7 @@
  * that keep their own pastel fills (default size 40), like VeloLogo.
  *
  * Usage:
- *   import { IconHome, IconCalendar } from '@/components/icons'
+ *   `import { IconHome, IconCalendar } from '@/components/icons'`
  */
 
 export { default as IconHome } from './IconHome.vue'

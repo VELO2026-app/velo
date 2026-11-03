@@ -337,7 +337,7 @@ async function pickDate(day: number): Promise<void> {
   await tapDayAndSave(day)
 }
 
-/** Drive the REAL teleported DatePickerSheet behind Finish -> pick a date. */
+/** Drive the REAL teleported DatePickerSheet behind `Finish -> pick a date`. */
 async function pickEndDate(day: number): Promise<void> {
   host?.querySelector<HTMLElement>('.create-practice__end-control.create-practice__picker')?.click()
   await flush()
@@ -354,7 +354,7 @@ async function pickEndDate(day: number): Promise<void> {
  * a nextTick loop never grants. So TimePickerSheet's own initFromModel default
  * of 12:00 (TimePickerSheet.vue:58-71) is the only value reachable through the
  * real sheet -- and it IS the real sheet: the tap, the save button, and the
- * update:modelValue -> form.time wiring are all genuinely exercised.
+ * `update:modelValue -> form.time` wiring are all genuinely exercised.
  */
 async function pickDefaultTime(): Promise<void> {
   pickerTriggers()[1]?.click()

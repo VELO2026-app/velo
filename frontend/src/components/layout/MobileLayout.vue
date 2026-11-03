@@ -117,7 +117,7 @@ async function retryRestore(): Promise<void> {
 
 /** Tab roots keep their own scroll, like a native tab bar: leaving the
  * calendar mid-list and coming back via the dock lands on the same spot.
- * Keyed by the tab's path; only a dock hop (tab root -> tab root) reads it. */
+ * Keyed by the tab's path; only a dock hop (`tab root -> tab root`) reads it. */
 const tabScroll = new Map<string, number>()
 const isTabRoot = (path: string): boolean => props.tabs.some((tab) => tab.to === path)
 

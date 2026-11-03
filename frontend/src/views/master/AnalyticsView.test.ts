@@ -432,7 +432,7 @@ function pcards(): HTMLElement[] {
 function pcardTitles(): string[] {
   return pcards().map((c) => c.querySelector('.analytics__pcard-title')?.textContent?.trim() ?? '')
 }
-/** Every distribution bar as label -> meta: a missing/extra bar fails toEqual. */
+/** Every distribution bar as `label -> meta`: a missing/extra bar fails toEqual. */
 function distAll(): Record<string, string> {
   return Object.fromEntries(
     Array.from(reviewsPane().querySelectorAll<HTMLElement>('.v-rating-dist__row')).map((r) => [
@@ -1305,7 +1305,7 @@ describe('AnalyticsView', () => {
   // - The insights LRU eviction and the "skip if already cached" guard
   //   (stores/diary.ts:363-380): store behaviour, and probekit-unit-test's ground.
   // - The send button (i18n:common.submitSend) in the send-message modal: that
-//   component's own open-then-send
+  //   component's own open-then-send
   //   behaviour (SendMessageModal.test.ts). It belongs to that component's own
   //   test, not to a screen test that would be re-asserting a child (SC-09).
   // - The income «—» placeholder (.vue:457-459): unreachable honestly. The

@@ -109,7 +109,7 @@ const props = defineProps<{
    *  creates for a school's master belongs to that school, and a school
    *  practice is for everyone or for the school's students
    *  (check_school_audience) -- so that flow passes ['public',
-   *  'schools']. Absent -> every kind, as before. */
+   *  'schools']. `Absent -> every kind`, as before. */
   allowedKinds?: PracticeAudienceKind[]
   /** BE-74 edit seam: the school of an EXISTING practice never changes
    *  (practice_school_immutable). Edit passes the practice's own school in

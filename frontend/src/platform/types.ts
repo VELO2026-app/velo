@@ -45,7 +45,7 @@ export interface Platform {
    * Telegram: WebApp.initDataUnsafe.start_param (set when bot link has startapp=...).
    * Standalone: null.
    *
-   * TD-F01: used to handle open_practice__{uuid} deep links.
+   * TD-F01: used to handle `open_practice__{uuid}` deep links.
    */
   getStartParam(): string | null
 

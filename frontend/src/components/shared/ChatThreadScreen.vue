@@ -391,7 +391,7 @@ function attachKeepBottom(): void {
   feedWrapObserver.observe(wrapEl.value)
 }
 
-/** One page, newest-first from comms -> stored oldest-first for rendering. */
+/** One page, `newest-first from comms -> stored oldest-first` for rendering. */
 async function fetchMessages(): Promise<ChatMessage[]> {
   const page = await listChatMessages(props.threadId)
   return [...page.messages].reverse()
@@ -460,7 +460,7 @@ async function reload(): Promise<void> {
 
 /** Self-scheduling poll loop (was a flat 12s interval): the next tick is
  *  TRANSLATING_POLL_MS while any message is still translating and the 2-minute
- *  lease is young, else the plain cadence. Hidden screen -> the loop PARKS
+ *  lease is young, else the plain cadence. `Hidden screen -> the loop PARKS`
  *  (no timer booked); onVisibility re-kicks it with an immediate poll.
  *  Idempotent -- re-booking clears the pending tick first, so reload()
  *  (which resolves AFTER the mount-time bootstrap booking, and is what
@@ -557,7 +557,7 @@ interface PendingSend {
 
 /** Own messages not yet in `messages`, in send order. */
 const pendingSends = ref<PendingSend[]>([])
-/** Server id -> the client key its bubble was rendered under (stable rows). */
+/** `Server id -> the client key` its bubble was rendered under (stable rows). */
 const clientKeyById = new Map<string, string>()
 
 interface FeedRow {

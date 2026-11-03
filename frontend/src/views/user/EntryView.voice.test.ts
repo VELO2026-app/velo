@@ -167,7 +167,7 @@ function menuItem(ariaLabel: string): HTMLButtonElement | undefined {
   return host?.querySelector<HTMLButtonElement>(`button[aria-label="${ariaLabel}"]`) ?? undefined
 }
 
-/** View -> edit through the real kebab + pencil. */
+/** `View -> edit` through the real kebab + pencil. */
 async function startEditing(): Promise<void> {
   host?.querySelector<HTMLButtonElement>('.v-menu__trigger')?.click()
   await flush()
