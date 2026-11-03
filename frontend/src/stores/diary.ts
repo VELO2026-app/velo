@@ -372,8 +372,10 @@ export const useDiaryStore = defineStore('diary', () => {
 
   /**
    * Load the context window around one search result and make it the active
-   * timeline view. Returns false on failure (jumpTargetId stays unset, so the
-   * results list remains on screen; jumpError carries the message).
+   * timeline view.
+   *
+   * @returns False on failure (jumpTargetId stays unset, so the results list
+   *   remains on screen; jumpError carries the message).
    */
   async function jumpToEntry(item: DiaryFeedItem): Promise<boolean> {
     if (jumpLoading.value) return false

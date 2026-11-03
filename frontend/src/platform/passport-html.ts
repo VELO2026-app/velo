@@ -40,8 +40,9 @@ function skinFontBlock(skin: SkinPackage): string {
   ].join('\n')
 }
 
-/** The index.html post-transform. `skin` is the package read by
- * platform/skin.ts (null = golden build). */
+/** The index.html post-transform.
+ *
+ * @param skin - The package read by platform/skin.ts (null = golden build). */
 export function passportHtmlDefaults(skin: SkinPackage | null = null): Plugin {
   let files: Record<string, string> = {}
   return {

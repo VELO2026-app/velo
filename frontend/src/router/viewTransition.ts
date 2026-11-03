@@ -97,9 +97,10 @@ export function transitionKind(
 let pendingPop = false
 let lastWasPop = false
 
-/** True when the navigation that produced the current route came from the
- * history stack (system/Telegram back, router.back()). MobileLayout reads it
- * to restore the scroll position instead of resetting it. */
+/** MobileLayout reads it to restore the scroll position instead of resetting it.
+ *
+ * @returns True when the navigation that produced the current route came from
+ * the history stack (system/Telegram back, router.back()). */
 export function lastNavigationWasPop(): boolean {
   return lastWasPop
 }

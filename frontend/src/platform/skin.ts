@@ -87,8 +87,13 @@ function readBrandJson(publicDir: string): SkinPackage {
   }
 }
 
-/** The skin package for this build, or null when the golden one ships.
- *  `publicDir` is the frontend/public directory. */
+/**
+ * The skin package for this build.
+ *
+ * @returns Null when the golden one ships.
+ *
+ * @param publicDir - The frontend/public directory.
+ */
 export function readSkin(publicDir: string): SkinPackage | null {
   if (!existsSync(join(publicDir, 'skin', 'brand.json'))) return null
   return readBrandJson(publicDir)

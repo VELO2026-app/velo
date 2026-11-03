@@ -196,7 +196,9 @@ export const useAuthStore = defineStore('auth', () => {
   /**
    * Browser sign-in, step 1: ask the backend for Telegram's URL, remember
    * `{ state, mark }` in this browser (platform/browser-login.ts) and leave
-   * for Telegram. Throws the API error for the login screen to word.
+   * for Telegram.
+   *
+   * @throws The API error for the login screen to word.
    */
   async function startBrowserLogin(): Promise<void> {
     const mark = newMark()
@@ -256,14 +258,14 @@ export const useAuthStore = defineStore('auth', () => {
    * masterApplication computeds derived from it) into a session that had
    * already logged out or moved on.
    *
-   * Returns whether the attempt REACHED A DEFINITIVE OUTCOME (B2, PROMPT
-   * №724): no token / a successful fetch / a discarded-by-race fetch / a 401
-   * all resolve `true` -- each is a real answer, not something worth retrying
-   * sooner. Only a genuine transport failure (network blip, 5xx, anything
-   * this function does not recognise) resolves `false`. useRoleFreshness.ts
-   * uses this to decide whether the debounce/poll window may advance --
-   * before this, the window advanced unconditionally and a single failed
-   * attempt silently ate the whole staleness window with no retry.
+   * @returns Whether the attempt REACHED A DEFINITIVE OUTCOME (B2, PROMPT
+   *   №724): no token / a successful fetch / a discarded-by-race fetch / a 401
+   *   all resolve `true` -- each is a real answer, not something worth retrying
+   *   sooner. Only a genuine transport failure (network blip, 5xx, anything
+   *   this function does not recognise) resolves `false`. useRoleFreshness.ts
+   *   uses this to decide whether the debounce/poll window may advance --
+   *   before this, the window advanced unconditionally and a single failed
+   *   attempt silently ate the whole staleness window with no retry.
    */
   async function fetchMe(): Promise<boolean> {
     if (!token.value) return true

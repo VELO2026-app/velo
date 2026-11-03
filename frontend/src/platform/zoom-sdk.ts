@@ -137,14 +137,15 @@ function errorCodeOf(payload: unknown): number | null {
 /**
  * Load the SDK (once per page) and enter the meeting with the server's
  * parameters. Resolves when join() reported success -- from then on the SDK
- * owns the page until leaveUrl reloads it. Rejects with ZoomSdkError.
+ * owns the page until leaveUrl reloads it.
  *
  * `leaveUrl` must be an absolute URL of THIS app (the SDK navigates to it).
  * `insetTop` is the top safe-area length (useSafeArea().contentSafeTopCss).
  *
- * The meeting's safe-area style goes on before the SDK draws anything and
- * comes off again on every failure, so a failed entry leaves the practice
- * screen exactly as it was.
+ * @throws ZoomSdkError - on any failure (load, init, join). The meeting's
+ *  safe-area style goes on before the SDK draws anything and comes off
+ *  again on every failure, so a failed entry leaves the practice screen
+ *  exactly as it was.
  */
 export async function enterZoomMeeting(
   join: ZoomSdkJoinResponse,

@@ -29,7 +29,9 @@ export function writeSessionNumber(key: string, value: number): void {
   }
 }
 
-/** A JSON value from sessionStorage, or null (missing, unreadable, corrupt). */
+/** A JSON value from sessionStorage.
+ *
+ * @returns Null when the key is missing, unreadable, or corrupt. */
 export function readSessionJson(key: string): unknown {
   try {
     const raw = host.sessionStorage.getItem(key)
@@ -39,7 +41,9 @@ export function readSessionJson(key: string): unknown {
   }
 }
 
-/** Store a pre-serialized JSON string; false when storage refused it. */
+/** Store a pre-serialized JSON string.
+ *
+ * @returns False when storage refused it. */
 export function writeSessionString(key: string, value: string): boolean {
   try {
     host.sessionStorage.setItem(key, value)
