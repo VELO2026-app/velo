@@ -1,0 +1,97 @@
+# velo on the deploy machine pridem: what to install, never a value
+# (contract 3; PRIMER-PROTOCOL 1.6). Values come from the instance's passport
+# and from the machine only (protocol 5.1).
+schema: 1
+name: velo
+kind: product
+
+dependencies:
+  comms: { repo: git@github.com:aivis-one/comms.git, version: ">=4,<5" }
+
+editions:
+  # One edition with every module until velo has its table "edition ->
+  # modules"; `full` is velo's own word for "every module on"
+  # (frontend/src/platform/features.ts).
+  full: { services: [comms] }
+
+stacks:
+  velo:
+    compose: docker-compose.yml
+    app:      { service: app, port: 8000, health: /health, ready: /ready }
+    frontend: { service: frontend, port: 3000 }
+    migrate:  python -m alembic upgrade head
+    test:     { run: python -m pytest tests/ --junitxml=/tmp/junit.xml, target: test }
+    seeds:
+      02102026-demo:            { run: python scripts/seed.py --profile 02102026-demo, when: command }
+      02102026-invest_demo_new: { run: python scripts/seed.py --profile 02102026-invest_demo_new, when: command }
+      11102026-loadtest:        { run: python scripts/seed.py --profile 11102026-loadtest, when: command }
+      "15082026":               { run: python scripts/seed.py --profile 15082026, when: command }
+      23092026-cf-388101:       { run: python scripts/seed.py --profile 23092026-cf-388101, when: command }
+      "26082026":               { run: python scripts/seed.py --profile 26082026, when: command }
+      26082026-1:               { run: python scripts/seed.py --profile 26082026-1, when: command }
+      FE-54:                    { run: python scripts/seed.py --profile FE-54, when: command }
+  velo-storage:
+    compose: docker-compose.storage.yml
+    persistent: true
+
+env:
+  # minted: the machine mints once, the value lives between rollouts
+  SECRET_KEY:           { source: minted }
+  POSTGRES_PASSWORD:    { source: minted }
+  REDIS_PASSWORD:       { source: minted }
+  STORAGE_SECRET_KEY:   { source: minted }
+  RUSTFS_ACCESS_KEY:    { source: minted }
+  RUSTFS_SECRET_KEY:    { source: minted }
+  # passport
+  EDITION:              { source: passport, key: edition, enum: editions }
+  APP_ENV:              { source: passport, key: server.role }
+  ALLOW_ZOOM_STUB:      { source: passport, key: server.role }
+  ALLOW_STRIPE_STUB:    { source: passport, key: server.role }
+  CORS_ORIGINS:         { source: passport, key: domains.frontend }
+  PUBLIC_LINK_BASE:     { source: passport, key: domains.api }
+  MCP_OAUTH_ISSUER_URL: { source: passport, key: domains.api }
+  API_BASE_URL:         { source: passport, key: domains.api }
+  # params.velo.<name> of the passport
+  SUPPORT_LANGUAGE:         { source: param }
+  ZOOM_ACCOUNT_ID:          { source: param }
+  ZOOM_CLIENT_ID:           { source: param }
+  ZOOM_SDK_CLIENT_ID:       { source: param }
+  TELEGRAM_LOGIN_CLIENT_ID: { source: param }
+  # asked: secrets of the passport
+  ZOOM_CLIENT_SECRET:           { source: asked }
+  ZOOM_SDK_CLIENT_SECRET:       { source: asked }
+  TELEGRAM_LOGIN_CLIENT_SECRET: { source: asked }
+  # seams of comms
+  COMMS_API_URL:         { source: seam, from: comms }
+  COMMS_SERVICE_TOKEN:   { source: seam, from: comms }
+  TELEGRAM_BOT_URL:      { source: seam, from: comms }
+  COMMS_EVENTS_ADDRESS:  { source: seam, from: comms }
+  COMMS_EVENTS_PASSWORD: { source: seam, from: comms }
+
+packages:
+  skin:
+    contract: ">=1,<2"
+    apply: build
+    build:
+      - { service: frontend, path: public/skin }
+
+# In transition (protocol 4.2, 11.2): each host leaves with its channel.
+egress:
+  - zoom.us               # Zoom, until velo-meet
+  - api.zoom.us           # Zoom, until velo-meet
+  - oauth.telegram.org    # sign-in with Telegram, until comms v4.x
+  - claude.ai             # MCP CIMD, until comms v4.x
+  - chatgpt.com           # MCP CIMD, until comms v4.x
+
+host:
+  domains: [frontend, api]
+  routes:
+    frontend: { to: "frontend:3000" }
+    api:      { to: "app:8000", max_body: 3M }
+
+verbs:
+  setrole:        { run: python scripts/set_role.py --yes, args: [telegram_id, role] }
+  comms-outbox:   { run: python scripts/comms_outbox.py, args: [command] }
+  backfill-comms: { run: python scripts/backfill_comms_sync.py }
+
+report: { health: /health, ready: /ready, logs: json, junit: true }
