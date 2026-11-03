@@ -73,6 +73,7 @@ function ribbonSvg(pts: PathPoint[], color: string, opacity: number): string {
     .join('')
 }
 
+/** Banner render variants: the lightweight list row, and the flat mode without watery filters. */
 export interface BannerSvgOptions {
   /**
    * true -- the list-row variant (§1.4/§5.3): no heavy filters
@@ -87,6 +88,7 @@ export interface BannerSvgOptions {
   flat?: boolean
 }
 
+/** Render the rose-whirl banner background as an SVG string, at the given size. */
 export function bannerSvg(
   P: SchoolBrandingParams,
   w: number,

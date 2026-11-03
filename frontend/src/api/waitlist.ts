@@ -19,10 +19,12 @@ export function getMyWaitlist(
   return api.get<PaginatedWaitlistResponse>(`/api/v1/waitlist/me${qs}`)
 }
 
-/** POST /waitlist/{id}/confirm -- 201 + booking on success. 400 when the
- *  hold expired (entry -> expired) or the spot was taken meanwhile (entry ->
- *  waiting again), or the entry is not a notified one; 404 for an entry that
- *  is not mine. The 400 body does not say WHICH -- re-read the entry. */
+/** `POST /waitlist/{id}/confirm` -- 201 + booking on success. The 400 body
+ *  does not say WHICH -- re-read the entry.
+ *
+ *  @throws ApiResponseError -- 400 when the hold expired (`entry -> expired`)
+ *    or the spot was taken meanwhile (`entry -> waiting again`), or the entry
+ *    is not a notified one; 404 for an entry that is not mine. */
 export function confirmWaitlist(id: string): Promise<WaitlistConfirmResponse> {
   return api.post<WaitlistConfirmResponse>(`/api/v1/waitlist/${id}/confirm`)
 }

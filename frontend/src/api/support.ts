@@ -53,6 +53,7 @@ export const SUPPORT_CLOSING_STATUSES: readonly SupportClosingStatus[] = [
   'spam',
 ]
 
+/** A ticket's category: which form lane the appeal arrived through. */
 export type SupportCategory =
   'tech' | 'practices' | 'payments' | 'complaint_master' | 'complaint_user' | 'other'
 
@@ -104,6 +105,7 @@ export interface AdminSupportTicket extends SupportTicket {
   rating: SupportTicketRating | null
 }
 
+/** One page of the admin ticket list with the next-page cursor. */
 export interface AdminSupportTicketList {
   tickets: AdminSupportTicket[]
   next_cursor: string | null
@@ -147,6 +149,7 @@ export interface SupportMessage {
  *  feed's `original` / `translation` (those come with the next feed read). */
 export type SupportSentMessage = Omit<SupportMessage, 'original' | 'translation'>
 
+/** Answer of a translation retry: the job is preparing again, with its attempt number. */
 export interface SupportRetryResult {
   message_id: string
   locale: string
@@ -154,11 +157,13 @@ export interface SupportRetryResult {
   state: 'preparing'
 }
 
+/** One page of the admin support feed with the next-page cursor. */
 export interface SupportMessageList {
   messages: SupportMessage[]
   next_cursor: string | null
 }
 
+/** Ticket-creation answer: the new ticket plus its first message. */
 export interface SupportTicketCreated {
   ticket: SupportTicket
   message: SupportMessage
@@ -176,6 +181,7 @@ export interface PendingRatingTicket {
   status_changed_at: string
 }
 
+/** The caller's tickets waiting for a rating, most recently resolved first. */
 export interface PendingRatingList {
   tickets: PendingRatingTicket[]
 }
@@ -364,9 +370,11 @@ export function sendAdminSupportReply(threadId: string, body: string): Promise<S
 }
 
 /** Take a ticket -- the act that grants the right to reply. A repeat of your
- *  own claim is 200 again; held by another admin -> 409. The answer (comms'
- *  thread) is not read: the card reads the ticket again (getAdminTicket), so
- *  who holds it is always velo's `claimed_by`. */
+ *  own claim is 200 again. The answer (comms' thread) is not read: the card
+ *  reads the ticket again (getAdminTicket), so who holds it is always velo's
+ *  `claimed_by`.
+ *
+ *  @throws ApiResponseError -- `held by another admin -> 409`. */
 export function claimSupportThread(threadId: string): Promise<unknown> {
   return api.post<unknown>(`/api/v1/support/threads/${threadId}/claim`, {})
 }
@@ -407,6 +415,7 @@ export interface SupportStatsResolver extends SupportStatsFigures {
   admin: SupportPerson | null
 }
 
+/** Period statistics of support appeals: per-category figures, spam, per-resolver ratings. */
 export interface SupportStats {
   period: { created_from: string; created_to: string }
   categories: SupportStatsCategory[]

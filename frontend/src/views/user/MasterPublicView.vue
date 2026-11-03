@@ -217,7 +217,7 @@
         </p>
       </section>
 
-    <!-- Write message (i18n:common.writeMessage, the ⋯ menu) replaced the
+      <!-- Write message (i18n:common.writeMessage, the ⋯ menu) replaced the
          old ask-a-question
          button: opens/joins the eternal DM with this master (POST
          /api/v1/chats is create-or-get, so tapping twice lands in the same

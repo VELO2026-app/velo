@@ -33,14 +33,16 @@ const VELO_SHORT_MONTHS: readonly string[] = datesSeed.dates?.shortMonths ?? []
  * Format cents into a currency string using Intl.NumberFormat.
  *
  * By default, 0 cents returns the free label (i18n:common.free; for practice
- * prices). Pass allowZero=true to format 0 as "0,00 €" (for balance display).
+ * prices).
+ *
+ * @param allowZero - Pass `true` to format 0 as "0,00 €" (for balance display).
  *
  * S-24: Always uses 2 decimal places for consistency in payment context.
  *
  * Examples:
- *   formatMoney(1500, 'EUR')              -> "15,00 €"  (in ru locale)
- *   formatMoney(0, 'EUR')                 -> i18n:common.free
- *   formatMoney(0, 'EUR', getLocale(), true)     -> "0,00 €"
+ *   `formatMoney(1500, 'EUR')              -> "15,00 €"`  (in ru locale)
+ *   `formatMoney(0, 'EUR')                 -> i18n:common.free`
+ *   `formatMoney(0, 'EUR', getLocale(), true)     -> "0,00 €"`
  */
 export function formatMoney(
   cents: number,
@@ -61,8 +63,8 @@ export function formatMoney(
  * Format an ISO datetime string into a human-readable date + time.
  *
  * Examples:
- *   formatDate('2026-02-28T07:00:00Z') -> "28 <month>, 10:00" (in Europe/Moscow)
- *   formatDate('2026-02-28T07:00:00Z', 'UTC') -> "28 <month>, 07:00"
+ *   `formatDate('2026-02-28T07:00:00Z') -> "28 <month>, 10:00"` (in Europe/Moscow)
+ *   `formatDate('2026-02-28T07:00:00Z', 'UTC') -> "28 <month>, 07:00"`
  */
 export function formatDate(
   isoString: string,
@@ -140,9 +142,9 @@ export function relativeDayCode(isoString: string, timezone = 'UTC'): 'today' | 
  * Format an ISO datetime into a compact card date: "9 June" / "12 Sept." style.
  *
  * Months follow the agreed VELO short-date table (ru genitive months, seeded
- * in locales/ru/dates.json): a month whose genitive form is <= 4 letters is
+ * in locales/ru/dates.json): a month whose genitive form is `<= 4` letters is
  * written in full with NO period (May / June / July); longer ones are
- * abbreviated to <= 4 letters + a period (Jan. / Feb. / Mar. / Apr. / Aug. /
+ * abbreviated to `<= 4` letters + a period (Jan. / Feb. / Mar. / Apr. / Aug. /
  * Sept. / Oct. / Nov. / Dec.). Day + month only (no year, no time).
  * Timezone-safe (Intl with timeZone, no Date mutation).
  */
@@ -270,9 +272,11 @@ export function formatTime(
  * be ordered by the absolute UTC epoch (`new Date(scheduled_at).getTime()`):
  * that orders by the underlying instant, which disagrees with the displayed
  * local times once practices span different timezones — a card showing 10:00
- * can sit below a card showing 12:00. This returns a comparable
- * `YYYYMMDDHHmmss` number built from the timezone-local parts, so an
- * ascending / descending sort matches the visible order (CR-1).
+ * can sit below a card showing 12:00.
+ *
+ * @returns A comparable `YYYYMMDDHHmmss` number built from the
+ *  timezone-local parts, so an ascending / descending sort matches the
+ *  visible order (CR-1).
  *
  * ONLY for DISPLAY-ORDER sorts of a per-practice-timezone list. Do NOT use it
  * for `scheduled_at`-vs-`now` comparisons (has-started / countdown / windows)
@@ -343,10 +347,10 @@ export function formatFeedDateTime(
  * (i18n:common.duration.m) (operator spec, batch I).
  *
  * Examples (ru catalog units):
- *   formatDuration(45)  -> "45 <min>"      (minutes only, full word)
- *   formatDuration(60)  -> "1 <hour>"      (exactly one hour, spelled out)
- *   formatDuration(90)  -> "1 <h> 30 <m>"  (hours + minutes, short unit)
- *   formatDuration(120) -> "2 <h>"         (exact multi-hour, no plural declension)
+ *   `formatDuration(45)  -> "45 <min>"`      (minutes only, full word)
+ *   `formatDuration(60)  -> "1 <hour>"`      (exactly one hour, spelled out)
+ *   `formatDuration(90)  -> "1 <h> 30 <m>"`  (hours + minutes, short unit)
+ *   `formatDuration(120) -> "2 <h>"`         (exact multi-hour, no plural declension)
  */
 export function formatDuration(minutes: number): string {
   if (minutes < 60) return `${minutes} ${t('common.duration.min')}`
@@ -392,8 +396,8 @@ export function cleanPracticeTitle(title: string): string {
 /**
  * Format a percentage share for the analytics distribution strips
  * (practice mood / school feedback). The TZ rule (tz-practice-analytics.md):
- * a share strictly between 0 and 1 reads «<1%», between 99 and 100 reads
- * «>99%», everything else rounds to a whole percent — so a real minority
+ * a share strictly between 0 and 1 reads «`<1%`», between 99 and 100 reads
+ * «`>99%`», everything else rounds to a whole percent — so a real minority
  * share never renders as a flat 0% and an incomplete distribution never
  * reads as a full 100%.
  */

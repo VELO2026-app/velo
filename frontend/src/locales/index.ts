@@ -41,13 +41,13 @@ for (const mod of Object.values(eagerDefault)) {
 export const ru = ruCatalog
 
 /**
- * vue-i18n's built-in plural choice is English-shaped (1 -> first form,
- * everything else -> last form). Our catalogs write CLDR forms -- ru messages
+ * vue-i18n's built-in plural choice is English-shaped (`1 -> first form`,
+ * `everything else -> last form`). Our catalogs write CLDR forms -- ru messages
  * `one|few|many`, en/de/es `one|other` -- so the choice delegates to
  * Intl.PluralRules of the message's locale and maps the category onto the
  * form index (tz-i18n §4.4: the ONE plural mechanism):
- *   2-form messages: one -> 0, every other category -> 1
- *   3+form messages: one -> 0, few -> 1, many/other -> 2
+ *   2-form messages: `one -> 0, every other category -> 1`
+ *   3+form messages: `one -> 0, few -> 1, many/other -> 2`
  */
 export function cldrPluralChoice(
   locale: string,
@@ -103,9 +103,9 @@ export default i18n
 
 /**
  * The project-wide translator (tz-i18n convention): ONE import, no per-file
- * useI18n composition. useI18n({ useScope: 'global' }) returns THIS same
+ * useI18n composition. `useI18n({ useScope: 'global' })` returns THIS same
  * composer, so files needing t write
- *   import { t } from '@/locales'
+ *   `import { t } from '@/locales'`
  * and templates call t() directly (script-setup bindings are exposed to the
  * template; globalInjection also provides $t for template-only cases).
  * Reactivity is the composer's own: every call reads the live locale ref,

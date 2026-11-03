@@ -3,7 +3,7 @@
  *
  * The transcription half of FIELD voice input, extracted from the flow
  * Composer.vue carried alone in step 1: recorder lifecycle observables, the
- * take->transcript round-trip, and every user-facing consequence of it --
+ * `take->transcript` round-trip, and every user-facing consequence of it --
  * toasts (the same composer.* texts), haptics, the local silence rejection.
  * What the caller keeps is the two decisions that differ per surface: what a
  * transcript DOES to the field (onTranscript -- the composer replaces, a
@@ -35,6 +35,7 @@ import { transcribeAudio } from '@/api/transcription'
 import { SILENCE_PEAK_THRESHOLD } from '@/utils/audio'
 import { platform } from '@/platform'
 
+/** Per-surface decisions of voice field input: what a transcript does to the field, and how focus drops before a take. */
 export interface VoiceFieldInputOptions {
   /** Receives each successful transcript; the caller decides append or
    *  replace. Runs BEFORE the busy freeze lifts, while the field is still
@@ -46,6 +47,7 @@ export interface VoiceFieldInputOptions {
   blurField?: () => void
 }
 
+/** Shared field voice input: recorder panel contract, take-to-transcript round-trip, toasts and silence rejection. */
 export function useVoiceFieldInput(options: VoiceFieldInputOptions) {
   const toast = useToast()
 

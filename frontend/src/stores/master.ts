@@ -19,6 +19,7 @@ import i18n from '@/locales'
 
 const { t } = i18n.global
 
+/** Master-zone state: the master profile and the master's own practices list. */
 export const useMasterStore = defineStore('master', () => {
   // =========================================================================
   // Profile

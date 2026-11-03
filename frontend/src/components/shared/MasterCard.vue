@@ -49,7 +49,7 @@ const props = withDefaults(
   defineProps<{
     masterName?: string | null
     methods?: string[] | null
-    /** Master avatar URL (User.avatar_url). Null -> placeholder glyph. */
+    /** Master avatar URL (User.avatar_url). `Null -> placeholder glyph.` */
     avatarUrl?: string | null
     /** Master user id -- target of the public-profile link. */
     masterId?: string | null

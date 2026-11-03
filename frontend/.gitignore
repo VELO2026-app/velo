@@ -4,6 +4,10 @@ node_modules/
 # Build output
 dist/
 
+# typedoc HTML output (FE-136): regenerable with `pnpm run docs`;
+# publishing it is a separate decision (FE-135), it never gets committed.
+docs/api/
+
 # Environment (secrets)
 .env
 .env.local

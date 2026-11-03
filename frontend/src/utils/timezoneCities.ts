@@ -34,6 +34,7 @@ import citySeedRuRaw from '@/locales/ru/timezones.json?raw'
 import citySeedEnRaw from '@/locales/en/timezones.json?raw'
 import { getLocale } from '@/locales'
 
+/** One searchable picker row: display city, canonical IANA zone, search haystack. */
 export interface TimezoneCity {
   city: string
   iana: string

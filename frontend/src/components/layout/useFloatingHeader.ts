@@ -12,8 +12,8 @@
  * that much at the top of the feed, so any island content (short greeting or a
  * tall title+weekstrip) gets the right fog clearance automatically.
  *
- * Provider  -> MobileLayout (renders the island host + measures it)
- * Consumer  -> VHeader, and tab views that want their heading to float
+ * `Provider  -> MobileLayout` (renders the island host + measures it)
+ * `Consumer  -> VHeader`, and tab views that want their heading to float
  *
  * When no provider is up the tree (shell-less screens, the admin layout), the
  * consumer reports `false` and renders its header inline, exactly as before.
@@ -29,7 +29,7 @@ export function provideFloatingHeader(): void {
 
 /**
  * Called by a header/heading. Returns true when a floating island host exists
- * (teleport into it); false -> render inline.
+ * (teleport into it); `false -> render inline`.
  */
 export function useFloatingHeader(): boolean {
   return inject(KEY, false)

@@ -16,7 +16,7 @@
 
 /**
  * Hours before scheduled_at during which check-in is allowed.
- * Mirrors backend config.py checkin_window_hours (24). Changed 3 -> 24
+ * Mirrors backend config.py checkin_window_hours (24). Changed `3 -> 24`
  * (customer request 2026-06-03).
  */
 export const CHECKIN_WINDOW_H = 24
@@ -42,8 +42,8 @@ export const WITHDRAWAL_FEE_EUROS = 2
 // ---------------------------------------------------------------------------
 
 /**
- * Real composer voice recording (tap mic -> record -> transcribe -> text in
- * the field). FALSE is the kill-switch: the mic disc never renders and both
+ * Real composer voice recording (tap mic `->` record `->` transcribe `->`
+ * text in the field). FALSE is the kill-switch: the mic disc never renders and both
  * composers behave exactly as before the feature -- no call-site changes
  * needed. Transcription goes through POST /api/v1/ai/transcribe (GT-41); the
  * browser holds no provider key and talks to no third party.
@@ -87,7 +87,7 @@ export const MASTER_APPLIED_KEY = 'velo:master-applied'
  * from the start). Set once the master has actually seen/entered through the
  * application-approved screen (i18n:masterScreens.masterPending.approved.title,
  * MasterPendingView.enterMasterMode).
- * RoleSwitchSection reads it to decide whether a role='user'->master
+ * RoleSwitchSection reads it to decide whether a `role='user'->master`
  * self-switch should detour through the approved screen first (not seen yet)
  * or go straight to the dashboard (already seen). Not cleared on logout -- it
  * is a one-time "have they ever seen this celebratory screen" fact about the

@@ -139,7 +139,7 @@ function ratingLabels(): string[] {
   return ratingBars().map((b) => b.querySelector('.v-rating-bar__label')?.textContent?.trim() ?? '')
 }
 
-/** Every rating row as label -> rendered value: a missing/extra row fails toEqual. */
+/** Every rating row as `label -> rendered value`: a missing/extra row fails toEqual. */
 function ratingValues(): Record<string, string> {
   return Object.fromEntries(
     ratingBars().map((b) => [

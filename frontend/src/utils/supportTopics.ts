@@ -33,10 +33,12 @@ import {
   IconWarning,
 } from '@/components/icons'
 
+/** The person-facing label of a support topic code (catalog: supportTopics keys). */
 export function supportTopicLabel(code: SupportTopicCode): string {
   return t(`supportTopics.${code}`)
 }
 
+/** The label of a support ticket status (catalog: adminSupport.statuses keys). */
 export function supportStatusLabel(status: SupportTicketStatus): string {
   return t(`adminScreens.adminSupport.statuses.${status}`)
 }
@@ -52,6 +54,7 @@ const STATUS_BADGES: Record<SupportTicketStatus, SupportStatusBadge> = {
   spam: 'error',
 }
 
+/** The badge colour of a ticket status, shared by the admin list and the card. */
 export function supportStatusBadge(status: SupportTicketStatus): SupportStatusBadge {
   return STATUS_BADGES[status]
 }
@@ -72,6 +75,7 @@ const SUPPORT_CATEGORY_ICONS: Record<SupportCategory, SupportCategoryIcon> = {
   other: { icon: IconQuestion, color: 'var(--velo-blue-200)' },
 }
 
+/** A support category's glyph and colour token. */
 export function supportCategoryIcon(category: SupportCategory): SupportCategoryIcon {
   return SUPPORT_CATEGORY_ICONS[category]
 }
@@ -82,6 +86,7 @@ export interface SupportCategoryGroup {
   categories: readonly SupportCategory[]
 }
 
+/** The five admin filter chips over the six categories (complaints merge into one chip). */
 export const SUPPORT_CATEGORY_GROUPS: readonly SupportCategoryGroup[] = [
   { key: 'payments', categories: ['payments'] },
   { key: 'practices', categories: ['practices'] },
@@ -90,6 +95,7 @@ export const SUPPORT_CATEGORY_GROUPS: readonly SupportCategoryGroup[] = [
   { key: 'other', categories: ['other'] },
 ]
 
+/** The label of a filter chip (catalog: adminSupport.categories keys). */
 export function supportCategoryGroupLabel(key: SupportCategoryGroup['key']): string {
   return t(`adminScreens.adminSupport.categories.${key}`)
 }

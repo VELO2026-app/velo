@@ -28,6 +28,7 @@
  *  (tz-whitelabel §3.1), applied to the feature namespace. */
 export const FEATURE_NAMES = ['ai', 'payments'] as const
 
+/** A module an instance edition may switch off ('ai', 'payments'). */
 export type FeatureName = (typeof FEATURE_NAMES)[number]
 
 /** VITE_FEATURES semantics (mirrors instance.ts parseFeatures): absent, empty

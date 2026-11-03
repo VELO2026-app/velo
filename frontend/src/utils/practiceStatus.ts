@@ -22,14 +22,17 @@ import type { PracticeStatus } from '@/api/types'
 
 const { t } = i18n.global
 
+/** A master practice-status badge: label text plus colour variant. */
 export interface PracticeStatusBadge {
   label: string
   variant: 'success' | 'warning' | 'error'
 }
 
 /**
- * Master card badge for a practice status. Returns null for the active phase
- * (scheduled / live / deleted) — those get no badge.
+ * Master card badge for a practice status.
+ *
+ * @returns Null for the active phase (scheduled / live / deleted) — those
+ *  get no badge.
  */
 export function masterPracticeBadge(status: PracticeStatus): PracticeStatusBadge | null {
   switch (status) {

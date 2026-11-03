@@ -81,6 +81,7 @@ export const MOOD_SCALE_FILLS: Record<MoodScaleKey, string> = {
 // the backend allowed lists / filter literals. Single source of truth --
 // do not duplicate these strings in components.
 
+/** Catalog label per practice direction (lazy getters, resolved per read). */
 export const DIRECTION_LABEL: Record<PracticeDirection, string> = {
   get meditation(): string {
     return t('display.direction.meditation')
@@ -120,6 +121,7 @@ export const DIRECTION_LABEL: Record<PracticeDirection, string> = {
 // lands (handoff §9), some directions still can't be created by masters.
 // A new direction added here without its own icon would fall through to
 // DIRECTION_ICON_FALLBACK instead of failing vue-tsc.
+/** Icon component per practice direction, with a neutral fallback for unknown directions. */
 export const DIRECTION_ICON: Partial<Record<PracticeDirection, Component>> = {
   meditation: IconMeditation,
   yoga: IconYoga,
@@ -150,7 +152,7 @@ export const DIRECTION_ICON_FALLBACK: Component = IconDots
  * Works for both PracticeResponse and PracticeSummary — backend B-1 added
  * `direction` to PracticeSummary on 2026-05-28, so the title-heuristic
  * fallback that used to live here is no longer needed (removed 2026-05-29).
- * Unknown direction -> neutral IconDots fallback.
+ * `Unknown direction -> neutral IconDots fallback`.
  *
  * `title` prop kept in the signature for call-site compatibility (some
  * legacy callers pass it); ignored internally.
@@ -169,6 +171,7 @@ export function practiceIconFor(p: {
   return DIRECTION_ICON_FALLBACK
 }
 
+/** Catalog label per practice difficulty. */
 export const DIFFICULTY_LABEL: Record<PracticeDifficulty, string> = {
   get beginner(): string {
     return t('display.difficulty.beginner')
@@ -191,6 +194,7 @@ export const DIFFICULTY_DOTS: Record<PracticeDifficulty, number> = {
   high: 3,
 }
 
+/** Catalog label per calendar duration bucket. */
 export const DURATION_BUCKET_LABEL: Record<DurationBucket, string> = {
   get short(): string {
     return t('display.durationBucket.short')
@@ -200,6 +204,7 @@ export const DURATION_BUCKET_LABEL: Record<DurationBucket, string> = {
   },
 }
 
+/** Catalog label per calendar time-of-day bucket. */
 export const TIME_OF_DAY_LABEL: Record<TimeOfDay, string> = {
   get night(): string {
     return t('display.timeOfDay.night')
@@ -228,6 +233,7 @@ export const TIME_OF_DAY_LABEL: Record<TimeOfDay, string> = {
 
 import type { DiaryEventKind } from '@/api/types'
 
+/** Card heading per diary feed event kind (kind-derived captions may override, e.g. practice_outcome). */
 export const FEED_KIND_TITLE: Record<DiaryEventKind, string> = {
   get booking_confirmed(): string {
     return t('display.feedKind.booking_confirmed')
@@ -269,6 +275,7 @@ export const FEED_KIND_TITLE: Record<DiaryEventKind, string> = {
 // drawn by the frontend from this key table. `custom` has no dictionary label
 // -- its caption is the user's own custom_activity_name, verbatim.
 
+/** Caption label per external-activity type; custom carries the user's own activity name instead. */
 export const EXTERNAL_ACTIVITY_LABEL: Record<ExternalActivityType, string> = {
   get vocal(): string {
     return t('display.externalActivity.vocal')
@@ -296,11 +303,12 @@ export const EXTERNAL_ACTIVITY_LABEL: Record<ExternalActivityType, string> = {
 // every activity_type: the event is "something that happened outside velo",
 // and the LABEL carries the type (dictionary label or the custom name), so
 // per-type artwork would repeat what the caption already says.
+/** The single glyph for external-activity events; the label carries the type, the icon does not. */
 export const EXTERNAL_ACTIVITY_ICON: Component = IconCalendarStar
 
 /**
  * Outcome badge label for a practice_outcome card.
- * attended -> "Done" (teal), no_show -> the missed-you label
+ * `attended -> "Done"` (teal), `no_show -> the missed-you label`
  * (i18n:display.outcome.no_show).
  *
  * B30 (PROMPT №747): the no_show label was previously the "did not take
@@ -324,7 +332,7 @@ export const OUTCOME_LABEL: Record<string, string> = {
 /**
  * Recurrence label for a series from its ISO weekday list: the daily label
  * (i18n:display.recurrenceDaily) when all seven days are present, otherwise
- * the short weekday list resolving via `t(\`display.weekdayAbbr.${d}\`)`
+ * the short weekday list resolving via \`t(\`display.weekdayAbbr.$\{d\}\`)\`
  * (de-duplicated, ordered Mon→Sun).
  *
  * @returns Null when there are no valid days so the caller can fall back

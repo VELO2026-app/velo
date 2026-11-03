@@ -173,7 +173,7 @@ const hasActiveFilters = computed<boolean>(
     draft.group !== null || draft.status !== null || draft.date !== '' || draft.rating.length > 0,
 )
 
-/** The rating chips toggle: on -> off, off -> on; "all" (i18n:common.all) is nothing chosen. */
+/** The rating chips toggle: `on -> off`, `off -> on`; "all" (i18n:common.all) is nothing chosen. */
 function toggleRating(value: (typeof SUPPORT_RATING_FILTERS)[number]): void {
   draft.rating = draft.rating.includes(value)
     ? draft.rating.filter((r) => r !== value)

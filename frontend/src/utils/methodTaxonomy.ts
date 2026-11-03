@@ -82,7 +82,7 @@ const ruSeed = {
  *  inline (selectedDirections / selectedStyles / otherMethod*). */
 export interface MethodSelection {
   directions: PracticeDirection[]
-  /** direction value -> chosen style values (only for directions with styles). */
+  /** `direction value -> chosen style values` (only for directions with styles). */
   styles: Record<string, string[]>
   customEnabled: boolean
   customText: string
@@ -140,6 +140,7 @@ const catalogStyleLabelByValue = shallowRef<Record<string, Record<string, string
 // Exposing an explicit version counter lets such a watcher add it as a second
 // source, so it can force exactly one reparse per catalog update without
 // weakening the anti-echo-loop guard that reparse would otherwise need.
+/** Bumped on every catalog apply, so non-reactive consumers can re-run on updates. */
 export const taxonomyCatalogVersion = ref(0)
 
 // Raw catalog response, alongside the derived label maps above. Populated by
@@ -208,9 +209,10 @@ export async function primeMethodTaxonomyCatalog(): Promise<void> {
  * master screens, or a prior call to this same function) -- "close the flash,
  * not just shrink it" (operator, T2 stage 2). Otherwise fetches once, primes
  * the shared cache (so later callers/screens ride it too), and returns it.
- * Never throws: a failed fetch returns null, same offline/error contract as
- * primeMethodTaxonomyCatalog() -- callers fall back to their own hardcoded
- * options.
+ *
+ * @returns Null on a failed fetch -- never throws; same offline/error contract
+ *  as primeMethodTaxonomyCatalog(), callers fall back to their own hardcoded
+ *  options.
  */
 export async function ensureTaxonomyCatalog(): Promise<TaxonomyListResponse | null> {
   if (cachedCatalog) return cachedCatalog
@@ -223,7 +225,7 @@ export async function ensureTaxonomyCatalog(): Promise<TaxonomyListResponse | nu
   }
 }
 
-/** Direction label -> value: the server catalog FIRST (its labels are the
+/** `Direction label -> value`: the server catalog FIRST (its labels are the
  *  stored canon -- a non-ru UI parses stored ru strings through it), then the
  *  live hardcoded labels (so a same-locale round-trip works with a cold
  *  cache). A catalog-only value is not a member of the closed
@@ -235,7 +237,7 @@ function resolveDirectionValue(label: string): PracticeDirection | undefined {
   return DIRECTION_OPTIONS.find((o) => o.label === label)?.value
 }
 
-/** Style label -> value under a resolved direction: catalog first, then the
+/** `Style label -> value` under a resolved direction: catalog first, then the
  *  live hardcoded labels (same order rationale as resolveDirectionValue). */
 function resolveStyleValue(dirValue: PracticeDirection, label: string): string | undefined {
   const viaCatalog = catalogStyleValueByLabel.value?.[dirValue]?.[label]
@@ -243,7 +245,7 @@ function resolveStyleValue(dirValue: PracticeDirection, label: string): string |
   return stylesForDirection(dirValue).find((o) => o.label === label)?.value
 }
 
-/** Style value -> label under a direction, for DISPLAY: the hardcoded key
+/** `Style value -> label` under a direction, for DISPLAY: the hardcoded key
  *  first (live locale), the server catalog second, the raw value last.
  *  Exported (T21-10, PROMPT №546): AdminMastersView's collapsed master card
  *  had no catalog-aware style helper available and hand-rolled a
@@ -256,7 +258,7 @@ export function resolveStyleLabel(dirValue: string, styleValue: string): string 
   return catalogStyleLabelByValue.value?.[dirValue]?.[styleValue] ?? styleValue
 }
 
-/** direction value -> label for DISPLAY: hardcoded key (live locale) first,
+/** `direction value -> label` for DISPLAY: hardcoded key (live locale) first,
  *  server catalog second, raw value last. */
 export function directionLabel(dir: string): string {
   if (i18n.global.te(`display.direction.${dir}`, 'ru')) {
@@ -265,14 +267,14 @@ export function directionLabel(dir: string): string {
   return catalogDirectionLabelByValue.value?.[dir] ?? dir
 }
 
-/** direction value -> label for STORAGE (flattenMethods): the server
+/** `direction value -> label` for STORAGE (flattenMethods): the server
  *  catalog's label is the canon, the ru seed covers a cold cache (the
  *  historic storage vocabulary), the raw value is the last resort. */
 function canonicalDirectionLabel(dir: string): string {
   return catalogDirectionLabelByValue.value?.[dir] ?? ruSeed.display?.direction?.[dir] ?? dir
 }
 
-/** style value -> label for STORAGE under a direction (same canon chain). */
+/** `style value -> label` for STORAGE under a direction (same canon chain). */
 function canonicalStyleLabel(dirValue: string, styleValue: string): string {
   return (
     catalogStyleLabelByValue.value?.[dirValue]?.[styleValue] ??

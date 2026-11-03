@@ -20,4 +20,5 @@ import languagesSeedRaw from '@/locales/ru/languages.json?raw'
 
 const languagesSeed = JSON.parse(languagesSeedRaw) as { languages?: { list?: string[] } }
 const seedList = languagesSeed.languages!.list!
+/** The practice languages a master can choose, as stored endonyms. */
 export const LANGUAGES: readonly [string, string] = [seedList[0]!, seedList[1]!]

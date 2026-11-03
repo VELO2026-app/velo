@@ -153,8 +153,8 @@ const props = withDefaults(
     /** (a): the consumer's own persistence -- this component calls it and
      *  interprets the result, never a store/API of its own. */
     send: (text: string) => Promise<ComposerSendResult>
-    /** (b): set -> localStorage-persisted draft under this exact key;
-     *  unset/null -> no persistence. */
+    /** (b): `set -> localStorage-persisted draft` under this exact key;
+     *  `unset/null -> no persistence`. */
     draftKey?: string | null
     /** (d): px cap for the bounded-growth textarea. Undefined leaves the CSS
      *  token (--velo-textarea-autogrow-max) as the sole mechanism -- the

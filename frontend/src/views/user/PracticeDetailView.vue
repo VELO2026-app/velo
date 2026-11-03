@@ -481,18 +481,18 @@ const myAnyBooking = computed((): BookingWithPracticeResponse | null => {
   )
 })
 
-/** Any booking exists (any status) -> show the booked framing
+/** `Any booking exists (any status) -> show the booked framing`
  *  (i18n:user.screens.practiceDetail.titleBooked). */
 const hasAnyBooking = computed((): boolean => myAnyBooking.value !== null)
 
-/** A finished booking (attended / no_show) -> hide the t('user.screens.practiceDetail.cta.book') CTA. */
+/** `A finished booking (attended / no_show) -> hide` the t('user.screens.practiceDetail.cta.book') CTA. */
 const isPastBooking = computed((): boolean => {
   const b = myAnyBooking.value
   return !!b && (b.status === 'attended' || b.status === 'no_show')
 })
 
 /**
- * True once the practice has started (scheduled_at <= now). The booking
+ * True once the practice has started (`scheduled_at <= now`). The booking
  * endpoint rejects a started practice (backend create_booking time guard);
  * we hide the t('user.screens.practiceDetail.cta.book') CTA so it never dangles on a past practice
  * opened from history / a deep link. Uses the reactive `now` (60s tick) so
@@ -600,7 +600,7 @@ const inFeedbackWindow = computed((): boolean => {
 })
 
 /**
- * BE-108: a no_show booking without a reflection -> the share-mood CTA
+ * BE-108: `a no_show booking without a reflection -> the share-mood CTA`
  * (i18n:user.screens.practiceDetail.shareMood).
  * Reads `myAnyBooking`, not `myBooking`: the latter is the first booking of
  * this practice in list order and can be a cancelled earlier one, while
@@ -771,7 +771,7 @@ function onSoldOut(): void {
   void bookingsStore.refreshBookings()
 }
 
-/** The find-another-practice action (i18n:shared.soldOut.findOther) ->
+/** The find-another-practice action (i18n:shared.soldOut.findOther) `->`
  *  the Calendar (the booking showcase). */
 function onFindOther(): void {
   soldOut.value = false

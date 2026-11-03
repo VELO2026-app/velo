@@ -22,6 +22,7 @@
 
 import { ref, type Ref } from 'vue'
 
+/** One page of a cursor-paginated list: the items plus the cursor of the next page (null at the end). */
 export interface CursorResult<T> {
   items: T[]
   next_cursor: string | null
@@ -31,6 +32,7 @@ export interface CursorResult<T> {
 // size, and returns one page plus the cursor for the following page.
 type CursorFetchFn<T> = (cursor: string | null, limit: number) => Promise<CursorResult<T>>
 
+/** Cursor-based load-more pagination for append-only feeds (items, refresh, loadMore, reset, split errors). */
 export function useCursorPagination<T>(fetchFn: CursorFetchFn<T>, pageSize = 20) {
   const items = ref<T[]>([]) as Ref<T[]>
   const cursor = ref<string | null>(null)

@@ -119,6 +119,7 @@ function scheduleInitialFreeze(): void {
   tick()
 }
 
+/** Publish the one-shot frozen viewport height (mount + orientationchange only); mounted once from App.vue. */
 export function useBackgroundStabilizer(): void {
   let orientationSettleId = 0
 

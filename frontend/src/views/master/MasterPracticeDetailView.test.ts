@@ -313,7 +313,7 @@ function dialogText(): string {
 }
 
 /**
- * Whether the screen DISMISSED the dialog (showCancel/showDelete -> false).
+ * Whether the screen DISMISSED the dialog (`showCancel/showDelete -> false`).
  *
  * Deliberately not `querySelector('.v-modal__overlay') === null`: that is the
  * obvious assertion and it FAILS while the product is correct. VModal's overlay

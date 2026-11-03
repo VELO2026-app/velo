@@ -163,7 +163,7 @@ const cells = computed<Cell[]>(() => {
 
 /**
  * [owner pass] Backward headroom actually rendered: the ribbon paints past
- * days ONLY while the window is past today (maxBackDays > 0). At the start
+ * days ONLY while the window is past today (`maxBackDays > 0`). At the start
  * (window == today) there is NOTHING before day 0 -- dragging back meets a
  * rubber wall with no content sliding in from the left: you cannot scroll
  * past today, not even visually.
@@ -224,7 +224,7 @@ const RIBBON_BEFORE = -14
 const RIBBON_AFTER = 27
 /** Max whole-day forward shift the rendered headroom allows. Five day
  *  columns are visible (the 6th is the stationary month chip), so the last
- *  visible index 4+k must stay <= RIBBON_AFTER. */
+ *  visible `index 4+k must stay <= RIBBON_AFTER`. */
 const MAX_FWD_DAYS = RIBBON_AFTER - 4
 /** Mirrors the CSS gap between day pills (5px). */
 const DAY_GAP_PX = 5

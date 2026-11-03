@@ -1460,17 +1460,17 @@ describe('MasterPracticesView', () => {
   // - masterStatusGuard, which fronts this route: the guard layer ->
   //   guards.test.ts (velo-idiom §6).
   //
-// The SFC's header comment (.vue:13-28) USED TO promise three things the
-// template does NOT do (stale prose, reported as a doc finding; the stale
-// bullets were removed from the header in FE-134), so there is nothing to
-// test and nothing was faked:
-//   * edit + Check-ins buttons below the upcoming card -- no such
-//     controls exist (.vue:74-107).
-//   * ✓/✗ attendance badges inside the past card -- removed per PL-E1, as an
-//     inline comment 100 lines further down admits (.vue:135-137).
-//   * the remaining-sessions line (i18n:practice.remainingSessions) was
-//     claimed "omitted (no series-session field)" -- it is NOT
-//     omitted; .vue:102-106 renders it and PracticeResponse has both
-//     total_sessions and completed_sessions. Tested above.
+  // The SFC's header comment (.vue:13-28) USED TO promise three things the
+  // template does NOT do (stale prose, reported as a doc finding; the stale
+  // bullets were removed from the header in FE-134), so there is nothing to
+  // test and nothing was faked:
+  //   * edit + Check-ins buttons below the upcoming card -- no such
+  //     controls exist (.vue:74-107).
+  //   * ✓/✗ attendance badges inside the past card -- removed per PL-E1, as an
+  //     inline comment 100 lines further down admits (.vue:135-137).
+  //   * the remaining-sessions line (i18n:practice.remainingSessions) was
+  //     claimed "omitted (no series-session field)" -- it is NOT
+  //     omitted; .vue:102-106 renders it and PracticeResponse has both
+  //     total_sessions and completed_sessions. Tested above.
   // ===========================================================================
 })

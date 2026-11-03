@@ -147,7 +147,7 @@ const props = withDefaults(
      *  OFF -- every existing caller stays byte-identical. */
     borderedAtRest?: boolean
     /** [FE-94, voice step 2; kill-switched per call site] The mic disc in the
-     *  field's row: tap -> record -> transcribe -> the transcript APPENDS to
+     *  field's row: `tap -> record -> transcribe -> the transcript APPENDS` to
      *  the current value (appendTranscript), clamped to the caller's
      *  maxlength attr. False (the default) keeps the disc unmounted and every
      *  piece of voice machinery unreachable; no other behaviour changes. */

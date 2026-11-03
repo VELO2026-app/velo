@@ -135,10 +135,12 @@ export function supportsViewTransitions(): boolean {
 }
 
 /**
- * document.startViewTransition, or null where the host has no View
- * Transitions (iOS < 18, older Android WebView) -- the caller then applies the
- * update directly. The promises are pre-handled: a skipped transition rejects
- * `ready`/`finished`, which is a normal outcome here, not an error.
+ * document.startViewTransition.
+ *
+ * @returns Null where the host has no View Transitions (iOS `< 18`, older
+ *  Android WebView) -- the caller then applies the update directly. The
+ *  promises are pre-handled: a skipped transition rejects `ready`/`finished`,
+ *  which is a normal outcome here, not an error.
  */
 export function startViewTransition(update: () => Promise<void>): ViewTransitionHandle | null {
   const doc = document as ViewTransitionDocument
@@ -163,8 +165,10 @@ export function isWebKitEngine(): boolean {
   return /iPhone|iPad|iPod/.test(navigator.userAgent)
 }
 
-/** A duration token on the root (`--velo-dur-*`) in ms, or `fallback` where
- * it is not set or not parseable (the unit-test DOM). */
+/** A duration token on the root (`--velo-dur-*`) in ms.
+ *
+ * @returns `fallback` where the token is not set or not parseable
+ *  (the unit-test DOM). */
 export function rootDurationMs(prop: string, fallback: number): number {
   const raw = rootStyleValue(prop).trim()
   const value = parseFloat(raw)

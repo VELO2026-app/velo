@@ -44,7 +44,7 @@ export function pickRecorderMime(): string | undefined {
   return candidates.find((type) => MediaRecorder.isTypeSupported(type))
 }
 
-/** Blob -> bare base64 (no data: URL prefix) -- the input_audio.data shape. */
+/** `Blob -> bare base64` (no data: URL prefix) -- the input_audio.data shape. */
 export function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()

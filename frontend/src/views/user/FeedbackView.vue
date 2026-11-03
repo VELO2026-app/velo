@@ -174,7 +174,7 @@ const alreadyGaveFeedback = computed<boolean>(() =>
  * F4: whether this screen may offer the form right now -- see the header.
  * Keys on this practice's booking in the loaded list: a live one (not
  * cancelled) decides; only a cancelled one means none is left. Absent from
- * the list -> 'open': the list is a single page, and the server, not a
+ * `the list -> 'open'`: the list is a single page, and the server, not a
  * guess, then says whether the feedback lands.
  */
 type FeedbackGate = 'loading' | 'open' | 'waiting' | 'not_attended' | 'cancelled'

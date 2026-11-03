@@ -169,9 +169,9 @@ const stage = ref<EntryStage | null>(null)
  *
  * FE-81: the one exception is a school invite deep link. The router has
  * already navigated to the standalone invitation screen, so the gate opens
-   * the app around it: the user sees the invite copy
-   * (i18n:masterScreens.schoolJoin.invited.title) BEFORE any
-   * onboarding, and the join view runs the carousel after the join (FE-83),
+ * the app around it: the user sees the invite copy
+ * (i18n:masterScreens.schoolJoin.invited.title) BEFORE any
+ * onboarding, and the join view runs the carousel after the join (FE-83),
  * landing in the joined school on finish or skip (FE-84).
  */
 function decideInitialStage(): EntryStage {

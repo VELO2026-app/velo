@@ -109,7 +109,7 @@ export function loginNoticeFor(error: unknown): LoginNotice {
  *
  * Set the instant logout() starts clearing the session and kept true until
  * the Mini App actually closes. The App.vue gate shows LoadingView while this
- * is true, so the brief window between _clearSession() (isAuthenticated -> false)
+ * is true, so the brief window between `_clearSession() (isAuthenticated -> false)`
  * and platform.close() never falls through to TelegramStubView. Without it,
  * a reactive tick could flash the "Open via Telegram" stub before the app closes.
  */
@@ -123,7 +123,7 @@ export function beginLogout(): void {
 /**
  * Pending deep link route from startapp parameter (TD-F01).
  * Consumed once by roleRedirect, then cleared.
- * Format: { name: string, params?: Record<string, string> }
+ * Format: `{ name: string, params?: Record<string, string> }`
  */
 export const pendingStartParam = ref<string | null>(null)
 
@@ -194,24 +194,25 @@ const SCHOOL_INVITE_PARAM = /^school__([A-Za-z0-9_-]{16,128})$/
 
 /**
  * Parse the Telegram startapp parameter into a router location.
- * Returns null if the parameter is absent or unrecognized.
+ *
+ * @returns Null if the parameter is absent or unrecognized.
  *
  * Supported formats:
- *   open_practice__{uuid}       -> practice-detail (master: master-practice-detail)
- *   zoom__{code}                -> { name: 'practice-live', params: { practiceId } } (T-35)
- *   master_onboarding__{token}  -> { name: 'master-invite', params: { token } }
- *   group_invite__{token}       -> { name: 'group-join', params: { token } } (P4, PROMPT №593)
- *   school__{token}             -> { name: 'school-join', params: { token } } (FE-18, Links)
- *   open_thread__{uuid}         -> { name: 'user-chat' | 'master-chat', params: { id } }
+ *   `open_practice__{uuid}       -> practice-detail (master: master-practice-detail)`
+ *   `zoom__{code}                -> { name: 'practice-live', params: { practiceId } }` (T-35)
+ *   `master_onboarding__{token}  -> { name: 'master-invite', params: { token } }`
+ *   `group_invite__{token}       -> { name: 'group-join', params: { token } }` (P4, PROMPT №593)
+ *   `school__{token}             -> { name: 'school-join', params: { token } }` (FE-18, Links)
+ *   `open_thread__{uuid}         -> { name: 'user-chat' | 'master-chat', params: { id } }`
  *                                  (FE-103: Telegram twin of the bell's msg.* buttons)
- *   open_support_rating__{uuid} -> the same chat route + ?rate=1: the rating
+ *   `open_support_rating__{uuid} -> the same chat route + ?rate=1`: the rating
  *                                  sheet on THAT resolved ticket (FE-107 /
  *                                  BE-162 delivery 3; the chat resolves the
  *                                  ticket id to the person's one support row)
- *   open_admin_support__{uuid}  -> { name: 'admin-support-detail', params: { id } }, admin only
+ *   `open_admin_support__{uuid}  -> { name: 'admin-support-detail', params: { id } }, admin only`
  *                                  (FE-103/BE-172: the comms THREAD id -- owner
  *                                  ruling in the BE-172 fix)
- *   <action>[__{uuid}]          -> the bell's screen for that notification verb (Links);
+ *   `<action>[__{uuid}]          -> the bell's screen for that notification verb (Links)`;
  *                                  the session `role` picks the zone where bells differ
  *
  * T-35: zoom__ is ADDED, open_practice__ is NOT replaced. They are two
@@ -399,16 +400,17 @@ export interface ReadyResult {
 
 /**
  * Returns a Promise that resolves once isReady becomes true.
- * If isReady is already true, resolves immediately with { ok: true, timedOut: false }.
- *
- * WARNING-3: races against a 10s timeout and now returns { ok, timedOut }
- * so callers can distinguish a clean ready from a network-stall timeout.
- * On timeout, auth.role may still be null -- callers must handle that case
- * (e.g. redirect to /auth-error) instead of falling through to role-based
- * routing with a null role.
  *
  * Used by roleRedirect guard, applyGuard, and router beforeEach.
  * Safe to call multiple times -- each call gets its own Promise.
+ *
+ * @returns A Promise that resolves immediately with
+ *   `{ ok: true, timedOut: false }` when isReady is already true; races a 10s
+ *   timeout (WARNING-3) and returns `{ ok, timedOut }` so callers can
+ *   distinguish a clean ready from a network-stall timeout. On timeout,
+ *   auth.role may still be null -- callers must handle that case (e.g.
+ *   redirect to /auth-error) instead of falling through to role-based
+ *   routing with a null role.
  */
 export function waitUntilReady(): Promise<ReadyResult> {
   if (isReady.value) return Promise.resolve({ ok: true, timedOut: false })
@@ -487,9 +489,11 @@ async function initAuth(): Promise<void> {
 }
 
 /**
- * The Telegram user id in an initData string, or null when there is none:
- * no string, no `user` field, not JSON, or no integer `id`. Unsigned -- see
+ * The Telegram user id in an initData string. Unsigned -- see
  * initAuth for why that is enough for the one decision it feeds.
+ *
+ * @returns Null when there is none: no string, no `user` field, not JSON, or
+ *   no integer `id`.
  */
 export function initDataUserId(initData: string | null): number | null {
   if (!initData) return null
@@ -558,6 +562,7 @@ async function completeFromReturn(authStore: ReturnType<typeof useAuthStore>): P
   }
 }
 
+/** Access the shared singleton auth state: readiness, login notices, init and the logout flag. */
 export function useAuth() {
   const authStore = useAuthStore()
 

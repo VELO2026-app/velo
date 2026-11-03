@@ -273,7 +273,7 @@ function bodyText(): string {
   return feedBody().textContent ?? ''
 }
 
-/** Split-entry previews in render order (oldest -> newest, DiaryTimeline reverses). */
+/** Split-entry previews in render order (`oldest -> newest`, DiaryTimeline reverses). */
 function cardPreviews(): string[] {
   return Array.from(feedBody().querySelectorAll('.tcard__entry-preview')).map(
     (e) => e.textContent?.trim() ?? '',

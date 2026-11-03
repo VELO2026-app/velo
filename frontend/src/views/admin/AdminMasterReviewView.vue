@@ -928,8 +928,9 @@ function addCert(): void {
   certInput.value = ''
 }
 
-/** Send a partial patch; reflect it locally + toast. Returns on error with the
- *  message surfaced inline (fieldError). */
+/** Send a partial patch; reflect it locally + toast.
+ *
+ * @returns Resolves on error with the message surfaced inline (fieldError). */
 async function saveProfile(patch: AdminMasterProfileUpdate): Promise<void> {
   if (savingField.value) return
   savingField.value = true

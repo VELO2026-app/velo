@@ -14,6 +14,7 @@
 // its leaves must stay plain strings.
 import schoolsSeedRaw from '@/locales/ru/schools.json?raw'
 
+/** One curator palette: display name plus the six hex roles of the golden SVG port. */
 export interface Palette {
   id: string
   name: string
@@ -35,6 +36,7 @@ function makePalette(id: string, roles: Omit<Palette, 'id' | 'name'>): Palette {
   return { id, name: paletteNames()[id] ?? id, ...roles }
 }
 
+/** The six school-branding palettes, in catalog key order. */
 export const PALETTES: Palette[] = [
   makePalette('eucalyptus', {
     bg: '#f6f2e8',

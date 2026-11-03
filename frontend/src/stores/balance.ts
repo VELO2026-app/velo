@@ -18,6 +18,7 @@ import { computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { formatMoney } from '@/utils/format'
 
+/** The user's balance, read from the auth store's profile, with formatting and refresh. */
 export const useBalanceStore = defineStore('balance', () => {
   const authStore = useAuthStore()
 

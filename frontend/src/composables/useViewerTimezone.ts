@@ -23,9 +23,9 @@ import { useAuthStore } from '@/stores/auth'
 /**
  * The current viewer's display timezone (their profile timezone).
  *
- * Returns undefined when there is no authenticated user / no timezone on the
- * profile, in which case the format helpers fall back to their own neutral
- * default. No city fallback is injected here.
+ * @returns Undefined when there is no authenticated user / no timezone on
+ *   the profile, in which case the format helpers fall back to their own
+ *   neutral default. No city fallback is injected here.
  */
 export function useViewerTimezone(): ComputedRef<string | undefined> {
   const authStore = useAuthStore()

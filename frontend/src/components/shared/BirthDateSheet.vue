@@ -75,7 +75,7 @@ interface WheelEntry {
 const props = withDefaults(
   defineProps<{
     open: boolean
-    /** ISO 'YYYY-MM-DD'; '' or absent -> the wheels start at January 1, 2000. */
+    /** ISO 'YYYY-MM-DD'; `'' or absent -> the wheels start at January 1, 2000.` */
     modelValue?: string
   }>(),
   { modelValue: '' },

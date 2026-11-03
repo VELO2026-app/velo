@@ -51,6 +51,7 @@ import type {
  */
 export type RestoreOutcome = 'restored' | 'none' | 'rejected' | 'unreachable'
 
+/** Session state: the signed-in user, the platform-owned token, login/restore and profile writes. */
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<UserResponse | null>(null)
   const token = ref<string | null>(null)
@@ -167,7 +168,7 @@ export const useAuthStore = defineStore('auth', () => {
    * discardSession): left alone it would stay live in Redis for the rest of
    * its 30 days with nobody holding it. A 401 (already gone) or no answer is
    * fine -- either way it is not this page's session any more. A 401 here
-   * also fires the client's onUnauthorized -> _clearSession; the callers set
+   * also fires the client's `onUnauthorized -> _clearSession`; the callers set
    * or clear the session themselves right after.
    */
   async function _revokeOnServer(staleToken: string): Promise<void> {
@@ -195,8 +196,10 @@ export const useAuthStore = defineStore('auth', () => {
 
   /**
    * Browser sign-in, step 1: ask the backend for Telegram's URL, remember
-   * { state, mark } in this browser (platform/browser-login.ts) and leave
-   * for Telegram. Throws the API error for the login screen to word.
+   * `{ state, mark }` in this browser (platform/browser-login.ts) and leave
+   * for Telegram.
+   *
+   * @throws The API error for the login screen to word.
    */
   async function startBrowserLogin(): Promise<void> {
     const mark = newMark()
@@ -214,9 +217,10 @@ export const useAuthStore = defineStore('auth', () => {
    * -- the same account or another one -- is closed on the server first, so
    * it does not linger in Redis for the rest of its 30 days.
    *
-   * Returns whether THIS sign-in gave the bot the right to write. Throws the
-   * API error for the login screen to word; the saved session is then left
-   * as it was.
+   * @returns Whether THIS sign-in gave the bot the right to write.
+   *
+   * @throws The API error for the login screen to word; the saved session is
+   *   then left as it was.
    */
   async function completeBrowserLogin(code: string, state: string, mark: string): Promise<boolean> {
     loading.value = true
@@ -255,14 +259,14 @@ export const useAuthStore = defineStore('auth', () => {
    * masterApplication computeds derived from it) into a session that had
    * already logged out or moved on.
    *
-   * Returns whether the attempt REACHED A DEFINITIVE OUTCOME (B2, PROMPT
-   * №724): no token / a successful fetch / a discarded-by-race fetch / a 401
-   * all resolve `true` -- each is a real answer, not something worth retrying
-   * sooner. Only a genuine transport failure (network blip, 5xx, anything
-   * this function does not recognise) resolves `false`. useRoleFreshness.ts
-   * uses this to decide whether the debounce/poll window may advance --
-   * before this, the window advanced unconditionally and a single failed
-   * attempt silently ate the whole staleness window with no retry.
+   * @returns Whether the attempt REACHED A DEFINITIVE OUTCOME (B2, PROMPT
+   *   №724): no token / a successful fetch / a discarded-by-race fetch / a 401
+   *   all resolve `true` -- each is a real answer, not something worth retrying
+   *   sooner. Only a genuine transport failure (network blip, 5xx, anything
+   *   this function does not recognise) resolves `false`. useRoleFreshness.ts
+   *   uses this to decide whether the debounce/poll window may advance --
+   *   before this, the window advanced unconditionally and a single failed
+   *   attempt silently ate the whole staleness window with no retry.
    */
   async function fetchMe(): Promise<boolean> {
     if (!token.value) return true
@@ -291,9 +295,11 @@ export const useAuthStore = defineStore('auth', () => {
   /**
    * Update the current user's profile and store the fresh result.
    *
-   * Returns the updated user on success. Throws on failure so callers
-   * (e.g. the onboarding finish handler) can keep the user on the screen
-   * and show an error instead of advancing as if it saved.
+   * @returns The updated user on success.
+   *
+   * @throws On failure, so callers (e.g. the onboarding finish handler) can
+   *   keep the user on the screen and show an error instead of advancing as
+   *   if it saved.
    */
   async function updateProfile(body: UserUpdate): Promise<UserResponse> {
     const updated = await updateMe(body)
@@ -303,8 +309,10 @@ export const useAuthStore = defineStore('auth', () => {
 
   /**
    * Switch the current account's role (TEST-ONLY tester tool) and store the
-   * fresh profile. Throws on failure so the caller can show an error and stay
-   * put. Navigation to the new role's dashboard is the caller's job.
+   * fresh profile. Navigation to the new role's dashboard is the caller's
+   * job.
+   *
+   * @throws On failure, so the caller can show an error and stay put.
    */
   async function switchRole(target: UserRole): Promise<UserResponse> {
     const updated = await apiSwitchRole(target)

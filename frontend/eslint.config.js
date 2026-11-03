@@ -5,6 +5,7 @@
 import js from '@eslint/js'
 import tseslint from 'typescript-eslint'
 import pluginVue from 'eslint-plugin-vue'
+import pluginTsdoc from 'eslint-plugin-tsdoc'
 import globals from 'globals'
 
 export default [
@@ -20,6 +21,9 @@ export default [
 
   {
     files: ['src/**/*.{ts,vue}'],
+    plugins: {
+      tsdoc: pluginTsdoc,
+    },
     languageOptions: {
       globals: {
         ...globals.browser,
@@ -40,6 +44,24 @@ export default [
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
+
+      // --- TSDoc syntax gate (FE-137): every /** */ comment parses as ----
+      // valid TSDoc, and only the standard's allowed tags
+      // (docs/frontend-comments.md §2.1) pass -- the whitelist lives in
+      // frontend/tsdoc.json. A misspelled tag (@parma -> unsupported-tag),
+      // a {type} annotation, a broken {@link} all fail here. Rides
+      // pnpm lint through lint-budget.mjs (eslint over src/), next to
+      // no-cyrillic and key-audit.
+      //
+      // ERROR since FE-138 (2026-11-03) closed the escape backlog the rule
+      // rode the warning budget for: the FE-134 prose kept `->` arrows, REST
+      // placeholders like {user_id} and @/alias paths verbatim as grep
+      // anchors; FE-138 either lifted their semantics into
+      // @param/@returns/@throws tags or wrapped them in single-line code
+      // spans, so hand-written files lint clean and the promised promotion
+      // (zero-budget slice -> error) happened. Generated files are exempted
+      // by the override below -- build output is not held to the standard.
+      'tsdoc/syntax': 'error',
       // Allow single-word component names (VButton, VCard, etc.).
       'vue/multi-word-component-names': 'off',
       // console.warn/error allowed; console.log is a hard lint failure.
@@ -144,10 +166,10 @@ export default [
   },
 
   {
-      // Tests drive components through createApp(...) -- the component-per-file
-      // and name-casing rules misread those prop/passing objects as component
-      // definitions (e.g. SendMessageModal's student-name `name` prop fixture
-      // carries a person's name, not a component name).
+    // Tests drive components through createApp(...) -- the component-per-file
+    // and name-casing rules misread those prop/passing objects as component
+    // definitions (e.g. SendMessageModal's student-name `name` prop fixture
+    // carries a person's name, not a component name).
     files: ['src/**/*.test.ts'],
     rules: {
       'vue/one-component-per-file': 'off',
@@ -186,6 +208,27 @@ export default [
     files: ['src/platform/**', 'src/main.ts'],
     rules: {
       'no-restricted-globals': 'off',
+    },
+  },
+
+  {
+    // --- Generated code: not held to the comment standard. ----------------
+    // src/api/generated.ts (the OpenAPI client) and
+    // src/platform/skin-brand.generated.ts are build output of generators
+    // that live in backend/** and carry "DO NOT EDIT" headers. Their
+    // docstrings keep `->`, {placeholders} and @-aliases verbatim (~182
+    // TSDoc grammar findings in generated.ts alone): hand-escaping is
+    // futile -- the next regen wipes it -- and fixing the generator is a
+    // backend change, off-limits to frontend work. The other FE-135 gates
+    // already exclude these files the same way (typedoc.json lists both
+    // patterns under exclude and externalPattern; note `**/generated.ts`
+    // must be listed separately: the `*.generated.ts` glob requires a
+    // basename prefix before the dot). The durable fix is upstream -- the
+    // generator emitting tsdoc-safe docstrings -- until then this override
+    // stands.
+    files: ['**/generated.ts', '**/*.generated.ts'],
+    rules: {
+      'tsdoc/syntax': 'off',
     },
   },
 

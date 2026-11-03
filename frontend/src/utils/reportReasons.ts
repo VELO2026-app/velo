@@ -12,8 +12,10 @@
 
 import i18n from '@/locales'
 
+/** Reason codes the report sheet sends (the frontend owns this vocabulary). */
 export const REASON_CODES = ['disrupted_practice', 'spam', 'abuse', 'fraud', 'other'] as const
 
+/** One known report reason code. */
 export type ReportReasonCode = (typeof REASON_CODES)[number]
 
 /** Localized label for one reason code (report.reasons.<code>). */

@@ -21,6 +21,7 @@ function helpers(rng: () => number) {
   }
 }
 
+/** The style choices a school's hash picks: palette, symmetry, main and crown shapes, colorway. */
 export interface BrandingStyle {
   palette: Palette
   k: number // symmetry
@@ -29,6 +30,7 @@ export interface BrandingStyle {
   colorway: 'deep' | 'mid' | 'duo'
 }
 
+/** Geometry parameters of the generated mandala (radii, widths, crown, curl direction). */
 export interface MandalaParams {
   rot: number
   core: {
@@ -42,6 +44,7 @@ export interface MandalaParams {
   curlsDir: number
 }
 
+/** One swirl band of the generated banner background. */
 export interface BannerBand {
   alpha: number
   arc: number
@@ -56,6 +59,7 @@ export interface BannerBand {
   opacity: number
 }
 
+/** One swirl tail of the generated banner background. */
 export interface BannerTail {
   alpha: number
   arc: number
@@ -66,6 +70,7 @@ export interface BannerTail {
   opacity: number
 }
 
+/** The whole generated banner background: glow, grain, swirl, optional mountains and leaves. */
 export interface BannerParams {
   glow: { cx: number; cy: number; r: number }
   grainSeed: number
@@ -100,6 +105,7 @@ export interface BannerParams {
   } | null
 }
 
+/** Everything the generators derive from one school's hash: style, mandala and banner parameters. */
 export interface SchoolBrandingParams {
   hash: string
   style: BrandingStyle
@@ -133,7 +139,7 @@ function mkRange(
 }
 
 /**
- * Hash -> parameters. The background's "rose whirl": nested wide ribbons
+ * `Hash -> parameters`. The background's "rose whirl": nested wide ribbons
  * pack the disc tightly (width ≈ spiral pitch), each next seam is rotated,
  * tones alternate contrastively, thin streams escape from under the outer
  * coils. Plus mountains and leaves.

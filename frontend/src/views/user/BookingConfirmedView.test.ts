@@ -386,7 +386,7 @@ describe('BookingConfirmedView', () => {
   //
   // Requirement: a successful send opens-or-gets the DM with THIS practice's
   // master, posts the typed text, and SHALL NOT open the chat -- a success
-    // toast lands and the user is returned to practice-detail, the booked
+  // toast lands and the user is returned to practice-detail, the booked
   // practice screen (i18n:user.screens.practiceDetail.titleBooked).
   // Full statement + scenarios: BookingConfirmedView.vue [FE-1]. The tests
   // below pin both scenarios (back when the practice screen is behind in

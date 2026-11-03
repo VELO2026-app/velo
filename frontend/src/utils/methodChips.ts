@@ -31,13 +31,14 @@ import type { Component } from 'vue'
 import { DIRECTION_ICON, DIRECTION_ICON_FALLBACK } from '@/utils/displayHelpers'
 import { directionLabel, parseMethods, resolveStyleLabel } from '@/utils/methodTaxonomy'
 
+/** A stored method string rendered as a chip: the direction's icon plus the short label. */
 export interface MethodChip {
   icon: Component
   label: string
 }
 
 /**
- * "Kundalini yoga" -> "Kundalini", "Meditation of silence" -> "of silence"
+ * `"Kundalini yoga" -> "Kundalini"`, `"Meditation of silence" -> "of silence"`
  * (English glosses; the pinned ru fixtures live in methodChips.test.ts).
  * Case-insensitive containment, separator residue trimmed; a style that is
  * exactly the direction word collapses back to the direction label. A style
@@ -58,7 +59,7 @@ export function shortStyleLabel(direction: string, style: string): string {
   return stripped ? stripped.charAt(0).toUpperCase() + stripped.slice(1) : dir
 }
 
-/** One stored method string -> the chip's icon + short label. */
+/** `One stored method string -> the chip's icon + short label.` */
 export function methodChipFor(method: string): MethodChip {
   const parsed = parseMethods([method])
   const dir = parsed.directions[0]

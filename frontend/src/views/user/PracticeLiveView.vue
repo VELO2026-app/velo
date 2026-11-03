@@ -297,9 +297,9 @@ const cameraHint = computed(() => {
  * Ask the server for this person's SDK parameters and enter. Resolves once
  * the SDK has joined (it then owns the page until leaveUrl reloads it).
  * Every refusal is shown, none is swallowed:
- *   zoom_sdk_not_configured -> the screen says so instead of the button;
- *   zoom_entry_not_joinable -> the state changed under us: re-resolve;
- *   anything else          -> its phrase, or a plain «try again».
+ *   `zoom_sdk_not_configured -> the screen says so instead of the button;`
+ *   `zoom_entry_not_joinable -> the state changed under us: re-resolve;`
+ *   `anything else          -> its phrase, or a plain «try again».`
  */
 async function enterThroughSdk(): Promise<void> {
   let params
@@ -393,7 +393,7 @@ function goToPractice(): void {
   void router.push({ name: 'practice-detail', params: { id: practiceId } })
 }
 
-/** Back arrow -> the zone's dashboard (breaks the check-in <-> live loop). */
+/** `Back arrow -> the zone's dashboard` (breaks the check-in `<->` live loop). */
 function goBack(): void {
   void router.push({ name: isMasterZone ? 'master-dashboard' : 'user-dashboard' })
 }

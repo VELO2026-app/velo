@@ -68,7 +68,7 @@ import {
 
 const props = withDefaults(
   defineProps<{
-    /** Semantic key -> DS glyph (see ICON_MAP). Not an emoji. */
+    /** `Semantic key -> DS glyph` (see ICON_MAP). Not an emoji. */
     icon?: string
     title: string
     description?: string

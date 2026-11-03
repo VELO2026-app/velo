@@ -26,7 +26,9 @@ import type {
   UpdateTaxonomyItemRequest,
 } from '@/api/generated'
 
+/** One style row of the method taxonomy catalog, under its consumer-facing name. */
 export type TaxonomyStyleItem = TaxonomyStyleResponse
+/** One direction row of the method taxonomy catalog, under its consumer-facing name. */
 export type TaxonomyDirectionItem = TaxonomyDirectionResponse
 export type {
   TaxonomyListResponse,
@@ -50,12 +52,14 @@ export function getFullTaxonomy(): Promise<TaxonomyListResponse> {
   return api.get<TaxonomyListResponse>('/api/v1/admin/taxonomy')
 }
 
+/** Create a taxonomy direction (admin catalog management). */
 export function createTaxonomyDirection(
   body: CreateDirectionRequest,
 ): Promise<TaxonomyDirectionItem> {
   return api.post<TaxonomyDirectionItem>('/api/v1/admin/taxonomy/directions', body)
 }
 
+/** Update a taxonomy direction (admin catalog management). */
 export function updateTaxonomyDirection(
   directionId: string,
   body: UpdateTaxonomyItemRequest,
@@ -63,6 +67,7 @@ export function updateTaxonomyDirection(
   return api.patch<TaxonomyDirectionItem>(`/api/v1/admin/taxonomy/directions/${directionId}`, body)
 }
 
+/** Create a style under one taxonomy direction (admin catalog management). */
 export function createTaxonomyStyle(
   directionId: string,
   body: CreateStyleRequest,
@@ -73,6 +78,7 @@ export function createTaxonomyStyle(
   )
 }
 
+/** Update one taxonomy style (admin catalog management). */
 export function updateTaxonomyStyle(
   styleId: string,
   body: UpdateTaxonomyItemRequest,

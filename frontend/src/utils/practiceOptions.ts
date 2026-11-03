@@ -16,6 +16,7 @@ import i18n from '@/locales'
 
 const { t } = i18n.global
 
+/** Duration options of the practice form, in minutes. */
 export const DURATION_OPTIONS: { label: string; value: string }[] = [
   {
     value: '30',
@@ -66,6 +67,7 @@ export const DURATION_OPTIONS: { label: string; value: string }[] = [
 // GT-11 and OFFERED by audienceOptions() below only when this master can
 // actually target at least one school (FE-24) -- an option without its
 // picker would let a master pick a kind whose targets they cannot set.
+/** Audience-kind options shared by the practice create and edit forms. */
 export const AUDIENCE_OPTIONS: { label: string; value: PracticeAudienceKind }[] = [
   {
     value: 'public',
@@ -90,7 +92,7 @@ export const AUDIENCE_OPTIONS: { label: string; value: PracticeAudienceKind }[] 
 /** FE-24: the option list with the fourth kind added when the master
  *  belongs to at least one school (relation curator or master -- the two
  *  relations the backend validates school_id against). Zero
- *  eligible schools -> the exact three options above, unchanged. */
+ *  eligible schools `->` the exact three options above, unchanged. */
 export function audienceOptions(
   hasSchools: boolean,
 ): { label: string; value: PracticeAudienceKind }[] {
@@ -167,7 +169,8 @@ const TIMEZONE_CITIES: { iana: string; city: string }[] = [
 /**
  * Current UTC offset of an IANA zone, in minutes (east of UTC positive).
  * Computed via Intl from `at` (defaults to now), so it reflects DST.
- * Returns null if the zone is not a valid IANA id (Intl throws RangeError).
+ *
+ * @returns Null when the zone is not a valid IANA id (Intl throws RangeError).
  */
 function getOffsetMinutes(iana: string, at: Date = new Date()): number | null {
   try {
@@ -193,11 +196,11 @@ function getOffsetMinutes(iana: string, at: Date = new Date()): number | null {
 
 /**
  * Format a UTC offset (in minutes) iOS-style:
- *   0      -> "UTC±0"
- *   +180   -> "UTC+3"
- *   -300   -> "UTC-5"
- *   +330   -> "UTC+5:30"
- *   +345   -> "UTC+5:45"
+ *   `0      -> "UTC±0"`
+ *   `+180   -> "UTC+3"`
+ *   `-300   -> "UTC-5"`
+ *   `+330   -> "UTC+5:30"`
+ *   `+345   -> "UTC+5:45"`
  * Minutes are shown only when non-zero. Sign uses a plain hyphen "-".
  */
 export function formatUtcOffset(iana: string, at: Date = new Date()): string {
@@ -220,9 +223,9 @@ function buildTimezoneLabel(iana: string, city: string, at: Date = new Date()): 
 /**
  * Derive a display city from a raw IANA id when we have no curated city for
  * it: take the last "/" segment and turn underscores into spaces.
- *   "Asia/Novosibirsk"   -> "Novosibirsk"
- *   "America/Argentina/Buenos_Aires" -> "Buenos Aires"
- *   "UTC"                -> "UTC"
+ *   `"Asia/Novosibirsk"   -> "Novosibirsk"`
+ *   `"America/Argentina/Buenos_Aires" -> "Buenos Aires"`
+ *   `"UTC"                -> "UTC"`
  */
 function cityFromIana(iana: string): string {
   const last = iana.split('/').pop() ?? iana
@@ -230,7 +233,7 @@ function cityFromIana(iana: string): string {
 }
 
 /**
- * Build a single { label, value } option for an arbitrary IANA zone, with a
+ * Build a single `{ label, value }` option for an arbitrary IANA zone, with a
  * dynamically generated label. Used by the onboarding picker to inject an
  * exotic auto-detected / profile zone that is not in the curated list, so the
  * user's real zone is shown and selectable instead of being silently dropped.
@@ -241,6 +244,7 @@ export function makeTimezoneOption(iana: string): { label: string; value: string
 
 // Curated options, computed once at module load, sorted by real offset
 // (UTC-11 -> UTC+14). Same { label, value }[] shape as before.
+/** Curated timezone options of the profile picker, sorted by real UTC offset. */
 export const TIMEZONE_OPTIONS: { label: string; value: string }[] = TIMEZONE_CITIES.map((z) => ({
   label: buildTimezoneLabel(z.iana, z.city),
   value: z.iana,
@@ -256,12 +260,14 @@ export const TIMEZONE_OPTIONS: { label: string; value: string }[] = TIMEZONE_CIT
 // matching literal union and the migration plan.
 // Shared by the master create/edit forms and the Calendar filter UI.
 
+/** One direction choice of the shared taxonomy pickers (label plus canonical value). */
 export interface DirectionOption {
   label: string
   value: PracticeDirection
 }
 
 // Labels reuse the display.direction.* keys (same words as the card display).
+/** Direction options shared by the practice forms and the Calendar filter. */
 export const DIRECTION_OPTIONS: DirectionOption[] = [
   {
     value: 'meditation',
@@ -325,6 +331,7 @@ export const DIRECTION_OPTIONS: DirectionOption[] = [
   },
 ]
 
+/** Difficulty options shared by the practice forms and the Calendar filter. */
 export const DIFFICULTY_OPTIONS: { label: string; value: string }[] = [
   {
     value: 'beginner',
@@ -346,6 +353,7 @@ export const DIFFICULTY_OPTIONS: { label: string; value: string }[] = [
   },
 ]
 
+/** One style choice of a direction's style picker. */
 export interface StyleOption {
   label: string
   value: string
@@ -357,6 +365,7 @@ export interface StyleOption {
 // selector when STYLE_OPTIONS_BY_DIRECTION[direction] is undefined.
 // Mirrors the future backend practice_allowed_styles with direction scoping
 // (handoff §9 B-2).
+/** Styles per direction; directions without styles are absent, so the style selector hides. */
 export const STYLE_OPTIONS_BY_DIRECTION: Partial<Record<PracticeDirection, StyleOption[]>> = {
   meditation: [
     {
@@ -444,8 +453,12 @@ export const STYLE_OPTIONS_BY_DIRECTION: Partial<Record<PracticeDirection, Style
   ],
 }
 
-/** Returns the style options for a given direction, or [] when the
- *  direction has no styles. */
+/**
+ * The style options for a given direction.
+ *
+ * @returns The style options for the direction, or `[]` when the direction
+ *  has no styles.
+ */
 export function stylesForDirection(direction: PracticeDirection | undefined | null): StyleOption[] {
   if (!direction) return []
   return STYLE_OPTIONS_BY_DIRECTION[direction] ?? []
@@ -457,9 +470,11 @@ export function directionHasStyles(direction: PracticeDirection | undefined | nu
   return stylesForDirection(direction).length > 0
 }
 
-/** Flat style value -> localized label (live). Unknown values are the
- *  caller's fallback (they return the raw key path -- callers must fall
- *  back to the raw value themselves when the taxonomy may not know it). */
+/** `Flat style value -> localized label` (live).
+ *
+ * @returns The localized label; an unknown value returns the raw key path --
+ *  callers must fall back to the raw value themselves when the taxonomy may
+ *  not know it. */
 export function styleLabel(styleValue: string): string {
   return t(`practice.styles.${styleValue}`)
 }
@@ -520,11 +535,13 @@ export function catalogDirectionOptions(catalog: TaxonomyListResponse | null): D
 }
 
 /** Styles for one direction, catalog-first with a fallback to the hardcoded
- *  stylesForDirection() when the catalog is cold or unreachable. When the
- *  catalog IS warm but the direction isn't found in it (should not happen --
- *  the catalog is a superset of the hardcoded directions), returns [] rather
- *  than falling back, mirroring MethodTaxonomyPicker.vue's own
- *  catalogStylesForDirection(). Labels resolve through styleDisplayLabel. */
+ *  stylesForDirection() when the catalog is cold or unreachable. Labels
+ *  resolve through styleDisplayLabel.
+ *
+ * @returns `[]` rather than falling back when the catalog IS warm but the
+ *  direction isn't found in it (should not happen -- the catalog is a
+ *  superset of the hardcoded directions), mirroring
+ *  MethodTaxonomyPicker.vue's own catalogStylesForDirection(). */
 export function catalogStylesForDirection(
   catalog: TaxonomyListResponse | null,
   direction: string | undefined | null,

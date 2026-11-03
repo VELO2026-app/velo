@@ -117,6 +117,7 @@ export function warmTabData(path: string): void {
   void warm().catch(() => undefined)
 }
 
+/** Warm the current zone's tab data once, idle after the first screen of the zone. */
 export function installDataPrefetch(router: Router): void {
   const started = new Set<readonly TabItem[]>()
   router.afterEach((to, _from, failure) => {

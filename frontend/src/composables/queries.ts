@@ -12,6 +12,7 @@ import { queryKeys } from '@/composables/queryKeys'
 import type { QueryOptions } from '@/composables/useQuery'
 import type { SchoolMineItem, UserStatsResponse } from '@/api/types'
 
+/** Payload of the schools tab: the schools the user participates in, plus the school-create right. */
 export interface UserSchools {
   schools: SchoolMineItem[]
   canCreate: boolean
@@ -56,6 +57,7 @@ export function userSchoolsQuery(role: string): QueryOptions<UserSchools> {
  * they change only after an attended practice. */
 export const STATS_STALE_MS = 5 * 60_000
 
+/** Query options for the attended-practice stats of the signed-in user (dashboard, profile). */
 export function myStatsQuery(staleTime = STATS_STALE_MS): QueryOptions<UserStatsResponse> {
   return { key: queryKeys.myStats(), query: getMyStats, staleTime, persist: true }
 }

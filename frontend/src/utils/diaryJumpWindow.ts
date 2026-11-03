@@ -18,6 +18,7 @@
 
 import type { DiaryFeedItem } from '@/api/types'
 
+/** Merge two feed windows (dedupe by id) into one newest-first list, keeping cross-window tie order. */
 export function mergeJumpWindow(older: DiaryFeedItem[], newer: DiaryFeedItem[]): DiaryFeedItem[] {
   const seen = new Set<string>()
   const merged: DiaryFeedItem[] = []

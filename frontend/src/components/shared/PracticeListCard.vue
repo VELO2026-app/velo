@@ -107,7 +107,7 @@ const props = withDefaults(
     /** Optional second line shown UNDER `when` (e.g. the time on the dashboard
      *  nearest-practice card, so date + time are both visible). Omit = single line. */
     whenTime?: string
-    /** When true (default), the whole card is a button and emits @click. */
+    /** When true (default), the whole card is a button and emits `@click`. */
     clickable?: boolean
   }>(),
   {

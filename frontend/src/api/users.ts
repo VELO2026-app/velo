@@ -42,7 +42,7 @@ export function getTimezoneCatalog(): Promise<TimezoneCatalogResponse> {
  * Only the fields present in `body` are changed.
  *
  * Used by the profile screen and by the welcome onboarding flow
- * (which sends { timezone, onboarding_completed: true } on completion).
+ * (which sends `{ timezone, onboarding_completed: true }` on completion).
  */
 export function updateMe(body: UserUpdate): Promise<UserResponse> {
   return api.patch<UserResponse>('/api/v1/users/me', body)

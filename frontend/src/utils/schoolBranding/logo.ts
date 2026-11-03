@@ -8,11 +8,12 @@
 import type { SchoolBrandingParams } from './params'
 import { mandalaGroup } from './mandala'
 
+/** Logo render options: monogram letter, flat mode, mandala scale inside the plate. */
 export interface LogoOptions {
   /** A monogram letter under the mandala (a "school letter" checkbox in
    *  the prototype). */
   monogram?: boolean
-  /** The monogram letter; sanitized against <>& (§5.3). */
+  /** The monogram letter; sanitized against `<>&` (§5.3). */
   letter?: string
   /** Flat mode: no drop-shadow (owner 2026-09-19: the logo is flat). */
   flat?: boolean
@@ -24,6 +25,7 @@ export interface LogoOptions {
   mandalaScale?: number
 }
 
+/** Render the school logo (plate, mandala, optional monogram) as a 200x200 SVG string. */
 export function logoSvg(P: SchoolBrandingParams, opts: LogoOptions = {}): string {
   const uid = 'lg' + P.hash.slice(0, 8)
   const c = P.style.palette
