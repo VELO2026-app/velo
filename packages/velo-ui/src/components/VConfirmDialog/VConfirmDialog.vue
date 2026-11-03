@@ -1,15 +1,29 @@
 <!--
-  VELO Frontend -- VConfirmDialog Component (Phase B4.4)
+  @velo/ui -- VConfirmDialog Component (Phase B4.4; migrated FE-145 P6b --
+  the modal family batch: VModal, VBottomSheet, VConfirmDialog)
 
   Confirmation dialog over the shared <VModal> canon (white sheet). Message +
   Cancel/Confirm buttons, danger variant, loading guard (overlay/cancel blocked
   while a request is in-flight).
+
+  i18n seam (§7.2, cut by the move): the kit component renders its button
+  labels PURE -- empty until `cancelLabel`/`confirmLabel` say something. The
+  app barrel re-anchors the localized t('ui.cancel')/t('ui.confirm') defaults
+  with a functional wrapper until P3 gives the kit its own i18n story (the
+  VLoader/VModal pattern, pinned app-side by VConfirmDialog.localized.test.ts);
+  the wrapper runs t() on every render, so the defaults still resolve at
+  RENDER time -- a locale switch re-renders them.
+
+  Caller attrs ride VModal's own §7.2 attrs-root merge: this component's
+  single template root is the kit VModal, and fallthrough carries them into
+  its explicit overlay binding (no inheritAttrs flip of its own needed).
 
   Usage:
     <VConfirmDialog
       :open="dlg.visible"
       :message="dlg.message"
       :confirm-label="dlg.confirmLabel"
+      :cancel-label="dlg.cancelLabel"
       :danger="dlg.danger"
       :loading="dlg.loading"
       @confirm="dlg.onConfirm"
@@ -74,7 +88,12 @@
 
 <template>
   <VModal :open="open" :show-close="false" :close-on-overlay="!loading" @close="$emit('cancel')">
-    <h2 v-if="title" class="v-confirm__title" :class="{ 'v-confirm__title--strong': titleStrong }">
+    <h2
+      v-if="title"
+      class="v-confirm__title"
+      :class="{ 'v-confirm__title--strong': titleStrong }"
+      :data-velo-strong="titleStrong || undefined"
+    >
       {{ title }}
     </h2>
     <slot />
@@ -83,14 +102,14 @@
       <p class="v-confirm__panel-text">{{ message }}</p>
     </div>
     <p v-else class="v-confirm__text">{{ message }}</p>
-    <div class="v-confirm__actions">
+    <div class="v-confirm__actions" :data-velo-compact="compactActions || undefined">
       <VButton
         :variant="cancelVariant"
         :size="compactActions ? 'sm' : 'md'"
         :disabled="loading"
         @click="$emit('cancel')"
       >
-        {{ cancelLabel ?? t('ui.cancel') }}
+        {{ cancelLabel }}
       </VButton>
       <VButton
         :variant="danger ? 'danger' : 'primary'"
@@ -98,25 +117,20 @@
         :loading="loading"
         @click="$emit('confirm')"
       >
-        {{ confirmLabel ?? t('ui.confirm') }}
+        {{ confirmLabel }}
       </VButton>
     </div>
   </VModal>
 </template>
 
 <script setup lang="ts">
-import { t } from '@/locales'
-import VModal from './VModal.vue'
-// FE-117 batch A: VButton lives in @velo/ui now -- take it from THIS barrel
-// (principle 1: consumers import @/components/ui). The temporary barrel
-// cycle (barrel -> VConfirmDialog -> barrel) is render-time-safe and dies
-// with this component's own move in P6.
-import { VButton } from '@/components/ui'
-import { IconWarning } from '@/components/icons'
+import VModal from '../VModal'
+import VButton from '../VButton'
+import { IconWarning } from '../../icons'
 
-// tz-i18n 1.3: label defaults resolve at render time (?? t() in the
-// template), so a locale switch re-renders them; withDefaults factories
-// would freeze the label at instance creation.
+// The i18n seam is the app barrel's wrapper (see the file header): the
+// labels here are pure prop copy, and the wrapper's render-time t() keeps
+// the tz-i18n 1.3 locale-switch re-render contract.
 
 withDefaults(
   defineProps<{

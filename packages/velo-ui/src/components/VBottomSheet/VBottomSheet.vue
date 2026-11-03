@@ -1,11 +1,21 @@
 <!--
-  VELO Frontend -- VBottomSheet Component (Phase-3 master DS)
+  @velo/ui -- VBottomSheet Component (Phase-3 master DS; migrated FE-145
+  P6b -- the modal family batch: VModal, VBottomSheet, VConfirmDialog)
 
   Flush bottom sheet (operator SVG 2026-06-11): grab handle, big title, content,
   optional primary "save" footer. Differs from VModal (a floating, all-corners
   dialog with an X): this is flush to the bottom edge, rounded top only, NO close
   button — dismissed by tapping the scrim. Reuses VModal's teleport + slide
   transition + scroll-lock + Escape pattern.
+
+  Migrated with NO i18n seam to cut: every label it renders (title, save,
+  cancel) is caller copy, so the kit component is pure as-is. The §7.2
+  attrs-root seam IS cut by the move: inheritAttrs:false + an explicit
+  v-bind merge onto the teleported OVERLAY root (see the titleStrong
+  paragraph below for the fallthrough gap that retires). Document access
+  (the Escape keydown) lives behind the kit's own seam
+  (src/platform/dom.ts) and the ref-counted body-scroll lock is the kit's
+  own (src/useBodyScrollLock.ts) -- both landed in P5.
 
   Usage:
     <VBottomSheet :open="open" title="Дата практики" save-label="Сохранить"
@@ -42,22 +52,28 @@
   colours it already had. Defaults 'primary'/'danger' = byte-identical.
 
   Optional `titleStrong` (T24-25/32, PROMPT №634): a prop, NOT a `:deep()`
-  override from the caller's own scoped style -- this component's template
-  root is Teleported, and Vue does not forward a caller's `class` fallthrough
-  onto a Teleported root (confirmed the hard way: `[Vue warn]: Extraneous
-  non-props attributes (class) were passed to component but could not be
-  automatically inherited because component renders fragment or text or
-  teleport root nodes`), so a scoped `:deep()` selector from outside can
-  never reach `.v-sheet__title`. Applies the app-wide hairline-stroke
-  faux-bold (global.css `.velo-text-strong`'s own recipe, reused as a class
-  here rather than via that global class directly, since this stays scoped
-  to THIS component). Default false = byte-identical to every other caller.
+  override from the caller's own scoped style -- at the time this component
+  lived in the app, its Teleported root silently dropped a caller's `class`
+  fallthrough (confirmed the hard way: `[Vue warn]: Extraneous non-props
+  attributes (class) were passed to component but could not be automatically
+  inherited because component renders fragment or text or teleport root
+  nodes`), so a scoped `:deep()` selector from outside could never reach
+  `.v-sheet__title`. The FE-145 §7.2 attrs-root merge now lands caller
+  attrs on the overlay deliberately; the prop stays (it is the component's
+  own variant knob, not a styling escape hatch). Applies the app-wide
+  hairline-stroke faux-bold (global.css `.velo-text-strong`'s own recipe,
+  reused as a class here rather than via that global class directly, since
+  this stays scoped to THIS component). Default false = byte-identical to
+  every other caller.
 -->
 
 <template>
   <Teleport to="body">
     <Transition name="v-sheet">
-      <div v-if="open" class="v-sheet__overlay" @click.self="onOverlay">
+      <!-- §7.2 attrs-root: caller attrs merge HERE, onto the teleported
+           overlay -- inheritAttrs is false above, so nothing rides Vue's
+           (Teleport-blind) fallthrough. -->
+      <div v-if="open" class="v-sheet__overlay" v-bind="attrs" @click.self="onOverlay">
         <div ref="panelEl" class="v-sheet__panel velo-kbd-scroll" role="dialog" aria-modal="true">
           <div
             class="v-sheet__handle"
@@ -74,6 +90,8 @@
               'v-sheet__title--compact': compactTitle,
               'v-sheet__title--strong': titleStrong,
             }"
+            :data-velo-compact="compactTitle || undefined"
+            :data-velo-strong="titleStrong || undefined"
             @pointerdown="onGrabDown"
             @pointermove="onGrabMove"
             @pointerup="onGrabEnd"
@@ -89,6 +107,7 @@
               type="button"
               class="v-sheet__cancel"
               :class="{ 'v-sheet__cancel--danger': cancelVariant === 'danger' }"
+              :data-velo-variant="cancelVariant"
               @click="$emit('close')"
             >
               {{ cancelLabel }}
@@ -97,6 +116,8 @@
               type="button"
               class="v-sheet__save v-sheet__save--paired"
               :class="{ 'v-sheet__save--primary': saveVariant === 'primary' }"
+              :data-velo-variant="saveVariant"
+              :data-velo-disabled="saveDisabled || undefined"
               :disabled="saveDisabled"
               @click="$emit('save')"
             >
@@ -107,6 +128,7 @@
             v-else-if="saveLabel"
             type="button"
             class="v-sheet__save"
+            :data-velo-disabled="saveDisabled || undefined"
             :disabled="saveDisabled"
             @click="$emit('save')"
           >
@@ -119,9 +141,12 @@
 </template>
 
 <script setup lang="ts">
-import { onDocumentEvent, offDocumentEvent } from '@/platform/dom'
-import { ref, watch, onMounted, onUnmounted, onDeactivated } from 'vue'
-import { lockBodyScroll, unlockBodyScroll } from '@/components/ui'
+import { onDocumentEvent, offDocumentEvent } from '../../platform/dom'
+import { ref, watch, onMounted, onUnmounted, onDeactivated, useAttrs } from 'vue'
+import { lockBodyScroll, unlockBodyScroll } from '../../useBodyScrollLock'
+
+defineOptions({ inheritAttrs: false })
+const attrs = useAttrs()
 
 const props = withDefaults(
   defineProps<{
