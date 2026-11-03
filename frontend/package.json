@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "vue-tsc --noEmit --incremental && vite build",
     "preview": "vite preview",
-    "verify": "pnpm lint && pnpm typecheck && pnpm test",
+    "verify": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test",
     "verify:quick": "node scripts/verify-quick.mjs",
     "lint": "node scripts/lint-budget.mjs && node scripts/no-cyrillic.mjs && node scripts/key-audit.mjs && node scripts/doc-coverage.mjs && pnpm lint:css",
     "lint:css": "stylelint \"src/**/*.{css,vue}\"",
