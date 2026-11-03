@@ -244,8 +244,8 @@
     </VModal>
 
     <!-- Block confirm (owner ruling 2026-09-30: blocking covers masters too).
-         Confirm sends POST …/members/{id}/block (BE-79 (2)); the copy is a
-         DRAFT for the owner's review. -->
+         Confirm sends POST …/members/{id}/block (BE-79 (2)); the copy is
+         DSGN-10 popup 1 verbatim (FE-97, owner-approved 2026-11-03). -->
     <VConfirmDialog
       :open="blockConfirmOpen"
       :title="t('user.screens.masterPublic.block.confirmTitle')"
@@ -259,6 +259,37 @@
     >
       <TargetUserCard :name="displayName" :avatar-url="profile?.avatar_url ?? null" />
     </VConfirmDialog>
+
+    <!-- Post-block (DSGN-10 popup 2, FE-97): mirrors the student-profile
+         chain verbatim -- warning panel WITHOUT the icon + compact pills.
+         «В поддержку» opens the report form; dismissing leaves the profile
+         the way the curator came in. Shown after the server's 204 only. -->
+    <VConfirmDialog
+      :open="blockedDialogOpen"
+      :title="t('user.screens.masterPublic.block.doneTitle')"
+      :message="t('user.screens.masterPublic.block.doneText')"
+      :confirm-label="t('user.screens.masterPublic.report.cta')"
+      :cancel-label="t('user.screens.masterPublic.report.dismiss')"
+      compact-actions
+      warning-panel
+      :warning-panel-icon="false"
+      danger
+      cancel-variant="primary"
+      @confirm="onReportOfferAccept"
+      @cancel="leaveAfterBlock"
+    >
+      <div class="master-public__block-card">
+        <TargetUserCard :name="displayName" :avatar-url="profile?.avatar_url ?? null" />
+      </div>
+    </VConfirmDialog>
+
+    <ReportUserSheet
+      :open="reportOpen"
+      :student-id="masterId"
+      :student-name="displayName"
+      :student-avatar-url="profile?.avatar_url ?? null"
+      @close="onReportClose"
+    />
   </div>
 </template>
 
@@ -284,6 +315,7 @@ import {
 import { VHeader } from '@/components/layout'
 import { IconChevronRight, IconLock, IconMessages, IconPen } from '@/components/icons'
 import CalendarPracticeCard from '@/components/shared/CalendarPracticeCard.vue'
+import ReportUserSheet from '@/components/shared/ReportUserSheet.vue'
 import SendMessageModal from '@/components/shared/SendMessageModal.vue'
 import TargetUserCard from '@/components/shared/TargetUserCard.vue'
 import { getPublicMaster } from '@/api/masters'
@@ -378,11 +410,14 @@ function onBlockClick(close: () => void): void {
   blockConfirmOpen.value = true
 }
 
-// BE-79 (2): 204 -> say so and go back where the curator came from (the
-// school roster: its master rows open this screen). 404 -> not a member any
-// more -> the same way back. Anything else (409, 403 in user mode -- the
-// server decides by the CURRENT role, network) -> the error toast, stay.
+// BE-79 (2): 204 -> the DSGN-10 popup 2 chain (FE-97) -- the report offer
+// first, leaving the profile only when the curator dismisses it (or closes
+// the report form). 404 -> not a member any more -> the same way back.
+// Anything else (409, 403 in user mode -- the server decides by the CURRENT
+// role, network) -> the error toast, stay.
 const blocking = ref(false)
+const blockedDialogOpen = ref(false)
+const reportOpen = ref(false)
 
 async function onBlockConfirm(): Promise<void> {
   if (blocking.value) return
@@ -390,8 +425,7 @@ async function onBlockConfirm(): Promise<void> {
   try {
     await blockSchoolMember(schoolId.value, masterId.value)
     blockConfirmOpen.value = false
-    toast.success(t('user.screens.masterPublic.toast.blocked'))
-    router.back()
+    blockedDialogOpen.value = true
   } catch (e) {
     blockConfirmOpen.value = false
     if (e instanceof ApiResponseError && e.status === 404) {
@@ -403,6 +437,22 @@ async function onBlockConfirm(): Promise<void> {
   } finally {
     blocking.value = false
   }
+}
+
+function leaveAfterBlock(): void {
+  blockedDialogOpen.value = false
+  router.back()
+}
+
+function onReportOfferAccept(): void {
+  blockedDialogOpen.value = false
+  reportOpen.value = true
+}
+
+// The report sheet is reached only after a block: closing it leaves too.
+function onReportClose(): void {
+  reportOpen.value = false
+  router.back()
 }
 
 function onMessageClick(close: () => void): void {
@@ -614,6 +664,13 @@ watch(masterId, (id) => {
 .master-public__role-actions {
   display: flex;
   gap: var(--space-2);
+}
+
+/* Post-block dialog: air between the who-card (slot content) and the warning
+   panel -- VConfirmDialog spaces only its own elements (same as the student
+   profile's block card). */
+.master-public__block-card {
+  margin-bottom: var(--space-3);
 }
 
 /* «Ближайшие практики» — свёрнутый аккордеон. Контейнер прозрачный (чтобы тело

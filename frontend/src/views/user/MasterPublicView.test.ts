@@ -264,6 +264,14 @@ describe('MasterPublicView', () => {
         (b) => b.textContent?.trim() === label,
       )
     }
+    // Body-wide exact match: the post-block chain swaps one teleported dialog
+    // for another (and then for the report sheet), so the LAST container is
+    // not always the right scope.
+    function bodyButton(label: string): HTMLButtonElement | undefined {
+      return Array.from(document.body.querySelectorAll<HTMLButtonElement>('button')).find(
+        (b) => b.textContent?.trim() === label,
+      )
+    }
     function openMenu(): Promise<void> {
       menuButton()?.click()
       return flush()
@@ -404,8 +412,9 @@ describe('MasterPublicView', () => {
     })
 
     // BE-79 (2): this pinned the INTERIM no-op (an info toast) -- right until
-    // the block endpoint landed. Confirm now sends it and goes back.
-    it('«Заблокировать»: confirm sends the block for THIS master in THIS school, then back', async () => {
+    // the block endpoint landed. Confirm now sends it and opens the DSGN-10
+    // popup-2 chain (FE-97): the report offer first, back only on dismissal.
+    it('«Заблокировать»: confirm sends the block, then the DSGN-10 popup 2 chain', async () => {
       routeQuery.schoolId = 'g1'
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
@@ -417,17 +426,47 @@ describe('MasterPublicView', () => {
       await flush()
 
       const modal = liveModal()
-      expect(modal?.textContent).toContain('Заблокировать участника школы?')
-      expect(modal?.textContent).toContain('утратит доступ к школе')
+      expect(modal?.textContent).toContain('Заблокировать мастера?')
+      expect(modal?.textContent).toContain('переместится в группу «Удалённые»')
       expect(modal?.querySelector('.v-confirm__panel svg')).not.toBeNull()
 
       modalButton('Заблокировать')?.click()
       await flush()
 
       expect(cgApi.blockSchoolMember).toHaveBeenCalledWith('g1', 'm1')
-      expect(toastSuccess).toHaveBeenCalledWith('Участник заблокирован')
-      expect(back).toHaveBeenCalledTimes(1)
+      // Popup 2 (DSGN-10 verbatim): the report offer, NOT an instant exit.
+      const done = liveModal()
+      expect(done?.textContent).toContain('Мастер заблокирован')
+      expect(done?.textContent).toContain('Мастер перемещён в «Удалённые»')
+      expect(bodyButton('Не сейчас')).toBeTruthy()
+      expect(bodyButton('В поддержку')).toBeTruthy()
+      expect(back).not.toHaveBeenCalled()
       expect(toastInfo).not.toHaveBeenCalled()
+    })
+
+    it('after the block, «В поддержку» opens the report form for the master', async () => {
+      routeQuery.schoolId = 'g1'
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      mount()
+      await flush()
+      await openMenu()
+
+      menuItem('Заблокировать')?.click()
+      await flush()
+      modalButton('Заблокировать')?.click()
+      await flush()
+      bodyButton('В поддержку')?.click()
+      await flush()
+
+      // The report form opened for the blocked master; the leave transition
+      // (--transition-slow, 0.3s) must finish before the popup's «В поддержку»
+      // unmounts -- the same wait the student-profile tests use.
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      await flush()
+
+      expect(document.body.textContent).toContain('Сообщить о пользователе')
+      expect(bodyButton('В поддержку')).toBeFalsy()
     })
 
     it('«Заблокировать» refused (409): the error toast, stay on the profile', async () => {
