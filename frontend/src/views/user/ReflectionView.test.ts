@@ -235,7 +235,7 @@ function typeComment(value: string): void {
   ta.dispatchEvent(new Event('input'))
 }
 
-/** Every export of @/api/diary that was called. Swept, not listed. */
+/** Every export of `@/api/diary` that was called. Swept, not listed. */
 function calledDiaryApi(): string[] {
   return Object.entries(diaryApi)
     .filter(([, fn]) => vi.isMockFunction(fn))

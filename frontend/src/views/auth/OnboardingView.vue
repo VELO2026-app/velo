@@ -204,8 +204,10 @@ const customGoal = ref('')
 const FALLBACK_TIMEZONE = 'UTC'
 
 /**
- * True if `zone` is a valid IANA id. The browser has no ZoneInfo, so we probe
- * via Intl: an invalid timeZone makes the constructor throw RangeError.
+ * The browser has no ZoneInfo, so we probe via Intl: an invalid timeZone
+ * makes the constructor throw RangeError.
+ *
+ * @returns True when `zone` is a valid IANA id.
  */
 function isValidIana(zone: string): boolean {
   if (!zone) return false

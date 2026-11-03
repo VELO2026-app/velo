@@ -327,7 +327,7 @@ const { showSkeleton: statsPending } = useLoadingHold(statsQuery.isPending)
  * Selection (operator G): pin the active session (the single latest-started
  * in-progress booking) FIRST -- that's where Zoom / Check-in matter -- then the
  * 2 soonest upcoming, so a genuinely-imminent booking is never hidden behind a
- * live one. Max 3 cards; nothing live -> just the 2 soonest upcoming. The pure
+ * live one. Max 3 cards; nothing live `->` just the 2 soonest upcoming. The pure
  * selection lives in utils/nearestBookings (unit-tested); reacts to `now` so it
  * re-ranks on the 60s clock tick.
  *
@@ -413,7 +413,7 @@ const checkinAlertTime = computed((): string => {
 
 /**
  * True when a card's practice is happening right now — decided by CLIENT TIME
- * (start ≤ now < end) via the shared isLiveNow, NOT by the master's manual
+ * (start `≤ now <` end) via the shared isLiveNow, NOT by the master's manual
  * status='live' flip. Keeps the live badge (i18n:user.screens.userDashboard.liveBadge)
  * in sync with the my-bookings screen (i18n:user.screens.myBookings.title)
  * and makes it appear/disappear exactly on schedule, no backend/cron dependency.

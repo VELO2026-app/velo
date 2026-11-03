@@ -397,7 +397,7 @@ async function fetchMessages(): Promise<ChatMessage[]> {
   return [...page.messages].reverse()
 }
 
-/** The newest message's id (oldest-first storage -> it's the tail).
+/** The newest message's id (`oldest-first storage -> it's the tail`).
  *  CH-1: THIS, not the array length, is what says "something arrived" --
  *  on an eternal DM past one page the length is pinned at the page size
  *  (100 === 100 forever), and a length compare silently blinds the poll
