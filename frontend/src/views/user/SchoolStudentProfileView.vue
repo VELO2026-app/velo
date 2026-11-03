@@ -25,11 +25,11 @@
     - «Заблокировать» (lock, owner ruling 2026-09-30): the ONLY way a
       curator ends a school membership now -- «Исключить из школы» is
       REMOVED (an exclusion no longer exists). The confirm popup is built
-      (same recipe as the master-zone block dialog; the copy is a DRAFT for
-      the owner's review -- BE-79 owns the final wording). Confirm sends
-      POST …/members/{user_id}/block (BE-79 (2)); only the server's 204 opens
-      «Пользователь заблокирован», and leaving that dialog returns to the
-      roster -- the blocked person is no longer in it.
+      (same recipe as the master-zone block dialog; the copy is the
+      owner-approved FE-97 wording -- «Удалённые», 2026-11-03). Confirm
+      sends POST …/members/{user_id}/block (BE-79 (2)); only the server's
+      204 opens «Ученик заблокирован», and leaving that dialog returns to
+      the roster -- the blocked person is no longer in it.
 
   All three are curator-of-THIS-school only (viewer.relation, §1.12.1's
   access rule). Masters of the school do NOT land here -- their rows open

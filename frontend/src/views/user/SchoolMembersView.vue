@@ -50,8 +50,8 @@
         @update:model-value="switchKind"
       />
 
-      <!-- The search rides the roster tabs; the Блок placeholder has nothing
-           to search, so the field sits out. -->
+      <!-- The search rides the roster tabs; the «Удалённые» placeholder has
+           nothing to search, so the field sits out. -->
       <div v-if="kind !== 'blocked'" class="school-members__search">
         <div class="school-members__search-field">
           <VInput
@@ -188,7 +188,8 @@ import { formatShortDate } from '@/utils/format'
 
 // §1.11 (owner 2026-09-22): the active roster rides ?kind= -- server truth
 // in the URL, so a refresh or a deep link reopens the same list. The third
-// tab «Блок» (owner 2026-09-30, BE-79 (2)) lists GET …/blocks for the
+// tab «Удалённые» (owner 2026-11-03, FE-97; the blocked group's UI name,
+// ?kind=blocked unchanged) lists GET …/blocks for the
 // curator, paged like the roster; it has no search (the endpoint takes
 // limit/offset only). «Разблокировать» sends DELETE …/blocks/{user_id} and
 // re-reads the first page -- the person leaves the list and is back in the
@@ -247,7 +248,7 @@ const isCurator = computed(() => relation.value === 'curator')
 /** A school master reading the roster in the master zone. */
 const asSchoolMaster = computed(() => relation.value === 'master' && inMasterZone.value)
 
-/** «Блок» is the curator's tab only (BE-79). */
+/** «Удалённые» is the curator's tab only (BE-79). */
 const kindOptions = computed(() =>
   isCurator.value ? KIND_OPTIONS : KIND_OPTIONS.filter((option) => option.value !== 'blocked'),
 )
@@ -311,8 +312,8 @@ const { items, loading, error, loadMoreError, hasMore, loadMore, refresh } = use
 >(async (limit, offset) => {
   try {
     const viewer = await loadRelation()
-    // «Блок» is the curator's alone; anyone else who lands on ?kind=blocked
-    // is moved to the masters tab.
+    // «Удалённые» is the curator's alone; anyone else who lands on
+    // ?kind=blocked is moved to the masters tab.
     if (kind.value === 'blocked') {
       if (viewer === 'curator') return await getSchoolBlocks(schoolId.value, { limit, offset })
       kind.value = 'master'
@@ -394,8 +395,8 @@ watch(
   },
 )
 
-// The one list holds either rows of the roster or rows of «Блок» -- the
-// tab decides which; these name it for the template.
+// The one list holds either rows of the roster or rows of «Удалённые» --
+// the tab decides which; these name it for the template.
 const rosterItems = computed(() =>
   kind.value === 'blocked' ? [] : (items.value as SchoolRosterItem[]),
 )

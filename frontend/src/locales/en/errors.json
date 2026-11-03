@@ -31,7 +31,7 @@
     "master_required": "Only a verified master can be appointed as a school's master",
     "blocked_by_curator": "Joining this school is not available",
     "blocked_in_school": "You are blocked in this school",
-    "cannot_block_curator": "A school's curator cannot be blocked",
+    "cannot_block_curator": "You cannot block the school's curator",
     "master_id_requires_school": "Choose the school the practice is created in",
     "master_not_in_school": "This master is not in the school or is not verified",
     "curator_only": "Only a school's curator can create a practice on the master's behalf",
