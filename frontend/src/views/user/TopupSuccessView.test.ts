@@ -125,7 +125,7 @@ describe('TopupSuccessView', () => {
 
   it('a zero balance renders as money, not «Бесплатно»', async () => {
     // stores/balance.ts:34-36 passes allowZero=true; formatMoney's default
-    // would print «Бесплатно» for 0 (utils/format.ts:33).
+    // would print the free label (i18n:common.free) for 0 (utils/format.ts:33).
     mount()
     await flush()
 

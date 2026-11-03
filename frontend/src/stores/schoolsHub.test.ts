@@ -2,8 +2,8 @@
 // VELO Frontend -- Schools Hub Store Tests (FE-88, tz-curator.md §1.2)
 // =============================================================================
 //
-// The hub is the one server truth the shells filter the conditional «Школы»
-// tab with. Real Pinia, mocked API seam (velo-idiom §4/§5) -- the store is
+// The hub is the one server truth the shells filter the conditional Schools
+// tab (i18n:tabs.schools) with. Real Pinia, mocked API seam (velo-idiom §4/§5) -- the store is
 // the unit under test, so only the network boundary is faked.
 //
 // What is under test, and why:
@@ -102,7 +102,8 @@ describe('schoolsHub store', () => {
   // ===========================================================================
   // FE-93: relation survives a switch to user mode (the /mine payload is
   // role-independent), but the USER zone counts participations only -- the
-  // curated rows are the master list's «Я куратор» section. And the master
+  // curated rows are the master list's curator section
+  // (i18n:masterScreens.masterSchools.tab.curator). And the master
   // surface requires the ACTIVE role master, so the founding-right probe
   // waits for that mode instead of burning a 403 per shell mount.
   // ===========================================================================

@@ -2,7 +2,7 @@
  * VELO Frontend -- Layout Components barrel export (Phase F2.1)
  *
  * Usage:
- *   import { MobileLayout, AdminLayout } from '@/components/layout'
+ *   `import { MobileLayout, AdminLayout } from '@/components/layout'`
  */
 
 export { default as VHeader } from './VHeader.vue'

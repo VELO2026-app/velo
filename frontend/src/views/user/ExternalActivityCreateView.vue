@@ -3,12 +3,15 @@
 
   Hand-entry screen for an activity that happened OUTSIDE velo (a home
   meditation, a massage, a dance class). Reached from the dashboard's
-  «Быстрый доступ» -> «Внести активность». NOT a FormShell form: the shared
+  quick-access block (i18n:user.screens.userDashboard.quickAccess.title) ->
+  its add-activity item (i18n:user.screens.userDashboard.quickAccess.addActivity).
+  NOT a FormShell form: the shared
   shell is built around a practice card + one question, while this screen is
   a plain fill-route column (own header, scrolling body, floating save pill).
 
   Owner amendments (2026-09-10):
-    - «Сохранить» is a FLOATING GLASS PILL -- the diary composer's Liquid
+    - The save control (i18n:ui.save) is a FLOATING GLASS PILL -- the diary
+      composer's Liquid
       Glass recipe hovering over the scrolling body (the body reserves the
       bottom clearance), not an in-flow footer bar;
     - required seals hug their field's right edge (FE-80 product correction,
@@ -16,7 +19,9 @@
       gap into the 33px layout padding, clear of the screen edge; fields
       keep the full rail;
     - the header carries no right-hand "..." placeholder;
-    - the «Мое состояние после» block is the FE-85 unified MoodSlider (PM-9
+    - the mood-after block
+      (i18n:user.screens.externalActivityCreate.section.moodAfter) is the
+      FE-85 unified MoodSlider (PM-9
       branch 1, owner 2026-10-12): the same 1..10 deck as Check-in/Feedback,
       gated
       by EXTERNAL_ACTIVITY_MOOD_HIDDEN in utils/constants.ts -- ONE flag
@@ -25,7 +30,8 @@
   Everything a person TYPES here deliberately starts EMPTY: no prefilled
   "now", no draft text -- an autofill would invent a plausible-but-wrong
   diary entry. The mood scale is the one exception: it opens on the VISIBLE
-  MOOD_SCALE_DEFAULT_SCORE (5 «Нормально»), the same untouched-form canon
+  MOOD_SCALE_DEFAULT_SCORE (5, i18n:mood.neutral), the same untouched-form
+  canon
   as Check-in/Feedback -- a default the person can see is an answer they
   can correct, not a fabricated one.
 
@@ -57,7 +63,7 @@
       </div>
       -->
 
-      <!-- ================= Когда произошло событие ================= -->
+      <!-- ================= When-the-event-occurred section (i18n:user.screens.externalActivityCreate.section.when) ================= -->
       <section class="ea__section">
         <h2 class="velo-section-title">
           {{ t('user.screens.externalActivityCreate.section.when') }}<span class="ea__req">*</span>
@@ -95,7 +101,7 @@
         </div>
       </section>
 
-      <!-- ================= Выбор активности ================= -->
+      <!-- ================= Activity choice section (i18n:user.screens.externalActivityCreate.section.activity) ================= -->
       <section class="ea__section">
         <h2 class="velo-section-title">
           {{ t('user.screens.externalActivityCreate.section.activity')
@@ -197,11 +203,12 @@
         <VFieldError id="err-activity" :message="errors.activity" />
       </section>
 
-      <!-- ================= Мое состояние после =================
+      <!-- ================= Mood-after section (i18n:user.screens.externalActivityCreate.section.moodAfter) =================
            The FE-85 unified 1..10 scale -- the same MoodSlider deck as
            Check-in/Feedback (PM-9 branch 1 + the owner's unification
            ruling, 2026-10-12; the three-button 2/6/9 picker is gone).
-           Untouched it stands on the visible DEFAULT_SCORE (5 «Нормально»);
+           Untouched it stands on the visible DEFAULT_SCORE (5, the neutral
+           label i18n:mood.neutral);
            the exact number travels to the backend as `mood`. The error
            span is not client validation -- it is the only sink for a
            backend mood 422 (contract drift), which no interaction on this
@@ -221,7 +228,7 @@
         <VFieldError id="err-state" :message="errors.state" />
       </section>
 
-      <!-- ================= Мысли ================= -->
+      <!-- ================= Thoughts section (i18n:user.screens.externalActivityCreate.section.thoughts) ================= -->
       <section class="ea__section">
         <h2 class="velo-section-title">
           {{ t('user.screens.externalActivityCreate.section.thoughts') }}
@@ -316,10 +323,12 @@ const ACTIVITY_OPTIONS: ReadonlyArray<{ value: ExternalActivityType; label: stri
   { value: 'dance', label: t('user.screens.externalActivityCreate.activity.dance') },
 ]
 
-// «Мое состояние» is the FE-85 unified MoodSlider (PM-9 branch 1 + the
+// The mood-after section (i18n:user.screens.externalActivityCreate.section.moodAfter)
+// is the FE-85 unified MoodSlider (PM-9 branch 1 + the
 // owner's unification ruling, 2026-10-12) -- the same deck as
-// Check-in/Feedback. Untouched it stands on the VISIBLE default (5
-// «Нормально»), the untouched-form canon of those screens; the exact number
+// Check-in/Feedback. Untouched it stands on the VISIBLE default (5,
+// the neutral label i18n:mood.neutral),
+// the untouched-form canon of those screens; the exact number
 // travels to the backend as `mood`. The flag in utils/constants.ts remains
 // the one switch shared with the feed card's «· N/10» suffix.
 
@@ -383,7 +392,8 @@ const bodyEl = ref<HTMLElement | null>(null)
 const zone = computed(() => timezone.value ?? 'UTC')
 const todayIso = computed(() => DateTime.now().setZone(zone.value).toISODate() ?? '')
 
-// Friendly date for the trigger field, e.g. «25 янв. 2026» -- the same recipe
+// Friendly date for the trigger field, e.g. a short month-day date plus the
+// year -- the same recipe
 // CreatePracticeView's own date trigger uses.
 const dateDisplay = computed((): string =>
   date.value ? `${formatShortDate(`${date.value}T12:00:00`)} ${date.value.slice(0, 4)}` : '',
@@ -443,7 +453,8 @@ function removeCustomChip(): void {
   clearError('activity')
 }
 
-// FE-77: a «Мои варианты» tap is ONE keystroke's worth of help, not a choice.
+// FE-77: a mine-hint tap (i18n:user.screens.externalActivityCreate.mine.caption)
+// is ONE keystroke's worth of help, not a choice.
 // It puts the name into the input as an EDITABLE DRAFT -- the commit (arrow /
 // Enter) stays the person's own act, exactly like typed text. If a custom
 // chip is already on the board it comes off first (the same as its ×): the
@@ -578,7 +589,7 @@ async function onSubmit(): Promise<void> {
 
 <style scoped>
 /* Three-row fill contract (EntryView's): fixed header, scrolling body, fixed
-   footer -- «Сохранить» stays at the bottom edge while only the form scrolls.
+   footer -- the save button (i18n:ui.save) stays at the bottom edge while only the form scrolls.
    Safe-area insets belong to AppFrame; nothing here re-applies them. */
 .ea {
   position: relative; /* anchors the floating glass save pill + header */
@@ -586,7 +597,7 @@ async function onSubmit(): Promise<void> {
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  /* Header fog (owner 2026-09-14, «как на главной»): the header floats OVER
+  /* Header fog (owner 2026-09-14, "like on the home screen"): the header floats OVER
      the scroll body and content dissolves beneath it. --ea-fog-top = the
      header's full footprint (top pad + 44px row + bottom pad); the mask holds
      content transparent through --ea-fog-hard, then fades to opaque exactly
@@ -594,8 +605,10 @@ async function onSubmit(): Promise<void> {
   --ea-fog-hard: 40px;
   --ea-fog-top: calc(var(--space-5) + var(--velo-size-44) + var(--space-3));
   /* [FE-79] SCREEN-SCOPED placeholder tint: inside .ea every placeholder --
-     «Мысли» (VTextarea), «Укажите ваш вариант», the empty «Дата»/«Время»
-     pickers -- resolves --velo-text-placeholder to the paler faint sibling,
+     the thoughts field (i18n:user.screens.externalActivityCreate.section.thoughts),
+     the custom-variant hint (i18n:practice.customVariant), the empty
+     date/time pickers (i18n:ui.pickerDate / i18n:ui.pickerTime) --
+     resolves --velo-text-placeholder to the paler faint sibling,
      visibly greyer than the typed text while holding №679's 4.5:1 bar
      (4.79:1). The GLOBAL token keeps №679's value: fading the app's other
      ~10 placeholder consumers is the owner's pending global-vs-screen call,
@@ -711,7 +724,8 @@ async function onSubmit(): Promise<void> {
 }
 
 /* [FE-79] An empty picker IS this screen's placeholder: it rides the DS
-   placeholder token like «Мысли» and «Укажите ваш вариант» -- one muted
+   placeholder token like the thoughts field and the custom-variant hint
+   (i18n:practice.customVariant) -- one muted
    style for every hint on the screen, visibly paler than the picked value
    (--velo-text-primary above). The former --velo-text-muted ride composited
    2.15:1, under the №679 bar the token is held to. */
@@ -751,7 +765,8 @@ async function onSubmit(): Promise<void> {
 /* Owner (2026-09-14): chips a touch narrower than the DS md default
    (--space-4 -> --space-3 horizontal padding). Selector carries .ea__chips
    so the override wins the specificity tie with .v-chip--md's own padding;
-   applies to selected, unselected and the filled «Свой вариант» alike. */
+   applies to selected, unselected and the filled custom chip
+   (i18n:user.screens.externalActivityCreate.custom.title) alike. */
 .ea__chips .ea__chip {
   padding: var(--space-2) var(--space-3);
 }
@@ -814,12 +829,13 @@ async function onSubmit(): Promise<void> {
   stroke-linecap: round;
 }
 
-/* -- FE-77 «Мои варианты»: the person's own past custom names as muted
-      glass chips directly above the custom field. Deliberately NOT the
-      preset look (blue-on-white outlined): these are fill-hints, not
-      choices -- VChip's own clickable rest state (grey-on-glass) is exactly
-      the secondary read, so only the geometry follows the board (the same
-      --space-3 horizontal padding the owner gave the preset chips). -- */
+/* -- FE-77 mine hints (i18n:user.screens.externalActivityCreate.mine.caption):
+      the person's own past custom names as muted glass chips directly above
+      the custom field. Deliberately NOT the preset look (blue-on-white
+      outlined): these are fill-hints, not choices -- VChip's own clickable
+      rest state (grey-on-glass) is exactly the secondary read, so only the
+      geometry follows the board (the same --space-3 horizontal padding the
+      owner gave the preset chips). -- */
 .ea__mine {
   display: flex;
   flex-direction: column;
@@ -845,7 +861,8 @@ async function onSubmit(): Promise<void> {
   padding: var(--space-2) var(--space-3);
 }
 
-/* -- «Свой вариант»: capsule on the white card with the commit disc nested
+/* -- Custom activity (i18n:user.screens.externalActivityCreate.custom.title):
+      capsule on the white card with the commit disc nested
       into its right cap (the composer's send-disc pattern). Focus follows
       the VInput canon: ONE border that appears on focus (quiet --velo-border
       at rest -> --velo-border-input-focus) plus a soft glass ring -- never a
@@ -936,14 +953,16 @@ async function onSubmit(): Promise<void> {
   stroke-linejoin: round;
 }
 
-/* -- «Мое состояние»: the FE-85 MoodSlider deck (the same component as
+/* -- Mood-after section (i18n:user.screens.externalActivityCreate.section.moodAfter):
+      the FE-85 MoodSlider deck (the same component as
       Check-in/Feedback) -- the section owns only the field wrapper; the
       deck's own look lives in the component. -- */
 .ea__state-block {
   min-width: 0;
 }
 
-/* -- «Мысли»: the DS textarea as a solid white plate (its rest state is
+/* -- Thoughts section (i18n:user.screens.externalActivityCreate.section.thoughts):
+      the DS textarea as a solid white plate (its rest state is
       transparent); rows=5 gives the ~120px reference height, text starts
       top-left, resize is already off in the DS. -- */
 .ea__thoughts :deep(.v-textarea__field) {

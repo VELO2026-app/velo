@@ -36,10 +36,11 @@ const BANNER_KINDS: DiaryEventKind[] = [
   'practice_cancelled_by_master',
 ]
 
+/** Presentational model of one diary feed card: form, titles, preview, icons, practice and banner fields. */
 export interface DiaryCardModel {
   kind: ComputedRef<DiaryEventKind>
   form: ComputedRef<'banner' | 'practice' | 'standard'>
-  /** Bare kind label ("Check-in" / "Feedback" / "Заметка"...). */
+  /** Bare kind label, resolved via `display.feedKind.*` ("Check-in", "Feedback", ...). */
   baseTitle: ComputedRef<string>
   /** Display title with mood/rating suffix for check-in/feedback. */
   title: ComputedRef<string>
@@ -60,14 +61,15 @@ export interface DiaryCardModel {
   practiceDuration: ComputedRef<string>
   outcomeStatus: ComputedRef<string>
   outcomeLabel: ComputedRef<string>
-  /** Rating label alone (score -> zone label; the thread bubble's no-comment fallback). */
+  /** Rating label alone (`score -> zone label`; the thread bubble's no-comment fallback). */
   ratingLabel: ComputedRef<string>
-  /** Mood label alone (score -> zone label; the check-in bubble's no-comment fallback). */
+  /** Mood label alone (`score -> zone label`; the check-in bubble's no-comment fallback). */
   moodLabel: ComputedRef<string>
   /** note / dream are editable (open the entry screen). */
   editable: ComputedRef<boolean>
 }
 
+/** Derive the shared presentational card model of one DiaryFeedItem for both card renderers (inputs are getters, to stay reactive). */
 export function useDiaryCardModel(
   getItem: () => DiaryFeedItem,
   getTimezone: () => string | undefined,

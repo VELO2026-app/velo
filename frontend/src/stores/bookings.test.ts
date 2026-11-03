@@ -198,9 +198,10 @@ describe('useBookingsStore', () => {
     })
   })
 
-  // FE-49 (решение продакта 2.11): «Покинуть практику» убрана из UI целиком,
-  // стор-экшен leaveBooking удалён; api/bookings.ts::leaveBooking остался
-  // с комментарием (эндпоинт бэка жив, UI-вызова больше нет).
+  // FE-49 (product decision 2026-11-02): the leave button is removed from
+  // the UI wholesale, the store action leaveBooking is deleted;
+  // api/bookings.ts::leaveBooking stays with a comment (the backend
+  // endpoint is alive, the UI no longer calls it).
 
   describe('skipCheckin', () => {
     it('on success: calls the API and refreshes the list', async () => {

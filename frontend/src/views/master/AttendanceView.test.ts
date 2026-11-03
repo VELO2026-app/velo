@@ -36,11 +36,12 @@
 // fixture would prove nothing.
 //
 // practiceWhen (.vue:129-134) combines formatDateShort (Date.now-dependent for
-// Сегодня/Завтра) + formatTime (PURE, no `new Date()` anywhere in it, verified
+// its today/tomorrow labels) + formatTime (PURE, no `new Date()` anywhere in
+// it, verified
 // by reading format.ts:207-214). PROMPT №542: the ORIGINAL fixture picked a
 // date "far from today" as of when this was written and verified the exact
 // string via node beforehand -- that relationship decays with every day that
-// passes and did in fact break (Сегодня/Завтра window reached it). The clock
+// passes and did in fact break (the today/tomorrow window reached it). The clock
 // is now FAKED and frozen (NOW, see beforeEach); the fixture date is NOW+30
 // days, so the relationship is fixed by construction, not by the luck of
 // which day the suite happens to run on.
@@ -65,7 +66,7 @@ vi.mock('@/api/practices')
 // comment -- the clock is now FAKED and frozen at NOW (beforeEach below),
 // not left to the real wall clock. practiceWhen (formatDateShort, Date.now-
 // dependent) previously read a fixture date "far from today" that was only
-// far from the day this was WRITTEN, and drifted into the Сегодня/Завтра
+// far from the day this was WRITTEN, and drifted into the today/tomorrow
 // window as real time passed (it did, PROMPT №542). STABLE_SCHEDULED_AT is
 // derived from NOW with a fixed +30-day offset, so the relationship holds
 // regardless of what NOW is.
@@ -120,7 +121,7 @@ function practice(overrides: Partial<PracticeResponse> = {}): PracticeResponse {
     description: null,
     what_to_prepare: null,
     contraindications: null,
-    scheduled_at: STABLE_SCHEDULED_AT, // NOW + 30 days -- always outside the Сегодня/Завтра window, regardless of when this suite runs (clock is faked, see beforeEach)
+    scheduled_at: STABLE_SCHEDULED_AT, // NOW + 30 days -- always outside the today/tomorrow window, regardless of when this suite runs (clock is faked, see beforeEach)
     duration_minutes: 60,
     timezone: 'UTC',
     max_participants: 10,

@@ -36,9 +36,10 @@
 // One pinia instance goes to setActivePinia AND app.use (SC-03).
 //
 // TIME IS PINNED to 2026-07-20T12:00:00Z. whenLabel -> formatDateShort compares
-// each practice against `new Date()` for «Сегодня»/«Завтра» (utils/format.ts:
-// 65-85), so unpinned the card sub-line is a different string every day and the
-// «Завтра» assertion would be green only on 2026-07-21 (SC-04). Every fixture
+// each practice against `new Date()` for the relative labels
+// (i18n:common.today / i18n:common.tomorrow; utils/format.ts:65-85), so
+// unpinned the card sub-line is a different string every day and the
+// tomorrow assertion would be green only on 2026-07-21 (SC-04). Every fixture
 // date is a LITERAL chosen against that frozen instant, never `Date.now() + n`,
 // and every fixture carries an explicit `timezone`.
 //
@@ -47,8 +48,10 @@
 // (Grepped: zero `v-show` in this SFC. AnalyticsView, the sibling tab screen,
 // is the opposite and must be read the other way -- do not copy across.)
 // The CHROME is a different story: the tab STRIP is always mounted, so both
-// labels «Предстоящие» and «Прошедшие» are in host.textContent before you touch
-// anything. `expect(text()).toContain('Прошедшие')` is therefore an assertion
+// labels "upcoming" (i18n:masterScreens.masterPractices.tab.upcoming) and
+// "past" (i18n:masterScreens.masterPractices.tab.past) are in host.textContent
+// before you touch anything. Asserting the past-tab label via toContain is
+// therefore an assertion
 // that cannot fail -- SC-14's shape without SC-14's cause. Which tab is live is
 // read off aria-selected and off the rendered list, never off host text.
 //
@@ -82,7 +85,8 @@ import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import MasterPracticesView from '@/views/master/MasterPracticesView.vue'
 // The REAL store, read in two tests -- the data always survived a failed
-// load-more; it was the template that hid it (fixed №441, see «Показать ещё»).
+// load-more; it was the template that hid it (fixed №441, see the
+// failed-load-more test below).
 import { useMasterStore } from '@/stores/master'
 import * as mastersApi from '@/api/masters'
 import * as diaryApi from '@/api/diary'
@@ -127,7 +131,8 @@ const NOW = new Date('2026-07-20T12:00:00Z')
 
 // -----------------------------------------------------------------------------
 // Fixtures. Every date is a literal picked against NOW:
-//   2026-07-20 = Сегодня, 2026-07-21 = Завтра, anything else = «N июля».
+//   2026-07-20 = today (i18n:common.today), 2026-07-21 = tomorrow
+//   (i18n:common.tomorrow), anything else = the compact "day month" date.
 // -----------------------------------------------------------------------------
 
 function practice(id: string, overrides: Partial<PracticeResponse> = {}): PracticeResponse {
@@ -416,7 +421,8 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-/** Mount already switched to «Прошедшие», the way a user gets there. */
+/** Mount already switched to the past tab
+ *  (i18n:masterScreens.masterPractices.tab.past), the way a user gets there. */
 async function mountOnPast(): Promise<void> {
   mount()
   await flush()
@@ -541,7 +547,7 @@ describe('MasterPracticesView', () => {
     it('opens straight on «Прошедшие» when the URL carries ?tab=past', async () => {
       // .vue:199 -- read at SETUP, so the query must be seeded before mount.
       // This is what makes router.back() from a detail restore the tab the
-      // master left from instead of dumping them on «Предстоящие».
+      // master left from instead of dumping them on the upcoming tab.
       routeQuery = { tab: 'past' }
       mount()
       await flush()
@@ -616,7 +622,8 @@ describe('MasterPracticesView', () => {
       // server queries (ensureBucketLoaded, .vue), each fetched lazily ON
       // ACTIVATION. What must still hold is the guard: a bucket already
       // loaded is never re-fetched, which is what protects the master's
-      // «Показать ещё» progress from being reset by a stray tab tap.
+      // show-more (i18n:common.showMore) progress from being reset by a
+      // stray tab tap.
       mount()
       await flush()
       expect(mastersApi.getMyPractices).toHaveBeenCalledTimes(1) // upcoming, first activation
@@ -703,7 +710,7 @@ describe('MasterPracticesView', () => {
     it('A4 V5: a status=live practice whose time has already ended does not show as upcoming', async () => {
       // The backend has not YET run autofinalize (status is still 'live'
       // server-side) -- the frontend must not wait for that round-trip to
-      // stop calling it "Предстоящие". U_JUST_ENDED ends AT the frozen
+      // stop calling it upcoming. U_JUST_ENDED ends AT the frozen
       // instant exactly (practiceHasEnded's own boundary: nowMs >= end).
       mockBucketedPractices([U_LIVE, U_SCHED, U_DRAFT, U_JUST_ENDED])
       mount()
@@ -829,7 +836,8 @@ describe('MasterPracticesView', () => {
     })
 
     it('falls back to the compact date beyond tomorrow', async () => {
-      // whenLabel (.vue:227-230): only Сегодня/Завтра are relative; everything
+      // whenLabel (.vue:227-230): only the today/tomorrow labels are relative;
+      // everything
       // else goes through formatShortDate's VELO month table.
       mount()
       await flush()
@@ -848,7 +856,7 @@ describe('MasterPracticesView', () => {
       await flush()
 
       // 00:00Z on the 21st is 09:00 on the 21st in Tokyo (+9) -- and the 21st
-      // is Завтра in Tokyo too, since NOW is 21:00 there on the 20th.
+      // is tomorrow in Tokyo too, since NOW is 21:00 there on the 20th.
       expect(subOf(cardById('Токио')!)).toBe('Завтра, 09:00 • 60 мин')
     })
 
@@ -939,7 +947,8 @@ describe('MasterPracticesView', () => {
       await flush()
 
       // De-duplicated and re-ordered Mon->Sun by recurrenceDaysLabel, so the
-      // shuffled [5,1,3] must come back as «Пн, Ср, Пт».
+      // shuffled [5,1,3] must come back as the Mon/Wed/Fri abbreviation list
+      // (resolved via `recurrenceDaysLabel`).
       expect(statsOf(cardById('Серия')!)).toEqual(['5/20', 'Пн, Ср, Пт'])
     })
 
@@ -988,7 +997,8 @@ describe('MasterPracticesView', () => {
 
     it('floors the remaining sessions at zero rather than going negative', async () => {
       // `Math.max(0, total - completed)` (practiceCardMeta.ts:49) -- an
-      // over-counted series must not read «Осталось -2 из 8 занятий».
+      // over-counted series must not render the remaining-sessions line
+      // (i18n:practice.remainingSessions) with a negative left count.
       const OVERRUN = practice('u-series4', {
         title: 'Перебор',
         practice_type: 'series',
@@ -1022,8 +1032,9 @@ describe('MasterPracticesView', () => {
 
     it('agrees the Russian plural across the cases that actually break', async () => {
       // participantsCount (.vue:239-247) is hand-rolled, and its edges are the
-      // ones a naive `n === 1` gets wrong: 11 is «участников» (not «участник»)
-      // while 21 IS «участник»; 14 is «участников» while 4 is «участника».
+      // ones a naive `n === 1` gets wrong (i18n:masterScreens.masterPractices.participantsLine):
+      // 11 takes the genitive-plural form (not the singular) while 21 IS the
+      // singular; 14 is genitive-plural while 4 is genitive-singular.
       const N = (n: number) =>
         practice(`c${n}`, {
           title: `Счёт ${n}`,
@@ -1199,7 +1210,8 @@ describe('MasterPracticesView', () => {
     it('a FAILED load-more KEEPS the list and tells the master (fixed №441)', async () => {
       // Was the tripwire for a REAL DEFECT found in №440, fixed in №441. The
       // error rung had no `&& practices.length === 0` guard (.vue:57) while its
-      // loading twin one line above (.vue:50) did, so a blipped «Показать ещё»
+      // loading twin one line above (.vue:50) did, so a blipped load-more
+      // (i18n:common.showMore)
       // replaced the practices the master was reading with a full-screen error
       // -- while usePagination still held them, intact (usePagination.ts:67-70).
       //
@@ -1381,7 +1393,8 @@ describe('MasterPracticesView', () => {
 
     it('tapping an upcoming card opens THAT practice', async () => {
       // The id is the whole assertion: cards render sorted, so the tapped card
-      // is not the one at the API's index -- «Черновик» is third on screen and
+      // is not the one at the API's index -- the draft card
+      // (i18n:practice.status.draft) is third on screen and
       // FIRST in the response.
       mount()
       await flush()
@@ -1447,15 +1460,17 @@ describe('MasterPracticesView', () => {
   // - masterStatusGuard, which fronts this route: the guard layer ->
   //   guards.test.ts (velo-idiom §6).
   //
-  // The SFC's header comment (.vue:13-28) promises three things the template
-  // does NOT do, so there is nothing to test and nothing was faked:
-  //   * «Изменить» + «Check-ins» buttons below the upcoming card -- no such
+  // The SFC's header comment (.vue:13-28) USED TO promise three things the
+  // template does NOT do (stale prose, reported as a doc finding; the stale
+  // bullets were removed from the header in FE-134), so there is nothing to
+  // test and nothing was faked:
+  //   * edit + Check-ins buttons below the upcoming card -- no such
   //     controls exist (.vue:74-107).
   //   * ✓/✗ attendance badges inside the past card -- removed per PL-E1, as an
   //     inline comment 100 lines further down admits (.vue:135-137).
-  //   * «осталось N из M» "omitted (no series-session field)" -- it is NOT
+  //   * the remaining-sessions line (i18n:practice.remainingSessions) was
+  //     claimed "omitted (no series-session field)" -- it is NOT
   //     omitted; .vue:102-106 renders it and PracticeResponse has both
   //     total_sessions and completed_sessions. Tested above.
-  // Stale prose, reported as a doc finding.
   // ===========================================================================
 })

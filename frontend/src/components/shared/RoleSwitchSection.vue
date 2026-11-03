@@ -74,9 +74,11 @@ async function onSwitch(target: UserRole): Promise<void> {
   switching.value = true
   try {
     // MA3: a role='user' account that just gained master capability (verified
-    // application) never saw "Ваша заявка одобрена!" if it self-switches from
+    // application) never saw the approval title
+    // (i18n:masterScreens.masterPending.approved.title) if it self-switches from
     // here instead of landing on /master/pending naturally. Detour through it
-    // ONCE — MasterPendingView's own "Войти в кабинет" (enterMasterMode) does
+    // ONCE — MasterPendingView's own enter-cabinet button
+    // (i18n:masterScreens.masterPending.enterCabinet) (enterMasterMode) does
     // the real switchRole+dashboard-push and marks masterApprovedSeenKey, so
     // every later self-switch (here or elsewhere) goes straight through as
     // before. Admins switching INTO master mode (role !== 'user') are

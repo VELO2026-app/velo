@@ -143,7 +143,8 @@ describe('SchoolsView', () => {
     mount()
     await flush()
 
-    // FE-93: the curated row is the master list's «Я куратор» section --
+    // FE-93: the curated row is the master list's curator section
+    // (i18n:masterScreens.masterSchools.tab.curator) --
     // every management surface behind it would 403 from this zone.
     expect(text()).not.toContain('Школа g1')
     expect(text()).toContain('Школа g2')
@@ -166,7 +167,8 @@ describe('SchoolsView', () => {
     await flush()
 
     // §1.3: the curator-empty screen is the quiet background with ONE CTA --
-    // no «Пока нет школ» copy, no VEmptyState plate, no invented illustration.
+    // no empty-list copy (i18n:user.screens.schools.empty.title), no
+    // VEmptyState plate, no invented illustration.
     expect(text()).not.toContain('Пока нет школ')
     expect(host?.querySelector('.v-empty-state')).toBeNull()
     expect(host?.querySelector('.schools__empty')).toBeTruthy()
@@ -185,7 +187,8 @@ describe('SchoolsView', () => {
     expect(cgApi.getSchools).not.toHaveBeenCalled()
     expect(host?.querySelector('.schools__add-btn')).toBeFalsy()
     // Without the create right the settled empty list is the plain empty
-    // state, not the quiet «Создать школу» screen.
+    // state, not the quiet create-school screen
+    // (i18n:user.screens.schools.create.title).
     expect(text()).toContain('Пока нет школ')
   })
 

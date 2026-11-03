@@ -6,11 +6,14 @@
 // GET /api/v1/chats (full _thread_out shape with `client`), each thread
 // enriched with the P-1 `peer` block by the proxy. The chat is a pre-sale
 // channel, so a peer may be nobody's student -- the enrichment is the ONLY
-// name source, and a null peer must degrade to «Ученик», never break.
+// name source, and a null peer must degrade to the student fallback
+// (i18n:masterScreens.masterMessages.peerFallback), never break.
 //
 // Sibling of UserMessagesView.test.ts (same seam, same states); what is
 // DIFFERENT here and therefore tested here: the comms thread shape renders
-// as-is, and the fallback wording is the master's («Ученик», not «Мастер»).
+// as-is, and the fallback wording is the master's
+// (i18n:masterScreens.masterMessages.peerFallback, not the user-side
+// i18n:user.screens.userMessages.peerFallback).
 //
 // UNREAD SINCE T-51: comms attaches it to the row itself (with_unread), so
 // there are no per-thread calls left to mock.
@@ -137,8 +140,10 @@ describe('MasterMessagesView', () => {
   })
 
   // FE-103 / BE-163: the master's OWN support conversation rides the same
-  // list -- VELO logo instead of the avatar, «Поддержка VELO» instead of
-  // the «Ученик» a null peer would degrade to.
+  // list -- VELO logo instead of the avatar, the support title
+  // (i18n:chat.supportTitle) instead of the student fallback
+  // (i18n:masterScreens.masterMessages.peerFallback) a null peer would
+  // degrade to.
   it("the master's own support row renders the VELO logo and «Поддержка VELO», not «Ученик»", async () => {
     vi.mocked(chatsApi.listChats).mockResolvedValue({
       threads: [

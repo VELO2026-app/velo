@@ -1,8 +1,8 @@
 /*
   VELO Frontend -- schoolBranding/noise (tz-curator.md §5.3)
 
-  Природный шум и цветовые утилиты. Порт прототипа -- формулы и константы
-  не трогать (golden-тесты сверяются с эталоном).
+  Natural noise and color utilities. Port of the prototype -- do not touch
+  the formulas and constants (golden tests compare against the reference).
 */
 
 import { fnv1a } from './hash'
@@ -10,9 +10,9 @@ import { fnv1a } from './hash'
 const TAU_INTERNAL = Math.PI * 2
 
 /**
- * Детерминированный сглаженный value-noise на решётке (сидируется хэшем
- * школы). Плавный шум = крупные "природные" формы; резкий случайный шум
- * выглядел бы механически.
+ * Deterministic smoothed value-noise on a lattice (seeded by the school
+ * hash). Smooth noise = large "natural" shapes; harsh random noise would
+ * look mechanical.
  */
 export function makeNoise(seedStr: string): (x: number, y: number) => number {
   const base = fnv1a(seedStr)
@@ -38,13 +38,14 @@ export function makeNoise(seedStr: string): (x: number, y: number) => number {
   }
 }
 
-/** Кратчайшая дуговая интерполяция углов. */
+/** Shortest-arc interpolation of angles. */
 export function mixAngle(a: number, b: number, t: number): number {
   const d = ((b - a + Math.PI * 3) % TAU_INTERNAL) - Math.PI
   return a + d * t
 }
 
-/** Смешивание цветов: приглушение тона ленты к её хвосту (как в акварели). */
+/** Color mixing: muting a ribbon's tone toward its tail (as in
+ *  watercolor). */
 export function mixHex(a: string, b: string, t: number): string {
   const pa = parseInt(a.slice(1), 16)
   const pb = parseInt(b.slice(1), 16)
@@ -59,7 +60,8 @@ export function mixHex(a: string, b: string, t: number): string {
   )
 }
 
-/** Профиль ширины ленты: тонкий вход, толстое тело, сходящий на нет хвост. */
+/** A ribbon's width profile: a thin entry, a thick body, a tail tapering
+ *  to nothing. */
 export function rampW(t: number): number {
   const inR = Math.min(1, t / 0.12)
   const s = inR * inR * (3 - 2 * inR)

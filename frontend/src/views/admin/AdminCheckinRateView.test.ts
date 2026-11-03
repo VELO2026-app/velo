@@ -19,9 +19,10 @@
 //
 //   THE FULL SKELETON -- period/offset parsing, rangeLabel, the data/loading/
 //   error refs, the load() try/catch/finally shape, the error fallback string
-//   ('Ошибка загрузки' / ApiResponseError -> e.detail), onMounted(load), and
-//   the 3-rung ladder markup (loading / VEmptyState error+Повторить / content,
-//   IDENTICAL VEmptyState title "Не удалось загрузить метрику" in all three)
+//   (i18n:common.loadError / ApiResponseError -> e.detail), onMounted(load), and
+//   the 3-rung ladder markup (loading / VEmptyState error + i18n:common.retry /
+//   content, IDENTICAL VEmptyState title i18n:adminScreens.adminCommon.loadMetricFailed
+//   in all three)
 //   -- is BYTE-IDENTICAL across all three modulo the type name and which
 //   getXMetric function is called. A GENUINE CLEAN NEGATIVE for THE HABIT this
 //   zone has otherwise found five times: nothing is present on one sibling and
@@ -31,7 +32,7 @@
 //   THE ONE STRUCTURAL DIVERGENCE (not a bug, a legitimate content
 //   difference): AdminCheckinRateView and AdminReturnRateView both render a
 //   client list with its own `v-if="list.length"` / `v-else` empty card
-//   ("Данных пока нет") -- lowPractices / loyalUsers. AdminFeedbackRateView
+//   (i18n:common.noData) -- lowPractices / loyalUsers. AdminFeedbackRateView
 //   has NO such list; its content is three VRatingBar rows that always
 //   render (their own null-vs-number handling lives INSIDE the component,
 //   not as a template branch on this screen). So the ladder's outer THREE

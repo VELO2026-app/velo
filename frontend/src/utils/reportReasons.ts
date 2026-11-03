@@ -4,7 +4,7 @@
 //
 // The report sheet's reasons are CODES in the backend payload (the field is
 // free text on the backend, so the frontend owns this vocabulary):
-//   payload: "code, code — свободный комментарий"
+//   payload: "code, code — free-form comment"
 // The visible labels live in the report.reasons.* catalogs. The admin
 // report detail decodes KNOWN codes back to localized labels; anything else
 // (a legacy free-text record, an unknown future code) renders verbatim.
@@ -12,8 +12,10 @@
 
 import i18n from '@/locales'
 
+/** Reason codes the report sheet sends (the frontend owns this vocabulary). */
 export const REASON_CODES = ['disrupted_practice', 'spam', 'abuse', 'fraud', 'other'] as const
 
+/** One known report reason code. */
 export type ReportReasonCode = (typeof REASON_CODES)[number]
 
 /** Localized label for one reason code (report.reasons.<code>). */

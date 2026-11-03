@@ -6,9 +6,10 @@
 // the sole date functions in the codebase that rendered via toLocaleString /
 // local Date getters with NO explicit `timeZone` -- every other date function
 // in utils/format.ts always threads an explicit IANA zone. That means their
-// output (and, for formatRelative's "Вчера" comparison, their CORRECTNESS)
-// depended on whichever machine renders the page. Fixed to pin UTC explicitly,
-// matching the rest of the codebase.
+// output -- and, for formatRelative's yesterday comparison
+// (i18n:common.yesterday), its very CORRECTNESS -- depended on whichever
+// machine renders the page. Fixed to pin UTC explicitly, matching the rest
+// of the codebase.
 // =============================================================================
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
@@ -73,12 +74,13 @@ describe('formatRelative', () => {
     expect(result).toContain('10')
   })
 
-  // SW10: the "Вчера" check compared device-LOCAL calendar fields on both the
-  // item and a device-mutated "yesterday" Date -- not the item's actual
-  // distance from "now". Fixture: 30h before "now" (two UTC calendar days
-  // back, correctly NOT "yesterday"), but a large positive device-tz offset
-  // (Kiritimati, UTC+14) pushed both instants' LOCAL calendar days forward
-  // enough to collapse the distinction and misreport it as "Вчера".
+  // SW10: the yesterday check (i18n:common.yesterday) compared device-LOCAL
+  // calendar fields on both the item and a device-mutated "yesterday" Date --
+  // not the item's actual distance from "now". Fixture: 30h before "now" (two
+  // UTC calendar days back, correctly NOT "yesterday"), but a large positive
+  // device-tz offset (Kiritimati, UTC+14) pushed both instants' LOCAL calendar
+  // days forward enough to collapse the distinction and misreport it as the
+  // yesterday label.
   it('SW10: "Вчера" is unaffected by the DEVICE\'s own timezone', () => {
     vi.useFakeTimers()
     vi.stubEnv('TZ', 'Pacific/Kiritimati')

@@ -7,18 +7,26 @@
 
   THE PERSON'S MESSAGE (`fromPerson`): `body` is the translation into the
   support language when `ready`, the original otherwise.
-    ready                     -> «Показать оригинал» / «Показать перевод»: the
-                                 original is shown ONLY on demand;
-    preparing / not_requested -> «Переводится…» (the original is shown);
-    impossible                -> «Ошибка перевода» (the original is shown);
+    ready                     -> show-original / show-translation toggle
+                                 (i18n:adminScreens.adminSupportDetail.translation.showOriginal /
+                                 i18n:adminScreens.adminSupportDetail.translation.showTranslation):
+                                 the original is shown ONLY on demand;
+    preparing / not_requested -> translating mark
+                                 (i18n:adminScreens.adminSupportDetail.translation.translating;
+                                 the original is shown);
+    impossible                -> failure mark
+                                 (i18n:adminScreens.adminSupportDetail.translation.failed;
+                                 the original is shown);
     not_needed / no block     -> nothing.
   A REPLY of support to a person of another language: `body` is the reply as
   written; the block says what became of its translation for the person.
-    preparing / not_requested -> «Переводится…»;
-    impossible                -> «Не доставлено» -- the person cannot read it;
+    preparing / not_requested -> i18n:adminScreens.adminSupportDetail.translation.translating;
+    impossible                -> i18n:adminScreens.adminSupportDetail.translation.undelivered --
+                                 the person cannot read it;
     ready / not_needed / null -> nothing.
   ANY message with `retryable: true` (the job failed in transport) offers
-  «Повторить» -- any admin may ask again (owner ruling FE-100). A declined
+  the retry button (i18n:common.retry) -- any admin may ask again
+  (owner ruling FE-100). A declined
   translation is `impossible` with `retryable: false`: final, no button.
 
   The five states are comms' closed set (VariantState) -- there is no

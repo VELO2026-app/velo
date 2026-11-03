@@ -2,7 +2,9 @@
 // VELO Frontend -- SchoolMembersView Screen Tests (tz-curator.md §1.11)
 // =============================================================================
 //
-// ONE participants screen with the Мастера/Ученики switcher (owner
+// ONE participants screen with the masters/students switcher
+// (i18n:user.screens.schoolMembers.tabs.masters /
+// i18n:user.screens.schoolMembers.tabs.students; owner
 // 2026-09-22): the tab rides ?kind= (default master, unknown values fall
 // back), switching resets the search, replaces the query and reloads with
 // the new kind (no unfiltered load ever leaves this screen -- §1.11.3), the
@@ -63,7 +65,9 @@ function mountWith(query: Record<string, string> = {}): HTMLElement {
   return host
 }
 
-/** The §1.11 switcher buttons, found by label (Мастера / Ученики). */
+/** The §1.11 switcher buttons, found by label (the masters / students tab
+ *  labels, i18n:user.screens.schoolMembers.tabs.masters /
+ *  i18n:user.screens.schoolMembers.tabs.students). */
 function rosterTab(label: string): HTMLButtonElement | null {
   return (
     (Array.from(host?.querySelectorAll<HTMLButtonElement>('.v-segment-track__btn') ?? []).find(
@@ -378,9 +382,10 @@ describe('SchoolMembersView', () => {
     expect(toastError).toHaveBeenCalled()
   })
 
-  // -- The «Удалённые» tab (owner 2026-09-30, BE-79; renamed FE-97 2026-11-03) -
+  // -- The removed tab (BE-79 placeholder; "Removed" since FE-97) -------------
 
-  // BE-79 (2): these two pinned the PLACEHOLDER (the tab never fetches) --
+  // BE-79 (2): these two pinned the PLACEHOLDER (the removed tab
+  // (i18n:user.screens.schoolMembers.tabs.blocked) never fetches) --
   // right while no endpoint listed blocked members. GET …/blocks replaced it:
   // the tab now reads it, paged like the roster, and has no search (the
   // endpoint takes limit/offset only).
@@ -505,7 +510,8 @@ describe('SchoolMembersView', () => {
 //
 // The viewer is the server's answer (getSchoolPage -> viewer.relation).
 // A school master in the master zone reads /roster (no curator fields), sees
-// no «Удалённые» tab, messages a student straight away and opens a master's public
+// no removed tab (i18n:user.screens.schoolMembers.tabs.blocked), messages
+// a student straight away and opens a master's public
 // page WITHOUT the curator's ?schoolId= marker. The user zone is untouched.
 
 function rosterRow(id: string, kind: 'master' | 'student', name: string) {

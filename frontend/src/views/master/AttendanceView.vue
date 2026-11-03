@@ -84,7 +84,8 @@
               {{ t('masterScreens.attendance.noShow') }}
             </div>
             <!-- Checked in (mood submitted) but left no comment: do NOT say
-                 «Ожидает check-in» — their mood face already shows they're in. -->
+                 "awaiting check-in" (i18n:masterScreens.attendance.awaitingCheckin)
+                 — their mood face already shows they're in. -->
             <div v-else-if="item.checkin" class="checkins__meta">
               {{ t('masterScreens.attendance.noComment') }}
             </div>
@@ -94,8 +95,8 @@
           </div>
         </div>
 
-        <!-- «Финализировать практику» убрана (operator 2026-06-18): завершение —
-             авто по расписанию (Зод auto-finalizer). -->
+        <!-- The "Finalize practice" button was removed (operator 2026-06-18):
+             completion is automatic by schedule (Zod auto-finalizer). -->
       </div>
     </template>
   </div>

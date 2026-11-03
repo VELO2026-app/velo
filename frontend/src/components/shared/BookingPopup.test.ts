@@ -123,9 +123,9 @@ describe('BookingPopup · [FE-52] viewer-timezone date', () => {
   })
 
   it('the calendar DAY follows the viewer zone when the zones disagree on the date', async () => {
-    // 23:30 UTC -> 19:30 22 июля in America/New_York (EDT) -- but 04:30 23
-    // июля in the master's Asia/Yekaterinburg. The popup must show the
-    // VIEWER's day, not the master's.
+    // 23:30 UTC -> 19:30 on July 22 in America/New_York (EDT) -- but 04:30
+    // on July 23 in the master's Asia/Yekaterinburg. The popup must show
+    // the VIEWER's day, not the master's.
     viewerZone = 'America/New_York'
     mountPopup(practice({ scheduled_at: '2026-07-22T23:30:00Z' }))
     await flush()

@@ -22,6 +22,7 @@ import { sessionTokenStore } from './session-token'
 /** Session token carrier: localStorage (session-token.ts). */
 const _tokens = sessionTokenStore(() => host.localStorage)
 
+/** The platform as it behaves outside Telegram: browser tab or installed app. */
 export const standalonePlatform: Platform = {
   name: 'standalone',
 

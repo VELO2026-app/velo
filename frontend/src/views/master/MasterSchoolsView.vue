@@ -1,12 +1,14 @@
 <!--
   VELO Frontend -- MasterSchoolsView (schools FE-20 / GT P3)
 
-  «Школы» -- the master zone's entry into SCHOOLS (route
-  /master/schools, dashboard row under «Мои группы»).
+  The schools screen (i18n:masterScreens.masterSchools.title) -- the master
+  zone's entry into SCHOOLS (route /master/schools, dashboard row under
+  i18n:masterScreens.masterDashboard.myGroups).
 
   Same GET /schools/mine payload as the user list, but sectioned by
-  MY relation: «Я куратор» first, «Я участник» second (backend order:
-  curated first, then join time -- the split only groups it).
+  MY relation: the curator tab (i18n:masterScreens.masterSchools.tab.curator)
+  first, the member tab (i18n:masterScreens.masterSchools.tab.member) second
+  (backend order: curated first, then join time -- the split only groups it).
 
   BE-18: the «+» is visible ONLY with the admin-issued right to
   found a school. The flag rides on GET /masters/me/schools

@@ -11,24 +11,29 @@
   Layout (top -> bottom):
     - Video placeholder (the meeting itself takes over the whole page once
       entered -- client view draws its own full-page UI)
-    - Info card: title + master + «В эфире» badge
+    - Info card: title + master + the live badge
+      (i18n:user.screens.practiceLive.liveBadge)
     - Actions, by the server's answer (GET /practices/{id}/zoom/resolve):
-        personal  -- «Войти»: join (sets joined_at), then the SDK as attendee
-        host      -- «Начать»: the SDK as host (the practice's own master)
-        guest     -- not booked: «Вы не записаны» and the way to the practice
+        personal  -- join (i18n:user.screens.practiceLive.join): join (sets
+                     joined_at), then the SDK as attendee
+        host      -- start (i18n:user.screens.practiceLive.start): the SDK as
+                     host (the practice's own master)
+        guest     -- not booked: the not-booked notice
+                     (i18n:user.screens.practiceLive.notBooked) and the way to
+                     the practice
                      (owner decision 12: no guest entry from the app)
         pending / failed / unavailable / cancelled -- honest states
-      + «Check-in» -- the student action, user zone only; hidden once done or
-        once the practice has started (FE-49, продакт 2.11 -- same decision
-        removed «Покинуть практику»: it only ever left the screen, which
-        «Назад» above already does)
+      + Check-in -- the student action, user zone only; hidden once done or
+        once the practice has started (FE-49, product decision 2026-11-02 --
+        the same decision removed the leave control: it only ever left the
+        screen, which the back control above already does)
       + the camera hint where the host app blocks the camera (Telegram iOS)
 
   Entering (onEnter / onStart): POST .../zoom/sdk-join for the parameters,
   then platform/zoom-sdk.ts loads the SDK and joins. Leaving is the SDK's
   own leaveUrl -- a full page load: the student lands on the feedback
-  screen, the master on his dashboard. «Назад» while in the meeting leaves it
-  the same way.
+  screen, the master on his dashboard. The back control (i18n:ui.back) while
+  in the meeting leaves it the same way.
 
   This screen is also the DEEP LINK target (startapp=zoom__<22>). A code of
   valid shape can name a practice that no longer exists; the client cannot
@@ -101,7 +106,8 @@
       <!-- Links (3 October): 'unavailable' -- the meeting exists and this
            person holds a live booking, but their personal entry could not be
            made (resolve_zoom_entry: nothing retries it, so «ask the master to
-           retry» would be a lie). No way in -- say so, no «Войти». -->
+           retry» would be a lie). No way in -- say so, no join button
+           (i18n:user.screens.practiceLive.join). -->
       <VEmptyState
         v-else-if="zoomEntry?.kind === 'unavailable'"
         icon="warning"
@@ -125,7 +131,8 @@
 
       <!-- The practice's own master: he starts the meeting as host, inside
            VELO. Reached from his dashboard (master zone) or by his own
-           published link (user zone) -- either way the same «Начать». -->
+           published link (user zone) -- either way the same start button
+           (i18n:user.screens.practiceLive.start). -->
       <template v-else-if="zoomEntry?.kind === 'host'">
         <p v-if="cameraHint" class="live__camera-hint">{{ CAMERA_HINT }}</p>
         <VButton
@@ -170,11 +177,11 @@
 
       <!-- Student action -- the user zone only, and not for the practice's
            own master (he checks no one in to his own practice).
-           FE-49 (продакт 2.11): HIDDEN, not locked, once the check-in is done
-           or the practice has started -- a locked «Check-in сделан» told a
-           person what he already knew. «Покинуть практику» used to sit here
-           and is gone entirely: it never cancelled anything, and «Назад»
-           above already leaves the screen. -->
+           FE-49 (product decision 2026-11-02): HIDDEN, not locked, once the
+           check-in is done or the practice has started -- a locked
+           "checked-in" plate told a person what he already knew. The leave
+           button used to sit here and is gone entirely: it never cancelled
+           anything, and the back control above already leaves the screen. -->
       <VButton
         v-if="studentActions && !alreadyCheckedIn && !practiceStarted"
         variant="secondary"
@@ -250,11 +257,11 @@ const myBooking = computed(() =>
 )
 
 /** One check-in per practice: once the booking has it, the button hides
- * (FE-49 -- it used to lock with a «Check-in сделан» label). */
+ * (FE-49 -- it used to lock with a "checked-in" label). */
 const alreadyCheckedIn = computed(() => !!myBooking.value?.has_checkin)
 
 /**
- * FE-49 (продакт 2.11): true once the practice's start time has passed -- the
+ * FE-49 (product decision 2026-11-02): true once the practice's start time has passed -- the
  * check-in button hides with it, the same boundary CheckinView's submit
  * fail-closes on (№444). Same predicate as PracticeDetailView.practiceStarted.
  */
@@ -274,8 +281,9 @@ const resolveFailed = ref(false)
 /** F4: sdk-join answered zoom_sdk_not_configured -- no SDK keys here. */
 const sdkNotConfigured = ref(false)
 
-/** «Войти» is enabled only for 'personal' -- the one answer that carries an
- * entry for this person. */
+/** The join button (i18n:user.screens.practiceLive.join) is enabled only
+ * for 'personal' -- the one answer that carries an entry for this
+ * person. */
 const canJoin = computed(() => zoomEntry.value?.kind === 'personal')
 
 /** Check-in belongs to a student in the user zone; never to the practice's
@@ -298,9 +306,9 @@ const cameraHint = computed(() => {
  * Ask the server for this person's SDK parameters and enter. Resolves once
  * the SDK has joined (it then owns the page until leaveUrl reloads it).
  * Every refusal is shown, none is swallowed:
- *   zoom_sdk_not_configured -> the screen says so instead of the button;
- *   zoom_entry_not_joinable -> the state changed under us: re-resolve;
- *   anything else          -> its phrase, or a plain «try again».
+ *   `zoom_sdk_not_configured -> the screen says so instead of the button;`
+ *   `zoom_entry_not_joinable -> the state changed under us: re-resolve;`
+ *   `anything else          -> its phrase, or a plain «try again».`
  */
 async function enterThroughSdk(): Promise<void> {
   let params
@@ -338,9 +346,10 @@ async function enterThroughSdk(): Promise<void> {
 }
 
 /**
- * «Войти» (personal): check in to the booking if not joined yet -- joined_at
- * is set here, by the button, exactly as before F4 -- then enter. A 409
- * "Already joined" is not an error: entering is still the right action.
+ * Enter (the join button, i18n:user.screens.practiceLive.join, personal):
+ * check in to the booking if not joined yet -- joined_at is set here, by the
+ * button, exactly as before F4 -- then enter. A 409 "Already joined" is not
+ * an error: entering is still the right action.
  */
 async function onEnter(): Promise<void> {
   if (!canJoin.value || entering.value) return
@@ -366,7 +375,8 @@ async function onEnter(): Promise<void> {
   }
 }
 
-/** «Начать» (host): the practice's own master starts the meeting in VELO. */
+/** Start (the host button, i18n:user.screens.practiceLive.start): the
+ *  practice's own master starts the meeting in VELO. */
 async function onStart(): Promise<void> {
   if (zoomEntry.value?.kind !== 'host' || entering.value) return
   entering.value = true
@@ -391,7 +401,7 @@ function goToPractice(): void {
   void router.push({ name: 'practice-detail', params: { id: practiceId } })
 }
 
-/** Back arrow -> the zone's dashboard (breaks the check-in <-> live loop). */
+/** `Back arrow -> the zone's dashboard` (breaks the check-in `<->` live loop). */
 function goBack(): void {
   void router.push({ name: isMasterZone ? 'master-dashboard' : 'user-dashboard' })
 }

@@ -1,15 +1,16 @@
 <!--
   VELO Frontend -- SchoolMemberRow (tz-curator.md §1.11)
 
-  One roster row on the school participants screen (§1.11 «Участники», both
-  switcher tabs): avatar + display name, the whole row one touch
+  One roster row on the school participants screen (§1.11, the screen of
+  i18n:user.screens.schoolMembers.title, both switcher tabs): avatar + display name, the whole row one touch
   target that opens the member's school-context profile. No per-row
   actions by the same rule T24-19 established on MasterGroupDetailView:
   the curator's offer/remove live on the profile screens, a row only
   navigates.
 
   is_visible=false (a suspended master-member, I-4) renders as a
-  «Временно недоступен» subtitle instead of dropping the row: the
+  temporarily-unavailable subtitle (i18n:shared.components.temporarilyHidden)
+  instead of dropping the row: the
   membership is real and returns by itself when the admin re-verifies.
   For students the flag is always true (they have no MasterProfile).
 

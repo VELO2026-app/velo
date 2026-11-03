@@ -10,7 +10,8 @@
 //   onWithdraw() (MasterPendingView.vue:225) DELETEs /masters/me/application.
 //
 // IS THAT REVERSIBLE? Followed one level down rather than trusting the dialog's
-// own promise («Подать новую заявку можно в любой момент») or the wrapper's
+// own promise (the reapply-anytime tail of
+// i18n:masterScreens.masterPending.withdrawConfirm) or the wrapper's
 // docstring -- a string is not evidence:
 //   - service.withdraw_master_application (masters/service.py:270-311) flips
 //     data.account.status to "cancelled_by_user". The User row is untouched
@@ -366,7 +367,8 @@ describe('MasterPendingView', () => {
     it('a role=user with the master CAPABILITY is approved, not pending', async () => {
       // T4 (:148-157): approval no longer flips the role -- an approved
       // applicant stays role='user' and gains 'master' in allowedRoles. Reading
-      // the role alone would leave them staring at «Заявка отправлена» forever.
+      // the role alone would leave them staring at the pending screen
+      // (i18n:masterScreens.masterPending.toast.sent) forever.
       authState.allowedRoles = ['user', 'master']
       mount()
       await flush()
@@ -506,7 +508,8 @@ describe('MasterPendingView', () => {
 
     it('offers BOTH ways out: support AND a fresh application (FORK-4)', async () => {
       // Re-apply is genuinely backend-supported (apply_for_master updates the
-      // rejected profile in place). Offering only «в поддержку» would dead-end
+      // rejected profile in place). Offering only the support contact
+      // (i18n:masterScreens.masterPending.contactSupport) would dead-end
       // an applicant the backend is happy to take again.
       authState.masterApplication = { status: 'rejected', rejection_reason: null }
       mount()
@@ -854,7 +857,8 @@ describe('MasterPendingView', () => {
 
   // NOT COVERED, deliberately -- stated rather than faked:
   //
-  // 1. The «Обновить статус» polling the banner (:16) still advertises does not
+  // 1. The refresh-status polling (i18n:masterScreens.masterPending.refreshStatus)
+  //    that the banner (:16) still advertises does not
   //    exist in this template any more -- there is no poll button and no
   //    setInterval in the SFC. Nothing to test; the stale banner line is a
   //    comment defect, not a behaviour gap, and fixing product code (even a

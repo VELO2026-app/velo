@@ -5,9 +5,9 @@
 // The shared 1..10 scale (tz-mood-scale.md) is the boundary contract between
 // Check-in and Feedback: every saved score later has to read as the emotion it
 // was picked as, on every surface. So the whole 1..10 range is walked here
-// (acceptance: "boundary-тесты покрывают каждое число 1..10") instead of
-// sampling it -- an off-by-one at any pair border (2|3, 4|5, 6|7, 8|9) shifts
-// real user data between emotions.
+// (acceptance, translated: "boundary tests cover every number 1..10")
+// instead of sampling it -- an off-by-one at any pair border (2|3, 4|5, 6|7,
+// 8|9) shifts real user data between emotions.
 // =============================================================================
 
 import { describe, it, expect } from 'vitest'
@@ -114,7 +114,8 @@ describe('clampMoodScore -- a damaged stored score is contained for DISPLAY', ()
 })
 
 describe('moodValueText -- the range input reads «5 из 10 — Нормально»', () => {
-  // Exact string from tz §8's a11y contract: value, «из 10», dash, label.
+  // Exact string from tz §8's a11y contract: value, the "out of 10" wording
+  // (i18n:mood.valueText), dash, label.
   it('names the emotion for the current score', () => {
     expect(moodValueText(5)).toBe('5 из 10 — Нормально')
     expect(moodValueText(1)).toBe('1 из 10 — Плохо')

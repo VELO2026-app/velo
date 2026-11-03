@@ -67,7 +67,7 @@ function toNum(v: unknown): number {
  * trimmed ('70px', '0px'); outside Telegram, STANDALONE_SAFE_TOP.
  *
  * Bind to an inline style so the padding re-renders reactively:
- *   :style="{ paddingTop: contentSafeTopCss }"
+ *   `:style="{ paddingTop: contentSafeTopCss }"`
  */
 export function useSafeArea(): { contentSafeTopCss: ComputedRef<string> } {
   const isMounted = useSignal(viewport.isMounted)

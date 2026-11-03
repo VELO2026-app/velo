@@ -1,7 +1,8 @@
 <!--
   VELO Frontend -- PracticeAudiencePicker (FE-24 / GT P5)
 
-  The «Для кого практика» selector, extracted from the audience block that
+  The audience selector (labeled i18n:masterScreens.createPractice.fields.audience),
+  extracted from the audience block that
   used to live (twice, drifting) in CreatePracticeView and EditPracticeView:
   a VRadioGroup of kinds plus, for the two targeted kinds, VChips of this
   master's own targets: a multi-select of groups, a SINGLE select of schools.
@@ -73,7 +74,9 @@
     </template>
 
     <!-- Review fix: the error belongs to the ACTIVE targeted kind only --
-         after «Выберите хотя бы одну группу» a switch to «Публичная» clears
+         after the choose-group validation error
+         (masterScreens.createPractice.validation.chooseGroup) a switch to the
+         public option (i18n:practice.audience.public) clears
          the message instead of lying until the next submit. -->
     <span v-if="error && (kindModel === 'groups' || kindModel === 'schools')" class="pap__error">{{
       error
@@ -97,15 +100,16 @@ const props = defineProps<{
   schools: AudienceSchoolOption[]
   /** Single validation-error line, shown for whichever kind is active. */
   error?: string
-  /** T24-24 (PROMPT №639): Create relabels the 'students' option to «Все мои
-   *  ученики» LOCALLY; Edit keeps the shared «Все ученики». A narrow seam,
+  /** T24-24 (PROMPT №639): Create relabels the 'students' option
+   *  (i18n:masterScreens.createPractice.audience.allMyStudents) LOCALLY; Edit
+   *  keeps the shared label (i18n:practice.audience.students). A narrow seam,
    *  not a second options list -- everything else is identical. */
   studentsLabel?: string
   /** FE-92: only these audience kinds are offered. A practice a curator
    *  creates for a school's master belongs to that school, and a school
    *  practice is for everyone or for the school's students
    *  (check_school_audience) -- so that flow passes ['public',
-   *  'schools']. Absent -> every kind, as before. */
+   *  'schools']. `Absent -> every kind`, as before. */
   allowedKinds?: PracticeAudienceKind[]
   /** BE-74 edit seam: the school of an EXISTING practice never changes
    *  (practice_school_immutable). Edit passes the practice's own school in

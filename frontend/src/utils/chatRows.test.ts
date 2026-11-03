@@ -8,8 +8,8 @@
 //                     `created_at` (the thread-not-yet-written case).
 //   chatRowPreview -- the newest-message line: plain bodies pass through,
 //                     the BE-166 translation states become their wording
-//                     («Переводится…» / «Перевод недоступен»), and a thread
-//                     without messages previews as nothing.
+//                     (i18n:chat.translating / i18n:chat.translationUnavailable),
+//                     and a thread without messages previews as nothing.
 // The t() wording comes from the locales module singleton (ru catalog).
 // =============================================================================
 

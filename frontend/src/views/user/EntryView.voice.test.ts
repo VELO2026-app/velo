@@ -4,7 +4,7 @@
 // EntryView's OWN half of step 2 (the pipeline itself is pinned in
 // VTextarea.voice.test.ts over the shared useVoiceFieldInput): the mic lives
 // only in the editor, a transcript APPENDS to the entry body and survives the
-// save round-trip, a live take freezes «Сохранить», and leaving the editor
+// save round-trip, a live take freezes the save button (i18n:ui.save), and leaving the editor
 // mid-take discards the take instead of orphaning a recording whose panel
 // just unmounted.
 //
@@ -15,7 +15,7 @@
 //
 // TICKS = 8, counted for the deepest chain here -- the dictation-then-save
 // flow: stop -> transcribe (1) -> onTranscript sets editContent (2) ->
-// re-render (3) -> «Сохранить» click -> onSave -> updateEntry ->
+// re-render (3) -> the save button (i18n:ui.save) click -> onSave -> updateEntry ->
 // updateDiaryEntry (4) -> feed.refresh -> loadMore -> listDiaryFeed (5,6) ->
 // updateEntry resumes and re-points selectedEntry (7) -> re-render (8).
 // listDiaryFeed is mocked resolved for the same reason as the main file: every
@@ -167,7 +167,7 @@ function menuItem(ariaLabel: string): HTMLButtonElement | undefined {
   return host?.querySelector<HTMLButtonElement>(`button[aria-label="${ariaLabel}"]`) ?? undefined
 }
 
-/** View -> edit through the real kebab + pencil. */
+/** `View -> edit` through the real kebab + pencil. */
 async function startEditing(): Promise<void> {
   host?.querySelector<HTMLButtonElement>('.v-menu__trigger')?.click()
   await flush()

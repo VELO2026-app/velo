@@ -2,14 +2,18 @@
   VELO Frontend -- MyBookingsView (screen 17, My reservations)
 
   Two sections instead of status tabs (Figma 17):
-    - "Предстоящие": active bookings (confirmed/pending). Tomorrow's ones are
-      sorted to the top and get a "Завтра" badge; the rest have no badge.
-    - "Прошедшие": attended / no_show / cancelled, with a status badge.
+    - Upcoming (i18n:user.screens.myBookings.tabs.upcoming): active bookings
+      (confirmed/pending). Tomorrow's ones are sorted to the top and get the
+      tomorrow badge (i18n:user.screens.myBookings.status.tomorrow); the rest
+      have no badge.
+    - Past (i18n:user.screens.myBookings.tabs.past): attended / no_show /
+      cancelled, with a status badge.
 
   Bookings are fetched page by page (no status filter) and grouped on the
-  client; a "Показать ещё" button appends the next page (store.loadMore /
-  store.hasMore, via usePagination). Cancellation now lives on the detail
-  screens (15/18), so the card is a plain link to the booking detail (screen 18).
+  client; the show-more control (i18n:common.showMore) appends the next page
+  (store.loadMore / store.hasMore, via usePagination). Cancellation now lives
+  on the detail screens (15/18), so the card is a plain link to the booking
+  detail (screen 18).
 
   Route: /user/bookings (name: 'user-bookings')
 -->
@@ -125,9 +129,9 @@ const skeletons = useRememberedCount(
   { fallback: 3, max: 3 },
 )
 
-// A failed «Показать ещё» keeps the list (the error rung is initial-load-only,
-// :28) -- which, until now, meant the tap did nothing and NOTHING said why.
-// Toast it, as the six admin lists do.
+// A failed show-more tap (i18n:common.showMore) keeps the list (the error
+// rung is initial-load-only, :28) -- which, until now, meant the tap did
+// nothing and NOTHING said why. Toast it, as the six admin lists do.
 async function onLoadMore(): Promise<void> {
   await store.loadMore()
   if (store.loadMoreError) toast.error(store.loadMoreError)
@@ -139,7 +143,7 @@ async function onLoadMore(): Promise<void> {
 const UPCOMING_STATUSES = ['confirmed', 'pending'] as const
 
 /**
- * True once the practice has ENDED (scheduled_at + duration < now).
+ * True once the practice has ENDED (`scheduled_at + duration < now`).
  *
  * A booking whose practice is over belongs in t('user.screens.myBookings.tabs.past') even while its status
  * is still confirmed/pending: the backend deliberately keeps that status until
@@ -157,8 +161,8 @@ function isUpcoming(b: BookingWithPracticeResponse): boolean {
 }
 
 /**
- * True if the practice is in progress — by CLIENT TIME (start ≤ now < end) via
- * the shared isLiveNow, in sync with the dashboard «Ближайшая практика» card.
+ * True if the practice is in progress — by CLIENT TIME (`start ≤ now < end`) via
+ * the shared isLiveNow, in sync with the dashboard's nearest-practice card.
  * (Was practice.status==='live', which depended on the master's manual flip.)
  */
 function isLive(b: BookingWithPracticeResponse): boolean {
@@ -303,12 +307,13 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
-  /* F-5 sync: horizontal padding снят — MobileLayout уже даёт
-   * var(--velo-screen-padding) (=33). Раньше тут было var(--space-4) (16),
-   * cards рендерились 304 wide вместо Figma 336.
-   * Vertical паддинг top/bottom 16 оставляем (визуальный отступ от header
-   * и от tab-bar; Figma my-reservations.svg gap header->title ≈ 28, у нас
-   * MobileLayout 16 + 14 (section-title margin) = 30, расхождение 2px). */
+  /* F-5 sync: the horizontal padding is dropped -- MobileLayout already
+   * provides var(--velo-screen-padding) (=33). This used to be var(--space-4)
+   * (16) here, and the cards rendered 304 wide instead of Figma's 336.
+   * The vertical padding top/bottom 16 stays (visual breathing room from the
+   * header and the tab bar; Figma my-reservations.svg gap header->title is
+   * about 28, ours is MobileLayout 16 + 14 (section-title margin) = 30, a
+   * 2px divergence). */
   padding: var(--space-4) 0;
 }
 

@@ -78,9 +78,9 @@ export function getMyBookings(
 /**
  * Fetch the current user's live-or-upcoming confirmed bookings, soonest first.
  *
- * Dedicated endpoint for the dashboard «Ближайшая практика» widget: the backend
+ * Dedicated endpoint for the dashboard widget (i18n:masterScreens.masterDashboard.nearestOne): the backend
  * filters to confirmed + not-ended and orders by scheduled_at ASC, so the
- * nearest-selection sees the truly-soonest practice (fixes the >20-bookings
+ * nearest-selection sees the truly-soonest practice (fixes the `>20-bookings`
  * mis-select where the paginated /me list only carried the newest-BOOKED page).
  */
 export function getUpcomingBookings(): Promise<BookingWithPracticeResponse[]> {
@@ -90,8 +90,8 @@ export function getUpcomingBookings(): Promise<BookingWithPracticeResponse[]> {
 /**
  * Fetch the current user's attended-practice stats (profile screen).
  *
- * Returns counts the profile header renders as two cards:
- * practices_attended and hours_attended.
+ * @returns Counts the profile header renders as two cards:
+ *   practices_attended and hours_attended.
  */
 export function getMyStats(): Promise<UserStatsResponse> {
   return api.get<UserStatsResponse>('/api/v1/bookings/me/stats')
@@ -101,9 +101,11 @@ export function getMyStats(): Promise<UserStatsResponse> {
  * Fetch a single booking with full practice details (screen 18).
  *
  * Backend returns the complete PracticeResponse (contraindications,
- * master_methods, status). Owner-only (404 otherwise). T-35: no Zoom URL of
+ * master_methods, status). T-35: no Zoom URL of
  * any kind is on that response -- a link comes from
- * GET /practices/{id}/zoom/resolve.
+ * `GET /practices/{id}/zoom/resolve`.
+ *
+ * @throws ApiResponseError -- 404 for anybody but the owner.
  */
 export function getBooking(bookingId: string): Promise<BookingDetailResponse> {
   return api.get<BookingDetailResponse>(`/api/v1/bookings/${bookingId}`)
@@ -113,8 +115,8 @@ export function getBooking(bookingId: string): Promise<BookingDetailResponse> {
  * Cancel a booking by ID.
  *
  * Backend applies refund policy based on cancellation deadline:
- *   > 24h before practice  -> full refund
- *   <= 24h before practice -> no refund (early finalize)
+ *   `> 24h before practice  -> full refund`
+ *   `<= 24h before practice -> no refund (early finalize)`
  */
 export function cancelBooking(bookingId: string): Promise<void> {
   return api.delete(`/api/v1/bookings/${bookingId}`)
@@ -124,7 +126,8 @@ export function cancelBooking(bookingId: string): Promise<void> {
  * Check in to a practice (sets joined_at). Phase 5.4.
  *
  * Backend rules: booking must be confirmed and the practice scheduled/live.
- * Returns 409 if already joined.
+ *
+ * @throws ApiResponseError -- 409 if already joined.
  */
 export function joinBooking(bookingId: string): Promise<BookingResponse> {
   return api.post<BookingResponse>(`/api/v1/bookings/${bookingId}/join`)
@@ -136,10 +139,10 @@ export function joinBooking(bookingId: string): Promise<BookingResponse> {
  * Backend rules: requires joined_at to be set (400 otherwise),
  * returns 409 if already left.
  *
- * FE-49 (продакт-решение 2.11): the only UI caller -- the «Покинуть практику»
+ * FE-49 (product decision 2026-11-02): the only UI caller -- the leave
  * button on PracticeLiveView -- is deleted: to the person the button did
- * nothing but leave the screen, which «Назад» already does. The wrapper and
- * the endpoint stay; the backend is not touched.
+ * nothing but leave the screen, which the back control already does. The
+ * wrapper and the endpoint stay; the backend is not touched.
  */
 export function leaveBooking(bookingId: string): Promise<BookingResponse> {
   return api.post<BookingResponse>(`/api/v1/bookings/${bookingId}/leave`)

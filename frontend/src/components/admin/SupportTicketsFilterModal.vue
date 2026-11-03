@@ -1,17 +1,25 @@
 <!--
   VELO Frontend -- SupportTicketsFilterModal (FE-100, delivery B)
 
-  Filter sheet of the «Обращения» list in «Модерация». Same shape as
-  ModerationFilterModal (VModal + funnel header + «Выбрать дату» ->
+  Filter sheet of the tickets list (i18n:adminScreens.adminReports.tabTickets)
+  in the moderation screen (i18n:adminScreens.adminReports.moderationTab).
+  Same shape as
+  ModerationFilterModal (VModal + funnel header + the date trigger
+  (i18n:composer.pickDate) ->
   DatePickerSheet + chip groups; closing the sheet IS applying -- the design
-  has no «Применить»), but its own: ModerationFilterModal belongs to «Жалобы»
+  has no apply button (i18n:filters.apply)), but its own:
+  ModerationFilterModal belongs to the complaints tab
+  (i18n:adminScreens.adminReports.tabComplaints)
   and stays as it is (owner ruling 24.10: two channels).
 
-  Every group is SINGLE-select with «Все» -- the backend takes one status and
+  Every group is SINGLE-select with "all" (i18n:common.all) -- the backend
+  takes one status and
   one category set per request (supportTicketsFilter.ts) -- except the rating
   group (FE-107), which is MULTI-select: the backend takes a repeatable
-  `rating`, so the star chips and «Без оценки» toggle independently and «Все»
-  is the reset. The status group is hidden in the «Спам» tab, where the
+  `rating`, so the star chips and the no-rating chip
+  (i18n:adminScreens.adminSupport.rating.none) toggle independently and "all"
+  is the reset. The status group is hidden in the spam tab
+  (i18n:adminScreens.adminSupport.statuses.spam), where the
   status is fixed.
 -->
 
@@ -70,7 +78,7 @@
 
       <!-- FE-107: the rating group is MULTI-select -- the backend takes a
            repeatable `rating` ("any of these"), so each chip toggles on its
-           own; «Все» (nothing chosen) is the reset, not a state. -->
+           own; "all" (i18n:common.all; nothing chosen) is the reset, not a state. -->
       <section class="sfilter__group">
         <h3 class="sfilter__label">{{ t('adminScreens.adminSupport.rating.filterLabel') }}</h3>
         <div class="sfilter__chips">
@@ -129,7 +137,7 @@ import {
 const props = defineProps<{
   open: boolean
   value: SupportTicketsFilter
-  /** False in the «Спам» tab: the status is fixed there. */
+  /** False in the spam tab (i18n:adminScreens.adminSupport.statuses.spam): the status is fixed there. */
   showStatus: boolean
 }>()
 
@@ -165,14 +173,14 @@ const hasActiveFilters = computed<boolean>(
     draft.group !== null || draft.status !== null || draft.date !== '' || draft.rating.length > 0,
 )
 
-/** The rating chips toggle: on -> off, off -> on; «Все» is nothing chosen. */
+/** The rating chips toggle: `on -> off`, `off -> on`; "all" (i18n:common.all) is nothing chosen. */
 function toggleRating(value: (typeof SUPPORT_RATING_FILTERS)[number]): void {
   draft.rating = draft.rating.includes(value)
     ? draft.rating.filter((r) => r !== value)
     : [...draft.rating, value]
 }
 
-// «Сбросить»: clear every group and STAY open -- closing applies.
+// Reset (i18n:common.reset): clear every group and STAY open -- closing applies.
 function resetFilters(): void {
   Object.assign(draft, EMPTY_SUPPORT_FILTER)
 }

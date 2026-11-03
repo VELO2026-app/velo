@@ -6,8 +6,8 @@
   VInput/VSelect already do, for DS parity.
 
   Usage:
-    <VTextarea v-model="bio" label="О себе" :rows="4" placeholder="Расскажите..." />
-    <VTextarea v-model="bio" label="О себе" required />
+    <VTextarea v-model="bio" label="About" :rows="4" placeholder="Tell us..." />
+    <VTextarea v-model="bio" label="About" required />
     <VTextarea v-model="thoughts" voice-input maxlength="2000" /> (FE-94)
 -->
 
@@ -47,7 +47,7 @@
            holds the plate's slot for the WHOLE span -- including the
            `requesting` permission prompt, when it stays an honestly frozen
            EMPTY band, the composer's own behaviour (no premature
-           «Транскрибация…» before there is a take to transcribe). The panel
+           i18n:voice.transcribing before there is a take to transcribe). The panel
            itself mounts only once the recorder is actually rolling; the
            textarea stays mounted (v-show) so focus and the autogrow height
            survive the take. -->
@@ -147,7 +147,7 @@ const props = withDefaults(
      *  OFF -- every existing caller stays byte-identical. */
     borderedAtRest?: boolean
     /** [FE-94, voice step 2; kill-switched per call site] The mic disc in the
-     *  field's row: tap -> record -> transcribe -> the transcript APPENDS to
+     *  field's row: `tap -> record -> transcribe -> the transcript APPENDS` to
      *  the current value (appendTranscript), clamped to the caller's
      *  maxlength attr. False (the default) keeps the disc unmounted and every
      *  piece of voice machinery unreachable; no other behaviour changes. */

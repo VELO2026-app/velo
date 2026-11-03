@@ -2,7 +2,10 @@
   VELO Frontend -- SchoolMembersView (tz-curator.md §1.11)
 
   The school's participants on ONE screen (§1.11, owner 2026-09-22): the
-  Мастера/Ученики glass switcher (VSegmentTrack variant="tabs") sits above
+  masters/students glass switcher (labels
+  i18n:user.screens.schoolMembers.tabs.masters /
+  i18n:user.screens.schoolMembers.tabs.students, VSegmentTrack
+  variant="tabs") sits above
   the search, and the active roster rides ?kind= so a refresh or a deep link
   reopens the same list. Curator-only surface: the server answers everyone
   else with the same masked 404 as before (P-08), and the 404 state hides
@@ -26,10 +29,12 @@
   the curator's actions (offer the master role / remove) live -- the T24-19
   rule from MasterGroupDetailView: a row navigates, it does not act.
 
-  States are the list canon: loader -> 404 («Школа недоступна», the same
+  States are the list canon: loader -> 404 (unavailable-school title
+  i18n:user.screens.schoolMembers.unavailable, the same
   P-08 masking every school surface gives) -> first-page error + retry ->
-  rows / two different empties (no members vs no search hits), «Показать
-  ещё» for the next page; a later-page failure keeps the list and reports
+  rows / two different empties (no members vs no search hits), the
+  show-more control (i18n:common.showMore) for the next page; a later-page
+  failure keeps the list and reports
   through a toast (the admin-lists pattern usePagination documents).
 -->
 
@@ -50,8 +55,9 @@
         @update:model-value="switchKind"
       />
 
-      <!-- The search rides the roster tabs; the «Удалённые» placeholder has
-           nothing to search, so the field sits out. -->
+      <!-- The search rides the roster tabs; the removed tab
+           (i18n:user.screens.schoolMembers.tabs.blocked) has nothing
+           to search, so the field sits out. -->
       <div v-if="kind !== 'blocked'" class="school-members__search">
         <div class="school-members__search-field">
           <VInput
@@ -188,13 +194,15 @@ import { formatShortDate } from '@/utils/format'
 
 // §1.11 (owner 2026-09-22): the active roster rides ?kind= -- server truth
 // in the URL, so a refresh or a deep link reopens the same list. The third
-// tab «Удалённые» (owner 2026-11-03, FE-97; the blocked group's UI name,
-// ?kind=blocked unchanged) lists GET …/blocks for the
-// curator, paged like the roster; it has no search (the endpoint takes
-// limit/offset only). «Разблокировать» sends DELETE …/blocks/{user_id} and
-// re-reads the first page -- the person leaves the list and is back in the
-// roster with their role (the other tabs re-read on switch). It is a
-// view-local MemberTab, NOT SchoolMemberKind: «blocked» is no kind of
+// tab (i18n:user.screens.schoolMembers.tabs.blocked -- owner 2026-09-30,
+// BE-79 (2); labelled "Removed" since FE-97, owner 2026-11-03;
+// ?kind=blocked unchanged) lists GET …/blocks for the curator, paged like
+// the roster; it
+// has no search (the endpoint takes limit/offset only). Unblock
+// (i18n:user.screens.schoolMembers.unblock) sends DELETE …/blocks/{user_id}
+// and re-reads the first page -- the person leaves the list and is back in
+// the roster with their role (the other tabs re-read on switch). It is a
+// view-local MemberTab, NOT SchoolMemberKind: 'blocked' is no kind of
 // membership in the API.
 type MemberTab = SchoolMemberKind | 'blocked'
 
@@ -248,7 +256,8 @@ const isCurator = computed(() => relation.value === 'curator')
 /** A school master reading the roster in the master zone. */
 const asSchoolMaster = computed(() => relation.value === 'master' && inMasterZone.value)
 
-/** «Удалённые» is the curator's tab only (BE-79). */
+/** The removed tab (i18n:user.screens.schoolMembers.tabs.blocked) is the
+ *  curator's tab only (BE-79). */
 const kindOptions = computed(() =>
   isCurator.value ? KIND_OPTIONS : KIND_OPTIONS.filter((option) => option.value !== 'blocked'),
 )
@@ -312,8 +321,8 @@ const { items, loading, error, loadMoreError, hasMore, loadMore, refresh } = use
 >(async (limit, offset) => {
   try {
     const viewer = await loadRelation()
-    // «Удалённые» is the curator's alone; anyone else who lands on
-    // ?kind=blocked is moved to the masters tab.
+    // The removed tab is the curator's alone; anyone else who lands on ?kind=blocked
+    // is moved to the masters tab.
     if (kind.value === 'blocked') {
       if (viewer === 'curator') return await getSchoolBlocks(schoolId.value, { limit, offset })
       kind.value = 'master'
@@ -395,8 +404,9 @@ watch(
   },
 )
 
-// The one list holds either rows of the roster or rows of «Удалённые» --
-// the tab decides which; these name it for the template.
+// The one list holds either rows of the roster or rows of the removed tab
+// (i18n:user.screens.schoolMembers.tabs.blocked) -- the
+// tab decides which; these name it for the template.
 const rosterItems = computed(() =>
   kind.value === 'blocked' ? [] : (items.value as SchoolRosterItem[]),
 )
@@ -404,7 +414,8 @@ const blockedItems = computed(() =>
   kind.value === 'blocked' ? (items.value as SchoolBlockedItem[]) : [],
 )
 
-// BE-79 (2): «Разблокировать». 204 -> the first page is re-read, so the row
+// BE-79 (2): unblock (i18n:user.screens.schoolMembers.unblock).
+// 204 -> the first page is re-read, so the row
 // leaves; 404 (already unblocked elsewhere) -> the same re-read, the list
 // was simply stale; anything else -> the error toast, the row stays.
 const unblocking = ref<string | null>(null)

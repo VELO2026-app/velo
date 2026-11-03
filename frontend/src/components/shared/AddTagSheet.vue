@@ -1,7 +1,8 @@
 <!--
   VELO Frontend -- AddTagSheet (Master GROUPS P2 PROMPT №591, palette wired P3 PROMPT №592)
 
-  "Добавить тег" -- a free-text field + the master's existing tags as
+  The add-tag sheet (i18n:tags.title) -- a free-text field + the master's
+  existing tags as
   single-select VChips (owner Q1=A: one tag per student, so at most one
   chip is ever active; tapping a chip fills the text field with it).
 

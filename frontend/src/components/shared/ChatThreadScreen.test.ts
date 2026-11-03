@@ -532,9 +532,10 @@ describe('ChatThreadScreen', () => {
     expect(host?.querySelectorAll('.chat-thread__body--state')).toHaveLength(2)
   })
 
-  // BE-166 (owner ruling 24.10, variant 1): while a message is still
-  // «Переводится…», the visible thread is re-read every few seconds -- 3s,
-  // not the 12s cadence; once the state resolves the plain cadence returns.
+  // BE-166 (owner ruling 24.10, variant 1): while a message is still in the
+  // translating state (i18n:chat.translating), the visible thread is re-read
+  // every few seconds -- 3s, not the 12s cadence; once the state resolves
+  // the plain cadence returns.
   it('polls on the 3s leash while translating, and relaxes to 12s once resolved', async () => {
     vi.useFakeTimers()
     vi.mocked(chatsApi.listChatMessages).mockResolvedValue(
@@ -567,7 +568,8 @@ describe('ChatThreadScreen', () => {
 
   // BE-166: the state flips on the SAME id -- newestId and the length do
   // not move, so the poll's drift check must see the translation shape
-  // change or the bubble would hang on «Переводится…» forever.
+  // change or the bubble would hang on the translating placeholder
+  // (i18n:chat.translating) forever.
   it('a translation state flip on the same message id re-renders the bubble (no false read-mark)', async () => {
     vi.useFakeTimers()
     vi.mocked(chatsApi.listChatMessages).mockResolvedValue(

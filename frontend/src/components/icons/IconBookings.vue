@@ -1,6 +1,7 @@
 <template>
-  <!-- Bookings list / clipboard glyph for "Мои бронирования" (Profile,
-       Figma node 4715:3532). Fill via currentColor. -->
+  <!-- Bookings list / clipboard glyph for the "My bookings" profile menu row
+       (Figma node 4715:3532; i18n:user.screens.userProfile.menu.bookings).
+       Fill via currentColor. -->
   <svg
     xmlns="http://www.w3.org/2000/svg"
     :width="size"

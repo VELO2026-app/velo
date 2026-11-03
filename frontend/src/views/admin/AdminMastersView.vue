@@ -1,9 +1,10 @@
 <!--
   VELO Frontend -- AdminMastersView (Admin DS rebuild 2026-06-14, operator SVGs "1 Masters" all/under-review/verified)
 
-  The «Мастера» tab (admin-masters). Rebuilt to the operator design: header (back +
-  count badge) + VSegment status filter (F3: Все / Проверка / Верифиц. / Отклонены /
-  Заблок. / Удалены — compact + horizontally scrollable) + master cards.
+  The masters tab (admin-masters, i18n:adminScreens.adminMasters.masters). Rebuilt to
+  the operator design: header (back + count badge) + VSegment status filter
+  (F3: all / review / verified / rejected / blocked / deleted — compact +
+  horizontally scrollable) + master cards.
   A fog-feed tab screen (mandala background, the admin tab bar stays). Tapping a card
   opens the master review (admin-master-review) where verify / reject live.
 
@@ -11,14 +12,17 @@
   the 3 filter counts are derived client-side from the fetched list. (The list is
   small; very large lists would need server-side filtering -> Zod.)
 
-  R8 (batch R): the rich card is REAL — направление+вид (methods, chip language
-  matching MethodTaxonomyPicker readonly) + Практик / Ученики / К выводу, all
+  R8 (batch R): the rich card is REAL — direction+style (methods, chip language
+  matching MethodTaxonomyPicker readonly) + the practices / students /
+  to-withdraw stats (i18n:adminScreens.adminMasters.practicesStat,
+  studentsStat, toWithdrawStat), all
   computed additively in list_masters (admin/users/service.py, 2 bounded
   GROUP-BY queries for the whole page, no N+1). generated.ts now carries these
   fields natively (regenerated at deploy c1dbe08). STUB «—»: only if a field is
-  genuinely null (should not happen for a master returned in this page). Опыт / Заявка (applied-at) were dropped from
+  genuinely null (should not happen for a master returned in this page).
+  Experience / application date (applied-at) were dropped from
   the list card in R8 — they never carried real data (always «—»); the detail
-  screen (AdminMasterReviewView) already shows Опыт for real.
+  screen (AdminMasterReviewView) already shows experience for real.
 -->
 
 <template>
@@ -76,7 +80,7 @@
           </div>
         </div>
 
-        <!-- R8: направление+вид -- chip language matches MethodTaxonomyPicker
+        <!-- R8: direction+style -- chip language matches MethodTaxonomyPicker
              readonly (filled direction chip + muted style chips), computed via
              the shared methodTaxonomy utils so it never drifts from the
              review-screen parsing. Legacy/unparsed methods fall back to
@@ -97,7 +101,7 @@
           }}</span>
         </div>
 
-        <!-- R8: stats footer -- Практик / Ученики / К выводу, real backend
+        <!-- R8: stats footer -- practices / students / to-withdraw, real backend
              aggregates (list_masters, admin/users/service.py). null -> «—»
              (honest stub; should not happen for a master in this page). -->
         <div class="mcard__stats">
@@ -155,7 +159,7 @@ import { formatMoney } from '@/utils/format'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 
-/** направление+вид as chip-language entries: filled (active) for the
+/** Direction+style as chip-language entries: filled (active) for the
  *  direction, muted for its styles -- same visual vocabulary as
  *  MethodTaxonomyPicker readonly. Legacy/unparsed methods (no taxonomy match)
  *  fall back to verbatim muted-off chips so nothing silently vanishes. */
@@ -201,7 +205,8 @@ function nameOf(m: AdminMasterListItem): string {
   return masterDisplayName(m)
 }
 
-// Filter counts derived from the fetched list (list is small). «Все» uses the API
+// Filter counts derived from the fetched list (list is small). The all tab
+// (i18n:common.all) uses the API
 // total so the header stays correct even if a cap is hit.
 function statusCount(status: string): number | undefined {
   return masters.value.filter((m) => m.master_status === status).length || undefined
@@ -209,8 +214,10 @@ function statusCount(status: string): number | undefined {
 
 const headerCount = computed<string>(() => (total.value ? String(total.value) : '—'))
 
-// F3: six status tabs. Values map 1:1 to data.account.status. «Заблокированы»
-// populates from A1's `suspended`; «Удалены» stays empty until F4 writes
+// F3: six status tabs. Values map 1:1 to data.account.status. The blocked tab
+// (i18n:adminScreens.adminMasters.blockedShort)
+// populates from A1's `suspended`; the deleted tab
+// (i18n:adminScreens.adminMasters.filterDeleted) stays empty until F4 writes
 // `cancelled_by_user` (the tab exists, count 0 — expected). F5: short labels;
 // the strip is compact + horizontally scrollable (VSegment scrollable).
 const segOptions = computed<SegmentOption[]>(() => [
@@ -420,7 +427,7 @@ onMounted(load)
   flex-shrink: 0;
 }
 
-/* -- R8: направление+вид (chip row) -- */
+/* -- R8: direction+style (chip row) -- */
 .mcard__taxonomy {
   display: flex;
   flex-wrap: wrap;
@@ -433,7 +440,7 @@ onMounted(load)
   letter-spacing: 0.02em;
 }
 
-/* -- R8: stats footer (Практик / Ученики / К выводу) -- */
+/* -- R8: stats footer (practices / students / to-withdraw) -- */
 .mcard__stats {
   display: flex;
   align-items: center;

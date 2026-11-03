@@ -105,8 +105,9 @@ export function takeLoginMark(storage: () => Storage = () => host.localStorage):
 /**
  * Read the return from Telegram, if this page IS one, and wipe it from the
  * address bar (history.replaceState -- no reload, no new history entry).
- * Null when the page is not RETURN_PATH or carries none of code / state /
- * error.
+ *
+ * @returns Null when the page is not RETURN_PATH or carries none of
+ *  code / state / error.
  */
 export function takeLoginReturn(win: Window = host): LoginReturn | null {
   const { pathname, search } = win.location

@@ -7,7 +7,8 @@
 
   recording:  dot beats softly (opacity pulse, no layout animation), the
               stopwatch counts up tabular-nums; ✕ emits `cancel`, ⏹ `stop`.
-  processing: the indicator group swaps to «Транскрибация…» + VLoader and BOTH
+  processing: the indicator group swaps to the transcribing label
+              (i18n:voice.transcribing) + VLoader and BOTH
               buttons go disabled -- the row is honestly frozen until the
               caller produces a transcript or an error toast.
 

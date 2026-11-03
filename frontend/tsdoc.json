@@ -1,0 +1,30 @@
+{
+  // TSDoc parser config for eslint-plugin-tsdoc (FE-137). The plugin picks
+  // it up next to the tsconfig root (frontend/); typedoc is NOT affected --
+  // it reads typedoc.json.
+  //
+  // supportForTags whitelists exactly the allowed tag set of the code
+  // comment standard (docs/frontend-comments.md §2.1: @remarks, @param,
+  // @returns, @defaultValue, @throws, @deprecated, @example, @internal,
+  // {@link}) plus @see and @typeParam from the same standard's
+  // cross-reference and generics rules. Anything else -- a misspelled tag
+  // (@parma), a JSDoc holdover (@constructor), an internal experiment --
+  // fails the tsdoc/syntax lint as unsupported.
+  //
+  // Tags NOT listed here stay *defined* (TSDoc core) but unsupported; when
+  // stage C/D of FE-135 extends the standard's tag set, extend this list
+  // in the same commit.
+  "$schema": "https://developer.microsoft.com/json-schemas/tsdoc/v0/tsdoc.schema.json",
+  "supportForTags": {
+    "@remarks": true,
+    "@param": true,
+    "@returns": true,
+    "@defaultValue": true,
+    "@throws": true,
+    "@deprecated": true,
+    "@example": true,
+    "@internal": true,
+    "@see": true,
+    "@typeParam": true
+  }
+}

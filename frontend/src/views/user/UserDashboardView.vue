@@ -7,11 +7,13 @@
                               the SAME upcoming source + candidate rule as the
                               list below (FE-56), never the paginated bookings
                               page
-    - "Ближайшие практики" -- live-aware list: the active session (if any) pinned
+    - Nearest practices (i18n:user.screens.userDashboard.sections.upcoming)
+                              -- live-aware list: the active session (if any) pinned
                               first, then up to 2 soonest upcoming (max 3), each
                               with Zoom; Check-in hides while the session is
                               live or already checked in (FE-47)
-    - "Ваш прогресс"       -- attended count + hours, from GET /bookings/me/stats
+    - Your progress (i18n:user.screens.userDashboard.progress.title)
+                              -- attended count + hours, from GET /bookings/me/stats
 
   Check-in window:  scheduled_at - CHECKIN_WINDOW_H  .. scheduled_at
   Feedback window:  scheduled_at + duration_minutes   .. + FEEDBACK_WINDOW_H
@@ -20,10 +22,12 @@
   practices_attended + hours_attended), a server-side aggregate over ALL attended
   bookings -- so the numbers are complete, not limited to the first bookings page.
 
-  [FE-37, owner pass] The "AI-саммари" section (heading + the «За всё время»
-  card with the mood trend indicator and the tap-through to 'user-ai-summary')
+  [FE-37, owner pass] The AI-summary section (heading
+  i18n:user.screens.aiSummary.title; the all-time card with the mood trend
+  indicator and the tap-through to 'user-ai-summary')
   is REMOVED from the dashboard entirely -- the user AI backend does not exist
-  and the placeholder card carried no information the «Ваш прогресс» stats do
+  and the placeholder card carried no information the progress stats
+  (i18n:user.screens.userDashboard.progress.title) do
   not already show. The 'user-ai-summary' route itself stays; nothing else
   here changed.
 
@@ -32,10 +36,12 @@
   per the task, all other events move to the notification center (FE-12, not
   built yet). Until it exists, feedback stays reachable from PracticeDetailView's
   own in-window button (F9.1), and the no-show reflection from the same
-  screen's «Поделиться, как вы» button (BE-108).
+  screen's share-mood button
+  (i18n:user.screens.practiceDetail.shareMood, BE-108).
 
   [FE-11, owner 2026-09-08] The notification bell lives in this screen's
-  FLOATING HEADER: VHeader «Главная» carries it in its action slot (right
+  FLOATING HEADER: the home header (i18n:user.screens.userDashboard.headerTitle)
+  carries it in its action slot (right
   side). The header teleports into MobileLayout's island and the fog
   (user-dashboard is a FOG route) dissolves scrolling content under it.
   The unread presence dot is store-driven (stores/notifications.ts): this
@@ -47,7 +53,8 @@
 
 <template>
   <div class="dashboard">
-    <!-- Floating header (owner, 2026-09-08): «Главная» left, the bell right.
+    <!-- Floating header (owner, 2026-09-08): the screen title
+         (i18n:user.screens.userDashboard.headerTitle) left, the bell right.
          VHeader teleports into MobileLayout's island; the fog dissolves
          scrolling content under it. Presence-only dot (FE-11 ruling: never
          a number). -->
@@ -163,7 +170,9 @@
                 Zoom
               </VButton>
               <!-- [FE-47] Check-in is NOT RENDERED (not disabled) when the
-                   session is already live («В эфире») or the booking already
+                   session is already live (the live badge,
+                   i18n:user.screens.userDashboard.liveBadge) or the booking
+                   already
                    has a check-in -- a disabled button reads as broken here.
                    When it drops out, Zoom becomes the row's only child and
                    spans it (see :only-child in the styles) -- no empty column.
@@ -189,7 +198,7 @@
             </VBadge>
             <!-- FE-91: the registrant's personal link will NOT come (retries
                  exhausted / Zoom answered without one). The meeting exists --
-                 not 'failed' -- and nothing is preparing -- not «готовится».
+                 not 'failed' -- and nothing is preparing -- not "still preparing".
                  The same predicate the practice screen renders as
                  kind:'unavailable' (PracticeLiveView), so the two surfaces
                  cannot disagree about the same registrant. -->
@@ -328,10 +337,10 @@ const { showSkeleton: statsPending } = useLoadingHold(statsQuery.isPending)
  * the practice is over. (This is "my session" -- distinct from the bookable
  * calendar feed, which hides a practice once it STARTS.)
  *
- * Selection (operator Г): pin the active session (the single latest-started
+ * Selection (operator G): pin the active session (the single latest-started
  * in-progress booking) FIRST -- that's where Zoom / Check-in matter -- then the
  * 2 soonest upcoming, so a genuinely-imminent booking is never hidden behind a
- * live one. Max 3 cards; nothing live -> just the 2 soonest upcoming. The pure
+ * live one. Max 3 cards; nothing live `->` just the 2 soonest upcoming. The pure
  * selection lives in utils/nearestBookings (unit-tested); reacts to `now` so it
  * re-ranks on the 60s clock tick.
  *
@@ -367,7 +376,8 @@ const upcomingSkeletons = useRememberedCount(
  *
  * [FE-56] The candidate pool is selectActionableBookings(bookingsStore.
  * upcoming) -- the SAME upcoming source and candidate rule that drive the
- * «Ближайшие практики» list, but UNCAPPED: the list shows at most 3 cards,
+ * nearest-practices list (i18n:user.screens.userDashboard.sections.upcoming),
+ * but UNCAPPED: the list shows at most 3 cards,
  * and with several practices inside the 24h window at once the first
  * still-checkable one may sit past that cap (e.g. behind a live session and
  * two already checked-in cards). NOT bookingsStore.bookings: that paginated
@@ -416,11 +426,13 @@ const checkinAlertTime = computed((): string => {
 
 /**
  * True when a card's practice is happening right now — decided by CLIENT TIME
- * (start ≤ now < end) via the shared isLiveNow, NOT by the master's manual
- * status='live' flip. Keeps the «В эфире» badge in sync with «Мои бронирования»
+ * (start `≤ now <` end) via the shared isLiveNow, NOT by the master's manual
+ * status='live' flip. Keeps the live badge (i18n:user.screens.userDashboard.liveBadge)
+ * in sync with the my-bookings screen (i18n:user.screens.myBookings.title)
  * and makes it appear/disappear exactly on schedule, no backend/cron dependency.
  *
- * Per-card (TASK-2): «Бесплатно»/«Оплачено» use the shared isFree() directly in
+ * Per-card (TASK-2): the free badge (i18n:common.free) and the paid badge
+ * (i18n:user.screens.userDashboard.paidBadge) use the shared isFree() directly in
  * the template, and -- [FE-47] -- the Check-in button is NOT rendered at all
  * while the session is live or the booking's own has_checkin is true (it used
  * to merely disable on has_checkin; a dead disabled button reads as broken,
@@ -432,8 +444,9 @@ function isLive(b: BookingWithPracticeResponse): boolean {
 }
 
 /**
- * Practice title without a trailing «(эфир)» marker. Some seeded / manually
- * created practices include «(эфир)» in their title (see seed.py); since the
+ * Practice title without a trailing live marker. Some seeded / manually
+ * created practices include the ru live-marker suffix in their title (the
+ * literal stripped by the regex below; see seed.py); since the
  * card already shows a t('user.screens.userDashboard.liveBadge') badge for live practices, the suffix in the
  * title is redundant — strip it on the client.
  */
@@ -466,9 +479,9 @@ function zoomStateFor(b: BookingWithPracticeResponse): ZoomEntryStateKind {
 function onZoomClick(b: BookingWithPracticeResponse): void {
   const state = zoomStateFor(b)
   if (state !== 'ready') {
-    // Backstop only — the button is disabled in this state (R1). FE-91: a
-    // row whose link will never come must not be told «готовится» here
-    // either.
+    // Backstop only -- the button is disabled in this state (R1). FE-91: a
+    // row whose link will never come must not be told "still preparing"
+    // here either.
     toast.info(
       state === 'unavailable'
         ? t('user.screens.userDashboard.zoomUnavailable')
@@ -482,7 +495,8 @@ function onZoomClick(b: BookingWithPracticeResponse): void {
 /**
  * Open a booking's practice. Routing uses the BACKEND status='live' (an actually
  * running session the master started → Practice-Live / Zoom entry); otherwise
- * the practice detail. (The «В эфире» BADGE is client-time, so it can show while
+ * the practice detail. (The live BADGE, i18n:user.screens.userDashboard.liveBadge,
+ * is client-time, so it can show while
  * routing still points to detail until the master starts the live session.)
  */
 function openBooking(b: BookingWithPracticeResponse): void {
@@ -500,15 +514,17 @@ function openBooking(b: BookingWithPracticeResponse): void {
 }
 
 /**
- * «Завтра, 07:00» / «5 янв, 10:00»
+ * Short day-plus-time rendering (ru examples: "tomorrow, 07:00" / "5 Jan,
+ * 10:00" — see formatDateShort).
  * F5: rendered in the VIEWER'S own profile timezone (the profile decides),
  * not the practice's timezone. format helpers apply their own neutral
  * default if the profile timezone is somehow absent.
  */
 const viewerTz = useViewerTimezone()
 
-// Dashboard t('user.screens.userDashboard.sections.nearestCard'): show BOTH the day (relative «Сегодня»/«Завтра»
-// or the date «10 июня») AND the time, stacked as two lines in the card — so the
+// Dashboard t('user.screens.userDashboard.sections.nearestCard'): show BOTH the day (relative day label,
+// i18n:common.today / i18n:common.tomorrow, or the short month-day date) AND the
+// time, stacked as two lines in the card — so the
 // time is never lost on a future-day card (operator 2026-06-09).
 function practiceDate(b: BookingWithPracticeResponse): string {
   return formatDateShort(b.practice.scheduled_at, viewerTz.value)
@@ -659,15 +675,16 @@ onUnmounted(pause)
 .dashboard__section-title {
   font-family: var(--font-body);
   font-size: var(--velo-fs-18);
-  /* Figma 2266:452 — все секционные заголовки 'Marmelad:Regular' (400),
-   * не bold. Было 700 — баг-фикс. */
+  /* Figma 2266:452 — every section heading is 'Marmelad:Regular' (400),
+   * not bold. Was 700 — bug fix. */
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
   margin: 0 0 var(--space-4);
 }
 
-/* Filled circle in the FLOATING HEADER's action slot (right of «Главная») --
+/* Filled circle in the FLOATING HEADER's action slot (right of the screen
+   title, i18n:user.screens.userDashboard.headerTitle) --
    the origin of the 36px recipe (owner, 2026-09-08): a 36px primary disc
    with a white 17px glyph, opacity press feedback. The MASTER dashboard's
    bell reuses this recipe verbatim (owner ask 2026-09-08) -- the presence
@@ -732,11 +749,12 @@ onUnmounted(pause)
 }
 
 /* ===== Nearest practice card =====
- * Карточка ближайшей практики — shared PracticeListCard (см.
- * components/shared/PracticeListCard.vue). Все card-стили перенесены туда,
- * здесь остаётся только spacing вокруг actions row под карточкой. */
+ * The nearest-practice card is the shared PracticeListCard (see
+ * components/shared/PracticeListCard.vue). All card styles moved there;
+ * only the spacing around the actions row under the card remains here. */
 
-/* Live pulse dot inside the «В эфире» badge (matches BookingCard's live dot). */
+/* Live pulse dot inside the live badge (i18n:user.screens.userDashboard.liveBadge;
+   matches BookingCard's live dot). */
 .dashboard__live-dot {
   width: 7px;
   height: 7px;
@@ -754,7 +772,7 @@ onUnmounted(pause)
 .dashboard__practice-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  /* Figma: 15 — близко к --space-3 (14), но точно 15 для соответствия */
+  /* Figma: 15 — close to --space-3 (14), but exactly 15 to match the design. */
   gap: var(--velo-gap-15);
   margin-top: var(--velo-gap-15);
 }
@@ -815,7 +833,7 @@ onUnmounted(pause)
  * needs the same anatomy. Geometry: 50px capsule (the composer pill height
  * token), horizontal padding --space-4, icon->label --space-3. The stack
  * container keeps its gap for the day a second capsule returns (the
- * «Добавить запись» row was removed 2026-10-02 -- one child, no extra
+ * add-diary-entry row was removed 2026-10-02 -- one child, no extra
  * height). */
 .dashboard__quick {
   display: flex;
@@ -852,7 +870,7 @@ onUnmounted(pause)
 }
 
 /* Peach tone for the activity entry. Icon, label and chevron all inherit
- * the row's colour (currentColor). The former teal «Добавить запись» twin
+ * the row's colour (currentColor). The former teal add-diary-entry twin
  * is gone with its button (2026-10-02). */
 .dashboard__quick-btn--activity {
   background: var(--velo-glass-peach-40);
@@ -883,8 +901,8 @@ onUnmounted(pause)
 }
 
 /* ===== Progress stats =====
- * Figma 2266:452 — 2 карточки 160×104, gap 16 (--space-4),
- * контент flex-центрирован по обеим осям, gap value->label 9. */
+ * Figma 2266:452 — two 160×104 cards, gap 16 (--space-4),
+ * content flex-centred on both axes, value->label gap 9. */
 .dashboard__stats-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -4,9 +4,11 @@
 //
 // UPDATED FE-104 (owner ruling BE-162): onSubmit creates a NEW ticket -- the
 // topic as a CODE and the message, one call (@/api/support::createTicket)
-// under the appeal's Idempotency-Key (::createAppealKeys). «Другое» has no
-// free text; the master form gains «Жалоба на пользователя»
-// (`complaint_user`). Attachments stay CAPTURED-LOCALLY-ONLY (no
+// under the appeal's Idempotency-Key (::createAppealKeys). The other topic
+// (i18n:supportTopics.other) has no
+// free text; the master form gains the user complaint
+// (i18n:supportTopics.complaint_user,
+// `complaint_user`). Attachments stay CAPTURED-LOCALLY-ONLY (no
 // upload/storage backend exists) -- their tests below are unchanged, nothing
 // about them sends anywhere.
 //
@@ -206,8 +208,9 @@ describe('MasterSupportView', () => {
       expect(submitBtn().disabled).toBe(true)
     })
 
-    // Was: switching to «Другое» re-disabled until a free-text topic was
-    // filled. Right while «Другое» carried its own text; FE-104 (owner
+    // Was: switching to the other topic (i18n:supportTopics.other)
+    // re-disabled until a free-text topic was
+    // filled. Right while the other topic carried its own text; FE-104 (owner
     // ruling) removed it -- the substance is the message.
     it('switching to «Другое» keeps it armed -- the message alone is enough', async () => {
       mount()
@@ -221,8 +224,9 @@ describe('MasterSupportView', () => {
       expect(submitBtn().disabled).toBe(false)
     })
 
-    // Was: the «Другое» free-text field was absent for a normal topic. Now it
-    // is absent for EVERY topic, «Другое» included -- one text field.
+    // Was: the other topic's (i18n:supportTopics.other) free-text field was
+    // absent for a normal topic. Now it
+    // is absent for EVERY topic, the other topic included -- one text field.
     it('no topic renders a field of its own -- «Другое» included', async () => {
       mount()
       await flush()

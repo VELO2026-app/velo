@@ -20,7 +20,8 @@
 //       stubs (no comms types yet; explicit disposition, Master-chat
 //       2026-07-28). Owner ruling 2026-08-16 (PROMPT №746): these four stay
 //       VISIBLE, DISABLED (VSwitch's own `disabled`, click is a no-op -- not
-//       moved-then-reverted), each carrying a short "Скоро" marker. This
+//       moved-then-reverted), each carrying the short "coming soon" marker
+//       (i18n:masterScreens.masterNotifications.soon). This
 //       superseded the earlier "flips visually, lost on remount" shape;
 //       asserted below.
 //
@@ -352,11 +353,12 @@ describe('MasterNotificationsView', () => {
     })
 
     // The former "default-OFF row toggles on" case lived here and used
-    // «Ежемесячный отчет» as its example -- the one row this file's own
-    // defaults comment calls out as default-off. It is now a disabled stub
-    // (PROMPT №746) and no live row is default-off, so there is no row left
-    // to carry this scenario; its disabled-click behaviour is covered above
-    // ('a STUB row (Ежемесячный отчет) is DISABLED...').
+    // the monthly-report row (i18n:masterScreens.masterNotifications.monthlyReport)
+    // as its example -- the one row this file's own defaults comment calls
+    // out as default-off. It is now a disabled stub (PROMPT №746) and no
+    // live row is default-off, so there is no row left to carry this
+    // scenario; its disabled-click behaviour is covered above (the
+    // stub-row-disabled case).
 
     it('toggling one row does not affect a sibling row with its OWN category (msg_* are independent)', async () => {
       mount()
@@ -375,7 +377,8 @@ describe('MasterNotificationsView', () => {
     // msg.support_message -> category msg_support. The label must SAY so,
     // and flipping that label must WRITE that category: wording and wiring
     // asserted together, so neither can silently flip back to the old
-    // inverted pair («От участников»/«От поддержки») without going red.
+    // inverted pair of labels ("From participants" / "From support")
+    // without going red.
     it('P-2: the msg_support row is worded «сообщения учеников» AND writes msg_support', async () => {
       mount()
       await flush()
@@ -403,7 +406,7 @@ describe('MasterNotificationsView', () => {
   // ===========================================================================
   describe('schedule days (VDayPicker)', () => {
     // FE-76: comms 2.0.0 made an unticked day TOTAL silence (owner decision
-    // 2026-09-16: «Отмеченное — это когда приходят, а не когда НЕ приходят»),
+    // 2026-09-16: "a ticked day is when messages come, not when they DON'T"),
     // so the default is all seven days -- a master who never opened this
     // screen must not silently lose the weekend a Mon-Fri default would mute.
     it('default: ALL SEVEN days on, weekend included', async () => {
@@ -461,7 +464,7 @@ describe('MasterNotificationsView', () => {
       })
     })
 
-    // FE-76 regression (the «сохранил один день → открыл экран → сохранить»
+    // FE-76 regression (the "saved one day -> reopened the screen -> save"
     // check): the seven-day default is only for a MISSING schedule -- a saved
     // one-day schedule renders as-is and a re-save must not resurrect the
     // other six days over it (the wholesale `if (prefs.schedule)` replace).
@@ -615,7 +618,7 @@ describe('MasterNotificationsView', () => {
       expect(fromField().textContent?.trim()).toBe('08:00') // NOT overwritten by the "to" commit
     })
 
-    // FE-76 §4: to "00:00" («присылать до полуночи») is VALID on comms 2.0.0
+    // FE-76 §4: to "00:00" ("keep sending until midnight") is VALID on comms 2.0.0
     // (the proxy maps it to end-of-day before the from/to check) -- the screen
     // must load and re-send it untouched, never "correct" or reject it locally.
     it('to: "00:00" loads as-is and re-sends as-is (valid on comms 2.0.0)', async () => {

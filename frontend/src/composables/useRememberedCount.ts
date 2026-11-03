@@ -14,6 +14,7 @@
 import { computed, ref, toValue, watch, type ComputedRef, type MaybeRefOrGetter } from 'vue'
 import { readSessionNumber, writeSessionNumber } from '@/platform/session-memo'
 
+/** Fallback and clamps of the remembered skeleton count: what to draw before anything is known, and the bounds. */
 export interface RememberedCountOptions {
   /** Placeholders before anything is known. */
   fallback: number
@@ -25,6 +26,7 @@ export interface RememberedCountOptions {
 
 const PREFIX = 'velo:skeleton-count:'
 
+/** How many skeleton placeholders to draw: the last settled count for this key, clamped, with a fallback while unknown. */
 export function useRememberedCount(
   key: string,
   count: MaybeRefOrGetter<number>,

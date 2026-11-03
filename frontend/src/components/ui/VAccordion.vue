@@ -4,7 +4,7 @@
   Expandable row with header and collapsible content.
 
   Usage:
-    <VAccordion title="Подробности">
+    <VAccordion title="Details">
       <p>Hidden content here</p>
     </VAccordion>
 

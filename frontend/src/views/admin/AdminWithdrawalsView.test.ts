@@ -19,7 +19,8 @@
 // there is nothing to assert about it from here.
 //
 // TIME IS PINNED (vi.setSystemTime). formatRelative reads Date.now()
-// (utils/adminHelpers.ts:115-131), so «2 ч назад» is wall-clock dependent;
+// (utils/adminHelpers.ts:115-131), so the hours-ago relative label
+// (i18n:admin.relative.hoursAgo) is wall-clock dependent;
 // fixtures below are literals relative to the frozen instant.
 // =============================================================================
 
@@ -265,7 +266,7 @@ describe('AdminWithdrawalsView', () => {
 
     it('a zero-fee withdrawal shows net == gross, not «Бесплатно»', async () => {
       // allowZero=true is passed (AdminWithdrawalsView.vue:139); without it a
-      // 0-cent net would render as «Бесплатно» (utils/format.ts:33).
+      // 0-cent net would render as the free label (i18n:common.free, utils/format.ts:33).
       vi.mocked(adminApi.getAdminWithdrawals).mockResolvedValue(
         page([wd('w1', { amount_cents: 5000, fee_cents: 0 })]),
       )

@@ -4,7 +4,8 @@
 //
 // The master info card sits ON the practice/booking detail screens, so its
 // method tags are the chips "on the event". Same contract as the public
-// profile's «Методы» (utils/methodChips.ts): direction icon + SHORT label,
+// profile's methods section (i18n:user.screens.masterPublic.methodsSection;
+// utils/methodChips.ts): direction icon + SHORT label,
 // the embedded direction word stripped, unknown strings verbatim under the
 // neutral fallback glyph.
 // =============================================================================

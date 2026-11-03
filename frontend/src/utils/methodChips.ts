@@ -3,44 +3,47 @@
 // (FE-61/62/63/64)
 // =============================================================================
 //
-// A stored `methods` entry is ONE flat «Направление — Вид» string (the
+// A stored `methods` entry is ONE flat "Direction — Style" string (the
 // methodTaxonomy.ts SEP vocabulary). A chip renders it as icon + SHORT label:
 //
-//   «Медитация — Медитация молчания» -> [meditation icon] Молчания
-//   «Йога — Кундалини-йога»          -> [yoga icon]       Кундалини
-//   «Дыхательные практики»           -> [breathwork icon] Дыхательные практики
-//   «Мой уникальный метод»           -> [dots fallback]   Мой уникальный метод
+//   "Meditation — Meditation of silence" -> [meditation icon] "of silence"
+//   "Yoga — Kundalini yoga"              -> [yoga icon]       "Kundalini"
+//   "Breathwork practices"               -> [breathwork icon] "Breathwork practices"
+//   "My unique method"                   -> [dots fallback]   "My unique method"
 //
-// The style labels embed the direction word by design («Медитация молчания»,
-// «Кундалини-йога»), so the old raw-string pill read the word twice —
-// «Медитация — Медитация молчания» (FE-64). shortStyleLabel() strips the
-// direction word from the style label; when nothing survives, the style WAS
-// the direction and the direction label stands alone.
+// The style labels embed the direction word by design ("Meditation of
+// silence", "Kundalini yoga"), so the old raw-string pill read the word
+// twice -- "Meditation — Meditation of silence" (FE-64). shortStyleLabel()
+// strips the direction word from the style label; when nothing survives, the
+// style WAS the direction and the direction label stands alone.
 //
-// The icon is the DIRECTION's artwork — the ready icon set has no per-style
-// glyphs — the same DIRECTION_ICON mapping the practice cards use. A string
-// the taxonomy does not know (custom «Свой вариант», legacy free text, a
-// catalog-only entry while the catalog cache is cold) keeps its verbatim text
-// under the neutral IconDots fallback: an invented icon would claim a skill
-// the set cannot name. Priming the taxonomy catalog (admin screens already
-// do) extends recognition to catalog rows with no change here.
+// The icon is the DIRECTION's artwork -- the ready icon set has no per-style
+// glyphs -- the same DIRECTION_ICON mapping the practice cards use. A string
+// the taxonomy does not know (a custom own-variant entry
+// (i18n:methodPicker.custom), legacy free text, a catalog-only entry while
+// the catalog cache is cold) keeps its verbatim text under the neutral
+// IconDots fallback: an invented icon would claim a skill the set cannot
+// name. Priming the taxonomy catalog (admin screens already do) extends
+// recognition to catalog rows with no change here.
 // =============================================================================
 
 import type { Component } from 'vue'
 import { DIRECTION_ICON, DIRECTION_ICON_FALLBACK } from '@/utils/displayHelpers'
 import { directionLabel, parseMethods, resolveStyleLabel } from '@/utils/methodTaxonomy'
 
+/** A stored method string rendered as a chip: the direction's icon plus the short label. */
 export interface MethodChip {
   icon: Component
   label: string
 }
 
 /**
- * «Кундалини-йога» -> «Кундалини», «Медитация молчания» -> «Молчания».
+ * `"Kundalini yoga" -> "Kundalini"`, `"Meditation of silence" -> "of silence"`
+ * (English glosses; the pinned ru fixtures live in methodChips.test.ts).
  * Case-insensitive containment, separator residue trimmed; a style that is
  * exactly the direction word collapses back to the direction label. A style
- * without the direction word inside («Виньяса») passes through untouched —
- * so does a word-stem overlap («Круги» / «Женский круг»): only the full
+ * without the direction word inside ("Vinyasa") passes through untouched —
+ * so does a word-stem overlap ("Circles" / "Women's circle"): only the full
  * direction label is stripped, never a guess at a stem.
  */
 export function shortStyleLabel(direction: string, style: string): string {
@@ -56,7 +59,7 @@ export function shortStyleLabel(direction: string, style: string): string {
   return stripped ? stripped.charAt(0).toUpperCase() + stripped.slice(1) : dir
 }
 
-/** One stored method string -> the chip's icon + short label. */
+/** `One stored method string -> the chip's icon + short label.` */
 export function methodChipFor(method: string): MethodChip {
   const parsed = parseMethods([method])
   const dir = parsed.directions[0]

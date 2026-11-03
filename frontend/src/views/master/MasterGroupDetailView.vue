@@ -13,13 +13,16 @@
   MasterGroupsView's per-card buttons -- reachable from this header's own
   «⋯» menu (VMenu/VMenuItem) for ANY custom group, empty or not (the old
   per-card buttons only worked when the group already had ≥1 member visible
-  in the list). Virtual groups («Ученики»/«Удалённые») get none of the
+  in the list). Virtual groups (the system students / deleted slugs) get
+  none of the
   three -- matches the backend's 400-on-system-slug.
 
-  Owner Q8 (PROMPT №610): the empty-state's own "Пригласить в группу" CTA
+  Owner Q8 (PROMPT №610): the empty-state's own invite CTA
+  (i18n:masterScreens.masterGroupDetail.inviteCta)
   -- a leftover from before the header menu existed (P4, PROMPT №593) --
   removed as a duplicate of that same header menu action, now the single
-  invite entry point. `onInviteClick`'s "Ссылка скопирована" toast already
+  invite entry point. `onInviteClick`'s link-copied toast
+  (i18n:common.linkCopied) already
   lives on THIS screen (it always has, since the header menu invite calls
   the same function) -- nothing to move.
 
@@ -141,8 +144,9 @@
     <!-- Rename + description edit (G2, PROMPT №609 -- moved from
          MasterGroupsView's card menu; owner Q10, PROMPT №611 -- gained the
          description field, same dialog). PROMPT №613: compact-title added --
-         this title (~494px at --text-xl) is LONGER than «Сообщить о
-         пользователе» (~408px), the title that originally justified this
+         this title (~494px at --text-xl) is LONGER than the report-dialog
+         title (i18n:report.title; ~408px),
+         the title that originally justified this
          prop, and was missed when this dialog was built. -->
     <VBottomSheet
       :open="renameOpen"
@@ -226,7 +230,8 @@ const groupId = computed(() => String(route.params.id))
 // wins once the API has answered, even if the API's own value is empty/
 // null (a Mini App reload has NO query at all: the app is reopened, not
 // navigated, so the old query-only design rendered a permanently blank
-// «Группа ""» header on every reload). `groupMeta` is set by loadGroups()
+// group header (an empty name in the header title form) on every reload).
+// `groupMeta` is set by loadGroups()
 // below, matched by this screen's own id.
 const groupMeta = ref<GroupListItem | null>(null)
 const groupName = computed(() =>

@@ -10,7 +10,7 @@
 //      answer then glided the block's height and faded the content in, the
 //      stats flipped from placeholders to numbers, the check-in banner and
 //      the bell dot popped in;
-//   3. the dock gained the «Школы» tab when the membership probe answered
+//   3. the dock gained the schools tab (i18n:tabs.schools) when the membership probe answered
 //      (every icon shifted);
 //   4. the Telegram safe-area insets could still be arriving.
 // This keeps the splash a moment longer instead -- until the route is

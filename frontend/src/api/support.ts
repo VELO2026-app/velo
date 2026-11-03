@@ -10,7 +10,8 @@
 // repeat under the same key is the same ticket, not a second one.
 //
 // The person never reads support through this module: their tickets are one
-// row in «Сообщения» (api/chats.ts, `channel: 'support'`, `thread_ids`).
+// row in the Messages screen (i18n:user.screens.userMessages.title;
+// api/chats.ts, `channel: 'support'`, `thread_ids`).
 //
 // ADMIN HALF: the ticket list (velo's own table; without a status filter every
 // ticket but spam), one ticket by id, the status change (an OPEN ticket only),
@@ -52,6 +53,7 @@ export const SUPPORT_CLOSING_STATUSES: readonly SupportClosingStatus[] = [
   'spam',
 ]
 
+/** A ticket's category: which form lane the appeal arrived through. */
 export type SupportCategory =
   'tech' | 'practices' | 'payments' | 'complaint_master' | 'complaint_user' | 'other'
 
@@ -96,12 +98,14 @@ export interface AdminSupportTicket extends SupportTicket {
   opener: SupportPerson | null
   claimed_by: SupportPerson | null
   history_thread_id: string | null
-  /** BE-162 delivery 3: the last admin who moved the ticket to «Решена». */
+  /** BE-162 delivery 3: the last admin who moved the ticket to resolved
+   *  (i18n:adminScreens.adminSupport.statuses.resolved). */
   resolved_by: SupportPerson | null
   /** The person's rating, null while there is none. */
   rating: SupportTicketRating | null
 }
 
+/** One page of the admin ticket list with the next-page cursor. */
 export interface AdminSupportTicketList {
   tickets: AdminSupportTicket[]
   next_cursor: string | null
@@ -145,6 +149,7 @@ export interface SupportMessage {
  *  feed's `original` / `translation` (those come with the next feed read). */
 export type SupportSentMessage = Omit<SupportMessage, 'original' | 'translation'>
 
+/** Answer of a translation retry: the job is preparing again, with its attempt number. */
 export interface SupportRetryResult {
   message_id: string
   locale: string
@@ -152,11 +157,13 @@ export interface SupportRetryResult {
   state: 'preparing'
 }
 
+/** One page of the admin support feed with the next-page cursor. */
 export interface SupportMessageList {
   messages: SupportMessage[]
   next_cursor: string | null
 }
 
+/** Ticket-creation answer: the new ticket plus its first message. */
 export interface SupportTicketCreated {
   ticket: SupportTicket
   message: SupportMessage
@@ -165,7 +172,7 @@ export interface SupportTicketCreated {
 // -- The person's rating (BE-162 delivery 3) -----------------------------------
 
 /** A ticket waiting for the caller's rating (GET /support/ratings/pending):
- *  «Решена» and not rated, most recently resolved first. A ticket the person
+ *  resolved and not rated, most recently resolved first. A ticket the person
  *  reopened with a message leaves the list until it is resolved again. */
 export interface PendingRatingTicket {
   id: string
@@ -174,6 +181,7 @@ export interface PendingRatingTicket {
   status_changed_at: string
 }
 
+/** The caller's tickets waiting for a rating, most recently resolved first. */
 export interface PendingRatingList {
   tickets: PendingRatingTicket[]
 }
@@ -194,7 +202,7 @@ export function listPendingRatings(): Promise<PendingRatingList> {
 
 /** Rate one's own RESOLVED ticket, once: 1..5 stars and, if they like, a
  *  comment (up to 1000 characters). 404 -- not the caller's ticket; 409 --
- *  not «Решена» (a reopen beat the rating) or rated already; 422 -- the body
+ *  not resolved (a reopen beat the rating) or rated already; 422 -- the body
  *  is wrong. The comment is sent as written, trimmed; empty is null. */
 export function rateTicket(
   ticketId: string,
@@ -314,10 +322,11 @@ export function releaseTicket(ticketId: string): Promise<AdminSupportTicket> {
   return api.post<AdminSupportTicket>(`/api/v1/support/tickets/${ticketId}/release`)
 }
 
-/** Back to OPEN: «вернуть в работу» from resolved / rejected / duplicate,
- *  «не спам» from spam within the retention -- one route for both. 409 --
- *  open already, spam past the retention, or changed meanwhile; 404 -- gone
- *  (the spam bin emptied it). */
+/** Back to OPEN: reopen (i18n:adminScreens.adminSupportDetail.menu.reopen)
+ *  from resolved / rejected / duplicate, not-spam
+ *  (i18n:adminScreens.adminSupportDetail.menu.notSpam) from spam within the
+ *  retention -- one route for both. 409 -- open already, spam past the
+ *  retention, or changed meanwhile; 404 -- gone (the spam bin emptied it). */
 export function reopenTicket(ticketId: string): Promise<AdminSupportTicket> {
   return api.post<AdminSupportTicket>(`/api/v1/support/tickets/${ticketId}/reopen`)
 }
@@ -331,7 +340,8 @@ export function reopenTicket(ticketId: string): Promise<AdminSupportTicket> {
  *  (`status_changed_at <= cutoff` there, strictly-newer here). */
 export const SUPPORT_SPAM_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 
-/** May this spam ticket still come back («Не спам»)? True while the verdict
+/** May this spam ticket still come back (not-spam,
+ *  i18n:adminScreens.adminSupportDetail.menu.notSpam)? True while the verdict
  *  is STRICTLY younger than the retention -- the backend refuses a verdict
  *  exactly at the cutoff (`status_changed_at <= cutoff` is a 409), so the
  *  offer disappears on the same edge. */
@@ -360,9 +370,11 @@ export function sendAdminSupportReply(threadId: string, body: string): Promise<S
 }
 
 /** Take a ticket -- the act that grants the right to reply. A repeat of your
- *  own claim is 200 again; held by another admin -> 409. The answer (comms'
- *  thread) is not read: the card reads the ticket again (getAdminTicket), so
- *  who holds it is always velo's `claimed_by`. */
+ *  own claim is 200 again. The answer (comms' thread) is not read: the card
+ *  reads the ticket again (getAdminTicket), so who holds it is always velo's
+ *  `claimed_by`.
+ *
+ *  @throws ApiResponseError -- `held by another admin -> 409`. */
 export function claimSupportThread(threadId: string): Promise<unknown> {
   return api.post<unknown>(`/api/v1/support/threads/${threadId}/claim`, {})
 }
@@ -403,6 +415,7 @@ export interface SupportStatsResolver extends SupportStatsFigures {
   admin: SupportPerson | null
 }
 
+/** Period statistics of support appeals: per-category figures, spam, per-resolver ratings. */
 export interface SupportStats {
   period: { created_from: string; created_to: string }
   categories: SupportStatsCategory[]

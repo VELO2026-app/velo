@@ -21,6 +21,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return proto === Object.prototype || proto === null
 }
 
+/** Structural sharing: keep previous references wherever the fresh value is deep-equal. */
 export function replaceEqualDeep<T>(prev: unknown, next: T): T {
   if (Object.is(prev, next)) return prev as T
   // Store state comes back as reactive proxies: compare the raw shape, but

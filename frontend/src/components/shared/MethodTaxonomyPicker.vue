@@ -1,26 +1,30 @@
 <!--
   VELO Frontend -- MethodTaxonomyPicker (batch L, FOUNDATION-1)
 
-  The two-level направление→вид method picker, extracted from MasterApplyView's
+  The two-level direction→style method picker, extracted from MasterApplyView's
   inline block (batch J) into ONE reusable component so the apply wizard, the
   edit-profile methods block and the pending method-change display all share a
   single source of truth (DS-single-source mandate).
 
   Presentational + DS-token-clean. Owns: level-1 direction chips, per-direction
-  level-2 style chips, the white-card layout, and the «Свой вариант» custom
-  input. Selection state is internal; the public contract is a v-model of the
-  STORED flat `methods: string[]` («Направление — Вид» vocabulary), seeded and
-  flattened through @/utils/methodTaxonomy (drop-unmatched, Q3=В). The outer
-  section label + any validation error stay with the parent (they differ per
-  screen: «Направления практик *» vs «Методы»).
+  level-2 style chips, the white-card layout, and the custom input
+  (i18n:methodPicker.custom). Selection state is internal; the public contract
+  is a v-model of the STORED flat `methods: string[]` ("direction — style"
+  vocabulary), seeded and flattened through @/utils/methodTaxonomy
+  (drop-unmatched, Q3=B). The outer section label + any validation error stay
+  with the parent (they differ per screen: the apply wizard's directions label
+  i18n:masterScreens.masterApply.fields.directions vs the edit-profile methods
+  title i18n:user.screens.editProfile.methods.title).
 
   Props:
     - modelValue  : the stored flat methods (v-model).
-    - allowCustom : show the «Свой вариант» chip + free-text input (default true;
+    - allowCustom : show the custom chip (i18n:methodPicker.custom) + free-text
+                    input (default true;
                     force off in readonly).
     - readonly    : render as a non-interactive summary — only the SELECTED
                     directions/styles, as filled non-clickable chips, no custom
-                    control. Used by the pending «ожидают подтверждения» display.
+                    control. Used by the pending method-change display (the
+                    readonly block under i18n:user.screens.editProfile.methods.pending).
 
   R5 stage 3b: the OPTIONS offered (which directions/styles render as chips)
   are fetched from the DB-backed catalog (GET /api/v1/taxonomy, active-only)
@@ -36,7 +40,7 @@
 
 <template>
   <div class="mtp">
-    <!-- Level 1: directions (+ «Свой вариант» when editable). -->
+    <!-- Level 1: directions (+ the custom chip i18n:methodPicker.custom when editable). -->
     <VCard class="mtp__chip-card" padding="none">
       <div class="mtp__chips">
         <VChip
@@ -60,7 +64,7 @@
         </VChip>
         <!-- Readonly display of the custom variant (R3/R4 fix, PROMPT №391):
              parseMethods now SURFACES an unmatched string instead of
-             dropping it (Q3=А, was Q3=В) -- this chip is what actually shows
+             dropping it (Q3=A, was Q3=B) -- this chip is what actually shows
              it, matching the selected-direction chips above rather than
              bespoke markup. -->
         <VChip v-if="readonly && selection.customEnabled" size="md" :active="true">
@@ -91,7 +95,7 @@
       </div>
     </VCard>
 
-    <!-- «Свой вариант»: a custom direction not in the base taxonomy. -->
+    <!-- The custom chip (i18n:methodPicker.custom): a custom direction not in the base taxonomy. -->
     <VInput
       v-if="allowCustom && !readonly && selection.customEnabled"
       v-model="customText"
@@ -142,7 +146,7 @@ const emit = defineEmits<{
   'update:modelValue': [methods: string[]]
 }>()
 
-// Lift the focused «Свой вариант» field above the soft keyboard once it settles
+// Lift the focused custom-variant field above the soft keyboard once it settles
 // (shared composable — same behaviour the wizard had inline).
 const { onFieldFocus } = useKeyboardFieldScroll()
 
@@ -169,8 +173,8 @@ function sameSet(a: string[], b: string[]): boolean {
 // UNCHANGED regardless of catalog state, so once the catalog warms and the
 // parent re-supplies the exact same text, sameSet() reads "unchanged" and
 // bails forever -- the picker never re-interprets it as the now-matched chip
-// it actually is. That is the exact mechanism behind "Иглоукалывание", a
-// real existing chip, staying stuck in the free-text box.
+// it actually is. That is the exact mechanism behind the acupuncture value (a
+// real existing catalog chip) staying stuck in the free-text box.
 //
 // Fix: also watch taxonomyCatalogVersion (bumped once per
 // applyTaxonomyCatalog() call, commit 1) and track which version produced
@@ -318,7 +322,7 @@ const customText = computed<string>({
   gap: var(--space-2);
 }
 
-/* White VCard подложка around each chip group (J2c/J2d). */
+/* White VCard backdrop around each chip group (J2c/J2d). */
 .mtp__chip-card {
   padding: var(--space-3);
 }
@@ -329,7 +333,7 @@ const customText = computed<string>({
   gap: var(--space-2);
 }
 
-/* Level-2 (виды) card: a small direction heading above its style chips. */
+/* Level-2 (styles) card: a small direction heading above its style chips. */
 .mtp__styles {
   display: flex;
   flex-direction: column;

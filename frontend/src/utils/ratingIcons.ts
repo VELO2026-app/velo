@@ -27,7 +27,7 @@ import {
   IconMoodScaleFire,
 } from '@/components/icons'
 
-/** Mood-scale key ('bad'..'fire', see utils/moodScale.ts) -> its approved face. */
+/** `Mood-scale key -> its approved face` ('bad'..'fire', see utils/moodScale.ts). */
 export const MOOD_SCALE_ICON: Record<MoodScaleKey, Component> = {
   bad: IconMoodScaleBad,
   low: IconMoodScaleLow,

@@ -7,8 +7,10 @@
 // (FE-93 -- in user mode a curator reads the page as an ordinary member,
 // because every masters-surface call behind those blocks answers 403 there).
 // Per the owner's 2026-09-19 cut the page is:
-// hero → «Редактировать школу» + four nav rows → «Создать практику» →
-// «Ближайшие практики» (≤5, the page's LAST element). The rosters, the
+// hero -> edit school (i18n:user.screens.schoolPage.edit.title) + four nav
+// rows -> the create-practice CTA (i18n:user.screens.schoolPage.createPractice)
+// -> nearest practices (i18n:user.screens.schoolPage.tabs.upcoming2)
+// (≤5, the page's LAST element). The rosters, the
 // journal, the header «⋯» menu and the invite/transfer/delete actions are
 // GONE from this page -- their tests went with them. Still covered: the
 // hero counters, relation/zone gating of rows/CTA, the edit sheet, the LEAVE
@@ -83,8 +85,10 @@ function buttonWith(label: string): HTMLElement | undefined {
   )
 }
 
-/** EXACT text match -- for dialog confirm buttons, where a substring search
- *  would hit the header's «Покинуть школу» before the dialog's «Покинуть». */
+/** EXACT text match -- for dialog confirm buttons, where a substring
+ *  search would hit the header's leave-school action
+ *  (i18n:user.screens.schoolPage.leaveCta) before the dialog's leave
+ *  confirm (i18n:user.screens.schoolPage.leave.confirmTitle). */
 function buttonExact(label: string): HTMLElement | undefined {
   return Array.from(document.body.querySelectorAll<HTMLElement>('button') ?? []).find(
     (b) => b.textContent?.trim() === label,
@@ -204,8 +208,8 @@ describe('SchoolPageView -- relation matrix', () => {
     await flush()
 
     expect(text()).toContain('Тихая школа')
-    // The «Школа» designation prefix is gone from the header; the name
-    // appears bare. No other surface on this page emits «Школа «'.
+    // The School designation prefix is gone from the header; the name
+    // appears bare. No other surface on this page emits the "School" prefix.
     expect(text()).not.toContain('Школа «')
   })
 
@@ -216,7 +220,8 @@ describe('SchoolPageView -- relation matrix', () => {
 
     expect(buttonWith('Покинуть школу')).toBeTruthy()
     expect(rowWith('Редактировать школу')).toBeUndefined()
-    // §1.11 (owner 2026-09-22): the merged «Участники» row is curator-only.
+    // §1.11 (owner 2026-09-22): the merged members row
+    // (i18n:user.screens.schoolMembers.title) is curator-only.
     expect(rowWith('Участники')).toBeUndefined()
     expect(rowWith('Аналитика')).toBeUndefined()
     // §1.6 (owner 2026-09-22): the invite field is curator-only too.
@@ -609,7 +614,7 @@ describe('SchoolPageView -- transfer banner', () => {
   })
 })
 
-// -- §1.6 hero + rows + feed (tz-curator.md, ред. 13/14 text contract) --------
+// -- §1.6 hero + rows + feed (tz-curator.md, revision 13/14 text contract) ---
 
 describe('SchoolPageView -- §1.6 page body', () => {
   it('the hero counters read the page payload -- students first, then masters', async () => {
@@ -666,7 +671,8 @@ describe('SchoolPageView -- §1.6 page body', () => {
     await flush()
 
     expect(text()).not.toContain('Редактировать школу')
-    // §1.11 (owner 2026-09-22): the merged «Участники» row is the curator's
+    // §1.11 (owner 2026-09-22): the merged members row
+    // (i18n:user.screens.schoolMembers.title) is the curator's
     // privilege -- the rosters are the curator handle on the server, which
     // already answered non-curators with the masked 404.
     expect(text()).not.toContain('Участники')

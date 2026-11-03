@@ -355,7 +355,8 @@ describe('useViewportGeometry() integration', () => {
     fieldB.remove()
   })
 
-  // [FE-44] The owner's "уезжает плохо: белый фон, потом растягивается":
+  // [FE-44] The owner's report of the janky keyboard close ("a white
+  // background first, then a stretch"):
   // intermediate close-resizes arrive LAGGING the visual reveal, and every
   // one of them used to re-assert the cap at a stale smaller height. The
   // first RISING frame must drop the cap and hold at-rest for the whole

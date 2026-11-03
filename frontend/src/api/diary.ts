@@ -68,6 +68,7 @@ export function upsertCheckin(practiceId: string, body: CheckinRequest): Promise
   return api.post<CheckinResponse>(`/api/v1/practices/${practiceId}/checkin`, body)
 }
 
+/** Filters of the check-ins list endpoint: practice, date window, pagination. */
 export interface ListCheckinsParams {
   practice_id?: string
   date_from?: string
@@ -130,6 +131,7 @@ export function createReflection(
   return api.post<ReflectionResponse>(`/api/v1/practices/${practiceId}/reflection`, body)
 }
 
+/** Filters of the feedbacks list endpoint: practice, rating, date window, pagination. */
 export interface ListFeedbacksParams {
   practice_id?: string
   /** Raw 1..10 score (the endpoint's `rating` query is an int). */
@@ -188,6 +190,7 @@ export function createDiaryEntry(
   return api.post<DiaryEntryResponse>('/api/v1/diary', body, { 'Idempotency-Key': idempotencyKey })
 }
 
+/** Filters of the diary-entries list endpoint: practice, mood, date window, pagination. */
 export interface ListDiaryEntriesParams {
   practice_id?: string
   /** Raw 1..10 score (the endpoint's `mood` query is an int). */
@@ -219,6 +222,7 @@ export function listDiaryEntries(
 // Diary feed (unified timeline)
 // ============================================================================
 
+/** Unified diary feed request: the feed filters plus cursor pagination. */
 export interface ListDiaryFeedParams extends DiaryFeedFilters {
   // occurred_at of the last item from the previous page; the next page
   // returns events strictly older than this. Omit for the first page.

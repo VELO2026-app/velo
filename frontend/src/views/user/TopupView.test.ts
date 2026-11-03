@@ -171,8 +171,9 @@ describe('TopupView', () => {
 
     it('a zero balance renders as money, not as «Бесплатно»', async () => {
       // stores/balance.ts:34-36 passes allowZero=true precisely for this;
-      // formatMoney's default would print «Бесплатно» on a 0 balance
-      // (utils/format.ts:33), which on a topup screen is nonsense.
+      // formatMoney's default would print the free label (i18n:common.free)
+      // on a 0 balance (utils/format.ts:33), which on a topup screen is
+      // nonsense.
       authState.user = { balance_cents: 0 }
       mount()
       await flush()
@@ -353,9 +354,10 @@ describe('TopupView', () => {
     it('the wiped negative is gone from the FIELD too, not just from the state', async () => {
       // REGRESSION GUARD (T8, find from PROMPT №432, fixed in №434).
       // TopupView.vue:158-162 says "Prevent negative values in UI" -- and it did
-      // not: the state was wiped but the field still showed «-5», leaving a
+      // not: the state was wiped but the field still showed "-5", leaving a
       // confusing dead end (no error text, since validationError bails on empty
-      // at TopupView.vue:125, and a disabled «Пополнить» with no amount).
+      // at TopupView.vue:125, and a disabled topup CTA
+      // (i18n:user.screens.topup.topupCta) with no amount).
       //
       // The cause was in VInput, not here: when a parent rejects a value back to
       // the one it already held, `modelValue` does not change, Vue skips the

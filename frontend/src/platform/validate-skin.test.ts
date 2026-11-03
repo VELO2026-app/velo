@@ -1,7 +1,7 @@
 // =============================================================================
 // VELO Frontend -- validate-skin tests (tz-whitelabel §3, F2)
 // =============================================================================
-// The validator is the «невалидный пакет не выкатывается» gate. Pinned here:
+// The validator is the "an invalid package never ships" gate. Pinned here:
 // the repo's OWN test-reference skin (skins/test-contrast) must PASS -- so a
 // golden change that breaks the contract is caught by the suite, not by a
 // deploy -- and deliberately broken packages must FAIL with named reasons.
@@ -42,7 +42,7 @@ describe('validate-skin (tz-whitelabel §3)', () => {
     }
     expect(report.fails).toEqual([])
     // The font seam is load-bearing: a dark demo with the golden Marmelad
-    // would give the lie to «другое приложение».
+    // would give the lie to the "a different application" requirement.
     expect(report.passed.some((line) => line.includes('Unbounded'))).toBe(true)
   })
 

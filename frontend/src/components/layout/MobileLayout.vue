@@ -117,7 +117,7 @@ async function retryRestore(): Promise<void> {
 
 /** Tab roots keep their own scroll, like a native tab bar: leaving the
  * calendar mid-list and coming back via the dock lands on the same spot.
- * Keyed by the tab's path; only a dock hop (tab root -> tab root) reads it. */
+ * Keyed by the tab's path; only a dock hop (`tab root -> tab root`) reads it. */
 const tabScroll = new Map<string, number>()
 const isTabRoot = (path: string): boolean => props.tabs.some((tab) => tab.to === path)
 
@@ -246,9 +246,11 @@ function fogDefaults() {
 //   fog-*  -> mask fade zones, aligned to the clearances (used only with --fog)
 //
 // Pre-measurement fallback (islandH===0 race): clear the floating VHeader's REAL
-// rendered height instead of a too-small base, so a back-button screen («Отзывы о
-// практике» / «Вывод средств») doesn't underlap its header before the island is
-// measured. Derived from VHeader.vue (floating): --velo-fog-headerless-top=20 +
+// rendered height instead of a too-small base, so a back-button screen
+// (PracticeReviewsView, or the withdrawal screen
+// i18n:masterScreens.masterFinance.title) doesn't underlap its header before
+// the island is measured. Derived from VHeader.vue (floating):
+// --velo-fog-headerless-top=20 +
 // the 40px back row + padding-bottom --space-2=8 ≈ 68px. The measured
 // islandH>0 path stays unchanged. (operator PROMPT №164; retuned 2026-09-30
 // when the header's bottom pad moved to --space-2.)
@@ -292,7 +294,8 @@ const mainStyle = computed(() => {
   // [FE-3] The fog's hard zone must never reach PAST the clearance: on the
   // headerless dashboard (top = 34) the default topHard (40) overlapped the
   // first 6px of content — the top of the first heading's glyphs was masked
-  // away («Б» clipped). Clamp the mask to the padding: content at rest is
+  // away (a Cyrillic capital letter Be was clipped). Clamp the mask to the
+  // padding: content at rest is
   // always fully opaque; scrolled content still dissolves across [0, top].
   const topHardEff = Math.min(topHard, top)
   return {

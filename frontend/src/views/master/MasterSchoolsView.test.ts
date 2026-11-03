@@ -3,9 +3,10 @@
 // =============================================================================
 //
 // Same idiom as UserMySchoolsView.test.ts, plus the master list's own
-// distinctions: the «Я куратор» / «Я участник» sectioning over one /mine
-// payload, and -- since BE-18 -- the «+» gated on the admin-issued
-// can_create_schools flag that rides on GET /masters/me/schools.
+// distinctions: the curator/member section tabs
+// (i18n:masterScreens.masterSchools.tab.curator, i18n:masterScreens.masterSchools.tab.member)
+// over one /mine payload, and -- since BE-18 -- the «+» gated on the
+// admin-issued can_create_schools flag that rides on GET /masters/me/schools.
 // =============================================================================
 
 import { createTestI18n } from '@/locales/testing'

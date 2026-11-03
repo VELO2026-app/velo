@@ -1,19 +1,20 @@
 /*
   VELO Frontend -- schoolBranding/banner (tz-curator.md §5.3)
 
-  Фон «роза-вихрь»: вложенные широкие ленты + тонкие струи + горы + листья.
-  Порт прототипа; формулы, фильтры и округления не трогать (golden-тесты).
-  bannerSvg(..., {lightweight}) -- упрощённый вариант для строки списка (§1.4):
-  без feTurbulence/feDisplacementMap/grain и blur-фильтров хребтов.
+  "Rose whirl" background: nested wide ribbons + thin streams + mountains +
+  leaves. Port of the prototype; do not touch the formulas, filters, and
+  rounding (golden tests). bannerSvg(..., {lightweight}) is the simplified
+  list-row variant (§1.4): no feTurbulence/feDisplacementMap/grain and no
+  ridge blur filters.
 */
 
 import type { SchoolBrandingParams } from './params'
 import { petal, poly, offsetPts, taperedPath, type PathPoint } from './geometry'
 import { makeNoise, mixHex, rampW } from './noise'
 
-/** Лента-кольцо «розы»: дуга вокруг центра с лёгким дрейфом радиуса и
- *  подворотом хвоста внутрь. Ширина почти равна шагу спирали -- ленты
- *  упаковывают диск вплотную. */
+/** A "rose" ring ribbon: an arc around the center with a slight radius
+ *  drift and the tail tucked inward. The width nearly equals the spiral
+ *  pitch -- the ribbons pack the disc tightly. */
 function bandPts(
   S: SchoolBrandingParams['bg']['swirl'],
   sp: SchoolBrandingParams['bg']['swirl']['bands'][number],
@@ -36,7 +37,8 @@ function bandPts(
   return pts
 }
 
-/** Тонкая струя, вылетающая из ролла за край (как пряди в верхней части). */
+/** A thin stream flying out of the roll past the edge (like the strands at
+ *  the top). */
 function tailPts(
   S: SchoolBrandingParams['bg']['swirl'],
   sp: SchoolBrandingParams['bg']['swirl']['tails'][number],
@@ -58,7 +60,8 @@ function tailPts(
   return pts
 }
 
-/** Лента из трех полупрозрачных проходов -- наслоение пигмента (акварель). */
+/** A ribbon of three semi-transparent passes -- pigment layering
+ *  (watercolor). */
 function ribbonSvg(pts: PathPoint[], color: string, opacity: number): string {
   const offs = [0, 0.18, -0.18]
   const alphas = [0.55, 0.32, 0.32]
@@ -70,20 +73,22 @@ function ribbonSvg(pts: PathPoint[], color: string, opacity: number): string {
     .join('')
 }
 
+/** Banner render variants: the lightweight list row, and the flat mode without watery filters. */
 export interface BannerSvgOptions {
   /**
-   * true -- вариант для строки списка (§1.4/§5.3): без тяжёлых фильтров
-   * (feTurbulence/feDisplacementMap/grain/blur), та же сцена.
+   * true -- the list-row variant (§1.4/§5.3): no heavy filters
+   * (feTurbulence/feDisplacementMap/grain/blur), the same scene.
    */
   lightweight?: boolean
   /**
-   * Плоский режим (owner 2026-09-19: фон выглядел «растянутым» -- это
-   * смазывали feDisplacementMap и grain): без водянистого дрожания краёв
-   * и зерна; мягкий blur хребтов остаётся.
+   * Flat mode (owner 2026-09-19: the background looked "stretched" -- the
+   * feDisplacementMap and grain were smearing it): no watery edge wobble
+   * and no grain; the mild ridge blur stays.
    */
   flat?: boolean
 }
 
+/** Render the rose-whirl banner background as an SVG string, at the given size. */
 export function bannerSvg(
   P: SchoolBrandingParams,
   w: number,
@@ -98,11 +103,11 @@ export function bannerSvg(
   let body = `<rect width="${w}" height="${h}" fill="${c.bg}"/>`
   let defs = ''
 
-  // мягкое свечение слева от центра вихря
+  // soft glow to the left of the whirl center
   body += `<radialGradient id="${uid}-glow"><stop offset="0%" stop-color="${c.faint}" stop-opacity=".8"/><stop offset="100%" stop-color="${c.faint}" stop-opacity="0"/></radialGradient>`
   body += `<circle cx="${b.glow.cx.toFixed(0)}" cy="${b.glow.cy.toFixed(0)}" r="${b.glow.r.toFixed(0)}" fill="url(#${uid}-glow)"/>`
 
-  // горы разного масштаба + туман у подножия
+  // mountains of varied scale + fog at the foot
   if (b.mountains) {
     b.mountains.ridges.forEach((rg, i) => {
       const filter = opts.lightweight ? '' : ` filter="url(#${uid}-m${i})"`
@@ -112,7 +117,7 @@ export function bannerSvg(
     body += `<rect x="-20" y="${b.mountains.fog.y.toFixed(0)}" width="${b.mountains.fog.w.toFixed(0)}" height="${b.mountains.fog.h.toFixed(0)}" fill="url(#${uid}-fog)" opacity="${b.mountains.fog.opacity.toFixed(2)}"/>`
   }
 
-  // струи под роллом
+  // streams under the roll
   let streams = S.tails
     .map(
       (t) =>
@@ -120,7 +125,7 @@ export function bannerSvg(
     )
     .join('')
 
-  // ленты-кольца: от внутренней к внешней, каждая со своим градиентом вдоль дуги
+  // ring ribbons: inner to outer, each with its own gradient along the arc
   S.bands.forEach((sp, i) => {
     const pts = bandPts(S, sp, noise)
     const g = `${uid}-b${i}`
@@ -130,7 +135,7 @@ export function bannerSvg(
     streams += `<g opacity="${sp.opacity}">${ribbonSvg(pts, `url(#${g})`, 1)}</g>`
   })
 
-  // листья у нижнего края
+  // leaves at the lower edge
   if (b.leaves) {
     streams += b.leaves.items
       .map(
@@ -140,9 +145,9 @@ export function bannerSvg(
       .join('')
   }
 
-  // водянистое дрожание краёв всех фигур (акварельная неровность) -- только
-  // в полном hero-варианте; в лёгком (строки) и плоском (owner) фильтр не
-  // рендерим.
+  // Watery edge wobble of every shape (watercolor unevenness) -- full hero
+  // variant only; the lightweight (rows) and flat (owner) modes do not
+  // render the filter.
   body +=
     opts.lightweight || opts.flat
       ? `<g>${streams}</g>`

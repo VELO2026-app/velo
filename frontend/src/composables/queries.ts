@@ -12,12 +12,13 @@ import { queryKeys } from '@/composables/queryKeys'
 import type { QueryOptions } from '@/composables/useQuery'
 import type { SchoolMineItem, UserStatsResponse } from '@/api/types'
 
+/** Payload of the schools tab: the schools the user participates in, plus the school-create right. */
 export interface UserSchools {
   schools: SchoolMineItem[]
   canCreate: boolean
 }
 
-/** «Школы» tab (SchoolsView): the schools I participate in + the create right. */
+/** Schools tab (SchoolsView, i18n:user.screens.schools.title): the schools I participate in + the create right. */
 export function userSchoolsQuery(role: string): QueryOptions<UserSchools> {
   return {
     key: ['schools', 'mine', 'participant', role],
@@ -36,7 +37,8 @@ export function userSchoolsQuery(role: string): QueryOptions<UserSchools> {
       if (mineRes.status === 'rejected') throw mineRes.reason
       // FE-93: this zone lists the schools I PARTICIPATE in. The curated rows
       // /mine still returns (relation is role-independent) are the master
-      // list's «Я куратор» section -- and each would 403 its way through this
+      // list's curator tab (i18n:masterScreens.masterSchools.tab.curator) --
+      // and each would 403 its way through this
       // zone's screens.
       return {
         schools: mineRes.value.items.filter((g) => g.relation !== 'curator'),
@@ -55,6 +57,7 @@ export function userSchoolsQuery(role: string): QueryOptions<UserSchools> {
  * they change only after an attended practice. */
 export const STATS_STALE_MS = 5 * 60_000
 
+/** Query options for the attended-practice stats of the signed-in user (dashboard, profile). */
 export function myStatsQuery(staleTime = STATS_STALE_MS): QueryOptions<UserStatsResponse> {
   return { key: queryKeys.myStats(), query: getMyStats, staleTime, persist: true }
 }

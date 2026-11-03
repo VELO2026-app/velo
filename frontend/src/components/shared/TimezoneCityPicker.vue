@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- TimezoneCityPicker (Задача 2, 2026-06-09)
+  VELO Frontend -- TimezoneCityPicker (Task 2, 2026-06-09)
 
   Searchable city -> timezone picker (Google-Calendar-style), DS-built:
     - VInput search field (type a city) with an IconSearch suffix.
@@ -7,7 +7,8 @@
       and the UTC offset (computed live via Intl, DST-aware) and an IconCheck on
       the selected one. Tapping a row selects its IANA zone.
     - Search AND manual browse in one (empty query = full list).
-    - No match -> a plain "не найден" hint (operator: keep it simple).
+    - No match -> a plain not-found hint (i18n:timezone.notFound; operator:
+      keep it simple).
 
   The rows are the curated cities plus the backend's time zone catalog
   (useTimezoneCatalog, BE-157) -- never the browser engine's zone list -- so a
@@ -94,7 +95,7 @@ const listEl = ref<HTMLElement | null>(null)
 
 // Owner ruling: the SELECTED zone leads the list -- the current choice (and
 // its IconCheck) must be visible without scrolling. Rows sharing the zone
-// float together (the check is per-iana: Москва + Санкт-Петербург, London's
+// float together (the check is per-iana: Moscow + Saint Petersburg, London's
 // cities); everything else keeps the curated/catalog order, and search
 // matches obey the same rule.
 const catalog = useTimezoneCatalog()
@@ -114,7 +115,7 @@ const filtered = computed(() => {
 // row (see the keyboard-open styles). A stale scrollTop would leave a MIDDLE
 // row in that one-row window after the set shrinks -- the browser only
 // clamps it once content is shorter than the scroll offset, which is exactly
-// the visible "скролл скачет". Resetting to top on every input change keeps
+// the visible "scroll jumps" glitch. Resetting to top on every input change keeps
 // the FIRST match (or the only one) in view, deterministically.
 // A selection re-orders the list (the selected zone moves to the top), so the
 // reset fires on it too: the freshly picked row -- now the first one -- is in

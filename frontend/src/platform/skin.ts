@@ -17,8 +17,9 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+/** A skin package's brand identity, materialized into the build's derivatives. */
 export interface SkinPackage {
-  /** Manifest name + short_name + the {brand} text source of record. */
+  /** Manifest name + short_name + the `{brand}` text source of record. */
   displayName: string
   /** PWA convention: ≤ 12 chars (validated strictly in validate-skin.mjs). */
   shortName: string
@@ -87,8 +88,13 @@ function readBrandJson(publicDir: string): SkinPackage {
   }
 }
 
-/** The skin package for this build, or null when the golden one ships.
- *  `publicDir` is the frontend/public directory. */
+/**
+ * The skin package for this build.
+ *
+ * @returns Null when the golden one ships.
+ *
+ * @param publicDir - The frontend/public directory.
+ */
 export function readSkin(publicDir: string): SkinPackage | null {
   if (!existsSync(join(publicDir, 'skin', 'brand.json'))) return null
   return readBrandJson(publicDir)
@@ -97,7 +103,7 @@ export function readSkin(publicDir: string): SkinPackage | null {
 /** Content of the generated src/styles/skin-tokens.css: the skin's token
  *  overrides verbatim under a banner, or the golden stub. Written by
  *  vite.config.ts at config time so the CSS import order in app.ts
- *  (variables -> global -> skin) is mechanical, never hopeful (tz-whitelabel
+ *  (`variables -> global -> skin`) is mechanical, never hopeful (tz-whitelabel
  *  §3, the cascade paragraph). */
 export function materializedSkinTokens(publicDir: string, skin: SkinPackage | null): string {
   if (skin === null) {

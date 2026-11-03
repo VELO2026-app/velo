@@ -1,8 +1,9 @@
 <!--
   VELO Frontend -- AdminWithdrawalsView (Admin DS, 2026-06-14)
 
-  Dedicated «Выплаты» list -- the entry that resolves the withdrawal-detail orphan
-  (audit №39 O-1, operator Q1=Б). Lists payout requests from the LIVE admin endpoint
+  Dedicated withdrawals list (i18n:adminScreens.adminWithdrawals.title) -- the
+  entry that resolves the withdrawal-detail orphan
+  (audit №39 O-1, operator Q1=B). Lists payout requests from the LIVE admin endpoint
   (GET /api/v1/admin/withdrawals via getAdminWithdrawals -- previously defined but
   never called; this screen revives it). Tapping a row hands the withdrawal to
   AdminWithdrawalDetailView via router state (the detail has no GET-by-id; it reads

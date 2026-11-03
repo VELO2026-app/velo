@@ -2,23 +2,29 @@
   VELO Frontend -- CalendarFilterModal (Calendar iteration, F-8)
 
   Filter modal for the Calendar feed. Groups (per Figma 22_Calendar filter):
-    - Направление практики (direction)  -- SINGLE-select chips (incl. "Все")
-    - Вид практики        (style)       -- MULTI-select chips, shown ONLY when
-                                            the current direction has styles
-                                            (meditation / yoga / circles)
-    - Сложность           (difficulty)  -- "Все" + multi-select chips
-    - Длительность        (duration_bucket) -- "Все" + single-select chips
-    - Время               (time_of_day) -- "Все" + single-select chips
+    - Direction (i18n:filters.direction)   -- SINGLE-select chips (incl. the
+                                              All chip, i18n:common.all)
+    - Style (i18n:filters.style)           -- MULTI-select chips, shown ONLY
+                                              when the current direction has
+                                              styles (meditation / yoga /
+                                              circles)
+    - Difficulty (i18n:filters.difficulty) -- All + multi-select chips
+    - Duration (i18n:filters.duration)     -- All + single-select chips
+                                              (duration_bucket)
+    - Time of day (i18n:filters.timeOfDay) -- All + single-select chips
+                                              (time_of_day)
 
   F-8 (2026-05-29):
-    1. No "Применить" button — every chip click immediately emits `apply`.
-       Modal stays open; user closes via the X (VModal close emit) when done.
+    1. No apply button (i18n:filters.apply) — every chip click immediately
+       emits `apply`. Modal stays open; user closes via the X (VModal close
+       emit) when done.
     2. Style switched from VSelect dropdown to multi-select chips (same UX
        as direction/difficulty). Requires backend B-4 (style: list[str]).
-    3. "Сбросить" clears all axes (also emits apply via the auto-apply path).
+    3. Reset (i18n:common.reset) clears all axes (also emits apply via the
+       auto-apply path).
 
   Why direction is single-select (2026-05-28): styles are
-  direction-conditional (см. utils/practiceOptions STYLE_OPTIONS_BY_DIRECTION),
+  direction-conditional (see utils/practiceOptions STYLE_OPTIONS_BY_DIRECTION),
   so showing a meaningful style picker requires knowing the single direction.
   Type CalendarFacetFilters.direction stays as PracticeDirection[] for
   backend compatibility — we just always send 0 or 1 element.
@@ -47,7 +53,7 @@
     <div class="cal-filter">
       <h2 class="cal-filter__heading">{{ t('filters.title') }}</h2>
 
-      <!-- Направление практики (single-select) -->
+      <!-- Practice direction (single-select) -->
       <section class="cal-filter__group">
         <h3 class="cal-filter__label">{{ t('filters.direction') }}</h3>
         <div class="cal-filter__chips">
@@ -72,7 +78,7 @@
         </div>
       </section>
 
-      <!-- Вид практики (direction-dependent multi-select chips) -->
+      <!-- Practice style (direction-dependent multi-select chips) -->
       <section v-if="styleOptions.length > 0" class="cal-filter__group">
         <h3 class="cal-filter__label">{{ t('filters.style') }}</h3>
         <div class="cal-filter__chips">
@@ -92,7 +98,7 @@
         </div>
       </section>
 
-      <!-- Сложность -->
+      <!-- Difficulty -->
       <section class="cal-filter__group">
         <h3 class="cal-filter__label">{{ t('filters.difficulty') }}</h3>
         <div class="cal-filter__chips">
@@ -117,7 +123,7 @@
         </div>
       </section>
 
-      <!-- Длительность (single-select) -->
+      <!-- Duration (single-select) -->
       <section class="cal-filter__group">
         <h3 class="cal-filter__label">{{ t('filters.duration') }}</h3>
         <div class="cal-filter__chips">
@@ -142,7 +148,7 @@
         </div>
       </section>
 
-      <!-- Время (single-select) -->
+      <!-- Time of day (single-select) -->
       <section class="cal-filter__group">
         <h3 class="cal-filter__label">{{ t('filters.timeOfDay') }}</h3>
         <div class="cal-filter__chips">
@@ -167,8 +173,9 @@
         </div>
       </section>
 
-      <!-- F-8: Только «Сбросить». «Применить» удалён — каждое нажатие на
-           чип уже эмитит apply. Закрыть модалку = X в VModal-шапке. -->
+      <!-- F-8: Only the reset button (i18n:common.reset). The apply button
+           was removed — every chip tap already emits apply. Closing the
+           modal = the X in the VModal header. -->
       <div class="cal-filter__actions">
         <VButton variant="secondary" block @click="onReset">{{ t('common.reset') }}</VButton>
       </div>
@@ -215,10 +222,11 @@ const DIFFICULTY_CHIPS: { value: PracticeDifficulty; label: string }[] = (
   ['beginner', 'medium', 'high'] satisfies PracticeDifficulty[]
 ).map((v) => ({ value: v, label: DIFFICULTY_LABEL[v] }))
 
-// Duration labels are LOCAL here (per the filter mock: "30 - 45 мин" /
-// "1 час и более"). The global DURATION_BUCKET_LABEL is left untouched so
-// other surfaces (cards / detail) keep their wording. Labels resolve at
-// ACCESS time (getters) -- tz-i18n 1.1.
+// Duration labels are LOCAL here (the filter mock's own wording:
+// i18n:filters.durationChips.short / i18n:filters.durationChips.long).
+// The global DURATION_BUCKET_LABEL is left untouched so other surfaces
+// (cards / detail) keep their wording. Labels resolve at ACCESS time
+// (getters) -- tz-i18n 1.1.
 const DURATION_CHIPS: { value: DurationBucket; label: string }[] = [
   {
     value: 'short',
@@ -256,11 +264,13 @@ const draft = reactive<Draft>({
   time_of_day: undefined,
 })
 
-/** Convenience accessor: the single selected direction, or undefined for "Все". */
+/** Convenience accessor: the single selected direction, or undefined for the
+ *  All chip (i18n:common.all). */
 const selectedDirection = computed<PracticeDirection | undefined>(() => draft.direction[0])
 
-/** Style options for the currently selected direction (empty when "Все"
- *  or when the direction has no styles). Catalog-first (T2 stage 2). */
+/** Style options for the currently selected direction (empty when the All
+ *  chip (i18n:common.all) is active or when the direction has no styles).
+ *  Catalog-first (T2 stage 2). */
 const styleOptions = computed(() =>
   catalogStylesForDirection(catalog.value, selectedDirection.value),
 )
@@ -303,7 +313,7 @@ function applyNow(): void {
 // -- Direction (single-select) --
 function setDirection(value: PracticeDirection): void {
   if (draft.direction[0] === value) {
-    // Tap the active chip again to clear it (acts like "Все" reset).
+    // Tap the active chip again to clear it (acts like the All reset, i18n:common.all).
     draft.direction = []
   } else {
     draft.direction = [value]
@@ -360,8 +370,9 @@ function clearSingle(key: SingleKey): void {
   applyNow()
 }
 
-/** F-8: "Сбросить" clears every axis then applies (lenta returns full feed).
- *  Modal stays open — user closes via X when done. */
+/** F-8: Reset (i18n:common.reset) clears every axis then applies (the
+ *  lenta returns the full feed). Modal stays open — user closes via X
+ *  when done. */
 function onReset(): void {
   draft.direction = []
   draft.difficulty = []

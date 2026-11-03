@@ -3,7 +3,7 @@
 // =============================================================================
 // A skin package (public/skin/) is checked BEFORE it is applied: a package
 // that fails here must not ship. Static checks only -- no rasterizer, no
-// browser (tz-whitelabel §3: «тестируем контракт, а не каждый скин»):
+// browser (tz-whitelabel §3: "we test the contract, not every skin"):
 //
 //   structure    brand.json + tokens.css + the mandatory asset set (§3 table)
 //   brand.json   display/short names (short_name <= 12, the PWA convention),
@@ -196,7 +196,7 @@ export function validateSkin(skinDir, frontendDir) {
   if (tokenNames.length > 0 && !tokenNames.some((n) => !n.startsWith('--')))
     ok(out, `tokens.css: ${tokenNames.length} token(s), all known --velo-*`)
   // The ONE bare token a skin may set: --font-body (the family swaps with the
-  // brand.json fontUrl link -- tz-whitelabel §7 «подстановка ссылки и токена»;
+  // brand.json fontUrl link -- tz-whitelabel §7 "link and token substitution";
   // every OTHER bare token stays golden, the frozen split owns them).
   const BARE_ALLOWED = new Set(['--font-body'])
   for (const name of tokenNames) {

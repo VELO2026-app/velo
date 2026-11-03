@@ -2,7 +2,8 @@
 // VELO Frontend -- MasterSummaryView Screen Tests
 // =============================================================================
 //
-// «Саммари недели» — the weekly digest a master reaches from the dashboard.
+// The weekly summary (i18n:masterScreens.masterSummary.title) — the weekly
+// digest a master reaches from the dashboard.
 // It is the one screen that tells a master WHICH student is unhappy and WHICH
 // review said so, and nothing downstream contradicts it: if the needs_attention
 // filter drops a row or a rating icon is mapped to the wrong bucket, the master
@@ -14,11 +15,13 @@
 // this file. There is no store (grep: zero `@/stores/*` imports), so NO pinia is
 // needed; the seam is `@/api/masters`, the module the screen itself imports
 // (.vue:143). It owns TWO INDEPENDENT ladders over that one seam:
-//   - «Ключевые отзывы»  <- getMasterReviews, refs feedbacksLoading/Error/
-//                          keyFeedbacks (.vue:165-181)
-//   - «Требуют внимания» <- getStudents, refs attnLoading/attnError/students
-//                          (.vue:195-210), filtered by the needsAttention
-//                          computed (.vue:216-218)
+//   - Key reviews (i18n:masterScreens.masterSummary.keyReviews) <-
+//     getMasterReviews, refs feedbacksLoading/Error/
+//     keyFeedbacks (.vue:165-181)
+//   - Needs attention (i18n:masterScreens.masterSummary.needsAttention) <-
+//     getStudents, refs attnLoading/attnError/students
+//     (.vue:195-210), filtered by the needsAttention
+//     computed (.vue:216-218)
 // Both are fired unawaited from one onMounted (.vue:211-214), so either can fail
 // while the other renders. Tested as such — a shared error state here would be a
 // dead endpoint reporting the healthy one as broken.
@@ -26,10 +29,10 @@
 // THE SHARP EDGE ON THIS SCREEN: the two sections are INDISTINGUISHABLE from a
 // host-wide query, and it is not obvious from a glance at the .vue.
 //   - both loaders carry the SAME class, `.summary__attn-state` (.vue:39,82)
-//   - both error states render the SAME title, «Не удалось загрузить»
-//     (.vue:45,88), the SAME description, «Попробуйте ещё раз» (.vue:177,206),
-//     and the SAME “Повторить” button label (.vue:48,91)
-// So `expect(text()).toContain('Не удалось загрузить')` passes when EITHER
+//   - both error states render the SAME title (i18n:common.loadFailed)
+//     (.vue:45,88), the SAME description (i18n:common.tryAgain) (.vue:177,206),
+//     and the SAME retry button label (i18n:common.retry) (.vue:48,91)
+// So a host-wide text query for the error title passes when EITHER
 // section failed and cannot tell you which — an SC-14-shaped hazard on a screen
 // with no v-show at all. Every query below is therefore scoped through
 // section(), which partitions .summary__content by its <h2> headings. The
@@ -37,17 +40,19 @@
 // IS the sectioning; there is no wrapper element to hang a scope on.
 //
 // SC-05 — the backend message is SWALLOWED on BOTH ladders: `catch {
-// feedbacksError.value = 'Попробуйте ещё раз' }` (.vue:176-178) and the same on
+// feedbacksError.value = t('common.tryAgain') }` (.vue:176-178) and the same on
 // .vue:205-207. The error tests prove the screen's own constant reaches the DOM
 // and explicitly assert that the rejection's detail does NOT. A master told
-// «Попробуйте ещё раз» learns nothing about why; that is pinned as the known
+// the generic retry copy (i18n:common.tryAgain) learns nothing about why; that
+// is pinned as the known
 // behaviour rather than left for a reader to assume otherwise.
 //
 // SC-06 — CHECKED, and it does not bite here, which is worth writing down
 // because the sibling screens ARE guarded and the asymmetry is what produced a
 // real bug elsewhere. Neither rung on either ladder carries `&& length === 0`
 // (.vue:39,42,82,85) — and neither NEEDS one, because this screen has NO
-// load-more and NO pagination. The only re-fetch is «Повторить», which only
+// load-more and NO pagination. The only re-fetch is the retry button
+// (i18n:common.retry), which only
 // exists INSIDE the error state, so an error can never arrive while a populated
 // list is on screen. The unguarded rungs are symmetric loading-vs-error twins,
 // not a latent list-wipe. Both retry paths are driven below to prove it.
@@ -250,7 +255,7 @@ function buttonIn(heading: string, label: string): HTMLButtonElement | undefined
   )
 }
 
-// -- «Ключевые отзывы» --------------------------------------------------------
+// -- Key reviews (i18n:masterScreens.masterSummary.keyReviews) ----------------
 
 function feedbackCards(): HTMLElement[] {
   return sectionQuery<HTMLElement>(FEEDBACKS, '.summary__feedback')
@@ -302,7 +307,7 @@ function faceOf(zone: ScoreZone): string {
   return html
 }
 
-// -- «Требуют внимания» -------------------------------------------------------
+// -- Needs attention (i18n:masterScreens.masterSummary.needsAttention) -------
 
 function attnRows(): HTMLElement[] {
   return sectionQuery<HTMLElement>(ATTENTION, '.summary__attn')
@@ -413,7 +418,7 @@ describe('MasterSummaryView', () => {
     })
 
     it("error: the copy is the SCREEN's constant -- the backend detail is swallowed", async () => {
-      // SC-05. `catch { feedbacksError.value = 'Попробуйте ещё раз' }`
+      // SC-05. `catch { feedbacksError.value = t('common.tryAgain') }`
       // (.vue:176-178) keeps no message. The negative assertion is the honest
       // half: this pins "the detail never surfaces" as known behaviour rather
       // than letting a reader assume it does.
@@ -549,9 +554,10 @@ describe('MasterSummaryView', () => {
     it('empty: students exist but NONE needs attention -- the same «всё в порядке»', async () => {
       // The distinction this screen deliberately does not draw: needsAttention
       // (.vue:216-218) filters, and an all-clear roster and an empty roster land
-      // on the identical empty state. Correct here -- «Все ученики в порядке» is
-      // true in both -- and pinned so the filter is proven to RUN rather than
-      // merely proven to render nothing.
+      // on the identical empty state. Correct here -- the all-well title
+      // (i18n:masterScreens.masterSummary.allWell) is true in both -- and
+      // pinned so the filter is proven to RUN rather than merely proven to
+      // render nothing.
       vi.mocked(mastersApi.getStudents).mockResolvedValue(
         studentsPage([student('s1'), student('s2')]),
       )
@@ -563,7 +569,8 @@ describe('MasterSummaryView', () => {
     })
 
     it('content: only the flagged students, and the positive set is pinned first', async () => {
-      // SC-15: `expect(attnNames()).not.toContain('Борис')` alone would also pass
+      // SC-15: asserting only the ABSENCE of a non-flagged fixture name would
+      // also pass
       // on a mount that rendered NOTHING -- a broken fixture or a failed flush
       // would look like a working filter. toEqual proves the list rendered AND
       // excluded.
@@ -704,7 +711,8 @@ describe('MasterSummaryView', () => {
       // .vue:174 -- getMasterReviews(FEEDBACKS_PAGE, 0, false). `attention` is
       // the load-bearing argument: `true` narrows the feed to the negative
       // bucket server-side (api/masters.ts:249), which is what AnalyticsView's
-      // «Требуют внимания» wants. THIS section wants the highlight reel --
+      // needs-attention section (i18n:masterScreens.analytics.sections.attention)
+      // wants. THIS section wants the highlight reel --
       // positive included -- so `false` is a deliberate difference from a
       // near-identical call one screen over, not a default.
       mount()
@@ -925,7 +933,8 @@ describe('MasterSummaryView', () => {
   // ===========================================================================
   // NOT COVERED, deliberately
   //
-  // - «Отправить» inside SendMessageModal. It is that COMPONENT's own behaviour
+  // - The send button (i18n:common.submitSend) inside SendMessageModal. It is
+  //   that COMPONENT's own behaviour
   //   (open-or-get the DM, post, toast -- SendMessageModal.test.ts) and is
   //   shared with MasterStudentsView / MasterStudentProfileView. This screen
   //   only opens the sheet and names the recipient; asserting the send here

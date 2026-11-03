@@ -1,6 +1,6 @@
 <!--
   VELO Frontend -- MasterChatView (chat thread; honesty-cleanup 2026-07-12;
-  REAL THREAD -- Phase 6 / T2, H-T2-UI phase «а», 2026-08-08)
+  REAL THREAD -- Phase 6 / T2, H-T2-UI phase A, 2026-08-08)
 
   The master's side of the DM. Thin wrapper over the shared ChatThreadScreen
   (same component the student uses): resolves the peer from the comms
@@ -11,7 +11,8 @@
   won't contain it -> not-found state here, and the proxy 404s every thread
   route anyway (membership is checked against the local pointer, ID-11).
 
-  FE-108: the not-found state is worded as «Этой переписки больше нет» --
+  FE-108: the not-found state is worded as the gone copy
+  (i18n:masterScreens.masterChat.gone) --
   a master's support appeal deleted with its spam ticket leaves a delivered
   `open_thread__<id>` notification naming an id the list no longer carries,
   and "deleted" vs "never yours" is deliberately indistinguishable (the
@@ -46,7 +47,8 @@
       @back="router.back()"
     />
 
-    <!-- FE-107: the master's support row asks «Как мы помогли?» too -- the
+    <!-- FE-107: the master's support row asks for a rating
+         (i18n:chat.rating.title) too -- the
          same self-contained sheet the user's wrapper mounts. -->
     <SupportRatingSheet :active="isSupport" :preferred-ticket-id="preferredRatingTicket" />
   </div>
@@ -71,7 +73,8 @@ const resolving = ref(true)
 const notFound = ref(false)
 const peer = ref<ChatPeer | null>(null)
 /** BE-163: the row's `channel` is the screen's identity -- a `support`
- *  thread is titled «Поддержка VELO», never the role fallback («Ученик»). */
+ *  thread is titled with the support title (i18n:chat.supportTitle), never
+ *  the role fallback (i18n:masterScreens.masterChat.peerFallback). */
 const isSupport = ref(false)
 
 /** FE-107: a bell row / Telegram button named THIS ticket (`?rate=1` -- the

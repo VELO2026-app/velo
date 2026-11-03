@@ -1,12 +1,14 @@
 <!--
   VELO Frontend -- VDayPicker Component (master notifications schedule)
 
-  Day-of-week selector: a row of seven circular toggles (ПН…ВС). A selected day
+  Day-of-week selector: a row of seven circular toggles (Mon…Sun). A selected day
   is a filled primary circle; an unselected one is an outline. Multi-select,
   Mon-first.
 
-  Introduced for the master «График уведомлений» block (operator SVG
-  «6 Notifications 3»). Reusable: any future "which days" setting should use this.
+  Introduced for the master schedule block (operator SVG
+  «6 Notifications 3»; the block heading is
+  i18n:masterScreens.masterNotifications.schedule). Reusable: any future
+  "which days" setting should use this.
 
   Usage:
     <VDayPicker v-model="days" />   // days: string[] of 'mon'..'sun'

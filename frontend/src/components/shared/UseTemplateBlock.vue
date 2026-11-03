@@ -1,20 +1,22 @@
 <!--
-  VELO Frontend -- UseTemplateBlock (CreatePracticeView «Использовать шаблон»)
+  VELO Frontend -- UseTemplateBlock (CreatePracticeView,
+  i18n:masterScreens.createPractice.useTemplate)
 
   Collapsible block at the top of the create-practice form: pick one of the
   master's own past practices as a template to prefill the form.
 
   Redesign (operator SVG «2 New practice 2/3», NP-5…9, 2026-06-30):
-    - ONE merged container (white plate, --radius-md) holds the «Вы создавали
-      ранее…» header AND the cards — not separate bubbles (NP-9).
+    - ONE merged container (white plate, --radius-md) holds the
+      "you created earlier" header (i18n:useTemplate.head) AND the cards —
+      not separate bubbles (NP-9).
     - Each card = compact bordered row (--velo-primary border): direction icon +
-      title + «дата, время» on the secondary line. NO participant count (NP-5/6/7).
+      title + a date-and-time secondary line. NO participant count (NP-5/6/7).
     - The list shows ~3 cards then scrolls with a VISIBLE scrollbar (NP-8;
       scrollbars are thinned/hidden elsewhere app-wide).
 
   States:
     - Collapsed: just the header row inside the plate.
-    - Expanded, no practices: muted «Данных пока нет…» hint.
+    - Expanded, no practices: the muted empty hint (i18n:useTemplate.empty).
     - Expanded, has practices: the master's practices (newest-first) as cards.
 
   Selecting a card emits `select` and collapses the block; the parent prefills.
@@ -157,7 +159,7 @@ function iconFor(p: PracticeResponse): Component {
   return practiceIconFor(p)
 }
 
-/** Secondary line «25 янв, 07:00» — date + time, no participant count (NP-5/6). */
+/** Secondary line ("25 Jan, 07:00") — date + time, no participant count (NP-5/6). */
 function cardWhen(p: PracticeResponse): string {
   return `${formatShortDate(p.scheduled_at, p.timezone)}, ${formatTime(p.scheduled_at, p.timezone)}`
 }

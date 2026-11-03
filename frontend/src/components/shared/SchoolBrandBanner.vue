@@ -1,12 +1,13 @@
 <!--
   VELO Frontend -- SchoolBrandBanner (tz-curator.md §5.3 / §7.2)
 
-  Детерминированный фирменный фон школы («роза-вихрь»). variant="hero" --
-  полная сцена с фильтрами для страницы школы (§1.6); variant="row" --
-  лёгкий декоративный crop правой трети карточки списка (§1.4): без тяжёлых
-  фильтров, aria-hidden, pointer-events:none, мягкий fade в белый слева.
-  Полный hero-SVG НЕ монтируется в каждой строке списка (§5.3).
-  SVG идёт через data-URL <img> -- без v-html/innerHTML (правило фронта).
+  The school's deterministic branded background (the "rose-vortex" pattern).
+  variant="hero" is the full scene with filters for the school page (§1.6);
+  variant="row" is a light decorative crop of the right third of the list-row
+  card (§1.4): no heavy filters, aria-hidden, pointer-events:none, a soft
+  fade to white on the left. The full hero SVG is NOT mounted in every list
+  row (§5.3). The SVG goes through a data-URL <img> -- no v-html/innerHTML
+  (frontend rule).
 -->
 
 <template>
@@ -26,10 +27,10 @@ import { bannerSvg, brandingParams } from '@/utils/schoolBranding'
 
 const props = withDefaults(
   defineProps<{
-    /** Хэш школы: branding_hash с бэка (§5.2 B) или schoolHashFromName (A). */
+    /** School hash: the branding_hash from the backend (§5.2 B) or schoolHashFromName (A). */
     hash: string
     variant?: 'hero' | 'row'
-    /** Плоский hero-рендер: без feDisplacementMap и grain (owner 2026-09-19). */
+    /** Flat hero render: no feDisplacementMap and no grain (owner 2026-09-19). */
     flat?: boolean
   }>(),
   { variant: 'hero', flat: false },
@@ -54,7 +55,7 @@ const src = computed((): string => {
   pointer-events: none;
 }
 
-/* Row-crop: правая треть карточки списка (§1.4), мягкий fade в белый слева. */
+/* Row-crop: the right third of the list-row card (§1.4), a soft fade to white on the left. */
 .school-brand-banner--row {
   position: absolute;
   inset: 0 0 0 auto;

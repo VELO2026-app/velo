@@ -17,13 +17,13 @@
  * Handles missing fractional part, single-digit fractions, and empty/invalid input.
  *
  * Examples:
- *   "15"     -> 1500
- *   "15.9"   -> 1590
- *   "15.99"  -> 1599
- *   "15.999" -> 1599  (truncated, not rounded -- display-only input)
- *   "0"      -> 0
- *   ""       -> 0
- *   "abc"    -> 0
+ *   `"15"     -> 1500`
+ *   `"15.9"   -> 1590`
+ *   `"15.99"  -> 1599`
+ *   `"15.999" -> 1599`  (truncated, not rounded -- display-only input)
+ *   `"0"      -> 0`
+ *   `""       -> 0`
+ *   `"abc"    -> 0`
  */
 export function eurStringToCents(raw: string): number {
   const trimmed = raw.trim()
@@ -54,13 +54,14 @@ export function eurStringToCents(raw: string): number {
 
 /**
  * Convert integer cents to a display string suitable for price inputs.
- * Always returns exactly 2 decimal places.
+ *
+ * @returns The display string, always with exactly 2 decimal places.
  *
  * Examples:
- *   1599 -> "15.99"
- *   1500 -> "15.00"
- *   100  -> "1.00"
- *   0    -> "0.00"
+ *   `1599 -> "15.99"`
+ *   `1500 -> "15.00"`
+ *   `100  -> "1.00"`
+ *   `0    -> "0.00"`
  */
 export function centsToEurString(cents: number): string {
   // toFixed(2) is safe here: we're converting from an integer, no float math.

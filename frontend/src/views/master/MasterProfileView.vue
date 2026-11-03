@@ -1,22 +1,28 @@
 <!--
   VELO Frontend -- MasterProfileView (redesigned as a menu hub, 2026-06-13)
 
-  Master profile rebuilt to the «1 Profile» design: a clean settings hub
+  Master profile rebuilt to the "1 Profile" design: a clean settings hub
   (avatar + name + email header, then grouped VMenuRow sections) replacing the
-  old detail screen. Route: /master/profile (tab «Я»). No masterStatusGuard --
-  accessible even while pending.
+  old detail screen. Route: /master/profile (profile tab, i18n:tabs.profile).
+  No masterStatusGuard -- accessible even while pending.
 
   Relocations from the old screen (operator-approved 2026-06-12):
-    - Payout requisites form -> MasterFinanceView (reached via «Вывод средств»).
-    - Bio -> «О себе» in the edit screen.
+    - Payout requisites form -> MasterFinanceView (reached via the withdraw
+      entry, i18n:masterScreens.masterProfile.menu.withdraw).
+    - Bio -> the about section (i18n:user.screens.editProfile.about.label)
+      in the edit screen.
     - Methods / experience / verified badge -> the public master profile (kept
       off the private hub).
     - Switch-to-user kept as a row; RoleSwitchSection (test-only) below it.
 
   Backend gaps (built per design, stubbed, recorded for Zod):
     - user.email -> shown when the backend returns it; hidden until then.
-    - «Сообщения» unread count (badge) -> 0 until the messages module lands.
-    - «Сообщения» / «Мои промокоды» / «Поддержка» open dedicated screens.
+    - Messages unread count (badge;
+      i18n:masterScreens.masterProfile.menu.messages) -> 0 until the messages
+      module lands.
+    - Messages / promocodes (i18n:masterScreens.masterProfile.menu.promocodes)
+      / support (i18n:masterScreens.masterProfile.menu.support) open dedicated
+      screens.
 -->
 
 <template>
@@ -32,7 +38,7 @@
 
     <!-- Menu sections -->
     <div class="master-profile__menus">
-      <!-- Аккаунт -->
+      <!-- Account (i18n:masterScreens.masterProfile.account) -->
       <div class="master-profile__menu-section">
         <div class="master-profile__menu-title">{{ t('masterScreens.masterProfile.account') }}</div>
         <div class="master-profile__menu-list">
@@ -65,7 +71,7 @@
         </div>
       </div>
 
-      <!-- Настройки -->
+      <!-- Settings (i18n:masterScreens.masterProfile.settings) -->
       <div class="master-profile__menu-section">
         <div class="master-profile__menu-title">
           {{ t('masterScreens.masterProfile.settings') }}
@@ -86,9 +92,10 @@
         </div>
       </div>
 
-      <!-- Помощь. The single user-mode entry point is «Режим пользователя» in
-           RoleSwitchSection below (a real role switch); the redundant «Открыть
-           как пользователь» uiMode-preview row was removed (batch L, L8). -->
+      <!-- Help (i18n:masterScreens.masterProfile.help). The single user-mode
+           entry point is the user-mode switch (i18n:roleSwitch.user) in
+           RoleSwitchSection below (a real role switch); the redundant
+           uiMode-preview "open as user" row was removed (batch L, L8). -->
       <div class="master-profile__menu-section">
         <div class="master-profile__menu-title">
           {{ t('masterScreens.masterProfile.help') }}
@@ -162,7 +169,8 @@ const router = useRouter()
 const masterStore = useMasterStore()
 const authStore = useAuthStore()
 
-// FE-112 (tz-whitelabel §4): hides the «Вывести» entry in editions without
+// FE-112 (tz-whitelabel §4): hides the withdraw entry
+// (i18n:masterScreens.masterProfile.menu.withdraw) in editions without
 // the payments module (see the template comment at the menu row).
 const paymentsEnabled = featureEnabled('payments')
 
@@ -180,23 +188,24 @@ const userEmail = computed(
   () => (authStore.user as { email?: string | null } | null | undefined)?.email ?? '',
 )
 
-// «Сообщения» unread badge -- ONE call since T-51 (was: list every thread,
+// Messages unread badge (i18n:masterScreens.masterProfile.menu.messages)
+// -- ONE call since T-51 (was: list every thread,
 // then one unread-count request per thread, on every hub open). Loaded lazily
 // on mount and silent on failure (the badge is a courtesy, the hub must
 // render regardless of the chat proxy's health).
 //
 // THE NUMBER MEANS SOMETHING SLIGHTLY DIFFERENT NOW, and the owner signed off
-// on the shift. It is «my unread, in whatever role I hold»:
+// on the shift. It is "my unread, in whatever role I hold":
 //   - GONE: unread sitting in the UNCLAIMED support queue. Those threads are
 //     visible to every operator, so their counts used to land in this sum --
 //     a master's own badge lighting up over a queue that is nobody's yet.
 //   - ADDED: threads where this master is himself the client (a master may
 //     open a chat with another master).
-// For a row on one's OWN profile, «mine» is the correct reading of both.
+// For a row on one's OWN profile, "mine" is the correct reading of both.
 //
 // T-53 removed the support pool from the chat LIST as well (it was a privacy
 // leak), so it is now absent from both this number and that screen. Do not
-// read that as «the two agree»: a thread where the master is himself the
+// read that as "the two agree": a thread where the master is himself the
 // client counts HERE and never shows up in that list, because comms scopes an
 // operator's list by assignee. That gap is the approved meaning above, not a
 // bug to reconcile.

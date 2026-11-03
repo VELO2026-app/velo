@@ -44,7 +44,8 @@ vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({ role: mockRole, user: { onboarding_completed: mockOnboarded } }),
 }))
 
-// FE-88: a successful join must refresh the dock's «Школы» tab probe (the
+// FE-88: a successful join must refresh the dock's schools tab probe
+// (i18n:tabs.schools; the
 // account may have just gained its first school). Mocked wholesale: this
 // app mounts without pinia, and the refresh is the only hub seam used here.
 const hubRefresh = vi.fn()
@@ -403,7 +404,8 @@ describe('SchoolJoinView -- the join gate', () => {
     await flush()
 
     expect(toastSuccess).toHaveBeenCalledWith('Вы вступили в школу «Тихая школа»')
-    // FE-88 still applies: the dock's «Школы» tab probe refreshes even though
+    // FE-88 still applies: the dock's schools tab probe (i18n:tabs.schools)
+    // refreshes even though
     // the navigation into the shell is deferred behind the carousel.
     expect(hubRefresh).toHaveBeenCalledTimes(1)
     expect(replace).not.toHaveBeenCalled()

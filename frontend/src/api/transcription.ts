@@ -16,11 +16,11 @@
  * module gave, with one addition. The shared client aborts every request at
  * 15 seconds; a minute of audio does not come back in 15 seconds, and an
  * abort on our side does not stop the completion the server is already
- * paying for. The timeout ladder is deliberate: browser 30s > backend 25s
- * (OPENROUTER_HTTP_TIMEOUT_SECONDS) > the provider call. Whoever gives up
- * first must not be the party holding the bill.
+ * paying for. The timeout ladder is deliberate:
+ * `browser 30s > backend 25s (OPENROUTER_HTTP_TIMEOUT_SECONDS) > the provider call`.
+ * Whoever gives up first must not be the party holding the bill.
  *
- * TranscribeResult is unchanged from the old module -- {ok, text?, error?} --
+ * TranscribeResult is unchanged from the old module -- `{ok, text?, error?}` --
  * so Composer.vue keeps consuming exactly what it consumed before.
  */
 
@@ -31,6 +31,7 @@ import { blobToBase64 } from '@/utils/audio'
 
 import { getAuthToken } from './client'
 
+/** Transcription outcome: ok plus the transcript, or a user-facing error message. */
 export interface TranscribeResult {
   ok: boolean
   text?: string
@@ -43,20 +44,21 @@ const BASE_URL = INSTANCE.apiBaseUrl
 const TIMEOUT_MS = 30000
 
 /**
- * Machine code -> the sentence the person reads. The table lives in
+ * `Machine code -> the sentence the person reads.` The table lives in
  * locales/ru/errors.json under `transcription` (tz-i18n 1.2) -- keys
  * transcription.<code>, phrases verbatim what the JS table carried.
  *
  * Every entry the backend can raise is there; anything unlisted falls back
  * to transcription.generic rather than showing a raw identifier.
  *
- * The vendor is deliberately absent from all of them. The old module said
- * «Закончился баланс OpenRouter» on a 402, which told a stranger both who we
- * buy from and what our balance is -- neither is theirs to know, and neither
- * is something they can act on. The backend collapses every provider-side
- * failure into transcription_failed for the same reason, including the
- * provider's own rate limit: that limit is on OUR key and counts everyone's
- * requests, so «слишком часто» addressed to this person would be false.
+ * The vendor is deliberately absent from all of them. The old module said,
+ * in Russian, that the OpenRouter balance had run out on a 402, which told
+ * a stranger both who we buy from and what our balance is -- neither is
+ * theirs to know, and neither is something they can act on. The backend
+ * collapses every provider-side failure into transcription_failed for the
+ * same reason, including the provider's own rate limit: that limit is on
+ * OUR key and counts everyone's requests, so a "too often" sentence
+ * addressed to this person would be false.
  */
 function genericError(): string {
   return i18n.global.t('transcription.generic')
@@ -69,13 +71,14 @@ function transcriptionError(code: string | null): string {
   return genericError()
 }
 
-/** Read the machine code out of our own error envelope: {error, message}. */
+/** Read the machine code out of our own error envelope: `{error, message}`. */
 function codeOf(payload: unknown): string | null {
   if (typeof payload !== 'object' || payload === null) return null
   const code = (payload as { error?: unknown }).error
   return typeof code === 'string' ? code : null
 }
 
+/** Send a recorded audio take to our backend for transcription (raw fetch: the 15-second shared-client timeout does not fit a minute of audio). */
 export async function transcribeAudio(audio: Blob): Promise<TranscribeResult> {
   let base64: string
   try {

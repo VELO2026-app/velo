@@ -5,7 +5,7 @@
     - Current balance display
     - Preset amounts (EUR 5, 10, 20, 50)
     - Custom amount input (EUR 1-500)
-    - "Пополнить" button -> POST /api/v1/payments/topup -> redirect
+    - The topup CTA (i18n:user.screens.topup.topupCta) -> POST /api/v1/payments/topup -> redirect
 
   F5 review fixes:
     C-1: Validate checkout_url before redirect (whitelist)
@@ -17,9 +17,11 @@
 <template>
   <div class="topup">
     <!-- A11Y-AUDIT-20260810 P1: no page-level visible title anywhere on this
-         screen ("Ваш баланс" / "Выберите сумму" are section-level labels, not a
-         page title) -- sr-only heading so screen-reader users navigating by
-         heading still get a page label for this screen. -->
+         screen (the balance label, i18n:user.screens.topup.balanceLabel, and
+         the amount title, i18n:user.screens.topup.amount.title, are
+         section-level labels, not a page title) -- sr-only heading so
+         screen-reader users navigating by heading still get a page label for
+         this screen. -->
     <h1 class="velo-sr-only">{{ t('user.screens.topup.title') }}</h1>
     <!-- Balance -->
     <div class="topup__balance">
@@ -116,9 +118,9 @@ const MAX_CENTS = 50000 // EUR 500.00 (from backend config)
 // info belongs to a different project entirely. If the env var is missing,
 // the allowlist admits ONLY Stripe's real checkout domain; a stub-mode
 // checkout_url (which would need the second prefix) is then rejected by
-// isAllowedRedirectUrl() below, and the user sees the existing "Некорректный
-// URL платёжной системы" toast instead of the allowlist silently widening
-// to permit a foreign domain.
+// isAllowedRedirectUrl() below, and the user sees the existing
+// invalid-payment-url toast (i18n:user.screens.topup.error.invalidUrl)
+// instead of the allowlist silently widening to permit a foreign domain.
 const ALLOWED_REDIRECT_PREFIXES = [
   'https://checkout.stripe.com/',
   ...(INSTANCE.apiBaseUrl ? [INSTANCE.apiBaseUrl] : []),
