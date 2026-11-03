@@ -34,11 +34,11 @@ import { api } from '@/api/client'
  *  key below is ALWAYS present on the wire; `action_data` and `read_at` are
  *  the two that may be null. `action_data` is the navigational intent,
  *  read by BOTH inbox deep-link maps (FE-11 + master parity 2026-09-08):
- *  the user inbox routes open_practice / confirm_waitlist -> the practice
- *  page, open_feedback -> feedback, open_wallet -> top-up, open_thread ->
- *  that message dialog (msg.* falls back to the messages list); the master
- *  inbox routes the same vocabulary into master-zone routes
- *  (MasterInboxView.vue). */
+ *  the user inbox routes `open_practice / confirm_waitlist -> the practice page`,
+ *  `open_feedback -> feedback`, `open_wallet -> top-up`,
+ *  `open_thread -> that message dialog` (msg.* falls back to the messages
+ *  list); the master inbox routes the same vocabulary into master-zone
+ *  routes (MasterInboxView.vue). */
 export interface NotificationItem {
   id: string
   type: string

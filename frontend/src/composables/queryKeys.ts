@@ -9,6 +9,6 @@
 export const queryKeys = {
   /** GET /bookings/me/stats -- attended practices + hours. */
   myStats: () => ['bookings', 'me', 'stats'] as const,
-  /** GET /practices/{id} -- the practice detail screen. */
+  /** `GET /practices/{id}` -- the practice detail screen. */
   practice: (id: string) => ['practice', id] as const,
 }

@@ -364,9 +364,11 @@ export function sendAdminSupportReply(threadId: string, body: string): Promise<S
 }
 
 /** Take a ticket -- the act that grants the right to reply. A repeat of your
- *  own claim is 200 again; held by another admin -> 409. The answer (comms'
- *  thread) is not read: the card reads the ticket again (getAdminTicket), so
- *  who holds it is always velo's `claimed_by`. */
+ *  own claim is 200 again. The answer (comms' thread) is not read: the card
+ *  reads the ticket again (getAdminTicket), so who holds it is always velo's
+ *  `claimed_by`.
+ *
+ *  @throws ApiResponseError -- `held by another admin -> 409`. */
 export function claimSupportThread(threadId: string): Promise<unknown> {
   return api.post<unknown>(`/api/v1/support/threads/${threadId}/claim`, {})
 }

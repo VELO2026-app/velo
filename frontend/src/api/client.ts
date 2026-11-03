@@ -33,7 +33,7 @@ export class ApiResponseError extends Error {
     /** Machine-readable error code from backend (e.g. "insufficient_balance"). */
     public code: string = 'unknown',
     /**
-     * Raw Pydantic 422 entries ({loc, msg, type}) when the failure is a
+     * Raw Pydantic 422 entries (`{loc, msg, type}`) when the failure is a
      * validation error, else undefined. FE-70: the external-activity form
      * binds each 422 to its control (the backend deliberately returns
      * SEVERAL field errors at once), which a joined string cannot express.

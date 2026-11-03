@@ -243,7 +243,7 @@ export function verifyMaster(
 }
 
 /**
- * PATCH /admin/masters/{user_id}/can-create-schools -- grant or take back a
+ * `PATCH /admin/masters/{user_id}/can-create-schools` -- grant or take back a
  * verified master's right to found schools (BE-18). ONE toggle, not a
  * grant/revoke pair: the thing is a single boolean and both directions are
  * the same idempotent write. Separate from verify because a master verified
@@ -275,7 +275,7 @@ export function getRevokePreview(userId: string): Promise<RevokeMasterAdvisory> 
 }
 
 /**
- * Revoke a master's capability (A1, operator B): role -> user + profile
+ * Revoke a master's capability (A1, operator B): `role -> user` + profile
  * soft-frozen (status=suspended, is_accepting=false); all data preserved.
  * Re-grant via makeMaster (i18n:adminScreens.adminUsers.makeMaster). Never
  * blocks on the advisory.
@@ -310,8 +310,8 @@ export function getMethodChangeRequests(
 
 /** Approve a master's pending method change-request (methods become live).
  *  promote (R5 stage 4, operator decision 3=B): optional custom method
- *  labels to add to the taxonomy catalog. Omitted/empty -> no catalog
- *  write, identical to pre-stage-4 behavior. */
+ *  labels to add to the taxonomy catalog. `Omitted/empty -> no catalog write`,
+ *  identical to pre-stage-4 behavior. */
 export function approveMethodChange(
   userId: string,
   promote?: string[],

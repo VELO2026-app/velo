@@ -3,7 +3,7 @@
  *
  * The transcription half of FIELD voice input, extracted from the flow
  * Composer.vue carried alone in step 1: recorder lifecycle observables, the
- * take->transcript round-trip, and every user-facing consequence of it --
+ * `take->transcript` round-trip, and every user-facing consequence of it --
  * toasts (the same composer.* texts), haptics, the local silence rejection.
  * What the caller keeps is the two decisions that differ per surface: what a
  * transcript DOES to the field (onTranscript -- the composer replaces, a

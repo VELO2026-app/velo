@@ -4,12 +4,14 @@
  * Global toast notification system. Renders via VToast component
  * mounted once in App.vue.
  *
- * Usage:
- *   import { useToast } from '@/composables/useToast'
- *   const toast = useToast()
- *   toast.success(message)
- *   toast.error(message)
- *   toast.info(message)
+ * @example
+ * ```ts
+ * import { useToast } from '@/composables/useToast'
+ * const toast = useToast()
+ * toast.success(message)
+ * toast.error(message)
+ * toast.info(message)
+ * ```
  */
 
 import { ref, readonly } from 'vue'

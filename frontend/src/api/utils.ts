@@ -14,15 +14,17 @@ type QueryValue = QueryScalar | QueryScalar[] | undefined | null
  * Build query string from an object, skipping undefined/null values and
  * empty arrays. Array values are serialized as repeated keys.
  *
- * Examples:
- *   buildQuery({ limit: 20, offset: 0, status: undefined })
- *   => "?limit=20&offset=0"
+ * @example
+ * ```ts
+ * buildQuery({ limit: 20, offset: 0, status: undefined })
+ * // => "?limit=20&offset=0"
  *
- *   buildQuery({ direction: ['yoga', 'breathwork'] })
- *   => "?direction=yoga&direction=breathwork"
+ * buildQuery({ direction: ['yoga', 'breathwork'] })
+ * // => "?direction=yoga&direction=breathwork"
  *
- *   buildQuery({ direction: [] })          // empty array -> skipped
- *   => ""
+ * buildQuery({ direction: [] }) // empty array -> skipped
+ * // => ""
+ * ```
  */
 export function buildQuery(params: Record<string, QueryValue>): string {
   const qs = new URLSearchParams()

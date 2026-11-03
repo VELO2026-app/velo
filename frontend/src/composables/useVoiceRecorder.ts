@@ -7,7 +7,7 @@
  * (the voice-input spec file was never committed to the repo; FE-75 in Linear
  * carries the step split and the step-2 scope).
  *
- * STATE MACHINE: idle -> requesting -> recording -> processing -> idle.
+ * STATE MACHINE: `idle -> requesting -> recording -> processing -> idle`.
  *   - requesting: getUserMedia permission prompt in flight (UI shows nothing
  *     new; a denial lands in errorReason).
  *   - recording:  mic open, stopwatch ticking (elapsedSec, ~200ms cadence).
@@ -199,7 +199,7 @@ export function useVoiceRecorder(options: VoiceRecorderOptions = {}) {
     }
   }
 
-  /** Manual stop: recording -> processing -> the take (null on failure).
+  /** Manual stop: `recording -> processing -> the take (null on failure)`.
    * Idempotent while a stop is already in flight. */
   function stop(): Promise<VoiceTake | null> {
     if (state.value === 'recording') {

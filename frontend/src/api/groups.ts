@@ -119,7 +119,7 @@ export interface DistinctTagsResponse {
   tags: string[]
 }
 
-/** GET /api/v1/masters/me/students/{id}/groups (P3). */
+/** `GET /api/v1/masters/me/students/{id}/groups` (P3). */
 export interface StudentGroupItem {
   id: string
   name: string
@@ -137,10 +137,13 @@ export function getGroups(): Promise<GroupListResponse> {
   return api.get<GroupListResponse>('/api/v1/masters/me/groups')
 }
 
-/** POST /api/v1/masters/me/groups -- create a custom group. `description`
- *  is optional (Owner Q4, PROMPT №610); blank/whitespace is normalized to
- *  null server-side. 409 on a duplicate name for this master (surface via
- *  extractApiError). */
+/** POST /api/v1/masters/me/groups -- create a custom group.
+ *
+ *  @param description - Optional (Owner Q4, PROMPT №610); blank/whitespace
+ *    is normalized to null server-side.
+ *
+ *  @throws ApiResponseError -- 409 on a duplicate name for this master
+ *    (surface via extractApiError). */
 export function createGroup(name: string, description?: string): Promise<GroupResponse> {
   return api.post<GroupResponse>('/api/v1/masters/me/groups', {
     name,
@@ -148,14 +151,16 @@ export function createGroup(name: string, description?: string): Promise<GroupRe
   })
 }
 
-/** PATCH /api/v1/masters/me/groups/{id} -- rename AND/OR edit description
- *  (Owner Q10, PROMPT №611). `description` is a PARTIAL UPDATE: omitting the
- *  argument entirely (`undefined`) omits the JSON key too, so the backend's
- *  own exclude_unset check leaves the column untouched -- passing `''`
- *  explicitly sends the key and clears it to NULL server-side. This is the
- *  same distinction MasterGroupDetailView's combined rename+description
- *  dialog relies on: it always sends both, but a raw caller renaming only
- *  must be able to omit description without wiping it. */
+/** `PATCH /api/v1/masters/me/groups/{id}` -- rename AND/OR edit description
+ *  (Owner Q10, PROMPT №611). This is the same distinction
+ *  MasterGroupDetailView's combined rename+description dialog relies on: it
+ *  always sends both, but a raw caller renaming only must be able to omit
+ *  description without wiping it.
+ *
+ *  @param description - PARTIAL UPDATE: omitting the argument entirely
+ *    (`undefined`) omits the JSON key too, so the backend's own
+ *    exclude_unset check leaves the column untouched -- passing `''`
+ *    explicitly sends the key and clears it to NULL server-side. */
 export function renameGroup(
   id: string,
   name: string,
@@ -168,15 +173,16 @@ export function renameGroup(
   return api.patch<GroupResponse>(`/api/v1/masters/me/groups/${id}`, body)
 }
 
-/** DELETE /api/v1/masters/me/groups/{id} -- delete a custom group (its
+/** `DELETE /api/v1/masters/me/groups/{id}` -- delete a custom group (its
  *  memberships cascade; members fall back to the derived default students
  *  group). */
 export function deleteGroup(id: string): Promise<void> {
   return api.delete(`/api/v1/masters/me/groups/${id}`)
 }
 
-/** GET /api/v1/masters/me/groups/{id}/members -- {id} accepts "students" /
- *  "deleted" / a custom group's UUID, same paginated + searchable shape. */
+/** `GET /api/v1/masters/me/groups/{id}/members` -- `{id}` accepts
+ *  "students" / "deleted" / a custom group's UUID, same paginated + searchable
+ *  shape. */
 export function getGroupMembers(
   id: string,
   search = '',
@@ -199,7 +205,7 @@ export function searchGroupMemberships(
   return api.get<PaginatedGroupSearchResponse>(`/api/v1/masters/me/groups/search${query}`)
 }
 
-/** POST /api/v1/masters/me/groups/{id}/members -- add-access, not move
+/** `POST /api/v1/masters/me/groups/{id}/members` -- add-access, not move
  *  (owner-settled): the student keeps every other membership. Idempotent. */
 export function addGroupMember(id: string, studentUserId: string): Promise<void> {
   return api.post(`/api/v1/masters/me/groups/${id}/members`, {
@@ -207,15 +213,17 @@ export function addGroupMember(id: string, studentUserId: string): Promise<void>
   })
 }
 
-/** DELETE /api/v1/masters/me/groups/{id}/members/{studentUserId} -- remove
+/** `DELETE /api/v1/masters/me/groups/{id}/members/{studentUserId}` -- remove
  *  from a CUSTOM group only (system slugs are rejected server-side). */
 export function removeGroupMember(id: string, studentUserId: string): Promise<void> {
   return api.delete(`/api/v1/masters/me/groups/${id}/members/${studentUserId}`)
 }
 
-/** PUT /api/v1/masters/me/students/{studentUserId}/tag -- upsert (or, when
- *  tag is null, clear) the single tag for this student. ONE tag per
- *  student (owner Q1=A) -- this REPLACES, never appends. */
+/** `PUT /api/v1/masters/me/students/{studentUserId}/tag` -- upsert the
+ *  single tag for this student.
+ *
+ *  @param tag - Null clears the single tag for this student. ONE tag per
+ *    student (owner Q1=A) -- this REPLACES, never appends. */
 export function setStudentTag(
   studentUserId: string,
   tag: string | null,
@@ -225,14 +233,14 @@ export function setStudentTag(
   })
 }
 
-/** POST /api/v1/masters/me/students/{studentUserId}/block (P3) -- sets
+/** `POST /api/v1/masters/me/students/{studentUserId}/block` (P3) -- sets
  *  blocked_at, drops the student from every custom group, cancels+refunds
  *  their FUTURE confirmed bookings on this master's practices. */
 export function blockStudent(studentUserId: string): Promise<BlockStudentResponse> {
   return api.post<BlockStudentResponse>(`/api/v1/masters/me/students/${studentUserId}/block`)
 }
 
-/** DELETE /api/v1/masters/me/students/{studentUserId}/block (P3) -- unblock.
+/** `DELETE /api/v1/masters/me/students/{studentUserId}/block` (P3) -- unblock.
  *  The student returns to the default students group automatically (derived);
  *  custom-group memberships are NOT restored, the tag is kept. */
 export function unblockStudent(studentUserId: string): Promise<void> {
@@ -246,14 +254,14 @@ export function getMyTags(): Promise<DistinctTagsResponse> {
   return api.get<DistinctTagsResponse>('/api/v1/masters/me/tags')
 }
 
-/** GET /api/v1/masters/me/students/{studentUserId}/groups (P3) -- the
+/** `GET /api/v1/masters/me/students/{studentUserId}/groups` (P3) -- the
  *  CUSTOM groups this student is in for this master (profile group chips).
  *  Never the two virtuals -- they aren't membership rows. */
 export function getStudentGroups(studentUserId: string): Promise<StudentGroupsResponse> {
   return api.get<StudentGroupsResponse>(`/api/v1/masters/me/students/${studentUserId}/groups`)
 }
 
-/** POST /api/v1/masters/me/groups/{id}/invite (P4). */
+/** `POST /api/v1/masters/me/groups/{id}/invite` (P4). */
 export interface GroupInviteResponse {
   invite_url: string
 }
@@ -265,17 +273,20 @@ export interface JoinGroupResponse {
   master_name: string
 }
 
-/** POST /api/v1/masters/me/groups/{id}/invite (P4) -- create-or-return the
- *  group's reusable invite link. CUSTOM groups only. Idempotent: repeat
- *  calls return the SAME url. */
+/** `POST /api/v1/masters/me/groups/{id}/invite` (P4) -- create-or-return the
+ *  group's reusable invite link. CUSTOM groups only.
+ *
+ *  @returns The SAME url on repeat calls (idempotent). */
 export function createGroupInvite(id: string): Promise<GroupInviteResponse> {
   return api.post<GroupInviteResponse>(`/api/v1/masters/me/groups/${id}/invite`)
 }
 
-/** POST /api/v1/masters/groups/join (P4) -- resolve a group-invite token
+/** `POST /api/v1/masters/groups/join` (P4) -- resolve a group-invite token
  *  and join the CALLER (any authenticated user, not master-scoped) to that
- *  group. 403 if the caller is blocked by that group's master, 404 on an
- *  unknown/invalid token. */
+ *  group.
+ *
+ *  @throws ApiResponseError -- 403 if the caller is blocked by that group's
+ *    master; 404 on an unknown/invalid token. */
 export function joinGroup(token: string): Promise<JoinGroupResponse> {
   return api.post<JoinGroupResponse>('/api/v1/masters/groups/join', { token })
 }
