@@ -28,30 +28,54 @@ import { describe, it, expect, afterEach, vi } from 'vitest'
 import { createApp, nextTick, ref, h, type App, type Ref } from 'vue'
 import VInput from '@/components/ui/VInput.vue'
 
+// FE-144 (P6a-2, pre-@velo/ui-move): the keyboard focus-scroll seam is
+// MOCKED per the ticket -- only its WIRING (onFieldFocus bound as @focus on
+// each render path) is asserted in the FE-144 section at the bottom, never
+// the real scroll machinery.
+const onFieldFocus = vi.hoisted(() => vi.fn())
+vi.mock('@/composables/useKeyboardFieldScroll', () => ({
+  useKeyboardFieldScroll: () => ({ onFieldFocus }),
+}))
+
 let app: App | null = null
 let host: HTMLElement | null = null
 
 /**
  * Mount VInput under a parent that runs `normalise` over every emitted value --
  * i.e. the shape of a screen that sanitises input.
+ *
+ * FE-144: the optional `affix` mounts the prefix/suffix slots (the affix
+ * render path), so the new sections reuse the same two-way harness.
  */
 function mountWith(
   normalise: (v: string) => string,
   initial = '',
   props: Record<string, unknown> = {},
+  affix?: 'prefix' | 'suffix' | 'both',
 ): { input: HTMLInputElement; model: Ref<string> } {
   const model = ref(initial)
   host = document.createElement('div')
   document.body.appendChild(host)
+  const slots =
+    affix === undefined
+      ? undefined
+      : {
+          ...(affix !== 'suffix' ? { prefix: () => h('span', '€') } : {}),
+          ...(affix !== 'prefix' ? { suffix: () => h('span', '₽') } : {}),
+        }
   app = createApp({
     render: () =>
-      h(VInput, {
-        ...props,
-        modelValue: model.value,
-        'onUpdate:modelValue': (v: string) => {
-          model.value = normalise(v)
+      h(
+        VInput,
+        {
+          ...props,
+          modelValue: model.value,
+          'onUpdate:modelValue': (v: string) => {
+            model.value = normalise(v)
+          },
         },
-      }),
+        slots,
+      ),
   }).use(createTestI18n())
   app.mount(host)
   const input = host.querySelector('input')
@@ -292,6 +316,174 @@ describe('VInput', () => {
       vm?.focus()
 
       expect(spy).toHaveBeenCalled()
+    })
+  })
+
+  // ===========================================================================
+  // FE-144 (P6a-2): the pre-@velo/ui-move contract pin. Everything the move
+  // must preserve that the controlled-input sections above do not cover:
+  // the label↔field wiring, the validation aria wiring, the required seal,
+  // the affix order and the focus-scroll seam. Markup + events only
+  // (happy-dom: no var() tokens, no computed styles). Zero component edits --
+  // anything that would need one is a finding for the FE-144 report.
+  // ===========================================================================
+
+  describe('FE-144: the label ↔ field wiring (PROMPT №679)', () => {
+    it('plain path: the external label[for] === input.id (the useId association)', () => {
+      mountWith(passThrough, '', { label: 'Имя' })
+
+      const label = host?.querySelector('label.v-input__label')
+      const input = host?.querySelector('input')
+      expect(label?.getAttribute('for')).toBe(input?.id)
+      expect(label?.textContent).toBe('Имя')
+    })
+
+    it('floating path: NO external label; the internal float label binds the same id; --filled tracks the model', async () => {
+      const empty = mountWith(passThrough, '', { floatingLabel: true, label: 'Сумма' })
+      expect(host?.querySelector('label.v-input__label')).toBeNull()
+      const floatLabel = host?.querySelector('.v-input__float-label')
+      expect(floatLabel?.getAttribute('for')).toBe(empty.input.id)
+      expect(
+        host?.querySelector('.v-input__float')?.classList.contains('v-input__float--filled'),
+      ).toBe(false)
+
+      await type(empty.input, 'заполнено')
+      expect(
+        host?.querySelector('.v-input__float')?.classList.contains('v-input__float--filled'),
+      ).toBe(true)
+    })
+
+    it('floatingLabel is IGNORED when an affix slot is present: the affix path wins -- and NO label renders (FE-144 finding, pinned as-is)', () => {
+      // FE-144 FINDING (not fixed here -- test-only ticket): the external
+      // label's v-if is `label && !floatingLabel`, but it is the FLOAT branch
+      // that backs off for affix slots. A caller combining floatingLabel with
+      // a prefix/suffix slot therefore gets the affix path with NO label of
+      // any kind: no external label, no float label -- the bare input loses
+      // its accessible name entirely. Pinned as-implemented for the move;
+      // see the FE-144 report.
+      mountWith(passThrough, '', { floatingLabel: true, label: 'Сумма' }, 'prefix')
+
+      expect(host?.querySelector('.v-input__float')).toBeNull()
+      expect(host?.querySelector('.v-input__box')).not.toBeNull()
+      expect(host?.querySelector('label.v-input__label')).toBeNull()
+      expect(host?.querySelector('.v-input__float-label')).toBeNull()
+    })
+
+    it('affix path: the external label binds the inner bare input id too', () => {
+      mountWith(passThrough, '', { label: 'Сумма' }, 'prefix')
+
+      const label = host?.querySelector('label.v-input__label')
+      const input = host?.querySelector('input.v-input__field--bare')
+      expect(label?.getAttribute('for')).toBe(input?.id)
+    })
+  })
+
+  describe('FE-144: the validation wiring (aria + VFieldError)', () => {
+    it('no error: no aria-invalid, no aria-describedby; the always-mounted error row is aria-hidden', () => {
+      mountWith(passThrough, '', { label: 'Имя' })
+      const input = host?.querySelector('input')
+
+      expect(input?.hasAttribute('aria-invalid')).toBe(false)
+      expect(input?.hasAttribute('aria-describedby')).toBe(false)
+      expect(host?.querySelector('.v-input--error')).toBeNull()
+      expect(host?.querySelector('.v-field-error')?.getAttribute('aria-hidden')).toBe('true')
+    })
+
+    it('error (plain path): aria-invalid=true, aria-describedby -> the role=alert line with the text', () => {
+      mountWith(passThrough, '', { label: 'Имя', error: 'Обязательное поле' })
+      const input = host?.querySelector('input')
+
+      expect(input?.getAttribute('aria-invalid')).toBe('true')
+      const describedBy = input?.getAttribute('aria-describedby')
+      expect(describedBy).toBe(`${input?.id}-error`)
+
+      const line = host?.querySelector('.v-field-error__text')
+      expect(line?.getAttribute('role')).toBe('alert')
+      expect(line?.id).toBe(describedBy)
+      expect(line?.textContent).toBe('Обязательное поле')
+      expect(host?.querySelector('.v-input--error')).not.toBeNull()
+    })
+
+    it('error on the FLOATING path wires the same aria onto its own <input> (W10 paranoia)', () => {
+      mountWith(passThrough, '', { floatingLabel: true, label: 'Сумма', error: 'Мало' })
+      const input = host?.querySelector('input')
+
+      expect(input?.getAttribute('aria-invalid')).toBe('true')
+      expect(input?.getAttribute('aria-describedby')).toBe(`${input?.id}-error`)
+    })
+
+    it('error on the AFFIX path wires the same aria onto its own <input>', () => {
+      mountWith(passThrough, '', { label: 'Сумма', error: 'Мало' }, 'prefix')
+      const input = host?.querySelector('input')
+
+      expect(input?.getAttribute('aria-invalid')).toBe('true')
+      expect(input?.getAttribute('aria-describedby')).toBe(`${input?.id}-error`)
+    })
+  })
+
+  describe('FE-144: the required seal (DS marker)', () => {
+    it('off by default: no seal renders', () => {
+      mountWith(passThrough, '', { label: 'Имя' })
+      expect(host?.querySelector('.v-input__seal')).toBeNull()
+    })
+
+    it('required + empty renders the seal NOT done; typing flips it done', async () => {
+      const { input } = mountWith(passThrough, '', { label: 'Имя', required: true })
+
+      const seal = host?.querySelector('.v-input__seal')
+      expect(seal).not.toBeNull()
+      expect(seal?.classList.contains('v-input__seal--done')).toBe(false)
+
+      await type(input, 'заполнено')
+      expect(host?.querySelector('.v-input__seal')?.classList.contains('v-input__seal--done')).toBe(
+        true,
+      )
+    })
+  })
+
+  describe('FE-144: misc markup parity', () => {
+    it('placeholder and disabled reach the inner input (plain path)', () => {
+      mountWith(passThrough, '', { placeholder: 'Подсказка' })
+      expect(host?.querySelector('input')?.getAttribute('placeholder')).toBe('Подсказка')
+
+      mountWith(passThrough, '', { disabled: true })
+      expect(host?.querySelector('input')?.disabled).toBe(true)
+    })
+
+    it('the affix order is prefix -> input -> suffix inside the box', () => {
+      mountWith(passThrough, '', {}, 'both')
+
+      const box = host?.querySelector('.v-input__box')
+      const children = Array.from(box?.children ?? [])
+      expect(children[0]?.classList.contains('v-input__affix')).toBe(true)
+      expect(children[0]?.textContent).toBe('€')
+      expect(children[1]?.tagName).toBe('INPUT')
+      expect(children[2]?.classList.contains('v-input__affix')).toBe(true)
+      expect(children[2]?.textContent).toBe('₽')
+    })
+  })
+
+  describe('FE-144: the keyboard focus-scroll seam (useKeyboardFieldScroll mocked)', () => {
+    // The DS-wide default wiring (the W10 lesson): every render path binds
+    // @focus -> onFieldFocus. The composable is mocked, so only the BINDING
+    // is asserted -- never the real scroll.
+
+    it('plain path input focus calls onFieldFocus', async () => {
+      const { input } = mountWith(passThrough, '', { label: 'Имя' })
+      input.focus()
+      expect(onFieldFocus).toHaveBeenCalledTimes(1)
+    })
+
+    it('floating path input focus calls onFieldFocus', async () => {
+      const { input } = mountWith(passThrough, '', { floatingLabel: true, label: 'Сумма' })
+      input.focus()
+      expect(onFieldFocus).toHaveBeenCalledTimes(1)
+    })
+
+    it('affix path input focus calls onFieldFocus', async () => {
+      const { input } = mountWith(passThrough, '', { label: 'Сумма' }, 'prefix')
+      input.focus()
+      expect(onFieldFocus).toHaveBeenCalledTimes(1)
     })
   })
 })
