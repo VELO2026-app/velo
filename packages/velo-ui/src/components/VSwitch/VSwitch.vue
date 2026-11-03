@@ -1,5 +1,6 @@
 <!--
-  VELO Frontend -- VSwitch Component (Profile redesign Screen E)
+  @velo/ui -- VSwitch Component (Profile redesign Screen E; migrated
+  FE-140 batch B)
 
   Boolean on/off switch (pill track + sliding knob), matching the Figma
   notifications toggles. Reusable primitive: any future on/off setting
@@ -18,6 +19,8 @@
     :aria-label="ariaLabel || undefined"
     class="v-switch"
     :class="{ 'v-switch--on': modelValue, 'v-switch--disabled': disabled }"
+    :data-velo-on="modelValue || undefined"
+    :data-velo-disabled="disabled || undefined"
     :disabled="disabled"
     @click="toggle"
   >

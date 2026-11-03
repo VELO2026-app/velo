@@ -6,10 +6,9 @@
 // @vue/test-utils, and plugin-vue (vitest.config) compiles the .vue for us.
 // =============================================================================
 
-import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, afterEach } from 'vitest'
 import { createApp, type App } from 'vue'
-import VPaginationDots from '@/components/ui/VPaginationDots.vue'
+import VPaginationDots from './VPaginationDots.vue'
 
 let app: App | null = null
 let host: HTMLElement | null = null
@@ -17,7 +16,7 @@ let host: HTMLElement | null = null
 function mount(props: { total: number; active?: number }): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(VPaginationDots, props).use(createTestI18n())
+  app = createApp(VPaginationDots, props)
   app.mount(host)
   return host
 }

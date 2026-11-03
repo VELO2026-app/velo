@@ -1,8 +1,13 @@
 <!--
-  VELO Frontend -- VStatCard Component (Phase F2.1)
+  @velo/ui -- VStatCard Component (Phase F2.1; migrated FE-140 batch B)
 
   Numeric stat card. Matches mockup .stat-card styles.
   Used in dashboards (user stats, admin stats, master analytics).
+
+  §7.2 (FE-140): the batch A deferral's VSkeleton dependency (the skeleton
+  family lives outside this batch's map) is cut the VButton-spinner way --
+  the pending placeholder is a `pending` slot with the canonical fallback
+  below; a host may substitute its own skeleton without forking the card.
 
   Usage:
     <VStatCard value="156" label="участников">
@@ -17,6 +22,10 @@
     :class="[`v-stat--${layout}`, { 'v-stat--clickable': clickable }]"
     :role="clickable ? 'button' : undefined"
     :tabindex="clickable ? 0 : undefined"
+    :data-velo-layout="layout"
+    :data-velo-clickable="clickable || undefined"
+    :data-velo-pending="valuePending || undefined"
+    :data-velo-value-tone="valueTone"
     @click="clickable ? $emit('click') : undefined"
     @keydown.enter.space.prevent="clickable ? $emit('click') : undefined"
   >
@@ -28,8 +37,9 @@
       :class="valueTone !== 'default' ? `v-stat__value--${valueTone}` : null"
     >
       <template v-if="valuePending"
-        >&#8203;<VSkeleton class="v-stat__value-skeleton" width="1.6em" height="0.8em"
-      /></template>
+        >&#8203;<slot name="pending">
+          <span class="v-stat__value-skeleton" aria-hidden="true" /> </slot
+      ></template>
       <template v-else>{{ value }}</template>
     </div>
     <div class="v-stat__label">{{ label }}</div>
@@ -38,8 +48,6 @@
 </template>
 
 <script setup lang="ts">
-import VSkeleton from './VSkeleton.vue'
-
 withDefaults(
   defineProps<{
     value: string | number
@@ -174,8 +182,45 @@ defineEmits<{
 .v-stat__delta--muted {
   color: var(--velo-text-muted);
 }
+/* Canonical pending placeholder (§7.2, FE-140) -- the exact recipe the app's
+   VSkeleton rendered for this spot (loading system §8.3.3, carried verbatim):
+   a calm opacity "breath", never a sweep; fades in only after
+   --velo-skeleton-delay, so a fast answer never flashes it; decorative, so
+   aria-hidden. Own keyframe names -- the kit must not lean on app CSS. */
 .v-stat__value-skeleton {
   display: inline-block;
   vertical-align: middle;
+  flex-shrink: 0;
+  width: 1.6em;
+  height: 0.8em;
+  background: var(--velo-skeleton-fill);
+  border-radius: var(--radius-full);
+  animation:
+    v-stat-skeleton-appear var(--velo-dur-base) var(--velo-ease-out) var(--velo-skeleton-delay) both,
+    v-stat-skeleton-breath var(--velo-dur-pulse) var(--velo-ease-breath)
+      calc(var(--velo-skeleton-delay) + var(--velo-dur-base)) infinite;
+}
+
+@keyframes v-stat-skeleton-appear {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes v-stat-skeleton-breath {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v-stat__value-skeleton {
+    animation: v-stat-skeleton-appear var(--velo-dur-base) linear var(--velo-skeleton-delay) both;
+  }
 }
 </style>

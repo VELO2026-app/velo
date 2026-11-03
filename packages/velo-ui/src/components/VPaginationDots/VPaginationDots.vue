@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- VPaginationDots (DS component)
+  @velo/ui -- VPaginationDots (DS component; migrated FE-140 batch B)
 
   Canonical "screen-switch" dots — the single source for the dot indicator used
   by multi-step wizards (master apply) and intro carousels (onboarding).
@@ -20,6 +20,7 @@
       :key="i"
       class="v-pagination-dots__dot"
       :class="{ 'v-pagination-dots__dot--active': i - 1 === active }"
+      :data-velo-active="i - 1 === active || undefined"
     />
   </div>
 </template>

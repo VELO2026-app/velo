@@ -1,5 +1,6 @@
 <!--
-  VELO Frontend -- VRatingBar (Admin DS, 2026-06-14, operator SVG "Распределение оценок")
+  @velo/ui -- VRatingBar (Admin DS, 2026-06-14, operator SVG "Распределение
+  оценок"; migrated FE-140 batch B)
 
   A rating-distribution row: leading icon + label, a coloured progress track below,
   and the percentage. Used inside the admin feedback-detail "Распределение оценок"
@@ -17,7 +18,7 @@
 -->
 
 <template>
-  <div class="v-rating-bar">
+  <div class="v-rating-bar" :data-velo-stub="!hasValue || undefined">
     <div class="v-rating-bar__head">
       <span class="v-rating-bar__icon" :style="{ color: iconColor || barColor }"
         ><slot name="icon"

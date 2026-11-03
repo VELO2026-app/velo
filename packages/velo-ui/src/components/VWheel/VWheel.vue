@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- VWheel Component (Phase-3 master DS)
+  @velo/ui -- VWheel Component (Phase-3 master DS; migrated FE-140 batch B)
 
   iOS-style scroll-snap wheel column: a vertical list where the CENTERED item is
   the selection; neighbours dim by distance (1 -> .5, 2 -> .2). Used by the date

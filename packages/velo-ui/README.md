@@ -1,10 +1,12 @@
 # `@velo/ui` — UI-кит VELO (приватный пакет монорепы)
 
-> P1-каркас (FE-116) + P2 батч A (FE-117): каркас, контракт токенов и
-> Storybook подняты до переноса; **батч A (FE-117) перенёс первые реальные
-> компоненты** (VAvatar, VBadge, VButton, VCard, VChip, VListRow, VTag) со
-> сторями и конвенциями §7.2; заглушка VStub удалена. Остальные переезжают
-> батчами в P2(B)–P6.
+> P1-каркас (FE-116) + P2 батч A (FE-117) + P2 хвост A/батч B (FE-140):
+> каркас, контракт токенов и Storybook подняты до переноса; **батч A
+> (FE-117) перенёс первые 7 компонентов** (VAvatar, VBadge, VButton, VCard,
+> VChip, VListRow, VTag); **FE-140 доложил хвост A + батч B — 9 компонентов**
+> (VLoader, VSegment c типом `SegmentOption`, VSegmentTrack, VSwitch,
+> VPaginationDots, VRatingBar, VStatCard, VMetricHero, VWheel) со сторями и
+> конвенциями §7.2. Остальные переезжают батчами в P3–P6.
 
 ## Что здесь чему подчиняется
 
@@ -26,63 +28,84 @@
    Примитивный цветовой рамп (`--velo-teal|peach|pink|blue|sand-NNN`,
    `--velo-white`) и сырые значения (hex — stylelint `color-no-hex` уже
    первый слой) запрещены. Список ниже — allowlist, поэтому примитив в него
-   не попадает в принципе. **Единственное исключение (батч A, FE-117):**
-   компоненты едут «как есть» (§3.3), и часть вариантных цветов до сих пор
-   не имеет семантических ролей — эти ровно 7 токенов внесены в закрытый
-   `LEGACY_MIGRATED_RAMP` в тесте (ниже с пометкой `*legacy-ramp`) и
-   уходят оттуда только PR-ом, который выводит использование. Новый
-   примитив по-прежнему роняет гейт.
+   не попадает в принципе. **Единственное исключение (батч A + батч B,
+   FE-117/FE-140):** компоненты едут «как есть» (§3.3), и часть вариантных
+   цветов до сих пор не имеет семантических ролей — эти ровно 9 токенов
+   внесены в закрытый `LEGACY_MIGRATED_RAMP` в тесте (ниже с пометкой
+   `*legacy-ramp`) и уходят оттуда только PR-ом, который выводит
+   использование. Новый примитив по-прежнему роняет гейт.
 
 Проверяется тестом `src/styles/token-contract.test.ts` в каждом `pnpm test`.
 
 ```velo-ui-token-contract
 # --- bare scale family (frozen names, PROMPT №437) ---
 --font-body
+--font-heading
 --radius-full
 --radius-md
+--radius-xl
 --space-1
 --space-2
 --space-3
 --space-4
 --space-5
+--space-hairline
+--transition-base
 --transition-fast
-# --- semantic / component tokens (batch A, FE-117) ---
+# --- semantic / component tokens (batch A FE-117 + batch B FE-140) ---
 --velo-bg-card-solid
 --velo-bg-subtle
 --velo-blue-100            # *legacy-ramp (VBadge/VTag blue variant)
+--velo-border
 --velo-border-card
+--velo-border-width
 --velo-dur-base
 --velo-dur-press
+--velo-dur-pulse
+--velo-ease-breath
 --velo-ease-out
 --velo-error
+--velo-fog-color
 --velo-fs-12
 --velo-fs-14
 --velo-fs-16
 --velo-fs-18
 --velo-fs-22
+--velo-fs-24
 --velo-fs-28
+--velo-fs-32
 --velo-gap-11
+--velo-gap-2
 --velo-gap-3
+--velo-gap-6
 --velo-glass-blue-15
+--velo-glass-blue-200-15
 --velo-glass-blue-60
+--velo-glass-blue-700-60
 --velo-glass-border
 --velo-glass-peach-40
 --velo-glass-teal-30
 --velo-glass-white-01
+--velo-glass-white-30
 --velo-inset-12
 --velo-nav-inactive-bg
 --velo-peach-700           # *legacy-ramp (VBadge/VTag warning text)
 --velo-pink-100            # *legacy-ramp (VBadge/VTag error bg)
 --velo-pink-300            # *legacy-ramp (VBadge error text, VButton danger)
+--velo-pink-500            # *legacy-ramp (VStatCard rose value/delta)
 --velo-primary
 --velo-primary-dark
 --velo-radius-badge
 --velo-sand-100            # *legacy-ramp (VTag sand bg)
 --velo-shadow-glow
+--velo-shadow-switch
+--velo-skeleton-delay
+--velo-skeleton-fill
 --velo-size-40
 --velo-size-44
 --velo-size-50
---velo-teal-600            # *legacy-ramp (VBadge success text)
+--velo-teal-400            # *legacy-ramp (VMetricHero icon glyph)
+--velo-teal-600            # *legacy-ramp (VBadge success text, VStatCard teal)
 --velo-text-muted
 --velo-text-primary
 --velo-text-secondary
@@ -117,9 +140,16 @@ src/components/VButton/
 
 Баррел `src/index.ts` собирается из папочных `index.ts`. Батч A (FE-117)
 посадил в эту структуру 7 живых компонентов (VAvatar, VBadge, VButton,
-VCard, VChip, VListRow, VTag) со сторями и конвенциями §7.2
-(`data-velo-*` состояния/варианты, слот спиннера у VButton); заглушка
-VStub, доказавшая конвейер в P1, удалена её же первым реальным батчем.
+VCard, VChip, VListRow, VTag); FE-140 доложил хвост A + батч B — 9
+компонентов (VLoader, VSegment, VSegmentTrack, VSwitch, VPaginationDots,
+VRatingBar, VStatCard, VMetricHero, VWheel), каждый со сторей и
+колокализованным тестом, написанным до переноса. Конвенции §7.2 применены
+в переносных PR: `data-velo-*` состояния/варианты (additive), attrs-корень
+и слоты как швы — VLoader режет i18n-зависимость через attrs (локализованную
+подпись баррел приложения подставляет обёрткой до P3), VStatCard — через
+слот `pending` с каноническим фолбэком вместо импорта VSkeleton (скелетоны
+вне карты батча остаются в приложении). Заглушка VStub, доказавшая конвейер
+в P1, удалена её же первым реальным батчем.
 
 ## Storybook (§3.4)
 

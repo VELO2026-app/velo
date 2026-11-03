@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- VSegment Component (Phase B4.1)
+  @velo/ui -- VSegment Component (Phase B4.1; migrated FE-140 batch B)
 
   Segmented control: pick one option from a set. Covers in-page tab strips
   (Analytics, MasterPractices) and binary form toggles (Free/Paid). Glass pill
@@ -17,6 +17,8 @@
     class="v-segment"
     :class="{ 'v-segment--compact': compact, 'v-segment--scrollable': scrollable }"
     role="tablist"
+    :data-velo-compact="compact || undefined"
+    :data-velo-scrollable="scrollable || undefined"
   >
     <button
       v-for="opt in options"
@@ -26,6 +28,7 @@
       :aria-selected="modelValue === opt.value"
       class="v-segment__item"
       :class="{ 'v-segment__item--active': modelValue === opt.value }"
+      :data-velo-active="modelValue === opt.value || undefined"
       @click="$emit('update:modelValue', opt.value)"
     >
       {{ opt.label }}

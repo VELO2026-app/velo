@@ -1,5 +1,6 @@
 <!--
-  VELO Frontend -- VMetricHero (Admin DS, 2026-06-14, operator SVG check-in/feedback/return)
+  @velo/ui -- VMetricHero (Admin DS, 2026-06-14, operator SVG
+  check-in/feedback/return; migrated FE-140 batch B)
 
   Hero metric card: a glass-teal icon circle + a large value + a caption. Used at the
   top of the admin metric-detail screens (Check-in / Feedback / Return rate).

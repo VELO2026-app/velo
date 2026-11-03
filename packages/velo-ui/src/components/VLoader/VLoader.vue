@@ -1,12 +1,19 @@
 <!--
-  VELO Frontend -- VLoader Component (Phase F2.1)
+  @velo/ui -- VLoader Component (Phase F2.1; migrated FE-140 -- tail of
+  FE-117 batch A)
 
   CSS-only loading spinner. Matches LoadingView spinner style.
 
   Loading rule (report §8.3): it fades in only after --velo-skeleton-delay,
   so a fast answer never flashes it; the turn is unhurried (1.1 s). For a
-  whole screen block prefer a VSkeleton* placeholder in the content's own
+  whole screen block prefer a skeleton placeholder in the content's own
   geometry -- a spinner says "wait", a skeleton says "this is what is coming".
+
+  §7.2 (FE-140): the batch A deferral's i18n seam is cut -- the kit is pure
+  and the localized loading label arrives through attrs on the root (the
+  application barrel re-anchors the t('common.loading') default until P3
+  gives the kit its own i18n story; pinned app-side by
+  VLoader.localized.test.ts).
 
   Usage:
     <VLoader />
@@ -14,17 +21,10 @@
 -->
 
 <template>
-  <div
-    class="v-loader"
-    :class="`v-loader--${size}`"
-    role="status"
-    :aria-label="t('common.loading')"
-  />
+  <div class="v-loader" :class="`v-loader--${size}`" role="status" :data-velo-size="size" />
 </template>
 
 <script setup lang="ts">
-import { t } from '@/locales'
-
 withDefaults(
   defineProps<{
     size?: 'sm' | 'md' | 'lg'

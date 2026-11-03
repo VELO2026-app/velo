@@ -71,18 +71,21 @@ const DECLARED = /(--[a-zA-Z0-9-]+)\s*:/g
 const PRIMITIVE_RAMP = /^--velo-(teal|peach|pink|blue|sand)-\d+$/
 
 /** Ramp/white tokens carried VERBATIM by components that migrated as-is
- * (FE-117 batch A, tz-ui-package.md §3.3/§4 P2: styles travel unchanged, and
- * these usages pre-date the semantic layer -- several variants have no
- * semantic role to this day). Semanticizing them means NEW host tokens, which
- * is a token-owner ruling (the PROMPT №437 line), not a migration edit. The
- * list is exact and closed: every token NOT on it still fails the tier rule,
- * and entries leave this set only in the PR that retires the usage. */
+ * (FE-117 batch A + FE-140 tail-of-A/batch B, tz-ui-package.md §3.3/§4 P2:
+ * styles travel unchanged, and these usages pre-date the semantic layer --
+ * several variants have no semantic role to this day). Semanticizing them
+ * means NEW host tokens, which is a token-owner ruling (the PROMPT №437
+ * line), not a migration edit. The list is exact and closed: every token NOT
+ * on it still fails the tier rule, and entries leave this set only in the PR
+ * that retires the usage. */
 const LEGACY_MIGRATED_RAMP = new Set([
   '--velo-blue-100',
   '--velo-peach-700',
   '--velo-pink-100',
   '--velo-pink-300',
+  '--velo-pink-500',
   '--velo-sand-100',
+  '--velo-teal-400',
   '--velo-teal-600',
   '--velo-white',
 ])
@@ -107,11 +110,20 @@ function contractTokens(readme: string): Set<string> {
   )
 }
 
-/** Strip CSS block comments so a commented-out var(--…) is not counted as
- * a dependency; a var( inside a string literal does not exist in CSS. */
+/** Strip comments so a commented-out var(--…) is not counted as a
+ * dependency: CSS block comments and, in SFCs, the HTML comment blocks (the
+ * file-header usage examples name colours a component never consumes -- the
+ * FE-140 VRatingBar header did exactly that). A var( inside a string literal
+ * does not exist in CSS. */
 function stripCssComments(css: string): string {
-  return css.replace(/\/\*[\s\S]*?\*\//g, '')
+  return css.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, '')
 }
+
+/** Custom properties a component sets on ITSELF at runtime (VWheel's --ih
+ * row height): private to the component's own CSS, not host-token
+ * consumption -- neither contract material nor a golden declaration. Exact
+ * and closed, like every other exemption in this suite. */
+const COMPONENT_LOCAL_CUSTOM_PROPERTIES = new Set(['--ih'])
 
 function usedTokens(): Map<string, string[]> {
   const used = new Map<string, string[]>()
@@ -121,7 +133,8 @@ function usedTokens(): Map<string, string[]> {
       /var\(\s*(--[a-zA-Z0-9-]+)/g,
     )) {
       const token = match[1]
-      if (token) used.set(token, [...(used.get(token) ?? []), rel])
+      if (!token || COMPONENT_LOCAL_CUSTOM_PROPERTIES.has(token)) continue
+      used.set(token, [...(used.get(token) ?? []), rel])
     }
   }
   return used
@@ -132,6 +145,7 @@ describe('token contract (tz-ui-package.md §3.6)', () => {
     // Self-test of the harness -- a gate that cannot fire is decoration.
     const css = [
       '/* var(--velo-old-token) removed */', //
+      '<!-- var(--velo-doc-example-token) -->',
       '.a { color: var(--velo-live-token); }',
       '.b { padding: var(--space-2, 8px); }',
     ].join('\n')

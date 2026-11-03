@@ -1,5 +1,6 @@
 <!--
-  VELO Frontend -- VSegmentTrack (DS primitive, extracted 2026-06-16)
+  @velo/ui -- VSegmentTrack (DS primitive, extracted 2026-06-16; migrated
+  FE-140 batch B)
 
   The "track + thumb" segmented control: a single glass track with a sliding
   primary fill-pill on the active option. This is the operator-approved master
@@ -34,6 +35,8 @@
     :class="[`v-segment-track--${variant}`, { 'v-segment-track--scrollable': scrollable }]"
     role="tablist"
     :aria-label="ariaLabel || undefined"
+    :data-velo-variant="variant"
+    :data-velo-scrollable="scrollable || undefined"
   >
     <button
       v-for="opt in options"
@@ -43,6 +46,7 @@
       :aria-selected="modelValue === opt.value"
       class="v-segment-track__btn"
       :class="{ 'v-segment-track__btn--active': modelValue === opt.value }"
+      :data-velo-active="modelValue === opt.value || undefined"
       @click="emit('update:modelValue', opt.value)"
     >
       <span v-if="opt.icon" class="v-segment-track__opt">
@@ -57,7 +61,10 @@
 <script setup lang="ts" generic="T extends string">
 import type { Component } from 'vue'
 
-interface SegOption {
+/* Exported for the d.ts emit (the default export's props mention it); the
+   option contract travels with the component, like VSegment's SegmentOption.
+   Generic so the SFC's own T parameter can bind to it. */
+export interface SegOption<T extends string> {
   value: T
   label: string
   /** Optional leading glyph (SchoolMembersView's «Блок» lock). */
@@ -69,7 +76,7 @@ withDefaults(
     /** Currently-selected option value. */
     modelValue: T
     /** Options rendered left→right. */
-    options: ReadonlyArray<SegOption>
+    options: ReadonlyArray<SegOption<T>>
     /** Shape: compact auto-width pills ('toggle') or full-width segments ('tabs'). */
     variant?: 'toggle' | 'tabs'
     /** Many tabs on one line: content-sized buttons + horizontal swipe scroll
