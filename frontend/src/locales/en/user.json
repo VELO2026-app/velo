@@ -729,7 +729,8 @@
         "inMinutes": "in {n} min",
         "inHours": "in {n} h",
         "findPractice": "Find a practice",
-        "zoomFailed": "Failed to create the meeting — contact the master"
+        "zoomFailed": "Failed to create the meeting — contact the master",
+        "zoomUnavailable": "Zoom is unavailable"
       },
       "userInbox": {
         "empty": {

@@ -729,7 +729,8 @@
         "inMinutes": "за {n} хв",
         "inHours": "за {n} год",
         "findPractice": "Знайти практику",
-        "zoomFailed": "Не вдалося створити зустріч — зверніться до майстра"
+        "zoomFailed": "Не вдалося створити зустріч — зверніться до майстра",
+        "zoomUnavailable": "Zoom недоступний"
       },
       "userInbox": {
         "empty": {
