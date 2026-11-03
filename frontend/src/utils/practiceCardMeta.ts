@@ -26,12 +26,14 @@ const { t } = i18n.global
 /** Check-in count "N/M" (distinct PRE check-ins / capacity), owner-only.
  *
  * checkin_count is null for a non-owner (public feed, someone else's
- * detail) -- there is nothing honest to show there, so this returns null
- * and the caller omits the badge entirely (same v-if idiom as
- * recurrenceLabel/remainingSessionsLabel below). It must NOT render "0/M"
+ * detail) -- there is nothing honest to show there. It must NOT render "0/M"
  * for null: that would fabricate a count for a viewer who isn't entitled to
- * one. A real 0 (owner, nobody checked in yet) DOES render as "0/M" -- the
- * operator's fraction rule holds whenever the number is real.
+ * one.
+ *
+ * @returns Null when checkin_count is null (non-owner): the caller omits the
+ *  badge entirely (same v-if idiom as recurrenceLabel/remainingSessionsLabel
+ *  below). A real 0 (owner, nobody checked in yet) DOES render as "0/M" --
+ *  the operator's fraction rule holds whenever the number is real.
  */
 export function checkinLabel(p: PracticeResponse): string | null {
   if (p.checkin_count == null) return null
@@ -50,7 +52,9 @@ export function recurrenceLabel(p: PracticeResponse): string | null {
 }
 
 /** The "N of M sessions left" line (i18n:practice.remainingSessions) for a
- * series with a known session count; null otherwise. */
+ * series with a known session count.
+ *
+ * @returns Null otherwise. */
 export function remainingSessionsLabel(p: PracticeResponse): string | null {
   const total = p.total_sessions
   if (total == null) return null

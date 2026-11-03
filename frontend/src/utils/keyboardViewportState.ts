@@ -19,7 +19,7 @@
  * a no-op (absent class, ''→''). No-op under SSR (no document).
  *
  * (Batch K: the bg is now decoupled structurally — no `--velo-bg-shift` /
- * `is-field-focused` to reset anymore.) Host access goes through @/platform/dom.
+ * `is-field-focused` to reset anymore.) Host access goes through `@/platform/dom`.
  */
 import { removeRootClass, setRootStyleProperty } from '@/platform/dom'
 export function resetKeyboardViewportState(): void {

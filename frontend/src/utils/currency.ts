@@ -54,7 +54,8 @@ export function eurStringToCents(raw: string): number {
 
 /**
  * Convert integer cents to a display string suitable for price inputs.
- * Always returns exactly 2 decimal places.
+ *
+ * @returns The display string, always with exactly 2 decimal places.
  *
  * Examples:
  *   `1599 -> "15.99"`

@@ -30,8 +30,10 @@ export type DiaryWriteTarget = 'note' | 'dream' | null
 export const DIARY_WRITE_BLOCKED: DiaryFeedCategory[] = ['practices', 'checkins', 'feedbacks']
 
 /**
- * Resolve the diary entry_type for the active filter, or `null` when writing is
- * blocked (a read-only category is selected). `null` hides the composer.
+ * Resolve the diary entry_type for the active filter.
+ *
+ * @returns Null when writing is blocked (a read-only category is selected)
+ *  -- null hides the composer.
  */
 export function diaryWriteTarget(categories: DiaryFeedCategory[]): DiaryWriteTarget {
   if (categories.some((c) => DIARY_WRITE_BLOCKED.includes(c))) return null

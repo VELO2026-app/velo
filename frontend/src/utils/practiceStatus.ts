@@ -28,8 +28,10 @@ export interface PracticeStatusBadge {
 }
 
 /**
- * Master card badge for a practice status. Returns null for the active phase
- * (scheduled / live / deleted) — those get no badge.
+ * Master card badge for a practice status.
+ *
+ * @returns Null for the active phase (scheduled / live / deleted) — those
+ *  get no badge.
  */
 export function masterPracticeBadge(status: PracticeStatus): PracticeStatusBadge | null {
   switch (status) {

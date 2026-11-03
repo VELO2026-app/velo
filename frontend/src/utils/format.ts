@@ -33,7 +33,9 @@ const VELO_SHORT_MONTHS: readonly string[] = datesSeed.dates?.shortMonths ?? []
  * Format cents into a currency string using Intl.NumberFormat.
  *
  * By default, 0 cents returns the free label (i18n:common.free; for practice
- * prices). Pass allowZero=true to format 0 as "0,00 €" (for balance display).
+ * prices).
+ *
+ * @param allowZero - Pass `true` to format 0 as "0,00 €" (for balance display).
  *
  * S-24: Always uses 2 decimal places for consistency in payment context.
  *
@@ -270,9 +272,11 @@ export function formatTime(
  * be ordered by the absolute UTC epoch (`new Date(scheduled_at).getTime()`):
  * that orders by the underlying instant, which disagrees with the displayed
  * local times once practices span different timezones — a card showing 10:00
- * can sit below a card showing 12:00. This returns a comparable
- * `YYYYMMDDHHmmss` number built from the timezone-local parts, so an
- * ascending / descending sort matches the visible order (CR-1).
+ * can sit below a card showing 12:00.
+ *
+ * @returns A comparable `YYYYMMDDHHmmss` number built from the
+ *  timezone-local parts, so an ascending / descending sort matches the
+ *  visible order (CR-1).
  *
  * ONLY for DISPLAY-ORDER sorts of a per-practice-timezone list. Do NOT use it
  * for `scheduled_at`-vs-`now` comparisons (has-started / countdown / windows)

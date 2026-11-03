@@ -43,16 +43,17 @@ export function selectActionableBookings(
  * Live-aware nearest-bookings selection (operator G).
  *
  * Candidate rule (unchanged, shared with selectActionableBookings): a booking
- * is a candidate while its practice has NOT ended yet (now < start +
- * duration_minutes) -- the same filter the single-card version used.
+ * is a candidate while its practice has NOT ended yet
+ * (`now < start + duration_minutes`) -- the same filter the single-card
+ * version used.
  *
  * Selection: pin the ACTIVE session first (the single latest-started in-progress
- * booking -- start <= now), then the `maxUpcoming` soonest NOT-yet-started
- * bookings (start > now). Result is capped at 1 + maxUpcoming cards; when nothing
+ * booking -- `start <= now`), then the `maxUpcoming` soonest NOT-yet-started
+ * bookings (`start > now`). Result is capped at 1 + maxUpcoming cards; when nothing
  * is live it is just the soonest upcoming ones. A genuinely-imminent booking is
  * therefore never hidden behind a live session.
  *
- * All comparisons are absolute epoch ms -> timezone-independent (TASK-2 proved
+ * All comparisons are absolute epoch ms `->` timezone-independent (TASK-2 proved
  * the reported dropout is not a tz bug).
  */
 export function selectNearestBookings(

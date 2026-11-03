@@ -86,28 +86,28 @@ export function clampMoodScore(score: number): number {
   return Math.min(MOOD_SCALE_MAX, Math.max(MOOD_SCALE_MIN, Math.round(score)))
 }
 
-/** score -> emotion index 0..4 (the canonical tz formula). */
+/** `score -> emotion index 0..4` (the canonical tz formula). */
 /** The five emotion positions on the strip, 0..4 left-to-right. */
 export type MoodScaleIndex = 0 | 1 | 2 | 3 | 4
 
-/** score -> emotion index 0..4 (the canonical tz formula), narrowed to the
+/** `score -> emotion index 0..4` (the canonical tz formula), narrowed to the
  *  tuple-index union so `MOOD_SCALE_KEYS[index]` stays a total lookup. */
 export function moodIndexFromScore(score: number): MoodScaleIndex {
   // clampMoodScore ∈ 1..10  =>  (score - 1) / 2 ∈ 0..4.5  =>  floor ∈ 0..4.
   return Math.floor((clampMoodScore(score) - 1) / 2) as MoodScaleIndex
 }
 
-/** index -> the emotion's tap/swipe score: the TOP value of its pair (tz §1). */
+/** `index -> the emotion's tap/swipe score`: the TOP value of its pair (tz §1). */
 export function moodScoreFromIndex(index: number): number {
   return Math.min(MOOD_SCALE_KEYS.length - 1, Math.max(0, Math.round(index))) * 2 + 2
 }
 
-/** score -> semantic key ('bad' | 'low' | 'neutral' | 'good' | 'fire'). */
+/** `score -> semantic key` ('bad' | 'low' | 'neutral' | 'good' | 'fire'). */
 export function moodKeyFromScore(score: number): MoodScaleKey {
   return MOOD_SCALE_KEYS[moodIndexFromScore(score)]
 }
 
-/** score -> the emotion label (i18n:mood.bad .. i18n:mood.fire). One label set for both forms. */
+/** `score -> the emotion label` (i18n:mood.bad .. i18n:mood.fire). One label set for both forms. */
 export function moodLabelFromScore(score: number): string {
   return MOOD_SCALE_LABELS[moodKeyFromScore(score)]
 }
@@ -126,7 +126,9 @@ export function zoneTotal(counts: Record<MoodScaleKey, number>): number {
   return MOOD_SCALE_KEYS.reduce((sum, key) => sum + counts[key], 0)
 }
 
-/** Per-zone counts -> rounded percentages of their total (all 0 when empty). */
+/** `Per-zone counts -> rounded percentages` of their total.
+ *
+ * @returns All-zero record when there are no counts (total 0). */
 export function zonePercents(counts: Record<MoodScaleKey, number>): Record<MoodScaleKey, number> {
   const total = zoneTotal(counts)
   const pcts = {} as Record<MoodScaleKey, number>

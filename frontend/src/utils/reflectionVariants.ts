@@ -84,7 +84,7 @@ function stableHash(key: string): number {
 
 /**
  * Pick a reflection variant for a booking by a stable hash of its practiceId.
- * Same practiceId -> same variant every time.
+ * `Same practiceId -> same variant` every time.
  */
 export function pickReflectionVariant(practiceId: string): ReflectionVariant {
   const idx = stableHash(practiceId) % REFLECTION_VARIANTS.length

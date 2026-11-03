@@ -13,7 +13,9 @@
 
 export const MCP_PATH = '/mcp'
 
-/** `base` without any trailing slash, plus /mcp; null when there is no base. */
+/** `base` without any trailing slash, plus /mcp.
+ *
+ * @returns Null when there is no base. */
 export function mcpServerUrl(base: string | undefined | null): string | null {
   const trimmed = (base ?? '').trim().replace(/\/+$/, '')
   return trimmed ? `${trimmed}${MCP_PATH}` : null

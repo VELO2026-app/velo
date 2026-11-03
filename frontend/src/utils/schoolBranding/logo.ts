@@ -12,7 +12,7 @@ export interface LogoOptions {
   /** A monogram letter under the mandala (a "school letter" checkbox in
    *  the prototype). */
   monogram?: boolean
-  /** The monogram letter; sanitized against <>& (§5.3). */
+  /** The monogram letter; sanitized against `<>&` (§5.3). */
   letter?: string
   /** Flat mode: no drop-shadow (owner 2026-09-19: the logo is flat). */
   flat?: boolean

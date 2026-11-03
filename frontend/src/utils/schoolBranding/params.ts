@@ -133,7 +133,7 @@ function mkRange(
 }
 
 /**
- * Hash -> parameters. The background's "rose whirl": nested wide ribbons
+ * `Hash -> parameters`. The background's "rose whirl": nested wide ribbons
  * pack the disc tightly (width ≈ spiral pitch), each next seam is rotated,
  * tones alternate contrastively, thin streams escape from under the outer
  * coils. Plus mountains and leaves.
