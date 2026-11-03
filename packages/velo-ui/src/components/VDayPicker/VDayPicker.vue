@@ -1,5 +1,6 @@
 <!--
-  VELO Frontend -- VDayPicker Component (master notifications schedule)
+  @velo/ui -- VDayPicker Component (master notifications schedule; migrated
+  FE-118 P3)
 
   Day-of-week selector: a row of seven circular toggles (ПН…ВС). A selected day
   is a filled primary circle; an unselected one is an outline. Multi-select,
@@ -21,6 +22,7 @@
       :class="{ 'v-day-picker__day--on': isOn(d) }"
       :aria-pressed="isOn(d)"
       :aria-label="t(`ui.dayFull.${d}`)"
+      :data-velo-on="isOn(d) || undefined"
       @click="toggle(d)"
     >
       {{ t(`ui.dayShort.${d}`) }}
@@ -29,9 +31,10 @@
 </template>
 
 <script setup lang="ts">
-import { t } from '@/locales'
+import { t } from '../../i18n'
 
-// tz-i18n 1.3: the day NAMES live in the ui.dayShort/dayFull catalogs (the
+// The i18n seam (FE-118, tz-ui-package.md §4 P3): the day NAMES live in the
+// host's ui.dayShort/dayFull catalogs through the injected translator (the
 // codes stay canonical Mon→Sun); the row order/shape is unchanged.
 
 const props = withDefaults(

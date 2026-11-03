@@ -66,8 +66,7 @@
       "moodEmpty": "No marks yet",
       "moodOf": "{n} of {total}",
       "masterFallback": "Master",
-      "temporarilyHidden": "Temporarily hidden",
-      "menuAria": "Menu"
+      "temporarilyHidden": "Temporarily hidden"
     }
   }
 }

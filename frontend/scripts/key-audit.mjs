@@ -338,6 +338,35 @@ for (const locale of localeDirs) {
   }
 }
 
+// -- 2f. @velo/ui registry: every UI_I18N_KEYS resolves in EVERY locale -------
+// FE-118 (tz-ui-package.md §4 P3): kit components render ui.* keys through
+// the injected host translator, so a registry key missing from ANY shipped
+// locale renders a raw path inside the KIT. Unlike the app parity report
+// above (fallback covers, translation may trail), the kit registry is a
+// HARD gate -- the package cannot ship against a half-translated host.
+// node cannot import the TS module, so the literals are read off the
+// UI_I18N_KEYS array like any other source scan; a shape change in the
+// module fails loudly instead of skipping the check.
+const i18nModuleSrc = readFileSync(join('..', 'packages', 'velo-ui', 'src', 'i18n.ts'), 'utf8')
+const registryMatch = i18nModuleSrc.match(/export const UI_I18N_KEYS = \[([\s\S]*?)\] as const/)
+const registryKeys = registryMatch
+  ? [...registryMatch[1].matchAll(/'(ui\.[A-Za-z0-9_.]+)'/g)].map((m) => m[1])
+  : []
+const registryViolations = []
+if (registryKeys.length === 0) {
+  registryViolations.push(
+    'cannot extract UI_I18N_KEYS from ../packages/velo-ui/src/i18n.ts -- the module moved or the array is empty',
+  )
+} else {
+  for (const locale of localeDirs) {
+    const cat = catalogOf(locale)
+    for (const key of registryKeys) {
+      if (resolveLocale(cat, key) === undefined)
+        registryViolations.push(`${locale}: ${key} (UI_I18N_KEYS) missing`)
+    }
+  }
+}
+
 // -- 3. root collisions (per locale dir) ---------------------------------------
 const rootsByFile = new Map()
 for (const f of filesFor(DEFAULT_LOCALE)) {
@@ -404,6 +433,11 @@ if (errorCodeMismatches.length > 0) {
     `\nkey-audit: ${errorCodeMismatches.length} ERROR_CODES <-> errors catalog mismatch(es):\n`,
   )
   for (const k of errorCodeMismatches) console.error(`   ${k}`)
+}
+if (registryViolations.length > 0) {
+  failed = true
+  console.error(`\nkey-audit: ${registryViolations.length} @velo/ui registry key(s) unresolved:\n`)
+  for (const k of registryViolations) console.error(`   ${k}`)
 }
 if (failed) process.exit(1)
 console.log(

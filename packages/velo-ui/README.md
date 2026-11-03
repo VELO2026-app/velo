@@ -1,12 +1,14 @@
 # `@velo/ui` — UI-кит VELO (приватный пакет монорепы)
 
-> P1-каркас (FE-116) + P2 батч A (FE-117) + P2 хвост A/батч B (FE-140):
-> каркас, контракт токенов и Storybook подняты до переноса; **батч A
-> (FE-117) перенёс первые 7 компонентов** (VAvatar, VBadge, VButton, VCard,
-> VChip, VListRow, VTag); **FE-140 доложил хвост A + батч B — 9 компонентов**
-> (VLoader, VSegment c типом `SegmentOption`, VSegmentTrack, VSwitch,
-> VPaginationDots, VRatingBar, VStatCard, VMetricHero, VWheel) со сторями и
-> конвенциями §7.2. Остальные переезжают батчами в P3–P6.
+> P1-каркас (FE-116) + P2 батч A (FE-117) + P2 хвост A/батч B (FE-140) +
+> P3 i18n-шов (FE-118): каркас, контракт токенов и Storybook подняты до
+> переноса; **батч A (FE-117) перенёс первые 7 компонентов** (VAvatar,
+> VBadge, VButton, VCard, VChip, VListRow, VTag); **FE-140 доложил хвост A +
+> батч B — 9 компонентов** (VLoader, VSegment c типом `SegmentOption`,
+> VSegmentTrack, VSwitch, VPaginationDots, VRatingBar, VStatCard,
+> VMetricHero, VWheel) со сторями и конвенциями §7.2; **FE-118 (P3) открыл
+> i18n-шов `configureUi({ t })` и перенёс 3 компонента со словарём**
+> (VAccordion, VBarChart, VDayPicker). Остальные переезжают батчами в P4–P6.
 
 ## Что здесь чему подчиняется
 
@@ -28,11 +30,11 @@
    Примитивный цветовой рамп (`--velo-teal|peach|pink|blue|sand-NNN`,
    `--velo-white`) и сырые значения (hex — stylelint `color-no-hex` уже
    первый слой) запрещены. Список ниже — allowlist, поэтому примитив в него
-   не попадает в принципе. **Единственное исключение (батч A + батч B,
-   FE-117/FE-140):** компоненты едут «как есть» (§3.3), и часть вариантных
-   цветов до сих пор не имеет семантических ролей — эти ровно 9 токенов
-   внесены в закрытый `LEGACY_MIGRATED_RAMP` в тесте (ниже с пометкой
-   `*legacy-ramp`) и уходят оттуда только PR-ом, который выводит
+   не попадает в принципе. **Единственное исключение (батч A + батч B +
+   P3, FE-117/FE-140/FE-118):** компоненты едут «как есть» (§3.3), и часть
+   вариантных цветов до сих пор не имеет семантических ролей — эти ровно
+   10 токенов внесены в закрытый `LEGACY_MIGRATED_RAMP` в тесте (ниже с
+   пометкой `*legacy-ramp`) и уходят оттуда только PR-ом, который выводит
    использование. Новый примитив по-прежнему роняет гейт.
 
 Проверяется тестом `src/styles/token-contract.test.ts` в каждом `pnpm test`.
@@ -52,12 +54,14 @@
 --space-hairline
 --transition-base
 --transition-fast
-# --- semantic / component tokens (batch A FE-117 + batch B FE-140) ---
+# --- semantic / component tokens (batch A FE-117 + batch B FE-140 + P3 FE-118) ---
 --velo-bg-card-solid
 --velo-bg-subtle
 --velo-blue-100            # *legacy-ramp (VBadge/VTag blue variant)
+--velo-blue-300            # *legacy-ramp (VBarChart light bars)
 --velo-border
 --velo-border-card
+--velo-border-light
 --velo-border-width
 --velo-dur-base
 --velo-dur-press
@@ -70,6 +74,7 @@
 --velo-fs-14
 --velo-fs-16
 --velo-fs-18
+--velo-fs-20
 --velo-fs-22
 --velo-fs-24
 --velo-fs-28
@@ -96,6 +101,7 @@
 --velo-primary
 --velo-primary-dark
 --velo-radius-badge
+--velo-radius-bar-top
 --velo-sand-100            # *legacy-ramp (VTag sand bg)
 --velo-shadow-glow
 --velo-shadow-switch
@@ -143,13 +149,41 @@ src/components/VButton/
 VCard, VChip, VListRow, VTag); FE-140 доложил хвост A + батч B — 9
 компонентов (VLoader, VSegment, VSegmentTrack, VSwitch, VPaginationDots,
 VRatingBar, VStatCard, VMetricHero, VWheel), каждый со сторей и
-колокализованным тестом, написанным до переноса. Конвенции §7.2 применены
+колокализованным тестом, написанным до переноса; FE-118 (P3) доложил
+первый словарный батч — VAccordion, VBarChart, VDayPicker — по той же
+механике. Конвенции §7.2 применены
 в переносных PR: `data-velo-*` состояния/варианты (additive), attrs-корень
 и слоты как швы — VLoader режет i18n-зависимость через attrs (локализованную
-подпись баррел приложения подставляет обёрткой до P3), VStatCard — через
+подпись баррел приложения подставляет обёрткой и после P3: `common.loading`
+вне реестра кита), VStatCard — через
 слот `pending` с каноническим фолбэком вместо импорта VSkeleton (скелетоны
 вне карты батча остаются в приложении). Заглушка VStub, доказавшая конвейер
 в P1, удалена её же первым реальным батчем.
+
+## i18n-шов (P3, FE-118, tz-ui-package.md §4)
+
+Решение ред. 2 — **инъекция транслятора, без vue-i18n в peer**: словарь
+`ui.*` остаётся в приложении (98 использований вне `components/ui`),
+пакет не тащит i18n-рантайм.
+
+- Пакет экспортирует `configureUi({ t })` — вызов один раз при старте
+  хоста (приложение: проводка — init-эффект самого баррела
+  `@/components/ui`, единственной двери к пакету, поэтому рантайм и любой
+  тест получают транслятор до первого рендера без внешней координации;
+  витрина Storybook: свой демо-словарь в `.storybook/preview.ts` с
+  золотыми ru-значениями реестра).
+- `UI_I18N_KEYS` (`src/i18n.ts`) — закрытый реестр: 8 статических ключей +
+  семьи `ui.dayFull.*`/`ui.dayShort.*`. `cancel/confirm/close` внесены
+  авансом под потребителей батча F (P6: VConfirmDialog/VModal), `menuAria`/
+  `noData` — выравнивание P3 (VMenu/VBarChart жили на
+  `shared.components.menuAria`/`common.noData`). Тип `UiMessageKey` сужает
+  аргументы `t` внутри кита — опечатка в ключе это ошибка компиляции.
+- Вызовы `t('ui.…')` внутри компонентов не изменились при переезде;
+  до `configureUi` `t` возвращает сырой ключ и предупреждает в dev один
+  раз на ключ.
+- Гейт: `frontend/scripts/key-audit.mjs` резолвит ВСЕ `UI_I18N_KEYS` во
+  ВСЕХ локалях (ru/en/uk) и роняет сборку, если ключ пропал — паритет
+  локалей для кита жёсткий, в отличие от отчёта по словарю приложения.
 
 ## Storybook (§3.4)
 

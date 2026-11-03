@@ -16,9 +16,12 @@
 //    never computed styles.
 //
 // Package-wide test plumbing lands together with the seams that need it:
-// P3 injects the i18n translator here (configureUi({ t })); P5 wires the
-// toast provider. Nothing to reset in P1 -- the package owns no module
-// state yet.
+// P3 (FE-118) landed the i18n seam, but NO global injection happens here --
+// each component test file calls configureUi with its own dictionary at
+// the top of the file, which vitest's per-file module isolation makes
+// deterministic (a fresh seam per file, the pre-configure behaviour even
+// stays testable, see src/i18n.test.ts). P5 will wire the toast provider.
+// The setup itself stays stateless on purpose.
 // =============================================================================
 
 export {}

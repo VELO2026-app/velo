@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- VAccordion Component (DS-3)
+  @velo/ui -- VAccordion Component (DS-3; migrated FE-118 P3)
 
   Expandable row with header and collapsible content.
 
@@ -16,7 +16,11 @@
 -->
 
 <template>
-  <div class="v-accordion" :class="{ 'v-accordion--open': open }">
+  <div
+    class="v-accordion"
+    :class="{ 'v-accordion--open': open }"
+    :data-velo-open="open || undefined"
+  >
     <button
       class="v-accordion__header"
       :aria-label="open ? t('ui.collapse') : t('ui.expand')"
@@ -42,10 +46,12 @@
 </template>
 
 <script setup lang="ts">
-import { t } from '@/locales'
+import { t } from '../../i18n'
 import { ref } from 'vue'
 
-// tz-i18n 1.3: aria labels from the ui.* catalog.
+// The i18n seam (FE-118, tz-ui-package.md §4 P3): aria labels come from the
+// host's ui.* catalog through the injected translator -- the key calls are
+// the ones the component made on the app's '@/locales' before the move.
 
 const props = withDefaults(
   defineProps<{

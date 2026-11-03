@@ -66,8 +66,7 @@
       "moodEmpty": "Пока нет отметок",
       "moodOf": "{n} из {total}",
       "masterFallback": "Мастер",
-      "temporarilyHidden": "Временно недоступен",
-      "menuAria": "Меню"
+      "temporarilyHidden": "Временно недоступен"
     }
   }
 }
