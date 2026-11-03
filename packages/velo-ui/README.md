@@ -1,16 +1,16 @@
 # `@velo/ui` — UI-кит VELO (приватный пакет монорепы)
 
-> P1-каркас (FE-116, `tz-ui-package.md` §3). Пакет-заглушка: тулинг,
-> структура папок, контракт токенов и Storybook подняты **до** переноса
-> компонентов; сами компоненты переезжают батчами в P2–P6. Приёмка P1:
-> приложение ничего не импортирует из пакета, все гейты зелёные, диффов
-> сборки золотого билда нет.
+> P1-каркас (FE-116) + P2 батч A (FE-117): каркас, контракт токенов и
+> Storybook подняты до переноса; **батч A (FE-117) перенёс первые реальные
+> компоненты** (VAvatar, VBadge, VButton, VCard, VChip, VListRow, VTag) со
+> сторями и конвенциями §7.2; заглушка VStub удалена. Остальные переезжают
+> батчами в P2(B)–P6.
 
 ## Что здесь чему подчиняется
 
 - **Пакет приватный** (`private: true`), публикация во внешний npm не
-  планируется; потребитель один — `frontend` (подключается в P8 как
-  `workspace:*`).
+  планируется; потребитель один — `frontend` (`workspace:*` с батча A —
+  баррел приложения ре-экспортирует пакет по компоненту).
 - **`vue` — peer** (`^3.5`): никогда не бандлится.
 - **Стили едут как есть** в SFC `<style>`; значения — только `var(--velo-*)`
   и голые масштабные токены. **Токены не уезжают в пакет** (принцип 2):
@@ -26,29 +26,84 @@
    Примитивный цветовой рамп (`--velo-teal|peach|pink|blue|sand-NNN`,
    `--velo-white`) и сырые значения (hex — stylelint `color-no-hex` уже
    первый слой) запрещены. Список ниже — allowlist, поэтому примитив в него
-   не попадает в принципе.
+   не попадает в принципе. **Единственное исключение (батч A, FE-117):**
+   компоненты едут «как есть» (§3.3), и часть вариантных цветов до сих пор
+   не имеет семантических ролей — эти ровно 7 токенов внесены в закрытый
+   `LEGACY_MIGRATED_RAMP` в тесте (ниже с пометкой `*legacy-ramp`) и
+   уходят оттуда только PR-ом, который выводит использование. Новый
+   примитив по-прежнему роняет гейт.
 
 Проверяется тестом `src/styles/token-contract.test.ts` в каждом `pnpm test`.
 
 ```velo-ui-token-contract
---font-body            # типографика хоста (голая семья, нейминг заморожен)
---radius-md            # кромка пилл-образца
---space-2              # вертикальный паддинг VStub
---space-4              # горизонтальный паддинг VStub
---velo-border          # семантический бордер
---velo-border-width    # волосяная ширина бордера
---velo-fs-14           # размер текста по рампу --velo-fs-*
---velo-text-primary    # семантический цвет текста
+# --- bare scale family (frozen names, PROMPT №437) ---
+--font-body
+--radius-full
+--radius-md
+--space-1
+--space-2
+--space-3
+--space-4
+--space-5
+--transition-fast
+# --- semantic / component tokens (batch A, FE-117) ---
+--velo-bg-card-solid
+--velo-bg-subtle
+--velo-blue-100            # *legacy-ramp (VBadge/VTag blue variant)
+--velo-border-card
+--velo-dur-base
+--velo-dur-press
+--velo-ease-out
+--velo-error
+--velo-fs-12
+--velo-fs-14
+--velo-fs-16
+--velo-fs-18
+--velo-fs-22
+--velo-fs-28
+--velo-gap-11
+--velo-gap-3
+--velo-glass-blue-15
+--velo-glass-blue-60
+--velo-glass-border
+--velo-glass-peach-40
+--velo-glass-teal-30
+--velo-glass-white-01
+--velo-inset-12
+--velo-nav-inactive-bg
+--velo-peach-700           # *legacy-ramp (VBadge/VTag warning text)
+--velo-pink-100            # *legacy-ramp (VBadge/VTag error bg)
+--velo-pink-300            # *legacy-ramp (VBadge error text, VButton danger)
+--velo-primary
+--velo-primary-dark
+--velo-radius-badge
+--velo-sand-100            # *legacy-ramp (VTag sand bg)
+--velo-shadow-glow
+--velo-size-40
+--velo-size-44
+--velo-size-50
+--velo-teal-600            # *legacy-ramp (VBadge success text)
+--velo-text-muted
+--velo-text-primary
+--velo-text-secondary
+--velo-white               # *legacy-ramp (active/danger text on fills)
 ```
 
 ## Стратегия CSS (§3.3)
 
-Стили компонентов едут в пакете как есть (`*.vue` SFC). Хост подключает
-css-бандл пакета (`@velo/ui/style.css` → `dist/velo-ui.css`) **строго
-после** `variables.css` и **строго до** `skin-tokens.css` — каскад
-tz-whitelabel §3 не ломается, скин и золотая сборка красят пакет одинаково.
-Первый PR батча A проверяется на бит-в-бит чанках и визуальную
-пиксельность до продолжения батча.
+Стили компонентов едут в пакете как есть (`*.vue` SFC). **Разрешение
+потребления (решение батча A, FE-117):** приложение собирает **исходники**
+пакета — `frontend` резолвит `@velo/ui` в `packages/velo-ui/src` (точный
+алиас в `vite.config`/`vitest.config` + `paths` в tsconfig). Компонентные
+стили продолжают ехать в чанках приложения ровно там же, где ехали до
+переноса, поэтому каскад `variables.css → компоненты → skin-tokens.css`
+не меняется ни для золотой сборки, ни для скина, и битовое сравнение
+чанков батча A сводится к ожидаемым механическим диффам (пути модулей и
+scope-id). Побочный выигрыш: ни один гейт (CI, Docker, pre-commit) не
+зависит от порядка «сначала собрать пакет». Css-бандл `dist/velo-ui.css`
+(`@velo/ui/style.css`) остаётся артефактом пакета для ВТОРОГО хоста и
+проверяется сборкой в CI; если владелец вернёт потребление через дист
+(буква §3.3), переключение — это замена алиаса на экспорты `exports`.
 
 ## Структура (§3.5): папка на компонент
 
@@ -60,9 +115,11 @@ src/components/VButton/
   index.ts           # ре-экспорт для баррела
 ```
 
-Баррел `src/index.ts` собирается из папочных `index.ts`. Текущий `VStub` —
-образец-заглушка, доказывающий конвейер (сборка+dts, vitest, stylelint,
-контракт-тест, Storybook); удаляется в батче A (P2).
+Баррел `src/index.ts` собирается из папочных `index.ts`. Батч A (FE-117)
+посадил в эту структуру 7 живых компонентов (VAvatar, VBadge, VButton,
+VCard, VChip, VListRow, VTag) со сторями и конвенциями §7.2
+(`data-velo-*` состояния/варианты, слот спиннера у VButton); заглушка
+VStub, доказавшая конвейер в P1, удалена её же первым реальным батчем.
 
 ## Storybook (§3.4)
 

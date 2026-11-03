@@ -254,10 +254,21 @@ export const SKIN_BRAND: string | null = ${JSON.stringify(skin?.displayName ?? n
     define: defines,
 
     resolve: {
-      alias: {
+      alias: [
+        // FE-117 batch A: @velo/ui resolves to the kit's SOURCES so the app
+        // bundles the SFCs exactly as it did before the move (chunk graph,
+        // cascade and CSS extraction unchanged -- package README §CSS).
+        // Exact-match regex, listed FIRST: the '@' prefix entry below would
+        // otherwise swallow '@velo/ui' into src/, and any deep subpath
+        // ('@velo/ui/...') stays unresolved on purpose -- the P8 boundary
+        // allows the barrel only.
+        {
+          find: /^@velo\/ui$/,
+          replacement: fileURLToPath(new URL('../packages/velo-ui/src/index.ts', import.meta.url)),
+        },
         // Makes `@/stores/auth` resolve to `src/stores/auth`.
-        '@': fileURLToPath(new URL('./src', import.meta.url)),
-      },
+        { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
+      ],
     },
 
     server: {

@@ -1,14 +1,17 @@
 // =============================================================================
-// VELO Frontend -- @velo/ui boundary (FE-116 acceptance, tz-ui-package.md §3)
+// VELO Frontend -- @velo/ui boundary (FE-116 raised it, FE-117 batch A opens
+// the ONE legitimate door, tz-ui-package.md §3/§4 P2)
 // =============================================================================
 //
-// P1 raises the @velo/ui skeleton (packages/velo-ui) with ZERO application
-// imports: components migrate in P2-P6 batches, the barrel flips
-// component-by-component, and the app keeps importing @/components/ui. This
-// test pins that acceptance mechanically -- the first import from the
-// package appears only in the batch PRs that migrate a component, and P8 is
-// the phase where the boundary legitimately opens (the barrel re-export +
-// package.json workspace:* dependency).
+// From batch A on, the application's UI barrel (src/components/ui/index.ts)
+// re-exports migrated components from '@velo/ui' component-by-component --
+// that is the migration's whole mechanics (principle 1: consumers never
+// change an import). The boundary law around that door:
+//
+//   1. ONLY src/components/ui/index.ts may import '@velo/ui' -- no view,
+//      store, composable or any other source touches the package directly;
+//   2. the specifier must be the EXACT barrel '@velo/ui' -- a deep subpath
+//      ('@velo/ui/...') stays banned until P8 reviews the eslint boundary.
 //
 // Scans *.ts and *.vue sources for imports of '@velo/ui' (any subpath).
 // =============================================================================
@@ -21,30 +24,42 @@ const files = import.meta.glob<string>('/src/**/*.{ts,vue}', {
   eager: true,
 })
 
-const UI_PACKAGE_IMPORT = /from\s+['"]@velo\/ui/
+const UI_PACKAGE_IMPORT = /from\s+['"](@velo\/ui[^'"]*)['"]/
+const BARREL_PATH = 'components/ui/index.ts'
 
-describe('@velo/ui boundary (FE-116: the app imports nothing from the package)', () => {
-  it('the detector works: a real import is found in a fixture', () => {
+describe('@velo/ui boundary (FE-117: the barrel flips, nothing else touches the package)', () => {
+  it('the detector works: real and deep imports are found in a fixture', () => {
     // Self-test of the harness -- a gate that cannot fire is decoration.
-    const fixture = [
-      "import { VButton } from '@/components/ui'", // legal, stays
-      "import { VButton } from '@velo/ui'", // what P1 forbids
-    ].join('\n')
-    expect(fixture.match(UI_PACKAGE_IMPORT)?.[0]).toContain('@velo/ui')
-    expect("import { VButton } from '@/components/ui'".match(UI_PACKAGE_IMPORT)).toBeNull()
+    const legal = "import { VButton } from '@velo/ui'"
+    const deep = "import { VButton } from '@velo/ui/dist'"
+    const appLocal = "import { VButton } from '@/components/ui'"
+    expect(legal.match(UI_PACKAGE_IMPORT)?.[1]).toBe('@velo/ui')
+    expect(deep.match(UI_PACKAGE_IMPORT)?.[1]).toBe('@velo/ui/dist')
+    expect(appLocal.match(UI_PACKAGE_IMPORT)).toBeNull()
   })
 
-  it('no application source imports @velo/ui', () => {
+  it('only the ui barrel imports @velo/ui, and only the exact barrel specifier', () => {
     expect(Object.keys(files).length).toBeGreaterThan(100) // the glob saw the codebase
     const violations: string[] = []
+    let barrelImports = 0
     for (const [rawPath, content] of Object.entries(files)) {
       const path = rawPath.replace(/^\/src\//, '')
       const lines = content.split('\n')
       lines.forEach((line, index) => {
-        if (UI_PACKAGE_IMPORT.test(line))
-          violations.push(`${path}:${index + 1}: ${line.trim().slice(0, 80)}`)
+        const specifier = line.match(UI_PACKAGE_IMPORT)?.[1]
+        if (!specifier) return
+        if (path !== BARREL_PATH) {
+          violations.push(`${path}:${index + 1}: import outside the barrel -- use @/components/ui`)
+          return
+        }
+        barrelImports += 1
+        if (specifier !== '@velo/ui') {
+          violations.push(`${path}:${index + 1}: deep import '${specifier}' -- the barrel only`)
+        }
       })
     }
+    // The flip is live: the barrel itself must reference the package.
+    expect(barrelImports).toBeGreaterThan(0)
     expect(violations).toEqual([])
   })
 })

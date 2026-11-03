@@ -63,6 +63,10 @@ export default [
       'vue/singleline-html-element-content-newline': 'off',
       'vue/multiline-html-element-content-newline': 'off',
       'vue/html-indent': 'off',
+      // FE-117 batch A: the P1 mirror missed this one (VStub never tripped
+      // it); the frontend config disables it the same way -- prettier owns
+      // the closing-bracket layout.
+      'vue/html-closing-bracket-newline': 'off',
       'vue/html-closing-tag-newline': 'off',
       'vue/html-self-closing': 'off',
       // Attribute/event NAMING stays camelCase (vue-tsc resolves template

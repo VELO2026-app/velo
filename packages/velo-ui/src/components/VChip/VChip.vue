@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- VChip Component (Phase B4.3)
+  @velo/ui -- VChip Component (Phase B4.3; migrated FE-117 batch A)
 
   Glass pill chip. Two roles:
     - static tag (default): non-interactive label (e.g. master methods).
@@ -33,6 +33,10 @@
       'v-chip--active': active && !existing,
       'v-chip--existing': existing,
     }"
+    :data-velo-size="size"
+    :data-velo-clickable="clickable || undefined"
+    :data-velo-active="(active && !existing) || undefined"
+    :data-velo-existing="existing || undefined"
     :aria-pressed="clickable ? ariaPressed : undefined"
     @click="clickable && $emit('click', $event)"
   >

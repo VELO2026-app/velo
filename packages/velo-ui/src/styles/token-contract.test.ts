@@ -70,6 +70,23 @@ const DECLARED = /(--[a-zA-Z0-9-]+)\s*:/g
  * takes the semantic role built on top of them instead. */
 const PRIMITIVE_RAMP = /^--velo-(teal|peach|pink|blue|sand)-\d+$/
 
+/** Ramp/white tokens carried VERBATIM by components that migrated as-is
+ * (FE-117 batch A, tz-ui-package.md §3.3/§4 P2: styles travel unchanged, and
+ * these usages pre-date the semantic layer -- several variants have no
+ * semantic role to this day). Semanticizing them means NEW host tokens, which
+ * is a token-owner ruling (the PROMPT №437 line), not a migration edit. The
+ * list is exact and closed: every token NOT on it still fails the tier rule,
+ * and entries leave this set only in the PR that retires the usage. */
+const LEGACY_MIGRATED_RAMP = new Set([
+  '--velo-blue-100',
+  '--velo-peach-700',
+  '--velo-pink-100',
+  '--velo-pink-300',
+  '--velo-sand-100',
+  '--velo-teal-600',
+  '--velo-white',
+])
+
 function declaredTokens(css: string): Set<string> {
   const out = new Set<string>()
   for (const match of css.matchAll(DECLARED)) {
@@ -128,7 +145,7 @@ describe('token contract (tz-ui-package.md §3.6)', () => {
 
   it('the harness sees the codebase: styles, contract, golden tokens', () => {
     // A walk that matched nothing would silently pass every check below.
-    expect(SOURCE_FILES.some((p) => p.endsWith('src/components/VStub/VStub.vue'))).toBe(true)
+    expect(SOURCE_FILES.some((p) => p.endsWith('src/components/VButton/VButton.vue'))).toBe(true)
     // Sanity floors, not exact pins: the golden file grows additively (its
     // header's frozen count is dated). If these ever fail, the golden path
     // or the naming convention broke -- not the token count.
@@ -158,10 +175,16 @@ describe('token contract (tz-ui-package.md §3.6)', () => {
 
   it('tier rule (§7.3): the primitive color ramp stays out of components', () => {
     // The README allowlist already excludes primitives; this check exists
-    // so the failure names the rule, not just "not in contract".
+    // so the failure names the rule, not just "not in contract". The ONLY
+    // exemptions are the exact legacy tokens carried verbatim by components
+    // migrated as-is (LEGACY_MIGRATED_RAMP above) -- a new primitive still
+    // fails here even if someone pastes it into the README.
     const violations: string[] = []
     for (const token of contractTokens(README)) {
-      if (PRIMITIVE_RAMP.test(token) || token === '--velo-white') {
+      if (
+        (PRIMITIVE_RAMP.test(token) || token === '--velo-white') &&
+        !LEGACY_MIGRATED_RAMP.has(token)
+      ) {
         violations.push(`${token}: primitive tier -- use the semantic role instead`)
       }
     }

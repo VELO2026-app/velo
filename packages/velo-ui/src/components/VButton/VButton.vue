@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- VButton Component (Phase F2.1)
+  @velo/ui -- VButton Component (Phase F2.1; migrated FE-117 batch A)
 
   Primary action element. VELΘ pill-shaped glass design.
 
@@ -24,10 +24,18 @@
         'v-btn--loading': loading,
       },
     ]"
+    :data-velo-variant="normalizedVariant"
+    :data-velo-size="normalizedSize"
+    :data-velo-loading="loading || undefined"
+    :data-velo-disabled="disabled || undefined"
     :disabled="disabled || loading"
     @click="$emit('click', $event)"
   >
-    <span v-if="loading" class="v-btn__spinner" />
+    <!-- §7.2 (FE-117): the spinner node is a slot with the canonical fallback
+         -- skins/tests may replace it without forking the component. -->
+    <slot name="spinner">
+      <span v-if="loading" class="v-btn__spinner" />
+    </slot>
     <span :class="{ 'v-btn__content--hidden': loading }">
       <slot />
     </span>

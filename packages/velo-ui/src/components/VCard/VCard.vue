@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- VCard Component (Phase F2.1; padding variants 2026-06-06)
+  @velo/ui -- VCard Component (Phase F2.1; padding variants 2026-06-06; migrated FE-117 batch A)
 
   Единый белый card-канон: opaque white + 1px --velo-border-card + --radius-md.
   Slot-контейнер для ВСЕХ белых карт/секций приложения (DS-governance).
@@ -23,6 +23,7 @@
     }"
     :role="clickable ? 'button' : undefined"
     :tabindex="clickable ? 0 : undefined"
+    :data-velo-clickable="clickable || undefined"
     @click="clickable ? $emit('click', $event) : undefined"
     @keydown.enter.space.prevent="clickable ? $emit('click', $event) : undefined"
   >

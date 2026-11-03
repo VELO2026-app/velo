@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- VListRow (Admin DS, 2026-06-14, operator SVG return/revenue/check-in lists)
+  @velo/ui -- VListRow (Admin DS, 2026-06-14; migrated FE-117 batch A)
 
   A white card list row: an optional leading visual (avatar / ring icon), a title +
   subtitle text column, and an optional trailing visual (value / chevron). Used by
@@ -18,6 +18,7 @@
     :type="clickable ? 'button' : undefined"
     class="v-list-row"
     :class="{ 'v-list-row--clickable': clickable }"
+    :data-velo-clickable="clickable || undefined"
     @click="clickable ? $emit('click') : undefined"
   >
     <span v-if="$slots.lead" class="v-list-row__lead"><slot name="lead" /></span>

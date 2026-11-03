@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- VAvatar Component (Phase F2.1, hardened 2026-07-14)
+  @velo/ui -- VAvatar Component (Phase F2.1, hardened 2026-07-14; migrated FE-117 batch A)
 
   Circular avatar. Shows image if url provided, otherwise initials from name.
   Matches mockup avatar patterns (student-avatar, user-avatar, master-avatar).
@@ -18,7 +18,12 @@
 -->
 
 <template>
-  <div class="v-avatar" :class="[`v-avatar--${size}`, { 'v-avatar--square': square }]">
+  <div
+    class="v-avatar"
+    :class="[`v-avatar--${size}`, { 'v-avatar--square': square }]"
+    :data-velo-size="size"
+    :data-velo-square="square || undefined"
+  >
     <!-- Hidden once the photo is in: a transparent PNG mark must not show
          letters through. -->
     <span

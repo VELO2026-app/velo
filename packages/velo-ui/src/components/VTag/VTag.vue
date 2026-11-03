@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- VTag Component (DS-3)
+  @velo/ui -- VTag Component (DS-3; migrated FE-117 batch A)
 
   Pill-shaped category tag. VELΘ glass tint design.
 
@@ -11,7 +11,7 @@
 -->
 
 <template>
-  <span class="v-tag" :class="`v-tag--${variant}`">
+  <span class="v-tag" :class="`v-tag--${variant}`" :data-velo-variant="variant">
     <slot />
   </span>
 </template>

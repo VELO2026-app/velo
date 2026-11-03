@@ -107,7 +107,11 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import VModal from './VModal.vue'
-import VButton from './VButton.vue'
+// FE-117 batch A: VButton lives in @velo/ui now -- take it from THIS barrel
+// (principle 1: consumers import @/components/ui). The temporary barrel
+// cycle (barrel -> VConfirmDialog -> barrel) is render-time-safe and dies
+// with this component's own move in P6.
+import { VButton } from '@/components/ui'
 import { IconWarning } from '@/components/icons'
 
 // tz-i18n 1.3: label defaults resolve at render time (?? t() in the

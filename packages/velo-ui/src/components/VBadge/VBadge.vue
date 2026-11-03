@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- VBadge Component (Phase F2.1)
+  @velo/ui -- VBadge Component (Phase F2.1; migrated FE-117 batch A)
 
   Pill-shaped status badge. Matches mockup .badge styles.
 
@@ -23,7 +23,7 @@
 -->
 
 <template>
-  <span class="v-badge" :class="`v-badge--${variant}`">
+  <span class="v-badge" :class="`v-badge--${variant}`" :data-velo-variant="variant">
     <slot />
   </span>
 </template>
