@@ -90,6 +90,7 @@ import { useBackgroundStabilizer } from '@/composables/useBackgroundStabilizer'
 import { useViewportGeometry } from '@/composables/useViewportGeometry'
 import { useKeyboardDismiss } from '@/composables/useKeyboardDismiss'
 import { startRoleFreshnessPoll } from '@/composables/useRoleFreshness'
+import { provideToast } from '@/composables/useToast'
 import { VToast } from '@/components/ui'
 import AppFrame from '@/components/layout/AppFrame.vue'
 import LoadingView from '@/views/auth/LoadingView.vue'
@@ -150,6 +151,11 @@ useViewportGeometry()
 // GLOBAL tap-to-dismiss keyboard (batch L, B1): one app-level owner replacing
 // the per-view dismissKeyboardOnBlank copies. Installed once here.
 useKeyboardDismiss()
+
+// FE-141: the ONE toast provider -- VToast and every useToast() caller in
+// the tree below inject this instance instead of reaching for the module
+// singleton (the seam VToast needs before it can move to @velo/ui, P6c).
+provideToast()
 
 /**
  * Entry stage after a successful auth. Null until initAuth() resolves and

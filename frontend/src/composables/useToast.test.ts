@@ -6,7 +6,9 @@
 // (`vi.mock('@/composables/useToast', ...)`), so the real _push() eviction
 // cap, the real auto-dismiss timer, and the real dismiss() had never
 // executed under test -- 88 toast.error() call sites relying on logic no
-// test ever ran. This file drives the REAL module.
+// test ever ran. This file drives the REAL module. FE-141 adds the
+// provide/inject seam cases; the original ones below now exercise the
+// no-provider singleton fallback, which is exactly what they reach.
 //
 // Module-level singleton state (_toasts) persists across tests in the same
 // file; dismiss() every leftover toast in afterEach so tests don't leak into
@@ -15,7 +17,8 @@
 // =============================================================================
 
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
-import { useToast } from '@/composables/useToast'
+import { createApp, defineComponent, h } from 'vue'
+import { useToast, provideToast, type ToastApi } from '@/composables/useToast'
 
 const TOAST_DURATION_MS = 3000
 
@@ -119,6 +122,46 @@ describe('useToast', () => {
 
       const variants = toast.toasts.value.map((t) => t.variant)
       expect(variants).toEqual(['success', 'error', 'info'])
+    })
+  })
+
+  describe('provide/inject seam (FE-141)', () => {
+    it('useToast() inside a provider tree returns the provided instance, isolated from the fallback', () => {
+      const fallback = useToast()
+      let inside: ToastApi | null = null
+      // provide() only reaches DESCENDANTS (inject reads the parent chain),
+      // so the consumer must be a child of the host -- the same shape as
+      // App.vue providing and VToast/useToast() callers injecting below it.
+      const Child = defineComponent({
+        setup() {
+          inside = useToast()
+          return () => null
+        },
+      })
+      const Host = defineComponent({
+        setup() {
+          provideToast()
+          return () => h(Child)
+        },
+      })
+      const app = createApp(Host)
+      app.mount(document.createElement('div'))
+
+      expect(inside).not.toBe(fallback)
+      inside!.info('provided-only')
+      expect(inside!.toasts.value.map((t) => t.message)).toEqual(['provided-only'])
+      // Fresh state per provider: the fallback singleton never sees it.
+      expect(fallback.toasts.value.map((t) => t.message)).not.toContain('provided-only')
+
+      app.unmount()
+    })
+
+    it('useToast() without a provider keeps returning the shared singleton fallback', () => {
+      const a = useToast()
+      const b = useToast()
+      a.info('shared-through-fallback')
+
+      expect(b.toasts.value.map((t) => t.message)).toContain('shared-through-fallback')
     })
   })
 })
