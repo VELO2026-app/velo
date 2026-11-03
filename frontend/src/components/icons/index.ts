@@ -6,20 +6,25 @@
  * Exception: the mood-scale faces (IconMoodScale*) are illustrative assets
  * that keep their own pastel fills (default size 40), like VeloLogo.
  *
+ * FE-119 (tz-ui-package.md §4 P4): the 12 cross-cutting glyphs moved to
+ * @velo/ui/icons and are re-exported here from the kit's barrel -- the
+ * consumers never change an import (§2.1); they flip to the kit directly
+ * as their host components move in P6/P8. The domain icons stay local.
+ *
  * Usage:
  *   import { IconHome, IconCalendar } from '@/components/icons'
  */
 
 export { default as IconHome } from './IconHome.vue'
-export { default as IconCalendar } from './IconCalendar.vue'
+export { IconCalendar } from '@velo/ui'
 export { default as IconCalendarStar } from './IconCalendarStar.vue'
 export { default as IconStar } from './IconStar.vue'
 export { default as IconDiary } from './IconDiary.vue'
 export { default as IconDiaryBook } from './IconDiaryBook.vue'
 export { default as IconProfile } from './IconProfile.vue'
 export { default as IconIdCard } from './IconIdCard.vue'
-export { default as IconGroup } from './IconGroup.vue'
-export { default as IconWarning } from './IconWarning.vue'
+export { IconGroup } from '@velo/ui'
+export { IconWarning } from '@velo/ui'
 export { default as IconQuestion } from './IconQuestion.vue'
 export { default as IconBrain } from './IconBrain.vue'
 export { default as IconClock } from './IconClock.vue'
@@ -41,13 +46,14 @@ export { default as IconRatingFire } from './IconRatingFire.vue'
 export { default as IconHeart } from './IconHeart.vue'
 export { default as IconFeedback } from './IconFeedback.vue'
 export { default as IconRuble } from './IconRuble.vue'
-export { default as IconSuccess } from './IconSuccess.vue'
+export { IconSuccess } from '@velo/ui'
 export { default as IconSupport } from './IconSupport.vue'
 
-// -- Dashboard flow (DS-dashboard): monochrome glyphs (currentColor) --
-export { default as IconCheck } from './IconCheck.vue'
-export { default as IconArrowRight } from './IconArrowRight.vue'
-export { default as IconClose } from './IconClose.vue'
+// -- Dashboard flow (DS-dashboard): monochrome glyphs (currentColor);
+//    the three chrome glyphs ride @velo/ui since FE-119 (P4) --
+export { IconCheck } from '@velo/ui'
+export { IconArrowRight } from '@velo/ui'
+export { IconClose } from '@velo/ui'
 
 // -- Mood scale (FE-85, tz-mood-scale.md §6): five approved illustrative
 //    faces for the unified Check-in/Feedback scale, embedded 1:1 from the
@@ -63,7 +69,7 @@ export { default as IconMoodScaleFire } from './IconMoodScaleFire.vue'
 // -- Diary feed (Diary redesign): monochrome glyphs (currentColor) --
 export { default as IconPen } from './IconPen.vue'
 export { default as IconDreamBook } from './IconDreamBook.vue'
-export { default as IconDots } from './IconDots.vue'
+export { IconDots } from '@velo/ui'
 export { default as IconMic } from './IconMic.vue'
 export { default as IconSend } from './IconSend.vue'
 export { default as IconStop } from './IconStop.vue'
@@ -88,14 +94,14 @@ export { default as IconPlusFilled } from './IconPlusFilled.vue'
 export { default as IconCheckin } from './IconCheckin.vue'
 export { default as IconDecor } from './IconDecor.vue'
 export { default as IconDecor2 } from './IconDecor2.vue'
-export { default as IconFile } from './IconFile.vue'
+export { IconFile } from '@velo/ui'
 export { default as IconFilter } from './IconFilter.vue'
 export { default as IconFinance } from './IconFinance.vue'
 export { default as IconFree } from './IconFree.vue'
 export { default as IconHint } from './IconHint.vue'
 export { default as IconHourglass } from './IconHourglass.vue'
 export { default as IconLanguage } from './IconLanguage.vue'
-export { default as IconList } from './IconList.vue'
+export { IconList } from '@velo/ui'
 export { default as IconMap } from './IconMap.vue'
 export { default as IconMessages } from './IconMessages.vue'
 export { default as IconNotificationAlt } from './IconNotificationAlt.vue'
@@ -103,8 +109,8 @@ export { default as IconPending } from './IconPending.vue'
 export { default as IconPromo } from './IconPromo.vue'
 export { default as IconReflection } from './IconReflection.vue'
 export { default as IconRepeat } from './IconRepeat.vue'
-export { default as IconRequired } from './IconRequired.vue'
-export { default as IconRequiredDone } from './IconRequiredDone.vue'
+export { IconRequired } from '@velo/ui'
+export { IconRequiredDone } from '@velo/ui'
 export { default as IconSearch } from './IconSearch.vue'
 export { default as IconSchool } from './IconSchool.vue'
 export { default as IconCamera } from './IconCamera.vue'

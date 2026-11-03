@@ -1,9 +1,10 @@
 // =============================================================================
 // @velo/ui -- package barrel (FE-116, tz-ui-package.md §3.5)
 // =============================================================================
-// Assembled from the per-component folder index.ts files. The application
-// imports ONLY this barrel (the P8 eslint boundary bans deep imports); the
-// P1 stub export is replaced component-by-component as batches A/B land.
+// Assembled from the per-component folder index.ts files (plus the flat
+// icon family barrel, FE-119 P4). The application imports ONLY this barrel
+// (the P8 eslint boundary bans deep imports); the P1 stub export is
+// replaced component-by-component as batches A/B land.
 // =============================================================================
 
 export { default as VAvatar } from './components/VAvatar'
@@ -22,6 +23,14 @@ export { default as VStatCard } from './components/VStatCard'
 export { default as VSwitch } from './components/VSwitch'
 export { default as VTag } from './components/VTag'
 export { default as VWheel } from './components/VWheel'
+
+// Icons (FE-119, tz-ui-package.md §4 P4): the 12 cross-cutting glyphs (UI
+// chrome + the VEmptyState ICON_MAP family), a flat family under src/icons/
+// with its own barrel; the domain icons stay in the application. The star
+// re-export keeps ONE explicit name list (the family barrel) -- the
+// application's icons barrel re-exports it until the P6/P8 component moves
+// switch their consumers.
+export * from './icons'
 
 // Types re-exported for barrel consumers (verbatimModuleSyntax-aware); the
 // VSegment option contract travels with its component (FE-140 batch B).

@@ -1,12 +1,17 @@
 # `@velo/ui` — UI-кит VELO (приватный пакет монорепы)
 
-> P1-каркас (FE-116) + P2 батч A (FE-117) + P2 хвост A/батч B (FE-140):
-> каркас, контракт токенов и Storybook подняты до переноса; **батч A
-> (FE-117) перенёс первые 7 компонентов** (VAvatar, VBadge, VButton, VCard,
-> VChip, VListRow, VTag); **FE-140 доложил хвост A + батч B — 9 компонентов**
-> (VLoader, VSegment c типом `SegmentOption`, VSegmentTrack, VSwitch,
-> VPaginationDots, VRatingBar, VStatCard, VMetricHero, VWheel) со сторями и
-> конвенциями §7.2. Остальные переезжают батчами в P3–P6.
+> P1-каркас (FE-116) + P2 батч A (FE-117) + P2 хвост A/батч B (FE-140) +
+> P4 иконки (FE-119): каркас, контракт токенов и Storybook подняты до
+> переноса; **батч A (FE-117) перенёс первые 7 компонентов** (VAvatar,
+> VBadge, VButton, VCard, VChip, VListRow, VTag); **FE-140 доложил хвост A
+>
+> - батч B — 9 компонентов** (VLoader, VSegment c типом `SegmentOption`,
+>   VSegmentTrack, VSwitch, VPaginationDots, VRatingBar, VStatCard,
+>   VMetricHero, VWheel) со сторями и конвенциями §7.2; **FE-119 (P4) перенёс
+>   12 сквозных иконок** в `src/icons/` (стрелка, галка, крест, точки,
+>   required-маркеры, предупреждение + семья `ICON_MAP` для VEmptyState) —
+>   домен-иконки остаются в приложении. Остальные компоненты переезжают
+>   батчами в P3–P6.
 
 ## Что здесь чему подчиняется
 
@@ -28,12 +33,15 @@
    Примитивный цветовой рамп (`--velo-teal|peach|pink|blue|sand-NNN`,
    `--velo-white`) и сырые значения (hex — stylelint `color-no-hex` уже
    первый слой) запрещены. Список ниже — allowlist, поэтому примитив в него
-   не попадает в принципе. **Единственное исключение (батч A + батч B,
-   FE-117/FE-140):** компоненты едут «как есть» (§3.3), и часть вариантных
-   цветов до сих пор не имеет семантических ролей — эти ровно 9 токенов
-   внесены в закрытый `LEGACY_MIGRATED_RAMP` в тесте (ниже с пометкой
-   `*legacy-ramp`) и уходят оттуда только PR-ом, который выводит
-   использование. Новый примитив по-прежнему роняет гейт.
+   не попадает в принципе. **Единственное исключение (батч A + батч B +
+   иконки P4, FE-117/FE-140/FE-119):** компоненты едут «как есть» (§3.3), и
+   часть вариантных цветов до сих пор не имеет семантических ролей — эти
+   ровно 9 токенов внесены в закрытый `LEGACY_MIGRATED_RAMP` в тесте (ниже
+   с пометкой `*legacy-ramp`) и уходят оттуда только PR-ом, который выводит
+   использование. FE-119 (P4) новых вхождений не добавило: `--velo-white`
+   у иконки IconRequiredDone — тот же «как есть» инлайн-штрих (SVG
+   presentation-атрибут не читает `var()`). Новый примитив по-прежнему
+   роняет гейт.
 
 Проверяется тестом `src/styles/token-contract.test.ts` в каждом `pnpm test`.
 
@@ -109,7 +117,7 @@
 --velo-text-muted
 --velo-text-primary
 --velo-text-secondary
---velo-white               # *legacy-ramp (active/danger text on fills)
+--velo-white               # *legacy-ramp (active/danger text on fills, FE-119: IconRequiredDone check stroke)
 ```
 
 ## Стратегия CSS (§3.3)
@@ -150,6 +158,22 @@ VRatingBar, VStatCard, VMetricHero, VWheel), каждый со сторей и
 слот `pending` с каноническим фолбэком вместо импорта VSkeleton (скелетоны
 вне карты батча остаются в приложении). Заглушка VStub, доказавшая конвейер
 в P1, удалена её же первым реальным батчем.
+
+**Иконки (FE-119, §4 P4)** — плоская семья, НЕ папка на компонент: глиф —
+один template-only SFC на общем контракте `size` (по умолчанию 24,
+currentColor), папка на глиф была бы шумом.
+
+```
+src/icons/
+  IconCheck.vue       # 12 сквозных глифов: хром UI + семья ICON_MAP (VEmptyState)
+  icons.test.ts       # один семейный тест (написан в приложении до git mv)
+  icons.stories.ts    # одна витрина на всю семью
+  index.ts            # баррел семьи; src/index.ts ре-экспортирует его звёздочно
+```
+
+Домен-иконки (IconBrain, IconBreathwork, IconMoodScale*, …) остаются в
+`frontend/src/components/icons`; баррел приложения ре-экспортирует 12
+сквозных из пакета — потребители не меняют импортов до P6/P8.
 
 ## Storybook (§3.4)
 
