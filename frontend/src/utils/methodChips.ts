@@ -31,6 +31,7 @@ import type { Component } from 'vue'
 import { DIRECTION_ICON, DIRECTION_ICON_FALLBACK } from '@/utils/displayHelpers'
 import { directionLabel, parseMethods, resolveStyleLabel } from '@/utils/methodTaxonomy'
 
+/** A stored method string rendered as a chip: the direction's icon plus the short label. */
 export interface MethodChip {
   icon: Component
   label: string

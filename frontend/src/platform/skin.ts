@@ -17,6 +17,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+/** A skin package's brand identity, materialized into the build's derivatives. */
 export interface SkinPackage {
   /** Manifest name + short_name + the `{brand}` text source of record. */
   displayName: string

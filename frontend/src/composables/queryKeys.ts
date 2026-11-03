@@ -6,6 +6,7 @@
 // data share one entry. A key starts with the resource, then narrows.
 // =============================================================================
 
+/** Factory for every useQuery cache key, so mutations invalidate exactly what they changed. */
 export const queryKeys = {
   /** GET /bookings/me/stats -- attended practices + hours. */
   myStats: () => ['bookings', 'me', 'stats'] as const,

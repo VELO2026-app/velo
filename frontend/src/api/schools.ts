@@ -453,6 +453,7 @@ export function getSchoolReviews(
  *  master dashboard's toggle sends (core/periods.py bounds server-side). */
 export type SchoolAnalyticsPeriod = 'week' | 'month' | 'quarter'
 
+/** School analytics for one period (members, attendance, distributions) via the curator surface. */
 export function getSchoolAnalytics(
   id: string,
   period: SchoolAnalyticsPeriod = 'week',

@@ -37,6 +37,7 @@ import { buildQuery } from '@/api/utils'
 /** System group slugs -- never a real group id. */
 export type GroupKind = 'students' | 'deleted' | 'custom'
 
+/** One row of the master's group list (system slug or custom group). */
 export interface GroupListItem {
   /** A UUID string for a custom group, or the literal "students" / "deleted". */
   id: string
@@ -52,10 +53,12 @@ export interface GroupListItem {
   description: string | null
 }
 
+/** The master's group list response. */
 export interface GroupListResponse {
   items: GroupListItem[]
 }
 
+/** One group as returned by create/rename. */
 export interface GroupResponse {
   id: string
   name: string
@@ -63,6 +66,7 @@ export interface GroupResponse {
   description: string | null
 }
 
+/** One member row of a group: the student plus their tag against this master. */
 export interface GroupMemberItem {
   id: string
   name: string
@@ -71,6 +75,7 @@ export interface GroupMemberItem {
   tag: string | null
 }
 
+/** Paginated member list of one group. */
 export interface PaginatedGroupMembersResponse {
   items: GroupMemberItem[]
   total: number
@@ -94,6 +99,7 @@ export interface GroupSearchMemberItem {
   group_name: string
 }
 
+/** Paginated cross-group membership search result. */
 export interface PaginatedGroupSearchResponse {
   items: GroupSearchMemberItem[]
   total: number
@@ -101,11 +107,13 @@ export interface PaginatedGroupSearchResponse {
   offset: number
 }
 
+/** Tag upsert answer: the student's tag (null when cleared). */
 export interface StudentTagResponse {
   student_user_id: string
   tag: string | null
 }
 
+/** Block-student answer, including how many future bookings were cancelled and refunded. */
 export interface BlockStudentResponse {
   student_user_id: string
   blocked_at: string
@@ -125,6 +133,7 @@ export interface StudentGroupItem {
   name: string
 }
 
+/** The groups one student belongs to. */
 export interface StudentGroupsResponse {
   groups: StudentGroupItem[]
 }

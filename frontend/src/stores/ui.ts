@@ -9,8 +9,10 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
+/** UI browsing mode: default, or user when a master/admin browses the user interface. */
 export type UiMode = 'default' | 'user'
 
+/** UI-mode state for role switching (not persisted: resets on every app open). */
 export const useUiStore = defineStore('ui', () => {
   // Not persisted intentionally -- resets on every session start.
   const uiMode = ref<UiMode>('default')

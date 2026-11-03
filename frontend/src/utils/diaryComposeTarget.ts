@@ -24,6 +24,7 @@
 
 import type { DiaryFeedCategory } from '@/api/types'
 
+/** What the composer authors for the active filter chips: a note, a dream, or nothing (read-only feeds). */
 export type DiaryWriteTarget = 'note' | 'dream' | null
 
 /** Categories you cannot author from the diary composer (read-only feeds). */

@@ -27,6 +27,7 @@ import { onScopeDispose, ref } from 'vue'
 import { encodeWav, peakAmplitude, pickRecorderMime } from '@/utils/audio'
 import { onDocumentEvent, offDocumentEvent, isDocumentHidden } from '@/platform/dom'
 
+/** States of the recorder state machine: idle, requesting (permission), recording, processing (WAV encode). */
 export type VoiceRecorderState = 'idle' | 'requesting' | 'recording' | 'processing'
 
 /** Why the last start() failed -- the CALLER turns this into user-facing text. */
@@ -41,15 +42,18 @@ export interface VoiceTake {
   peak: number
 }
 
+/** Recording cap: the take auto-stops (onAutoStop) at 60 seconds. */
 export const VOICE_MAX_DURATION_SEC = 60
 /** Stopwatch cadence. Sub-second is enough; coarser reads as stuck. */
 const TICK_MS = 200
 
+/** Options of the recorder: the auto-stop callback fired when the 60-second cap ends a take. */
 export interface VoiceRecorderOptions {
   /** Fires when the 60s cap stops the take on its own (not from stop()). */
   onAutoStop?: (take: VoiceTake | null) => void
 }
 
+/** MediaRecorder lifecycle as a small state machine with a WAV handoff; transcription stays with the caller. */
 export function useVoiceRecorder(options: VoiceRecorderOptions = {}) {
   const state = ref<VoiceRecorderState>('idle')
   const elapsedSec = ref(0)

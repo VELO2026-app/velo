@@ -20,6 +20,7 @@
 import { readonly, ref, type DeepReadonly, type Ref } from 'vue'
 import { getTimezoneCatalog } from '@/api/users'
 
+/** The backend's timezone catalog: canonical names, accepted alias spellings, and CLDR labels. */
 export interface TimezoneCatalog {
   /** Every name the backend stores unchanged. */
   names: string[]

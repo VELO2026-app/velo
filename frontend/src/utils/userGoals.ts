@@ -16,8 +16,10 @@
 // credentials.goals_custom.
 // =============================================================================
 
+/** Marks the custom goal pick whose free text travels in goals_custom. */
 export const GOAL_CUSTOM = 'custom'
 
+/** Goal slugs of the onboarding screen, in the operator's display order. */
 export const USER_GOAL_OPTIONS: readonly string[] = [
   'less_anxiety',
   'better_sleep',

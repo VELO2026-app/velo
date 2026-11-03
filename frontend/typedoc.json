@@ -58,12 +58,12 @@
   "excludePrivate": true,
   "excludeInternal": true,
 
-  // With the openapi client (src/api/generated.ts) deliberately external,
-  // every reference to its types warns "referenced but not included" (132
-  // on the first run) -- pure noise until the export-coverage policy
-  // lands. Re-enable notExported at stage D (FE-135) together with that
-  // policy.
+  // Re-enabled at stage D (FE-139) together with the export-coverage gate
+  // (scripts/doc-coverage.mjs): every export in the six module areas now
+  // carries a doc comment with a summary, so a documented-but-not-exported
+  // reflection is a real finding, not noise. References into the external
+  // generated.ts stay covered by externalPattern above, not by this flag.
   "validation": {
-    "notExported": false
+    "notExported": true
   }
 }

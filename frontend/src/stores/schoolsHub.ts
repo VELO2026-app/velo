@@ -37,6 +37,7 @@ import { getSchools, getMySchools } from '@/api/schools'
 import { useAuthStore } from '@/stores/auth'
 import type { SchoolMineItem } from '@/api/types'
 
+/** Membership answer for the shells: whether this account sees the Schools tab, plus the school-create right. */
 export const useSchoolsHubStore = defineStore('schoolsHub', () => {
   const authStore = useAuthStore()
 

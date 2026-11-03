@@ -10,6 +10,7 @@
 import type { SchoolBrandingParams } from './params'
 import { diamond, petal, scallop } from './geometry'
 
+/** Render the mandala (core, main wreath, crown) as an SVG group string, centered at the origin. */
 export function mandalaGroup(P: SchoolBrandingParams): string {
   const c = P.style.palette
   const m = P.mandala

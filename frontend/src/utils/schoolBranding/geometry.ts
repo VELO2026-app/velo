@@ -6,8 +6,10 @@
   against the reference).
 */
 
+/** Full turn in radians. */
 export const TAU = Math.PI * 2
 
+/** A point of a variable-width path: position plus half-width. */
 export interface PathPoint {
   x: number
   y: number
@@ -69,6 +71,7 @@ function Rr(points: string[]): string[] {
   return [...points].reverse()
 }
 
+/** Closed straight-edge SVG path through the given points. */
 export function poly(pts: Array<[number, number]>): string {
   return 'M ' + pts.map((p) => p[0].toFixed(2) + ' ' + p[1].toFixed(2)).join(' L ') + ' Z'
 }
@@ -88,6 +91,7 @@ export function petal(angle: number, r0: number, r1: number, w: number, bulge = 
   return `M ${bx.toFixed(2)} ${by.toFixed(2)} Q ${(mx + px * w).toFixed(2)} ${(my + py * w).toFixed(2)} ${tx.toFixed(2)} ${ty.toFixed(2)} Q ${(mx - px * w).toFixed(2)} ${(my - py * w).toFixed(2)} ${bx.toFixed(2)} ${by.toFixed(2)} Z`
 }
 
+/** A diamond shape (four straight edges) at an angle and radius. */
 export function diamond(angle: number, r: number, halfW: number, halfH: number): string {
   const ux = Math.cos(angle)
   const uy = Math.sin(angle)

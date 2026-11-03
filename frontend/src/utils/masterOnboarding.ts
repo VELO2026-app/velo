@@ -27,6 +27,7 @@ export function isMasterOnboardingCompleted(user: unknown): boolean {
   )
 }
 
+/** Inputs of the onboarding gate decision: role, profile status, completion flag, session suppression. */
 export interface MasterOnboardingGateInput {
   /** Current account role (null while auth is still resolving). */
   role: UserRole | null

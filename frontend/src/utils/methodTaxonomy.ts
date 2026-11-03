@@ -140,6 +140,7 @@ const catalogStyleLabelByValue = shallowRef<Record<string, Record<string, string
 // Exposing an explicit version counter lets such a watcher add it as a second
 // source, so it can force exactly one reparse per catalog update without
 // weakening the anti-echo-loop guard that reparse would otherwise need.
+/** Bumped on every catalog apply, so non-reactive consumers can re-run on updates. */
 export const taxonomyCatalogVersion = ref(0)
 
 // Raw catalog response, alongside the derived label maps above. Populated by

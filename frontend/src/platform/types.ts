@@ -11,6 +11,7 @@
 // TD-F01: added getStartParam() for deep link handling.
 // =============================================================================
 
+/** The host seam both environments implement; consumers call it without knowing which one is live. */
 export interface Platform {
   /** Which environment we're running in. */
   readonly name: 'telegram' | 'standalone'

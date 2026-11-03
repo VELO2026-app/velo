@@ -40,6 +40,7 @@ import { readPersisted, writePersisted } from '@/composables/persistedCache'
 import { useDiaryStore } from '@/stores/diary'
 import type { BookingWithPracticeResponse, BookingDetailResponse, BookingStatus } from '@/api/types'
 
+/** Result of a booking cancel: ok plus a user-facing error string. */
 export interface CancelResult {
   ok: boolean
   error: string
@@ -58,6 +59,7 @@ export interface ActionResult {
 /** persistedCache slot of the dashboard's upcoming bookings. */
 const UPCOMING_PERSIST = 'bookings.upcoming'
 
+/** The user's bookings: paginated list, the dashboard's upcoming slice, join/leave/cancel actions. */
 export const useBookingsStore = defineStore('bookings', () => {
   // -- Status filter --
   const statusFilter = ref<BookingStatus | undefined>(undefined)

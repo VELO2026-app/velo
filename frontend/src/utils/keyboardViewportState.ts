@@ -22,6 +22,7 @@
  * `is-field-focused` to reset anymore.) Host access goes through `@/platform/dom`.
  */
 import { removeRootClass, setRootStyleProperty } from '@/platform/dom'
+/** Restore the at-rest keyboard layout state (no open-keyboard class, cleared viewport var). */
 export function resetKeyboardViewportState(): void {
   removeRootClass('is-keyboard-open')
   setRootStyleProperty('--velo-vvh', '')

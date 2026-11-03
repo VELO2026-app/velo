@@ -53,6 +53,7 @@ export interface TabItem {
   requires?: 'schools' | FeatureName
 }
 
+/** The user zone's tab bar (UserShell). */
 export const USER_TABS: TabItem[] = [
   {
     icon: IconHome,
@@ -103,6 +104,7 @@ export const USER_TABS: TabItem[] = [
   },
 ]
 
+/** The master zone's tab bar (MasterShell). */
 export const MASTER_TABS: TabItem[] = [
   {
     icon: IconHome,
@@ -150,6 +152,7 @@ export const MASTER_TABS: TabItem[] = [
   },
 ]
 
+/** The admin zone's tab bar (AdminShell, live badge counts injected by the shell). */
 export const ADMIN_TABS: TabItem[] = [
   {
     icon: IconHome,

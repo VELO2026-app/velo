@@ -16,8 +16,10 @@
 
 import { ref, readonly } from 'vue'
 
+/** Visual kind of a toast: success, error or info. */
 export type ToastVariant = 'success' | 'error' | 'info'
 
+/** One toast in the global queue: id, message, variant. */
 export interface Toast {
   id: number
   message: string
@@ -44,6 +46,7 @@ function _push(message: string, variant: ToastVariant) {
   }, TOAST_DURATION_MS)
 }
 
+/** Show global toasts (success, error, info) rendered by the single VToast instance in App.vue. */
 export function useToast() {
   /** Show a success toast */
   const success = (message: string): void => {

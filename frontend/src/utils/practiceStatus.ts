@@ -22,6 +22,7 @@ import type { PracticeStatus } from '@/api/types'
 
 const { t } = i18n.global
 
+/** A master practice-status badge: label text plus colour variant. */
 export interface PracticeStatusBadge {
   label: string
   variant: 'success' | 'warning' | 'error'

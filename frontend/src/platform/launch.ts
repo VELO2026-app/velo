@@ -36,6 +36,7 @@
 
 import { host } from './host'
 
+/** Canonical URL of the Telegram WebApp script, loaded only inside Telegram. */
 export const TELEGRAM_SCRIPT_URL = 'https://telegram.org/js/telegram-web-app.js'
 
 /** sessionStorage key remembering that Telegram launched this tab. */

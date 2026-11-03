@@ -3,6 +3,7 @@ import type { SchoolMemberItem } from '@/api/types'
 
 const { t } = i18n.global
 
+/** Catalog label of a pending school-transfer offer state; undefined once decided. */
 export function masterOfferLabel(state: SchoolMemberItem['master_offer']): string | undefined {
   if (state === 'awaiting_verification') return t('practice.offer.awaiting_verification')
   if (state === 'awaiting_answer') return t('practice.offer.awaiting_answer')

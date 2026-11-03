@@ -52,6 +52,7 @@ import type { PracticeFilters, PracticeResponse } from '@/api/types'
 // Calendar-specific facet filters (excludes pagination/sort/date-range,
 // which the store manages itself). Mirrors the facet subset of
 // PracticeFilters that the Calendar UI controls.
+/** Facet subset of the practice filters the Calendar UI controls (dates and pagination stay with the store). */
 export interface CalendarFacetFilters {
   practice_type?: PracticeFilters['practice_type']
   direction?: PracticeFilters['direction']
@@ -112,6 +113,7 @@ function todayMidnight(): Date {
   return DateTime.now().startOf('day').toJSDate()
 }
 
+/** Calendar screen state: sliding 7-day window, selected day, facet filters, one-request week loading. */
 export const useCalendarStore = defineStore('calendar', () => {
   // -- State --
   // First day of the currently viewed 7-day window (local midnight).

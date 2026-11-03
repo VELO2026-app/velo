@@ -40,6 +40,7 @@ import { onUnmounted } from 'vue'
  *  settled and scroll the field into view. */
 const SETTLE_MS = 120
 
+/** Scroll a focused text field into view once the soft keyboard settles; returns the handler to bind on the field. */
 export function useKeyboardFieldScroll() {
   // The listener this composable currently has attached to the (long-lived,
   // global) window.visualViewport, if any. Normally removed on the field's

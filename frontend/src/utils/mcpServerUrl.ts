@@ -11,6 +11,7 @@
 // looks configured and never connects.
 // =============================================================================
 
+/** Path of the MCP endpoint under the API base. */
 export const MCP_PATH = '/mcp'
 
 /** `base` without any trailing slash, plus /mcp.

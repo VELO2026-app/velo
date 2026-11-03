@@ -30,6 +30,7 @@ import i18n from '@/locales'
 
 const { t } = i18n.global
 
+/** The five emotions of the 1..10 mood and rating scale, worst to best. */
 export type MoodScaleKey = 'bad' | 'low' | 'neutral' | 'good' | 'fire'
 
 // Exact type equality (not mutual assignability, which a union subset would
@@ -37,9 +38,12 @@ export type MoodScaleKey = 'bad' | 'low' | 'neutral' | 'good' | 'fire'
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false
 type AssertTrue<T extends true> = T
+/** Compile-time lock: the front's zone keys equal the backend's ScoreZone exactly. */
 export type MoodScaleKeyMatchesServerZone = AssertTrue<Equal<MoodScaleKey, ScoreZone>>
 
+/** Lowest score of the scale. */
 export const MOOD_SCALE_MIN = 1
+/** Highest score of the scale. */
 export const MOOD_SCALE_MAX = 10
 
 /**
@@ -60,6 +64,7 @@ export const MOOD_SCALE_KEYS = [
 
 // Labels resolve at ACCESS time (getters), not at import: a saved score is
 // named by the ACTIVE locale's emotion word (tz-i18n 1.1).
+/** Emotion word per zone, resolved in the active locale at access time. */
 export const MOOD_SCALE_LABELS: Record<MoodScaleKey, string> = {
   get bad(): string {
     return t('mood.bad')

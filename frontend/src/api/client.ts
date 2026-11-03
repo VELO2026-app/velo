@@ -25,6 +25,7 @@ const REQUEST_TIMEOUT_MS = 15_000
 
 // -- Error classes --
 
+/** A backend-answered failure: status, human detail, machine code, optional 422 validation entries. */
 export class ApiResponseError extends Error {
   constructor(
     public status: number,
@@ -46,6 +47,7 @@ export class ApiResponseError extends Error {
   }
 }
 
+/** The request never reached the backend (network failure). */
 export class ApiNetworkError extends Error {
   constructor() {
     super('Network error -- check your connection')
@@ -53,6 +55,7 @@ export class ApiNetworkError extends Error {
   }
 }
 
+/** The request exceeded the client timeout and was aborted. */
 export class ApiTimeoutError extends Error {
   constructor() {
     super(`Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`)
@@ -228,6 +231,7 @@ function suffixWithTraceId(message: string, traceId: string | null): string {
 
 // -- Public API --
 
+/** The app's typed REST surface: token header, timeout, in-flight GET dedupe, error mapping. */
 export const api = {
   get<T>(path: string): Promise<T> {
     // F-09: deduplicate simultaneous identical GET requests.

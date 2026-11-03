@@ -51,6 +51,7 @@ import type {
  */
 export type RestoreOutcome = 'restored' | 'none' | 'rejected' | 'unreachable'
 
+/** Session state: the signed-in user, the platform-owned token, login/restore and profile writes. */
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<UserResponse | null>(null)
   const token = ref<string | null>(null)

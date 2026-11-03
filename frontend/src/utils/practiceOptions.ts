@@ -16,6 +16,7 @@ import i18n from '@/locales'
 
 const { t } = i18n.global
 
+/** Duration options of the practice form, in minutes. */
 export const DURATION_OPTIONS: { label: string; value: string }[] = [
   {
     value: '30',
@@ -66,6 +67,7 @@ export const DURATION_OPTIONS: { label: string; value: string }[] = [
 // GT-11 and OFFERED by audienceOptions() below only when this master can
 // actually target at least one school (FE-24) -- an option without its
 // picker would let a master pick a kind whose targets they cannot set.
+/** Audience-kind options shared by the practice create and edit forms. */
 export const AUDIENCE_OPTIONS: { label: string; value: PracticeAudienceKind }[] = [
   {
     value: 'public',
@@ -242,6 +244,7 @@ export function makeTimezoneOption(iana: string): { label: string; value: string
 
 // Curated options, computed once at module load, sorted by real offset
 // (UTC-11 -> UTC+14). Same { label, value }[] shape as before.
+/** Curated timezone options of the profile picker, sorted by real UTC offset. */
 export const TIMEZONE_OPTIONS: { label: string; value: string }[] = TIMEZONE_CITIES.map((z) => ({
   label: buildTimezoneLabel(z.iana, z.city),
   value: z.iana,
@@ -257,12 +260,14 @@ export const TIMEZONE_OPTIONS: { label: string; value: string }[] = TIMEZONE_CIT
 // matching literal union and the migration plan.
 // Shared by the master create/edit forms and the Calendar filter UI.
 
+/** One direction choice of the shared taxonomy pickers (label plus canonical value). */
 export interface DirectionOption {
   label: string
   value: PracticeDirection
 }
 
 // Labels reuse the display.direction.* keys (same words as the card display).
+/** Direction options shared by the practice forms and the Calendar filter. */
 export const DIRECTION_OPTIONS: DirectionOption[] = [
   {
     value: 'meditation',
@@ -326,6 +331,7 @@ export const DIRECTION_OPTIONS: DirectionOption[] = [
   },
 ]
 
+/** Difficulty options shared by the practice forms and the Calendar filter. */
 export const DIFFICULTY_OPTIONS: { label: string; value: string }[] = [
   {
     value: 'beginner',
@@ -347,6 +353,7 @@ export const DIFFICULTY_OPTIONS: { label: string; value: string }[] = [
   },
 ]
 
+/** One style choice of a direction's style picker. */
 export interface StyleOption {
   label: string
   value: string
@@ -358,6 +365,7 @@ export interface StyleOption {
 // selector when STYLE_OPTIONS_BY_DIRECTION[direction] is undefined.
 // Mirrors the future backend practice_allowed_styles with direction scoping
 // (handoff §9 B-2).
+/** Styles per direction; directions without styles are absent, so the style selector hides. */
 export const STYLE_OPTIONS_BY_DIRECTION: Partial<Record<PracticeDirection, StyleOption[]>> = {
   meditation: [
     {

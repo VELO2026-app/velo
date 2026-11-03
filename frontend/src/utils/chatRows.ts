@@ -18,6 +18,7 @@
 import { getLocale, t } from '@/locales'
 import type { ChatThread } from '@/api/chats'
 
+/** Clock corner of a chat row: time today, date otherwise; empty when no message. */
 export function chatRowTime(thread: ChatThread): string {
   const iso = thread.last_message_at ?? thread.created_at
   if (!iso) return ''
@@ -32,6 +33,7 @@ export function chatRowTime(thread: ChatThread): string {
   return d.toLocaleDateString(getLocale(), { day: '2-digit', month: '2-digit' })
 }
 
+/** Preview line of a chat row: the last message body, or its translation state's label. */
 export function chatRowPreview(thread: ChatThread): string {
   const last = thread.last_message
   if (!last) return ''

@@ -51,6 +51,7 @@ export interface NotificationItem {
   created_at: string
 }
 
+/** One page of the bell feed: items, next-page cursor and the unread badge in the same response. */
 export interface NotificationList {
   items: NotificationItem[]
   /** Opaque keyset cursor for the next page. UNUSED in v1 -- the bell loads
@@ -60,10 +61,12 @@ export interface NotificationList {
   unread: number
 }
 
+/** The fresh unread badge, as returned by the mark-read calls. */
 export interface NotificationUnread {
   unread: number
 }
 
+/** Fetch the bell feed: newest-first page plus the unread badge. */
 export function listNotifications(cursor?: string): Promise<NotificationList> {
   const qs = new URLSearchParams()
   if (cursor) qs.set('cursor', cursor)
@@ -71,10 +74,12 @@ export function listNotifications(cursor?: string): Promise<NotificationList> {
   return api.get<NotificationList>(`/api/v1/notifications${suffix}`)
 }
 
+/** Mark one notification read (idempotent); returns the fresh badge. */
 export function markNotificationRead(id: string): Promise<NotificationUnread> {
   return api.post<NotificationUnread>(`/api/v1/notifications/${id}/read`, {})
 }
 
+/** Mark every unread notification read; the badge returns to zero. */
 export function markAllNotificationsRead(): Promise<NotificationUnread> {
   return api.post<NotificationUnread>('/api/v1/notifications/read-all', {})
 }
@@ -88,15 +93,18 @@ export interface NotificationPrefsResponse {
   timezone: string | null
 }
 
+/** Partial notification-prefs write: only the parts sent change; a present schedule replaces fully. */
 export interface NotificationPrefsUpdate {
   categories?: Record<string, boolean>
   schedule?: { from: string; to: string; days: string[] } | null
 }
 
+/** Read the notification preferences: category toggles, delivery window, timezone. */
 export function getNotificationPrefs(): Promise<NotificationPrefsResponse> {
   return api.get<NotificationPrefsResponse>('/api/v1/notifications/prefs')
 }
 
+/** Partially update the notification preferences; returns the full preferences. */
 export function updateNotificationPrefs(
   body: NotificationPrefsUpdate,
 ): Promise<NotificationPrefsResponse> {

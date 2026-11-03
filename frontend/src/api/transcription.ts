@@ -31,6 +31,7 @@ import { blobToBase64 } from '@/utils/audio'
 
 import { getAuthToken } from './client'
 
+/** Transcription outcome: ok plus the transcript, or a user-facing error message. */
 export interface TranscribeResult {
   ok: boolean
   text?: string
@@ -77,6 +78,7 @@ function codeOf(payload: unknown): string | null {
   return typeof code === 'string' ? code : null
 }
 
+/** Send a recorded audio take to our backend for transcription (raw fetch: the 15-second shared-client timeout does not fit a minute of audio). */
 export async function transcribeAudio(audio: Blob): Promise<TranscribeResult> {
   let base64: string
   try {

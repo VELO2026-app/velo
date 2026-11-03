@@ -67,6 +67,7 @@ declare module 'vue-router' {
   }
 }
 
+/** Screen-change motion class: a drill-in, a pop, or a same-level tab switch. */
 export type TransitionKind = 'forward' | 'back' | 'tab'
 
 /** How long a navigation may wait for `meta.preload` before the snapshot.
@@ -85,6 +86,7 @@ const LEAVE_SAFETY_MS = 1200
 
 const TAB_PATHS = new Set([...USER_TABS, ...MASTER_TABS, ...ADMIN_TABS].map((tab) => tab.to))
 
+/** Classify a navigation: tab-to-tab, history pop, or forward drill-in. */
 export function transitionKind(
   to: Pick<RouteLocationNormalized, 'path'>,
   from: Pick<RouteLocationNormalized, 'path'>,
@@ -177,6 +179,7 @@ let navSeq = 0
 let activeTransition: ViewTransitionHandle | null = null
 let activeClass: string | null = null
 
+/** Drive the app's screen-change motion: pop detection, preload budget, View Transitions, fallbacks. */
 export function installViewTransitions(router: Router): void {
   // history.listen fires synchronously for back/forward (popstate), before
   // the router's own async navigation reaches the guards below.

@@ -562,6 +562,7 @@ async function completeFromReturn(authStore: ReturnType<typeof useAuthStore>): P
   }
 }
 
+/** Access the shared singleton auth state: readiness, login notices, init and the logout flag. */
 export function useAuth() {
   const authStore = useAuthStore()
 

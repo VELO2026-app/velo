@@ -29,6 +29,7 @@
 //      ZoomMeeting row at all): an honest "being prepared".
 // =============================================================================
 
+/** Whether a list row's Zoom entry is ready, still being prepared, or permanently failed. */
 export type ZoomEntryStateKind = 'ready' | 'pending' | 'failed'
 
 /** Name the Zoom entry state of one list row.

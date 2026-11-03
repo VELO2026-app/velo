@@ -73,6 +73,7 @@ import type { AdminZoomAttendanceResponse } from '@/api/generated'
 export type { AdminPromoResponse, AdminPaginatedPromosResponse }
 export type { AdminZoomAttendanceResponse }
 
+/** Promo issuer filter for the admin promo list: company-wide or master promos. */
 export type AdminPromoTypeFilter = 'company' | 'master'
 
 // Re-export for views that import from api/admin.ts directly.
@@ -104,6 +105,7 @@ export type {
 // Stats
 // ============================================================================
 
+/** Fetch the cumulative admin counters that feed the shell and tab badges (GET /api/v1/admin/stats). */
 export function getAdminStats(): Promise<AdminStatsResponse> {
   return api.get<AdminStatsResponse>('/api/v1/admin/stats')
 }
@@ -126,11 +128,13 @@ export function getAdminStatsOverview(
 // Masters
 // ============================================================================
 
+/** List master applications awaiting verification, paginated. */
 export function getPendingMasters(limit = 20, offset = 0): Promise<PaginatedMastersResponse> {
   const query = buildQuery({ limit, offset })
   return api.get<PaginatedMastersResponse>(`/api/v1/admin/masters/pending${query}`)
 }
 
+/** List masters filtered by verification status, paginated. */
 export function getMastersList(
   status?: 'pending' | 'verified' | 'rejected',
   limit = 100,
@@ -262,6 +266,7 @@ export function setMasterSchoolRight(
   )
 }
 
+/** Reject a pending master application with a reason. */
 export function rejectMaster(userId: string, reason: string): Promise<AdminMasterActionResponse> {
   return api.post<AdminMasterActionResponse>(`/api/v1/admin/masters/${userId}/reject`, { reason })
 }
@@ -341,6 +346,7 @@ export function rejectMethodChange(
 // Reports
 // ============================================================================
 
+/** List moderation reports filtered by status and target type, paginated. */
 export function getReports(
   status?: ReportStatusFilter,
   target_type?: ReportTargetTypeFilter,
@@ -359,12 +365,14 @@ export function getReportById(reportId: string): Promise<ReportResponse> {
   return api.get<ReportResponse>(`/api/v1/admin/reports/${reportId}`)
 }
 
+/** Resolve a moderation report with a resolution note. */
 export function resolveReport(reportId: string, resolutionNote: string): Promise<ReportResponse> {
   return api.post<ReportResponse>(`/api/v1/admin/reports/${reportId}/resolve`, {
     resolution_note: resolutionNote,
   })
 }
 
+/** Dismiss a moderation report, optionally with a note. */
 export function dismissReport(reportId: string, resolutionNote?: string): Promise<ReportResponse> {
   return api.post<ReportResponse>(`/api/v1/admin/reports/${reportId}/dismiss`, {
     resolution_note: resolutionNote ?? null,
@@ -375,6 +383,7 @@ export function dismissReport(reportId: string, resolutionNote?: string): Promis
 // Withdrawals (payout approval)
 // ============================================================================
 
+/** List master payout withdrawals filtered by status, paginated. */
 export function getAdminWithdrawals(
   status?: WithdrawalStatus,
   limit = 20,
@@ -384,6 +393,7 @@ export function getAdminWithdrawals(
   return api.get<PaginatedAdminWithdrawalsResponse>(`/api/v1/admin/withdrawals${query}`)
 }
 
+/** Approve a payout withdrawal, optionally with a note. */
 export function approveWithdrawal(
   withdrawalId: string,
   note?: string,
@@ -393,6 +403,7 @@ export function approveWithdrawal(
   })
 }
 
+/** Reject a payout withdrawal with a note. */
 export function rejectWithdrawal(
   withdrawalId: string,
   note: string,
@@ -408,6 +419,7 @@ export function rejectWithdrawal(
 // stepper. Omitting the args = current week (drill-in views).
 // ============================================================================
 
+/** Check-in engagement rate for one period window (per distinct practice). */
 export function getCheckinMetric(
   period: 'week' | 'month' = 'week',
   offset = 0,
@@ -416,6 +428,7 @@ export function getCheckinMetric(
   return api.get<CheckinMetricResponse>(`/api/v1/admin/metrics/check-in${query}`)
 }
 
+/** Feedback engagement rate for one period window (per distinct practice). */
 export function getFeedbackMetric(
   period: 'week' | 'month' = 'week',
   offset = 0,
@@ -424,6 +437,7 @@ export function getFeedbackMetric(
   return api.get<FeedbackMetricResponse>(`/api/v1/admin/metrics/feedback${query}`)
 }
 
+/** Return (repeat attendance) engagement rate for one period window. */
 export function getReturnMetric(
   period: 'week' | 'month' = 'week',
   offset = 0,
@@ -439,6 +453,7 @@ export function getReturnMetric(
 /** Scope filter for the global practices list (backend: ?scope=). */
 export type AdminPracticeScope = 'all' | 'upcoming' | 'past'
 
+/** Global practices oversight list, scope-filtered and paginated. */
 export function getAdminPractices(
   scope: AdminPracticeScope = 'all',
   limit = 20,
@@ -448,6 +463,7 @@ export function getAdminPractices(
   return api.get<PaginatedAdminPracticesResponse>(`/api/v1/admin/practices${query}`)
 }
 
+/** Practice detail with its roster for the admin oversight view. */
 export function getAdminPracticeDetail(id: string): Promise<AdminPracticeDetailResponse> {
   return api.get<AdminPracticeDetailResponse>(`/api/v1/admin/practices/${id}`)
 }
@@ -477,6 +493,7 @@ export function getAdminRevenue(
 // company-wide ones. Company creation (POST) stays out of this batch's scope.
 // ============================================================================
 
+/** Every promo (company-wide and master) for the admin oversight list, paginated. */
 export function getAdminPromos(
   type?: AdminPromoTypeFilter,
   isActive?: boolean,
@@ -487,6 +504,7 @@ export function getAdminPromos(
   return api.get<AdminPaginatedPromosResponse>(`/api/v1/admin/promos${query}`)
 }
 
+/** Deactivate a promo from the admin oversight list. */
 export function deactivateAdminPromo(promoId: string): Promise<PromoResponse> {
   return api.patch<PromoResponse>(`/api/v1/admin/promos/${promoId}/deactivate`)
 }

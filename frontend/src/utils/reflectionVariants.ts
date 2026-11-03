@@ -21,6 +21,7 @@ import i18n from '@/locales'
 
 const { t } = i18n.global
 
+/** One no-show reflection copy set: dashboard plate title plus the reflection screen's question pair. */
 export interface ReflectionVariant {
   /** Dashboard plate title (operator banner SVGs). */
   bannerTitle: string
@@ -44,6 +45,7 @@ const VARIANT_WELLBEING: ReflectionVariant = {
   },
 }
 
+/** The reflection copy pool, picked per practice by a stable hash. */
 export const REFLECTION_VARIANTS: readonly ReflectionVariant[] = [
   VARIANT_WELLBEING,
   {

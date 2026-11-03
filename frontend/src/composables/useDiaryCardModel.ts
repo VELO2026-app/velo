@@ -36,6 +36,7 @@ const BANNER_KINDS: DiaryEventKind[] = [
   'practice_cancelled_by_master',
 ]
 
+/** Presentational model of one diary feed card: form, titles, preview, icons, practice and banner fields. */
 export interface DiaryCardModel {
   kind: ComputedRef<DiaryEventKind>
   form: ComputedRef<'banner' | 'practice' | 'standard'>
@@ -68,6 +69,7 @@ export interface DiaryCardModel {
   editable: ComputedRef<boolean>
 }
 
+/** Derive the shared presentational card model of one DiaryFeedItem for both card renderers (inputs are getters, to stay reactive). */
 export function useDiaryCardModel(
   getItem: () => DiaryFeedItem,
   getTimezone: () => string | undefined,

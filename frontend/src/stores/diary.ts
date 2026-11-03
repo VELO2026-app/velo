@@ -60,6 +60,7 @@ import type {
   PracticeInsightsResponse,
 } from '@/api/types'
 
+/** Result of a diary submit: ok/error plus the backend error code when one reached the store. */
 export interface SubmitResult {
   ok: boolean
   error: string
@@ -97,6 +98,7 @@ export interface PendingDiaryEntry {
   item: DiaryFeedItem
 }
 
+/** Diary state: check-in/feedback submit, the unified cursor feed, entry CRUD, master insights. */
 export const useDiaryStore = defineStore('diary', () => {
   // ===========================================================================
   // Check-in submit (CheckinView)

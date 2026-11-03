@@ -33,6 +33,7 @@ import { onBeforeUnmount, onMounted } from 'vue'
 const INTERACTIVE_SELECTOR =
   'input, textarea, select, button, [role="button"], a, label, [contenteditable]'
 
+/** Install the single app-level blank-tap keyboard dismissal (capture-phase click; mounted once from the app root). */
 export function useKeyboardDismiss(): void {
   function onDocumentClick(e: MouseEvent): void {
     const active = activeHTMLElement()
