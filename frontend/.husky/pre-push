@@ -1,3 +1,5 @@
 # Гейт перед пушем (до CI — локальная истина): type-aware линт с бюджетом,
-# юнит-тесты, прод-сборка (внутри build — vue-tsc). Красный пуш не уезжает.
-cd frontend && pnpm lint && pnpm test && pnpm build
+# юнит-тесты и прод-сборка ВСЕХ членов workspace (frontend + @velo/ui,
+# FE-116; внутри build — vue-tsc). Красный пуш не уезжает.
+# Хук запускается из корня воркспейса, поэтому без cd.
+pnpm -r verify && pnpm -C frontend build && pnpm -C packages/velo-ui build

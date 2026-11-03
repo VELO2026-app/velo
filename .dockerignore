@@ -1,0 +1,25 @@
+# =============================================================================
+# VELO frontend image -- build-context excludes (FE-116)
+# =============================================================================
+# The frontend build context is the REPOSITORY ROOT since the pnpm workspace
+# moved there (the lockfile and pnpm-workspace.yaml live at the root and the
+# Dockerfile installs from them). The context used to be ./frontend alone;
+# everything the Dockerfile never COPYs is excluded here so the widened
+# context does not drag the backend tree and the working docs through every
+# frontend image build -- the same reasoning that keeps backend's context
+# narrow (see docker-compose.yml, the comms-profile mount).
+**/node_modules
+frontend/dist
+packages/*/dist
+.git
+.github
+backend
+storage
+loadtest
+comms-profile
+scripts
+docs
+diagrams
+Design_prototype
+*.md
+docker-compose.yml

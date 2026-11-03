@@ -1,0 +1,25 @@
+{
+  "name": "velo",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@12.4.2",
+  "scripts": {
+    "verify": "pnpm -r verify",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "format:check": "pnpm -r format:check",
+    "storybook": "pnpm -C packages/velo-ui storybook",
+    "prepare": "husky frontend/.husky"
+  },
+  "devDependencies": {
+    "eslint": "^9.20.0",
+    "husky": "^9.1.7",
+    "prettier": "^3.5.0",
+    "stylelint": "^17.16.0",
+    "typescript": "~5.7.0",
+    "vitest": "^4.1.12"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

@@ -1,3 +1,17 @@
+# =============================================================================
+# VELO monorepo -- pnpm workspace root (FE-116, tz-ui-package.md §3.1)
+# =============================================================================
+# Members:
+#   frontend     -- the application (Vue 3 + Vite, the golden build)
+#   packages/*   -- private code packages (@velo/ui today)
+# The root owns the lockfile and the shared toolchain versions; this file
+# moved here verbatim from frontend/ when the workspace root moved to the
+# repository root -- pnpm >= 10 reads the settings below from the WORKSPACE
+# ROOT file only, a member-local pnpm-workspace.yaml would be ignored.
+packages:
+  - frontend
+  - packages/*
+
 # pnpm settings (pnpm >= 10 reads config from this file, not package.json).
 # Dependency build-script allowlist; packages not listed stay unexecuted.
 allowBuilds:

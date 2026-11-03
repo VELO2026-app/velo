@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@12.4.2",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit --incremental && vite build",
@@ -11,7 +10,7 @@
     "verify": "pnpm lint && pnpm typecheck && pnpm test",
     "verify:quick": "node scripts/verify-quick.mjs",
     "lint": "node scripts/lint-budget.mjs && node scripts/no-cyrillic.mjs && node scripts/key-audit.mjs && pnpm lint:css",
-    "lint:css": "stylelint \"src/**/*.{css,vue}\"",
+    "lint:css": "stylelint \"src/**/*.{css,vue}\" \"../packages/velo-ui/src/**/*.{css,vue}\"",
     "skin": "node scripts/apply-skin.mjs",
     "build:matrix": "node scripts/build-matrix.mjs",
     "lint:fix": "eslint src/ --fix",
@@ -20,11 +19,11 @@
     "typecheck": "vue-tsc --noEmit --incremental",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "prepare": "cd .. && husky frontend/.husky"
+    "test:coverage": "vitest run --coverage"
   },
   "lint-staged": {
-    "*.{js,ts,vue}": "prettier --write"
+    "*.{js,ts,vue}": "prettier --write",
+    "{frontend,packages}/**/*.{js,ts,vue}": "prettier --write"
   },
   "dependencies": {
     "@tma.js/sdk-vue": "^1.0.19",
@@ -53,7 +52,6 @@
     "eslint-plugin-vue": "^9.32.0",
     "globals": "^15.15.0",
     "happy-dom": "^21.0.4",
-    "husky": "^9.1.7",
     "lint-staged": "^17.2.0",
     "postcss-html": "^2.0.0",
     "prettier": "^3.5.0",
