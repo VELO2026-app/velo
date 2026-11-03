@@ -5,6 +5,7 @@
 import js from '@eslint/js'
 import tseslint from 'typescript-eslint'
 import pluginVue from 'eslint-plugin-vue'
+import pluginTsdoc from 'eslint-plugin-tsdoc'
 import globals from 'globals'
 
 export default [
@@ -20,6 +21,9 @@ export default [
 
   {
     files: ['src/**/*.{ts,vue}'],
+    plugins: {
+      tsdoc: pluginTsdoc,
+    },
     languageOptions: {
       globals: {
         ...globals.browser,
@@ -40,6 +44,24 @@ export default [
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
+
+      // --- TSDoc syntax gate (FE-137): every /** */ comment parses as ----
+      // valid TSDoc, and only the standard's allowed tags
+      // (docs/frontend-comments.md §2.1) pass -- the whitelist lives in
+      // frontend/tsdoc.json. A misspelled tag (@parma -> unsupported-tag),
+      // a {type} annotation, a broken {@link} all fail here. Rides
+      // pnpm lint through lint-budget.mjs (eslint over src/), next to
+      // no-cyrillic and key-audit.
+      //
+      // WHY WARN, NOT ERROR (the legacy-debt pattern above): the FE-134
+      // prose keeps `->` arrows, REST placeholders like {user_id} and
+      // @/alias paths VERBATIM as grep anchors (§2.1) -- the TSDoc grammar
+      // wants them escaped or in code spans, which is ~630 findings in 81
+      // files and is stage C/D comment restructuring, not gate mechanics.
+      // Until that lands, the findings ride the warning budget; any NEW
+      // one still fails lint by exceeding it. Promote to 'error' when the
+      // tsdoc slice of the budget hits zero.
+      'tsdoc/syntax': 'warn',
       // Allow single-word component names (VButton, VCard, etc.).
       'vue/multi-word-component-names': 'off',
       // console.warn/error allowed; console.log is a hard lint failure.
