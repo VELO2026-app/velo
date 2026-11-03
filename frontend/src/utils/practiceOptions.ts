@@ -3,11 +3,12 @@
 //
 // tz-i18n: every label resolves at ACCESS time (getters over the catalogs) --
 // no locale text lives in this module. Values stay canonical codes; the
-// STORED method strings («Направление — Вид») keep the server catalog's
-// labels as their canon (methodTaxonomy.ts consults the catalog FIRST, the
-// live hardcoded labels second), so a non-ru UI parses stored ru data via
-// the catalog and only a cold-cache non-ru session composes localized
-// strings (visible as the custom variant, never lost -- Q3=А).
+// STORED method strings (the "direction — style" pair composed of the server
+// catalog's labels) keep the server catalog's labels as their canon
+// (methodTaxonomy.ts consults the catalog FIRST, the live hardcoded labels
+// second), so a non-ru UI parses stored ru data via the catalog and only a
+// cold-cache non-ru session composes localized strings (visible as the
+// custom variant, never lost -- Q3=A).
 
 import type { PracticeDirection, PracticeAudienceKind } from '@/api/types'
 import type { TaxonomyListResponse } from '@/api/taxonomy'
@@ -54,10 +55,11 @@ export const DURATION_OPTIONS: { label: string; value: string }[] = [
   },
 ]
 
-// «Для кого практика» (P5, PROMPT №594): audience_kind single-select, shared
-// between Create and Edit for the same reason as DURATION_OPTIONS above --
-// originally lived only in CreatePracticeView; extracted here so Edit's port
-// doesn't duplicate the option list a second time.
+// The audience field (i18n:masterScreens.createPractice.fields.audience;
+// P5, PROMPT №594): audience_kind single-select, shared between Create and
+// Edit for the same reason as DURATION_OPTIONS above -- originally lived
+// only in CreatePracticeView; extracted here so Edit's port doesn't
+// duplicate the option list a second time.
 // GT-11: values are the CONTRACT type (generated.ts's AudienceKind via the
 // types.ts alias), so a typo'd kind stops compiling instead of silently
 // posting. The fourth kind ('schools') is backend-side since
@@ -450,7 +452,7 @@ export function stylesForDirection(direction: PracticeDirection | undefined | nu
 }
 
 /** True when the direction has at least one style — used by filter / forms
- *  to decide whether to render the "Вид практики" selector. */
+ *  to decide whether to render the style selector (i18n:filters.style). */
 export function directionHasStyles(direction: PracticeDirection | undefined | null): boolean {
   return stylesForDirection(direction).length > 0
 }
@@ -493,8 +495,8 @@ export function hasStyleLabel(styleValue: string): boolean {
  *  so on a non-ru UI the known directions would render Russian without this
  *  mapping. Catalog-only additions (admin-approved customs, no seed key)
  *  keep the server label until the backend ships per-locale labels (BE-165).
- *  DISPLAY-ONLY: flattenMethods keeps composing the stored «Направление —
- *  Вид» canon from the server labels, so storage never forks. */
+ *  DISPLAY-ONLY: flattenMethods keeps composing the stored "direction —
+ *  style" canon from the server labels, so storage never forks. */
 export function directionDisplayLabel(value: string, catalogLabel: string): string {
   return DIRECTION_OPTIONS.find((o) => o.value === value)?.label ?? catalogLabel
 }

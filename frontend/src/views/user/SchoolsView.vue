@@ -1,20 +1,23 @@
 <!--
   VELO Frontend -- SchoolsView (tz-curator.md §1.2-1.4, curator flow)
 
-  The «Школы» TAB's own screen (route /user/schools, name user-schools):
+  The schools tab's own screen
+  (i18n:user.screens.schools.title; route /user/schools, name user-schools):
   the dock tab is visible only to curators (UserShell filters by the
   schoolsHub store), and this hub is where it lands.
 
   Per the owner's mockups (Design_prototype/mockups/schools-*.png):
-    - no schools -> the default screen with the CTA «Создать школу»;
+    - no schools -> the default screen with the create-school CTA
+      (i18n:user.screens.schools.create.title);
     - schools -> a FLAT list of cards (the schools I PARTICIPATE in --
-      FE-93: /mine's curated rows are the master list's «Я куратор» section
-      and every management surface behind them 403s outside master mode, so
+      FE-93: /mine's curated rows are the master list's curator tab
+      (i18n:masterScreens.masterSchools.tab.curator) and every management
+      surface behind them 403s outside master mode, so
       the user zone lists memberships only, backend join order). The
       sectioned list of the master zone (MasterSchoolsView) keeps its
       own shape -- different screens answer different questions.
     - the search pill is deliberately NOT rendered in v1 (no discovery
-      backend; tz-curator.md §1.3 / захоронка §7.1 №1).
+      backend; tz-curator.md §1.3 / the deferred-ideas registry §7.1 №1).
 
   States are the list canon: loader -> error + retry -> empty -> rows.
   /schools/mine is unpaginated (whole list in one response), so the
@@ -57,8 +60,10 @@
 
       <!-- §1.3, the main curator-empty state: a QUIET screen -- the global
            background with ONE CTA in the visual centre. No VEmptyState, no
-           invented illustration, no «Пока нет школ» copy, no search pill
-           (v1 has no discovery backend; захоронка §7.1 №1). -->
+           invented illustration, none of the no-schools-yet copy
+           (i18n:user.screens.schools.empty.title), no search pill
+           (v1 has no discovery backend; the deferred-ideas registry
+           §7.1 №1). -->
       <div v-else-if="!schools.length && canCreate" class="schools__empty">
         <VButton variant="primary" block @click="router.push({ name: 'master-school-create' })">
           {{ t('user.screens.schools.create.title') }}

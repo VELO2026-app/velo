@@ -1,9 +1,10 @@
 <!--
   VELO Frontend -- IconChevronRight
 
-  DS-5 set addition (2026-09-30): the «Предстоящие практики» nav row on the
-  master's public profile. Simple 24px stroke chevron, monochrome
-  currentColor per the icon-set canon (no baked colours).
+  DS-5 set addition (2026-09-30): the upcoming-practices nav row on the
+  master's public profile (i18n:user.screens.masterPublic.sections.upcoming).
+  Simple 24px stroke chevron, monochrome currentColor per the icon-set canon
+  (no baked colours).
 -->
 
 <template>

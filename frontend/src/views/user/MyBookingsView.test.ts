@@ -19,7 +19,9 @@
 // another, and every assertion would pass while proving nothing.
 //
 // TIME IS PINNED (vi.setSystemTime). The screen reads Date.now()/new Date() in
-// upcomingRank/isToday/isTomorrow/badgeFor, so «Сегодня»/«Завтра» and the sort
+// upcomingRank/isToday/isTomorrow/badgeFor, so the today/tomorrow badges
+// (i18n:user.screens.myBookings.status.today /
+// i18n:user.screens.myBookings.status.tomorrow) and the sort
 // order are wall-clock dependent; fixtures below are literals relative to the
 // frozen instant, and practice.timezone is 'UTC' so Intl's calendar-date
 // comparison can't drift across the runner's local zone.
@@ -51,8 +53,9 @@ vi.mock('@/stores/diary', () => ({
   useDiaryStore: () => ({ refreshFeed: vi.fn() }),
 }))
 
-// A failed «Показать ещё» toasts (.vue:onLoadMore) -- the toast IS the entire
-// user-facing half of that path, so it has to be a real assertion seam.
+// A failed show-more tap (i18n:common.showMore) toasts (.vue:onLoadMore) --
+// the toast IS the entire user-facing half of that path, so it has to be a
+// real assertion seam.
 const toastError = vi.fn()
 vi.mock('@/composables/useToast', () => ({
   useToast: () => ({ error: toastError, success: vi.fn(), info: vi.fn() }),
@@ -336,11 +339,16 @@ describe('MyBookingsView', () => {
     it('splits upcoming from past and badges each by its own rule', async () => {
       vi.mocked(bookingsApi.getMyBookings).mockResolvedValue(
         page([
-          // ended 10 days ago, attended -> «Прошедшие» + «Завершена»
+          // ended 10 days ago, attended -> the past section
+          // (i18n:user.screens.myBookings.tabs.past) + the done badge
+          // (i18n:user.screens.myBookings.done)
           booking('past1', { status: 'attended' }, { scheduled_at: '2026-07-10T10:00:00Z' }),
-          // later today -> «Предстоящие» + «Сегодня»
+          // later today -> the upcoming section
+          // (i18n:user.screens.myBookings.tabs.upcoming) + the today badge
+          // (i18n:user.screens.myBookings.status.today)
           booking('today1', {}, { scheduled_at: '2026-07-20T18:00:00Z' }),
-          // tomorrow -> «Предстоящие» + «Завтра»
+          // tomorrow -> the upcoming section + the tomorrow badge
+          // (i18n:user.screens.myBookings.status.tomorrow)
           booking('tom1', {}, { scheduled_at: '2026-07-21T10:00:00Z' }),
         ]),
       )
@@ -357,7 +365,9 @@ describe('MyBookingsView', () => {
     it('a confirmed booking whose practice already ended is past and badged «Подсчет», not an upcoming badge', async () => {
       // MyBookingsView.vue:198-201: the backend keeps confirmed until finalize
       // (settlement grace window), so status alone would mis-file it as upcoming
-      // and paint a misleading «Сегодня» on a practice that is over.
+      // and paint a misleading today badge
+      // (i18n:user.screens.myBookings.status.today) on a practice that is
+      // over.
       // AT-2 (PROMPT №585): it's ALSO not silent any more -- a Zoom-tracked
       // practice awaiting its attendance report gets an honest "still being
       // decided" badge instead of no badge at all.
@@ -399,7 +409,8 @@ describe('MyBookingsView', () => {
       // Leave and come back once the report has ripened: same booking, now
       // decided. The pre-B30 fetchMyBookings() would have skipped this fetch
       // entirely because the list was already non-empty, leaving the stale
-      // "Подсчет" badge showing forever.
+      // counting badge (i18n:user.screens.myBookings.status.counting)
+      // showing forever.
       vi.mocked(bookingsApi.getMyBookings).mockResolvedValueOnce(
         page([
           booking(
@@ -439,10 +450,12 @@ describe('MyBookingsView', () => {
       // Same distinguishing instant/tz pair as CalendarView's SW2 test: 20:00
       // UTC on the 20th (after NOW=12:00Z, not live, not ended). In the
       // VIEWER's Moscow (UTC+3) that's 23:00 on the 20th -- same calendar day
-      // as NOW there (15:00) -- so the correct badge is "Сегодня". In the
+      // as NOW there (15:00) -- so the correct badge is today
+      // (i18n:user.screens.myBookings.status.today). In the
       // practice's OWN tz (Asia/Yekaterinburg, UTC+5, no DST) the same instant
       // is 01:00 on the 21st while NOW there is 17:00 on the 20th, so the OLD
-      // buggy behaviour (reading b.practice.timezone) badges it "Завтра"
+      // buggy behaviour (reading b.practice.timezone) badges it tomorrow
+      // (i18n:user.screens.myBookings.status.tomorrow)
       // instead -- a genuinely different label, not a coincidental match.
       vi.mocked(bookingsApi.getMyBookings).mockResolvedValue(
         page([

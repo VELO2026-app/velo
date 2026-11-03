@@ -1,33 +1,47 @@
 <!--
   VELO Frontend -- MasterPublicView (Calendar iteration, S-4)
 
-  Public master profile shown to users who tap "Подробнее" on a practice's
+  Public master profile shown to users who tap the more link (i18n:ui.more)
+  on a practice's
   master card (frame 4). Figma node 541:2065:
-    - Hero card: avatar, name, "N лет опыта" pill, bio (the verified check
-      badge is hidden product-wide, owner 2026-10-03)
-    - Two stat cards: practices_count "Практик" / reviews_count "Отзывов"
-    - "Методы" accordion (method chips)
-    - «Предстоящие практики» nav row (owner 2026-09-30) -> the stacked
+    - Hero card: avatar, name, the experience pill
+      (i18n:user.screens.masterPublic.experienceLine), bio (the verified
+      check badge is hidden product-wide, owner 2026-10-03)
+    - Two stat cards: practices_count
+      (i18n:user.screens.masterPublic.practicesLabel) / reviews_count
+      (i18n:user.screens.masterPublic.reviewsLabel)
+    - Methods accordion (i18n:user.screens.masterPublic.methodsSection;
+      method chips)
+    - Upcoming-practices nav row
+      (i18n:user.screens.masterPublic.sections.upcoming, owner 2026-09-30)
+      -> the stacked
       user-calendar-master route (the master's practice calendar)
-    - «Аналитика» accordion, curator-of-the-school only (?schoolId=):
+    - Analytics accordion (i18n:user.screens.masterPublic.analyticsSection),
+      curator-of-the-school only (?schoolId=):
       PLACEHOLDER until the curator-analytics contract exists
-    - «Ближайшие практики»: plain heading + up to 5 upcoming-practice cards
+    - Nearest practices (i18n:user.screens.masterPublic.sections.nearest):
+      plain heading + up to 5 upcoming-practice cards
       (owner 2026-09-30 -- the collapsed accordion is retired; reuses
       getPractices with master_id -- no new endpoint, no dedicated store).
       Owner 2026-10-03: in the curator's school context (?schoolId=) only the
       master's practices in THAT school are listed -- a larger page is fetched
       and filtered client-side by the practices' school_id (the public
-      feed has no school param); «Предстоящие практики» hands ?schoolId to the
-      master calendar for the same filter.
-    - «⋯» меню: «Написать сообщение» -> ask-master flow (T2); в школьном
-      контексте куратора — ещё «Изменить роль» и «Заблокировать» (владелец,
-      2026-09-30; «Изменить роль» — BE-59, «Заблокировать» — BE-79 (2))
+      feed has no school param); the upcoming-practices nav row
+      (i18n:user.screens.masterPublic.sections.upcoming) hands ?schoolId to
+      the master calendar for the same filter.
+    - The «⋯» menu: write message (i18n:common.writeMessage) -> ask-master
+      flow (T2); in the curator's school context it also carries change role
+      (i18n:user.screens.masterPublic.role.switchCta, BE-59) and block
+      (i18n:common.block, BE-79 (2)) (owner, 2026-09-30).
 
   Backend: GET /api/v1/masters/:id (MasterPublicResponse). Only verified
-  masters resolve; 404 otherwise -> "Мастер не найден" (no retry, nothing to
-  retry). A 5xx/network failure is a DIFFERENT empty state -- "Не удалось
-  загрузить" with a "Повторить" retry -- since the master may well exist
-  (B11 item 2, PROMPT №587; before this both collapsed into "не найден").
+  masters resolve; 404 otherwise -> the not-found title
+  (i18n:user.screens.masterPublic.notFound; no retry, nothing to
+  retry). A 5xx/network failure is a DIFFERENT empty state -- the
+  load-failed title (i18n:common.loadFailed) with a retry control
+  (i18n:common.retry) -- since the master may well exist
+  (B11 item 2, PROMPT №587; before this both collapsed into the single
+  not-found state).
 
   Route: /user/masters/:id  (name: user-master-public)
 -->
@@ -35,11 +49,12 @@
 <template>
   <div class="master-public">
     <VHeader :title="t('user.screens.masterPublic.title')" show-back @back="router.back()">
-      <!-- The ⋯ menu: «Написать сообщение» for EVERY visitor (owner
-           2026-09-30 -- replaced the «Задать вопрос» button). In the
-           curator's school context (the roster's master rows navigate here
-           with ?schoolId=) it also carries the curator's actions: «Изменить
-           роль» (BE-59 demote) and «Заблокировать» (BE-79 (2) block). -->
+      <!-- The ⋯ menu: the write-message item (i18n:common.writeMessage) for
+           EVERY visitor (owner 2026-09-30 -- replaced the old ask-a-question
+           button). In the curator's school context (the roster's master rows
+           navigate here with ?schoolId=) it also carries the curator's
+           actions: change role (i18n:user.screens.masterPublic.role.switchCta,
+           BE-59 demote) and block (i18n:common.block, BE-79 (2) block). -->
       <template #action>
         <VMenu :aria-label="t('user.screens.masterPublic.actionsAria')">
           <template #default="{ close }">
@@ -130,7 +145,9 @@
       </div>
 
       <!-- Methods accordion (owner 2026-09-30: ALWAYS renders -- like
-           «Ближайшие», the section never disappears; default-open, an empty
+           the nearest-practices section
+           (i18n:user.screens.masterPublic.sections.nearest), the section
+           never disappears; default-open, an empty
            profile gets the honest note, the header stays as the entry
            point). -->
       <VAccordion :title="t('user.screens.masterPublic.methodsSection')" default-open>
@@ -147,7 +164,9 @@
         <p v-else class="master-public__note">{{ t('user.screens.masterPublic.methods.empty') }}</p>
       </VAccordion>
 
-      <!-- «Предстоящие практики» (owner 2026-09-30): nav row to the stacked
+      <!-- Upcoming practices
+           (i18n:user.screens.masterPublic.sections.upcoming,
+           owner 2026-09-30): nav row to the stacked
            master-practice calendar. A row, not an accordion -- it only
            navigates. -->
       <button type="button" class="master-public__nav" @click="goToCalendar">
@@ -157,9 +176,12 @@
         <IconChevronRight :size="16" />
       </button>
 
-      <!-- Аналитика: curator-of-THIS-school only (the ?schoolId= marker).
+      <!-- Analytics (i18n:user.screens.masterPublic.analyticsSection):
+           curator-of-THIS-school only (the ?schoolId= marker).
            PLACEHOLDER until the curator-analytics contract exists (same
-           pattern as the Блок tab) -- no endpoint serves a member master's
+           pattern as the blocked-members tab,
+           i18n:user.screens.schoolMembers.tabs.blocked) -- no endpoint
+           serves a member master's
            figures to the school curator yet. -->
       <VAccordion v-if="schoolContext" :title="t('user.screens.masterPublic.analyticsSection')">
         <p class="master-public__note">
@@ -167,11 +189,16 @@
         </p>
       </VAccordion>
 
-      <!-- Ближайшие практики (owner 2026-09-30): the title ALWAYS shows --
+      <!-- Nearest practices
+           (i18n:user.screens.masterPublic.sections.nearest,
+           owner 2026-09-30): the title ALWAYS shows --
            with cards when the master has scheduled practices, with the honest
-           «пока не запланировано» note when not (≤5 cards; the collapsed
+           none-planned note
+           (i18n:user.screens.masterPublic.sections.nonePlanned) when not
+           (≤5 cards; the collapsed
            accordion from operator 2026-06-05 is retired; the ⋯ menu keeps
-           floating above). show-date: практики идут в разные дни. -->
+           floating above). show-date: the practices fall on different
+           days. -->
       <section class="master-public__upcoming">
         <h3 class="master-public__section-title">
           {{ t('user.screens.masterPublic.sections.nearest') }}
@@ -190,13 +217,15 @@
         </p>
       </section>
 
-      <!-- «Написать сообщение» (the ⋯ menu) replaced the «Задать вопрос»
-           button: opens/joins the eternal DM with this master (POST
-           /api/v1/chats is create-or-get, so tapping twice lands in the same
-           thread) and navigates in. -->
+    <!-- Write message (i18n:common.writeMessage, the ⋯ menu) replaced the
+         old ask-a-question
+         button: opens/joins the eternal DM with this master (POST
+         /api/v1/chats is create-or-get, so tapping twice lands in the same
+         thread) and navigates in. -->
     </div>
 
-    <!-- «Создать практику» (owner 2026-09-30): hangs above the tab bar,
+    <!-- Create practice (i18n:user.screens.masterPublic.createPractice,
+         owner 2026-09-30): hangs above the tab bar,
          curator-of-THIS-school only (?schoolId=). Same §1.6 hand-off as the
          school page: master AND school go to the create flow (FE-92). -->
     <div v-if="schoolContext" class="master-public__cta">
@@ -205,8 +234,9 @@
       </VButton>
     </div>
 
-    <!-- «Написать сообщение» (owner 2026-09-30 -- replaced the «Задать
-           вопрос» button): the composer opens the eternal DM with this
+    <!-- Write message (i18n:common.writeMessage; owner 2026-09-30 --
+           replaced the old ask-a-question
+           button): the composer opens the eternal DM with this
            master and posts the text; success toasts and closes. -->
     <SendMessageModal
       :open="composerOpen"
@@ -215,9 +245,11 @@
       @close="composerOpen = false"
     />
 
-    <!-- «Изменить роль» for a SCHOOL MASTER (owner ruling 2026-09-30). The
+    <!-- Change role (i18n:user.screens.masterPublic.role.switchCta) for a
+         SCHOOL MASTER (owner ruling 2026-09-30). The
          radio preselects the member's current role (master); choosing
-         «Ученик» is a DEMOTE request -- its contract does not exist yet
+         student (i18n:user.screens.masterPublic.role.student) is a DEMOTE
+         request -- its contract does not exist yet
          (§7.1 №6 + BE-59's extensible field), so confirm is a marked no-op
          (info toast) and the copy stays a draft. -->
     <VModal :open="roleOpen" :show-close="false" @close="onRoleClose">
@@ -305,9 +337,10 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 /** B11 item 2: 404 (master genuinely doesn't exist) is a DIFFERENT state
  *  from a 5xx/network failure (server down, worth retrying) -- collapsing
- *  them both into «Мастер не найден» told the user to give up on a master
- *  who might well exist. Derived from the caught error's own status, no
- *  backend field added. */
+ *  them both into the not-found title
+ *  (i18n:user.screens.masterPublic.notFound) told the user to give up on a
+ *  master who might well exist. Derived from the caught error's own status,
+ *  no backend field added. */
 const notFound = ref(false)
 
 const masterId = computed(() => String(route.params.id))
@@ -323,8 +356,10 @@ const TAG_VARIANTS = ['blue', 'pink', 'sand'] as const
 //
 // The roster's master rows navigate here with ?schoolId= -- that marker turns
 // on the action menu for the curator of THAT school. The plain public profile
-// (any other entry) renders no menu. «Изменить роль» is the BE-59 demote
-// (wired); «Заблокировать» sends the BE-79 block (wired, BE-79 (2)).
+// (any other entry) renders no menu. Change role
+// (i18n:user.screens.masterPublic.role.switchCta) is the BE-59 demote
+// (wired); block (i18n:common.block) sends the BE-79 block (wired,
+// BE-79 (2)).
 
 const schoolId = computed(() => String(route.query.schoolId ?? ''))
 const schoolContext = computed(() => schoolId.value !== '')
@@ -411,15 +446,16 @@ function onMessageClick(close: () => void): void {
 }
 
 // FE-61/62: one chip = direction icon + SHORT skill label. The direction word
-// embedded in a style label («Медитация молчания») is stripped so a pill
-// never says the word twice (FE-64) — see utils/methodChips.ts.
+// embedded in a style label (a master-data string, e.g. a silence-meditation
+// style name under the Meditation direction) is stripped so a pill never
+// says the word twice (FE-64) — see utils/methodChips.ts.
 const methodChips = computed(() => (profile.value?.methods ?? []).map(methodChipFor))
 
 function goToPractice(id: string): void {
   void router.push({ name: 'practice-detail', params: { id } })
 }
 
-// The «Предстоящие практики» row: the stacked MASTER-practice calendar. The
+// The upcoming-practices row: the stacked MASTER-practice calendar. The
 // curator's school context travels along (?schoolId) -- the calendar then shows
 // only this master's practices in THAT school (owner 2026-10-03).
 function goToCalendar(): void {
@@ -430,7 +466,7 @@ function goToCalendar(): void {
   })
 }
 
-// The hanging «Создать практику» CTA: §1.6 hand-off naming the master --
+// The hanging create-practice CTA: §1.6 hand-off naming the master --
 // the create flow preselects (and locks) this master from the query. FE-92:
 // the school travels too -- the backend creates for another master only IN
 // a school (BE-102), and the CTA exists only in the school context.
@@ -519,9 +555,10 @@ watch(masterId, (id) => {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  /* Горизонтальный отступ раздаёт шелл (--velo-rail-pad-x=24), как на всех
-   * экранах; локально только vertical — иначе был двойной padding и контент
-   * у́же других экранов (operator 2026-06-04). */
+  /* The horizontal padding comes from the shell (--velo-rail-pad-x=24) as on
+   * every screen; only the vertical one is set locally -- otherwise there
+   * would be double padding and the content would sit narrower than on the
+   * other screens (operator 2026-06-04). */
   padding: var(--space-4) 0;
 }
 
@@ -589,7 +626,7 @@ watch(masterId, (id) => {
   gap: var(--space-1);
 }
 
-/* «Изменить роль» popup (owner ruling 2026-09-30): title / who / role picker
+/* The change-role popup (owner ruling 2026-09-30): title / who / role picker
    / pills -- the same skeleton the school student profile uses. */
 .master-public__role {
   display: flex;
@@ -616,10 +653,7 @@ watch(masterId, (id) => {
   gap: var(--space-2);
 }
 
-/* «Ближайшие практики» — свёрнутый аккордеон. Контейнер прозрачный (чтобы тело
- * не было белой плашкой), заголовок = белая плашка как «Методы», тело прозрачное
- * -> карточки лежат на фоне отдельными прямоугольниками (без «слитности»). */
-/* «Предстоящие практики»: a nav row (owner 2026-09-30) -- card plate, label
+/* The upcoming-practices nav row (owner 2026-09-30): card plate, label
    + chevron, tap-only. */
 .master-public__nav {
   display: flex;
@@ -670,7 +704,7 @@ watch(masterId, (id) => {
   padding-bottom: var(--size-cta-clearance);
 }
 
-/* Ближайшие практики: plain heading, --text-base like the other panel
+/* Nearest practices: plain heading, --text-base like the other panel
    headers (owner 2026-09-30), cards always open -- no accordion. */
 .master-public__section-title {
   font-family: var(--font-body);
@@ -690,8 +724,9 @@ watch(masterId, (id) => {
   margin-top: var(--space-2);
 }
 
-/* Аккордеон «Методы»: белая card-плашка (тот же приём, что аккордеоны на
-   экране практики; локально, без правки общего VAccordion). */
+/* The methods accordion: a white card plate (the same technique as the
+   accordions on the practice screen; local, without touching the shared
+   VAccordion). */
 :deep(.v-accordion) {
   background: var(--velo-bg-card-solid);
   border: 1px solid var(--velo-border-card);

@@ -1,15 +1,22 @@
 <!--
   VELO Frontend -- AiConnectionsView (BE-138, MCP phase 0; BE-150 layout)
-  "Подключения ИИ", three blocks top to bottom (owner ruling, BE-150):
-    1. «Как подключить» -- the MCP address (<API base>/mcp, utils/
-       mcpServerUrl) with «Скопировать», and how to add it in claude.ai.
-       When the server has no button sign-in (oauth_connect_available false)
-       the instructions are not promised; the personal token is pointed at.
-       No API base configured -> no address at all (fails closed).
-    2. Every connection, button-made and personal, with «Отозвать».
-    3. «Для разработчиков: личный токен», collapsed by default: create (name
-       + scopes, all by default -- owner ruling), the token shown ONCE with
-       «Скопировать» and «Скопировать как заголовок» (Bearer <token>).
+  The AI-connections screen (i18n:user.screens.aiConnections.title), three
+  blocks top to bottom (owner ruling, BE-150):
+    1. How to connect (i18n:user.screens.aiConnections.dev.howTo) -- the MCP
+       address (<API base>/mcp, utils/mcpServerUrl) with the copy button
+       (i18n:user.screens.aiConnections.copy.cta), and how to add it in
+       claude.ai. When the server has no button sign-in
+       (oauth_connect_available false) the instructions are not promised; the
+       personal token is pointed at. No API base configured -> no address at
+       all (fails closed).
+    2. Every connection, button-made and personal, with the revoke control
+       (i18n:user.screens.aiConnections.revoke.cta).
+    3. The developer personal-token block
+       (i18n:user.screens.aiConnections.devTitle), collapsed by default:
+       create (name + scopes, all by default -- owner ruling), the token
+       shown ONCE with the copy button (i18n:user.screens.aiConnections.copy.cta)
+       and the copy-as-header control (i18n:user.screens.aiConnections.copyAsHeader)
+       (Bearer <token>).
   SCOPE DESCRIPTIONS come from the list response (scope_labels, BE-148): the
   backend's SCOPE_ACTIONS is the one place they are written.
   THE TOKEN LIVES IN ONE PLACE: the local `createdToken` ref of this

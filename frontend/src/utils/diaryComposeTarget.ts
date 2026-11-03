@@ -7,14 +7,17 @@
 // (diaryComposeTarget.test.ts) so the rules stay locked.
 //
 // Rules (operator-confirmed 2026-06-02):
-//   - Writing is allowed ONLY for Дневник (entries) and Сонник (dreams).
+//   - Writing is allowed ONLY for the diary feed (entries,
+//     i18n:diary.categories.entries) and the dream feed (dreams,
+//     i18n:diary.categories.dreams).
 //   - The read-only categories (practices / checkins / feedbacks) block input
 //     entirely -> the composer is hidden and the keyboard never opens.
 //   - Truth table:
-//       []                         -> 'note'   ("Все" / root = Дневник)
+//       []                         -> 'note'   (all, i18n:common.all /
+//                                               root = diary feed)
 //       [entries]                  -> 'note'
-//       [dreams]                   -> 'dream'  (only Сонник)
-//       [entries, dreams]          -> 'note'   (default to Дневник)
+//       [dreams]                   -> 'dream'  (dream feed only)
+//       [entries, dreams]          -> 'note'   (defaults to the diary feed)
 //       any with a blocked category-> null     (including mixed, e.g.
 //                                               [entries, feedbacks])
 // =============================================================================

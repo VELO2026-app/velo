@@ -1,10 +1,11 @@
 <!--
-  VELO Frontend -- VAdminTabBar (Admin DS rebuild 2026-06-14, operator SVG "ПАНЕЛЬ" / "1 Dashboard")
+  VELO Frontend -- VAdminTabBar (Admin DS rebuild 2026-06-14, operator SVG "PANEL" / "1 Dashboard")
 
   Admin-only bottom tab bar. DISTINCT from the shared VTabBar (user/master): per the
   operator's admin design the pills are STADIUM-shaped (not circles), the active tab
   is marked by a white GLOW (not a darker fill), and tabs carry pink count BADGES.
-  Built as its own component on the operator's instruction ("свой таббар") so the
+  Built as its own component on the operator's instruction (a tab bar of its
+  own, not the shared one) so the
   shipped user/master VTabBar (circles) stays byte-identical.
 
   Visual spec (operator SVG, 402-frame):

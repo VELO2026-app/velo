@@ -592,8 +592,8 @@ describe('EditProfileView', () => {
 
       // Real DOM interaction with the REAL (unstubbed) child picker -- adds a
       // second direction. Falls back to the hardcoded DIRECTION_OPTIONS
-      // (getActiveTaxonomy mocked to reject, see banner), so 'Йога' is a real
-      // chip.
+      // (getActiveTaxonomy mocked to reject, see banner), so the yoga
+      // direction is a real chip.
       methodChip('Йога')?.click()
       await flush()
 

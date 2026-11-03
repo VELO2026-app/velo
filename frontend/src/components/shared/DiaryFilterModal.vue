@@ -3,22 +3,23 @@
 
   Category filter for the unified diary feed, opened from the "..." menu.
   Chips map 1:1 onto DiaryFeedCategory (backend `category` query values):
-    Все       -> no categories (empty array)
-    Дневник   -> entries
-    Сонник    -> dreams
+    All (i18n:common.all)                 -> no categories (empty array)
+    Diary (i18n:diary.categories.entries) -> entries
+    Dreams (i18n:diary.categories.dreams) -> dreams
     Feedbacks -> feedbacks
     Check-ins -> checkins
-    Практики  -> practices
+    Practices (i18n:diary.categories.practices) -> practices
 
-  "Все" is mutually exclusive with the others: tapping it clears the
-  selection; tapping any category clears "Все" and toggles that category
-  (multi-select). An empty selection IS "Все".
+  The All chip (i18n:common.all) is mutually exclusive with the others:
+  tapping it clears the selection; tapping any category clears All and
+  toggles that category (multi-select). An empty selection IS All.
 
   Date-range filtering (screen 43) is a separate piece (Batch 2b) and is not
   part of this modal yet.
 
-  Works on a local DRAFT; nothing is applied until "Применить" (-> emits
-  `apply` with the category array). "Сбросить" clears to "Все".
+  Works on a local DRAFT; nothing is applied until Apply (i18n:filters.apply)
+  (-> emits `apply` with the category array). Reset (i18n:common.reset)
+  clears to All.
 
   Usage:
     <DiaryFilterModal
@@ -123,7 +124,7 @@
       <!-- Categories (screen 42) -->
       <section class="diary-filter__group">
         <div class="diary-filter__chips">
-          <!-- "Все" -- active when nothing else is selected. -->
+          <!-- The All chip (i18n:common.all) -- active when nothing else is selected. -->
           <VChip size="md" clickable :active="draft.length === 0" @click="selectAll">
             {{ t('common.all') }}
           </VChip>
@@ -186,7 +187,8 @@ const emit = defineEmits<{
 }>()
 
 // Chip option list (label + value). Labels match the design (screen 42);
-// "Все" is rendered separately above (it is the empty selection).
+// the All chip (i18n:common.all) is rendered separately above (it is the
+// empty selection).
 // Labels resolve at ACCESS time (getters) -- tz-i18n 1.1.
 const CATEGORY_CHIPS: { value: DiaryFeedCategory; label: string }[] = [
   {
@@ -221,7 +223,7 @@ const CATEGORY_CHIPS: { value: DiaryFeedCategory; label: string }[] = [
   },
 ]
 
-// Local draft -- the working copy until "Применить".
+// Local draft -- the working copy until Apply (i18n:filters.apply).
 const draft = ref<DiaryFeedCategory[]>([])
 
 // -- Date range draft (screen 43) --------------------------------------------
@@ -237,7 +239,7 @@ const draftTo = ref<string | null>(null) // YYYY-MM-DD
 // The month currently shown in the grid (1st of month, local).
 const viewMonth = ref<Date>(firstOfMonth(new Date()))
 
-/** 1-е число месяца, в котором лежит `d`. */
+/** The first day of the month that `d` falls in. */
 function startOfMonth(d: Date): Date {
   return firstOfMonth(d)
 }
@@ -395,7 +397,7 @@ watch(
 )
 
 function selectAll(): void {
-  // "Все" == empty selection.
+  // All (i18n:common.all) == empty selection.
   draft.value = []
 }
 

@@ -2,14 +2,14 @@
 // VELO Frontend -- Document seam
 // =============================================================================
 //
-// Единственная точка доступа к `document` для прикладного кода (закон
-// no-restricted-globals: window/document только внутри platform/**).
-// Покрывает фактические операции приложения: слушатели на document,
-// видимость, activeElement, блокировка скролла body, root CSS-переменные
-// и классы, точечный querySelector.
+// The single access point to `document` for application code (the
+// no-restricted-globals law: window/document only inside platform/**).
+// Covers the app's actual operations: document listeners,
+// visibility, activeElement, body scroll locking, root CSS variables
+// and classes, point querySelector.
 // =============================================================================
 
-/** document.addEventListener с типизацией по карте событий документа. */
+/** document.addEventListener with typing from the document event map. */
 export function onDocumentEvent<K extends keyof DocumentEventMap>(
   type: K,
   listener: (this: Document, ev: DocumentEventMap[K]) => unknown,
@@ -18,7 +18,7 @@ export function onDocumentEvent<K extends keyof DocumentEventMap>(
   document.addEventListener(type, listener as EventListener, options)
 }
 
-/** document.removeEventListener с типизацией по карте событий документа. */
+/** document.removeEventListener with typing from the document event map. */
 export function offDocumentEvent<K extends keyof DocumentEventMap>(
   type: K,
   listener: (this: Document, ev: DocumentEventMap[K]) => unknown,
@@ -28,10 +28,11 @@ export function offDocumentEvent<K extends keyof DocumentEventMap>(
 }
 
 /**
- * window.addEventListener с типизацией по карте событий окна. Окно нужно
- * жестам, которые не должны обрываться, когда указатель уходит за пределы
- * компонента (drag вне strip): document сюда не подходит — pointerup над
- * элементом вне документа-цели всплывает именно до window.
+ * window.addEventListener with typing from the window event map. The window
+ * target is needed by gestures that must not break off when the pointer
+ * leaves the component (drag outside a strip): document does not fit here —
+ * a pointerup over an element outside the target document bubbles up
+ * exactly to window.
  */
 export function onWindowEvent<K extends keyof WindowEventMap>(
   type: K,
@@ -41,7 +42,7 @@ export function onWindowEvent<K extends keyof WindowEventMap>(
   window.addEventListener(type, listener as EventListener, options)
 }
 
-/** window.removeEventListener, пара к onWindowEvent. */
+/** window.removeEventListener, the counterpart of onWindowEvent. */
 export function offWindowEvent<K extends keyof WindowEventMap>(
   type: K,
   listener: (this: Window, ev: WindowEventMap[K]) => unknown,
@@ -60,12 +61,12 @@ export function documentVisibility(): DocumentVisibilityState {
   return document.visibilityState
 }
 
-/** document.activeElement, суженный до HTMLElement (типовой кейс приложения). */
+/** document.activeElement narrowed to HTMLElement (the app's typical case). */
 export function activeHTMLElement(): HTMLElement | null {
   return document.activeElement as HTMLElement | null
 }
 
-/** document.body.style.overflow = value (блокировка/разблокировка скролла). */
+/** document.body.style.overflow = value (locking/unlocking the scroll). */
 export function setBodyOverflow(value: string): void {
   document.body.style.overflow = value
 }
@@ -75,7 +76,7 @@ export function setRootStyleProperty(prop: string, value: string): void {
   document.documentElement.style.setProperty(prop, value)
 }
 
-/** document.documentElement.lang = value (язык интерфейса, tz-i18n 0.3). */
+/** document.documentElement.lang = value (the UI language, tz-i18n 0.3). */
 export function setRootLang(lang: string): void {
   document.documentElement.lang = lang
 }
@@ -90,12 +91,12 @@ export function removeRootClass(cls: string): void {
   document.documentElement.classList.remove(cls)
 }
 
-/** getComputedStyle(document.documentElement) — для чтения CSS-переменных. */
+/** getComputedStyle(document.documentElement), for reading CSS variables. */
 export function rootComputedStyle(): CSSStyleDeclaration {
   return getComputedStyle(document.documentElement)
 }
 
-/** Значение CSS-переменной на documentElement (без fallback'а — решает вызов). */
+/** The value of a CSS variable on documentElement (no fallback — the caller decides). */
 export function rootStyleValue(prop: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(prop)
 }
@@ -105,7 +106,7 @@ export function toggleRootClass(cls: string, force: boolean): void {
   document.documentElement.classList.toggle(cls, force)
 }
 
-/** document.querySelector с дженериком элемента (контракт T | null). */
+/** document.querySelector with an element generic (the T | null contract). */
 export function queryDocument<T extends Element = Element>(selector: string): T | null {
   return document.querySelector<T>(selector)
 }

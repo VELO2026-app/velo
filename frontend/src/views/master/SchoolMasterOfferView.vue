@@ -3,12 +3,14 @@
 VELO Frontend — SchoolMasterOfferView (BE-59/GT-27, owner mockup 2026-10-02)
 =============================================================================
 
-«Приглашение стать мастером школы!» — the consent screen of the curator's
+Invitation heading (i18n:masterScreens.schoolMasterOffer.invited.title) —
+the consent screen of the curator's
 master-role appointment: the curator offers, the appointee confirms, and
 the appointment takes effect HERE (POST /schools/{id}/master-offer/
 accept turns the member row into a master's). Reached from the
-school.master_offered inbox notification («Вас приглашают вести
-школу»), which UserInboxView routes here by TYPE — the notification rides
+school.master_offered inbox notification (its body text invites the
+recipient to run the school), which UserInboxView routes here by TYPE — the
+notification rides
 the generic open_school action like every school event. Standalone
 route like the join screen, no guard: the endpoints decide.
 
@@ -19,20 +21,27 @@ the school, so the page answers; there is deliberately NO member-side
 The offer's existence is therefore proven only by the accept itself:
 
 State machine (each renders honestly, none fakes data):
-  loading              -> spinner («Проверяем приглашение…»)
-  transient            -> «Повторить» (W11: a hiccup is not a verdict)
-  gone (page 404)      -> «Приглашение недействительно» — the school is
+  loading              -> spinner (i18n:common.inviteChecking)
+  transient            -> retry (i18n:common.retry; W11: a hiccup is not a
+                          verdict)
+  gone (page 404)      -> the invalid-invite title
+                          (i18n:masterScreens.schoolMasterOffer.invalid.title)
+                          — the school is
                           dark/gone or the reader is no longer a member;
                           for the addressee that IS the death of the invite
   offerGone (404 on
-  accept)              -> «Назначение недействительно или уже отменено» —
+  accept)              -> the offer-gone error (i18n:errors.master_offer_not_found) —
                           no offer for you here, one answer (P-08)
   verification (403
-  on accept)           -> «Нужна верификация мастера» — the caller's
+  on accept)           -> verification needed
+                          (i18n:masterScreens.schoolMasterOffer.verificationNeeded)
+                          — the caller's
                           verification lapsed since the offer; the offer
                           SURVIVES, so the way out is the apply wizard,
                           not a retry
-  page                 -> SchoolInviteCard + «Принять» / «Отклонить»
+  page                 -> SchoolInviteCard + accept
+                          (i18n:masterScreens.schoolMasterOffer.accept) /
+                          decline (i18n:masterScreens.schoolMasterOffer.decline)
 
 The card is the shared invite card (owner mockup 2026-10-02): logo, name,
 the two counters, the school's description, the bold heading. No analytics

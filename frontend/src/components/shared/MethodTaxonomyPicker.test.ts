@@ -125,8 +125,9 @@ describe('MethodTaxonomyPicker (bug 5 leak 1 -- shared cache warmed on mount)', 
 // catalog must reparse to its real chip once the catalog resolves, even
 // though the incoming modelValue TEXT never changes between the cold and
 // warm parse (that's the whole trap -- sameSet() alone can't tell the two
-// apart). This is the exact mechanism behind the owner's decisive repro:
-// "Иглоукалывание" already exists as a real catalog chip, yet renders in the
+// apart). This is the exact mechanism behind the owner's decisive repro: the
+// acupuncture value (the direction mocked and mounted in the test below)
+// already exists as a real catalog chip, yet renders in the
 // free-text box because the picker's own immediate watch always fires before
 // its onMounted catalog fetch can resolve.
 // =============================================================================

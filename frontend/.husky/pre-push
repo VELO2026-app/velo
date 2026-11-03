@@ -1,3 +1,4 @@
-# Гейт перед пушем (до CI — локальная истина): type-aware линт с бюджетом,
-# юнит-тесты, прод-сборка (внутри build — vue-tsc). Красный пуш не уезжает.
+# Pre-push gate (before CI -- the local source of truth): type-aware lint
+# with budget, unit tests, production build (vue-tsc runs inside build).
+# A red push does not leave the machine.
 cd frontend && pnpm lint && pnpm test && pnpm build

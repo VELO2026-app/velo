@@ -1,16 +1,22 @@
 <!--
   VELO Frontend -- ModerationFilterModal (Admin DS, 2026-06-14, operator SVG «2 Filter»)
 
-  Filter sheet for the «Модерация» (admin reports) list. VModal (the DS filter-sheet
-  base, same as DiaryFilterModal) + funnel header + «Выбрать дату» (opens the reused
-  DatePickerSheet «Дата заявки») + three chip groups: Категория / Приоритет / Статус.
+  Filter sheet for the admin reports Moderation list
+  (i18n:adminScreens.adminReports.moderationTab). VModal (the DS filter-sheet
+  base, same as DiaryFilterModal) + funnel header + the pick-date pill
+  (i18n:composer.pickDate; opens the reused DatePickerSheet retitled via
+  i18n:moderation.reportDate) + three chip groups: category
+  (i18n:moderation.category) / priority (i18n:moderation.priority) / request
+  status (i18n:moderation.status).
 
-  WIRING (honest skeleton, build-full-design-now). Only «Статус» maps to the backend:
-  Открытая → pending, Закрытая → resolved (GET /admin/reports `status`). Категория
-  (Тикеты/Жалобы/Платежи), Приоритет (P0–P3) and the date have NO backend filter yet —
-  the chips are fully selectable but inert until Zod extends the reports endpoint
-  (recorded in master-ds-zod-roadmap). The draft applies on close (the design has no
-  «Применить» button — closing the sheet IS applying).
+  WIRING (honest skeleton, build-full-design-now). Only the status group maps to
+  the backend: open (i18n:moderation.statuses.open) → pending, closed
+  (i18n:moderation.statuses.closed) → resolved (GET /admin/reports `status`).
+  Category chips (moderation.cats.*), priority (P0–P3) and the date have NO
+  backend filter yet — the chips are fully selectable but inert until Zod
+  extends the reports endpoint
+  (recorded in master-ds-zod-roadmap). The draft applies on close (the design
+  has no apply button — closing the sheet IS applying).
 -->
 
 <template>
@@ -29,7 +35,7 @@
         </svg>
       </button>
 
-      <!-- Категория -->
+      <!-- Category -->
       <section class="mfilter__group">
         <h3 class="mfilter__label">{{ t('moderation.category') }}</h3>
         <div class="mfilter__chips">
@@ -49,7 +55,7 @@
         </div>
       </section>
 
-      <!-- Приоритет -->
+      <!-- Priority -->
       <section class="mfilter__group">
         <h3 class="mfilter__label">{{ t('moderation.priority') }}</h3>
         <div class="mfilter__chips">
@@ -66,7 +72,7 @@
         </div>
       </section>
 
-      <!-- Статус заявки -->
+      <!-- Request status -->
       <section class="mfilter__group">
         <h3 class="mfilter__label">{{ t('moderation.status') }}</h3>
         <div class="mfilter__chips">
@@ -90,7 +96,7 @@
     </div>
   </VModal>
 
-  <!-- Date picker (reused master DS sheet, retitled «Дата заявки») -->
+  <!-- Date picker (reused master DS sheet, retitled via i18n:moderation.reportDate) -->
   <DatePickerSheet
     :open="showDate"
     :model-value="draftDate"
@@ -196,8 +202,9 @@ const hasActiveFilters = computed<boolean>(
     draftDate.value !== '',
 )
 
-// «Сбросить»: clear every filter to its default and STAY open. Closing the sheet
-// then applies the cleared draft (the design has no «Применить» — close = apply).
+// Reset (i18n:common.reset): clear every filter to its default and STAY open. Closing
+// the sheet
+// then applies the cleared draft (the design has no apply button — close = apply).
 function resetFilters(): void {
   draftCats.value = []
   draftPrio.value = []
@@ -205,7 +212,7 @@ function resetFilters(): void {
   draftDate.value = ''
 }
 
-// Design has no «Применить» — closing the sheet applies the current draft.
+// Design has no apply button — closing the sheet applies the current draft.
 function applyAndClose(): void {
   emit('apply', {
     categories: [...draftCats.value],
@@ -250,7 +257,7 @@ function applyAndClose(): void {
   margin: 0;
 }
 
-/* «Выбрать дату» pill */
+/* Pick-date pill (i18n:composer.pickDate) */
 .mfilter__date {
   display: flex;
   align-items: center;

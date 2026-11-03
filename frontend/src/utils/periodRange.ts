@@ -7,7 +7,7 @@
 // calendar bounds. Shared by AdminDashboardView (the stepper) and the Engagement
 // drill-in detail views so both show the SAME week when the user drills in.
 //
-// SW17 (Батч 3, PROMPT №580): pinned to UTC throughout -- both the calendar
+// SW17 (batch 3, PROMPT №580): pinned to UTC throughout -- both the calendar
 // math (which day is "today", which day a week starts on, which month an
 // offset lands in) and the final render -- same decision as SW10's
 // adminHelpers fix. Before this, every step used device-LOCAL Date getters/
@@ -19,7 +19,8 @@
 
 import { getLocale } from '@/locales'
 
-/** e.g. week → "29 июн - 5 июл"; month → "Июль 2026". */
+/** e.g. week → "29 Jun - 5 Jul"; month → "July 2026" (ru ICU output; the
+ *  tests pin the rendered literals). */
 export function formatPeriodRange(period: 'week' | 'month', offset: number): string {
   const now = new Date()
   const locale = getLocale()
@@ -31,7 +32,7 @@ export function formatPeriodRange(period: 'week' | 'month', offset: number): str
     const sun = new Date(Date.UTC(mon.getUTCFullYear(), mon.getUTCMonth(), mon.getUTCDate() + 6))
     const fmt = (d: Date): string => {
       const s = d.toLocaleDateString(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' })
-      // ICU marks the Russian short month with a dot («июн.»); the design drops it.
+      // ICU marks the ru short month with a trailing dot; the design drops it.
       // Other locales' short forms keep their own punctuation.
       return locale === 'ru' ? s.replace('.', '') : s
     }

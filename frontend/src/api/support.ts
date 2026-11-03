@@ -10,7 +10,8 @@
 // repeat under the same key is the same ticket, not a second one.
 //
 // The person never reads support through this module: their tickets are one
-// row in «Сообщения» (api/chats.ts, `channel: 'support'`, `thread_ids`).
+// row in the Messages screen (i18n:user.screens.userMessages.title;
+// api/chats.ts, `channel: 'support'`, `thread_ids`).
 //
 // ADMIN HALF: the ticket list (velo's own table; without a status filter every
 // ticket but spam), one ticket by id, the status change (an OPEN ticket only),
@@ -96,7 +97,8 @@ export interface AdminSupportTicket extends SupportTicket {
   opener: SupportPerson | null
   claimed_by: SupportPerson | null
   history_thread_id: string | null
-  /** BE-162 delivery 3: the last admin who moved the ticket to «Решена». */
+  /** BE-162 delivery 3: the last admin who moved the ticket to resolved
+   *  (i18n:adminScreens.adminSupport.statuses.resolved). */
   resolved_by: SupportPerson | null
   /** The person's rating, null while there is none. */
   rating: SupportTicketRating | null
@@ -165,7 +167,7 @@ export interface SupportTicketCreated {
 // -- The person's rating (BE-162 delivery 3) -----------------------------------
 
 /** A ticket waiting for the caller's rating (GET /support/ratings/pending):
- *  «Решена» and not rated, most recently resolved first. A ticket the person
+ *  resolved and not rated, most recently resolved first. A ticket the person
  *  reopened with a message leaves the list until it is resolved again. */
 export interface PendingRatingTicket {
   id: string
@@ -194,7 +196,7 @@ export function listPendingRatings(): Promise<PendingRatingList> {
 
 /** Rate one's own RESOLVED ticket, once: 1..5 stars and, if they like, a
  *  comment (up to 1000 characters). 404 -- not the caller's ticket; 409 --
- *  not «Решена» (a reopen beat the rating) or rated already; 422 -- the body
+ *  not resolved (a reopen beat the rating) or rated already; 422 -- the body
  *  is wrong. The comment is sent as written, trimmed; empty is null. */
 export function rateTicket(
   ticketId: string,
@@ -314,10 +316,11 @@ export function releaseTicket(ticketId: string): Promise<AdminSupportTicket> {
   return api.post<AdminSupportTicket>(`/api/v1/support/tickets/${ticketId}/release`)
 }
 
-/** Back to OPEN: «вернуть в работу» from resolved / rejected / duplicate,
- *  «не спам» from spam within the retention -- one route for both. 409 --
- *  open already, spam past the retention, or changed meanwhile; 404 -- gone
- *  (the spam bin emptied it). */
+/** Back to OPEN: reopen (i18n:adminScreens.adminSupportDetail.menu.reopen)
+ *  from resolved / rejected / duplicate, not-spam
+ *  (i18n:adminScreens.adminSupportDetail.menu.notSpam) from spam within the
+ *  retention -- one route for both. 409 -- open already, spam past the
+ *  retention, or changed meanwhile; 404 -- gone (the spam bin emptied it). */
 export function reopenTicket(ticketId: string): Promise<AdminSupportTicket> {
   return api.post<AdminSupportTicket>(`/api/v1/support/tickets/${ticketId}/reopen`)
 }
@@ -331,7 +334,8 @@ export function reopenTicket(ticketId: string): Promise<AdminSupportTicket> {
  *  (`status_changed_at <= cutoff` there, strictly-newer here). */
 export const SUPPORT_SPAM_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 
-/** May this spam ticket still come back («Не спам»)? True while the verdict
+/** May this spam ticket still come back (not-spam,
+ *  i18n:adminScreens.adminSupportDetail.menu.notSpam)? True while the verdict
  *  is STRICTLY younger than the retention -- the backend refuses a verdict
  *  exactly at the cutoff (`status_changed_at <= cutoff` is a 409), so the
  *  offer disappears on the same edge. */

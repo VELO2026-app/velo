@@ -10,8 +10,9 @@
   diary/service.py), so a form shown then would only end in an error. The
   screen says what is true instead (feedbackGate below):
     attended                -> the form;
-    pending / confirmed     -> «Отзыв можно будет оставить, когда Zoom
-                               подтвердит участие» -- and a way back;
+    pending / confirmed     -> the waiting notice
+                               (i18n:user.screens.feedback.waiting.text)
+                               -- and a way back;
     no_show / only cancelled -> feedback is not available here, and why;
     not in the loaded list  -> the form, as before F4 (the list is one page;
                                the server stays the judge).
@@ -68,7 +69,7 @@
     @retry="loadPractice"
     @submit="onSubmit"
   >
-    <!-- Practice meta — две колонки (Figma 2266:2988): мастер | статус. -->
+    <!-- Practice meta — two columns (Figma 2266:2988): master | status. -->
     <template #practice-meta>
       <span class="form-shell__practice-meta-cell">
         {{
@@ -101,7 +102,8 @@
       </span>
     </template>
 
-    <!-- Success actions: primary "В дневник" + text link "На главную" (Figma 2266:2296) -->
+    <!-- Success actions: primary to-the-diary CTA (i18n:user.screens.feedback.toDiary)
+         + the home text link (i18n:common.backHome) (Figma 2266:2296) -->
     <template #success-actions>
       <VButton variant="primary" size="lg" block @click="goToDiary">{{
         t('user.screens.feedback.toDiary')
@@ -143,8 +145,8 @@ const practice = computed(() => practicesStore.selected)
 const practiceLoading = computed(() => practicesStore.selectedLoading)
 const practiceLoadError = computed(() => practicesStore.selectedError)
 
-// Rating score 1..10. Default is the EXACT 5 «Нормально» (tz-mood-scale §2.4):
-// both forms open identically and an untouched submit sends 5, not 6.
+// Rating score 1..10. Default is the EXACT 5, the neutral mood label (i18n:mood.neutral,
+// tz-mood-scale §2.4): both forms open identically and an untouched submit sends 5, not 6.
 const ratingScore = ref<number>(MOOD_SCALE_DEFAULT_SCORE)
 const comment = ref('')
 const submitted = ref(false)
@@ -215,9 +217,9 @@ async function onSubmit(): Promise<void> {
 }
 
 function onBack(): void {
-  // Возврат на тот экран, с которого пришёл пользователь (дашборд, детали
-  // практики, ...). Fallback на дашборд, если истории нет — например, после
-  // релоада или прямой ссылки в Telegram.
+  // Return to the screen the user arrived from (dashboard, practice
+  // detail, and so on). Fall back to the dashboard when there is no
+  // history -- for example, after a reload or a direct Telegram link.
   const hasHistory = historyHasBack()
   if (hasHistory) {
     router.back()
@@ -234,7 +236,7 @@ function goToDashboard(): void {
   void router.push({ name: 'user-dashboard' })
 }
 
-// Named so the error rung's «Повторить» can re-run exactly what onMounted ran.
+// Named so the error rung's retry button (i18n:common.retry) can re-run exactly what onMounted ran.
 // Unconditional: the guard below is a cache check for the mount path, but a retry
 // means the last attempt FAILED, so there is nothing cached to skip for.
 function loadPractice(): void {

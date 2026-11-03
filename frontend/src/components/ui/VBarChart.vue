@@ -9,7 +9,7 @@
   state until the backend provides the series.
 
   Usage:
-    <VBarChart :bars="[{ label: 'ПН', value: 58 }, ...]" />
+    <VBarChart :bars="[{ label: 'Mon', value: 58 }, ...]" />
 -->
 
 <template>

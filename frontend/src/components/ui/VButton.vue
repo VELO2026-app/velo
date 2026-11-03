@@ -140,7 +140,8 @@ const normalizedSize = computed(() => (props.size === 'lg' ? 'md' : props.size))
 
 /* Hover fills only on real pointer devices: on touch (Telegram WebView) :hover
    sticks after a tap and leaves the button looking "filled" — most visible on the
-   ghost «Показать ещё» (operator PROMPT №162). Desktop hover unchanged. */
+   ghost show-more button (i18n:common.showMore; operator PROMPT №162). Desktop
+   hover unchanged. */
 @media (hover: hover) {
   .v-btn--primary:hover:not(:disabled) {
     background: var(--velo-primary-dark);

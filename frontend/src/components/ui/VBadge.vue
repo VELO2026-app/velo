@@ -4,19 +4,20 @@
   Pill-shaped status badge. Matches mockup .badge styles.
 
   Usage:
-    <VBadge variant="success">Подтверждено</VBadge>
-    <VBadge variant="warning">Ожидание</VBadge>
-    <VBadge variant="error">Отменено</VBadge>
-    <VBadge variant="info">Новое</VBadge>
-    <VBadge variant="blue">Бесплатно</VBadge>
-    <VBadge variant="muted">Не состоялась</VBadge>
+    <VBadge variant="success">Confirmed</VBadge>
+    <VBadge variant="warning">Pending</VBadge>
+    <VBadge variant="error">Canceled</VBadge>
+    <VBadge variant="info">New</VBadge>
+    <VBadge variant="blue">Free</VBadge>
+    <VBadge variant="muted">Did not happen</VBadge>
 
   `blue` is the calm price/free tone (blue-100 / primary), shared by the
-  practice-card "Бесплатно"/price badges so they no longer hand-roll their own
-  span. `muted` is the low-key blue-grey tone (glass-blue-15 / text-secondary)
-  for non-alarming "didn't happen" states (no_show → «Не состоялась»); VELO has
-  no pure grey, so it reuses existing DS tokens rather than a new colour. Same
-  4×10 / radius-badge shape as every other variant.
+  practice-card free (i18n:common.free) / price badges so they no longer
+  hand-roll their own span. `muted` is the low-key blue-grey tone
+  (glass-blue-15 / text-secondary) for non-alarming "didn't happen" states
+  (no_show, a did-not-happen label); VELO has no pure grey, so it reuses
+  existing DS tokens rather than a new colour. Same 4×10 / radius-badge
+  shape as every other variant.
 
   NOTE: `info` is a duplicate of `success` (same teal) — prefer `success`/`blue`;
   `info` is kept only for backward compatibility.

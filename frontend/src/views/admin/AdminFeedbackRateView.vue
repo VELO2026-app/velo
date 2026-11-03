@@ -2,8 +2,8 @@
   VELO Frontend -- AdminFeedbackRateView (Admin DS, 2026-06-14, operator SVG "3 Feedback rate")
 
   Drill-in from the dashboard Engagement "Feedback rate" row. Hero rate + totals +
-  rating distribution, one row per zone of the shared 1..10 scale (Огонь ..
-  Плохо, BE-77).
+  rating distribution, one row per zone of the shared 1..10 scale
+  (i18n:mood.fire .. i18n:mood.bad, BE-77).
 
   WIRED (E9, 2026-06-16): GET /admin/metrics/feedback — leave-rate, visited/left
   totals, rating distribution (counts → bucket percentages). Loading/error states;
@@ -106,7 +106,7 @@ function bucketPct(count: number | undefined): number | null {
   if (count == null || distributionTotal.value === 0) return null
   return Math.round((count / distributionTotal.value) * 100)
 }
-// Best zone first, as the three-row version read (Огонь on top).
+// Best zone first, as the three-row version read (i18n:mood.fire on top).
 const ratingRows = computed(() =>
   [...MOOD_SCALE_KEYS].reverse().map((key: MoodScaleKey) => ({
     key,

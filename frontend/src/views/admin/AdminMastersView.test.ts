@@ -28,10 +28,11 @@
 // TAXONOMY FIXTURES ARE REAL, NOT INVENTED: read parseMethods (methodTaxonomy.ts:239-283)
 // and practiceOptions.ts's DIRECTION_OPTIONS/STYLE_OPTIONS_BY_DIRECTION before
 // authoring these. The SEP is ' — ' (space + U+2014 em dash + space,
-// methodTaxonomy.ts:55) -- 'Медитация' -> direction 'meditation',
-// 'Медитация — Медитация молчания' -> direction 'meditation' + style
+// methodTaxonomy.ts:55) -- the bare direction label (i18n:display.direction.meditation)
+// -> direction 'meditation'; direction label + SEP + style label
+// (i18n:practice.styles.silence) -> direction 'meditation' + style
 // 'silence'. A string that matches neither a bare direction label nor a
-// direction+style pair surfaces verbatim as the "custom" branch (Q3=А,
+// direction+style pair surfaces verbatim as the "custom" branch (Q3=A,
 // SURFACE-UNMATCHED) -- used below to exercise taxonomyChips' legacy/unparsed
 // fallback for real, not simulated.
 //
@@ -605,8 +606,9 @@ describe('AdminMastersView', () => {
       expect(push).toHaveBeenCalledWith({ name: 'admin-master-invite' })
     })
 
-    // FE-23 (GT P4): the «Куратор» badge keys off schools_count > 0
-    // (counts ACTIVE and FROZEN schools alike), and «Школы» opens the
+    // FE-23 (GT P4): the curator badge (i18n:adminScreens.adminMasters.curatorRole)
+    // keys off schools_count > 0 (counts ACTIVE and FROZEN schools alike), and the
+    // schools button (i18n:adminScreens.adminMasters.schoolsTab) opens the
     // read-only schools list.
     it('shows the «Куратор» badge only for masters owning schools, and «Школы» opens the list', async () => {
       vi.mocked(adminApi.getMastersList)

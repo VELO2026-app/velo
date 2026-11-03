@@ -25,7 +25,7 @@ describe('formatMoney', () => {
 
   it('formats 0 cents as currency when allowZero is true', () => {
     const result = formatMoney(0, 'EUR', 'ru', true)
-    // Should contain "0" and NOT be "Бесплатно"
+    // Should contain "0" and NOT be the free label (i18n:common.free)
     expect(result).toContain('0')
     expect(result).not.toBe('Бесплатно')
   })
@@ -95,7 +95,8 @@ describe('formatDuration', () => {
 // formatDateShort
 // -----------------------------------------------------------------------
 describe('formatDateShort', () => {
-  // Clock-stable: the «Сегодня»/«Завтра» cases compare against `new Date()`, which
+  // Clock-stable: the today/tomorrow label cases (i18n:common.today /
+  // i18n:common.tomorrow) compare against `new Date()`, which
   // is flaky near local midnight (local-tomorrow can resolve to a UTC date +2 days).
   // Pin "now" to a mid-day, mid-month instant so they're deterministic.
   // formatDateShort itself is unchanged. The flake was a test-construction
@@ -232,7 +233,7 @@ describe('dayLabelOf', () => {
 // "formatDateShort" covered and moves on.
 //
 // The gap cost a real bug (PROMPT №440/441): days 1-9 rendered zero-padded
-// ("09 июня") against a docstring promising "9 июня", across 13 view/card
+// ("09 <month>") against a docstring promising "9 <month>", across 13 view/card
 // surfaces, for nine days of every month. Days 10-31 were correct, which is why
 // no one noticed. The leading-zero cases below are the regression guard --
 // deleting them re-opens the hole.
@@ -276,7 +277,7 @@ describe('formatShortDate', () => {
   })
 
   // The VELO short-month table: <= 4 letters written in full with NO period
-  // (мая / июня / июля), longer ones abbreviated to <= 4 + a period.
+  // (the ru genitive May / June / July), longer ones abbreviated to <= 4 + a period.
   it('renders every month per the VELO short-date table', () => {
     const rendered = Array.from({ length: 12 }, (_, i) =>
       formatShortDate(`2026-${String(i + 1).padStart(2, '0')}-15T12:00:00Z`),

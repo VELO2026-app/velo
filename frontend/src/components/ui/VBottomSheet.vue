@@ -8,15 +8,15 @@
   transition + scroll-lock + Escape pattern.
 
   Usage:
-    <VBottomSheet :open="open" title="Дата практики" save-label="Сохранить"
+    <VBottomSheet :open="open" title="Practice date" save-label="Save"
                   @save="commit" @close="open = false">
       ...content...
     </VBottomSheet>
 
   Optional `compactTitle` (PROMPT №609, G11): steps the title font-size
   down from --text-xl (32px) to --text-lg (20px), for a caller whose title
-  is long enough to wrap onto two lines (ReportUserSheet's «Сообщить о
-  пользователе» -- the longest title of this component's 10 callers).
+  is long enough to wrap onto two lines (ReportUserSheet's title,
+  i18n:report.title -- the longest title of this component's 10 callers).
   Deliberately scoped to an opt-in prop rather than changing the shared
   default: every other caller's title is short enough to already fit fine
   at --text-xl, and changing the shared size would shrink 9 titles that
@@ -28,18 +28,19 @@
   When set (together with saveLabel), renders a two-button ROW instead of
   the single full-width save button: cancel at ~39% width (emits the
   EXISTING `close` event, same as the scrim tap -- no new event needed)
-  and save at ~61% (measured, ReportUserSheet's «Отмена»/«Отправить»).
+  and save at ~61% (measured, ReportUserSheet's i18n:ui.cancel /
+  i18n:common.submitSend pair).
   Default '' = byte-identical to every other caller; only ReportUserSheet
   sets this today.
 
   Optional `cancelVariant`/`saveVariant` (T24-27/37, PROMPT №634): the
   owner's position-based colour rule -- LEFT (cancel) BLUE, RIGHT (save)
-  CORAL, with exactly one owner-ruled exception (Modal E, «Добавить в
-  группу»: swapped). The paired row's colours were already exactly this
-  (cancel primary blue, paired-save --velo-error coral, both measured
-  PROMPT №610) -- these props only let a caller INVERT them for the one
-  exception; every existing caller (ReportUserSheet) keeps the same
-  colours it already had. Defaults 'primary'/'danger' = byte-identical.
+  CORAL, with exactly one owner-ruled exception (Modal E,
+  i18n:shared.groups.addTitle: swapped). The paired row's colours were
+  already exactly this (cancel primary blue, paired-save --velo-error coral,
+  both measured PROMPT №610) -- these props only let a caller INVERT them
+  for the one exception; every existing caller (ReportUserSheet) keeps the
+  same colours it already had. Defaults 'primary'/'danger' = byte-identical.
 
   Optional `titleStrong` (T24-25/32, PROMPT №634): a prop, NOT a `:deep()`
   override from the caller's own scoped style -- this component's template
@@ -129,9 +130,9 @@ const props = withDefaults(
     title?: string
     saveLabel?: string
     /** Disables the save button (P3, PROMPT №592 -- e.g. the report form's
-     *  «Отправить» until a reason is chosen). Default false -- every
-     *  pre-existing caller renders byte-identically to before this prop
-     *  existed. */
+     *  send button (i18n:common.submitSend) until a reason is chosen).
+     *  Default false -- every pre-existing caller renders byte-identically
+     *  to before this prop existed. */
     saveDisabled?: boolean
     closeOnOverlay?: boolean
     /** Sizing-only fix for a long title (PROMPT №609, G11) -- see the file
@@ -413,8 +414,9 @@ onUnmounted(() => {
   background: var(--velo-primary-dark);
 }
 
-/* T24-37 (PROMPT №634, Rule 2's one owner-ruled exception -- «Добавить в
-   группу»): cancel repainted coral instead of the default blue. */
+/* T24-37 (PROMPT №634, Rule 2's one owner-ruled exception --
+   i18n:shared.groups.addTitle): cancel repainted coral instead of the
+   default blue. */
 .v-sheet__cancel--danger {
   background: var(--velo-error);
 }
@@ -425,10 +427,11 @@ onUnmounted(() => {
 }
 
 /* Paired save (measured: --velo-error fill, not the lone-button's primary
-   -- ReportUserSheet's «Отправить», owner-specified, not a mistake to
-   "correct" back to primary). Same shape/size as the lone .v-sheet__save,
-   just repainted + given its own flex-grow ratio instead of the parent
-   flex-column's implicit full-width stretch. */
+   -- ReportUserSheet's send button (i18n:common.submitSend),
+   owner-specified, not a mistake to "correct" back to primary). Same
+   shape/size as the lone .v-sheet__save, just repainted + given its own
+   flex-grow ratio instead of the parent flex-column's implicit full-width
+   stretch. */
 .v-sheet__save--paired {
   flex: 61 1 0%;
   margin-top: 0;

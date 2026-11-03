@@ -4,7 +4,7 @@
   Horizontal week selector for the Calendar screen:
     - 5 visible day pills (weekday label + day number + dot marker) and a
       STATIONARY month chip as the 6th column -- day pills scroll UNDER it
-      (the month(s) of the visible span: "Авг" or "Авг-Сен")
+      (the month(s) of the visible span: "Aug" or "Aug-Sep")
     - Selected day filled with the primary color
     - [owner pass] No prev/next arrows anymore -- the drag IS the navigation
     - [slider pass] THE STRIP IS A DRAG CAROUSEL: pointer down on the days
@@ -127,7 +127,7 @@ const emit = defineEmits<{
 const WEEKDAY_LABELS = [7, 1, 2, 3, 4, 5, 6].map(weekdayAbbrUpper)
 
 // [owner pass] Short month abbreviations -- the STATIONARY 6th chip
-// shows the month(s) of the five visible days ("Авг" / "Авг-Сен").
+// shows the month(s) of the five visible days ("Aug" / "Aug-Sep").
 const MONTH_ABBR = Array.from({ length: 12 }, (_, m) => {
   if (getLocale() === 'ru') return t(`shared.monthsShort.${m + 1}`)
   const name = new Intl.DateTimeFormat(getLocale(), { month: 'short' }).format(
@@ -135,9 +135,6 @@ const MONTH_ABBR = Array.from({ length: 12 }, (_, m) => {
   )
   return name.charAt(0).toUpperCase() + name.replace('.', '').slice(1)
 })
-
-// [owner pass] Short month abbreviations -- the STATIONARY 6th chip
-// shows the month(s) of the five visible days ("Авг" / "Авг-Сен").
 
 interface Cell {
   key: string
@@ -195,7 +192,7 @@ const trackTransform = computed(
  * day the leftmost visible column shows is round(-offset / stride) -- so the
  * label follows the drag and flips exactly when the visible span crosses a
  * month border. Equal months collapse to ONE line; a straddling span stacks
- * TWO lines (Авг over Сен) -- never a dashed "Авг-Сен".
+ * TWO lines (Aug over Sep) -- never a dashed "Aug-Sep".
  */
 const monthList = computed<string[]>(() => {
   const base = props.days[0]
@@ -451,7 +448,7 @@ function onDayClick(dateKey: string): void {
 
 .week-strip__days {
   display: flex;
-  /* Figma 2266:2307 — gap между day-pills = 5px, не --space-2 (8). */
+  /* Figma 2266:2307 — the gap between day pills is 5px, not --space-2 (8). */
   gap: var(--velo-card-gap-icon-title);
   width: max-content;
   /* The slider's moving part. The transition lives on the --anim modifier
@@ -566,8 +563,8 @@ function onDayClick(dateKey: string): void {
   color: var(--velo-text-secondary);
 }
 
-/* One month = one centred line; a month border = TWO stacked lines (Авг
-   over Сен), one month per line -- the strip is too narrow for a dashed
+/* One month = one centred line; a month border = TWO stacked lines (Aug
+   over Sep), one month per line -- the strip is too narrow for a dashed
    pair on a single row. */
 .week-strip__month-chip-months {
   flex: 1;

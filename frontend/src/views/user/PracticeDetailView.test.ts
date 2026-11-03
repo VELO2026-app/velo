@@ -376,8 +376,9 @@ describe('PracticeDetailView', () => {
     })
 
     it('a free practice offers «Записаться бесплатно», a paid one «Забронировать»', async () => {
-      // bookButtonText (PracticeDetailView.vue:~240). Offering "Забронировать"
-      // on a free practice is a needless payment framing; the reverse is worse.
+      // bookButtonText (PracticeDetailView.vue:~240). Offering the paid
+      // book CTA (i18n:user.screens.practiceDetail.cta.book) on a free
+      // practice is a needless payment framing; the reverse is worse.
       practicesState.selected = practice({ is_free: true, price_cents: 0 })
       mount()
       await flush()
@@ -422,7 +423,8 @@ describe('PracticeDetailView', () => {
 
     it('an UNCAPPED practice is never full', async () => {
       // max_participants null = no limit. Treating null as 0 would lock every
-      // open practice behind «Мест нет».
+      // open practice behind the sold-out label
+      // (i18n:user.screens.practiceDetail.state.soldOut).
       practicesState.selected = practice({ current_participants: 999, max_participants: null })
       mount()
       await flush()
@@ -503,8 +505,9 @@ describe('PracticeDetailView', () => {
       // bookings/service.py deliberately leaves a Zoom-tracked booking
       // CONFIRMED after the practice ends until the attendance report ripens
       // or the deadline fallback fires. Without this, a user who sat through
-      // the class sees the exact same «Вы записаны» as before it started --
-      // indistinguishable from a no-show at a glance.
+      // the class sees the exact same booked label
+      // (i18n:user.screens.practiceDetail.state.booked) as before it started
+      // -- indistinguishable from a no-show at a glance.
       const ended = new Date(NOW_MS - 3 * HOUR).toISOString()
       practicesState.selected = practice({ scheduled_at: ended, duration_minutes: 60 })
       bookingsState.bookings = [
@@ -551,8 +554,9 @@ describe('PracticeDetailView', () => {
     })
 
     it('an ACTIVE booking wins over an older cancelled one', async () => {
-      // Selection order matters: showing «Отменена» to someone who re-booked and
-      // holds a paid confirmed booking is a support ticket.
+      // Selection order matters: showing the cancelled label
+      // (i18n:user.screens.practiceDetail.state.cancelled) to someone who
+      // re-booked and holds a paid confirmed booking is a support ticket.
       bookingsState.bookings = [
         booking({ id: 'b_old', status: 'cancelled', created_at: '2026-07-10T00:00:00Z' }),
         booking({ id: 'b_new', status: 'confirmed', created_at: '2026-07-01T00:00:00Z' }),
@@ -572,7 +576,7 @@ describe('PracticeDetailView', () => {
       mount()
       await flush()
 
-      // B30 (PROMPT №746, owner wording): was 'Неявка'.
+      // B30 (PROMPT №746, owner wording): was the old no-show label.
       expect(text()).toContain('Вы не пришли')
       expect(text()).not.toContain('Отменена')
     })
@@ -694,7 +698,8 @@ describe('PracticeDetailView', () => {
     it('does NOT offer cancel once the practice has ENDED', async () => {
       // G4 (PracticeDetailView.vue:~267-272): the backend keeps a booking
       // confirmed until the lifecycle worker finalizes it, so status alone would
-      // dangle «Отменить» on an practice that is already over.
+      // dangle the cancel CTA (i18n:user.screens.practiceDetail.cancelBooking)
+      // on a practice that is already over.
       const ended = new Date(NOW_MS - 3 * HOUR).toISOString()
       practicesState.selected = practice({ scheduled_at: ended, duration_minutes: 60 })
       // The nested summary moves too -- hasEnded reads THAT, not the store's.
@@ -855,7 +860,8 @@ describe('PracticeDetailView', () => {
 
     it('a CONFIRMED booking past its practice (attendance still pending) still qualifies', async () => {
       // Owner ruling: entitlement is the booking, not the attendance
-      // verdict -- confirmed-and-ended (the "Подсчет" state) must not
+      // verdict -- confirmed-and-ended (the counting state,
+      // i18n:user.screens.practiceDetail.state.counting) must not
       // be treated as ineligible just because attended/no_show isn't decided.
       getBookingRecording.mockResolvedValue({ status: 'available', url: 'https://zoom.us/rec/x' })
       practicesState.selected = practice({ scheduled_at: ended, duration_minutes: 60 })

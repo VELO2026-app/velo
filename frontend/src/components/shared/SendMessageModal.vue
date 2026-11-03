@@ -1,21 +1,24 @@
 <!--
   VELO Frontend -- SendMessageModal (Master DS, 2026-06-11; REAL send -- T3)
 
-  "Написать сообщение" sheet, reused on the student screens (list / profile /
-  summary / analytics). REAL since the T3 chat backend landed: «Отправить»
-  open-or-gets the eternal DM and posts the text. Same open-then-send split
+  The write-message sheet (i18n:common.writeMessage), reused on the student
+  screens (list / profile / summary / analytics). REAL since the T3 chat
+  backend landed: Send (i18n:common.submitSend) open-or-gets the eternal DM
+  and posts the text. Same open-then-send split
   as BookingConfirmedView.onSendRequest: one in-flight flag, success toasts
   and closes, a failure toasts and leaves the sheet standing with the draft
   (the retry is safe -- comms dedups on the pair). Visual contract: recipient
-  chip + message textarea + Отмена / Отправить.
+  chip + message textarea + the cancel / send pair (i18n:ui.cancel /
+  i18n:common.submitSend).
 
   Two directed pairs, one component (owner 2026-09-30):
     - studentId -- master-side caller: POST /chats/students {student_id}
       (openStudentChat), the master zone screens' path;
-    - masterId  -- the PUBLIC master profile's «Написать сообщение»
-      (MasterPublicView): POST /chats {master_id} (openChat), the same
-      thread the visitor's own «Задать вопрос» opens. When both ids are
-      passed the master wins; exactly one is passed in practice.
+    - masterId  -- the PUBLIC master profile's write-message action
+      (i18n:common.writeMessage, MasterPublicView): POST /chats {master_id}
+      (openChat), the same thread the visitor's own ask-a-question button
+      (the legacy label, replaced by i18n:common.writeMessage) opens. When
+      both ids are passed the master wins; exactly one is passed in practice.
 -->
 
 <template>

@@ -78,7 +78,7 @@ export function getMyBookings(
 /**
  * Fetch the current user's live-or-upcoming confirmed bookings, soonest first.
  *
- * Dedicated endpoint for the dashboard «Ближайшая практика» widget: the backend
+ * Dedicated endpoint for the dashboard widget (i18n:masterScreens.masterDashboard.nearestOne): the backend
  * filters to confirmed + not-ended and orders by scheduled_at ASC, so the
  * nearest-selection sees the truly-soonest practice (fixes the >20-bookings
  * mis-select where the paginated /me list only carried the newest-BOOKED page).

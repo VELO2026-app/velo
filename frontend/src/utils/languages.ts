@@ -8,8 +8,9 @@
 // stored on the master profile as data.profile.languages (mirrors methods).
 //
 // tz-i18n: the entries are ENDONYMS -- storage canon, not UI copy (every
-// locale lists the same 'Русский' / 'English'); the vocabulary lives in the
-// locales/ru/languages.json seed for the same reason taxonomy.json does.
+// locale lists the same native names, e.g. Russian under its own endonym
+// alongside 'English'); the vocabulary lives in the locales/ru/languages.json
+// seed for the same reason taxonomy.json does.
 // =============================================================================
 
 // ?raw + JSON.parse: VueI18nPlugin precompiles every plain locales/**/*.json

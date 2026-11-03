@@ -17,8 +17,9 @@
 // sources arrive -- only SUPPORT_CATEGORY_ICONS below changes.
 //
 // THE FILTER GROUPS (FE-100): five chips over the six categories -- the
-// «Жалобы» chip is both complaint categories (sent as a repeatable
-// `category`, BE-162 fix 2).
+// complaints chip (i18n:adminScreens.adminSupport.categories.complaints)
+// is both complaint categories (sent as a repeatable `category`, BE-162
+// fix 2).
 // =============================================================================
 
 import type { Component } from 'vue'
@@ -95,7 +96,8 @@ export function supportCategoryGroupLabel(key: SupportCategoryGroup['key']): str
 
 /** The SIX categories by their own code (FE-107: the statistics rows name
  *  each category separately -- complaint_master and complaint_user apart,
- *  where the filter's chips merge them into «Жалобы»). */
+ *  where the filter's chips merge them into the complaints chip,
+ *  i18n:adminScreens.adminSupport.categories.complaints). */
 export function supportCategoryLabel(category: SupportCategory): string {
   return t(`adminScreens.adminSupport.categoryNames.${category}`)
 }

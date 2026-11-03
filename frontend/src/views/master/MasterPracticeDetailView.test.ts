@@ -41,9 +41,10 @@
 // the reactive read. The write path is the thing under test.
 //
 // TIME IS PINNED (vi.setSystemTime). whenLabel -> formatDateShort compares the
-// practice against `new Date()` to emit «Сегодня»/«Завтра» (utils/format.ts:
-// 65-85). Unpinned, the hero's date line is a different string every day and
-// the «Завтра» test below would be green only on 2026-07-21. Fixtures are
+// practice against `new Date()` to emit the relative labels
+// (i18n:common.today / i18n:common.tomorrow; utils/format.ts:65-85). Unpinned,
+// the hero's date line is a different string every day and the tomorrow test
+// below would be green only on 2026-07-21. Fixtures are
 // literals relative to the frozen instant.
 //
 // SC-13 -- THE OVERLAY REAP IS MANDATORY HERE. Both confirm dialogs
@@ -55,7 +56,7 @@
 // belonging to an unmounted app: the first dialog test passes, every later one
 // fails, and the screen is innocent. afterEach purges .v-modal__overlay.
 //
-// No money is FORMATTED on this screen -- the «Цена» stat card was removed
+// No money is FORMATTED on this screen -- the price stat card was removed
 // (operator 2026-06-18) and formatMoney is not imported, so the ru NBSP trap
 // (velo-idiom §11) does not bite. text() normalises the three space variants
 // anyway: Intl emits U+00A0 from the date/time formatters on some ICU builds,
@@ -140,8 +141,9 @@ function practice(overrides: Partial<PracticeResponse> = {}): PracticeResponse {
     description: null,
     what_to_prepare: null,
     contraindications: null,
-    // Two days out: neither «Сегодня» nor «Завтра», so whenLabel is the stable
-    // «22 июля, 10:00» that the content assertions read.
+    // Two days out: neither the today nor the tomorrow label, so whenLabel
+    // is the stable non-relative date line (resolved via `formatDateShort` +
+    // `formatTime`) that the content assertions read.
     scheduled_at: '2026-07-22T10:00:00Z',
     duration_minutes: 60,
     timezone: 'UTC',
@@ -296,8 +298,9 @@ async function openDestructive(): Promise<void> {
  * A button inside the teleported dialog. Queried from document.body, NOT from
  * the mount root (SC-07: VModal teleports, so host.querySelector finds nothing
  * and the test would conclude the dialog never opened). Matched on the EXACT
- * trimmed label -- «Не отменять» and «Отменить» share a stem and a
- * `includes()` match would eventually pick the wrong one.
+ * trimmed label -- the keep button (i18n:practiceCancel.keep) and the cancel
+ * button share a stem and an `includes()` match would eventually pick the
+ * wrong one.
  */
 function dialogButton(label: string): HTMLButtonElement | undefined {
   return Array.from(
@@ -1534,7 +1537,7 @@ describe('MasterPracticeDetailView', () => {
 
 describe('MasterPracticeDetailView -- audience_unavailable (FE-24 / GT P5)', () => {
   it('flag true: the warning renders and offers no way into the editor (BE-74)', async () => {
-    // Before BE-74 the banner said «Смените аудиторию» and its button opened
+    // Before BE-74 the banner said "Change the audience" and its button opened
     // the edit screen -- right while a school audience could be swapped there.
     // BE-74 made a school practice's audience and school read-only on that
     // screen, and every flagged practice belongs to a school (the flag is set

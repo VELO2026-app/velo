@@ -4,8 +4,8 @@
 //
 // A master's promo codes. Money-adjacent by construction: the master ABSORBS
 // the discount out of their own revenue (generated.ts:427, CreateMasterPromoRequest
-// docstring), so a wrong percent or a code that survives "Удалить" costs the
-// master real money on every redemption.
+// docstring), so a wrong percent or a code that survives the delete CTA
+// (i18n:ui.delete) costs the master real money on every redemption.
 //
 // PATTERN B (local-ref): promos/loading/error/deactivatingId are refs in the
 // component, fed by a direct getMyPromos() in onMounted
@@ -200,7 +200,7 @@ describe('MasterPromocodesView', () => {
   describe('labels', () => {
     it('an unlimited promo shows ∞ rather than a bogus cap', async () => {
       // usedLabel falls back to '∞' on a null max_uses (MasterPromocodesView.vue:113).
-      // Printing "4 из 0" or "4 из null" would read as an exhausted code.
+      // Printing "4 of 0" or "4 of null" would read as an exhausted code.
       vi.mocked(promosApi.getMyPromos).mockResolvedValue(
         page([promo('p1', { max_uses: null, used_count: 4 })]),
       )

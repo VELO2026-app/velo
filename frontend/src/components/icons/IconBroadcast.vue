@@ -1,11 +1,11 @@
 <!--
-  VELO Frontend -- IconBroadcast (master "Подключение" auto-link illustration)
+  VELO Frontend -- IconBroadcast (online-broadcast/streaming glyph)
 
-  Online-broadcast/streaming glyph for the practice-create «Подключение» card
-  («ссылка создаётся платформой»). Extracted verbatim from the operator SVG
-  (2 New practice 3.svg, 2026-06-11). Single-tone currentColor; the host renders
-  it inside a --velo-blue-100 circle with color:--velo-blue-400 (see
-  CreatePracticeView). viewBox bounds the graphic from the source canvas.
+  Extracted verbatim from the operator SVG (2 New practice 3.svg, 2026-06-11).
+  Single-tone currentColor; viewBox bounds the graphic from the source canvas.
+  Currently unreferenced: it illustrated the practice-create auto-link card
+  ("the link is created by the platform"), removed from CreatePracticeView in
+  T-35; kept as part of the F-9 canonical icon set.
 -->
 <template>
   <svg

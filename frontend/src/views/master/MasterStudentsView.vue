@@ -1,7 +1,8 @@
 <!--
   VELO Frontend -- MasterStudentsView (Master DS, 2026-06-11)
 
-  "Мои ученики" — the master's students list. Reached from the dashboard row.
+  The my-students screen (i18n:masterScreens.masterStudents.title) — the
+  master's students list. Reached from the dashboard row.
   Rendered inside MasterShell.
 
   LIVE (E5): getStudents() → GET /api/v1/masters/me/students →
@@ -159,8 +160,10 @@ const filtered = computed((): StudentListItem[] => {
   return students.value.filter((s) => s.name.toLowerCase().includes(q))
 })
 
-// Show the first 10; the rest hide behind a «+ ещё N учеников» pill until tapped
-// (operator 2026-06-25). The cap applies to the current (search-)filtered list.
+// Show the first 10; the rest hide behind a "+ more students" pill (resolves
+// via `t('masterScreens.masterStudents.moreStudents', hiddenCount)`) until
+// tapped (operator 2026-06-25). The cap applies to the current
+// (search-)filtered list.
 const STUDENTS_PREVIEW = 10
 const expanded = ref(false)
 const visibleStudents = computed((): StudentListItem[] =>

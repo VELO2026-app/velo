@@ -9,7 +9,8 @@
 // What is under test, and why:
 //   1. NAMES ARRIVE FROM THE ROW ITSELF -- P-1 exists so the list renders
 //      without per-row profile lookups; the test proves no other api module
-//      is touched. peer=null degrades to «Мастер», never breaks the row.
+//      is touched. peer=null degrades to the role fallback
+//      (i18n:user.screens.userMessages.peerFallback), never breaks the row.
 //   2. BADGES ARRIVE WITH THE ROWS -- ONE request for the whole screen
 //      (T-51: the per-thread fan-out is gone, and its wrapper with it).
 //      Three row states stay distinguishable: a count, an explicit 0, and
@@ -55,8 +56,8 @@ function thread(overrides: Partial<ChatThread> = {}): ChatThread {
 }
 
 function supportThread(overrides: Partial<ChatThread> = {}): ChatThread {
-  // BE-163: a support row has peer: null -- the VELO logo + «Поддержка
-  // VELO» stand in for both.
+  // BE-163: a support row has peer: null -- the VELO logo + the support
+  // title (i18n:chat.supportTitle) stand in for both.
   return thread({
     id: 'support-1',
     channel: 'support',

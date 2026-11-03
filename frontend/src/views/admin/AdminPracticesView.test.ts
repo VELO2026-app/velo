@@ -9,7 +9,7 @@
 // reading every import AND stores/admin.ts end to end: the list itself is
 // driven by getAdminPractices (@/api/admin, .vue:124) called directly -- the
 // store is read for exactly ONE value, `adminStore.stats?.practices_count`
-// (.vue:89), feeding the "Все" segment badge. This screen never calls
+// (.vue:89), feeding the i18n:common.all segment badge. This screen never calls
 // fetchDashboard.
 //
 // ADMIN-STORE SETUP: stores/admin.ts is a setup store whose `stats` is a
@@ -26,9 +26,9 @@
 //
 // CORRECTION TO RECON: formatDateShort (@/utils/format.ts:65-92) is NOT
 // Date.now-independent -- it reads `new Date()` internally (format.ts:67) to
-// decide the "Сегодня"/"Завтра" relative labels vs a plain "28 февраля" date.
-// A fixture dated near the real run date would make this suite flaky
-// depending on WHEN it runs.
+// decide the relative-day labels (i18n:common.today / i18n:common.tomorrow)
+// vs a plain long-form date. A fixture dated near the real run date would
+// make this suite flaky depending on WHEN it runs.
 //
 // PROMPT №563 (flagged by 137bd8c, fixed here): the ORIGINAL fixture picked
 // 2030-03-15 as "far enough in the future to never collide" -- true only
@@ -37,7 +37,7 @@
 // is now FAKED and frozen at NOW (beforeEach below), and the fixture date is
 // derived as NOW + 30 days, so the relationship holds by construction
 // regardless of which day the suite runs on. Exact rendered strings ("21
-// августа" / "13:00" for NOW=2026-07-22T10:00:00Z + 30 days, in
+// August" / "13:00" for NOW=2026-07-22T10:00:00Z + 30 days, in
 // Europe/Moscow) verified directly via node before writing the assertions
 // below, not guessed.
 //
@@ -68,8 +68,9 @@ vi.mock('vue-router', () => ({
 
 // PROMPT №563: clock is FAKED and frozen at NOW (beforeEach below), same
 // pattern as AttendanceView.test.ts/AttendanceRosterView.test.ts (137bd8c).
-// STABLE_SCHEDULED_AT is NOW + 30 days, so formatDateShort's Сегодня/Завтра
-// branch can never collide with it regardless of when this suite runs.
+// STABLE_SCHEDULED_AT is NOW + 30 days, so formatDateShort's relative-day
+// branch (i18n:common.today / i18n:common.tomorrow) can never collide with
+// it regardless of when this suite runs.
 const NOW = new Date('2026-07-22T10:00:00Z')
 const STABLE_SCHEDULED_AT = new Date(NOW.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
 

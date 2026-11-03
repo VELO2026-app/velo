@@ -3,8 +3,10 @@
 // =============================================================================
 //
 // Pins the sheet's contracts that do not need a real scroll:
-//   1. the three wheel columns render with their Месяц/День/Год labels;
-//   2. save with no prior pick emits the DEFAULT position (1 января 2000) --
+//   1. the three wheel columns render with their month/day/year labels
+//      (i18n:auth.onboarding.birth.month, i18n:auth.onboarding.birth.day,
+//      i18n:auth.onboarding.birth.year);
+//   2. save with no prior pick emits the DEFAULT position (January 1, 2000) --
 //      the repo's "the untouched value travels" idiom (see
 //      ExternalActivityCreateView.test.ts, pickDefaultTime);
 //   3. a modelValue initializes the wheels and round-trips on save;

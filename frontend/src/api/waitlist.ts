@@ -2,7 +2,7 @@
 // VELO Frontend -- Waitlist API (Links, 3 October)
 // =============================================================================
 //
-// The «Освободилось место» notification (waitlist.spot_available) carries
+// The spot-freed notification (kind waitlist.spot_available) carries
 // confirm_waitlist with waitlist_id. Until now nothing on the front could
 // confirm it; WaitlistConfirmView does, through these two calls.
 // =============================================================================

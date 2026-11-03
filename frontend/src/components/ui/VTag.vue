@@ -5,9 +5,9 @@
 
   Variants: blue | pink | sand
   Usage:
-    <VTag variant="blue">Йога</VTag>
-    <VTag variant="pink">Медитация</VTag>
-    <VTag variant="sand">Дыхание</VTag>
+    <VTag variant="blue">Yoga</VTag>
+    <VTag variant="pink">Meditation</VTag>
+    <VTag variant="sand">Breathing</VTag>
 -->
 
 <template>

@@ -22,8 +22,10 @@
 // so their DOM is queried from document.body, not the mount root (SC-07) -- and
 // both leak past unmount, so afterEach reaps them (see the note there).
 //
-// THE GATE IS ONE STEP (owner 2026-10-02): «Подтвердить» -> ConfirmPaymentModal
-// (the recap the admin checks) -> «Одобрить выплату» -> approve. The 2FA window
+// THE GATE IS ONE STEP (owner 2026-10-02): the confirm button (i18n:ui.confirm)
+// -> ConfirmPaymentModal
+// (the recap the admin checks) -> the payout approve button (i18n:payout.approve)
+// -> approve. The 2FA window
 // that used to follow the recap was removed: the approve endpoint never took a
 // code, so it gated nothing. Its tests went with it; the double-pay guard it
 // carried (its `loading`) now lives on the confirm button and is asserted below.
@@ -113,7 +115,7 @@ function bodyButton(label: string): HTMLButtonElement | undefined {
 }
 
 // SCOPED to the confirm modal (.cpm): the screen behind it has its own
-// «Подтвердить», and a bare body search could click the wrong one.
+// confirm button (i18n:ui.confirm), and a bare body search could click the wrong one.
 function cpmApprove(): HTMLButtonElement | undefined {
   const cpm = document.body.querySelector('.cpm')
   return Array.from(cpm?.querySelectorAll('button') ?? []).find((b) =>
@@ -127,7 +129,7 @@ function rowValue(key: string): string {
   return row?.querySelector('.wd__v')?.textContent?.trim() ?? ''
 }
 
-/** Walk the real gate: Подтвердить -> ConfirmPaymentModal. */
+/** Walk the real gate: confirm (i18n:ui.confirm) -> ConfirmPaymentModal. */
 async function openConfirm(): Promise<void> {
   button('Подтвердить')?.click()
   await flush()

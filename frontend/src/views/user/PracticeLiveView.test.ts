@@ -23,14 +23,16 @@
 // Every field access goes through `practice?.x ?? fallback` (.vue:47-48), so
 // the screen renders its full shape immediately and swaps in real values once
 // the store resolves; there is nothing that "shows a loader" to assert. NO
-// status branching either: the "В эфире" badge (.vue:51) is unconditional --
+// status branching either: the live badge (i18n:user.screens.practiceLive.liveBadge,
+// .vue:51) is unconditional --
 // this screen trusts whatever navigated it here (only reached from a
 // dashboard/booking CTA gated on the practice actually being live) and does
 // not itself re-check practice.status. Both confirmed by reading the full
 // template, not assumed from the screen's name.
 //
 // VEmptyState is used for three T-35 states (host / cancelled / resolve-404),
-// not as a general loading/error ladder; Check-in and "Покинуть практику"
+// not as a general loading/error ladder; Check-in and the leave button
+// (i18n:user.screens.practiceLive.leave)
 // stay rendered regardless -- except (F4) for the practice's own master and in
 // the master zone, where they are not his actions.
 //
@@ -45,9 +47,11 @@
 //   (a) the AUDIT-0520-02 https guard. It policed a master-typed string; that
 //       field no longer exists, and every URL this screen can open now comes
 //       from our own database through the resolve endpoint.
-//   (b) N1's "Вы не записаны" empty state. A person with no booking is no
+//   (b) N1's not-booked empty state (i18n:user.screens.practiceLive.notBooked).
+//       A person with no booking is no
 //       longer stonewalled -- they are offered the guest entry, which is what
-//       the wrapper is for. The honest "не засчитается" mark took its place.
+//       the wrapper is for. The honest "will not be counted" mark took its
+//       place.
 //
 // ⚠ FINDING RESOLVED (FE-78.2, 2026-10-03): the gate now keys on the machine
 // status (`result.status !== 409`) instead of matching the word "already" in
@@ -56,11 +60,13 @@
 // to the toast gate only; if that is wrong too, it is a separate decision.
 //
 // STANDALONE F4 SUPERSEDES THE LINK. Zoom now runs INSIDE VELO (Meeting SDK,
-// client view): «Войти»/«Начать» ask the server for SDK parameters
+// client view): the join/start buttons (i18n:user.screens.practiceLive.join /
+// i18n:user.screens.practiceLive.start) ask the server for SDK parameters
 // (joinZoomSdk) and hand them to platform/zoom-sdk.ts (enterZoomMeeting). Every
 // assertion that used to read `openLink(<zoom url>)` now reads those two
 // calls, and `openLink` is asserted NEVER called. The guest branch inverted
-// (owner decision 12: no guest entry from the app -- «Вы не записаны» and the
+// (owner decision 12: no guest entry from the app -- the not-booked state
+// (i18n:user.screens.practiceLive.notBooked) and the
 // way to the practice), and the host branch no longer sends the owner away:
 // he starts right here. One view, two zones: routeName decides.
 //
@@ -510,7 +516,8 @@ describe('PracticeLiveView', () => {
       expect(enterBtn()).toBeNull()
     })
 
-    // Links (Д4): 'unavailable' fell into the generic «Войти» branch.
+    // Links (D4): 'unavailable' fell into the generic join branch
+    // (i18n:user.screens.practiceLive.join).
     it('unavailable: honest state, no «Войти» (a live booking whose entry will not come)', async () => {
       practicesState.selected = practice()
       bookingsState.bookings = [booking()]

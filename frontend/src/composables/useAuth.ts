@@ -242,7 +242,7 @@ export function parseStartParam(
 
   // T-35: the public practice code, the same 22 characters that appear in
   // {PUBLIC_LINK_BASE}/z/{code}. One code, two places -- the landing page's
-  // "Открыть VELO" button carries it straight through as startapp=zoom__<22>
+  // open-app button carries it straight through as startapp=zoom__<22>
   // (28 characters against Telegram's 64 limit), so a person who clicked a
   // channel link arrives here already pointed at the right practice.
   const zoomMatch = startParam.match(/^zoom__([A-Za-z0-9_-]{22})$/)
@@ -324,11 +324,11 @@ export function parseStartParam(
       // screen learns it is support from the row's `channel`).
       return id ? { name: asMaster ? 'master-chat' : 'user-chat', params: { id } } : null
     case 'open_support_rating':
-      // FE-107 / BE-162 delivery 3: «Как мы помогли?» -- the notification's
-      // button opens the rating sheet on THAT ticket. The same chat route
-      // open_thread uses resolves the ticket id to the person's one support
-      // row; ?rate=1 is what asks the sheet to open on the ticket the link
-      // named (the route's own id).
+      // FE-107 / BE-162 delivery 3: the rating notification's title
+      // (i18n:chat.rating.title) -- its button opens the rating sheet on
+      // THAT ticket. The same chat route open_thread uses resolves the
+      // ticket id to the person's one support row; ?rate=1 is what asks the
+      // sheet to open on the ticket the link named (the route's own id).
       return id
         ? {
             name: asMaster ? 'master-chat' : 'user-chat',

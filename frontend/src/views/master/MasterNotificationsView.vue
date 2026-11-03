@@ -2,13 +2,15 @@
   VELO Frontend -- MasterNotificationsView (Phase-3 Master DS)
 
   Master-side notification preferences, reached from the master profile hub
-  («Уведомления»). Operator decision 2026-06-13 (В1=Б): this is a SEPARATE
-  master-only screen, NOT the shared user NotificationsView. The master design is
+  (i18n:masterScreens.masterProfile.menu.notifications). Operator decision
+  2026-06-13 (B1=B): this is a SEPARATE master-only screen, NOT the shared
+  user NotificationsView. The master design is
   far richer (bookings / participants / messages / analytics + a delivery
   schedule); the user view stays untouched (user role is frozen).
 
-  Grouped on/off rows (label + optional sub + VSwitch) plus a «График
-  уведомлений» block: a from/to delivery window (VSelect) and a VDayPicker.
+  Grouped on/off rows (label + optional sub + VSwitch) plus the delivery
+  schedule block (i18n:masterScreens.masterNotifications.schedule): a
+  from/to delivery window (VSelect) and a VDayPicker.
 
   BACKEND (Phase 6 / T1): the CATEGORY toggles and the schedule now read and
   write the comms service through the velo proxy
@@ -188,9 +190,9 @@ const GROUPS: Group[] = [
     // receives students' chat messages as msg.support_message -> category
     // msg_support, REGARDLESS of thread form; msg_participants reaches the
     // master only where they are the CLIENT of somebody else's thread. The
-    // old labels («От участников» / «От поддержки») said the opposite of
-    // what the toggles do. msg_support first: it is the one that matters
-    // to a master. Texts approved by Master-chat (Т-10); wording is the
+    // old labels ("From participants" / "From support") said the opposite
+    // of what the toggles do. msg_support first: it is the one that matters
+    // to a master. Texts approved by Master-chat (T-10); wording is the
     // boss's to replay after the show -- a two-line edit here.
     rows: [
       {
@@ -368,7 +370,8 @@ function onScheduleDays(days: string[]): void {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
-  /* Extra bottom space so the «График уведомлений» block isn't glued to the
+  /* Extra bottom space so the delivery schedule block
+     (i18n:masterScreens.masterNotifications.schedule) isn't glued to the
      bottom edge (operator 2026-06-19). */
   padding: 0 var(--space-4) var(--space-8);
 }

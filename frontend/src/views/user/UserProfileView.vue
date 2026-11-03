@@ -4,26 +4,32 @@
   User profile main screen. Matches Figma node 4715:3464 (70_Profile):
     - Header: avatar, name (no email -- email is a future, separately
       collected field, NOT the Telegram username, so it is not shown here)
-    - Stats row: two cards -- "Практик" (attended count) and "Часов"
-      (attended hours), both from GET /api/v1/bookings/me/stats
+    - Stats row: two cards -- attended practices
+      (i18n:user.screens.userProfile.practicesStat) and attended hours
+      (i18n:user.screens.userProfile.hoursStat),
+      both from GET /api/v1/bookings/me/stats
     - Menu sections: account, settings, help, logout
 
   Stats source: /bookings/me/stats returns practices_attended + hours_attended,
   computed from attended bookings only, so the two numbers stay consistent.
   B52: the same response also carries has_unread_messages, a colour-only
-  indicator (no count) for the "Сообщения" row's dot -- one request, no
+  indicator (no count) for the messages row's
+  (i18n:user.screens.userProfile.menu.messages) dot -- one request, no
   new endpoint, no per-thread poll on this screen.
 
   Menu navigation: items whose target screens (Edit profile, Notifications,
   Language/Timezone, Support, Share) are built in later steps of the profile
   redesign are wired as toast stubs for now; each becomes a real route when
-  its screen lands. "Мои бронирования" already has a route and navigates.
+  its screen lands. The bookings row (i18n:user.screens.userProfile.menu.bookings)
+  already has a route and navigates.
 
   Vector icons (currentColor) from components/icons replace the previous
   emoji glyphs, matching the mockup.
 
-  TD-FE-ROLE-SWITCH: master/admin see a "Вернуться в режим ..." row above
-  logout that resets uiMode and navigates to their native dashboard.
+  TD-FE-ROLE-SWITCH: master/admin see a back-to-native-mode row above logout
+  (i18n:user.screens.userProfile.backToMaster /
+  i18n:user.screens.userProfile.backToAdmin)
+  that resets uiMode and navigates to their native dashboard.
 
   Route: /user/profile (name: 'user-profile')
 -->
@@ -312,9 +318,9 @@ function returnToNativeMode(): void {
 }
 
 .profile__avatar {
-  /* Центрируем аватар: VAvatar — блочный flex-контейнер фикс-ширины, поэтому
-   * text-align родителя его не центрит. flex-center гарантирует центр
-   * (operator 2026-06-04). */
+  /* Centre the avatar: VAvatar is a block flex container of fixed width, so
+   * the parent's text-align cannot centre it. flex-center guarantees the
+   * centre (operator 2026-06-04). */
   display: flex;
   justify-content: center;
   margin-bottom: var(--space-3);

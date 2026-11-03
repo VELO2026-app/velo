@@ -26,12 +26,12 @@
   white circle every other screen uses, unchanged) | 'glass' -- the
   composer's Liquid Glass frost (blur(18) saturate(180%) + a white rim, and
   a white 20% fill -- bumped from the composer's 12% by the owner the same
-  day: "чуть менее прозрачным"), for the diary's floating header button over
-  the scrolling feed.
+  day, to read slightly less transparent), for the diary's floating header
+  button over the scrolling feed.
 
   Usage:
     <VBackButton @click="router.back()" />
-    <VBackButton variant="glass" aria-label="Выйти из дневника" @click="exitDiary" />
+    <VBackButton variant="glass" aria-label="Exit the diary" @click="exitDiary" />
 -->
 
 <template>
@@ -104,9 +104,10 @@ defineEmits<{ click: [] }>()
 
 /* [2026-09-07, diary header] Glass variant: the composer's Liquid Glass frost
    recipe -- white 20% surface (owner-bumped from the composer's 12% the same
-   day: "чуть менее прозрачным") over blur(18) saturate(180) with a white rim
-   -- the feed scrolling beneath the floating button still reads through it,
-   just denser. The solid variant stays the DS default everywhere else. */
+   day, to read slightly less transparent) over blur(18) saturate(180) with a
+   white rim -- the feed scrolling beneath the floating button still reads
+   through it, just denser. The solid variant stays the DS default everywhere
+   else. */
 .v-back--glass {
   background: var(--velo-glass-white-20);
   border: 1px solid var(--velo-glass-white-35);

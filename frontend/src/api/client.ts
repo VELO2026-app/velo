@@ -218,7 +218,8 @@ async function request<T>(
 // -- the log line carries the full id, so a prefix match finds it with one
 // grep. No header (network/timeout failures, which never reach this
 // function) -> no suffix; never render an empty or placeholder code.
-// tz-i18n 1.2: the word «код» comes from common.traceSuffix.
+// tz-i18n 1.2: the "code" word in the rendered suffix is catalog copy
+// (i18n:common.traceSuffix).
 function suffixWithTraceId(message: string, traceId: string | null): string {
   return traceId
     ? i18n.global.t('common.traceSuffix', { message, code: traceId.slice(0, 6) })

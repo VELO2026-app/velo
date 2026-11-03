@@ -2,9 +2,10 @@
 // VELO Frontend -- methodTaxonomy.ts Unit Tests
 // =============================================================================
 // R3/R4 regression (PROMPT №391): parseMethods used to DROP any string that
-// didn't match the taxonomy (Q3=В); it now SURFACES it as the custom variant
-// (Q3=А) so a master's «Свой вариант» entry (e.g. "терапия") shows up in the
-// picker instead of silently vanishing after submit / after admin approval.
+// didn't match the taxonomy (Q3=B); it now SURFACES it as the custom variant
+// (Q3=A) so a master's own-variant entry (i18n:methodPicker.custom; e.g. the
+// "therapy" custom-text fixtures pinned below) shows up in the picker instead
+// of silently vanishing after submit / after admin approval.
 // =============================================================================
 
 import { describe, it, expect, vi } from 'vitest'
@@ -99,8 +100,9 @@ describe('parseMethods -> flattenMethods round-trip', () => {
 
 // =============================================================================
 // Bug 2 (PROMPT №405): a value auto-promoted into the DB catalog (admin
-// approves a master's «Свой вариант» with "добавить в каталог") must resolve
-// as a MATCHED direction, not stay "unmatched -> custom" forever.
+// approves a master's own-variant submission (i18n:methodPicker.custom) with
+// the add-to-catalog action, i18n:adminScreens.adminMasterReview.addToCatalog)
+// must resolve as a MATCHED direction, not stay "unmatched -> custom" forever.
 //
 // primeMethodTaxonomyCatalog() mutates MODULE-LEVEL state (the whole point --
 // a lazy, session-lifetime cache, same lifecycle as production). Tests below
@@ -198,7 +200,8 @@ describe('primeMethodTaxonomyCatalog (warm cache)', () => {
 // The bug 2 fix (PROMPT №405) above taught directionLabel/parseMethods about
 // the catalog, but flattenMethods' style branch (`STYLE_LABEL[st] ?? st`) was
 // never made catalog-aware in any screen -- a catalog-created style
-// flattened straight to its raw slug (e.g. "Йога тест — custom_l40lb6fj")
+// flattened straight to its raw slug (e.g. the "Yoga test" fixture's
+// direction label joined directly to the raw style slug "custom_l40lb6fj")
 // because there was no value->label reverse map for styles, only the
 // label->value forward map parseMethods needs. applyTaxonomyCatalog() (pulled
 // out of primeMethodTaxonomyCatalog so MethodTaxonomyPicker can feed the SAME

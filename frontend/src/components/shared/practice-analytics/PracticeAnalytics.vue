@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // BE-78: presentational. The container (PracticeReviewsView) owns the three
 // requests and the paging; every number here is the server's -- zones
-// included (ScoreZone, BE-24: never a raw 1..10). Every "X из N" uses
+// included (ScoreZone, BE-24: never a raw 1..10). Every "X of N" count
+// (shared.analytics.outOf) uses
 // N = summary.attended.
 import { t } from '@/locales'
 import { computed, ref, watch } from 'vue'
@@ -20,8 +21,9 @@ import type {
 } from '@/api/types'
 import PracticeMoodDistribution from './PracticeMoodDistribution.vue'
 
-// tz-i18n 2.2a: headers/labels via shared.analytics.*; the pairs " ещё N"
-// ladder is the built-in plural (Intl.PluralRules) now.
+// tz-i18n 2.2a: headers/labels via shared.analytics.*; the pairs "N more"
+// ladder (shared.analytics.pairsMore) is the built-in plural (Intl.PluralRules)
+// now.
 import { moodTotal, personTarget, type AnalyticsPerson } from './analytics'
 
 const props = withDefaults(
@@ -61,7 +63,8 @@ function onPerson(person: AnalyticsPerson): void {
   if (opens(person)) emit('person', person)
 }
 
-// «Чек-инов до» is the «до» distribution's total: one population (attended).
+// The check-ins count (shared.analytics.checkins) is the total of the
+// "before" distribution (shared.analytics.before): one population (attended).
 const checkedIn = computed(() => (props.summary ? moodTotal(props.summary.before) : 0))
 const hasMorePairs = computed(
   () => !!props.summary && props.pairs.length < props.summary.pairs_total,
@@ -87,8 +90,9 @@ const visiblePairs = computed(() =>
 )
 const hiddenPairs = computed(() => Math.max(0, props.pairs.length - PAIRS_VISIBLE))
 const hiddenPairsLabel = computed(() => {
-  // tz-i18n 2.2a: was the manual RU ladder (11-14 -> пар, %10==1 -> пару,
-  // %10 2-4 -> пары, else пар) -- exactly Intl.PluralRules one/few/many,
+  // tz-i18n 2.2a: was the manual RU plural ladder for "pair" (11-14 -> many
+  // form, %10==1 -> one form, %10 2-4 -> few form, else many) -- exactly
+  // Intl.PluralRules one/few/many,
   // which is what the built-in plural picks now.
   return t('shared.analytics.pairsMore', hiddenPairs.value)
 })
@@ -254,7 +258,7 @@ const showPairsPager = computed(
 </template>
 
 <style scoped>
-/* Фон, safe area и горизонтальные поля уже задаёт MobileLayout. */
+/* Background, safe area and horizontal padding are already set by MobileLayout. */
 .practice-analytics {
   display: flex;
   flex-direction: column;

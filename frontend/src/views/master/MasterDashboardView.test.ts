@@ -7,7 +7,8 @@
 // into the two numbers, the two cards and the one CTA a master reads to decide
 // what to do today. Every value is DERIVED, so a wrong one is silent -- there is
 // nothing on the screen to contradict it. Hence: these tests assert the VALUES
-// the computeds produce («Завтра, 07:00 • 45 мин», «+23%», «12»), not that a
+// the computeds produce (the composed "Tomorrow, 07:00, 45 min" line, "+23%",
+// "12"), not that a
 // fetch fired (SC-02). The two call-shape assertions in this file are flagged
 // where they appear, and each is there because the argument IS the behaviour and
 // nothing rendered can distinguish it.
@@ -32,7 +33,8 @@
 //   - `now = ref(Date.now())` + a 60s setInterval (.vue:302-303,384-386), which
 //     `nearestPractices` cuts on via practiceHasEnded (.vue:308).
 //   - formatDateShort (utils/format.ts:65-85) internally compares against
-//     `new Date()` to emit «Сегодня» / «Завтра».
+//     `new Date()` to emit the today / tomorrow labels
+//     (i18n:common.today / i18n:common.tomorrow).
 // Unpinned, the card list and every date line below are a different answer at a
 // different hour, and a different one again in CI (SC-04). All fixtures are
 // LITERAL datetimes chosen against that frozen instant, never `Date.now() + n`.
@@ -69,12 +71,13 @@
 // and an afternoon debugging a healthy screen.
 //
 // TWO COMMENTS IN THE SOURCE ARE STALE, and the tests below assert the CODE:
-//   - .vue:20-21 «Stats: only the practices total is real; participants/income +
-//     all deltas and the Неделя/Месяц period scoping have no API -> toggle
-//     visual-only». Untrue since E7: loadStats really calls
+//   - .vue:20-21 claimed "Stats: only the practices total is real;
+//     participants/income + all deltas and the week/month period scoping have
+//     no API -> toggle visual-only". Untrue since E7: loadStats really calls
 //     GET /masters/me/stats?period and watch(period) really refetches
 //     (.vue:258-260,288-292). Asserted as the live behaviour it is.
-//   - «Мои ученики (stub — no screen yet)». Untrue: onGroups() pushes to
+//   - The old "My students (stub -- no screen yet)" claim. Untrue: onGroups()
+//     pushes to
 //     'master-groups' (P2, PROMPT №591 -- was onStudents/'master-students')
 //     and that route exists and resolves MasterGroupsView. It navigates.
 // Both reported. Neither faked.
@@ -113,10 +116,10 @@ vi.mock('@/api/users')
 vi.mock('@/api/notifications')
 
 // PROMPT №565: "Zoom", for kind==='personal', now goes through the same
-// ticket flow "Начать" used before the two buttons merged -- only
+// ticket flow the old Start button used before the two buttons merged -- only
 // retryZoomMeeting is a network call worth mocking; the rest of the module
 // stays real. (Standalone F4: the start-ticket pair that sat here is gone
-// with its flow -- «Zoom» routes to the practice screen.)
+// with its flow -- the Zoom button routes to the practice screen.)
 vi.mock('@/api/practices', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api/practices')>()
   return { ...actual, retryZoomMeeting: vi.fn() }
@@ -206,7 +209,8 @@ function practice(id: string, overrides: Partial<PracticeResponse> = {}): Practi
   }
 }
 
-// Tomorrow 07:00 UTC, 45 min -> «Завтра, 07:00 • 45 мин». The soonest.
+// Tomorrow 07:00 UTC, 45 min -> the "Tomorrow, 07:00, 45 min" card line. The
+// soonest.
 const P_SOON = practice('p1', {
   title: 'Утренняя практика',
   scheduled_at: '2026-07-21T07:00:00Z',
@@ -215,7 +219,8 @@ const P_SOON = practice('p1', {
   max_participants: 20,
   checkin_count: 3,
 })
-// Five days out, 90 min -> «25 июля, 10:00 • 1 ч 30 м». Second in the list.
+// Five days out, 90 min -> the "25 July, 10:00, 1 h 30 m" line. Second in the
+// list.
 const P_LATER = practice('p2', {
   title: 'Вечерняя практика',
   scheduled_at: '2026-07-25T10:00:00Z',
@@ -500,8 +505,9 @@ function periodButton(label: string): HTMLButtonElement | undefined {
 }
 
 /** VCards in document order: [0] is the nearest-practices empty card,
- *  present only when there is nothing to show. ([owner pass] the «Саммари
- *  недели» teaser card that used to be [0] is removed with its section.) */
+ *  present only when there is nothing to show. ([owner pass] the
+ *  weekly-summary (i18n:masterScreens.masterSummary.title)
+ *  teaser card that used to be [0] is removed with its section.) */
 function cards(): HTMLElement[] {
   return Array.from(host?.querySelectorAll<HTMLElement>('.v-card') ?? [])
 }
@@ -602,8 +608,9 @@ describe('MasterDashboardView', () => {
     })
 
     it('loading: the practices half has its OWN loader, under a resolved profile', async () => {
-      // .vue:120-124 -- practicesLoading gates only the «Ближайшие практики»
-      // section, so the stats stay on screen while it spins.
+      // .vue:120-124 -- practicesLoading gates only the nearest-practices
+      // section (i18n:masterScreens.masterDashboard.nearest),
+      // so the stats stay on screen while it spins.
       vi.mocked(mastersApi.getMyPractices).mockReturnValue(new Promise(() => {}))
       mount()
       await flush()
@@ -630,7 +637,8 @@ describe('MasterDashboardView', () => {
       await flush()
 
       expect(titles()).toEqual(['Утренняя практика', 'Вечерняя практика'])
-      // formatDateShort resolves «Завтра» against the FROZEN instant, in the
+      // formatDateShort resolves the tomorrow label (i18n:common.tomorrow)
+      // against the FROZEN instant, in the
       // practice's zone -- this line is the whole reason time is pinned.
       expect(subOf(blocks()[0]!)).toBe('Завтра, 07:00 • 45 мин')
       expect(subOf(blocks()[1]!)).toBe('25 июля, 10:00 • 1 ч 30 м')
@@ -679,8 +687,10 @@ describe('MasterDashboardView', () => {
     it('FE-53: a FAILED remount refresh keeps the previous cards (no zero-state wipe)', async () => {
       // The other half of the fix: refreshInPlace, not refresh. refresh()
       // reset()s the bucket, so a transient failure while RE-entering the
-      // dashboard would have wiped cards already on screen into «Нет
-      // предстоящих практик» + the create CTA -- worse than the stale figures
+      // dashboard would have wiped cards already on screen into the
+      // no-upcoming-practices empty state
+      // (i18n:masterScreens.masterDashboard.emptyUpcoming) + the create CTA
+      // -- worse than the stale figures
       // it replaced. The freshness check is passive: on failure the old page
       // stays, exactly like loadStats keeps its previous values.
       mount()
@@ -751,7 +761,9 @@ describe('MasterDashboardView', () => {
       // (composables/usePagination.ts:67-70), the store re-exports it as
       // practicesError, and this template never binds it either. A network
       // failure is therefore rendered as the factual CLAIM that the master has
-      // no practices -- with the «Создать практику» CTA under it, inviting them
+      // no practices -- with the create CTA
+      // (i18n:masterScreens.masterDashboard.createPractice) under it, inviting
+      // them
       // to make a duplicate. Reported; asserted as the tripwire.
       vi.mocked(mastersApi.getMyPractices).mockRejectedValue(new TypeError('network down'))
       mount()
@@ -800,9 +812,9 @@ describe('MasterDashboardView', () => {
       // proves the negative: the two practices' absolute (UTC) order and their
       // local-wall-clock order DISAGREE, and the dashboard renders whatever
       // order the (correctly UTC-ascending) server response gave it.
-      //   TZ_SORT_A (Токио)     20:00Z -> local wall-clock 22 July 05:00
-      //   TZ_SORT_B (Нью-Йорк)  22:00Z -> local wall-clock 21 July 18:00
-      // By local wall-clock, Нью-Йорк would sort first (21 July before 22 July)
+      //   TZ_SORT_A (Tokyo)     20:00Z -> local wall-clock 22 July 05:00
+      //   TZ_SORT_B (New York)  22:00Z -> local wall-clock 21 July 18:00
+      // By local wall-clock, New York would sort first (21 July before 22 July)
       // -- the old CR-1 assertion. The server orders ascending by the absolute
       // instant instead (TZ_SORT_A 20:00Z < TZ_SORT_B 22:00Z), and the
       // dashboard must preserve exactly that order.
@@ -867,7 +879,7 @@ describe('MasterDashboardView', () => {
   describe('isNewMaster -- the zero state is about PRACTICES EVER, not upcoming', () => {
     it('a master with only past practices is NOT new: the plain empty card, not the new-master one', async () => {
       // practicesTotal is 3 even though nothing is upcoming (.vue:247-249).
-      // The «Статистика»/«Моя статистика» heading is GONE from the screen
+      // The Statistics / My-statistics heading is GONE from the screen
       // (owner ask 2026-09-08) -- asserted absent for everyone below.
       vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
         page([P_COMPLETED, P_JUST_ENDED, P_CANCELLED]),
@@ -877,13 +889,15 @@ describe('MasterDashboardView', () => {
 
       expect(text()).not.toContain('Статистика')
       expect(text()).not.toContain('Моя статистика')
-      // ...and the empty card says «нет предстоящих», not «нет данных».
+      // ...and the empty card says no-upcoming
+      // (i18n:masterScreens.masterDashboard.emptyUpcoming), not a generic
+      // no-data wording.
       expect(norm(nearestEmptyCard()?.textContent).trim()).toBe('Нет предстоящих практик')
     })
 
     it('but still offers «Создать практику» -- the CTA tracks UPCOMING, not ever', async () => {
       // .vue:87-88: shown whenever there is no upcoming practice, not only to
-      // brand-new masters. The «первую» wording was dropped for exactly this.
+      // brand-new masters. The "first" wording was dropped for exactly this.
       mockBucketedPractices([P_COMPLETED])
       mount()
       await flush()
@@ -1028,7 +1042,8 @@ describe('MasterDashboardView', () => {
     it('a failed REFETCH keeps the previous figures rather than blanking them', async () => {
       // The watch's `.catch(() => {})` (.vue:288-292) is deliberate. Note what it
       // costs and what is asserted: the numbers on screen are now the WEEK's
-      // while the toggle reads «Месяц», and nothing says so.
+      // while the toggle reads month (i18n:common.periodMonth), and nothing
+      // says so.
       mount()
       await flush()
       expect(statValue('Практик')).toBe('12')
@@ -1249,7 +1264,8 @@ describe('MasterDashboardView', () => {
       // button was enabled and merely MARKED as not counting attendance. That
       // rung is gone with its column -- a link attendance cannot see is not a
       // degraded option, it is the defect. A master whose meeting failed to
-      // create uses "Повторить" (below), not a hand-typed URL.
+      // create uses the retry action (i18n:common.retry; below), not a
+      // hand-typed URL.
       mount()
       await flush()
 
@@ -1258,7 +1274,8 @@ describe('MasterDashboardView', () => {
     })
 
     // =========================================================================
-    // A4 V2 (PROMPT №572): create_failed replaces "Zoom" with "Повторить".
+    // A4 V2 (PROMPT №572): create_failed replaces "Zoom" with the retry
+    // label (i18n:common.retry).
     // Before this, create_failed and pending_creation both rendered the
     // identical disabled "Zoom" button -- indistinguishable to the master,
     // and no way to act on the permanent one.

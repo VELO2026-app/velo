@@ -6,24 +6,24 @@
   The `icon` prop takes a SEMANTIC KEY (not an emoji) — the DS picks the glyph:
     warning | notfound | calendar | list | group | success | empty
   Usage:
-    <VEmptyState icon="calendar" title="Нет практик" description="Создайте первую практику" />
-    <VEmptyState icon="warning" title="Ошибка">
-      <VButton size="sm" @click="reload">Обновить</VButton>
+    <VEmptyState icon="calendar" title="No practices yet" description="Create your first practice" />
+    <VEmptyState icon="warning" title="Error">
+      <VButton size="sm" @click="reload">Refresh</VButton>
     </VEmptyState>
 
   Custom icon via slot (any DS icon component, overrides the key):
-    <VEmptyState title="Нет практик">
+    <VEmptyState title="No practices yet">
       <template #icon><IconClock :size="48" /></template>
     </VEmptyState>
 
   variant="note" (WS-3b T2) — a compact card-wrapped one-liner: solid card plate,
   NO icon, NO title/desc split, NO action. The single message comes from `title`
   (or the default slot). Replaces the bespoke `__empty` plates in the master views.
-    <VEmptyState variant="note" title="Данных пока нет" />
+    <VEmptyState variant="note" title="No data yet" />
 
   The action button takes EITHER slot — both render into `.v-empty__action`:
-    <VEmptyState icon="warning" title="Ошибка">
-      <template #action><VButton @click="load">Повторить</VButton></template>
+    <VEmptyState icon="warning" title="Error">
+      <template #action><VButton @click="load">Retry</VButton></template>
     </VEmptyState>
 
   Why both (T8, PROMPT №433): 11 views were already written against `#action`, a

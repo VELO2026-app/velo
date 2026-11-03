@@ -142,7 +142,8 @@ export function createSchool(name: string, description?: string): Promise<School
  *
  *  The server stores the avatar URL NORMALIZED (lowercase host, trailing
  *  slash, punycode) -- what comes back in the response is NOT byte-equal to
- *  what was sent, and callers are expected to surface «сохранено как …». */
+ *  what was sent, and callers are expected to surface the saved-as toast
+ *  (i18n:user.screens.schoolPage.toast.avatarSaved). */
 export function updateSchool(
   id: string,
   name: string,
@@ -257,7 +258,8 @@ export function unblockSchoolMember(id: string, userId: string): Promise<void> {
   return api.delete(`${CURATOR_BASE}/${id}/blocks/${userId}`)
 }
 
-/** GET /masters/me/schools/{id}/blocks (BE-79) -- the «Блок» tab.
+/** GET /masters/me/schools/{id}/blocks (BE-79) -- the blocked-members tab
+ *  (i18n:user.screens.schoolMembers.tabs.blocked).
  *  limit/offset only: the endpoint has no search. */
 export function getSchoolBlocks(
   id: string,
@@ -419,8 +421,9 @@ export function getSchoolReviews(
 // calendar (week|month|quarter, default week -- the master stats
 // convention). The all-time groups (practices/members/feedback/
 // top_practices) ride the same response unchanged: members.students is the
-// «из N в школе» denominator of card 2, and the distributions are the raw
-// material for the screen's later parts.
+// denominator of card 2's members line
+// (i18n:user.screens.schoolAnalytics.membersLine), and the distributions are
+// the raw material for the screen's later parts.
 // =============================================================================
 
 /** The analytics slider's period vocabulary -- the same three values the

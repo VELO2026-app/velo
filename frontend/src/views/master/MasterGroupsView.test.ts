@@ -191,7 +191,8 @@ describe('MasterGroupsView', () => {
       await flush()
 
       expect(rows()).toHaveLength(5)
-      // 8 - 5 = 3 hidden -> plural('группы') for count=3.
+      // 8 - 5 = 3 hidden -> the count=3 plural form of the expander label
+      // (i18n:masterScreens.masterGroups.moreGroups) is what renders.
       expect(text()).toContain('+ ещё 3 группы')
     })
 

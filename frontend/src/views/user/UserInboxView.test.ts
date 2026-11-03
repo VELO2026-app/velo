@@ -13,7 +13,8 @@
 //   2. TAPPING AN UNREAD ROW marks it read: optimistic dot-clear + a real
 //      call to markNotificationRead, reverted on failure.
 //   3. TAPPING AN ALREADY-READ ROW is a no-op -- no network call.
-//   4. "ПРОЧИТАТЬ ВСЁ" only renders when unread > 0, marks every row read,
+//   4. The read-all control (i18n:user.screens.userInbox.readAll) only
+//      renders when unread > 0, marks every row read,
 //      and reverts EVERY row (not just the failing one) on failure.
 //   5. DEEP LINKS (FE-11 owner ruling): a tap navigates by action_data.action
 //      -- velo's own action vocabulary -- AND marks the row read:
@@ -409,12 +410,13 @@ describe('UserInboxView', () => {
     })
   })
 
-  // Links (В2): a school event stayed mark-read-only -- right while only the
+  // Links (B2): a school event stayed mark-read-only -- right while only the
   // offer had a screen. Every school.* notice now opens the school page,
   // like its Telegram button; the block notice is the one exception (pinned in
   // the BE-79 block above).
-  // Links (Д3): «Освободилось место» carries waitlist_id, not practice_id --
-  // the row went nowhere. It opens its own confirm screen now.
+  // Links (D3): the spot-freed notification (kind waitlist.spot_available)
+  // carries waitlist_id, not practice_id -- the row went nowhere. It opens
+  // its own confirm screen now.
   it('confirm_waitlist (waitlist_id) opens the waitlist confirm screen', async () => {
     vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
       items: [
@@ -702,8 +704,8 @@ describe('UserInboxView', () => {
   describe('type slider (Все / Сообщения / Мероприятия / Другое)', () => {
     // One row per bucket + one "other" kind: the buckets are PREFIX rules over
     // velo's emit vocabulary (msg.* / booking.* / practice.* / waitlist.*),
-    // and finance is the complement case -- «Другое» owns every kind with no
-    // bucket of its own (owner ask).
+    // and finance is the complement case -- the "other" tab (i18n:common.other)
+    // owns every kind with no bucket of its own (owner ask).
     function mixed(): NotificationItem[] {
       return [
         item({ id: 'a', type: 'booking.confirmed' }),

@@ -1,6 +1,6 @@
 <template>
   <!-- Open book with a crescent moon + star for diary "dream" cards
-       (Сонник). Monochrome currentColor, card-icon DS contract. -->
+       (i18n:diary.categories.dreams). Monochrome currentColor, card-icon DS contract. -->
   <svg
     xmlns="http://www.w3.org/2000/svg"
     :width="size"

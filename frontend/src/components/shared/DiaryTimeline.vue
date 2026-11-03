@@ -21,14 +21,14 @@
 <template>
   <div class="timeline">
     <template v-for="(group, gi) in dayGroups" :key="group.dayKey">
-      <!-- Day separator: big decor link above the date node (Декор 2 / big).
+      <!-- Day separator: big decor link above the date node (Decor 2 / big).
            The FIRST group carries none: a connector hanging from nothing read
            as a dead gap above the thread's very first entry (owner request). -->
       <div v-if="gi > 0" class="timeline__link">
         <IconDecor2 part="big" :size="30" />
       </div>
 
-      <!-- Date node: a decor flourish on each side of the label (Декор). -->
+      <!-- Date node: a decor flourish on each side of the label (Decor). -->
       <div class="timeline__date-node">
         <IconDecor part="left" :size="39" />
         <span class="timeline__date-label">{{ group.label }}</span>
@@ -40,8 +40,8 @@
         <IconDecor2 part="big" :size="30" />
       </div>
 
-      <!-- Cards of this day, centered, joined by the small decor link (Декор 2
-           / small) — shown between cards, not before the first one. -->
+      <!-- Cards of this day, centered, joined by the small decor link
+           (Decor 2 / small) — shown between cards, not before the first one. -->
       <template v-for="(item, i) in group.items" :key="itemKey ? itemKey(item) : item.id">
         <div v-if="i > 0" class="timeline__link">
           <IconDecor2 part="small" :size="18" />

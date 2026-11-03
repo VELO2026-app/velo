@@ -44,7 +44,8 @@
 // the wall clock in FOUR places that decide what renders: the reactive `now`
 // ref + 60s setInterval (.vue:225-226,459-461) driving isInCheckinWindow/
 // isLiveNow; and formatDateShort internally
-// compare against `new Date()` for "Сегодня"/"Завтра" (utils/format.ts:67,176).
+// compare against `new Date()` for the relative day labels
+// (i18n:common.today / i18n:common.tomorrow; utils/format.ts:67,176).
 // All fixture datetimes are literals relative to that frozen instant.
 //
 // VIEWER TIMEZONE: the profile timezone is 'Europe/Moscow' (UTC+3), not 'UTC'
@@ -515,7 +516,7 @@ describe('UserDashboardView', () => {
       const blocks = nearestBlocks()
       expect(blocks).toHaveLength(2)
       // selectNearestBookings pins the active session first regardless of input order.
-      expect(titleOf(blocks[0]!)).toBe('Утренняя практика') // "(эфир)" suffix stripped
+      expect(titleOf(blocks[0]!)).toBe('Утренняя практика') // live-marker suffix stripped
       expect(badgeOf(blocks[0]!)).toBe('В эфире')
       expect(whenOf(blocks[0]!)).toBe('Сегодня')
       expect(durOf(blocks[0]!)).toContain('14:50')
@@ -672,7 +673,8 @@ describe('UserDashboardView', () => {
 
       const blocks = nearestBlocks()
       // blocks[0] is UP_LIVE (pinned live-first): session in progress
-      // («В эфире») -> NO Check-in button at all -- hidden, not disabled.
+      // (live badge, i18n:user.screens.userDashboard.liveBadge) -> NO
+      // Check-in button at all -- hidden, not disabled.
       expect(actionIn(blocks[0]!, 'Check-in')).toBeUndefined()
       // blocks[1] is UP_SOON: has_checkin true -> NO Check-in either.
       expect(actionIn(blocks[1]!, 'Check-in')).toBeUndefined()
@@ -1146,8 +1148,9 @@ describe('UserDashboardView', () => {
   })
 
   // ===========================================================================
-  // FE-70: «Быстрый доступ» -- two one-tap entries into writing, placed
-  // between the nearest practices and the progress stats.
+  // FE-70: the quick-access section (i18n:user.screens.userDashboard.quickAccess.title)
+  // -- two one-tap entries into writing, placed between the nearest practices
+  // and the progress stats.
   // ===========================================================================
   describe('quick access (FE-70)', () => {
     function sectionTitles(): string[] {
