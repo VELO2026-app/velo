@@ -173,8 +173,8 @@ function sameSet(a: string[], b: string[]): boolean {
 // UNCHANGED regardless of catalog state, so once the catalog warms and the
 // parent re-supplies the exact same text, sameSet() reads "unchanged" and
 // bails forever -- the picker never re-interprets it as the now-matched chip
-  // it actually is. That is the exact mechanism behind the acupuncture value (a
-  // real existing catalog chip) staying stuck in the free-text box.
+// it actually is. That is the exact mechanism behind the acupuncture value (a
+// real existing catalog chip) staying stuck in the free-text box.
 //
 // Fix: also watch taxonomyCatalogVersion (bumped once per
 // applyTaxonomyCatalog() call, commit 1) and track which version produced
