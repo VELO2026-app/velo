@@ -205,7 +205,7 @@ onBeforeUnmount(() => {
 <style scoped>
 /* ==========================================================================
  * [LOOK-TEST v2, owner pass 2026-09-06] Compact liquid-glass dock pill.
- * Approved direction ("нравится"), still a git-revertible experiment vs
+ * Approved direction (owner verdict: likes it), still a git-revertible experiment vs
  * the per-button Figma bubbles described in the file banner above.
  *
  * ONE floating glass pill, built from the diary composer's Apple Liquid

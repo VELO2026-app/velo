@@ -38,7 +38,7 @@ import { ApiResponseError } from '@/api/client'
 
 vi.mock('@/api/diary')
 
-// UserShell's «Школы» tab probe (FE-88) reads /schools/mine for every
+// UserShell's Schools tab probe (i18n:tabs.schools, FE-88) reads /schools/mine for every
 // account that mounts the shell; this fixture's visitor belongs to no school
 // and must settle without touching the network.
 const schoolsMock = vi.hoisted(() => ({
@@ -80,7 +80,7 @@ vi.mock('@/stores/auth', () => ({
     get user() {
       return authState.user
     },
-    // schoolsHub (the shell's «Школы» tab probe) reads the store's
+    // schoolsHub (the shell's Schools tab probe, i18n:tabs.schools) reads the store's
     // role_switch-derived surface; an empty list = never master-capable here.
     allowedRoles: [],
   }),
@@ -165,7 +165,7 @@ function thoughtTextarea(): HTMLTextAreaElement {
   return el
 }
 
-// -- The unified mood scale (MoodSlider) inside «Мое состояние» -----------------
+// -- The unified mood scale (MoodSlider) inside the mood section (i18n:user.screens.externalActivityCreate.section.moodAfter) -----------------
 
 function stateRange(): HTMLInputElement {
   const el = host?.querySelector<HTMLInputElement>('[data-field="state"] input[type="range"]')
@@ -243,7 +243,7 @@ function typeThoughts(value: string): void {
   el.dispatchEvent(new Event('input'))
 }
 
-/** A fully valid form: yesterday 12:00, Медитация, no thoughts. The mood
+/** A fully valid form: yesterday 12:00, the meditation chip, no thoughts. The mood
  *  scale needs NO interaction: it opens on the visible default (5) and the
  *  untouched value travels with the payload, like Check-in/Feedback. */
 async function fillValidForm(): Promise<void> {
@@ -301,7 +301,8 @@ describe('ExternalActivityCreateView', () => {
       const titles = Array.from(host?.querySelectorAll('.velo-section-title') ?? []).map((t) =>
         t.textContent?.trim(),
       )
-      // «Мое состояние после» is the unified scale's section (no star: the mood
+      // The mood-after section (i18n:user.screens.externalActivityCreate.section.moodAfter)
+      // is the unified scale's section (no star: the mood
       // never blocks -- the visible default always carries).
       expect(titles).toEqual([
         'Когда произошло событие *',
@@ -343,7 +344,8 @@ describe('ExternalActivityCreateView', () => {
       expect(picker(0).textContent?.trim()).toBe('Дата')
       expect(picker(1).textContent?.trim()).toBe('Время')
       expect(screenText()).not.toContain('Свой вариант')
-      // The unified scale renders untouched: the active face is «Нормально»,
+      // The unified scale renders untouched: the active face is the neutral
+      // label (i18n:mood.neutral),
       // the range sits on the default 5.
       expect(host?.querySelector('[data-field="state"]')).not.toBeNull()
       expect(faceCard('Нормально').getAttribute('aria-checked')).toBe('true')
@@ -743,7 +745,7 @@ describe('ExternalActivityCreateView', () => {
       const shellHost = document.createElement('div')
       document.body.appendChild(shellHost)
       const shellApp = createApp(UserShell).use(createTestI18n())
-      // Settle the dock's «Школы» probe as "no schools" (FE-88) so the shell
+      // Settle the dock's Schools tab probe (i18n:tabs.schools) as "no schools" (FE-88) so the shell
       // mount stays network-free.
       schoolsMock.getMySchools.mockResolvedValue({ items: [] })
       schoolsMock.getSchools.mockResolvedValue({

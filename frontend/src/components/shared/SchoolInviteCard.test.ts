@@ -4,7 +4,7 @@
 //
 // The card's contract, per the mockups and the owner's no-analytics ruling:
 // logo/name/counters/description plus the bold invitation heading -- and
-// NOTHING else. The counters are the same pluralised «ученики → мастера»
+// NOTHING else. The counters are the same pluralised students → masters
 // pair the hero card renders; an empty description is omitted, never an
 // empty paragraph; without a hash the initials plate stands in until the
 // derived mandala resolves (§5.2 variant A).

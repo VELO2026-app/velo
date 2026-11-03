@@ -2,12 +2,15 @@
   VELO Frontend -- SchoolTransferBanner (schools FE-21 / GT P3)
 
   The one banner with two faces, keyed off the viewer's relation:
-    - CURATOR: «Предложение отправлено <имя>» + «Отменить». The name comes
-      from the transfer ref's to_display_name (the users/helpers display_name
-      rule -- always yields something, never the master-profile null).
-    - ADDRESSEE (a master with a non-null transfer): «Вам предлагают стать
-      куратором» + «Принять» / «Отклонить». Accept returns the page AS THE
-      NEW CURATOR -- emitted up so the page can replace its state wholesale.
+    - CURATOR: the offer-sent line (transfer.sentTo) + the cancel button
+      (i18n:transfer.cancel). The name comes from the transfer ref's
+      to_display_name (the users/helpers display_name rule -- always yields
+      something, never the master-profile null).
+    - ADDRESSEE (a master with a non-null transfer): the invite line
+      (i18n:transfer.invite) + the accept / decline buttons
+      (i18n:transfer.accept / i18n:transfer.decline). Accept returns the page
+      AS THE NEW CURATOR -- emitted up so the page can replace its state
+      wholesale.
     - Everyone else (students, masters without an offer): renders nothing.
       The backend fills `transfer` for exactly two people, and this banner
       respects that boundary rather than guessing.

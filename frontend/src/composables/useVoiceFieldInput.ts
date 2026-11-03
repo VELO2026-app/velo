@@ -16,7 +16,8 @@
  * -- while the panel itself waits for an actual take (voicePanelVisible:
  * recording, plus the processing/transcription freeze). voiceActive spans the
  * `requesting` permission prompt too, when the row freezes as an empty band
- * WITHOUT a premature «Транскрибация…». Mic/stop buttons unmount for the whole
+ * WITHOUT a premature transcribing label (i18n:voice.transcribing). Mic/stop
+ * buttons unmount for the whole
  * span.
  *
  * Composer.vue deliberately keeps its own copy of this flow: its version is
@@ -73,7 +74,7 @@ export function useVoiceFieldInput(options: VoiceFieldInputOptions) {
 
   /** The panel itself waits for an actual take: the transient `requesting`
    *  phase (permission prompt) freezes the row WITHOUT a premature
-   *  «Транскрибация…». */
+   *  transcribing label (i18n:voice.transcribing). */
   const voicePanelVisible = computed(
     () =>
       recorderState.value === 'recording' ||

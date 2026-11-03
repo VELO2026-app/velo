@@ -374,7 +374,7 @@ const voicePhase = computed<'recording' | 'processing'>(() =>
 
 /** The panel itself waits for an actual take: the transient `requesting`
  * phase (permission prompt) freezes the row WITHOUT showing a premature
- * «Транскрибация…». */
+ * transcribing label (i18n:voice.transcribing). */
 const voicePanelVisible = computed(
   () =>
     recorderState.value === 'recording' ||
@@ -524,7 +524,7 @@ function discardDraft(body: string): void {
   void nextTick(autogrow)
 }
 
-// FE-70: one-tap "Добавить запись" from the dashboard needs the diary's
+// FE-70: the dashboard's one-tap add-entry action needs the diary's
 // composer to ENTER write mode on arrival. Exposing the existing focusField()
 // (optimistic composing + focus, draft-preview un-hide) rather than a new
 // focus path keeps the collapse/autogrow/preview behaviour singular.

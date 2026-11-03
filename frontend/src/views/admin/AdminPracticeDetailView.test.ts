@@ -7,7 +7,8 @@
 // screen, confirmed by reading every import: ONE seam from @/api/admin
 // (getAdminPracticeDetail), plus ApiResponseError (@/api/client, kept REAL
 // via importOriginal -- not mocked) and formatDateShort (@/utils/format,
-// Date.now-dependent for its "Сегодня"/"Завтра" labels -- display only, not
+// Date.now-dependent for its "today"/"tomorrow" labels (i18n:common.today,
+// i18n:common.tomorrow) -- display only, not
 // asserted with an exact string, same caution as prior admin coverage).
 // PracticeHeroCard (@/components/shared) verified by READING its source
 // (the MethodTaxonomyPicker precedent, checked so it isn't just assumed):
@@ -18,10 +19,11 @@
 //
 // FOUR-RUNG LADDER, unlike AdminReportDetailView/AdminMasterReviewView's TWO
 // (recon confirmed correct): loading (.vue:25) / error with a distinct
-// "Повторить" retry (.vue:27-34, its OWN rung -- this screen DOES set an
+// retry rung (i18n:common.retry, .vue:27-34, its OWN rung -- this screen DOES set an
 // error ref on failure, unlike the two prior detail screens where a failed
 // fetch collapsed into the same not-found rung) / content (.vue:36) / a
-// final v-else "Практика недоступна" card (.vue:100-102). That fourth rung
+// final v-else practice-unavailable card (i18n:adminScreens.adminPracticeDetail.unavailable,
+// .vue:100-102). That fourth rung
 // is reachable TWO ways, both measured below, not assumed:
 //   (1) TRANSIENT, on every mount: `loading` starts as `ref(false)`, and
 //       Vue's initial render/patch (inside the synchronous `app.mount()`
@@ -29,8 +31,8 @@
 //       `loading.value = true` -- and that flip itself only SCHEDULES a
 //       re-render (Vue's reactivity is microtask-batched), it doesn't force
 //       one synchronously. So for one microtask, right after `app.mount()`
-//       returns and before any `await`, the DOM is showing "Практика
-//       недоступна", not the loader. Asserted below with a synchronous
+//       returns and before any `await`, the DOM is showing the
+//       practice-unavailable card, not the loader. Asserted below with a synchronous
 //       (pre-`flush()`) DOM check.
 //   (2) a genuinely malformed/empty success response (`practice.value`
 //       stays falsy after `loading.value = false` because the resolved
@@ -48,9 +50,12 @@
 //
 // THREE EMPTY STATES ON THREE SEPARATE BRANCHES, each with a DISTINCT
 // string that is exactly the kind of thing a copy-paste slip would cross:
-// registered-empty = "Данных пока нет" (.vue:63), present-empty = "Данных
-// пока нет" (.vue:81, SAME string as registered-empty, different branch),
-// absent-empty = "Нет данных" (.vue:96, the ONLY one that differs). Queried
+// registered-empty = the shared no-data card (i18n:common.noData, .vue:63),
+// present-empty = the SAME no-data string
+// (.vue:81, same copy as registered-empty, different branch),
+// absent-empty = the practice-detail no-data copy
+// (i18n:adminScreens.adminPracticeDetail.noData,
+// .vue:96, the ONLY one that differs). Queried
 // below by walking to the DOM sibling immediately after each section's own
 // <h3>, not by a page-wide text().toContain(), so a swap between the
 // present/absent branches would actually fail the test that targets the
@@ -114,7 +119,7 @@ function practice(
     direction: 'meditation',
     master_name: 'Мария Петрова',
     master_verified: true,
-    scheduled_at: '2020-01-15T10:00:00Z', // far from "today" -- avoids Сегодня/Завтра
+    scheduled_at: '2020-01-15T10:00:00Z', // far from "today" -- avoids the today/tomorrow labels
     duration_minutes: 60,
     booked: 2,
     capacity: 10,
@@ -466,8 +471,8 @@ describe('AdminPracticeDetailView', () => {
     })
 
     it("SW5: whenLabel renders in the PRACTICE's own timezone, not a hardcoded UTC default -- must agree with AdminPracticesView's list item, which already threads timezone through", async () => {
-      // 2020-01-15T00:30:00Z: in UTC this is 15 января. In Pacific/Honolulu
-      // (UTC-10, no DST) it is still 2020-01-14 14:30 local -- 14 января.
+      // 2020-01-15T00:30:00Z: in UTC this is January 15. In Pacific/Honolulu
+      // (UTC-10, no DST) it is still 2020-01-14 14:30 local -- January 14.
       // Before this fix, formatDateShort's timezone param defaulted to 'UTC'
       // (no third arg was ever passed), so this practice's OWN timezone
       // field was silently ignored and every detail page showed the UTC

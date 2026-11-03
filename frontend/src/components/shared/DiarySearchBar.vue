@@ -30,10 +30,11 @@
 <template>
   <div class="diary-search">
     <!-- [field (small clear-x inside)] [close X] -- owner 2026-09-09. The
-         field is the composer's pill look ("аккуратный инпут, который был
-         внизу"); submit is Enter / a recent (live search refetches as you
-         type, so there is no go disc any more -- the magnifier ruling of
-         2026-09-07 is superseded by this layout). -->
+         field is the composer's pill look (the owner's wording: "the neat
+         input that used to sit at the bottom"); submit is Enter / a recent
+         (live search refetches as you type, so there is no go disc any
+         more -- the magnifier ruling of 2026-09-07 is superseded by this
+         layout). -->
     <div class="diary-search__field">
       <input
         ref="inputEl"
@@ -293,8 +294,9 @@ defineExpose({ focus })
   gap: var(--space-1);
 }
 
-/* The OUTER close x (owner 2026-09-09, round 2: "иконка крестика" -- a PLAIN
-   glyph, deliberately NOT a button disc): the pill is the surface; the x is
+/* The OUTER close x (owner 2026-09-09, round 2: the owner's wording was
+   "a cross icon" -- a plain glyph, deliberately NOT a button disc): the
+   pill is the surface; the x is
    just an icon with a generous touch target (the pill's own 50px height, so
    vertical centring is free). Visibly larger than the field's inner clear
    x (14px) so the two never read as the same control. */

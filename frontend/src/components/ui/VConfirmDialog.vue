@@ -20,7 +20,7 @@
   the message, for the two-part "title? / consequences." copy shape (e.g.
   block-confirm, report-offer). Omitted by every existing caller -- default
   empty, renders nothing extra, byte-identical to before this prop existed.
-    <VConfirmDialog title="Заблокировать пользователя?" :message="..." ... />
+    <VConfirmDialog title="Block the user?" :message="..." ... />
 
   G6/G8 (PROMPT №609): `title`'s font-size stepped down from --text-xl (32px)
   to --text-lg (20px) so a two-word question fits one line -- affects every
@@ -30,10 +30,12 @@
   Optional `compactActions` (PROMPT №609, G10): renders both action buttons
   at size="sm" instead of the default "md", for a caller whose confirm
   label is long enough that "md" wraps the row onto two lines
-  (MasterStudentProfileView's report-offer dialog: «Сообщить в
-  поддержку» + «Не сейчас»). Sizing-only fix, not a label change -- the
-  row layout itself (flex, wrap-when-too-wide) is unchanged. Default false,
-  every pre-existing caller renders byte-identically.
+  (MasterStudentProfileView's report-offer dialog:
+  i18n:masterScreens.masterStudentProfile.toSupport +
+  i18n:masterScreens.masterStudentProfile.notNow). Sizing-only fix, not a
+  label change -- the row layout itself (flex, wrap-when-too-wide) is
+  unchanged. Default false, every pre-existing caller renders
+  byte-identically.
 
   Default SLOT (PROMPT №610, owner Q9): optional content rendered between
   `title` and `message` -- e.g. MasterStudentProfileView's TargetUserCard,

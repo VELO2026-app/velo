@@ -94,8 +94,9 @@
 //    so no exclusion can pass on a mount that rendered nothing. This is load
 //    bearing for the tripwire block, whose whole claim is about ABSENT things.
 //  - SC-14b. The word «feedback» is unfailable here: it is the header back-label
-//    ("Feedback", .vue:13), a substring of the submit label («Отправить
-//    feedback»), and a substring of the success title («Спасибо за feedback!»).
+//    ("Feedback", .vue:13), a substring of the submit label
+//    (i18n:user.screens.feedback.submit), and a substring of the success title
+//    (i18n:user.screens.feedback.toast.thanks).
 //    `text()).toContain('feedback')` can never fail. The success title is read
 //    off `.result-screen__title` and never off the host.
 //  - window.history.state, read in an EVENT HANDLER (.vue:137) -- `onBack` only
@@ -110,7 +111,8 @@
 // none of it):
 //  - NO WALL CLOCK, and this is the sharpest difference from CheckinView. That
 //    screen reads `Date.now()` (.vue:119) behind a 60s interval; this one reads
-//    the clock NOWHERE. Its meta cell is the static literal «Завершена»
+//    the clock NOWHERE. Its meta cell is the static completed status
+//    (i18n:user.screens.feedback.state.completed)
 //    (.vue:34), not a formatDate call, so there is no timezone to pin either.
 //    NO fake timers, NO vi.setSystemTime, NO NOW constant -- copying CheckinView's
 //    time setup here would be dead setup carrying a false justification.
@@ -241,8 +243,8 @@ function practice(overrides: Partial<PracticeResponse> = {}): PracticeResponse {
  * Standalone F4: the booking defaulted to 'confirmed'. That was harmless while
  * this screen ignored the booking's status, but it was never what the server
  * accepts a feedback for (upsert_feedback wants ATTENDED). The screen now
- * shows the form only for an attended booking and an honest «ждём
- * подтверждения» otherwise, so the default is the status that really reaches
+ * shows the form only for an attended booking and an honest waiting state
+ * (i18n:user.screens.feedback.waiting.title) otherwise, so the default is the status that really reaches
  * the form; the waiting/not-attended states override it in their own tests.
  */
 function booking(
@@ -403,7 +405,7 @@ describe('FeedbackView', () => {
       mount()
       await flush()
 
-      // cleanPracticeTitle strips the "(эфир)" suffix (FormShell.vue:194).
+      // cleanPracticeTitle strips the live-broadcast title suffix (FormShell.vue:194).
       expect(host?.querySelector('.hero-card__title')?.textContent?.trim()).toBe('Вечерняя йога')
       expect(text()).toContain('Мастер Лена')
     })
@@ -418,7 +420,7 @@ describe('FeedbackView', () => {
       await flush()
 
       expect(text()).toContain('Завершена')
-      // The fixture's scheduled_at would render as «20 июля» if a date were shown.
+      // The fixture's scheduled_at would render as a formatted date if a date were shown.
       expect(text()).not.toContain('20 июля')
     })
 
@@ -646,8 +648,10 @@ describe('FeedbackView', () => {
 
   describe('submitting the feedback', () => {
     it('sends the DEFAULT rating and a null comment, and shows the success screen', async () => {
-      // ratingScore defaults to the EXACT 5 «Нормально» (tz-mood-scale §2.4):
-      // a user who taps Отправить without touching the scale sends 5 -- not a
+      // ratingScore defaults to the EXACT 5, the neutral mood label
+      // (i18n:mood.neutral, tz-mood-scale §2.4):
+      // a user who taps submit (i18n:user.screens.feedback.submit) without
+      // touching the scale sends 5 -- not a
       // card's click value (6) or an empty body the backend would reject.
       mount()
       await flush()
@@ -663,7 +667,7 @@ describe('FeedbackView', () => {
 
     it('sends the rating the SLIDER chose and the comment the user typed, trimmed', async () => {
       // The Pattern-C form half, driven through real DOM rather than by poking
-      // refs. Tapping the third card («Нормально») -> its click value 6 (the
+      // refs. Tapping the third card (the neutral mood label, i18n:mood.neutral) -> its click value 6 (the
       // MoodSlider radios select the pair's TOP score, not a zone centre).
       mount()
       await flush()
@@ -681,7 +685,7 @@ describe('FeedbackView', () => {
     })
 
     it('sends the LOW rating from the first slider card', async () => {
-      // The first card («Плохо») -> click value 2. The other end of the scale:
+      // The first card (the bad mood label, i18n:mood.bad) -> click value 2. The other end of the scale:
       // a 1..10 field where only the middle was ever exercised would hide an
       // off-by-one at the pair boundary.
       mount()

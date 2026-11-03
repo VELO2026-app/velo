@@ -41,8 +41,9 @@ const activeTab = computed(() => {
   return match?.to ?? ADMIN_TABS[0]?.to ?? ''
 })
 
-// Live count badges (operator SVG): masters awaiting verification on the Мастера
-// tab, reports awaiting moderation on the Модерация tab. 0 -> no badge.
+// Live count badges (operator SVG): masters awaiting verification on the
+// Masters tab (i18n:tabs.masters), reports awaiting moderation on the
+// Moderation tab (i18n:tabs.moderation). 0 -> no badge.
 const tabItems = computed<TabItem[]>(() =>
   ADMIN_TABS.map((tab) => {
     if (tab.to === '/admin/masters' && adminStore.pendingVerifications > 0)

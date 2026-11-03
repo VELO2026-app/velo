@@ -1,6 +1,6 @@
 <template>
-  <!-- Right-pointing arrow. Used for the "Подробнее" forward link on the
-       dashboard (it visually sits left of the label but points forward,
+  <!-- Right-pointing arrow. Used for the "more" forward link (i18n:ui.more) on
+       the dashboard (it visually sits left of the label but points forward,
        matching Figma Group_2738). Color via currentColor. -->
   <svg
     xmlns="http://www.w3.org/2000/svg"

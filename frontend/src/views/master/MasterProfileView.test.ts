@@ -246,7 +246,8 @@ describe('MasterProfileView', () => {
     })
 
     it('falls back to the generic "Мастер" when neither is available', async () => {
-      // `?? 'Мастер'` (.vue:135-137) only falls through on null/undefined --
+      // The final `?? t('masterScreens.masterProfile.masterWord')` fallback
+      // (.vue:135-137) only falls through on null/undefined --
       // an empty-string first_name would NOT trigger it, so the fixture must
       // remove the user entirely to reach the true fallback branch.
       vi.mocked(mastersApi.getMyMasterProfile).mockReturnValue(new Promise(() => {}))

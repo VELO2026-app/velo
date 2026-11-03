@@ -11,25 +11,32 @@
   else, P-08); what the screen adds is the action set in the header «⋯»
   menu (VMenu/VMenuItem, the §1.12.3 component rule):
 
-    - «Написать сообщение» (SendMessageModal -- the same master->student DM
-      the master zone already uses).
-    - «Изменить роль» (FE-87, tz-curator.md §1.12.3): the role-choice popup
+    - Write message (i18n:common.writeMessage; SendMessageModal -- the same
+      master->student DM the master zone already uses).
+    - Change role (i18n:user.screens.schoolStudentProfile.role.switchCta;
+      FE-87, tz-curator.md §1.12.3): the role-choice popup
       preselected on the member's CURRENT roster role (owner decision
-      2026-09-22). «Мастер» sends the school's master offer
+      2026-09-22). The master option
+      (i18n:user.screens.schoolStudentProfile.role.master) sends the
+      school's master offer
       (offerSchoolMaster, BE-59): a verified master answers yes / no,
       an unverified one is invited to get verified first; the toast is
-      «Предложение отправлено». There is no admin role-request (owner
+      the offer-sent one
+      (i18n:user.screens.schoolStudentProfile.toast.offerSent). There is no
+      admin role-request (owner
       ruling). Demotion lives on the master's public profile (MasterPublicView,
       demoteSchoolMaster), not here, so a current master sees no student
       option. No optimistic changes: the roster moves server-side only.
-    - «Заблокировать» (lock, owner ruling 2026-09-30): the ONLY way a
-      curator ends a school membership now -- «Исключить из школы» is
-      REMOVED (an exclusion no longer exists). The confirm popup is built
-      (same recipe as the master-zone block dialog; the copy is a DRAFT for
-      the owner's review -- BE-79 owns the final wording). Confirm sends
-      POST …/members/{user_id}/block (BE-79 (2)); only the server's 204 opens
-      «Пользователь заблокирован», and leaving that dialog returns to the
-      roster -- the blocked person is no longer in it.
+    - Block (i18n:common.block; lock, owner ruling 2026-09-30): the ONLY way
+      a curator ends a school membership now -- the removed-from-school
+      action is REMOVED (an exclusion no longer exists). The confirm popup
+      is built (same recipe as the master-zone block dialog; the copy is a
+      DRAFT for the owner's review -- BE-79 owns the final wording). Confirm
+      sends POST …/members/{user_id}/block (BE-79 (2)); only the server's
+      204 opens the blocked toast
+      (i18n:user.screens.schoolStudentProfile.toast.blocked), and leaving
+      that dialog returns to the roster -- the blocked person is no longer
+      in it.
 
   All three are curator-of-THIS-school only (viewer.relation, §1.12.1's
   access rule). Masters of the school do NOT land here -- their rows open
@@ -73,7 +80,8 @@
 
     <div class="ssp__content">
       <!-- The masked 404 (P-08): not-curator, not-a-student, dead school --
-           one answer, §1.13.5's «Ученик недоступен». -->
+           one answer, §1.13.5's unavailable-student title
+           (i18n:user.screens.schoolStudentProfile.unavailable). -->
       <VEmptyState
         v-if="profileNotFound"
         icon="notfound"
@@ -109,7 +117,9 @@
           <h1 class="ssp__name">{{ studentName }}</h1>
         </VCard>
 
-        <!-- §1.13.2: two equal cards in one row -- «Практик» / «Часов». -->
+        <!-- §1.13.2: two equal cards in one row -- the practices / hours
+             stats (i18n:user.screens.schoolStudentProfile.practicesStat /
+             i18n:user.screens.schoolStudentProfile.hoursStat). -->
         <div class="ssp__stats">
           <VStatCard
             layout="row"
@@ -141,7 +151,8 @@
       </template>
     </div>
 
-    <!-- «Изменить роль» (FE-87, tz-curator.md §1.12.3). The radio preselects
+    <!-- Change role (i18n:user.screens.schoolStudentProfile.role.switchCta;
+         FE-87, tz-curator.md §1.12.3). The radio preselects
          the member's CURRENT roster role (owner decision 2026-09-22) and
          stays disabled until that lookup lands; confirming without a change
          is a disabled button, never a silent no-op request. -->
@@ -349,7 +360,8 @@ async function load(): Promise<void> {
   } catch (e) {
     if (version !== loadVersion) return
     // The 404 is MASKED by design (P-08): not-curator, not-a-student and a
-    // dead school are one answer -- §1.13.1's «Ученик недоступен».
+    // dead school are one answer -- §1.13.1's student-unavailable state
+    // (i18n:user.screens.schoolStudentProfile.unavailable).
     if (e instanceof ApiResponseError && e.status === 404) {
       profileNotFound.value = true
     } else {
@@ -371,7 +383,7 @@ watch([schoolId, userId], () => {
   if (schoolId.value && userId.value) void load()
 })
 
-// -- «Написать сообщение» ------------------------------------------------------
+// -- Write message (i18n:common.writeMessage) ----------------------------------
 
 const msgOpen = ref(false)
 
@@ -380,13 +392,16 @@ function onMessageClick(close: () => void): void {
   msgOpen.value = true
 }
 
-// -- «Изменить роль» (FE-87, tz-curator.md §1.12.3) ----------------------------
+// -- Change role (FE-87, tz-curator.md §1.12.3; the CTA is
+// i18n:user.screens.schoolStudentProfile.role.switchCta) -----------------------
 //
-// Confirming «Мастер» sends the school's master offer (offerSchoolMaster,
+// Confirming the master option (i18n:user.screens.schoolStudentProfile.role.master)
+// sends the school's master offer (offerSchoolMaster,
 // BE-59): a verified master answers yes / no, an unverified one is invited to
-// get verified first; toast «Предложение отправлено». No admin role-request
-// exists or is planned (owner ruling). NO optimistic changes: the roster
-// moves server-side only.
+// get verified first; the offer-sent toast
+// (i18n:user.screens.schoolStudentProfile.toast.offerSent). No admin
+// role-request exists or is planned (owner ruling). NO optimistic changes:
+// the roster moves server-side only.
 
 type MemberKind = 'student' | 'master'
 
@@ -402,7 +417,8 @@ const roleBusy = computed(() => rolePending.value || kindResolving.value)
 // Demotion (master -> student) lives on the master's public profile
 // (MasterPublicView, demoteSchoolMaster), not on this screen: a current
 // master sees only the master option, which preselects itself and keeps
-// «Изменить» disabled -- the popup never offers a demotion it does not send.
+// user.screens.schoolStudentProfile.change disabled -- the popup never
+// offers a demotion it does not send.
 const roleOptions = computed(() =>
   currentKind.value === 'master'
     ? [{ value: 'master', label: t('user.screens.schoolStudentProfile.role.master') }]
@@ -498,12 +514,13 @@ async function onCancelOffer(): Promise<void> {
   }
 }
 
-// -- «Заблокировать» (BE-79 (2)) -------------------------------------------------
+// -- Block (BE-79 (2), the CTA is i18n:common.block) ---------------------------
 //
-// Owner ruling 2026-09-30: «Исключить из школы» больше не существует --
-// блокировка участника школы (пользователя ИЛИ мастера) заменяет её. The
-// chain: confirm -> POST …/block -> on 204 «Пользователь заблокирован»
-// (report-offer) -> back to the roster, which no longer lists the person.
+// Owner ruling 2026-09-30: exclude-from-school no longer exists --
+// blocking a school member (a user OR a master) replaces it. The
+// chain: confirm -> POST …/block -> on 204 the blocked toast
+// (i18n:user.screens.schoolStudentProfile.toast.blocked, report-offer)
+// -> back to the roster, which no longer lists the person.
 // 404 (not a member any more) -> say so, back to the roster. Anything else
 // (409, 403 in user mode -- the server decides by the CURRENT role, network)
 // -> the error toast, stay. Shown in both zones by `isCurator`.
@@ -625,7 +642,7 @@ function onReportClose(): void {
   color: var(--velo-text-secondary);
 }
 
-/* «Изменить роль» popup (FE-87, §1.12.3): title / who / role picker / pills. */
+/* The change-role popup (FE-87, §1.12.3): title / who / role picker / pills. */
 .ssp__role {
   display: flex;
   flex-direction: column;

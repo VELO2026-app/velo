@@ -4,7 +4,8 @@
 //
 // The roster row is pure presentation over SchoolMemberItem: the name
 // shows, a suspended master (is_visible=false, I-4) degrades to a
-// «Временно недоступен» subtitle instead of vanishing, and the whole row is
+// temporarily-unavailable subtitle (i18n:shared.components.temporarilyHidden)
+// instead of vanishing, and the whole row is
 // one touch target that hands the member up to the parent (which decides
 // where the profile lives -- a row navigates, it does not act).
 // =============================================================================

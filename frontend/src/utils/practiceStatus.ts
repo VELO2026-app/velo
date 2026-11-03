@@ -8,9 +8,10 @@
 //
 //   Master shows a badge ONLY for operational/terminal states. The active phase
 //   (scheduled / live, and ended-but-not-finalized) carries NO badge — the master
-//   reads it from the date + the action buttons («Начать эфир» / «Завершить»).
-//   So: draft → Черновик, completed → Завершена, cancelled → Отменена; everything
-//   else (scheduled / live / deleted) → null (no badge).
+//   reads it from the date + the live-stream action buttons (start / finish).
+//   So: draft → i18n:practice.status.draft, completed →
+//   i18n:practice.status.completed, cancelled → i18n:practice.status.cancelled;
+//   everything else (scheduled / live / deleted) → null (no badge).
 //
 // The practice-level time helpers mirror utils/bookingStatus.ts (which operates on
 // a booking's embedded practice) for callers that hold a practice directly.

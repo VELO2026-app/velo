@@ -7,9 +7,9 @@
  * Usage:
  *   import { useToast } from '@/composables/useToast'
  *   const toast = useToast()
- *   toast.success('Сохранено!')
- *   toast.error('Ошибка сети')
- *   toast.info('Обновлено')
+ *   toast.success(message)
+ *   toast.error(message)
+ *   toast.info(message)
  */
 
 import { ref, readonly } from 'vue'

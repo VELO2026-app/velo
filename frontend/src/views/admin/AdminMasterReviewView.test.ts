@@ -99,7 +99,7 @@
 // `flattenMethods(parseMethods(methods)).length > 0`) is TRUE not only for a
 // taxonomy-matching method but ALSO for a fully unmatched/custom one --
 // parseMethods surfaces an unmatched string as `customText`
-// (SURFACE-UNMATCHED, Q3=А), and flattenMethods re-emits non-empty
+// (SURFACE-UNMATCHED, Q3=A), and flattenMethods re-emits non-empty
 // customText right back into its output. Consequence: the screen's OWN
 // verbatim `.mreview__chips` fallback (.vue:223-225,
 // `v-else-if="methods.length"`) is effectively DEAD for any methods array
@@ -465,8 +465,9 @@ describe('AdminMasterReviewView', () => {
     })
 
     it('SW7: a cold-deep-link failure lands in a DISTINCT error rung, not "not found" -- with a retry button', async () => {
-      // Previously this fell straight into the "Заявка не найдена" empty
-      // state (the SAME state a genuine 404 renders), with only a toast (easy
+      // Previously this fell straight into the not-found empty state
+      // (i18n:adminScreens.adminMasterReview.notFound; the SAME state a genuine
+      // 404 renders), with only a toast (easy
       // to miss) as the sole signal something was actually wrong -- no way to
       // retell a transient network blip from "this application doesn't exist"
       // and no retry affordance. Matches sibling admin detail screens
@@ -789,7 +790,8 @@ describe('AdminMasterReviewView', () => {
       footBtn('Одобрить')?.click()
       await flush()
       // The dialog must genuinely be open here -- otherwise verifyMaster
-      // below could have already fired straight off the "Одобрить" click,
+      // below could have already fired straight off the approve click
+      // (i18n:adminScreens.adminMasterReview.approve),
       // which would make this test pass for the WRONG reason (the button
       // click below finding nothing to click is a silent no-op, per the
       // mutation-checked note at the end of this describe block).
@@ -816,7 +818,7 @@ describe('AdminMasterReviewView', () => {
     it('FE-89: TWO own methods travel as two separate labels, never one glued «А, Б» direction', async () => {
       // The reported bug: a master adds a second own method in their profile;
       // the admin approves; the old code glued both unmatched labels into ONE
-      // master_only entry «Сказкотерапия, Гвоздестояние» -- one direction,
+      // master_only entry with both labels glued into one direction,
       // neither usable. Each label must travel separately (the earlier
       // private method re-scopes idempotently, the new one is born alone).
       vi.mocked(adminApi.getMasterById).mockResolvedValue(
@@ -856,7 +858,8 @@ describe('AdminMasterReviewView', () => {
 
       // VModal's overlay has @click.self -- dispatching directly on the
       // overlay element itself (not a descendant button) is the dismiss
-      // path, distinct from clicking "Только этому мастеру".
+      // path, distinct from clicking the scoped cancel button
+      // (i18n:adminScreens.adminMasterReview.thisMasterOnly).
       modalOverlay()?.click()
       await flush()
 
@@ -900,7 +903,8 @@ describe('AdminMasterReviewView', () => {
     // "failure after confirm" above used `modalBtn(...)?.click()` with no
     // prior modalIsOpen() assertion. Breaking the customEnabled branch in
     // onVerify (always skip the dialog) made verifyMaster fire straight off
-    // the "Одобрить" click -- and those two tests STILL PASSED, because a
+    // the approve click (i18n:adminScreens.adminMasterReview.approve) --
+    // and those two tests STILL PASSED, because a
     // click on a `?.`-chained missing button is a silent no-op, and the
     // final assertions (verifyMaster called with just the id; the error
     // toast) look identical whether reached via "dialog opened -> cancel/
@@ -1032,8 +1036,9 @@ describe('AdminMasterReviewView', () => {
       expect(adminApi.revokeMaster).toHaveBeenCalledWith('m_verified')
       expect(toastSuccess).toHaveBeenCalledWith('Мастер отозван — аккаунт стал пользователем')
       expect(modalIsOpen()).toBe(false)
-      // Local status flip (.vue:543) -- the "Отозвать" button itself disappears
-      // (no longer verified), NOT re-fetched from the server.
+      // Local status flip (.vue:543) -- the revoke-master button itself
+      // disappears (i18n:adminScreens.adminMasterReview.revokeMaster;
+      // no longer verified), NOT re-fetched from the server.
       expect(footBtn('Отозвать мастера')).toBeUndefined()
     })
 
@@ -1129,7 +1134,8 @@ describe('AdminMasterReviewView', () => {
     // once the reject sheet is open, its `.v-sheet__overlay` is
     // `position:fixed;inset:0` (VBottomSheet.vue), covering the footer in a
     // REAL browser's hit-testing -- so a real pointer could not click
-    // "Одобрить" while the sheet is open. happy-dom's `.click()` has no
+    // the approve button (i18n:adminScreens.adminMasterReview.approve)
+    // while the sheet is open. happy-dom's `.click()` has no
     // hit-testing/occlusion model, so it DOES reach the handler regardless.
     // This test proves the PROGRAMMATIC/handler-level gap (what a scripted
     // client or a future UI change without the overlay could hit), not a
@@ -1146,7 +1152,8 @@ describe('AdminMasterReviewView', () => {
       mount('m_pending')
       await flush()
 
-      // No await between these two: the "Отклонить" TRIGGER button (not
+      // No await between these two: the reject TRIGGER button
+      // (i18n:adminScreens.adminMasterReview.rejectAction; not
       // onReject itself) IS `:disabled="anyLoading"` (.vue:337) -- once
       // painted, a real click on it is a no-op (confirmed: an earlier draft
       // of this test awaited a tick here and the sheet never opened at all).
@@ -1242,7 +1249,7 @@ describe('AdminMasterReviewView', () => {
         user_id: 'm_pending',
         status: 'ok',
       })
-      mount('m_pending') // methods: ['Медитация']
+      mount('m_pending') // fixture methods: the bare meditation direction label
       await flush()
 
       pencilBtn('Направления практик').click()
@@ -1407,7 +1414,7 @@ describe('AdminMasterReviewView', () => {
         user_id: 'm_pending',
         status: 'ok',
       })
-      mount('m_pending') // languages: ['Русский']
+      mount('m_pending') // fixture languages: Russian only
       await flush()
 
       pencilBtn('Язык практик').click()
@@ -1427,7 +1434,7 @@ describe('AdminMasterReviewView', () => {
         user_id: 'm_pending',
         status: 'ok',
       })
-      mount('m_pending') // certifications: ['Сертификат йоги']
+      mount('m_pending') // fixture certifications: one seeded certificate
       await flush()
 
       pencilBtn('Сертификаты').click()
@@ -1530,7 +1537,7 @@ describe('AdminMasterReviewView', () => {
     })
 
     it('hasParsedMethods=true for a taxonomy-matching method: renders the readonly picker, not verbatim chips', async () => {
-      mount('m_pending') // methods: ['Медитация'] -- matches the bare direction
+      mount('m_pending') // fixture methods: the bare meditation direction label -- matches the taxonomy
       await flush()
 
       const row = rowByKey('Направления практик')
@@ -1542,7 +1549,7 @@ describe('AdminMasterReviewView', () => {
     // CORRECTED FROM AN INITIAL WRONG ASSUMPTION, measured directly (a
     // throwaway debug test against the REAL parseMethods/flattenMethods):
     // parseMethods surfaces an unmatched string as `customText`
-    // (SURFACE-UNMATCHED, Q3=А), and flattenMethods RE-EMITS non-empty
+    // (SURFACE-UNMATCHED, Q3=A), and flattenMethods RE-EMITS non-empty
     // customText -- so `hasParsedMethods` (.vue:478-480,
     // `flattenMethods(parseMethods(methods)).length > 0`) is TRUE even for a
     // FULLY unmatched/custom method, not just a taxonomy-matching one. A

@@ -33,7 +33,8 @@ vi.mock('@/api/support', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/api/support')>()
   return {
     SUPPORT_CLOSING_STATUSES: real.SUPPORT_CLOSING_STATUSES,
-    // REAL here too: the «Не спам» visibility math is part of what is tested.
+    // REAL here too: the not-spam visibility math
+    // (i18n:adminScreens.adminSupportDetail.menu.notSpam) is part of what is tested.
     spamWithinRetention: real.spamWithinRetention,
     getAdminTicket: vi.fn(),
     getAdminSupportMessages: vi.fn(),
@@ -82,7 +83,8 @@ vi.mock('@/stores/auth', () => ({
 const ME: SupportPerson = { user_id: 'admin_me', name: 'Я', avatar_url: null }
 const OTHER: SupportPerson = { user_id: 'other_admin', name: 'Ольга', avatar_url: null }
 
-/** The roster rows of GET /admin/users?role=admin (FE-108: «Назначить»). */
+/** The roster rows of GET /admin/users?role=admin (FE-108: the assign action,
+ *  i18n:adminScreens.adminSupportDetail.menu.assign). */
 const OLGA_USER = {
   id: 'other_admin',
   first_name: 'Ольга',
@@ -179,7 +181,8 @@ function bubbles(): HTMLElement[] {
 }
 
 // FE-100: the status actions live in the ⋯ menu (a teleported VBottomSheet).
-// FE-108 added a SECOND sheet -- «Назначить»'s roster; the helpers below
+// FE-108 added a SECOND sheet -- the assign roster
+// (i18n:adminScreens.adminSupportDetail.menu.assign); the helpers below
 // tell them apart by the roster's own container class.
 function menuButton(): HTMLButtonElement | null {
   return host?.querySelector<HTMLButtonElement>('.support-detail__menu') ?? null
@@ -194,7 +197,7 @@ function menuRows(): HTMLElement[] {
     .filter((o) => !o.querySelector('.support-detail__assign'))
     .flatMap((o) => Array.from(o.querySelectorAll<HTMLElement>('.v-menu-row')))
 }
-/** The rows of the «Назначить» roster sheet. */
+/** The rows of the assign roster sheet (i18n:adminScreens.adminSupportDetail.menu.assign). */
 function assignRows(): HTMLElement[] {
   return sheetOverlays()
     .filter((o) => o.querySelector('.support-detail__assign'))
@@ -415,7 +418,9 @@ describe('AdminSupportDetailView', () => {
 
   // Was: four buttons stacked in the card (delivery A). FE-100, owner ruling
   // 25.10: the same four statuses, behind ⋯ in the header. FE-108 grew the
-  // same menu by the handover entries («Назначить», «Освободить»). What the
+  // same menu by the handover entries -- assign
+  // (i18n:adminScreens.adminSupportDetail.menu.assign) and release
+  // (i18n:adminScreens.adminSupportDetail.menu.release). What the
   // actions DO is asserted unchanged; only the offer grew.
   describe('status actions (FE-100) -- the ⋯ menu', () => {
     it('an OPEN ticket offers the handover plus the four closing statuses -- to ANY admin, taker or not', async () => {
@@ -440,7 +445,8 @@ describe('AdminSupportDetailView', () => {
     })
 
     // Was (FE-100): a closed ticket had no ⋯ at all. FE-108: it keeps ⋯ --
-    // «Назначить» and «Вернуть в работу» -- and still shows its status.
+    // assign and reopen (i18n:adminScreens.adminSupportDetail.menu.assign,
+    // i18n:adminScreens.adminSupportDetail.menu.reopen) -- and still shows its status.
     it('a REJECTED ticket keeps ⋯ -- «Назначить» and «Вернуть в работу», no closing statuses', async () => {
       mount('t_1', ticket({ status: 'rejected' }))
       await flush()
@@ -463,7 +469,8 @@ describe('AdminSupportDetailView', () => {
         status,
         created_at: '2026-10-25T09:00:00Z',
         // NOW, not a fixed date: a spam verdict must stay inside the
-        // retention for «Не спам» to be offered after the change.
+        // retention for the not-spam action
+        // (i18n:adminScreens.adminSupportDetail.menu.notSpam) to be offered after the change.
         status_changed_at: new Date().toISOString(),
       })
       mount('t_1', ticket({ claimed_by: ME }))
@@ -476,7 +483,8 @@ describe('AdminSupportDetailView', () => {
       expect(badge()).toBe(label)
       // A closed ticket still keeps ⋯ -- the reopen side of the new status.
       // The taker is unchanged (the answer carries no admin fields), so
-      // «Освободить» stays offered too.
+      // The release action (i18n:adminScreens.adminSupportDetail.menu.release)
+      // stays offered too.
       const reopenOffer =
         status === 'spam'
           ? ['Назначить', 'Освободить', 'Не спам']
@@ -554,8 +562,9 @@ describe('AdminSupportDetailView', () => {
   })
 
   // ===========================================================================
-  // FE-108 (BE-162 delivery 2): «Назначить», «Освободить», «Вернуть в работу»,
-  // «Не спам» -- entries of the same TICKET_ACTIONS array. The three routes
+  // FE-108 (BE-162 delivery 2): assign, release, reopen, and not-spam
+  // (adminScreens.adminSupportDetail.menu.assign / release / reopen / notSpam)
+  // -- entries of the same TICKET_ACTIONS array. The three routes
   // answer the ticket's FULL row, so their answers replace the card outright;
   // a 409 re-reads, a 404 on reopen is the not-found screen.
   describe('the handover (FE-108) -- «Назначить»', () => {
@@ -664,7 +673,8 @@ describe('AdminSupportDetailView', () => {
       expect(supportApi.releaseTicket).toHaveBeenCalledWith('t_1')
       expect(toastSuccess).toHaveBeenCalledWith('Обращение возвращено в общий список')
       expect(supportApi.getAdminTicket).not.toHaveBeenCalled()
-      // Back in the pool: the claim panel offers «Взять в работу» again.
+      // Back in the pool: the claim panel offers the take button
+      // (i18n:adminScreens.adminSupportDetail.take) again.
       expect(composer()).toBeNull()
       expect(btnByText('Взять в работу')).toBeDefined()
     })

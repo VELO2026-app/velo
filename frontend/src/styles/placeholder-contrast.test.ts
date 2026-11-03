@@ -1,8 +1,10 @@
 // =============================================================================
 // VELO Frontend -- placeholder token contract (FE-79 + PROMPT №679)
 // =============================================================================
-// FE-79 asked for screen «Новое событие» placeholders «noticeably fainter»
-// than typed text -- a user had taken the long «Мысли» hint for her own input.
+// FE-79 asked for the new-event screen
+// (i18n:user.screens.externalActivityCreate.title) placeholders "noticeably
+// fainter" than typed text -- a user had taken the long thoughts hint
+// (i18n:user.screens.externalActivityCreate.thoughts.label) for her own input.
 // №679 (owner option B) had moved them the other way for WCAG: the DS token
 // --velo-text-placeholder is 90% alpha of the text hue, the minimum clean
 // value clearing 4.5:1 (4.75:1) -- and same-hue alpha cannot satisfy both
@@ -28,7 +30,7 @@
 //      stays visibly greyer than the text -- the saturation gap threshold
 //      (8pp) is calibrated so №679's own 0.9-alpha value (5.9pp) FAILS it:
 //      the gate holds THIS fix, not just any value over the WCAG bar;
-//   3. every hint on the «Новое событие» screen rides the SAME token, and
+//   3. every hint on the new-event screen rides the SAME token, and
 //      that token resolves to the faint sibling inside .ea only.
 // =============================================================================
 
@@ -131,7 +133,7 @@ function hslPercent([r, g, b]: Rgb): { l: number; s: number } {
 // the typed text. 8 is calibrated BETWEEN the two known values -- №679's
 // rgba(76,101,137,0.9) composites to a 5.9pp gap (must FAIL), the FE-79 faint
 // value sits at 11.6pp (must PASS) -- so the assertion holds this exact fix,
-// not merely «some color over the WCAG bar».
+// not merely some color over the WCAG bar.
 const SATURATION_GAP_PP = 8
 
 // -- The tokens this contract balances -------------------------------------------
@@ -187,7 +189,7 @@ describe('placeholder token contract (FE-79 / PROMPT №679)', () => {
   it("the gate holds THIS fix: №679's own value would FAIL the saturation rail", () => {
     // The reason SATURATION_GAP_PP is 8, stated as an assertion: the
     // pre-FE-79 rgba(76,101,137,0.9) composites to a 5.9pp gap -- reverting
-    // the faint value to it (the lazy «just darken the token» path) must
+    // the faint value to it (the lazy "just darken the token" path) must
     // turn this suite red, and so must any future near-text retune.
     const old = hslPercent(placeholderGlobal)
     const text = hslPercent(textPrimary)
@@ -200,16 +202,19 @@ describe('placeholder token contract (FE-79 / PROMPT №679)', () => {
     expect(cssRule(createView, '.ea')).toMatch(
       /--velo-text-placeholder:\s*var\(--velo-text-placeholder-faint\)/,
     )
-    // «Дата»/«Время»: an empty picker IS this screen's placeholder -- the
-    // former --velo-text-muted ride was the 2.15:1 outlier №679 banned.
+    // The date/time pickers (i18n:user.screens.externalActivityCreate.fields.date,
+    // i18n:user.screens.externalActivityCreate.fields.time): an empty picker IS
+    // this screen's placeholder -- the former --velo-text-muted ride was the
+    // 2.15:1 outlier №679 banned.
     expect(cssRule(createView, '.ea__picker--empty')).toMatch(
       /color:\s*var\(--velo-text-placeholder\)/,
     )
-    // «Укажите ваш вариант»: the custom-variant input's own placeholder.
+    // The custom-variant input's own placeholder (i18n:practice.customVariant).
     expect(cssRule(createView, '.ea__custom-input::placeholder')).toMatch(
       /color:\s*var\(--velo-text-placeholder\)/,
     )
-    // «Мысли»: VTextarea stays on the DS token UNTOUCHED -- it inherits the
+    // The thoughts field (i18n:user.screens.externalActivityCreate.thoughts.label):
+    // VTextarea stays on the DS token UNTOUCHED -- it inherits the
     // faint value through .ea's scope, no :deep color override needed.
     expect(cssRule(vTextarea, '.v-textarea__field::placeholder')).toMatch(
       /color:\s*var\(--velo-text-placeholder\)/,

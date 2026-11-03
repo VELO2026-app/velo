@@ -129,8 +129,10 @@ export interface StudentGroupsResponse {
   groups: StudentGroupItem[]
 }
 
-/** GET /api/v1/masters/me/groups -- «Ученики» first, custom by created_at,
- *  «Удалённые» last and omitted entirely when empty (server-decided). */
+/** GET /api/v1/masters/me/groups -- the default students group ("students")
+ *  first, custom by created_at, the deleted group ("deleted") last and
+ *  omitted entirely when empty (server-decided; the Russian display names
+ *  arrive on the wire as backend data, not catalog keys). */
 export function getGroups(): Promise<GroupListResponse> {
   return api.get<GroupListResponse>('/api/v1/masters/me/groups')
 }
@@ -167,7 +169,8 @@ export function renameGroup(
 }
 
 /** DELETE /api/v1/masters/me/groups/{id} -- delete a custom group (its
- *  memberships cascade; members fall back to the derived «Ученики»). */
+ *  memberships cascade; members fall back to the derived default students
+ *  group). */
 export function deleteGroup(id: string): Promise<void> {
   return api.delete(`/api/v1/masters/me/groups/${id}`)
 }
@@ -230,8 +233,8 @@ export function blockStudent(studentUserId: string): Promise<BlockStudentRespons
 }
 
 /** DELETE /api/v1/masters/me/students/{studentUserId}/block (P3) -- unblock.
- *  The student returns to «Ученики» automatically (derived); custom-group
- *  memberships are NOT restored, the tag is kept. */
+ *  The student returns to the default students group automatically (derived);
+ *  custom-group memberships are NOT restored, the tag is kept. */
 export function unblockStudent(studentUserId: string): Promise<void> {
   return api.delete(`/api/v1/masters/me/students/${studentUserId}/block`)
 }

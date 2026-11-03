@@ -1,8 +1,8 @@
 /*
   VELO Frontend -- schoolBranding (tz-curator.md §5.3)
 
-  Барел генератора фирменного стиля школы (утверждённый прототип
-  2026-09-19, перенесён как есть): тот же хэш обязан давать тот же SVG.
+  Barrel of the school branding generator (owner-approved prototype
+  2026-09-19, ported as-is): the same hash MUST yield the same SVG.
 */
 
 import { generateParams, type SchoolBrandingParams } from './params'
@@ -15,7 +15,7 @@ export { mandalaGroup, mandalaSvg } from './mandala'
 export { logoSvg, type LogoOptions } from './logo'
 export { bannerSvg, type BannerSvgOptions } from './banner'
 
-/** Кэш params по хэшу -- генерация не повторяется в списках/лентах. */
+/** params cache keyed by hash -- generation never repeats in lists/feeds. */
 const paramsCache = new Map<string, SchoolBrandingParams>()
 
 export function brandingParams(hash: string): SchoolBrandingParams {
@@ -26,16 +26,19 @@ export function brandingParams(hash: string): SchoolBrandingParams {
   return fresh
 }
 
-/** Первая буква названия для монограммы (как в прототипе: без кавычек). */
+/** The first letter of the name for the monogram (as in the prototype:
+ *  quotes stripped). */
 export function schoolLetter(name: string): string {
-  // 'Ш' -- golden-port fallback (see logo.ts); no live caller relies on it.
+  // U+0428 (Cyrillic Sha) -- golden-port fallback (see logo.ts); no live
+  // caller relies on it.
   return (name.replace(/^["«'«]*/, '')[0] || 'Ш').toUpperCase()
 }
 
 /**
- * Светлый полутон фона школы -- подложка под лого на шве hero (owner
- * 2026-09-19: «фон под лого -- что-то среднее от фона, но светлое»):
- * палитровый bg, осветлённый наполовину к белому.
+ * The school background's light halftone -- the plate under the logo on the
+ * hero seam (owner 2026-09-19: the tint under the logo should read as
+ * midway from the background, but light): the palette bg lightened halfway
+ * toward white.
  */
 export function brandingBodyTint(hash: string): string {
   const bg = brandingParams(hash).style.palette.bg

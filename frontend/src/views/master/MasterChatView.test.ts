@@ -105,7 +105,8 @@ function stub(): HTMLElement | null {
 }
 
 function notFound(): boolean {
-  // FE-108: the state is worded as «Этой переписки больше нет» -- a deleted
+  // FE-108: the state is worded as the gone copy
+  // (i18n:masterScreens.masterChat.gone) -- a deleted
   // support thread (spam past the retention) and a foreign id are one screen.
   return (host?.textContent ?? '').includes('Этой переписки больше нет')
 }

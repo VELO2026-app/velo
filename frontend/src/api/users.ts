@@ -62,7 +62,7 @@ export function deleteMe(): Promise<void> {
 }
 
 /**
- * Switch the authenticated user's own role (capability-derived, A1=Б).
+ * Switch the authenticated user's own role (capability-derived, A1=B).
  *
  * Backend: POST /api/v1/users/me/role — always on (the ROLE_SWITCH_ENABLED
  * flag is gone, №256). The allowed target set is derived server-side from

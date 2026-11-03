@@ -46,16 +46,17 @@ describe('parseStartParam', () => {
       ['open_master_practices', 'master', { name: 'master-practices' }],
       [`open_practice__${id}`, 'master', { name: 'master-practice-detail', params: { id } }],
       // FE-103: the Telegram twin of the bell's msg.* buttons -- support
-      // notification and «перевод недоступен» land on the same chat routes
-      // the bell uses; the role picks the zone.
+      // notification and the "translation unavailable" notice land on the
+      // same chat routes the bell uses; the role picks the zone.
       [`open_thread__${id}`, 'user', { name: 'user-chat', params: { id } }],
       [`open_thread__${id}`, 'master', { name: 'master-chat', params: { id } }],
       // FE-103/BE-172: the admin signal carries the OPENER's user_id; only
       // an admin gets the destination.
       [`open_admin_support__${id}`, 'admin', { name: 'admin-support-detail', params: { id } }],
-      // FE-107 / BE-162 delivery 3: «Как мы помогли?» -- the same chat route
-      // open_thread uses, plus ?rate=1 asking the rating sheet to open on
-      // the ticket the link named; the role picks the zone.
+      // FE-107 / BE-162 delivery 3: the rating notification's title
+      // (i18n:chat.rating.title) -- the same chat route open_thread uses,
+      // plus ?rate=1 asking the rating sheet to open on the ticket the link
+      // named; the role picks the zone.
       [
         `open_support_rating__${id}`,
         'user',

@@ -3,20 +3,22 @@
 // =============================================================================
 //
 // One small piece of server truth the SHELLS need before any school screen
-// mounts: does this account see the conditional «Школы» tab at all?
+// mounts: does this account see the conditional Schools tab (i18n:tabs.schools) at all?
 //
 // THE TAB FOLLOWS MEMBERSHIP (owner 2026-09-22, FE-88), not curatorship:
 //   - USER zone: >= 1 JOINED school (FE-93: master / student memberships;
 //     the curated rows /mine still answers -- relation is role-independent
-//     -- are the master list's «Я куратор» section, so a curator switched
+//     -- are the master list's curator section
+//     (i18n:masterScreens.masterSchools.tab.curator), so a curator switched
 //     to user mode counts their participations only).
 //     /schools/mine is a user surface, so EVERY authenticated account
 //     is probed -- the plain student of one school is the branch this store
 //     used to defer as a "later slice".
 //   - MASTER zone: the same membership (any relation), OR the admin-issued
 //     right to found a school (can_create_schools, BE-18). A right holder
-//     with zero schools keeps their entrance -- the empty hub with
-//     «Создать школу» is exactly their screen (owner 2026-09-19); a master
+//     with zero schools keeps their entrance -- the empty hub with its
+//     create CTA (i18n:masterScreens.masterSchools.create) is exactly
+//     their screen (owner 2026-09-19); a master
 //     without the right gains the tab when they belong to somebody else's
 //     school.
 //
@@ -52,7 +54,8 @@ export const useSchoolsHubStore = defineStore('schoolsHub', () => {
   /** The USER-zone tab condition. Fail-closed: an unsettled (or failed)
    *  mine probe reads as "no schools". FE-93: in user mode only JOINED
    *  schools count -- the curated rows /mine still answers are the master
-   *  list's «Я куратор» section, so a curator switched to user mode with no
+   *  list's curator section (i18n:masterScreens.masterSchools.tab.curator),
+   *  so a curator switched to user mode with no
    *  participations reads as "no schools" until they switch back. The raw
    *  /mine payload does not depend on the role, so recomputing on a role
    *  switch is enough -- no re-probe. */
@@ -123,7 +126,8 @@ export const useSchoolsHubStore = defineStore('schoolsHub', () => {
   return {
     canCreate,
     mine,
-    /** Probe outcomes -- the «Школы» answer is only as fresh as these;
+    /** Probe outcomes -- the Schools-tab answer (i18n:tabs.schools) is only
+     *  as fresh as these;
      *  exposed so membership-adjacent screens can tell a settled "no" from
      *  an in-flight one. */
     mineSettled,

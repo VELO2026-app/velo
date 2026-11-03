@@ -158,7 +158,8 @@ export function getUsersList(
 }
 
 /**
- * Global participants list (all platform users) for the «Участников» screen.
+ * Global participants list (all platform users) for the participants screen
+ * (i18n:adminScreens.adminParticipants.title).
  * `filter` = all | new | active; new/active window on `period` (+ `offset`
  * stepper, parity with the dashboard). Paginated (limit/page_offset).
  */
@@ -274,9 +275,10 @@ export function getRevokePreview(userId: string): Promise<RevokeMasterAdvisory> 
 }
 
 /**
- * Revoke a master's capability (A1, operator Б): role -> user + profile
+ * Revoke a master's capability (A1, operator B): role -> user + profile
  * soft-frozen (status=suspended, is_accepting=false); all data preserved.
- * Re-grant via makeMaster ("Сделать мастером"). Never blocks on the advisory.
+ * Re-grant via makeMaster (i18n:adminScreens.adminUsers.makeMaster). Never
+ * blocks on the advisory.
  */
 export function revokeMaster(userId: string): Promise<RevokeMasterAdvisory> {
   return api.post<RevokeMasterAdvisory>(`/api/v1/admin/masters/${userId}/revoke`)
@@ -307,7 +309,7 @@ export function getMethodChangeRequests(
 }
 
 /** Approve a master's pending method change-request (methods become live).
- *  promote (R5 stage 4, operator decision 3=Б): optional custom method
+ *  promote (R5 stage 4, operator decision 3=B): optional custom method
  *  labels to add to the taxonomy catalog. Omitted/empty -> no catalog
  *  write, identical to pre-stage-4 behavior. */
 export function approveMethodChange(

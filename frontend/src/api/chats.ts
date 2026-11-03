@@ -41,8 +41,10 @@ import { api } from '@/api/client'
 
 /** P-1 display block: the counterparty as velo knows them. `name` is
  *  "First Last" from Telegram fields and may be null -- the VIEW owns the
- *  role-appropriate fallback («Мастер» / «Ученик»). null peer = the proxy
- *  could not resolve the user at all (degrade, don't break the row). */
+ *  role-appropriate fallback (i18n:user.screens.userChat.peerFallback for a
+ *  student, i18n:masterScreens.masterChat.peerFallback for a master). null
+ *  peer = the proxy could not resolve the user at all (degrade, don't break
+ *  the row). */
 export interface ChatPeer {
   user_id: string
   name: string | null
@@ -51,7 +53,7 @@ export interface ChatPeer {
 
 /** BE-163: `"chat"` is a person-to-person DM, `"support"` the caller's own
  *  support conversation (peer is always null there -- the row shows the
- *  VELO logo and «Поддержка VELO» instead). */
+ *  VELO logo and the support title (i18n:chat.supportTitle) instead). */
 export type ChatChannel = 'chat' | 'support'
 
 /** BE-166 translation state, attached to support-channel messages. `null`

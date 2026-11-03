@@ -1,10 +1,13 @@
 <!--
   VELO Frontend -- UserMySchoolsView (schools FE-19 / GT P3)
 
-  «Мои школы» for the user zone (route /user/schools, entry row in
-  UserProfileView's «Аккаунт» section). A FLAT list of GET /schools/mine
+  The my-schools screen (i18n:user.screens.userMySchools.title) for the
+  user zone (route /user/schools, entry row in
+  UserProfileView's account section,
+  i18n:user.screens.userProfile.section.account). A FLAT list of GET /schools/mine
   -- the schools I PARTICIPATE in, by join time. FE-93: /mine's curated rows
-  are the master list's «Я куратор» section and every management surface
+  are the master list's curator tab (i18n:masterScreens.masterSchools.tab.curator)
+  and every management surface
   behind them 403s outside master mode, so this zone lists memberships only
   (a curator switched to user mode reads as an ordinary member). Rows are
   the shared SchoolRow; tap -> the school page in this zone.
@@ -79,7 +82,7 @@ async function load(): Promise<void> {
     const res = await getMySchools()
     // FE-93: this zone lists the schools I PARTICIPATE in -- the curated
     // rows /mine still returns (relation is role-independent) are the
-    // master list's «Я куратор» section.
+    // master list's curator tab (i18n:masterScreens.masterSchools.tab.curator).
     schools.value = res.items.filter((school) => school.relation !== 'curator')
   } catch {
     error.value = true

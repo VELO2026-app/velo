@@ -105,7 +105,7 @@ function bodyButton(label: string, within = '.v-modal__container'): HTMLButtonEl
   )
 }
 
-/** Unfold «Для разработчиков: личный токен» (collapsed by default, BE-150). */
+/** Unfold the developers section (i18n:user.screens.aiConnections.devTitle), collapsed by default (BE-150). */
 async function openDev(): Promise<void> {
   if (host!.querySelector('[data-test="dev-body"]')) return
   host!.querySelector<HTMLButtonElement>('[data-test="dev-block"] .v-accordion__header')!.click()

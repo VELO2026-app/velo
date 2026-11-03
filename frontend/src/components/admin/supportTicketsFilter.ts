@@ -1,16 +1,20 @@
 /**
- * Filter state of the «Обращения» list (FE-100; the rating group FE-107) and
+ * Filter state of the tickets list (i18n:adminScreens.adminReports.tabTickets;
+ * FE-100; the rating group FE-107) and
  * its translation into the list query. Lives in a .ts module, not in the .vue
  * sheet: types exported from SFCs are invisible to type-aware eslint (same
  * reason as shared/moderationFilter.ts).
  *
  * ONE VALUE PER GROUP: the backend takes one `status` and one set of
- * categories per request, so every chip group is single-select with «Все».
- * The «Жалобы» chip is both complaint categories (repeatable `category`).
+ * categories per request, so every chip group is single-select with
+ * "all" (i18n:common.all) as the reset.
+ * The complaints chip (i18n:adminScreens.adminSupport.categories.complaints)
+ * is both complaint categories (repeatable `category`).
  *
  * THE RATING GROUP IS MULTI-SELECT (FE-107 / BE-162 delivery 3): the backend
- * takes a repeatable `rating` ("any of these"), so the star chips and «Без
- * оценки» toggle independently; none chosen = every ticket.
+ * takes a repeatable `rating` ("any of these"), so the star chips and the
+ * no-rating toggle (i18n:adminScreens.adminSupport.rating.none)
+ * toggle independently; none chosen = every ticket.
  *
  * THE DAY is the admin's own: [00:00, 00:00 of the next day) in their
  * `users.timezone`, sent as ISO with the offset (the backend refuses a time
@@ -31,7 +35,7 @@ export const SUPPORT_FILTER_STATUSES: readonly SupportFilterStatus[] = [
 ]
 
 /** The rating chips in the filter's order: the stars low-to-high, then
- *  «без оценки». */
+ *  the no-rating chip (i18n:adminScreens.adminSupport.rating.none). */
 export const SUPPORT_RATING_FILTERS: readonly SupportRatingFilter[] = [
   '1',
   '2',
@@ -59,7 +63,8 @@ export const EMPTY_SUPPORT_FILTER: SupportTicketsFilter = {
   rating: [],
 }
 
-/** The list query for a tab + filter. In «Спам» the status is spam and the
+/** The list query for a tab + filter. In the spam tab
+ *  (i18n:adminScreens.adminSupport.statuses.spam) the status is spam and the
  *  status chips do not apply; category and day still do. */
 export function supportTicketQuery(
   tab: SupportTicketsTab,

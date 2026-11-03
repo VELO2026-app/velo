@@ -50,13 +50,14 @@ const TIMEOUT_MS = 30000
  * Every entry the backend can raise is there; anything unlisted falls back
  * to transcription.generic rather than showing a raw identifier.
  *
- * The vendor is deliberately absent from all of them. The old module said
- * «Закончился баланс OpenRouter» on a 402, which told a stranger both who we
- * buy from and what our balance is -- neither is theirs to know, and neither
- * is something they can act on. The backend collapses every provider-side
- * failure into transcription_failed for the same reason, including the
- * provider's own rate limit: that limit is on OUR key and counts everyone's
- * requests, so «слишком часто» addressed to this person would be false.
+ * The vendor is deliberately absent from all of them. The old module said,
+ * in Russian, that the OpenRouter balance had run out on a 402, which told
+ * a stranger both who we buy from and what our balance is -- neither is
+ * theirs to know, and neither is something they can act on. The backend
+ * collapses every provider-side failure into transcription_failed for the
+ * same reason, including the provider's own rate limit: that limit is on
+ * OUR key and counts everyone's requests, so a "too often" sentence
+ * addressed to this person would be false.
  */
 function genericError(): string {
   return i18n.global.t('transcription.generic')

@@ -1,8 +1,9 @@
 <!--
   VELO Frontend -- MasterSchoolCreateView (schools FE-20 / GT P3; §1.5)
 
-  «Новая школа» -- banner+avatar (behind the kill-switch), «Название школы» +
-  optional «Описание школы», POST /masters/me/schools, ON SUCCESS the
+  The new-school screen (i18n:masterScreens.masterSchoolCreate.title) --
+  banner+avatar (behind the kill-switch), the school name + optional
+  description fields, POST /masters/me/schools, ON SUCCESS the
   TZ's §1.6 rule: creation lands on the SCHOOL PAGE, not the list. A close
   structural clone of MasterGroupCreateView (the custom student group's own
   create form): same required-fields legend, same pinned submit, same 409
@@ -76,11 +77,12 @@
         />
 
         <!-- §1.5 media, kill-switched until the upload backend exists: TWO
-             sequential sections AFTER «Основное» (avatar first, then banner
-             -- the mockup order), each a full-width upload card with its own
-             hint. No overlay, no reserve when the flag is off; the modelValues
-             ride NOTHING to the server (createSchool takes
-             name/description only). -->
+             sequential sections AFTER the basics section
+             (i18n:masterScreens.masterSchoolCreate.section.basics), avatar
+             first then banner -- the mockup order, each a full-width upload
+             card with its own hint. No overlay, no reserve when the flag is
+             off; the modelValues ride NOTHING to the server (createSchool
+             takes name/description only). -->
         <template v-if="SCHOOL_MEDIA_UPLOAD_ENABLED">
           <h2 class="velo-section-title">
             {{ t('masterScreens.masterSchoolCreate.fields.avatar') }}
@@ -246,7 +248,7 @@ html.is-keyboard-open .ncg {
 }
 
 /* T24-7 equivalent: kill VInput/VTextarea's own margin-bottom inside this
-   gapped column (the double-counted gap), scoped to the Название field. */
+   gapped column (the double-counted gap), scoped to the school name field. */
 .ncg__content > :deep(.v-input) {
   margin-bottom: 0;
 }

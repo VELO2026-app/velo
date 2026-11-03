@@ -1,8 +1,10 @@
 <!--
   VELO Frontend -- UserMessagesView (user messaging entry, 2026-06-30;
-  REAL LIST -- Phase 6 / T2, H-T2-UI phase «а», 2026-08-08; BE-163 row shape)
+  REAL LIST -- Phase 6 / T2, H-T2-UI phase A, 2026-08-08; BE-163 row shape)
 
-  User conversations, reached from Profile ▸ «Аккаунт» ▸ «Сообщения».
+  User conversations, reached from Profile ▸ the account section
+  (i18n:user.screens.userProfile.section.account) ▸ the messages row
+  (i18n:user.screens.userProfile.menu.messages).
   Route: /user/profile/messages (name: 'user-messages').
 
   The list comes from GET /api/v1/chats (BE-163 shape): one request, rows
@@ -10,7 +12,8 @@
   row carries the P-1 `peer` block (no per-row profile lookups), the row's
   own `unread` (T-51 -- the backend fetches the whole page's counts in one
   call), `last_message` for the preview line and `channel`: a `support` row
-  renders the VELO logo + «Поддержка VELO» and its preview speaks the
+  renders the VELO logo + the support title (i18n:chat.supportTitle) and
+  its preview speaks the
   translation states (utils/chatRows.ts). The list is not polled (approved
   plan §4).
 
@@ -79,7 +82,8 @@ const error = ref<string | null>(null)
 const threads = ref<ChatThread[]>([])
 
 /** BE-163: a `support` row has no peer -- its name is the support title,
- *  not the role fallback («Мастер») the null-peer degrade would paint. */
+ *  not the role fallback (i18n:user.screens.userMessages.peerFallback) the
+ *  null-peer degrade would paint. */
 function rowFallback(thread: ChatThread): string {
   return thread.channel === 'support'
     ? t('chat.supportTitle')

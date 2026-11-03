@@ -4,7 +4,7 @@
 //
 // WHY: the biggest screen in the user zone (902 lines) and the LAST known
 // instance of the silent-load-more bug class chased all session -- and the worst
-// instance: MyBookingsView at least had a «Показать ещё» button the user could
+// instance: MyBookingsView at least had a show-more button (i18n:common.showMore) the user could
 // tap again. Here page-N fires from an IntersectionObserver sentinel (.vue:583),
 // so a failed older page left the user scrolling at a feed that simply never
 // grew, with no control to retry and nothing on screen to explain it.
@@ -51,7 +51,8 @@
 //  - SC-15: the ordering / filter tests pin the POSITIVE set with toEqual first,
 //    so an exclusion cannot pass on a feed that rendered nothing.
 //  - Wall clock: dayLabelOf (format.ts:174) calls `new Date()` for the
-//    Сегодня/Вчера dividers, so time is pinned and every fixture is a literal
+//    today/yesterday dividers (i18n:common.today / i18n:common.yesterday), so time
+//    is pinned and every fixture is a literal
 //    against it. Timezone is forced to UTC through the mocked auth store, so
 //    the runner's local zone cannot drift the day keys.
 //  - localStorage: DiaryComposer mirrors its draft to `velo:diary:draft:*` on
@@ -61,7 +62,7 @@
 // TRAPS ABSENT (proved, so nobody cargo-cults the setup onto this file):
 //  - NO money, NO formatMoney anywhere in this screen's chain -> the ru NBSP trap
 //    (velo-idiom §11) does not apply. The one Intl string asserted here is the
-//    day divider «10 июля»; codepoint-scanned it -- 0x20, a plain space, not
+//    day divider (an Intl day-month date); codepoint-scanned it -- 0x20, a plain space, not
 //    U+00A0. So no norm() helper: dead defensive code carrying a false
 //    justification is worse than none.
 //  - NO v-show on this screen (grepped) -- the ladder rungs are v-if/v-else-if,
@@ -212,8 +213,9 @@ function fireSentinel(isIntersecting = true): void {
 
 // -- Fixtures ----------------------------------------------------------------
 
-// Frozen instant. Fixtures are literals against it: 07-16 = «Сегодня»,
-// 07-15 = «Вчера», 07-10 = «10 июля».
+// Frozen instant. Fixtures are literals against it: 07-16 = the today label
+// (i18n:common.today), 07-15 = the yesterday label (i18n:common.yesterday),
+// 07-10 = a plain day-month date.
 const NOW = new Date('2026-07-16T12:00:00Z')
 
 function feedItem(
@@ -359,7 +361,7 @@ describe('DiaryFeedView', () => {
     it('error: the REAL backend message never reaches the DOM -- the copy is hardcoded', async () => {
       // SC-05. useCursorPagination stores e.message verbatim (.ts:61), but unlike
       // MyBookingsView (which binds :description="store.error") this screen hard-
-      // codes «Проверьте соединение и попробуйте ещё раз» (.vue:175). So the rung
+      // codes the check-connection copy (i18n:common.checkConnection, .vue:175). So the rung
       // shows, and the reason is dropped. Pinning both halves so nobody reads the
       // rung above as proof that error propagation works -- it does not.
       vi.mocked(diaryApi.listDiaryFeed).mockRejectedValue(new Error('Сервис недоступен'))
@@ -434,7 +436,7 @@ describe('DiaryFeedView', () => {
       mount()
       await flush()
 
-      // Oldest group first. «10 июля» is Intl ru output -- codepoint-checked as a
+      // Oldest group first. The day-month divider is Intl ru output -- codepoint-checked as a
       // plain 0x20 space (see the banner), so no NBSP normalisation is needed.
       expect(dayDividers()).toEqual(['10 июля', 'Вчера', 'Сегодня'])
       expect(cardPreviews()).toEqual(['старая', 'вчерашняя', 'сегодняшняя'])
@@ -811,7 +813,7 @@ describe('DiaryFeedView', () => {
       host?.querySelector<HTMLButtonElement>('button[aria-label="Поиск"]')?.click()
       await flush()
 
-      // No scrim AT ALL (owner 2026-09-09: "блюр и затемнение убираем") --
+      // No scrim AT ALL (owner 2026-09-09: blur and dimming removed) --
       // before typing and after.
       expect(host?.querySelector('.diary-feed__search-scrim')).toBeNull()
 
@@ -859,7 +861,7 @@ describe('DiaryFeedView', () => {
       await store.runFeedSearch('сон')
       await flush()
 
-      // The honest rung: NOT «Дневник пуст» -- the diary has entries, the
+      // The honest rung: NOT the empty title (i18n:user.screens.diaryFeed.empty.title) -- the diary has entries, the
       // QUERY matched none. The query is echoed back.
       expect(bodyText()).toContain('Ничего не найдено')
       expect(bodyText()).toContain('«сон»')
@@ -1213,7 +1215,7 @@ describe('DiaryFeedView', () => {
   })
 
   // ===========================================================================
-  // FE-70: the dashboard's «Добавить запись» arrives as ?compose=note -- a
+  // FE-70: the dashboard's add-entry action arrives as ?compose=note -- a
   // ONE-SHOT intent. The screen focuses the existing note composer once and
   // strips the param via router.replace, keeping every other query param.
   // ===========================================================================

@@ -12,7 +12,8 @@
 //  - NO practice-specific data is ever rendered. `practice` gates the ladder
 //    but its title/master_name/scheduled_at/price are NEVER interpolated
 //    anywhere in the content block -- the success card is 100% static copy
-//    ("Практика забронирована!", a fixed 10-minute Zoom line). This directly
+//    (the success title i18n:user.screens.bookingConfirmed.title, plus a fixed
+//    10-minute Zoom line). This directly
 //    contradicts the assumed shape ("cover that the right data renders") --
 //    there is no per-practice data to cover; two different fixtures produce
 //    byte-identical visible text (proven below). STILL TRUE after the
@@ -53,8 +54,9 @@
 //      of a fetch for a NEW id, skipping the loader and letting the
 //      (harmless, since static) success card render while the real
 //      confirmation was still in flight -- or, on a failing fetch, flashing
-//      "Практика забронирована!" before "Практика не найдена" for a practice
-//      that was never confirmed. FIX: `practice` now reads
+//      the success title (i18n:user.screens.bookingConfirmed.title) before the
+//      not-found title (i18n:user.screens.bookingConfirmed.notFound) for a
+//      practice that was never confirmed. FIX: `practice` now reads
 //      `store.selected?.id === practiceId ? store.selected : null` -- a
 //      stale different-id value is treated as not-yet-loaded, not as
 //      content. The two tests below that used to document the bug now assert
@@ -271,8 +273,9 @@ describe('BookingConfirmedView', () => {
       expect(emptyState()).toBeNull()
       expect(content()).not.toBeNull()
       expect(content()?.textContent).toContain('Практика забронирована!')
-      // Standalone F4: was «Ссылка на Zoom появится за 10 минут до начала.» --
-      // right while a link was sent; Zoom now runs inside the app, no link comes.
+      // Standalone F4: the screen used to promise a Zoom link 10 minutes
+      // before the start -- shown right while a link was sent; Zoom now runs
+      // inside the app, no link comes.
       expect(content()?.textContent).toContain(
         'Войти в Zoom можно будет прямо в VELO — на экране практики.',
       )
@@ -377,13 +380,14 @@ describe('BookingConfirmedView', () => {
   // ===========================================================================
   // [FE-1] ask-master (capability: user-booking) -- REAL since the chat landed
   // (was the TD-ASK-MASTER stub: field hard-disabled, button hard-disabled, a
-  // «Вопросы мастеру — скоро» hint; the two tests that pinned the stub are
+  // questions-to-master coming-soon hint; the two tests that pinned the stub are
   // gone -- they asserted `disabled === true` unconditionally, which is
   // exactly the behaviour being removed).
   //
   // Requirement: a successful send opens-or-gets the DM with THIS practice's
   // master, posts the typed text, and SHALL NOT open the chat -- a success
-  // toast lands and the user is returned to «Моя практика» (practice-detail).
+    // toast lands and the user is returned to practice-detail, the booked
+  // practice screen (i18n:user.screens.practiceDetail.titleBooked).
   // Full statement + scenarios: BookingConfirmedView.vue [FE-1]. The tests
   // below pin both scenarios (back when the practice screen is behind in
   // history; replace otherwise) and both failure paths (no navigation, the
@@ -460,8 +464,9 @@ describe('BookingConfirmedView', () => {
         'thread-7',
         'Практика: Утренняя медитация, 20 июля в 10:00\n\nБолит колено',
       )
-      // [FE-1] Scenario: normal flow -- toast + step BACK into «Моя практика»;
-      // no new history entry, nothing else navigated. Pins the FE-2 check too:
+      // [FE-1] Scenario: normal flow -- toast + step BACK into practice-detail
+      // (i18n:user.screens.practiceDetail.titleBooked); no new history entry,
+      // nothing else navigated. Pins the FE-2 check too:
       // back leads to the practice screen, not back into the request loop.
       expect(toastSuccess).toHaveBeenCalledWith('Запрос отправлен мастеру')
       expect(back).toHaveBeenCalledTimes(1)
@@ -523,7 +528,7 @@ describe('BookingConfirmedView', () => {
       sendBtn()?.click()
       await flush()
 
-      // 10:00 UTC -> 13:00 Moscow, and no "(эфир)" suffix in the caption.
+      // 10:00 UTC -> 13:00 Moscow, and no live-broadcast title suffix in the caption.
       expect(chatsApi.sendChatMessage).toHaveBeenCalledWith(
         'thread-7',
         'Практика: Утренняя медитация, 20 июля в 13:00\n\nВопрос',

@@ -42,8 +42,10 @@
 //    before the mount (SKILL.md's two history.state rows; this screen is
 //    explicitly listed on the handler row). Reset in beforeEach so a seeded test
 //    cannot leak the `back` key into the fallback test.
-//  - SC-14b: 'Практика' is the header's back-label AND a prefix of the error copy
-//    'Не удалось загрузить практику'; 'Как ваше самочувствие?' is variant p2's
+//  - SC-14b: the practice fallback (i18n:user.screens.reflection.practiceFallback)
+//    is the header's back-label AND a prefix of the error copy
+//    (i18n:storeErrors.practices.selected); the variant subtitle
+//    (i18n:reflection.v1.screenSubtitle) is variant p2's
 //    SUBTITLE and also variant p1's... no -- but the three variants share
 //    vocabulary, so every copy assertion is read off the scoped .form-shell__question
 //    h3/p, never off the host.
@@ -51,7 +53,8 @@
 //    satisfied by a mount that rendered nothing. Every one of them pins the
 //    positive FIRST -- the question is up, the button exists, the button is
 //    enabled -- so the exclusion is real.
-//  - SC-18: the fixture defaults ('Утренняя практика' / 'Мастер Аня') differ from
+//  - SC-18: the fixture defaults (the morning-practice title / the master
+//    name in the fixtures) differ from
 //    every value any test overrides, so a dropped `...overrides` fails loudly
 //    instead of silently agreeing.
 //  - SC-17: see "re-entry" below -- the double tap is caught by the ref the
@@ -73,7 +76,8 @@
 //    whole-host queries are safe where used.
 //  - NO wall clock. Unlike CheckinView there is no `nowMs`, no interval, no
 //    windowClosed, and no date is rendered at all: the meta line is the static
-//    «Не состоялась» (.vue:45), because a no-show has no time worth showing. So
+//    missed-you label (i18n:common.missedYou) (.vue:45), because a no-show
+//    has no time worth showing. So
 //    NO vi.setSystemTime, NO fake timers, and no fixture is dated relative to an
 //    instant (SC-04 cannot bite what reads no clock).
 //  - NO money. No formatMoney, no Intl.NumberFormat -> no ru NBSP trap
@@ -302,7 +306,8 @@ describe('ReflectionView', () => {
       mount()
       await flush()
 
-      // cleanPracticeTitle strips the "(эфир)" suffix (FormShell.vue:194).
+      // cleanPracticeTitle strips the live marker suffix from the title
+      // (backend title data; FormShell.vue:194).
       expect(host?.querySelector('.hero-card__title')?.textContent?.trim()).toBe('Вечерняя йога')
       expect(text()).toContain('Мастер Лена')
     })
@@ -312,8 +317,9 @@ describe('ReflectionView', () => {
       // this screen renders none -- unlike its two FormShell siblings, which both
       // put a formatted scheduled_at in this slot. That asymmetry is the design
       // (F1), so it is worth a test rather than an assumption.
-      // B30 (PROMPT №747): was «Не состоялась» -- false, the practice DID
-      // happen, the person missed it; now the owner's word, "Вы не пришли".
+      // B30 (PROMPT №747): was the did-not-take-place label -- false, the
+      // practice DID happen, the person missed it; now the owner's word, the
+      // missed-you label (i18n:common.missedYou).
       getPracticeMock.mockResolvedValue(practice({ scheduled_at: '2026-07-20T13:00:00.000Z' }))
       mount()
       await flush()

@@ -22,7 +22,8 @@ const { t } = i18n.global
 
 /**
  * Build display name from AdminMasterListItem first_name + last_name.
- * Falls back to 'Пользователь' when both are null.
+ * Falls back to the catalog fallback user name (i18n:admin.fallbackUserName)
+ * when both are null.
  */
 export function masterDisplayName(
   item: Pick<AdminMasterListItem, 'first_name' | 'last_name'>,
@@ -45,10 +46,13 @@ export function masterStatusVariant(status: string): 'warning' | 'success' | 'er
 /**
  * Map master_status to Russian label.
  *
- * F3 (2026-07-07): `suspended` shows «Заблокирован» (the masters status filter
- * groups A1's soft-freeze under «Заблокированы»; the revoke ACTION stays
- * «Отозвать мастера»). `cancelled_by_user` → «Аккаунт удалён» (F4-ready; no
- * flow writes it yet, so it renders only once F4 ships).
+ * F3 (2026-07-07): `suspended` shows the blocked label
+ * (i18n:admin.masterStatus.suspended); the masters status filter groups A1's
+ * soft-freeze under its plural blocked filter, and the revoke ACTION stays
+ * "Withdraw master" (i18n:adminScreens.adminMasterReview.revokeMaster).
+ * `cancelled_by_user` → the account-deleted label
+ * (i18n:admin.masterStatus.cancelled_by_user) (F4-ready; no flow writes it
+ * yet, so it renders only once F4 ships).
  */
 export function masterStatusLabel(status: string): string {
   if (status === 'pending') return t('admin.masterStatus.pending')
@@ -117,14 +121,16 @@ export function formatDateTime(iso: string): string {
 
 /**
  * Relative "time ago" label for report/moderation cards (operator SVG
- * «1 Moderation»): «только что» / «N мин назад» / «N ч назад» / «Вчера», then
- * the absolute «DD MMM» for older items. Abbreviated units sidestep Russian
- * plural forms while staying readable.
+ * «1 Moderation»): just now (i18n:admin.relative.justNow), minutes ago
+ * (i18n:admin.relative.minutesAgo), hours ago (i18n:admin.relative.hoursAgo),
+ * yesterday (i18n:common.yesterday), then the absolute «DD MMM» for older
+ * items. Abbreviated units sidestep Russian plural forms while staying
+ * readable.
  *
  * SW10: the day comparisons are pinned to UTC via dayKeyOf (utils/format.ts)
- * instead of the device's own local calendar fields -- otherwise "Вчера"
- * itself could misfire (or fail to fire) depending on which machine renders
- * the page, not just the displayed string's format.
+ * instead of the device's own local calendar fields -- otherwise the
+ * yesterday label itself could misfire (or fail to fire) depending on which
+ * machine renders the page, not just the displayed string's format.
  */
 export function formatRelative(iso: string): string {
   const then = new Date(iso).getTime()

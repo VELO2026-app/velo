@@ -2,8 +2,9 @@
   VELO Frontend -- SchoolAvatarPicker (tz-curator.md §1.5 / §7.2)
 
   The school's avatar upload section: a full-width white card holding a
-  rectangular outline zone («+ Загрузить фото» with the upload affordance);
-  a chosen file renders as a preview with «Заменить / Убрать» INSIDE the same
+  rectangular outline zone (the upload copy i18n:school.upload with its
+  upload affordance); a chosen file renders as a preview with the replace /
+  remove actions (i18n:school.replace, i18n:school.remove) INSIDE the same
   card (§1.5: the states must never leave their card). Rendered ONLY behind
   the SCHOOL_MEDIA_UPLOAD_ENABLED kill-switch (utils/constants.ts): there is
   no upload backend yet (§7.1 №4), so the picker holds a LOCAL object-URL
@@ -116,7 +117,7 @@ onBeforeUnmount(() => {
   opacity: 0.85;
 }
 
-/* The §1.5 zone: rectangular outline, centred icon + «+ Загрузить фото». */
+/* The §1.5 zone: rectangular outline, centred icon + the upload copy (i18n:school.upload). */
 .sap__zone {
   display: flex;
   flex-direction: column;

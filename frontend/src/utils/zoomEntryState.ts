@@ -24,7 +24,7 @@
 //      (ZoomMeetingStatus.create_failed): waiting is pointless until the
 //      master retries. Kept distinct from 3 by A4 V2 -- create_failed is
 //      routine (series children are created in the background), and before
-//      that both rendered the same «готовится» spinner forever.
+//      that both rendered the same "still preparing" spinner forever.
 //   3. pending -- not ready yet, meeting still pending_creation (or no
 //      ZoomMeeting row at all): an honest "being prepared".
 // =============================================================================

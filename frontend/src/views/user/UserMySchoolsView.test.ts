@@ -94,7 +94,8 @@ describe('UserMySchoolsView', () => {
     mount()
     await flush()
 
-    // FE-93: the curated row is the master list's «Я куратор» section --
+    // FE-93: the curated rows are the master list's curator tab
+    // (i18n:masterScreens.masterSchools.tab.curator) --
     // this zone lists the schools I participate in.
     expect(text()).not.toContain('Школа g2')
     expect(text()).toContain('Школа g1')

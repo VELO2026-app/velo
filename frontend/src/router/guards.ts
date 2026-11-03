@@ -138,7 +138,8 @@ export const roleRedirect: NavigationGuardWithThis<undefined> = async () => {
  * Scope is deliberately UNCHANGED (still called for every role, not gated to
  * role==='user'): the obvious-looking fix of only refreshing for a
  * rejection-eligible role would blind the SYMMETRIC case --
- * AdminMasterReviewView.vue's «Отозвать мастера» revoke flips a master's
+ * AdminMasterReviewView.vue's revoke action
+ * (i18n:adminScreens.adminMasterReview.revokeMaster) flips a master's
  * server-side role straight to 'user' (admin/masters/service.py's
  * revoke_master), and a master who is never refreshed would keep the stale
  * client-side role until a cold boot, same bug class as T21-4, pointed the
@@ -214,13 +215,14 @@ export function roleGuard(
 }
 
 /**
- * Shared no-application check (№257 honest entry, operator Q4=А).
+ * Shared no-application check (№257 honest entry, operator Q4=A).
  *
  * A role=master account with NO master profile at all (confirmed by the
  * backend's 403 code=master_profile_not_found -- e.g. an admin who switched
  * into master, or a CLI-promoted account without a profile) is LED to the
  * application wizard instead of a mute degraded dashboard / a false
- * "заявка отправлена" screen. Distinct from pending/rejected applications,
+ * application-sent screen (i18n:masterScreens.masterPending.toast.sent).
+ * Distinct from pending/rejected applications,
  * which keep their existing /master/pending verdict flow.
  *
  * Admins browsing /master/* keep today's path (pending -> admin bounce), and
@@ -313,7 +315,8 @@ export const masterStatusGuard: NavigationGuardWithThis<undefined> = async () =>
  *
  * The route lives OUTSIDE the /master shell group, so it has no role guard of
  * its own — without this, a plain user who opens /master/pending directly sees
- * a false "Заявка отправлена!" screen. Access rules:
+ * a false application-sent screen (i18n:masterScreens.masterPending.toast.sent).
+ * Access rules:
  *   - admin            -> redirect to /admin/dashboard (admins never apply)
  *   - master           -> allow (masterStatusGuard sends non-verified masters
  *                         here; a verified master is redirected to the dashboard
@@ -323,7 +326,8 @@ export const masterStatusGuard: NavigationGuardWithThis<undefined> = async () =>
  *                         on a successful application submit)
  *   - user + capability -> allow (MA3: an already-approved role='user' account
  *                         detoured here by RoleSwitchSection so it sees the
- *                         "Ваша заявка одобрена!" screen before switching — same
+ *                         approval screen (i18n:masterScreens.masterPending.approved.title)
+ *                         before switching — same
  *                         authoritative signal the view's own profileStatus
  *                         computed already trusts, not the sessionStorage marker
  *                         which only covers the fresh-submit path)

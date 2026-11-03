@@ -268,8 +268,9 @@ export function getMasterReviews(
   attention = false,
 ): Promise<PaginatedMasterReviewsResponse> {
   // attention=true narrows the feed to ratings 1-4 (zones bad and low,
-  // BE-77) server-side (E1) so the «Требуют внимания» block sees a full page
-  // of them, not only those that fall in the first mixed page.
+  // BE-77) server-side (E1) so the needs-attention block
+  // (i18n:masterScreens.analytics.sections.attention) sees a full page of
+  // them, not only those that fall in the first mixed page.
   const query = buildQuery({ limit, offset, attention: attention || undefined })
   return api.get<PaginatedMasterReviewsResponse>(`/api/v1/masters/me/reviews${query}`)
 }

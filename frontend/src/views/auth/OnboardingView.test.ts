@@ -3,7 +3,8 @@
 // =============================================================================
 //
 // WHY THIS FILE EXISTS: a 5-step welcome flow (FE-101 grew the carousel by
-// the «Дата рождения» and «К чему бы вы хотели прийти?» form steps) whose
+// the birth-date (i18n:auth.onboarding.birth.title) and goals
+// (i18n:auth.onboarding.goals.title) form steps) whose
 // LAST step is also the finish step, with two re-entry guards (`advancing`,
 // `finishArmed`) and a real persistence call (authStore.updateProfile) that
 // must carry the DEVICE timezone plus whatever FE-101 answers were
@@ -147,7 +148,7 @@ function activeDotIndex(): number {
   return dots().findIndex((d) => d.classList.contains('v-pagination-dots__dot--active'))
 }
 
-/** Advances to the date step: three awaited «Далее» clicks. */
+/** Advances to the date step: three awaited Next (i18n:auth.onboarding.next) clicks. */
 async function gotoDateStep(): Promise<void> {
   for (let i = 0; i < 3; i++) {
     primaryButton().click()
@@ -155,14 +156,14 @@ async function gotoDateStep(): Promise<void> {
   }
 }
 
-/** Advances to the last (finish) step: four awaited «Далее» clicks. */
+/** Advances to the last (finish) step: four awaited Next (i18n:auth.onboarding.next) clicks. */
 async function gotoFinalStep(): Promise<void> {
   await gotoDateStep()
   primaryButton().click()
   await flush()
 }
 
-/** Opens the date sheet and saves its default position (1 января 2000). */
+/** Opens the date sheet and saves its default position (January 1, 2000). */
 async function pickDefaultBirthDate(): Promise<void> {
   const field = host?.querySelector<HTMLButtonElement>('.ob-date__field')
   if (!field) throw new Error('.ob-date__field did not render')
@@ -548,7 +549,7 @@ describe('OnboardingView', () => {
 
       expect(toastError).toHaveBeenCalledWith('Не удалось сохранить. Попробуйте ещё раз.')
       expect(onDone).not.toHaveBeenCalled()
-      // Stays on the screen so the user can retry (Skip / «Готово»).
+      // Stays on the screen so the user can retry (Skip / Done, i18n:auth.onboarding.done).
       expect(text()).toContain('Найдите свою практику')
     })
 

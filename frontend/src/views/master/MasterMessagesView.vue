@@ -1,15 +1,18 @@
 <!--
   VELO Frontend -- MasterMessagesView (messages list, 2026-06-13;
-  REAL LIST -- Phase 6 / T2, H-T2-UI phase «а», 2026-08-08; BE-163 row shape)
+  REAL LIST -- Phase 6 / T2, H-T2-UI phase "a", 2026-08-08; BE-163 row shape)
 
-  Route /master/messages (from the profile hub's «Сообщения» row). The list
-  comes from GET /api/v1/chats (BE-163 shape, one request): rows ordered
+  Route /master/messages (from the profile hub's messages row,
+  i18n:masterScreens.masterProfile.menu.messages). The list comes from
+  GET /api/v1/chats (BE-163 shape, one request): rows ordered
   last-message-first, each carrying the P-1 `peer` block -- the client may
   be nobody's student (pre-sale channel), so this is the ONLY way a name
-  arrives; peer=null degrades to «Ученик». Alongside the DMs the master now
-  also sees HIS own support conversation (channel `support` -- VELO logo +
-  «Поддержка VELO», preview speaks the translation states via
-  utils/chatRows.ts) and the DMs he opened with other masters as a client.
+  arrives; peer=null degrades to the student fallback
+  (i18n:masterScreens.masterMessages.peerFallback). Alongside the DMs the
+  master now also sees HIS own support conversation (channel `support` --
+  VELO logo + the support title (i18n:chat.supportTitle), preview speaks
+  the translation states via utils/chatRows.ts) and the DMs he opened with
+  other masters as a client.
   The list itself is not polled (approved plan §4).
 -->
 
@@ -79,7 +82,8 @@ const threads = ref<ChatThread[]>([])
 // gets are always his, so the key is there -- the `?? 0` at the call site is
 // the type's optionality, not a state this screen can reach on a `chat` row.
 /** BE-163: a `support` row has no peer -- its name is the support title,
- *  not the role fallback («Ученик») the null-peer degrade would paint. */
+ *  not the role fallback (i18n:masterScreens.masterMessages.peerFallback)
+ *  the null-peer degrade would paint. */
 function rowFallback(thread: ChatThread): string {
   return thread.channel === 'support'
     ? t('chat.supportTitle')

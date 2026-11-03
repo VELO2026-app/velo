@@ -2,13 +2,17 @@
   VELO Frontend -- BirthDateSheet (FE-101 onboarding)
 
   Bottom-sheet WHEEL picker for a birth date, operator mockup 2026-10-19:
-  three VWheel columns in the order Месяц / День / Год («октября / 14 / 2001»)
-  and a single «Сохранить» button. Sibling of DatePickerSheet, which serves
+  three VWheel columns in the order month / day / year (labels
+  i18n:auth.onboarding.birth.month, i18n:auth.onboarding.birth.day,
+  i18n:auth.onboarding.birth.year; the mockup's sample row reads
+  "October / 14 / 2001" with ru's genitive month spelling) and a single
+  save button (i18n:ui.save). Sibling of DatePickerSheet, which serves
   PRACTICE dates (calendar-first, a ±5-year horizon); a birth date needs a
   century-deep wheel instead, so the two share VBottomSheet + VWheel rather
   than one strained component.
 
-  Month labels are GENITIVE («октября», not «октябрь»): generated through
+  Month labels are GENITIVE in ru (the month form used beside a day, not
+  the standalone nominative form): generated through
   Intl formatToParts with a day present, the same trick the mockup's column
   shows. Other locales simply get ICU's own month spelling.
 
@@ -16,7 +20,8 @@
   current year, future months -- and within the current month, future days --
   are dropped from the wheels (a birth date cannot be in the future). The
   selected day clamps to the month's length when the month/year moves
-  (Jan 31 -> Feb 28/29), so «Сохранить» can never compose an invalid date.
+  (Jan 31 -> Feb 28/29), so the save button (i18n:ui.save) can never
+  compose an invalid date.
 
   v-model is an ISO 'YYYY-MM-DD' string ('' = nothing chosen). Emits
   update:modelValue + close on save; the scrim/Escape emit close only, so
@@ -70,7 +75,7 @@ interface WheelEntry {
 const props = withDefaults(
   defineProps<{
     open: boolean
-    /** ISO 'YYYY-MM-DD'; '' or absent -> the wheels start at 1 января 2000. */
+    /** ISO 'YYYY-MM-DD'; '' or absent -> the wheels start at January 1, 2000. */
     modelValue?: string
   }>(),
   { modelValue: '' },
@@ -119,11 +124,11 @@ watch(
 
 // Genitive month labels: ICU yields the genitive form in ru only when a DAY
 // is part of the pattern, so the label is read from formatToParts rather
-// than a standalone { month: 'long' } (which would give «Октябрь»). The
-// probe date is UTC-anchored (no runtime-tz Date constructor) and the
-// formatter is called WITHOUT `new`: the Intl constructors are
-// legacy-callable, and the call form keeps working under the test suite's
-// zero-arg Intl spy (whose mock is not a constructor).
+// than a standalone { month: 'long' } (which would give the nominative
+// month form). The probe date is UTC-anchored (no runtime-tz Date
+// constructor) and the formatter is called WITHOUT `new`: the Intl
+// constructors are legacy-callable, and the call form keeps working under
+// the test suite's zero-arg Intl spy (whose mock is not a constructor).
 const MONTH_LABELS = Array.from({ length: 12 }, (_, m) => {
   const parts = Intl.DateTimeFormat(getLocale(), {
     day: 'numeric',

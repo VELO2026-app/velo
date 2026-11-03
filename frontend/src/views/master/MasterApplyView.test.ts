@@ -43,11 +43,12 @@
 //
 // TWO ENTIRELY DIFFERENT SUCCESS OUTCOMES, gated on `res.status`:
 //   'verified' (self-provision -- an admin who switched into master mode):
-//     masterStore.fetchMyProfile(true), toast "Профиль создан", push
-//     master-dashboard. NEITHER storage key is touched on this path at all.
+//     masterStore.fetchMyProfile(true), toast i18n:masterScreens.masterApply.toast.profileCreated,
+//     push master-dashboard. NEITHER storage key is touched on this path at all.
 //   anything else (normal application, stays role='user'): sessionStorage
 //     MASTER_APPLIED_KEY='1', localStorage rejection-seen key removed (only
-//     `if (authStore.user?.id)`), toast "Заявка отправлена!", push
+//     `if (authStore.user?.id)`), toast
+//     i18n:masterScreens.masterApply.toast.applicationSent, push
 //     master-pending.
 // Both covered below as genuinely different branches, not variations of one.
 //
@@ -64,7 +65,8 @@
 // synchronously up to its first `await`, so click #1 sets `submitting.value
 // = true` before click #2's synchronous handler call even starts. CLEAN
 // NEGATIVE -- the one screen this batch that got it right from the start.
-// The guard is also SHARED across «Отправить» and «Пропустить» (both call
+// The guard is also SHARED across submit (i18n:common.submitSend) and skip
+// (i18n:common.skip) (both call
 // the same `submit()`), asserted below with a cross-button same-tick click.
 //
 // onBack (.vue:315-321) PRESERVES DATA -- READ, NOT ASSUMED: it only ever
@@ -301,7 +303,7 @@ async function fillStep2(): Promise<void> {
   await flush()
   chipByText('Медитация молчания')?.click()
   await flush()
-  chooseExperience('2') // "1-3 года"
+  chooseExperience('2') // i18n:masterScreens.masterApply.experience.1_3
   await flush()
   setValue(bioField(), 'Практикую 5 лет, веду группы для начинающих.')
   await flush()
@@ -693,7 +695,7 @@ describe('MasterApplyView', () => {
       await flush()
       chipByText('Медитация молчания')?.click()
       await flush()
-      chooseExperience('7') // "5-10 лет"
+      chooseExperience('7') // i18n:masterScreens.masterApply.experience.5_10
       await flush()
       setValue(bioField(), 'Бэкграунд.')
       await flush()

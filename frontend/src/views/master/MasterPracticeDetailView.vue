@@ -3,39 +3,42 @@
 
   Master's practice detail at /master/practices/:id/detail (masterStatusGuard;
   rendered inside MasterShell, no tab bar). Reached by tapping a practice card in
-  MasterPracticesView (both tabs). Р1=А: ONE route, status-branched.
+  MasterPracticesView (both tabs). R1=A: ONE route, status-branched.
 
     - PAST branch (completed / cancelled): read-only review — hero + attendance
-      stats + participant reviews + finance + Check-ins / Посещаемость CTAs.
+      stats + participant reviews + Check-ins / Attendance CTAs
+      (i18n:masterScreens.masterPracticeDetail.sections.attendance).
     - UPCOMING branch (draft / scheduled / live) = WI-B hub: PracticeHeroCard +
-      Записалось/Мест/Цена stat cards + «Записались» roster (read-only rows) +
-      description/contraindications accordions + Check-ins,
-      with a «…» menu (Изменить / отменить|удалить). Replaces the former redirect
-      to the edit screen. EditPracticeView is untouched (reached via «…» → Изменить).
-      NB: there is deliberately NO «Начать практику» button. Going live is
+      enrolled/capacity stat cards (i18n:masterScreens.masterPracticeDetail.stats.enrolled /
+      .stats.capacity; the price card was removed, operator 2026-06-18) +
+      the booked roster (i18n:masterScreens.masterPracticeDetail.bookedCount,
+      read-only rows) + description/contraindications accordions + Check-ins,
+      with a "…" menu (edit i18n:ui.edit / cancel|delete). Replaces the former redirect
+      to the edit screen. EditPracticeView is untouched (reached via "…" → edit).
+      NB: there is deliberately NO start-practice button. Going live is
       AUTOMATIC (backend lifecycle worker flips scheduled -> live at scheduled_at,
       and -> completed at scheduled_at + duration). PATCH status='live' is rejected
       by the backend (422), so never wire such a button here.
 
-  Decisions (operator, WI-B, all Г=А):
-    FORK1 — REMOVED (PROMPT post-№280): the per-participant «отменить запись» X was a
+  Decisions (operator, WI-B, all G=A):
+    FORK1 — REMOVED (PROMPT post-№280): the per-participant cancel-booking X was a
             stub (no master-removes-participant endpoint — cancelBooking is self-only)
             so the operator asked to drop it entirely until the backend exists. The
             roster rows are now read-only. Re-add the X when the remove-participant
             endpoint ships (E11, master-ds-zod-roadmap). FORK2 — the recurrence-days
-            hero line is HIDDEN (no recurrence model). FORK3 — NO «Опубликовать» on the hub
+            hero line is HIDDEN (no recurrence model). FORK3 — NO publish CTA
+            (i18n:masterScreens.editPractice.actions.publish) on the hub
             (draft→scheduled stays in EditPracticeView). FORK4 — the hub hero
             reuses the shared PracticeHeroCard.
 
   Data reality:
-    REAL: header (getPractice) · Записалось/Мест/Цена + roster (getAttendance) ·
-          отменить (cancelPractice) · удалить draft (deletePractice). PAST rating
+    REAL: header (getPractice) · enrolled/capacity stats + roster (getAttendance) ·
+          cancel (cancelPractice) · delete draft (deletePractice). PAST rating
           badges + stats as before (getAttendance + anonymous insights).
           Status transitions scheduled -> live -> completed are NOT driven from
           here -- the backend lifecycle worker does them by the clock, so the PAST
           branch starts rendering on its own once the practice's duration elapses.
-    STUB → Zod: remove-one-participant (no endpoint) → the X was REMOVED (not faked);
-          «Доход» (no income/ledger API) → «—»; «Отзывы участников» (insights anonymous).
+    STUB → Zod: remove-one-participant (no endpoint) → the X was REMOVED (not faked).
 -->
 
 <template>
@@ -44,9 +47,9 @@
       <template v-if="isUpcoming" #action>
         <VMenu :aria-label="t('masterScreens.masterPracticeDetail.menuAria')">
           <template #default="{ close }">
-            <!-- Карандаш → редактирование, корзина → удаление/отмена (Q1=А,
-                 openDestructive контекстный: черновик удаляет, запланированную
-                 отменяет, с подтверждением). -->
+            <!-- Pencil → edit, trash → delete/cancel (Q1=A,
+                 openDestructive is contextual: a draft deletes, a scheduled
+                 practice cancels, both with confirmation). -->
             <VMenuItem
               :icon="IconPen"
               :ariaLabel="t('ui.edit')"
@@ -136,7 +139,8 @@
           </VButton>
         </div>
 
-        <!-- Записалось / Мест (карточка «Цена» убрана — operator 2026-06-18) -->
+        <!-- Enrolled / capacity stat cards (i18n:masterScreens.masterPracticeDetail.stats.enrolled /
+             .stats.capacity; the price card was removed — operator 2026-06-18) -->
         <div class="practice-detail__stats">
           <VStatCard
             :value="enrolledStat"
@@ -148,7 +152,8 @@
           />
         </div>
 
-        <!-- Записались (roster; первые 5 + раскрытие — operator 2026-06-18) -->
+        <!-- Booked roster (i18n:masterScreens.masterPracticeDetail.bookedCount;
+             first 5 + expander — operator 2026-06-18) -->
         <section v-if="rosterItems.length > 0" class="practice-detail__section">
           <h2 class="velo-section-title">
             {{ t('masterScreens.masterPracticeDetail.bookedCount') }}
@@ -176,8 +181,10 @@
           />
         </section>
 
-        <!-- Описание / Противопоказания / Что подготовить — отдельные карточки
-             (separate cards, bold headers, big chevron — PROMPT №158). -->
+        <!-- Description / contraindications / what to bring — separate cards
+             (i18n:masterScreens.masterPracticeDetail.sections.description /
+             .contraindications / .whatToBring; bold headers, big chevron —
+             PROMPT №158). -->
         <section
           v-if="practice.description || practice.contraindications || practice.what_to_prepare"
           class="practice-detail__section"
@@ -256,8 +263,9 @@
           </div>
         </section>
 
-        <!-- Нижние кнопки убраны (operator 2026-06-18): запуск — авто по
-             расписанию (Зод), check-in живёт на дашборде ≤24ч. -->
+        <!-- Bottom buttons removed (operator 2026-06-18): going live is
+             automatic by schedule (Zod), check-in lives on the dashboard
+             within 24h of the start. -->
       </div>
 
       <!-- ===================== PAST detail (read-only) ===================== -->
@@ -290,7 +298,8 @@
           />
         </div>
 
-        <!-- Отзывы участников (E1 named reviews — getPracticeReviews) -->
+        <!-- Participant reviews (i18n:masterScreens.masterPracticeDetail.sections.reviews;
+             E1 named reviews — getPracticeReviews) -->
         <section class="practice-detail__section">
           <h2 class="velo-section-title">
             {{ t('masterScreens.masterPracticeDetail.sections.reviews') }}
@@ -308,7 +317,9 @@
               </div>
               <div v-if="r.comment" class="practice-detail__review-quote">«{{ r.comment }}»</div>
             </div>
-            <!-- Первые 10 + раскрытие «посмотреть еще» (operator PROMPT №160). -->
+            <!-- First 10 + the show-more expander
+                 (i18n:masterScreens.masterPracticeDetail.common.showMoreLower,
+                 operator PROMPT №160). -->
             <VShowMore
               v-if="!reviewsExpanded && hiddenReviewsCount > 0"
               :label="t('masterScreens.masterPracticeDetail.common.showMoreLower')"
@@ -447,8 +458,11 @@ const durationLabel = computed((): string =>
 )
 
 // -- Upcoming hero extras --
-// Recurrence chip (Q2=Б): mirrors MasterPracticesView — «Пн, Ср, Пт» / «Ежедневно»
-// for a series, «Регулярная» when the day list is empty; null hides the chip.
+// Recurrence chip (Q2=B): mirrors MasterPracticesView — the weekday list
+// (via `recurrenceDaysLabel(practice.recurrence_days)`, e.g. "Mon, Wed, Fri")
+// or "Daily" (i18n:display.recurrenceDaily) for a series, "Regular"
+// (i18n:masterScreens.masterPracticeDetail.regular) when the day list is
+// empty; null hides the chip.
 const recurrenceLabel = computed((): string | null => {
   if (practice.value?.practice_type !== 'series') return null
   return (
@@ -480,7 +494,7 @@ async function onCopySharedLink(): Promise<void> {
 }
 
 // Accordion open state (local per-screen cards, was VAccordion — PROMPT №158).
-// All three open by default (operator PD-C1: Противопоказания also expanded).
+// All three open by default (operator PD-C1: contraindications also expanded).
 const descOpen = ref(true)
 const contraOpen = ref(true)
 const prepOpen = ref(true)
@@ -503,7 +517,9 @@ const capacityStat = computed((): string | number => {
   return cap != null ? cap : '∞'
 })
 
-// -- Roster (Записались): первые 5, остальные — по «+ ещё N участников» --
+// -- Roster (i18n:masterScreens.masterPracticeDetail.bookedCount): first 5,
+//    the rest behind the "+ N more participants" expander
+//    (i18n:masterScreens.masterPracticeDetail.moreParticipants) --
 const ROSTER_PREVIEW = 5
 const rosterItems = computed((): AttendanceItemResponse[] => attendance.value?.items ?? [])
 const rosterExpanded = ref(false)
@@ -548,7 +564,9 @@ const noShowValue = computed((): string | number =>
   attendance.value ? attendance.value.no_show : '—',
 )
 
-// -- Past: Отзывы участников (E1 named reviews — getPracticeReviews, paginated) --
+// -- Past: participant reviews
+//    (i18n:masterScreens.masterPracticeDetail.sections.reviews; E1 named
+//    reviews — getPracticeReviews, paginated) --
 const REVIEWS_PAGE = 20
 const REVIEWS_PREVIEW = 10
 const reviews = ref<ReviewItem[]>([])
@@ -556,7 +574,9 @@ const reviewsTotal = ref(0)
 const reviewsLoading = ref(false)
 const hasMoreReviews = computed((): boolean => reviews.value.length < reviewsTotal.value)
 
-// Первые 10 + раскрытие «посмотреть еще» (operator PROMPT №160).
+// First 10 + the show-more expander
+// (i18n:masterScreens.masterPracticeDetail.common.showMoreLower,
+// operator PROMPT №160).
 const reviewsExpanded = ref(false)
 const visibleReviews = computed((): ReviewItem[] =>
   reviewsExpanded.value ? reviews.value : reviews.value.slice(0, REVIEWS_PREVIEW),
@@ -588,7 +608,8 @@ async function loadMoreReviews(): Promise<void> {
     reviews.value = [...reviews.value, ...res.items]
     reviewsTotal.value = res.total
   } catch {
-    // Keep the loaded page; the «Показать ещё» button stays for a retry.
+    // Keep the loaded page; the show-more button (i18n:common.showMore)
+    // stays for a retry.
   } finally {
     reviewsLoading.value = false
   }
@@ -605,7 +626,7 @@ function goEdit(): void {
   void router.push({ name: 'master-practice-edit', params: { id: practiceId } })
 }
 
-// -- «…» destructive: cancel (scheduled/live) or delete (draft) --
+// -- "…" destructive: cancel (scheduled/live) or delete (draft) --
 const showCancel = ref(false)
 const showDelete = ref(false)
 const cancelling = ref(false)
@@ -760,7 +781,7 @@ onMounted(load)
   gap: var(--space-3);
 }
 
-/* Описание / Противопоказания / Что подготовить — отдельные карточки
+/* Description / contraindications / what to bring — separate cards
    (bold header + big chevron, screen-local; PROMPT №158). */
 .pd-acc {
   background: var(--velo-bg-card-solid);
@@ -804,7 +825,7 @@ onMounted(load)
   line-height: 1.5;
 }
 
-/* ===== Записались rows (upcoming roster) ===== */
+/* ===== Booked roster rows (upcoming) ===== */
 .pd-prow {
   display: flex;
   align-items: center;

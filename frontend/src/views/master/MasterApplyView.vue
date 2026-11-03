@@ -5,17 +5,21 @@
   route (no MasterShell, no tab bar) — accessible to role='user'.
 
   Steps:
-    1. Профиль   -- display_name (required), email, phone + privacy consent
-    2. Опыт      -- methods (VChip pills + «Свой вариант»), experience_years
-                    (VSelect), bio (kept), language (Русский/English -- sent
+    1. Profile   -- display_name (required), email, phone + privacy consent
+    2. Experience -- methods (VChip pills + the custom option
+                    (i18n:methodPicker.custom)), experience_years
+                    (VSelect), bio (kept), language (Russian/English -- sent
                     as experience.languages, E16)
-    3. Документы -- passport / certificates / profile-photo upload zones
-                    (honest stub → Zod E13: tap shows «недоступно», no file POST)
+    3. Documents -- passport / certificates / profile-photo upload zones
+                    (honest stub → Zod E13: tap shows the unavailable toast
+                    (i18n:masterScreens.masterApply.upload.unavailable),
+                    no file POST)
                     + privacy paragraph + processing consent
 
   FORKS (operator-locked): NO password fields (Telegram initData auth, F1) ·
-  bio retained (F2) · language sent (F3, E16) · full method list incl. «Кундалини
-  йога» (F6). Step indicator = the canonical VPaginationDots (top-left).
+  bio retained (F2) · language sent (F3, E16) · full method list incl.
+  kundalini yoga (i18n:practice.styles.kundalini, F6). Step indicator = the
+  canonical VPaginationDots (top-left).
 
   All collected data is sent as one POST /api/v1/masters/apply on step-3 submit
   (uploaded files are NOT in the request yet -- documents: [], Zod E13). On
@@ -26,7 +30,8 @@
 
 <template>
   <div class="apply-view">
-    <!-- Non-scrolling top block: «Заявка» header + step dots float ABOVE the
+    <!-- Non-scrolling top block: the application header
+         (i18n:masterScreens.masterApply.title) + step dots float ABOVE the
          fogged feed, so scrolling body text can never ride up over them (J2g). -->
     <div class="apply-view__top">
       <VHeader :title="t('masterScreens.masterApply.title')" show-back @back="onBack" />
@@ -39,7 +44,7 @@
          app-global now (useKeyboardDismiss, B1). -->
     <div ref="contentEl" class="apply-view__content velo-kbd-scroll">
       <!-- ================================================================
-           STEP 1: Профиль
+           STEP 1: PROFILE
            ================================================================ -->
       <template v-if="step === 1">
         <h3 class="apply-view__step-title">
@@ -73,17 +78,20 @@
       </template>
 
       <!-- ================================================================
-           STEP 2: Опыт
+           STEP 2: EXPERIENCE
            ================================================================ -->
       <template v-else-if="step === 2">
         <h3 class="apply-view__step-title">
           {{ t('masterScreens.masterApply.step2.title') }}<span class="apply-view__req">*</span>
         </h3>
 
-        <!-- Направления практик — TWO-LEVEL taxonomy, extracted into the shared
+        <!-- Practice directions
+             (i18n:masterScreens.masterApply.fields.directions) — TWO-LEVEL
+             taxonomy, extracted into the shared
              MethodTaxonomyPicker (batch L, single source of truth). The outer
              label + validation error stay here; the picker owns the direction
-             chips, the per-direction style cards and «Свой вариант». v-model is
+             chips, the per-direction style cards and the custom option
+             (i18n:methodPicker.custom). v-model is
              the flat `methods: string[]` payload (unchanged schema). -->
         <div class="apply-view__field">
           <label class="apply-view__label">{{
@@ -108,7 +116,9 @@
           :error="errors.bio"
         />
 
-        <!-- Язык проведения практик (E16): sent with the application as
+        <!-- Practice language
+             (i18n:masterScreens.masterApply.fields.language) (E16): sent with
+             the application as
              experience.languages (selectedLanguages). -->
         <div class="apply-view__field">
           <label class="apply-view__label">{{
@@ -126,7 +136,7 @@
       </template>
 
       <!-- ================================================================
-           STEP 3: Документы (upload = honest stub, Zod E13)
+           STEP 3: DOCUMENTS (upload = honest stub, Zod E13)
            ================================================================ -->
       <template v-else>
         <h3 class="apply-view__step-title">
@@ -139,8 +149,9 @@
         <!-- Documents are OPTIONAL right now: file upload/storage is not built
              yet (E13 / S3 — SELF-later, see the onUpload stub + submit()). The
              applicant MUST be able to proceed without uploading, otherwise the
-             required-looking passport «*» + a disabled upload traps them and
-             nobody can become a master. «Пропустить» below submits with an
+             required-looking passport "*" + a disabled upload traps them and
+             nobody can become a master. The skip button (i18n:common.skip)
+             below submits with an
              empty documents list (the backend already accepts that). -->
         <VCard class="apply-view__skip-note" padding="none">
           {{ t('masterScreens.masterApply.step3.docsUnavailable') }}
@@ -308,9 +319,10 @@ const form = reactive({
 })
 
 // -- Method selection (batch L) ----------------------------------------------
-// The two-level направление→вид taxonomy now lives in MethodTaxonomyPicker; this
+// The two-level direction→style taxonomy now lives in MethodTaxonomyPicker; this
 // view only holds the flat `methods: string[]` payload it emits (v-model). The
-// picker owns seeding/flattening, «Свой вариант» and its own focus-scroll.
+// picker owns seeding/flattening, the custom option (i18n:methodPicker.custom)
+// and its own focus-scroll.
 const methods = ref<string[]>([])
 
 // Experience years stored as string value label, mapped to int on submit
@@ -322,7 +334,7 @@ const langRu = ref(true)
 const langEn = ref(false)
 const selectedLanguages = computed((): string[] => {
   const langs: string[] = []
-  if (langRu.value) langs.push(LANGUAGES[0]) // Русский
+  if (langRu.value) langs.push(LANGUAGES[0]) // the Russian endonym
   if (langEn.value) langs.push(LANGUAGES[1]) // English
   return langs
 })
@@ -432,9 +444,12 @@ function goToStep3(): void {
 // FP-04: double-submit guard must come before validation — parallel clicks both
 // pass the consent check before the guard fires.
 //
-// `skipDocuments` (the «Пропустить» button): the applicant proceeds WITHOUT
+// `skipDocuments` (the skip button, i18n:common.skip): the applicant proceeds
+// WITHOUT
 // documents. File upload/storage is not built yet (E13 / S3 — SELF-later; the
-// onUpload() stub only toasts «недоступно»), so requiring a document — or the
+// onUpload() stub only toasts the unavailable notice
+// (i18n:masterScreens.masterApply.upload.unavailable)), so requiring a
+// document — or the
 // consent-to-process-documents checkbox — would trap every applicant. The
 // backend already accepts an empty documents list, so skip is a pure
 // client-side path: it bypasses the docs-consent gate. Steps 1-2
@@ -539,7 +554,8 @@ async function submit(skipDocuments = false): Promise<void> {
   /* Top fog-mask: content dissolves at the header edge on scroll (reuses the
      dashboard/diary island gradient — not a new mechanism). The fade sits inside
      the top padding, so at rest the first block is fully crisp (layout
-     unchanged). Bottom stays crisp — the «Далее/Отправить» actions must not fade. */
+     unchanged). Bottom stays crisp — the next/submit actions
+     (i18n:masterScreens.masterApply.next / i18n:common.submitSend) must not fade. */
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0,
@@ -609,7 +625,10 @@ async function submit(skipDocuments = false): Promise<void> {
 .apply-view__hint {
   font-size: var(--velo-fs-14);
   /* MA2 (operator 2026-07-12): brightened to match .apply-view__intro so the
-     Step-3 upload captions (Паспорт/Сертификаты/Фото профиля) read at the same
+     Step-3 upload captions (passport / certificates / profile photo:
+     i18n:masterScreens.masterApply.fields.passport,
+     i18n:masterScreens.masterApply.fields.certificates,
+     i18n:masterScreens.masterApply.fields.photo) read at the same
      legibility as the top privacy paragraph, not the fainter muted tone. */
   color: var(--velo-text-secondary);
   line-height: 1.4;
@@ -631,7 +650,7 @@ async function submit(skipDocuments = false): Promise<void> {
   padding: var(--space-3);
 }
 
-/* -- Upload zones (stub) — each wrapped in a white VCard подложка (J3b) -- */
+/* -- Upload zones (stub) — each wrapped in a white VCard backing plate (J3b) -- */
 .apply-view__upload-card {
   /* The white plate; the bespoke dropzone button sits inside it. */
   padding: var(--space-2);
@@ -705,7 +724,8 @@ async function submit(skipDocuments = false): Promise<void> {
   line-height: 1.4;
 }
 
-/* «Пропустить» — secondary path directly under «Отправить». */
+/* Skip (i18n:common.skip) — secondary path directly under submit
+   (i18n:common.submitSend). */
 .apply-view__skip {
   margin-top: var(--space-2);
 }

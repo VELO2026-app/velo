@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- IconDecor2 (Diary axis link «Декор 2»)
+  VELO Frontend -- IconDecor2 (Diary axis link "Decor 2")
 
   Source: icon-spec Group 3358.svg. Two vertical beaded connectors used on the
   diary thread. `part` selects which to render:

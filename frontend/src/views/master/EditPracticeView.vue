@@ -18,13 +18,16 @@
   that silently breaks attendance.
 
   State machine action buttons (below form):
-    draft      -> "Опубликовать"  PATCH status=scheduled
-                  "Удалить"       DELETE  (soft-delete, draft only)
-    scheduled  -> "Отменить"      POST /cancel (+ confirm dialog)
-    live       -> "Отменить"      POST /cancel   (+ confirm dialog)
+    draft      -> publish (i18n:masterScreens.editPractice.actions.publish)
+                  -- PATCH status=scheduled
+                  delete draft (i18n:masterScreens.editPractice.actions.deleteDraft)
+                  -- DELETE (soft-delete, draft only)
+    scheduled  -> cancel (i18n:masterScreens.editPractice.actions.cancelPractice)
+                  -- POST /cancel (+ confirm dialog)
+    live       -> cancel (same key) -- POST /cancel (+ confirm dialog)
                   (no manual scheduled->live nor live->finalize here: going live
                    and completion are auto-by-schedule/duration, pending backend.
-                   The «Начать эфир» button was removed — operator 2026-06-24.)
+                   The Go-live button was removed — operator 2026-06-24.)
     completed / cancelled / deleted -> readonly info banner
 
   After any successful mutation:
@@ -41,7 +44,7 @@
          populateForm uses centsToEurString() -- no float precision issues.
     W-8: date input has :min="todayDate" to prevent setting past dates
     W-9: commission calc uses COMMISSION_RATE from @/utils/commission
-    A4 V3 (PROMPT №571): Направление/Вид options filtered to the master's own
+    A4 V3 (PROMPT №571): direction/style options filtered to the master's own
         CONFIRMED methods (mirrors CreatePracticeView), and the taxonomy
         rejection codes (direction_not_confirmed/style_not_confirmed) get the
         same Russian toast translation as CreatePracticeView's submit() catch.
@@ -91,20 +94,21 @@
              FORM (editable for draft / scheduled only)
              ================================================================ -->
         <fieldset :disabled="isTerminal || saving" class="edit-practice__fieldset">
-          <!-- Реш. В (2026-06-12): поля по SVG Edit (label-above, белая плашка),
-               БЕЗ секций-заголовков. Уровень/таймзона/цена по-прежнему опущены —
-               они задаются на создании и блокируются после (хранятся в form,
-               уходят на submit неизменными, данные не теряем). Направление/вид
-               ДОБАВЛЕНЫ (operator, T2, 2026-07-15 — override навигатора: не
-               отдельным батчем позже, а прямо в этом). Дата и Zoom возвращены
-               по логике (см. комментарии ниже). -->
+          <!-- Decision V (2026-06-12): fields per the Edit SVG (label-above,
+               white plate), WITHOUT section headings. Difficulty/timezone/price
+               stay omitted — they are set at creation and locked afterwards
+               (parked in form, shipped unchanged on submit, no data lost).
+               Direction/style were ADDED (operator, T2, 2026-07-15 — an
+               override of the navigator's plan: not in a separate later
+               batch, but right in this one). Date and Zoom were returned
+               by logic (see the comments below). -->
           <VInput
             v-model="form.title"
             :label="t('masterScreens.editPractice.fields.name')"
             :error="errors.title"
           />
 
-          <!-- Направление — options catalog-first (T2 stage 2), см. CreatePracticeView. -->
+          <!-- Direction — options catalog-first (T2 stage 2), see CreatePracticeView. -->
           <VSelect
             v-model="form.direction"
             :label="t('masterScreens.editPractice.fields.direction')"
@@ -113,8 +117,8 @@
             @update:modelValue="onDirectionChange"
           />
 
-          <!-- Вид практики — показываем только если у направления есть виды
-               (Q4=А, mirrors CreatePracticeView: без явного «Без вида»). -->
+          <!-- Practice style — shown only when the direction has styles
+               (Q4=A, mirrors CreatePracticeView: no explicit "no style" option). -->
           <div v-if="styleOptionsForForm.length > 0">
             <VSelect
               v-model="form.style"
@@ -123,8 +127,9 @@
             />
           </div>
 
-          <!-- Дата — DS-пикер (реш. В: возвращена по логике — перенос практики
-               норм. операция; нативный type=date заменён на брендовый пикер). -->
+          <!-- Date — DS picker (decision V: returned by logic — rescheduling a
+               practice is a normal operation; the native type=date was
+               replaced with the branded picker). -->
           <div class="edit-practice__field">
             <label class="edit-practice__field-label">{{
               t('masterScreens.editPractice.fields.date')
@@ -139,7 +144,7 @@
             </button>
           </div>
 
-          <!-- Время — DS-пикер (24ч, шаг 5 мин). -->
+          <!-- Time — DS picker (24h, 5-minute step). -->
           <div class="edit-practice__field">
             <label class="edit-practice__field-label">{{
               t('masterScreens.editPractice.fields.time')
@@ -168,11 +173,11 @@
           />
 
           <!-- ================================================================
-               Для кого практика (P5 port, PROMPT №606; FE-24: the shared
+               Audience (P5 port, PROMPT №606; FE-24: the shared
                PracticeAudiencePicker, the same component Create uses --
                the local copy of the chips block is gone). Edit's FLAT
                layout keeps its own field label (no velo-section-title
-               sections here, Реш. В above).
+               sections here, decision V above).
                ================================================================ -->
           <div class="edit-practice__field edit-practice__audience">
             <label class="edit-practice__field-label">{{
@@ -251,10 +256,11 @@
 
         <!-- ================================================================
              STATE MACHINE ACTIONS
-             Q2=А (2026-06-12): лайфсайкл-переходы СОХРАНЕНЫ ВРЕМЕННО (в SVG Edit
-             их нет) — пока хаб Practice-detail (WI-B) их не заберёт. Выкинуть
-             сейчас = оставить мастера без публикации/завершения вовсе (в макете
-             хаба их тоже нет). При сборке WI-B этот блок мигрирует туда.
+             Q2=A (2026-06-12): the lifecycle transitions are KEPT TEMPORARILY
+             (the Edit SVG has none) — until the Practice-detail hub (WI-B)
+             takes them over. Dropping them now = leaving the master with no
+             publish/complete action at all (the hub mockup has none either).
+             When WI-B is built, this block migrates there.
              W-3: all buttons :disabled="anyLoading" -- prevents concurrent
              save + publish / save + cancel / save + delete etc.
              ================================================================ -->
@@ -271,16 +277,18 @@
             {{ t('masterScreens.editPractice.actions.publish') }}
           </VButton>
 
-          <!-- «Начать эфир» (scheduled->live) removed (operator 2026-06-24): it
+          <!-- The Go-live button (scheduled->live) was removed (operator
+               2026-06-24): it
                surfaced only because Create now auto-publishes to `scheduled`, and
                it must not live on the edit screen. Going live is auto-by-schedule
                (Zod) / lives on the practice hub, not here. -->
 
-          <!-- «Завершить практику» + «Посещаемость» removed (operator 2026-06-17):
+          <!-- The "Complete practice" and "Attendance" buttons were removed
+               (operator 2026-06-17):
                finalize is non-obvious behind the edit form; a practice is meant to
                complete automatically by its duration (unless cancelled) once the
                backend implements it — see the Zod note. Attendance/check-ins stay
-               reachable from the dashboard «Check-ins» and the practice screen. -->
+               reachable from the dashboard Check-ins header and the practice screen. -->
 
           <!-- draft -> deleted -->
           <VButton
@@ -420,7 +428,7 @@ const transitioning = ref(false)
 const cancelling = ref(false)
 const deleting = ref(false)
 
-// Date/time picker sheets + branded cancel modal (Q1=В / Q3=А, 2026-06-12).
+// Date/time picker sheets + branded cancel modal (Q1=V / Q3=A, 2026-06-12).
 const showDate = ref(false)
 const showTime = ref(false)
 const cancelModalOpen = ref(false)
@@ -453,7 +461,8 @@ const confirmDialog = reactive({
 // (not UTC) so it doesn't drift a day near midnight for east/west-of-UTC users.
 const todayDate = computed(() => todayLocalISO())
 
-// Friendly date for the picker trigger, e.g. «25 янв. 2026» (mirrors Create).
+// Friendly date for the picker trigger, e.g. "25 Jan 2026" in the ru short
+// form (mirrors Create).
 const dateDisplay = computed((): string =>
   form.date ? `${formatShortDate(`${form.date}T12:00:00`)} ${form.date.slice(0, 4)}` : '',
 )
@@ -491,9 +500,9 @@ const form = reactive({
   audience_group_ids: [] as string[],
 })
 
-// P5 port (PROMPT №606): this master's own custom groups, for «Конкретные
-// группы»'s multi-select -- loaded in onMounted below, same recipe as
-// CreatePracticeView.
+// P5 port (PROMPT №606): this master's own custom groups, for the
+// specific-groups (i18n:practice.audience.groups) multi-select -- loaded in
+// onMounted below, same recipe as CreatePracticeView.
 const customGroups = ref<GroupListItem[]>([])
 
 // BE-74 + FE-92: a school practice's KIND is editable, but only within the
@@ -642,12 +651,13 @@ onMounted(async () => {
     catalog.value = c
   })
 
-  // P5 port (PROMPT №606): this master's own custom groups, for «Конкретные
-  // группы»'s multi-select -- same fire-and-forget-before-the-cached-check
+  // P5 port (PROMPT №606): this master's own custom groups, for the
+  // specific-groups (i18n:practice.audience.groups) multi-select -- same
+  // fire-and-forget-before-the-cached-check
   // placement as the taxonomy fetch above, so it runs on both branches.
-  // «Удалённые» is a system slug (never a real MasterGroup row) and
-  // «Ученики» isn't a target-able group either -- getGroups() already
-  // returns both alongside custom ones, so filter here (mirrors
+  // The deleted bucket is a system slug (never a real MasterGroup row) and
+  // the default students group is not target-able either -- getGroups()
+  // already returns both alongside custom ones, so filter here (mirrors
   // CreatePracticeView). Re-resolves the name->id selection afterward in
   // case populateForm() already ran against an empty customGroups list.
   void getGroups().then((res) => {
@@ -755,11 +765,12 @@ async function save(): Promise<void> {
       // Owner-picked wording (PROMPT №614, wording B): three facts -- how
       // many, why, and that the booking survives (the fact that stops the
       // master over-panicking). The NOUN's forms come from the CLDR pipe
-      // key plural.bookedNoun («записавшийся | записавшихся») -- a
-      // substantivized participle whose 2-4 and 5+ forms are IDENTICAL, so
-      // the 3-way split collapses to a binary one there. That same
+      // key plural.bookedNoun (a Russian substantivized participle whose
+      // 2-4 and 5+ forms are IDENTICAL, so
+      // the 3-way split collapses to a binary one there). That same
       // one-vs-rest split also governs the sentence's verb/pronoun
-      // agreement (попадёт/попадут, он/они), which no noun triple covers --
+      // agreement in Russian (the singular vs plural verb and pronoun
+      // forms), which no noun triple covers --
       // so the SENTENCE branches on count === 1 directly (strandedHeadOne /
       // strandedHeadMany) rather than threading variants through a helper.
       const n = preview.stranded_count
@@ -987,7 +998,7 @@ async function remove(): Promise<void> {
   margin-bottom: var(--space-2);
 }
 
-/* -- Для кого практика (P5 port, PROMPT №606): same token recipe as
+/* -- Audience (P5 port, PROMPT №606): same token recipe as
    CreatePracticeView's .create-practice__audience-chips/__empty (itself
    AddToGroupSheet's .add-to-group__chips/__empty recipe). -- */
 .edit-practice__audience-chips {
@@ -1032,8 +1043,9 @@ async function remove(): Promise<void> {
   color: var(--velo-text-muted);
 }
 
-/* -- Actions section (no «Действия» label/divider — just the buttons; operator
-   EP-B2). The --space-5 content gap separates them from «Сохранить» above. -- */
+/* -- Actions section (no "Actions" label/divider — just the buttons; operator
+   EP-B2). The --space-5 content gap separates them from Save (i18n:ui.save)
+   above. -- */
 .edit-practice__actions {
   display: flex;
   flex-direction: column;

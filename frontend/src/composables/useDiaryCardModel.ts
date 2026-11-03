@@ -39,7 +39,7 @@ const BANNER_KINDS: DiaryEventKind[] = [
 export interface DiaryCardModel {
   kind: ComputedRef<DiaryEventKind>
   form: ComputedRef<'banner' | 'practice' | 'standard'>
-  /** Bare kind label ("Check-in" / "Feedback" / "Заметка"...). */
+  /** Bare kind label, resolved via `display.feedKind.*` ("Check-in", "Feedback", ...). */
   baseTitle: ComputedRef<string>
   /** Display title with mood/rating suffix for check-in/feedback. */
   title: ComputedRef<string>

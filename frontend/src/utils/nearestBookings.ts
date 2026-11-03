@@ -2,8 +2,9 @@
 // VELO Frontend -- nearest-bookings selection (user dashboard, TASK-2)
 // =============================================================================
 //
-// Pure, timezone-independent selection for the dashboard «Ближайшие практики»
-// section. Extracted from UserDashboardView so it can be unit-tested directly.
+// Pure, timezone-independent selection for the dashboard nearest-practices
+// section (i18n:user.screens.userDashboard.sections.upcoming). Extracted from
+// UserDashboardView so it can be unit-tested directly.
 // =============================================================================
 
 import type { BookingWithPracticeResponse } from '@/api/types'
@@ -39,7 +40,7 @@ export function selectActionableBookings(
 }
 
 /**
- * Live-aware nearest-bookings selection (operator Г).
+ * Live-aware nearest-bookings selection (operator G).
  *
  * Candidate rule (unchanged, shared with selectActionableBookings): a booking
  * is a candidate while its practice has NOT ended yet (now < start +

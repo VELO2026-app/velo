@@ -1,8 +1,9 @@
 /*
   VELO Frontend -- schoolBranding/geometry (tz-curator.md §5.3)
 
-  Чистая геометрия лепестков/лент: точки и SVG-пути. Порт прототипа --
-  округления .toFixed(2) не трогать (golden-тесты сверяются с эталоном).
+  Pure geometry of petals/ribbons: points and SVG paths. Port of the
+  prototype -- do not touch the .toFixed(2) rounding (golden tests compare
+  against the reference).
 */
 
 export const TAU = Math.PI * 2
@@ -13,7 +14,7 @@ export interface PathPoint {
   w: number
 }
 
-/** Спираль для усиков/прядей: точки с сужающейся шириной. */
+/** A spiral for tendrils/strands: points with tapering width. */
 export function spiralPts(
   cx: number,
   cy: number,
@@ -41,7 +42,7 @@ export function spiralPts(
   return pts
 }
 
-/** Контур ленты с переменной шириной: две кромки, сведённые в замкнутый путь. */
+/** A variable-width ribbon outline: two edges joined into a closed path. */
 export function taperedPath(pts: PathPoint[]): string {
   const L: string[] = []
   const R: string[] = []
@@ -63,7 +64,7 @@ export function taperedPath(pts: PathPoint[]): string {
   return 'M ' + L.join(' L ') + ' L ' + Rr(R).join(' L ') + ' Z'
 }
 
-// Обратная кромка (в прототипе -- Rr.reverse()); вынесена, чтобы не мутировать.
+// The reversed edge (Rr.reverse() in the prototype); extracted to avoid mutation.
 function Rr(points: string[]): string[] {
   return [...points].reverse()
 }
@@ -72,7 +73,7 @@ export function poly(pts: Array<[number, number]>): string {
   return 'M ' + pts.map((p) => p[0].toFixed(2) + ' ' + p[1].toFixed(2)).join(' L ') + ' Z'
 }
 
-/** Лепесток: bulge 0.5 -- округлый, 0.66 -- капля. */
+/** A petal: bulge 0.5 -- rounded, 0.66 -- a teardrop. */
 export function petal(angle: number, r0: number, r1: number, w: number, bulge = 0.5): string {
   const ux = Math.cos(angle)
   const uy = Math.sin(angle)
@@ -102,7 +103,7 @@ export function diamond(angle: number, r: number, halfW: number, halfH: number):
   ])
 }
 
-/** Кружевная дуга: n выпуклых арок по кругу (штриховой путь). */
+/** A lace arc: n convex scallops around the circle (a stroked path). */
 export function scallop(r0: number, r1: number, n: number, rot: number): string {
   let d = ''
   for (let i = 0; i < n; i++) {
@@ -116,7 +117,8 @@ export function scallop(r0: number, r1: number, n: number, rot: number): string 
   return d
 }
 
-/** Смещение точек вдоль нормали -- для акварельных проходов с неровным краем. */
+/** Offset points along the normal -- for watercolor passes with an uneven
+ *  edge. */
 export function offsetPts(pts: PathPoint[], k: number): PathPoint[] {
   return pts.map((p, i) => {
     const q = pts[Math.min(i + 1, pts.length - 1)]!

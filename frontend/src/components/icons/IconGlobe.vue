@@ -1,5 +1,5 @@
 <template>
-  <!-- Globe glyph for "Язык/Часовой пояс" (Profile, Figma node 4715:3477).
+  <!-- Globe glyph for the language/time-zone row (Profile, Figma node 4715:3477).
        Fill via currentColor. -->
   <svg
     xmlns="http://www.w3.org/2000/svg"

@@ -2,21 +2,25 @@
   VELO Frontend -- MasterStudentProfileView (Master DS, 2026-06-11; block +
   report flow P3, PROMPT №592)
 
-  "Профиль ученика" — one student's card: hero, GROUP CHIPS, stats, recent
-  check-ins, feedbacks, "Написать сообщение", and (P3) a destructive
-  «Заблокировать пользователя» at the bottom. Rendered inside MasterShell.
+  The student profile screen (i18n:masterScreens.masterStudentProfile.title) —
+  one student's card: hero, GROUP CHIPS, stats, recent check-ins, feedbacks,
+  the write-message action (i18n:common.writeMessage), and (P3) a destructive
+  block CTA (i18n:masterScreens.masterStudentProfile.blockAction) at the
+  bottom. Rendered inside MasterShell.
 
   LIVE (E5): getStudent(id) → GET /api/v1/masters/me/students/{id} →
   StudentDetailResponse { name, avatar_url, practices_count, hours,
   satisfaction_pct, recent_checkins[], feedbacks[], blocked }. Reuses the real
-  MoodAvatar (diary mood faces) for check-ins. The "Написать сообщение"
-  action posts into the eternal DM with THIS student (SendMessageModal --
+  MoodAvatar (diary mood faces) for check-ins. The write-message action
+  (i18n:common.writeMessage)
+  posts into the eternal DM with THIS student (SendMessageModal --
   REAL since the T3 chat backend: POST /chats/students).
 
   P3 additions:
     - Group chips (VTag): GET /masters/me/students/{id}/groups (this
       master's CUSTOM groups the student is in). Empty -> no chips row.
-    - «Заблокировать пользователя» (VButton danger) -> block confirm
+    - The block CTA (i18n:masterScreens.masterStudentProfile.blockAction,
+      VButton danger) -> block confirm
       (VConfirmDialog, destructive) -> POST .../block (P1) -> toast -> THEN
       the report-offer (VConfirmDialog) -> optionally ReportUserSheet
       (POST /api/v1/reports, the EXISTING backend table -- recon #589).
@@ -29,8 +33,10 @@
   instead of a clicked row. Hidden entirely while blocked (T24-20) -- same
   reasoning the row itself already used for a blocked member ("everything
   else is meaningless for a blocked student"), just relocated. The bottom
-  action (T24-20) reads "Разблокировать пользователя" instead of
-  "Заблокировать пользователя" when `detail.blocked` is true, and opens the
+  action (T24-20) reads the unblock label
+  (i18n:masterScreens.masterStudentProfile.unblockConfirm) instead of the
+  block label (i18n:masterScreens.masterStudentProfile.blockAction) when
+  `detail.blocked` is true, and opens the
   unblock confirm instead of the block confirm -- otherwise byte-identical
   (still `variant="danger"`, same position).
 -->
@@ -134,7 +140,8 @@
           <VStatCard :value="hours" :label="t('masterScreens.masterStudentProfile.hoursStat')" />
         </div>
 
-        <!-- Recent check-ins (cap 3; rest behind «посмотреть еще» — PROMPT №157) -->
+        <!-- Recent check-ins (cap 3; rest behind the show-more pill
+             i18n:masterScreens.masterStudentProfile.showMore — PROMPT №157) -->
         <h2 class="velo-section-title">
           {{ t('masterScreens.masterStudentProfile.sections.recentCheckins') }}
         </h2>
@@ -154,7 +161,8 @@
           @click="ciExpanded = true"
         />
 
-        <!-- Feedbacks (cap 3; rest behind «посмотреть еще» — PROMPT №157) -->
+        <!-- Feedbacks (cap 3; rest behind the show-more pill
+             i18n:masterScreens.masterStudentProfile.showMore — PROMPT №157) -->
         <h2 class="velo-section-title">Feedbacks</h2>
         <div v-if="feedbackRows.length === 0" class="profile__empty">
           {{ t('masterScreens.masterStudentProfile.empty.reviews') }}
@@ -218,8 +226,9 @@
     </VConfirmDialog>
 
     <!-- Report-offer (optional step -- dismiss is fine). compact-actions
-         (PROMPT №609, G10) + confirm-label shortened to «В поддержку»
-         (owner Q1, PROMPT №610) -- «Сообщить в поддержку» was the label
+         (PROMPT №609, G10) + confirm-label shortened to the support CTA
+         (i18n:masterScreens.masterStudentProfile.toSupport; owner Q1,
+         PROMPT №610) -- the earlier, longer "report to support" label was
          still overflowing even at compact size; see the delivery report
          for the measured fit with the new label. -->
     <VConfirmDialog
@@ -350,7 +359,8 @@ const route = useRoute()
 const router = useRouter()
 
 // Identity comes from StudentDetailResponse (name/avatar_url, E5). The list
-// still forwards ?name= for an instant pre-fetch render; «Ученик» is only a
+// still forwards ?name= for an instant pre-fetch render; the generic student
+// label (i18n:masterScreens.masterStudentProfile.studentFallback) is only a
 // last-resort fallback (e.g. before the fetch resolves on a direct deep-link),
 // never the unconditional placeholder.
 const name = computed((): string => {
@@ -453,9 +463,10 @@ const feedbackRows = computed(() =>
   })),
 )
 
-// Show the 3 most recent of each; the rest hide behind a «посмотреть еще» pill
-// until tapped (operator, PROMPT №157). Client-side expand of the already-loaded
-// (backend-capped) set — no pagination.
+// Show the 3 most recent of each; the rest hide behind a show-more pill
+// (i18n:masterScreens.masterStudentProfile.showMore) until tapped (operator,
+// PROMPT №157). Client-side expand of the already-loaded (backend-capped)
+// set — no pagination.
 const PREVIEW_CAP = 3
 const ciExpanded = ref(false)
 const fbExpanded = ref(false)

@@ -44,8 +44,8 @@ export function useCursorPagination<T>(fetchFn: CursorFetchFn<T>, pageSize = 20)
   // stale and must not apply -- not its items, not its error, not even its
   // `loading = false` (the newer fetch owns the flag now). The diary's live
   // search fires a refresh per debounced keystroke: without this, a slow
-  // response for "см" landing after the "смс" one paints the wrong results
-  // as final. Monotonic, never reset.
+  // response for an earlier keystroke landing after a later one paints the
+  // wrong results as final. Monotonic, never reset.
   let fetchEpoch = 0
 
   // TWO errors, mirroring usePagination (№442). One shared `error` cannot say

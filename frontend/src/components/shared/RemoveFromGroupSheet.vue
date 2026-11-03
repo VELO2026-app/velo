@@ -1,17 +1,19 @@
 <!--
   VELO Frontend -- RemoveFromGroupSheet (Master GROUPS P2, PROMPT №591)
 
-  "Удалить из группы" -- CUSTOM groups only (removal from «Ученики» is
-  Block, P3; «Удалённые» is Unblock, P3 -- neither is offered here). Three
+  The remove-from-group sheet (i18n:shared.groups.removeTitle) -- CUSTOM
+  groups only (removal from the derived students group is
+  Block, P3; the Removed segment is Unblock, P3 -- neither is offered here). Three
   modes (VRadioGroup, single choice):
 
   Domain scope (owner 2026-09-30): groups are the MASTER zone's own CRM --
   a school has none. This sheet never appears in school screens; school
-  membership removal is «Исключить из школы» there.
+  membership removal is the school zone's own remove-from-school action there.
     current  -- this one group only
     selected -- expands custom-group VChips, multi-select
     all      -- every custom group; note the student falls back to
-                «Ученики» automatically (the derived group, nothing to do)
+                the derived students group automatically (the derived group,
+                nothing to do)
 
   "all" has no "list this student's groups" endpoint to call (P1 doesn't
   have one) -- it loops EVERY custom group and calls DELETE on each.
@@ -22,8 +24,9 @@
   T24-25/26/27 (PROMPT №634): smaller title (VBottomSheet's own compactTitle,
   PROMPT №609 -- already existed, just unused here) + hairline-stroke weight
   (the app-wide .velo-text-strong utility) + the student on the shared
-  TargetUserCard plinth (was a plain name paragraph) + an explicit "Отмена"
-  beside "Удалить" (VBottomSheet's cancelLabel, PROMPT №610 -- its default
+  TargetUserCard plinth (was a plain name paragraph) + an explicit cancel
+  button (i18n:ui.cancel)
+  beside the delete button (i18n:ui.delete) (VBottomSheet's cancelLabel, PROMPT №610 -- its default
   paired-row colours are ALREADY blue-cancel/coral-save, which is exactly
   Rule 2's position-based colour rule; no colour override needed here).
 

@@ -15,10 +15,11 @@
 <template>
   <div class="diary-list">
     <template v-for="group in dayGroups" :key="group.dayKey">
-      <!-- Day divider: разделяет записи разных дней (Сегодня/Вчера/«2 июня»).
-           Возвращён по просьбе оператора 2026-06-04 — в списочном виде их не
-           было (были только в thread). Стиль — простая строка с тонкими
-           линиями (без тяжёлых орнаментов thread-вида). -->
+      <!-- Day divider: separates entries of different days (i18n:common.today /
+           i18n:common.yesterday / a formatted calendar day). Brought back at
+           the operator's request 2026-06-04 — the list view had none (only
+           the thread view did). Style — a plain line with thin rules (no
+           heavy thread-style ornaments). -->
       <div class="diary-list__divider">
         <span>{{ group.label }}</span>
       </div>
@@ -70,8 +71,9 @@ interface DayGroup {
   items: DiaryFeedItem[]
 }
 
-// Chat-mode: лента приходит newest-first; рендерим хронологическую копию
-// (oldest сверху, newest снизу), группируя по дню. props.items не мутируем.
+// Chat-mode: the feed arrives newest-first; we render a chronological copy
+// (oldest on top, newest at the bottom), grouped by day. props.items is
+// never mutated.
 const dayGroups = computed<DayGroup[]>(() => {
   const groups: DayGroup[] = []
   let current: DayGroup | null = null
@@ -91,14 +93,15 @@ const dayGroups = computed<DayGroup[]>(() => {
 .diary-list {
   display: flex;
   flex-direction: column;
-  /* Figma diary-list.svg: межкарточный gap 10px. Нет точного токена (4/8/14…) —
-     берём ближайший --space-2 (8px); единый источник для отступа списка. */
+  /* Figma diary-list.svg: the inter-card gap is 10px. No exact token exists
+     (4/8/14...) — take the nearest --space-2 (8px); a single source for the
+     list spacing. */
   gap: var(--space-2);
   width: 100%;
   padding: var(--space-3) 0;
 }
 
-/* Разделитель дня: дата по центру + тонкие линии по бокам (токены DS). */
+/* Day divider: the date centered + thin rules on either side (DS tokens). */
 .diary-list__divider {
   display: flex;
   align-items: center;

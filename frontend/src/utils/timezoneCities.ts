@@ -62,7 +62,7 @@ function activeSeed(): { curated: TimezoneCity[]; aliases: TimezoneCity[] } {
 }
 
 // Famous cities that SHARE a zone with another city, so a search by their
-// own name still resolves (e.g. Рио-де-Жанейро → America/Sao_Paulo).
+// own name still resolves (e.g. Rio de Janeiro → America/Sao_Paulo).
 const CURATED: TimezoneCity[] = RU_SEED.curated ?? []
 const ALIASES: TimezoneCity[] = RU_SEED.aliases ?? []
 
@@ -84,8 +84,8 @@ function englishCity(iana: string): string {
 }
 
 /** Extra search words per stored name: every other spelling the backend
- * accepts for it ("katmandu", "kiev") and its Russian CLDR city and country
- * ("катманду", "непал"). */
+ * accepts for it ("katmandu", "kiev") plus its Russian CLDR city and
+ * country captions, lowercased into the haystack. */
 function searchWords(catalog: TimezoneRowSource | null): Map<string, string[]> {
   const words = new Map<string, string[]>()
   const add = (name: string, ...more: (string | null)[]) => {

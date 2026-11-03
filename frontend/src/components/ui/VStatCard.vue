@@ -5,10 +5,10 @@
   Used in dashboards (user stats, admin stats, master analytics).
 
   Usage:
-    <VStatCard value="156" label="участников">
+    <VStatCard value="156" label="participants">
       <template #icon><IconGroup :size="24" /></template>
     </VStatCard>
-    <VStatCard value="€1,280" label="доход" />
+    <VStatCard value="€1,280" label="income" />
 -->
 
 <template>

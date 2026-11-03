@@ -5,7 +5,8 @@
 // The numeric contract of the unified 1..10 state scale shared by Check-in
 // (mood) and Feedback (rating): five emotions, two scores each. The label set
 // lives here too, so a saved score is never named a different emotion later
-// (tz §1: "Числовой контракт и подписи живут в одном общем модуле шкалы").
+// (tz §1, translated: the numeric contract and the labels live in one shared
+// scale module).
 //
 // PURE module: no .vue imports (tz §4.3). The key -> icon binding lives in
 // utils/ratingIcons.ts (UI layer), the interaction lives in MoodSlider.vue.
@@ -42,8 +43,9 @@ export const MOOD_SCALE_MIN = 1
 export const MOOD_SCALE_MAX = 10
 
 /**
- * Both forms open here: the EXACT score 5 / «Нормально» (tz §2.4). Not a zone
- * centre -- submitting an untouched form sends 5, not the pair's click value 6.
+ * Both forms open here: the EXACT score 5 with its neutral label
+ * (i18n:mood.neutral) (tz §2.4). Not a zone centre -- submitting an untouched
+ * form sends 5, not the pair's click value 6.
  */
 export const MOOD_SCALE_DEFAULT_SCORE = 5
 
@@ -105,12 +107,12 @@ export function moodKeyFromScore(score: number): MoodScaleKey {
   return MOOD_SCALE_KEYS[moodIndexFromScore(score)]
 }
 
-/** score -> Russian label («Плохо» .. «Огонь»). One label set for both forms. */
+/** score -> the emotion label (i18n:mood.bad .. i18n:mood.fire). One label set for both forms. */
 export function moodLabelFromScore(score: number): string {
   return MOOD_SCALE_LABELS[moodKeyFromScore(score)]
 }
 
-/** Range input's aria-valuetext: «5 из 10 — Нормально» (tz §8). */
+/** Range input's aria-valuetext, composed via i18n:mood.valueText (tz §8). */
 export function moodValueText(score: number): string {
   return t('mood.valueText', {
     score: clampMoodScore(score),

@@ -12,8 +12,8 @@ import { keyboardOpen } from './useViewportGeometry'
  * from App.vue; this function does not mount anything itself.
  *
  * Used to hide the floating bottom tab bar while typing, so it does not ride
- * up and overlap a focused input (e.g. BookingConfirmedView's "запрос
- * мастеру").
+ * up and overlap a focused input (e.g. BookingConfirmedView's
+ * request-to-master textarea).
  */
 export function useKeyboardOpen() {
   return { keyboardOpen }

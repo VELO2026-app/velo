@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- Feature Registry (tz-whitelabel §4, F3; variant «а»)
+// VELO Frontend -- Feature Registry (tz-whitelabel §4, F3; variant "a")
 // =============================================================================
 //
 // The ONE source of the module namespace list. Two consumption shapes, one
@@ -10,7 +10,8 @@
 //   those literals DIRECTLY (never through this module): a literal `false`
 //   folds the gate, Rollup tree-shakes the branch together with its dynamic
 //   imports, and the disabled module's chunks are physically absent from
-//   dist/ -- the F5 grep-test «чанков выключенного модуля нет» depends on it.
+//   dist/ -- the F5 grep test ("no chunks of a disabled module in dist/")
+//   depends on it.
 //
 //   RUNTIME accessor -- featureEnabled() for consumers with no chunks to cut
 //   (tab-bar filters). It re-parses import.meta.env per call: trivially cheap,

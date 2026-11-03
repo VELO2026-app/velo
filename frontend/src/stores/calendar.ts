@@ -141,7 +141,8 @@ export const useCalendarStore = defineStore('calendar', () => {
     masterSchoolFilter.value = schoolFilter
   }
 
-  // SCHOOL scope (owner 2026-10-01): «Предстоящие практики» on the school page
+  // SCHOOL scope (owner 2026-10-01): the upcoming-practices tab copy
+  // (i18n:user.screens.schoolPage.tabs.upcoming) on the school page
   // opens the calendar scoped to ONE school's upcoming practices. The school
   // feed endpoint (GET /schools/{id}/practices) has no date params, so
   // its full upcoming list is fetched once (in loadWeek, when the feed is

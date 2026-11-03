@@ -20,7 +20,8 @@
 //       stubs (no comms types yet; explicit disposition, Master-chat
 //       2026-07-28). Owner ruling 2026-08-16 (PROMPT №746): these four stay
 //       VISIBLE, DISABLED (VSwitch's own `disabled`, click is a no-op -- not
-//       moved-then-reverted), each carrying a short "Скоро" marker. This
+//       moved-then-reverted), each carrying the short "coming soon" marker
+//       (i18n:masterScreens.masterNotifications.soon). This
 //       superseded the earlier "flips visually, lost on remount" shape;
 //       asserted below.
 //
@@ -351,11 +352,12 @@ describe('MasterNotificationsView', () => {
     })
 
     // The former "default-OFF row toggles on" case lived here and used
-    // «Ежемесячный отчет» as its example -- the one row this file's own
-    // defaults comment calls out as default-off. It is now a disabled stub
-    // (PROMPT №746) and no live row is default-off, so there is no row left
-    // to carry this scenario; its disabled-click behaviour is covered above
-    // ('a STUB row (Ежемесячный отчет) is DISABLED...').
+    // the monthly-report row (i18n:masterScreens.masterNotifications.monthlyReport)
+    // as its example -- the one row this file's own defaults comment calls
+    // out as default-off. It is now a disabled stub (PROMPT №746) and no
+    // live row is default-off, so there is no row left to carry this
+    // scenario; its disabled-click behaviour is covered above (the
+    // stub-row-disabled case).
 
     it('toggling one row does not affect a sibling row with its OWN category (msg_* are independent)', async () => {
       mount()
@@ -374,7 +376,8 @@ describe('MasterNotificationsView', () => {
     // msg.support_message -> category msg_support. The label must SAY so,
     // and flipping that label must WRITE that category: wording and wiring
     // asserted together, so neither can silently flip back to the old
-    // inverted pair («От участников»/«От поддержки») without going red.
+    // inverted pair of labels ("From participants" / "From support")
+    // without going red.
     it('P-2: the msg_support row is worded «сообщения учеников» AND writes msg_support', async () => {
       mount()
       await flush()

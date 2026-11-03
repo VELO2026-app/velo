@@ -71,7 +71,7 @@ const badgeIcon = computed(() => {
     case 'cancelled':
       return IconClose
     default:
-      return null // no_show («Не состоялась») / live / calculating → no icon
+      return null // no_show (i18n:user.screens.myBookings.status.noShow) / live / calculating → no icon
   }
 })
 
@@ -86,9 +86,9 @@ const vbadgeVariant = computed<'success' | 'warning' | 'error' | 'muted'>(() => 
     case 'cancelled':
       return 'error'
     case 'no_show':
-      return 'muted' // «Не состоялась» — low-key blue-grey, no drama
+      return 'muted' // i18n:user.screens.myBookings.status.noShow — low-key blue-grey, no drama
     case 'calculating':
-      return 'muted' // AT-2: «Подсчет» — same low-key tone, not a verdict yet
+      return 'muted' // AT-2: i18n:user.screens.myBookings.status.counting — same low-key tone, not a verdict yet
     default:
       return 'success'
   }
@@ -101,9 +101,10 @@ const formattedDate = computed(() =>
   formatShortDate(props.booking.practice.scheduled_at, viewerTz.value),
 )
 
-// Дата под иконкой — короткая (список идёт по разным дням), поэтому время суток
-// складываем в мета-ячейку рядом с длительностью: «13:00 · 45 мин» (тот же
-// приём, что на странице мастера). Иначе на карточке брони не видно времени.
+// The date under the icon is short (the list spans different days), so the
+// time of day is folded into the meta cell next to the duration
+// (`13:00 · <duration>`, the same trick as on the master's page). Otherwise
+// the booking card would show no time at all.
 const timeAndDuration = computed(() => {
   const time = formatTime(props.booking.practice.scheduled_at, viewerTz.value)
   const dur = formatDuration(props.booking.practice.duration_minutes)

@@ -2,9 +2,10 @@
   VELO Frontend -- VRatingBadges (DS, extracted 2026-06-17; five zones since BE-77)
 
   The rating-distribution badge row: one chip per zone of the shared 1..10
-  scale (Огонь .. Плохо, best first), each the zone's approved face + its
-  percentage. Used by AnalyticsView (past-practice cards), MasterPracticesView
-  (past cards) and MasterPracticeDetailView (PAST hero).
+  scale (i18n:mood.fire .. i18n:mood.bad, best first), each the zone's
+  approved face + its percentage. Used by AnalyticsView (past-practice
+  cards), MasterPracticesView (past cards) and MasterPracticeDetailView
+  (PAST hero).
 
   Five chips instead of the former three: the face carries the zone (full-
   colour artwork, no accent colour), so every chip shares one neutral plate
@@ -48,7 +49,7 @@ const props = withDefaults(
   { size: 'sm' },
 )
 
-// Best zone first, as the three-chip version read (Огонь leftmost).
+// Best zone first, as the three-chip version read (i18n:mood.fire leftmost).
 const ZONES_BEST_FIRST: readonly MoodScaleKey[] = [...MOOD_SCALE_KEYS].reverse()
 
 const iconSize = computed((): number => (props.size === 'lg' ? 16 : 14))

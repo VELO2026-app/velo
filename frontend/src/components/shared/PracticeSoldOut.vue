@@ -1,20 +1,25 @@
 <!--
-  VELO Frontend -- PracticeSoldOut (полноэкранный стейт «Места закончились»)
+  VELO Frontend -- PracticeSoldOut (the full-screen sold-out state,
+  i18n:shared.soldOut.title)
 
-  Показывается, когда места на практику кончились в гонке (пока юзер читал /
-  оформлял бронь): backend отдаёт practice_full, BookingPopup закрывается и
-  эмитит soldOut, родитель (PracticeDetailView) поднимает этот оверлей.
+  Shown when a practice's spots ran out in the race (while the user was still
+  reading the page or completing the booking): the backend returns
+  practice_full, BookingPopup closes and emits soldOut, and the parent
+  (PracticeDetailView) raises this overlay.
 
-  Построен по эталону .form-shell-success (FormShell.vue): полностью белый
-  экран без рамок, absolute поверх кадра, центр — иллюстрация / заголовок /
-  подзаголовок / primary CTA / текст-ссылка «Закрыть». Все значения — токены DS.
+  Built on the .form-shell-success canon (FormShell.vue): a fully white
+  screen with no borders, absolute over the frame; centered — illustration /
+  title / subtitle / primary CTA / the close text link (i18n:ui.close). Every
+  value is a DS token.
 
-  Иллюстрация SORRY — точный вектор из Figma (11 Check-in Success.svg):
-  круг = --velo-glass-teal-30, руки и буквы = --velo-teal-400.
+  The SORRY illustration is the exact Figma vector (11 Check-in Success.svg):
+  circle = --velo-glass-teal-30, hands and letters = --velo-teal-400.
 
   Emits:
-    find-other -- «Найти другую практику» (родитель уводит в Календарь)
-    close      -- «Закрыть» (родитель прячет оверлей, оставляя экран практики)
+    find-other -- the find-other CTA (i18n:shared.soldOut.findOther; the
+                  parent navigates to the Calendar)
+    close      -- the close link (i18n:ui.close; the parent hides the overlay,
+                  keeping the practice screen)
 -->
 
 <template>
@@ -67,7 +72,8 @@ import { t } from '@/locales'
 import { VButton } from '@/components/ui'
 import ResultScreen from '@/components/shared/ResultScreen.vue'
 
-// tz-i18n 2.2b: sold-out copy via shared.soldOut.*; the text-link «Закрыть»
+// tz-i18n 2.2b: sold-out copy via shared.soldOut.*; the close text link
+// (i18n:ui.close)
 // reuses ui.close.
 
 defineEmits<{
@@ -77,9 +83,9 @@ defineEmits<{
 </script>
 
 <style scoped>
-/* Полноэкранная белая поверхность + заголовок/подзаголовок/actions теперь в
-   общем <ResultScreen>. Здесь — только специфика sold-out: арт SORRY, glow
-   на CTA, текст-ссылка «Закрыть». */
+/* The full-screen white surface + title/subtitle/actions now live in the
+   shared <ResultScreen>. Only the sold-out specifics remain here: the SORRY
+   art, the glow on the CTA, the close text link (i18n:ui.close). */
 .sold-out__art {
   width: 183px;
   height: 183px;
@@ -94,7 +100,7 @@ defineEmits<{
   fill: var(--velo-teal-400);
 }
 
-/* CTA — primary VButton с фирменным glow по токену (Figma 11). */
+/* CTA — primary VButton with the brand glow token (Figma 11). */
 .sold-out__cta {
   box-shadow: var(--velo-shadow-glow);
 }

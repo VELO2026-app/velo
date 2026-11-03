@@ -440,8 +440,8 @@ describe('Composer -- honest failures', () => {
   })
 
   it('a transcription failure keeps the field empty and toasts the mapped message', async () => {
-    // The message used to be «Закончился баланс OpenRouter», and that
-    // assertion was right about the property that still holds: whatever the
+    // The message used to be the "OpenRouter balance has run out" sentence,
+    // and that assertion was right about the property that still holds: whatever the
     // failure, a SPECIFIC sentence reaches the person -- not a silent empty
     // field and not a raw code. What it can no longer be is that particular
     // sentence: the key moved to the server (GT-41), so the browser knows

@@ -65,7 +65,8 @@ describe('practice analytics snippets', () => {
 })
 
 // BE-78: the screen renders the SERVER's numbers -- zones arrive as
-// ScoreZone, distributions as ScoreZoneCounts, and every "X из N" divides by
+// ScoreZone, distributions as ScoreZoneCounts, and every "X of N" count
+// (shared.analytics.outOf) divides by
 // `attended`. The former client-side zone counting (countMoods over raw
 // 1..10 answers) is gone together with the raw answers.
 function summary(overrides: Partial<PracticeAnalyticsResponse> = {}): PracticeAnalyticsResponse {
@@ -113,7 +114,8 @@ describe('practice screen', () => {
         reviews: [review],
       },
     })
-    // «Чек-ины» is the «до» total (15), «Пришли» the attended (22).
+    // The check-ins meta (shared.analytics.checkins) is the "before" total (15);
+    // the attended meta (shared.analytics.attended) is 22.
     const meta = wrapper.get('.practice-analytics__meta').text()
     expect(meta).toContain('Пришли: 22')
     expect(meta).toContain('Чек-ины: 15')
@@ -128,7 +130,7 @@ describe('practice screen', () => {
     const rv = wrapper.get('.practice-analytics__review')
     expect(rv.text()).toContain('«Спасибо!»')
     expect(rv.find('time').attributes('datetime')).toBe('2026-08-14T20:00:00Z')
-    // 4 loaded of 13 -> a «Показать ещё» that asks the container for a page.
+    // 4 loaded of 13 -> a show-more pager (i18n:common.showMore) that asks the container for a page.
     await wrapper.get('.practice-analytics__pairs button').trigger('click')
     expect(wrapper.emitted('morePairs')).toHaveLength(1)
     // All reviews loaded (1 of 1) -> no reviews pager.
@@ -159,7 +161,7 @@ describe('practice screen', () => {
     expect(pill.text()).toBe('+ ещё 2 пары')
     await pill.trigger('click')
     expect(wrapper.findAll('.practice-analytics__pair')).toHaveLength(7)
-    // everything loaded is on screen: «Скрыть» alone, no server pager beside it
+    // everything loaded is on screen: the hide pill (i18n:common.hide) alone, no server pager beside it
     const buttons = wrapper.findAll('.practice-analytics__pairs button')
     expect(buttons).toHaveLength(1)
     expect(buttons[0]!.text()).toBe('Скрыть')

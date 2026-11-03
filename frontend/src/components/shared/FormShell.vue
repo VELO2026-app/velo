@@ -18,7 +18,7 @@
     #selection          — mood or rating buttons
     #success-actions    — buttons shown on success screen
     #success-icon       -- success screen icon (defaults to successIcon emoji)
-    #practice-meta      — meta line below practice name (date / "Завершена")
+    #practice-meta      — meta line below practice name (date / i18n:user.screens.feedback.state.completed)
 
   Props:
     backLabel           — VHeader back label
@@ -30,7 +30,7 @@
     submitting          — loading state for submit button
     submitDisabled      — disable submit button
     submitLabel         — submit button text
-    showSkip            — show "Пропустить" ghost button
+    showSkip            — show the skip ghost button (i18n:common.skip)
     submitted           — show success screen instead of form
     successIcon         — emoji shown on success screen
     successTitle        — title on success screen
@@ -74,7 +74,7 @@
       </VEmptyState>
 
       <template v-else>
-        <!-- Practice info — общий PracticeHeroCard в form-варианте (F-3). -->
+        <!-- Practice info — the shared PracticeHeroCard, form variant (F-3). -->
         <PracticeHeroCard
           v-if="practice"
           variant="form"
@@ -181,7 +181,7 @@ const props = defineProps<{
   submitting: boolean
   submitDisabled: boolean
   /** Helper text shown right under the submit button when submitDisabled is true
-   * (e.g. "Чек-ин закрыт — практика уже началась"). */
+   * (e.g. the check-in window-closed hint, i18n:user.screens.checkin.windowClosedHint). */
   disabledHint?: string
   submitLabel: string
   showSkip?: boolean
@@ -201,9 +201,10 @@ const emit = defineEmits<{
   'update:comment': [value: string]
 }>()
 
-// Заголовок без суффикса «(эфир)» — единый хелпер (live-практику и так
-// маркирует бейдж «В эфире»; в названии скобки не нужны). Покрывает оба
-// экрана на FormShell: check-in и feedback.
+// Title stripped of the live-broadcast suffix via the shared helper
+// (cleanPracticeTitle): a live practice is already marked by the live badge
+// (i18n:user.screens.userDashboard.liveBadge), so the parenthetical in the
+// title is redundant. Covers both FormShell screens: check-in and feedback.
 const cleanTitle = computed(() => (props.practice ? cleanPracticeTitle(props.practice.title) : ''))
 </script>
 
@@ -222,17 +223,19 @@ const cleanTitle = computed(() => (props.practice ? cleanPracticeTitle(props.pra
   flex: 1;
   display: flex;
   flex-direction: column;
-  /* Horizontal screen-padding теперь раздаётся MobileLayout-ом (--velo-screen-padding).
-   * Здесь добавляем только vertical, чтобы не было двойного отступа по бокам. */
+  /* Horizontal screen padding is now distributed by MobileLayout
+   * (--velo-screen-padding). Only the vertical padding is added here, so the
+   * sides never get a double inset. */
   padding: var(--space-5) 0;
   gap: var(--space-5);
 }
 
-/* Meta-cell для слота #practice-meta (контент от CheckinView / FeedbackView).
- * Layout самой practice-карточки (паддинги, иконка, заголовок, грид-meta) теперь
- * приходит из общего PracticeHeroCard variant="form" (F-3). Здесь остаётся только
- * стиль ячейки: дублируем scoped + :slotted, чтобы класс работал и для дефолтного
- * содержимого слота (FormShell scope), и для override от вьюх (parent scope). */
+/* Meta-cell for the #practice-meta slot (content from CheckinView / FeedbackView).
+ * The practice card's own layout (paddings, icon, heading, meta grid) now comes
+ * from the shared PracticeHeroCard variant="form" (F-3). Only the cell style
+ * remains here: duplicated as scoped + :slotted so the class works both for the
+ * slot's default content (FormShell scope) and for overrides from the views
+ * (parent scope). */
 .form-shell__practice-meta-cell,
 :slotted(.form-shell__practice-meta-cell) {
   display: inline-flex;
@@ -247,7 +250,7 @@ const cleanTitle = computed(() => (props.practice ? cleanPracticeTitle(props.pra
   padding: var(--space-4) 0;
 }
 
-/* Question — паддинги и gap по Figma 2266:728 (карточка 336x87) */
+/* Question — paddings and gap per Figma 2266:728 (card 336x87) */
 .form-shell__question {
   text-align: center;
   background: var(--velo-bg-card-solid);

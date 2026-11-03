@@ -27,7 +27,7 @@
     :style="composerStyle"
   >
     <!-- Header: floating glass buttons OVER the feed (owner 2026-09-07): the
-         штора/top fade is gone and there is no title -- entries really pass
+         curtain/top fade is gone and there is no title -- entries really pass
          beneath the buttons, the same overlay model the composer uses at the
          bottom. 2026-09-09 ruling: while ANY search state is up (open mode /
          committed query / the jump window over one) this row is REPLACED by
@@ -36,10 +36,11 @@
          as it was. The row stays MOUNTED (hidden via the class below) so
          the swap is a crossfade, not a mount/unmount blink. -->
     <header class="diary-feed__header" :class="{ 'diary-feed__header--replaced': searchMode }">
-      <!-- Back контекстный (operator 2026-06-04): если активен фильтр/поиск —
-           стрелка СБРАСЫВАЕТ фильтр (возврат в полную ленту), иначе выходит из
-           дневника. Отдельный «x» убран. [FE-42] кнопка «Назад» круглая ВЕЗДЕ
-           (поправка владельца) — базовый вид VBackButton; здесь белым стеклом. -->
+      <!-- Contextual back (operator 2026-06-04): with a filter/search active
+           the arrow RESETS the filter (return to the full feed), otherwise it
+           exits the diary. The separate "x" is gone. [FE-42] the back button
+           is round EVERYWHERE (owner amendment) -- VBackButton's base look;
+           white glass here. -->
       <VBackButton
         class="diary-feed__back"
         variant="glass"
@@ -50,10 +51,11 @@
         "
         @click="onBack"
       />
-      <!-- «...» на одной строке со стрелкой, у правого рельса (owner
-           2026-09-08: колонка «под стрелкой» отменена): обычный DS-вид
-           (owner 2026-09-07, раунд 2: синее стекло убрано); раскрывается
-           вниз (в Фильтр и Поиск) поверх контента. -->
+      <!-- "..." on one line with the arrow, at the right rail (owner
+           2026-09-08: the "under the arrow" column is cancelled): the plain
+           DS look (owner 2026-09-07, round 2: blue glass removed); expands
+           downward (into Filter (i18n:user.screens.diaryFeed.filter.title)
+           and Search (i18n:user.screens.diaryFeed.search.title)) over the content. -->
       <VMenu>
         <!-- Trigger glyph: vertical dots that rotate to horizontal while the
              menu is open (a state cue, approved animation). The shared default
@@ -74,7 +76,7 @@
           </svg>
         </template>
         <template #default="{ close }">
-          <!-- Filter (funnel) + Search (magnifier). "Связи" (Relationships)
+          <!-- Filter (funnel) + Search (magnifier). The Relationships item
                is an AI feature outside the MVP and is intentionally omitted. -->
           <VMenuItem
             :ariaLabel="t('user.screens.diaryFeed.filter.title')"
@@ -120,9 +122,10 @@
               />
             </svg>
           </VMenuItem>
-          <!-- View toggle (list <-> thread map). ВРЕМЕННО СКРЫТО флагом
-               SHOW_VIEW_TOGGLE: thread-вид сырой, прячем кнопку (и тем самым
-               вход в режим) до доработки. Код цел. Glyph + aria reflect the
+          <!-- View toggle (list <-> thread map). TEMPORARILY HIDDEN behind the
+               SHOW_VIEW_TOGGLE flag: the thread view is raw, so the button (and
+               with it the mode's entry point) is hidden until it is finished.
+               The code is intact. Glyph + aria reflect the
                TARGET view (what tapping switches to). -->
           <VMenuItem
             v-if="SHOW_VIEW_TOGGLE"
@@ -223,8 +226,9 @@
         <VLoader size="lg" />
       </div>
 
-      <!-- Search: honest no-results rung -- distinct from «Дневник пуст»
-           (the diary is NOT empty, the query matched nothing). Skipped while
+      <!-- Search: honest no-results rung -- distinct from the diary-empty
+           title (i18n:user.screens.diaryFeed.empty.title; the diary is NOT
+           empty, the query matched nothing). Skipped while
            a jump window is open (the thread rung owns the screen then). -->
       <VEmptyState
         v-else-if="searchActive && !jumpActive && items.length === 0"
@@ -299,9 +303,10 @@
         </div>
 
         <!-- Wrapper pins a short feed to the bottom (margin-top:auto) so few
-             entries sit next to the composer, chat-style. При активном
-             фильтре/поиске прижатие отключается (--top) — результаты идут
-             СВЕРХУ, а не уезжают в середину/низ (operator 2026-06-04). -->
+             entries sit next to the composer, chat-style. With a
+             filter/search active the pinning is disabled (--top) -- results
+             go at the TOP instead of sliding to the middle/bottom (operator
+             2026-06-04). -->
         <div
           class="diary-feed__thread"
           :class="{ 'diary-feed__thread--top': filterActive, 'velo-reveal': feedReveal }"
@@ -590,9 +595,10 @@ const searchMode = computed(() => searchOpen.value || searchActive.value)
 // memory is wanted).
 const viewMode = ref<'list' | 'map'>('map')
 
-// Переключатель list/map остаётся СКРЫТЫМ: дневник живёт в thread-виде, и
-// пока продукт явно не вернёт плоский список, кнопки входа в него нет.
-// КОД НЕ УДАЛЁН — DiaryList/toggleView целы за этим флагом.
+// The list/map toggle stays HIDDEN: the diary lives in the thread view, and
+// until the product explicitly brings back the flat list there is no button
+// to enter it. THE CODE IS NOT DELETED -- DiaryList/toggleView stay intact
+// behind this flag.
 const SHOW_VIEW_TOGGLE = false
 
 async function toggleView(): Promise<void> {
@@ -609,8 +615,8 @@ function exitDiary(): void {
   void router.push('/user/dashboard')
 }
 
-// Back контекстный (operator 2026-06-04): активен фильтр -> сбрасываем
-// (возврат в полную ленту), иначе выходим из дневника на дашборд. (A search
+// Contextual back (operator 2026-06-04): a filter active -> reset it
+// (return to the full feed), otherwise exit the diary to the dashboard. (A search
 // state never reaches here: the header row is replaced by the search bar
 // while one is up, so this button is off-screen -- the bar's outer x owns
 // that exit.)
@@ -630,7 +636,7 @@ const activeCategories = computed<DiaryFeedCategory[]>(() => feedFilters.value.c
 // dims or fogs anything (ruling 6, PROMPT №668).
 const composing = ref(false)
 
-// FE-70: the dashboard's «Добавить запись» arrives with a one-shot intent
+// FE-70: the dashboard's add-entry action arrives with a one-shot intent
 // (?compose=note). One focus() call enters write mode (Composer.focusField:
 // optimistic composing + caret on the real textarea); with a read-only filter
 // active the composer is unmounted and the call is a safe no-op. The param is
@@ -692,7 +698,8 @@ function openFilter(): void {
   showFilter.value = true
 }
 
-// «Поиск» toggles the inline bar (owner 2026-09-07): unfold in place + focus.
+// The search menu item (i18n:user.screens.diaryFeed.search.title) toggles the
+// inline bar (owner 2026-09-07): unfold in place + focus.
 function toggleSearch(): void {
   searchOpen.value = !searchOpen.value
   if (searchOpen.value) void nextTick(() => searchBarEl.value?.focus())
@@ -732,7 +739,7 @@ async function onApplyFilter(payload: {
     date_to: payload.date_to,
   })
   await nextTick()
-  // Результаты фильтра идут СВЕРХУ (top-align), а полная лента — чат-низ.
+  // Filter results go at the TOP (top-align); the full feed stays chat-bottom.
   if (filterActive.value) scrollToTop()
   else scrollToBottom()
 }
@@ -825,8 +832,9 @@ async function clearFilter(): Promise<void> {
 // -- Undo bar (after deleting an entry on EntryView) -------------------------
 //
 // EntryView soft-deletes then navigates back here with ?deleted=<entryId>.
-// We surface an «Запись удалена / Отменить» bar (Figma screen 58); tapping
-// Отменить restores the entry. The bar auto-dismisses after a few seconds.
+// We surface an undo bar (deleted text i18n:user.screens.diaryFeed.toast.deleted,
+// cancel button i18n:user.screens.diaryFeed.cancel; Figma screen 58); tapping
+// cancel restores the entry. The bar auto-dismisses after a few seconds.
 
 const UNDO_DURATION_MS = 6000
 const deletedEntryId = ref<string | null>(null)
@@ -1010,8 +1018,9 @@ function attachComposerResize(): void {
   composerResizeObserver.observe(composerEl.value)
 }
 
-// Top-align: результаты фильтра/поиска показываем СВЕРХУ (с top-align враппера),
-// чтобы они не уезжали в середину/низ экрана (operator 2026-06-04).
+// Top-align: filter/search results are shown at the TOP (via the wrapper's
+// top-align class) so they do not slide to the middle/bottom of the screen
+// (operator 2026-06-04).
 function scrollToTop(): void {
   diaryStore.feedScrollTop = 0
   const el = scrollEl.value
@@ -1221,11 +1230,11 @@ onBeforeUnmount(() => {
    overlay's left edge is aligned to the INPUT's visible left edge -- the
    composer pill's 16px rail, shared via --diary-overlay-rail (owner,
    2026-09-08; a flush x=0 and the feed's 24px content rail were both
-   tried and rejected the same day) -- with «Назад» (white glass,
+   tried and rejected the same day) -- with the back button (white glass,
    VBackButton's glass variant) at that LEFT rail and the "..." trigger
    (its usual solid DS look) at the RIGHT rail, on ONE line (owner
-   2026-09-08: the column that sat "..." under «Назад» is retired),
-   expanding downward into Фильтр/Поиск exactly as before -- and the feed
+   2026-09-08: the column that sat "..." under the back button is retired),
+   expanding downward into Filter/Search exactly as before -- and the feed
    scrolls beneath both; the buttons frost what passes under them (the same
    overlay model the composer uses at the bottom). No title. The
    `z-index: var(--z-sticky)` survives for the PROMPT №665 reason: the
@@ -1309,7 +1318,7 @@ onBeforeUnmount(() => {
    entries really pass beneath. PROMPT №668 (ruling 6): NOT dimmed in any
    state; the blur-on-outside-click (onRootClickCapture) is the non-visual
    click-blocker that replaced the fog. No `position`/`z-index` on this
-   element itself -- a plain flex row. NO edge fade any more: the штора (the
+   element itself -- a plain flex row. NO edge fade any more: the curtain (the
    ruling-4 amendment's top fade, last survivor of the old 4-zone mask) is
    removed by the same owner ruling -- with the header floating OVER the feed
    the fade had nothing to transition into; content ends CRISP top and bottom
@@ -1368,7 +1377,7 @@ onBeforeUnmount(() => {
   padding-bottom: var(--space-6);
 }
 
-/* -- Search scrim: RETIRED (owner 2026-09-09: «блюр и затемнение убираем»)
+/* -- Search scrim: RETIRED (owner 2026-09-09: blur and dimming removed)
    -- no dim, no soft blur; the screen behind the search stays fully visible
    and crisp. Closing the search is the bar's OUTER x. */
 
@@ -1451,8 +1460,8 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-md);
 }
 
-/* При активном фильтре/поиске отключаем прижатие к низу — результаты идут
-   сверху (иначе мало записей уезжает в середину/низ экрана). */
+/* With a filter/search active the bottom pinning is disabled -- results go
+   at the top (otherwise a few entries slide to the middle/bottom of the screen). */
 .diary-feed__thread--top {
   margin-top: 0;
 }
@@ -1509,7 +1518,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
-  /* Deletion tone (Figma «запись удалена.svg»): pink fill + pink border +
+  /* Deletion tone (Figma "entry deleted" spec): pink fill + pink border +
      rose text, distinct from the neutral glass chrome. */
   background: var(--velo-glass-pink-40);
   border: 1px solid var(--velo-pink-300);

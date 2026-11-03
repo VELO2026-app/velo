@@ -307,8 +307,8 @@ export function useViewportGeometry(): void {
     // reveal, and every one of them used to re-assert the keyboard cap at a
     // stale smaller height -- the keyboard slid away faster than the events
     // arrived, exposing body-white, and only the FINAL resize restored the
-    // full height (the owner's "уезжает плохо: белый фон, потом
-    // растягивается"). The iOS keyboard is an OVERLAY: an app already at
+    // full height (the owner's report: "a white background first, then a
+    // stretch"). The iOS keyboard is an OVERLAY: an app already at
     // full height is simply progressively revealed -- nothing to track.
     // So: drop the cap on the FIRST rising frame and hold at-rest geometry
     // through the animation, exactly like the K3f navigation window above.
@@ -363,7 +363,7 @@ export function useViewportGeometry(): void {
     host.requestAnimationFrame(() => keepRootUnpanned())
   }
 
-  // [FE-44] The close-time end-jump ("моргание"): the app returns to FULL
+  // [FE-44] The close-time end-jump (a visible blink): the app returns to FULL
   // height the moment the close starts, but the VISUAL viewport only grows
   // back over the ~250ms animation -- mid-flight the document is taller than
   // the visible area, a scroll range EXISTS, and iOS's own close-time

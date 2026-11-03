@@ -8,11 +8,11 @@
   live in one place.
 
   Usage:
-    <VMenu aria-label="Меню">
+    <VMenu aria-label="Menu">
       <template #default="{ close }">
-        <VMenuItem :icon="IconPen" aria-label="Редактировать"
+        <VMenuItem :icon="IconPen" aria-label="Edit"
                    @click="startEdit(); close()" />
-        <VMenuItem :icon="IconTrash" aria-label="Удалить"
+        <VMenuItem :icon="IconTrash" aria-label="Delete"
                    @click="onDelete(); close()" />
       </template>
     </VMenu>

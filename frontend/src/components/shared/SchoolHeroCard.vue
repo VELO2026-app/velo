@@ -111,7 +111,7 @@ const heroVars = computed(() =>
    3/4 down behind the logo instead of half. */
 /* The brand scene shown FULL: the container matches the 1200×600 canvas
    ratio, so nothing is cropped or zoomed in (owner 2026-09-19:
-   «растянут слишком близко»). */
+   "stretched too close"). */
 .school-hero__banner {
   position: relative;
   aspect-ratio: 2 / 1;
@@ -139,9 +139,9 @@ const heroVars = computed(() =>
    frame's top padding and border are added back so the 3/4 line lands on
    the logo, not on the frame.
    Foreground: the banner is positioned, so without z-index it paints OVER
-   the pulled-up frame (owner: «лого на переднем плане»); the frame carries
+   the pulled-up frame (owner: "the logo in the foreground"); the frame carries
    the owner's THICK 4px border. The mandala INSIDE the tile is enlarged via
-   mandalaScale (owner: «само лого внутри плитки -- больше»). */
+   mandalaScale (owner: "the logo itself inside the tile -- larger"). */
 .school-hero__logo-frame {
   position: relative;
   z-index: 1;

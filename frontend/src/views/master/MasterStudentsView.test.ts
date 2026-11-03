@@ -13,7 +13,7 @@
 //   Mocking a store here would mock a layer this screen does not have.
 //
 // Honest scope note on the error rung: MasterStudentsView.vue:135-137 does
-// `catch { error.value = 'Попробуйте ещё раз' }` -- the backend's own message is
+// `catch { error.value = t('common.tryAgain') }` -- the backend's own message is
 // SWALLOWED. So the error test below proves the screen's fallback constant
 // reaches the DOM; it deliberately does NOT claim the backend message surfaces
 // (it cannot). MyBookingsView is the contrast: it binds :description="store.error"

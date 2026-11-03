@@ -1,6 +1,7 @@
 <template>
   <!-- Plus / add. Stroke-based primitive (same family as IconCheck/IconArrowRight),
-       used on the "Создать практику" action tile. Color via currentColor. -->
+       used on the create-practice action button
+       (i18n:masterScreens.masterPractices.createAria). Color via currentColor. -->
   <svg
     xmlns="http://www.w3.org/2000/svg"
     :width="size"

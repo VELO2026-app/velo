@@ -2,7 +2,7 @@
   VELO Frontend -- ReportUserSheet (Master GROUPS P3, PROMPT №592; MULTI-select
   + styling fix batch PROMPT №609; full rebuild to measured values PROMPT №610)
 
-  "Сообщить о пользователе" -- the report form (step D of the block flow,
+  The report sheet (i18n:report.title) -- the report form (step D of the block flow,
   also reachable standalone from wherever a master wants to report a
   student). MULTI-select round-checkbox reasons (G12, owner-ruled) + an
   optional comment.
@@ -27,7 +27,8 @@
   Rebuild to `Report a user.svg` / `Report a user 2.svg` (PROMPT №610):
     - target-user card (TargetUserCard, shared with both block-flow
       VConfirmDialogs on MasterStudentProfileView -- owner Q9)
-    - «Причина:» as a full-width glass band, not coloured text
+    - the reason band (i18n:report.reasonBand) as a full-width glass band,
+      not coloured text
     - round 20x20 checkbox rows (multi-select unchanged, only the visual
       changed from VChip pills)
     - textarea: --velo-radius-4-5 (deliberately small) + --velo-border,
@@ -35,7 +36,8 @@
     - support notice: --velo-warning-bg peach panel, NO icon (unlike the
       two block-flow dialogs, which DO carry a warning icon -- see those
       files)
-    - «Отмена» (owner Q3, VBottomSheet's new opt-in cancelLabel) + «Отправить»
+    - cancel (i18n:ui.cancel; owner Q3, VBottomSheet's new opt-in cancelLabel)
+      + send (i18n:common.submitSend)
       in one row, 39/61 width, --velo-primary / --velo-error fill
 -->
 
@@ -169,7 +171,7 @@ async function onSend(): Promise<void> {
   margin-bottom: var(--space-4);
 }
 
-/* «Причина:» -- full-width glass band, not coloured text (measured). */
+/* Reason band (i18n:report.reasonBand) -- full-width glass band, not coloured text (measured). */
 .report-user__reason-band {
   width: 100%;
   background: var(--velo-glass-blue-15);

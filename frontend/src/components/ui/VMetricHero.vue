@@ -7,7 +7,7 @@
   Stub-friendly: pass value="—" until the backend metric exists (build-full-design).
 
   Usage:
-    <VMetricHero value="78%" label="Средний check-in rate">
+    <VMetricHero value="78%" label="Average check-in rate">
       <template #icon><IconCheck :size="30" /></template>
     </VMetricHero>
 -->
