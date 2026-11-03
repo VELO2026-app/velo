@@ -87,7 +87,7 @@ master.application_received:
   telegram:
     title: "New master application"
     body: "📨 A new master application has been submitted.\n\n👤 {applicant_name}"
-    button_text: "Open VELO"
+    button_text: "Open application"
 
 master.application_submitted:
   telegram:
@@ -152,20 +152,20 @@ support.message_received:
   telegram:
     title: "Message to support"
     body: "💬 A user has written to support.\n\n👤 {sender_name}{topic_line_en}"
-    button_text: "Open VELO"
+    button_text: "Open request"
 
 # BE-162 delivery 2: a ticket was handed to this admin / returned to the pool.
 support.ticket_assigned:
   telegram:
     title: "A support request was handed to you"
     body: "📨 {actor_name} handed a support request to you.\n\n👤 {sender_name}{topic_line_en}"
-    button_text: "Open VELO"
+    button_text: "Open request"
 
 support.ticket_released:
   telegram:
     title: "A support request is back in the pool"
     body: "↩️ {actor_name} returned a support request to the pool — anyone can take it.\n\n👤 {sender_name}{topic_line_en}"
-    button_text: "Open VELO"
+    button_text: "Open request"
 
 # BE-166: the support reply could not be translated into the user's
 # language (support.translate_for_user ended without an answer, or the model
@@ -272,7 +272,7 @@ school.master_offered:
   telegram:
     title: "You are invited to teach"
     body: "🏛 <b>{actor_name}</b> invites you to become a master of <b>{school_name}</b>.\n\nOpen the app to accept or decline."
-    button_text: "View offer"
+    button_text: "Open offer"
 
 school.member_demoted:
   telegram:
@@ -326,7 +326,7 @@ school.master_practice_deleted:
   telegram:
     title: "A curator deleted your draft"
     body: "🏛 <b>{actor_name}</b> deleted your draft <b>{practice_title}</b> ({scheduled_at}) in <b>{school_name}</b>.\n\nThe draft is no longer available."
-    button_text: "My practices"
+    button_text: "Open my practices"
 
 # -- Master-facing (BE-33) --
 #
@@ -337,7 +337,7 @@ practice.master_reminder_1h:
   telegram:
     title: "Your practice in 1 hour"
     body: "⏰ You are teaching <b>{practice_title}</b> in 1 hour.\n\n📅 {scheduled_at}"
-    button_text: "My practices"
+    button_text: "Open practice"
 
 practice.checkin_received:
   telegram:
