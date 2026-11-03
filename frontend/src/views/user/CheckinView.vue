@@ -30,7 +30,7 @@
     @submit="onSubmit"
     @skip="onSkip"
   >
-    <!-- Practice meta — две колонки (Figma 2266:716): мастер | дата. -->
+    <!-- Practice meta — two columns (Figma 2266:716): master | date. -->
     <template #practice-meta>
       <span class="form-shell__practice-meta-cell">
         {{
@@ -104,8 +104,8 @@ const practice = computed(() => practicesStore.selected)
 const practiceLoading = computed(() => practicesStore.selectedLoading)
 const practiceLoadError = computed(() => practicesStore.selectedError)
 
-// Slider score 1..10. Default is the EXACT 5 «Нормально» (tz-mood-scale §2.4):
-// submitting without touching the scale sends 5, not a zone's click value (6).
+// Slider score 1..10. Default is the EXACT 5, the neutral mood label (i18n:mood.neutral,
+// tz-mood-scale §2.4): submitting without touching the scale sends 5, not a zone's click value (6).
 const moodScore = ref<number>(MOOD_SCALE_DEFAULT_SCORE)
 const comment = ref('')
 const submitted = ref(false)
@@ -240,7 +240,7 @@ watch(alreadyCheckedIn, (done) => {
   if (done) submitted.value = true
 })
 
-// Named so the error rung's «Повторить» can re-run exactly what onMounted ran.
+// Named so the error rung's retry button (i18n:common.retry) can re-run exactly what onMounted ran.
 // Unconditional: the guard below is a cache check for the mount path, but a retry
 // means the last attempt FAILED, so there is nothing cached to skip for.
 function loadPractice(): void {

@@ -1,10 +1,12 @@
 <!--
   VELO Frontend -- SchoolInviteCard (invite screens, owner mockups 2026-10-02)
 
-  The school card of the INVITATION screens («Вас пригласили в школу!» /
-  «Приглашение стать мастером школы!»): the mockup's anatomy -- the SQUARE
-  school logo, the name, ONE counters line («N учеников · N мастеров»), the
-  school's own description and the bold invitation heading at the card's
+  The school card of the INVITATION screens (the invite headings
+  i18n:masterScreens.schoolJoin.invited.title /
+  i18n:masterScreens.schoolMasterOffer.invited.title): the mockup's anatomy
+  -- the SQUARE school logo, the name, ONE counters line (students first,
+  then masters), the school's own description and the bold invitation
+  heading at the card's
   bottom. NO banner strip (that is the page hero's, SchoolHeroCard) and NO
   analytics lines: by owner ruling (2026-10-02) an invitation card carries
   the participant and master COUNTS only -- nothing personal, nothing
@@ -77,10 +79,13 @@ const props = defineProps<{
   mastersCount: number
   /** The school's own description -- rendered only when non-blank. */
   description?: string | null
-  /** FE-67's «кто предлагает»: the school's curator, when the caller knows
-   *  one. Rendered as a quiet line under the name; omitted, never «Куратор:». */
+  /** FE-67's "who offers" datum: the school's curator, when the caller knows
+   *  one. Rendered as a quiet line under the name (i18n:school.curator);
+   *  when unknown, the line is omitted -- never a bare label. */
   curatorName?: string | null
-  /** The bold invitation line at the card's bottom («Вас пригласили…!»). */
+  /** The bold invitation line at the card's bottom
+   *  (i18n:masterScreens.schoolJoin.invited.title or
+   *  i18n:masterScreens.schoolMasterOffer.invited.title). */
   heading: string
 }>()
 

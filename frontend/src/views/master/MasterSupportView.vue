@@ -1,27 +1,32 @@
 <!--
   VELO Frontend -- MasterSupportView (Phase-3 Master DS, 2026-06-13)
 
-  Support / contact form, reached from the master profile hub («Поддержка»).
+  Support / contact form, reached from the master profile hub
+  (i18n:masterScreens.masterProfile.menu.support).
   Built to SVGs «5 Support» / «5 Support 2» / «5 Support (files added)» /
   «Check-in Success» (the form's success screen).
 
-  WIRED (FE-104, owner ruling BE-162): «Отправить» creates a NEW ticket -- the
+  WIRED (FE-104, owner ruling BE-162): the submit button (i18n:common.submitSend)
+  creates a NEW ticket -- the
   topic as a CODE and the message, one call (@/api/support::createTicket) under
   the appeal's Idempotency-Key (::createAppealKeys: the same key while the
   topic and the text stay the same, so a retry after a failed send is the same
-  ticket). «Другое» has no free text of its own (owner): the substance is the
-  message. New master topic: «Жалоба на пользователя» (`complaint_user`).
+  ticket). The other topic (i18n:supportTopics.other) has no free text of its
+  own (owner): the substance is the
+  message. New master topic: the user complaint (i18n:supportTopics.complaint_user,
+  `complaint_user`).
   The success screen's copy was written for the old stub, became FALSE the
   moment this screen started delivering, was rewritten at PROMPT №712, and is
   REWRITTEN AGAIN at FE-103 (owner ruling 25.10), identical to the user
-  screen's: the reply now arrives in «Сообщения» (BE-163), and after the send
+  screen's: the reply now arrives in Messages
+  (i18n:masterScreens.masterMessages.title; BE-163), and after the send
   the form opens that conversation itself. ⚠ Do not "improve" it -- wording is
   the owner's call. Attachments stay
   CAPTURED-LOCALLY-ONLY, unwired, out of that prompt's scope (no
   upload/storage backend exists).
 
-  Roadmap beyond this prompt: file upload + storage; the «Добавить
-  направление практики» topic may route to its own flow.
+  Roadmap beyond this prompt: file upload + storage; the add-direction topic
+  (i18n:supportTopics.add_direction) may route to its own flow.
 
   Route: /master/support (name 'master-support', meta.hideTabBar — back-nav
   screen, no tab bar per the design).
@@ -29,7 +34,8 @@
 <template>
   <div class="support">
     <!-- Header hidden on the success screen — it's a terminal state with no back
-         (operator 2026-06-19); «На главную» is the only exit. -->
+         (operator 2026-06-19); the back-home CTA (i18n:common.backHome) is the
+         only exit. -->
     <VHeader
       v-if="!submitted"
       :title="t('masterScreens.masterSupport.title')"
@@ -155,14 +161,17 @@ import { supportTopicLabel } from '@/utils/supportTopics'
 const router = useRouter()
 const toast = useToast()
 
-// Scroll the «Сообщение» textarea above the soft keyboard once it settles (M5).
+// Scroll the message textarea (i18n:masterScreens.masterSupport.message.label)
+// above the soft keyboard once it settles (M5).
 const { onFieldFocus } = useKeyboardFieldScroll()
 
 // -- Topic catalog (L7) -----------------------------------------------------
 // Mirrors the user SupportView pattern: each topic carries an INTERNAL priority
 // (P0/P1/P2 — future routing/sort signal) that is deliberately NOT rendered to
-// the master. «Добавить направление практики» is a PLAIN free-text topic (no
-// special form/route). «Вопрос по отклоненной заявке» removed (operator L7).
+// the master. The add-direction topic (i18n:supportTopics.add_direction) is
+// a PLAIN free-text topic (no
+// special form/route). The rejected-application question topic was removed
+// (operator L7).
 // FE-104: codes only; labels from the one table (supportTopics). The
 // complaint topic's priority is P0, as the user form's complaint.
 type SupportPriority = 'P0' | 'P1' | 'P2'
@@ -205,7 +214,7 @@ function removeAttachment(i: number): void {
   attachments.value.splice(i, 1)
 }
 
-// -- Submit (flow В) --------------------------------------------------------
+// -- Submit (flow V) --------------------------------------------------------
 const emailHref = 'mailto:support@velo.app'
 
 const canSubmit = computed(() => message.value.trim().length > 0)
@@ -243,7 +252,8 @@ async function openConversation(): Promise<void> {
     if (support) await router.push({ name: 'master-chat', params: { id: support.id } })
   } catch {
     // The success screen is the honest fallback (the reply lands in
-    // «Сообщения» regardless); a failed lookup must not toast over success.
+    // Messages, i18n:masterScreens.masterMessages.title, regardless); a
+    // failed lookup must not toast over success.
   }
 }
 

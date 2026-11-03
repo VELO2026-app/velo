@@ -3,7 +3,7 @@
 // =============================================================================
 //
 // 327 lines. PATTERN = list-with-full-ladder + client-side pagination
-// ("Показать ещё") + client-side search + a MUTATING action (make-master)
+// (i18n:common.showMore) + client-side search + a MUTATING action (make-master)
 // behind a confirm dialog. NO store, confirmed by reading every import.
 // Seams mocked: @/api/admin's getUsersList and makeMaster. ApiResponseError
 // kept REAL (importOriginal) for realistic error-path tests. Router mocked

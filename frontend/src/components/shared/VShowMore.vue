@@ -1,7 +1,7 @@
 <!--
   VELO Frontend -- VShowMore (shared, WS-3b T3)
 
-  «+ ещё N <noun>» reveal pill — the shared replacement for the three hand-rolled
+  The "+ more N <noun>" reveal pill — the shared replacement for the three hand-rolled
   pills (AnalyticsView .analytics__more-pill, MasterPracticeDetailView .pd-more-pill,
   AttendanceRosterView .roster__more-btn).
 
@@ -15,7 +15,7 @@
   CLDR pipe form with the plural overload, t('...more', hiddenCount) (see
   masterScreens.*.more* keys, same recipe as shared.analytics.pairsMore) and
   set `plus` -- the «+» glyph is markup, not copy, so it lives here and the
-  catalogs carry «ещё {count} …» without a leading symbol. aria-expanded and
+  catalogs carry the "more {count} …" pattern without a leading symbol. aria-expanded and
   other attrs fall through to the root button.
 
   Usage:

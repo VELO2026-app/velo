@@ -1,16 +1,19 @@
 <!--
   VELO Frontend -- ReflectionView
 
-  Full-screen gentle reflection form shown to a User whose booking is
-  «Не состоялась» (no_show). Sibling of FeedbackView: same FormShell layout,
+  Full-screen gentle reflection form shown to a User whose booking is a
+  no-show (status no_show, the missed-you label
+  i18n:user.screens.myBookings.status.noShow). Sibling of FeedbackView: same
+  FormShell layout,
   but NO rating slider — a no-show reflection only invites the user to share how
   they are (comment), it never rates a practice they didn't attend.
 
   Copy rotates per booking (utils/reflectionVariants, stable by practiceId).
 
   Submit (BE-108): POST /api/v1/practices/{id}/reflection, once per practice,
-  an empty comment included. Reached from PracticeDetailView's «Поделиться,
-  как вы» button. After a successful submit the bookings list is refreshed so
+  an empty comment included. Reached from PracticeDetailView's share-mood
+  button (i18n:user.screens.practiceDetail.shareMood). After a successful
+  submit the bookings list is refreshed so
   the booking's server-side has_reflection hides that button; a refusal
   (no no_show booking, already submitted) is shown as a toast, never as the
   thank-you screen.
@@ -39,9 +42,10 @@
     @retry="loadPractice"
     @submit="onSubmit"
   >
-    <!-- Practice meta — мастер | honest no-show статус (B30, PROMPT №747:
-         "Вы не пришли", the owner's word for this status on a user surface;
-         was F1's «Не состоялась», the same false claim MyBookingsView and
+    <!-- Practice meta — master | the honest no-show status (B30, PROMPT №747:
+         the missed-you label (i18n:common.missedYou), the owner's word for
+         this status on a user surface; was F1's did-not-take-place label,
+         the same false claim MyBookingsView and
          PracticeDetailView carried before №746). -->
     <template #practice-meta>
       <span class="form-shell__practice-meta-cell">
@@ -97,7 +101,7 @@ const toast = useToast()
 const practiceId = route.params.practiceId as string
 
 // Stable per-booking copy — same booking always renders the same variant
-// (no flicker on the dashboard's 60s re-eval; PROMPT №269 F5=А).
+// (no flicker on the dashboard's 60s re-eval; PROMPT №269 F5=A).
 const variant = pickReflectionVariant(practiceId)
 
 const practice = computed(() => practicesStore.selected)
@@ -144,7 +148,8 @@ function goToDashboard(): void {
   void router.push({ name: 'user-dashboard' })
 }
 
-// Named so the error rung's «Повторить» can re-run exactly what onMounted ran.
+// Named so the error rung's retry button (i18n:common.retry) can re-run
+// exactly what onMounted ran.
 // Unconditional: the guard below is a cache check for the mount path, but a retry
 // means the last attempt FAILED, so there is nothing cached to skip for.
 function loadPractice(): void {

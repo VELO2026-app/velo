@@ -6,7 +6,7 @@
   the admin detail lists (low check-in practices, top loyal users, per-master payouts).
 
   Usage:
-    <VListRow title="Анна К." subtitle="15 практик • 3 мастера">
+    <VListRow title="Anna K." subtitle="15 practices • 3 masters">
       <template #lead><VAvatar /></template>
       <template #trailing>€24,300</template>
     </VListRow>

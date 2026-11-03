@@ -72,14 +72,18 @@ function buttonWith(label: string): HTMLElement | undefined {
   )
 }
 
-/** Exact-label finder -- «Изменить» (the pill) must not match «Изменить роль» (the menu item). */
+/** Exact-label finder -- the change pill
+ *  (i18n:user.screens.schoolStudentProfile.change) must not match the
+ *  change-role menu item (i18n:user.screens.schoolStudentProfile.role.switchCta). */
 function exactButton(label: string): HTMLButtonElement | undefined {
   return Array.from(document.body.querySelectorAll<HTMLButtonElement>('button') ?? []).find(
     (b) => b.textContent?.trim() === label || b.getAttribute('aria-label') === label,
   )
 }
 
-/** The stat cards' values in DOM order (§1.13.2: «Практик» then «Часов»). */
+/** The stat cards' values in DOM order (§1.13.2: the practices stat
+ *  i18n:user.screens.schoolStudentProfile.practicesStat, then the hours stat
+ *  i18n:user.screens.schoolStudentProfile.hoursStat). */
 function statValues(): string[] {
   return Array.from(document.body.querySelectorAll<HTMLElement>('.v-stat__value') ?? []).map((e) =>
     (e.textContent ?? '').trim(),
@@ -217,7 +221,7 @@ describe('SchoolStudentProfileView', () => {
   })
 
   // BE-79 (2): this used to pin the INTERIM -- «nothing mutates, the chain is
-  // a draft». Right then; the block endpoint (BE-79 (1а)) replaced it: confirm
+  // a draft». Right then; the block endpoint (BE-79 (1a)) replaced it: confirm
   // now SENDS the block, and the chain opens on the server's 204 only.
   it('block confirm: «Заблокировать» sends the block; on 204 the success chain opens', async () => {
     mount()
@@ -232,7 +236,9 @@ describe('SchoolStudentProfileView', () => {
     await flush()
 
     // The post-block step rides the same dialog canon: title, who-card, the
-    // warning panel WITHOUT the icon, compact «Не сейчас» / «В поддержку».
+    // warning panel WITHOUT the icon, compact dismiss
+    // (i18n:user.screens.schoolStudentProfile.report.dismiss) / report
+    // (i18n:user.screens.schoolStudentProfile.report.cta).
     expect(text()).toContain('Пользователь заблокирован')
     expect(text()).toContain('Пользователь перемещён во вкладку «Блок» участников школы.')
     expect(exactButton('Не сейчас')).toBeTruthy()

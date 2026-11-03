@@ -8,10 +8,12 @@
 //   cancelPractice() (EditPracticeView.vue:588) POSTs /practices/:id/cancel,
 //   which refunds EVERY confirmed booking on the backend, atomically
 //   (api/practices.ts:115-125). There is no un-cancel endpoint. Money has left.
-//   The screen's own success toast says it out loud: «возвраты выполнены».
+//   The screen's own success toast says it out loud: refunds were issued
+//   (i18n:masterScreens.editPractice.toast.cancelledRefunded).
 //
 //   deletePractice() (:615) soft-deletes a draft. The screen's own confirm text
-//   is «Это действие нельзя отменить» (:603).
+//   says it cannot be undone
+//   (i18n:masterScreens.editPractice.draft.deleteConfirm) (:603).
 //
 // So the assertions that earn their keep here are: neither action fires on a
 // single click, each one reaches the RIGHT id, cancel carries the RIGHT scope
@@ -43,7 +45,7 @@
 //     :374) -- which day cells are disabled is otherwise a different answer
 //     every run.
 //   - CancelPracticeDialog renders formatDateShort(), which compares against
-//     `new Date()` for «Сегодня»/«Завтра» (utils/format.ts:65-85).
+//     `new Date()` for its today/tomorrow labels (utils/format.ts:65-85).
 // Fixtures are literals relative to the frozen instant.
 //
 // TIMEZONE: the FIXTURE's zone is pinned (Europe/Moscow), the RUNNER's is not,
@@ -83,7 +85,8 @@ import { ApiResponseError } from '@/api/client'
 import type { MasterProfileResponse, PracticeResponse, UpdatePracticeRequest } from '@/api/types'
 
 vi.mock('@/api/practices')
-// P5 port (PROMPT №606): «Для кого практика» -> «Конкретные группы» fetches
+// P5 port (PROMPT №606): the audience's specific-groups kind
+// (i18n:practice.audience.groups) fetches
 // the master's own custom groups on mount, same as CreatePracticeView.
 // Mocked wholesale -- an unmocked call here would hit the real network in
 // EVERY test in this file, not just the audience-specific ones below.
@@ -253,7 +256,8 @@ function choose(el: HTMLSelectElement | undefined, value: string): void {
 //    :open differs), and a dead one may still be parked from earlier in the same
 //    test -- a bare document.body button search would click the wrong dialog.
 
-/** The branded cancel modal's «Отменить» (CancelPracticeDialog.vue:52). */
+/** The branded cancel modal's confirm button
+ * (i18n:practiceCancel.cancel; CancelPracticeDialog.vue:52). */
 function cancelModalConfirm(): HTMLButtonElement | undefined {
   const actions = document.body.querySelector('.cpd__actions')
   return Array.from(actions?.querySelectorAll('button') ?? []).find(
@@ -261,7 +265,7 @@ function cancelModalConfirm(): HTMLButtonElement | undefined {
   )
 }
 
-/** The branded cancel modal's «Не отменять». */
+/** The branded cancel modal's dismiss button (i18n:practiceCancel.keep). */
 function cancelModalDismiss(): HTMLButtonElement | undefined {
   const actions = document.body.querySelector('.cpd__actions')
   return Array.from(actions?.querySelectorAll('button') ?? []).find(
@@ -408,7 +412,8 @@ describe('EditPracticeView', () => {
     })
 
     it('a failed fetch shows the mapped table phrase for a real code, and offers no form', async () => {
-      // The empty state's «Практика не найдена» is the screen's OWN constant
+      // The empty state's not-found copy (i18n:masterScreens.editPractice.notFound)
+      // is the screen's OWN constant
       // (:58) -- the backend's message reaches the master only through the toast
       // (:611). Asserting both, and claiming neither is the other (SC-05).
       // B8 (PROMPT №747): 'not_found' IS a real backend code --
@@ -503,8 +508,9 @@ describe('EditPracticeView', () => {
 
     it("narrows Направление to the master's own confirmed methods, not the whole catalogue", async () => {
       // The real break this closes: before the fix, a master confirmed for
-      // ONLY "Йога" still saw the full catalogue (Медитация, Дыхательные
-      // практики, ...) on the edit screen, unlike CreatePracticeView which
+      // ONLY yoga (i18n:display.direction.yoga) still saw the full catalogue
+      // (meditation, breathwork, ...)
+      // on the edit screen, unlike CreatePracticeView which
       // already narrows this (T21-6, PROMPT №546).
       masterState.profile = { methods: ['Йога', 'Йога — Хатха-йога'] } as MasterProfileResponse
       mountCached(practice())
@@ -526,7 +532,8 @@ describe('EditPracticeView', () => {
         o.textContent?.trim(),
       )
       expect(opts).toContain('Хатха-йога')
-      // "Йога — Кундалини" is NOT in this master's confirmed methods.
+      // The kundalini style (i18n:practice.styles.kundalini) is NOT in this
+      // master's confirmed methods.
       expect(opts).not.toContain('Кундалини-йога')
     })
 
@@ -721,7 +728,9 @@ describe('EditPracticeView', () => {
       expect(document.body.querySelector('.cpd__recur')).toBeNull()
       // Scoped to the dialog's own root (.cpd), not the whole document: the
       // audience block added to the main form by the P5 port (PROMPT №606)
-      // renders its OWN .v-radio (Публичная/Все ученики/Конкретные группы),
+      // renders its OWN .v-radio (the public / all-students / specific-groups
+      // options: i18n:practice.audience.public, i18n:practice.audience.students,
+      // i18n:practice.audience.groups),
       // which a global query would also match. This assertion's actual
       // claim is "the cancel dialog itself offers no scope radio", not
       // "nothing on the page renders a .v-radio".
@@ -792,7 +801,9 @@ describe('EditPracticeView', () => {
     })
 
     it('a FAILED cancel falls back to the generic message (unmapped code) and never claims the refunds ran', async () => {
-      // Telling a master «возвраты выполнены» when the POST failed is the worst
+      // Telling a master the refunds ran
+      // (i18n:masterScreens.editPractice.toast.cancelledRefunded) when the POST
+      // failed is the worst
       // outcome on this screen: they walk away believing their students were
       // paid back.
       // B8 (PROMPT №747): 'already_live' is not a real backend code --
@@ -1066,7 +1077,7 @@ describe('EditPracticeView', () => {
   describe('saving: the PATCH body', () => {
     it("ships the practice's OWN price back, to the cent", async () => {
       // MONEY. There is no price field on this form (the section was dropped;
-      // see the template's Реш. В note) -- the price only survives an edit
+      // see the template's decision V note) -- the price only survives an edit
       // because populateForm parks it in `form` and save reads it back
       // (:449, :548). If that round-trip ever broke, every Save on this screen
       // would silently reprice the practice, and the students who booked at the
@@ -1563,7 +1574,7 @@ describe('EditPracticeView', () => {
   // LIVE flags are each proven by the re-entry tests above.
 })
 
-// -- «Школы» audience (FE-24 / GT P5; BE-74, FE-92) --------------------------------
+// -- Schools audience (i18n:practice.audience.schools; FE-24 / GT P5; BE-74, FE-92) ---
 //
 // The rulings here evolved. Before BE-74 this block asserted that Edit
 // resolves a school practice's chips from NAMES (PracticeResponse carried no

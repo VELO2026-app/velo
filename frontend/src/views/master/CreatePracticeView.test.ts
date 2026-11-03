@@ -22,8 +22,9 @@
 //
 // PATTERN C (hybrid). The two halves are driven through DIFFERENT seams, and
 // mixing them would gut the test (SKILL.md Step 3):
-//   - DATA half: «Использовать шаблон» reads useMasterStore's practices cache,
-//     and the Направление options come from the taxonomy catalog. Both are
+//   - DATA half: the use-template block (i18n:masterScreens.createPractice.useTemplate)
+//     reads useMasterStore's practices cache,
+//     and the direction options come from the taxonomy catalog. Both are
 //     DEPENDENCIES, not the thing under test -> mocked wholesale behind getters
 //     over a mutable object (the guards.test.ts trick, velo-idiom §5).
 //   - FORM half: `form` is a local reactive() (:497-525) owned entirely by this
@@ -60,15 +61,16 @@
 // since 2014, so the arithmetic is a constant.
 //
 // NO NBSP NORMALISATION, deliberately. This screen renders no formatMoney and
-// has no price field at all -- «Оплата» is a single hardcoded «Бесплатно» radio
+// has no price field at all -- the payment section is a single hardcoded free
+// radio (i18n:common.free)
 // (:294-302) and submit ships a literal price_cents: 0 (:844). The one money
 // assertion here is on the POST BODY's integer cents, not on rendered text, so
-// the ru U+00A0 trap (velo-idiom §11) cannot bite. If «Платно» is ever restored
-// to this form, this paragraph stops being true.
+// the ru U+00A0 trap (velo-idiom §11) cannot bite. If the paid option is ever
+// restored to this form, this paragraph stops being true.
 //
 // THE TAXONOMY CATALOG IS SEAMED AT ensureTaxonomyCatalog(), not at the network:
 // the real one rides a module-level cache that lives for the whole test FILE
-// (utils/methodTaxonomy.ts), so letting it run would make test N's Направление
+// (utils/methodTaxonomy.ts), so letting it run would make test N's direction
 // options depend on whether test N-1 warmed it -- exactly the order dependence
 // this banner would then have to declare. Mocked to null, every test gets the
 // hardcoded DIRECTION_OPTIONS fallback (practiceOptions.ts:268-271).
@@ -95,7 +97,8 @@ import type {
 } from '@/api/types'
 
 vi.mock('@/api/practices')
-// P5 (PROMPT №594): «Для кого практика» -> «Конкретные группы» fetches the
+// P5 (PROMPT №594): the audience's specific-groups kind (i18n:practice.audience.groups)
+// fetches the
 // master's own custom groups on mount. Mocked wholesale (like practicesApi
 // above) -- an unmocked call here would hit the real network in EVERY test
 // in this file, not just the audience-specific ones below.
@@ -264,7 +267,7 @@ function typeInto(el: HTMLInputElement | HTMLTextAreaElement | null, value: stri
 }
 
 // The four VSelects are identified by their own placeholder <option> (VSelect.vue:23)
-// rather than by index: the «Вид практики» select appears and disappears with the
+// rather than by index: the practice-style select appears and disappears with the
 // chosen direction (:97), so an index would silently shift under the test.
 function selectByPlaceholder(placeholder: string): HTMLSelectElement | undefined {
   return Array.from(host?.querySelectorAll<HTMLSelectElement>('select.v-select__field') ?? []).find(
@@ -279,7 +282,7 @@ function choose(el: HTMLSelectElement | undefined, value: string): void {
   el.dispatchEvent(new Event('change'))
 }
 
-/** The Дата / Время trigger fields (:125-160). The «Дата окончания» trigger
+/** The date/time trigger fields (:125-160). The end-date trigger
  *  reuses .create-practice__picker, so it is excluded by its own modifier. */
 function pickerTriggers(): HTMLElement[] {
   return Array.from(
@@ -327,14 +330,14 @@ async function tapDayAndSave(day: number): Promise<void> {
   await flush()
 }
 
-/** Drive the REAL teleported DatePickerSheet behind «Дата». */
+/** Drive the REAL teleported DatePickerSheet behind the date trigger. */
 async function pickDate(day: number): Promise<void> {
   pickerTriggers()[0]?.click()
   await flush()
   await tapDayAndSave(day)
 }
 
-/** Drive the REAL teleported DatePickerSheet behind «Завершить -> Выбрать дату». */
+/** Drive the REAL teleported DatePickerSheet behind Finish -> pick a date. */
 async function pickEndDate(day: number): Promise<void> {
   host?.querySelector<HTMLElement>('.create-practice__end-control.create-practice__picker')?.click()
   await flush()
@@ -504,8 +507,10 @@ describe('CreatePracticeView', () => {
       // Same cold catalog as above (ensureTaxonomyCatalog mocked to null) --
       // the filter is driven by MasterProfileResponse.methods, resolved via
       // parseMethods against the hardcoded DIRECTION_OPTIONS fallback, not by
-      // the taxonomy catalog. A master confirmed for "Йога" only must never
-      // be offered "Медитация" from the create-practice picker (T21-6): that
+      // the taxonomy catalog. A master confirmed for the yoga method
+      // (i18n:display.direction.yoga) only must never
+      // be offered meditation (i18n:display.direction.meditation)
+      // from the create-practice picker (T21-6): that
       // would let them create a practice in a direction they were never
       // verified for.
       masterState.profile = { methods: ['Йога'] } as MasterProfileResponse
@@ -541,7 +546,7 @@ describe('CreatePracticeView', () => {
     })
 
     it('changing direction drops a style that belonged to the OLD direction', async () => {
-      // onDirectionChange (:562-564). Without the reset, switching Йога -> Круги
+      // onDirectionChange (:562-564). Without the reset, switching yoga -> circles
       // would POST style='hatha' under direction='circles'.
       mount()
       await flush()
@@ -670,7 +675,7 @@ describe('CreatePracticeView', () => {
       typeInto(textareaByPlaceholder('Расскажите подробее о вашей практике'), 'Описание')
       typeInto(textareaByPlaceholder('Противопоказания'), 'Травмы спины')
       typeInto(textareaByPlaceholder('Что подготовить'), 'Коврик')
-      // T-35: the «ПОДКЛЮЧЕНИЕ» section (a manual Zoom URL) is gone from this
+      // T-35: the CONNECTION section (a manual Zoom URL) is gone from this
       // form -- the column no longer exists, and the POST body below is
       // asserted with toEqual, so its absence is pinned exactly here.
       await flush()
@@ -696,7 +701,7 @@ describe('CreatePracticeView', () => {
         price_cents: 0,
         currency: 'eur',
         recurrence: null,
-        // P5 (PROMPT №594): untouched «Для кого практика» -> the default.
+        // P5 (PROMPT №594): audience left untouched -> the default.
         // BE-74: school_id always ships too -- null for every
         // non-school kind (it was an empty array of school ids until a
         // practice came to belong to exactly one school).
@@ -707,8 +712,9 @@ describe('CreatePracticeView', () => {
     })
 
     it('carries the price to the cent -- a zero, because the form has no price', async () => {
-      // MONEY. «Платно» was removed (:294-302, operator 2026-06-18 Q2=А): the
-      // «Оплата» section is a single hardcoded «Бесплатно» radio bound to a
+      // MONEY. The paid option was removed (:294-302, operator 2026-06-18 Q2=A):
+      // the payment section is a single hardcoded free radio (i18n:common.free)
+      // bound to a
       // literal 'free' with NO handler, and submit ships is_free: form.is_free
       // (initialised true, :519) with price_cents: 0 and currency 'eur' (:843-845).
       // Nothing on this screen can move any of the three. The practice is
@@ -1073,7 +1079,8 @@ describe('CreatePracticeView', () => {
       // already, when this looks like a retry within its short window --
       // and, since A4 V6, marks the response deduplicated=true. Before V6
       // this branch was reached via the status==='scheduled' heuristic
-      // alone and showed "Практика создана!" like a real success -- the
+      // alone and showed the created toast (i18n:masterScreens.createPractice.toast.created)
+      // like a real success -- the
       // exact defect V6 closes. A second PATCH .../status=scheduled would
       // ALSO 400 ("Cannot transition from scheduled to scheduled") for no
       // reason, so that part of the original fix still holds.
@@ -1102,7 +1109,8 @@ describe('CreatePracticeView', () => {
       // The discriminator: without deduplicated=true, status='scheduled' on
       // its own must NOT be read as "existing" -- a series root that
       // legitimately publishes straight to scheduled must still say
-      // "Практика создана!" and land on the list, not the detail screen.
+      // created (i18n:masterScreens.createPractice.toast.created)
+      // and land on the list, not the detail screen.
       vi.mocked(practicesApi.createPractice).mockResolvedValue(
         practice({ id: 'p_new', status: 'scheduled', deduplicated: false }),
       )
@@ -1122,7 +1130,7 @@ describe('CreatePracticeView', () => {
     })
 
     it('on success: reports it, invalidates the list cache and REPLACES the route', async () => {
-      // replace(), not push() (:869) -- «назад» must return to the origin, not
+      // replace(), not push() (:869) -- Back must return to the origin, not
       // back onto a filled form that would create a duplicate on a second submit.
       mount()
       await flush()
@@ -1188,7 +1196,8 @@ describe('CreatePracticeView', () => {
 
     it('a create that succeeds but FAILS to publish leaves the master on the form', async () => {
       // The two writes share one try/catch (:810-878), so a failed publish is
-      // reported with the CREATE's fallback -- «Не удалось создать практику»
+      // reported with the CREATE's fallback
+      // (i18n:masterScreens.createPractice.toast.createFailed)
       // -- even though the POST succeeded and a draft now exists server-side.
       // This pins the behaviour as it is, and deliberately does NOT assert it
       // is right: see the NOT COVERED note at the foot of this file.
@@ -1245,7 +1254,7 @@ describe('CreatePracticeView', () => {
   describe('«Использовать шаблон»', () => {
     it("offers the master's own practices, newest-created first", async () => {
       // :546-548 sorts by created_at DESC because the backend list order is not
-      // guaranteed (operator Q2=А).
+      // guaranteed (operator Q2=A).
       masterState.practices = [
         practice({ id: 'a', title: 'Старая', created_at: '2026-01-01T00:00:00Z' }),
         practice({ id: 'b', title: 'Новая', created_at: '2026-06-01T00:00:00Z' }),
@@ -1263,7 +1272,8 @@ describe('CreatePracticeView', () => {
     })
 
     it('T23-3 (PROMPT №565): a published series offers ONE entry, not one per generated occurrence', async () => {
-      // The owner's exact report: "Свист" for three separate July dates --
+      // The owner's exact report: the same title three times for three
+      // separate July dates --
       // one root (parent_practice_id=null) + two generated children sharing
       // that root's id as their own parent_practice_id. Grouped by
       // parent_practice_id ?? id (.vue), the root wins over its children.
@@ -1342,7 +1352,7 @@ describe('CreatePracticeView', () => {
     })
 
     it('picking a template prefills the form but NEVER the date or time', async () => {
-      // :572-590. A template must not schedule a practice in the past (Q1=А):
+      // :572-590. A template must not schedule a practice in the past (Q1=A):
       // date/time stay empty and required, so the master must choose them afresh.
       masterState.practices = [
         practice({
@@ -1461,7 +1471,8 @@ describe('CreatePracticeView', () => {
 
     it('a draft of nothing but defaults does not nag -- and is swept up', async () => {
       // isMeaningfulDraft (:603-621). A bare open of the form must not greet the
-      // master with «Продолжить черновик?» next visit.
+      // master with the resume-draft banner
+      // (i18n:masterScreens.createPractice.draft.resumeConfirm) next visit.
       seedDraft({ title: '   ', direction: '', is_recurring: false })
       mount()
       await flush()
@@ -1493,8 +1504,9 @@ describe('CreatePracticeView', () => {
     })
 
     it('a fulfilled draft is dropped on a successful create', async () => {
-      // :859-860. Left behind, it would greet the master with «Продолжить
-      // черновик?» on the very next create -- offering to restore the practice
+      // :859-860. Left behind, it would greet the master with the resume-draft
+      // banner (i18n:masterScreens.createPractice.draft.resumeConfirm)
+      // on the very next create -- offering to restore the practice
       // they just published.
       seedDraft({ title: 'Черновик' })
       mount()
@@ -1516,7 +1528,8 @@ describe('CreatePracticeView', () => {
 
   describe('navigation', () => {
     it('back POPS to the real origin when there is history', async () => {
-      // :428-431. Create opens from BOTH the dashboard CTA and Практики's «+»;
+      // :428-431. Create opens from BOTH the dashboard CTA and the practices
+      // screen's "+";
       // pushing a fixed route would send half the masters somewhere they did not
       // come from (operator 2026-06-23). NB: onBack reads window.history.state at
       // CLICK time, not during setup -- unlike AdminWithdrawalDetailView, seeding
@@ -1671,15 +1684,16 @@ describe('CreatePracticeView', () => {
   //
   // 3. THE «create succeeded, publish failed» MESSAGE. The test above pins what
   //    the screen does; it does NOT assert that what it does is right. Both writes
-  //    share one try/catch (:810-878), so a failed PATCH is reported as «Не
-  //    удалось создать практику» while a draft DOES exist server-side, and a
+  //    share one try/catch (:810-878), so a failed PATCH is reported as the
+  //    create-failed copy (i18n:masterScreens.createPractice.toast.createFailed)
+  //    while a draft DOES exist server-side, and a
   //    master who retries makes a second one. Whether that should be a distinct
   //    message, a retry of the PATCH alone, or a rollback is a product decision,
   //    not a defect this file may invent an assertion for. Flagged, not fixed.
   // ==========================================================================
 })
 
-// -- «Школы» audience (FE-24 / GT P5) ------------------------------------------
+// -- Schools audience (i18n:practice.audience.schools; FE-24 / GT P5) ----------
 
 describe('CreatePracticeView -- «Школы» audience (FE-24 / GT P5)', () => {
   const school = (id: string, name: string, relation: 'curator' | 'master' | 'student') => ({
@@ -1779,7 +1793,7 @@ describe('CreatePracticeView -- «Школы» audience (FE-24 / GT P5)', () => 
 // =============================================================================
 // masterId + schoolId (the master's public page CTA) and schoolId (the school
 // page CTA) surface the master context. The STUB tests that stood here
-// («warns and blocks submit») pinned the interim -- right until BE-102 let
+// ("warns and blocks submit") pinned the interim -- right until BE-102 let
 // POST /practices take master_id; their property no longer exists. Now: a
 // foreign target sends master_id AND the school (with either school
 // audience), the result is the master's draft, and the curator goes back to
@@ -1792,7 +1806,8 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
   it('masterId + schoolId: the master is fixed; submit sends master_id AND the school, no second request', async () => {
     routeQuery.masterId = 'm_pub'
     routeQuery.schoolId = 'g1'
-    // The target master confirms «Йога» — fillMinimalForm picks exactly that;
+    // The target master confirms yoga (i18n:display.direction.yoga) —
+    // fillMinimalForm picks exactly that;
     // the master-vs-caller divergence is exercised by the picker tests below.
     vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
       display_name: 'Анна Ли',
@@ -1812,7 +1827,7 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     expect(body.school_id).toBe('g1')
     expect(body.audience_kind).toBe('public')
     // BE-102 publish: the backend published it in the create request (this
-    // pinned «the draft stays a draft», right under the 1 October ruling);
+    // pinned "the draft stays a draft", right under the 1 October ruling);
     // the front sends no second request either way.
     expect(practicesApi.updatePractice).not.toHaveBeenCalled()
     expect(toastSuccess).toHaveBeenCalledWith('Практика опубликована — мастер получит уведомление')
@@ -1838,7 +1853,8 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
   it('a dedup for the master: «Такая практика уже есть у мастера», back to the school', async () => {
     routeQuery.masterId = 'm_pub'
     routeQuery.schoolId = 'g1'
-    // fillMinimalForm needs the master's confirmed set to offer «Йога».
+    // fillMinimalForm needs the master's confirmed set to offer yoga
+    // (i18n:display.direction.yoga).
     vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
       display_name: 'Анна Ли',
       methods: ['Йога', 'Йога — Хатха-йога'],
@@ -1865,7 +1881,8 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
   ] as const)('refusal %i %s -> its toast; the form keeps its input', async (status, code, msg) => {
     routeQuery.masterId = 'm_pub'
     routeQuery.schoolId = 'g1'
-    // fillMinimalForm needs the master's confirmed set to offer «Йога».
+    // fillMinimalForm needs the master's confirmed set to offer yoga
+    // (i18n:display.direction.yoga).
     vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
       display_name: 'Анна Ли',
       methods: ['Йога', 'Йога — Хатха-йога'],
@@ -1927,7 +1944,8 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     expect(text()).toContain('Пётр Романов')
     // An invisible (suspended) master is not offered.
     expect(text()).not.toContain('Заморожен')
-    // Default «Я»: no warning, submit enabled -- the historical flow.
+    // Default self pick (i18n:masterScreens.createPractice.audience.me):
+    // no warning, submit enabled -- the historical flow.
     expect(text()).not.toContain('Создание для другого мастера пока недоступно')
     expect(button('Создать практику')?.disabled).toBe(false)
 
@@ -1946,7 +1964,8 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     await flush()
 
     // The restriction rides the SCHOOL ENTRY, not the master pick: with the
-    // default «Я» the audience radio still renders («Публичная» is on) but
+    // default self pick the audience radio still renders (the public option,
+    // i18n:practice.audience.public, is on) but
     // neither personal kind is offered.
     const radios = (): HTMLButtonElement[] =>
       Array.from(host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? [])
@@ -1993,7 +2012,8 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
       limit: 50,
       offset: 0,
     })
-    // The picked master confirms «Йога» — fillMinimalForm picks exactly that.
+    // The picked master confirms yoga (i18n:display.direction.yoga) —
+    // fillMinimalForm picks exactly that.
     vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
       display_name: 'Пётр Романов',
       methods: ['Йога', 'Йога — Хатха-йога'],
@@ -2010,7 +2030,8 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     option.click()
     await flush()
 
-    // Only «для всех» and «ученикам школы» remain on offer.
+    // Only the public (i18n:practice.audience.public) and school
+    // (i18n:practice.audience.schools) kinds remain on offer.
     const audienceLabels = radios().map((b) => b.textContent ?? '')
     expect(audienceLabels.some((l) => l.includes('Все мои ученики'))).toBe(false)
 
@@ -2023,8 +2044,10 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     expect(['public', 'schools']).toContain(body.audience_kind)
   })
 
-  // FE-92 follow-up: «Использовать шаблон» offers the CALLER's practices --
-  // hidden while another master is targeted, shown for «Я».
+  // FE-92 follow-up: the use-template block
+  // (i18n:masterScreens.createPractice.useTemplate) offers the CALLER's
+  // practices -- hidden while another master is targeted, shown for the self
+  // pick (i18n:masterScreens.createPractice.audience.me).
   function templateSection(): boolean {
     return text().includes('Использовать шаблон')
   }
@@ -2079,7 +2102,8 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
   it("masterId + schoolId: the pickers offer the MASTER's methods — a direction only he holds is creatable", async () => {
     routeQuery.masterId = 'm_pub'
     routeQuery.schoolId = 'g1'
-    // The caller (beforeEach) is confirmed for Йога but NOT Медитация; the
+    // The caller (beforeEach) is confirmed for yoga (i18n:display.direction.yoga)
+    // but NOT meditation (i18n:display.direction.meditation); the
     // target master is the reverse. Exactly the asymmetry that used to 400
     // on submit.
     vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
@@ -2127,7 +2151,7 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
       limit: 50,
       offset: 0,
     })
-    // Per-id: the caller confirms Йога, the school master Медитация.
+    // Per-id: the caller confirms yoga, the school master meditation.
     vi.mocked(mastersApi.getPublicMaster).mockImplementation(async (id: string) =>
       id === 'm2'
         ? ({ methods: ['Медитация'] } as MasterPublicResponse)
@@ -2136,7 +2160,7 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     mount()
     await flush()
 
-    // «Я» by default: the caller's own set, no master lookup yet.
+    // Self pick by default: the caller's own set, no master lookup yet.
     let opts = directionOptions()
     expect(opts).toContain('Йога')
     expect(opts).not.toContain('Медитация')
@@ -2183,7 +2207,7 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     mount()
     await flush()
 
-    // Picked while «Я» (the caller confirms Йога).
+    // Picked while on the self pick (the caller confirms yoga).
     choose(selectByPlaceholder('Направление практики'), 'yoga')
     await flush()
 
@@ -2209,7 +2233,8 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     expect(toastError).toHaveBeenCalledWith('Не удалось загрузить методы мастера')
 
     // And no direction can ride along to the API: the title is filled, so
-    // «Выберите направление» is what blocks the submit.
+    // the choose-direction error (i18n:masterScreens.createPractice.validation.chooseDirection)
+    // is what blocks the submit.
     typeInto(inputByPlaceholder('Название'), 'Утренняя практика')
     submitForm()
     await flush()

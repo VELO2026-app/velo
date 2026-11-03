@@ -166,10 +166,10 @@ export default [
   },
 
   {
-    // Tests drive components through createApp(...) -- the component-per-file
-    // and name-casing rules misread those prop/passing objects as component
-    // definitions (e.g. SendMessageModal's `name: 'Анна Кузнецова'` fixture is
-    // a student-name prop, not a component name).
+      // Tests drive components through createApp(...) -- the component-per-file
+      // and name-casing rules misread those prop/passing objects as component
+      // definitions (e.g. SendMessageModal's student-name `name` prop fixture
+      // carries a person's name, not a component name).
     files: ['src/**/*.test.ts'],
     rules: {
       'vue/one-component-per-file': 'off',

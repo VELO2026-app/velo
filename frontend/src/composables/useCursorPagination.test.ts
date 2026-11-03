@@ -76,8 +76,8 @@ describe('useCursorPagination', () => {
       .mockResolvedValueOnce({ items: [row('смс')], next_cursor: null })
     const feed = useCursorPagination<Row>(fetchFn, 2)
 
-    const slow = feed.refresh() // "см" -- slow
-    const fast = feed.refresh() // "смс" -- overtakes
+    const slow = feed.refresh() // the shorter query -- resolves late
+    const fast = feed.refresh() // the longer query -- overtakes it
     await fast
     expect(feed.items.value.map((r) => r.id)).toEqual(['смс'])
     expect(feed.loading.value).toBe(false)

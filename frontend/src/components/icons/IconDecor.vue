@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- IconDecor (Diary date-node flourish «Декор»)
+  VELO Frontend -- IconDecor (Diary date-node flourish "Decor")
 
   Source: icon-spec Group 3352.svg (Adobe Illustrator re-export, 2026-06-08),
   the canonical diary decor pair. The asset is a SYMMETRIC PAIR of filigree

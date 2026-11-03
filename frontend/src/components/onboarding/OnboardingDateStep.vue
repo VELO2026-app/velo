@@ -1,15 +1,19 @@
 <!--
   VELO Frontend -- OnboardingDateStep (FE-101, onboarding step 4 of 5)
 
-  The «Дата рождения» body of the user onboarding: title, one line of copy
+  The birth-date body of the user onboarding (i18n:auth.onboarding.birth.title):
+  title, one line of copy
   and a single field-styled button that opens BirthDateSheet. The shell
-  (dots, «Пропустить», back arrow, «Далее») belongs to OnboardingView; this
+  (dots, i18n:common.skip, back arrow, i18n:auth.onboarding.next) belongs to
+  OnboardingView; this
   component only owns the date itself.
 
   v-model is an ISO 'YYYY-MM-DD' string, '' until a date is saved in the
-  sheet. Choosing is OPTIONAL by design: the step's «Далее» stays enabled
+  sheet. Choosing is OPTIONAL by design: the step's next button
+  (i18n:auth.onboarding.next) stays enabled
   with no date (nothing is sent for birth_date then) -- the screen collects
-  a nicety, it does not gate the flow, same spirit as «Пропустить».
+  a nicety, it does not gate the flow, same spirit as the skip button
+  (i18n:common.skip).
 -->
 
 <template>
@@ -53,7 +57,8 @@ const emit = defineEmits<{
 
 const sheetOpen = ref(false)
 
-// «14 октября 2001 г.» in ru, straight from ICU -- the app's single date
+// A long ICU date ("14 October 2001" style in ru, with the Russian month
+// name and trailing year marker), straight from ICU -- the app's single date
 // spelling authority (utils/format.ts uses the same composer). Noon anchor:
 // the ISO date is parsed in the RUNNER's zone, and a midnight anchor can
 // slide to the previous day in a zone behind UTC. Called WITHOUT `new`

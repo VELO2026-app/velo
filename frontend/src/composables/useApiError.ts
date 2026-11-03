@@ -9,7 +9,7 @@
 //   import { extractApiError } from '@/composables/useApiError'
 //
 //   } catch (e) {
-//     return { ok: false, error: extractApiError(e, 'Не удалось выполнить действие') }
+//     return { ok: false, error: extractApiError(e, fallbackMessage) }
 //   }
 //
 // tz-i18n 1.2: a known code resolves through the `errors` catalog

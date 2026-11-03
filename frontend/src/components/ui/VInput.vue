@@ -8,7 +8,7 @@
 
   Usage:
     <VInput v-model="email" label="Email" type="email" placeholder="you@example.com" />
-    <VInput v-model="name" label="Название" required />
+    <VInput v-model="name" label="Title" required />
 -->
 
 <template>

@@ -17,7 +17,7 @@ export interface UserSchools {
   canCreate: boolean
 }
 
-/** «Школы» tab (SchoolsView): the schools I participate in + the create right. */
+/** Schools tab (SchoolsView, i18n:user.screens.schools.title): the schools I participate in + the create right. */
 export function userSchoolsQuery(role: string): QueryOptions<UserSchools> {
   return {
     key: ['schools', 'mine', 'participant', role],
@@ -36,7 +36,8 @@ export function userSchoolsQuery(role: string): QueryOptions<UserSchools> {
       if (mineRes.status === 'rejected') throw mineRes.reason
       // FE-93: this zone lists the schools I PARTICIPATE in. The curated rows
       // /mine still returns (relation is role-independent) are the master
-      // list's «Я куратор» section -- and each would 403 its way through this
+      // list's curator tab (i18n:masterScreens.masterSchools.tab.curator) --
+      // and each would 403 its way through this
       // zone's screens.
       return {
         schools: mineRes.value.items.filter((g) => g.relation !== 'curator'),

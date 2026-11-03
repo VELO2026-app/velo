@@ -3,7 +3,8 @@
 // =============================================================================
 //
 // 424 lines. The GLOBAL taxonomy catalog -- the same catalog AdminMethodRequestsView's
-// «Добавить в каталог» promote path (№476) writes into. PATTERN = local-refs +
+// i18n:adminScreens.adminMethodRequests.addToCatalog promote path (№476) writes
+// into. PATTERN = local-refs +
 // a reactive Record (`newStyleLabel`, keyed per direction id) + FIVE mutating
 // CRUD operations. No store, confirmed by reading every import. Seams mocked:
 // @/api/taxonomy's getFullTaxonomy / createTaxonomyDirection /
@@ -34,10 +35,11 @@
 // getFullTaxonomy called a SECOND time, not a locally-mutated array.
 //
 // FIVE FALLBACK STRINGS, confirmed distinct where the code makes them
-// distinct: addDirection -> 'Не удалось добавить направление' (.vue:210);
-// addStyle -> 'Не удалось добавить вид' (.vue:230); saveDirectionLabel ->
-// 'Не удалось сохранить' (.vue:259); toggleDirectionActive AND
-// toggleStyleActive BOTH -> 'Не удалось изменить статус' (.vue:273,286) --
+// distinct: addDirection -> i18n:adminScreens.adminCatalog.addDirectionFailed
+// (.vue:210); addStyle -> i18n:adminScreens.adminCatalog.addStyleFailed
+// (.vue:230); saveDirectionLabel -> i18n:adminScreens.adminCatalog.saveFailed
+// (.vue:259); toggleDirectionActive AND toggleStyleActive BOTH ->
+// i18n:adminScreens.adminCatalog.statusChangeFailed (.vue:273,286) --
 // these two are INTENTIONALLY identical (not a copy-paste bug; both are
 // generic "status change failed" messages), so the failure-path tests for
 // those two are discriminated by WHICH api function was called, not by the
@@ -681,7 +683,7 @@ describe('AdminCatalogView', () => {
       await flush()
 
       const cardA = dirCards()[0]!
-      chips(cardA)[0]?.click() // Тишина, is_active: true -> toggling to false
+      chips(cardA)[0]?.click() // first style chip, fixture is_active: true -> toggling to false
       await flush()
 
       expect(taxonomyApi.updateTaxonomyStyle).toHaveBeenCalledWith('st_a1', { is_active: false })
@@ -732,7 +734,7 @@ describe('AdminCatalogView', () => {
     // (.vue:280) catches the second click regardless. Only removing
     // toggleStyleActive's OWN guard turns THIS test red. So this is really an
     // isolated proof of .vue:280, not .vue:267 -- both were verified
-    // separately and restored; see the ГОТОВО report for the full trail.
+    // separately and restored; see the GOTOVO report for the full trail.
     it('togglingId is SHARED ACROSS FUNCTIONS: a direction toggle in flight blocks a style toggle on the SAME card', async () => {
       let resolveToggle!: (v: TaxonomyDirectionItem) => void
       vi.mocked(taxonomyApi.updateTaxonomyDirection).mockImplementation(

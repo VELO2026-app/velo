@@ -10,7 +10,7 @@
 // Pinning the full contract here so future edits can't silently reintroduce
 // the detail read.
 //
-// B3 (Батч 3, PROMPT №580, historical): extended extractApiError to also
+// B3 (Batch 3, PROMPT №580, historical): extended extractApiError to also
 // fall back on an EMPTY ApiResponseError.detail. That concern is subsumed
 // now -- an empty detail and an unmapped code land on the fallback the same
 // way, since detail is never consulted either way.

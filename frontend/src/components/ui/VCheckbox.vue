@@ -2,11 +2,13 @@
   VELO Frontend -- VCheckbox Component (Phase-3 master DS)
 
   Square checkbox + label. DS-token control (the DS had only VSwitch; the
-  practice "Повторение" section needs a real checkbox). Checked = primary fill
-  + white IconCheck, matching the operator SVG (2026-06-11).
+  practice recurrence section
+  (i18n:masterScreens.createPractice.sections.recurrence) needs a real
+  checkbox). Checked = primary fill + white IconCheck, matching the operator
+  SVG (2026-06-11).
 
   Usage:
-    <VCheckbox v-model="isRecurring" label="Сделать регулярной" />
+    <VCheckbox v-model="isRecurring" label="Make recurring" />
 -->
 
 <template>
@@ -73,10 +75,11 @@ function toggle(): void {
 }
 
 /* [FE-26] 44px touch-target bar: the row's own height is label-sized
-   (~20-27px) and must not grow -- consent/«Сделать регулярной» rows are
-   deliberately compact, and 44px min-height would blow up every form's
-   spacing. The invisible overlay extends the tappable zone ~12px above/
-   below and around instead: the 20px box alone reaches 44px, and rows
+   (~20-27px) and must not grow -- consent rows and the make-recurring row
+   (i18n:masterScreens.createPractice.recurring.toggle) are deliberately
+   compact, and 44px min-height would blow up every form's spacing. The
+   invisible overlay extends the tappable zone ~12px above/below and
+   around instead: the 20px box alone reaches 44px, and rows
    WITH a label were already wide enough. Adjacent stacked checkboxes'
    zones can meet in the row gap -- a seam tap then goes to the later
    row, which for adjacent checkbox rows is an acceptable miss. */

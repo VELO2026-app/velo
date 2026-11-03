@@ -60,9 +60,10 @@ const { t } = i18n.global
  * not approximations, and are mirrored by the --velo-analytics-* tokens in
  * styles/variables.css (the token wins at runtime; the fallback only covers
  * a context where the stylesheet did not load). Every five-segment
- * analytics strip (practice «До/После практики», the school feedback
- * block, the rating bars and the feeds' distributions since BE-77) reads
- * its segment colors from here, so the surfaces cannot drift apart.
+ * analytics strip (the practice before/after pair,
+ * i18n:shared.analytics.before / i18n:shared.analytics.after, the school
+ * feedback block, the rating bars and the feeds' distributions since BE-77)
+ * reads its segment colors from here, so the surfaces cannot drift apart.
  */
 export const MOOD_SCALE_FILLS: Record<MoodScaleKey, string> = {
   bad: 'var(--velo-analytics-bad, #fe9093)',
@@ -155,8 +156,8 @@ export const DIRECTION_ICON_FALLBACK: Component = IconDots
  * legacy callers pass it); ignored internally.
  */
 export function practiceIconFor(p: {
-  /** direction идёт из generated.ts как string (бэкенд widen-нул enum);
-   *  принимаем string и сами проверяем через DIRECTION_ICON. */
+  /** `direction` arrives from generated.ts as a plain string (the backend
+   *  widened the enum); accept string and check it against DIRECTION_ICON. */
   direction?: string | null
   /** Kept for backwards compatibility — ignored after B-1 (2026-05-28). */
   title?: string | null
@@ -219,7 +220,8 @@ export const TIME_OF_DAY_LABEL: Record<TimeOfDay, string> = {
 // ---------------------------------------------------------------------------
 //
 // Card title per event kind. The feed renders these as the card heading;
-// checkin/feedback append the mood/rating label (e.g. "Check-in: Не очень").
+// checkin/feedback append the mood/rating label (e.g. "Check-in: " +
+// i18n:mood.low).
 // Values match the design (screens 40/41). kind->icon COMPONENT mapping lives
 // in DiaryFeedCard.vue, not here -- the utils layer must not import .vue files
 // (same rule as MOOD_ICON in CheckinView).
@@ -298,11 +300,13 @@ export const EXTERNAL_ACTIVITY_ICON: Component = IconCalendarStar
 
 /**
  * Outcome badge label for a practice_outcome card.
- * attended -> "Done" (teal), no_show -> "Вы не пришли".
+ * attended -> "Done" (teal), no_show -> the missed-you label
+ * (i18n:display.outcome.no_show).
  *
- * B30 (PROMPT №747): was 'Не состоялась' -- false, the practice DID happen,
- * the person missed it. Feeds DiaryFeedCard.vue and DiaryThreadCard.vue via
- * useDiaryCardModel's outcomeLabel, both user-facing (DetailView.vue).
+ * B30 (PROMPT №747): the no_show label was previously the "did not take
+ * place" wording -- false, the practice DID happen, the person missed it.
+ * Feeds DiaryFeedCard.vue and DiaryThreadCard.vue via useDiaryCardModel's
+ * outcomeLabel, both user-facing (DetailView.vue).
  */
 export const OUTCOME_LABEL: Record<string, string> = {
   get attended(): string {
@@ -318,10 +322,13 @@ export const OUTCOME_LABEL: Record<string, string> = {
 // ---------------------------------------------------------------------------
 
 /**
- * Recurrence label for a series from its ISO weekday list: «Ежедневно» when all
- * seven days are present, otherwise the short list «Пн, Ср, Пт» (de-duplicated,
- * ordered Mon→Sun). Returns null when there are no valid days so the caller can
- * fall back to a generic label.
+ * Recurrence label for a series from its ISO weekday list: the daily label
+ * (i18n:display.recurrenceDaily) when all seven days are present, otherwise
+ * the short weekday list resolving via `t(\`display.weekdayAbbr.${d}\`)`
+ * (de-duplicated, ordered Mon→Sun).
+ *
+ * @returns Null when there are no valid days so the caller can fall back
+ * to a generic label.
  */
 export function recurrenceDaysLabel(days: number[] | null | undefined): string | null {
   if (!days || days.length === 0) return null
@@ -333,9 +340,10 @@ export function recurrenceDaysLabel(days: number[] | null | undefined): string |
 
 /**
  * Upper-cased short weekday label for an ISO weekday (1=Mon..7=Sun): the
- * design grids (week strip, date/diary pickers) render ПН..ВС / MON..SUN.
- * The ONE place that knows the labels are upper-cased -- callers keep only
- * their own day ordering.
+ * design grids (week strip, date/diary pickers) render the short weekday
+ * abbreviations upper-cased (MON..SUN style in every locale). The ONE place
+ * that knows the labels are upper-cased -- callers keep only their own day
+ * ordering.
  */
 export function weekdayAbbrUpper(iso: number): string {
   return t(`display.weekdayAbbr.${iso}`).toUpperCase()

@@ -7,9 +7,9 @@
   FIELDS:
     - Name      -> first_name (real column; last_name left as-is, per the
                   master-name convention _master_full_name = first + last).
-    - E-mail    -> DISABLED stub. The app has no email capture yet (see the
-                  main profile screen decision); shown greyed out with a
-                  "появится позже" placeholder, never sent.
+    - E-mail    -> captured and validated here (E11; Telegram provides
+                  none): soft client check (the backend also 422s), sent
+                  only when changed, "" clears it.
     - Phone     -> credentials JSONB "phone". Soft, international validation
                   (digits/space/+()-, >=5 digits). Empty string clears it.
     - About     -> credentials JSONB "bio", max 2000 chars. Empty clears.
@@ -19,8 +19,10 @@
   /users/me). phone/bio cleared by sending "" (not null) -- matches the
   backend variant (b) semantics.
 
-  DELETE (Screen D): the red "Удалить аккаунт" opens a confirm modal. The
-  confirm action is a STUB — onConfirmDelete toasts «недоступно» and does NOT
+  DELETE (Screen D): the red delete CTA
+  (i18n:user.screens.editProfile.deleteCta) opens a confirm modal. The
+  confirm action is a STUB — onConfirmDelete toasts unavailability
+  (i18n:user.screens.editProfile.toast.deleteUnavailable) and does NOT
   call any delete endpoint (real account-deletion + balance-forfeit pending
   backend; see the inline note in onConfirmDelete). deleteMe() only resets
   onboarding (not a real erase), so it is intentionally NOT wired here.
@@ -44,7 +46,7 @@
         </button>
       </div>
 
-      <!-- Name + surname (two explicit fields — operator Q C2=Б) -->
+      <!-- Name + surname (two explicit fields — operator Q C2=B) -->
       <VInput
         v-model="form.firstName"
         :label="t('user.screens.editProfile.fields.firstName')"
@@ -69,17 +71,17 @@
       />
       <VFieldError id="err-email" :message="emailError" />
 
-      <!-- Методы практик (мастер): flat set + admin-approved change-request (M3).
-           Order (L2): below Имя/Фамилия/E-mail, above Языки/О себе. -->
+      <!-- Practice methods (master): flat set + admin-approved change-request (M3).
+           Order (L2): below name/surname/e-mail, above languages/about. -->
       <div v-if="isMaster" class="edit-profile__methods">
         <label class="edit-profile__methods-label">{{
           t('user.screens.editProfile.methods.title')
         }}</label>
 
         <!-- Pending: the proposed set is locked while an admin reviews it —
-             shown in the SAME направление→вид white cards (batch L, readonly
+             shown in the SAME direction→kind white cards (batch L, readonly
              picker), not a flat chip row. Unmatched (custom) strings now
-             surface as their own chip (Q3=А, PROMPT №391 — was drop, Q3=В). -->
+             surface as their own chip (Q3=A, PROMPT №391 — was drop, Q3=C). -->
         <template v-if="methodRequestPending">
           <MethodTaxonomyPicker :model-value="pendingProposedMethods" readonly />
           <div class="edit-profile__methods-status">
@@ -88,12 +90,13 @@
           <p class="edit-profile__methods-note">{{ METHOD_CHANGE_NOTE }}</p>
         </template>
 
-        <!-- Editable: two-level направление→вид picker (batch L, shared
+        <!-- Editable: two-level direction→kind picker (batch L, shared
              MethodTaxonomyPicker), seeded from the master's current methods
-             (surface-unmatched as custom, Q3=А). On submit the flat
+             (surface-unmatched as custom, Q3=A). On submit the flat
              new-vocabulary methods[]
              goes to submitMethodChangeRequest (schema unchanged). PC3
-             (2026-07-12): «Свой вариант» re-enabled (default allowCustom=true,
+             (2026-07-12): the custom option (i18n:methodPicker.custom)
+             re-enabled (default allowCustom=true,
              same as the apply wizard) -- the custom string flows through the
              SAME flattenMethods()/submitMethodChangeRequest() path already
              used here, and the backend's proposed_methods field has no
@@ -117,7 +120,8 @@
         </template>
       </div>
 
-      <!-- Языки практик (мастер): freely editable, no moderation (E16, Q2=А). -->
+      <!-- Practice languages (master, i18n:user.screens.editProfile.languages.title):
+           freely editable, no moderation (E16, Q2=A). -->
       <div v-if="isMaster" class="edit-profile__methods">
         <label class="edit-profile__methods-label">{{
           t('user.screens.editProfile.languages.title')
@@ -258,13 +262,14 @@ import { flattenMethods, parseMethods, primeMethodTaxonomyCatalog } from '@/util
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import type { UserUpdate } from '@/api/types'
 
-// FE-112 (tz-whitelabel §4): hides the «Сначала вывести» step in editions
+// FE-112 (tz-whitelabel §4): hides the withdraw-first step
+// (i18n:user.screens.editProfile.withdrawFirst) in editions
 // without the payments module (see the template comment at the button).
 const paymentsEnabled = featureEnabled('payments')
 
 const router = useRouter()
 
-// Scroll the «Фамилия» / «О себе» fields above the soft keyboard once it settles (M6).
+// Scroll the surname / about fields above the soft keyboard once it settles (M6).
 const { onFieldFocus } = useKeyboardFieldScroll()
 const toast = useToast()
 const authStore = useAuthStore()
@@ -273,8 +278,8 @@ const masterStore = useMasterStore()
 const user = computed(() => authStore.user)
 const isMaster = computed(() => authStore.role === 'master')
 
-// -- Master methods: two-level направление→вид picker gated by admin approval
-// (batch L). Selection is held as the flat «Направление — Вид» methods[] the
+// -- Master methods: two-level direction→kind picker gated by admin approval
+// (batch L). Selection is held as the flat "Direction — Kind" methods[] the
 // shared MethodTaxonomyPicker emits; the change-request payload/schema is
 // unchanged (still a flat string[] to submitMethodChangeRequest).
 const METHOD_CHANGE_NOTE =
@@ -477,7 +482,8 @@ async function onSave(): Promise<void> {
 
 // -- Delete account (design «Delete account») -------------------------------
 // Full design built now; the real "delete forever + forfeit balance" backend
-// isn't wired (the MVP deleteMe only resets onboarding), so «Удалить навсегда»
+// isn't wired (the MVP deleteMe only resets onboarding), so the delete-forever
+// button (i18n:user.screens.editProfile.delete.confirmButton)
 // is a stub-toast per the operator rule. -> Zod: real account-deletion + balance
 // forfeiture endpoint; a user-side balance source for this modal.
 const showDeleteModal = ref(false)
@@ -489,9 +495,10 @@ const balanceCents = computed(() => masterStore.profile?.available_cents ?? 0)
 const hasBalance = computed(() => balanceCents.value > 0)
 const formattedBalance = computed(() => formatMoney(balanceCents.value, 'EUR', getLocale(), true))
 
-// «Удалить навсегда» unlocks once any balance is consented to and the user
+// The delete-forever button (i18n:user.screens.editProfile.delete.confirmButton)
+// unlocks once any balance is consented to and the user
 // typed the confirmation word.
-// Confirmation word accepted in any case — «удалить» / «УДАЛИТЬ» both unlock (C7).
+// Confirmation word accepted in any case — typed lower-case or upper-case both unlock (C7).
 // tz-i18n §3.1 item 2: the word is the delete.confirmWord key (locale-owned);
 // which word a non-ru locale asks the user to type stays an owner ruling --
 // switching the key's text switches both the prompt and the comparison.
@@ -501,7 +508,7 @@ const canDelete = computed(
     delConfirmText.value.trim().toUpperCase() === t('user.screens.editProfile.delete.confirmWord'),
 )
 
-// The «УДАЛИТЬ» confirm field sits below the balance / withdraw / consent block, so
+// The confirmation-word field sits below the balance / withdraw / consent block, so
 // with a balance it only appears after consent and lands below the fold — the user
 // had to hunt for it (operator PE-4). Scroll it into the modal's `.v-modal__scroll`
 // region as soon as it renders: on modal open (the no-balance path shows it at once)

@@ -304,7 +304,8 @@ export const useDiaryStore = defineStore('diary', () => {
   }
 
   /**
-   * Clear all filters (back to "Все", no date range, no search) and reload.
+   * Clear all filters (back to the all-categories chip, i18n:common.all, no
+   * date range, no search) and reload.
    */
   async function clearFeedFilters(): Promise<void> {
     exitJump()

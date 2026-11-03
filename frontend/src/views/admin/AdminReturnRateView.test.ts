@@ -21,8 +21,8 @@
 //     negative -- THE HABIT did NOT repeat a sixth time in this batch.
 //   - STRUCTURAL SHAPE: this screen matches AdminCheckinRateView, not
 //     AdminFeedbackRateView -- a client list (loyalUsers) with its OWN
-//     `v-if="list.length"` / `v-else "Данных пока нет"` branch (.vue:41-44),
-//     same shape as lowPractices. (AdminFeedbackRateView has no such list at
+//     `v-if="list.length"` / `v-else` no-data branch (i18n:common.noData,
+//     .vue:41-44), same shape as lowPractices. (AdminFeedbackRateView has no such list at
 //     all -- three always-rendering VRatingBar rows instead.)
 //   - NO v-else-if="data": same as both siblings, content renders
 //     unconditionally past loading/error even if data.value stays null.

@@ -5,13 +5,13 @@
   trailing arrow. Variants: default | primary (accent text) | danger.
 
   Usage:
-    <VMenuRow label="Редактировать профиль" @click="onEdit">
+    <VMenuRow label="Edit profile" @click="onEdit">
       <template #icon><IconPen :size="20" /></template>
     </VMenuRow>
-    <VMenuRow label="Выйти" variant="danger" :show-arrow="false" @click="onLogout">
+    <VMenuRow label="Log out" variant="danger" :show-arrow="false" @click="onLogout">
       <template #icon><IconLogout :size="20" /></template>
     </VMenuRow>
-    <VMenuRow label="Сообщения" dot @click="onMessages">
+    <VMenuRow label="Messages" dot @click="onMessages">
       <template #icon><IconMessages :size="20" /></template>
     </VMenuRow>
 -->

@@ -85,7 +85,9 @@ describe('DiaryThreadCard -- system banner', () => {
 
     expect(q('.tcard--banner-teal')).not.toBeNull()
     expect(q('.tcard__banner-title')?.textContent?.trim()).toBe('Вы записались на')
-    // Square brackets preserved; the master joins with «с» only when present.
+    // Square brackets preserved; the master part joins in via the reference
+    // line (i18n:diary.bannerConfirmedRef) only when present
+    // (i18n:diary.bannerConfirmedRefNoMaster otherwise).
     expect(q('.tcard__banner-subtitle')?.textContent?.trim()).toBe(
       '[Вечерняя медитация с Анна Соколова]',
     )
@@ -148,8 +150,9 @@ describe('DiaryThreadCard -- check-in bubble', () => {
   })
 
   it('no comment -> the mood label becomes line 2 (still not a title suffix)', () => {
-    // mood 7 -> «Хорошо» (the good pair's top score is 8, the label is what
-    // the thread shows when the student left no comment).
+    // mood 7 -> the good-zone label (i18n:mood.good) (the good pair's top
+    // score is 8, the label is what the thread shows when the student left
+    // no comment).
     mountCard(feedItem('checkin', { mood: 7 }))
 
     expect(q('.tcard__bubble-title')?.textContent?.trim()).toBe('Check-in')
@@ -190,7 +193,8 @@ describe('DiaryThreadCard -- feedback bubble', () => {
   })
 
   it('no comment -> the rating label becomes line 2', () => {
-    // rating 9 -> «Огонь» (the unified scale, no exclamation mark).
+    // rating 9 -> the fire-zone label (i18n:mood.fire) (the unified scale,
+    // no exclamation mark).
     mountCard(feedItem('feedback', { rating: 9 }))
 
     expect(q('.tcard__bubble-preview')?.textContent?.trim()).toBe('Огонь')
@@ -213,7 +217,8 @@ describe('DiaryThreadCard -- practice outcome', () => {
 
     expect(q('.tcard__prac-title')?.textContent?.trim()).toBe('Утренняя йога')
     expect(host?.textContent).toContain('Мария Петрова')
-    // 08:00Z rendered in UTC; formatDuration(60) -> «1 час».
+    // 08:00Z rendered in UTC; formatDuration(60) -> the one-hour duration
+    // string.
     expect(q('.tcard__prac-meta')?.textContent).toContain('08:00')
     expect(q('.tcard__prac-meta')?.textContent).toContain('1 час')
     const status = q('.tcard__prac-status--attended')

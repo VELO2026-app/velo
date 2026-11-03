@@ -75,7 +75,9 @@ export const useMasterStore = defineStore('master', () => {
 
   // =========================================================================
   // Practices (paginated) -- T22-3/T22-5 (PROMPT №561): TWO independent
-  // cursors, not one. "Предстоящие" and "Прошедшие" are different questions
+  // cursors, not one. The practices-list tabs -- upcoming
+  // (i18n:masterScreens.masterPractices.tab.upcoming) and past
+  // (i18n:masterScreens.masterPractices.tab.past) -- are different questions
   // to the server (nearest-first vs most-recent-first over disjoint status
   // sets), so one shared futures-first cursor could never answer both --
   // page 1 of a single cursor was always the FURTHEST-future rows, which is
@@ -100,7 +102,8 @@ export const useMasterStore = defineStore('master', () => {
   /** Combined view across both cursors -- for consumers that need a practice
    *  by id regardless of bucket (EditPracticeView/MasterPracticeDetailView/
    *  AttendanceView/AttendanceRosterView's cache lookups) or a mixed-status
-   *  set (CreatePracticeView's "Использовать шаблон", which re-sorts by
+   *  set (CreatePracticeView's use-template section,
+   *  i18n:masterScreens.createPractice.useTemplate, which re-sorts by
    *  created_at itself and does not care which bucket a template came from).
    *  Order is NOT meaningful here -- callers that care about order use
    *  practicesUpcoming/practicesPast directly. */
@@ -111,7 +114,7 @@ export const useMasterStore = defineStore('master', () => {
   const practicesTotal = computed(() => paginationUpcoming.total.value + paginationPast.total.value)
 
   /**
-   * Initial load of the "Предстоящие" bucket only.
+   * Initial load of the upcoming bucket only.
    * Skips if already loaded (navigating back to list).
    */
   async function fetchUpcomingPractices(): Promise<void> {
@@ -121,9 +124,10 @@ export const useMasterStore = defineStore('master', () => {
   }
 
   /**
-   * Initial load of the "Прошедшие" bucket only. Lazy -- called when a
-   * screen actually needs past practices (the practices-list "Прошедшие" tab
-   * on activation; AnalyticsView's reviews tab on mount), never eagerly.
+   * Initial load of the past bucket only. Lazy -- called when a
+   * screen actually needs past practices (the practices-list past tab,
+   * i18n:masterScreens.masterPractices.tab.past, on activation;
+   * AnalyticsView's reviews tab on mount), never eagerly.
    */
   async function fetchPastPractices(): Promise<void> {
     if (pastLoaded.value) return
@@ -145,7 +149,7 @@ export const useMasterStore = defineStore('master', () => {
    * Force-reload BOTH buckets.
    * Called after create / edit / delete / cancel operations -- any of them
    * can move a practice between buckets (e.g. cancelling removes it from
-   * "Предстоящие" and it never appears in "Прошедшие" either).
+   * upcoming and it never appears in past either).
    */
   async function refreshMyPractices(): Promise<void> {
     await Promise.all([paginationUpcoming.refreshInPlace(), paginationPast.refresh()])
@@ -154,7 +158,7 @@ export const useMasterStore = defineStore('master', () => {
   }
 
   /**
-   * Force-reload the "Предстоящие" bucket ONLY (FE-53). The dashboard card's
+   * Force-reload the upcoming bucket ONLY (FE-53). The dashboard card's
    * figures -- current_participants / checkin_count -- move by ANOTHER actor's
    * hand (a student's booking, a student's PRE check-in), and with no push
    * mechanism the lazy guard above froze them at whatever the session's first
@@ -211,7 +215,7 @@ export const useMasterStore = defineStore('master', () => {
     fetchMyPractices,
     refreshMyPractices,
 
-    // Practices -- "Предстоящие" (nearest first)
+    // Practices -- upcoming bucket (nearest first)
     practicesUpcoming: paginationUpcoming.items,
     practicesUpcomingTotal: paginationUpcoming.total,
     practicesUpcomingLoading: paginationUpcoming.loading,
@@ -222,7 +226,7 @@ export const useMasterStore = defineStore('master', () => {
     refreshUpcomingPractices,
     loadMoreUpcomingPractices: paginationUpcoming.loadMore,
 
-    // Practices -- "Прошедшие" (most recent first)
+    // Practices -- past bucket (most recent first)
     practicesPast: paginationPast.items,
     practicesPastTotal: paginationPast.total,
     practicesPastLoading: paginationPast.loading,

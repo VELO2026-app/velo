@@ -1,22 +1,29 @@
 <!--
-  VELO Frontend -- WaitlistConfirmView: «Освободилось место» (Links, 3 October)
+  VELO Frontend -- WaitlistConfirmView: the spot-freed screen
+  (i18n:user.screens.waitlistConfirm.leadLine; Links, 3 October)
 
   Route: /user/waitlist/:id (waitlist-confirm). Reached from the
   waitlist.spot_available notification -- the bell row and the Telegram
   button (confirm_waitlist__<waitlist_id>). Before this screen nothing on the
   front could confirm a freed spot.
 
-  The entry comes from GET /waitlist/me (found by id) -- the practice and the
-  deadline «до». «Подтвердить место» -> POST /waitlist/{id}/confirm -> the
+  The entry comes from GET /waitlist/me (found by id) -- the practice and
+  the confirmation deadline (the lead line,
+  i18n:user.screens.waitlistConfirm.leadLine, carries the "until" date).
+  The confirm CTA (i18n:user.screens.waitlistConfirm.confirm.cta) ->
+  POST /waitlist/{id}/confirm -> the
   practice page. Every other state says what it is, with a way to the
   practice:
     notified, deadline ahead -> the confirm button
-    notified, deadline passed -> «Срок подтверждения истёк» (the server
+    notified, deadline passed -> the expired label
+                                 (i18n:user.screens.waitlistConfirm.state.expired;
+                                 the server
                                  expires it lazily, on the next confirm)
-    expired   -> «Срок подтверждения истёк»
-    converted -> «Место уже подтверждено»
-    waiting   -> «Вы в очереди»
-    not found -> «Запись не найдена» (no practice to link: back to the app)
+    expired   -> i18n:user.screens.waitlistConfirm.state.expired
+    converted -> i18n:user.screens.waitlistConfirm.state.confirmed
+    waiting   -> i18n:user.screens.waitlistConfirm.state.pending
+    not found -> i18n:user.screens.waitlistConfirm.notFound.title (no
+                 practice to link: back to the app)
   A 400 on confirm does not say which case it was (expired / spot taken /
   not notified) -- the screen re-reads the entry and shows its state; a 404
   is «not found»; anything else is the error toast, the button stays.

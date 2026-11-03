@@ -1,10 +1,11 @@
 <!--
   VELO Frontend -- SchoolMandalaBadge (tz-curator.md §5.3 / §7.2)
 
-  Квадратный логотип-мандала школы, детерминированно собранный из хэша
-  (utils/schoolBranding). Лёгкий -- для строки списка (§1.4), hero страницы
-  (§1.6) и карточки практики. SVG генератора отдаётся через data-URL <img>:
-  без v-html/innerHTML (правило фронта), фильтры внутри SVG в <img> работают.
+  The school's square mandala logo, deterministically assembled from the
+  hash (utils/schoolBranding). Lightweight -- for the list row (§1.4), the
+  page hero (§1.6) and the practice card. The generator's SVG goes through
+  a data-URL <img>: no v-html/innerHTML (frontend rule), and filters inside
+  an SVG in <img> keep working.
 -->
 
 <template>
@@ -25,14 +26,14 @@ import { brandingParams, logoSvg } from '@/utils/schoolBranding'
 
 const props = withDefaults(
   defineProps<{
-    /** Хэш школы: branding_hash с бэка (§5.2 B) или schoolHashFromName (A). */
+    /** School hash: the branding_hash from the backend (§5.2 B) or schoolHashFromName (A). */
     hash: string
     size?: number
     monogram?: boolean
     letter?: string
-    /** Плоский рендер: без drop-shadow (owner 2026-09-19). */
+    /** Flat render: no drop-shadow (owner 2026-09-19). */
     flat?: boolean
-    /** Масштаб мандалы внутри плашки (0.8 -- прототип; больше -- крупнее). */
+    /** Mandala scale inside the plate (0.8 -- the prototype; larger values scale it up). */
     mandalaScale?: number
   }>(),
   { size: 40, monogram: false, letter: '', flat: false, mandalaScale: 0.8 },

@@ -161,7 +161,7 @@ export function getAttendance(id: string): Promise<AttendanceResponse> {
 }
 
 /**
- * A4 V2 (PROMPT №572): the "Повторить" action on a permanently-failed Zoom
+ * A4 V2 (PROMPT №572): the retry action (i18n:common.retry) on a permanently-failed Zoom
  * meeting (zoom_meeting_status === 'create_failed'). Owner-only; throws
  * ApiResponseError code 'zoom_meeting_not_failed' if the meeting is not
  * currently in that state, or a 404 if there is no ZoomMeeting row at all.
@@ -229,21 +229,23 @@ export function getPracticeReviews(
 }
 
 // ============================================================================
-// BE-78: «Аналитика по практике»
+// BE-78: practice analytics (i18n:shared.analytics.title)
 // ============================================================================
 //
 // Readers: the leading master; for a school's practice also its curator and
 // its verified masters. Anyone else gets 404 -- not 403: the endpoints take
 // any signed-in user (a curator may hold role='user') and mask the practice.
 // An entitled reader of a practice that is not completed gets 400. Scores
-// arrive as zones (ScoreZone) only; every "X из N" uses N = `attended`.
+// arrive as zones (ScoreZone) only; every "X of N" counter
+// (i18n:shared.analytics.outOf) uses N = `attended`.
 
 /** Header + both zone distributions + the two list totals. */
 export function getPracticeAnalytics(id: string): Promise<PracticeAnalyticsResponse> {
   return api.get<PracticeAnalyticsResponse>(`/api/v1/practices/${id}/analytics`)
 }
 
-/** «Пришёл -> ушёл»: attendees with a PRE check-in AND a review, by name. */
+/** Came-left pairs (i18n:shared.analytics.cameLeft): attendees with a PRE
+ *  check-in AND a review, by name. */
 export function getPracticeAnalyticsPairs(
   id: string,
   limit = 20,

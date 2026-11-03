@@ -1,8 +1,8 @@
 <!--
   VELO Frontend -- Login screen outside Telegram (Standalone phase 3)
 
-  The ONLY way into the app from a browser or the home-screen app: «Войти
-  через Telegram» -> Telegram's page (the person confirms in Telegram) ->
+  The ONLY way into the app from a browser or the home-screen app: the
+  sign-in CTA (i18n:auth.loginCta) -> Telegram's page (the person confirms in Telegram) ->
   back to RETURN_PATH, where useAuth.ts finishes the sign-in on a fresh page
   load. The account is the one the Mini App uses for this Telegram account;
   a new person gets one on the first sign-in.

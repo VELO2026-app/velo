@@ -2,8 +2,8 @@
   VELO Frontend -- AdminPromosView (T5, PROMPT №418)
 
   Admin sees + deactivates EVERY master's promos, plus its own company-wide
-  ones (operator ask, 2026-07-14: "админ должен видеть и деактивировать
-  промокоды ВСЕХ мастеров"). Built in the AdminMastersView / AdminWithdrawalsView
+  ones (operator ask, 2026-07-14: "the admin must see and deactivate the
+  promocodes of ALL masters"). Built in the AdminMastersView / AdminWithdrawalsView
   family: header (back + count) + VSegment type/status tabs + card list +
   loader/error/empty states + load-more (AdminWithdrawalsView's pattern).
 

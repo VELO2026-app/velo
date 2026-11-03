@@ -1,9 +1,10 @@
 /*
   VELO Frontend -- schoolBranding/mandala (tz-curator.md §5.3)
 
-  Рендер мандалы -- чистая функция от params. Центр в (0,0), максимальный
-  радиус ~79. Три крупные зоны: ядро, венец, корона. Порт прототипа; в
-  прототипе mandalaGroup мутировала m.mainRing -- здесь этого нет.
+  Mandala render -- a pure function of params. Center at (0,0), max radius
+  ~79. Three large zones: the core, the main wreath, the crown. Port of the
+  prototype; the prototype's mandalaGroup mutated m.mainRing -- this one
+  does not.
 */
 
 import type { SchoolBrandingParams } from './params'
@@ -19,7 +20,7 @@ export function mandalaGroup(P: SchoolBrandingParams): string {
     P.style.colorway === 'duo' ? 'accent' : P.style.colorway === 'mid' ? 'deep' : 'mid'
   let s = ''
 
-  // ядро: точка + кольцо
+  // core: a dot + a ring
   s += `<circle r="${m.core.dot.toFixed(2)}" fill="${c[mainColor]}"/>`
   s += `<circle r="${m.core.ringR.toFixed(2)}" fill="none" stroke="${c[crownColor]}" stroke-width="2.6"/>`
   if (m.core.dots) {
@@ -29,7 +30,7 @@ export function mandalaGroup(P: SchoolBrandingParams): string {
     }
   }
 
-  // главный венец: подложка (в полшага, светлее) + крупные лепестки
+  // main wreath: an underlay (half a step out, lighter) + large petals
   const M = m.main
   const shape = P.style.main
   for (let i = 0; i < k; i++) {
@@ -46,10 +47,10 @@ export function mandalaGroup(P: SchoolBrandingParams): string {
       s += `<path d="${petal(a, M.r0, M.r1, M.w, shape === 'teardrop' ? 0.66 : 0.5)}" fill="${c[mainColor]}"/>`
   }
 
-  // один разделитель
+  // a single divider
   s += `<circle r="${m.divider.toFixed(2)}" fill="none" stroke="${c.mid}" stroke-width="2"/>`
 
-  // корона: одна крупная зона
+  // crown: one large zone
   const C = m.crown
   if (P.style.crown === 'petals') {
     for (let i = 0; i < k; i++) {
@@ -72,7 +73,8 @@ export function mandalaGroup(P: SchoolBrandingParams): string {
   return s
 }
 
-/** Полный SVG мандалы 200×200 (как логотип, но без плашки и тени). */
+/** The full mandala SVG, 200×200 (like the logo, but without the plate and
+ *  the shadow). */
 export function mandalaSvg(P: SchoolBrandingParams): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><g transform="translate(100 100) scale(.8)">${mandalaGroup(P)}</g></svg>`
 }

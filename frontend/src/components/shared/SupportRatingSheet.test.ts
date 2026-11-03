@@ -4,8 +4,9 @@
 //
 // The sheet is self-contained (the pending queue, the POST, the queue's
 // advance), so this file owns its BEHAVIOUR end to end: what it opens on,
-// what a submit sends, how it moves to the next waiting ticket, what «Позже»
-// ends, and what a deep link to an already-rated ticket does (nothing).
+// what a submit sends, how it moves to the next waiting ticket, what the
+// later button (i18n:chat.rating.later) ends, and what a deep link to an
+// already-rated ticket does (nothing).
 //
 // Seams mocked: @/api/support (listPendingRatings, rateTicket) and the toast.
 // The sheet is teleported (VBottomSheet) -- queries go to document.body.

@@ -29,7 +29,7 @@ export const useBalanceStore = defineStore('balance', () => {
 
   /**
    * Formatted balance string: "€0,00" for zero, "€15,00" for 1500 cents.
-   * Uses allowZero=true so 0 balance shows as currency, not "Бесплатно".
+   * Uses allowZero=true so 0 balance shows as currency, not the free label (i18n:common.free).
    */
   const formattedBalance = computed(() =>
     formatMoney(balanceCents.value, currency.value, 'ru', true),

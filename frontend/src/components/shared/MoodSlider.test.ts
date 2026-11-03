@@ -168,7 +168,7 @@ describe('MoodSlider -- a card tap picks the pair TOP score', () => {
   })
 
   it('re-tapping the active card while on an ODD score still snaps to the click value', () => {
-    // 5 sits inside «Нормально» but is not what the card promises; tapping it
+    // 5 sits inside the neutral card (i18n:mood.neutral) but is not what the card promises; tapping it
     // must land on the pair's top score 6, not swallow the tap.
     const { changes } = mountSlider(5)
 
@@ -292,7 +292,7 @@ describe('MoodSlider -- the horizontal swipe (tz §2.2)', () => {
     point('pointerdown', strip(), 200, 300)
     point('pointermove', strip(), 203, 301) // inside DRAG_SLOP
     point('pointerup', strip(), 203, 301)
-    cards()[4]!.click() // a real tap on «Огонь»
+    cards()[4]!.click() // a real tap on the fire card (i18n:mood.fire)
 
     expect(changes).toEqual([10])
   })

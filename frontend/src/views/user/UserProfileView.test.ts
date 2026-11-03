@@ -26,7 +26,8 @@
 // renders NOTHING in every test here -- confirmed by asserting zero
 // `.role-switch` elements in the master/admin role tests below, where a
 // leaked render would be most likely to show up and collide with the
-// screen's OWN "Вернуться в режим …" row (which is a SEPARATE, older
+// screen's OWN back-to-native-zone row (i18n:user.screens.userProfile.backToMaster /
+// i18n:user.screens.userProfile.backToAdmin) (which is a SEPARATE, older
 // mechanism, .vue:88-104, unconditional on role_switch).
 //
 // MONEY: none (stats are counts/hours, not currency). Cyrillic fixtures and
@@ -188,7 +189,8 @@ describe('UserProfileView', () => {
   })
 
   // ===========================================================================
-  // B52: the "Сообщения" row's colour dot, sourced from the SAME getMyStats
+  // B52: the messages row's (i18n:user.screens.userProfile.menu.messages)
+  // colour dot, sourced from the SAME getMyStats
   // response -- no separate seam to mock.
   describe('B52: unread dot on the "Сообщения" row', () => {
     it('has_unread_messages: true renders the dot', async () => {

@@ -295,8 +295,9 @@ export interface PracticeResponse extends GeneratedPracticeResponse {
   audience_kind?: AudienceKind
   /** The practice's target CUSTOM groups' names (audience_kind='groups'
    * only; empty/undefined otherwise). Static per-practice data, not a
-   * per-viewer flag -- CheckinView.vue composes the "Вы не состоите в
-   * группе «...»" message from this directly, no second round-trip. */
+   * per-viewer flag -- CheckinView.vue composes the not-in-group message
+   * (i18n:user.screens.checkin.restrictGroupNames) from this directly, no
+   * second round-trip. */
   audience_group_names?: string[]
 }
 
@@ -466,8 +467,9 @@ export type DiaryEventKind =
   | 'external_activity'
 
 // Filter chips on the feed. Map 1:1 onto backend \`category\` query values
-// (settings.diary_feed_categories). Omitting category = "Все". Query-param
-// literal, not a response field -- no generated.ts counterpart to re-point at.
+// (settings.diary_feed_categories). Omitting category = the All chip
+// (i18n:common.all). Query-param literal, not a response field -- no
+// generated.ts counterpart to re-point at.
 export type DiaryFeedCategory = 'entries' | 'dreams' | 'feedbacks' | 'checkins' | 'practices'
 
 // Query params for GET /api/v1/diary/feed (cursor pagination).
@@ -487,9 +489,9 @@ export interface PracticeFilters {
   // Calendar facets (all optional). Multi-select facets are arrays.
   direction?: PracticeDirection[]
   difficulty?: PracticeDifficulty[]
-  // F-8 (2026-05-29): style теперь multi-select chips, отправляется как массив
-  // (как direction/difficulty). Backend B-4 принимает list[str] и фильтрует
-  // через .in_().
+  // F-8 (2026-05-29): style is now multi-select chips, sent as an array
+  // (same as direction/difficulty). Backend B-4 accepts list[str] and
+  // filters via .in_().
   style?: string[]
   duration_bucket?: DurationBucket
   time_of_day?: TimeOfDay

@@ -39,23 +39,23 @@
 // the two sections expand INDEPENDENTLY (expanding one must not affect the
 // other -- the classic sibling-state bug, measured not assumed).
 //
-// VShowMore (.vue:73-77,87-91) is used with a VERBATIM `label="посмотреть
-// еще"` override (@/components/shared/VShowMore.vue:14-15,20-22) -- it does
-// NOT render the hidden count in its own text (unlike its `:count`/`:noun`
-// mode). The hidden count is only checkable through this screen's own state
-// (list lengths), not through the button's text -- confirmed by reading the
-// component, not assumed from its name.
+// VShowMore (.vue:73-77,87-91) is label-only: the caller passes a fully
+// localized label (i18n:masterScreens.attendanceRoster.showMore;
+// @/components/shared/VShowMore.vue:14-15,20-22) and the component renders
+// NO hidden count of its own. The hidden count is only checkable through
+// this screen's own state (list lengths), not through the button's text --
+// confirmed by reading the component, not assumed from its name.
 //
 // whenLabel/durationLabel (.vue:130-139): whenLabel combines formatDateShort
 // (Date.now-dependent) + formatTime (pure) -- same handling as
 // AttendanceView's practiceWhen. PROMPT №542: the ORIGINAL fixture used a
 // literal date "verified via node beforehand" to be far from "today" --
-// that only held on the day it was written, and drifted into the Сегодня/
-// Завтра window as real time passed. The clock is now FAKED and frozen
-// (NOW, see beforeEach); STABLE_SCHEDULED_AT is NOW+30 days, so the
-// relationship is fixed by construction, not by luck of the run date.
-// durationLabel is a PURE `${duration_minutes} мин` string, no Date
-// dependence at all.
+// that only held on the day it was written, and drifted into the today/
+// tomorrow relative-label window as real time passed. The clock is now
+// FAKED and frozen (NOW, see beforeEach); STABLE_SCHEDULED_AT is NOW+30
+// days, so the relationship is fixed by construction, not by luck of the
+// run date. durationLabel is a PURE t('practice.durationMinutes') call, no
+// Date dependence at all.
 //
 // Cyrillic fixtures/expected strings below were typed via the Write tool,
 // never a shell heredoc.
@@ -77,7 +77,7 @@ vi.mock('@/api/practices')
 // (beforeEach below), not left to the real wall clock -- whenLabel
 // (formatDateShort, Date.now-dependent) previously read a fixture date
 // "far from today" that was only far from the day this was WRITTEN, and
-// drifted into the Сегодня/Завтра window as real time passed (it did,
+// drifted into the today/tomorrow relative-label window as real time passed (it did,
 // PROMPT №542). STABLE_SCHEDULED_AT is derived from NOW with a fixed +30-day
 // offset, so the relationship holds regardless of what NOW is -- proven by
 // re-running this file with NOW set to several unrelated instants, not by
@@ -160,7 +160,7 @@ function practice(overrides: Partial<PracticeResponse> = {}): PracticeResponse {
     description: null,
     what_to_prepare: null,
     contraindications: null,
-    scheduled_at: STABLE_SCHEDULED_AT, // NOW + 30 days -- always outside the Сегодня/Завтра window, regardless of when this suite runs (clock is faked, see beforeEach)
+    scheduled_at: STABLE_SCHEDULED_AT, // NOW + 30 days -- always outside the today/tomorrow window, regardless of when this suite runs (clock is faked, see beforeEach)
     duration_minutes: 45,
     timezone: 'UTC',
     max_participants: 10,

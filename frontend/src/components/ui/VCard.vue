@@ -1,16 +1,17 @@
 <!--
   VELO Frontend -- VCard Component (Phase F2.1; padding variants 2026-06-06)
 
-  Единый белый card-канон: opaque white + 1px --velo-border-card + --radius-md.
-  Slot-контейнер для ВСЕХ белых карт/секций приложения (DS-governance).
+  The single white card canon: opaque white + 1px --velo-border-card +
+  --radius-md. Slot container for ALL of the app's white cards/sections
+  (DS-governance).
 
   Usage:
-    <VCard>Content</VCard>                     padding md (--space-4, деф)
+    <VCard>Content</VCard>                     padding md (--space-4, default)
     <VCard padding="sm">Compact</VCard>        padding --space-3
-    <VCard padding="none">Edge-to-edge</VCard> padding 0 (свой паддинг на классе)
+    <VCard padding="none">Edge-to-edge</VCard> padding 0 (own padding on the class)
     <VCard clickable @click="open(id)">…</VCard>
-  Доп. layout (flex/gap/cursor и т.п.) задаётся классом на самом <VCard> —
-  Vue мержит class на корень .v-card.
+  Extra layout (flex/gap/cursor and the like) is set by a class on the
+  <VCard> itself — Vue merges the class onto the .v-card root.
 -->
 
 <template>
@@ -34,7 +35,7 @@
 withDefaults(
   defineProps<{
     clickable?: boolean
-    /** md (--space-4, деф) | sm (--space-3) | none/false (0, свой паддинг) | true=md */
+    /** md (--space-4, default) | sm (--space-3) | none/false (0, own padding) | true=md */
     padding?: boolean | 'sm' | 'md' | 'none'
   }>(),
   {

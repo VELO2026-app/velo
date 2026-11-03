@@ -5,14 +5,16 @@
 
   Two back-button modes (per Figma DS, 2026-05-28):
     1. With separate title -> arrow-only compact pill (63×35), title sits next to it.
-       Example: PracticeDetailView ("Моя практика" / "Практика").
+       Example: PracticeDetailView (i18n:user.screens.practiceDetail.titleBooked /
+       i18n:user.screens.practiceDetail.titlePlain).
     2. Without title -> arrow + backLabel inside the pill (e.g. "<- Check-in").
        Example: CheckinView / FeedbackView.
 
-  Usage:
-    <VHeader title="Дашборд" />                            -- title only
-    <VHeader title="Моя практика" show-back @back="..." /> -- mode 1: arrow-only
-    <VHeader show-back back-label="Check-in" @back="..." />-- mode 2: arrow + text
+  Usage (title values are screen copy, e.g. i18n:tabs.dashboard for a role
+  dashboard, i18n:user.screens.practiceDetail.titleBooked for a practice):
+    <VHeader title="Dashboard" />                            -- title only
+    <VHeader title="My practice" show-back @back="..." />     -- mode 1: arrow-only
+    <VHeader show-back back-label="Check-in" @back="..." />   -- mode 2: arrow + text
 -->
 
 <template>

@@ -6,8 +6,8 @@
   (was glass-blue). `required` -> pink IconRequired seal in the right gutter.
 
   Usage:
-    <VSelect v-model="lang" label="Язык" :options="langOptions" />
-    <VSelect v-model="dir" label="Направление" :options="opts" required />
+    <VSelect v-model="lang" label="Language" :options="langOptions" />
+    <VSelect v-model="dir" label="Direction" :options="opts" required />
 -->
 
 <template>

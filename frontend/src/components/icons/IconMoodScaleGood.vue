@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- IconMoodScaleGood (mood-scale "Хорошо")
+  VELO Frontend -- IconMoodScaleGood (mood-scale "Good", i18n:mood.good)
 
   Approved mood-scale face (FE-85, tz-mood-scale.md §6): kept 1:1 from the approved source art: geometry, colors and gradients
   exactly as delivered. This component is the in-repo source of truth (raw
@@ -8,7 +8,7 @@
 
   F2.0 step-0 (tz-whitelabel §3.1): the gradient stops carry the fill colors
   as tokens with the source hex as fallback -- same pixels, but a skin can
-  now retheme them. The remaining mood-scale icons follow in step 1(в)
+  now retheme them. The remaining mood-scale icons follow in step 1(v)
   AFTER this probe is visually accepted.
 -->
 <template>

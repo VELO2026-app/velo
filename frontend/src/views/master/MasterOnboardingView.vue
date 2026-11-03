@@ -9,14 +9,19 @@
   system (operator EYEBALL-1), MINUS the timezone step (the master already set
   their timezone as a user).
 
-  Steps:
-    0  "Добро пожаловать"                 -> master-welcome.svg
-    1  "Ваше пространство"                -> master-space.svg
-    2  "AI-аналитика о состоянии группы"  -> master-analytics.svg
+  Steps (titles keyed, not quoted):
+    0  welcome   (i18n:masterScreens.masterOnboarding.welcome.title)
+       -> master-welcome.svg
+    1  space     (i18n:masterScreens.masterOnboarding.space.title)
+       -> master-space.svg
+    2  analytics (i18n:masterScreens.masterOnboarding.analytics.title)
+       -> master-analytics.svg
 
   Navigation:
-    - "Далее" advances; on the last step the CTA is "Войти в кабинет".
-    - "Пропустить" dismisses the whole carousel.
+    - "Next" (i18n:masterScreens.masterOnboarding.next) advances; on the
+      last step the CTA is "Enter the cabinet"
+      (i18n:masterScreens.masterOnboarding.enterCabinet).
+    - "Skip" (i18n:common.skip) dismisses the whole carousel.
     Both finish paths emit a single `done` event; the parent persists the flag
     and hides the overlay (no navigation).
 

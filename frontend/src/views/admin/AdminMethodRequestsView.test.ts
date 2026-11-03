@@ -7,8 +7,9 @@
 // import. Seams mocked: @/api/admin's getMethodChangeRequests,
 // approveMethodChange, rejectMethodChange. ApiResponseError kept REAL
 // (importOriginal). parseMethods kept REAL (pure, taxonomy-matching fixtures
-// built by reading it directly -- 'Медитация' matches the bare direction
-// label; 'Мой уникальный метод' matches nothing and surfaces as customText).
+// built by reading it directly -- the bare direction label
+// (i18n:display.direction.meditation) matches it; a custom fixture string
+// matching nothing surfaces as customText).
 //
 // TWO TRAPS REUSED FROM PRIOR ADMIN COVERAGE:
 //   (a) primeMethodTaxonomyCatalog sits in loadInitial's `Promise.all`
@@ -353,7 +354,7 @@ describe('AdminMethodRequestsView', () => {
   // mutation of the `customEnabled` half specifically. It has its own,
   // independent mutation-proof instead: removing the `void doApprove(item)`
   // call at .vue:238 turns IT red (0 calls instead of 1) without touching
-  // .vue:233 at all -- verified separately, restored, see the ГОТОВО report.
+  // .vue:233 at all -- verified separately, restored, see the ticket completion report.
   describe('THE CROWN BRANCH -- approve pauses only for custom methods (.vue:230-239)', () => {
     it('a fully taxonomy-matching proposal approves IMMEDIATELY, no dialog', async () => {
       vi.mocked(adminApi.approveMethodChange).mockResolvedValue({
@@ -431,7 +432,7 @@ describe('AdminMethodRequestsView', () => {
     it('FE-89: TWO own methods travel as two separate labels, never one glued «Сказкотерапия, Гвоздестояние» entry', async () => {
       // The reported bug: the master's already-approved private method rode
       // along inside proposed_methods, and the old glue scoped ONE direction
-      // named «Сказкотерапия, Гвоздестояние» -- dead for both practices.
+      // named by gluing both labels into one -- dead for both practices.
       vi.mocked(adminApi.approveMethodChange).mockResolvedValue({
         user_id: 'm_two',
         status: 'approved',
@@ -562,7 +563,7 @@ describe('AdminMethodRequestsView', () => {
     // onPromoteConfirm calls doApprove directly with NO guard of its own in
     // front (unlike the immediate-approve path above). This is the test that
     // actually goes red if JUST doApprove's own guard is removed -- verified
-    // directly, see the mutation trail in the ГОТОВО report.
+    // directly, see the mutation trail in the ticket completion report.
     it('promote-confirm path: a same-tick double click on "Добавить в каталог" makes no second api call', async () => {
       let resolveApprove!: (v: MethodChangeActionResponse) => void
       vi.mocked(adminApi.approveMethodChange).mockImplementation(

@@ -2,8 +2,8 @@
 // VELO Frontend -- build matrix (tz-whitelabel F5.1 acceptance prototype)
 // =============================================================================
 // Builds THREE editions from the current working tree and prints the diff
-// report the F5 acceptance reads (§6.1: «из одного коммита собираются VELO
-// (золотой) + 2 тестовых бренда; отчёт-диф ассетов и токенов»):
+// report the F5 acceptance reads (§6.1: "from one commit, VELO (golden)
+// + 2 test brands are built; the report diffs assets and tokens"):
 //
 //   golden         apply-skin --remove      -> the VELO reference
 //   test-contrast  skins/test-contrast      -> the intentionally contrasty skin

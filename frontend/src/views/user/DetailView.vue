@@ -19,8 +19,8 @@
   No store: this is a one-shot read with no caching or mutations, loaded
   directly via the api wrappers (like getPractice).
 
-  Relationships ("Найдена взаимосвязь", screens 53-55) is an AI feature
-  outside the MVP and is deliberately NOT rendered here.
+  The relationships feature ("relationship found" cards, screens 53-55) is an
+  AI feature outside the MVP and is deliberately NOT rendered here.
 -->
 
 <template>

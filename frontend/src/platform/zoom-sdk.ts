@@ -12,7 +12,9 @@
 //
 // LAZY, ON PURPOSE. @zoom/meetingsdk is about 5 MB with React and redux
 // behind it. It is imported with a dynamic import() at the moment somebody
-// presses «Войти» / «Начать», never at module load: no other screen pays for
+// presses the practice screen's join / start button
+// (i18n:user.screens.practiceLive.join / i18n:user.screens.practiceLive.start),
+// never at module load: no other screen pays for
 // it, and the service worker's precache keeps it out too (vite.config.ts
 // manualChunks 'zoom-sdk' + globIgnores). The SDK's own media files (av,
 // WASM, CSS) come from Zoom's CDN, source.zoom.us/<version>/lib -- the SDK's

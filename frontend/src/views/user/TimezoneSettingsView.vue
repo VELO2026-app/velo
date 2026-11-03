@@ -7,9 +7,9 @@
   role-agnostic. Rebuilt to the operator SVG «7 Language/Timezone».
 
   Operator decisions 2026-06-13:
-    - TIMEZONE (В1): KEPT the existing TimezoneCityPicker combobox («align with the
+    - TIMEZONE (B1): KEPT the existing TimezoneCityPicker combobox («align with the
       user's» — already built, covers ~100 cities with live time + UTC offset). The
-      SVG's Москва/Лондон preset rows are NOT built — the search covers that need.
+      SVG's Moscow/London preset rows are NOT built — the search covers that need.
     - LANGUAGE: RETURNED (tz-i18n phase 5; the section was removed 2026-09-17
       with the note «a switcher returns together with real i18n» -- it has).
       Rows per the original SVG markup (globe + checkmark on the active row);
@@ -20,11 +20,14 @@
       follow-up applyUserLanguage is a no-op (setLocale early-exits on the
       same locale). Revert + toast on failure, same contract as the timezone
       row below. The server owns the value; no switcher state lives here.
-    - DATE FORMAT (В2=А): the «Формат даты» dropdown is built per the SVG but is
+    - DATE FORMAT (B2=A): the date-format dropdown
+      (i18n:user.screens.timezoneSettings.dateFormat.label) is built per the
+      SVG but is
       CAPTURED-ONLY — selecting a format does not change how dates render (dates go
       through the fixed format.ts). Backend task (Zod): store + actually apply a
       date-format preference app-wide.
-    - SAVE (В3=А): no «Сохранить» button — timezone auto-saves on selection (the
+    - SAVE (B3=A): no save button (i18n:ui.save) — timezone auto-saves on
+      selection (the
       established behaviour); a button on an auto-saving screen would mislead.
 
   Route: /{user,master}/profile/timezone.
@@ -269,7 +272,8 @@ async function onTimezoneChange(value: string): Promise<void> {
   flex-shrink: 0;
 }
 
-/* Subtitle directly under the «Часовой пояс» heading (operator 2026-06-19). The
+/* Subtitle directly under the timezone heading
+   (i18n:user.screens.timezoneSettings.timezone.label; operator 2026-06-19). The
    negative top margin pulls it tight to the heading inside the section gap. */
 .tz-settings__subtitle {
   margin: calc(-1 * var(--space-2)) 0 0;

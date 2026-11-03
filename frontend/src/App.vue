@@ -12,8 +12,8 @@
     3. Not authenticated:
          in Telegram  -> TelegramStubView (initData sign-in failed or the
                          session ended -- unchanged by Standalone phase 3);
-         outside      -> TelegramLoginView, the ONLY way in from a browser
-                         ("Войти через Telegram"). The sign-in ends on a
+         outside      -> TelegramLoginView, the ONLY way in from a
+                         browser (i18n:auth.loginCta). The sign-in ends on a
                          fresh page load (useAuth.ts), so the stage below is
                          decided with the user already known.
     4. Authenticated -> a small entry state machine (stage). FE-39: the INITIAL
@@ -169,8 +169,9 @@ const stage = ref<EntryStage | null>(null)
  *
  * FE-81: the one exception is a school invite deep link. The router has
  * already navigated to the standalone invitation screen, so the gate opens
- * the app around it: the user sees «Вас пригласили в школу» BEFORE any
- * onboarding, and the join view runs the carousel after the join (FE-83),
+   * the app around it: the user sees the invite copy
+   * (i18n:masterScreens.schoolJoin.invited.title) BEFORE any
+   * onboarding, and the join view runs the carousel after the join (FE-83),
  * landing in the joined school on finish or skip (FE-84).
  */
 function decideInitialStage(): EntryStage {
@@ -180,9 +181,9 @@ function decideInitialStage(): EntryStage {
 }
 
 /**
- * "Войти" on the welcome screen. New users go through the onboarding
- * carousel; returning users (onboarding already completed) go straight
- * to the app. Since FE-39 Welcome is the NEW-user entry only, so the
+ * The welcome screen sign-in button (i18n:auth.enter). New users go through
+ * the onboarding carousel; returning users (onboarding already completed) go
+ * straight to the app. Since FE-39 Welcome is the NEW-user entry only, so the
  * completed branch here is a defensive fallback, not a reachable path.
  */
 function onWelcomeEnter(): void {

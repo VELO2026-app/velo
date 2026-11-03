@@ -1,8 +1,8 @@
 /*
   VELO Frontend -- schoolBranding/palettes (tz-curator.md §5.1/§5.3)
 
-  Шесть кураторских палитр × шесть ролей. Порт прототипа -- имена и hex
-  не трогать: они входят в golden-SVG.
+  Six curator palettes × six roles. Port of the prototype -- do not touch
+  the names and hex: they are part of the golden SVG.
 
   tz-i18n: display names are catalog data (schools.json -> branding.palettes,
   keyed by the slug id); the hex roles below are the golden-SVG port and are

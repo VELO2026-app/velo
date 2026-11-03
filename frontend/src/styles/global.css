@@ -180,8 +180,8 @@ html.is-keyboard-open #app-bg {
    typing. Both left a band below the live bottom that painted NOTHING: the
    iOS focus pan (visualViewport.offsetTop) and the open/close animation
    frames transiently expose exactly that region, and body's own white
-   showed through -- the "большая белая область снизу" on the practice-create
-   form (FE-43). [FE-43] The background must CONTINUOUSLY fill everything
+   showed through -- the owner-reported "large white area at the bottom" on
+   the practice-create form (FE-43). [FE-43] The background must CONTINUOUSLY fill everything
    the visual viewport can ever show: the layer keeps its frozen height in
    EVERY state (the rule below is intentionally empty/removed) -- the
    mandala never re-lays (cover over a constant box, FE-45's goal) and
@@ -212,7 +212,8 @@ html.is-keyboard-closing body {
 /* [FE-44] CLOSE ANIMATES AT THE KEYBOARD'S OWN SPEED. The keyboard-open
    state tracks the native fold frame-by-frame (smooth by construction); the
    close, since FE-44, drops the cap in ONE step -- visually a faster,
-   abrupter motion than the open ("скорость разной не была"). While the
+   abrupter motion than the open (the owner's ruling: the speed must not
+   differ). While the
    closing class holds, every capped height TRANSITIONS from its
    keyboard-open value to the at-rest value over ~250ms with an ease-out
    curve -- the same order as the soft keyboard's own animation -- so the

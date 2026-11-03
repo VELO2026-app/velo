@@ -1,15 +1,17 @@
 <!--
   VELO Frontend -- AdminRevenueView (Admin DS, 2026-06-14, operator SVG "1 Revenue")
 
-  Drill-in from the dashboard "Баланс по мастерам" link. Platform revenue +
+  Drill-in from the dashboard masters-balance link
+  (i18n:adminScreens.adminDashboard.mastersBalance). Platform revenue +
   commission + payout + per-master earnings.
 
   WIRED (E9, 2026-06-16): GET /api/v1/admin/revenue?period=week|month — revenue
   (GMV), commission, payout + per-master breakdown (loading/error/empty states).
-  Неделя/Месяц toggle (mirrors AdminDashboardView's period segment), default
-  'week' to match the backend default. Money via formatMoney(..., 'EUR', getLocale(),
+  Week/month toggle (i18n:common.periodWeek / i18n:common.periodMonth; mirrors
+  AdminDashboardView's period segment), default 'week' to match the backend
+  default. Money via formatMoney(..., 'EUR', getLocale(),
   true) so €0.00 renders honestly: seed practices are currently free, so totals
-  read 0 until priced templates land (seed-pricing task, operator D2=В, queued
+  read 0 until priced templates land (seed-pricing task, operator D2=B, queued
   next). No fabricated figures.
 -->
 
@@ -102,7 +104,7 @@ const data = ref<AdminRevenueResponse | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
 
-// Период (Неделя/Месяц), default 'week' matches the backend default.
+// Period (i18n:common.periodWeek / i18n:common.periodMonth), default 'week' matches the backend default.
 const period = ref<'week' | 'month'>('week')
 const periodOptions: SegmentOption[] = [
   { value: 'week', label: t('common.periodWeek') },
