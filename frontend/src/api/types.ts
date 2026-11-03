@@ -54,6 +54,7 @@ export type {
   CreateMasterPromoRequest,
   CreateReportRequest,
   CreateWithdrawalRequest,
+  CustomActivityNamesResponse,
   SchoolAnalyticsResponse,
   SchoolCheckinItem,
   SchoolCuratorRef,

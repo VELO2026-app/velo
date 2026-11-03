@@ -22,6 +22,10 @@
 //     PATCH  /api/v1/diary/{id}                    -- update entry (clear_* sentinels)
 //     DELETE /api/v1/diary/{id}                    -- hard delete
 //
+//   External activity (FE-70 / BE-27, custom-name hints FE-77 / BE-37):
+//     POST /api/v1/diary/external-activities            -- create + project
+//     GET  /api/v1/diary/external-activities/custom-names -- own past names
+//
 //   Insights (F9.3, master-facing):
 //     GET /api/v1/practices/{id}/insights          -- aggregated distributions
 // =============================================================================
@@ -45,6 +49,7 @@ import type {
   DiaryFeedFilters,
   CreateExternalActivityRequest,
   ExternalActivityResponse,
+  CustomActivityNamesResponse,
   PracticeInsightsResponse,
 } from '@/api/types'
 
@@ -299,6 +304,20 @@ export function createExternalActivity(
   body: CreateExternalActivityRequest,
 ): Promise<ExternalActivityResponse> {
   return api.post<ExternalActivityResponse>('/api/v1/diary/external-activities', body)
+}
+
+/**
+ * The person's OWN previously typed custom activity names (FE-77 / BE-37),
+ * most recently used first, at most eight. No parameters by design -- the
+ * scope is the caller, the count is the owner's product decision; neither
+ * belongs in the query string.
+ *
+ * An EMPTY items list is the normal "never used «custom»" state, not an
+ * error; the only coded failure is 401, which the client handles globally.
+ * Case-only spelling variants are already folded server-side.
+ */
+export function getExternalActivityCustomNames(): Promise<CustomActivityNamesResponse> {
+  return api.get<CustomActivityNamesResponse>('/api/v1/diary/external-activities/custom-names')
 }
 
 // ============================================================================

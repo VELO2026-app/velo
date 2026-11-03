@@ -273,6 +273,9 @@
         "relatedLine": "Related to the practice: {title} with {name}"
       },
       "externalActivityCreate": {
+        "mine": {
+          "caption": "My options"
+        },
         "custom": {
           "remove": "Remove your variant",
           "title": "Custom activity",

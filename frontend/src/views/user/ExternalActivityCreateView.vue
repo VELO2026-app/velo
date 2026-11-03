@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- ExternalActivityCreateView (FE-70 / BE-27)
+  VELO Frontend -- ExternalActivityCreateView (FE-70 / BE-27, name hints FE-77)
 
   Hand-entry screen for an activity that happened OUTSIDE velo (a home
   meditation, a massage, a dance class). Reached from the dashboard's
@@ -135,12 +135,38 @@
             </span>
           </div>
 
+          <!-- FE-77 / BE-37: the person's OWN past custom names, served by the
+               backend most-recent-first (at most eight). A tap only FILLS the
+               input below -- the commit stays the person's own act, same as
+               typing. There is NO × on these chips: the backend has no
+               deletion and the owner ruled hints are not removable. An empty
+               list is the normal «never used custom» state -- the whole row
+               stays away, the field alone is a complete screen. -->
+          <div v-if="myNames.length > 0" class="ea__mine" data-field="mine">
+            <span class="ea__mine-caption">
+              {{ t('user.screens.externalActivityCreate.mine.caption') }}
+            </span>
+            <div class="ea__mine-chips">
+              <VChip
+                v-for="name in myNames"
+                :key="name"
+                class="ea__mine-chip"
+                size="md"
+                clickable
+                @click="applyMyName(name)"
+              >
+                {{ name }}
+              </VChip>
+            </div>
+          </div>
+
           <div
             class="ea__custom"
             data-field="custom"
             :class="{ 'ea__custom--error': !!errors.custom }"
           >
             <input
+              ref="customInputEl"
               v-model="customInput"
               class="ea__custom-input"
               type="text"
@@ -256,13 +282,14 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { DateTime } from 'luxon'
 import { VBackButton, VChip, VFieldError, VTextarea } from '@/components/ui'
 import DatePickerSheet from '@/components/shared/DatePickerSheet.vue'
 import TimePickerSheet from '@/components/shared/TimePickerSheet.vue'
 import MoodSlider from '@/components/shared/MoodSlider.vue'
+import { getExternalActivityCustomNames } from '@/api/diary'
 import { useDiaryStore, type ExternalActivityFieldErrors } from '@/stores/diary'
 import { useToast } from '@/composables/useToast'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
@@ -313,8 +340,29 @@ const customInput = ref('')
 // FE-70 owner rule 2026-09-14: the committed custom chip text -- null means
 // no custom chip is on the board (the input is available again).
 const customChip = ref<string | null>(null)
+// The input element itself -- a suggestion tap (applyMyName) focuses it, the
+// same "move the person to the next act" job focusFirstError does.
+const customInputEl = ref<HTMLInputElement | null>(null)
 const moodScore = ref(MOOD_SCALE_DEFAULT_SCORE)
 const thoughts = ref('')
+
+// -- FE-77 / BE-37: the person's own past custom names -----------------------
+// The backend serves them most-recent-first, at most eight, case-folded.
+// EMPTY is the normal «never used custom» state (the row simply does not
+// render); any failure -- 401 is the only coded one, and the client handles
+// it globally -- leaves the hints off the same way: suggestions are a
+// courtesy and must never break or block the form.
+const myNames = ref<string[]>([])
+
+onMounted(() => {
+  getExternalActivityCustomNames()
+    .then((response) => {
+      myNames.value = response.items
+    })
+    .catch(() => {
+      // Hints stay away; the form is fully usable without them.
+    })
+})
 
 const errors = ref({
   date: '',
@@ -393,6 +441,18 @@ function removeCustomChip(): void {
   selectedActivity.value = null
   clearError('custom')
   clearError('activity')
+}
+
+// FE-77: a «Мои варианты» tap is ONE keystroke's worth of help, not a choice.
+// It puts the name into the input as an EDITABLE DRAFT -- the commit (arrow /
+// Enter) stays the person's own act, exactly like typed text. If a custom
+// chip is already on the board it comes off first (the same as its ×): the
+// single-select board must be free before the field can hold a draft.
+function applyMyName(name: string): void {
+  if (customChip.value !== null) removeCustomChip()
+  customInput.value = name
+  clearError('custom')
+  customInputEl.value?.focus()
 }
 
 function onThoughtsInput(value: string): void {
@@ -752,6 +812,37 @@ async function onSubmit(): Promise<void> {
   stroke: currentColor;
   stroke-width: 2.5;
   stroke-linecap: round;
+}
+
+/* -- FE-77 «Мои варианты»: the person's own past custom names as muted
+      glass chips directly above the custom field. Deliberately NOT the
+      preset look (blue-on-white outlined): these are fill-hints, not
+      choices -- VChip's own clickable rest state (grey-on-glass) is exactly
+      the secondary read, so only the geometry follows the board (the same
+      --space-3 horizontal padding the owner gave the preset chips). -- */
+.ea__mine {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ea__mine-caption {
+  font-family: var(--font-body);
+  font-size: var(--velo-fs-12);
+  color: var(--velo-text-secondary);
+}
+
+.ea__mine-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* The board's own owner geometry (2026-09-14): the selector carries
+   .ea__mine-chips so it wins the specificity tie with .v-chip--md's own
+   padding, same trick as the preset chips above. */
+.ea__mine-chips .ea__mine-chip {
+  padding: var(--space-2) var(--space-3);
 }
 
 /* -- «Свой вариант»: capsule on the white card with the commit disc nested
