@@ -76,7 +76,6 @@
       "upcoming": "Failed to load the nearest practice",
       "cancel": "Failed to cancel the booking",
       "join": "Failed to join the practice",
-      "leave": "Failed to leave the practice",
       "skipCheckin": "Failed to skip the check-in"
     },
     "master": {

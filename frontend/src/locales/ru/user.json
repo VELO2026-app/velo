@@ -474,13 +474,11 @@
         "entryPreparing": "Вход недоступен",
         "entryPreparing2": "Вход готовится",
         "join": "Войти",
-        "checkinDone": "Check-in сделан",
         "desktopCameraHint": "Чтобы включить камеру, откройте @:brand с рабочего стола",
         "toast": {
           "stateChanged": "Состояние практики изменилось",
           "zoomOpenFailed": "Не удалось открыть Zoom. Попробуйте ещё раз"
         },
-        "leave": "Покинуть практику",
         "liveBadge": "В эфире",
         "titleFallback": "Практика",
         "start": "Начать",

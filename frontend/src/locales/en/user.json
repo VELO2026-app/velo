@@ -474,13 +474,11 @@
         "entryPreparing": "Entry is unavailable",
         "entryPreparing2": "The entry is being prepared",
         "join": "Join",
-        "checkinDone": "Check-in done",
         "desktopCameraHint": "To turn the camera on, open @:brand from a desktop",
         "toast": {
           "stateChanged": "The practice state has changed",
           "zoomOpenFailed": "Failed to open Zoom. Try again"
         },
-        "leave": "Leave the practice",
         "liveBadge": "Live",
         "titleFallback": "Practice",
         "start": "Start",
