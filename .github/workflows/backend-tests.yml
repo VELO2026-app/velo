@@ -11,12 +11,18 @@
 # migration (protocol test.run), and this workflow is deleted -- it never
 # runs on `test` anyway (the branch filter below).
 #
-# THE SUITE OF THE STAND, NOT A SUITE OF ITS OWN. The stand runs
-# `python -m pytest tests/ -v --tb=short` inside the app container, next to
-# Postgres, Redis and velo-storage, with APP_ENV=production. Here the same
-# command runs in the stage `test` of backend/Dockerfile (BE-189: the suite
-# no longer ships in the runtime image), built from the repository root with
-# the build arguments the deploy machine gives, in one docker network with:
+# THE SUITE AS THE DEPLOY MACHINE RUNS IT, NOT A SUITE OF ITS OWN. The
+# command is the one of the stand, `python -m pytest tests/ -v --tb=short`
+# with APP_ENV=production, and it runs in the stage `test` of
+# backend/Dockerfile (BE-189: the suite no longer ships in the runtime
+# image), built from the repository root with the build arguments the deploy
+# machine gives. The database is the machine's (protocol 7.1, BE-191): a
+# ready `velo_test`, created by the Postgres service itself (POSTGRES_DB)
+# with the role the application would use, and handed to the suite as
+# DATABASE_URL -- the suite only empties it, never creates or drops it, and
+# refuses a name without `_test`. The role is the image's POSTGRES_USER, a
+# superuser, as on the machine (docker-compose.yml): an owner without
+# CREATEDB is not what this job reproduces. One docker network with:
 #   postgres, redis    -- the images docker-compose.yml pins, read FROM that
 #                         file (one place for the digests, BE-157);
 #   velo-storage       -- the stack docker-compose.storage.yml itself,
@@ -248,8 +254,8 @@ jobs:
           # image runs a temporary server on the unix socket only, and a
           # socket check reports it ready before the real server restarts.
           docker run -d --name velo-ci-postgres --network "$NET" --network-alias postgres \
-            -e POSTGRES_USER=velo -e POSTGRES_DB=velo -e POSTGRES_PASSWORD \
-            --health-cmd "pg_isready -h 127.0.0.1 -U velo -d velo" \
+            -e POSTGRES_USER=velo -e POSTGRES_DB=velo_test -e POSTGRES_PASSWORD \
+            --health-cmd "pg_isready -h 127.0.0.1 -U velo -d velo_test" \
             --health-interval 2s --health-timeout 3s --health-retries 60 \
             "$PG_IMAGE"
           # The command and the check of docker-compose.yml's redis service.
@@ -279,7 +285,7 @@ jobs:
             -e LOG_LEVEL=INFO \
             -e SECRET_KEY=velo-ci-secret-key-0123456789abcdef0123456789abcdef \
             -e POSTGRES_PASSWORD \
-            -e DATABASE_URL="postgresql+asyncpg://velo:${POSTGRES_PASSWORD}@postgres:5432/velo" \
+            -e DATABASE_URL="postgresql+asyncpg://velo:${POSTGRES_PASSWORD}@postgres:5432/velo_test" \
             -e REDIS_URL="redis://:${REDIS_PASSWORD}@redis:6379/0" \
             -e CORS_ORIGINS=https://app.velo-ci.invalid \
             -e PUBLIC_LINK_BASE=https://api.velo-ci.invalid \
