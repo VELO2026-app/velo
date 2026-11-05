@@ -108,10 +108,10 @@ describe('error mapping', () => {
   }
 
   it('never shows the vendor or our balance', async () => {
-    // The old module answered a 402 with «Закончился баланс OpenRouter». The
-    // backend collapses every provider-side failure into one code precisely
-    // so that sentence cannot come back: the person can act on neither our
-    // vendor nor our credit.
+    // The old module answered a 402 with a sentence that named the vendor
+    // and our empty balance. The backend collapses every provider-side
+    // failure into one code precisely so that sentence cannot come back:
+    // the person can act on neither our vendor nor our credit.
     fetchMock.mockResolvedValue(jsonResponse({ error: 'transcription_failed', message: 'x' }, 502))
 
     const result = await transcribeAudio(AUDIO_BLOB)

@@ -21,10 +21,12 @@
 
 import { setBodyOverflow, toggleRootClass } from '@/platform/dom'
 
+/** Root class applied while the body scroll is locked, so MobileLayout can freeze its own scroller too. */
 export const SCROLL_LOCK_CLASS = 'velo-scroll-locked'
 
 let lockCount = 0
 
+/** Lock background scrolling (ref-counted: the body unlocks only when every locker has released). */
 export function lockBodyScroll(): void {
   lockCount += 1
   if (lockCount === 1) {
@@ -33,6 +35,7 @@ export function lockBodyScroll(): void {
   }
 }
 
+/** Release one scroll-lock hold (ref-counted counterpart of lockBodyScroll). */
 export function unlockBodyScroll(): void {
   lockCount = Math.max(0, lockCount - 1)
   if (lockCount === 0) {

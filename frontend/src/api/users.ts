@@ -42,7 +42,7 @@ export function getTimezoneCatalog(): Promise<TimezoneCatalogResponse> {
  * Only the fields present in `body` are changed.
  *
  * Used by the profile screen and by the welcome onboarding flow
- * (which sends { timezone, onboarding_completed: true } on completion).
+ * (which sends `{ timezone, onboarding_completed: true }` on completion).
  */
 export function updateMe(body: UserUpdate): Promise<UserResponse> {
   return api.patch<UserResponse>('/api/v1/users/me', body)
@@ -62,7 +62,7 @@ export function deleteMe(): Promise<void> {
 }
 
 /**
- * Switch the authenticated user's own role (capability-derived, A1=Б).
+ * Switch the authenticated user's own role (capability-derived, A1=B).
  *
  * Backend: POST /api/v1/users/me/role — always on (the ROLE_SWITCH_ENABLED
  * flag is gone, №256). The allowed target set is derived server-side from

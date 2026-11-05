@@ -18,7 +18,8 @@
 //     direct @/api/masters calls -- that is the seam for everything else.
 //
 // TIME IS PINNED (vi.setSystemTime). formatDateShort compares the entry against
-// `new Date()` to decide «Сегодня»/«Вчера» (utils/format.ts:65-67), so history
+// `new Date()` to decide today/yesterday (i18n:common.today /
+// i18n:common.yesterday; utils/format.ts:65-67), so history
 // rows are wall-clock dependent; fixtures are literals relative to the frozen
 // instant. useViewerTimezone is mocked to a FIXED zone -- it reads the auth
 // profile, and an unpinned zone would drift the calendar-date comparison.
@@ -328,7 +329,8 @@ describe('MasterFinanceView', () => {
     })
 
     // formattedNetAmount's Math.max(0, ...) floor (MasterFinanceView.vue:257) is
-    // deliberately NOT tested: the "Вы получите" line only renders when
+    // deliberately NOT tested: the fee-breakdown line
+    // (i18n:masterScreens.masterFinance.fields.feeBreakdown) only renders when
     // amountError is empty (:169), which requires amount >= €50, where
     // amount - €2 fee is always positive. The floor is unreachable through the
     // DOM today. It becomes reachable -- and worth a test -- the day the

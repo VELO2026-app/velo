@@ -1,8 +1,8 @@
 /*
   VELO Frontend -- schoolBranding/palettes (tz-curator.md §5.1/§5.3)
 
-  Шесть кураторских палитр × шесть ролей. Порт прототипа -- имена и hex
-  не трогать: они входят в golden-SVG.
+  Six curator palettes × six roles. Port of the prototype -- do not touch
+  the names and hex: they are part of the golden SVG.
 
   tz-i18n: display names are catalog data (schools.json -> branding.palettes,
   keyed by the slug id); the hex roles below are the golden-SVG port and are
@@ -14,6 +14,7 @@
 // its leaves must stay plain strings.
 import schoolsSeedRaw from '@/locales/ru/schools.json?raw'
 
+/** One curator palette: display name plus the six hex roles of the golden SVG port. */
 export interface Palette {
   id: string
   name: string
@@ -35,6 +36,7 @@ function makePalette(id: string, roles: Omit<Palette, 'id' | 'name'>): Palette {
   return { id, name: paletteNames()[id] ?? id, ...roles }
 }
 
+/** The six school-branding palettes, in catalog key order. */
 export const PALETTES: Palette[] = [
   makePalette('eucalyptus', {
     bg: '#f6f2e8',

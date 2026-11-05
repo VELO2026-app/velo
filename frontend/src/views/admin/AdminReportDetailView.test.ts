@@ -26,9 +26,10 @@
 // genuinely NOT-FOUND state rendered the EXACT SAME UI (.vue's old catch
 // block never set any error/not-found flag, `report.value` simply stayed
 // null, so `v-else-if="report"` fell through to the same final `v-else`,
-// "Жалоба не найдена", with only a toast -- easy to miss -- as the sole
-// signal something was actually wrong, and no retry). The catch now sets a
-// distinct `error` ref with its own rung + "Повторить", matching sibling
+// the not-found title (i18n:adminScreens.adminReportDetail.notFoundTitle),
+// with only a toast -- easy to miss -- as the sole signal something was
+// actually wrong, and no retry). The catch now sets a distinct `error` ref
+// with its own rung + retry button (i18n:common.retry), matching sibling
 // admin detail screens (AdminPracticeDetailView, AdminMasterReviewView,
 // AdminWithdrawalDetailView). The old not-found `v-else` fallback is kept
 // (matching those same siblings' own defensive fallback) but is not
@@ -338,7 +339,9 @@ describe('AdminReportDetailView', () => {
       expect(adminApi.resolveReport).toHaveBeenCalledWith('r_pending', 'Меры приняты')
       expect(toastSuccess).toHaveBeenCalledWith('Жалоба решена')
       // S-1/S-2: push to the list, not back() -- fresh loadInitial() on return.
-      // FE-100: the «Жалобы» tab of «Модерация» -- the list it came from, as before.
+      // FE-100: the complaints tab (i18n:adminScreens.adminReports.tabComplaints) of
+      // Moderation (i18n:adminScreens.adminReports.moderationTab) -- the list it came
+      // from, as before.
       expect(push).toHaveBeenCalledWith({ name: 'admin-reports', query: { tab: 'complaints' } })
     })
 
@@ -389,7 +392,9 @@ describe('AdminReportDetailView', () => {
 
       expect(adminApi.dismissReport).toHaveBeenCalledWith('r_pending', undefined)
       expect(toastSuccess).toHaveBeenCalledWith('Жалоба отклонена')
-      // FE-100: the «Жалобы» tab of «Модерация» -- the list it came from, as before.
+      // FE-100: the complaints tab (i18n:adminScreens.adminReports.tabComplaints) of
+      // Moderation (i18n:adminScreens.adminReports.moderationTab) -- the list it came
+      // from, as before.
       expect(push).toHaveBeenCalledWith({ name: 'admin-reports', query: { tab: 'complaints' } })
     })
 
@@ -556,9 +561,11 @@ describe('AdminReportDetailView', () => {
       mount('r_pending', REPORT_PENDING) // both null
       await flush()
       expect(text()).not.toContain('Обработана')
-      // "Примечание" alone would also match the dismiss textarea's OWN label
-      // ("Примечание (необязательно)"), which always renders while pending --
-      // query the resolution_note meta block specifically instead.
+      // i18n:adminScreens.adminReportDetail.note alone would also match the
+      // dismiss textarea's OWN label
+      // (i18n:adminScreens.adminReportDetail.noteOptional), which always renders
+      // while pending -- query the resolution_note meta block specifically
+      // instead.
       expect(host?.querySelector('.report-detail__meta-note')).toBeNull()
 
       app?.unmount()

@@ -1,15 +1,17 @@
 /*
   VELO Frontend -- schoolBranding/params (tz-curator.md §5.3)
 
-  Хэш → параметры стиля. Всё разнообразие решается здесь; рендер
-  (mandala/logo/banner) -- чистая функция от params. Порт прототипа:
-  константы диапазонов не трогать (golden-тесты сверяются с эталоном).
+  Hash -> style parameters. All variety is decided here; the render
+  (mandala/logo/banner) is a pure function of params. Port of the
+  prototype: do not touch the range constants (golden tests compare
+  against the reference).
 */
 
 import { fnv1a, mulberry32 } from './hash'
 import { PALETTES, type Palette } from './palettes'
 
-/** Немного крупных зон вместо множества мелких -- так читается на телефоне. */
+/** A few large zones instead of many small ones -- that is what reads on
+ *  a phone. */
 function helpers(rng: () => number) {
   return {
     f: (a: number, b: number): number => a + rng() * (b - a),
@@ -19,14 +21,16 @@ function helpers(rng: () => number) {
   }
 }
 
+/** The style choices a school's hash picks: palette, symmetry, main and crown shapes, colorway. */
 export interface BrandingStyle {
   palette: Palette
-  k: number // симметрия
+  k: number // symmetry
   main: 'round' | 'teardrop' | 'diamond'
   crown: 'petals' | 'scallops' | 'diamonds'
   colorway: 'deep' | 'mid' | 'duo'
 }
 
+/** Geometry parameters of the generated mandala (radii, widths, crown, curl direction). */
 export interface MandalaParams {
   rot: number
   core: {
@@ -40,6 +44,7 @@ export interface MandalaParams {
   curlsDir: number
 }
 
+/** One swirl band of the generated banner background. */
 export interface BannerBand {
   alpha: number
   arc: number
@@ -54,6 +59,7 @@ export interface BannerBand {
   opacity: number
 }
 
+/** One swirl tail of the generated banner background. */
 export interface BannerTail {
   alpha: number
   arc: number
@@ -64,6 +70,7 @@ export interface BannerTail {
   opacity: number
 }
 
+/** The whole generated banner background: glow, grain, swirl, optional mountains and leaves. */
 export interface BannerParams {
   glow: { cx: number; cy: number; r: number }
   grainSeed: number
@@ -98,6 +105,7 @@ export interface BannerParams {
   } | null
 }
 
+/** Everything the generators derive from one school's hash: style, mandala and banner parameters. */
 export interface SchoolBrandingParams {
   hash: string
   style: BrandingStyle
@@ -105,7 +113,7 @@ export interface SchoolBrandingParams {
   bg: BannerParams
 }
 
-/** Гауссовы вершины суммируются в природный хребет. */
+/** Gaussian peaks sum into a natural ridge. */
 function mkPeaks(endX: number, hMax: number, R: ReturnType<typeof helpers>) {
   const peaks: Array<{ x: number; h: number; w: number }> = []
   let x = R.f(0, 90)
@@ -131,10 +139,10 @@ function mkRange(
 }
 
 /**
- * Хэш → параметры. «Роза-вихрь» фона: вложенные широкие ленты плотно
- * упаковывают диск (ширина ≈ шагу спирали), швы каждой следующей повёрнуты,
- * тона чередуются контрастно, из-под внешних витков вылетают тонкие струи.
- * Плюс горы и листья.
+ * `Hash -> parameters`. The background's "rose whirl": nested wide ribbons
+ * pack the disc tightly (width ≈ spiral pitch), each next seam is rotated,
+ * tones alternate contrastively, thin streams escape from under the outer
+ * coils. Plus mountains and leaves.
  */
 export function generateParams(hashHex: string): SchoolBrandingParams {
   const rng = mulberry32(fnv1a(hashHex))
@@ -142,10 +150,10 @@ export function generateParams(hashHex: string): SchoolBrandingParams {
 
   const style: BrandingStyle = {
     palette: R.pick(PALETTES),
-    k: R.pick([8, 10, 12]), // симметрия
-    main: R.pick(['round', 'teardrop', 'diamond']), // форма главного венца
-    crown: R.pick(['petals', 'scallops', 'diamonds']), // внешняя корона
-    colorway: R.pick(['deep', 'mid', 'duo']), // распределение тонов
+    k: R.pick([8, 10, 12]), // symmetry
+    main: R.pick(['round', 'teardrop', 'diamond']), // main wreath shape
+    crown: R.pick(['petals', 'scallops', 'diamonds']), // outer crown
+    colorway: R.pick(['deep', 'mid', 'duo']), // tone distribution
   }
 
   const mandala: MandalaParams = {
@@ -161,8 +169,9 @@ export function generateParams(hashHex: string): SchoolBrandingParams {
     curlsDir: R.chance(0.5) ? 1 : -1,
   }
 
-  // NB: в прототипе здесь создавался makeNoise(hashHex), но переменная была
-  // мёртвой (шум фона сидируется в banner.ts из того же хэша) -- не портируем.
+  // NB: the prototype created makeNoise(hashHex) here, but the variable was
+  // dead (the background noise is seeded in banner.ts from the same hash) --
+  // not ported.
   const bg: BannerParams = (() => {
     const wraps = R.i(4, 6)
     const rIn = R.f(30, 46)
@@ -176,11 +185,11 @@ export function generateParams(hashHex: string): SchoolBrandingParams {
     let prevRole: string | null = null
     for (let i = 0; i < wraps; i++) {
       ox += R.f(-9, 9)
-      oy += R.f(-9, 9) // центр ролла слегка «гуляет»
+      oy += R.f(-9, 9) // the roll's center drifts slightly
       let role: (typeof roles)[number]
       do {
         role = R.pick([...roles])
-      } while (role === prevRole) // соседние ленты контрастны
+      } while (role === prevRole) // adjacent ribbons contrast
       prevRole = role
       bands.push({
         alpha: dir * i * R.f(0.5, 0.95),
@@ -198,7 +207,7 @@ export function generateParams(hashHex: string): SchoolBrandingParams {
     }
     const tails: BannerTail[] = Array.from({ length: R.i(1, 2) }, () => {
       const arc = R.f(1.6, 2.6)
-      const endA = R.f(Math.PI * 1.05, Math.PI * 1.5) // струи улетают влево-вверх
+      const endA = R.f(Math.PI * 1.05, Math.PI * 1.5) // streams fly off to the upper left
       return {
         alpha: endA - dir * arc,
         arc,
@@ -223,7 +232,7 @@ export function generateParams(hashHex: string): SchoolBrandingParams {
       },
       mountains: R.chance(0.92)
         ? {
-            // хребты разного масштаба: далёкие пики, средний план, предгорья
+            // ridges of varied scale: distant peaks, middle ground, foothills
             ridges: [
               {
                 pts: mkRange(mkPeaks(R.f(650, 880), R.f(260, 360), R), R.f(575, 605)),

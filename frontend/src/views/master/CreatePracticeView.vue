@@ -5,13 +5,13 @@
   Standalone within MasterShell (back button -> origin via router.back(); see onBack).
 
   Sections (matching mockup screen-practice-create):
-    ОСНОВНОЕ    -- title (required), practice_type (required)
-    РАСПИСАНИЕ  -- date, time (combined -> scheduled_at UTC), duration, timezone
-    УЧАСТНИКИ   -- max_participants (null = unlimited)
-    ЦЕНА        -- is_free toggle; if paid: price_cents
-    ОПИСАНИЕ    -- description, what_to_prepare, contraindications (optional)
+    BASICS      -- title (required), practice_type (required)
+    SCHEDULE    -- date, time (combined -> scheduled_at UTC), duration, timezone
+    PARTICIPANTS -- max_participants (null = unlimited)
+    PRICE       -- is_free toggle; if paid: price_cents
+    DESCRIPTION -- description, what_to_prepare, contraindications (optional)
 
-  T-35: the ПОДКЛЮЧЕНИЕ section is GONE. There is no manual Zoom link to
+  T-35: the CONNECTION section is GONE. There is no manual Zoom link to
   enter any more -- attendance was never recorded for anyone who joined
   through one, so it was a second way past the very thing the Zoom
   integration exists to measure. If meeting creation fails, the answer is the
@@ -76,9 +76,10 @@
       -->
 
       <!-- ================================================================
-           Мастер (§1.6 delegation, FE-92): whose practice this is. The
+           Master (§1.6 delegation, FE-92): whose practice this is. The
            master-card entry preselects one master; the school-page entry
-           picks among that school's visible masters, «Я» first. Both need
+           picks among that school's visible masters, the self option
+           (i18n:masterScreens.createPractice.audience.me) first. Both need
            the school (?schoolId=): the backend creates for another master
            only IN a school, for a master of that school (BE-102). No school
            -> the caller owns the practice and this section does not render.
@@ -100,8 +101,9 @@
            the templates are the CALLER's practices (masterStore.myPractices),
            and the curator has no list of the master's. Fields a template
            filled before the switch stay: they are the curator's input now.
-           Использовать шаблон — prefill from one of the master's own past
-           practices (newest-first). Reuses PracticeListCard rows. Date/time
+           Use template (i18n:masterScreens.createPractice.useTemplate) —
+           prefill from one of the master's own past practices (newest-first).
+           Reuses PracticeListCard rows. Date/time
            are NOT copied (a template must not schedule in the past).
            ================================================================ -->
       <div v-if="!targetsForeignMaster" class="create-practice__section">
@@ -112,8 +114,9 @@
       </div>
 
       <!-- ================================================================
-           Основное  (Q2=А: 3 поля — Направление / Вид=style / Уровень=difficulty;
-           practice_type не показываем, выводим из «Повторения»)
+           Basics (Q2=A: 3 fields — direction / style / difficulty;
+           practice_type is not shown, it is derived from the recurrence
+           toggle)
            ================================================================ -->
       <div class="create-practice__section">
         <h2 class="velo-section-title">
@@ -126,7 +129,8 @@
           :error="errors.title"
         />
 
-        <!-- Направление = дисциплина (meditation/yoga/…). Подпись = плейсхолдер.
+        <!-- Direction = discipline (meditation/yoga/…). The field label is
+             the in-field placeholder.
              Options catalog-first (T2 stage 2) -- see directionOptions. -->
         <VSelect
           v-model="form.direction"
@@ -136,8 +140,8 @@
           @update:modelValue="onDirectionChange"
         />
 
-        <!-- Вид практики = style. Показываем только если у направления есть виды
-             (Q4=А: без явного «Без вида», не выбрано = null, необязательное). -->
+        <!-- Practice style = style. Shown only when the direction has styles
+             (Q4=A: no explicit "no style" option, unselected = null, optional). -->
         <div v-if="styleOptionsForForm.length > 0">
           <VSelect
             v-model="form.style"
@@ -146,7 +150,7 @@
           />
         </div>
 
-        <!-- Уровень сложности = difficulty (локальные мужские лейблы, Q1=Б). -->
+        <!-- Difficulty = difficulty (local masculine-gender labels, Q1=B). -->
         <VSelect
           v-model="form.difficulty"
           :placeholder="t('masterScreens.createPractice.fields.difficulty')"
@@ -156,14 +160,15 @@
       </div>
 
       <!-- ================================================================
-           Расписание
+           Schedule
            ================================================================ -->
       <div class="create-practice__section">
         <h2 class="velo-section-title">
           {{ t('masterScreens.createPractice.sections.schedule') }}<span class="cp-req">*</span>
         </h2>
 
-        <!-- Дата: открывает DatePickerSheet. Подпись = плейсхолдер внутри поля. -->
+        <!-- Date (i18n:ui.pickerDate): opens DatePickerSheet. The label is
+             the in-field placeholder. -->
         <div class="create-practice__field">
           <div class="create-practice__field-row">
             <button
@@ -183,7 +188,8 @@
           <VFieldError id="err-date" :message="errors.date" />
         </div>
 
-        <!-- Время: открывает TimePickerSheet (24ч). Подпись = плейсхолдер. -->
+        <!-- Time (i18n:ui.pickerTime): opens TimePickerSheet (24h). The label
+             is the placeholder. -->
         <div class="create-practice__field">
           <div class="create-practice__field-row">
             <button
@@ -209,15 +215,18 @@
           :options="DURATION_OPTIONS"
           :error="errors.duration_minutes"
         />
-        <!-- Часовой пояс убран: берётся из профиля мастера (form.timezone),
-             расписание задаётся в его часовом поясе (operator 2026-06-18). -->
+        <!-- Timezone removed: taken from the master's profile (form.timezone),
+             the schedule is set in the master's own timezone (operator
+             2026-06-18). -->
       </div>
 
       <!-- ================================================================
-           Повторение  (Q1=А: полная секция — период + дни недели + «Завершить»
-           + счётчик. РЕАЛЬНО только series/live из чекбокса-гейта; период/дни/
-           условие/счётчик — captured-only (нет бэка), см. master-ds-zod-roadmap.
-           Печати обязательности — Q2=В: на полях повтора, когда «регулярная» вкл.)
+           Recurrence (Q1=A: the full section — period + weekdays + finish
+           + count. Only the series/live checkbox gate is REAL; period/days/
+           end-condition/count are captured-only (no backend yet), see
+           master-ds-zod-roadmap. Required seals — Q2=V: on the recurrence
+           fields while the recurring toggle (i18n:masterScreens.createPractice.recurring.toggle)
+           is on.)
            ================================================================ -->
       <div class="create-practice__section">
         <h2 class="velo-section-title">
@@ -234,7 +243,7 @@
         </div>
 
         <template v-if="form.is_recurring">
-          <!-- Повтор: период (всегда выбрано → печать не нужна). -->
+          <!-- Repeat period (always selected → no required seal). -->
           <div class="create-practice__seal-row">
             <VCard class="create-practice__repeat create-practice__grow" padding="none">
               <div class="create-practice__repeat-title">
@@ -244,9 +253,9 @@
             </VCard>
           </div>
 
-          <!-- Дни недели — ТОЛЬКО для weekly/biweekly. «Каждый день» (daily) не
-               использует дни недели, поэтому пикер не рендерится вовсе
-               (operator NP-10). Валидация уже пропускает daily. -->
+          <!-- Weekdays — ONLY for weekly/biweekly. The every-day (daily)
+               option uses no weekdays, so the picker is not rendered at all
+               (operator NP-10). Validation already lets daily through. -->
           <template v-if="form.recurrence !== 'daily'">
             <div class="create-practice__seal-row">
               <div class="create-practice__days create-practice__grow">
@@ -259,7 +268,7 @@
             <VFieldError id="err-days" :message="errors.recurrence_days" />
           </template>
 
-          <!-- Завершить -->
+          <!-- Finish -->
           <div class="create-practice__seal-row">
             <VCard class="create-practice__repeat create-practice__grow" padding="none">
               <div class="create-practice__repeat-title">
@@ -267,7 +276,7 @@
               </div>
               <VRadioGroup v-model="form.recurrence_end" :options="RECURRENCE_END_OPTIONS" />
 
-              <!-- Выбрать дату: тот же DatePickerSheet, дата окончания серии (#10). -->
+              <!-- Pick a date: the same DatePickerSheet, the series end date (#10). -->
               <button
                 v-if="form.recurrence_end === 'until_date'"
                 type="button"
@@ -282,7 +291,7 @@
                 }}
               </button>
 
-              <!-- После числа повторений: ручной ввод количества (#11). -->
+              <!-- After N repeats: manual count input (#11). -->
               <input
                 v-else-if="form.recurrence_end === 'after_count'"
                 v-model.number="form.recurrence_count"
@@ -304,7 +313,7 @@
       </div>
 
       <!-- ================================================================
-           Участники  (опционально → без печати; имя поля = плейсхолдер)
+           Participants (optional → no seal; the field name is the placeholder)
            ================================================================ -->
       <div class="create-practice__section">
         <h2 class="velo-section-title">
@@ -322,7 +331,7 @@
       </div>
 
       <!-- ================================================================
-           Для кого практика  (P5, PROMPT №594; FE-24: the shared
+           Audience (P5, PROMPT №594; FE-24: the shared
            PracticeAudiencePicker -- kinds radio + target chips for BOTH
            targeted kinds): student groups and schools. No SVG mock exists --
            MINIMAL DS-language design.
@@ -347,8 +356,9 @@
       </div>
 
       <!-- ================================================================
-           Оплата  (платная опция убрана — пока только «Бесплатно», operator
-           2026-06-18 Q2=А; «Платно» + цену вернём одной строкой при надобности)
+           Payment (the paid option was removed — free only
+           (i18n:common.free) for now, operator 2026-06-18 Q2=A; the paid
+           option + price return as one line if ever needed)
            ================================================================ -->
       <div class="create-practice__section">
         <h2 class="velo-section-title">{{ t('masterScreens.createPractice.sections.payment') }}</h2>
@@ -361,7 +371,7 @@
       </div>
 
       <!-- ================================================================
-           Описание  (textarea + 2 однострочных; опциональны → без печати)
+           Description (textarea + 2 single-line ones; optional → no seal)
            ================================================================ -->
       <div class="create-practice__section create-practice__section--desc">
         <h2 class="velo-section-title">
@@ -378,7 +388,7 @@
         </div>
 
         <!-- 1-row start (rows=1) = the VInput height these were before; auto-grow
-             past one line per the «Новая практика» SVG (operator Q1=А). -->
+             past one line per the create-screen SVG (operator Q1=A). -->
         <div>
           <VTextarea
             v-model="form.contraindications"
@@ -411,7 +421,7 @@
         @update:model-value="form.date = $event"
         @close="showDate = false"
       />
-      <!-- Дата окончания серии (#10): тот же пикер, минимум — дата старта. -->
+      <!-- Series end date (#10): same picker, minimum is the start date. -->
       <DatePickerSheet
         :open="showEndDate"
         :model-value="form.recurrence_end_date"
@@ -488,20 +498,23 @@ const toast = useToast()
 
 // §1.6 delegation: whose practice is being created. `masterId` in the query
 // (the master's public page CTA) names the master; `schoolId` (the school
-// page CTA) offers that school's visible masters with «Я» first. No query
+// page CTA) offers that school's visible masters with the self option
+// (i18n:masterScreens.createPractice.audience.me) first. No query
 // context -> the caller owns the practice, the historical behavior.
 //
 // FE-92 (BE-102): a curator creates a practice FOR a master of a school --
 // POST /practices with master_id AND school_id; the backend accepts
 // it only in that school, for a verified master of it, from its curator,
 // and the practice is born PUBLISHED there (owner, 3 October) -- one
-// «created and published» notice to the master, no second publish step.
+// "created and published" notice to the master, no second publish step.
 // Without the school in the context (?schoolId=) another master is
 // never offered: the request would be refused (master_id_requires_school).
 // The audience kinds are the school's two (public / schools --
-// check_school_audience) for the WHOLE school entry, «Я» included (owner
-// 2026-10-05) — the personal kinds («Все мои ученики» / «Конкретные
-// группы») are offered only by a no-context create.
+// check_school_audience) for the WHOLE school entry, the self option
+// included (owner 2026-10-05) — the personal kinds (all my students
+// (i18n:masterScreens.createPractice.audience.allMyStudents) / specific
+// groups (i18n:practice.audience.groups)) are offered only by a no-context
+// create.
 const contextSchoolId = computed(() => queryParam('schoolId'))
 const delegatedMaster = ref<{ id: string; name: string } | null>(null)
 const schoolMasterOptions = ref<{ label: string; value: string }[]>([])
@@ -561,7 +574,8 @@ async function loadPracticeMasterContext(): Promise<void> {
   const masterId = queryParam('masterId')
   const schoolId = queryParam('schoolId')
   // FE-92: a master named without the school cannot be created for -- no
-  // «Мастер» section, the practice is the caller's own.
+  // Master section (i18n:masterScreens.createPractice.fields.master),
+  // the practice is the caller's own.
   if (masterId && schoolId) {
     try {
       const profile = await getPublicMaster(masterId)
@@ -595,14 +609,15 @@ async function loadPracticeMasterContext(): Promise<void> {
           value: m.user_id,
         }))
     } catch {
-      // Picker falls back to «Я» alone -- the caller can still create.
+      // Picker falls back to the self option alone -- the caller can still
+      // create.
       schoolMasterOptions.value = []
     }
   }
 }
 
 // The school-picker flow: a foreign master's methods arrive when he is
-// picked, drop when the caller returns to «Я». The loadId makes an
+// picked, drop when the caller returns to the self option. The loadId makes an
 // out-of-order pair of replies land only if they belong to the CURRENTLY
 // selected master (the same race discipline as the screen's list fetches).
 async function loadDelegatedMethods(masterId: string): Promise<void> {
@@ -636,8 +651,9 @@ watch(selectedMasterId, (id) => {
 const { onFieldFocus } = useKeyboardFieldScroll()
 
 // Back/cancel: return to the real origin. Create opens from BOTH the dashboard
-// empty-state CTA and Практики's «+» (goNew) — router.back() lands on whichever
-// pushed us here (fixes «back always went to Практики», operator 2026-06-23).
+// empty-state CTA and the practices screen's "+" (goNew) — router.back() lands
+// on whichever pushed us here (fixes "back always went to the practices
+// screen", operator 2026-06-23).
 // Deep-link / no history → fall back to the practices list. Submit-success
 // navigation (→ master-practices) is unchanged; only this Back button differs.
 function onBack(): void {
@@ -648,13 +664,14 @@ function onBack(): void {
 const authStore = useAuthStore()
 const masterStore = useMasterStore()
 
-// Load the master's practices so «Использовать шаблон» can offer them as
+// Load the master's practices so the use-template block
+// (i18n:masterScreens.createPractice.useTemplate) can offer them as
 // templates (no-op if already loaded from the practices list / dashboard).
 // T2 stage 2 (2026-07-15): prime the taxonomy catalog IN PARALLEL, on entry --
 // "close the flash, not just shrink it" (operator). Rides the shared cache
 // (ensureTaxonomyCatalog(): zero network call if another screen already
 // warmed it this session); if cold, fetched here before the master is likely
-// to have opened the Направление select.
+// to have opened the direction select.
 const catalog = ref<TaxonomyListResponse | null>(null)
 // P5 (PROMPT №594): the master's own custom groups (loaded in onMounted below).
 const customGroups = ref<GroupListItem[]>([])
@@ -674,10 +691,11 @@ onMounted(() => {
   // styleOptionsForForm below). No-op if already loaded elsewhere this
   // session (fetchMyProfile's own cache, same as fetchMyPractices above).
   void masterStore.fetchMyProfile()
-  // P5 (PROMPT №594): the master's own custom groups, for «Конкретные
-  // группы»'s multi-select. «Удалённые» is a system slug (never a real
-  // MasterGroup row) and «Ученики» isn't a target-able group either --
-  // getGroups() already returns both alongside custom ones, so filter here.
+  // P5 (PROMPT №594): the master's own custom groups, for the specific-groups
+  // (i18n:practice.audience.groups) multi-select. The deleted bucket is a
+  // system slug (never a real MasterGroup row) and the default students
+  // group is not target-able either -- getGroups() already returns both
+  // alongside custom ones, so filter here.
   void getGroups()
     .then((res) => {
       customGroups.value = res.items.filter((g) => g.kind === 'custom')
@@ -709,16 +727,16 @@ const submitting = ref(false)
 // Date/time picker sheets.
 const showDate = ref(false)
 const showTime = ref(false)
-const showEndDate = ref(false) // «Завершить → Выбрать дату» (#10)
+const showEndDate = ref(false) // Finish → pick a date (#10)
 
-// Friendly date for a trigger field, e.g. «25 янв. 2026».
+// Friendly date for a trigger field, e.g. "25 Jan 2026" in the ru short form.
 function friendlyDate(iso: string): string {
   return iso ? `${formatShortDate(`${iso}T12:00:00`)} ${iso.slice(0, 4)}` : ''
 }
 const dateDisplay = computed((): string => friendlyDate(form.date))
 const endDateDisplay = computed((): string => friendlyDate(form.recurrence_end_date))
 
-// -- Recurrence period options (Повторение). The on/off toggle drives
+// -- Recurrence period options. The on/off toggle drives
 // practice_type (series/live); when on, period/days/end build a RecurrenceSpec
 // sent to the series engine (E3). --
 const RECURRENCE_OPTIONS = [
@@ -727,18 +745,19 @@ const RECURRENCE_OPTIONS = [
   { label: t('masterScreens.createPractice.recurrence.biweekly'), value: 'biweekly' },
 ]
 
-// Завершение серии: never / until_date / after_count → RecurrenceSpec.end.
+// Series end condition: never / until_date / after_count → RecurrenceSpec.end.
 const RECURRENCE_END_OPTIONS = [
   { label: t('masterScreens.createPractice.recurrence.never'), value: 'never' },
   { label: t('masterScreens.createPractice.picker.date'), value: 'until_date' },
   { label: t('masterScreens.createPractice.recurrence.afterCount'), value: 'after_count' },
 ]
 
-// «Платно» убрано (operator 2026-06-18 Q2=А) — пока только бесплатные практики.
+// The paid option was removed (operator 2026-06-18 Q2=A) — free practices only for now.
 const PAYMENT_OPTIONS = [{ value: 'free', label: t('common.free') }]
 
-// Уровень сложности — локальные мужские лейблы под слово «уровень» (Q1=Б);
-// глобальный DIFFICULTY_LABEL (женский род, под «практика») не трогаем.
+// Difficulty — local masculine-gender labels agreeing with the word "level"
+// (Q1=B); the global DIFFICULTY_LABEL (feminine, agreeing with "practice")
+// stays untouched.
 const DIFFICULTY_OPTIONS_CREATE = [
   { value: 'beginner', label: t('masterScreens.createPractice.difficulty.beginner') },
   { value: 'medium', label: t('masterScreens.createPractice.difficulty.medium') },
@@ -756,7 +775,7 @@ const form = reactive({
   direction: '',
   difficulty: '',
   style: '',
-  // Повторение: is_recurring drives practice_type (series/live); when on,
+  // Recurrence: is_recurring drives practice_type (series/live); when on,
   // period/days/end-condition/count are sent as a RecurrenceSpec (E3 series
   // engine). recurrence_days holds VDayPicker codes ('mon'..'sun').
   is_recurring: false,
@@ -776,8 +795,9 @@ const form = reactive({
   // Timezone is taken from the master's profile (field removed from the form).
   timezone: authStore.user?.timezone ?? 'Europe/Moscow',
   max_participants_raw: '', // string input, parsed to int|null on submit
-  is_free: true, // «Платно» removed — practices are free for now (Q2=А)
-  // P5 (PROMPT №594): «Для кого практика» — single-select kind, + a
+  is_free: true, // the paid option was removed — practices are free for now (Q2=A)
+  // P5 (PROMPT №594): the audience (i18n:masterScreens.createPractice.fields.audience)
+  // — single-select kind, + a
   // multi-select of the master's OWN custom groups when kind='groups'.
   // Default 'public' -- matches every practice's behavior before this
   // feature existed.
@@ -887,14 +907,15 @@ watch(
   },
 )
 
-// «Использовать шаблон» source: all the master's practices, newest-created
-// first (operator Q2=А — backend list order isn't guaranteed, so sort here).
+// Use-template (i18n:masterScreens.createPractice.useTemplate) source: all
+// the master's practices, newest-created
+// first (operator Q2=A — backend list order isn't guaranteed, so sort here).
 //
 // T23-3 (PROMPT №565): a published SERIES must offer ONE entry, not one per
 // generated occurrence -- masterStore.practices carries every child
 // individually (each is its own Practice row), so an unrelated series
-// otherwise floods this list with N near-identical cards («Свист» three
-// times for three July dates in the owner's report).
+// otherwise floods this list with N near-identical cards (the same title
+// three times for three July dates in the owner's report).
 //
 // Grouped by parent_practice_id (a series child's own group key) falling
 // back to the row's own id (a root or a non-series practice is its own
@@ -961,7 +982,7 @@ const confirmedMethods = computed(() => {
 // an unknown or empty confirmed-set must never read as "everything is
 // allowed". A master with genuinely zero confirmed methods (documented
 // elsewhere as unreachable for a real verified master) now sees an empty
-// Направление select instead of the full catalogue.
+// direction select instead of the full catalogue.
 const directionOptions = computed(() => {
   if (!masterStore.profileLoaded) return []
   const confirmed = confirmedMethods.value
@@ -971,8 +992,9 @@ const directionOptions = computed(() => {
 })
 
 // Direction-conditional style options, same confirmed-methods filter. A
-// direction confirmed WITHOUT a specific style (bare t('masterScreens.createPractice.labels.direction'), no " —
-// Вид" half) offers NO styles here -- matches the backend's equally strict
+// direction confirmed WITHOUT a specific style (the bare direction label,
+// t('masterScreens.createPractice.labels.direction'), with no style half)
+// offers NO styles here -- matches the backend's equally strict
 // check (practices/service.py's _assert_master_confirmed_taxonomy): picking
 // any style under a bare-confirmed direction would be rejected on submit,
 // so the picker must not offer it in the first place.
@@ -1009,9 +1031,10 @@ function onDirectionChange(): void {
 }
 
 /**
- * «Использовать шаблон»: prefill the form from one of the master's own past
+ * Use template (i18n:masterScreens.createPractice.useTemplate): prefill the
+ * form from one of the master's own past
  * practices. Copies the practice's settings EXCEPT date & time, which stay
- * fresh so a template can't schedule a practice in the past (operator Q1=А).
+ * fresh so a template can't schedule a practice in the past (operator Q1=A).
  * The block collapses itself after selecting.
  */
 function applyTemplate(p: PracticeResponse): void {
@@ -1052,10 +1075,13 @@ function applyTemplate(p: PracticeResponse): void {
 }
 
 // -- Draft autosave (L1 / B2) ------------------------------------------------
-// Debounced localStorage draft so a half-filled «Новая практика» survives an
+// Debounced localStorage draft so a half-filled create form
+// (i18n:masterScreens.createPractice.title) survives an
 // accidental navigation-away. Scoped per user. NOT auto-restored: on mount a
-// meaningful draft surfaces a «Продолжить черновик?» banner (restore / start
-// fresh). Cleared on successful submit + on «Начать заново».
+// meaningful draft surfaces a resume banner
+// (i18n:masterScreens.createPractice.draft.resumeConfirm) (restore / start
+// fresh). Cleared on successful submit + on start-over
+// (i18n:masterScreens.createPractice.draft.startOver).
 const DRAFT_KEY = computed(() => `velo:create-practice-draft:${authStore.user?.id ?? 'anon'}`)
 
 type DraftShape = Record<string, unknown>
@@ -1211,13 +1237,13 @@ function validate(): boolean {
     errors.recurrence_days = t('masterScreens.createPractice.validation.chooseWeekday')
     ok = false
   }
-  // End = «выбрать дату» needs a chosen date, else until_date submits null → 422
+  // End = pick-a-date needs a chosen date, else until_date submits null → 422
   // with no field feedback.
   if (form.is_recurring && form.recurrence_end === 'until_date' && !form.recurrence_end_date) {
     errors.recurrence_end_date = t('masterScreens.createPractice.validation.chooseEndDate')
     ok = false
   }
-  // End = «после числа повторений» needs a positive count; a cleared input binds
+  // End = after-N-repeats needs a positive count; a cleared input binds
   // to '' (HTML min doesn't block submit) → count '' → 422 with no feedback.
   if (
     form.is_recurring &&
@@ -1227,7 +1253,8 @@ function validate(): boolean {
     errors.recurrence_count = t('masterScreens.createPractice.validation.repeatMin1')
     ok = false
   }
-  // P5 (PROMPT №594): «Конкретные группы» needs at least one group chosen --
+  // P5 (PROMPT №594): the specific-groups kind (i18n:practice.audience.groups)
+  // needs at least one group chosen --
   // matches the backend's own group_ids-non-empty-when-groups check.
   if (form.audience_kind === 'groups' && form.audience_group_ids.length === 0) {
     errors.audience_group_ids = t('masterScreens.createPractice.validation.chooseGroup')
@@ -1308,7 +1335,7 @@ async function submit(): Promise<void> {
     }
 
     const created = await createPractice({
-      // Q2=А: practice_type derived from the recurrence toggle (series/live);
+      // Q2=A: practice_type derived from the recurrence toggle (series/live);
       // one_on_one/replay are not creatable from this form (roadmap: advanced mode).
       practice_type: form.is_recurring ? 'series' : 'live',
       direction: form.direction,
@@ -1382,10 +1409,12 @@ async function submit(): Promise<void> {
     }
 
     // Publish immediately: a freshly created practice must be live & bookable,
-    // not a draft that needs a second edit→«Опубликовать» step (operator
+    // not a draft that needs a second edit→publish step (operator
     // 2026-06-17). The backend create defaults to 'draft'; we run the same
     // draft→scheduled PATCH the edit screen uses, so the practice appears on the
-    // dashboard «Ближайшая практика» (scheduled/live only) right away.
+    // dashboard's nearest-practice card
+    // (i18n:masterScreens.masterDashboard.nearestOne; scheduled/live only)
+    // right away.
     if (created.status !== 'scheduled') {
       await updatePractice(created.id, { status: 'scheduled' })
     }
@@ -1398,12 +1427,14 @@ async function submit(): Promise<void> {
     clearDraft()
 
     toast.success(t('masterScreens.createPractice.toast.created'))
-    // Redirect to the master's practices list — it defaults to the «Предстоящие»
-    // (upcoming) tab, and the practice we just published is status='scheduled', so
-    // it lands there. replace() (not push) so «назад» returns to the origin
+    // Redirect to the master's practices list — it defaults to the upcoming tab
+    // (i18n:masterScreens.masterPractices.tab.upcoming), and the practice we
+    // just published is status='scheduled', so
+    // it lands there. replace() (not push) so Back returns to the origin
     // (practices / dashboard), not back onto this filled form (#1). Navigate
     // BEFORE the refresh so a failing refresh can never divert to catch and strand
-    // the user on the form still showing «Практика создана!» (G1).
+    // the user on the form still showing the created toast copy
+    // (i18n:masterScreens.createPractice.toast.created) (G1).
     void router.replace({ name: 'master-practices' })
     // Invalidate the cached list so it reloads with the new practice. Fire-and-
     // forget + swallow: master-practices loads its own list on mount, so a missed
@@ -1444,7 +1475,7 @@ async function submit(): Promise<void> {
    typing, the scroll region (.velo-kbd-scroll main) shrinks to the visible
    area -- this form's min-height:100% column used to compress with it, so
    focusing the participants-count field reshuffled the whole layout
-   («экран дёргается»). Keep the column at its AT-REST height instead:
+   (the "screen jitters" owner report). Keep the column at its AT-REST height instead:
    fields stay exactly where they were, the below-the-fold part waits under
    the keyboard (reachable by scrolling main), and the open -> close -> open
    cycle has nothing to recompute -- no jump in either direction. Inert at
@@ -1478,8 +1509,8 @@ html.is-keyboard-open .create-practice {
   padding: var(--space-2) 0 var(--space-4);
   display: flex;
   flex-direction: column;
-  /* Minimal acceptable section rhythm (owner 2026-10-01: «расстояния
-     огромные») -- 16px between sections. */
+  /* Minimal acceptable section rhythm (owner 2026-10-01: the gaps were
+     huge) -- 16px between sections. */
   gap: var(--space-4);
 }
 
@@ -1504,8 +1535,9 @@ html.is-keyboard-open .create-practice {
   margin-top: var(--velo-gap-6);
 }
 
-/* «Описание» section: the textareas are spaced by the section gap alone — drop
-   their own margin-bottom so Описание / Противопоказания / Что подготовить sit
+/* Description section: the textareas are spaced by the section gap alone — drop
+   their own margin-bottom so the description / contraindications /
+   what-to-bring fields sit
    tight (one step, not the doubled gap + margin) (operator CP-A1). */
 .create-practice__section--desc :deep(.v-textarea) {
   margin-bottom: var(--space-2);
@@ -1547,7 +1579,7 @@ html.is-keyboard-open .create-practice {
   margin-top: var(--space-2);
 }
 
-/* Повторение cards (white plates). */
+/* Recurrence cards (white plates). */
 .create-practice__repeat {
   padding: var(--space-3) var(--space-4);
   display: flex;
@@ -1599,7 +1631,7 @@ html.is-keyboard-open .create-practice {
    expanding smoothly on appear; VInput/VSelect keep their red borders via
    their own :error props. */
 
-/* -- Для кого практика (P5, PROMPT №594): group multi-select chips, same
+/* -- Audience (P5, PROMPT №594): group multi-select chips, same
    token recipe as AddToGroupSheet's .add-to-group__chips/__empty. -- */
 .create-practice__audience-chips {
   display: flex;
@@ -1615,7 +1647,7 @@ html.is-keyboard-open .create-practice {
   margin: var(--space-3) 0 0;
 }
 
-/* -- Повторение: ряды карточек (карточка/дни занимают всю ширину). -- */
+/* -- Recurrence: rows of cards (the card/days take the full width). -- */
 .create-practice__seal-row {
   display: flex;
   align-items: flex-start;
@@ -1632,21 +1664,21 @@ html.is-keyboard-open .create-practice {
   min-width: 0;
 }
 
-/* -- Дни недели: карточка-обёртка для DS-примитива VDayPicker. -- */
+/* -- Weekdays: a wrapper card for the DS primitive VDayPicker. -- */
 .create-practice__days {
   background: var(--velo-bg-card-solid);
   border-radius: var(--radius-md);
   padding: var(--velo-card-padding-y) var(--space-3);
 }
 
-/* -- «После числа повторений»: счётчик-пилюля (captured-only). -- */
-/* «Завершить» sub-control (end date button / repeat-count input) — sits below
+/* -- After N repeats: a pill counter (captured-only). -- */
+/* The finish sub-control (end date button / repeat-count input) — sits below
    the radios; needs a visible edge on the white card. */
 .create-practice__end-control {
   margin-top: var(--space-3);
   /* This trigger reuses .create-practice__picker (flex: 1), but here it sits in a
      flex-COLUMN card, where flex-basis:0% would collapse its height:40px to the
-     text line («Дата окончания» squished). flex:0 0 auto restores the 40px; the
+     text line (the end-date trigger squished). flex:0 0 auto restores the 40px; the
      date/time row keeps flex:1 (correct there — grows width in a flex row). */
   flex: 0 0 auto;
 }

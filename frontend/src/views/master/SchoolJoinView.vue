@@ -6,20 +6,26 @@ VELO Frontend — SchoolJoinView (schools FE-18 / GT P3)
 Landing for the school__<token> deeplink (route
 /schools/join/:token, standalone — exactly like group-join). Unlike
 that screen's fire-and-forget POST, this one is a TWO-STEP flow: the preview
-(GET /schools/invites/{token}) DESCRIBES the offer, and only «Вступить»
+(GET /schools/invites/{token}) DESCRIBES the offer, and only the join CTA
+(i18n:masterScreens.schoolJoin.joinCta)
 commits (POST /join). The preview is a hint and the join is the gate — between
 the two the world can change (token revoked, curator frozen), so join errors
 are handled as REAL states here, never as "impossible".
 
 State machine (each renders honestly, none fakes data):
   loading            -> spinner
-  transient          -> «Повторить» (W11: a connection hiccup is not a verdict)
-  404                -> «Приглашение недействительно» (one answer for unknown /
+  transient          -> retry (i18n:common.retry; W11: a connection hiccup is
+                        not a verdict)
+  404                -> the invalid-invite title
+                        (i18n:masterScreens.schoolJoin.invalid.title; one
+                        answer for unknown /
                         revoked / frozen / deleted — the backend refuses to
                         distinguish, P-08)
   can_join=false     -> per-reason refusal; own_school / already_member add an
-                        «Открыть» button into the school page
-  can_join=true      -> school card + «Вступить» / «Отказаться»
+                        open button (i18n:masterScreens.schoolJoin.open) into
+                        the school page
+  can_join=true      -> school card + join (i18n:masterScreens.schoolJoin.joinCta)
+                        / decline (i18n:masterScreens.schoolJoin.decline)
   joined (new user)  -> post-join onboarding overlay (FE-83): an account whose
                         onboarding flag is still false meets the carousel
                         AFTER the join; finishing or skipping it opens the
@@ -30,7 +36,8 @@ link got can_join=true with relation="student", because joining would promote
 them, so the button stayed active and a hint explained it. One link now, and
 it only ever makes students: a member always gets can_join=false,
 reason=already_member. School masters are appointed by the curator with the
-appointee's confirmation, on a screen of its own. «Отказаться» is a pure
+appointee's confirmation, on a screen of its own. The decline CTA
+(i18n:masterScreens.schoolJoin.decline) is a pure
 router.replace — no server state, the link keeps working.
 
 FE-81: for an account's FIRST session this screen is the app's entry — the
@@ -64,18 +71,25 @@ so the order is invitation -> join -> onboarding (skippable) -> school.
         </div>
       </template>
 
-      <!-- Honest refusal: invalid link, or a described can_join=false reason. -->
+      <!-- Honest refusal: invalid link, or a described can_join=false reason.
+           FE-97: the design-system refusal screen (VEmptyState), not bare
+           text -- the same honest-failure plate the rest of the app uses. -->
       <template v-else-if="blocked">
-        <h2 class="cg-join__title">{{ blocked.title }}</h2>
-        <p v-if="blocked.description" class="cg-join__subtitle">{{ blocked.description }}</p>
-        <div class="cg-join__actions">
-          <VButton v-if="blocked.open" variant="primary" block @click="openSchool">
-            {{ t('masterScreens.schoolJoin.open') }}
-          </VButton>
-          <VButton v-else variant="primary" block @click="router.replace({ name: 'root' })">
-            {{ t('common.backHome') }}
-          </VButton>
-        </div>
+        <VEmptyState :icon="blocked.icon" :title="blocked.title" :description="blocked.description">
+          <!-- The blocked-in-school refusal carries the lock face (DSGN-16
+               vocabulary); the semantic keys cover the rest. -->
+          <template v-if="blocked.icon === 'lock'" #icon>
+            <IconLock :size="48" />
+          </template>
+          <template #action>
+            <VButton v-if="blocked.open" variant="primary" block @click="openSchool">
+              {{ t('masterScreens.schoolJoin.open') }}
+            </VButton>
+            <VButton v-else variant="primary" block @click="router.replace({ name: 'root' })">
+              {{ t('common.backHome') }}
+            </VButton>
+          </template>
+        </VEmptyState>
       </template>
 
       <!-- The school card behind the link: the shared invite card (owner
@@ -132,7 +146,8 @@ import { useToast } from '@/composables/useToast'
 import { useSafeArea } from '@/composables/useSafeArea'
 import { useAuthStore } from '@/stores/auth'
 import { useSchoolsHubStore } from '@/stores/schoolsHub'
-import { VButton, VLoader } from '@/components/ui'
+import { IconLock } from '@/components/icons'
+import { VButton, VEmptyState, VLoader } from '@/components/ui'
 import SchoolInviteCard from '@/components/shared/SchoolInviteCard.vue'
 import OnboardingView from '@/views/auth/OnboardingView.vue'
 
@@ -164,6 +179,9 @@ interface RefusalView {
   description: string
   /** own_school / already_member offer a jump straight into the school page. */
   open: boolean
+  /** VEmptyState semantic glyph: notfound (dead link), group (already in),
+   *  lock (the blocked refusals, FE-97). */
+  icon: 'notfound' | 'group' | 'lock'
 }
 
 /** The not-found and can_join=false states share one honest-failure layout. */
@@ -173,6 +191,7 @@ const blocked = computed<RefusalView | null>(() => {
       title: t('masterScreens.schoolJoin.invalid.title'),
       description: t('masterScreens.schoolJoin.invalid.text'),
       open: false,
+      icon: 'notfound',
     }
   }
   const p = preview.value
@@ -183,26 +202,31 @@ const blocked = computed<RefusalView | null>(() => {
         title: t('masterScreens.schoolJoin.alreadyOwner.title'),
         description: t('masterScreens.schoolJoin.alreadyOwner.text'),
         open: true,
+        icon: 'group',
       }
     case 'already_member':
       return {
         title: t('masterScreens.schoolJoin.alreadyMember.title'),
         description: t('masterScreens.schoolJoin.alreadyMember.text'),
         open: true,
+        icon: 'group',
       }
     case 'blocked_by_curator':
       return {
         title: t('masterScreens.schoolJoin.unavailable'),
         description: t('masterScreens.schoolJoin.restricted.text'),
         open: false,
+        icon: 'lock',
       }
-    // BE-79 (DRAFT wording): blocked by the curator IN this school -- the
-    // preview says so, and a join refused 403 re-reads the preview (below).
+    // BE-79 (FE-97 final wording): blocked by the curator IN this school --
+    // the preview says so, and a join refused 403 re-reads the preview
+    // (below).
     case 'blocked_in_school':
       return {
         title: t('masterScreens.schoolJoin.unavailable'),
         description: t('masterScreens.schoolJoin.blocked.title'),
         open: false,
+        icon: 'lock',
       }
     default:
       // can_join=false with no reason is not a contract shape; stay honest
@@ -211,6 +235,7 @@ const blocked = computed<RefusalView | null>(() => {
         title: t('masterScreens.schoolJoin.unavailable'),
         description: '',
         open: false,
+        icon: 'lock',
       }
   }
 })
@@ -292,7 +317,8 @@ function openSchool(): void {
   if (id) void router.replace(schoolRoute(id))
 }
 
-/** FE-84: «Готово» and «Пропустить» both emit done (the carousel persists the
+/** FE-84: the done (i18n:auth.onboarding.done) and skip (i18n:common.skip)
+ *  buttons both emit done (the carousel persists the
  *  flag either way) -- the main screen of the school just joined opens. */
 function finishOnboarding(): void {
   const id = joinedSchoolId.value

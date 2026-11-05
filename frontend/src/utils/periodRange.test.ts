@@ -2,7 +2,7 @@
 // VELO Frontend -- periodRange.ts Unit Tests
 // =============================================================================
 //
-// SW17 (Батч 3, PROMPT №580): formatPeriodRange did all its week/month math via
+// SW17 (batch 3, PROMPT №580): formatPeriodRange did all its week/month math via
 // device-LOCAL Date getters/setters (getDay/setDate/getFullYear/getMonth) and
 // formatted via toLocaleDateString with NO explicit timeZone -- the same class
 // of bug already fixed for adminHelpers.ts (SW10). Two admins (or the same

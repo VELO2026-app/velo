@@ -9,7 +9,8 @@
     - Method tags (VTag, cycling blue / pink / sand)
 
   The WHOLE card is the tap target -> master public profile (/user/masters/:id).
-  (operator 2026-06-09: the separate "Подробнее" arrow link was removed; tapping
+  (operator 2026-06-09: the separate "more" arrow link (i18n:ui.more) was
+  removed; tapping
   anywhere on the card opens the master.) Same button pattern as PracticeListCard.
 
   Extracted from PracticeDetailView so screens 15 / 18 / frame 4 share one card.
@@ -48,7 +49,7 @@ const props = withDefaults(
   defineProps<{
     masterName?: string | null
     methods?: string[] | null
-    /** Master avatar URL (User.avatar_url). Null -> placeholder glyph. */
+    /** Master avatar URL (User.avatar_url). `Null -> placeholder glyph.` */
     avatarUrl?: string | null
     /** Master user id -- target of the public-profile link. */
     masterId?: string | null
@@ -95,8 +96,8 @@ function onMore(): void {
   padding: var(--velo-inset-12) var(--space-3);
   display: flex;
   align-items: center;
-  /* Figma: tags start at x=111 от card left = 14 padding + 80 avatar + 17 gap.
-   * Round 17 до space-4=16 — расхождение 1px. */
+  /* Figma: tags start at x=111 from card left = 14 padding + 80 avatar + 17 gap.
+   * Round 17 to space-4=16 — a 1px discrepancy. */
   gap: var(--space-4);
   box-sizing: border-box;
   text-align: left;
@@ -133,7 +134,7 @@ function onMore(): void {
   margin-top: var(--space-1);
 }
 
-/* T21-2 (PROMPT №546): a stored method is ONE flat "Направление — Вид" string
+/* T21-2 (PROMPT №546): a stored method is ONE flat "direction — style" string
    (methodTaxonomy.ts SEP), so a single composite tag can be long -- flex-wrap
    above only wraps BETWEEN tags, it cannot help one tag whose own content
    overflows. VTag's shared default is white-space:nowrap (correct everywhere

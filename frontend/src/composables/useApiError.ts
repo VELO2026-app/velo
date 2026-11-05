@@ -9,7 +9,7 @@
 //   import { extractApiError } from '@/composables/useApiError'
 //
 //   } catch (e) {
-//     return { ok: false, error: extractApiError(e, 'Не удалось выполнить действие') }
+//     return { ok: false, error: extractApiError(e, fallbackMessage) }
 //   }
 //
 // tz-i18n 1.2: a known code resolves through the `errors` catalog
@@ -27,11 +27,6 @@ export { errorMessage } from '@/api/errorMessages'
 /**
  * Extract a human-readable error message from a caught exception.
  *
- * - ApiResponseError whose code has a catalog entry (locales errors.*):
- *   returns that phrase. If a code has a phrase, it wins.
- * - Anything else (an unmapped code, or not an ApiResponseError at all):
- *   returns the caller-provided fallback string.
- *
  * B8 (PROMPT №746): this used to return e.detail -- the backend's own,
  * often-English message -- whenever it was non-empty, and only fell back to
  * the caller's Russian string on a genuinely empty detail. That is the exact
@@ -40,6 +35,11 @@ export { errorMessage } from '@/api/errorMessages'
  * read here at all: a known code shows its phrase, an unknown one shows the
  * caller's own fallback, which is already Russian at every existing call
  * site -- so nothing downstream needed to change to stop leaking English.
+ *
+ * @returns For an ApiResponseError whose code has a catalog entry (locales
+ *   errors.*), that phrase -- if a code has a phrase, it wins; anything else
+ *   (an unmapped code, or not an ApiResponseError at all) returns the
+ *   caller-provided fallback string.
  */
 export function extractApiError(e: unknown, fallback: string): string {
   if (e instanceof ApiResponseError) {

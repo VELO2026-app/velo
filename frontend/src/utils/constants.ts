@@ -16,7 +16,7 @@
 
 /**
  * Hours before scheduled_at during which check-in is allowed.
- * Mirrors backend config.py checkin_window_hours (24). Changed 3 -> 24
+ * Mirrors backend config.py checkin_window_hours (24). Changed `3 -> 24`
  * (customer request 2026-06-03).
  */
 export const CHECKIN_WINDOW_H = 24
@@ -42,8 +42,8 @@ export const WITHDRAWAL_FEE_EUROS = 2
 // ---------------------------------------------------------------------------
 
 /**
- * Real composer voice recording (tap mic -> record -> transcribe -> text in
- * the field). FALSE is the kill-switch: the mic disc never renders and both
+ * Real composer voice recording (tap mic `->` record `->` transcribe `->`
+ * text in the field). FALSE is the kill-switch: the mic disc never renders and both
  * composers behave exactly as before the feature -- no call-site changes
  * needed. Transcription goes through POST /api/v1/ai/transcribe (GT-41); the
  * browser holds no provider key and talks to no third party.
@@ -85,8 +85,9 @@ export const MASTER_APPLIED_KEY = 'velo:master-applied'
  * `MASTER_APPROVED_SEEN_KEY` constant that leaked across accounts on a shared
  * device, same class of bug masterRejectionSeenKey below was built to avoid
  * from the start). Set once the master has actually seen/entered through the
- * "Ваша заявка одобрена!" screen (MasterPendingView.enterMasterMode).
- * RoleSwitchSection reads it to decide whether a role='user'->master
+ * application-approved screen (i18n:masterScreens.masterPending.approved.title,
+ * MasterPendingView.enterMasterMode).
+ * RoleSwitchSection reads it to decide whether a `role='user'->master`
  * self-switch should detour through the approved screen first (not seen yet)
  * or go straight to the dashboard (already seen). Not cleared on logout -- it
  * is a one-time "have they ever seen this celebratory screen" fact about the
@@ -100,7 +101,7 @@ export function masterApprovedSeenKey(userId: string): string {
 /**
  * localStorage marker key, PER-USER (bug 1, PROMPT №405 -- operator device
  * testing 2026-07-15): set once a rejected applicant has actually seen the
- * «Отказ» screen (MasterPendingView), read by roleRedirect to decide whether
+ * rejection screen (MasterPendingView), read by roleRedirect to decide whether
  * a returning role='user' rejected applicant is routed to /master/pending
  * (not yet seen) or straight to /user/dashboard (already seen -- operator
  * decision: show once, then treat them as an ordinary user; rejection is not
@@ -134,7 +135,8 @@ export const KEYBOARD_VIEWPORT_THRESHOLD = 150
 // ---------------------------------------------------------------------------
 
 /**
- * The «Мое состояние» block on the external-activity form. FALSE (PM-9
+ * The my-state block on the external-activity form
+ * (i18n:user.screens.externalActivityCreate.section.moodAfter). FALSE (PM-9
  * branch 1, owner 2026-10-12): the FE-85 unified MoodSlider (1..10, five
  * faces) renders on the form, standing on the visible DEFAULT_SCORE like
  * Check-in/Feedback, and the feed card shows the exact «· N/10» suffix.
@@ -146,7 +148,7 @@ export const KEYBOARD_VIEWPORT_THRESHOLD = 150
 export const EXTERNAL_ACTIVITY_MOOD_HIDDEN: boolean = false
 
 // ---------------------------------------------------------------------------
-// School media upload (tz-curator.md §1.5, захоронка §7.1 №4) -- kill-switch
+// School media upload (tz-curator.md §1.5, deferred-tasks §7.1 №4) -- kill-switch
 // ---------------------------------------------------------------------------
 
 /**
@@ -166,11 +168,11 @@ export const SCHOOL_MEDIA_UPLOAD_ENABLED: boolean = false
 // ---------------------------------------------------------------------------
 
 /**
- * The school page's «Аналитика» card. FALSE is the kill-switch: the metrics
- * specification is PM-blocked (tz-curator.md §6, blocker PM-2) and no
- * BE contract exists, so the card does not render at all -- a disabled card
- * on every school page would only teach people to ignore it. Flip together
- * with the §6 slice landing (BE + screen); until then the page simply ends
- * after the journal.
+ * The school page's analytics card (i18n:user.screens.schoolPage.tabs.analytics).
+ * FALSE is the kill-switch: the metrics specification is PM-blocked
+ * (tz-curator.md §6, blocker PM-2) and no BE contract exists, so the card
+ * does not render at all -- a disabled card on every school page would only
+ * teach people to ignore it. Flip together with the §6 slice landing
+ * (BE + screen); until then the page simply ends after the journal.
  */
 export const SCHOOL_ANALYTICS_ENABLED: boolean = false

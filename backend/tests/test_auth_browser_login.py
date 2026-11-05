@@ -451,8 +451,15 @@ async def test_name_claim_stands_in_for_a_missing_given_name(
 
 @pytest.mark.parametrize(
     ("language", "expected"),
-    [(None, "en"), ("xx-YY", "en"), ("de-AT", "de"), ("ES", "es"), ("<b>ru</b>", "en")],
-    ids=["absent", "unsupported", "regional", "upper-case", "markup"],
+    [
+        (None, "en"),
+        ("xx-YY", "en"),
+        ("uk-UA", "uk"),
+        ("RU", "ru"),
+        ("de-AT", "en"),
+        ("<b>ru</b>", "en"),
+    ],
+    ids=["absent", "unsupported", "regional", "upper-case", "out-of-product", "markup"],
 )
 async def test_the_browser_language_is_normalized_on_insert(
     client: AsyncClient,
@@ -478,7 +485,7 @@ async def test_the_browser_language_never_changes_an_existing_account(
 ) -> None:
     await login_user(client, 74115)
     await db_session.execute(
-        update(User).where(User.telegram_id == 74115).values(language="de")
+        update(User).where(User.telegram_id == 74115).values(language="uk")
     )
     await db_session.commit()
 
@@ -487,7 +494,7 @@ async def test_the_browser_language_never_changes_an_existing_account(
     assert resp.status_code == 200
     user = await _user(db_session, 74115)
     assert user is not None
-    assert user.language == "de"
+    assert user.language == "uk"
 
 
 # ---------------------------------------------------------------------------

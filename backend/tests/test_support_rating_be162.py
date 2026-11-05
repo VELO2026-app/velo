@@ -464,7 +464,7 @@ class TestAdminRow:
     ) -> None:
         a = await _person(client, db_session, 18, role=UserRole.ADMIN.value)
         b = await _person(client, db_session, 19, role=UserRole.ADMIN.value)
-        user = await _person(client, db_session, 20, language="de")
+        user = await _person(client, db_session, 20, language="uk")
         thread = await _ticket(
             db_session,
             user["user"]["id"],
@@ -472,7 +472,7 @@ class TestAdminRow:
             resolved_by=b["user"]["id"],
         )
         row = await _row(thread)
-        await _rate(client, user, thread, {"stars": 2, "comment": "langsam"})
+        await _rate(client, user, thread, {"stars": 2, "comment": "повільно"})
         await db_session.execute(
             SupportTicket.__table__.update()
             .where(SupportTicket.support_thread_id == row.support_thread_id)
@@ -488,8 +488,8 @@ class TestAdminRow:
         rating = card["rating"]
         assert (rating["stars"], rating["comment"], rating["comment_locale"]) == (
             2,
-            "langsam",
-            "de",
+            "повільно",
+            "uk",
         )
         assert rating["rated_resolver"]["user_id"] == a["user"]["id"]
         assert rating["rated_at"]

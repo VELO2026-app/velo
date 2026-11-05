@@ -23,7 +23,7 @@
 // It was the sibling-guard shape (five confirmed instances in this repo): this
 // screen's OWN PARENT gets it right. useDiaryCardModel.ts:120,124 does
 // `moodLabelFromScore(mood)` and :178,180 does `MOOD_ICON[moodZoneFromScore(...)]`
-// -- so the feed card you tapped said «Check-in: Огонь!» over a beaming face, and
+// -- so the feed card you tapped said the fire pill title (Check-in: + i18n:mood.fire) over a beaming face, and
 // the detail you landed on said «Check-in» over a shrug. The conversion helpers
 // DetailView needed were already imported one file away. THE FIX is the parent's
 // own line, `?? 6` default included (.vue:144,146,152,156).
@@ -92,7 +92,7 @@
 //    rendered nothing cannot satisfy it.
 //  - SC-18: every fixture default DIFFERS from every value any test overrides --
 //    mood defaults to 6 and no test passes 6 (they pass 1/2/5/9/10); comment
-//    defaults to «Спокойное утро» and no test overrides it to that. A dropped
+//    defaults to a distinctive fixture comment and no test overrides it to that. A dropped
 //    `...overrides` fails loudly here instead of quietly agreeing.
 //  - SC-05, the GOOD half: `:description="loadError"` (.vue:45) binds the real
 //    message, so the backend's own words reach the DOM. Asserted as propagation,
@@ -100,8 +100,10 @@
 //    mistaken for proof of the other.
 //  - The two DIVERGENT master fallbacks, asserted together in one test because
 //    they are one screen's answer to one missing field: contextLine says
-//    «Мастером» (.vue:180) and PracticeListCard's own masterName says «Мастер»
-//    (PracticeListCard.vue:133). Both correct, both live, neither a typo.
+//    the instrumental fallback (i18n:shared.form.hostFallback, .vue:180) and
+//    PracticeListCard's own masterName says the nominative fallback
+//    (i18n:booking.masterFallback, PracticeListCard.vue:133). Both correct,
+//    both live, neither a typo.
 //
 // TRAPS ABSENT (proved by grep, so the next reader does not cargo-cult setup):
 //  - NO TELEPORT ANYWHERE in this screen's chain -> no SC-13/13b/13c and NO
@@ -117,17 +119,19 @@
 //    COULD hide a fallback was checked anyway: PracticeListCard's master row is a
 //    `<slot name="subtitle">` whose fallback (PracticeListCard.vue:47-56) this
 //    screen does not override, and it sits inside no v-if of the card's own -- so
-//    «Мастер» really is reachable, and the test below reaches it.
+//    the nominative master fallback (i18n:booking.masterFallback) really is
+//    reachable, and the test below reaches it.
 //  - NO MONEY, no formatMoney in this screen or any child -> the ru U+00A0 trap
 //    (velo-idiom §11) cannot bite, so there is deliberately NO norm() helper. The
 //    Intl strings asserted here were CODEPOINT-SCANNED on this ICU build rather
-//    than eyeballed: «17 июля • Пятница • 01:30», «16 июля • Четверг • 10:00»,
-//    «13:00» and «1 ч 30 м» contain zero U+00A0/U+202F/U+2009. (formatDuration is
+//    than eyeballed: the date-line, time and duration literals asserted below
+//    contain zero U+00A0/U+202F/U+2009. (formatDuration is
 //    a plain template literal, not Intl -- it never could.)
 //  - NO vi.setSystemTime. formatFeedDateTime / formatTime / formatDuration
 //    (utils/format.ts:264,207,297) are pure Intl over the given instant + zone --
-//    none reads `new Date()` for "now". This screen has no «Сегодня»/«Завтра»
-//    badge and no relative label, so freezing the clock would be dead setup.
+//    none reads `new Date()` for "now". This screen has no today
+//    (i18n:common.today) or tomorrow (i18n:common.tomorrow) badge and no
+//    relative label, so freezing the clock would be dead setup.
 //  - NO IntersectionObserver / ResizeObserver, NO navigator.clipboard, NO
 //    window.location assignment, NO window.history.state read, NO waitUntilReady
 //    in the chain, NO scrollHeight read, NO localStorage, NO useToast (this
@@ -346,8 +350,8 @@ describe('DetailView', () => {
     })
 
     it('a failed fetch shows the rung AND surfaces the mapped table phrase for a real code', async () => {
-      // SC-05, and this screen is the GOOD half of it: «Не удалось загрузить
-      // запись» is the screen's own constant (.vue:44) but the description is
+      // SC-05, and this screen is the GOOD half of it: the load-failed title
+      // (i18n:user.screens.detail.loadFailed) is the screen's own constant (.vue:44) but the description is
       // bound to `:description="loadError"` (.vue:45). Both halves asserted
       // so neither is read as proof of the other.
       // B8 (PROMPT №747): 'not_found' IS a real backend code --
@@ -428,7 +432,7 @@ describe('DetailView', () => {
 
   describe('the pill: the score reaches the screen as its zone (see the banner)', () => {
     it('a check-in pill carries the mood label -- «Check-in: Хорошо» + the good face', async () => {
-      // mood 7 -> good (moodScale.ts: 7-8 -> good) -> «Хорошо». The `not.toBe`
+      // mood 7 -> good (moodScale.ts: 7-8 -> good) -> the good label (i18n:mood.good). The `not.toBe`
       // lines pin the OLD BUG's exact output -- the bare kind over the neutral
       // face, which is what an unlabelled score used to produce. Revert the
       // pill's leadIcon to a raw-score index and this test names the regression
@@ -445,7 +449,7 @@ describe('DetailView', () => {
     })
 
     it('a feedback pill carries the rating label -- «Feedback: Огонь» + the fire face', async () => {
-      // rating 10 -> fire (moodScale.ts: 9-10 -> fire) -> «Огонь». Same
+      // rating 10 -> fire (moodScale.ts: 9-10 -> fire) -> the fire label (i18n:mood.fire). Same
       // mechanism, the other half of the branch -- which is exactly why both
       // kinds are driven: one test would prove nothing about the other, and the
       // bug was duplicated across both maps, so the fix had to be too.
@@ -716,11 +720,12 @@ describe('DetailView', () => {
     it('a nameless master degrades to TWO DIFFERENT words -- «Мастером» in the line, «Мастер» on the card', async () => {
       // Not a typo on either side, and asserted together because they are one
       // screen's answer to one missing field. contextLine builds a Russian
-      // instrumental case for "с ..." (.vue:180 -> «с Мастером»), while
+      // instrumental-case phrase with the host fallback
+      // (i18n:shared.form.hostFallback at .vue:180), while
       // PracticeListCard's own masterName fallback is the nominative
-      // (PracticeListCard.vue:133 -> «Мастер»). Assert one alone and the next
-      // editor "fixes" the mismatch by making them agree, breaking the grammar of
-      // whichever side they align to.
+      // (i18n:booking.masterFallback, PracticeListCard.vue:133). Assert one
+      // alone and the next editor "fixes" the mismatch by making them agree,
+      // breaking the grammar of whichever side they align to.
       vi.mocked(diaryApi.getCheckin).mockResolvedValue(checkin({ practice_id: 'p7' }))
       vi.mocked(practicesApi.getPractice).mockResolvedValue(
         practice({ id: 'p7', title: 'Утренняя йога', master_name: null }),

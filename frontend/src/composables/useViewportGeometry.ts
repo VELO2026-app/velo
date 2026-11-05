@@ -93,12 +93,14 @@ const KEYBOARD_CLOSE_SETTLE_MS = 700
 const ORIENTATION_SETTLE_MS = 300
 
 /**
- * Telegram's own (stableHeight - height), or null when there's no native
- * signal to use (standalone/browser, or the @tma.js/sdk-vue viewport never
- * mounted). Pure, exported for unit tests -- unchanged from the retired
- * utils/keyboardDetection.ts. KEPT as a diagnostic cross-check (the debug
- * panel still reads it) but NO LONGER the decision input -- see
- * restBaselineDelta below for why, and the PROMPT №663 comment on `publish()`.
+ * Telegram's own (stableHeight - height). Pure, exported for unit tests --
+ * unchanged from the retired utils/keyboardDetection.ts. KEPT as a diagnostic
+ * cross-check (the debug panel still reads it) but NO LONGER the decision
+ * input -- see restBaselineDelta below for why, and the PROMPT №663 comment
+ * on `publish()`.
+ *
+ * @returns Null when there's no native signal to use (standalone/browser, or
+ *   the `@tma.js/sdk-vue` viewport never mounted).
  */
 export function nativeKeyboardDelta(): number | null {
   if (!viewport.isMounted()) return null
@@ -107,8 +109,10 @@ export function nativeKeyboardDelta(): number | null {
 
 /**
  * Delta (px) between a first-observed "rest" visual-viewport height and the
- * current one, or null while no baseline is established yet (restHeight <= 0
- * -- the very first reading seeds it and cannot judge itself against it).
+ * current one, or null while no baseline is established yet.
+ *
+ * @returns Null while no baseline is established yet (`restHeight <= 0` --
+ *   the very first reading seeds it and cannot judge itself against it).
  *
  * PROMPT №663, added after a DEVICE measurement (five screenshots, the
  * owner's Android, prod `2d4fb6ce`): with the keyboard visibly open,
@@ -139,12 +143,14 @@ export function restBaselineDelta(restHeight: number, currentHeight: number): nu
  * for unit tests -- the delta logic itself is unchanged from the retired
  * utils/keyboardDetection.ts.
  *
- * [VV-PAN 2026-09-07] `scale` (optional, default 1): a zoomed visual viewport
- * shrinks vv.height exactly like a keyboard does (iOS auto-zoom on focus of
- * a <16px input, or a plain pinch), so a height-only detector asserts
- * "keyboard" over a zoom -- and a zoomed pan/resize then drives the
- * keyboard-cap CSS. While the scale is off 1 by more than 1%, no keyboard
- * assertion is made at all.
+ * [VV-PAN 2026-09-07]: a zoomed viewport is the reason `scale` exists.
+ *
+ * @param scale - Optional, default 1. A zoomed visual viewport shrinks
+ *   vv.height exactly like a keyboard does (iOS auto-zoom on focus of a
+ *   `<16px` input, or a plain pinch), so a height-only detector asserts
+ *   "keyboard" over a zoom -- and a zoomed pan/resize then drives the
+ *   keyboard-cap CSS. While the scale is off 1 by more than 1%, no keyboard
+ *   assertion is made at all.
  */
 export function isKeyboardOpenFrom(
   nativeDelta: number | null,
@@ -307,8 +313,8 @@ export function useViewportGeometry(): void {
     // reveal, and every one of them used to re-assert the keyboard cap at a
     // stale smaller height -- the keyboard slid away faster than the events
     // arrived, exposing body-white, and only the FINAL resize restored the
-    // full height (the owner's "уезжает плохо: белый фон, потом
-    // растягивается"). The iOS keyboard is an OVERLAY: an app already at
+    // full height (the owner's report: "a white background first, then a
+    // stretch"). The iOS keyboard is an OVERLAY: an app already at
     // full height is simply progressively revealed -- nothing to track.
     // So: drop the cap on the FIRST rising frame and hold at-rest geometry
     // through the animation, exactly like the K3f navigation window above.
@@ -363,7 +369,7 @@ export function useViewportGeometry(): void {
     host.requestAnimationFrame(() => keepRootUnpanned())
   }
 
-  // [FE-44] The close-time end-jump ("моргание"): the app returns to FULL
+  // [FE-44] The close-time end-jump (a visible blink): the app returns to FULL
   // height the moment the close starts, but the VISUAL viewport only grows
   // back over the ~250ms animation -- mid-flight the document is taller than
   // the visible area, a scroll range EXISTS, and iOS's own close-time

@@ -24,7 +24,9 @@ import { visibleHeight } from './useViewportGeometry'
  *     compactness choice for the idle field, so it is NOT recomputed live.
  */
 export const COMPOSING_HEIGHT_CEILING = 240
+/** Lower clamp of the composing autogrow cap: a very short viewport must not collapse the field to one line (px). */
 export const COMPOSING_HEIGHT_FLOOR = 80
+/** Fixed cap of the idle (not composing) Composer field (px); a compactness choice, never viewport-driven. */
 export const COLLAPSED_HEIGHT_CAP = 120
 
 /** Pure function, exported for unit tests -- the whole point of extracting

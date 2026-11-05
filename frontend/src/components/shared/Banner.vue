@@ -2,8 +2,11 @@
   VELO Frontend -- Banner (DS, 2026-05)
 
   Shared alert/notice banner. Used in:
-    - UserDashboardView: "Пора на check-in!" (warning) + "Оставьте feedback!" (success)
-    - PracticeDetailView: "ПРОТИВОПОКАЗАНИЯ" (warning)
+    - UserDashboardView: the check-in reminder banner
+      (i18n:user.screens.userDashboard.checkinBanner.title, warning) + the
+      leave-feedback reminder banner (success)
+    - PracticeDetailView: the contraindications banner
+      (i18n:user.screens.practiceDetail.contraindications, warning)
 
   Visual spec (Figma SVGs dashboard, booked-practice):
     - Min-height 64px, full content width
@@ -22,13 +25,14 @@
                --velo-error-text / --velo-error-text
     alert   -> --velo-glass-pink-40 / --velo-pink-300 /
                --velo-danger-text (icon + title + body) -- stronger red than
-               `error`; admin "обращения на модерации" banner.
+               `error`; the admin moderation-queue banner
+               (i18n:adminScreens.adminDashboard.moderationBanner).
 
   Slots:
     #icon (optional) — left-aligned icon. If empty, no icon column.
 
   Usage:
-    <Banner variant="warning" title="Пора на check-in!" body="Через 30 минут">
+    <Banner variant="warning" title="Title text" body="Body text">
       <template #icon><IconClock :size="28" /></template>
     </Banner>
 -->

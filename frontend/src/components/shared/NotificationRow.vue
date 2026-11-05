@@ -9,8 +9,10 @@
   degrading rather than breaking on missing data.
 
   `icon` is optional: 'message' (IconMessages) / 'event' (IconCalendar) /
-  'finance' (IconFinance -- the master inbox's «Финансы» bucket; same glyph
-  as the master profile's «Вывод средств»). Absent = dot only, no icon
+  'finance' (IconFinance -- the master inbox's finance bucket
+  (i18n:masterScreens.masterInbox.filter.finances); same glyph
+  as the master profile's withdraw item
+  (i18n:masterScreens.masterProfile.menu.withdraw)). Absent = dot only, no icon
   block.
 
   formatRelative is @/utils/adminHelpers -- the name is legacy (ModerationFilterModal.vue

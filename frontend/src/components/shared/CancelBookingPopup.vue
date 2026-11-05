@@ -3,9 +3,9 @@
 
   Confirmation popup for cancelling a booking. Built on VModal.
 
-  Money theme temporarily removed: the "Вы уверены…" subtitle and the refund
-  warning (green "Средства вернутся" / red "Средства НЕ будут возвращены") are
-  gone for now. TODO: re-add the actual refund texts later.
+  Money theme temporarily removed: the "Are you sure..." subtitle and the
+  refund warning (green "Funds will be returned" / red "Funds will NOT be
+  returned") are gone for now. TODO: re-add the actual refund texts later.
 
   F5 review fix:
     W-22: Added loading prop + disabled state on confirm button
@@ -24,13 +24,13 @@
 <template>
   <VModal :open="open" @close="onClose">
     <h2 class="cancel__title">{{ t('bookingCancel.title') }}</h2>
-    <!-- The "Вы уверены…" subtitle (redundant with the title) and the refund /
-         money warning were removed — the money theme is temporarily out.
-         TODO: re-add the actual refund texts later. -->
+    <!-- The "Are you sure..." subtitle (redundant with the title) and the
+         refund / money warning were removed — the money theme is
+         temporarily out. TODO: re-add the actual refund texts later. -->
 
-    <!-- Actions — side-by-side, safe action ЛЕВЕЕ и primary-вариант
-         (Figma cancel-reservation.svg + DS-паттерн для destructive-confirm:
-         prominent = safe, subtle/destructive = pink). -->
+    <!-- Actions — side-by-side: the safe action sits LEFT and gets the
+         primary variant (Figma cancel-reservation.svg + the DS pattern for
+         destructive-confirm: prominent = safe, subtle/destructive = pink). -->
     <div class="cancel__actions">
       <VButton variant="primary" block :disabled="loading" @click="onClose">
         {{ t('bookingCancel.keep') }}
@@ -102,9 +102,10 @@ function onClose(): void {
   margin-bottom: var(--space-5);
 }
 
-/* Actions: side-by-side (F-5.3 sync с Figma cancel-reservation.svg).
- * Каждая кнопка block (=100%) — flex parent делит пополам. Gap space-2 (8)
- * близок к Figma 11 (diff 3, acceptable visual noise). */
+/* Actions: side-by-side (F-5.3 sync with Figma cancel-reservation.svg).
+ * Each button is block (=100%) — the flex parent splits them in half.
+ * Gap space-2 (8) is close to Figma's 11 (diff 3, acceptable visual
+ * noise). */
 .cancel__actions {
   display: flex;
   flex-direction: row;

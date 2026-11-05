@@ -1,36 +1,41 @@
 /*
   VELO Frontend -- schoolBranding/logo (tz-curator.md §5.3)
 
-  Логотип школы: 200×200, скруглённый квадрат #fffdf8, мягкая тень,
-  мандала + опциональная монограмма-буква. Порт прототипа.
+  School logo: 200×200, a rounded square #fffdf8, a soft shadow, the
+  mandala + an optional monogram letter. Port of the prototype.
 */
 
 import type { SchoolBrandingParams } from './params'
 import { mandalaGroup } from './mandala'
 
+/** Logo render options: monogram letter, flat mode, mandala scale inside the plate. */
 export interface LogoOptions {
-  /** Монограмма-буква под мандалой (в прототипе -- чекбокс «буква школы»). */
+  /** A monogram letter under the mandala (a "school letter" checkbox in
+   *  the prototype). */
   monogram?: boolean
-  /** Буква монограммы; экранируется от <>& (§5.3). */
+  /** The monogram letter; sanitized against `<>&` (§5.3). */
   letter?: string
-  /** Плоский режим: без drop-shadow (owner 2026-09-19: лого -- плоский). */
+  /** Flat mode: no drop-shadow (owner 2026-09-19: the logo is flat). */
   flat?: boolean
   /**
-   * Масштаб мандалы внутри плашки: 0.8 -- как в прототипе; больше -- мандала
-   * крупнее (owner 2026-09-19: «само лого внутри плитки -- больше»).
+   * The mandala's scale inside the plate: 0.8 -- as in the prototype;
+   * higher -- a larger mandala (owner 2026-09-19: the logo itself should
+   * be bigger inside the tile).
    */
   mandalaScale?: number
 }
 
+/** Render the school logo (plate, mandala, optional monogram) as a 200x200 SVG string. */
 export function logoSvg(P: SchoolBrandingParams, opts: LogoOptions = {}): string {
   const uid = 'lg' + P.hash.slice(0, 8)
   const c = P.style.palette
   const scale = opts.mandalaScale ?? 0.8
   const mono = opts.monogram
     ? `<text x="100" y="164" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="28" fill="${c.deep}">${
-        // «Ш» -- the prototype's stand-in for «Школа» (golden port 2026-09-19, tz-curator
-        // §5.3: перенесён как есть). Unreachable today: no live component turns the
-        // monogram on; the fallback exists for the golden contract only.
+        // U+0428 (Cyrillic Sha) -- the prototype's stand-in for the Russian
+        // word for "school" (golden port 2026-09-19, tz-curator §5.3: ported
+        // as-is). Unreachable today: no live component turns the monogram on;
+        // the fallback exists for the golden contract only.
         (opts.letter || 'Ш').replace(/[<>&]/g, '')
       }</text>`
     : ''

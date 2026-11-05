@@ -45,10 +45,11 @@
 // not a redundant guard layer.
 //
 // displayName (.vue:66-70) fallbacks covered the way UserProfileView's
-// analogous computed was in №470: no user -> "Администратор"; first+last ->
-// joined; only one half present -> that half alone; BOTH halves empty
-// strings (falsy, `.filter(Boolean)` drops them) -> "Администратор" again,
-// not a lone space.
+// analogous computed was in №470: no user -> the admin fallback
+// (i18n:adminScreens.adminProfile.administrator); first+last -> joined; only
+// one half present -> that half alone; BOTH halves empty strings (falsy,
+// `.filter(Boolean)` drops them) -> the admin fallback again, not a lone
+// space.
 //
 // Cyrillic fixtures/expected strings below were typed via the Write tool,
 // never a shell heredoc.

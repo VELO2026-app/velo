@@ -22,7 +22,8 @@
 //   c. full editions carry BOTH gated modules (ai + payments chunks);
 //   d. the feature-cut edition carries ai but NO payments chunks --
 //      Topup*, MasterFinanceView, AdminWithdrawals* must be physically
-//      absent from dist (§4 «чанков выключенного модуля нет», F3 variant «а»);
+//      absent from dist (§4 "a disabled module leaves no chunks", F3
+//      variant "a");
 //   e. the pre-run edition is restored with a fresh FULL build, so dist/
 //      matches the tree the matrix found.
 //

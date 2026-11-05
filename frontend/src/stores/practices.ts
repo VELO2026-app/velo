@@ -48,6 +48,7 @@ export function seedPractices(list: readonly PracticeResponse[]): void {
   for (const practice of list) queryCache.seed(queryKeys.practice(practice.id), practice)
 }
 
+/** Single practice detail with stale-while-revalidate over the screen-data cache. */
 export const usePracticesStore = defineStore('practices', () => {
   // -- Single practice detail --
   const selected = ref<PracticeResponse | null>(null)

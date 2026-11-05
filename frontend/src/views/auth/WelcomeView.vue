@@ -7,8 +7,9 @@
   the app, so the LoadingView splash transitions directly into the dashboard.
 
   The person is already signed in when this screen shows (initData in
-  Telegram, "Log In With Telegram" in a browser), so "Войти" is effectively a
-  "begin onboarding" button -> emits `enter`. App.vue routes new users into
+  Telegram, "Log In With Telegram" in a browser), so the enter button
+  (i18n:auth.enter) is effectively a "begin onboarding" button -> emits
+  `enter`. App.vue routes new users into
   the onboarding carousel (the completed-flag branch to the dashboard remains
   as a defensive fallback).
 
@@ -16,7 +17,8 @@
   white mandala variant at a large size to match Figma 01_Welcome; the wordmark
   is part of the logo, so there is no separate text heading.
 
-  Telegram safe area (2026-05): when launched from the chat list ("Открыть")
+  Telegram safe area (2026-05): when launched from the chat list (Telegram's
+  own "Open" button)
   Telegram opens the Mini App in fullscreen, drawing its own Close/menu controls
   ON TOP of our content (no native header). The content safe-area inset
   (--tg-content-safe-area-inset-top, set live by the SDK) tells us how far down

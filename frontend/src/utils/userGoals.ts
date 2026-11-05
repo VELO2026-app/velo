@@ -2,7 +2,7 @@
 // VELO Frontend -- User onboarding goals (FE-101)
 // =============================================================================
 //
-// The ordered catalog of the goal screen («К чему бы вы хотели прийти?»).
+// The ordered catalog of the goal screen (i18n:auth.onboarding.goals.title).
 // Slugs are the wire format the backend stores in credentials.goals and
 // validates against its own USER_GOAL_OPTIONS membership set
 // (backend/app/modules/users/schemas.py) -- the labels live in the locale
@@ -11,12 +11,15 @@
 // is unordered on purpose, so this list may be reordered without a wire
 // change. Adding a value means changing BOTH sides plus the catalogs.
 //
-// GOAL_CUSTOM is not a goal of its own -- it marks the «Свой вариант» pick
-// whose free text travels in credentials.goals_custom.
+// GOAL_CUSTOM is not a goal of its own -- it marks the custom pick
+// (i18n:auth.onboarding.goals.options.custom) whose free text travels in
+// credentials.goals_custom.
 // =============================================================================
 
+/** Marks the custom goal pick whose free text travels in goals_custom. */
 export const GOAL_CUSTOM = 'custom'
 
+/** Goal slugs of the onboarding screen, in the operator's display order. */
 export const USER_GOAL_OPTIONS: readonly string[] = [
   'less_anxiety',
   'better_sleep',

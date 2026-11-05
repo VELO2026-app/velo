@@ -2,8 +2,9 @@
   VELO Frontend -- ResultScreen (shared, DS)
 
   Full-bleed white "takeover" state shown instead of a screen's content:
-  success confirmations (Check-in отправлен / Спасибо за feedback) and the
-  sold-out state (Места закончились). One canon for every full-white user
+  success confirmations (i18n:user.screens.checkin.toast.sent /
+  i18n:user.screens.feedback.toast.thanks) and the
+  sold-out state (i18n:shared.soldOut.title). One canon for every full-white user
   result screen — extracted from the former .form-shell-success / .sold-out
   duplicates.
 

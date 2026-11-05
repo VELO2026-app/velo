@@ -15,20 +15,21 @@
       2026-10-03), and PracticeResponse carries no verified flag.
 
   Modes:
-    view  -- header "<- Запись ⋯", optional practice header, date, title,
-             full content.
+    view  -- header (back control, title i18n:user.screens.entry.titleFallback,
+             "⋯" menu), optional practice header, date, title, full content.
     menu  -- the "⋯" popover: pencil (edit) + trash (delete).
-    edit  -- editable title + autogrow textarea + "Сохранить"; the content
-             field also takes voice dictation (FE-94): mic disc beside it,
-             transcript APPENDS to the body (TEXTAREA_VOICE_INPUT kill-switch),
-             a live take freezes «Сохранить» and leaving the editor discards
-             the take.
-    delete-> soft-delete, navigate back to the feed; the feed shows an
-             "Запись удалена / Отменить" undo bar (handled in DiaryFeedView
-             via the ?deleted query param).
+    edit  -- editable title + autogrow textarea + save (i18n:ui.save); the
+             content field also takes voice dictation (FE-94): mic disc
+             beside it, transcript APPENDS to the body
+             (TEXTAREA_VOICE_INPUT kill-switch), a live take freezes the save
+             control and leaving the editor discards the take.
+    delete-> soft-delete, navigate back to the feed; the feed shows a
+             deleted-entry undo bar (deleted text
+             i18n:user.screens.diaryFeed.toast.deleted; handled in
+             DiaryFeedView via the ?deleted query param).
 
-  Relationships ("Найдена взаимосвязь", screens 53-55) is an AI feature
-  outside the MVP and is deliberately NOT rendered here.
+  The relationships feature ("relationship found" cards, screens 53-55) is an
+  AI feature outside the MVP and is deliberately NOT rendered here.
 -->
 
 <template>
@@ -368,8 +369,9 @@ async function onDelete(): Promise<void> {
     toast.error(result.error)
     return
   }
-  // Hand the undo affordance to the feed: it shows the "Запись удалена /
-  // Отменить" bar and calls diaryStore.restoreEntry on tap.
+  // Hand the undo affordance to the feed: it shows the undo bar (deleted
+  // text i18n:user.screens.diaryFeed.toast.deleted, cancel button
+  // i18n:user.screens.diaryFeed.cancel) and calls diaryStore.restoreEntry on tap.
   void router.replace({ name: 'user-diary', query: { deleted: id } })
 }
 

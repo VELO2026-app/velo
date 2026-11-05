@@ -129,7 +129,7 @@ describe('AdminRevenueView', () => {
 
     it('error: surfaces the generic fallback in the card (unmapped code)', async () => {
       // :description="error" (AdminRevenueView.vue:37) + error.value =
-      // extractApiError(e, 'Ошибка загрузки') (:130). B8 (PROMPT №747):
+      // extractApiError(e, t('common.loadError')) (:130). B8 (PROMPT №747):
       // 'reports_down' is not a real backend code -- unmapped, lands on that
       // fallback; extractApiError no longer reads e.detail at all, so this
       // screen no longer differs from its siblings the way the old comment
@@ -201,7 +201,8 @@ describe('AdminRevenueView', () => {
     it('zero totals render as €0,00, NOT «Бесплатно»', async () => {
       // money() passes allowZero=true (AdminRevenueView.vue:113-116) precisely
       // because the seed practices are free, so real totals ARE 0. Without it
-      // the revenue hero would read «Бесплатно» (utils/format.ts:33).
+      // the revenue hero would read the free label (i18n:common.free;
+      // utils/format.ts:33).
       vi.mocked(adminApi.getAdminRevenue).mockResolvedValue(
         revenue({ revenue_cents: 0, commission_cents: 0, payout_cents: 0 }),
       )
@@ -252,7 +253,8 @@ describe('AdminRevenueView', () => {
 
     it('switching to «Месяц» re-fetches for that period and relabels the hero', async () => {
       // The label is driven by the SAME ref as the fetch (AdminRevenueView.vue:103-105),
-      // so the hero cannot say "за неделю" over month data.
+      // so the hero cannot say the week title (i18n:adminScreens.adminRevenue.titleWeek)
+      // over month data.
       mount()
       await flush()
 

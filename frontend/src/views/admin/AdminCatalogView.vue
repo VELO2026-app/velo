@@ -1,8 +1,8 @@
 <!--
   VELO Frontend -- AdminCatalogView (batch P, P2; made editable R5 stage 3c)
 
-  The practice-taxonomy catalog: each direction with its styles (виды).
-  Reached from the Admin dashboard «Каталог практик» row.
+  The practice-taxonomy catalog: each direction with its styles.
+  Reached from the Admin dashboard i18n:adminScreens.adminDashboard.catalogLink row.
 
   R5 stage 3c: now editable, backed by the stage-2 admin CRUD API
   (GET/POST/PATCH /api/v1/admin/taxonomy/*) -- add direction, add style

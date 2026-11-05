@@ -1,5 +1,6 @@
 // =============================================================================
-// VELO Frontend -- PracticeReviewsView Screen Tests («Аналитика по практике»)
+// VELO Frontend -- PracticeReviewsView Screen Tests (practice analytics,
+// i18n:shared.analytics.title)
 // =============================================================================
 //
 // BE-78: one screen for every entitled reader, on three server endpoints

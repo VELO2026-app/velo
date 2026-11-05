@@ -4,8 +4,9 @@
   The user dashboard's bell feed -- the user-zone mirror of the master's
   T-26 inbox (MasterInboxView.vue), reached by tapping the bell
   (UserDashboardView.vue's onBell). Same comms-proxy endpoints, same rows
-  (NotificationRow), same copy: the title, empty state and «Прочитать всё»
-  wording was owner-confirmed for the master inbox (PROMPT №703) and carries
+  (NotificationRow), same copy: the title, empty state and read-all wording
+  (i18n:user.screens.userInbox.readAll) was owner-confirmed for the master
+  inbox (PROMPT №703) and carries
   over verbatim.
 
   DEEP LINKS (owner ruling, FE-11): a tap navigates AND marks the row read.
@@ -21,10 +22,13 @@
   PAGINATION: deliberately absent -- one page (comms default limit 20);
   "load more" is future scope.
 
-  TYPE SLIDER (owner ask): Все / Сообщения / Мероприятия / Другое, a
+  TYPE SLIDER (owner ask): all / messages / events / other (i18n:common.all,
+  i18n:user.screens.userInbox.filter.messages,
+  i18n:user.screens.userInbox.filter.events, i18n:common.other), a
   client-side view filter over the ONE loaded page. Buckets follow velo's
   own emit vocabulary: msg.* = the messaging engine; booking.* / practice.* /
-  waitlist.* = practice life; «Другое» = the complement (finance and every
+  waitlist.* = practice life; the "other" bucket (i18n:common.other) = the
+  complement (finance and every
   future kind with no tab of its own) -- the vocabulary grows, so prefixes,
   not an enum. The track is SCROLLABLE (owner ask): four tabs do not squeeze
   into equal segments, they stay content-sized and the last one is reached
@@ -146,10 +150,12 @@ const skeletons = useRememberedCount(
 )
 const unread = ref(0)
 
-// -- Type slider (Все / Сообщения / Мероприятия / Другое) -----------------------
+// -- Type slider (all / messages / events / other; labels via
+// common.all / user.screens.userInbox.filter.messages /
+// user.screens.userInbox.filter.events / common.other) -----------------------
 // A client-side view filter. Buckets are PREFIX rules over velo's emit
 // vocabulary (see header): msg.* = messages; booking.*/practice.*/waitlist.*
-// = practice life; «Другое» = everything else (finance, future kinds).
+// = practice life; "other" = everything else (finance, future kinds).
 type InboxFilter = 'all' | 'messages' | 'events' | 'other'
 const FILTER_OPTIONS: ReadonlyArray<{ value: InboxFilter; label: string }> = [
   { value: 'all', label: t('common.all') },
@@ -253,8 +259,8 @@ function routeFor(
   // person it is about, so it stays mark-read only (BE-79 (2)).
   if (item.type === 'school.member_blocked') return null
 
-  // BE-104: a rejection reads its verdict -- the «Отказ» screen of
-  // master-pending shows the reason and «подать заново» (-> master-apply).
+  // BE-104: a rejection reads its verdict -- master-pending's rejected
+  // screen shows the reason and the reapply path (-> master-apply).
   // The TYPE decides, as above: the same open_master_application verb from
   // BE-59 or master.application_submitted keeps the apply route below (its
   // guard sends a rejected applicant to the wizard, which has no reason).
@@ -277,7 +283,8 @@ function routeFor(
     case 'open_practice':
       return practiceId ? { name: 'practice-detail', params: { id: practiceId } } : null
     case 'confirm_waitlist': {
-      // Links: «Освободилось место» -- its own confirm screen, by waitlist_id.
+      // Links: the spot-freed notification (kind waitlist.spot_available) --
+      // its own confirm screen, by waitlist_id.
       const waitlistId = typeof params.waitlist_id === 'string' ? params.waitlist_id : null
       return waitlistId ? { name: 'waitlist-confirm', params: { id: waitlistId } } : null
     }
@@ -294,7 +301,9 @@ function routeFor(
       return { name: 'master-apply' }
     case 'open_master_zone':
       // BE-104 master.verified to a role='user' account: master-pending's
-      // «Ваша заявка одобрена!» screen does the switch («Войти в кабинет»).
+      // approved screen (i18n:masterScreens.masterPending.approved.title)
+      // does the switch via its enter-cabinet CTA
+      // (i18n:masterScreens.masterPending.enterCabinet).
       // Without the capability (revoked before the tap) there is no zone to
       // open -- mark-read-only.
       return auth.allowedRoles.includes('master') ? { name: 'master-pending' } : null
@@ -310,7 +319,8 @@ function routeFor(
       return threadId ? { name: 'user-chat', params: { id: threadId } } : null
     }
     case 'open_support_rating': {
-      // FE-107 / BE-162 delivery 3: «Как мы помогли?» -- the rating sheet on
+      // FE-107 / BE-162 delivery 3: the rating question
+      // (i18n:chat.rating.title) -- the rating sheet on
       // THAT resolved ticket. The chat route resolves the ticket id to the
       // person's one support row; ?rate=1 asks the sheet to open on the
       // ticket the notification named (the route's own id).
@@ -359,9 +369,9 @@ function onRow(item: NotificationItem): void {
 }
 
 .user-inbox__filter {
-  /* Top gap under the floating header island (owner 2026-10-01: «сильно
-     прижат») -- the screen's own negative-margin container leaves the
-     control row flush with the island otherwise. */
+  /* Top gap under the floating header island (owner 2026-10-01: the row sat
+     pressed too hard against the island) -- the screen's own negative-margin
+     container leaves the control row flush with the island otherwise. */
   margin: var(--space-4) var(--space-4) var(--space-3);
 }
 

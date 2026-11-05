@@ -48,6 +48,7 @@ function tokenColor(name: string, fallback: string): string {
   return v || fallback
 }
 
+/** The platform as it behaves inside the Telegram Mini App. */
 export const telegramPlatform: Platform = {
   name: 'telegram',
 

@@ -7,7 +7,7 @@
  * (the voice-input spec file was never committed to the repo; FE-75 in Linear
  * carries the step split and the step-2 scope).
  *
- * STATE MACHINE: idle -> requesting -> recording -> processing -> idle.
+ * STATE MACHINE: `idle -> requesting -> recording -> processing -> idle`.
  *   - requesting: getUserMedia permission prompt in flight (UI shows nothing
  *     new; a denial lands in errorReason).
  *   - recording:  mic open, stopwatch ticking (elapsedSec, ~200ms cadence).
@@ -27,6 +27,7 @@ import { onScopeDispose, ref } from 'vue'
 import { encodeWav, peakAmplitude, pickRecorderMime } from '@/utils/audio'
 import { onDocumentEvent, offDocumentEvent, isDocumentHidden } from '@/platform/dom'
 
+/** States of the recorder state machine: idle, requesting (permission), recording, processing (WAV encode). */
 export type VoiceRecorderState = 'idle' | 'requesting' | 'recording' | 'processing'
 
 /** Why the last start() failed -- the CALLER turns this into user-facing text. */
@@ -41,15 +42,18 @@ export interface VoiceTake {
   peak: number
 }
 
+/** Recording cap: the take auto-stops (onAutoStop) at 60 seconds. */
 export const VOICE_MAX_DURATION_SEC = 60
 /** Stopwatch cadence. Sub-second is enough; coarser reads as stuck. */
 const TICK_MS = 200
 
+/** Options of the recorder: the auto-stop callback fired when the 60-second cap ends a take. */
 export interface VoiceRecorderOptions {
   /** Fires when the 60s cap stops the take on its own (not from stop()). */
   onAutoStop?: (take: VoiceTake | null) => void
 }
 
+/** MediaRecorder lifecycle as a small state machine with a WAV handoff; transcription stays with the caller. */
 export function useVoiceRecorder(options: VoiceRecorderOptions = {}) {
   const state = ref<VoiceRecorderState>('idle')
   const elapsedSec = ref(0)
@@ -199,7 +203,7 @@ export function useVoiceRecorder(options: VoiceRecorderOptions = {}) {
     }
   }
 
-  /** Manual stop: recording -> processing -> the take (null on failure).
+  /** Manual stop: `recording -> processing -> the take (null on failure)`.
    * Idempotent while a stop is already in flight. */
   function stop(): Promise<VoiceTake | null> {
     if (state.value === 'recording') {

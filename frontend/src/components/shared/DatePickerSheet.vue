@@ -2,9 +2,10 @@
   VELO Frontend -- DatePickerSheet (Phase-3 master DS)
 
   Bottom-sheet date picker for the practice form (operator SVG 2026-06-11,
-  "Дата практики"). Two modes in one sheet (Q2=А):
+  title i18n:shared.datePicker.title). Two modes in one sheet (Q2=A):
     - calendar: Mon-first month grid; selected day = filled primary circle;
-      adjacent-month days dimmed; ‹ › month nav; tap the «Месяц Год» header →
+      adjacent-month days dimmed; ‹ › month nav; tap the "Month Year"
+      header →
     - wheel: month + year VWheel columns; pick → back to the grid.
 
   v-model is an ISO date string 'YYYY-MM-DD' (what the form stores). `min`
@@ -111,7 +112,8 @@ const props = withDefaults(
      *  FE-70: the external-activity form passes max=today (nothing that has
      *  not happened yet can be recorded). */
     max?: string
-    /** Sheet title (default «Дата практики»; reused as «Дата заявки» in admin). */
+    /** Sheet title (default i18n:shared.datePicker.title; reused as the
+     *  report date i18n:moderation.reportDate in admin). */
     title?: string
   }>(),
   { modelValue: '', min: '', max: '' },

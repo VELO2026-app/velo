@@ -124,7 +124,8 @@ const router = createRouter({
           path: 'dashboard',
           name: 'user-dashboard',
           // [FE-3] Headerless top clearance RETIRED (owner, 2026-09-08): the
-          // screen has a floating header again -- VHeader «Главная» with the
+          // screen has a floating header again -- VHeader
+          // (i18n:user.screens.userDashboard.headerTitle) with the
           // notification bell in its action slot teleports into the island,
           // so the route must NOT declare headerless (per the [FE-3] contract
           // in MobileLayout's mainStyle) or the feed would underlap the
@@ -138,15 +139,17 @@ const router = createRouter({
           component: () => import('@/views/user/CalendarView.vue'),
         },
         {
-          // The MASTER's practice calendar (owner 2026-09-30): the «Предстоящие
-          // практики» row on the master's public profile lands here. Stacked
+          // The MASTER's practice calendar (owner 2026-09-30): the
+          // upcoming-practices row (i18n:user.screens.masterPublic.sections.upcoming)
+          // on the master's public profile lands here. Stacked
           // (not the tab hub) so the floating island's back control is honest.
           path: 'calendar/master/:masterId',
           name: 'user-calendar-master',
           component: () => import('@/views/user/CalendarView.vue'),
         },
         {
-          // Owner 2026-10-01: «Предстоящие практики» on the school page opens
+          // Owner 2026-10-01: the upcoming tab
+          // (i18n:user.screens.schoolPage.tabs.upcoming) on the school page opens
           // the calendar scoped to that school. Stacked (not the tab hub) so
           // the floating island's back control is honest; mirrors
           // user-calendar-master above.
@@ -267,18 +270,21 @@ const router = createRouter({
           component: () => import('@/views/user/UserInboxView.vue'),
         },
         {
-          // FE-19 (GT P3): the user zone's «Мои школы» -- the schools I
+          // FE-19 (GT P3): the user zone's my-schools screen
+          // (i18n:user.screens.userMySchools.title) -- the schools I
           // belong to. The master's student groups are a master-zone
           // concept a plain user never sees. Entry row: UserProfileView,
-          // «Аккаунт» section.
+          // account section (i18n:user.screens.userProfile.section.account).
           path: 'my-schools',
           name: 'user-my-schools',
           meta: { hideTabBar: true },
           component: () => import('@/views/user/UserMySchoolsView.vue'),
         },
         {
-          // tz-curator.md §1.2-1.4: the «Школы» TAB HUB (curator flow) --
-          // the tab bar's own screen: empty state with «Создать школу» or the
+          // tz-curator.md §1.2-1.4: the schools TAB HUB (i18n:tabs.schools,
+          // curator flow) --
+          // the tab bar's own screen: empty state with the create button
+          // (i18n:user.screens.schools.create.title) or the
           // flat schools list. Reached from the dock tab and nowhere else;
           // tab visibility itself is the schoolsHub store's decision.
           path: 'schools',
@@ -305,7 +311,9 @@ const router = createRouter({
           component: () => import('@/views/user/CheckinView.vue'),
         },
         {
-          // Links (3 October): «Освободилось место» -- the waitlist.spot_available
+          // Links (3 October): the spot-freed screen
+          // (i18n:user.screens.waitlistConfirm.leadLine) -- the
+          // waitlist.spot_available
           // notification (bell + Telegram confirm_waitlist__<id>) lands here.
           path: 'waitlist/:id',
           name: 'waitlist-confirm',
@@ -397,7 +405,7 @@ const router = createRouter({
           // mounts it as 'practice-live' below. Here the server's ladder
           // answers 'host' and the screen starts the meeting inside VELO
           // (Meeting SDK); the zone picks the back target and hides the
-          // student-only actions (Check-in, «Покинуть практику»).
+          // student-only actions (Check-in).
           path: 'practice-live/:practiceId',
           name: 'master-practice-live',
           beforeEnter: masterStatusGuard,
@@ -448,7 +456,7 @@ const router = createRouter({
         // Master profile sub-screens reached from the master profile hub; back-nav
         // uses router.back() so it returns here. Edit + timezone reuse the
         // role-agnostic user settings views; notifications has its own master view
-        // (richer master-only design, operator В1=Б 2026-06-13).
+        // (richer master-only design, operator B1=B 2026-06-13).
         {
           path: 'profile/edit',
           name: 'master-edit-profile',
@@ -536,7 +544,8 @@ const router = createRouter({
           component: () => import('@/views/master/MasterGroupDetailView.vue'),
         },
         {
-          // tz-curator.md §1.2: the master zone's «Школы» TAB HUB -- the
+          // tz-curator.md §1.2: the master zone's schools TAB HUB
+          // (i18n:tabs.schools) -- the
           // sectioned schools list the dock tab lands on, same contract as
           // user-schools: the tab bar stays visible with the fourth tab
           // active, so no hideTabBar meta here.
@@ -643,8 +652,9 @@ const router = createRouter({
       component: () => import('@/views/master/SchoolJoinView.vue'),
     },
     {
-      // BE-59/GT-27 (owner mockup 2026-10-02): «Приглашение стать мастером
-      // школы!» -- the consent screen of the curator's master-role
+      // BE-59/GT-27 (owner mockup 2026-10-02): the master-offer heading
+      // (i18n:masterScreens.schoolMasterOffer.invited.title) -- the
+      // consent screen of the curator's master-role
       // appointment. Reached from the school.master_offered notification
       // (open_master_offer, bell + Telegram); standalone like school-join, no guard: the
       // school page and the accept endpoint decide who sees what.
@@ -783,8 +793,10 @@ const router = createRouter({
           component: () => import('@/views/admin/AdminSupportStatsView.vue'),
         },
         {
-          // A support ticket's card (FE-100: the list is the «Обращения» tab
-          // of «Модерация», admin-reports; the deep link of the BE-172
+          // A support ticket's card (FE-100: the list is the tickets tab
+          // (i18n:adminScreens.adminReports.tabTickets) of the moderation
+          // screen (i18n:adminScreens.adminReports.moderationTab),
+          // admin-reports; the deep link of the BE-172
           // signal lands here directly).
           path: 'support/:id',
           name: 'admin-support-detail',

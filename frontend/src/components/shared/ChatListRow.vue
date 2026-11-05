@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- ChatListRow (Phase 6 / T2, H-T2-UI phase «а»; BE-163 row)
+  VELO Frontend -- ChatListRow (Phase 6 / T2, H-T2-UI phase a; BE-163 row)
 
   One conversation in the chats list, shared by both roles: avatar + peer
   name + per-thread unread badge, and -- since BE-163 feeds the row its own

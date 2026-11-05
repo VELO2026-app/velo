@@ -7,7 +7,8 @@
 // golden source), icons (present + declared dimensions), the bot URL (the
 // one the build actually inlined), and the locale set. Every fact carries its
 // SOURCE (skin brand.json / passport env / golden default) -- the §6.4
-// question «всё из конфига, ничего в коде» is answered by the source column.
+// question "everything from config, nothing in code" is answered by the
+// source column.
 //
 // The maskable safe-zone needs pixel inspection and stays MANUAL (owner's
 // acceptance, same as in validate-skin.mjs).

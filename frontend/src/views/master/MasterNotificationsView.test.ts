@@ -20,7 +20,8 @@
 //       stubs (no comms types yet; explicit disposition, Master-chat
 //       2026-07-28). Owner ruling 2026-08-16 (PROMPT №746): these four stay
 //       VISIBLE, DISABLED (VSwitch's own `disabled`, click is a no-op -- not
-//       moved-then-reverted), each carrying a short "Скоро" marker. This
+//       moved-then-reverted), each carrying the short "coming soon" marker
+//       (i18n:masterScreens.masterNotifications.soon). This
 //       superseded the earlier "flips visually, lost on remount" shape;
 //       asserted below.
 //
@@ -42,6 +43,7 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
+import { ApiResponseError } from '@/api/client'
 import MasterNotificationsView from '@/views/master/MasterNotificationsView.vue'
 
 const back = vi.fn()
@@ -351,11 +353,12 @@ describe('MasterNotificationsView', () => {
     })
 
     // The former "default-OFF row toggles on" case lived here and used
-    // «Ежемесячный отчет» as its example -- the one row this file's own
-    // defaults comment calls out as default-off. It is now a disabled stub
-    // (PROMPT №746) and no live row is default-off, so there is no row left
-    // to carry this scenario; its disabled-click behaviour is covered above
-    // ('a STUB row (Ежемесячный отчет) is DISABLED...').
+    // the monthly-report row (i18n:masterScreens.masterNotifications.monthlyReport)
+    // as its example -- the one row this file's own defaults comment calls
+    // out as default-off. It is now a disabled stub (PROMPT №746) and no
+    // live row is default-off, so there is no row left to carry this
+    // scenario; its disabled-click behaviour is covered above (the
+    // stub-row-disabled case).
 
     it('toggling one row does not affect a sibling row with its OWN category (msg_* are independent)', async () => {
       mount()
@@ -374,7 +377,8 @@ describe('MasterNotificationsView', () => {
     // msg.support_message -> category msg_support. The label must SAY so,
     // and flipping that label must WRITE that category: wording and wiring
     // asserted together, so neither can silently flip back to the old
-    // inverted pair («От участников»/«От поддержки») without going red.
+    // inverted pair of labels ("From participants" / "From support")
+    // without going red.
     it('P-2: the msg_support row is worded «сообщения учеников» AND writes msg_support', async () => {
       mount()
       await flush()
@@ -400,37 +404,177 @@ describe('MasterNotificationsView', () => {
   })
 
   // ===========================================================================
-  describe('schedule days (.vue:190-193, VDayPicker)', () => {
-    it('default: Mon-Fri on, Sat/Sun off', async () => {
+  describe('schedule days (VDayPicker)', () => {
+    // FE-76: comms 2.0.0 made an unticked day TOTAL silence (owner decision
+    // 2026-09-16: "a ticked day is when messages come, not when they DON'T"),
+    // so the default is all seven days -- a master who never opened this
+    // screen must not silently lose the weekend a Mon-Fri default would mute.
+    it('default: ALL SEVEN days on, weekend included', async () => {
       mount()
       await flush()
 
       expect(dayOn('ПН')).toBe(true)
+      expect(dayOn('ВТ')).toBe(true)
+      expect(dayOn('СР')).toBe(true)
+      expect(dayOn('ЧТ')).toBe(true)
       expect(dayOn('ПТ')).toBe(true)
-      expect(dayOn('СБ')).toBe(false)
-      expect(dayOn('ВС')).toBe(false)
+      expect(dayOn('СБ')).toBe(true)
+      expect(dayOn('ВС')).toBe(true)
     })
 
-    it('removing a default day and adding a non-default day both work', async () => {
+    // FE-76 §2: the checkbox meaning changed under the user -- the card now
+    // says so. Wording and wiring asserted together so neither silently
+    // reverts.
+    it('FE-76: the day card carries the hint -- an unticked day is silence all day', async () => {
       mount()
       await flush()
 
-      dayBtn('ПН').click() // remove Monday
-      await flush()
-      dayBtn('СБ').click() // add Saturday
+      expect(host?.querySelector('.mn-days-hint')?.textContent?.trim()).toBe(
+        'Отмеченные дни — когда уведомления приходят. Если день не отмечен, в этот день не придёт ничего — круглые сутки, независимо от выставленного времени.',
+      )
+    })
+
+    it('removing and re-adding a day both persist the FULL schedule', async () => {
+      mount()
       await flush()
 
-      expect(dayOn('ПН')).toBe(false)
-      expect(dayOn('СБ')).toBe(true)
-      expect(dayOn('ВТ')).toBe(true) // the rest of the default set is untouched
+      dayBtn('ВС').click() // remove Sunday
+      await flush()
+
+      expect(dayOn('ВС')).toBe(false)
       // T1: every day change persists the FULL schedule through the proxy.
       expect(prefsPut).toHaveBeenLastCalledWith({
         schedule: {
           from: '08:00',
           to: '22:00',
-          days: ['tue', 'wed', 'thu', 'fri', 'sat'],
+          days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'],
         },
       })
+
+      dayBtn('ВС').click() // re-add it
+      await flush()
+
+      expect(dayOn('ВС')).toBe(true)
+      expect(prefsPut).toHaveBeenLastCalledWith({
+        schedule: {
+          from: '08:00',
+          to: '22:00',
+          days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
+        },
+      })
+    })
+
+    // FE-76 regression (the "saved one day -> reopened the screen -> save"
+    // check): the seven-day default is only for a MISSING schedule -- a saved
+    // one-day schedule renders as-is and a re-save must not resurrect the
+    // other six days over it (the wholesale `if (prefs.schedule)` replace).
+    it('a SAVED one-day schedule renders as-is; the default does not resurrect the other six', async () => {
+      prefsGet.mockResolvedValueOnce({
+        ...structuredClone(FACADE),
+        schedule: { from: '09:00', to: '21:00', days: ['mon'] },
+      })
+      mount()
+      await flush()
+
+      expect(dayOn('ПН')).toBe(true)
+      expect(dayOn('ВТ')).toBe(false)
+      expect(dayOn('СР')).toBe(false)
+      expect(dayOn('ЧТ')).toBe(false)
+      expect(dayOn('ПТ')).toBe(false)
+      expect(dayOn('СБ')).toBe(false)
+      expect(dayOn('ВС')).toBe(false)
+
+      dayBtn('ВТ').click()
+      await flush()
+
+      expect(prefsPut).toHaveBeenLastCalledWith({
+        schedule: { from: '09:00', to: '21:00', days: ['mon', 'tue'] },
+      })
+    })
+
+    // FE-76 post-ship check №5: unchecking ALL days clears the schedule --
+    // days:[] reaches the proxy, which turns it into schedule:null
+    // (notifications flow without time limits).
+    it('unchecking ALL seven days persists days: [] (the schedule-clearing path)', async () => {
+      mount()
+      await flush()
+
+      // A flush between clicks: same-tick clicks would read the not-yet-
+      // re-rendered prop and toggle from the stale day set (test-harness
+      // artifact -- real taps are separate tasks, see the file banner).
+      for (const label of ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС']) {
+        dayBtn(label).click()
+        await flush()
+      }
+
+      expect(dayOn('ПН')).toBe(false)
+      expect(dayOn('ВС')).toBe(false)
+      expect(prefsPut).toHaveBeenLastCalledWith({
+        schedule: { from: '08:00', to: '22:00', days: [] },
+      })
+    })
+  })
+
+  // ===========================================================================
+  describe('FE-76 §3.1 -- from == to is a 400 delivery_window_empty, shown AT the time row', () => {
+    // The wheel cannot dial a specific time in happy-dom (banner above), so
+    // an equal from/to pair arrives from the SERVER: a schedule the screen
+    // re-loads. Any later change (a day tick) re-sends it and eats the 400.
+    const windowConflict = () =>
+      new ApiResponseError(
+        400,
+        'Delivery window start and end must differ',
+        'delivery_window_empty',
+      )
+
+    function timeErrorRow(): Element | null {
+      return host?.querySelector('.v-field-error') ?? null
+    }
+
+    it('the rejection shows the catalog phrase at the TIME row, not the generic toast', async () => {
+      prefsGet.mockResolvedValueOnce({
+        ...structuredClone(FACADE),
+        schedule: { from: '09:00', to: '09:00', days: ['mon'] },
+      })
+      prefsPut.mockRejectedValueOnce(windowConflict())
+      mount()
+      await flush()
+
+      expect(fromField().textContent?.trim()).toBe('09:00') // the equal pair loaded
+      expect(timeErrorRow()?.classList.contains('v-field-error--open')).toBe(false) // quiet before
+
+      dayBtn('ВТ').click()
+      await flush()
+
+      expect(timeErrorRow()?.querySelector('.v-field-error__text')?.textContent?.trim()).toBe(
+        'Время начала и окончания доставки не могут совпадать',
+      )
+      expect(timeErrorRow()?.classList.contains('v-field-error--open')).toBe(true)
+      // Bound to BOTH time fields, not floating over the form.
+      expect(fromField().getAttribute('aria-describedby')).toBe('err-sched-time')
+      expect(toField().getAttribute('aria-describedby')).toBe('err-sched-time')
+      expect(toastError).not.toHaveBeenCalled() // NOT the generic schedule toast
+    })
+
+    it('the row clears on the next (successful) save attempt', async () => {
+      prefsGet.mockResolvedValueOnce({
+        ...structuredClone(FACADE),
+        schedule: { from: '09:00', to: '09:00', days: ['mon'] },
+      })
+      prefsPut.mockRejectedValueOnce(windowConflict())
+      mount()
+      await flush()
+
+      dayBtn('ВТ').click()
+      await flush()
+      expect(timeErrorRow()?.classList.contains('v-field-error--open')).toBe(true)
+
+      // The standing prefsPut resolves (set in beforeEach) -> the row closes.
+      dayBtn('СР').click()
+      await flush()
+
+      expect(timeErrorRow()?.classList.contains('v-field-error--open')).toBe(false)
+      expect(fromField().getAttribute('aria-describedby')).toBeNull()
     })
   })
 
@@ -472,6 +616,27 @@ describe('MasterNotificationsView', () => {
 
       expect(toField().textContent?.trim()).toBe('22:00') // its own edge, committed
       expect(fromField().textContent?.trim()).toBe('08:00') // NOT overwritten by the "to" commit
+    })
+
+    // FE-76 §4: to "00:00" ("keep sending until midnight") is VALID on comms 2.0.0
+    // (the proxy maps it to end-of-day before the from/to check) -- the screen
+    // must load and re-send it untouched, never "correct" or reject it locally.
+    it('to: "00:00" loads as-is and re-sends as-is (valid on comms 2.0.0)', async () => {
+      prefsGet.mockResolvedValueOnce({
+        ...structuredClone(FACADE),
+        schedule: { from: '21:00', to: '00:00', days: ['mon'] },
+      })
+      mount()
+      await flush()
+
+      expect(toField().textContent?.trim()).toBe('00:00')
+
+      dayBtn('ВТ').click()
+      await flush()
+
+      expect(prefsPut).toHaveBeenLastCalledWith({
+        schedule: { from: '21:00', to: '00:00', days: ['mon', 'tue'] },
+      })
     })
   })
 })

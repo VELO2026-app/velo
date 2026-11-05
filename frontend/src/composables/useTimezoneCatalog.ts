@@ -20,10 +20,11 @@
 import { readonly, ref, type DeepReadonly, type Ref } from 'vue'
 import { getTimezoneCatalog } from '@/api/users'
 
+/** The backend's timezone catalog: canonical names, accepted alias spellings, and CLDR labels. */
 export interface TimezoneCatalog {
   /** Every name the backend stores unchanged. */
   names: string[]
-  /** Every other accepted spelling -> the name stored for it. */
+  /** `Every other accepted spelling -> the name stored for it.` */
   aliases: Record<string, string>
   /** Russian CLDR city / country per name, where CLDR has one. */
   labels: Record<string, { city_ru: string | null; country_ru: string | null }>

@@ -2,13 +2,15 @@
   VELO Frontend -- MasterNotificationsView (Phase-3 Master DS)
 
   Master-side notification preferences, reached from the master profile hub
-  («Уведомления»). Operator decision 2026-06-13 (В1=Б): this is a SEPARATE
-  master-only screen, NOT the shared user NotificationsView. The master design is
+  (i18n:masterScreens.masterProfile.menu.notifications). Operator decision
+  2026-06-13 (B1=B): this is a SEPARATE master-only screen, NOT the shared
+  user NotificationsView. The master design is
   far richer (bookings / participants / messages / analytics + a delivery
   schedule); the user view stays untouched (user role is frozen).
 
-  Grouped on/off rows (label + optional sub + VSwitch) plus a «График
-  уведомлений» block: a from/to delivery window (VSelect) and a VDayPicker.
+  Grouped on/off rows (label + optional sub + VSwitch) plus the delivery
+  schedule block (i18n:masterScreens.masterNotifications.schedule): a
+  from/to delivery window (VSelect) and a VDayPicker.
 
   BACKEND (Phase 6 / T1): the CATEGORY toggles and the schedule now read and
   write the comms service through the velo proxy
@@ -24,6 +26,15 @@
   monthly_report) have NO comms types yet and stay LOCAL stubs -- explicit
   disposition (Master-chat 2026-07-28): when their types appear, move them
   into comms and drop the local persistence.
+
+  FE-76 (comms schedule 2.0.0, BE-36): the wire contract is unchanged, but
+  an unticked day now means TOTAL silence for that day (owner decision
+  2026-09-16: "a ticked day is when messages come, not when they DON'T").
+  Three screen-side consequences, all below: the DEFAULT is all seven days
+  (a master who never opened this screen must not silently lose the
+  weekend), a hint under the day card spells out what an unticked day
+  means, and the proxy's 400 `delivery_window_empty` (from == to) is shown
+  AT the time row (VFieldError) instead of the generic save toast.
 
   Route: /master/profile/notifications (name 'master-notifications',
   meta.hideTabBar — back-nav settings sub-screen, no tab bar per the design).
@@ -67,14 +78,25 @@
           {{ t('masterScreens.masterNotifications.receiveFrom') }}
         </p>
         <div class="mn-sched">
-          <button type="button" class="mn-sched__field" @click="openTimePicker('from')">
+          <button
+            type="button"
+            class="mn-sched__field"
+            :aria-describedby="scheduleTimeError ? 'err-sched-time' : undefined"
+            @click="openTimePicker('from')"
+          >
             {{ schedule.from }}
           </button>
           <span class="mn-sched__sep">{{ t('masterScreens.masterNotifications.to') }}</span>
-          <button type="button" class="mn-sched__field" @click="openTimePicker('to')">
+          <button
+            type="button"
+            class="mn-sched__field"
+            :aria-describedby="scheduleTimeError ? 'err-sched-time' : undefined"
+            @click="openTimePicker('to')"
+          >
             {{ schedule.to }}
           </button>
         </div>
+        <VFieldError id="err-sched-time" :message="scheduleTimeError" />
         <div class="mn-days-card">
           <VDayPicker
             :model-value="schedule.days"
@@ -82,6 +104,9 @@
             @update:model-value="onScheduleDays"
           />
         </div>
+        <p class="mn-days-hint">
+          {{ t('masterScreens.masterNotifications.daysHint') }}
+        </p>
       </section>
     </div>
 
@@ -100,9 +125,11 @@ import { t } from '@/locales'
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
-import { VSwitch, VDayPicker, VBadge } from '@/components/ui'
+import { VSwitch, VDayPicker, VBadge, VFieldError } from '@/components/ui'
 import TimePickerSheet from '@/components/shared/TimePickerSheet.vue'
 import { getNotificationPrefs, updateNotificationPrefs } from '@/api/notifications'
+import { ApiResponseError } from '@/api/client'
+import { errorMessage } from '@/api/errorMessages'
 import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
@@ -188,9 +215,9 @@ const GROUPS: Group[] = [
     // receives students' chat messages as msg.support_message -> category
     // msg_support, REGARDLESS of thread form; msg_participants reaches the
     // master only where they are the CLIENT of somebody else's thread. The
-    // old labels («От участников» / «От поддержки») said the opposite of
-    // what the toggles do. msg_support first: it is the one that matters
-    // to a master. Texts approved by Master-chat (Т-10); wording is the
+    // old labels ("From participants" / "From support") said the opposite
+    // of what the toggles do. msg_support first: it is the one that matters
+    // to a master. Texts approved by Master-chat (T-10); wording is the
     // boss's to replay after the show -- a two-line edit here.
     rows: [
       {
@@ -256,10 +283,15 @@ const toggles = reactive<Record<ToggleKey, boolean>>({
 })
 
 // --- Delivery schedule -----------------------------------------------------
+// FE-76: ALL SEVEN days on by default. Since comms 2.0.0 an unticked day is
+// total silence (owner decision 2026-09-16), so a Mon-Fri default would mute
+// the weekend of every master who never opened this screen -- a choice nobody
+// made. Defaults only show until the load answers; a saved schedule always
+// replaces them wholesale.
 const schedule = reactive<{ from: string; to: string; days: string[] }>({
   from: '08:00',
   to: '22:00',
-  days: ['mon', 'tue', 'wed', 'thu', 'fri'],
+  days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
 })
 
 // Wheel time-picker (operator 2026-06-19: switch the from/to dropdowns to the same
@@ -308,10 +340,22 @@ async function loadPrefs(): Promise<void> {
 }
 onMounted(loadPrefs)
 
+// FE-76 §3.1: the proxy refuses from == to with 400 `delivery_window_empty`.
+// That answer is ABOUT the times, so it goes to the from/to row as a
+// VFieldError -- not to the generic save toast above the form.
+const scheduleTimeError = ref('')
+
 function persistSchedule(): void {
+  // A fresh attempt clears the row; a repeated from == to brings it back.
+  scheduleTimeError.value = ''
   updateNotificationPrefs({
     schedule: { from: schedule.from, to: schedule.to, days: [...schedule.days] },
   }).catch((error) => {
+    if (error instanceof ApiResponseError && error.code === 'delivery_window_empty') {
+      scheduleTimeError.value = errorMessage('delivery_window_empty')
+      console.warn('schedule save rejected', error)
+      return
+    }
     // H-R2 (3.6): the schedule save failing silently meant the picker
     // showed a schedule the server never accepted.
     toast.error(t('masterScreens.masterNotifications.toast.scheduleSaveFailed'))
@@ -368,7 +412,8 @@ function onScheduleDays(days: string[]): void {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
-  /* Extra bottom space so the «График уведомлений» block isn't glued to the
+  /* Extra bottom space so the delivery schedule block
+     (i18n:masterScreens.masterNotifications.schedule) isn't glued to the
      bottom edge (operator 2026-06-19). */
   padding: 0 var(--space-4) var(--space-8);
 }
@@ -473,5 +518,16 @@ function onScheduleDays(days: string[]): void {
   border: 1px solid var(--velo-border-card);
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--velo-inset-row);
+}
+
+/* FE-76: an unticked day is TOTAL silence now -- say so under the card
+   (same secondary-text shape as .mn-section__sub / .mn-card__sub). */
+.mn-days-hint {
+  font-family: var(--font-body);
+  font-size: var(--velo-fs-14);
+  color: var(--velo-text-secondary);
+  letter-spacing: 0.02em;
+  line-height: 1.25;
+  margin: calc(-1 * var(--space-2)) 0 0;
 }
 </style>

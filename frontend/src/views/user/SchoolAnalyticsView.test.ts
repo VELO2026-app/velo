@@ -4,11 +4,13 @@
 //
 // ONE screen, both zones, one aggregate per period: the period slider asks
 // for week by default and refetches with the selected period, the four
-// engagement cards render the server numbers verbatim («приходило из N в
-// школе» borrows N from members.students), an out-of-order response never
+// engagement cards render the server numbers verbatim (the members line,
+// i18n:user.screens.schoolAnalytics.membersLine, borrows N from
+// members.students), an out-of-order response never
 // lands under a newer period label, a failed switch is the honest retry
 // state (never stale numbers under a new label), the masked 404 is the
-// SCHOOL being unavailable and its «К школе» action follows the zone. The
+// SCHOOL being unavailable and its back-to-school action
+// (i18n:user.screens.schoolAnalytics.backToSchool) follows the zone. The
 // route table is pinned in router/routes.test.ts.
 // =============================================================================
 
@@ -75,7 +77,7 @@ function analyticsFixture(): SchoolAnalyticsResponse {
       // BE-107: the share is reviews out of visits, computed by the server
       // (was reviewers / members.students on the client). reviews is the
       // strip's sum (1 + 3 + 1); visits (8) differs from the roster (7) on
-      // purpose, so a client still dividing by students would show «из 7».
+      // purpose, so a client still dividing by students would show "out of 7".
       visits: 8,
       reviews: 5,
       reviews_pct: 63,
@@ -153,7 +155,7 @@ describe('SchoolAnalyticsView', () => {
 
     // The section heading follows the slider (default week).
     expect(text()).toContain('Практики недели')
-    // Newest first: Медитация above Дыхание.
+    // Newest first: the meditation-practice fixture above the breathing one.
     expect(text()).toContain('Медитация')
     expect(text()).toContain('Дыхание')
     // ONE line: date · students · feedbacks.
@@ -195,7 +197,7 @@ describe('SchoolAnalyticsView', () => {
     expect(text()).toContain('Человек приходило из 40 в школе')
     expect(text()).toContain('60%')
     expect(text()).toContain('Пришли еще раз, 7 из 8')
-    // The month fixture predates part 3 (the «бек доедет» case): the
+    // The month fixture predates part 3 (the backend-will-catch-up case): the
     // heading follows the slider, the list degrades to its empty state.
     expect(text()).toContain('Практики месяца')
     expect(text()).toContain('Пока нет практик за этот период')
@@ -230,7 +232,9 @@ describe('SchoolAnalyticsView', () => {
     await flush()
     expect(text()).toContain('63% · 5 из 8')
 
-    // Tap Месяц, then Квартал before Месяц answers; the late month
+    // Tap month (i18n:common.periodMonth), then quarter
+    // (i18n:user.screens.schoolAnalytics.period.quarter) before month
+    // answers; the late month
     // response must not overwrite the quarter numbers.
     buttonWith('Месяц')?.click()
     await flush()
@@ -300,7 +304,8 @@ describe('SchoolAnalyticsView', () => {
     // bad 1 + good 3 + fire 1 -> 20% / 60% / 20% segments (60% is unique
     // on the screen, unlike 50% which card 3 also carries).
     expect(text()).toContain('60%')
-    // «Расшифровка» ships hidden (v-show): in the DOM, not displayed.
+    // The breakdown toggle (i18n:distribution.breakdown) ships hidden
+    // (v-show): in the DOM, not displayed.
     const details = () => host?.querySelector<HTMLElement>('.distribution__details')
     expect(details()).toBeTruthy()
     expect(details()?.style.display).toBe('none')
@@ -333,7 +338,8 @@ describe('SchoolAnalyticsView', () => {
     expect(text()).toContain('Пока нет отзывов')
     expect(text()).toContain('0% · 0 из 8')
     // The main block (no reviews) shows its empty text; the practice cards'
-    // bare strips never carry a «Расшифровка» button at all.
+    // bare strips never carry a breakdown button
+    // (i18n:distribution.breakdown) at all.
     const showMoreButtons = () =>
       Array.from(host?.querySelectorAll<HTMLButtonElement>('button') ?? []).filter(
         (b) => b.textContent?.trim() === 'Расшифровка',
@@ -342,7 +348,8 @@ describe('SchoolAnalyticsView', () => {
   })
 
   it('a pre-contract payload (no engagement yet) renders the scaffold, not a crash', async () => {
-    // «Бек доедет»: until the real backend ships the contract, an older
+    // The backend will catch up: until the real backend ships the
+    // contract, an older
     // payload renders the honest zero scaffold -- zero cards + the empty
     // feedback block -- and the screen stays alive.
     vi.mocked(cgApi.getSchoolAnalytics).mockResolvedValue({
@@ -395,7 +402,8 @@ describe('SchoolAnalyticsView', () => {
     expect(push).toHaveBeenCalledWith({ name: 'master-school', params: { id: 'g1' } })
   })
 
-  // BE-78 (2): a practice card opens «Аналитика по практике» -- in the MASTER
+  // BE-78 (2): a practice card opens the practice analytics screen
+  // (i18n:shared.analytics.title) -- in the MASTER
   // zone only; the user-zone mount stays inert (FE-93 removes it).
   it('master zone: tapping a period practice opens its analytics by id', async () => {
     routeState.name = 'master-school-analytics'

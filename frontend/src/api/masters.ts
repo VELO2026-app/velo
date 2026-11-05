@@ -129,12 +129,13 @@ export function getMyPractices(
 
 /**
  * Update master's payout details (bank transfer, PayPal, Revolut).
- * Returns the stored PayoutDetails on success.
  *
- * body.details is freeform -- depends on method:
- *   bank_transfer -> { iban, bank_name?, account_holder?, swift? }
- *   paypal        -> { email }
- *   revolut       -> { tag? } or { phone? }
+ * @param body - `details` is freeform -- depends on method:
+ *   `bank_transfer -> { iban, bank_name?, account_holder?, swift? }`
+ *   `paypal        -> { email }`
+ *   `revolut       -> { tag? } or { phone? }`
+ *
+ * @returns The stored PayoutDetails on success.
  */
 export function updatePayoutDetails(body: PayoutDetails): Promise<PayoutDetails> {
   return api.patch<PayoutDetails>('/api/v1/masters/me/payout', body)
@@ -150,12 +151,13 @@ export function deletePayout(): Promise<void> {
 }
 
 /**
- * Create a withdrawal request.
- * Freezes amount_cents from available balance until admin decision.
- * Returns 201 on success.
+ * Create a withdrawal request. Returns 201 on success.
  *
- * Requires payout details to be configured first (400 otherwise).
- * Minimum amount: 5000 cents (EUR 50.00).
+ * @param amount_cents - Freezes amount_cents from available balance until
+ *   admin decision. Minimum amount: 5000 cents (EUR 50.00).
+ *
+ * @throws ApiResponseError -- 400 when payout details are not configured
+ *   first.
  */
 export function createWithdrawal(amount_cents: number): Promise<WithdrawalResponse> {
   return api.post<WithdrawalResponse>('/api/v1/masters/me/withdraw', { amount_cents })
@@ -268,8 +270,9 @@ export function getMasterReviews(
   attention = false,
 ): Promise<PaginatedMasterReviewsResponse> {
   // attention=true narrows the feed to ratings 1-4 (zones bad and low,
-  // BE-77) server-side (E1) so the «Требуют внимания» block sees a full page
-  // of them, not only those that fall in the first mixed page.
+  // BE-77) server-side (E1) so the needs-attention block
+  // (i18n:masterScreens.analytics.sections.attention) sees a full page of
+  // them, not only those that fall in the first mixed page.
   const query = buildQuery({ limit, offset, attention: attention || undefined })
   return api.get<PaginatedMasterReviewsResponse>(`/api/v1/masters/me/reviews${query}`)
 }

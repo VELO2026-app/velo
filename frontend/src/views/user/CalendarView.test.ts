@@ -32,7 +32,8 @@
 // correct when they fire (a template ordering bug, the "one line apart"
 // class this session keeps finding, is NOT present here -- error is checked
 // before empty, and loadWeek()'s catch clears weekPractices alongside
-// setting error, so an error never falls through to "Нет практик"; a
+// setting error, so an error never falls through to the empty state
+// (i18n:user.screens.calendar.emptyPlain); a
 // dedicated test proves this ordering, not just assumes it from reading).
 //
 // A REAL FINDING lives in what that guard does NOT check (see the report,
@@ -42,7 +43,8 @@
 // (non-empty) items while `selectedDate` already points at the NEW week.
 // The loading guard's `weekPractices.length === 0` is therefore false (old
 // data exists), loading does not render, and `dayPractices` (filtered
-// against the NEW selectedDate) is empty -- so "Нет практик" renders while
+// against the NEW selectedDate) is empty -- so the empty state
+// (i18n:user.screens.calendar.emptyPlain) renders while
 // the app is still genuinely loading. Reproduced with hard evidence during
 // authoring (a green test asserting exactly that DOM state) and PULLED from
 // this commit -- reported to the navigator separately with the reproduction
@@ -443,13 +445,14 @@ describe('CalendarView', () => {
       // 20th -- the SAME calendar day as NOW there (15:00 on the 20th), which
       // is also the store's default selectedDate (bucketed in viewer tz,
       // store.ts:165-175) -- so this practice IS the day's content and the
-      // correct label is "Сегодня". In the practice's OWN tz (Asia/
+      // correct label is the today label (i18n:common.today). In the practice's OWN tz (Asia/
       // Yekaterinburg, UTC+5, no DST) the same instant is 01:00 on the 21st,
       // while NOW there is still 17:00 on the 20th -- so the OLD buggy
-      // behaviour (reading practice.timezone) renders "Завтра" instead. Two
+      // behaviour (reading practice.timezone) renders the tomorrow label
+      // (i18n:common.tomorrow) instead. Two
       // genuinely different strings -- unlike the previous version of this
-      // test, "Сегодня" alone can't be produced by both branches by
-      // coincidence.
+      // test, the today label (i18n:common.today) alone can't be produced by
+      // both branches by coincidence.
       vi.mocked(practicesApi.getPractices).mockResolvedValue(
         page([
           practice('p1', { scheduled_at: '2026-07-20T20:00:00Z', timezone: 'Asia/Yekaterinburg' }),
@@ -522,7 +525,8 @@ describe('CalendarView', () => {
       // A guard keyed on weekPractices.length would read that stale non-empty
       // list as "not loading" and fall through to dayPractices (now filtered
       // against the NEW date -- always empty, since a 7-day shift never
-      // overlaps the old week) -- rendering "Нет практик" while genuinely
+      // overlaps the old week) -- rendering the empty state
+      // (i18n:user.screens.calendar.emptyPlain) while genuinely
       // still loading.
       mount()
       await flush()

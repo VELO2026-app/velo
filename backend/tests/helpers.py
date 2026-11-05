@@ -67,12 +67,17 @@ def build_init_data(
     user_data: dict,
     bot_token: str = BOT_TOKEN,
     auth_date: int | None = None,
+    *,
+    extra: dict[str, str] | None = None,
 ) -> str:
     """Build a valid Telegram initData query string with correct HMAC.
 
     Includes a unique query_id on every call (via _init_data_counter) so
     that multiple calls for the same telegram_id within the same second
     produce different hashes and don't trigger anti-replay protection.
+
+    `extra` adds fields BEFORE signing, so they are covered by the hash the
+    way Telegram covers them (e.g. `signature`, BE-187).
     """
     if auth_date is None:
         auth_date = int(time.time())
@@ -81,6 +86,7 @@ def build_init_data(
         "user": json.dumps(user_data),
         "auth_date": str(auth_date),
         "query_id": str(next(_init_data_counter)),
+        **(extra or {}),
     }
 
     data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(params.items()))

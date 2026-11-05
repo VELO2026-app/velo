@@ -323,8 +323,10 @@ describe('AdminDashboardView', () => {
       )
     })
 
-    // FE-100: «Модерация» opens on «Обращения» by default; the banner counts
-    // pending REPORTS, so it lands on the «Жалобы» tab.
+    // FE-100: Moderation (i18n:adminScreens.adminReports.moderationTab) opens
+    // on the tickets tab (i18n:adminScreens.adminReports.tabTickets) by
+    // default; the banner counts pending REPORTS, so it lands on the
+    // complaints tab (i18n:adminScreens.adminReports.tabComplaints).
     it('the moderation banner opens «Модерация» on the «Жалобы» tab', async () => {
       const store = useAdminStore()
       store.stats = stats()
@@ -340,8 +342,9 @@ describe('AdminDashboardView', () => {
   })
 
   // ===========================================================================
-  // FE-100, owner ruling 25.10: support appeals live in «Модерация»; the
-  // dashboard's «Поддержка» row is gone.
+  // FE-100, owner ruling 25.10: support appeals live in Moderation
+  // (i18n:adminScreens.adminReports.moderationTab); the dashboard's Support
+  // row is gone.
   describe('no support block (FE-100)', () => {
     it('the dashboard lists no «Поддержка» row and never routes to a support list', async () => {
       const store = useAdminStore()

@@ -2,18 +2,25 @@
   VELO Frontend -- MasterGroupCreateView (Master GROUPS P2, PROMPT №591;
   description field + layout fix batch PROMPT №610)
 
-  "Новая группа" -- «Название» + optional «Описание», POST /masters/me/groups,
+  New group (i18n:masterScreens.masterGroupCreate.title) -- the name field
+  (i18n:masterScreens.masterGroupCreate.fields.name) + optional description
+  (i18n:masterScreens.masterGroupCreate.fields.description),
+  POST /masters/me/groups,
   back to the list on success. 409 (duplicate name for this master) surfaces
   as an inline VInput error + a toast (mirrors MasterNewPromocodeView's
   create-form pattern: extractApiError + toast.error).
 
-  G17/G18 (PROMPT №609): «Основное» section heading, reusing the existing
+  G17/G18 (PROMPT №609): the basics section heading
+  (i18n:masterScreens.masterGroupCreate.section.basics), reusing the existing
   velo-section-title class CreatePracticeView already uses -- no new DS
-  class. Placeholder shortened to «Название» (was «Название группы»); the
-  VInput label above the field already says «Название», so the placeholder
+  class. Placeholder shortened to the bare name word (was the longer
+  "group name" wording); the
+  VInput label above the field already says it, so the placeholder
   no longer needs to repeat it.
 
-  Owner Q4 (PROMPT №610): «Описание» -- optional, VTextarea/autogrow (same
+  Owner Q4 (PROMPT №610): the description field
+  (i18n:masterScreens.masterGroupCreate.fields.description) -- optional,
+  VTextarea/autogrow (same
   shape CreatePracticeView's own optional description field uses), no
   required-seal. Trimmed + blank-normalized-to-undefined client-side before
   POST -- createGroup() forwards that as `undefined` to the backend, which
@@ -35,10 +42,11 @@
   of this SAME banner uses a paler alpha (0.25 vs 0.40) and a different
   seal-icon color (--velo-rating-good vs --velo-error) despite resolving to
   the identical base hex for its border/text tokens -- picked the newer one
-  verbatim rather than silently reconciling the two). Only «Название» is
-  marked `required` -- «Описание» is genuinely optional, so it carries no
+  verbatim rather than silently reconciling the two). Only the name field is
+  marked `required` -- the description field is genuinely optional, so it
+  carries no
   seal, matching the client-side validation this form already had
-  ("Введите название группы").
+  (i18n:masterScreens.masterGroupCreate.validation.enterName).
 -->
 
 <template>
@@ -219,21 +227,24 @@ html.is-keyboard-open .new-group {
    is a flex column with `gap: var(--space-4)` between EVERY pair of children,
    but VInput/VTextarea ALSO carry their OWN `margin-bottom: var(--space-4)`
    (their shared default, needed by every OTHER caller that isn't inside a
-   gapped flex column) -- the two stacked to 32px between Название and
-   Описание where one space-4 (16px) was ever intended. Zeroing the Название
+   gapped flex column) -- the two stacked to 32px between the name and
+   description fields where one space-4 (16px) was ever intended. Zeroing
+   the name
    field's own margin-bottom here removes exactly the duplicate, leaving a
-   single space-4 gap -- scoped to THIS one transition (heading->Название and
-   Описание->button keep their normal spacing, untouched). */
+   single space-4 gap -- scoped to THIS one transition (heading->name and
+   description->button keep their normal spacing, untouched). */
 .new-group__content > :deep(.v-input) {
   margin-bottom: 0;
 }
 
 /* T24-8 (PROMPT №639): MEASURED finding -- the wrapper divs were ALREADY the
    same width (both stretch via the parent flex column's default
-   align-items:stretch); the VISIBLE PLATE was not. Название is `required`,
+   align-items:stretch); the VISIBLE PLATE was not. The name field is
+   `required`,
    so its row reserves ~30px (IconRequired 22px + --space-2 gap) for the seal
    INSIDE `.v-input__row`, shrinking the field's own flex:1 share by that much.
-   Описание has no seal (genuinely optional) so its row gives the field the
+   The description field has no seal (genuinely optional) so its row gives the
+   field the
    full width. Reserving the same 30px on the textarea's side (as invisible
    margin, not a fake seal) equalizes the two visible plates without touching
    VInput's shared required-seal layout used everywhere else. */

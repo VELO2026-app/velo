@@ -2,16 +2,17 @@
   VELO Frontend -- Onboarding View (onboarding 05-07 + FE-101)
 
   Five-step welcome flow, shown once to new users (those whose
-  onboarding_completed flag is still false). App.vue mounts it after "Войти"
-  on WelcomeView; the school-join flow (SchoolJoinView) mounts the same
-  flow AFTER a successful join (FE-83) -- the invitation comes first.
+  onboarding_completed flag is still false). App.vue mounts it after the
+  enter button (i18n:auth.enter) on WelcomeView; the school-join flow
+  (SchoolJoinView) mounts the same flow AFTER a successful join (FE-83) --
+  the invitation comes first.
 
-  Steps:
-    0  "Найдите свою практику"      (intro)
-    1  "Ведите дневник"             (intro)
-    2  "Карта себя"                 (intro)
-    3  "Дата рождения"              (FE-101, form)
-    4  "К чему бы вы хотели прийти?" (FE-101, form, finish)
+  Steps (slide titles by catalog key):
+    0  i18n:auth.onboarding.find.title    (intro)
+    1  i18n:auth.onboarding.diary.title   (intro)
+    2  i18n:auth.onboarding.map.title     (intro)
+    3  i18n:auth.onboarding.birth.title   (FE-101, form)
+    4  i18n:auth.onboarding.goals.title   (FE-101, form, finish)
 
   FE-101 reloaded the earlier screens' progress indicator for the new total:
   the dots (VPaginationDots) count every step of the flow, so the three intro
@@ -21,16 +22,17 @@
   The former timezone step is gone: the timezone is taken automatically from
   the user's DEVICE (Intl auto-detect, IANA-validated, UTC fallback) and
   persisted together with the onboarding flag on finish. It stays editable
-  after onboarding: Профиль -> Часовой пояс (TimezoneSettingsView).
+  after onboarding: Profile -> Timezone (TimezoneSettingsView).
 
   Navigation:
-    - "Далее" advances; on the last step it turns into "Готово".
-    - "Пропустить" finishes onboarding outright (same persistence as Готово);
-      visible on every step but the last, exactly as before FE-101.
+    - Next (i18n:auth.onboarding.next) advances; on the last step it turns
+      into Done (i18n:auth.onboarding.done).
+    - Skip (i18n:common.skip) finishes onboarding outright (same persistence
+      as Done); visible on every step but the last, exactly as before FE-101.
     - The round back arrow (steps 3-4, per the operator mockup) steps back
       one screen; the collected answers stay in memory -- nothing persists
       until the finish.
-    - "Готово" on the last step persists { timezone, onboarding_completed:
+    - Done on the last step persists { timezone, onboarding_completed:
       true, birth_date?, goals?, goals_custom? } via authStore.updateProfile,
       then emits `done`. The FE-101 answers ride the SAME single PATCH --
       there is no per-step save, so a user who skips never leaves half an
@@ -48,7 +50,8 @@
 
 <template>
   <div class="onboarding">
-    <!-- Top row: back arrow on the FE-101 form steps (left), «Пропустить» on
+    <!-- Top row: back arrow on the FE-101 form steps (left), Skip
+         (i18n:common.skip) on
          every step but the last (right). The intro slides keep the row at
          skip-height via the left spacer; the form steps' 44px back button
          sizes it. No step hides BOTH controls anymore (the last step keeps
@@ -201,8 +204,10 @@ const customGoal = ref('')
 const FALLBACK_TIMEZONE = 'UTC'
 
 /**
- * True if `zone` is a valid IANA id. The browser has no ZoneInfo, so we probe
- * via Intl: an invalid timeZone makes the constructor throw RangeError.
+ * The browser has no ZoneInfo, so we probe via Intl: an invalid timeZone
+ * makes the constructor throw RangeError.
+ *
+ * @returns True when `zone` is a valid IANA id.
  */
 function isValidIana(zone: string): boolean {
   if (!zone) return false
@@ -293,8 +298,9 @@ function finishPayload(): UserUpdate {
   }
   if (selectedGoals.value.length > 0) {
     payload.goals = selectedGoals.value
-    // The free text travels only with its pick: unchecked «Свой вариант»
-    // must not save a stale answer typed before the toggle went off.
+    // The free text travels only with its pick: an unchecked own-variant
+    // option (i18n:auth.onboarding.goals.options.custom) must not save a
+    // stale answer typed before the toggle went off.
     if (selectedGoals.value.includes(GOAL_CUSTOM)) {
       const custom = customGoal.value.trim()
       if (custom) payload.goals_custom = custom

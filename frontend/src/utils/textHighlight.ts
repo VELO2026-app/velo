@@ -11,11 +11,13 @@
 // (a pre-lowercased ilike over text_search): simple toLowerCase folding is
 // 1:1 for the RU/EN scripts the diary writes.
 
+/** A run of display text plus whether it is a search hit. */
 export interface TextSegment {
   text: string
   hit: boolean
 }
 
+/** Split text into plain and hit segments around a case-insensitive needle. */
 export function splitHighlight(text: string, query: string): TextSegment[] {
   const needle = query.trim()
   if (!needle || !text) return [{ text, hit: false }]

@@ -41,8 +41,9 @@
 // api/client, composables/useToast, and two DS components).
 //
 // TRAPS PRESENT:
-//  - SC-05-adjacent: the honest-failure copy ("Ссылка недействительна...") is
-//    the screen's OWN hardcoded string, not the backend's -- the backend's
+//  - SC-05-adjacent: the honest-failure copy
+//    (i18n:masterScreens.masterInviteClaim.invalid.title) is the screen's
+//    OWN copy, not the backend's -- the backend's
 //    invite_invalid detail is "Invite link is invalid or already used"
 //    (service.py:668), never rendered. Asserted as the screen's own constant,
 //    not claimed as backend-message passthrough.
@@ -62,8 +63,9 @@
 // UNCONDITIONALLY at its top with no `if (claiming.value) return` guard, unlike
 // every other re-entrant handler audited elsewhere in this codebase (e.g.
 // MasterPendingView's onWithdraw/switchRole). A zero-tick double-tap on
-// «Повторить» (VButton's :loading->:disabled binding needs a render tick it
-// hasn't had yet) fires claimMasterInvite() twice concurrently. This is LOW
+// the retry button (i18n:common.retry; VButton's :loading->:disabled
+// binding needs a render tick it hasn't had yet) fires claimMasterInvite()
+// twice concurrently. This is LOW
 // SEVERITY, not the same class as the money/withdrawal-grade races found
 // elsewhere: Redis GETDEL is atomic (service.py:663-665), so the second
 // in-flight call always resolves invite_invalid rather than double-consuming
@@ -294,7 +296,8 @@ describe('MasterInviteClaimView', () => {
 // =============================================================================
 // NOT COVERED, deliberately
 // =============================================================================
-// - The zero-tick double-tap re-entry gap on «Повторить» (see the banner's
+// - The zero-tick double-tap re-entry gap on the retry button
+//   (i18n:common.retry; see the banner's
 //   SEPARATE FINDING above) -- not asserted; today's behaviour is a UI-only
 //   race the atomic backend burn already protects against, not a data bug.
 // - applyGuard (router/index.ts:32-48), which is what actually keeps a

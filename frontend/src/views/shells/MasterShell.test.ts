@@ -111,7 +111,7 @@ async function mount(
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(MasterShell).use(createTestI18n())
-  // The shell reads the schoolsHub store (the «Школы» tab probe).
+  // The shell reads the schoolsHub store (the Schools tab probe, i18n:tabs.schools).
   const pinia = createPinia()
   app.use(pinia)
   // Seed BEFORE mount so onMounted's probe sees the seeded account.
@@ -234,8 +234,8 @@ describe('MasterShell', () => {
     })
 
     it('the hub screen itself keeps the dock visible with Школы active (§1.2 mockup)', async () => {
-      // The mockup's normative line: «На /user/schools и
-      // /master/schools активен четвёртый таб» -- the hub is the tab
+      // The mockup's normative line: "on /user/schools and
+      // /master/schools the fourth tab is active" -- the hub is the tab
       // bar's own screen, so the bar must render there (the FE-20-era
       // hideTabBar meta once hid it entirely).
       schoolsMock.getSchools.mockResolvedValue({

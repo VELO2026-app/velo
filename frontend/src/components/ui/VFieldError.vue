@@ -1,6 +1,6 @@
 <!--
-  VELO Frontend -- VFieldError Component (owner TZ 2026-11-01: «ошибки
-  обязательных полей без резерва и без прыжков»)
+  VELO Frontend -- VFieldError Component (owner TZ 2026-11-01:
+  required-field errors with no reserved space and no layout jumps)
 
   The ONE app-wide error line for form fields. Closed it occupies exactly
   0px (no constant-height reserve); open it expands smoothly and the fields

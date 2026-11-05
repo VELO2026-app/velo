@@ -1,10 +1,10 @@
 <!--
-  VELO Frontend -- IconMoodScaleFire (mood-scale "Огонь")
+  VELO Frontend -- IconMoodScaleFire (mood-scale "Fire", i18n:mood.fire)
 
   Approved mood-scale face (FE-85, tz-mood-scale.md §6): kept 1:1 from the approved source art: geometry, colors and gradients
   exactly as delivered. This component is the in-repo source of truth (raw
   svg sources are not kept).
-  F2.0 (tz-whitelabel §3.1, batch (в)): the pale paints carry tokens with the
+  F2.0 (tz-whitelabel §3.1, batch (v)): the pale paints carry tokens with the
   source hex as fallback -- same pixels, skin-themable. The hex fallback is
   load-bearing: the view tests tell the faces apart by the fallback hex in
   the rendered art. Full-color illustrative asset, not

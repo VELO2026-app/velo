@@ -5,30 +5,35 @@
   month / scroll). Rendered inside MasterShell (fog + tab bar from the shell).
 
   Structure (DS-first — every value is a --velo-* token / DS component):
-    - Top row (owner ask 2026-09-08): period slider (Неделя/Месяц) left +
-      notification bell right, ONE line -- the «Статистика» heading is gone.
+    - Top row (owner ask 2026-09-08): period slider (week/month) left +
+      notification bell right, ONE line -- the Statistics heading is gone.
       The bell is the USER dashboard's recipe reused verbatim -- 36px disc +
       presence-only dot (FE-11 ruling: never a number; supersedes the T-26
       count badge). Unread fetched alongside the stats row; tap ->
       'master-inbox' (MasterInboxView.vue). No feed on the dashboard itself.
-    - Stats: period toggle (Неделя / Месяц / Квартал) in the top row +
+    - Stats: period toggle (week / month / quarter) in the top row +
       2 VStatCard with optional delta trend (E7: the toggle refetches
-      GET /masters/me/stats?period=...). «Квартал» went live with the
+      GET /masters/me/stats?period=...). The quarter option
+      (i18n:masterScreens.masterDashboard.period.quarter) went live with the
       backend's third calendar period (BE-28; FE-66).
-    - "Мои группы" row (VMenuRow) -> master-groups (P2, PROMPT №591; was
-      "Мои ученики" -> master-students).
-    - Zero state only: "Создать первую практику" (VButton) -> create.
-    - "Ближайшие практики": up to 2 upcoming practice cards, each with
-      "Изменить" -> edit and "Check-ins" -> attendance.
+    - The my-groups row (i18n:masterScreens.masterDashboard.myGroups,
+      VMenuRow) -> master-groups (P2, PROMPT №591; was
+      the my-students row -> master-students).
+    - Zero state only: the create-first-practice CTA (VButton) -> create.
+    - Nearest practices (i18n:masterScreens.masterDashboard.nearest): up to
+      2 upcoming practice cards, each with
+      "Edit" -> edit and "Check-ins" -> attendance.
 
   No stubs left on this screen. The stats grid is real (E7 -- GET
   /masters/me/stats, week|month|quarter, the toggle refetches it); the
   practice-card meta -- check-ins (checkin_count), recurrence
-  (recurrence_days) and «Осталось N из M» (total_sessions) -- is real
+  (recurrence_days) and the remaining-sessions line
+  (i18n:practice.remainingSessions; total_sessions) -- is real
   (practiceCardMeta.ts) and rendered when the practice carries it (v-if);
   the AI summary is gone (owner pass below); the bell is real (T-26).
 
-  [owner pass] The "Саммари недели" section (heading + VCard teaser ->
+  [owner pass] The weekly-summary section (i18n:masterScreens.masterSummary.title;
+  heading + VCard teaser ->
   master-summary) is REMOVED from the dashboard entirely -- no master-AI
   backend exists and the placeholder card carried no information. The
   master-summary route itself stays (reachable elsewhere); nothing else
@@ -46,9 +51,9 @@
 
     <template v-else>
       <!-- ================================================================
-           TOP ROW (owner ask 2026-09-08): the period slider (Неделя/Месяц/Квартал)
+           TOP ROW (owner ask 2026-09-08): the period slider (week/month/quarter)
            on the left, the notification bell on the right -- ONE line. The
-           «Статистика» heading is gone with it. The bell is the USER
+           Statistics heading is gone with it. The bell is the USER
            dashboard's recipe, reused verbatim: 36px primary disc, 17px glyph
            in a wrapper box, and the PRESENCE-ONLY coral dot -- the FE-11
            "never a number" ruling now governs the master bell too,
@@ -94,7 +99,7 @@
       </div>
 
       <!-- ================================================================
-           МОИ ГРУППЫ (P2, PROMPT №591 -- was «Мои ученики» / master-students)
+           MY GROUPS (P2, PROMPT №591 -- was the my-students row / master-students)
            ================================================================ -->
       <VMenuRow :label="t('masterScreens.masterDashboard.myGroups')" @click="onGroups">
         <template #icon><IconGroup :size="24" /></template>
@@ -104,7 +109,7 @@
            ZERO-STATE CTA
            ================================================================ -->
       <!-- Shown whenever there is no upcoming practice (not only brand-new
-           masters) — operator tester-fix 2026-06-17; «первую» dropped. -->
+           masters) — operator tester-fix 2026-06-17; the "first" wording dropped. -->
       <VButton
         v-if="nearestPractices.length === 0"
         variant="primary"
@@ -115,7 +120,7 @@
       </VButton>
 
       <!-- ================================================================
-           БЛИЖАЙШИЕ ПРАКТИКИ (up to 2)
+           NEAREST PRACTICES (up to 2)
            ================================================================ -->
       <h2 class="velo-section-title">
         {{
@@ -153,8 +158,9 @@
                 <div class="master-dashboard__practice-sub">{{ practiceWhen(practice) }}</div>
               </div>
             </div>
-            <!-- Meta rows span the full card width BELOW the head (parity with the
-                 «Практики › Предстоящие» reference card), so the weekday list has
+            <!-- Meta rows span the full card width BELOW the head (parity with
+                 the practices screen's upcoming-tab reference card), so the
+                 weekday list has
                  room and never wraps mid-word; icons match the list at :16 (DB-5). -->
             <div class="master-dashboard__practice-meta">
               <span class="master-dashboard__meta-item">
@@ -187,7 +193,8 @@
                from the server, sdk-join). No Zoom link is opened anywhere. -->
           <div class="master-dashboard__practice-actions">
             <!-- A4 V2 (PROMPT №572): create_failed replaces "Zoom" with
-                 "Повторить" -- before this, a permanently-failed meeting
+                 the retry label (i18n:common.retry) -- before this, a
+                 permanently-failed meeting
                  showed the SAME disabled "Zoom" button as one still being
                  created, with no way for the master to act on it. -->
             <VButton
@@ -301,7 +308,8 @@ const toast = useToast()
 // -- Period toggle. Drives the period-scoped stats row (E7). `quarter` went
 //    live with the backend's third calendar period (BE-28; FE-66 unblocked the
 //    segment -- before that the endpoint would 422 it, and a failed refetch
-//    would silently keep the WEEK figures under a «Квартал» label). --
+//    would silently keep the WEEK figures under a quarter label
+//    (i18n:masterScreens.masterDashboard.period.quarter)). --
 const period = ref<'week' | 'month' | 'quarter'>('week')
 const PERIOD_OPTIONS: ReadonlyArray<{ value: 'week' | 'month' | 'quarter'; label: string }> = [
   { value: 'week', label: t('common.periodWeek') },
@@ -315,7 +323,9 @@ const isNewMaster = computed(
 )
 
 // =========================================================================
-// Stats (E7: GET /masters/me/stats?period). Both «Практик» and «Участников»
+// Stats (E7: GET /masters/me/stats?period). Both the practices stat
+// (i18n:masterScreens.masterDashboard.statPractices) and the members stat
+// (i18n:masterScreens.masterDashboard.statMembers)
 // are period-scoped (D1); the toggle refetches. income_cents is returned but
 // rendered on Finance/Analytics, not here (D2). "—" until the fetch resolves.
 // =========================================================================
@@ -604,7 +614,7 @@ onUnmounted(() => {
 }
 
 /* -- Top row: period slider left, bell right (owner ask 2026-09-08; the
-      «Статистика» heading is gone). min-height keeps the operator-tuned 44px
+      Statistics heading is gone). min-height keeps the operator-tuned 44px
       top band the lone bell row used to reserve. -- */
 .master-dashboard__top-row {
   display: flex;
@@ -761,7 +771,8 @@ onUnmounted(() => {
   letter-spacing: var(--velo-card-letter-spacing-meta);
 }
 
-/* Full-width meta row below the head (parity with the «Практики» reference
+/* Full-width meta row below the head (parity with the practices screen's
+   reference
    card): flex-wrap so items reflow as whole chips, generous column gap so the
    weekday list fits without splitting mid-word (DB-5). */
 .master-dashboard__practice-meta {
@@ -775,7 +786,8 @@ onUnmounted(() => {
   margin-top: var(--space-3);
 }
 
-/* Second meta row («Осталось N из M занятий») — tighter under the first and
+/* Second meta row (remaining sessions, i18n:practice.remainingSessions) —
+   tighter under the first and
    centered, mirroring the reference card's row-2. */
 .master-dashboard__practice-meta--row2 {
   margin-top: var(--space-2);

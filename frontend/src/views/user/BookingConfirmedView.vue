@@ -2,19 +2,23 @@
   VELO Frontend -- BookingConfirmedView (Calendar iteration, frame 5)
 
   Full-screen confirmation shown AFTER a successful booking. Figma 541:2120:
-    - Success card: celebration icon (IconSuccess) in a teal circle,
-      "Практика забронирована!", "Войти в Zoom можно будет прямо в VELO — на
-      экране практики." (static line; Standalone F4 replaced "Ссылка на Zoom
-      появится за 10 минут до начала." -- no link is sent any more, Zoom runs
-      inside the app).
-    - "Ваш запрос мастеру (по желанию)" textarea + teal info banner.
-      REAL since the chat landed (TD-ASK-MASTER retired): "Отправить запрос"
-      opens-or-gets the eternal DM with THIS practice's master
+    - Success card: celebration icon (IconSuccess) in a teal circle, the
+      title (i18n:user.screens.bookingConfirmed.title) and the static Zoom
+      note (i18n:user.screens.bookingConfirmed.zoomNote) (Standalone F4
+      replaced the old "Zoom link ten minutes before the start" line -- no
+      link is sent any more, Zoom runs inside the app).
+    - The request textarea
+      (i18n:user.screens.bookingConfirmed.request.placeholder) + teal info
+      banner. REAL since the chat landed (TD-ASK-MASTER retired): the send
+      button (i18n:user.screens.bookingConfirmed.sendRequest) opens-or-gets
+      the eternal DM with THIS practice's master
       (POST /api/v1/chats is create-or-get, so a second tap lands in the same
       thread) and posts the typed text as a message. [FE-1] The send SHALL NOT
       open the chat afterwards: a success toast lands and the user returns to
-      «Моя практика» (practice-detail), which renders the already-booked
-      state. Same shape as «Задать вопрос» on MasterPublicView, plus the
+      the booked-practice screen (i18n:user.screens.practiceDetail.titleBooked,
+      practice-detail), which renders the already-booked
+      state. Same shape as the retired ask-a-question control on
+      MasterPublicView, plus the
       message: the master id comes from the loaded practice (master_id is
       non-null on PracticeResponse), so nothing extra is fetched.
     - No in-page navigation buttons: the bottom tab bar handles it (this route
@@ -59,7 +63,8 @@
       <!-- Ask-master request — REAL: the text becomes the first message of the
            DM with this practice's master. The send button follows the chat
            composer's own rule (ChatThreadScreen.vue:94): disabled while a send
-           is in flight AND while the field is blank — "Отправить запрос" with
+           is in flight AND while the field is blank — the send button
+           (i18n:user.screens.bookingConfirmed.sendRequest) with
            nothing to send would open a thread and post nothing. The field is
            still optional (the label says so): skipping it simply leaves the
            block untouched. maxlength mirrors the chat composer's own cap. -->
@@ -159,17 +164,18 @@ async function onSendRequest(): Promise<void> {
     toast.success(t('user.screens.bookingConfirmed.request.sent'))
     // [FE-1] Requirement: post-send navigation (capability: user-booking)
     // After a successful send the app SHALL NOT open the chat thread; it
-    // SHALL show the «Запрос отправлен мастеру» toast and land the user on
-    // «Моя практика» (practice-detail, booked state), and the confirmation
-    // screen SHALL NOT remain in the back-stack. Supersedes the B43 rule
-    // (which only said "not in history" for the chat entry).
+    // SHALL show the sent toast (i18n:user.screens.bookingConfirmed.request.sent)
+    // and land the user on the booked practice screen
+    // (i18n:user.screens.practiceDetail.titleBooked, practice-detail, booked
+    // state), and the confirmation screen SHALL NOT remain in the back-stack.
+    // Supersedes the B43 rule (which only said "not in history" for the chat entry).
     //
     // Scenario: normal flow (practice detail -> here via push)
     // - WHEN history.state.back is /user/practices/:id
     // - THEN router.back() -- no new history entry; Back from the practice
     //   screen keeps going where it originally would. (This is also the FE-2
-    //   guarantee: back leads to «Моя практика», never back into the loop
-    //   request -> messages -> request.)
+    //   guarantee: back leads to the booked practice screen, never back into
+    //   the loop request -> messages -> request.)
     //
     // Scenario: deep link / reload (nothing usable behind)
     // - WHEN history.state.back does not match /user/practices/:id

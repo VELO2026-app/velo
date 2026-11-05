@@ -3,19 +3,23 @@
 
   Read-only attendance roster for a practice. Route: /master/practices/:id/roster
   (masterStatusGuard; inside MasterShell, no tab bar — detail route).
-  Reached by the «Посещаемость» CTA on MasterPracticeDetailView.
+  Reached by the attendance CTA (i18n:masterScreens.attendanceRoster.title)
+  on MasterPracticeDetailView.
 
-  Decision Р2=А (operator 2026-06-12): a SEPARATE light roster, distinct from the
+  Decision R2=A (operator 2026-06-12): a SEPARATE light roster, distinct from the
   «Check-ins» screen (AttendanceView) which keeps mood faces + comments + finalize.
   This screen is purely the ✓ attended / ✗ no-show name lists — no mood, no comment,
   no finalize action.
 
   Sections (operator SVG "6 Attendance 1/2"):
-    - VHeader (back + "Посещаемость").
+    - VHeader (back + the screen title, i18n:masterScreens.attendanceRoster.title).
     - Hero card: direction icon + title + date·time / duration.
-    - 2 VStatCard: Присутствовало (teal) / Не пришли (rose).
-    - «Присутствовали»: ✓ rows (teal check + name); «+ еще N участников» expands.
-    - «Не пришли»: ✗ rows (rose cross + name); «+ еще N» expands.
+    - 2 VStatCard: attended (i18n:masterScreens.attendanceRoster.attendedStat,
+      teal) / no-shows (i18n:masterScreens.attendanceRoster.noShowStat, rose).
+    - Attended section (i18n:masterScreens.attendanceRoster.attended): ✓ rows
+      (teal check + name); expands via i18n:masterScreens.attendanceRoster.showMore.
+    - Missed section (i18n:masterScreens.attendanceRoster.missed): ✗ rows
+      (rose cross + name); same expand control.
 
   Data: REAL — GET /practices/:id/attendance. Stats = attended/no_show aggregates;
   lists = items filtered by status (display_name; avatar not shown per design).
@@ -87,7 +91,7 @@
           :description="t('masterScreens.attendanceRoster.empty.text')"
         />
 
-        <!-- Присутствовали -->
+        <!-- Attended -->
         <section v-if="attendedItems.length > 0" class="roster__section">
           <h2 class="velo-section-title">
             {{ t('masterScreens.attendanceRoster.attended') }}
@@ -103,7 +107,7 @@
           />
         </section>
 
-        <!-- Не пришли -->
+        <!-- Missed -->
         <section v-if="noShowItems.length > 0" class="roster__section">
           <h2 class="velo-section-title">{{ t('masterScreens.attendanceRoster.missed') }}</h2>
           <div v-for="item in visibleNoShow" :key="item.booking_id" class="roster__row">

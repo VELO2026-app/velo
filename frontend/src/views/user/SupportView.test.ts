@@ -83,7 +83,8 @@ async function flush(): Promise<void> {
 }
 
 // The labels of the one topic table (supportTopics, ru). `technical` reads
-// «Технические проблемы» on both forms since FE-104 (owner ruling).
+// the technical-problems label (i18n:supportTopics.technical) on both forms
+// since FE-104 (owner ruling).
 const TOPIC_LABEL = {
   payment: 'Проблема с оплатой / транзакцией',
   complaint_master: 'Жалоба на мастера',
@@ -204,9 +205,10 @@ describe('SupportView', () => {
       expect(submitBtn().disabled).toBe(true)
     })
 
-    // Was: «Другое» with an EMPTY free-text field stayed disabled. Right while
-    // «Другое» carried its own topic text; FE-104 (owner ruling) removed that
-    // text -- the substance is the message -- so «Другое» + message is enough.
+    // Was: the "other" topic (i18n:supportTopics.other) with an EMPTY
+    // free-text field stayed disabled. Right while that topic carried its own
+    // text; FE-104 (owner ruling) removed that text -- the substance is the
+    // message -- so "other" + message is enough.
     it('topic «Другое» + message: ENABLED -- no free text is required', async () => {
       mount()
       await flush()
@@ -221,8 +223,9 @@ describe('SupportView', () => {
   })
 
   // ===========================================================================
-  // Was: selecting «Другое» revealed a free-text input. Cancelled by FE-104
-  // (owner ruling: «Другое» without free text); the form has one text field.
+  // Was: selecting the "other" topic (i18n:supportTopics.other) revealed a
+  // free-text input. Cancelled by FE-104 (owner ruling: "other" without free
+  // text); the form has one text field.
   describe('the topic list (FE-104)', () => {
     it('offers exactly the five user topics, labelled from the one table', async () => {
       mount()
@@ -268,7 +271,8 @@ describe('SupportView', () => {
       await flush()
 
       expect(isTerminal()).toBe(true)
-      // FE-103 (owner wording 25.10): the reply arrives in «Сообщения»...
+      // FE-103 (owner wording 25.10): the reply arrives in the messages
+      // screen (i18n:user.screens.userMessages.title)...
       expect(host?.textContent).toContain('Обращение отправлено')
       expect(host?.textContent).toContain('Ответ придёт в «Сообщения»')
       expect(host?.querySelector('.support__content')).toBeNull()

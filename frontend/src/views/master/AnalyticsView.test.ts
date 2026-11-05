@@ -11,14 +11,14 @@
 //
 // PATTERN C (hybrid) -- and both halves are driven, per the skill's warning that
 // mocking one layer for both guts the test:
-//   - DATA HALF (Отзывы): past practices come from a REAL useMasterStore, and
+//   - DATA HALF (Reviews tab): past practices come from a REAL useMasterStore, and
 //     per-practice insights from a REAL useDiaryStore's reactive insightsCache
 //     (.vue:268-272). Real stores, not mocked ones: the screen's aggregates hang
 //     off that reactive Map, and a hand-rolled fake Map is exactly the kind of
 //     thing that is quietly non-reactive -- the test would then prove the
 //     fixture, not the screen. Both stores read their data from `@/api/masters`
 //     and `@/api/diary`, so mocking those two modules seams BOTH halves at once.
-//   - LOCAL-REF HALF (Платежи): income / transactions / paymentsLoading /
+//   - LOCAL-REF HALF (Payments tab): income / transactions / paymentsLoading /
 //     paymentsError are the screen's own refs, fed by direct getIncome +
 //     getTransactions calls (.vue:449-499). Same `@/api/masters` seam.
 // One real Pinia instance goes to setActivePinia AND app.use (SC-03).
@@ -33,8 +33,9 @@
 // (utils/format.ts:118), and formatMoney is called with an explicit 'ru'.
 //
 // TRAP -- v-show, not v-if: BOTH tab panes are permanently in the DOM
-// (.vue:54,175). `host.textContent` therefore contains the Платежи pane's text
-// while Отзывы is on screen, and `.analytics__loader` matches in either pane. So
+// (.vue:54,175). `host.textContent` therefore contains the Payments pane's text
+// while the Reviews tab is on screen, and `.analytics__loader` matches in either
+// pane. So
 // every assertion here is scoped to reviewsPane() / paymentsPane(), and
 // "is this tab showing?" is `style.display !== 'none'`. A whole-host toContain()
 // on this screen is a test that cannot fail.
@@ -91,8 +92,8 @@ vi.mock('vue-router', () => ({
 const NOW = new Date('2026-07-20T12:00:00Z')
 
 // -----------------------------------------------------------------------------
-// Payments are PARKED (owner 2026-10-01): the Отзывы/Платежи slider and the
-// Платежи pane are hidden until payments go live, their data loads gated with
+// Payments are PARKED (owner 2026-10-01): the Reviews/Payments slider and the
+// Payments pane are hidden until payments go live, their data loads gated with
 // them. This mirror flips TOGETHER with PAYMENTS_TAB_ENABLED in
 // AnalyticsView.vue -- the describes exercising the parked UI skip themselves
 // while it is false.
@@ -423,7 +424,7 @@ function stat(label: string): string {
   return norm(card?.querySelector('.v-stat__value')?.textContent).trim()
 }
 
-/** A «Общая статистика» bar's «NN% (count)» meta, found by its bucket label. */
+/** An overall-stats bar's "NN% (count)" meta, found by its bucket label. */
 
 function pcards(): HTMLElement[] {
   return Array.from(reviewsPane().querySelectorAll<HTMLElement>('.analytics__pcard'))
@@ -431,7 +432,7 @@ function pcards(): HTMLElement[] {
 function pcardTitles(): string[] {
   return pcards().map((c) => c.querySelector('.analytics__pcard-title')?.textContent?.trim() ?? '')
 }
-/** Every distribution bar as label -> meta: a missing/extra bar fails toEqual. */
+/** Every distribution bar as `label -> meta`: a missing/extra bar fails toEqual. */
 function distAll(): Record<string, string> {
   return Object.fromEntries(
     Array.from(reviewsPane().querySelectorAll<HTMLElement>('.v-rating-dist__row')).map((r) => [
@@ -635,9 +636,9 @@ describe('AnalyticsView', () => {
     })
 
     it('sorts newest-first, regardless of the order the API returned', async () => {
-      // PRACTICES is deliberately shuffled (p3, p1, p5, p4, p2). Read on МЕСЯЦ so
-      // all three in-period practices are visible at once -- the week holds two,
-      // and a two-item list is a weak sort assertion.
+      // PRACTICES is deliberately shuffled (p3, p1, p5, p4, p2). Read it on the
+      // month toggle so all three in-period practices are visible at once --
+      // the week holds two, and a two-item list is a weak sort assertion.
       mount()
       await flush()
       chromeButton('Месяц')?.click()
@@ -658,7 +659,8 @@ describe('AnalyticsView', () => {
       // usePagination catches into `error` (composables/usePagination.ts:67-70)
       // and useMasterStore re-exports it as practicesError -- but this template
       // never binds it (.vue:113-124), so a network failure is rendered as the
-      // factual claim «За выбранный период практик нет». Reported as a finding;
+      // factual claim of the no-practices copy (i18n:masterScreens.analytics.empty.noPractices).
+      // Reported as a finding;
       // this test is the tripwire for the day it is repaired.
       vi.mocked(mastersApi.getMyPractices).mockRejectedValue(new TypeError('network down'))
       mount()
@@ -882,7 +884,8 @@ describe('AnalyticsView', () => {
 
     it('changing the period collapses the reveal back to the preview', async () => {
       // watch(period) resets pastExpanded (.vue:509-515): a month's worth of
-      // cards left expanded from a week's «показать все» is a different list.
+      // cards left expanded from a week's reveal (i18n:masterScreens.analytics.morePractices)
+      // is a different list.
       mockBucketedPractices(FIVE)
       mount()
       await flush()
@@ -901,7 +904,8 @@ describe('AnalyticsView', () => {
   // ===========================================================================
   describe('Требуют внимания', () => {
     it('lists the attention reviews inside the period', async () => {
-      // RV_RECENT (low) is recent; RV_OLD is 20 days old -> week shows Анна.
+      // RV_RECENT (low) is recent; RV_OLD is 20 days old -> the week shows the
+      // RV_RECENT reviewer only.
       mount()
       await flush()
 
@@ -1111,8 +1115,9 @@ describe('AnalyticsView', () => {
 
     it('a zero income reads «0,00 €», NOT «Бесплатно»', async () => {
       // formatMoney is called with allowZero=true (.vue:458) precisely because a
-      // real master really can earn nothing this week -- and «Бесплатно»
-      // (utils/format.ts:33) is a price label, not an income of zero.
+      // real master really can earn nothing this week -- and the free-price
+      // fallback (i18n:common.free, utils/format.ts:33) is a price label, not an
+      // income of zero.
       vi.mocked(mastersApi.getIncome).mockResolvedValue({
         income_cents: 0,
         prev_income_cents: 0,
@@ -1228,7 +1233,8 @@ describe('AnalyticsView', () => {
 
     it('does NOT re-fetch the transaction feed -- it is not period-scoped', async () => {
       // watch(period) calls loadIncome only (.vue:509-515). Re-paging the ledger
-      // on a toggle would silently reset a master's «показать ещё» progress.
+      // on a toggle would silently reset a master's show-more progress
+      // (i18n:common.showMore).
       mount()
       await flush()
       expect(mastersApi.getTransactions).toHaveBeenCalledTimes(1)
@@ -1255,7 +1261,8 @@ describe('AnalyticsView', () => {
     it('a failed income refetch KEEPS the previous figure rather than blanking it', async () => {
       // The watch's `.catch(() => {})` (.vue:512-514) is deliberate. Note what it
       // costs: the number on screen is now the WEEK's while the toggle reads
-      // «Месяц», and nothing says so. Asserted as the behaviour it is.
+      // month (i18n:common.periodMonth), and nothing says so. Asserted as the
+      // behaviour it is.
       mount()
       await flush()
       expect(incomeValue()).toContain('1 234,56')
@@ -1288,7 +1295,7 @@ describe('AnalyticsView', () => {
   // ===========================================================================
   // NOT COVERED, deliberately
   //
-  // - The «Платежи» link to the full finance screen: the template has no such
+  // - The Payments link to the full finance screen: the template has no such
   //   control. The header comment (.vue:29) promises one ("Full finance ... lives
   //   on /master/finance -> link"), and it is not there. A comment, not a
   //   behaviour -- reported, not faked.
@@ -1297,7 +1304,8 @@ describe('AnalyticsView', () => {
   //   the values this screen feeds them.
   // - The insights LRU eviction and the "skip if already cached" guard
   //   (stores/diary.ts:363-380): store behaviour, and probekit-unit-test's ground.
-  // - «Отправить» in the send-message modal: that component's own open-then-send
+  // - The send button (i18n:common.submitSend) in the send-message modal: that
+  //   component's own open-then-send
   //   behaviour (SendMessageModal.test.ts). It belongs to that component's own
   //   test, not to a screen test that would be re-asserting a child (SC-09).
   // - The income «—» placeholder (.vue:457-459): unreachable honestly. The

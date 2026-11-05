@@ -22,14 +22,14 @@
 //
 // NO time pinning: the screen reads no wall clock. formatShortDate() takes the
 // fixture's own ISO string and formats it in a FIXED timezone (UTC default,
-// format.ts:118-129) -- so "9 июня" is a literal derivation of the fixture, not
-// of today. Date fixtures below are literals and stay correct forever.
+// format.ts:118-129) -- so the rendered "June 9" is a literal derivation of
+// the fixture, not of today. Date fixtures below are literals and stay correct forever.
 //
 // NO money: nothing here renders formatMoney, so the ru-NBSP trap is absent.
 // Asserted strings contain only ordinary spaces (verified by codepoint).
 //
 // REAL BUG found while writing this file, FIXED in №441: formatShortDate()
-// zero-padded days 1..9 ("09 июня") despite documenting "9 июня" — an en-CA
+// zero-padded days 1..9 (rendering "09 June") despite documenting "June 9" — an en-CA
 // format-matcher resolution, not this screen's fault, affecting 13 surfaces
 // app-wide. The tripwire in the feedbackRows block below now asserts the
 // CORRECT output and is the screen-level proof the util fix reaches the DOM.
@@ -43,7 +43,8 @@
 // pin the loading gate; they do not repeat the comment's claim. See the report.
 //
 // TRAP -- route.params.id is read INSIDE load() (.vue:136), never in a watcher.
-// The screen fetches on mount and on «Повторить» only; a params change would not
+// The screen fetches on mount and on the retry button (i18n:common.retry)
+// only; a params change would not
 // refetch. Same shape the neighbour found on MasterPracticeDetailView. Not
 // asserted as a feature -- the route is a static mock here; noted so the next
 // reader does not assume reactivity that is not there.
@@ -54,8 +55,9 @@
 // overlay being gone (SC-13b) -- happy-dom never fires the transitionend.
 //
 // No v-show on this screen (grepped: 0) -- host-wide textContent is safe here,
-// but per-section queries are still scoped because BOTH sections render the same
-// «посмотреть еще» label and «Хорошо» is BOTH the high mood label and the good
+// but per-section queries are still scoped because BOTH sections render the
+// same show-more label (i18n:masterScreens.masterStudentProfile.showMore) and
+// the good label (i18n:mood.good) is BOTH the high mood label and the good
 // rating label.
 //
 // P3 ADDITIONS (PROMPT №592): two more seams now exist and are mocked below --
@@ -450,7 +452,8 @@ describe('MasterStudentProfileView', () => {
 
       const row = ciRows()[0]
       expect(row?.querySelector('.profile__ci-text')?.textContent).toBe('Тяжело шло')
-      // formatShortDate in the default UTC tz: 12 Sept -> "12 сент." (format.ts:103-129).
+      // formatShortDate in the default UTC tz: 12 Sept renders via the short
+      // ru month form (format.ts:103-129).
       expect(row?.querySelector('.profile__ci-date')?.textContent).toBe('12 сент.')
     })
 
@@ -468,7 +471,8 @@ describe('MasterStudentProfileView', () => {
       await flush()
 
       // moodKeyFromScore: 1-2 bad / 3-4 low / 5-6 neutral / 7-8 good / 9-10
-      // fire (moodScale.ts). Scoped to .profile__ci-text: «Хорошо» is ALSO the
+      // fire (moodScale.ts). Scoped to .profile__ci-text: the good label
+      // (i18n:mood.good) is ALSO the
       // good rating label, so a host-wide toContain here would not prove which
       // row said it.
       expect(ciRows().map((r) => r.querySelector('.profile__ci-text')?.textContent)).toEqual([
@@ -540,7 +544,8 @@ describe('MasterStudentProfileView', () => {
       await flush()
 
       // Four boundary cases exceed PREVIEW_CAP=3, so the fourth is behind the
-      // pill -- expand before asserting, or `8 -> Хорошо` is never rendered and
+      // pill -- expand before asserting, or the rating-8 row (i18n:mood.good)
+      // is never rendered and
       // the case that matters most silently goes untested.
       showMorePills()[0]?.click()
       await flush()
@@ -587,7 +592,7 @@ describe('MasterStudentProfileView', () => {
       expect(fbRows()[0]?.querySelector('.profile__fb-text')?.textContent).toBe('Лучшая практика')
       // `v-if="fb.comment"` (.vue:75) -- '' from the ?? '' is falsy, so no empty node.
       expect(fbRows()[1]?.querySelector('.profile__fb-text')).toBeNull()
-      // "1 мая" -- the leading zero was the format.ts:118 defect, fixed in №441.
+      // May 1 -- the leading zero was the format.ts:118 defect, fixed in №441.
       expect(fbRows()[0]?.querySelector('.profile__fb-date')?.textContent).toBe('1 мая')
     })
 
@@ -596,7 +601,7 @@ describe('MasterStudentProfileView', () => {
     // leading zero. It asked Intl for `day:'numeric'` but en-CA's format matcher
     // resolved the day+month skeleton to `MM-dd` -- resolvedOptions() really did
     // return `{month:'2-digit', day:'2-digit'}` -- so every day 1..9 rendered
-    // zero-padded ("01 мая", "09 июня") against a docstring promising "9 июня".
+    // zero-padded ("01 May", "09 June") against a docstring promising "9 June".
     // Days 10..31 were correct, which is why it survived: a shared util across
     // 13 view/card surfaces, wrong for nine days of every month.
     //
@@ -829,9 +834,11 @@ describe('MasterStudentProfileView', () => {
     // VBottomSheet both TELEPORT to document.body (same trap the file's own
     // SendMessageModal tests already worked around with liveModal()). Two
     // helpers below scope to each teleported container's OWN buttons, so a
-    // click never lands on the ORIGINAL "Заблокировать пользователя" CTA by
-    // accident (its label contains "Заблокировать" as a substring -- caught
-    // while first writing these: buttonWith('Заблокировать') silently
+    // click never lands on the ORIGINAL block CTA
+    // (i18n:masterScreens.masterStudentProfile.blockAction) by
+    // accident -- its label contains the dialog confirm button's text as a
+    // substring (caught while first writing these: a substring query for that
+    // text silently
     // matched the CTA, not the dialog's confirm button, and every test
     // downstream of that click passed for the wrong reason).
     function modalButtonWith(label: string): HTMLElement | undefined {
@@ -911,9 +918,10 @@ describe('MasterStudentProfileView', () => {
       expect(modalButtonWith('Не сейчас')).toBeDefined()
       expect(modalButtonWith('В поддержку')).toBeDefined()
       // G10 (PROMPT №609): compact-actions -> both buttons render at the
-      // smaller VButton size, a sizing fix for the ORIGINAL long «Сообщить
-      // в поддержку» label. Owner Q1 (PROMPT №610) shortened the label
-      // itself to «В поддержку» afterward -- both changes stack; this
+      // smaller VButton size, a sizing fix for the ORIGINAL long
+      // report-to-support label. Owner Q1 (PROMPT №610) shortened the label
+      // itself to the support CTA (i18n:masterScreens.masterStudentProfile.toSupport)
+      // afterward -- both changes stack; this
       // still asserts the sizing class survives on the new label.
       expect(modalButtonWith('Не сейчас')?.classList.contains('v-btn--sm')).toBe(true)
       expect(modalButtonWith('В поддержку')?.classList.contains('v-btn--sm')).toBe(true)
@@ -1383,11 +1391,12 @@ describe('MasterStudentProfileView', () => {
   })
 
   // T24-20 (PROMPT №638): a blocked student's profile now opens (backend
-  // narrow allow-path) instead of the generic "Не удалось загрузить
-  // профиль" failure -- the ONLY visible difference is the bottom action's
+  // narrow allow-path) instead of the generic profile-load failure
+  // (i18n:masterScreens.masterStudentProfile.toast.loadFailed) -- the ONLY
+  // visible difference is the bottom action's
   // label/target, and the "..." menu (relocated unblock, T24-19) is hidden
-  // (same reasoning the row's old «Удалённые» kind already used: those
-  // actions are meaningless for a blocked student).
+  // (same reasoning the row's old removed-students group kind already used:
+  // those actions are meaningless for a blocked student).
   describe('T24-20: blocked student profile', () => {
     it('a blocked student opens normally (200), not the generic error screen', async () => {
       vi.mocked(mastersApi.getStudent)
@@ -1433,9 +1442,9 @@ describe('MasterStudentProfileView', () => {
     })
 
     // The title dropped the name: the TargetUserCard directly below the
-    // title already shows it, so the old copy said "Анна Кузнецова" three
-    // times in one dialog. The MESSAGE still names her -- that sentence is
-    // about what happens TO her and reads wrong without it.
+    // title already shows it, so the old copy displayed the fixture student
+    // name three times in one dialog. The MESSAGE still names her -- that
+    // sentence is about what happens TO her and reads wrong without it.
     it('clicking it opens the unblock confirm -- title without the name, message with it', async () => {
       vi.mocked(mastersApi.getStudent)
         .mockReset()

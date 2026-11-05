@@ -1,24 +1,30 @@
 <!--
   VELO Frontend -- AdminReportsView (Admin DS rebuild 2026-06-14, operator SVGs
-  «1 Moderation» + «2 Filter» + «Дата заявки»)
+  "1 Moderation" + "2 Filter" + request date (i18n:moderation.reportDate))
 
-  The «Модерация» tab (admin-reports). Rebuilt to the operator design, replacing the
-  F8.3 layout (VHeader + two VSelects): header (back + count badge) + «Фильтр» pill →
-  ModerationFilterModal + «Все» label + report cards (warning glyph + reason + relative
-  time), on the fog feed with the admin tab bar. Tapping a card opens the report detail.
+  The Moderation tab (i18n:adminScreens.adminReports.moderationTab; route
+  admin-reports). Rebuilt to the operator design, replacing the F8.3 layout
+  (VHeader + two VSelects): header (back + count badge) + filter pill
+  (i18n:adminScreens.adminReports.filter) → ModerationFilterModal + all label
+  (i18n:common.all) + report cards (warning glyph + reason + relative time), on
+  the fog feed with the admin tab bar. Tapping a card opens the report detail.
 
   DATA. Real: GET /admin/reports (paginated) → reason (title) + created_at (relative
-  time); verify/resolve live in the detail. Status filter is wired (Открытая → pending,
-  Закрытая → resolved). STUB «honest» (build-full-design-now): the card category glyph
+  time); verify/resolve live in the detail. Status filter is wired
+  (i18n:moderation.statuses.open → pending, i18n:moderation.statuses.closed →
+  resolved). STUB «honest» (build-full-design-now): the card category glyph
   (single warning — ReportResponse has no category) and the reporter name (no name in the
-  payload) are honest placeholders; Категория / Приоритет / date filters have no backend.
+  payload) are honest placeholders; category (i18n:moderation.category) / priority
+  (i18n:moderation.priority) / date filters have no backend.
   Roadmap (Zod): extend GET /admin/reports — category (ticket/complaint/payment) + priority
   (P0–P3) + date filtering + reporter name. Recorded in master-ds-zod-roadmap.
 
-  FE-100 (owner ruling 25.10): «Модерация» is two channels behind a «Обращения | Жалобы»
-  switch. «Обращения» -- support tickets (components/admin/SupportTicketsPanel.vue, the
-  former admin-support screen); «Жалобы» -- everything above, unchanged. The tab rides
-  the query (`?tab=complaints`; anything else is «Обращения», the default), so the
+  FE-100 (owner ruling 25.10): Moderation (i18n:adminScreens.adminReports.moderationTab)
+  is two channels behind a tickets | complaints switch
+  (i18n:adminScreens.adminReports.tabTickets | i18n:adminScreens.adminReports.tabComplaints).
+  Tickets -- support tickets (components/admin/SupportTicketsPanel.vue, the
+  former admin-support screen); complaints -- everything above, unchanged. The tab rides
+  the query (`?tab=complaints`; anything else is tickets, the default), so the
   back button from a card lands on the tab it left. The header count is gone (owner).
 -->
 
@@ -139,7 +145,8 @@ const router = useRouter()
 const route = useRoute()
 const toast = useToast()
 
-// FE-100: «Обращения | Жалобы», the tab in the query (see the header).
+// FE-100: tickets | complaints (i18n:adminScreens.adminReports.tabTickets |
+// i18n:adminScreens.adminReports.tabComplaints), the tab in the query (see the header).
 type ModerationTab = 'tickets' | 'complaints'
 const tab = computed<ModerationTab>({
   get: () => (route.query.tab === 'complaints' ? 'complaints' : 'tickets'),
@@ -179,14 +186,17 @@ const categoryLabel = computed<string>(() => {
 })
 
 // The filter pill echoes the active category (operator «payments»/«complaints»
-// variants); the «Платежи» selection swaps the card glyph to the payment $.
+// variants); the payments selection (i18n:adminScreens.adminReports.payments)
+// swaps the card glyph to the payment $.
 const pillLabel = computed<string>(() =>
   filter.value.categories.length ? categoryLabel.value : t('adminScreens.adminReports.filter'),
 )
 const isPayments = computed<boolean>(() => filter.value.categories.includes('payments'))
 
-// Only «Статус» maps to the backend (Открытая → pending, Закрытая → resolved). Both or
-// none selected = no status filter (all). The rest of the filter is a Zod stub.
+// Only the status chips (i18n:moderation.status) map to the backend
+// (i18n:moderation.statuses.open → pending, i18n:moderation.statuses.closed →
+// resolved). Both or none selected = no status filter (all). The rest of the
+// filter is a Zod stub.
 const apiStatus = computed<ReportStatusFilter | undefined>(() => {
   const s = filter.value.statuses
   if (s.length === 1) {
@@ -248,7 +258,8 @@ function openDetail(item: ReportResponse): void {
   })
 }
 
-// «Жалобы» load when their tab is shown -- on arrival and on every switch to it.
+// Complaints (i18n:adminScreens.adminReports.tabComplaints) load when their tab
+// is shown -- on arrival and on every switch to it.
 watch(
   tab,
   (next) => {

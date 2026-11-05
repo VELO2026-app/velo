@@ -31,7 +31,7 @@
     "master_required": "Only a verified master can be appointed as a school's master",
     "blocked_by_curator": "Joining this school is not available",
     "blocked_in_school": "You are blocked in this school",
-    "cannot_block_curator": "A school's curator cannot be blocked",
+    "cannot_block_curator": "You cannot block the school's curator",
     "master_id_requires_school": "Choose the school the practice is created in",
     "master_not_in_school": "This master is not in the school or is not verified",
     "curator_only": "Only a school's curator can create a practice on the master's behalf",
@@ -46,6 +46,7 @@
     "mcp_token_limit_reached": "There are already 10 active tokens — revoke an unneeded one to create a new",
     "mcp_token_not_found": "Token not found — refresh the list",
     "mcp_token_name_taken": "A token with this name already exists — choose another",
+    "delivery_window_empty": "The delivery start and end times cannot be the same",
     "unauthorized": "Your session has expired — log in again",
     "not_found": "The requested resource was not found",
     "forbidden": "The action is not available",
@@ -76,7 +77,6 @@
       "upcoming": "Failed to load the nearest practice",
       "cancel": "Failed to cancel the booking",
       "join": "Failed to join the practice",
-      "leave": "Failed to leave the practice",
       "skipCheckin": "Failed to skip the check-in"
     },
     "master": {

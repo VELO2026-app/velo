@@ -273,6 +273,9 @@
         "relatedLine": "Related to the practice: {title} with {name}"
       },
       "externalActivityCreate": {
+        "mine": {
+          "caption": "My options"
+        },
         "custom": {
           "remove": "Remove your variant",
           "title": "Custom activity",
@@ -350,8 +353,14 @@
           "student": "Student"
         },
         "block": {
-          "confirmTitle": "Block this school member?",
-          "warning": "The member will lose access to the school and its practices. You can unblock them at any time."
+          "confirmTitle": "Block this master?",
+          "warning": "The master will be moved to the “Removed” group. They will no longer be able to create practices on behalf of the school or see its analytics, and their upcoming school practices will become hidden. You can unblock them at any time.",
+          "doneTitle": "The master has been blocked",
+          "doneText": "The master has been moved to “Removed”. If they broke the rules — for example, missed a practice or behaved inappropriately — you can report it to support."
+        },
+        "report": {
+          "cta": "To support",
+          "dismiss": "Not now"
         },
         "notFound": "Master not found",
         "methods": {
@@ -365,9 +374,8 @@
         "toast": {
           "roleChanged": "Role changed: the member is now a student of the school",
           "roleFailed": "Failed to change the role",
-          "blocked": "The member has been blocked",
-          "alreadyLeftSchool": "The member has already left the school",
-          "blockFailed": "Failed to block the member"
+          "alreadyLeftSchool": "The master is no longer in the school",
+          "blockFailed": "Failed to block the master"
         },
         "profileUnavailable": "Profile unavailable",
         "tryLater": "Try again later",
@@ -474,13 +482,11 @@
         "entryPreparing": "Entry is unavailable",
         "entryPreparing2": "The entry is being prepared",
         "join": "Join",
-        "checkinDone": "Check-in done",
         "desktopCameraHint": "To turn the camera on, open @:brand from a desktop",
         "toast": {
           "stateChanged": "The practice state has changed",
           "zoomOpenFailed": "Failed to open Zoom. Try again"
         },
-        "leave": "Leave the practice",
         "liveBadge": "Live",
         "titleFallback": "Practice",
         "start": "Start",
@@ -528,7 +534,7 @@
         "tabs": {
           "masters": "Masters",
           "students": "Students",
-          "blocked": "Blocked"
+          "blocked": "Removed"
         },
         "blocked": {
           "empty": "A member will appear here when you block them via the menu on their profile page."
@@ -551,12 +557,12 @@
         "empty": {
           "searchMaster": "Search masters...",
           "searchStudent": "Search students...",
-          "blocked": "No blocked members yet",
+          "blocked": "No removed members yet",
           "masters": "No masters in the school yet",
           "students": "No students in the school yet"
         },
         "loadFailed": {
-          "blocked": "Failed to load the blocked members",
+          "blocked": "Failed to load the removed members",
           "masters": "Failed to load the masters",
           "students": "Failed to load the students"
         }
@@ -570,7 +576,7 @@
           "master": "Master"
         },
         "block": {
-          "confirmTitle": "Block this school member?"
+          "confirmTitle": "Block this student?"
         },
         "unavailable": "The student is unavailable",
         "unavailableHint": "They may have left the school or been removed.",
@@ -582,21 +588,21 @@
           "cancelCta": "Cancel the offer"
         },
         "toast": {
-          "blocked": "The user has been blocked",
-          "blockedHint": "The user has been moved to the \"Blocked\" tab of the school members. If they broke the rules — for example, missed a practice or behaved inappropriately — you can report it to support.",
+          "blocked": "The student has been blocked",
+          "blockedHint": "The student has been moved to “Removed”. If they broke the rules — for example, missed a practice or behaved inappropriately — you can report it to support.",
           "offerSent": "The offer has been sent",
           "offerFailed": "Failed to send the offer",
           "offerCancelled": "The offer has been cancelled",
           "offerCancelFailed": "Failed to cancel the offer",
-          "alreadyLeftSchool": "The member has already left the school",
-          "blockFailed": "Failed to block the member"
+          "alreadyLeftSchool": "The student is no longer in the school",
+          "blockFailed": "Failed to block the student"
         },
         "report": {
           "cta": "To support",
           "dismiss": "Not now"
         },
         "backToStudents": "To the students list",
-        "blockText": "The member will no longer be able to see this school or book its practices, and will stop receiving its notifications.",
+        "blockText": "The student will be moved to the “Removed” group. They will no longer be able to see the school's practices. You can unblock them at any time.",
         "title": "Student",
         "actionsAria": "Actions for the student",
         "practicesStat": "Practices",
@@ -728,7 +734,8 @@
         "inMinutes": "in {n} min",
         "inHours": "in {n} h",
         "findPractice": "Find a practice",
-        "zoomFailed": "Failed to create the meeting — contact the master"
+        "zoomFailed": "Failed to create the meeting — contact the master",
+        "zoomUnavailable": "Zoom is unavailable"
       },
       "userInbox": {
         "empty": {

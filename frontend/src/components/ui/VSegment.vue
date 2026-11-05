@@ -7,8 +7,8 @@
 
   Usage:
     <VSegment v-model="activeTab" :options="[
-      { value: 'upcoming', label: 'Предстоящие', badge: 3 },
-      { value: 'past',     label: 'Прошедшие' },
+      { value: 'upcoming', label: 'Upcoming', badge: 3 },
+      { value: 'past',     label: 'Past' },
     ]" />
 -->
 
@@ -54,8 +54,9 @@ withDefaults(
     /**
      * Compact/inline variant: the strip is sized to its content (not full-width
      * `flex:1`) and wrapped in a single glass pill — fits an inline title-row
-     * toggle (e.g. dashboard «Неделя/Месяц»). Default false = the full-width
-     * filter-strip behaviour used by the admin list screens.
+     * toggle (e.g. the dashboard i18n:common.periodWeek / i18n:common.periodMonth
+     * toggle). Default false = the full-width filter-strip behaviour used by the
+     * admin list screens.
      */
     compact?: boolean
     /**

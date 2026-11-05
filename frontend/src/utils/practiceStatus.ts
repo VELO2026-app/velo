@@ -8,9 +8,10 @@
 //
 //   Master shows a badge ONLY for operational/terminal states. The active phase
 //   (scheduled / live, and ended-but-not-finalized) carries NO badge — the master
-//   reads it from the date + the action buttons («Начать эфир» / «Завершить»).
-//   So: draft → Черновик, completed → Завершена, cancelled → Отменена; everything
-//   else (scheduled / live / deleted) → null (no badge).
+//   reads it from the date + the live-stream action buttons (start / finish).
+//   So: draft → i18n:practice.status.draft, completed →
+//   i18n:practice.status.completed, cancelled → i18n:practice.status.cancelled;
+//   everything else (scheduled / live / deleted) → null (no badge).
 //
 // The practice-level time helpers mirror utils/bookingStatus.ts (which operates on
 // a booking's embedded practice) for callers that hold a practice directly.
@@ -21,14 +22,17 @@ import type { PracticeStatus } from '@/api/types'
 
 const { t } = i18n.global
 
+/** A master practice-status badge: label text plus colour variant. */
 export interface PracticeStatusBadge {
   label: string
   variant: 'success' | 'warning' | 'error'
 }
 
 /**
- * Master card badge for a practice status. Returns null for the active phase
- * (scheduled / live / deleted) — those get no badge.
+ * Master card badge for a practice status.
+ *
+ * @returns Null for the active phase (scheduled / live / deleted) — those
+ *  get no badge.
  */
 export function masterPracticeBadge(status: PracticeStatus): PracticeStatusBadge | null {
   switch (status) {

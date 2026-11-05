@@ -2,14 +2,18 @@
   VELO Frontend -- AdminParticipantsView (Admin DS, 2026-06-14, operator SVG "1 Participants")
 
   Global participants list (all platform users). Reached from the dashboard
-  «Участников» stat card. Header (back + count badge) + VSegment filter
-  (Все / Новые / Активные) + participant rows + load-more.
+  participants stat card (i18n:adminScreens.adminDashboard.participantsStat).
+  Header (back + count badge) + VSegment filter
+  (all / new / active) + participant rows + load-more.
 
   DATA (E1): GET /api/v1/admin/participants — filter=all|new|active over the
   current week (new = created_at≥start, active = last_login_at≥start, coarse
-  "opened ≥1×" using User.last_login_at, operator Q2=В). Rows show name · ID ·
-  practices_count · joined («с Дек 2025») + last-active labels (formatted on the
-  FE from created_at / last_login_at). Header count + «Все» badge still show the
+  "opened ≥1×" using User.last_login_at, operator Q2=V). Rows show name · ID ·
+  practices_count · a joined line with a since-month-year date
+  (i18n:adminScreens.adminParticipants.joinedLine) + last-active labels
+  (formatted on the
+  FE from created_at / last_login_at). Header count + the all badge
+  (i18n:common.all) still show the
   platform total from /admin/stats. admin->user messaging is still a stub toast.
 -->
 
@@ -64,7 +68,8 @@
     </template>
 
     <!-- W12 fix (PROMPT №409): a failed load used to fall through to the same
-         "нет данных" empty state as a genuinely empty list -- indistinguishable
+         no-data empty state (i18n:common.noData) as a genuinely empty list --
+         indistinguishable
          to the admin, who'd read it as "no participants" rather than "retry". -->
     <VEmptyState
       v-else-if="error"
@@ -102,7 +107,7 @@ const router = useRouter()
 const toast = useToast()
 const adminStore = useAdminStore()
 
-// Все / Новые / Активные. new+active window on the current week (backend
+// all / new / active. new+active window on the current week (backend
 // filter over created_at / last_login_at). Changing it refetches from page 0.
 type ParticipantFilter = 'all' | 'new' | 'active'
 const filter = ref<ParticipantFilter>('all')
@@ -113,7 +118,7 @@ const loading = ref(false)
 const error = ref(false)
 const hasMore = computed<boolean>(() => participants.value.length < total.value)
 
-// Header + «Все» badge show the real platform total from /admin/stats (loaded
+// Header + the all badge (i18n:common.all) show the real platform total from /admin/stats (loaded
 // by AdminShell) — a stable count independent of the current filter/page.
 const totalCount = computed<number | null>(() => adminStore.stats?.users_count ?? null)
 const headerCount = computed<string>(() =>

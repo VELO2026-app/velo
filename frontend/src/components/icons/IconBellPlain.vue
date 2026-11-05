@@ -6,7 +6,9 @@
   IconBell glyph (which has a notification dot baked into the artwork), this
   bell is clean — the unread badge is a SEPARATE element rendered by the host
   (see MasterDashboardView). Used ONLY on the master dashboard bell; the shared
-  IconBell stays byte-identical for the «Уведомления» profile rows.
+  IconBell stays byte-identical for the notifications profile rows
+  (i18n:masterScreens.masterProfile.menu.notifications and
+  i18n:user.screens.userProfile.menu.notifications).
 
   viewBox frames the glyph's own coordinate box (x≈339–359, y≈46–67 from the
   source canvas); fill = currentColor so it inherits the button's colour token.

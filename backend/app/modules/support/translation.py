@@ -115,10 +115,13 @@ RETRY_SEARCH_PAGES = 10
 _SEARCH_PAGE = 100
 _BATCH = 200
 
+# The name of a TARGET language for the model's letter (_name, letter). A
+# target is always settings.support_language or reply_language() -- both
+# inside core/i18n.py SUPPORTED_LANGUAGES -- so this holds exactly those
+# (BE-188; tests/test_product_languages.py pins the equality). The source
+# language comes from the model and never passes through here.
 LANGUAGE_NAMES = {
-    "de": "German",
     "en": "English",
-    "es": "Spanish",
     "ru": "Russian",
     "uk": "Ukrainian",
 }

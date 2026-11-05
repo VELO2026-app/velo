@@ -401,7 +401,7 @@ describe('AdminPromosView', () => {
 
     it("switching tabs clears the previous tab's rows before the new ones land", async () => {
       // loadInitial resets items/total/hasMore up front (AdminPromosView.vue:192-194).
-      // Without that, company promos would flash under the «Мастеров» tab.
+      // Without that, company promos would flash under the i18n:adminScreens.adminPromos.filterMasters tab.
       vi.mocked(adminApi.getAdminPromos).mockResolvedValue(page([promo('p1', { code: 'FIRST' })]))
       mount()
       await flush()

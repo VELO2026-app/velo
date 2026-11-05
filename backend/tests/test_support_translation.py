@@ -426,7 +426,7 @@ async def test_a_users_message_goes_in_at_once_and_its_translation_follows(
     fake: FakeComms,
     capsys: pytest.CaptureFixture,
 ) -> None:
-    admin, user, pointer = await _setup(client, db_session, user_language="de")
+    admin, user, pointer = await _setup(client, db_session, user_language="uk")
     sent = await _user_writes(client, user, pointer, "Ich kann mich nicht anmelden")
     mid = sent["id"]
 
@@ -486,7 +486,7 @@ async def test_an_admins_reply_goes_in_at_once_and_gets_a_variant_in_the_users_l
     fake: FakeComms,
     capsys: pytest.CaptureFixture,
 ) -> None:
-    admin, _, pointer = await _setup(client, db_session, user_language="de")
+    admin, _, pointer = await _setup(client, db_session, user_language="uk")
     sent = await _admin_replies(client, admin, pointer, "Please reset your password")
     mid = sent["id"]
 
@@ -495,29 +495,29 @@ async def test_an_admins_reply_goes_in_at_once_and_gets_a_variant_in_the_users_l
     assert fake.messages[-1]["body"] == "Please reset your password"
     assert sent["body"] == "Please reset your password"
     [row] = await _rows(db_session, mid)
-    assert (row.direction, row.locale) == ("to_user", "de")
+    assert (row.direction, row.locale) == ("to_user", "uk")
 
     [payload] = await ship(db_session, fake)
     assert payload["type"] == translation.FOR_USER_TYPE
-    assert "German (de)" in payload["llm"]["messages"][0]["content"]
+    assert "Ukrainian (uk)" in payload["llm"]["messages"][0]["content"]
     await translation.sweep()
-    fake.answer(row.job_key, _answer("en", "Bitte setzen Sie Ihr Passwort zurück"))
+    fake.answer(row.job_key, _answer("en", "Будь ласка, скиньте свій пароль"))
     await translation.on_key(row.job_key)
 
     seen = (await _feed(client, admin, pointer))[mid]
     assert seen["body"] == "Please reset your password"  # the admin's own text
-    assert seen["translation"]["locale"] == "de"
+    assert seen["translation"]["locale"] == "uk"
     assert seen["translation"]["state"] == "ready"
-    assert seen["translation"]["variant_body"] == "Bitte setzen Sie Ihr Passwort zurück"
+    assert seen["translation"]["variant_body"] == "Будь ласка, скиньте свій пароль"
     # Read twice: the support language and the user's.
     locales = [
         c[3].get("locale")
         for c in fake.calls
         if c[0] == "GET" and c[1].endswith("/messages")
     ]
-    assert locales[-2:] == ["en", "de"]
+    assert locales[-2:] == ["en", "uk"]
     out = capsys.readouterr().out
-    assert "Passwort" not in out and "reset your" not in out
+    assert "пароль" not in out and "reset your" not in out
 
 
 async def test_a_reply_to_a_user_of_the_support_language_queues_nothing(
@@ -526,7 +526,7 @@ async def test_a_reply_to_a_user_of_the_support_language_queues_nothing(
     fake: FakeComms,
 ) -> None:
     """Owner ruling 5: same language, no translation -- no job, no request.
-    Pair: the same reply to a German reader does queue one."""
+    Pair: the same reply to a Ukrainian reader does queue one."""
     admin, _, pointer = await _setup(client, db_session, user_language="en")
     sent = await _admin_replies(client, admin, pointer, "Hello")
     assert await _rows(db_session, sent["id"]) == []
@@ -541,7 +541,7 @@ async def test_a_reply_to_a_user_of_the_support_language_queues_nothing(
     user_row = (
         await db_session.execute(select(User).where(User.telegram_id == _TID_USER))
     ).scalar_one()
-    user_row.language = "de"
+    user_row.language = "uk"
     await db_session.commit()
     sent = await _admin_replies(client, admin, pointer, "Hello again")
     assert len(await _rows(db_session, sent["id"])) == 1
@@ -559,7 +559,7 @@ async def test_original_is_on_the_admin_feed_only_and_no_user_route_reads_a_thre
     read is the chat routes' (BE-163). Until BE-162 the support router had
     two user writes, the open and the send of №712; both went with the one
     eternal thread."""
-    admin, user, pointer = await _setup(client, db_session, user_language="de")
+    admin, user, pointer = await _setup(client, db_session, user_language="uk")
     sent = await _user_writes(client, user, pointer, "Hallo")
     assert "original" not in sent and "translation" not in sent
     assert "original" in (await _feed(client, admin, pointer))[sent["id"]]
@@ -586,7 +586,7 @@ async def test_not_needed_when_the_model_finds_the_support_language(
 ) -> None:
     """A user's message is ALWAYS sent to the model; already in the support
     language -> the variant "none needed", the body stays the original."""
-    admin, user, pointer = await _setup(client, db_session, user_language="de")
+    admin, user, pointer = await _setup(client, db_session, user_language="uk")
     sent = await _user_writes(client, user, pointer, "Hi, I need help")
     [row] = await _rows(db_session, sent["id"])
     await ship(db_session, fake)
@@ -612,7 +612,7 @@ async def test_a_failed_job_tells_the_user_once_and_an_admin_retry_delivers(
     db_session: AsyncSession,
     fake: FakeComms,
 ) -> None:
-    admin, _, pointer = await _setup(client, db_session, user_language="de")
+    admin, _, pointer = await _setup(client, db_session, user_language="uk")
     mid = (await _admin_replies(client, admin, pointer, "Your refund is on its way"))[
         "id"
     ]
@@ -624,7 +624,7 @@ async def test_a_failed_job_tells_the_user_once_and_an_admin_retry_delivers(
     await translation.on_key(row.job_key)  # a repeated push
 
     assert (await _rows(db_session, mid))[0].outcome == "failed"
-    assert (mid, "de") not in fake.variants
+    assert (mid, "uk") not in fake.variants
     assert await _notifications(db_session, mid) == 1
     block = (await _feed(client, admin, pointer))[mid]["translation"]
     assert (block["state"], block["retryable"]) == ("impossible", True)
@@ -634,7 +634,7 @@ async def test_a_failed_job_tells_the_user_once_and_an_admin_retry_delivers(
     assert resp.status_code == 200, resp.text
     assert resp.json() == {
         "message_id": mid,
-        "locale": "de",
+        "locale": "uk",
         "attempt": 2,
         "state": "preparing",
     }
@@ -667,14 +667,14 @@ async def test_a_declined_answer_is_final_and_tells_the_user(
     db_session: AsyncSession,
     fake: FakeComms,
 ) -> None:
-    admin, _, pointer = await _setup(client, db_session, user_language="de")
+    admin, _, pointer = await _setup(client, db_session, user_language="uk")
     mid = (await _admin_replies(client, admin, pointer, "x"))["id"]
     [row] = await _rows(db_session, mid)
     await ship(db_session, fake)
     fake.answer(row.job_key, _answer("en", None, declined=True))
     await translation.on_key(row.job_key)
-    assert fake.variants[(mid, "de")]["declined"] is True
-    assert fake.variants[(mid, "de")]["source_locale"] == "en"
+    assert fake.variants[(mid, "uk")]["declined"] is True
+    assert fake.variants[(mid, "uk")]["source_locale"] == "en"
     assert await _notifications(db_session, mid) == 1
     block = (await _feed(client, admin, pointer))[mid]["translation"]
     assert (block["state"], block["retryable"]) == ("impossible", False)
@@ -690,7 +690,7 @@ async def test_an_unreadable_answer_is_asked_again_once_then_declined(
     db_session: AsyncSession,
     fake: FakeComms,
 ) -> None:
-    _, user, pointer = await _setup(client, db_session, user_language="de")
+    _, user, pointer = await _setup(client, db_session, user_language="uk")
     mid = (await _user_writes(client, user, pointer, "Hallo"))["id"]
     [first] = await _rows(db_session, mid)
     await ship(db_session, fake)
@@ -718,7 +718,7 @@ async def test_a_job_refused_at_intake_fails_through_the_sweep(
     """422 on the request, and by key `job: null` with intake: never taken
     -> a transport failure, the user told. Pair: 422 with the job merely
     not shipped keeps waiting (the first test)."""
-    admin, _, pointer = await _setup(client, db_session, user_language="de")
+    admin, _, pointer = await _setup(client, db_session, user_language="uk")
     mid = (await _admin_replies(client, admin, pointer, "x"))["id"]
     [row] = await _rows(db_session, mid)
     fake.jobs[row.job_key] = {"status": None, "intake_rejected": True}
@@ -737,7 +737,7 @@ async def test_a_retry_does_not_reach_past_its_pages(
 ) -> None:
     """KNOWN CEILING of translation.find_message, built: the message is
     one page too deep -> 404. Pair: one page more reaches it."""
-    admin, _, pointer = await _setup(client, db_session, user_language="de")
+    admin, _, pointer = await _setup(client, db_session, user_language="uk")
     mid = (await _admin_replies(client, admin, pointer, "old"))["id"]
     [row] = await _rows(db_session, mid)
     await ship(db_session, fake)
@@ -765,7 +765,7 @@ async def test_a_repeated_outcome_writes_one_variant(
     db_session: AsyncSession,
     fake: FakeComms,
 ) -> None:
-    _, user, pointer = await _setup(client, db_session, user_language="de")
+    _, user, pointer = await _setup(client, db_session, user_language="uk")
     mid = (await _user_writes(client, user, pointer, "Hallo"))["id"]
     [row] = await _rows(db_session, mid)
     await ship(db_session, fake)
@@ -789,7 +789,7 @@ async def test_the_feed_catches_up_a_message_without_a_job_once(
     """A message in the thread whose job was lost (its request rolled back)
     is queued when an admin reads the feed -- once, however many read.
     Pair: a message that has its job is not queued again."""
-    admin, user, pointer = await _setup(client, db_session, user_language="de")
+    admin, user, pointer = await _setup(client, db_session, user_language="uk")
     lost = {
         "id": str(uuid4()),
         "thread_id": str(pointer.comms_thread_id),
@@ -1075,7 +1075,7 @@ async def test_one_listener_holds_the_lock_and_a_dead_connection_frees_it() -> N
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("value", ["xx", "", "EN", "pt"])
+@pytest.mark.parametrize("value", ["xx", "", "EN", "pt", "de", "es"])
 async def test_a_support_language_the_backend_does_not_know_refuses_the_start(
     value: str,
     monkeypatch: pytest.MonkeyPatch,
@@ -1085,7 +1085,7 @@ async def test_a_support_language_the_backend_does_not_know_refuses_the_start(
         Settings()
 
 
-@pytest.mark.parametrize("value", ["en", "de", "es", "ru", "uk"])
+@pytest.mark.parametrize("value", ["en", "ru", "uk"])
 async def test_every_backend_language_is_a_support_language(
     value: str,
     monkeypatch: pytest.MonkeyPatch,
