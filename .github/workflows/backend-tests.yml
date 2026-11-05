@@ -1,0 +1,189 @@
+# =============================================================================
+# VELO CI -- the backend pytest suite on branch deploy-machine (BE-197)
+#
+# WHY. The stand rolls out only `test`, and ci.yml has no backend suite, so
+# without this job nothing checks the backend on deploy-machine: BE-191,
+# BE-189 and BE-192 would meet their first test run on the machine's
+# velo-test, all at once.
+#
+# TEMPORARY. When velo-test on the deploy machine is green and deploy-machine
+# is merged into `test`, the machine itself runs the tests before every
+# migration (protocol test.run), and this workflow is deleted -- it never
+# runs on `test` anyway (the branch filter below).
+#
+# THE SUITE OF THE STAND, NOT A SUITE OF ITS OWN. The stand runs
+# `python -m pytest tests/ -v --tb=short` inside the app container, next to
+# Postgres, Redis and velo-storage, with APP_ENV=production. Here the same
+# command runs in an image built from backend/Dockerfile, in one docker
+# network with:
+#   postgres, redis    -- the images docker-compose.yml pins, read FROM that
+#                         file (one place for the digests, BE-157);
+#   velo-storage       -- the stack docker-compose.storage.yml itself,
+#                         server and velo-storage-init: test_storage.py talks
+#                         to the live storage at velo-storage:9000 (the
+#                         address is a constant in app/core/storage.py) and
+#                         works only in the test-twin buckets the init makes.
+# comms-profile/ is mounted at /comms-profile, as compose binds it for app.
+#
+# FORM OF THE COMPOSE FILES. Both are read as they are, and BE-193 will
+# change docker-compose.storage.yml. Every step that depends on their form
+# checks it and fails LOUDLY when it moves -- a missing service, an image
+# without a digest, a stack on more than one network -- rather than testing
+# against something else.
+#
+# Every value below is invented for this job: none is a secret, and the
+# suite refuses placeholders (app/core/config.py), not invented values.
+# =============================================================================
+name: Backend tests
+
+on:
+  push:
+    branches: [deploy-machine]
+    paths:
+      - backend/**
+      - comms-profile/**
+      - docker-compose.yml
+      - docker-compose.storage.yml
+      - .github/workflows/backend-tests.yml
+  pull_request:
+    branches: [deploy-machine]
+    paths:
+      - backend/**
+      - comms-profile/**
+      - docker-compose.yml
+      - docker-compose.storage.yml
+      - .github/workflows/backend-tests.yml
+
+concurrency:
+  group: backend-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    name: backend -- pytest (full suite, backend image)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PROJECT: velo-ci
+      IMAGE: velo-ci-backend
+      # The storage stack's own three variables (docker-compose.storage.yml).
+      RUSTFS_ACCESS_KEY: velo-ci-root
+      RUSTFS_SECRET_KEY: velo-ci-root-secret-0123456789abcdef0123
+      STORAGE_SECRET_KEY: velo-ci-storage-secret-0123456789abcdef
+      POSTGRES_PASSWORD: velo-ci-postgres-password
+      REDIS_PASSWORD: velo-ci-redis-password
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the backend image (backend/Dockerfile, runtime)
+        run: docker build --target runtime -t "$IMAGE" ./backend
+
+      - name: Read the Postgres and Redis images from docker-compose.yml
+        id: images
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE/docker-compose.yml:/compose.yml:ro" \
+            "$IMAGE" python -c '
+          import sys, yaml
+          services = (yaml.safe_load(open("/compose.yml")) or {}).get("services") or {}
+          for name in ("postgres", "redis"):
+              image = (services.get(name) or {}).get("image")
+              if not isinstance(image, str) or not image.strip():
+                  sys.exit("docker-compose.yml: services.%s.image is missing or empty" % name)
+              if "@sha256:" not in image:
+                  sys.exit("docker-compose.yml: services.%s.image is not pinned by digest: %s" % (name, image))
+              print("%s=%s" % (name, image))
+          ' >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
+
+      - name: Start velo-storage and run velo-storage-init
+        run: |
+          compose() { docker compose -p "$PROJECT" -f docker-compose.storage.yml "$@"; }
+          compose up -d --wait velo-storage
+          # `up -d` does not wait for a one-shot job: the init runs in the
+          # foreground and its exit code decides this step.
+          compose run --rm -T velo-storage-init
+          # The network the tests join is the one the storage is on -- read
+          # from the running container, not assumed from the project name.
+          storage=$(compose ps -q velo-storage)
+          nets=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$storage")
+          count=$(echo "$nets" | wc -w)
+          if [ "$count" -ne 1 ]; then
+            echo "velo-storage is on $count networks ($nets); this job expects exactly one"
+            exit 1
+          fi
+          net=$(echo "$nets" | tr -d ' ')
+          echo "NET=$net" >> "$GITHUB_ENV"
+          echo "network: $net"
+
+      - name: Start Postgres and Redis on the same network
+        env:
+          PG_IMAGE: ${{ steps.images.outputs.postgres }}
+          REDIS_IMAGE: ${{ steps.images.outputs.redis }}
+        run: |
+          # -h 127.0.0.1, unlike compose's own healthcheck: during initdb the
+          # image runs a temporary server on the unix socket only, and a
+          # socket check reports it ready before the real server restarts.
+          docker run -d --name velo-ci-postgres --network "$NET" --network-alias postgres \
+            -e POSTGRES_USER=velo -e POSTGRES_DB=velo -e POSTGRES_PASSWORD \
+            --health-cmd "pg_isready -h 127.0.0.1 -U velo -d velo" \
+            --health-interval 2s --health-timeout 3s --health-retries 60 \
+            "$PG_IMAGE"
+          # The command and the check of docker-compose.yml's redis service.
+          docker run -d --name velo-ci-redis --network "$NET" --network-alias redis \
+            -e REDIS_PASSWORD \
+            --health-cmd 'export REDISCLI_AUTH=$REDIS_PASSWORD; redis-cli ping | grep -q PONG' \
+            --health-interval 2s --health-timeout 3s --health-retries 60 \
+            "$REDIS_IMAGE" sh -c 'exec redis-server --requirepass "$REDIS_PASSWORD" --appendonly yes'
+          for c in velo-ci-postgres velo-ci-redis; do
+            for _ in $(seq 1 90); do
+              status=$(docker inspect -f '{{.State.Health.Status}}' "$c")
+              [ "$status" = healthy ] && break
+              sleep 2
+            done
+            if [ "$status" != healthy ]; then
+              echo "$c is $status after 180 s"
+              docker logs "$c"
+              exit 1
+            fi
+            echo "$c: healthy"
+          done
+
+      - name: Run the backend suite (python -m pytest tests/)
+        run: |
+          docker run --rm --network "$NET" \
+            -v "$GITHUB_WORKSPACE/comms-profile:/comms-profile:ro" \
+            -e APP_ENV=production \
+            -e LOG_LEVEL=INFO \
+            -e SECRET_KEY=velo-ci-secret-key-0123456789abcdef0123456789abcdef \
+            -e POSTGRES_PASSWORD \
+            -e DATABASE_URL="postgresql+asyncpg://velo:${POSTGRES_PASSWORD}@postgres:5432/velo" \
+            -e REDIS_URL="redis://:${REDIS_PASSWORD}@redis:6379/0" \
+            -e CORS_ORIGINS=https://app.velo-ci.invalid \
+            -e PUBLIC_LINK_BASE=https://api.velo-ci.invalid \
+            -e MCP_OAUTH_ISSUER_URL=https://api.velo-ci.invalid \
+            -e TELEGRAM_BOT_TOKEN=123456:velo-ci-bot-token \
+            -e TELEGRAM_BOT_URL=https://telegram.me/velo_ci_bot \
+            -e TELEGRAM_LOGIN_CLIENT_ID=123456 \
+            -e TELEGRAM_LOGIN_CLIENT_SECRET=velo-ci-login-secret \
+            -e STRIPE_SECRET_KEY=TEST \
+            -e STRIPE_SUCCESS_URL=TEST \
+            -e STRIPE_CANCEL_URL=TEST \
+            -e ALLOW_STRIPE_STUB=true \
+            -e ZOOM_CLIENT_SECRET=TEST \
+            -e ALLOW_ZOOM_STUB=true \
+            -e STORAGE_SECRET_KEY \
+            "$IMAGE" python -m pytest tests/ -v --tb=short
+
+      - name: Logs of the services (on failure)
+        if: failure()
+        run: |
+          for c in velo-ci-postgres velo-ci-redis; do
+            echo "::group::$c"; docker logs "$c" 2>&1 | tail -n 200 || true; echo "::endgroup::"
+          done
+          echo "::group::velo-storage"
+          docker compose -p "$PROJECT" -f docker-compose.storage.yml logs --no-color --tail 200 || true
+          echo "::endgroup::"
