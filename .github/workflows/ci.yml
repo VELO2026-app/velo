@@ -3,7 +3,8 @@
 #
 # Two jobs, no agents, no judgment:
 #   frontend    — the FE-73 zero-warning budget + prettier + vitest + vue-tsc
-#                 build, mirroring the pre-push hook (closes --no-verify).
+#                 build, mirroring the pre-push hook (closes --no-verify),
+#                 then the whitelabel build-matrix gate (FE-114).
 #   drift-check — regenerate frontend/src/api/generated.ts from the app's own
 #                 OpenAPI schema and fail on any diff. Read-only w.r.t. the
 #                 backend. The generator is deterministic by contract
@@ -65,6 +66,15 @@ jobs:
 
       - name: Build (vue-tsc + vite)
         run: pnpm build
+
+      # tz-whitelabel F5 (FE-114): the build matrix IS the whitelabel gate --
+      # three full editions (golden + 2 reference skins) + the feature-cut
+      # one (VITE_FEATURES=ai: payments chunks must be physically absent),
+      # then a full restore build. ~5 vite builds, 3-4 min. Runs AFTER the
+      # plain build so a red matrix reads as the whitelabel gate failing,
+      # not as "the app does not build".
+      - name: Build matrix (whitelabel gate)
+        run: pnpm build:matrix
 
   drift-check:
     name: generated.ts drift
