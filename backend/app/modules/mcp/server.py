@@ -10,7 +10,7 @@
 # refusals; a difference found between them is a defect.
 #
 # THE STACK, outside in:
-#   McpGate (this module)    killswitch, public-host refusal, Bearer -> 401,
+#   McpGate (this module)    killswitch, Bearer -> 401,
 #                            token verification in its own short session.
 #                            Two kinds of token open it: a personal token and
 #                            an OAuth access token (BE-141, oauth.py) -- same
@@ -56,7 +56,6 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Annotated, Any, Literal
-from urllib.parse import urlsplit
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -119,14 +118,6 @@ class McpCaller:
 _STATE_KEY = "mcp_caller"
 
 
-def _public_host() -> str | None:
-    """Host of the public short-link domain, or None when it is not set.
-    /mcp must not be served there (tz-mcp §3); nginx proxies that domain to
-    the same backend, so the refusal lives here."""
-    base = settings.public_link_base
-    return urlsplit(base).hostname if base else None
-
-
 async def _send_json(
     send, status: int, body: dict, headers: list | None = None
 ) -> None:
@@ -154,14 +145,14 @@ async def send_not_found(send) -> None:
 async def _unauthorized(send) -> None:
     # One answer for every reason -- no oracle (the same rule as
     # verify_mcp_token). WWW-Authenticate tells an MCP client to ask the
-    # user for credentials (tz-mcp §3); when OAuth is configured (BE-141) it
-    # also points at the protected resource metadata, which is how
+    # user for credentials (tz-mcp §3); it also points at the protected
+    # resource metadata (BE-141; OAuth is always configured, BE-192), which is how
     # claude.ai finds where to sign in (RFC 9728 §5.1).
-    from app.modules.mcp.oauth import oauth_configured, resource_metadata_url
+    from app.modules.mcp.oauth import resource_metadata_url
 
-    challenge = 'Bearer realm="velo-mcp"'
-    if oauth_configured():
-        challenge += f', resource_metadata="{resource_metadata_url()}"'
+    challenge = (
+        f'Bearer realm="velo-mcp", resource_metadata="{resource_metadata_url()}"'
+    )
     await _send_json(
         send,
         401,
@@ -170,18 +161,16 @@ async def _unauthorized(send) -> None:
     )
 
 
-def door_closed(scope) -> bool:
-    """True when this request must get the plain 404: MCP switched off, or
-    the request came in on the public short-link host (tz-mcp §3). Shared by
-    McpGate and the OAuth door (BE-141), so the two can never disagree."""
-    if not settings.mcp_enabled:
-        return True
-    host = next(
-        (v.decode("latin-1") for k, v in scope["headers"] if k == b"host"),
-        "",
-    )
-    public = _public_host()
-    return bool(public) and host.split(":", 1)[0].lower() == public.lower()
+def door_closed() -> bool:
+    """True when this request must get the plain 404: MCP switched off.
+    Shared by McpGate and the OAuth door (BE-141), so the two can never
+    disagree.
+
+    No refusal by host any more (BE-192): the public /z/{code} links live on
+    the API's own host (domains.api) -- the deploy machine has no separate
+    short-link domain -- so a refusal on the public-link host would close
+    /mcp on the only host it is served from."""
+    return not settings.mcp_enabled
 
 
 class McpGate:
@@ -191,7 +180,7 @@ class McpGate:
         self.inner = inner
 
     async def __call__(self, scope, receive, send) -> None:
-        if scope["type"] != "http" or door_closed(scope):
+        if scope["type"] != "http" or door_closed():
             await send_not_found(send)
             return
 

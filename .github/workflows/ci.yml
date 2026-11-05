@@ -89,9 +89,21 @@ jobs:
 
       - name: Regenerate generated.ts from the app's OpenAPI schema
         working-directory: backend
+        # app.main builds Settings at import: every required key (BE-192),
+        # invented -- the schema reads none of them.
         env:
-          APP_ENV: development
-          PUBLIC_LINK_BASE: http://localhost:8000
+          SERVER_ROLE: test
+          DATABASE_URL: postgresql+asyncpg://velo:velo@localhost:5432/velo
+          DOMAIN_FRONTEND: app.velo-ci.invalid
+          DOMAIN_API: api.velo-ci.invalid
+          TELEGRAM_BOT_TOKEN: 123456:velo-ci-bot-token
+          TELEGRAM_LOGIN_CLIENT_ID: '123456'
+          TELEGRAM_LOGIN_CLIENT_SECRET: velo-ci-login-secret
+          ZOOM_ACCOUNT_ID: velo-ci-zoom-account
+          ZOOM_CLIENT_ID: velo-ci-zoom-client
+          ZOOM_CLIENT_SECRET: velo-ci-zoom-secret
+          ZOOM_SDK_CLIENT_ID: velo-ci-zoom-sdk-client
+          ZOOM_SDK_CLIENT_SECRET: velo-ci-zoom-sdk-secret
           PYTHONPATH: ${{ github.workspace }}/backend
         run: |
           python -c "import json; from app.main import app; json.dump(app.openapi(), open('openapi.json', 'w'))"

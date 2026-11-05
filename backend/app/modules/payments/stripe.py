@@ -17,7 +17,7 @@
 #   no balance credited. Defense-in-depth against key leaks or bugs.
 #
 # F5 STUB MODE:
-#   When is_stripe_stub is True (STRIPE_SECRET_KEY="TEST"), topup
+#   When is_stripe_stub is True (SERVER_ROLE test or preview), topup
 #   bypasses Stripe entirely: creates a confirmed Payment, credits
 #   user balance via ledger, returns stripe_success_url as checkout_url.
 #   This allows full end-to-end testing without real Stripe keys.
@@ -199,8 +199,8 @@ async def _create_stub_topup(
 ) -> tuple[Payment, str]:
     """Stub topup: instant confirmation without Stripe.
 
-    Used when STRIPE_SECRET_KEY="TEST". Creates a confirmed Payment,
-    credits user balance via ledger, returns success URL.
+    Used when is_stripe_stub (SERVER_ROLE test or preview). Creates a
+    confirmed Payment, credits user balance via ledger, returns success URL.
 
     This enables full end-to-end testing of the topup flow
     (frontend -> backend -> balance update) without Stripe keys.

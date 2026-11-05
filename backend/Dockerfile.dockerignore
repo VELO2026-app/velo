@@ -23,8 +23,9 @@
 !backend/migrations/
 !backend/tests/
 !backend/pyproject.toml
-# T-14: documentation, not a secret; the test stage needs it (test_config.py).
-!backend/.env.example
+# BE-192: the test stage needs them (tests/test_primer_env.py); no values.
+!primer.yaml
+!docker-compose.yml
 !comms-profile/
 
 # Inside the allowed directories: local leftovers, never part of a build.

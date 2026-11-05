@@ -52,6 +52,7 @@ from app.core.events import SECTION_SUPPORT_KEY, SECTION_SUPPORT_LABEL
 from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
 from app.core.i18n import normalize_language
 from app.modules.support import translation
+from app.modules.support.purge import SUPPORT_SPAM_RETENTION_DAYS
 from app.modules.support.models import (
     CATEGORIES,
     STATUS_OPEN,
@@ -1175,7 +1176,7 @@ async def reopen_ticket(
     _, ticket = await _require_ticket(session, thread_id)
     if ticket.status == STATUS_OPEN:
         raise ConflictError("The ticket is open already")
-    cutoff = datetime.now(UTC) - timedelta(days=settings.support_spam_retention_days)
+    cutoff = datetime.now(UTC) - timedelta(days=SUPPORT_SPAM_RETENTION_DAYS)
     if ticket.status == STATUS_SPAM and ticket.status_changed_at <= cutoff:
         raise ConflictError("Spam older than the retention cannot come back")
     seen_status, seen_version = ticket.status, ticket.version

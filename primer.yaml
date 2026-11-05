@@ -36,7 +36,6 @@ stacks:
 
 env:
   # minted: the machine mints once, the value lives between rollouts
-  SECRET_KEY:           { source: minted }
   POSTGRES_PASSWORD:    { source: minted }
   REDIS_PASSWORD:       { source: minted }
   STORAGE_SECRET_KEY:   { source: minted }
@@ -44,12 +43,9 @@ env:
   RUSTFS_SECRET_KEY:    { source: minted }
   # passport
   EDITION:              { source: passport, key: edition, enum: editions }
-  APP_ENV:              { source: passport, key: server.role }
-  ALLOW_ZOOM_STUB:      { source: passport, key: server.role }
-  ALLOW_STRIPE_STUB:    { source: passport, key: server.role }
-  CORS_ORIGINS:         { source: passport, key: domains.frontend }
-  PUBLIC_LINK_BASE:     { source: passport, key: domains.api }
-  MCP_OAUTH_ISSUER_URL: { source: passport, key: domains.api }
+  SERVER_ROLE:          { source: passport, key: server.role }
+  DOMAIN_FRONTEND:      { source: passport, key: domains.frontend }
+  DOMAIN_API:           { source: passport, key: domains.api }
   API_BASE_URL:         { source: passport, key: domains.api }
   # params.velo.<name> of the passport
   SUPPORT_LANGUAGE:         { source: param }
@@ -61,6 +57,7 @@ env:
   ZOOM_CLIENT_SECRET:           { source: asked }
   ZOOM_SDK_CLIENT_SECRET:       { source: asked }
   TELEGRAM_LOGIN_CLIENT_SECRET: { source: asked }
+  TELEGRAM_BOT_TOKEN:           { source: asked }
   # seams of comms
   COMMS_API_URL:         { source: seam, from: comms }
   COMMS_SERVICE_TOKEN:   { source: seam, from: comms }

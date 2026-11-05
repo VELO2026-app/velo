@@ -812,7 +812,7 @@ class PracticeResponse(BaseModel):
     created_at: datetime
     updated_at: datetime | None
 
-    # T-35: OUR public link for this practice -- {PUBLIC_LINK_BASE}/z/{code}.
+    # T-35: OUR public link for this practice -- https://<domains.api>/z/{code}.
     # Replaces zoom_shared_join_url, which used to carry the RAW Zoom guest
     # URL here; no raw Zoom URL leaves the API on any path any more, so the
     # master's "Копировать" button cannot hand anyone a link that bypasses

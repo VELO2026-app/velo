@@ -1068,11 +1068,10 @@ def decode_practice_code(code: str) -> UUID | None:
 
 def build_public_practice_link(practice_id: UUID) -> str:
     """The full, shareable link for a practice. Assembled at the edge from
-    settings.public_link_base (arch decision 13, late binding: the intent
-    lives in the data, the domain in env, the URL is built at send time) --
+    settings.api_origin (arch decision 13, late binding: the intent lives in
+    the data, the domain in the passport, the URL is built at send time) --
     no domain is ever stored on a row."""
-    base = settings.public_link_base.rstrip("/")
-    return f"{base}/z/{encode_practice_code(practice_id)}"
+    return f"{settings.api_origin}/z/{encode_practice_code(practice_id)}"
 
 
 class ZoomEntryKind(enum.StrEnum):

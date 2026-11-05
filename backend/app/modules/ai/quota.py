@@ -5,8 +5,9 @@
 # WHAT IT BOUNDS. POST /api/v1/ai/transcribe is a PAID call: every request
 # that reaches the provider is billed to our key. Authentication alone let one
 # signed-in account spend the whole budget in a loop. This caps it at
-# settings.transcription_daily_limit transcriptions per person per UTC day
-# (owner decision: 60).
+# TRANSCRIPTION_DAILY_LIMIT transcriptions per person per UTC day (owner
+# decision: 60; a constant since BE-192 -- the owner's number, the same on
+# every instance).
 #
 # WHY HERE AND NOT IN transcription.py. That module is the provider client,
 # and it is deleted whole when voice moves to comms (BE-136,
@@ -63,12 +64,15 @@ from uuid import UUID
 
 import structlog
 
-from app.core.config import settings
 from app.core.exceptions import TooManyRequestsError
 from app.core.ratelimit import count_in_window
 from app.core.redis import get_redis
 
 logger = structlog.get_logger()
+
+# BE-67: transcriptions one person may make per UTC day (owner decision: 60).
+# Counted before the provider is called, failed calls included.
+TRANSCRIPTION_DAILY_LIMIT = 60
 
 # Two days: longer than any day the key can count, so the key never expires
 # while its date is still today. It only clears yesterday's key away.
@@ -115,11 +119,11 @@ async def consume_transcription_quota(
     count = await count_in_window(
         get_redis(), quota_key(user_id, day), QUOTA_KEY_TTL_SECONDS,
     )
-    if count > settings.transcription_daily_limit:
+    if count > TRANSCRIPTION_DAILY_LIMIT:
         logger.warning(
             "transcription_quota_exceeded",
             user_id=str(user_id),
             count=count,
-            limit=settings.transcription_daily_limit,
+            limit=TRANSCRIPTION_DAILY_LIMIT,
         )
         raise TranscriptionQuotaExceededError()

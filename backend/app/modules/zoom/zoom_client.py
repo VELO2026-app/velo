@@ -28,14 +28,12 @@
 #   of the functions below need asyncio.to_thread; wrapping an already-async
 #   call in one would just add a needless thread hop.
 #
-# STUB MODE: there is no Zoom sandbox for local dev. settings.is_zoom_stub
-#   (true whenever credentials are blank, or ZOOM_CLIENT_SECRET="TEST",
-#   mirroring the Stripe "TEST" sentinel) short-circuits every call below
-#   with deterministic fake data, so callers can exercise their control flow
-#   (success handling, failure handling, retry wiring) without real
-#   credentials. UNLIKE the Stripe stub, there is no startup-blocking guard
-#   here -- see the settings.is_zoom_stub docstring in core/config.py for
-#   why, and do not add one without re-reading that reasoning first.
+# STUB MODE: there is no Zoom sandbox. settings.is_zoom_stub short-circuits
+#   every call below with deterministic fake data, so callers can exercise
+#   their control flow (success handling, failure handling, retry wiring)
+#   without reaching Zoom. It is on for the test suite only (tests/conftest.py)
+#   -- never on an instance: every role runs on real Zoom keys (BE-192,
+#   owner ruling; see _zoom_stub in core/config.py).
 #
 # FAILURE SHAPE: every call raises ZoomAPIError (status_code, body) on a
 #   non-2xx response or a network failure. This module never swallows

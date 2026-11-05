@@ -54,7 +54,7 @@ from app.core.exceptions import TooManyRequestsError
 from app.core.i18n import normalize_language
 from app.core.ratelimit import count_in_window, limitable_source
 from app.core.redis import get_redis
-from app.core.telegram_links import normalize_telegram_url
+from app.core.telegram_links import TELEGRAM_LINK_DOMAIN, normalize_telegram_url
 from app.modules.users.models import User
 
 logger = structlog.get_logger()
@@ -263,8 +263,7 @@ def validate_telegram_init_data(init_data: str, bot_token: str) -> TelegramInitD
 #
 # The multiplier, not a new config key: config.py is a production gate this
 # handoff deliberately does not touch, and a knob with no operator asking for
-# it is not worth the .env.example entry, the doctor drift check and the
-# compatibility burden on existing boxes. It rides the two settings that
+# it is not worth a new instance value. It rides the two settings that
 # already exist (auth_rate_limit_max_requests / _window_seconds) so tuning
 # the auth limits still moves both together.
 #
@@ -385,7 +384,7 @@ async def upsert_user_on_login(
     # downstream (schemas, views, the DB) ever sees a dead host.
     # See app/core/telegram_links.py.
     photo_url = normalize_telegram_url(
-        telegram_user.get("photo_url"), settings.telegram_link_domain
+        telegram_user.get("photo_url"), TELEGRAM_LINK_DOMAIN
     )
 
     credentials = {

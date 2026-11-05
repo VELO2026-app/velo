@@ -21,23 +21,24 @@ services:
       context: .
       dockerfile: backend/Dockerfile
       target: runtime
+    # Every key here is a field of the backend's Settings (EDITION: from
+    # BE-182), and every field without a default is a key here
+    # (backend/tests/test_primer_env.py): a key Settings does not read would
+    # be ignored without a word.
     environment:
-      APP_ENV: ${APP_ENV:?}
+      # The role of the server (test | preview | prod); the backend decides
+      # from it whether payments run on the stub.
+      SERVER_ROLE: ${SERVER_ROLE:?}
       EDITION: ${EDITION:?}
-      SECRET_KEY: ${SECRET_KEY:?}
       DATABASE_URL: postgresql+asyncpg://velo:${POSTGRES_PASSWORD:?}@postgres:5432/velo
       REDIS_URL: redis://:${REDIS_PASSWORD:?}@redis:6379/0
       # Hosts of the instance's domains, not origins: the backend adds https://
       # (contract 3 rule 18).
-      CORS_ORIGINS: ${CORS_ORIGINS:?}
-      PUBLIC_LINK_BASE: ${PUBLIC_LINK_BASE:?}
-      MCP_OAUTH_ISSUER_URL: ${MCP_OAUTH_ISSUER_URL:?}
-      # The role of the server (test | prod | preview); the backend decides
-      # from it whether a stub is allowed.
-      ALLOW_ZOOM_STUB: ${ALLOW_ZOOM_STUB:?}
-      ALLOW_STRIPE_STUB: ${ALLOW_STRIPE_STUB:?}
+      DOMAIN_FRONTEND: ${DOMAIN_FRONTEND:?}
+      DOMAIN_API: ${DOMAIN_API:?}
       SUPPORT_LANGUAGE: ${SUPPORT_LANGUAGE:?}
       # Channels in transition: they leave with their hosts in egress.
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?}
       ZOOM_ACCOUNT_ID: ${ZOOM_ACCOUNT_ID:?}
       ZOOM_CLIENT_ID: ${ZOOM_CLIENT_ID:?}
       ZOOM_CLIENT_SECRET: ${ZOOM_CLIENT_SECRET:?}

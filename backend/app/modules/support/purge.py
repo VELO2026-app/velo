@@ -52,6 +52,11 @@ from app.modules.support.models import (
 
 logger = structlog.get_logger()
 
+# Owner ruling: the days a spam ticket can still come back before the purge
+# deletes it. A constant since BE-192 -- the owner's number, the same on every
+# instance; support/service.py refuses "not spam" past it.
+SUPPORT_SPAM_RETENTION_DAYS = 30
+
 # Tickets taken, and comms threads deleted, per step at most.
 PURGE_BATCH = 100
 
@@ -63,7 +68,7 @@ async def bury_spam(
     retention, under their row lock (SKIP LOCKED), become tombstones and
     purge rows, and their thread pointers go -- the tickets and their
     translation jobs with them, by cascade. Returns how many."""
-    cutoff = now - timedelta(days=settings.support_spam_retention_days)
+    cutoff = now - timedelta(days=SUPPORT_SPAM_RETENTION_DAYS)
     rows = (
         await session.execute(
             select(SupportTicket, SupportThread)
@@ -160,7 +165,7 @@ async def run_support_spam_purge() -> None:
     logger.info(
         "support_spam_purge_started",
         interval=settings.support_spam_purge_interval_seconds,
-        retention_days=settings.support_spam_retention_days,
+        retention_days=SUPPORT_SPAM_RETENTION_DAYS,
     )
     while True:
         try:

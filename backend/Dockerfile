@@ -14,10 +14,11 @@
 #                 backend/requirements-dev.txt, the same way.
 #   runtime       what runs on a server: the venv of `builder`, app/,
 #                 migrations/, alembic.ini, scripts/ -- no tests, no dev
-#                 tools, no .env.example. docker-compose.yml builds this.
+#                 tools. docker-compose.yml builds this.
 #   test          runtime + the venv of `builder-test` + tests/,
-#                 pyproject.toml (the pytest configuration), .env.example and
-#                 the comms profile at /comms-profile. primer.yaml's
+#                 pyproject.toml (the pytest configuration), primer.yaml and
+#                 docker-compose.yml at /, and the comms profile at
+#                 /comms-profile. primer.yaml's
 #                 test.target and CI (.github/workflows/backend-tests.yml) build
 #                 this; the suite runs in it, not in the runtime image.
 #
@@ -143,9 +144,12 @@ COPY --from=builder-test /opt/venv /opt/venv
 COPY backend/tests/ ./tests/
 # [tool.pytest.ini_options]: asyncio_mode = "auto", testpaths, cache_dir.
 COPY backend/pyproject.toml ./
-# T-14: documentation, not a secret (.env itself is never in the context) --
-# needed by test_config.py's sync test, which runs in this image.
-COPY backend/.env.example ./
+# BE-192: what the deploy machine is told about this product -- read by
+# tests/test_primer_env.py, which holds Settings, compose's app.environment
+# and primer.yaml's env and egress together. / is
+# where the tests' Path(__file__).resolve().parents[2] lands from /app/tests,
+# as for the comms profile below. Neither file holds a value (protocol 5.1).
+COPY primer.yaml docker-compose.yml /
 # The comms product profile, which the suite checks every notification
 # against (tests/notification_guard.py). /comms-profile is where the tests'
 # Path(__file__).resolve().parents[2] / "comms-profile" lands from

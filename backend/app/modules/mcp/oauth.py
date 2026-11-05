@@ -56,11 +56,10 @@
 # progress and codes: Redis, keyed by the sha256 of their secret, with a
 # TTL. Redis is disposable; losing it loses only logins in progress.
 #
-# THE DOOR. Every path here sits behind OAuthDoor: MCP switched off or the
-# public short-link host -> the app's plain 404 (the same door_closed as
-# /mcp); OAuth not configured -> the same 404. "Configured" means the three
-# optional keys are all set (config.py, MCP_OAUTH_ISSUER_URL and the two
-# TELEGRAM_LOGIN_* keys).
+# THE DOOR. Every path here sits behind OAuthDoor: MCP switched off -> the
+# app's plain 404 (the same door_closed as /mcp). OAuth is always configured
+# (BE-192): the issuer is the API's own origin and the two TELEGRAM_LOGIN_*
+# keys are required at start.
 #
 # SECRETS never leave as text: codes, access and refresh tokens, Telegram's
 # code and id_token, the request and consent ids are not logged, not
@@ -166,12 +165,8 @@ _S256_CHALLENGE_RE = re.compile(r"[A-Za-z0-9_-]{43}")
 # ---------------------------------------------------------------------------
 
 
-def oauth_configured() -> bool:
-    return bool(settings.mcp_oauth_issuer_url) and telegram_oidc.configured()
-
-
 def issuer_url() -> str:
-    return settings.mcp_oauth_issuer_url.rstrip("/")
+    return settings.api_origin
 
 
 def resource_url() -> str:
@@ -229,9 +224,8 @@ def _https_redirect(uri: object) -> bool:
 # fetches that URL (draft-ietf-oauth-client-id-metadata-document; Anthropic's
 # connector docs). It is a request to a URL a client chose, so it is fenced:
 #   - the URL: https, port 443, a path, no query, no fragment, no userinfo,
-#     at most 2048 characters, and its host on mcp_oauth_cimd_allowed_hosts
-#     (claude.ai and chatgpt.com by default) -- anything else is refused
-#     unfetched;
+#     at most 2048 characters, and its host in MCP_OAUTH_CIMD_ALLOWED_HOSTS
+#     (claude.ai and chatgpt.com) -- anything else is refused unfetched;
 #   - the request: no redirects followed, mcp_oauth_cimd_timeout_seconds,
 #     at most mcp_oauth_cimd_max_bytes read, status 200 and an
 #     application/json body, or refused;
@@ -262,6 +256,14 @@ def _https_redirect(uri: object) -> bool:
 # used either: the client's own word has changed.
 # The fetch happens outside any database session (par0 §8).
 
+# The hosts whose CIMD documents are fetched (owner ruling, BE-170): the way
+# claude.ai recommends and ChatGPT prefers. Any other host is refused -- the
+# server would otherwise fetch a URL a stranger names. A constant since
+# BE-192 ("what to trust" is the product's decision, the same on every
+# instance, protocol 5.2.1); it must equal the CIMD hosts of `egress` in
+# primer.yaml, which tests/test_mcp_oauth.py checks.
+MCP_OAUTH_CIMD_ALLOWED_HOSTS = frozenset({"claude.ai", "chatgpt.com"})
+
 _CIMD_MAX_URL = 2048
 _CIMD_UNREACHABLE = frozenset({"unreachable", "status"})
 
@@ -270,14 +272,6 @@ class _CimdRefusedError(Exception):
     def __init__(self, reason: str) -> None:
         super().__init__(reason)
         self.reason = reason
-
-
-def _cimd_allowed_hosts() -> set[str]:
-    return {
-        h.strip().lower()
-        for h in settings.mcp_oauth_cimd_allowed_hosts.split(",")
-        if h.strip()
-    }
 
 
 def _cimd_url_refusal(url: str) -> str | None:
@@ -296,7 +290,7 @@ def _cimd_url_refusal(url: str) -> str | None:
         return "bad_port"
     if parts.path in ("", "/") or parts.query or parts.fragment:
         return "bad_path"
-    if parts.hostname.lower() not in _cimd_allowed_hosts():
+    if parts.hostname.lower() not in MCP_OAUTH_CIMD_ALLOWED_HOSTS:
         return "host_not_allowed"
     return None
 
@@ -950,7 +944,7 @@ class OAuthDoor:
     """ASGI endpoint main.py routes every OAUTH_PATHS entry to."""
 
     async def __call__(self, scope, receive, send) -> None:
-        if scope["type"] != "http" or door_closed(scope) or not oauth_configured():
+        if scope["type"] != "http" or door_closed():
             await send_not_found(send)
             return
         if scope["path"] == REGISTER_PATH and scope["method"] == "POST":

@@ -73,23 +73,23 @@ async def setup_infrastructure():
     # Phase 6 / T0: relay tests drive relay_pending_batch manually --
     # the same no-background-race rationale as the workers above.
     settings.comms_relay_enabled = False
-    # PROMPT №543: pin Zoom to stub mode for the whole suite. Until now every
-    # test server happened to have no real Zoom credentials, so
-    # settings.is_zoom_stub was True by ambient accident -- several tests
-    # asserted on that accident instead of pinning it (see the four tests
-    # named in the PROMPT №543 postmortem). The day the deploy container
-    # gained real credentials (owner connected them), is_zoom_stub flipped
-    # to False mid-suite and those tests took the opposite branch. Setting
-    # the secret to the "TEST" sentinel is_zoom_stub already checks for
-    # mirrors the existing is_stripe_stub convention (config.py) and reads
-    # honestly: this is a deliberate stub marker, not a blanked-out real
-    # value that could be misread as "never configured". A test that
-    # explicitly wants non-stub Zoom (e.g.
-    # test_zoom_attendance_decision.py's
+    # PROMPT №543: pin Zoom to stub mode for the whole suite. Several tests
+    # once asserted on a server that happened to have no Zoom keys instead of
+    # pinning the stub, and took the opposite branch the day real keys
+    # arrived. Since BE-192 the stub exists for the suite alone (no role runs
+    # it, owner ruling) and every instance -- velo-test, whose environment
+    # the deploy machine runs this suite with, included -- carries real Zoom
+    # keys, so the pin is what keeps every test away from Zoom. A test that
+    # explicitly wants non-stub Zoom (e.g. test_zoom_attendance_decision.py's
     # test_zoom_tracked_practice_defers_instead_of_deciding_immediately)
-    # monkeypatches all three credential fields itself and is unaffected --
-    # monkeypatch snapshots and restores whatever was here before it ran.
-    settings.zoom_client_secret = "TEST"
+    # monkeypatches _zoom_stub to False itself -- monkeypatch snapshots and
+    # restores whatever was here before it ran.
+    settings._zoom_stub = True
+    # BE-192: the Stripe stub follows SERVER_ROLE (test and preview). The
+    # suite runs only on `test` (protocol 6.2), and is pinned to it all the
+    # same, for the reason of the Zoom pin above: a test's branch must not
+    # depend on the environment it happens to run in.
+    settings.server_role = "test"
 
     # BE-86 / BE-191: the suite runs in the `*_test` database it is GIVEN
     # (DATABASE_URL, made by the deploy machine), never in the application's,

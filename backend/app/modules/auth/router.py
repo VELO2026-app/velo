@@ -25,7 +25,6 @@ from app.core.database import get_db_session
 from app.core.exceptions import (
     BadRequestError,
     ForbiddenError,
-    NotFoundError,
     TooManyRequestsError,
     VeloError,
 )
@@ -183,8 +182,6 @@ async def auth_telegram(
 # ---------------------------------------------------------------------------
 #
 # Every refusal is a code the login screen turns into a phrase:
-#   404 login_not_configured  -- no Telegram login keys, or CORS_ORIGINS is
-#                                not exactly one https origin (return_url);
 #   400 login_expired         -- the state is unknown, expired or taken;
 #   400 login_foreign         -- the return came to a browser that did not
 #                                start this sign-in (the mark does not match);
@@ -199,13 +196,6 @@ def _unavailable() -> VeloError:
         message="Service temporarily unavailable. Try again in a minute.",
         code="service_unavailable",
         status_code=503,
-    )
-
-
-def _not_configured() -> NotFoundError:
-    return NotFoundError(
-        "Browser sign-in is not configured on this server",
-        code="login_not_configured",
     )
 
 
@@ -229,12 +219,9 @@ async def browser_login_start(
     touches the database.
     """
     await _source_limit()
-    redirect_uri = browser_login.return_url()
-    if redirect_uri is None or not telegram_oidc.configured():
-        raise _not_configured()
     try:
         url, state = await browser_login.start(
-            redirect_uri=redirect_uri, mark=body.mark
+            redirect_uri=browser_login.return_url(), mark=body.mark
         )
     except RedisError:
         raise _unavailable() from None
@@ -262,9 +249,6 @@ async def browser_login_complete(
       6. upsert -> refuse a deactivated account -> session in Redis.
     """
     await _source_limit()
-    if browser_login.return_url() is None or not telegram_oidc.configured():
-        raise _not_configured()
-
     try:
         started = await browser_login.take(body.state)
     except RedisError:

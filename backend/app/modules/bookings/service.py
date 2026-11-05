@@ -855,12 +855,12 @@ async def _finalize_practice_core(
 
     Transitions:
     - NO active Zoom meeting, OR an active meeting created in Zoom STUB mode
-      (PROMPT №530, settings.is_zoom_stub -- no real credentials configured):
+      (PROMPT №530, settings.is_zoom_stub -- the test suite's, BE-192):
       confirmed + (joined_at IS NOT NULL OR PRE check-in) -> attended, else
       -> no_show. Decided HERE, immediately, tagged legacy_proxy (unchanged
       from before E21 step F -- covers practices published before Zoom
-      shipped, AND every practice on a server with no real Zoom credentials
-      today, since a stub meeting can never produce a real report).
+      shipped, and every stub meeting, since a stub meeting can never
+      produce a real report).
     - HAS an active meeting AND real credentials are configured (E21 step
       F): confirmed bookings are DEFERRED -- left exactly as CONFIRMED, NOT
       flipped here, NOT included in this call's diary projection or
@@ -908,8 +908,8 @@ async def _finalize_practice_core(
             )
         )
     ).scalar_one_or_none()
-    # PROMPT №530: an active meeting created in Zoom STUB mode (no real
-    # credentials configured -- true on every server today) can never
+    # PROMPT №530: an active meeting created in Zoom STUB mode (the test
+    # suite's -- no instance runs the stub, BE-192) can never
     # produce a real attendance report; zoom/report_poller.py would poll
     # forever and the deadline fallback (settings.
     # zoom_attendance_decision_deadline_minutes, 120) would be the ONLY
@@ -920,9 +920,8 @@ async def _finalize_practice_core(
     # stub meeting still gets created and exercised normally everywhere
     # else (reschedule, retry, registrant creation, report ingestion all
     # stay fully covered by stub mode, per zoom_client.py's own docstring --
-    # only THIS decision treats it as untracked). The moment real
-    # credentials are configured, settings.is_zoom_stub flips to False and
-    # the deferral switches itself back on with no other code change.
+    # only THIS decision treats it as untracked). Outside the stub
+    # settings.is_zoom_stub is False and the deferral is on.
     zoom_tracked = zoom_meeting is not None and not settings.is_zoom_stub
 
     attended_count = 0

@@ -19,9 +19,8 @@
 # THE LIMIT IS PATCHED to small numbers rather than driven to 60 with sixty
 # requests, except where 60 itself is the point -- there the counter is
 # seeded to 59 through the module's own key function, so the test sends two
-# requests, not sixty. The default being 60 is asserted on the field, not on
-# settings: a stand where the owner set the limit to 2 for a live check must
-# not turn this file red.
+# requests, not sixty. The limit itself is a constant of the code (BE-192),
+# patched on the module, quota.TRANSCRIPTION_DAILY_LIMIT.
 # =============================================================================
 
 import asyncio
@@ -38,11 +37,10 @@ from uuid import UUID, uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from pydantic import ValidationError
 from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import Settings, settings
+from app.core.config import settings
 from app.core.redis import get_redis
 from app.main import app
 from app.modules.ai import quota
@@ -112,10 +110,10 @@ def _today_key(user_id: UUID) -> str:
 # ===================================================================
 
 
-def test_the_default_limit_is_sixty() -> None:
-    """The owner's number lives on the field, where a stand's own .env
-    cannot hide it from this test."""
-    assert Settings.model_fields["transcription_daily_limit"].default == 60
+def test_the_limit_is_sixty() -> None:
+    """The owner's number, a constant in the code since BE-192 -- no
+    instance value can move it."""
+    assert quota.TRANSCRIPTION_DAILY_LIMIT == 60
 
 
 async def test_up_to_the_limit_passes_and_the_next_never_reaches_the_provider(
@@ -126,7 +124,7 @@ async def test_up_to_the_limit_passes_and_the_next_never_reaches_the_provider(
     token, _ = await _login(client)
     transcribe = AsyncMock(return_value="привет")
 
-    with patch.object(settings, "transcription_daily_limit", 3), \
+    with patch.object(quota, "TRANSCRIPTION_DAILY_LIMIT", 3), \
          patch(_TRANSCRIBE_SEAM, transcribe):
         passed = [await _transcribe(client, token) for _ in range(3)]
         refused = await _transcribe(client, token)
@@ -147,7 +145,7 @@ async def test_the_sixtieth_passes_and_the_sixty_first_is_refused(
     await get_redis().set(_today_key(user_id), 59, ex=QUOTA_KEY_TTL_SECONDS)
     transcribe = AsyncMock(return_value="шестидесятая")
 
-    with patch.object(settings, "transcription_daily_limit", 60), \
+    with patch.object(quota, "TRANSCRIPTION_DAILY_LIMIT", 60), \
          patch(_TRANSCRIBE_SEAM, transcribe):
         sixtieth = await _transcribe(client, token)
         sixty_first = await _transcribe(client, token)
@@ -158,26 +156,13 @@ async def test_the_sixtieth_passes_and_the_sixty_first_is_refused(
     assert transcribe.await_count == 1
 
 
-async def test_a_zero_limit_refuses_the_first_take(client: AsyncClient) -> None:
-    """0 is "voice input off", without a branch of its own."""
-    token, _ = await _login(client)
-    transcribe = AsyncMock(return_value="никогда")
-
-    with patch.object(settings, "transcription_daily_limit", 0), \
-         patch(_TRANSCRIBE_SEAM, transcribe):
-        response = await _transcribe(client, token)
-
-    assert response.status_code == 429
-    transcribe.assert_not_awaited()
-
-
 async def test_two_people_do_not_share_a_counter(client: AsyncClient) -> None:
     """One person's used-up day leaves the next person's untouched."""
     first, _ = await _login(client, 74171)
     second, _ = await _login(client, 74172)
     transcribe = AsyncMock(return_value="текст")
 
-    with patch.object(settings, "transcription_daily_limit", 1), \
+    with patch.object(quota, "TRANSCRIPTION_DAILY_LIMIT", 1), \
          patch(_TRANSCRIBE_SEAM, transcribe):
         assert (await _transcribe(client, first)).status_code == 200
         assert (await _transcribe(client, first)).status_code == 429
@@ -198,7 +183,7 @@ async def test_a_new_utc_day_gives_a_fresh_count() -> None:
     user_id = uuid4()
     late = datetime(2026, 10, 31, 23, 59, 58, tzinfo=UTC)
 
-    with patch.object(settings, "transcription_daily_limit", 1):
+    with patch.object(quota, "TRANSCRIPTION_DAILY_LIMIT", 1):
         await consume_transcription_quota(user_id, now=late)
         with pytest.raises(TranscriptionQuotaExceededError):
             await consume_transcription_quota(
@@ -260,7 +245,7 @@ async def test_a_broken_payload_spends_nothing(
     token, _ = await _login(client)
     transcribe = AsyncMock(return_value="текст")
 
-    with patch.object(settings, "transcription_daily_limit", 1), \
+    with patch.object(quota, "TRANSCRIPTION_DAILY_LIMIT", 1), \
          patch(_TRANSCRIBE_SEAM, transcribe):
         broken = await _transcribe(client, token, audio)
         good = await _transcribe(client, token)
@@ -312,7 +297,7 @@ async def test_a_failed_provider_call_still_spends_a_unit(
     token, _ = await _login(client)
     transcribe = AsyncMock(side_effect=failure)
 
-    with patch.object(settings, "transcription_daily_limit", 1), \
+    with patch.object(quota, "TRANSCRIPTION_DAILY_LIMIT", 1), \
          patch(_TRANSCRIBE_SEAM, transcribe):
         failed = await _transcribe(client, token)
         next_take = await _transcribe(client, token)
@@ -331,7 +316,7 @@ async def test_a_server_without_a_key_spends_the_quota_first(
     lasts, and quota_exceeded after."""
     token, _ = await _login(client)
 
-    with patch.object(settings, "transcription_daily_limit", 1), \
+    with patch.object(quota, "TRANSCRIPTION_DAILY_LIMIT", 1), \
          patch.object(settings, "openrouter_api_key", ""):
         first = await _transcribe(client, token)
         second = await _transcribe(client, token)
@@ -398,7 +383,7 @@ async def test_two_takes_racing_at_the_limit_let_exactly_one_through(
         await consume_transcription_quota(user)
 
     transcribe = AsyncMock(return_value="один")
-    with patch.object(settings, "transcription_daily_limit", 60), \
+    with patch.object(quota, "TRANSCRIPTION_DAILY_LIMIT", 60), \
          patch(_TRANSCRIBE_SEAM, transcribe), \
          patch(_QUOTA_SEAM, both_at_once):
         responses = await asyncio.wait_for(
@@ -409,35 +394,6 @@ async def test_two_takes_racing_at_the_limit_let_exactly_one_through(
     assert sorted(r.status_code for r in responses) == [200, 429]
     assert await get_redis().get(_today_key(user_id)) == "61"
     assert transcribe.await_count == 1
-
-
-# ===================================================================
-# The setting
-# ===================================================================
-
-
-@pytest.mark.parametrize("raw", ["", "   "])
-def test_an_empty_limit_means_sixty(
-    monkeypatch: pytest.MonkeyPatch, raw: str,
-) -> None:
-    """`velo env set TRANSCRIPTION_DAILY_LIMIT` with an empty value writes
-    the key empty. Unvalidated, that is int_parsing at import and a backend
-    that does not start; here it is the owner's 60."""
-    monkeypatch.setenv("TRANSCRIPTION_DAILY_LIMIT", raw)
-    assert Settings(_env_file=None).transcription_daily_limit == 60
-
-
-def test_a_set_limit_is_read_and_a_negative_one_is_refused(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The pair of the empty case: a real value is taken as given, and a
-    nonsense one stops the load instead of meaning something by accident."""
-    monkeypatch.setenv("TRANSCRIPTION_DAILY_LIMIT", "2")
-    assert Settings(_env_file=None).transcription_daily_limit == 2
-
-    monkeypatch.setenv("TRANSCRIPTION_DAILY_LIMIT", "-1")
-    with pytest.raises(ValidationError):
-        Settings(_env_file=None)
 
 
 # ===================================================================

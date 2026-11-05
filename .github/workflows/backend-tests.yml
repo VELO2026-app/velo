@@ -13,7 +13,7 @@
 #
 # THE SUITE AS THE DEPLOY MACHINE RUNS IT, NOT A SUITE OF ITS OWN. The
 # command is the one of the stand, `python -m pytest tests/ -v --tb=short`
-# with APP_ENV=production, and it runs in the stage `test` of
+# with SERVER_ROLE=test (BE-192), and it runs in the stage `test` of
 # backend/Dockerfile (BE-189: the suite no longer ships in the runtime
 # image), built from the repository root with the build arguments the deploy
 # machine gives. The database is the machine's (protocol 7.1, BE-191): a
@@ -44,8 +44,9 @@
 # without a digest, a stack on more than one network -- rather than testing
 # against something else.
 #
-# Every value below is invented for this job: none is a secret, and the
-# suite refuses placeholders (app/core/config.py), not invented values.
+# Every value below is invented for this job: none is a secret. The suite's
+# environment is what docker-compose.yml's app.environment passes (BE-192):
+# every required key of app/core/config.py, none it does not read.
 # =============================================================================
 name: Backend tests
 
@@ -57,6 +58,7 @@ on:
       - comms-profile/**
       - docker-compose.yml
       - docker-compose.storage.yml
+      - primer.yaml
       - .github/workflows/backend-tests.yml
   pull_request:
     branches: [deploy-machine]
@@ -65,6 +67,7 @@ on:
       - comms-profile/**
       - docker-compose.yml
       - docker-compose.storage.yml
+      - primer.yaml
       - .github/workflows/backend-tests.yml
 
 concurrency:
@@ -134,7 +137,7 @@ jobs:
           for name in ("uvicorn", "fastapi", "alembic", "sqlalchemy"):
               module(name, True)
           dev = kind == "test"
-          for path in ("/app/tests", "/app/pyproject.toml", "/app/.env.example",
+          for path in ("/app/tests", "/app/pyproject.toml", "/primer.yaml", "/docker-compose.yml",
                        "/comms-profile/types.yaml", "/opt/venv/bin/pytest", "/opt/venv/bin/ruff"):
               (present if dev else absent)(path)
           for name in ("pytest", "pytest_asyncio", "ruff"):
@@ -281,25 +284,20 @@ jobs:
       - name: Run the backend suite (python -m pytest tests/)
         run: |
           docker run --rm --network "$NET" \
-            -e APP_ENV=production \
-            -e LOG_LEVEL=INFO \
-            -e SECRET_KEY=velo-ci-secret-key-0123456789abcdef0123456789abcdef \
-            -e POSTGRES_PASSWORD \
+            -e SERVER_ROLE=test \
             -e DATABASE_URL="postgresql+asyncpg://velo:${POSTGRES_PASSWORD}@postgres:5432/velo_test" \
             -e REDIS_URL="redis://:${REDIS_PASSWORD}@redis:6379/0" \
-            -e CORS_ORIGINS=https://app.velo-ci.invalid \
-            -e PUBLIC_LINK_BASE=https://api.velo-ci.invalid \
-            -e MCP_OAUTH_ISSUER_URL=https://api.velo-ci.invalid \
+            -e DOMAIN_FRONTEND=app.velo-ci.invalid \
+            -e DOMAIN_API=api.velo-ci.invalid \
             -e TELEGRAM_BOT_TOKEN=123456:velo-ci-bot-token \
             -e TELEGRAM_BOT_URL=https://telegram.me/velo_ci_bot \
             -e TELEGRAM_LOGIN_CLIENT_ID=123456 \
             -e TELEGRAM_LOGIN_CLIENT_SECRET=velo-ci-login-secret \
-            -e STRIPE_SECRET_KEY=TEST \
-            -e STRIPE_SUCCESS_URL=TEST \
-            -e STRIPE_CANCEL_URL=TEST \
-            -e ALLOW_STRIPE_STUB=true \
-            -e ZOOM_CLIENT_SECRET=TEST \
-            -e ALLOW_ZOOM_STUB=true \
+            -e ZOOM_ACCOUNT_ID=velo-ci-zoom-account \
+            -e ZOOM_CLIENT_ID=velo-ci-zoom-client \
+            -e ZOOM_CLIENT_SECRET=velo-ci-zoom-secret \
+            -e ZOOM_SDK_CLIENT_ID=velo-ci-zoom-sdk-client \
+            -e ZOOM_SDK_CLIENT_SECRET=velo-ci-zoom-sdk-secret \
             -e STORAGE_SECRET_KEY \
             "$IMAGE" python -m pytest tests/ -v --tb=short
 

@@ -24,7 +24,6 @@ from app.core.database import get_db_reader, get_db_session
 from app.core.exceptions import NotFoundError
 from app.modules.auth.dependencies import get_current_user, get_current_user_write
 from app.modules.mcp.models import McpScope, scope_label
-from app.modules.mcp.oauth import oauth_configured
 from app.modules.mcp.schemas import (
     McpScopeLabel,
     McpTokenCreate,
@@ -90,7 +89,8 @@ async def list_mcp_tokens_endpoint(
     rows = await list_mcp_tokens(user, session)
     return McpTokenListResponse(
         items=[McpTokenItem.model_validate(r) for r in rows],
-        oauth_connect_available=oauth_configured(),
+        # Always true (schemas.py says why the field stays).
+        oauth_connect_available=True,
         scope_labels=[
             McpScopeLabel(scope=scope, label=scope_label(scope)) for scope in McpScope
         ],
