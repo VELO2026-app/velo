@@ -5,11 +5,10 @@
 // today's behavior as its default, so this suite pins the golden contract:
 // a build without a passport is indistinguishable from the app as it ships.
 //
-// brand/defaultLocale/locales/features are a module-eval snapshot (i18n and
-// the manifest read them once), so env variants are exercised through
-// resetModules + re-import. apiBaseUrl/telegramBotUrl are deliberate GETTERS:
-// the read stays live, which keeps per-mount semantics for views and lets
-// vi.stubEnv work after import -- the third block pins exactly that.
+// Every seam is a GETTER (FE-129): the runtime config must be visible at any
+// access time -- launch.ts applies it only after this module has first been
+// imported -- and vi.stubEnv keeps working after import too. Env-variant
+// suites still go through resetModules + re-import for clean module state.
 // =============================================================================
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -80,6 +79,64 @@ describe('INSTANCE -- locale parsing (tz-i18n 0.5)', () => {
     const { INSTANCE } = await loadInstance()
 
     expect(INSTANCE.locales).toEqual(['ru'])
+  })
+})
+
+describe('INSTANCE -- runtime config.json (FE-129)', () => {
+  it('runtime values win over the build env', async () => {
+    vi.stubEnv('VITE_BRAND', 'ENV-БРЕНД')
+    const { INSTANCE, applyInstanceConfig } = await loadInstance()
+
+    applyInstanceConfig({
+      apiBaseUrl: 'https://api.school.example',
+      telegramBotUrl: 'https://t.me/schoolbot',
+      defaultLocale: 'en',
+      locales: 'en,ru',
+      brand: 'ШКОЛА',
+    })
+
+    expect(INSTANCE.apiBaseUrl).toBe('https://api.school.example')
+    expect(INSTANCE.telegramBotUrl).toBe('https://t.me/schoolbot')
+    expect(INSTANCE.defaultLocale).toBe('en')
+    expect(INSTANCE.locales).toEqual(['en', 'ru'])
+    expect(INSTANCE.brand).toBe('ШКОЛА')
+  })
+
+  it('empty runtime values fall through to the build env and golden defaults', async () => {
+    vi.stubEnv('VITE_BRAND', 'ENV-БРЕНД')
+    const { INSTANCE, applyInstanceConfig } = await loadInstance()
+
+    applyInstanceConfig({
+      apiBaseUrl: '',
+      telegramBotUrl: '',
+      defaultLocale: '',
+      locales: '',
+      brand: '',
+    })
+
+    expect(INSTANCE.apiBaseUrl).toBe('')
+    expect(INSTANCE.telegramBotUrl).toBe('https://telegram.me/veloappbot')
+    expect(INSTANCE.defaultLocale).toBe('ru')
+    expect(INSTANCE.locales).toEqual(['ru'])
+    expect(INSTANCE.brand).toBe('ENV-БРЕНД')
+  })
+
+  it('a runtime defaultLocale outside the declared set falls back to ru', async () => {
+    const { INSTANCE, applyInstanceConfig } = await loadInstance()
+
+    applyInstanceConfig({ defaultLocale: 'de' })
+
+    expect(INSTANCE.defaultLocale).toBe('ru')
+  })
+
+  it('null/undefined config resets to build env and golden', async () => {
+    const { INSTANCE, applyInstanceConfig } = await loadInstance()
+
+    applyInstanceConfig({ brand: 'ШКОЛА' })
+    expect(INSTANCE.brand).toBe('ШКОЛА')
+
+    applyInstanceConfig(null)
+    expect(INSTANCE.brand).toBe('VELO')
   })
 })
 

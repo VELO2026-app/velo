@@ -1,0 +1,7 @@
+{
+  "apiBaseUrl": "${API_BASE_URL}",
+  "telegramBotUrl": "${TELEGRAM_BOT_URL}",
+  "defaultLocale": "${DEFAULT_LOCALE}",
+  "locales": "${LOCALES}",
+  "brand": "${BRAND}"
+}

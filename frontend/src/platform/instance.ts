@@ -2,11 +2,14 @@
 // VELO Frontend -- Instance Passport Seams (tz-whitelabel §1; tz-i18n 0.5)
 // =============================================================================
 //
-// The ONE place that reads instance-level VITE_* values off the build.
-// Every seam carries today's behavior as its default, so a build without a
-// passport is indistinguishable from the app as it ships now (the golden
-// build). tz-whitelabel F1: all seven former import.meta.env read sites
-// (5x VITE_API_BASE_URL, 2x VITE_TELEGRAM_BOT_URL) go through INSTANCE now.
+// The ONE place that reads instance-level values. Under the deploy machine
+// (FE-129) the container's nginx renders /config.json from its environment
+// at start, and launch.ts applies it here BEFORE the app module graph is
+// imported; every seam reads the runtime value first, then the build-time
+// VITE_* variables (local dev builds), then the golden defaults. A build
+// with neither input is indistinguishable from the app as it ships now (the
+// golden build). tz-whitelabel F1: all former direct import.meta.env read
+// sites go through INSTANCE now.
 //
 // The locale set is the product's languages -- the same set as the backend's
 // (backend core/i18n.py SUPPORTED_LANGUAGES: en, ru, uk; BE-188), and exactly
@@ -35,6 +38,33 @@ function parseLocales(value: string | undefined): Locale[] {
   return known.length > 0 ? known : ['ru']
 }
 
+// =============================================================================
+// Runtime instance config (FE-129). The deploy machine renders /config.json
+// from the container environment at start (nginx/config.json.template); the
+// keys follow primer.yaml's env schema -- API_BASE_URL, TELEGRAM_BOT_URL,
+// DEFAULT_LOCALE, LOCALES, BRAND. launch.ts applies it before `import('./app')`,
+// because i18n and the manifest read the snapshot fields below at module
+// evaluation. An empty/absent value falls through to the build-time VITE_*
+// variable and then to the golden default.
+// =============================================================================
+
+/** The /config.json the container's nginx renders at start (FE-129). */
+export interface InstanceConfig {
+  apiBaseUrl?: string
+  telegramBotUrl?: string
+  defaultLocale?: string
+  /** Comma-separated locale codes, as the machine ships them (guide §2.5). */
+  locales?: string
+  brand?: string
+}
+
+let runtimeConfig: InstanceConfig = {}
+
+/** Apply the runtime /config.json. Called from launch.ts, pre-app-import. */
+export function applyInstanceConfig(config: InstanceConfig | null | undefined): void {
+  runtimeConfig = config ?? {}
+}
+
 /**
  * Enabled modules of this instance: absent/empty/'full' means everything;
  * otherwise a comma list of module namespaces ('payments', 'ai', ...).
@@ -55,21 +85,41 @@ export function hasFeature(features: FeatureSet, name: string): boolean {
   return features.all || features.enabled.has(name)
 }
 
-/** Instance passport as seen by this build. Defaults = the golden build. */
+/** Instance values as seen by this build. Defaults = the golden build. */
 export const INSTANCE = {
-  // tz-whitelabel §1 URL seams. Getters, not a snapshot: production replaces
-  // import.meta.env statically either way, and the live read keeps the exact
-  // per-mount semantics the former inline reads had (views read them in
-  // setup; vi.stubEnv in tests keeps working unchanged).
-  /** tz-whitelabel §1: empty = same-origin (Nginx proxies /api/* in prod). */
+  // tz-whitelabel §1 URL seams. Getters, not a snapshot: the live read keeps
+  // the exact per-mount semantics the former inline reads had (views read
+  // them in setup; vi.stubEnv in tests keeps working unchanged) -- and the
+  // runtime config wins at access time for free.
+  /** Empty = same-origin: the machine routes the whole domain here and this
+   * app's nginx proxies /api to the backend (FE-149 §2, decision A). */
   get apiBaseUrl(): string {
-    return import.meta.env.VITE_API_BASE_URL || ''
+    return runtimeConfig.apiBaseUrl || import.meta.env.VITE_API_BASE_URL || ''
   },
   get telegramBotUrl(): string {
-    return import.meta.env.VITE_TELEGRAM_BOT_URL || 'https://telegram.me/veloappbot'
+    return (
+      runtimeConfig.telegramBotUrl ||
+      import.meta.env.VITE_TELEGRAM_BOT_URL ||
+      'https://telegram.me/veloappbot'
+    )
   },
-  brand: import.meta.env.VITE_BRAND ?? 'VELO',
-  defaultLocale: parseLocale(import.meta.env.VITE_DEFAULT_LOCALE, 'ru'),
-  locales: parseLocales(import.meta.env.VITE_LOCALES),
+  // Identity fields are getters TOO -- not snapshots. launch.ts statically
+  // imports this module, so a snapshot taken at evaluation would be computed
+  // BEFORE prepareHost() applies the runtime config and would never see it.
+  // Live reads are correct: the consumers (i18n's catalog setup, the manifest
+  // is build-time) evaluate later, inside the dynamically imported app
+  // graph -- after the config is in.
+  get brand(): string {
+    return runtimeConfig.brand || import.meta.env.VITE_BRAND || 'VELO'
+  },
+  get defaultLocale(): Locale {
+    return parseLocale(runtimeConfig.defaultLocale || import.meta.env.VITE_DEFAULT_LOCALE, 'ru')
+  },
+  get locales(): Locale[] {
+    return parseLocales(runtimeConfig.locales || import.meta.env.VITE_LOCALES)
+  },
+  // Feature composition is a PROJECT property (the edition), not an instance
+  // value: it stays build-time -- PRIMER_EDITION is the machine's channel,
+  // VITE_FEATURES the local-dev one (FE-130, FE-149 §3).
   features: parseFeatures(import.meta.env.VITE_FEATURES),
 } as const
