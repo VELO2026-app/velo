@@ -80,4 +80,22 @@ const iconSize = computed((): number => (props.size === 'lg' ? 16 : 14))
 .v-rating-badges--lg .v-rating-badges__badge {
   padding: var(--velo-gap-3) var(--space-2);
 }
+
+/* FE-97 width contract: five zones fit a list card in ONE row at a 360px
+   viewport (the card plate leaves ~280px after the rail + card padding) and
+   wrap neatly, without overlap, below that. At 360px and narrower the chip
+   shrinks to the compact metrics (fs-12 text, tighter paddings/gaps -- every
+   value a token); the worst realistic row (five two-digit percentages) then
+   measures ~237px, and a 100% zone always sits next to four 0% chips. */
+@media (max-width: 360px) {
+  .v-rating-badges {
+    gap: var(--velo-gap-3);
+  }
+
+  .v-rating-badges__badge {
+    gap: var(--velo-gap-3);
+    padding: var(--space-1) var(--velo-gap-3);
+    font-size: var(--velo-fs-12);
+  }
+}
 </style>

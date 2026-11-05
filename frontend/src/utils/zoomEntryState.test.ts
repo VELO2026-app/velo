@@ -49,4 +49,34 @@ describe('zoomEntryState', () => {
       expect(zoomEntryState(false, status)).toBe('pending')
     }
   })
+
+  // FE-91: the row the backend marks "this registrant's personal link will
+  // NOT come" must stop reading as "still preparing" -- nothing is
+  // preparing, and
+  // the meeting itself exists (not 'failed' either).
+  it('reports unavailable when the row says the personal link will not come', () => {
+    expect(zoomEntryState(false, 'active', true)).toBe('unavailable')
+    expect(zoomEntryState(undefined, undefined, true)).toBe('unavailable')
+  })
+
+  it('linkUnavailable false/absent changes nothing -- pending as before (fixtures, master rows)', () => {
+    for (const flag of [false, undefined, null]) {
+      expect(zoomEntryState(false, 'active', flag)).toBe('pending')
+      expect(zoomEntryState(undefined, undefined, flag)).toBe('pending')
+    }
+  })
+
+  it('ready wins over linkUnavailable -- the entry itself is the fact', () => {
+    // The server never sends both (the flag requires "no entry token"), but
+    // the helper names what it is shown: a row that CAN be entered is ready.
+    expect(zoomEntryState(true, 'active', true)).toBe('ready')
+  })
+
+  it('unavailable wins over create_failed in contradictory data (a real row is never both)', () => {
+    // The backend's flag query joins on an ACTIVE meeting, so a real
+    // create_failed row carries no flag. If stale or hand-built data ever
+    // carries both, the per-person fact ("no link for YOU, ever") is the one
+    // that cannot be fixed by the master retrying the meeting.
+    expect(zoomEntryState(false, 'create_failed', true)).toBe('unavailable')
+  })
 })

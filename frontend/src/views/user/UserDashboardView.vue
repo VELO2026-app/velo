@@ -196,6 +196,19 @@
             >
               {{ t('user.screens.userDashboard.zoomFailed') }}
             </VBadge>
+            <!-- FE-91: the registrant's personal link will NOT come (retries
+                 exhausted / Zoom answered without one). The meeting exists --
+                 not 'failed' -- and nothing is preparing -- not "still preparing".
+                 The same predicate the practice screen renders as
+                 kind:'unavailable' (PracticeLiveView), so the two surfaces
+                 cannot disagree about the same registrant. -->
+            <VBadge
+              v-else-if="zoomStateFor(b) === 'unavailable'"
+              variant="warning"
+              class="dashboard__zoom-note"
+            >
+              {{ t('user.screens.userDashboard.zoomUnavailable') }}
+            </VBadge>
           </div>
         </TransitionGroup>
       </VLoadingSwap>
@@ -452,7 +465,11 @@ function practiceTitle(b: BookingWithPracticeResponse): string {
  * no booking at all -- and that screen is where «Zoom» takes him.
  */
 function zoomStateFor(b: BookingWithPracticeResponse): ZoomEntryStateKind {
-  return zoomEntryState(b.zoom_registrant_ready, b.practice.zoom_meeting_status)
+  return zoomEntryState(
+    b.zoom_registrant_ready,
+    b.practice.zoom_meeting_status,
+    b.zoom_registrant_link_unavailable,
+  )
 }
 
 /**
@@ -460,9 +477,16 @@ function zoomStateFor(b: BookingWithPracticeResponse): ZoomEntryStateKind {
  * runs there, inside VELO. The screen asks the server for the entry itself.
  */
 function onZoomClick(b: BookingWithPracticeResponse): void {
-  if (zoomStateFor(b) !== 'ready') {
-    // Backstop only — the button is disabled in this state (R1).
-    toast.info(t('user.screens.userDashboard.zoomPreparing'))
+  const state = zoomStateFor(b)
+  if (state !== 'ready') {
+    // Backstop only -- the button is disabled in this state (R1). FE-91: a
+    // row whose link will never come must not be told "still preparing"
+    // here either.
+    toast.info(
+      state === 'unavailable'
+        ? t('user.screens.userDashboard.zoomUnavailable')
+        : t('user.screens.userDashboard.zoomPreparing'),
+    )
     return
   }
   void router.push({ name: 'practice-live', params: { practiceId: b.practice_id } })

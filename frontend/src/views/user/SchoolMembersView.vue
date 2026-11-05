@@ -55,7 +55,7 @@
         @update:model-value="switchKind"
       />
 
-      <!-- The search rides the roster tabs; the blocked tab
+      <!-- The search rides the roster tabs; the removed tab
            (i18n:user.screens.schoolMembers.tabs.blocked) has nothing
            to search, so the field sits out. -->
       <div v-if="kind !== 'blocked'" class="school-members__search">
@@ -194,8 +194,10 @@ import { formatShortDate } from '@/utils/format'
 
 // §1.11 (owner 2026-09-22): the active roster rides ?kind= -- server truth
 // in the URL, so a refresh or a deep link reopens the same list. The third
-// tab (i18n:user.screens.schoolMembers.tabs.blocked; owner 2026-09-30,
-// BE-79 (2)) lists GET …/blocks for the curator, paged like the roster; it
+// tab (i18n:user.screens.schoolMembers.tabs.blocked -- owner 2026-09-30,
+// BE-79 (2); labelled "Removed" since FE-97, owner 2026-11-03;
+// ?kind=blocked unchanged) lists GET …/blocks for the curator, paged like
+// the roster; it
 // has no search (the endpoint takes limit/offset only). Unblock
 // (i18n:user.screens.schoolMembers.unblock) sends DELETE …/blocks/{user_id}
 // and re-reads the first page -- the person leaves the list and is back in
@@ -254,7 +256,7 @@ const isCurator = computed(() => relation.value === 'curator')
 /** A school master reading the roster in the master zone. */
 const asSchoolMaster = computed(() => relation.value === 'master' && inMasterZone.value)
 
-/** The blocked tab (i18n:user.screens.schoolMembers.tabs.blocked) is the
+/** The removed tab (i18n:user.screens.schoolMembers.tabs.blocked) is the
  *  curator's tab only (BE-79). */
 const kindOptions = computed(() =>
   isCurator.value ? KIND_OPTIONS : KIND_OPTIONS.filter((option) => option.value !== 'blocked'),
@@ -319,7 +321,7 @@ const { items, loading, error, loadMoreError, hasMore, loadMore, refresh } = use
 >(async (limit, offset) => {
   try {
     const viewer = await loadRelation()
-    // The blocked tab is the curator's alone; anyone else who lands on ?kind=blocked
+    // The removed tab is the curator's alone; anyone else who lands on ?kind=blocked
     // is moved to the masters tab.
     if (kind.value === 'blocked') {
       if (viewer === 'curator') return await getSchoolBlocks(schoolId.value, { limit, offset })
@@ -402,7 +404,7 @@ watch(
   },
 )
 
-// The one list holds either rows of the roster or rows of the blocked tab
+// The one list holds either rows of the roster or rows of the removed tab
 // (i18n:user.screens.schoolMembers.tabs.blocked) -- the
 // tab decides which; these name it for the template.
 const rosterItems = computed(() =>
