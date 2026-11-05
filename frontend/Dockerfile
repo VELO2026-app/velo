@@ -39,7 +39,7 @@
 # Base images (BE-157): pinned by the INDEX digest of the multi-arch manifest
 # list -- the pull picks the platform. The tag only names what is inside
 # (Node 24.21.0 / nginx 1.31.6 on Alpine 3.24); the digest decides.
-FROM node:24.21.0-alpine3.24@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c7010e764c5b53302f905ec1c1 AS source
+FROM node:24.21.0-alpine3.24@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS source
 
 WORKDIR /app
 
