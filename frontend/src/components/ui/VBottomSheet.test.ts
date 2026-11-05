@@ -65,7 +65,7 @@ const saved = vi.fn()
 interface MountOpts {
   /** The :open prop the harness mounts with. */
   open?: boolean
-  /** The parent ACTS on @close (sets open=false) instead of just recording. */
+  /** The parent ACTS on `@close` (sets open=false) instead of just recording. */
   closeOnEmit?: boolean
   /** Extra props/attrs forwarded onto the sheet (title, saveLabel, ...). */
   props?: Record<string, unknown>

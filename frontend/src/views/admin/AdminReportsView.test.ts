@@ -35,9 +35,11 @@
 // Cyrillic fixtures/expected strings below were typed via the Write tool,
 // never a shell heredoc.
 //
-// FE-100: «Модерация» is «Обращения | Жалобы», the tab in the query. Every
+// FE-100: Moderation (i18n:adminScreens.adminReports.moderationTab) is a
+// tickets | complaints switch (i18n:adminScreens.adminReports.tabTickets |
+// i18n:adminScreens.adminReports.tabComplaints), the tab in the query. Every
 // test of the reports list above mounts on `?tab=complaints` -- the list is
-// unchanged, only where it sits. The «Обращения» side (SupportTicketsPanel)
+// unchanged, only where it sits. The tickets side (SupportTicketsPanel)
 // is stubbed here and tested in its own file.
 // =============================================================================
 
@@ -301,15 +303,17 @@ describe('AdminReportsView', () => {
             }),
         )
 
-      // Filter A: "Открытая" only -> apiStatus 'pending' (generation 2, in flight).
+      // Filter A: the open chip (i18n:moderation.statuses.open) only ->
+      // apiStatus 'pending' (generation 2, in flight).
       await applyStatusFilter('Открытая')
       expect(callCount).toBe(1)
 
-      // Filter B: switch to "Закрытая" only, BEFORE A resolves (generation 3, in flight).
-      // Toggle off "Открытая", toggle on "Закрытая" -- the sheet re-seeds its
+      // Filter B: switch to the closed chip (i18n:moderation.statuses.closed)
+      // only, BEFORE A resolves (generation 3, in flight). Toggle off the open
+      // chip, toggle on the closed one -- the sheet re-seeds its
       // draft from the currently APPLIED filter each time it opens (confirmed
       // by reading ModerationFilterModal's own watch(props.open, ...)), so
-      // "Открытая" shows selected again and must be explicitly cleared.
+      // the open chip shows selected again and must be explicitly cleared.
       await applyStatusFilter('Открытая', 'Закрытая')
       expect(callCount).toBe(2)
 
@@ -441,7 +445,8 @@ describe('AdminReportsView', () => {
   // ===========================================================================
   describe('header + openDetail', () => {
     // Was: the header count showed the API total ("—" when 0). FE-100, owner
-    // ruling 25.10: the count leaves the «Модерация» header -- the header is
+    // ruling 25.10: the count leaves the Moderation header
+    // (i18n:adminScreens.adminReports.moderationTab) -- the header is
     // shared by both tabs now, and the number belonged to one of them.
     it('the header carries no count -- on either tab', async () => {
       vi.mocked(adminApi.getReports).mockResolvedValue(paginated([REPORT_A, REPORT_B], 42))

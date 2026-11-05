@@ -4,17 +4,21 @@
   Master analytics hub. Route: /master/analytics (inside MasterShell).
 
   Two tabs (operator design 2026-06-11), each under a shared period toggle:
-    1. Отзывы  -- aggregate stats (Check-in / Feedback / Отзывов) + overall
-                  rating distribution bars + "Требуют внимания" + past-practice
-                  cards with inline rating badges.
-    2. Платежи -- period income + transactions list + link to full Finance.
+    1. Reviews (i18n:masterScreens.analytics.sections.reviews) -- aggregate
+       stats (Check-in / Feedback / feedbacks total,
+       i18n:masterScreens.analytics.feedbacksStat) + overall rating
+       distribution bars + the needs-attention section + past-practice cards
+       with inline rating badges.
+    2. Payments (i18n:masterScreens.analytics.sections.payments) -- period
+       income + transactions list + link to full Finance.
 
   Owner 2026-10-01: payments are not live yet, so the tab slider is PARKED
-  (PAYMENTS_TAB_ENABLED below) and the screen renders the Отзывы tab only --
-  a single-option slider would be meaningless. The Платежи pane and its E2
+  (PAYMENTS_TAB_ENABLED below) and the screen renders the Reviews tab only --
+  a single-option slider would be meaningless. The Payments pane and its E2
   wiring stay intact for the flip-back. The period toggle moved up into the
-  header's action slot (owner 2026-10-01): title left, Неделя/Месяц right --
-  one line, no second control row.
+  header's action slot (owner 2026-10-01): title left, the week/month toggle
+  (i18n:common.periodWeek / i18n:common.periodMonth) right -- one line, no
+  second control row.
 
   Controls are the track+thumb pattern (single glass track, active fill pill) --
   the same shape as the master-dashboard period toggle, NOT the two-pill VSegment
@@ -26,21 +30,24 @@
           Insights are eager-loaded for the visible page so the inline badges and
           the aggregate are populated without a tap.
     STUB (no backend yet -> master-ds-zod-roadmap.md):
-      - Период «Неделя/Месяц»: no period-scoped API -> toggle is visual-only.
-      - «Требуют внимания»: insights are anonymous (no names / comment texts), so
-        the de-anonymised attention feed has no source. Section is scaffolded and
-        renders its empty state until Zod adds a NON-anonymous endpoint.
-      - «Платежи» (E2 wired 2026-06-16): getIncome(period) drives «Доход за период»
-        + signed delta_pct; getTransactions drives the feed. Currency canon = EUR;
-        €0.00 / empty while seed practices are free (seed-pricing task next). Full
-        finance (balance, payout, withdrawals) lives on /master/finance -> link.
+      - Period week/month toggle: no period-scoped API -> toggle is visual-only.
+      - Needs-attention section (i18n:masterScreens.analytics.sections.attention):
+        insights are anonymous (no names / comment texts), so the de-anonymised
+        attention feed has no source. Section is scaffolded and renders its
+        empty state until Zod adds a NON-anonymous endpoint.
+      - Payments (E2 wired 2026-06-16): getIncome(period) drives the revenue
+        heading (i18n:masterScreens.analytics.sections.revenue) + signed
+        delta_pct; getTransactions drives the feed. Currency canon = EUR;
+        €0.00 / empty while seed practices are free (seed-pricing task next).
+        Full finance (balance, payout, withdrawals) lives on /master/finance ->
+        link.
 -->
 
 <template>
   <div class="analytics">
     <!-- Header (DS VHeader — uniform with the rest of the master zone, rides
          MobileLayout's floating island; PROMPT №162). The period toggle shares
-         the header line (owner 2026-10-01): title left, Неделя/Месяц right --
+         the header line (owner 2026-10-01): title left, week/month right --
          with the tab slider parked there is no second control row to reserve.
          Visual-only until a period-scoped analytics API exists. -->
     <VHeader :title="t('masterScreens.analytics.title')">
@@ -64,7 +71,7 @@
     />
 
     <!-- ================================================================
-         TAB: ОТЗЫВЫ
+         TAB: REVIEWS
          ================================================================ -->
     <div v-show="activeTab === 'reviews'" class="analytics__body">
       <!-- Aggregate stats (over loaded insights; period scoping has no API). -->
@@ -77,16 +84,19 @@
         />
       </div>
 
-      <!-- Общая статистика -->
+      <!-- Overall stats (i18n:masterScreens.analytics.sections.overall). -->
       <section class="analytics__section">
         <h2 class="velo-section-title">{{ t('masterScreens.analytics.sections.overall') }}</h2>
         <VRatingDistribution :counts="ratingTotals" />
       </section>
 
-      <!-- Требуют внимания: ученики, чей отзыв за период сервер отнёс к вниманию
-           (attention=true: оценки 1-4, зоны «Плохо» и «Не очень», BE-77). Секция (вместе с заголовком) НЕ показывается, если таких нет.
-           Тап по карточке → профиль ученика (E1: user_id на MasterReviewItem);
-           кнопка сообщения — @click.stop, шлёт сообщение, не навигируя (PROMPT №229). -->
+      <!-- Needs attention (i18n:masterScreens.analytics.sections.attention):
+           students whose period review the server flagged for attention
+           (attention=true: ratings 1-4, zones bad and low, BE-77). The section
+           (heading included) is NOT shown when there are none. Card tap goes to
+           the student's profile (E1: user_id on MasterReviewItem); the message
+           button is @click.stop -- it sends a message without navigating
+           (PROMPT №229). -->
       <section v-if="attentionItems.length > 0" class="analytics__section">
         <h2 class="velo-section-title">{{ t('masterScreens.analytics.sections.attention') }}</h2>
         <div
@@ -116,7 +126,7 @@
         </div>
       </section>
 
-      <!-- Прошедшие практики -->
+      <!-- Past practices (i18n:masterScreens.analytics.sections.past). -->
       <section class="analytics__section">
         <h2 class="velo-section-title">{{ t('masterScreens.analytics.sections.past') }}</h2>
 
@@ -162,7 +172,7 @@
             />
           </button>
 
-          <!-- Первые 3 + раскрытие «+ ещё N практик» (#5). -->
+          <!-- First 3 + the reveal control (i18n:masterScreens.analytics.morePractices, #5). -->
           <VShowMore
             v-if="!pastExpanded && hiddenPastCount > 0"
             plus
@@ -183,7 +193,7 @@
     </div>
 
     <!-- ================================================================
-         TAB: ПЛАТЕЖИ
+         TAB: PAYMENTS
          ================================================================ -->
     <div v-if="PAYMENTS_TAB_ENABLED" v-show="activeTab === 'payments'" class="analytics__body">
       <div v-if="paymentsLoading" class="analytics__loader"><VLoader /></div>
@@ -211,7 +221,7 @@
           </div>
         </div>
 
-        <!-- Транзакции (E2: getTransactions — signed title-tagged ledger rows). -->
+        <!-- Transactions (E2: getTransactions — signed title-tagged ledger rows). -->
         <section class="analytics__section">
           <h2 class="velo-section-title">
             {{ t('masterScreens.analytics.sections.transactions') }}
@@ -241,7 +251,7 @@
       </template>
     </div>
 
-    <!-- «Требуют внимания» tap → message the student (posts into the DM). -->
+    <!-- Needs-attention message flow: open the DM modal for the student. -->
     <SendMessageModal
       :open="msgOpen"
       :student-id="msgId"
@@ -295,9 +305,9 @@ const insightsCache = diaryStore.insightsCache
 // Tabs (track+thumb segment) + period toggle (visual-only)
 // =========================================================================
 
-// Owner 2026-10-01: payments are not live yet -- the Отзывы/Платежи slider is
-// parked and the screen renders the Отзывы tab only. Flip to true to restore
-// the slider, the Платежи pane and its data loads (everything below is kept).
+// Owner 2026-10-01: payments are not live yet -- the Reviews/Payments slider is
+// parked and the screen renders the Reviews tab only. Flip to true to restore
+// the slider, the Payments pane and its data loads (everything below is kept).
 // Annotation is deliberate: a literal-false const would let TS narrow every
 // `if (PAYMENTS_TAB_ENABLED)` into provably-dead code.
 const PAYMENTS_TAB_ENABLED: boolean = false
@@ -325,8 +335,8 @@ const PERIOD_OPTIONS: ReadonlyArray<{ value: 'week' | 'month'; label: string }> 
 // ordering bug.
 const pastPractices = computed(() => masterStore.practicesPast)
 
-// Period scoping (#1, fork В): until a period-scoped reviews API exists, filter
-// the loaded past practices client-side (Неделя = 7 days, Месяц = 30) so the
+// Period scoping (#1, fork V): until a period-scoped reviews API exists, filter
+// the loaded past practices client-side (week = 7 days, month = 30) so the
 // toggle moves real numbers. Swap to the Zod summary endpoint when it lands.
 const PERIOD_DAYS: Record<'week' | 'month', number> = { week: 7, month: 30 }
 const periodPractices = computed(() => {
@@ -337,7 +347,7 @@ const periodInsights = computed(() =>
   periodPractices.value.map((p) => insightsCache.get(p.id)).filter((i) => i != null),
 )
 
-// Past list: first 3 + «+ ещё N практик» reveal (#5).
+// Past list: first 3 + the reveal (i18n:masterScreens.analytics.morePractices, #5).
 const PAST_PREVIEW = 3
 const pastExpanded = ref(false)
 const visiblePast = computed(() =>
@@ -374,8 +384,9 @@ const aggregateFeedbackPct = computed((): string => {
 })
 
 // =========================================================================
-// Overall rating distribution (Общая статистика) — VRatingDistribution owns the
-// bar config/palettes/markup; we just feed it the period's summed feedback counts.
+// Overall rating distribution (i18n:masterScreens.analytics.sections.overall):
+// VRatingDistribution owns the bar config/palettes/markup; we just feed it the
+// period's summed feedback counts.
 // =========================================================================
 
 const ratingTotals = computed((): ScoreZoneCounts => {
@@ -402,7 +413,7 @@ function ratingPcts(practiceId: string): Record<MoodScaleKey, number> {
 }
 
 // =========================================================================
-// Последние отзывы (#3: GET /masters/me/reviews — cross-practice named feed)
+// Latest reviews (#3: GET /masters/me/reviews — cross-practice named feed)
 // =========================================================================
 
 const REVIEWS_PAGE = 20
@@ -411,7 +422,7 @@ const reviews = ref<MasterReviewItem[]>([])
 async function loadReviews(): Promise<void> {
   try {
     // E1: fetch the attention reviews server-side (attention=true: ratings
-    // 1-4, BE-77) — the «Требуют внимания» block is the only consumer, so a
+    // 1-4, BE-77) — the needs-attention block is the only consumer, so a
     // full page of them beats a mixed page where they may be sparse. The
     // server owns the threshold; the period cutoff still narrows client-side
     // (no period param on the endpoint).
@@ -422,7 +433,7 @@ async function loadReviews(): Promise<void> {
   }
 }
 
-// Требуют внимания: the server already narrowed the page to the attention
+// Needs attention: the server already narrowed the page to the attention
 // reviews (attention=true) -- no zone check here, a second copy of the
 // threshold would drift. Only the active period's cutoff is applied
 // client-side (mirroring the past list). Empty ⇒ the section + title are hidden.
@@ -453,7 +464,7 @@ function openMessage(id: string, name: string): void {
 }
 
 // =========================================================================
-// Платежи (E2: income by period + transaction feed)
+// Payments (E2: income by period + transaction feed)
 // =========================================================================
 
 const TX_PAGE = 20
@@ -483,8 +494,9 @@ function formatTxnAmount(cents: number): string {
   return `${sign}${formatMoney(Math.abs(cents), 'EUR', getLocale(), true)}`
 }
 
-// M5: show the practice NAME instead of the generic stored label («Оплата за
-// практику»). practice_title is added by the backend join; read it defensively
+// M5: show the practice NAME instead of the generic stored ledger label
+// (the backend's default "payment for a practice" transaction title).
+// practice_title is added by the backend join; read it defensively
 // because generated.ts is regenerated at deploy (not hand-edited here), so the
 // field may be absent from the local type until then.
 function txnTitle(t: MasterTransactionItem): string {
@@ -544,7 +556,7 @@ async function onLoadMore(): Promise<void> {
   await loadVisibleInsights()
 }
 
-/** Open the per-practice reviews detail (Г2: closes the card-tap from Г4). */
+/** Open the per-practice reviews detail (G2: closes the card-tap from G4). */
 function openReviews(practiceId: string): void {
   void router.push({ name: 'master-practice-reviews', params: { id: practiceId } })
 }
@@ -593,7 +605,7 @@ onMounted(async () => {
   gap: var(--space-3);
 }
 
-/* ===== Требуют внимания (tappable card → message) ===== */
+/* ===== Needs attention (tappable card → message) ===== */
 .analytics__attention {
   width: 100%;
   text-align: left;
@@ -647,7 +659,7 @@ onMounted(async () => {
 }
 
 /* Message button — distinct action (@click.stop), does not navigate to the
-   profile. Same DS shape as MasterSummaryView's «Требуют внимания» msg button. */
+   profile. Same DS shape as MasterSummaryView's needs-attention message button. */
 .analytics__attention-msg {
   width: var(--velo-size-46);
   height: var(--velo-size-46);
@@ -738,8 +750,8 @@ onMounted(async () => {
 /* Spread the rating trio across the card (operator SVG: 3 equal-width pills,
    gap 10) — analytics-only override; the shared VRatingBadges component layout
    is untouched (other usages keep their left-aligned trio). The icon+% is
-   CENTERED within each pill (operator PROMPT №235: «по центру, а не с левого
-   края / распределены по карточке»). */
+   CENTERED within each pill (operator PROMPT №235: centered within the pill,
+   not flush left or spread across the card). */
 .analytics__pcard-badges {
   gap: var(--velo-card-meta-row-gap);
 }
@@ -762,7 +774,7 @@ onMounted(async () => {
   padding: var(--space-5) 0;
 }
 
-/* ===== Платежи ===== */
+/* ===== Payments ===== */
 .analytics__income {
   background: var(--velo-bg-card-solid);
   border: 1px solid var(--velo-border-card);

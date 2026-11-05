@@ -5,9 +5,9 @@
   enter/leave transitions. Content via default slot.
 
   Centered DIALOG at every width, over a frosted scrim (owner ask 2026-09-30:
-  «попапы по центру экрана и немного блюрить задний фон»). Form-style sheets
-  that dock to the bottom remain VBottomSheet's job -- the two components
-  split the DS: VModal = dialog, VBottomSheet = sheet.
+  popups centered on screen, with a slight blur of the background). Form-style
+  sheets that dock to the bottom remain VBottomSheet's job -- the two
+  components split the DS: VModal = dialog, VBottomSheet = sheet.
 
   Used by: BookingPopup, CancelBookingPopup, VConfirmDialog, SendMessageModal,
   the FE-87 role popup, and the filter modals.
@@ -128,8 +128,8 @@ onUnmounted(() => {
   inset: 0;
   z-index: var(--z-modal);
   background: var(--velo-scrim);
-  /* Light frosted glass over the page (owner ask 2026-09-30, «немного
-     блюрить»). -webkit- prefix for the Telegram webviews; a browser without
+  /* Light frosted glass over the page (owner ask 2026-09-30: a slight
+     blur). -webkit- prefix for the Telegram webviews; a browser without
      backdrop-filter simply keeps the plain scrim. */
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -157,8 +157,8 @@ onUnmounted(() => {
   overflow: hidden;
   background: var(--velo-bg-card-solid);
   border: 1px solid var(--velo-border-card);
-  /* Плавающая шторка (overlay даёт отступ со всех сторон) -> скругляем ВСЕ
-     углы. Радиус из DS-токена (--radius-md=15), а не сырой 20px. */
+  /* A floating sheet (the overlay leaves a gap on all sides) -> round ALL
+     corners. Radius from the DS token (--radius-md=15), not a raw 20px. */
   border-radius: var(--radius-md);
   /* box-shadow: var(--shadow-xl) removed PROMPT №437 (operator ruling: VELO is
      flat). --shadow-xl was `none`, so this asked for a shadow and got nothing --

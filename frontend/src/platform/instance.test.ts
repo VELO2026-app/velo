@@ -47,6 +47,17 @@ describe('INSTANCE -- golden defaults (a passport-less build is the golden build
   })
 })
 
+describe('SUPPORTED_LOCALES -- the product locales (BE-188)', () => {
+  it('is exactly ru, en, uk -- the catalogs in src/locales, the backend set', async () => {
+    const { SUPPORTED_LOCALES, isSupportedLocale } = await loadInstance()
+
+    expect([...SUPPORTED_LOCALES].sort()).toEqual(['en', 'ru', 'uk'])
+    // Not product locales any more, and never were catalogs.
+    expect(isSupportedLocale('de')).toBe(false)
+    expect(isSupportedLocale('es')).toBe(false)
+  })
+})
+
 describe('INSTANCE -- locale parsing (tz-i18n 0.5)', () => {
   it('an unsupported default locale falls back to ru', async () => {
     vi.stubEnv('VITE_DEFAULT_LOCALE', 'xx')

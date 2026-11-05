@@ -6,7 +6,7 @@
 // P6a-2 safety net, same pattern as VModal.test.ts from FE-142: VTextarea
 // moves to @velo/ui under FE-121 (P6) and its only tests today are the VOICE
 // cases (VTextarea.voice.test.ts, FE-94) -- the plain field contract was
-// unpinned. «переносить нетестированное запрещено». These pin the CURRENT
+// unpinned. "moving untested code is forbidden". These pin the CURRENT
 // component's markup/events as-is. Zero component edits: anything that could
 // only pass after an edit is a component finding for the FE-144 report, not
 // a fix in here.

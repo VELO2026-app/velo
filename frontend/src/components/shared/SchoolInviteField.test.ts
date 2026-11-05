@@ -5,7 +5,8 @@
 // The field's contract (owner 2026-10-01, fifth iteration: the diary's
 // DiaryBubbleShape bead, side="right", PRIMARY lobe -- ONE chip, ONE
 // button): mint on mount (get-or-mint -- repeat calls return the SAME
-// url), the B2 clipboard copy off the single «Ссылка-приглашение» chip,
+// url), the B2 clipboard copy off the single invite-link chip
+// (i18n:school.inviteLabel),
 // the lazy mint that never refuses a tap, and the one honest-failure case
 // that matters -- no fabricated url ever leaves this component. The raw
 // url is NOT displayed (owner 2026-09-22: the field IS the interface).

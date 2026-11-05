@@ -306,7 +306,8 @@ describe('useVoiceRecorder -- cancel and edges', () => {
 describe('useVoiceRecorder -- cancel during the permission prompt (FE-78.1)', () => {
   it('a late getUserMedia answer after cancel releases the mic and never records', async () => {
     // The permission prompt sits open: start()'s getUserMedia promise is
-    // still pending while the person taps «Отмена».
+    // still pending while the person taps the panel's cancel control
+    // (voice.cancelAria).
     let resolveGum!: (stream: MediaStream) => void
     gumMock.mockReturnValue(
       new Promise<MediaStream>((resolve) => {

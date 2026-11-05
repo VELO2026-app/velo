@@ -7,7 +7,7 @@
 // 1. SKIN-BLIND (frontend commit b91e259f): the frontend suite pins the
 //    golden brand stub so it never depends on which skin the working tree
 //    happens to carry. This package needs no alias -- it owns NO theme
-//    values at all (принцип 2: токены не уезжают) -- and the same blindness
+//    values at all (principle 2: no tokens leave the host) -- and the same blindness
 //    holds by construction: the token contract test (styles/token-contract)
 //    reads the GOLDEN variables.css through a pinned relative path, never a
 //    materialized skin.

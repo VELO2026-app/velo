@@ -20,7 +20,10 @@ import type { McpScope, McpTokenCreated, McpTokenItem, McpTokenListResponse } fr
 
 const BASE = '/api/v1/users/me/mcp-tokens'
 
-/** Mint a token. `scopes` omitted -> the backend grants all three. */
+/** Mint a token.
+ *
+ *  @param scopes - `Omitted -> the backend grants all three.`
+ */
 export function createMcpToken(name: string, scopes?: McpScope[]): Promise<McpTokenCreated> {
   return api.post<McpTokenCreated>(BASE, scopes ? { name, scopes } : { name })
 }

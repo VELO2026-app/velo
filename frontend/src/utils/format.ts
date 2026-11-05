@@ -11,7 +11,8 @@
 // F5 review: S-24 -- minimumFractionDigits: 2 for consistent money format.
 // tz-i18n 1.1: labels come from the active locale's catalog; the Intl
 // locale parameter defaults to it too (getLocale()). cleanPracticeTitle is
-// NOT i18n scope -- "(эфир)" is a DATA suffix from the seed/backend.
+// NOT i18n scope -- the on-air title suffix it strips is a DATA suffix from
+// the seed/backend.
 // =============================================================================
 
 import i18n, { getLocale } from '@/locales'
@@ -31,15 +32,17 @@ const VELO_SHORT_MONTHS: readonly string[] = datesSeed.dates?.shortMonths ?? []
 /**
  * Format cents into a currency string using Intl.NumberFormat.
  *
- * By default, 0 cents returns "Бесплатно" (for practice prices).
- * Pass allowZero=true to format 0 as "0,00 €" (for balance display).
+ * By default, 0 cents returns the free label (i18n:common.free; for practice
+ * prices).
+ *
+ * @param allowZero - Pass `true` to format 0 as "0,00 €" (for balance display).
  *
  * S-24: Always uses 2 decimal places for consistency in payment context.
  *
  * Examples:
- *   formatMoney(1500, 'EUR')              -> "15,00 €"  (in ru locale)
- *   formatMoney(0, 'EUR')                 -> "Бесплатно"
- *   formatMoney(0, 'EUR', getLocale(), true)     -> "0,00 €"
+ *   `formatMoney(1500, 'EUR')              -> "15,00 €"`  (in ru locale)
+ *   `formatMoney(0, 'EUR')                 -> i18n:common.free`
+ *   `formatMoney(0, 'EUR', getLocale(), true)     -> "0,00 €"`
  */
 export function formatMoney(
   cents: number,
@@ -60,8 +63,8 @@ export function formatMoney(
  * Format an ISO datetime string into a human-readable date + time.
  *
  * Examples:
- *   formatDate('2026-02-28T07:00:00Z') -> "28 февраля, 10:00" (in Europe/Moscow)
- *   formatDate('2026-02-28T07:00:00Z', 'UTC') -> "28 февраля, 07:00"
+ *   `formatDate('2026-02-28T07:00:00Z') -> "28 <month>, 10:00"` (in Europe/Moscow)
+ *   `formatDate('2026-02-28T07:00:00Z', 'UTC') -> "28 <month>, 07:00"`
  */
 export function formatDate(
   isoString: string,
@@ -81,7 +84,7 @@ export function formatDate(
 /**
  * Format an ISO datetime string into a short date for section headers.
  *
- * Returns relative labels for today/tomorrow, otherwise "28 февраля".
+ * @returns Relative labels for today/tomorrow, otherwise "28 <month>".
  */
 export function formatDateShort(
   isoString: string,
@@ -103,8 +106,8 @@ export function formatDateShort(
 /**
  * Calendar-day code for an ISO datetime against now, in the target timezone:
  * 'today' | 'tomorrow' | null. tz-i18n §3.1 item 2 — callers branch on this
- * CODE, never by comparing rendered labels (formatDateShort's «Сегодня»
- * strings are locale output, not operands).
+ * CODE, never by comparing rendered labels (formatDateShort's today label,
+ * i18n:common.today, is locale output, not an operand).
  *
  * SW9: +24h on the epoch, NOT Date.setDate() -- setDate mutates in the
  * DEVICE's own local timezone (whatever the runner's OS is set to), which
@@ -136,12 +139,13 @@ export function relativeDayCode(isoString: string, timezone = 'UTC'): 'today' | 
 }
 
 /**
- * Format an ISO datetime into a compact card date: "9 июня" / "12 сент.".
+ * Format an ISO datetime into a compact card date: "9 June" / "12 Sept." style.
  *
- * Months follow the agreed VELO short-date table: a month whose genitive form
- * is <= 4 letters is written in full with NO period (мая / июня / июля); longer
- * ones are abbreviated to <= 4 letters + a period (янв. / февр. / мар. / апр. /
- * авг. / сент. / окт. / нояб. / дек.). Day + month only (no year, no time).
+ * Months follow the agreed VELO short-date table (ru genitive months, seeded
+ * in locales/ru/dates.json): a month whose genitive form is `<= 4` letters is
+ * written in full with NO period (May / June / July); longer ones are
+ * abbreviated to `<= 4` letters + a period (Jan. / Feb. / Mar. / Apr. / Aug. /
+ * Sept. / Oct. / Nov. / Dec.). Day + month only (no year, no time).
  * Timezone-safe (Intl with timeZone, no Date mutation).
  */
 
@@ -157,8 +161,8 @@ export function formatShortDate(isoString: string, timezone = 'UTC'): string {
   // resolves this day+month skeleton to MM-dd and pads both to two digits no
   // matter that we asked for `numeric` (resolvedOptions().day === '2-digit').
   // Number() normalises whatever padding any locale/ICU build hands back, so
-  // this cannot silently drift back to "09 июня". The month below was always
-  // immune for exactly this reason.
+  // this cannot silently drift back to a zero-padded "09 <month>" day. The
+  // month below was always immune for exactly this reason.
   const dayRaw = parts.find((p) => p.type === 'day')?.value ?? ''
   const day = dayRaw === '' ? '' : String(Number(dayRaw))
   const monthNum = Number(parts.find((p) => p.type === 'month')?.value ?? '1')
@@ -191,7 +195,7 @@ export function isToday(isoString: string, timezone = 'UTC'): boolean {
 /**
  * Calendar-day key 'YYYY-MM-DD' in the target timezone — the day boundary used
  * to tell whether two datetimes fall on the same calendar day. Single source of
- * truth for the diary day-grouping and the "Сегодня/Вчера" relative label.
+ * truth for the diary day-grouping and the today/yesterday relative labels.
  */
 export function dayKeyOf(isoString: string, timezone = 'UTC'): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -203,7 +207,8 @@ export function dayKeyOf(isoString: string, timezone = 'UTC'): string {
 }
 
 /**
- * Relative day label «Сегодня» / «Вчера» / «24 января» for a datetime, computed
+ * Relative day label -- today (i18n:common.today), yesterday
+ * (i18n:common.yesterday), or a "24 <month>" date -- for a datetime, computed
  * in the target timezone. Extracted verbatim from DiaryList/DiaryTimeline
  * (PROMPT №267) so the dashboard feedback banner and the diary share one
  * implementation instead of hardcoding the day.
@@ -233,8 +238,9 @@ export function dayLabelOf(isoString: string, timezone = 'UTC'): string {
  * Unlike `new Date().toISOString().slice(0, 10)` (which is UTC), this reads the
  * browser's LOCAL date parts, so a date-floor `:min` computed from it doesn't
  * drift by a day for users east/west of UTC near midnight. Used as the
- * future-only floor for the in-app date pickers (promocode «Действует до»,
- * practice date). Zero-padded so the 'YYYY-MM-DD' string compare stays correct.
+ * future-only floor for the in-app date pickers (the promocode valid-until
+ * field, i18n:masterScreens.masterNewPromocode.fields.validUntil; practice
+ * date). Zero-padded so the 'YYYY-MM-DD' string compare stays correct.
  */
 export function todayLocalISO(): string {
   const d = new Date()
@@ -266,9 +272,11 @@ export function formatTime(
  * be ordered by the absolute UTC epoch (`new Date(scheduled_at).getTime()`):
  * that orders by the underlying instant, which disagrees with the displayed
  * local times once practices span different timezones — a card showing 10:00
- * can sit below a card showing 12:00. This returns a comparable
- * `YYYYMMDDHHmmss` number built from the timezone-local parts, so an
- * ascending / descending sort matches the visible order (CR-1).
+ * can sit below a card showing 12:00.
+ *
+ * @returns A comparable `YYYYMMDDHHmmss` number built from the
+ *  timezone-local parts, so an ascending / descending sort matches the
+ *  visible order (CR-1).
  *
  * ONLY for DISPLAY-ORDER sorts of a per-practice-timezone list. Do NOT use it
  * for `scheduled_at`-vs-`now` comparisons (has-started / countdown / windows)
@@ -301,7 +309,7 @@ export function localSortKey(isoString: string, timezone = 'UTC'): number {
 
 /**
  * Format an ISO datetime into the diary feed card date line:
- *   "23 января • Пятница • 14:35"
+ *   "23 <month> • <Weekday> • 14:35"
  * (day + month, weekday, time -- separated by bullets, matching the design).
  * Used by DiaryFeedCard. Defaults to the user's timezone (the diary is a
  * personal timeline -- "when it happened in my time").
@@ -326,22 +334,23 @@ export function formatFeedDateTime(
     minute: '2-digit',
     timeZone: timezone,
   }).format(date)
-  // Capitalize the weekday (Intl returns lowercase in ru: "пятница").
+  // Capitalize the weekday (Intl returns it lowercase in the ru locale).
   const weekdayCap = weekday.charAt(0).toUpperCase() + weekday.slice(1)
   return `${dayMonth} • ${weekdayCap} • ${time}`
 }
 
 /**
- * Format duration in minutes into a SHORT readable string. Compact so lines like
- * «12:30 · 1 ч 30 м» stay on one line (booking cards). Note the deliberate
- * asymmetry: minutes-only keeps the full «мин», while the combined form uses the
- * short «м» (operator spec, batch I).
+ * Format duration in minutes into a SHORT readable string. Compact so booking
+ * card lines like "12:30 · 1 h 30 m" stay on one line. Note the deliberate
+ * asymmetry: minutes-only keeps the full minutes word
+ * (i18n:common.duration.min), while the combined form uses the short unit
+ * (i18n:common.duration.m) (operator spec, batch I).
  *
- * Examples:
- *   formatDuration(45)  -> "45 мин"    (minutes only, full «мин»)
- *   formatDuration(60)  -> "1 час"     (exactly one hour, spelled out)
- *   formatDuration(90)  -> "1 ч 30 м"  (hours + minutes, short «м»)
- *   formatDuration(120) -> "2 ч"       (exact multi-hour, no plural declension)
+ * Examples (ru catalog units):
+ *   `formatDuration(45)  -> "45 <min>"`      (minutes only, full word)
+ *   `formatDuration(60)  -> "1 <hour>"`      (exactly one hour, spelled out)
+ *   `formatDuration(90)  -> "1 <h> 30 <m>"`  (hours + minutes, short unit)
+ *   `formatDuration(120) -> "2 <h>"`         (exact multi-hour, no plural declension)
  */
 export function formatDuration(minutes: number): string {
   if (minutes < 60) return `${minutes} ${t('common.duration.min')}`
@@ -352,12 +361,13 @@ export function formatDuration(minutes: number): string {
 }
 
 /**
- * Format participants count: "5/20" or "N участн." when unlimited.
+ * Format participants count: "5/20", or the abbreviated participants count
+ * (i18n:common.participantsAbbr) when unlimited.
  */
 export function formatParticipants(current: number, max: number | null): string {
   if (max === null) return t('common.participantsAbbr', { n: current })
-  // No trailing «мест» — the group icon already conveys it; the design shows a
-  // bare «N/M» (operator 2026-06-17).
+  // No trailing spots word -- the group icon already conveys it; the design
+  // shows a bare "N/M" (operator 2026-06-17).
   return `${current}/${max}`
 }
 
@@ -370,11 +380,13 @@ export function isFull(current: number, max: number | null): boolean {
 }
 
 /**
- * Strip a trailing " (эфир)" marker from a practice title.
+ * Strip the trailing on-air marker suffix from a practice title (the literal
+ * lives in the regex below).
  *
- * Some seeded / manually created practices append "(эфир)" to the title (see
- * seed.py). Live practices already show a "В эфире" badge, so the suffix is
- * redundant noise in the title itself. Single source of truth for cleaning it
+ * Some seeded / manually created practices append the Russian on-air suffix
+ * to the title (see seed.py). Live practices already show the live badge
+ * (e.g. i18n:user.screens.practiceLive.liveBadge), so the suffix is redundant
+ * noise in the title itself. Single source of truth for cleaning it
  * (FormShell check-in/feedback header; dashboard nearest-practice card).
  */
 export function cleanPracticeTitle(title: string): string {
@@ -384,8 +396,8 @@ export function cleanPracticeTitle(title: string): string {
 /**
  * Format a percentage share for the analytics distribution strips
  * (practice mood / school feedback). The TZ rule (tz-practice-analytics.md):
- * a share strictly between 0 and 1 reads «<1%», between 99 and 100 reads
- * «>99%», everything else rounds to a whole percent — so a real minority
+ * a share strictly between 0 and 1 reads «`<1%`», between 99 and 100 reads
+ * «`>99%`», everything else rounds to a whole percent — so a real minority
  * share never renders as a flat 0% and an incomplete distribution never
  * reads as a full 100%.
  */

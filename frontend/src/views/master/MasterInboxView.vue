@@ -26,18 +26,23 @@
   deliberately UNMAPPED here: their emit sites address students, never a
   master.
 
-  TYPE SLIDER (same ask): Сообщения / Практики / Финансы / Другое -- there
-  is no «Все» tab: the master's traffic concentrates in msg.* and wallet.*,
-  so the buckets split where his feed actually lives instead of borrowing
-  the user's «Мероприятия» (nearly empty for a master) or «Другое» (which
-  would bury the withdrawals). Buckets are PREFIX rules over velo's emit
-  vocabulary: msg.* = the messaging engine; booking.* / practice.* /
-  waitlist.* = practice life; wallet.* = the money flow; «Другое» = the
-  complement (announcements and every future kind with no bucket of its
-  own) -- the vocabulary grows, so prefixes, not an enum. The first bucket
-  is the default. A client-side view filter over the ONE loaded page; the
-  track is SCROLLABLE (the user slider's owner recipe): four content-sized
-  tabs, the last one reached by a horizontal swipe.
+  TYPE SLIDER (same ask): Messages / Practices / Finances / Other
+  (i18n:masterScreens.masterInbox.filter.messages,
+  i18n:masterScreens.masterInbox.filter.practices,
+  i18n:masterScreens.masterInbox.filter.finances, i18n:common.other) --
+  there is no "All" tab (i18n:common.all): the master's traffic concentrates
+  in msg.* and wallet.*, so the buckets split where his feed actually lives
+  instead of borrowing the user's "Events" tab
+  (i18n:user.screens.userInbox.filter.events, nearly empty for a master) or
+  a plain "Other" (which would bury the withdrawals). Buckets are PREFIX
+  rules over velo's emit vocabulary: msg.* = the messaging engine;
+  booking.* / practice.* / waitlist.* = practice life; wallet.* = the
+  money flow; the other bucket = the complement (announcements and every
+  future kind with no bucket of its own) -- the vocabulary grows, so
+  prefixes, not an enum. The first bucket is the default. A client-side
+  view filter over the ONE loaded page; the track is SCROLLABLE (the user
+  slider's owner recipe): four content-sized tabs, the last one reached by
+  a horizontal swipe.
 
   PAGINATION: still deliberately absent. `next_cursor` arrives on every
   response and is not used -- one page (comms default limit 20) is what the
@@ -140,7 +145,8 @@ const error = ref<string | null>(null)
 const items = ref<NotificationItem[]>([])
 const unread = ref(0)
 
-// -- Type slider (Сообщения / Практики / Финансы / Другое) ----------------------
+// -- Type slider (messages / practices / finances / other labels:
+// masterScreens.masterInbox.filter.*, common.other) ----------------------
 // A client-side view filter over the one loaded page. Bucket rules and the
 // row icons share ONE classifier so a tab and its glyph can never disagree.
 type InboxFilter = 'messages' | 'practices' | 'finance' | 'other'
@@ -285,9 +291,9 @@ function routeFor(
       return threadId ? { name: 'master-chat', params: { id: threadId } } : null
     }
     case 'open_support_rating': {
-      // FE-107 / BE-162 delivery 3: «Как мы помогли?» -- the rating sheet on
-      // THAT resolved ticket, in the master's own support conversation; the
-      // same shape as the user map (see UserInboxView.vue).
+      // FE-107 / BE-162 delivery 3: the rating sheet (i18n:chat.rating.title)
+      // on THAT resolved ticket, in the master's own support conversation;
+      // the same shape as the user map (see UserInboxView.vue).
       const threadId = typeof params.thread_id === 'string' ? params.thread_id : null
       return threadId
         ? { name: 'master-chat', params: { id: threadId }, query: { rate: '1' } }

@@ -7,12 +7,12 @@
  * that keep their own pastel fills (default size 40), like VeloLogo.
  *
  * FE-119 (tz-ui-package.md §4 P4): the 12 cross-cutting glyphs moved to
- * @velo/ui/icons and are re-exported here from the kit's barrel -- the
+ * `@velo/ui/icons` and are re-exported here from the kit's barrel -- the
  * consumers never change an import (§2.1); they flip to the kit directly
  * as their host components move in P6/P8. The domain icons stay local.
  *
  * Usage:
- *   import { IconHome, IconCalendar } from '@/components/icons'
+ *   `import { IconHome, IconCalendar } from '@/components/icons'`
  */
 
 export { default as IconHome } from './IconHome.vue'

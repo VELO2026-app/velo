@@ -2,14 +2,15 @@
   VELO Frontend -- CalendarView (Calendar iteration, frames 1 & 3)
 
   The Calendar screen:
-    - Title "Календарь"
+    - Title (i18n:user.screens.calendar.titlePlain)
     - WeekStrip: week selector with day dot-markers (frame 1)
-    - "Выбрать практики" control:
+    - The practice-picker control (i18n:user.screens.calendar.pickPractices):
         collapsed -> pill + funnel icon (opens CalendarFilterModal)
         expanded  -> active-filter chips (tap a chip to remove) + collapse
       (Variant 1: the modal is the single source of filter editing; the
        inline chips only DISPLAY the current selection and allow removal.)
-    - Day sections grouped by date ("Сегодня" / "Завтра" / "28 февраля")
+    - Day sections grouped by date (i18n:common.today / i18n:common.tomorrow /
+      a formatted day-month date)
     - CalendarPracticeCard per practice
     - loading / error / empty states
 
@@ -76,7 +77,8 @@
       </div>
     </Teleport>
 
-    <!-- "Выбрать практики" control: the viewer's OWN practice filters. In
+    <!-- Practice-picker control (i18n:user.screens.calendar.pickPractices):
+         the viewer's OWN practice filters. In
          master mode the feed is the master's scheduled practices -- the
          facet modal has nothing to filter, so the control sits out. -->
     <div v-if="!masterMode && !schoolMode" class="calendar__selector">
@@ -317,7 +319,8 @@ const daySkeletons = useRememberedCount(
   { fallback: 3, max: 3 },
 )
 
-// Section header for the selected day (t('user.screens.calendar.today') / t('user.screens.calendar.tomorrow') / «28 января»),
+// Section header for the selected day (the today label i18n:common.today, the
+// tomorrow label i18n:common.tomorrow, or a formatted day-month date),
 // derived from the VIEWER's profile timezone (SW2) -- matching the store's
 // own viewer-tz bucketing (store.ts selectedDayPractices) and the cards'
 // rendered time, never the first practice's own timezone. dayLabel is only
@@ -419,7 +422,7 @@ function removeChip(chip: ActiveChip): void {
       next.time_of_day = undefined
       break
     case 'style':
-      // F-8: удалить ровно ОДИН стиль (multi-select).
+      // F-8: remove exactly ONE style value (multi-select).
       next.style = (next.style ?? []).filter((v) => v !== chip.value)
       if (next.style.length === 0) next.style = undefined
       break
@@ -478,7 +481,7 @@ onActivated(() => {
 
 .calendar__heading {
   font-family: var(--font-body);
-  /* Figma 2266:2307 — заголовок 18 (text-base), не text-lg. */
+  /* Figma 2266:2307: the heading is 18px (text-base), not text-lg. */
   font-size: var(--velo-fs-18);
   font-weight: 400;
   color: var(--velo-text-primary);

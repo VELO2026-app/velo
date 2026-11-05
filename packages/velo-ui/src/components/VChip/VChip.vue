@@ -8,8 +8,8 @@
   Sizes: sm (default, compact tag) | md (roomier, filter chips).
 
   Usage:
-    <VChip>Медитация</VChip>
-    <VChip size="md" clickable :active="on" @click="toggle">Заметки</VChip>
+    <VChip>Meditation</VChip>
+    <VChip size="md" clickable :active="on" @click="toggle">Notes</VChip>
 
   Optional `existing` (T24-35, PROMPT №634): a second, DARKER selected state
   meaning "already a member of this" -- distinct from `active` ("selected

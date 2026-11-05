@@ -91,7 +91,7 @@
 //    assertion cannot happen here and whole-host queries are safe.
 //  - NO money. No formatMoney, no Intl.NumberFormat, so no ru NBSP trap
 //    (velo-idiom §11) and no norm() helper. The date assertions are split into
-//    two toContain calls ('20 июля', '13:00') purely to dodge ICU separator
+//    two toContain calls (the day-month date and '13:00') purely to dodge ICU separator
 //    variance between Node builds -- that is not the NBSP rule.
 //  - NO IntersectionObserver, no scroll/layout reads, no navigator.clipboard, no
 //    window.location assignment, no window.history.state, no waitUntilReady.
@@ -364,9 +364,10 @@ describe('CheckinView', () => {
 
     it('while loading, the disabled button does NOT claim the practice already started', async () => {
       // The hint is gated on `practice` (.vue:22). Without that gate, failing
-      // closed would make the screen assert «Check-in закрыт — практика уже
-      // началась» about a practice it has not even loaded -- trading a live
-      // button for a confident lie. Disabled-and-silent is the honest state.
+      // closed would make the screen assert the window-closed hint
+      // (i18n:user.screens.checkin.windowClosedHint) about a practice it has
+      // not even loaded -- trading a live button for a confident lie.
+      // Disabled-and-silent is the honest state.
       getPracticeMock.mockReturnValue(new Promise(() => {}))
       mount()
       await flush()
@@ -393,7 +394,7 @@ describe('CheckinView', () => {
       mount()
       await flush()
 
-      // cleanPracticeTitle strips the "(эфир)" suffix (FormShell.vue:172).
+      // cleanPracticeTitle strips the live-broadcast title suffix (FormShell.vue:172).
       expect(host?.querySelector('.hero-card__title')?.textContent?.trim()).toBe('Вечерняя йога')
       expect(text()).toContain('Мастер Лена')
     })
@@ -535,9 +536,9 @@ describe('CheckinView', () => {
       // (FormShell had no error state and .vue never read selectedError) and submit
       // live with the window unknown.
       // B8 (PROMPT №747): no third arg means code defaults to 'unknown' --
-      // unmapped, lands on practices.ts's own fallback ('Не удалось загрузить
-      // практику'), which happens to read identically to this screen's own
-      // static title -- both now render, one static and one dynamic.
+      // unmapped, lands on practices.ts's own fallback
+      // (i18n:practice.loadFailed), which happens to read identically to this
+      // screen's own static title -- both now render, one static and one dynamic.
       getPracticeMock.mockRejectedValue(new ApiResponseError(404, 'Практика не найдена'))
       mount()
       await flush()
@@ -757,8 +758,9 @@ describe('CheckinView', () => {
   // ===========================================================================
   describe('submitting the check-in', () => {
     it('sends the DEFAULT mood and a null comment, and shows the success screen', async () => {
-      // moodScore defaults to the EXACT 5 «Нормально» (tz-mood-scale §2.4): a
-      // user who taps Отправить without touching the scale sends 5 -- not a
+      // moodScore defaults to the EXACT 5, the neutral mood label
+      // (i18n:mood.neutral, tz-mood-scale §2.4): a user who taps submit
+      // without touching the scale sends 5 -- not a
       // card's click value (6) and not an empty body the backend would reject.
       mount()
       await flush()
@@ -776,8 +778,9 @@ describe('CheckinView', () => {
       mount()
       await flush()
 
-      // Tap the third card («Нормально») -> its click value 6 (MoodSlider
-      // radios select the pair's TOP score, not a zone centre).
+      // Tap the third card (the neutral mood label, i18n:mood.neutral) -> its
+      // click value 6 (MoodSlider radios select the pair's TOP score, not a
+      // zone centre).
       const cards = host?.querySelectorAll('.mood-slider__card')
       expect(cards?.length).toBe(5)
       ;(cards?.[2] as HTMLElement).click()
@@ -868,8 +871,8 @@ describe('CheckinView', () => {
       // closedPracticeMessage() (.vue:192-206, its own small point-branch
       // table for blocked_by_master/not_a_student/not_in_audience) also
       // returns null for 'unknown', so this falls through to
-      // diaryStore.submitCheckin's own fallback ('Не удалось отправить
-      // check-in', stores/diary.ts).
+      // diaryStore.submitCheckin's own fallback
+      // (i18n:storeErrors.diary.sendCheckin, stores/diary.ts).
       upsertCheckinMock.mockRejectedValue(new ApiResponseError(400, 'Check-in window has closed'))
       mount()
       await flush()
@@ -908,8 +911,8 @@ describe('CheckinView', () => {
 
     // BE-92: the backend's check-in refusals carry their own codes now --
     // each reaches the screen as its own phrase from ERROR_MESSAGES, none of
-    // them as the generic «Запрошенный ресурс не найден» / «Некорректный
-    // запрос» they used to fall back to.
+    // them as the generic not-found (i18n:errors.not_found) or bad-request
+    // (i18n:errors.bad_request) phrases they used to fall back to.
     describe('honest check-in codes (BE-92)', () => {
       it.each([
         [404, 'no_active_booking', 'У вас нет подтверждённой брони на эту практику'],
@@ -1123,5 +1126,5 @@ describe('CheckinView', () => {
   //    read practicesStore.selectedError and FormShell had no error state, so a
   //    failed deep link rendered a live form for a POST the backend would refuse.
   //    Both halves are now covered above: the rung (with the real message and a
-  //    working «Повторить»), and windowClosed failing CLOSED.
+  //    working retry button (i18n:common.retry)), and windowClosed failing CLOSED.
 })

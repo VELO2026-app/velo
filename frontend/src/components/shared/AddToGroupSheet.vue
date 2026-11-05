@@ -1,10 +1,11 @@
 <!--
   VELO Frontend -- AddToGroupSheet (Master GROUPS P2, PROMPT №591)
 
-  "Добавить в группу" -- add-access, NOT move (owner-settled: the title is
-  deliberately "Добавить", never "Переместить"). Multi-select VChips over
-  the master's CUSTOM groups; an optional "Удалить из текущей группы" toggle
-  only shown when opened FROM a custom group (removal from «Ученики» is
+  The sheet title (i18n:shared.groups.addTitle) means add-access, NOT move
+  (owner-settled: the title is deliberately the add copy, never a "move"
+  one). Multi-select VChips over the master's CUSTOM groups; an optional
+  removal toggle (i18n:shared.groups.removeToggle) only shown when opened
+  FROM a custom group (removal from the default "Students" virtual group is
   Block, P3 -- never offered here).
 
   POST /groups/{id}/members for every selected group, then (if the toggle
@@ -14,14 +15,15 @@
 
   T24-32..37 (PROMPT №634): smaller title (VBottomSheet's compactTitle) +
   hairline-stroke weight (.velo-text-strong) + TargetUserCard plinth +
-  bolder "Выберите группу" heading (bumped --text-sm -> --text-base, PLUS
-  the same stroke) + chips KEPT (RULE 1 -- the owner's words win over the
-  design file's checkbox-list drawing) with a new darker "already a member"
-  VChip state (T24-35) + the optional removal toggle rebuilt as a REAL
-  VCheckbox (T24-36 -- the written item + the measured spec both say
-  checkbox; it was a VSwitch) + Rule 2's ONE deliberate exception: cancel
-  CORAL on the left, save (still labelled "Добавить", never "Переместить" --
-  owner-settled, see the module docstring above) BLUE on the right.
+  bolder group-choice heading (i18n:shared.groups.choose; bumped --text-sm
+  -> --text-base, PLUS the same stroke) + chips KEPT (RULE 1 -- the owner's
+  words win over the design file's checkbox-list drawing) with a new darker
+  "already a member" VChip state (T24-35) + the optional removal toggle
+  rebuilt as a REAL VCheckbox (T24-36 -- the written item + the measured
+  spec both say checkbox; it was a VSwitch) + Rule 2's ONE deliberate
+  exception: cancel CORAL on the left, save (still labelled with the add
+  copy i18n:shared.groups.addTitle, never a "move" label -- owner-settled,
+  see the module docstring above) BLUE on the right.
 -->
 
 <template>
@@ -90,8 +92,9 @@ const props = withDefaults(
      *  mark, never a broken sheet. */
     existingGroupIds?: string[]
     /** The custom group this sheet was opened FROM, if any (powers the
-     *  optional removal toggle). Null/undefined when opened from «Ученики»
-     *  or «Удалённые» -- no toggle in that case. */
+     *  optional removal toggle). Null/undefined when opened from the
+     *  default Students virtual group or the Deleted virtual group --
+     *  no toggle in that case. */
     currentGroupId?: string | null
   }>(),
   {

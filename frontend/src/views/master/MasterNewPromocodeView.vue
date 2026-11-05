@@ -41,7 +41,8 @@
           :options="DISCOUNT_OPTIONS"
         />
       </div>
-      <!-- «Действует до»: opens the shared DatePickerSheet (consistent in-app picker;
+      <!-- The valid-until field (i18n:masterScreens.masterNewPromocode.fields.validUntil):
+           opens the shared DatePickerSheet (consistent in-app picker;
            future-only via :min) instead of the OS-native date input. -->
       <div class="cp-req-label">
         <div class="new-promo__field">
@@ -145,7 +146,8 @@ const form = reactive({
   limit: '',
 })
 
-// «Действует до» must be in the future — DatePickerSheet :min = today disables the
+// The valid-until date (i18n:masterScreens.masterNewPromocode.fields.validUntil)
+// must be in the future — DatePickerSheet :min = today disables the
 // earlier days (B6; replaces the OS-native min attribute). Local-time date floor
 // (not UTC) so it doesn't drift a day near midnight for east/west-of-UTC testers.
 const todayISO = computed((): string => todayLocalISO())
@@ -247,7 +249,7 @@ async function onCreate(): Promise<void> {
   margin-top: var(--space-4);
 }
 
-/* «Действует до» date trigger — same box as a VInput field (tokens match
+/* Valid-until date trigger — same box as a VInput field (tokens match
    .v-input__field / CreatePractice's picker), opens DatePickerSheet. */
 .new-promo__field {
   margin-bottom: 0;

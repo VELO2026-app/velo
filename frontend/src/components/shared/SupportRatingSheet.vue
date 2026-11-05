@@ -1,7 +1,7 @@
 <!--
   VELO Frontend -- SupportRatingSheet (FE-107 / BE-162 delivery 3)
 
-  «Как мы помогли?» -- the rating sheet of the person's RESOLVED support
+  i18n:chat.rating.title -- the rating sheet of the person's RESOLVED support
   ticket: 1..5 stars and, if they like, a comment (up to 1000 characters).
   One rating per ticket; the notification's button, the bell row and the
   Telegram deep link (`open_support_rating__<id>`) all land on the chat with
@@ -10,18 +10,20 @@
   SELF-CONTAINED on purpose: the wrappers (UserChatView / MasterChatView)
   only say WHEN it may run (`active` -- the opened thread is the support
   row) and WHICH ticket the deep link named. Everything else is here:
-    - the queue: GET /api/v1/support/ratings/pending -- «Решена» without a
+    - the queue: GET /api/v1/support/ratings/pending -- resolved
+      (i18n:adminScreens.adminSupport.statuses.resolved) without a
       rating, newest resolution first; a ticket the person reopened with a
       message is not waiting and will be asked again once re-resolved;
     - the sheet opens on the deep-linked ticket when it is still waiting,
       else (no deep link) on the newest waiting one. A deep link to a ticket
       that no longer waits (rated on another device, reopened) opens
       NOTHING: the person came for that ticket's conversation;
-    - a submitted rating advances to the next waiting ticket; «Позже»
-      (or the scrim) stops asking for this visit -- the sheet returns when
-      the screen is opened again and something still waits.
+    - a submitted rating advances to the next waiting ticket; the later
+      button (i18n:chat.rating.later) -- or the scrim -- stops asking for
+      this visit: the sheet returns when the screen is opened again and
+      something still waits.
 
-  LOOK IS A PLACEHOLDER (the ticket's own words: the вид всплывашки is a
+  LOOK IS A PLACEHOLDER (the ticket's own words: the sheet's look is a
   design task): functional, on the existing components and --velo-* tokens.
   Until the mockup arrives, only behaviour is contractual here.
 -->
@@ -165,7 +167,8 @@ async function onSubmit(): Promise<void> {
     advance()
   } catch (e) {
     if (e instanceof ApiResponseError && (e.status === 409 || e.status === 404)) {
-      // Unanswerable, each in its own way: 409 -- not «Решена» any more or
+      // Unanswerable, each in its own way: 409 -- no longer resolved
+      // (i18n:adminScreens.adminSupport.statuses.resolved), or
       // rated on another device; 404 -- not the caller's ticket any more
       // (deleted past the spam retention). The ask is closed either way:
       // move on to what still waits.
@@ -181,8 +184,8 @@ async function onSubmit(): Promise<void> {
 
 function onLater(): void {
   // A tap in flight lands nowhere: while the rating is being sent the sheet
-  // is not dismissable (the scrim, Escape and «Позже» all come through
-  // here) -- a dismissal mid-flight would race the answer's advance().
+  // is not dismissable (the scrim, Escape and the later button all come
+  // through here) -- a dismissal mid-flight would race the answer's advance().
   if (sending.value) return
   dismissed = true
   open.value = false

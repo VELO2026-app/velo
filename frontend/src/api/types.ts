@@ -54,6 +54,7 @@ export type {
   CreateMasterPromoRequest,
   CreateReportRequest,
   CreateWithdrawalRequest,
+  CustomActivityNamesResponse,
   SchoolAnalyticsResponse,
   SchoolCheckinItem,
   SchoolCuratorRef,
@@ -236,6 +237,7 @@ import type { AudienceKind, PracticeType } from './generated'
 // (interfaces included) once a regen adds those fields natively.
 export type { AudienceKind as PracticeAudienceKind } from './generated'
 
+/** Create-practice request bridged with audience_kind and group_ids ahead of the next generated.ts regen. */
 export interface CreatePracticeRequest extends GeneratedCreatePracticeRequest {
   /** Default 'public' server-side when omitted -- matches every practice's
    * behavior before this feature existed. */
@@ -246,6 +248,7 @@ export interface CreatePracticeRequest extends GeneratedCreatePracticeRequest {
   group_ids?: string[]
 }
 
+/** Update-practice request bridged with the audience fields (PATCH semantics) ahead of the next generated.ts regen. */
 export interface UpdatePracticeRequest extends GeneratedUpdatePracticeRequest {
   /** Both optional (PATCH semantics): omitted = unchanged. group_ids, when
    * sent, REPLACES the practice's full target-group set. */
@@ -260,11 +263,13 @@ export interface UpdatePracticeRequest extends GeneratedUpdatePracticeRequest {
 // UpdatePracticeRequest above, both request fields are REQUIRED here -- the
 // caller always has a complete proposed state in hand (it's evaluating "if
 // I save the form as it stands"), not a partial PATCH.
+/** Audience dry-run proposal for a practice: the complete audience_kind plus group_ids being evaluated. */
 export interface AudiencePreviewRequest {
   audience_kind: AudienceKind
   group_ids: string[]
 }
 
+/** Audience dry-run answer: how many active bookers would fall outside the proposed audience. */
 export interface AudiencePreviewResponse {
   /** How many of this practice's ACTIVE (pending/confirmed) bookers would
    * fall outside the proposed audience. Always present on the response
@@ -272,6 +277,7 @@ export interface AudiencePreviewResponse {
   stranded_count: number
 }
 
+/** Practice DTO bridged with dedup, audience and target-group-name fields ahead of the next generated.ts regen. */
 export interface PracticeResponse extends GeneratedPracticeResponse {
   /* T-35: zoom_meeting_status and zoom_public_link are NATIVE in
    * generated.ts, so this bridge does not restate them. zoom_link is gone
@@ -295,16 +301,19 @@ export interface PracticeResponse extends GeneratedPracticeResponse {
   audience_kind?: AudienceKind
   /** The practice's target CUSTOM groups' names (audience_kind='groups'
    * only; empty/undefined otherwise). Static per-practice data, not a
-   * per-viewer flag -- CheckinView.vue composes the "Вы не состоите в
-   * группе «...»" message from this directly, no second round-trip. */
+   * per-viewer flag -- CheckinView.vue composes the not-in-group message
+   * (i18n:user.screens.checkin.restrictGroupNames) from this directly, no
+   * second round-trip. */
   audience_group_names?: string[]
 }
 
 /* T-35: zoom_meeting_status is native in generated.ts now; this alias is
  * kept so the many existing imports of PracticeSummary from '@/api/types'
  * keep resolving to one name. */
+/** Alias of the generated PracticeSummary, kept so existing imports from this module keep resolving. */
 export type PracticeSummary = GeneratedPracticeSummary
 
+/** Booking-with-practice DTO retyped so its practice field uses the PracticeSummary alias. */
 export interface BookingWithPracticeResponse extends GeneratedBookingWithPracticeResponse {
   /** Overrides the generated field's type to OUR PracticeSummary alias
    * above, so both names stay interchangeable at call sites. */
@@ -339,6 +348,7 @@ export interface BookingWithPracticeResponse extends GeneratedBookingWithPractic
 // read structurally — no conflict, since this is a separate named type.
 import type { UserRole } from './generated'
 
+/** Role-switch block of the user profile: the roles this account may switch itself into. */
 export interface RoleSwitchInfo {
   /** Roles this account may switch itself into. */
   allowed_roles: UserRole[]
@@ -346,6 +356,7 @@ export interface RoleSwitchInfo {
 
 // -- API error shape (matches VeloError + Pydantic 422 formats) --------------
 
+/** Error body shape shared by VeloError and Pydantic 422 responses. */
 export interface ApiError {
   /** Machine-readable error code ("bad_request", "not_found", etc.) */
   error?: string
@@ -385,6 +396,7 @@ export type { PracticeType, PracticeStatus } from './generated'
 // NB: PracticeStatus (re-exported above) still carries live/completed -- those
 // are real statuses the backend REPORTS, they just cannot be REQUESTED.
 // Intentionally NARROWER than PracticeStatus, not a generated.ts candidate.
+/** Statuses a client may PATCH a practice into -- deliberately narrower than the reported PracticeStatus. */
 export type PracticeStatusTransition = 'scheduled' | 'deleted'
 
 // -- Calendar taxonomy facets (match backend data.taxonomy values) --
@@ -402,6 +414,7 @@ export type PracticeStatusTransition = 'scheduled' | 'deleted'
 // (extend practice_allowed_directions, migrate womens_circle/mens_circle
 // -> circles + style, migrate kundalini -> yoga + style=kundalini). The
 // frontend commit MUST wait for the backend deploy.
+/** Practice direction taxonomy facets, hand-copied because the backend serves direction as a bare string. */
 export type PracticeDirection =
   | 'meditation'
   | 'yoga'
@@ -415,18 +428,24 @@ export type PracticeDirection =
   | 'movement'
 // Same reasoning as PracticeDirection above: backend serves `difficulty` as
 // a bare `string`, no generated union to re-point at.
+/** Practice difficulty facets, narrowed from a bare backend string for type safety. */
 export type PracticeDifficulty = 'beginner' | 'medium' | 'high'
 // -- Calendar feed buckets (match backend filter literals) -- these are
 // QUERY-PARAM literals the calendar filter sends, not a field any response
 // object carries -- generated.ts has no counterpart to re-point at.
+/** Calendar duration-bucket query literal (short or long); a filter value, not a response field. */
 export type DurationBucket = 'short' | 'long'
+/** Calendar time-of-day query literal (night, morning, day, evening). */
 export type TimeOfDay = 'night' | 'morning' | 'day' | 'evening'
 export type { BookingStatus } from './generated'
 // No generated.ts counterpart for these three -- Purchase/Master/Attendance
 // each expose their status as a bare backend `string`, narrowed here for
 // call-site type safety only.
+/** Purchase status narrowed from a bare backend string for call-site type safety. */
 export type PurchaseStatus = 'pending' | 'completed' | 'refunded' | 'failed'
+/** Master verification status narrowed from a bare backend string. */
 export type MasterStatus = 'pending' | 'verified' | 'rejected'
+/** Attendance's booking status narrowed from a bare backend string. */
 export type AttendanceBookingStatus = 'pending' | 'confirmed' | 'attended' | 'no_show'
 export type { WithdrawalStatus } from './generated'
 // WaitlistStatus is re-exported from generated.ts -- that file is the
@@ -446,6 +465,7 @@ export type { WithdrawalStatus } from './generated'
 // narrow the generated `DiaryFeedItem.kind: string` to this union at the
 // rendering layer for exhaustive card mapping. Keep in sync with the backend
 // enum -- regenerating types does NOT produce this (snapshot/kind stay open).
+/** Closed vocabulary of diary feed event kinds, narrowed at the rendering layer for exhaustive card mapping. */
 export type DiaryEventKind =
   | 'booking_confirmed'
   | 'booking_cancelled_by_user'
@@ -466,11 +486,14 @@ export type DiaryEventKind =
   | 'external_activity'
 
 // Filter chips on the feed. Map 1:1 onto backend \`category\` query values
-// (settings.diary_feed_categories). Omitting category = "Все". Query-param
-// literal, not a response field -- no generated.ts counterpart to re-point at.
+// (settings.diary_feed_categories). Omitting category = the All chip
+// (i18n:common.all). Query-param literal, not a response field -- no
+// generated.ts counterpart to re-point at.
+/** Feed filter-chip categories, mapping one-to-one onto the backend category query values. */
 export type DiaryFeedCategory = 'entries' | 'dreams' | 'feedbacks' | 'checkins' | 'practices'
 
 // Query params for GET /api/v1/diary/feed (cursor pagination).
+/** Query params of the diary feed endpoint: chips, date window, search (cursor pagination). */
 export interface DiaryFeedFilters {
   // Filter chips -> repeated \`category\` params. Empty/undefined = all.
   categories?: DiaryFeedCategory[]
@@ -481,15 +504,16 @@ export interface DiaryFeedFilters {
 
 // -- Query / filter types (used by stores and API modules) -------------------
 
+/** List/filter query params for practices: facets, date window, sort. */
 export interface PracticeFilters {
   // Multi-select: OR within the facet, sent as repeated query params.
   practice_type?: PracticeType[]
   // Calendar facets (all optional). Multi-select facets are arrays.
   direction?: PracticeDirection[]
   difficulty?: PracticeDifficulty[]
-  // F-8 (2026-05-29): style теперь multi-select chips, отправляется как массив
-  // (как direction/difficulty). Backend B-4 принимает list[str] и фильтрует
-  // через .in_().
+  // F-8 (2026-05-29): style is now multi-select chips, sent as an array
+  // (same as direction/difficulty). Backend B-4 accepts list[str] and
+  // filters via .in_().
   style?: string[]
   duration_bucket?: DurationBucket
   time_of_day?: TimeOfDay
@@ -503,11 +527,14 @@ export interface PracticeFilters {
 
 // Admin report-list query-param literals -- not response fields, no
 // generated.ts counterpart to re-point at.
+/** Admin report-list status filter literals. */
 export type ReportStatusFilter = 'pending' | 'resolved' | 'dismissed'
+/** Admin report-list target-type filter literals. */
 export type ReportTargetTypeFilter = 'user' | 'master' | 'practice'
 
 // -- Convenience re-export for generic paginated response -------------------
 
+/** Generic shape of a limit/offset-paginated list response. */
 export interface PaginatedResponse<T> {
   items: T[]
   total: number
@@ -517,6 +544,7 @@ export interface PaginatedResponse<T> {
 
 // -- Promo request (unified for master and admin UI) ------------------------
 
+/** Promo create request shared by the master and admin promo UIs. */
 export interface CreatePromoRequest {
   code: string
   discount_percent: number

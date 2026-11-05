@@ -3,8 +3,9 @@
 // =============================================================================
 //
 // School practices (audience_kind === 'schools') are listed exactly
-// like every other practice: the muted «Для школы» badge (FE-24 / GT P5) was
-// retired by owner decision 2026-10-02. Asserted on the unavailable-school
+// like every other practice: the muted "For school" badge (FE-24 / GT P5)
+// was retired by owner decision 2026-10-02. Asserted on the
+// unavailable-school
 // case too -- the master zone carries the audience_unavailable warning, the
 // shared card carries nothing.
 // =============================================================================

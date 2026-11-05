@@ -153,7 +153,9 @@ describe('MasterSchoolCreateView', () => {
     expect(host?.querySelector('label.sap')).toBeNull()
     expect(host?.querySelector('label.sbp')).toBeNull()
     // §1.5: the media sections disappear from the flow entirely -- no
-    // «Аватар школы»/«Фон школы» titles without the flag.
+    // avatar (i18n:masterScreens.masterSchoolCreate.fields.avatar) or
+    // background (i18n:masterScreens.masterSchoolCreate.fields.background)
+    // section titles without the flag.
     expect(text()).not.toContain('Аватар школы')
     expect(text()).not.toContain('Фон школы')
   })
@@ -168,7 +170,9 @@ describe('MasterSchoolCreateView', () => {
     const body = text()
     expect(body).toContain('Аватар школы')
     expect(body).toContain('Фон школы')
-    // The mockup order: «Основное» first, then avatar, then banner.
+    // The mockup order: the basics section
+    // (i18n:masterScreens.masterSchoolCreate.section.basics) first, then
+    // avatar, then banner.
     expect(body.indexOf('Основное')).toBeLessThan(body.indexOf('Аватар школы'))
     expect(body.indexOf('Аватар школы')).toBeLessThan(body.indexOf('Фон школы'))
   })

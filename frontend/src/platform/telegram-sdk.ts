@@ -33,6 +33,7 @@ let _initialized = false
  * once outside Telegram / when the SDK is unavailable. */
 let _viewportSettled: Promise<void> = Promise.resolve()
 
+/** Initialize the Telegram SDK and mount its viewport (no-op outside Telegram). */
 export function initTelegramSdk(): void {
   if (_initialized) return
   if (!isTelegramEnv()) return
@@ -66,6 +67,7 @@ export function viewportSettled(): Promise<void> {
   return _viewportSettled
 }
 
+/** Whether the Telegram SDK initialized successfully in this run. */
 export function isTelegramSdkReady(): boolean {
   return _initialized
 }

@@ -88,7 +88,7 @@ export function getPractice(id: string): Promise<PracticeResponse> {
 /**
  * Create a new practice (status defaults to 'draft' until published).
  *
- * Backend state machine: draft -> scheduled (via PATCH status='scheduled').
+ * Backend state machine: `draft -> scheduled` (via PATCH status='scheduled').
  * scheduled_at must be a future UTC ISO 8601 string.
  */
 export function createPractice(body: CreatePracticeRequest): Promise<PracticeResponse> {
@@ -99,24 +99,25 @@ export function createPractice(body: CreatePracticeRequest): Promise<PracticeRes
  * Edit practice fields and/or trigger a status transition.
  *
  * Status transitions allowed via PATCH:
- *   draft       -> scheduled (publish)
+ *   `draft -> scheduled` (publish)
  *
- * scheduled -> live and live -> completed are NO LONGER PATCH-able: they are
- * driven by the backend lifecycle worker by the clock (start at scheduled_at,
- * finish at scheduled_at + duration), not by the client.
+ * `scheduled -> live` and `live -> completed` are NO LONGER PATCH-able: they
+ * are driven by the backend lifecycle worker by the clock (start at
+ * scheduled_at, finish at scheduled_at + duration), not by the client.
  * "cancelled" is NOT reachable here -- use cancelPractice() instead.
- * "deleted"   -> use deletePractice() (soft-delete, draft only).
+ * `"deleted" -> use deletePractice()` (soft-delete, draft only).
  */
 export function updatePractice(id: string, body: UpdatePracticeRequest): Promise<PracticeResponse> {
   return api.patch<PracticeResponse>(`/api/v1/practices/${id}`, body)
 }
 
 /**
- * POST /api/v1/practices/{id}/audience-preview (owner Q15, PROMPT №613).
- * Read-only dry-run -- never saves anything. Returns how many of this
- * practice's ACTIVE bookers would fall outside the proposed audience, so
- * EditPracticeView can warn with a real count before an audience-narrowing
- * save strands people who are already booked.
+ * `POST /api/v1/practices/{id}/audience-preview` (owner Q15, PROMPT №613).
+ * Read-only dry-run -- never saves anything.
+ *
+ * @returns How many of this practice's ACTIVE bookers would fall outside the
+ *   proposed audience, so EditPracticeView can warn with a real count before
+ *   an audience-narrowing save strands people who are already booked.
  */
 export function previewAudienceChange(
   id: string,
@@ -126,7 +127,7 @@ export function previewAudienceChange(
 }
 
 /**
- * Soft-delete a practice (draft only -> status=deleted).
+ * Soft-delete a practice (`draft only -> status=deleted`).
  * Returns 204 No Content on success.
  */
 export function deletePractice(id: string): Promise<void> {
@@ -136,13 +137,14 @@ export function deletePractice(id: string): Promise<void> {
 /**
  * Cancel a practice with full refund to all participants.
  *
- * Allowed statuses: scheduled, live -> cancelled.
+ * Allowed statuses: `scheduled, live -> cancelled`.
  * Backend triggers refund for all confirmed bookings atomically.
  *
- * `scope` selects how far the cancellation reaches for a SERIES practice:
- *   'this'            -- only this occurrence (default when omitted).
+ * @param scope - Selects how far the cancellation reaches for a SERIES
+ *   practice: 'this' -- only this occurrence (default when omitted);
  *   'this_and_future' -- this occurrence and every later one in the series.
- * A non-series practice has no siblings, so omitting scope behaves like 'this'.
+ *   A non-series practice has no siblings, so omitting scope behaves like
+ *   'this'.
  */
 export function cancelPractice(
   id: string,
@@ -154,19 +156,22 @@ export function cancelPractice(
 /**
  * Fetch attendance list and aggregates for a specific practice.
  *
- * Returns total, attended, no_show, pending counts + per-booking items.
+ * @returns Total, attended, no_show, pending counts + per-booking items.
  */
 export function getAttendance(id: string): Promise<AttendanceResponse> {
   return api.get<AttendanceResponse>(`/api/v1/practices/${id}/attendance`)
 }
 
 /**
- * A4 V2 (PROMPT №572): the "Повторить" action on a permanently-failed Zoom
- * meeting (zoom_meeting_status === 'create_failed'). Owner-only; throws
- * ApiResponseError code 'zoom_meeting_not_failed' if the meeting is not
- * currently in that state, or a 404 if there is no ZoomMeeting row at all.
- * Returns the updated practice -- zoom_meeting_status reflects the fresh
- * attempt's outcome immediately, no reload needed.
+ * A4 V2 (PROMPT №572): the retry action (i18n:common.retry) on a permanently-failed Zoom
+ * meeting (zoom_meeting_status === 'create_failed'). Owner-only.
+ *
+ * @returns The updated practice -- zoom_meeting_status reflects the fresh
+ *   attempt's outcome immediately, no reload needed.
+ *
+ * @throws ApiResponseError -- code 'zoom_meeting_not_failed' if the meeting
+ *   is not currently in that state, or a 404 if there is no ZoomMeeting row
+ *   at all.
  */
 export function retryZoomMeeting(practiceId: string): Promise<PracticeResponse> {
   return api.post<PracticeResponse>(`/api/v1/practices/${practiceId}/zoom/retry`)
@@ -184,12 +189,13 @@ export function retryZoomMeeting(practiceId: string): Promise<PracticeResponse> 
  * only party that knows whether this person holds a booking attendance will
  * be written for.
  *
- * Keyed by practice id, not by the public /z/{code} code: this screen is also
- * reached by an ordinary tap from a dashboard, where no code exists.
+ * Keyed by practice id, not by the public `/z/{code}` code: this screen is
+ * also reached by an ordinary tap from a dashboard, where no code exists.
  *
- * 404 when the practice does not exist or is draft/deleted -- a well-formed
- * deep link naming a deleted practice lands exactly here, and the caller must
- * render an honest error rather than an empty screen.
+ * @throws ApiResponseError -- 404 when the practice does not exist or is
+ *   draft/deleted; a well-formed deep link naming a deleted practice lands
+ *   exactly here, and the caller must render an honest error rather than an
+ *   empty screen.
  */
 export function resolveZoomEntry(practiceId: string): Promise<ZoomEntryResolveResponse> {
   return api.get<ZoomEntryResolveResponse>(`/api/v1/practices/${practiceId}/zoom/resolve`)
@@ -199,13 +205,15 @@ export function resolveZoomEntry(practiceId: string): Promise<ZoomEntryResolveRe
  * Standalone F4: the Meeting SDK join parameters for the current user on this
  * practice, minted by the server at the moment of entering and never stored
  * (backend zoom/sdk.py). Only 'personal' and 'host' get them; anything else
- * is ApiResponseError 409 zoom_entry_not_joinable (re-resolve and show the
- * new state). 409 zoom_sdk_not_configured: this server has no SDK keys. 502
- * zoom_unavailable / zoom_host_token_unavailable: Zoom did not answer. 429:
- * the per-user limit.
+ * is not joinable (re-resolve and show the new state).
  *
  * The body carries credentials (passcode, token, a host's ZAK): hand it to
  * the SDK and drop it -- never store it, never log it.
+ *
+ * @throws ApiResponseError -- 409 zoom_entry_not_joinable when the entry is
+ *   anything but 'personal' or 'host'; 409 zoom_sdk_not_configured: this
+ *   server has no SDK keys; 502 zoom_unavailable / zoom_host_token_unavailable:
+ *   Zoom did not answer; 429: the per-user limit.
  */
 export function joinZoomSdk(practiceId: string): Promise<ZoomSdkJoinResponse> {
   return api.post<ZoomSdkJoinResponse>(`/api/v1/practices/${practiceId}/zoom/sdk-join`)
@@ -229,21 +237,23 @@ export function getPracticeReviews(
 }
 
 // ============================================================================
-// BE-78: «Аналитика по практике»
+// BE-78: practice analytics (i18n:shared.analytics.title)
 // ============================================================================
 //
 // Readers: the leading master; for a school's practice also its curator and
 // its verified masters. Anyone else gets 404 -- not 403: the endpoints take
 // any signed-in user (a curator may hold role='user') and mask the practice.
 // An entitled reader of a practice that is not completed gets 400. Scores
-// arrive as zones (ScoreZone) only; every "X из N" uses N = `attended`.
+// arrive as zones (ScoreZone) only; every "X of N" counter
+// (i18n:shared.analytics.outOf) uses N = `attended`.
 
 /** Header + both zone distributions + the two list totals. */
 export function getPracticeAnalytics(id: string): Promise<PracticeAnalyticsResponse> {
   return api.get<PracticeAnalyticsResponse>(`/api/v1/practices/${id}/analytics`)
 }
 
-/** «Пришёл -> ушёл»: attendees with a PRE check-in AND a review, by name. */
+/** Came-left pairs (i18n:shared.analytics.cameLeft): attendees with a PRE
+ *  check-in AND a review, by name. */
 export function getPracticeAnalyticsPairs(
   id: string,
   limit = 20,

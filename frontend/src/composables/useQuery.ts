@@ -41,8 +41,10 @@ import {
 import { onDocumentEvent, isDocumentHidden } from '@/platform/dom'
 import { readPersisted, writePersisted } from '@/composables/persistedCache'
 
+/** Cache key of a query entry: an ordered tuple of primitives identifying the request. */
 export type QueryKey = readonly (string | number | boolean | null)[]
 
+/** Definition of one cached query: key, fetcher, staleness window, placeholder, persistence. */
 export interface QueryOptions<T> {
   key: QueryKey
   query: () => Promise<T>
@@ -56,11 +58,13 @@ export interface QueryOptions<T> {
   persist?: boolean
 }
 
+/** Screen-side options of useQuery, e.g. keeping the previous key's data while a new key loads. */
 export interface UseQueryOptions {
   /** Keep the previous key's data on screen while a new key loads. */
   keepPrevious?: boolean
 }
 
+/** Reactive handle over one cache entry: data, error, pending/fetching flags, refresh and revalidate. */
 export interface QueryResult<T> {
   /** Cached data, else the previous key's (keepPrevious), else the placeholder. */
   data: ComputedRef<T | undefined>
@@ -78,6 +82,7 @@ export interface QueryResult<T> {
   revalidate: () => Promise<void>
 }
 
+/** Default staleness window: data younger than this is not refetched on use (ms). */
 export const DEFAULT_STALE_TIME_MS = 30_000
 /** Entries kept without subscribers; the oldest unused ones are dropped. */
 const MAX_ENTRIES = 120
@@ -103,6 +108,7 @@ interface Entry {
 
 const entries = new Map<string, Entry>()
 
+/** Serialize a query key into the string hash the cache map is keyed by. */
 export function serializeKey(key: QueryKey): string {
   return JSON.stringify(key)
 }
@@ -199,6 +205,7 @@ function installFocusRefetch(): void {
   })
 }
 
+/** Subscribe a screen to one cached query entry: stale-while-revalidate reads, dedupe, optional reload persistence. */
 export function useQuery<T>(
   options: MaybeRefOrGetter<QueryOptions<T>>,
   { keepPrevious = false }: UseQueryOptions = {},

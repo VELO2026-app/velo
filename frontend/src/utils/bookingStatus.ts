@@ -3,8 +3,9 @@
 // =============================================================================
 //
 // Single source of truth for the practice/booking lifecycle as the USER sees it,
-// shared by the dashboard "Ближайшая практика" card and "Мои бронирования" so
-// the two never drift.
+// shared by the dashboard nearest-practice card
+// (i18n:masterScreens.masterDashboard.nearestOne) and the bookings screen
+// (i18n:user.screens.myBookings.title) so the two never drift.
 //
 // Active-cycle states (before/while the practice runs) are decided by CLIENT
 // TIME (scheduled_at + duration_minutes), NOT by practice.status. The backend

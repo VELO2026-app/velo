@@ -1,12 +1,14 @@
 <!--
   VELO Frontend -- OnboardingGoalStep (FE-101, onboarding step 5 of 5)
 
-  The «К чему бы вы хотели прийти?» body of the user onboarding: a
-  multi-select checkbox list from USER_GOAL_OPTIONS plus the «Свой вариант»
-  reveal (GOAL_CUSTOM) with a free-text input. The shell (dots, back arrow,
-  «Готово») belongs to OnboardingView; this component only owns the picks.
+  The goals body of the user onboarding (i18n:auth.onboarding.goals.title): a
+  multi-select checkbox list from USER_GOAL_OPTIONS plus the custom-answer
+  reveal (i18n:auth.onboarding.goals.options.custom, GOAL_CUSTOM) with a
+  free-text input. The shell (dots, back arrow,
+  i18n:auth.onboarding.done) belongs to OnboardingView; this component only owns the picks.
 
-  Nothing is REQUIRED: «Готово» stays enabled with zero picks -- the flow
+  Nothing is REQUIRED: the done button (i18n:auth.onboarding.done) stays
+  enabled with zero picks -- the flow
   never traps a user who would rather not say (the same optionality the
   Skip on every earlier step gives). The parent decides what to send.
 -->
@@ -25,7 +27,8 @@
         @update:model-value="toggle(slug)"
       />
 
-      <!-- «Свой вариант» reveal: the input mounts only while the pick is
+      <!-- Custom-answer reveal (i18n:auth.onboarding.goals.options.custom):
+           the input mounts only while the pick is
            on, so the list never reserves dead space for it. The wrapper div
            carries the class -- VInput sets inheritAttrs:false and forwards
            attrs (a class included) onto its INNER input, so a class placed
@@ -87,7 +90,8 @@ function toggle(slug: string): void {
   max-width: var(--velo-content-width);
   margin: 0 auto;
   /* The list is the tallest step of the flow: own the scroll so the title,
-     dots and «Готово» stay pinned (ROOT-LOCK, same as the intro body). */
+     dots and the done button (i18n:auth.onboarding.done) stay pinned
+     (ROOT-LOCK, same as the intro body). */
   min-height: 0;
   overflow-y: auto;
   padding-bottom: var(--space-2);

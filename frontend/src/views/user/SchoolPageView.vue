@@ -17,11 +17,14 @@
   Zone only decides the back target (master-schools vs
   user-my-schools), read off route.name's prefix.
 
-  «Покинуть школу» for student/master lives in the header. The curator's
-  page carries «Редактировать школу» (the edit sheet) and the four §1.6 nav
-  rows; Пригласить / Передать школу / Удалить школу have no entry point on
-  this page any more (owner 2026-09-19). The one destructive dialog left is
-  покинуть, and it carries the ADVISORY line from the leave-preview; a 404
+  The leave control for student/master
+  (i18n:user.screens.schoolPage.leaveCta) lives in the header. The curator's
+  page carries the edit-school row
+  (i18n:user.screens.schoolPage.edit.title, the edit sheet) and the four §1.6
+  nav rows; the invite / transfer-school / delete-school actions have no
+  entry point on this page any more (owner 2026-09-19). The one destructive
+  dialog left is leave, and it carries the ADVISORY line from the
+  leave-preview; a 404
   on a preview means "no advisory" (frozen school -- leave still works,
   I-5), never an error and never a blocked button.
 -->
@@ -117,13 +120,14 @@
           @declined="onTransferDeclined"
         />
 
-        <!-- §1.6: «Редактировать школу» (curator, master zone -- FE-93)
-             keeps its pencil and no chevron; the nav rows that follow
-             carry NO left icons --
-             only the label and the enlarged dark chevron (§1.9). «Участники»
-             opens the merged roster screen (§1.11, curator only); the
-             rosters no longer live on this page. «Аналитика» opens the
-             school's analytics screen (§6 MVP, owner 2026-10-02). -->
+        <!-- §1.6: the edit-school row (i18n:user.screens.schoolPage.edit.title,
+             curator, master zone -- FE-93) keeps its pencil and no chevron;
+             the nav rows that follow carry NO left icons --
+             only the label and the enlarged dark chevron (§1.9). Members
+             (i18n:user.screens.schoolMembers.title) opens the merged roster
+             screen (§1.11, curator only); the rosters no longer live on this
+             page. Analytics (i18n:user.screens.schoolPage.tabs.analytics)
+             opens the school's analytics screen (§6 MVP, owner 2026-10-02). -->
         <div class="cgp__actions">
           <VMenuRow
             v-if="curatorSurface"
@@ -135,13 +139,17 @@
           </VMenuRow>
 
           <!-- §1.9: these carry NO left icons -- only the label and the
-               enlarged dark chevron. «Участники» opens the merged roster
-               screen with the Мастера/Ученики switcher (§1.11, owner
-               2026-09-22) and is the curator's privilege -- the rosters are
+               enlarged dark chevron. The members row
+               (i18n:user.screens.schoolPage.tabs.members) opens the merged
+               roster screen with the masters/students switcher (§1.11,
+               owner 2026-09-22) and is the curator's privilege -- the
+               rosters are
                the curator handle on the server, everyone else reads the
-               counters in the hero. «Предстоящие практики» opens the school-
+               counters in the hero. The upcoming-practices row
+               (i18n:user.screens.schoolPage.tabs.upcoming) opens the school-
                scoped calendar (owner 2026-10-01; was a scroll to the feed
-               below); «Аналитика» is the honest stub until §6 ships a page. -->
+               below); analytics (i18n:user.screens.schoolPage.tabs.analytics)
+               is the honest stub until §6 ships a page. -->
           <!-- BE-76: the roster is the curator's and, in the master zone only,
                the school's masters' -- FE-93 removed the user-zone screens, so
                a curator reading the page in user mode is an ordinary member. -->
@@ -184,7 +192,8 @@
           {{ t('user.screens.schoolPage.createPractice') }}
         </VButton>
 
-        <!-- §1.6 item 7 + owner 2026-09-19: «Ближайшие практики» is the
+        <!-- §1.6 item 7 + owner 2026-09-19: the nearest-practices section
+             (i18n:user.screens.schoolPage.tabs.upcoming2) is the
              page's LAST element -- nothing renders below it -- and shows at
              most five upcoming school practices. The existing practice-card
              canon, no school-only variant. -->
@@ -230,7 +239,8 @@
       <!-- BE-20: the avatar is a URL, not an upload (no file storage in the
            platform). Left empty on a school that HAS one, it means "remove";
            the server stores the link normalized, and the save surface shows
-           «сохранено как …» when it round-trips differently. -->
+           the saved-as toast (i18n:user.screens.schoolPage.toast.avatarSaved)
+           when it round-trips differently. -->
       <VInput
         v-model="editAvatar"
         :label="t('user.screens.schoolPage.edit.avatarLink')"
@@ -313,14 +323,16 @@ const isCurator = computed(() => relation.value === 'curator')
  *  every call behind these blocks goes to the masters surface, which answers
  *  403 there; in user mode a curator is an ordinary member. */
 const curatorSurface = computed(() => isCurator.value && inMasterZone.value)
-/** Who sees «Участники» (BE-76): the curator, and a master of the school in
- *  the master zone. The server enforces the same split on GET .../roster. */
+/** Who sees the members screen (i18n:user.screens.schoolMembers.title,
+ *  BE-76): the curator, and a master of the school in the master zone. The
+ *  server enforces the same split on GET .../roster. */
 const canOpenRoster = computed(
   () => isCurator.value || (relation.value === 'master' && inMasterZone.value),
 )
 
-// Owner 2026-10-05: the header carries ONLY the school's name (was
-// «Школа «{name}»», §1.6/§1.10 mockup). field.schoolFallback is the pre-load fallback.
+// Owner 2026-10-05: the header carries ONLY the school's name (was the
+// School-prefixed name composite of the §1.6/§1.10 mockup).
+// field.schoolFallback is the pre-load fallback.
 const pageTitle = computed(
   () => page.value?.name ?? t('user.screens.schoolPage.field.schoolFallback'),
 )
@@ -342,7 +354,8 @@ watch(
   { immediate: true },
 )
 
-// Owner 2026-10-01: «Предстоящие практики» opens the school-scoped calendar
+// Owner 2026-10-01: the upcoming-practices row
+// (i18n:user.screens.schoolPage.tabs.upcoming) opens the school-scoped calendar
 // (user-calendar-school) -- the school's full upcoming list on the week grid,
 // not the five-card preview below. The preview stays: it is the page's last
 // element (§1.6 item 7). The route's param is :schoolId -- pushing it as :id
@@ -459,7 +472,8 @@ function advisoryLine(count: number | null): string {
   // 0 -> no line at all (nothing would change -- saying so is noise).
   if (count === null || count === 0) return ''
   // hiddenCount is a CLDR pipe key: the whole sentence agrees per form
-  // (предстанет/станут), so no noun-fragment threading is needed.
+  // (the Russian wording changes with the count), so no noun-fragment
+  // threading is needed.
   // The joining space lives here, not in the catalog (no leading-space values).
   return ` ${t('user.screens.schoolPage.hiddenCount', count)}`
 }
@@ -518,7 +532,8 @@ const editDescription = ref('')
 const editAvatar = ref('')
 const saving = ref(false)
 
-/** Shared by the «⋯» menu item and the §1.6 «Редактировать школу» row. */
+/** Shared by the ⋯ menu item and the §1.6 edit-school row
+ *  (i18n:user.screens.schoolPage.edit.title). */
 function openEdit(): void {
   editName.value = page.value?.name ?? ''
   editDescription.value = page.value?.description ?? ''

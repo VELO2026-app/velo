@@ -22,6 +22,7 @@ import i18n from '@/locales'
 
 const { t } = i18n.global
 
+/** Admin dashboard stats and live pending counts shared by the admin shell badges and screens. */
 export const useAdminStore = defineStore('admin', () => {
   const stats = ref<AdminStatsResponse | null>(null)
   const pendingReports = ref(0)

@@ -41,8 +41,10 @@ import { api } from '@/api/client'
 
 /** P-1 display block: the counterparty as velo knows them. `name` is
  *  "First Last" from Telegram fields and may be null -- the VIEW owns the
- *  role-appropriate fallback («Мастер» / «Ученик»). null peer = the proxy
- *  could not resolve the user at all (degrade, don't break the row). */
+ *  role-appropriate fallback (i18n:user.screens.userChat.peerFallback for a
+ *  student, i18n:masterScreens.masterChat.peerFallback for a master). null
+ *  peer = the proxy could not resolve the user at all (degrade, don't break
+ *  the row). */
 export interface ChatPeer {
   user_id: string
   name: string | null
@@ -51,7 +53,7 @@ export interface ChatPeer {
 
 /** BE-163: `"chat"` is a person-to-person DM, `"support"` the caller's own
  *  support conversation (peer is always null there -- the row shows the
- *  VELO logo and «Поддержка VELO» instead). */
+ *  VELO logo and the support title (i18n:chat.supportTitle) instead). */
 export type ChatChannel = 'chat' | 'support'
 
 /** BE-166 translation state, attached to support-channel messages. `null`
@@ -109,11 +111,13 @@ export interface ChatThread {
   unread?: number
 }
 
+/** One page of the caller's chat threads (last-message-first) with the next-page cursor. */
 export interface ChatThreadList {
   threads: ChatThread[]
   next_cursor: string | null
 }
 
+/** One message of a thread's feed: sender, body (null when translation replaces it) and translation state. */
 export interface ChatMessage {
   id: string
   thread_id: string
@@ -133,6 +137,7 @@ export interface ChatMessageList {
   next_cursor: string | null
 }
 
+/** A thread's unread counter, as returned by mark-read and the badge poll. */
 export interface ChatUnread {
   unread: number
 }
@@ -148,6 +153,7 @@ export interface ChatUnreadSummary {
   unread_messages: number
 }
 
+/** Open-or-get the eternal direct message thread with one verified master (one thread per pair). */
 export function openChat(masterId: string): Promise<ChatThread> {
   return api.post<ChatThread>('/api/v1/chats', { master_id: masterId })
 }
@@ -161,6 +167,7 @@ export function openStudentChat(studentId: string): Promise<ChatThread> {
   return api.post<ChatThread>('/api/v1/chats/students', { student_id: studentId })
 }
 
+/** List the caller's conversations, last-message-first. */
 export function listChats(limit = 100): Promise<ChatThreadList> {
   return api.get<ChatThreadList>(`/api/v1/chats?limit=${limit}`)
 }
@@ -173,6 +180,7 @@ export function chatRowFor(threads: ChatThread[], threadId: string): ChatThread 
   return threads.find((t) => t.id === threadId || t.thread_ids?.includes(threadId))
 }
 
+/** Fetch one newest-first, cursor-paginated page of a thread's message feed. */
 export function listChatMessages(
   threadId: string,
   limit = 100,
@@ -211,10 +219,12 @@ export function sendChatMessage(
   )
 }
 
+/** Advance the caller's read pointer of a thread; returns its fresh unread count. */
 export function markChatRead(threadId: string): Promise<ChatUnread> {
   return api.post<ChatUnread>(`/api/v1/chats/${threadId}/read`, {})
 }
 
+/** The caller's unread state across every conversation (the master hub badge source). */
 export function getChatUnreadSummary(): Promise<ChatUnreadSummary> {
   return api.get<ChatUnreadSummary>('/api/v1/chats/unread-summary')
 }

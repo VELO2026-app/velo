@@ -148,7 +148,7 @@ function preloadAppChunk(): Plugin {
 export default defineConfig(({ mode }) => {
   const frontendDir = fileURLToPath(new URL('.', import.meta.url))
   const instanceEnv = loadEnv(mode, frontendDir, 'VITE_')
-  // tz-whitelabel §4 (F3, variant «а»): VITE_FEATURES materializes into one
+  // tz-whitelabel §4 (F3, variant "a"): VITE_FEATURES materializes into one
   // boolean literal per module (featureDefines() in platform/features -- the
   // same builder vitest.config pins to the golden all-on set). Route gates in
   // router/index.ts read these __VELO_FEATURE_*__ defines DIRECTLY -- a
@@ -215,7 +215,8 @@ export const SKIN_BRAND: string | null = ${JSON.stringify(skin?.displayName ?? n
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
           // Don't precache source maps -- nor the Zoom Meeting SDK chunk
           // (Standalone F4, manualChunks below): about 5 MB that only the
-          // practice screen loads, on «Войти»/«Начать». Precached, every
+              // practice screen loads, on the practice-live join/start buttons
+              // (i18n:user.screens.practiceLive.join, i18n:user.screens.practiceLive.start). Precached, every
           // install and every update would download it for everyone.
           globIgnores: ['**/*.map', '**/zoom-sdk-*.js'],
           // Runtime caching gives the service worker a valid strategy even when

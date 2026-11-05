@@ -225,8 +225,9 @@ describe('MasterNewPromocodeView', () => {
 
       await pickDay(25)
 
-      // «июля», genitive -- VELO_SHORT_MONTHS abbreviates only the months whose
-      // names are long (utils/format.ts:103-116); июнь/июль/май are spelled out.
+      // The picked day renders with the genitive July month name --
+      // VELO_SHORT_MONTHS abbreviates only the months whose names are long
+      // (utils/format.ts:103-116); June, July and May are spelled out.
       expect(text()).toContain('25 июля 2026')
       expect(text()).not.toContain('Выберите дату')
     })

@@ -10,10 +10,10 @@
   below; a host may substitute its own skeleton without forking the card.
 
   Usage:
-    <VStatCard value="156" label="участников">
+    <VStatCard value="156" label="participants">
       <template #icon><IconGroup :size="24" /></template>
     </VStatCard>
-    <VStatCard value="€1,280" label="доход" />
+    <VStatCard value="€1,280" label="income" />
 -->
 
 <template>

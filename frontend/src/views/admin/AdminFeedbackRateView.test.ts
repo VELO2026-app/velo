@@ -27,8 +27,8 @@
 //     null -- every computed already guards with '—' for exactly that case.
 //
 // THE FIVE-ZONE DISTRIBUTION -- the real assignment on this screen.
-// BE-77: this was three buckets (fire / good / confused under «Огонь!» /
-// «Хорошо» / «Есть вопросы»); the owner's five zones replaced it, so every
+// BE-77: this was three buckets (fire / good / confused, old copy no longer in
+// the catalog); the owner's five zones replaced it, so every
 // assertion below now names all five rows (moodScale labels). Rows are read
 // as ONE label -> value map, so a missing, extra or crossed row fails.
 // `distributionTotal = zoneTotal(distribution)` (0 if no distribution at
@@ -46,7 +46,8 @@
 //     zero share") and the guard is written to tell them apart on purpose.
 // THE FIELD-NAME MAPPING (explicitly checked, not assumed): each zone key
 // of ScoreZoneCounts (bad / low / neutral / good / fire) is rendered under
-// its moodScale label (Плохо / Не очень / Нормально / Хорошо / Огонь).
+// its moodScale label (i18n:mood.bad / i18n:mood.low / i18n:mood.neutral /
+// i18n:mood.good / i18n:mood.fire).
 // Asserted below with five DIFFERENT counts so a mis-wired mapping would
 // actually show up as a wrong percentage on a specific bar, not just "some
 // numbers somewhere."
@@ -138,7 +139,7 @@ function ratingLabels(): string[] {
   return ratingBars().map((b) => b.querySelector('.v-rating-bar__label')?.textContent?.trim() ?? '')
 }
 
-/** Every rating row as label -> rendered value: a missing/extra row fails toEqual. */
+/** Every rating row as `label -> rendered value`: a missing/extra row fails toEqual. */
 function ratingValues(): Record<string, string> {
   return Object.fromEntries(
     ratingBars().map((b) => [

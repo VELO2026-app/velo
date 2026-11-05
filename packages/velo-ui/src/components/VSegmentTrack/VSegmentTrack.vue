@@ -5,7 +5,7 @@
   The "track + thumb" segmented control: a single glass track with a sliding
   primary fill-pill on the active option. This is the operator-approved master
   idiom and is DISTINCT from VSegment (the two-pill filter on admin lists +
-  master practices tabs) — the two idioms intentionally coexist (SHELL fork #5=А).
+  master practices tabs) — the two idioms intentionally coexist (SHELL fork #5=A).
 
   Extracted verbatim from two duplicated local copies so the markup + CSS live in
   one place:
@@ -18,7 +18,7 @@
 
   Track glass aligned to the operator SVG «1 Practices» (2026-06-18): blue-200 @15
   tint + 2px backdrop blur, and the tabs inactive colour brought to text-primary so
-  the Practices and Analytics tab strips are byte-identical (operator fork Б=Г).
+  the Practices and Analytics tab strips are byte-identical (operator fork B=G).
 
   Usage:
     <VSegmentTrack v-model="period" :options="PERIOD_OPTIONS" variant="toggle" />
@@ -26,7 +26,8 @@
     <VSegmentTrack v-model="filter" :options="OPTIONS" variant="tabs" scrollable />
 
   An option may carry an `icon` (a DS icon component) rendered before the
-  label (SchoolMembersView's «Блок» lock). Iconless options -- every
+  label (the lock on SchoolMembersView's blocked tab,
+  i18n:user.screens.schoolMembers.tabs.blocked). Iconless options -- every
   pre-existing caller -- render exactly as before.
 -->
 <template>
@@ -67,7 +68,8 @@ import type { Component } from 'vue'
 export interface SegOption<T extends string> {
   value: T
   label: string
-  /** Optional leading glyph (SchoolMembersView's «Блок» lock). */
+  /** Optional leading glyph (the lock on SchoolMembersView's blocked tab,
+   * i18n:user.screens.schoolMembers.tabs.blocked). */
   icon?: Component
 }
 
@@ -174,7 +176,8 @@ const emit = defineEmits<{
   white-space: nowrap;
 }
 
-/* Optional icon+label composition (the «Блок» lock). */
+/* Optional icon+label composition (the blocked-tab lock,
+   i18n:user.screens.schoolMembers.tabs.blocked). */
 .v-segment-track__opt {
   display: inline-flex;
   align-items: center;

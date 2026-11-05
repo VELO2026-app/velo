@@ -5,7 +5,7 @@
 //
 // P6a-2 safety net, same pattern as VModal.test.ts from FE-142: VMenu and
 // VMenuItem move to @velo/ui under FE-121 (P6), and until now neither had
-// tests -- «переносить нетестированное запрещено». These pin the CURRENT
+// tests -- "moving untested code is forbidden". These pin the CURRENT
 // components' contract as-is. Zero component edits: anything that could only
 // pass after an edit is a component finding for the FE-144 report, not a fix
 // in here.
@@ -77,9 +77,9 @@ const actions: string[] = []
 interface MountOpts {
   /** Extra props forwarded onto VMenu (ariaLabel, ...). */
   props?: Record<string, unknown>
-  /** Default-slot factory receiving VMenu's { close } scope. */
+  /** Default-slot factory receiving VMenu's `{ close }` scope. */
   slot?: (scope: { close: () => void }) => VNode
-  /** #trigger slot factory receiving the { open } scope. */
+  /** #trigger slot factory receiving the `{ open }` scope. */
   trigger?: (scope: { open: boolean }) => VNode
 }
 
@@ -186,7 +186,7 @@ describe('VMenu (trigger markup)', () => {
     const btn = trigger()
     expect(btn?.getAttribute('type')).toBe('button')
     // The default comes from the module-singleton t (shared.components.menuAria
-    // -> «Меню»), not from any app-level i18n -- pinned as-is.
+    // -> "Menu"), not from any app-level i18n -- pinned as-is.
     expect(btn?.getAttribute('aria-label')).toBe('Меню')
     expect(btn?.getAttribute('aria-haspopup')).toBe('menu')
     expect(btn?.getAttribute('aria-expanded')).toBe('false')

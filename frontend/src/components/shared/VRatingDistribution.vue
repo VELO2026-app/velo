@@ -2,7 +2,7 @@
   VELO Frontend -- VRatingDistribution (shared, WS-3b T2; five zones since BE-77)
 
   Rating-distribution bars, one per zone of the shared 1..10 scale
-  (Огонь .. Плохо, best first), on a VCard plate.
+  (fire .. bad, best first), on a VCard plate.
 
   API = COUNTS-IN: the caller passes the server's per-zone counts
   (ScoreZoneCounts, keyed like utils/moodScale.ts); the component owns the
@@ -53,7 +53,7 @@ interface RatingBar {
   barColor: string
 }
 
-// Best zone first, as the three-bar version read (Огонь on top).
+// Best zone first, as the three-bar version read (the fire zone on top).
 const ZONES_BEST_FIRST: readonly MoodScaleKey[] = [...MOOD_SCALE_KEYS].reverse()
 
 const bars = computed((): RatingBar[] => {

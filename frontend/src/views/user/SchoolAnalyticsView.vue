@@ -2,13 +2,17 @@
   VELO Frontend -- SchoolAnalyticsView (tz-curator.md §6)
 
   The school's analytics screen, rebuilt per the owner's brief of
-  2026-10-02. Part 1: a period slider (Неделя / Месяц / Квартал) over four
+  2026-10-02. Part 1: a period slider (week i18n:common.periodWeek, month
+  i18n:common.periodMonth, quarter
+  i18n:user.screens.schoolAnalytics.period.quarter) over four
   white metric cards -- practices conducted, people who came out of the
   school's members, came-again rate, joined-but-never-came. Part 2: the
-  «Процент фидбеков» block under the cards -- the period's reviews out of
+  feedback-percent block (i18n:user.screens.schoolAnalytics.feedbackPercent)
+  under the cards -- the period's reviews out of
   its visits (BE-107: the server computes reviews_pct and sends both
   numbers; the screen does no arithmetic) on the heading line,
-  the FIVE-scale feedback strip (Плохо .. Огонь, tz-mood-scale) below, via
+  the FIVE-scale feedback strip (i18n:mood.bad .. i18n:mood.fire,
+  tz-mood-scale) below, via
   the shared DistributionCard. The slider refetches in place, and the last
   requested period wins (an earlier response never lands under a newer
   label).
@@ -74,11 +78,11 @@
           :aria-label="t('analytics.statsPeriod')"
         />
 
-        <!-- Interim scaffold (owner 2026-10-02: «бек доедет»): every
-             engagement read is fault-tolerant, so a payload from a backend
-             that has not shipped the contract yet renders the honest zero
-             scaffold instead of crashing the screen. When the real backend
-             lands, the numbers appear with no FE change. -->
+        <!-- Interim scaffold (owner 2026-10-02: the backend will catch
+             up): every engagement read is fault-tolerant, so a payload from
+             a backend that has not shipped the contract yet renders the
+             honest zero scaffold instead of crashing the screen. When the
+             real backend lands, the numbers appear with no FE change. -->
         <div class="school-analytics__stats">
           <div class="school-analytics__stat">
             <span class="school-analytics__stat-value">
@@ -121,7 +125,7 @@
 
         <!-- Part 2: the feedback share. Heading line + the colored strip,
              one server aggregate per selected period; the percent and both
-             numbers (reviews из visits) come ready from the server. -->
+             numbers (reviews out of visits) come ready from the server. -->
         <DistributionCard
           class="school-analytics__feedback"
           :title="t('user.screens.schoolAnalytics.feedbackPercent')"
@@ -226,12 +230,13 @@ const PERIOD_OPTIONS: ReadonlyArray<{ value: SchoolAnalyticsPeriod; label: strin
   { value: 'quarter', label: t('user.screens.schoolAnalytics.period.quarter') },
 ]
 
-// -- The feedback block (part 2). «Процент фидбеков» = the period's reviews
-//    out of its visits, everyone who came (BE-107, owner decision 3). The
-//    SERVER computes reviews_pct and sends reviews and visits beside it; the
-//    screen renders them as they come and divides nothing. reviews is the
-//    sum of the strip's zones, so the line and the strip agree. The
-//    strip is the FIVE mood-scale gradations («Плохо» .. «Огонь») with the
+// -- The feedback block (part 2). The feedback-percent heading
+//    (i18n:user.screens.schoolAnalytics.feedbackPercent) = the period's
+//    reviews out of its visits, everyone who came (BE-107, owner decision
+//    3). The SERVER computes reviews_pct and sends reviews and visits beside
+//    it; the screen renders them as they come and divides nothing. reviews
+//    is the sum of the strip's zones, so the line and the strip agree. The
+//    strip is the FIVE mood-scale gradations (i18n:mood.bad .. i18n:mood.fire) with the
 //    shared mood palette + faces -- visually the same segments the practice
 //    strips render, and since BE-77 the same five zones every feed and
 //    distribution carries. --
@@ -329,8 +334,9 @@ onMounted(() => {
   void refresh()
 })
 
-// BE-78 (2): in the MASTER zone a practice card opens «Аналитика по
-// практике» (its back is router.back() -> here). The user-zone mount stays
+// BE-78 (2): in the MASTER zone a practice card opens the practice
+// analytics screen (i18n:shared.analytics.title; its back is
+// router.back() -> here). The user-zone mount stays
 // inert -- FE-93 removes it: the card is `clickable` only in the master zone,
 // and VCard emits no click otherwise, so this runs in the master zone only.
 function openPractice(practiceId: string): void {
@@ -375,7 +381,8 @@ function goBack(): void {
 
 /* The four metric cards: white rectangles, value over caption. Same white
    surface tokens as VStatCard (the dashboards' stat card); the caption may
-   run two lines («Человек приходило из 27 в школе»), so it wraps instead
+   run two lines (the members line,
+   i18n:user.screens.schoolAnalytics.membersLine), so it wraps instead
    of VStatCard's single-line nowrap label. */
 .school-analytics__stats {
   display: grid;

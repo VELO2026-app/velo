@@ -2,19 +2,21 @@
   VELO Frontend -- AdminPracticesView (Admin DS, 2026-06-14, operator SVGs "2 Practices" + upcoming/past)
 
   Global practices list (all platform practices, across masters). Reached from the
-  dashboard «Практик» stat card. Header (back + count badge) + VSegment filter
-  (Все / Предстоящие / Прошедшие) + PracticeListCard rows. Tapping a card opens the
-  admin practice detail (admin-practice-detail), handing the practice via router state.
+  dashboard practices stat card (i18n:adminScreens.adminDashboard.practicesStat).
+  Header (back + count badge) + VSegment filter (i18n:common.all /
+  i18n:adminScreens.adminPractices.upcoming / i18n:adminScreens.adminPractices.past)
+  + PracticeListCard rows. Tapping a card opens the admin practice detail
+  (admin-practice-detail), handing the practice via router state.
 
-  Card = the canonical PracticeListCard (operator reconciliation п.1=А): direction
+  Card = the canonical PracticeListCard (operator reconciliation p.1=A): direction
   icon + title + master + bottom meta (date under the icon · duration ·
   capacity in the #badge slot, rose when full). No status badge — capacity took its
   slot in the newer SVGs; the verified check is hidden product-wide (2026-10-03).
 
   WIRED (E9, 2026-06-16): GET /api/v1/admin/practices?scope=all|upcoming|past drives
   the list (loading/error/empty states). Header count = the fetched scope total; the
-  «Все» segment badge keeps the platform total from /admin/stats. Tapping a card opens
-  the detail, which re-fetches by id (GET /admin/practices/:id).
+  i18n:common.all segment badge keeps the platform total from /admin/stats. Tapping
+  a card opens the detail, which re-fetches by id (GET /admin/practices/:id).
 -->
 
 <template>
@@ -85,7 +87,7 @@ const total = ref<number | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
 
-// Platform total from /admin/stats (loaded by AdminShell) — the «Все» badge.
+// Platform total from /admin/stats (loaded by AdminShell) — the i18n:common.all badge.
 const totalCount = computed<number | null>(() => adminStore.stats?.practices_count ?? null)
 // Header count reflects the fetched scope total.
 const headerCount = computed<string>(() => (total.value !== null ? String(total.value) : '—'))
@@ -101,8 +103,9 @@ const segOptions = computed<SegmentOption[]>(() => [
 ])
 
 function whenLabel(p: AdminPracticeListItem): string {
-  // Day label in the practice's own timezone so «Сегодня/Завтра» agrees with
-  // the local time shown alongside it (whenTime).
+  // Day label in the practice's own timezone so the relative-day labels
+  // (i18n:common.today / i18n:common.tomorrow) agree with the local time shown
+  // alongside it (whenTime).
   return formatDateShort(p.scheduled_at, p.timezone)
 }
 function whenTime(p: AdminPracticeListItem): string {

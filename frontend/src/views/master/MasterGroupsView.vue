@@ -1,13 +1,15 @@
 <!--
   VELO Frontend -- MasterGroupsView (Master GROUPS P2, PROMPT №591)
 
-  "Мои группы" -- replaces "Мои ученики" as the dashboard entry. Lists the
-  two virtual groups («Ученики» always first, «Удалённые» last and omitted
-  when empty) plus every custom group, in the order the backend returns
-  (GET /masters/me/groups).
+  The "My groups" screen (i18n:masterScreens.masterGroups.title) -- replaces
+  "My students" (i18n:masterScreens.masterStudents.title) as the dashboard
+  entry. Lists the two virtual groups (the default students group always
+  first, the deleted-students group last and omitted when empty) plus every
+  custom group, in the order the backend returns (GET /masters/me/groups).
 
-  Reuses VListRow (row shell), VShowMore (the "+ ещё N групп" expander) --
-  no bespoke visual component, DS tokens only.
+  Reuses VListRow (row shell), VShowMore (the "+ N more groups" expander,
+  i18n:masterScreens.masterGroups.moreGroups) -- no bespoke visual
+  component, DS tokens only.
 
   G2 (PROMPT №609, owner-ruled): the per-card «share» + «⋯» actions
   (invite/rename/delete) MOVED into MasterGroupDetailView's header menu --
@@ -18,8 +20,10 @@
   (client-side, over the already-loaded `groups`) AND people across CUSTOM
   groups (server-side, debounced -- the original P6/PROMPT №607 people
   search, unchanged in mechanism). The two result kinds are VISUALLY
-  SEPARATED under their own section heading (Группы / Участники) rather
-  than interleaved, so they never blur into one list -- groups first
+  SEPARATED under their own section headings
+  (i18n:masterScreens.masterGroups.tabs.groups for group names,
+  i18n:masterScreens.masterGroups.tabs.members for people) rather than
+  interleaved, so they never blur into one list -- groups first
   (this screen's own primary content), people below (the wider,
   cross-group search). Empty query -> the groups list unchanged (below).
 -->
@@ -385,7 +389,8 @@ const matchingGroups = computed((): GroupListItem[] => {
 
 /* G1 (PROMPT №609): section headings separating group-name matches from
    people matches -- reuses the app-wide velo-section-title class
-   (MasterStudentProfileView's «Последние check-ins»/«Feedbacks» recipe),
+   (MasterStudentProfileView's section-heading recipe, e.g.
+   i18n:masterScreens.masterStudentProfile.sections.recentCheckins),
    just a small top gap since it follows the search field / a prior
    section directly. */
 .groups__search-heading {

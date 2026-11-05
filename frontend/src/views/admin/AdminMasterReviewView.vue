@@ -2,29 +2,29 @@
   VELO Frontend -- AdminMasterReviewView (Admin DS rebuild 2026-06-14, operator SVGs
   "2 Master's request" ×5)
 
-  Master-application review (admin). Reached by tapping a card in the «Мастера» tab
-  (admin-master-review); the master is handed via router state, with getMasterById as
-  fallback. Rebuilt to the operator design, replacing the F8.2 layout:
-    profile (avatar photo / IconIdCard glyph) → «Информация» (Направление/Вид editable,
-    Опыт/Язык/О себе read) → «Документы» (verified file rows) → «История заявок»
-    (accordion) → sticky footer Отклонить / Одобрить.
+  Master-application review (admin). Reached by tapping a card in the Masters tab
+  (i18n:adminScreens.adminMasters.masters) (admin-master-review); the master is
+  handed via router state, with getMasterById as fallback. Rebuilt to the operator
+  design, replacing the F8.2 layout:
+    profile (avatar photo / IconIdCard glyph) →
+    i18n:adminScreens.adminMasterReview.information →
+    i18n:adminScreens.adminMasterReview.documents →
+    i18n:adminScreens.adminMasterReview.historyTitle
+    (accordion) → sticky footer i18n:adminScreens.adminMasterReview.rejectAction /
+    i18n:adminScreens.adminMasterReview.approve.
 
   DATA. Real: name · avatar · status · verify (verifyMaster) / reject (rejectMaster —
-  reason collected in a DS bottom-sheet, operator fork п.1=А 2026-06-14).
-  STUB «—»/empty (honest skeleton, operator В): direction · type · experience · language ·
-  bio · documents · history · email are NOT in AdminMasterListItem, so they render «—» /
-  empty until Zod extends GET /admin/masters/:id. Editing Направление/Вид has no save
-  endpoint → «ОК» toasts «недоступно» (build-full-design-now). Roadmap (Zod): extend the
-  master-detail endpoint (profile fields + documents[] + submission history + email) +
-  an admin edit-master-fields endpoint.
+  reason collected in a DS bottom-sheet, operator fork p.1=A 2026-06-14).
 
   Footer only for master_status==='pending'; processed applications show a note. After
   verify/reject → router.push({ name: 'admin-masters' }) (S-1/S-2: fresh list mount).
 
   PROMOTE-ON-VERIFY (PROMPT №505): a custom/unmatched method in the applicant's own
-  methods pauses «Одобрить» on a confirm dialog -- mirrors AdminMethodRequestsView's
-  identical promote-on-approve dialog verbatim (same VConfirmDialog, same copy).
-  Confirming ("Добавить в каталог") or dismissing/cancelling ("Только этому мастеру")
+  methods pauses i18n:adminScreens.adminMasterReview.approve on a confirm dialog --
+  mirrors AdminMethodRequestsView's identical promote-on-approve dialog verbatim
+  (same VConfirmDialog, same copy).
+  Confirming (i18n:adminScreens.adminMasterReview.addToCatalog) or
+  dismissing/cancelling (i18n:adminScreens.adminMasterReview.thisMasterOnly)
   both still verify -- never blocks. Closes the loop: verify_master (backend, PROMPT
   №503 commit 3) already accepted `promote`, but nothing on any screen could ever
   send it -- this is the first and only caller.
@@ -63,12 +63,15 @@
         <div class="mreview__email">{{ email }}</div>
       </VCard>
 
-      <!-- Информация — every master-authored field is admin-editable (batch H).
-           TWO distinct names: «Имя-визитка» (data.profile.display_name, shown to
-           users) vs «Имя аккаунта» (User.first/last, shown in admin lists). -->
+      <!-- Information (i18n:adminScreens.adminMasterReview.information) — every
+           master-authored field is admin-editable (batch H). TWO distinct names:
+           display name (i18n:adminScreens.adminMasterReview.displayNameTitle =
+           data.profile.display_name, shown to users) vs account name
+           (i18n:adminScreens.adminMasterReview.accountNameTitle =
+           User.first/last, shown in admin lists). -->
       <div class="mreview__seclabel">{{ t('adminScreens.adminMasterReview.information') }}</div>
       <VCard class="mreview__info" padding="none">
-        <!-- Имя-визитка = data.profile.display_name (text) -->
+        <!-- Display name (i18n:adminScreens.adminMasterReview.displayNameTitle) = data.profile.display_name (text) -->
         <div class="mreview__row">
           <div class="mreview__k">{{ t('adminScreens.adminMasterReview.displayNameTitle') }}</div>
           <template v-if="editing === 'display_name'">
@@ -105,7 +108,7 @@
           </template>
         </div>
 
-        <!-- Имя аккаунта = User.first_name / last_name (two-part text) -->
+        <!-- Account name (i18n:adminScreens.adminMasterReview.accountNameTitle) = User.first_name / last_name (two-part text) -->
         <div class="mreview__row">
           <div class="mreview__k">{{ t('adminScreens.adminMasterReview.accountNameTitle') }}</div>
           <template v-if="editing === 'account_name'">
@@ -146,7 +149,7 @@
           </template>
         </div>
 
-        <!-- О себе = bio (textarea) -->
+        <!-- About (i18n:adminScreens.adminMasterReview.fields.about) = bio (textarea) -->
         <div class="mreview__row">
           <div class="mreview__k">{{ t('adminScreens.adminMasterReview.fields.about') }}</div>
           <template v-if="editing === 'bio'">
@@ -214,7 +217,7 @@
           </template>
         </div>
 
-        <!-- Телефон (text) -->
+        <!-- Phone (i18n:adminScreens.adminMasterReview.phone) = text input -->
         <div class="mreview__row">
           <div class="mreview__k">{{ t('adminScreens.adminMasterReview.phone') }}</div>
           <template v-if="editing === 'phone'">
@@ -243,7 +246,7 @@
           </template>
         </div>
 
-        <!-- Опыт = experience_years (number) -->
+        <!-- Experience (i18n:adminScreens.adminMasterReview.experience) = experience_years (number) -->
         <div class="mreview__row">
           <div class="mreview__k">{{ t('adminScreens.adminMasterReview.experience') }}</div>
           <template v-if="editing === 'experience_years'">
@@ -281,7 +284,7 @@
           </template>
         </div>
 
-        <!-- Язык практик = languages (chip toggle, fixed set + custom) -->
+        <!-- Practice languages (i18n:adminScreens.adminMasterReview.fields.languages) = languages (chip toggle, fixed set + custom) -->
         <div class="mreview__row">
           <div class="mreview__k">{{ t('adminScreens.adminMasterReview.fields.languages') }}</div>
           <template v-if="editing === 'languages'">
@@ -329,7 +332,7 @@
           </template>
         </div>
 
-        <!-- Направления практик = methods (chip toggle, own endpoint, unchanged) -->
+        <!-- Practice directions (i18n:adminScreens.adminMasterReview.fields.directions) = methods (chip toggle, own endpoint, unchanged) -->
         <div class="mreview__row">
           <div class="mreview__k">
             {{ t('adminScreens.adminMasterReview.fields.directions') }}
@@ -338,7 +341,7 @@
             <!-- T4/F2-F6 (PROMPT №409): swapped the flat legacy AVAILABLE_METHODS
                  toggle for the writable two-level picker, mirroring the swap
                  already done in EditProfileView.vue -- an admin can now pick a
-                 fresh Направление→Вид pair from the R5 DB catalog, not just
+                 fresh direction→style pair from the R5 DB catalog, not just
                  toggle among pre-existing flat strings. -->
             <MethodTaxonomyPicker v-model="methodsDraft" />
             <p v-if="methodsError" class="mreview__methods-err">{{ methodsError }}</p>
@@ -353,9 +356,9 @@
           </div>
           <template v-else>
             <div class="mreview__v">
-              <!-- Q2: render the flat «Направление — Вид» methods as the batch-L
-                   two-level readonly picker (direction heading + вид chips) so both
-                   направление AND вид show. Fully-legacy methods that don't map to
+              <!-- Q2: render the flat direction — style methods as the batch-L
+                   two-level readonly picker (direction heading + style chips) so both
+                   direction AND style show. Fully-legacy methods that don't map to
                    the taxonomy fall back to verbatim chips; empty → «—». -->
               <MethodTaxonomyPicker v-if="hasParsedMethods" :model-value="methods" readonly />
               <div v-else-if="methods.length" class="mreview__chips">
@@ -374,7 +377,7 @@
           </template>
         </div>
 
-        <!-- Сертификаты = certifications (free-text add/remove chips) -->
+        <!-- Certificates (i18n:adminScreens.adminMasterReview.certificates) = certifications (free-text add/remove chips). -->
         <div class="mreview__row">
           <div class="mreview__k">{{ t('adminScreens.adminMasterReview.certificates') }}</div>
           <template v-if="editing === 'certifications'">
@@ -432,7 +435,7 @@
         </div>
       </VCard>
 
-      <!-- Документы -->
+      <!-- Documents (i18n:adminScreens.adminMasterReview.documents) -->
       <div class="mreview__seclabel">{{ t('adminScreens.adminMasterReview.documents') }}</div>
       <VCard v-if="documents.length" class="mreview__docs" padding="none">
         <div v-for="d in documents" :key="d.name" class="mreview__doc">
@@ -465,7 +468,7 @@
         </p></VCard
       >
 
-      <!-- История заявок -->
+      <!-- Application history (i18n:adminScreens.adminMasterReview.historyTitle) -->
       <VCard class="mreview__hist" padding="none">
         <VAccordion :title="t('adminScreens.adminMasterReview.historyTitle')">
           <template #icon><IconClock :size="20" /></template>
@@ -528,7 +531,8 @@
                verify only admits pending applications, so this is the only
                lever for the master verified yesterday. Idempotent both ways;
                revoking closes NEW schools only, everything already owned
-               keeps living (that lever is «Отозвать мастера» below). -->
+               keeps living (that lever is the revoke-master button below,
+               i18n:adminScreens.adminMasterReview.revokeMaster). -->
           <div class="mreview__right">
             <div>
               <div class="mreview__k">
@@ -574,7 +578,7 @@
       :description="t('adminScreens.adminMasterReview.notFoundHint')"
     />
 
-    <!-- Reject reason (bottom-sheet, fork п.1=А) -->
+    <!-- Reject reason (bottom-sheet, fork p.1=A) -->
     <VBottomSheet
       :open="showReject"
       :title="t('adminScreens.adminMasterReview.rejectionReason')"
@@ -682,16 +686,16 @@ const showReject = ref(false)
 const rejectReason = ref('')
 const rejectError = ref('')
 
-// Honest skeleton (operator В): rich fields are not on AdminMasterListItem → «—» /
+// Honest skeleton (operator V): rich fields are not on AdminMasterListItem → «—» /
 // empty until Zod extends the endpoint. Sample data lives in the design preview only.
-// Honest skeleton (operator В): email / language / documents / history are not
+// Honest skeleton (operator V): email / language / documents / history are not
 // on the detail endpoint yet → «—» / empty. methods / experience / bio are REAL
 // (T3 — pulled from data.profile via GET /admin/masters/:id).
 const PLACEHOLDER = '—'
-// «Имя аккаунта» = User first/last (also the profile-card header + revoke msg).
+// Account name (i18n:adminScreens.adminMasterReview.accountNameTitle) = User first/last (also the profile-card header + revoke message).
 const displayName = computed<string>(() => (master.value ? masterDisplayName(master.value) : ''))
 const accountName = displayName
-// «Имя-визитка» = data.profile.display_name (shown to users on the public page).
+// Display name (i18n:adminScreens.adminMasterReview.displayNameTitle) = data.profile.display_name (shown to users on the public page).
 const displayNameField = computed<string>(() => master.value?.display_name || PLACEHOLDER)
 // Batch H: real fields now returned by the detail endpoint.
 const email = computed<string>(() => master.value?.email || PLACEHOLDER)
@@ -699,7 +703,7 @@ const phone = computed<string>(() => master.value?.phone || PLACEHOLDER)
 const languages = computed<string[]>(() => master.value?.languages ?? [])
 const certifications = computed<string[]>(() => master.value?.certifications ?? [])
 const methods = computed<string[]>(() => master.value?.methods ?? [])
-// Q2: true when at least one method maps to the direction/вид taxonomy — then the
+// Q2: true when at least one method maps to the direction/style taxonomy — then the
 // two-level readonly picker has something to render; otherwise (fully-legacy flat
 // methods) we fall back to verbatim chips so nothing vanishes.
 const hasParsedMethods = computed<boolean>(
@@ -924,8 +928,9 @@ function addCert(): void {
   certInput.value = ''
 }
 
-/** Send a partial patch; reflect it locally + toast. Returns on error with the
- *  message surfaced inline (fieldError). */
+/** Send a partial patch; reflect it locally + toast.
+ *
+ * @returns Resolves on error with the message surfaced inline (fieldError). */
 async function saveProfile(patch: AdminMasterProfileUpdate): Promise<void> {
   if (savingField.value) return
   savingField.value = true
@@ -1007,8 +1012,9 @@ function closeReject(): void {
 // VConfirmDialog component (already imported+used on this screen for
 // revoke), same copy. A custom/unmatched method in the applicant's own
 // methods (parseMethods, already used for hasParsedMethods above) pauses
-// verify on a confirm; dismissing (overlay tap) and the explicit "Только
-// этому мастеру" button fire the SAME `cancel` event (VConfirmDialog wraps
+// verify on a confirm; dismissing (overlay tap) and the explicit
+// this-master-only button (i18n:adminScreens.adminMasterReview.thisMasterOnly)
+// fire the SAME `cancel` event (VConfirmDialog wraps
 // VModal's @close straight into its own @cancel) -- so an accidental
 // dismiss can never fail to verify, by construction, not by a separate
 // guard. No custom text -> straight to doVerify(), unchanged from before.
@@ -1082,13 +1088,14 @@ async function doVerify(promote?: string[], masterOnly?: string[]): Promise<void
   }
 }
 
-/** «Добавить в каталог» -- verify AND promote the custom labels (each its
- *  own catalog row). */
+/** Add-to-catalog confirm (i18n:adminScreens.adminMasterReview.addToCatalog) --
+ *  verify AND promote the custom labels (each its own catalog row). */
 function onPromoteConfirm(): void {
   void doVerify([...promoteLabels.value])
 }
 
-/** «Только этому мастеру» (or the dialog dismissed) -- verify, scoped to this
+/** This-master-only cancel (i18n:adminScreens.adminMasterReview.thisMasterOnly;
+ *  or the dialog dismissed) -- verify, scoped to this
  *  master only (T22-6, PROMPT №561): a real taxonomy row per label, just not
  *  a shared one -- was silently nothing before this. FE-89: per-label. */
 function onPromoteCancel(): void {
@@ -1190,7 +1197,7 @@ onMounted(loadMaster)
   margin: var(--velo-gap-2) var(--velo-gap-2) calc(-1 * var(--velo-gap-6));
 }
 
-/* -- Информация -- */
+/* -- Information -- */
 .mreview__info {
   padding: var(--space-1) var(--velo-inset-row);
 }
@@ -1233,7 +1240,7 @@ onMounted(loadMaster)
   cursor: pointer;
 }
 
-/* -- Methods (Направления практик) display + editor (T3) -- */
+/* -- Methods (practice directions) display + editor (T3) -- */
 .mreview__chips {
   display: flex;
   flex-wrap: wrap;
@@ -1299,7 +1306,7 @@ onMounted(loadMaster)
   flex: 1;
 }
 
-/* -- Документы -- */
+/* -- Documents -- */
 .mreview__docs {
   display: flex;
   flex-direction: column;
@@ -1352,7 +1359,7 @@ onMounted(loadMaster)
   padding: var(--space-3) var(--space-2);
 }
 
-/* -- История заявок (accordion) -- */
+/* -- Application history (accordion) -- */
 .mreview__hist {
   overflow: hidden;
 }
@@ -1455,7 +1462,7 @@ onMounted(loadMaster)
   flex: 1;
 }
 
-/* Q-GRANT=Б note: full-width line above the buttons (they keep their row). */
+/* Q-GRANT=B note: full-width line above the buttons (they keep their row). */
 .mreview__grant-note {
   flex-basis: 100%;
   margin: 0;
@@ -1465,7 +1472,7 @@ onMounted(loadMaster)
 }
 
 /* BE-18: the verify-dialog checkbox -- full width, above the
-   Отклонить/Одобрить row, same slot the old grant note occupied. */
+   reject/approve row, same slot the old grant note occupied. */
 .mreview__grant-check {
   flex-basis: 100%;
 }

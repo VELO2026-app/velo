@@ -89,7 +89,7 @@ master.verified:
   telegram:
     title: "Профиль мастера открыт"
     body: "🎉 Вам открыт профиль мастера.\n\nТеперь вы можете создавать практики."
-    button_text: "Перейти в кабинет мастера"
+    button_text: "Открыть кабинет мастера"
 
 master.rejected:
   telegram:
@@ -101,7 +101,7 @@ master.application_received:
   telegram:
     title: "Новая заявка мастера"
     body: "📨 Поступила новая заявка на статус мастера.\n\n👤 {applicant_name}"
-    button_text: "Открыть VELO"
+    button_text: "Открыть заявку"
 
 master.application_submitted:
   telegram:
@@ -166,20 +166,20 @@ support.message_received:
   telegram:
     title: "Сообщение в поддержку"
     body: "💬 Пользователь написал в поддержку.\n\n👤 {sender_name}{topic_line_ru}"
-    button_text: "Открыть VELO"
+    button_text: "Открыть обращение"
 
 # BE-162 delivery 2: a ticket was handed to this admin / returned to the pool.
 support.ticket_assigned:
   telegram:
     title: "Вам передано обращение"
     body: "📨 {actor_name} передал(а) вам обращение в поддержку.\n\n👤 {sender_name}{topic_line_ru}"
-    button_text: "Открыть VELO"
+    button_text: "Открыть обращение"
 
 support.ticket_released:
   telegram:
     title: "Обращение вернулось в общий список"
     body: "↩️ {actor_name} вернул(а) обращение в общий список — его можно взять.\n\n👤 {sender_name}{topic_line_ru}"
-    button_text: "Открыть VELO"
+    button_text: "Открыть обращение"
 
 # BE-166: the support reply could not be translated into the user's
 # language (support.translate_for_user ended without an answer, or the model
@@ -286,7 +286,7 @@ school.master_offered:
   telegram:
     title: "Вас приглашают вести школу"
     body: "🏛 <b>{actor_name}</b> предлагает вам стать мастером школы <b>{school_name}</b>.\n\nОткройте приложение, чтобы принять или отклонить."
-    button_text: "Посмотреть предложение"
+    button_text: "Открыть предложение"
 
 school.member_demoted:
   telegram:
@@ -340,7 +340,7 @@ school.master_practice_deleted:
   telegram:
     title: "Куратор удалил ваш черновик"
     body: "🏛 <b>{actor_name}</b> удалил ваш черновик <b>{practice_title}</b> ({scheduled_at}) в школе <b>{school_name}</b>.\n\nЧерновик больше недоступен."
-    button_text: "Мои практики"
+    button_text: "Открыть мои практики"
 
 # -- Master-facing (BE-33) --
 #
@@ -353,7 +353,7 @@ practice.master_reminder_1h:
   telegram:
     title: "Ваша практика через 1 час"
     body: "⏰ Вы ведёте <b>{practice_title}</b> через 1 час.\n\n📅 {scheduled_at}"
-    button_text: "Мои практики"
+    button_text: "Открыть практику"
 
 practice.checkin_received:
   telegram:

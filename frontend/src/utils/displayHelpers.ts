@@ -60,9 +60,10 @@ const { t } = i18n.global
  * not approximations, and are mirrored by the --velo-analytics-* tokens in
  * styles/variables.css (the token wins at runtime; the fallback only covers
  * a context where the stylesheet did not load). Every five-segment
- * analytics strip (practice «До/После практики», the school feedback
- * block, the rating bars and the feeds' distributions since BE-77) reads
- * its segment colors from here, so the surfaces cannot drift apart.
+ * analytics strip (the practice before/after pair,
+ * i18n:shared.analytics.before / i18n:shared.analytics.after, the school
+ * feedback block, the rating bars and the feeds' distributions since BE-77)
+ * reads its segment colors from here, so the surfaces cannot drift apart.
  */
 export const MOOD_SCALE_FILLS: Record<MoodScaleKey, string> = {
   bad: 'var(--velo-analytics-bad, #fe9093)',
@@ -80,6 +81,7 @@ export const MOOD_SCALE_FILLS: Record<MoodScaleKey, string> = {
 // the backend allowed lists / filter literals. Single source of truth --
 // do not duplicate these strings in components.
 
+/** Catalog label per practice direction (lazy getters, resolved per read). */
 export const DIRECTION_LABEL: Record<PracticeDirection, string> = {
   get meditation(): string {
     return t('display.direction.meditation')
@@ -119,6 +121,7 @@ export const DIRECTION_LABEL: Record<PracticeDirection, string> = {
 // lands (handoff §9), some directions still can't be created by masters.
 // A new direction added here without its own icon would fall through to
 // DIRECTION_ICON_FALLBACK instead of failing vue-tsc.
+/** Icon component per practice direction, with a neutral fallback for unknown directions. */
 export const DIRECTION_ICON: Partial<Record<PracticeDirection, Component>> = {
   meditation: IconMeditation,
   yoga: IconYoga,
@@ -149,14 +152,14 @@ export const DIRECTION_ICON_FALLBACK: Component = IconDots
  * Works for both PracticeResponse and PracticeSummary — backend B-1 added
  * `direction` to PracticeSummary on 2026-05-28, so the title-heuristic
  * fallback that used to live here is no longer needed (removed 2026-05-29).
- * Unknown direction -> neutral IconDots fallback.
+ * `Unknown direction -> neutral IconDots fallback`.
  *
  * `title` prop kept in the signature for call-site compatibility (some
  * legacy callers pass it); ignored internally.
  */
 export function practiceIconFor(p: {
-  /** direction идёт из generated.ts как string (бэкенд widen-нул enum);
-   *  принимаем string и сами проверяем через DIRECTION_ICON. */
+  /** `direction` arrives from generated.ts as a plain string (the backend
+   *  widened the enum); accept string and check it against DIRECTION_ICON. */
   direction?: string | null
   /** Kept for backwards compatibility — ignored after B-1 (2026-05-28). */
   title?: string | null
@@ -168,6 +171,7 @@ export function practiceIconFor(p: {
   return DIRECTION_ICON_FALLBACK
 }
 
+/** Catalog label per practice difficulty. */
 export const DIFFICULTY_LABEL: Record<PracticeDifficulty, string> = {
   get beginner(): string {
     return t('display.difficulty.beginner')
@@ -190,6 +194,7 @@ export const DIFFICULTY_DOTS: Record<PracticeDifficulty, number> = {
   high: 3,
 }
 
+/** Catalog label per calendar duration bucket. */
 export const DURATION_BUCKET_LABEL: Record<DurationBucket, string> = {
   get short(): string {
     return t('display.durationBucket.short')
@@ -199,6 +204,7 @@ export const DURATION_BUCKET_LABEL: Record<DurationBucket, string> = {
   },
 }
 
+/** Catalog label per calendar time-of-day bucket. */
 export const TIME_OF_DAY_LABEL: Record<TimeOfDay, string> = {
   get night(): string {
     return t('display.timeOfDay.night')
@@ -219,13 +225,15 @@ export const TIME_OF_DAY_LABEL: Record<TimeOfDay, string> = {
 // ---------------------------------------------------------------------------
 //
 // Card title per event kind. The feed renders these as the card heading;
-// checkin/feedback append the mood/rating label (e.g. "Check-in: Не очень").
+// checkin/feedback append the mood/rating label (e.g. "Check-in: " +
+// i18n:mood.low).
 // Values match the design (screens 40/41). kind->icon COMPONENT mapping lives
 // in DiaryFeedCard.vue, not here -- the utils layer must not import .vue files
 // (same rule as MOOD_ICON in CheckinView).
 
 import type { DiaryEventKind } from '@/api/types'
 
+/** Card heading per diary feed event kind (kind-derived captions may override, e.g. practice_outcome). */
 export const FEED_KIND_TITLE: Record<DiaryEventKind, string> = {
   get booking_confirmed(): string {
     return t('display.feedKind.booking_confirmed')
@@ -267,6 +275,7 @@ export const FEED_KIND_TITLE: Record<DiaryEventKind, string> = {
 // drawn by the frontend from this key table. `custom` has no dictionary label
 // -- its caption is the user's own custom_activity_name, verbatim.
 
+/** Caption label per external-activity type; custom carries the user's own activity name instead. */
 export const EXTERNAL_ACTIVITY_LABEL: Record<ExternalActivityType, string> = {
   get vocal(): string {
     return t('display.externalActivity.vocal')
@@ -294,15 +303,18 @@ export const EXTERNAL_ACTIVITY_LABEL: Record<ExternalActivityType, string> = {
 // every activity_type: the event is "something that happened outside velo",
 // and the LABEL carries the type (dictionary label or the custom name), so
 // per-type artwork would repeat what the caption already says.
+/** The single glyph for external-activity events; the label carries the type, the icon does not. */
 export const EXTERNAL_ACTIVITY_ICON: Component = IconCalendarStar
 
 /**
  * Outcome badge label for a practice_outcome card.
- * attended -> "Done" (teal), no_show -> "Вы не пришли".
+ * `attended -> "Done"` (teal), `no_show -> the missed-you label`
+ * (i18n:display.outcome.no_show).
  *
- * B30 (PROMPT №747): was 'Не состоялась' -- false, the practice DID happen,
- * the person missed it. Feeds DiaryFeedCard.vue and DiaryThreadCard.vue via
- * useDiaryCardModel's outcomeLabel, both user-facing (DetailView.vue).
+ * B30 (PROMPT №747): the no_show label was previously the "did not take
+ * place" wording -- false, the practice DID happen, the person missed it.
+ * Feeds DiaryFeedCard.vue and DiaryThreadCard.vue via useDiaryCardModel's
+ * outcomeLabel, both user-facing (DetailView.vue).
  */
 export const OUTCOME_LABEL: Record<string, string> = {
   get attended(): string {
@@ -318,10 +330,13 @@ export const OUTCOME_LABEL: Record<string, string> = {
 // ---------------------------------------------------------------------------
 
 /**
- * Recurrence label for a series from its ISO weekday list: «Ежедневно» when all
- * seven days are present, otherwise the short list «Пн, Ср, Пт» (de-duplicated,
- * ordered Mon→Sun). Returns null when there are no valid days so the caller can
- * fall back to a generic label.
+ * Recurrence label for a series from its ISO weekday list: the daily label
+ * (i18n:display.recurrenceDaily) when all seven days are present, otherwise
+ * the short weekday list resolving via \`t(\`display.weekdayAbbr.$\{d\}\`)\`
+ * (de-duplicated, ordered Mon→Sun).
+ *
+ * @returns Null when there are no valid days so the caller can fall back
+ * to a generic label.
  */
 export function recurrenceDaysLabel(days: number[] | null | undefined): string | null {
   if (!days || days.length === 0) return null
@@ -333,9 +348,10 @@ export function recurrenceDaysLabel(days: number[] | null | undefined): string |
 
 /**
  * Upper-cased short weekday label for an ISO weekday (1=Mon..7=Sun): the
- * design grids (week strip, date/diary pickers) render ПН..ВС / MON..SUN.
- * The ONE place that knows the labels are upper-cased -- callers keep only
- * their own day ordering.
+ * design grids (week strip, date/diary pickers) render the short weekday
+ * abbreviations upper-cased (MON..SUN style in every locale). The ONE place
+ * that knows the labels are upper-cased -- callers keep only their own day
+ * ordering.
  */
 export function weekdayAbbrUpper(iso: number): string {
   return t(`display.weekdayAbbr.${iso}`).toUpperCase()

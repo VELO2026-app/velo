@@ -3,7 +3,7 @@
 // =============================================================================
 // The rating-distribution row of the admin feedback detail: the three canon
 // colours with their icons, the absolute-count suffix, and the stub state.
-// Checked against the operator SVG "Распределение оценок" frame.
+// Checked against the operator SVG "Rating distribution" frame.
 
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
 

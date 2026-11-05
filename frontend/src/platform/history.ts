@@ -2,6 +2,7 @@
 // window.history directly (eslint no-restricted-globals). vue-router writes
 // { back, forward, ... } into history.state on every navigation; reading it
 // raw yields `any`, so the shape is declared here once.
+/** Whether the history stack has an entry to go back to (vue-router's own state). */
 export function historyHasBack(): boolean {
   const state = window.history.state as { back?: unknown } | null
   return state?.back != null

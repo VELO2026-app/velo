@@ -33,11 +33,13 @@
 // extractApiError treated every ApiResponseError identically regardless of
 // status code, and the template had exactly ONE combined v-else-if for
 // "error OR no profile", so a genuine 404 and a transient 500/network drop
-// both rendered the identical "Мастер не найден" title with no retry. Fixed
+// both rendered the identical not-found title
+// (i18n:user.screens.masterPublic.notFound) with no retry. Fixed
 // by deriving `notFound` from `e instanceof ApiResponseError && e.status ===
 // 404` in loadMaster() (.vue) and splitting the template into two
-// v-else-if rungs: "Мастер не найден" (404, "Назад" only) vs. "Не удалось
-// загрузить" (anything else, "Повторить" retry that re-runs loadMaster).
+// v-else-if rungs: not-found (404, back only, i18n:ui.back) vs.
+// load-failed (anything else, i18n:common.loadFailed, with a
+// i18n:common.retry button that re-runs loadMaster).
 // Proven below: a 404 keeps the old title/no-retry; a plain Error and a 500
 // both now get the retryable title instead.
 //
@@ -45,7 +47,8 @@
 // getPractices only runs AFTER getPublicMaster resolves (nested, sequential --
 // .vue:184-203), and its own try/catch is LOCAL: a practices failure never
 // touches `error` or `profile`, so the profile still renders and only the
-// "Ближайшие практики" section is silently absent (the header's own comment:
+// nearest-practices section (i18n:user.screens.masterPublic.sections.nearest)
+// is silently absent (the header's own comment:
 // "Non-fatal"). A master-fetch failure, conversely, never even calls
 // getPractices (proven below) and always reaches the combined error rung.
 //
@@ -264,6 +267,14 @@ describe('MasterPublicView', () => {
         (b) => b.textContent?.trim() === label,
       )
     }
+    // Body-wide exact match: the post-block chain swaps one teleported dialog
+    // for another (and then for the report sheet), so the LAST container is
+    // not always the right scope.
+    function bodyButton(label: string): HTMLButtonElement | undefined {
+      return Array.from(document.body.querySelectorAll<HTMLButtonElement>('button')).find(
+        (b) => b.textContent?.trim() === label,
+      )
+    }
     function openMenu(): Promise<void> {
       menuButton()?.click()
       return flush()
@@ -404,8 +415,9 @@ describe('MasterPublicView', () => {
     })
 
     // BE-79 (2): this pinned the INTERIM no-op (an info toast) -- right until
-    // the block endpoint landed. Confirm now sends it and goes back.
-    it('«Заблокировать»: confirm sends the block for THIS master in THIS school, then back', async () => {
+    // the block endpoint landed. Confirm now sends it and opens the DSGN-10
+    // popup-2 chain (FE-97): the report offer first, back only on dismissal.
+    it('«Заблокировать»: confirm sends the block, then the DSGN-10 popup 2 chain', async () => {
       routeQuery.schoolId = 'g1'
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
@@ -417,17 +429,47 @@ describe('MasterPublicView', () => {
       await flush()
 
       const modal = liveModal()
-      expect(modal?.textContent).toContain('Заблокировать участника школы?')
-      expect(modal?.textContent).toContain('утратит доступ к школе')
+      expect(modal?.textContent).toContain('Заблокировать мастера?')
+      expect(modal?.textContent).toContain('переместится в группу «Удалённые»')
       expect(modal?.querySelector('.v-confirm__panel svg')).not.toBeNull()
 
       modalButton('Заблокировать')?.click()
       await flush()
 
       expect(cgApi.blockSchoolMember).toHaveBeenCalledWith('g1', 'm1')
-      expect(toastSuccess).toHaveBeenCalledWith('Участник заблокирован')
-      expect(back).toHaveBeenCalledTimes(1)
+      // Popup 2 (DSGN-10 verbatim): the report offer, NOT an instant exit.
+      const done = liveModal()
+      expect(done?.textContent).toContain('Мастер заблокирован')
+      expect(done?.textContent).toContain('Мастер перемещён в «Удалённые»')
+      expect(bodyButton('Не сейчас')).toBeTruthy()
+      expect(bodyButton('В поддержку')).toBeTruthy()
+      expect(back).not.toHaveBeenCalled()
       expect(toastInfo).not.toHaveBeenCalled()
+    })
+
+    it('after the block, «В поддержку» opens the report form for the master', async () => {
+      routeQuery.schoolId = 'g1'
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      mount()
+      await flush()
+      await openMenu()
+
+      menuItem('Заблокировать')?.click()
+      await flush()
+      modalButton('Заблокировать')?.click()
+      await flush()
+      bodyButton('В поддержку')?.click()
+      await flush()
+
+      // The report form opened for the blocked master; the leave transition
+      // (--transition-slow, 0.3s) must finish before the popup's report button
+      // unmounts -- the same wait the student-profile tests use.
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      await flush()
+
+      expect(document.body.textContent).toContain('Сообщить о пользователе')
+      expect(bodyButton('В поддержку')).toBeFalsy()
     })
 
     it('«Заблокировать» refused (409): the error toast, stay on the profile', async () => {
@@ -527,7 +569,7 @@ describe('MasterPublicView', () => {
       expect(content()).not.toBeNull()
       expect(content()?.textContent).toContain('Анна Соколова')
       // The verified check is hidden product-wide (owner 2026-10-03): no disc
-      // on the avatar, no «Верифицирован» text anywhere.
+      // on the avatar, no verified-label text anywhere.
       expect(content()?.querySelector('.master-public__verified')).toBeNull()
       expect(content()?.textContent).not.toContain('Верифицирован')
     })
@@ -559,16 +601,17 @@ describe('MasterPublicView', () => {
 
     it('FIXED corollary: a 500 ApiResponseError (backend reachable, real server error) ALSO gets the retryable state, not "не найден"', async () => {
       // B8 (PROMPT №747): 'internal_error' IS a real backend code --
-      // extractApiError now returns its table phrase (which happens to read
-      // almost identically to this mock's detail, plus a trailing
-      // "Попробуйте ещё раз") regardless of the mocked detail text.
+      // extractApiError now returns its table phrase (i18n:errors.internal_error,
+      // which happens to read almost identically to this mock's detail plus
+      // a trailing try-again sentence, i18n:common.tryAgain) regardless of
+      // the mocked detail text.
       vi.mocked(mastersApi.getPublicMaster).mockRejectedValue(
         new ApiResponseError(500, 'Внутренняя ошибка сервера', 'internal_error'),
       )
       mount()
       await flush()
 
-      expect(emptyTitle()).toBe('Не удалось загрузить') // no longer "не найден" -- the master likely DOES exist
+      expect(emptyTitle()).toBe('Не удалось загрузить') // no longer the not-found title -- the master likely DOES exist
       expect(emptyDesc()).toBe('Внутренняя ошибка сервера. Попробуйте ещё раз')
       expect(emptyState()?.textContent).toContain('Повторить')
     })
@@ -784,7 +827,8 @@ describe('MasterPublicView', () => {
 
       expect(content()?.textContent).toContain('Аналитика')
       // The placeholder body lives in the accordion; expand THE ANALYTICS one
-      // (querySelector would hit the Методы accordion first) to prove the copy.
+      // (a plain querySelector would hit the methods accordion first,
+      // i18n:user.screens.masterPublic.methodsSection) to prove the copy.
       const analyticsAcc = Array.from(content()?.querySelectorAll('.v-accordion') ?? []).find(
         (acc) => acc.querySelector('.v-accordion__title')?.textContent?.includes('Аналитика'),
       )
@@ -957,8 +1001,9 @@ describe('MasterPublicView', () => {
 
     it('"Назад" in the not-found (404) rung calls router.back()', async () => {
       // B11 item 2: a non-404 failure now lands on the RETRYABLE rung, whose
-      // sole button is "Повторить" (re-fetches), not "Назад" -- see the
-      // dedicated retry test above. Only the 404 rung still offers "Назад".
+      // sole button is retry (i18n:common.retry, re-fetches), not back
+      // (i18n:ui.back) -- see the dedicated retry test above. Only the 404
+      // rung still offers back.
       vi.mocked(mastersApi.getPublicMaster).mockRejectedValue(
         new ApiResponseError(404, 'Мастер не найден', 'not_found'),
       )

@@ -1,13 +1,13 @@
 /*
   VELO Frontend -- schoolBranding/hash (tz-curator.md §5.1/§5.3)
 
-  Детерминированная база генератора фирменного стиля школы (утверждённый
-  прототип 2026-09-19, перенесён без изменений -- константы и округления не
-  трогать: тот же хэш обязан давать тот же SVG, детерминизм закреплён
-  golden-тестами).
+  Deterministic base of the school branding generator (owner-approved
+  prototype 2026-09-19, ported unchanged -- do not touch the constants and
+  rounding: the same hash MUST yield the same SVG; determinism is pinned by
+  the golden tests).
 */
 
-/** 32-битный FNV-1a: сид для PRNG и синхронный fallback хэша. */
+/** 32-bit FNV-1a: the PRNG seed and the synchronous hash fallback. */
 export function fnv1a(str: string): number {
   let h = 0x811c9dc5
   for (const ch of str) {
@@ -17,7 +17,7 @@ export function fnv1a(str: string): number {
   return h >>> 0
 }
 
-/** mulberry32: сидированный PRNG, последовательность зависит только от сида. */
+/** mulberry32: a seeded PRNG whose sequence depends only on the seed. */
 export function mulberry32(seed: number): () => number {
   let a = seed >>> 0
   return function () {
@@ -29,11 +29,12 @@ export function mulberry32(seed: number): () => number {
 }
 
 /**
- * Хэш школы: SHA-256("school:" + name), первые 16 hex-символов (§5.1).
- * crypto.subtle доступен только в secure context (Telegram Mini App -- ок);
- * вне его -- синхронный fallback fnv1a×2 из прототипа, тоже 16 hex-символов.
- * Когда бэк начнёт отдавать стабильный branding_hash (§5.2, вариант B),
- * фронт переключается на поле -- сигнатура это позволяет.
+ * School hash: SHA-256("school:" + name), first 16 hex chars (§5.1).
+ * crypto.subtle is available only in a secure context (the Telegram Mini App
+ * qualifies); outside it -- the prototype's synchronous fnv1a×2 fallback,
+ * also 16 hex chars. Once the backend starts serving a stable branding_hash
+ * (§5.2, option B), the frontend switches to the field -- the signature
+ * already allows it.
  */
 export async function schoolHashFromName(name: string): Promise<string> {
   const subtle = globalThis.crypto?.subtle

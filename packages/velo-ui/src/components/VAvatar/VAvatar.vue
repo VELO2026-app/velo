@@ -13,7 +13,7 @@
   followed by a hard pop. An image already in the cache shows at once.
 
   Usage:
-    <VAvatar name="Мария К." size="md" />
+    <VAvatar name="Maria K." size="md" />
     <VAvatar name="Alex" url="/avatars/alex.jpg" size="lg" />
 -->
 

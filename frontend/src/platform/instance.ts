@@ -8,15 +8,19 @@
 // build). tz-whitelabel F1: all seven former import.meta.env read sites
 // (5x VITE_API_BASE_URL, 2x VITE_TELEGRAM_BOT_URL) go through INSTANCE now.
 //
-// The locale set mirrors what the backend normalizes Telegram's
-// language_code to (backend auth/service.py normalize_language: en/de/es/ru);
-// User.language is the source of truth the UI follows (locales/index.ts).
+// The locale set is the product's languages -- the same set as the backend's
+// (backend core/i18n.py SUPPORTED_LANGUAGES: en, ru, uk; BE-188), and exactly
+// the catalogs in src/locales/. User.language is the source of truth the UI
+// follows (locales/index.ts).
 // =============================================================================
 
-export const SUPPORTED_LOCALES = ['ru', 'en', 'uk', 'de', 'es'] as const
+/** The product's locale codes (the backend's SUPPORTED_LANGUAGES, same set). */
+export const SUPPORTED_LOCALES = ['ru', 'en', 'uk'] as const
 
+/** One supported locale code. */
 export type Locale = (typeof SUPPORTED_LOCALES)[number]
 
+/** Whether the value is one of the supported locale codes. */
 export function isSupportedLocale(value: string | null | undefined): value is Locale {
   return (SUPPORTED_LOCALES as readonly string[]).includes(value ?? '')
 }
@@ -46,6 +50,7 @@ function parseFeatures(value: string | undefined): FeatureSet {
   return { all: false, enabled: new Set(list.split(',').map((name) => name.trim())) }
 }
 
+/** Whether a parsed feature set enables the named module. */
 export function hasFeature(features: FeatureSet, name: string): boolean {
   return features.all || features.enabled.has(name)
 }

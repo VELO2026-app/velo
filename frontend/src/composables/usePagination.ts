@@ -16,6 +16,7 @@
 
 import { ref, computed, type Ref } from 'vue'
 
+/** One page of a limit/offset-paginated list: the items plus the window and the total. */
 export interface PaginatedResult<T> {
   items: T[]
   total: number
@@ -25,6 +26,7 @@ export interface PaginatedResult<T> {
 
 type FetchFn<T> = (limit: number, offset: number) => Promise<PaginatedResult<T>>
 
+/** Limit/offset pagination with load-more; splits first-page errors (empty screen) from later-page errors (toast). */
 export function usePagination<T>(fetchFn: FetchFn<T>, pageSize = 20) {
   const items = ref<T[]>([]) as Ref<T[]>
   const total = ref(0)

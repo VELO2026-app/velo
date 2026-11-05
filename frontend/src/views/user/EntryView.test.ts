@@ -11,14 +11,17 @@
 //   1. THERE IS NO CONFIRM. The trash VMenuItem's handler is
 //      `() => { onDelete(); close() }` (.vue:54-59) and onDelete calls
 //      diaryStore.deleteEntry(id) on the spot. No VConfirmDialog, no VModal, no
-//      second tap. This is NOT the EditPracticeView shape ("Это действие нельзя
-//      отменить" behind a dialog) -- one tap destroys. Pinned below, as the
+//      second tap. This is NOT the EditPracticeView shape (the irreversible
+//      warning i18n:masterScreens.editPractice.draft.deleteConfirm behind a
+//      dialog) -- one tap destroys. Pinned below, as the
 //      behaviour that ships, in «one tap deletes».
 //   2. IT IS NOT IRREVERSIBLE. deleteDiaryEntry is a SOFT delete
 //      (api/diary.ts:239-244) and restoreDiaryEntry (:249-251) is its inverse.
 //      The undo is not on this screen: the delete hands it to the feed through
 //      `router.replace({ name:'user-diary', query:{ deleted: id } })` (.vue:296),
-//      and DiaryFeedView raises the «Запись удалена / Отменить» bar off that
+//      and DiaryFeedView raises the undo bar (deleted text
+//      i18n:user.screens.diaryFeed.toast.deleted, cancel button
+//      i18n:user.screens.diaryFeed.cancel) off that
 //      query param (covered in DiaryFeedView.test.ts).
 //
 // Those two facts are one design, not two accidents: the undo handoff IS the
@@ -70,7 +73,7 @@
 //    POSITIVE set (the entry's own content rendered) BEFORE asserting the header
 //    is absent, so a mount that rendered nothing cannot satisfy them.
 //  - SC-17: VButton binds `:disabled="disabled || loading"` (VButton.vue:27) and
-//    «Сохранить» is bound to `saving` on both (.vue:137-138). So the re-entry test
+//    The save button (i18n:ui.save) is bound to `saving` on both (.vue:137-138). So the re-entry test
 //    clicks twice with NO tick between -- nothing has re-rendered, no disabled
 //    attribute can be doing the work, and the `saving` ref (.vue:263) is the only
 //    defence. The disabled ATTRIBUTE is proven separately, as its own test, so
@@ -92,12 +95,13 @@
 //  - NO money, NO formatMoney anywhere in this screen's chain -> the ru U+00A0
 //    trap (velo-idiom §11) cannot bite, so there is no norm() helper. The Intl
 //    strings asserted here were codepoint-scanned directly rather than assumed:
-//    «16 июля • Четверг • 10:00», «17 июля • Пятница • 01:30» and «13:00» contain
+//    the date-line, weekday and time literals asserted below contain
 //    zero U+00A0/U+202F/U+2009 on this ICU build. Defensive code carrying a false
 //    justification is worse than none.
 //  - NO vi.setSystemTime. formatFeedDateTime / formatTime / formatDuration
 //    (utils/format.ts:207,264,297) are pure Intl over the given instant + zone --
-//    none of them reads `new Date()`. This screen has no «Сегодня»/«Завтра» badge
+//    none of them reads `new Date()`. This screen has no today (i18n:common.today)
+//    or tomorrow (i18n:common.tomorrow) badge
 //    and no relative label, so freezing the clock would be dead setup. (Contrast
 //    DiaryFeedView, whose day dividers DO call new Date().)
 //  - NO v-show (grepped): the ladder is v-if / v-else-if / v-else-if and the two
@@ -346,8 +350,8 @@ describe('EntryView', () => {
     })
 
     it('a failed fetch shows the rung AND surfaces the mapped table phrase for a real code', async () => {
-      // SC-05, and this screen is the GOOD half of it: «Не удалось загрузить
-      // запись» is the screen's own constant (.vue:76) but the description is
+      // SC-05, and this screen is the GOOD half of it: the load-failed title
+      // (i18n:user.screens.entry.loadFailed) is the screen's own constant (.vue:76) but the description is
       // bound to `:description="loadError"` (.vue:77) -- unlike DiaryFeedView,
       // which hardcodes both. Both halves asserted so neither is read as
       // proof of the other.
@@ -517,7 +521,8 @@ describe('EntryView', () => {
     })
 
     it('a nameless master degrades to «Мастером», not to «null»', async () => {
-      // `practice.master_name ?? 'Мастером'` (.vue:208).
+      // `practice.master_name ??` the host fallback
+      // (i18n:user.screens.entry.shared.form.hostFallback) (.vue:208).
       vi.mocked(diaryApi.getDiaryEntry).mockResolvedValue(entry({ practice_id: 'p7' }))
       vi.mocked(practicesApi.getPractice).mockResolvedValue(
         practice({ id: 'p7', title: 'Утренняя йога', master_name: null }),
@@ -596,7 +601,7 @@ describe('EntryView', () => {
 
     it('back in EDIT mode returns to view without navigating away', async () => {
       // goBack branches on mode (.vue:301-307). Leaving the screen here would
-      // drop the user's unsaved text on a control labelled «Назад».
+      // drop the user's unsaved text on a control labelled with the back copy (i18n:ui.back).
       mount()
       await flush()
       await startEditing()
@@ -825,7 +830,9 @@ describe('EntryView', () => {
       // .vue:296. THE assertion of this file. The delete is soft
       // (api/diary.ts:239-244) and restoreDiaryEntry is its inverse -- but the only
       // way a user can ever reach that inverse is this query param, which
-      // DiaryFeedView turns into the «Запись удалена / Отменить» bar. A wrong id
+      // DiaryFeedView turns into the undo bar (deleted text
+      // i18n:user.screens.diaryFeed.toast.deleted, cancel button
+      // i18n:user.screens.diaryFeed.cancel). A wrong id
       // restores someone else's note; a missing one silently strips the user's only
       // recovery path while still telling them it is gone.
       routeParams.id = 'e7'
@@ -847,7 +854,7 @@ describe('EntryView', () => {
 
     it('a FAILED delete shows the mapped table phrase for a real code and NEVER navigates -- no undo bar for a delete that did not happen', async () => {
       // .vue:290-293. Navigating on a failure would hand the feed a `deleted=` id,
-      // which raises «Запись удалена / Отменить» over an entry that is still there
+      // which raises the undo bar (i18n:user.screens.diaryFeed.toast.deleted) over an entry that is still there
       // -- the screen would be lying, and the offered undo would restore nothing.
       // B8 (PROMPT №747): 'conflict' IS a real backend code -- extractApiError
       // now returns its table phrase regardless of the mocked detail text.
@@ -991,7 +998,8 @@ describe('EntryView', () => {
 //   not truncate on programmatic `.value =`, so a test would be asserting the
 //   attribute's presence, i.e. that the literal is bound to itself. The gate that
 //   is really this screen's own (canSave / the empty-body refusal) IS covered.
-// - The «Запись удалена / Отменить» bar and restoreEntry. This screen's half of
+// - The feed's undo bar (deleted text i18n:user.screens.diaryFeed.toast.deleted,
+//   cancel button i18n:user.screens.diaryFeed.cancel) and restoreEntry. This screen's half of
 //   the handoff -- the exact replace() payload -- is asserted above; the feed's
 //   half (reading ?deleted=, raising the bar, calling restoreEntry, and the failed
 //   restore) is DiaryFeedView's own screen and is covered in DiaryFeedView.test.ts.

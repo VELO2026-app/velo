@@ -2,8 +2,8 @@
 // @velo/ui -- token contract test (FE-116, tz-ui-package.md §3.6)
 // =============================================================================
 //
-// The package consumes the HOST's tokens and owns none (принцип 2: токены
-// не уезжают). A component referencing a token the host does not declare
+// The package consumes the HOST's tokens and owns none (principle 2: no tokens
+// leave the host). A component referencing a token the host does not declare
 // breaks silently for every second consumer -- this suite makes that break
 // loud, in the shape of the frontend's styles/token-law.test.ts:
 //

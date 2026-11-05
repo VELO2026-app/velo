@@ -6,9 +6,11 @@
   Hero (PracticeHeroCard, #meta = master + date) + 2 VStatCard + roster.
 
   Two variants by practice.status ("upcoming" / "past"):
-    - upcoming: stats Записалось / Свободно; section «Записались (N/M)».
-    - past: stats Записалось / Пришли; «Присутствовали» (teal check) + «Не пришли»
-      (rose cross).
+    - upcoming: stats booked / free (adminScreens.adminPracticeDetail.bookedStat,
+      freeStat); booked-count section (adminScreens.adminPracticeDetail.bookedSection).
+    - past: stats booked / attended (adminScreens.adminPracticeDetail.attendedStat);
+      present (teal check) + absent (rose cross) sections
+      (adminScreens.adminPracticeDetail.presentSection, absentSection).
 
   WIRED (E9, 2026-06-16): GET /api/v1/admin/practices/:id provides the hero fields,
   booked/capacity/attended counts and the full non-cancelled roster (loading/error

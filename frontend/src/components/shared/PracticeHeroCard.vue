@@ -7,14 +7,17 @@
       falls back to a default glyph when direction is absent/unknown.
     - Title
     - Meta row: date, duration, optional participants
-    - Optional difficulty dots ("Сложность **o") -- shown only when
+    - Optional difficulty dots (label i18n:shared.heroCard.difficulty + dots) --
+      shown only when
       difficultyDots > 0 (Calendar frame 4). Word level is intentionally
       NOT shown (matches the mockup: label + dots only).
-    - Optional #badge slot (e.g. "Оплачено", "LIVE" -- screen 15)
+    - Optional #badge slot (e.g. the paid badge
+      i18n:user.screens.userDashboard.paidBadge, "LIVE" -- screen 15)
 
   Props cover all cases:
     - Catalog (frame 4, not booked):  participants shown, difficulty dots, no badge
-    - Booked (15):                    no participants, "Оплачено" badge via slot
+    - Booked (15):                    no participants, paid badge
+                                      (i18n:user.screens.userDashboard.paidBadge) via slot
     - Booking detail (18):            no participants, no badge
 
   The outer margin is left to the parent -- this is just the card.
@@ -29,7 +32,7 @@
       {{ title }}
     </h1>
     <div class="hero-card__meta">
-      <!-- #meta переопределяет встроенный icon-row (form-вариант: Check-in / Feedback). -->
+      <!-- #meta overrides the built-in icon row (form variant: Check-in / Feedback). -->
       <slot name="meta">
         <span class="hero-card__meta-item"> <IconCalendar :size="14" /> {{ date }} </span>
         <!-- duration optional: master review heads omit it (date + participants only). -->
@@ -77,18 +80,20 @@ import type { PracticeDirection } from '@/api/types'
 const props = withDefaults(
   defineProps<{
     title: string
-    /** Layout variant. 'hero' (default) — detail-экраны. 'form' — practice-header
-     *  Check-in / Feedback: меньший заголовок, meta как grid 1fr/1fr через #meta. */
+    /** Layout variant. 'hero' (default) — detail screens. 'form' — the
+     *  practice-header of Check-in / Feedback: smaller title, meta supplied
+     *  via the #meta slot. */
     variant?: 'hero' | 'form'
     /** Title size in the hero variant. 'lg' (default) keeps every existing
      *  consumer unchanged; 'base' is the master-head canon (Reviews shrinks). */
     titleSize?: 'lg' | 'base'
-    /** Built-in meta. Нужны только когда слот #meta НЕ передан (hero-вариант). */
+    /** Built-in meta items. Used only when the #meta slot is NOT passed (hero variant). */
     date?: string
     duration?: string
     /** Optional "N / M" participants string. Omit to hide (booked / detail). */
     participants?: string | null
-    /** Optional recurrence label («Пн, Ср, Пт» / «Ежедневно» / «Регулярная»). Omit to hide. */
+    /** Optional recurrence label (e.g. a weekday list, i18n:display.recurrenceDaily,
+     *  i18n:practice.regular). Omit to hide. */
     recurrence?: string | null
     /** Content direction (taxonomy) -- taxonomy values (PracticeDirection)
      *  pick the dedicated hero glyph; unknown/absent falls back to default. */
@@ -140,7 +145,7 @@ const iconComponent = computed(
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Иконка сама несёт circle-обводку (IconMeditation.vue) — без teal-подложки. */
+  /* The icon itself carries the circle outline (IconMeditation.vue) — no teal backdrop. */
   color: var(--velo-text-primary);
   margin-bottom: var(--space-1);
 }
@@ -209,10 +214,10 @@ const iconComponent = computed(
   background: var(--velo-primary);
 }
 
-/* ===== Form variant — practice-header в Check-in / Feedback (F-3) =====
- * Было 19px (padding-top) + 5px (icon margin). Снап на шкалу 2026-10-31:
- * 18 + 6 — сумма та же (24px), поэтому заголовок не сдвигается, иконка
- * поднимается на 1px. */
+/* ===== Form variant — practice-header in Check-in / Feedback (F-3) =====
+ * Was 19px (padding-top) + 5px (icon margin). Snapped to the scale on
+ * 2026-10-31: 18 + 6 — the sum stays the same (24px), so the title does not
+ * shift and the icon moves up 1px. */
 .hero-card--form {
   padding: var(--velo-inset-row) var(--space-4) var(--space-5);
   gap: 0;
@@ -227,9 +232,10 @@ const iconComponent = computed(
   margin-bottom: var(--space-4);
 }
 
-/* Meta — один центрированный ряд: мастер · дата/статус собраны по центру с
- * фиксированным gap (вместо двух 1fr-половин, дававших дыру в центре).
- * Сами ячейки (#meta слот) стилизуются в FormShell (:slotted .form-shell__practice-meta-cell). */
+/* Meta — one centered row: master · date/status centered with a fixed gap
+ * (instead of the two 1fr halves that left a hole in the middle).
+ * The cells themselves (#meta slot) are styled in FormShell
+ * (:slotted .form-shell__practice-meta-cell). */
 .hero-card--form .hero-card__meta {
   display: flex;
   align-items: center;

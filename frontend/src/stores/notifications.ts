@@ -21,6 +21,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { listNotifications } from '@/api/notifications'
 
+/** The user-zone bell's unread presence, shared by the dashboard poll and the inbox actions. */
 export const useNotificationsStore = defineStore('notifications', () => {
   /** Unread bell items; 0 = no dot (presence only -- no number by ruling). */
   const unread = ref(0)

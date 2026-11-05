@@ -14,7 +14,8 @@
     feedback -- the SAME silhouette mirrored (lobe RIGHT): rating glyph +
                 title/preview; the icon keeps its rating-zone colour
     practice -- practice_outcome: dedicated 217x67 card (direction icon,
-                title, master row, time/duration meta, Done / "Вы не пришли")
+                title, master row, time/duration meta, the outcome pair
+                i18n:display.outcome.attended / i18n:display.outcome.no_show)
     entry    -- note / dream: two separate white surfaces (icon box + text
                 box) with a transparent gap between them
     activity -- external_activity (FE-70): the entry geometry again, but
@@ -108,8 +109,9 @@
       <span v-if="practiceDuration" class="tcard__prac-cell">
         <IconClock :size="11" />{{ practiceDuration }}
       </span>
-      <!-- Attended shows BOTH the check and the word "Done" (thread target);
-           a miss keeps its "Вы не пришли" label. -->
+      <!-- Attended shows BOTH the check and the word "Done"
+           (i18n:display.outcome.attended; thread target);
+           a miss keeps its no-show label (i18n:display.outcome.no_show). -->
       <span class="tcard__prac-status" :class="`tcard__prac-status--${outcomeStatus}`">
         <IconCheck v-if="outcomeAttended" :size="10" />{{ outcomeText }}
       </span>
@@ -230,8 +232,10 @@ const form = computed<ThreadForm>(() => {
 })
 
 // -- banner copy ---------------------------------------------------------------
-// The confirmed-booking reference copy: "Вы записались на / [Практика с
-// Мастером]" -- the master part drops out cleanly when the snapshot has no
+// The confirmed-booking reference copy: the title line
+// (i18n:diary.bannerConfirmedTitle) plus the bracketed reference line
+// (i18n:diary.bannerConfirmedRef) -- the master part drops out cleanly
+// (i18n:diary.bannerConfirmedRefNoMaster) when the snapshot has no
 // name. The other banner kinds keep their existing semantic title+subtitle.
 // tz-i18n 2.2b: TWO keys (the design styles line 2 differently): a plain
 // title line and a bracketed reference line; non-locales assemble the

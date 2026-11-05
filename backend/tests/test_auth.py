@@ -47,7 +47,7 @@ class TestValidateTelegramInitData:
         user_data = {"id": 12345, "first_name": "Test"}
         init_data = build_init_data(user_data)
         result = validate_telegram_init_data(init_data, BOT_TOKEN)
-        assert result["id"] == 12345
+        assert result.user["id"] == 12345
 
     def test_missing_hash(self) -> None:
         """initData without hash → error."""
@@ -132,7 +132,7 @@ class TestValidateTelegramInitData:
         user_data = {"id": 12345, "first_name": marker}
         init_data = build_init_data(user_data)
         result = validate_telegram_init_data(init_data, BOT_TOKEN)
-        assert result["first_name"] == marker
+        assert result.user["first_name"] == marker
 
     def test_signed_value_with_reserved_characters_survives(self) -> None:
         """The same property for characters that are meaningful to a URL
@@ -141,7 +141,7 @@ class TestValidateTelegramInitData:
         user_data = {"id": 12345, "first_name": "A&B=C+D"}
         init_data = build_init_data(user_data)
         result = validate_telegram_init_data(init_data, BOT_TOKEN)
-        assert result["first_name"] == "A&B=C+D"
+        assert result.user["first_name"] == "A&B=C+D"
 
     def test_repeat_same_init_data_twice(self) -> None:
         """REPEAT axis: validation is pure -- the same initData validated

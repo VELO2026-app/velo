@@ -9,7 +9,8 @@
                 (pill-ish status banner; teal accent for the positive
                 "confirmed" case, neutral slate for cancels/reschedules)
     practice -- practice_outcome (taller white card: title + master row +
-                date row + Done / "Не состоялась" outcome badge)
+                date row + the outcome badge: i18n:display.outcome.attended /
+                i18n:display.outcome.no_show)
     standard -- checkin / feedback / note / dream / thread_started (white card:
                 leading icon + title + content preview + date line; for
                 thread_started the preview line is the master's name)
@@ -73,8 +74,8 @@
       </span>
     </div>
 
-    <!-- Practice direction glyph, top-left. 46px — единый размер иконки
-         практики по DS (как в карточках дашборда/календаря). -->
+    <!-- Practice direction glyph, top-left. 46px — the DS's uniform practice
+         icon size (as in the dashboard/calendar cards). -->
     <component :is="directionIcon" :size="46" class="feed-card__practice-icon" />
   </div>
 
@@ -215,9 +216,9 @@ function onTap(): void {
 
 .feed-card__practice-title {
   font-size: var(--velo-fs-16);
-  /* 2026-05-29: text-align LEFT, anchored at icon right edge (V3 fix, см.
-   * аналогичную правку в PracticeListCard). Раньше center — при разной
-   * длине titles левый край плавал ±7px по горизонтали. */
+  /* 2026-05-29: text-align LEFT, anchored at icon right edge (V3 fix, see
+   * the analogous fix in PracticeListCard). Was center — with varying
+   * title lengths the left edge drifted ±7px horizontally. */
   text-align: left;
   letter-spacing: calc(0.32px * var(--velo-de-k, 1));
   margin-left: calc(var(--space-4) + var(--velo-size-46) + var(--space-2));
@@ -230,8 +231,9 @@ function onTap(): void {
 .feed-card__practice-master {
   display: flex;
   align-items: center;
-  /* 2026-05-29: justify LEFT по той же линии что title (V3 fix). Раньше
-   * center — master row плавал ±27px при разной длине имени мастера. */
+  /* 2026-05-29: justify LEFT along the same line as the title (V3 fix).
+   * Was center — the master row drifted ±27px with varying master-name
+   * lengths. */
   justify-content: flex-start;
   gap: var(--space-1);
   margin-left: calc(var(--space-4) + var(--velo-size-46) + var(--space-2));
@@ -327,7 +329,8 @@ function onTap(): void {
   left: var(--space-4);
   width: calc(46px * var(--velo-de-k, 1));
   height: calc(46px * var(--velo-de-k, 1));
-  /* Цвет — text-primary (Figma DS): иконка сама несёт circle-обводку. */
+  /* Color — text-primary (Figma DS): the icon itself carries the circle
+     outline. */
   color: var(--velo-text-primary);
 }
 

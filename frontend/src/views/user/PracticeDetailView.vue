@@ -2,11 +2,15 @@
   VELO Frontend -- PracticeDetailView (Phase F3.2, updated F4.1, F5, F9.1, DS-sprint)
 
   Full practice detail screen. Matches design Dashboard 2 / booked-practice layout:
-    - Hero: white card with IconMeditation SVG + title + meta + "Оплачено" badge
-    - Accordions: "О практике" (description), "Что подготовить" (what_to_prepare)
+    - Hero: white card with IconMeditation SVG + title + meta + the paid
+      badge (i18n:user.screens.userDashboard.paidBadge)
+    - Accordions: about the practice
+      (i18n:user.screens.practiceDetail.aboutSection, description), what to
+      prepare (i18n:user.screens.practiceDetail.prepareSection,
+      what_to_prepare)
     - Master card: avatar + name + check + methods tags (VTag) + arrow
-      (B44: «Написать мастеру» removed 2026-08-15 -- the master's public
-      profile «Задать вопрос» is the one contact path now)
+      (B44: the write-to-master button removed 2026-08-15 -- the master's
+      public profile ask-a-question control is the one contact path now)
     - Contraindications banner (if practice.contraindications)
     - Sticky footer: price + action button + cancel booking
 
@@ -14,13 +18,21 @@
   F5 review fix:
     W-21: booked state derived from bookingsStore instead of local ref.
   F9.1: Sticky footer action is now context-aware:
-    - Not booked + available  -> "Забронировать" / "Записаться бесплатно"
-    - Booked + in check-in window  -> "Check-in перед практикой"
-    - Booked + in feedback window  -> "Оставить feedback"
-    - Booked + outside any window  -> "Вы записаны" (disabled)
-    - Booked (cancellable)         -> "Отменить бронирование"
-  BE-108: a no_show booking without a reflection also gets «Поделиться, как
-    вы» (secondary), after «Посмотреть запись» when a recording exists.
+    - Not booked + available  -> book (i18n:user.screens.practiceDetail.cta.book)
+                                 / book free
+                                 (i18n:user.screens.practiceDetail.cta.bookFree)
+    - Booked + in check-in window  -> check-in
+                                 (i18n:user.screens.practiceDetail.checkinCta)
+    - Booked + in feedback window  -> leave feedback
+                                 (i18n:user.screens.practiceDetail.feedbackCta)
+    - Booked + outside any window  -> the booked status
+                                 (i18n:user.screens.practiceDetail.state.booked)
+    - Booked (cancellable)         -> cancel booking
+                                 (i18n:user.screens.practiceDetail.cancelBooking)
+  BE-108: a no_show booking without a reflection also gets the share-mood
+    control (i18n:user.screens.practiceDetail.shareMood, secondary), after
+    the watch-recording CTA (i18n:user.screens.practiceDetail.recordingCta)
+    when a recording exists.
   DS-sprint: accordions, master methods tags, contraindications banner.
 
   Route: /user/practices/:id
@@ -117,7 +129,7 @@
         </VBadge>
       </VCard>
 
-      <!-- О практике accordion -->
+      <!-- About accordion (i18n:user.screens.practiceDetail.aboutSection) -->
       <VAccordion
         v-if="practice.description"
         :title="t('user.screens.practiceDetail.aboutSection')"
@@ -125,7 +137,7 @@
         <p class="detail__accordion-text">{{ practice.description }}</p>
       </VAccordion>
 
-      <!-- Что подготовить accordion -->
+      <!-- What-to-prepare accordion (i18n:user.screens.practiceDetail.prepareSection) -->
       <VAccordion
         v-if="practice.what_to_prepare"
         :title="t('user.screens.practiceDetail.prepareSection')"
@@ -171,7 +183,8 @@
     <!-- Footer: price + action (flows at the end of the unified scroll) -->
     <div class="detail__actions">
       <!-- Price row: only for the catalog (not-booked) view. In the booked
-           "Моя практика" view (Figma 15) the practice is already paid for,
+           view (i18n:user.screens.practiceDetail.titleBooked, Figma 15) the
+           practice is already paid for,
            so the price row is hidden. -->
       <VCard v-if="!booked" class="detail__price-row" padding="none">
         <span class="detail__price-label">{{ t('user.screens.practiceDetail.fields.price') }}</span>
@@ -241,8 +254,10 @@
         {{ t('user.screens.practiceDetail.shareMood') }}
       </VButton>
 
-      <!-- Booked but no active window: NO CTA here. The "записан" state is
-           shown in the status row ("Вы записаны"); the old disabled button was
+      <!-- Booked but no active window: NO CTA here. The booked state is
+           shown in the status row
+           (i18n:user.screens.practiceDetail.state.booked); the old disabled
+           button was
            dead weight and ate vertical space (operator, 2026-06-04). -->
 
       <!-- Not booked: book button. Hidden for the practice owner, for a
@@ -285,8 +300,9 @@
       @sold-out="onSoldOut"
     />
 
-    <!-- Полноэкранный стейт «Места закончились» (гонка: места кончились,
-         пока юзер читал/бронировал). Поверх кадра, как .form-shell-success. -->
+    <!-- Full-screen sold-out state (i18n:shared.soldOut.title; the race:
+         the spots filled up while the user was reading/booking). Overlays
+         the frame, like .form-shell-success. -->
     <PracticeSoldOut v-if="soldOut" @find-other="onFindOther" @close="soldOut = false" />
   </div>
 </template>
@@ -349,7 +365,8 @@ const difficultyLabel = computed<string>(() => {
 
 // -- Booking state --
 const showBookingPopup = ref(false)
-// Полноэкранный стейт «Места закончились» (гонка practice_full при бронировании).
+// The fullscreen sold-out state (i18n:shared.soldOut.title) for the
+// practice_full race during booking.
 const soldOut = ref(false)
 const authStore = useAuthStore()
 const toast = useToast()
@@ -372,7 +389,7 @@ const isMaster = computed(() => !!practice.value && practice.value.master_id ===
 // a tester-only tool, never a navigation step. `schoolsHub.mine` (relation
 // per school) is warmed by both shells' ensureCurator(); a probe still in
 // flight keeps the kebab hidden and lets it appear once the data lands --
-// fail-closed, the same contract the «Школы» tab follows.
+// fail-closed, the same contract the schools tab (i18n:tabs.schools) follows.
 // =========================================================================
 const schoolsHub = useSchoolsHubStore()
 const isCuratorOfSchool = computed((): boolean => {
@@ -431,12 +448,14 @@ const myBooking = computed(() => {
 })
 
 // =========================================================================
-// Batch 6: merged «Бронирование» screen. The dedicated BookingDetailView is
-// gone; its unique pieces (a status row + a ZOOM card) live here now.
+// Batch 6: merged the booking screen (i18n:booking.title). The dedicated
+// BookingDetailView is gone; its unique pieces (a status row + a ZOOM card)
+// live here now.
 //
 // `myAnyBooking` is ANY booking the viewer holds for this practice, in ANY
-// status (including cancelled / no_show) -- so the history (status row, "Моя
-// практика" title) survives for past/cancelled bookings. This is separate
+// status (including cancelled / no_show) -- so the history (status row, the
+// booked title, i18n:user.screens.practiceDetail.titleBooked) survives for
+// past/cancelled bookings. This is separate
 // from `booked` / `myBooking` above (active-status semantics), which keep
 // driving price / t('user.screens.practiceDetail.cta.book') / t('user.screens.practiceDetail.state.booked') / check-in / feedback and
 // must NOT change. Selection: an active booking
@@ -462,17 +481,18 @@ const myAnyBooking = computed((): BookingWithPracticeResponse | null => {
   )
 })
 
-/** Any booking exists (any status) -> show the «Моя практика» framing. */
+/** `Any booking exists (any status) -> show the booked framing`
+ *  (i18n:user.screens.practiceDetail.titleBooked). */
 const hasAnyBooking = computed((): boolean => myAnyBooking.value !== null)
 
-/** A finished booking (attended / no_show) -> hide the t('user.screens.practiceDetail.cta.book') CTA. */
+/** `A finished booking (attended / no_show) -> hide` the t('user.screens.practiceDetail.cta.book') CTA. */
 const isPastBooking = computed((): boolean => {
   const b = myAnyBooking.value
   return !!b && (b.status === 'attended' || b.status === 'no_show')
 })
 
 /**
- * True once the practice has started (scheduled_at <= now). The booking
+ * True once the practice has started (`scheduled_at <= now`). The booking
  * endpoint rejects a started practice (backend create_booking time guard);
  * we hide the t('user.screens.practiceDetail.cta.book') CTA so it never dangles on a past practice
  * opened from history / a deep link. Uses the reactive `now` (60s tick) so
@@ -485,15 +505,18 @@ const practiceStarted = computed((): boolean => {
 })
 
 // -- Status row (ported from BookingDetailView; driven by myAnyBooking) --
-// NB: confirmed -> «Вы записаны» ТОЛЬКО на этом экране (status row заменяет
-// бывшую disabled-кнопку). Глобальный лейбл «Подтверждена» (Мои записи и пр.)
-// живёт в своих местах и не трогается.
+// NB: confirmed -> the booked label
+// (i18n:user.screens.practiceDetail.state.booked) ONLY on this screen (the
+// status row replaces the former disabled button). The global confirmed
+// label (My bookings and the other screens) lives in its own places and is
+// not touched.
 const STATUS_LABEL: Record<BookingStatus, string> = {
   pending: t('user.screens.practiceDetail.state.pending'),
   confirmed: t('user.screens.practiceDetail.state.booked'),
   attended: t('user.screens.practiceDetail.state.completed'),
-  // B30 (PROMPT №746, owner wording): was «Неявка», inconsistent with
-  // MyBookingsView's «Не состоялась» for the same status -- now identical to it there too.
+  // B30 (PROMPT №746, owner wording): was the old no-show label, inconsistent
+  // with MyBookingsView's did-not-take-place label for the same status --
+  // now identical to it there too.
   no_show: t('user.screens.practiceDetail.state.noShow'),
   cancelled: t('user.screens.practiceDetail.state.cancelled'),
 }
@@ -511,9 +534,10 @@ const STATUS_VARIANT: Record<BookingStatus, 'success' | 'warning' | 'error' | 'i
  * booked" -- it's a Zoom-tracked practice awaiting its attendance report
  * (bookings/service.py deliberately leaves it CONFIRMED until the report
  * ripens or the deadline fallback fires). Without this, a user who sat
- * through the class and checks right after sees the exact same «Вы
- * записаны» they saw before it started -- indistinguishable from a no-show
- * at a glance. hasEnded is already imported/used by canCancel above.
+ * through the class and checks right after sees the exact same booked label
+ * (i18n:user.screens.practiceDetail.state.booked) they saw before it
+ * started -- indistinguishable from a no-show at a glance. hasEnded is
+ * already imported/used by canCancel above.
  */
 const attendancePending = computed((): boolean => {
   const b = myAnyBooking.value
@@ -576,7 +600,8 @@ const inFeedbackWindow = computed((): boolean => {
 })
 
 /**
- * BE-108: a no_show booking without a reflection -> «Поделиться, как вы».
+ * BE-108: `a no_show booking without a reflection -> the share-mood CTA`
+ * (i18n:user.screens.practiceDetail.shareMood).
  * Reads `myAnyBooking`, not `myBooking`: the latter is the first booking of
  * this practice in list order and can be a cancelled earlier one, while
  * `myAnyBooking` falls back to the latest -- the no_show, since a practice
@@ -703,7 +728,8 @@ const cancelling = ref(false)
  * G4: the backend keeps a booking `confirmed` until the practice is finalized
  * (now automatic — the lifecycle worker at scheduled_at + duration), so a
  * held-but-not-finalized practice would otherwise still
- * show «Отменить бронирование» on an already-over practice. Gate additionally on
+ * show the cancel-booking CTA (i18n:user.screens.practiceDetail.cancelBooking)
+ * on an already-over practice. Gate additionally on
  * hasEnded (scheduled_at + duration ≤ now) using the reactive `now` (60s tick),
  * so the action hides live the moment the practice ends. FE-hide only — the
  * backend late-cancel/no-refund path stays sanctioned (operator).
@@ -733,9 +759,11 @@ function onPurchased(): void {
 }
 
 /**
- * Места кончились в гонке (BookingPopup поймал practice_full): поднимаем
- * полноэкранный стейт «Места закончились» и обновляем практику/брони, чтобы
- * экран под оверлеем уже отражал заполненность (кнопка -> «Мест нет»).
+ * Handle the sold-out race (BookingPopup caught practice_full): raise the
+ * fullscreen sold-out state (i18n:shared.soldOut.title) and refresh the
+ * practice/bookings so the screen under the overlay already reflects the
+ * fill state (the button becomes the sold-out label,
+ * i18n:user.screens.practiceDetail.state.soldOut).
  */
 function onSoldOut(): void {
   soldOut.value = true
@@ -743,7 +771,8 @@ function onSoldOut(): void {
   void bookingsStore.refreshBookings()
 }
 
-/** «Найти другую практику» -> в Календарь (витрина записи). */
+/** The find-another-practice action (i18n:shared.soldOut.findOther) `->`
+ *  the Calendar (the booking showcase). */
 function onFindOther(): void {
   soldOut.value = false
   void router.push({ name: 'user-calendar' })
@@ -832,21 +861,24 @@ onUnmounted(() => {
 
 /* Outer container: a plain block — the whole screen scrolls in MobileLayout's
  * single __main scroll. No nested scroll / no pinned footer (operator fix:
- * «скролл на блоке, а не общий»). Hero + body + actions flow top-to-bottom. */
+ * scroll on the block, not a page-level one). Hero + body + actions flow
+ * top-to-bottom. */
 .detail {
   display: flex;
   flex-direction: column;
 }
 
 /* ===== Hero (shared PracticeHeroCard wrapper) =====
- * Horizontal screen-padding раздаётся MobileLayout (--velo-screen-padding=33).
- * Здесь только vertical top-margin, чтобы не было двойного отступа. */
+ * The horizontal screen padding comes from MobileLayout
+ * (--velo-screen-padding=33); only the vertical top margin is set here, so
+ * there is no double spacing. */
 .detail__hero {
   margin-top: var(--space-4);
 }
 
 /* ===== Body =====
- * Аналогично — горизонтальный padding из ML, локально только vertical. */
+ * Same here — the horizontal padding comes from MobileLayout, only the
+ * vertical one is local. */
 .detail__body {
   padding: var(--space-4) 0;
   display: flex;
@@ -913,9 +945,11 @@ onUnmounted(() => {
   line-height: 1.5;
 }
 
-/* Section = label («Мастер» / «ZOOM») над карточкой. Разделительные линии
- * убраны — в белой DS они инородны; единый карточный язык + gap из __body
- * (operator: «навести красоту через DS», 2026-06-04). */
+/* A section = a label (the master label,
+ * i18n:user.screens.practiceDetail.fields.master, or "ZOOM") above the card.
+ * Divider lines are gone — foreign to the white design system; one card
+ * language + the gap from __body
+ * (operator: tidy it up through the design system, 2026-06-04). */
 .detail__section {
   display: flex;
   flex-direction: column;
@@ -931,14 +965,16 @@ onUnmounted(() => {
 }
 
 /* ===== Contraindications banner (shared Banner) =====
- * Все стили — в Banner.vue (variant="warning"). Здесь только spacing вокруг. */
+ * All the styling lives in Banner.vue (variant="warning"); only the
+ * surrounding spacing is set here. */
 .detail__contraindications {
   margin-top: var(--space-2);
 }
 
 /* ===== Footer =====
- * Figma booked-practice.svg: кнопки сидят прямо на mandala-фоне экрана,
- * никакой стеклянной подложки. Убран background/backdrop-filter/border-top. */
+ * Figma booked-practice.svg: the buttons sit directly on the screen's
+ * mandala background, no glass plate. background/backdrop-filter/border-top
+ * removed. */
 .detail__actions {
   padding: var(--space-4) 0 0;
   display: flex;
@@ -947,8 +983,9 @@ onUnmounted(() => {
 }
 
 .detail__price-row {
-  /* F-5.4 sync: в Figma practice-booked.svg price-row — белая card 336×48
-   * rx=15 (стиль как у accordion и status-row), не голый flex-row. */
+  /* F-5.4 sync: in Figma practice-booked.svg the price-row is a white card
+   * 336×48, rx=15 (the same style as the accordion and the status row), not
+   * a bare flex-row. */
   padding: var(--space-3) var(--space-4);
   display: flex;
   justify-content: space-between;

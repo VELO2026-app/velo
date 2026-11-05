@@ -110,7 +110,7 @@ class TestTrigger:
     @pytest.mark.parametrize(
         ("assignment", "params"),
         [
-            ("language = :v", {"v": "de"}),
+            ("language = :v", {"v": "uk"}),
             ("timezone = :v", {"v": "Europe/Berlin"}),
             ("is_active = :v", {"v": False}),
             ("telegram_id = :v", {"v": _TID_C}),
@@ -171,11 +171,11 @@ class TestTrigger:
         user_id = (await login_user(client, telegram_id=_TID_A))["user"]["id"]
         await _sql(
             db_session,
-            "UPDATE users SET language = 'de' WHERE id = :id", id=user_id,
+            "UPDATE users SET language = 'uk' WHERE id = :id", id=user_id,
         )
         await _sql(
             db_session,
-            "UPDATE users SET language = 'de' WHERE id = :id", id=user_id,
+            "UPDATE users SET language = 'uk' WHERE id = :id", id=user_id,
         )
         assert await _version(db_session, user_id) == 2
 
@@ -192,7 +192,7 @@ class TestTrigger:
         assert await _version(db_session, user_id) == 1
         await _sql(
             db_session,
-            "UPDATE users SET snapshot_version = 50, language = 'de' "
+            "UPDATE users SET snapshot_version = 50, language = 'uk' "
             "WHERE id = :id",
             id=user_id,
         )
@@ -257,14 +257,14 @@ class TestSnapshot:
 
         await _sql(
             db_session,
-            "UPDATE users SET language = 'de' WHERE id = :id", id=user_id,
+            "UPDATE users SET language = 'uk' WHERE id = :id", id=user_id,
         )
         async with factory() as writer:
             await emit_user_upserted(writer, stale)
             await writer.commit()
 
         last = (await _snapshots(db_session, user_id))[-1]
-        assert last["locale"] == "de"
+        assert last["locale"] == "uk"
         assert last["version"] == 2
 
     async def test_two_changes_with_a_flush_between_raise_it_twice(
@@ -273,14 +273,14 @@ class TestSnapshot:
         """POVTOR: each change reaches the row, each snapshot its own version."""
         user_id = (await login_user(client, telegram_id=_TID_A))["user"]["id"]
         user = await db_session.get(User, UUID(user_id))
-        user.language = "de"
+        user.language = "uk"
         await emit_user_upserted(db_session, user)
         user.timezone = "Europe/Berlin"
         await emit_user_upserted(db_session, user)
         await db_session.commit()
 
         *_, first, second = await _snapshots(db_session, user_id)
-        assert (first["version"], first["locale"]) == (2, "de")
+        assert (first["version"], first["locale"]) == (2, "uk")
         assert (second["version"], second["timezone"]) == (3, "Europe/Berlin")
 
     async def test_no_credentials_at_all_is_a_null_email(
@@ -360,24 +360,32 @@ class TestPaths:
         assert (cleared["version"], cleared["email"]) == (3, None)
         assert cleared["locale"] == "en"
 
-    async def test_a_blank_language_is_stored_but_sent_as_null(
+    async def test_a_blank_language_is_refused_and_nothing_is_sent(
         self, client: AsyncClient, db_session: AsyncSession,
     ) -> None:
-        """PUSTOTA, and the product defect it hides.
+        """PUSTOTA: PATCH language=" " answers 422; the row and the
+        snapshot stay as they were.
 
-        PATCH accepts language=" " (min_length=1, no strip) and stores it;
-        comms refuses a blank locale. The snapshot sends null -- the pair
-        pins that the blank really is in the row, so this test goes red the
-        day the validator is fixed and the case becomes unreachable.
+        What this test used to pin, and why it was right then: PATCH
+        accepted language=" " (min_length=1, no strip) and stored it, comms
+        refuses a blank locale, so the snapshot had to send null -- and the
+        test said it would go red the day the validator was fixed. BE-188
+        fixed it: PATCH accepts exactly the product's languages
+        (users/schemas.py), so a blank language can no longer reach the
+        row. What remains to pin is the refusal itself: no write, and no
+        snapshot for a write that did not happen.
         """
         auth = await login_user(client, telegram_id=_TID_A)
         user_id = auth["user"]["id"]
+        before = await _snapshots(db_session, user_id)
+        assert before  # the login itself emitted one: the pair below is real
+
         resp = await client.patch(
             ME_URL,
             json={"language": " "},
             headers=auth_headers(auth["session_token"]),
         )
-        assert resp.status_code == 200, resp.text
+        assert resp.status_code == 422, resp.text
 
         stored = (
             await db_session.execute(
@@ -385,9 +393,6 @@ class TestPaths:
                 {"id": user_id},
             )
         ).scalar_one()
-        assert stored == " "
-        last = (await _snapshots(db_session, user_id))[-1]
-        assert last["locale"] is None
-        assert last["version"] == 2
-        assert last["timezone"] == "UTC"
-        assert last["telegram_id"] == _TID_A
+        assert stored == "en"
+        assert await _snapshots(db_session, user_id) == before
+        assert await _version(db_session, user_id) == 1

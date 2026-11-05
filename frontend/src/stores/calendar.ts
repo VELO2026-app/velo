@@ -52,6 +52,7 @@ import type { PracticeFilters, PracticeResponse } from '@/api/types'
 // Calendar-specific facet filters (excludes pagination/sort/date-range,
 // which the store manages itself). Mirrors the facet subset of
 // PracticeFilters that the Calendar UI controls.
+/** Facet subset of the practice filters the Calendar UI controls (dates and pagination stay with the store). */
 export interface CalendarFacetFilters {
   practice_type?: PracticeFilters['practice_type']
   direction?: PracticeFilters['direction']
@@ -112,6 +113,7 @@ function todayMidnight(): Date {
   return DateTime.now().startOf('day').toJSDate()
 }
 
+/** Calendar screen state: sliding 7-day window, selected day, facet filters, one-request week loading. */
 export const useCalendarStore = defineStore('calendar', () => {
   // -- State --
   // First day of the currently viewed 7-day window (local midnight).
@@ -141,7 +143,8 @@ export const useCalendarStore = defineStore('calendar', () => {
     masterSchoolFilter.value = schoolFilter
   }
 
-  // SCHOOL scope (owner 2026-10-01): «Предстоящие практики» on the school page
+  // SCHOOL scope (owner 2026-10-01): the upcoming-practices tab copy
+  // (i18n:user.screens.schoolPage.tabs.upcoming) on the school page
   // opens the calendar scoped to ONE school's upcoming practices. The school
   // feed endpoint (GET /schools/{id}/practices) has no date params, so
   // its full upcoming list is fetched once (in loadWeek, when the feed is

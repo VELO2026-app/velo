@@ -1,5 +1,5 @@
-# Гейт перед пушем (до CI — локальная истина): type-aware линт с бюджетом,
-# юнит-тесты и прод-сборка ВСЕХ членов workspace (frontend + @velo/ui,
-# FE-116; внутри build — vue-tsc). Красный пуш не уезжает.
-# Хук запускается из корня воркспейса, поэтому без cd.
+# Pre-push gate (before CI -- the local source of truth): type-aware lint
+# with budget, unit tests and a production build of EVERY workspace member
+# (frontend + @velo/ui, FE-116; vue-tsc runs inside build). A red push does
+# not leave the machine. The hook runs from the workspace root, hence no cd.
 pnpm -r verify && pnpm -C frontend build && pnpm -C packages/velo-ui build

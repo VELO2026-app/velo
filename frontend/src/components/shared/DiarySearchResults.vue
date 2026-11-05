@@ -2,7 +2,8 @@
   VELO Frontend -- DiarySearchResults (diary live search, 2026-09-09)
 
   The compact results list shown while a diary search is active: a count line
-  ("Найдено: N" / "N+" while more pages remain -- the feed API returns no
+  (i18n:diary.search.found, suffixed with "+" while more pages remain -- the
+  feed API returns no
   total, so N+ is the honest ceiling) and one DiarySearchResultRow per event,
   newest-first in the API's own order (rows are a jump list, not the
   timeline -- no day separators). The parent (DiaryFeedView) owns pagination

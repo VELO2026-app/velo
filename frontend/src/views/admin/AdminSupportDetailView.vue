@@ -23,14 +23,18 @@
   CLAIM IS WRITE-AUTHZ, MADE LEGIBLE. comms admits only the thread's client or
   its ASSIGNEE to post; an admin who has not claimed gets comms' own 403 on a
   reply. So the composer shows only to the admin in `claimed_by`; everybody
-  else sees a notice, and «Взять в работу» while nobody holds it. A ticket
+  else sees a notice, and the claim button
+  (i18n:adminScreens.adminSupportDetail.take) while nobody holds it. A ticket
   held by another admin is a 409 on the claim; after any claim answer the
   ticket is read again, so `claimed_by` is always the server's.
 
   THE HANDOVER (FE-108, BE-162 delivery 2) lives in the same ⋯ menu as the
-  statuses: «Назначить» (a roster of admins -- the admin users list, myself
-  not offered), «Освободить» (a held ticket), «Вернуть в работу» (a closed
-  ticket) and «Не спам» (spam inside the 30-day retention). All three routes
+  statuses: assign (i18n:adminScreens.adminSupportDetail.menu.assign; a
+  roster of admins -- the admin users list, myself not offered), release
+  (i18n:adminScreens.adminSupportDetail.menu.release; a held ticket), reopen
+  (i18n:adminScreens.adminSupportDetail.menu.reopen; a closed ticket) and
+  not-spam (i18n:adminScreens.adminSupportDetail.menu.notSpam; spam inside
+  the 30-day retention). All three routes
   answer the ticket's FULL row, so their answers replace the card outright.
   A 409 means the ticket moved on meanwhile: a toast and a fresh read; a 404
   on reopen means the spam bin emptied it: the not-found screen. The card only
@@ -39,7 +43,8 @@
   this screen can reach.
 
   DELIBERATELY NOT BUILT (scope trim, stated not silent): polling like
-  ChatThreadScreen has -- a manual «Обновить» covers it; mark-read for admins.
+  ChatThreadScreen has -- a manual refresh
+  (i18n:adminScreens.adminSupportDetail.refresh) covers it; mark-read for admins.
 -->
 
 <template>
@@ -77,8 +82,9 @@
             {{ supportStatusLabel(ticket.status) }}
           </VBadge>
           <span class="support-detail__topic">{{ supportTopicLabel(ticket.topic) }}</span>
-          <!-- FE-107: who moved it to «Решена» last -- the admin the
-               rating (when one comes) is most likely about. -->
+          <!-- FE-107: who moved it to resolved
+               (i18n:adminScreens.adminSupport.statuses.resolved) last -- the
+               admin the rating (when one comes) is most likely about. -->
           <span
             v-if="ticket.status === 'resolved' && ticket.resolved_by"
             class="support-detail__resolved-by"
@@ -278,7 +284,8 @@
       </div>
     </VBottomSheet>
 
-    <!-- «Назначить»: the admin roster (FE-108). Read fresh on every open --
+    <!-- Assign (i18n:adminScreens.adminSupportDetail.menu.assign): the admin
+         roster (FE-108). Read fresh on every open --
          the roster is one small GET, and a stale handover target is a 422. -->
     <VBottomSheet
       :open="assignOpen"
@@ -404,8 +411,9 @@ const historyThreadId = computed(() => ticket.value?.history_thread_id ?? '')
 /** The rating's five stars, one row value at a time. */
 const STAR_VALUES = [1, 2, 3, 4, 5] as const
 
-/** Who moved the ticket to «Решена» last, by name (the fallback names an
- *  admin the row could not name). */
+/** Who moved the ticket to resolved
+ *  (i18n:adminScreens.adminSupport.statuses.resolved) last, by name (the
+ *  fallback names an admin the row could not name). */
 const resolvedByName = computed(() =>
   ticket.value?.resolved_by
     ? t('adminScreens.adminSupportDetail.resolvedBy', {
@@ -424,9 +432,9 @@ const ratingResolverName = computed(() => {
 })
 
 /** The comment's likely language, signed for the admin (owner's example:
- *  «на русском»). An unknown code shows itself -- honest, never wrong.
- *  t() is called with the template literal INLINE so the key audit sees
- *  the dynamic prefix (scripts/key-audit.mjs). */
+ *  i18n:adminScreens.adminSupport.rating.locales.ru). An unknown code shows
+ *  itself -- honest, never wrong. t() is called with the template literal
+ *  INLINE so the key audit sees the dynamic prefix (scripts/key-audit.mjs). */
 function localeName(code: string): string {
   const label = t(`adminScreens.adminSupport.rating.locales.${code}`)
   return label === `adminScreens.adminSupport.rating.locales.${code}` ? code : label
@@ -439,9 +447,12 @@ function isPerson(m: SupportMessage): boolean {
 
 // -- The ⋯ menu ---------------------------------------------------------------
 // ONE ENTRY PER ACTION (owner ruling FE-100): the four closing statuses,
-// then the handover of BE-162 delivery 2 (FE-108) -- «назначить»,
-// «освободить», «вернуть в работу», «не спам» -- each its own entry, nothing
-// else changes. The button shows only while some entry applies.
+// then the handover of BE-162 delivery 2 (FE-108) -- assign
+// (i18n:adminScreens.adminSupportDetail.menu.assign), release
+// (i18n:adminScreens.adminSupportDetail.menu.release), reopen
+// (i18n:adminScreens.adminSupportDetail.menu.reopen), not-spam
+// (i18n:adminScreens.adminSupportDetail.menu.notSpam) -- each its own entry,
+// nothing else changes. The button shows only while some entry applies.
 interface TicketMenuAction {
   key: string
   label: () => string
@@ -449,13 +460,14 @@ interface TicketMenuAction {
   run: () => Promise<void>
 }
 
-/** A closed-but-not-spam ticket: «Вернуть в работу» reopens it. */
+/** A closed-but-not-spam ticket: reopen (i18n:adminScreens.adminSupportDetail.menu.reopen) reopens it. */
 const REOPENABLE_STATUSES: readonly SupportTicketStatus[] = ['resolved', 'rejected', 'duplicate']
 
 const TICKET_ACTIONS: readonly TicketMenuAction[] = [
-  // «Назначить» -- always, on a ticket. A history thread never reaches the
-  // card (its id 404s at the one-ticket read), so "кроме истории" holds by
-  // construction; the route's 409 is the backend backstop.
+  // Assign (i18n:adminScreens.adminSupportDetail.menu.assign) -- always, on a
+  // ticket. A history thread never reaches the
+  // card (its id 404s at the one-ticket read), so the "except history threads"
+  // rule holds by construction; the route's 409 is the backend backstop.
   {
     key: 'assign',
     label: () => t('adminScreens.adminSupportDetail.menu.assign'),
@@ -480,7 +492,8 @@ const TICKET_ACTIONS: readonly TicketMenuAction[] = [
     visible: (tk) => REOPENABLE_STATUSES.includes(tk.status),
     run: () => onReopen(),
   },
-  // «Не спам» is the same reopen route, offered only while the verdict is
+  // Not-spam (i18n:adminScreens.adminSupportDetail.menu.notSpam) is the same
+  // reopen route, offered only while the verdict is
   // inside the retention (past it the bin deletes the ticket with its
   // conversation -- the route would 404/409 anyway).
   {
@@ -501,7 +514,7 @@ function runAction(action: TicketMenuAction): void {
   void action.run()
 }
 
-// -- «Назначить»: the roster and the handover (FE-108) ------------------------
+// -- Assign (i18n:adminScreens.adminSupportDetail.menu.assign): the roster and the handover (FE-108) --------
 
 interface AdminOption {
   id: string
@@ -516,7 +529,8 @@ const assigning = ref(false)
 
 /** The roster source is the admin users list (the same one AdminUsersView
  *  reads). The caller themselves is not offered: handing a ticket to
- *  yourself is «Взять в работу», not a handover. */
+ *  yourself is the take button (i18n:adminScreens.adminSupportDetail.take),
+ *  not a handover. */
 function adminName(u: UserResponse): string {
   return (
     [u.first_name, u.last_name].filter(Boolean).join(' ') ||
@@ -593,7 +607,8 @@ async function onRelease(): Promise<void> {
   }
 }
 
-/** «Вернуть в работу» and «Не спам» -- one route (FE-108). */
+/** Reopen (i18n:adminScreens.adminSupportDetail.menu.reopen) and not-spam
+ *  (i18n:adminScreens.adminSupportDetail.menu.notSpam) -- one route (FE-108). */
 async function onReopen(): Promise<void> {
   if (!ticket.value || reopening.value) return
   reopening.value = true
@@ -658,7 +673,8 @@ function restartPolling(): void {
 }
 
 /** Read the feeds again in place, silently: a failed read keeps what is
- *  shown -- the next poll or «Обновить» tries again. */
+ *  shown -- the next poll or the refresh button
+ *  (i18n:adminScreens.adminSupportDetail.refresh) tries again. */
 async function rereadFeeds(): Promise<void> {
   try {
     const page = await getAdminSupportMessages(ticketId)

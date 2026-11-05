@@ -3,10 +3,11 @@
 // =============================================================================
 //
 // [FE-2] Requirement: no request loop after the send (capability: user-booking)
-// After «Отправить запрос» the back stack SHALL contain no trace of the request
-// screen behind «Моя практика»: back from practice-detail SHALL land on the
-// entry that preceded the practice screen (e.g. the calendar), and the chat
-// thread SHALL NOT have been opened along the way.
+// After the send-request button (i18n:user.screens.bookingConfirmed.sendRequest)
+// the back stack SHALL contain no trace of the request screen behind the booked
+// practice title (i18n:user.screens.practiceDetail.titleBooked): back from
+// practice-detail SHALL land on the entry that preceded the practice screen
+// (e.g. the calendar), and the chat thread SHALL NOT have been opened along the way.
 //
 // WHY A SEPARATE FILE: BookingConfirmedView.test.ts mocks vue-router wholesale
 // (useRouter/useRoute stubs) -- perfect for the screen's own ladder and error
@@ -19,15 +20,17 @@
 // SCOPE HONESTY: memory history does NOT populate history.state.{back,...}
 // (only createWebHistory builds those entries), so here the view always takes
 // the REPLACE branch. What this file therefore proves end-to-end: the send
-// lands on «Моя практика», the chat is never entered, the request screen is
-// gone from the stack (visited exactly once), and back from «Моя практика»
-// goes to the pre-practice entry -- the loop request -> messages -> request
+// lands on the booked practice screen (i18n:user.screens.practiceDetail.titleBooked),
+// the chat is never entered, the request screen is gone from the stack (visited
+// exactly once), and back from the booked practice screen goes to the pre-practice
+// entry -- the loop request -> messages -> request
 // cannot reproduce. The router.back() branch itself (state.back matching
 // /user/practices/:id -- a web-history-only contract) stays pinned by the
 // [FE-1] unit tests' historyState mock; the two files are complementary.
 //
 // Scenario A: normal flow -- calendar -> practice -> booking-confirmed, send,
-// then back from «Моя практика» lands on the CALENDAR, not the request screen.
+// then back from the booked practice screen lands on the CALENDAR, not the
+// request screen.
 //
 // Scenario B: deep link -- straight into booking-confirmed (nothing usable
 // behind), send, back lands on the pre-entry root; the request screen was
@@ -203,9 +206,9 @@ describe('BookingConfirmedView back-navigation [FE-2]', () => {
     // ...and the request screen was visited exactly once (the original push).
     expect(visited.filter((p) => p.startsWith('/user/booking-confirmed'))).toHaveLength(1)
 
-    // The FE-2 core: back from «Моя практика» never resurrects the request
-    // screen. In MEMORY history the send went through the replace branch
-    // (state.back is a web-history-only field -- see the banner), so the
+    // The FE-2 core: back from the booked practice screen never resurrects the
+    // request screen. In MEMORY history the send went through the replace
+    // branch (state.back is a web-history-only field -- see the banner), so the
     // practice entry sits in the stack TWICE: the original push + the entry
     // that replaced the request screen. The first back lands on that ORIGINAL
     // practice entry; in the browser the back-branch collapses it into one

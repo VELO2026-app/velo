@@ -3,7 +3,7 @@
 // =============================================================================
 //
 // P6a safety net: VModal moves to @velo/ui in FE-121 (P6), and until now it
-// had no tests -- "переносить нетестированное запрещено". These pin the
+// had no tests -- "moving untested code is forbidden". These pin the
 // CURRENT component's contract as-is. Zero component edits: anything that
 // could only pass after an edit is a component finding for the FE-142 report,
 // not a fix in here.
@@ -67,7 +67,7 @@ const closed = vi.fn()
 interface MountOpts {
   /** The :open prop the harness mounts with. */
   open?: boolean
-  /** The parent ACTS on @close (sets open=false) instead of just recording. */
+  /** The parent ACTS on `@close` (sets open=false) instead of just recording. */
   closeOnEmit?: boolean
   /** Extra props/attrs forwarded onto VModal (closeOnOverlay, class, ...). */
   props?: Record<string, unknown>

@@ -584,6 +584,7 @@
       "schedule": "Notification schedule",
       "receiveFrom": "Receive notifications from",
       "to": "to",
+      "daysHint": "Ticked days are when notifications arrive. An unticked day stays silent all day, whatever the set times.",
       "category": {
         "practices": "Practices",
         "members": "Members",

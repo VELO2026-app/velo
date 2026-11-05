@@ -3,8 +3,9 @@
 
   The ONE 1..10 scale shared by CheckinView (mood), FeedbackView (rating)
   and the external-activity form (mood -- PM-9 branch 1, owner 2026-10-12).
-  Five approved faces, two scores each: 1-2 Плохо / 3-4 Не очень / 5-6
-  Нормально / 7-8 Хорошо / 9-10 Огонь. The numeric contract + labels live in
+  Five approved faces, two scores each: 1-2 bad (i18n:mood.bad), 3-4 low
+  (i18n:mood.low), 5-6 neutral (i18n:mood.neutral), 7-8 good (i18n:mood.good),
+  9-10 fire (i18n:mood.fire). The numeric contract + labels live in
   utils/moodScale.ts, the key -> face binding in utils/ratingIcons.ts; this
   component owns only the INTERACTION. CheckinView and the external-activity
   form send the score as `mood`, FeedbackView as `rating` -- emotion keys
@@ -19,7 +20,8 @@
 
   Cards are a real single-choice radiogroup (roving tabindex; arrows / Home /
   End move the selection). The range keeps its native slider semantics and
-  carries the exact aria-valuetext «5 из 10 — Нормально» (tz §8).
+  carries the exact aria-valuetext (i18n:mood.valueText with the score, max
+  and the active mood label) (tz §8).
 
   Touch: the stage owns the gesture (touch-action: none) -- a press-and-drag
   tracks the finger 1:1 on both axes, with no mid-gesture handoff to page
@@ -132,15 +134,15 @@ const emit = defineEmits<{
 // behind the neighbors and crop against the stage edges.
 const CARD_WIDTH = 96
 /** Nearest neighbors: 0.75 x card width. Their scaled half-width
- *  (48 * 0.8 = 38.4) puts the inner edge at 72 - 38.4 = 33.6 < 48 -- hidden
+ *  (48 * 0.8 = 38.4) puts the inner edge at `72 - 38.4 = 33.6 < 48` -- hidden
  *  behind the active card by ~14px of overlap. */
 const NEAR_SHIFT = 0.75 * CARD_WIDTH // 72px
 /** Far cards: 1.3 x card width, BEHIND the neighbors (their inner edge at
- *  125 - 31 = 94 < 110 = the neighbor's outer edge). */
+ *  `125 - 31 = 94 < 110` = the neighbor's outer edge). */
 const FAR_SHIFT = 1.3 * CARD_WIDTH // ~125px
 /** Tier scales: active / nearest / far. */
 const TIER_SCALE = [1, 0.8, 0.65] as const
-/** Layer order: active -> neighbors -> far cards. */
+/** Layer order: `active -> neighbors -> far cards`. */
 const TIER_Z = [10, 9, 8] as const
 /** Per-tier slide from the stage centerline. */
 /** Rendered face size -- scales with its CARD now, no inner face scaling. */
@@ -184,7 +186,8 @@ function selectIndex(index: number): void {
   const target = Math.min(EMOTIONS.length - 1, Math.max(0, index))
   const score = moodScoreFromIndex(target)
   // Re-tapping the active card emits nothing once the stored score is already
-  // that card's click value (tz §2.3). A 5 sitting on «Нормально» still snaps
+  // that card's click value (tz §2.3). A 5 sitting on the neutral card
+  // (i18n:mood.neutral) still snaps
   // to 6 -- only an already-exact match is a no-op.
   if (target === activeIndex.value && clampedScore.value === score) return
   emit('update:modelValue', score)

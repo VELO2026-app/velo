@@ -72,14 +72,18 @@ function buttonWith(label: string): HTMLElement | undefined {
   )
 }
 
-/** Exact-label finder -- «Изменить» (the pill) must not match «Изменить роль» (the menu item). */
+/** Exact-label finder -- the change pill
+ *  (i18n:user.screens.schoolStudentProfile.change) must not match the
+ *  change-role menu item (i18n:user.screens.schoolStudentProfile.role.switchCta). */
 function exactButton(label: string): HTMLButtonElement | undefined {
   return Array.from(document.body.querySelectorAll<HTMLButtonElement>('button') ?? []).find(
     (b) => b.textContent?.trim() === label || b.getAttribute('aria-label') === label,
   )
 }
 
-/** The stat cards' values in DOM order (§1.13.2: «Практик» then «Часов»). */
+/** The stat cards' values in DOM order (§1.13.2: the practices stat
+ *  i18n:user.screens.schoolStudentProfile.practicesStat, then the hours stat
+ *  i18n:user.screens.schoolStudentProfile.hoursStat). */
 function statValues(): string[] {
   return Array.from(document.body.querySelectorAll<HTMLElement>('.v-stat__value') ?? []).map((e) =>
     (e.textContent ?? '').trim(),
@@ -191,7 +195,7 @@ describe('SchoolStudentProfileView', () => {
     expect(buttonWith('Предложить стать мастером')).toBeUndefined()
   })
 
-  it('«Заблокировать» opens the block confirm (draft copy); «Отмена» closes it without any call', async () => {
+  it('«Заблокировать» opens the block confirm; «Отмена» closes it without any call', async () => {
     mount()
     await flush()
 
@@ -200,10 +204,11 @@ describe('SchoolStudentProfileView', () => {
     buttonWith('Заблокировать')?.click()
     await flush()
 
-    // Title + who-card + the DRAFT warning copy (BE-79 owns the final wording).
-    expect(text()).toContain('Заблокировать участника школы?')
+    // Title + who-card + the FE-97 owner-approved warning copy
+    // (i18n:user.screens.schoolStudentProfile.blockText).
+    expect(text()).toContain('Заблокировать ученика?')
     expect(text()).toContain('Пётр Сидоров')
-    expect(text()).toContain('перестанет получать её уведомления')
+    expect(text()).toContain('переместится в группу «Удалённые»')
 
     exactButton('Отмена')?.click()
     // The leave transition (--transition-slow, 0.3s) must finish before the
@@ -211,13 +216,13 @@ describe('SchoolStudentProfileView', () => {
     await new Promise((resolve) => setTimeout(resolve, 500))
     await flush()
 
-    expect(text()).not.toContain('Заблокировать участника школы?')
+    expect(text()).not.toContain('Заблокировать ученика?')
     expect(toastInfo).not.toHaveBeenCalled()
     expect(cgApi.offerSchoolMaster).not.toHaveBeenCalled()
   })
 
   // BE-79 (2): this used to pin the INTERIM -- «nothing mutates, the chain is
-  // a draft». Right then; the block endpoint (BE-79 (1а)) replaced it: confirm
+  // a draft». Right then; the block endpoint (BE-79 (1a)) replaced it: confirm
   // now SENDS the block, and the chain opens on the server's 204 only.
   it('block confirm: «Заблокировать» sends the block; on 204 the success chain opens', async () => {
     mount()
@@ -232,9 +237,11 @@ describe('SchoolStudentProfileView', () => {
     await flush()
 
     // The post-block step rides the same dialog canon: title, who-card, the
-    // warning panel WITHOUT the icon, compact «Не сейчас» / «В поддержку».
-    expect(text()).toContain('Пользователь заблокирован')
-    expect(text()).toContain('Пользователь перемещён во вкладку «Блок» участников школы.')
+    // warning panel WITHOUT the icon, compact dismiss
+    // (i18n:user.screens.schoolStudentProfile.report.dismiss) / report
+    // (i18n:user.screens.schoolStudentProfile.report.cta).
+    expect(text()).toContain('Ученик заблокирован')
+    expect(text()).toContain('Ученик перемещён в «Удалённые»')
     expect(exactButton('Не сейчас')).toBeTruthy()
     expect(exactButton('В поддержку')).toBeTruthy()
     expect(cgApi.blockSchoolMember).toHaveBeenCalledTimes(1)
@@ -269,9 +276,9 @@ describe('SchoolStudentProfileView', () => {
     mount()
     await flush()
     await confirmBlock()
-    expect(toastError).toHaveBeenCalledWith('Участник уже не в школе')
+    expect(toastError).toHaveBeenCalledWith('Ученик уже не в школе')
     expect(push).toHaveBeenCalledWith(expect.objectContaining({ name: 'master-school-members' }))
-    expect(text()).not.toContain('Пользователь заблокирован')
+    expect(text()).not.toContain('Ученик заблокирован')
   })
 
   it('block refused (409 / 403 / network): the error toast, no success chain, no navigation', async () => {
@@ -283,7 +290,7 @@ describe('SchoolStudentProfileView', () => {
     await confirmBlock()
     expect(toastError).toHaveBeenCalled()
     expect(push).not.toHaveBeenCalled()
-    expect(text()).not.toContain('Пользователь заблокирован')
+    expect(text()).not.toContain('Ученик заблокирован')
   })
 
   it('«В поддержку» opens the report form; «Не сейчас» just dismisses the chain', async () => {

@@ -10,8 +10,10 @@
 // The old unconditional scrollIntoView({block:'center'}) re-centered the field
 // in the scrollport EVEN WHEN IT ALREADY FIT -- on the group-create form
 // (whose column keeps its at-rest height while typing, see that SFC) focusing
-// «Описание» used to sweep the legend/title/name field up out of view
-// («улетает наверх, хотя место есть»). scrollIntoViewIfNeeded(false) is the
+// the description field (i18n:masterScreens.masterGroupCreate.fields.description)
+// used to sweep the legend/title/name field up out of view (the owner's
+// report: it "flies off the top even though there is room").
+// scrollIntoViewIfNeeded(false) is the
 // exact "only if needed, nearest edge" primitive, present in every WebKit and
 // Chromium this app runs in (Safari 4+); scrollIntoView({block:'nearest'}) is
 // the standard-spelled fallback for anything else. A field genuinely under
@@ -53,9 +55,11 @@ import {
 const SETTLE_MS = 120
 
 /**
- * The real implementation, a FACTORY since FE-143: each consumer's setup()
- * runs it (through the kit seam), so the onUnmounted cleanup below binds to
- * the component that owns the focused field.
+ * Scroll a focused text field into view once the soft keyboard settles;
+ * returns the handler to bind on the field. The real implementation is a
+ * FACTORY since FE-143: each consumer's setup() runs it (through the kit
+ * seam), so the onUnmounted cleanup below binds to the component that owns
+ * the focused field.
  */
 export function createKeyboardFieldScroll() {
   // The listener this composable currently has attached to the (long-lived,
@@ -129,7 +133,7 @@ export function createKeyboardFieldScroll() {
  * FE-143 host wiring -- App.vue calls this once in its setup. Provides the
  * real factory under the kit's injection key; every
  * useKeyboardFieldScroll() below (host views and shared pickers today, the
- * kit's VInput/VTextarea after P6) resolves to it through @velo/ui.
+ * kit's VInput/VTextarea after P6) resolves to it through `@velo/ui`.
  */
 export function provideKeyboardFieldScroll(): void {
   provide(KEYBOARD_FIELD_SCROLL_INJECTION_KEY, createKeyboardFieldScroll)

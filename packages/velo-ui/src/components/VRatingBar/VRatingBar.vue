@@ -1,17 +1,18 @@
 <!--
-  @velo/ui -- VRatingBar (Admin DS, 2026-06-14, operator SVG "Распределение
-  оценок"; migrated FE-140 batch B)
+  @velo/ui -- VRatingBar (Admin DS, 2026-06-14, operator SVG "Rating
+  distribution"; migrated FE-140 batch B)
 
   A rating-distribution row: leading icon + label, a coloured progress track below,
-  and the percentage. Used inside the admin feedback-detail "Распределение оценок"
-  card (Огонь / Хорошо / Есть вопросы).
+  and the percentage. Used inside the admin feedback-detail distribution card
+  (heading i18n:adminScreens.adminFeedbackRate.distributionratings), on rows
+  such as fire (i18n:mood.fire), good (i18n:mood.good) and "have questions".
 
   Stub-friendly (build-full-design): omit `value` (null) to show an empty track +
   "—" until the backend provides the distribution. `suffix` adds an absolute count
   next to the percent (e.g. "(5)").
 
   Usage:
-    <VRatingBar label="Огонь!" :value="45"
+    <VRatingBar label="Fire!" :value="45"
       bar-color="var(--velo-peach-300)" icon-color="var(--velo-peach-500)">
       <template #icon><IconRatingFire :size="22" /></template>
     </VRatingBar>

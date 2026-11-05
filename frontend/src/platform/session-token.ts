@@ -24,11 +24,13 @@
 /** The key, the same in both carriers. */
 export const SESSION_TOKEN_KEY = 'velo_token'
 
+/** The token carrier's contract: read, and write-or-remove. */
 export interface SessionTokenStore {
   read(): string | null
   write(token: string | null): void
 }
 
+/** Build a token store over the given storage; throwing storage reads as empty. */
 export function sessionTokenStore(storage: () => Storage): SessionTokenStore {
   return {
     read(): string | null {

@@ -2,8 +2,10 @@
 // VELO Frontend -- WaitlistConfirmView tests (Links, 3 October)
 // =============================================================================
 //
-// The «Освободилось место» screen: the entry from GET /waitlist/me by id,
-// «Подтвердить место» -> POST /waitlist/{id}/confirm -> the practice page;
+// The spot-freed screen (lead line i18n:user.screens.waitlistConfirm.leadLine):
+// the entry from GET /waitlist/me by id,
+// the confirm CTA (i18n:user.screens.waitlistConfirm.confirm.cta)
+// -> POST /waitlist/{id}/confirm -> the practice page;
 // every other state says what it is. A 400 does not say which case it was,
 // so the screen re-reads the entry and shows its state.
 // =============================================================================

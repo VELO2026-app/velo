@@ -7,7 +7,7 @@
     1. Shows practice summary (title, date, master, price)
     2. Optional promo code input + "OK" -> preview-purchase API
     3. Displays discount if promo applied
-    4. "Оплатить" button -> purchase API (booking + ledger)
+    4. Pay button (i18n:booking.cta.pay) -> purchase API (booking + ledger)
     5. Error handling: insufficient balance, full, already booked
 
   F5 review fixes:
@@ -124,8 +124,9 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
   purchased: []
-  /** Гонка: места кончились пока юзер читал/бронировал (backend practice_full).
-   *  Родитель показывает полноэкранный стейт «Места закончились». */
+  /** Race: the spots filled up while the user was reading or booking
+   *  (backend practice_full). The parent shows the fullscreen sold-out
+   *  state (i18n:shared.soldOut.title). */
   soldOut: []
 }>()
 
@@ -255,8 +256,9 @@ async function onPurchase(): Promise<void> {
       // №746): its phrase now lives in errorMessages.ts and the generic
       // extractApiError() branch below finds it there.
       if (e.code === 'practice_full') {
-        // Места кончились в гонке — закрываем попап и поднимаем полноэкранный
-        // стейт «Места закончились» (вместо тоста). Решение оператора 2026-06-04.
+        // The spots filled up in the race: close the popup and raise the
+        // fullscreen sold-out state (i18n:shared.soldOut.title) instead of
+        // a toast. Operator decision of 2026-06-04.
         resetState()
         emit('close')
         emit('soldOut')

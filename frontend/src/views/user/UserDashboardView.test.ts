@@ -44,7 +44,8 @@
 // the wall clock in FOUR places that decide what renders: the reactive `now`
 // ref + 60s setInterval (.vue:225-226,459-461) driving isInCheckinWindow/
 // isLiveNow; and formatDateShort internally
-// compare against `new Date()` for "Сегодня"/"Завтра" (utils/format.ts:67,176).
+// compare against `new Date()` for the relative day labels
+// (i18n:common.today / i18n:common.tomorrow; utils/format.ts:67,176).
 // All fixture datetimes are literals relative to that frozen instant.
 //
 // VIEWER TIMEZONE: the profile timezone is 'Europe/Moscow' (UTC+3), not 'UTC'
@@ -515,7 +516,7 @@ describe('UserDashboardView', () => {
       const blocks = nearestBlocks()
       expect(blocks).toHaveLength(2)
       // selectNearestBookings pins the active session first regardless of input order.
-      expect(titleOf(blocks[0]!)).toBe('Утренняя практика') // "(эфир)" suffix stripped
+      expect(titleOf(blocks[0]!)).toBe('Утренняя практика') // live-marker suffix stripped
       expect(badgeOf(blocks[0]!)).toBe('В эфире')
       expect(whenOf(blocks[0]!)).toBe('Сегодня')
       expect(durOf(blocks[0]!)).toContain('14:50')
@@ -665,6 +666,69 @@ describe('UserDashboardView', () => {
       expect(host?.textContent).not.toContain('Не удалось создать встречу')
     })
 
+    // FE-91 (BE-72's frontend half): a registrant that exhausted its retries
+    // (or got a Zoom answer without a link) used to fall into the SAME
+    // 'pending' branch as a link still being prepared -- the student stared
+    // at an eternally "still preparing" row for a link that would never arrive.
+    // The flag is the backend's ONE predicate (zoom/service.py::
+    // link_unavailable_reason) -- the same one the resolve endpoint answers
+    // kind:'unavailable' from, so this row and the practice screen it opens
+    // cannot disagree.
+    it('Zoom: link_unavailable -- disabled AND the «Zoom недоступен» badge, not «готовится», not the failed-meeting text', async () => {
+      const noLink = booking(
+        'up_no_link',
+        {
+          status: 'confirmed',
+          zoom_registrant_ready: false,
+          zoom_registrant_link_unavailable: true,
+        },
+        {
+          scheduled_at: '2026-07-20T11:50:00Z',
+          duration_minutes: 60,
+          // The meeting itself exists and is live -- only the PERSONAL link
+          // is gone; that is what keeps this state distinct from 'failed'.
+          zoom_meeting_status: 'active',
+        },
+      )
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([noLink])
+      mount()
+      await flush()
+
+      const block = nearestBlocks()[0]!
+      expect(actionIn(block, 'Zoom')?.disabled).toBe(true)
+      expect(host?.textContent).toContain('Zoom недоступен')
+      // Not the failed-meeting wording (the meeting was created)...
+      expect(host?.textContent).not.toContain('Не удалось создать встречу')
+    })
+
+    it('Zoom: link_unavailable absent/false stays the plain pending row as before', async () => {
+      // The M-3 gate: the flag rides the same booking fields as the ready
+      // flag, and a row without it (false, or a fixture with no field) must
+      // keep rendering exactly what it did before FE-91 -- a disabled Zoom
+      // button with NO badge under it.
+      const stillPreparing = booking(
+        'up_still_preparing',
+        {
+          status: 'confirmed',
+          zoom_registrant_ready: false,
+          zoom_registrant_link_unavailable: false,
+        },
+        {
+          scheduled_at: '2026-07-20T11:50:00Z',
+          duration_minutes: 60,
+        },
+      )
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([stillPreparing])
+      mount()
+      await flush()
+
+      const block = nearestBlocks()[0]!
+      expect(actionIn(block, 'Zoom')?.disabled).toBe(true)
+      // No note badge under the actions row at all.
+      expect(block.querySelector('.dashboard__zoom-note')).toBeNull()
+      expect(host?.textContent).not.toContain('Zoom недоступен')
+    })
+
     it('[FE-47] Check-in: NOT rendered while live or already checked in -- lone Zoom keeps the row intact', async () => {
       vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([UP_SOON, UP_LIVE])
       mount()
@@ -672,7 +736,8 @@ describe('UserDashboardView', () => {
 
       const blocks = nearestBlocks()
       // blocks[0] is UP_LIVE (pinned live-first): session in progress
-      // («В эфире») -> NO Check-in button at all -- hidden, not disabled.
+      // (live badge, i18n:user.screens.userDashboard.liveBadge) -> NO
+      // Check-in button at all -- hidden, not disabled.
       expect(actionIn(blocks[0]!, 'Check-in')).toBeUndefined()
       // blocks[1] is UP_SOON: has_checkin true -> NO Check-in either.
       expect(actionIn(blocks[1]!, 'Check-in')).toBeUndefined()
@@ -1146,8 +1211,9 @@ describe('UserDashboardView', () => {
   })
 
   // ===========================================================================
-  // FE-70: «Быстрый доступ» -- two one-tap entries into writing, placed
-  // between the nearest practices and the progress stats.
+  // FE-70: the quick-access section (i18n:user.screens.userDashboard.quickAccess.title)
+  // -- two one-tap entries into writing, placed between the nearest practices
+  // and the progress stats.
   // ===========================================================================
   describe('quick access (FE-70)', () => {
     function sectionTitles(): string[] {

@@ -24,9 +24,11 @@ import { host } from './host'
 export const CHUNK_RELOAD_KEY = 'velo:chunk-reload'
 
 /**
- * Claim the session's single reload. True exactly once per session; false
- * when already claimed or when storage cannot hold the mark -- without the
- * mark a reload could not stop itself, so no mark means no reload.
+ * Claim the session's single reload.
+ *
+ * @returns True exactly once per session; false when already claimed or
+ *  when storage cannot hold the mark -- without the mark a reload could not
+ *  stop itself, so no mark means no reload.
  */
 function claimReload(storage: () => Storage): boolean {
   try {

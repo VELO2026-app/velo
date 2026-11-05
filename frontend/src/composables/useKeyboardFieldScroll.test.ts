@@ -130,7 +130,8 @@ describe('useKeyboardFieldScroll (unmount cleanup, owed by 3ad1433d)', () => {
 // [FE-45 follow-up] The settle scroll's SEMANTICS: minimal, only-if-needed.
 // It used to be an unconditional scrollIntoView({block:'center'}) -- which
 // re-centered fields that were already fully visible, sweeping the form's
-// upper rows out of view ("улетает наверх, хотя место есть"). The new contract
+// upper rows out of view (the owner's report: the field "flies off the top
+// even though there is room"). The new contract
 // prefers scrollIntoViewIfNeeded(false) (no-op when visible, nearest-edge
 // reveal when not), with scrollIntoView({block:'nearest'}) as the fallback
 // when the WebKit-ism is absent. Pinned by stubbing both APIs and firing the
