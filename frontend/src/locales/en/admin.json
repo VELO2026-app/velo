@@ -484,9 +484,7 @@
         "locales": {
           "ru": "in Russian",
           "en": "in English",
-          "uk": "in Ukrainian",
-          "de": "in German",
-          "es": "in Spanish"
+          "uk": "in Ukrainian"
         }
       },
       "categoryNames": {

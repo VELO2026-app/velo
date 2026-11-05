@@ -10,8 +10,9 @@
 // PATTERN: both stores are DEPENDENCIES here, not the thing under test --
 // same classification as PracticeDetailView.test.ts, and for the identical
 // reason: this screen's OWN derivation (hasValidZoom / canJoin / the join-409
-// no-op / the leave-always-navigates flow) is what needs proving, not the
-// stores' internal fetch/refresh plumbing (already covered by
+// no-op / the FE-49 button-hiding rules -- Check-in hidden once done or
+// started, the leave button never rendered at all) is what needs proving,
+// not the stores' internal fetch/refresh plumbing (already covered by
 // stores/bookings.test.ts and stores/practices' own tests). Both mocked
 // wholesale behind getters over a mutable object (velo-idiom §5), exactly
 // PracticeDetailView.test.ts:59-97's shape. Real Pinia still installed so any
@@ -31,10 +32,12 @@
 // template, not assumed from the screen's name.
 //
 // VEmptyState is used for three T-35 states (host / cancelled / resolve-404),
-// not as a general loading/error ladder; Check-in and the leave button
-// (i18n:user.screens.practiceLive.leave)
-// stay rendered regardless -- except (F4) for the practice's own master and in
-// the master zone, where they are not his actions.
+// not as a general loading/error ladder. FE-49 (product decision
+// 2026-11-02): Check-in is HIDDEN once the booking has one or the practice
+// has started (the locked "checked-in" plate is gone with the button), and
+// the leave button is deleted entirely -- no state renders it; the student
+// action still never shows for the practice's own master or in the master
+// zone.
 //
 // Because both stores are mocked getters (not reactive refs), state must be
 // set BEFORE mount() -- mutating bookingsState/practicesState mid-test does
@@ -194,7 +197,9 @@ vi.mock('@/stores/practices', () => ({
 const bookingsState: { bookings: BookingWithPracticeResponse[] } = { bookings: [] }
 const fetchMyBookings = vi.fn()
 const joinBooking = vi.fn()
-const leaveBooking = vi.fn()
+// FE-49: leaveBooking is deliberately NOT on the mock -- the screen no longer
+// consumes it (the leave button is deleted); if it ever comes back, the call
+// crashes loudly instead of silently passing.
 vi.mock('@/stores/bookings', () => ({
   useBookingsStore: () => ({
     get bookings() {
@@ -202,7 +207,6 @@ vi.mock('@/stores/bookings', () => ({
     },
     fetchMyBookings,
     joinBooking,
-    leaveBooking,
   }),
 }))
 
@@ -327,7 +331,6 @@ beforeEach(() => {
   fetchPractice.mockReset()
   fetchMyBookings.mockReset()
   joinBooking.mockReset()
-  leaveBooking.mockReset()
   openLink.mockReset()
   // Default: a booked user with a personal entry -- the ordinary case every
   // non-Zoom test in this file assumes. F4: the body carries `kind` only.
@@ -644,9 +647,14 @@ describe('PracticeLiveView', () => {
   })
 
   // ===========================================================================
-  describe('check-in', () => {
-    it('not yet checked in: navigates to the check-in route with the practiceId', () => {
-      practicesState.selected = practice()
+  // FE-49 (product decision 2026-11-02): the button HIDES -- the locked
+  // "checked-in" variant is gone with the label it showed. The default practice() fixture
+  // (2026-07-20) is already in the past, so every positive case here names a
+  // far-future start and every hidden-because-started case a far-past one --
+  // clock-independent, like every date in this file.
+  describe('check-in (FE-49: hidden, not locked)', () => {
+    it('before the practice and not yet checked in: the button is there and navigates to the check-in route', () => {
+      practicesState.selected = practice({ scheduled_at: '2100-01-01T10:00:00Z' })
       bookingsState.bookings = [booking({ has_checkin: false })]
       mount()
 
@@ -655,59 +663,56 @@ describe('PracticeLiveView', () => {
       expect(push).toHaveBeenCalledWith({ name: 'user-checkin', params: { practiceId: 'p1' } })
     })
 
-    it('already checked in: the button is disabled and reads "Check-in сделан"', () => {
-      practicesState.selected = practice()
+    it('already checked in: NO button (the "Check-in сделан" lock went with FE-49)', () => {
+      practicesState.selected = practice({ scheduled_at: '2100-01-01T10:00:00Z' })
       bookingsState.bookings = [booking({ has_checkin: true })]
       mount()
 
-      expect(checkinBtn()?.disabled).toBe(true)
-      expect(checkinBtn()?.textContent?.trim()).toBe('Check-in сделан')
+      expect(checkinBtn()).toBeNull()
+    })
+
+    it('the practice has started: NO button, checked in or not', () => {
+      practicesState.selected = practice({ scheduled_at: '2020-01-01T10:00:00Z' })
+      bookingsState.bookings = [booking({ has_checkin: false })]
+      mount()
+      expect(checkinBtn()).toBeNull()
+      app?.unmount()
+      host?.remove()
+
+      bookingsState.bookings = [booking({ has_checkin: true })]
+      mount()
+      expect(checkinBtn()).toBeNull()
     })
   })
 
   // ===========================================================================
-  describe('leave flow', () => {
-    it('a joined, not-yet-left booking: calls leaveBooking, then navigates to the dashboard', async () => {
+  // FE-49 (product decision 2026-11-02): the leave button is deleted from
+  // the screen. It never cancelled anything -- to the person it only left
+  // for the dashboard, which the back control already does -- so what needs
+  // proving here is the ABSENCE: no booking state renders it. The store is
+  // not even on the mock anymore (see the useBookingsStore factory above);
+  // the endpoint wrapper stays in api/bookings.ts with a comment, out of
+  // this screen's reach.
+  describe('FE-49: the leave button is gone', () => {
+    it('no booking state renders the button: never joined, joined, or already left', () => {
       practicesState.selected = practice()
+      bookingsState.bookings = [booking({ joined_at: null, left_at: null })]
+      mount()
+      expect(leaveBtn()).toBeNull()
+      app?.unmount()
+      host?.remove()
+
+      bookingsState.bookings = [booking({ joined_at: '2026-07-20T09:00:00Z', left_at: null })]
+      mount()
+      expect(leaveBtn()).toBeNull()
+      app?.unmount()
+      host?.remove()
+
       bookingsState.bookings = [
-        booking({ id: 'b1', joined_at: '2026-07-20T09:00:00Z', left_at: null }),
+        booking({ joined_at: '2026-07-20T09:00:00Z', left_at: '2026-07-20T10:30:00Z' }),
       ]
-      leaveBooking.mockResolvedValue({ ok: true, error: '' })
       mount()
-
-      leaveBtn()?.click()
-      await flush()
-
-      expect(leaveBooking).toHaveBeenCalledWith('b1')
-      expect(toastError).not.toHaveBeenCalled()
-      expect(push).toHaveBeenCalledWith({ name: 'user-dashboard' })
-    })
-
-    it('never joined: does NOT call leaveBooking, but still navigates to the dashboard', async () => {
-      practicesState.selected = practice()
-      bookingsState.bookings = [booking({ id: 'b1', joined_at: null })]
-      mount()
-
-      leaveBtn()?.click()
-      await flush()
-
-      expect(leaveBooking).not.toHaveBeenCalled()
-      expect(push).toHaveBeenCalledWith({ name: 'user-dashboard' })
-    })
-
-    it('leaveBooking fails: shows the toast AND still navigates to the dashboard (documented "always returns" behavior)', async () => {
-      practicesState.selected = practice()
-      bookingsState.bookings = [
-        booking({ id: 'b1', joined_at: '2026-07-20T09:00:00Z', left_at: null }),
-      ]
-      leaveBooking.mockResolvedValue({ ok: false, error: 'Сеть недоступна' })
-      mount()
-
-      leaveBtn()?.click()
-      await flush()
-
-      expect(toastError).toHaveBeenCalledWith('Сеть недоступна')
-      expect(push).toHaveBeenCalledWith({ name: 'user-dashboard' })
+      expect(leaveBtn()).toBeNull()
     })
   })
 

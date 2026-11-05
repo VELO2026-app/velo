@@ -47,6 +47,7 @@ from uuid import UUID
 from email_validator import EmailNotValidError, validate_email
 from pydantic import BaseModel, Field, computed_field, field_validator
 
+from app.core.i18n import SUPPORTED_LANGUAGES
 from app.core.timezones import UnknownTimezoneError, canonical_timezone
 from app.modules.users.models import UserRole
 
@@ -543,6 +544,26 @@ class UserUpdate(BaseModel):
                 f"Invalid IANA timezone: '{v}'. "
                 "Examples: 'UTC', 'Europe/Moscow', 'America/New_York'"
             ) from None
+
+    @field_validator("language")
+    @classmethod
+    def validate_language(cls, v: str | None) -> str | None:
+        """Accept exactly one of the product's languages (BE-188).
+
+        Strict, not normalized: the frontend sends a code from its own list
+        (SUPPORTED_LOCALES, the same set), so anything else -- "de", "EN",
+        "en-US", " " -- is a client error and answers 422 rather than being
+        quietly stored as something the client did not send. Runs after
+        _reject_null_for_required_fields (mode="before").
+        """
+        if v is None:
+            return v
+        if v not in SUPPORTED_LANGUAGES:
+            raise ValueError(
+                f"Unknown language: {v!r}. "
+                f"Allowed: {', '.join(sorted(SUPPORTED_LANGUAGES))}"
+            )
+        return v
 
 
 class TimezoneLabel(BaseModel):

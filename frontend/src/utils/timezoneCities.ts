@@ -55,7 +55,7 @@ const RU_SEED: CitySeed = parseSeed(citySeedRuRaw)
 const SEEDS: Record<string, CitySeed> = { ru: RU_SEED, en: parseSeed(citySeedEnRaw) }
 
 /** The seed for the ACTIVE locale -- falling back to ru when a locale has no
- * city seed yet (de/es). Called inside timezoneRows, which the picker wraps
+ * city seed yet (uk). Called inside timezoneRows, which the picker wraps
  * in a computed: the rows re-derive on a locale switch, same frame. */
 function activeSeed(): { curated: TimezoneCity[]; aliases: TimezoneCity[] } {
   const seed = SEEDS[getLocale()] ?? RU_SEED

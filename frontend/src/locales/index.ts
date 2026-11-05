@@ -21,7 +21,7 @@
 import { createI18n } from 'vue-i18n'
 
 import { setRootLang } from '@/platform/dom'
-import { INSTANCE, isSupportedLocale, SUPPORTED_LOCALES } from '@/platform/instance'
+import { INSTANCE, isSupportedLocale, SUPPORTED_LOCALES, type Locale } from '@/platform/instance'
 import { SKIN_BRAND } from '@/platform/skin-brand.generated'
 // Per-domain catalogs (tz-i18n §4.1): one FOLDER per locale, one FILE per
 // domain. Adding a language = adding a folder; adding a domain = adding a
@@ -43,7 +43,7 @@ export const ru = ruCatalog
 /**
  * vue-i18n's built-in plural choice is English-shaped (`1 -> first form`,
  * `everything else -> last form`). Our catalogs write CLDR forms -- ru messages
- * `one|few|many`, en/de/es `one|other` -- so the choice delegates to
+ * and uk `one|few|many`, en `one|other` -- so the choice delegates to
  * Intl.PluralRules of the message's locale and maps the category onto the
  * form index (tz-i18n §4.4: the ONE plural mechanism):
  *   2-form messages: `one -> 0, every other category -> 1`
@@ -62,13 +62,13 @@ export function cldrPluralChoice(
   }
 }
 
+// One entry per product locale, no more and no less: `satisfies` makes
+// vue-tsc refuse both a missing locale and one outside SUPPORTED_LOCALES.
 const PLURAL_RULES = {
   ru: cldrPluralChoice('ru'),
   en: cldrPluralChoice('en'),
   uk: cldrPluralChoice('uk'),
-  de: cldrPluralChoice('de'),
-  es: cldrPluralChoice('es'),
-}
+} satisfies Record<Locale, ReturnType<typeof cldrPluralChoice>>
 
 // No `messages` in the options: the composed catalog goes in through
 // setLocaleMessage right after -- with a dynamic (non-literal) schema this
@@ -218,7 +218,7 @@ export async function setLocale(locale: string): Promise<void> {
  * Locales that actually have catalog folders (default included), in
  * SUPPORTED_LOCALES order. The language switcher offers exactly these -- a
  * locale without a catalog would render fallback forever, and setLocale
- * no-ops on it. The list grows automatically when de/es catalogs land.
+ * no-ops on it. Today every product locale has a catalog (BE-188).
  */
 export function availableLocales(): string[] {
   const withCatalogs = new Set(

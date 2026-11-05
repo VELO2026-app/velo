@@ -382,9 +382,9 @@ describe('SchoolMembersView', () => {
     expect(toastError).toHaveBeenCalled()
   })
 
-  // -- The blocked tab (owner 2026-09-30, BE-79 placeholder) -------------------
+  // -- The removed tab (BE-79 placeholder; "Removed" since FE-97) -------------
 
-  // BE-79 (2): these two pinned the PLACEHOLDER (the blocked tab
+  // BE-79 (2): these two pinned the PLACEHOLDER (the removed tab
   // (i18n:user.screens.schoolMembers.tabs.blocked) never fetches) --
   // right while no endpoint listed blocked members. GET …/blocks replaced it:
   // the tab now reads it, paged like the roster, and has no search (the
@@ -408,12 +408,12 @@ describe('SchoolMembersView', () => {
     )
   }
 
-  it('the Блок tab carries the lock glyph; switching reads GET …/blocks, not the roster', async () => {
+  it('the «Удалённые» tab carries the lock glyph; switching reads GET …/blocks, not the roster', async () => {
     vi.mocked(cgApi.getSchoolBlocks).mockResolvedValue(blocksPage([blocked(1, 'master')]))
     mountWith()
     await flush()
 
-    const blockTab = rosterTab('Блок')
+    const blockTab = rosterTab('Удалённые')
     expect(blockTab?.querySelector('svg')).not.toBeNull()
     const rosterCalls = vi.mocked(cgApi.getSchoolMembers).mock.calls.length
     blockTab!.click()
@@ -434,8 +434,8 @@ describe('SchoolMembersView', () => {
 
     expect(cgApi.getSchoolBlocks).toHaveBeenCalledTimes(1)
     expect(vi.mocked(cgApi.getSchoolMembers)).not.toHaveBeenCalled()
-    expect(rosterTab('Блок')?.getAttribute('aria-selected')).toBe('true')
-    expect(text()).toContain('Пока нет заблокированных')
+    expect(rosterTab('Удалённые')?.getAttribute('aria-selected')).toBe('true')
+    expect(text()).toContain('Пока нет удалённых')
   })
 
   it('«Разблокировать»: DELETE for THAT person, then the re-read list no longer has them', async () => {
@@ -469,7 +469,7 @@ describe('SchoolMembersView', () => {
 
     expect(cgApi.getSchoolBlocks).toHaveBeenCalledTimes(2)
     expect(toastError).not.toHaveBeenCalled()
-    expect(text()).toContain('Пока нет заблокированных')
+    expect(text()).toContain('Пока нет удалённых')
   })
 
   it('«Разблокировать» failing otherwise: the error toast, the row stays', async () => {
@@ -510,7 +510,7 @@ describe('SchoolMembersView', () => {
 //
 // The viewer is the server's answer (getSchoolPage -> viewer.relation).
 // A school master in the master zone reads /roster (no curator fields), sees
-// no blocked tab (i18n:user.screens.schoolMembers.tabs.blocked), messages
+// no removed tab (i18n:user.screens.schoolMembers.tabs.blocked), messages
 // a student straight away and opens a master's public
 // page WITHOUT the curator's ?schoolId= marker. The user zone is untouched.
 
@@ -545,13 +545,13 @@ describe('SchoolMembersView -- a master of the school (BE-76)', () => {
     expect(text()).toContain('Борис')
   })
 
-  it('has no «Блок» tab, and ?kind=blocked lands on the masters tab', async () => {
+  it('has no «Удалённые» tab, and ?kind=blocked lands on the masters tab', async () => {
     mountWith({ kind: 'blocked' })
     await flush()
 
     expect(rosterTab('Мастера')).toBeTruthy()
     expect(rosterTab('Ученики')).toBeTruthy()
-    expect(rosterTab('Блок')).toBeNull()
+    expect(rosterTab('Удалённые')).toBeNull()
     expect(cgApi.getSchoolRoster).toHaveBeenCalledWith(
       'g1',
       expect.objectContaining({ kind: 'master' }),

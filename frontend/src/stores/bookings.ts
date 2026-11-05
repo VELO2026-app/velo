@@ -19,7 +19,6 @@ import {
   getBooking,
   cancelBooking as apiCancelBooking,
   joinBooking as apiJoinBooking,
-  leaveBooking as apiLeaveBooking,
   skipCheckin as apiSkipCheckin,
 } from '@/api/bookings'
 import { usePagination } from '@/composables/usePagination'
@@ -46,7 +45,7 @@ export interface CancelResult {
   error: string
 }
 
-/** Result of join/leave actions (same shape as CancelResult). */
+/** Result of join/skip-checkin actions (same shape as CancelResult). */
 export interface ActionResult {
   ok: boolean
   error: string
@@ -239,21 +238,6 @@ export const useBookingsStore = defineStore('bookings', () => {
   }
 
   /**
-   * Check out from a practice (sets left_at on the backend).
-   * Refreshes the list afterwards.
-   */
-  async function leaveBooking(bookingId: string): Promise<ActionResult> {
-    try {
-      await apiLeaveBooking(bookingId)
-      await pagination.refreshInPlace()
-      return { ok: true, error: '' }
-    } catch (e) {
-      const message = extractApiError(e, t('storeErrors.bookings.leave'))
-      return { ok: false, error: message }
-    }
-  }
-
-  /**
    * Persist the user's choice to skip their PRE check-in for a booking (B2).
    * Refreshes the list so the persisted `checkin_skipped` flag is reflected,
    * keeping the dashboard banner hidden across reloads (not just this session).
@@ -330,7 +314,6 @@ export const useBookingsStore = defineStore('bookings', () => {
     // Actions
     cancelBooking,
     joinBooking,
-    leaveBooking,
     skipCheckin,
 
     // Session-only check-in skip tracking

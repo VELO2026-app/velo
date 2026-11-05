@@ -30,8 +30,9 @@
     - Block (i18n:common.block; lock, owner ruling 2026-09-30): the ONLY way
       a curator ends a school membership now -- the removed-from-school
       action is REMOVED (an exclusion no longer exists). The confirm popup
-      is built (same recipe as the master-zone block dialog; the copy is a
-      DRAFT for the owner's review -- BE-79 owns the final wording). Confirm
+      is built (same recipe as the master-zone block dialog; the copy is
+      the owner-approved FE-97 wording, 2026-11-03 -- the destination group
+      is named by i18n:user.screens.schoolMembers.tabs.blocked). Confirm
       sends POST …/members/{user_id}/block (BE-79 (2)); only the server's
       204 opens the blocked toast
       (i18n:user.screens.schoolStudentProfile.toast.blocked), and leaving

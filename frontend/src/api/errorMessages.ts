@@ -57,6 +57,10 @@
 // both in schools/service.py. Counting raise sites rather than
 // literals put the real number at 36 at GT-15, and puts it at 49 at BE-92.
 //
+// FE-76 moves ONE code out of the absent list above: delivery_window_empty
+// (comms 2.0.0 refuses from == to with it; the master notifications screen
+// binds the phrase to the time row). Absent: 12, total table size: 39.
+//
 // SEEDED from the 7 call sites that already carried a hand-written Russian
 // phrase for a specific code (verbatim, not re-worded -- those were written
 // with a real screen in view): bot_url_not_configured, direction_not_confirmed,
@@ -123,6 +127,7 @@ export const ERROR_CODES = [
   'mcp_token_limit_reached',
   'mcp_token_not_found',
   'mcp_token_name_taken',
+  'delivery_window_empty',
   'unauthorized',
   'not_found',
   'forbidden',

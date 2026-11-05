@@ -4,7 +4,7 @@
 //
 // Covers the money-adjacent actions: cancelBooking (backend refund by
 // deadline, plus its diary.refreshFeed() side effect), joinBooking,
-// leaveBooking, skipCheckin. Mocked at the wrapper layer (@/api/bookings) --
+// skipCheckin. Mocked at the wrapper layer (@/api/bookings) --
 // the store imports named functions directly, so this is the correct seam
 // (no MSW needed). @/stores/diary is mocked wholesale since cancelBooking
 // pulls in useDiaryStore() lazily as a side effect, not a dependency under
@@ -35,7 +35,6 @@ describe('useBookingsStore', () => {
     vi.mocked(bookingsApi.getMyBookings).mockReset().mockResolvedValue(emptyPage())
     vi.mocked(bookingsApi.cancelBooking).mockReset()
     vi.mocked(bookingsApi.joinBooking).mockReset()
-    vi.mocked(bookingsApi.leaveBooking).mockReset()
     vi.mocked(bookingsApi.skipCheckin).mockReset()
     refreshFeed.mockReset()
   })
@@ -199,32 +198,10 @@ describe('useBookingsStore', () => {
     })
   })
 
-  describe('leaveBooking', () => {
-    it('on success: calls the API and refreshes the list', async () => {
-      vi.mocked(bookingsApi.leaveBooking).mockResolvedValue({
-        id: 'booking_1',
-      } as BookingResponse)
-      const store = useBookingsStore()
-
-      const result = await store.leaveBooking('booking_1')
-
-      expect(result).toEqual({ ok: true, error: '' })
-      expect(bookingsApi.leaveBooking).toHaveBeenCalledWith('booking_1')
-    })
-
-    it('on failure (e.g. never joined): falls back to the generic message (unmapped code)', async () => {
-      // B8 (PROMPT №747): 'not_joined' is not a real backend code --
-      // unmapped, lands on the call site's own fallback (bookings.ts:217).
-      vi.mocked(bookingsApi.leaveBooking).mockRejectedValue(
-        new ApiResponseError(400, 'Not joined yet', 'not_joined'),
-      )
-      const store = useBookingsStore()
-
-      const result = await store.leaveBooking('booking_1')
-
-      expect(result).toEqual({ ok: false, error: 'Не удалось покинуть практику' })
-    })
-  })
+  // FE-49 (product decision 2026-11-02): the leave button is removed from
+  // the UI wholesale, the store action leaveBooking is deleted;
+  // api/bookings.ts::leaveBooking stays with a comment (the backend
+  // endpoint is alive, the UI no longer calls it).
 
   describe('skipCheckin', () => {
     it('on success: calls the API and refreshes the list', async () => {

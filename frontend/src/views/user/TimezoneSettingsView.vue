@@ -14,7 +14,7 @@
       with the note «a switcher returns together with real i18n» -- it has).
       Rows per the original SVG markup (globe + checkmark on the active row);
       the list is availableLocales() -- locales that actually have catalogs
-      (ru/en today; de/es appear when their catalogs land). Selecting a row
+      (ru/en/uk -- every product locale has one). Selecting a row
       switches the locale IMMEDIATELY (optimistic, live re-render) and PATCHes
       user.language via the existing /users/me endpoint; the App.vue watcher's
       follow-up applyUserLanguage is a no-op (setLocale early-exits on the

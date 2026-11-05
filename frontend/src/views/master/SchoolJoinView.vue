@@ -71,18 +71,25 @@ so the order is invitation -> join -> onboarding (skippable) -> school.
         </div>
       </template>
 
-      <!-- Honest refusal: invalid link, or a described can_join=false reason. -->
+      <!-- Honest refusal: invalid link, or a described can_join=false reason.
+           FE-97: the design-system refusal screen (VEmptyState), not bare
+           text -- the same honest-failure plate the rest of the app uses. -->
       <template v-else-if="blocked">
-        <h2 class="cg-join__title">{{ blocked.title }}</h2>
-        <p v-if="blocked.description" class="cg-join__subtitle">{{ blocked.description }}</p>
-        <div class="cg-join__actions">
-          <VButton v-if="blocked.open" variant="primary" block @click="openSchool">
-            {{ t('masterScreens.schoolJoin.open') }}
-          </VButton>
-          <VButton v-else variant="primary" block @click="router.replace({ name: 'root' })">
-            {{ t('common.backHome') }}
-          </VButton>
-        </div>
+        <VEmptyState :icon="blocked.icon" :title="blocked.title" :description="blocked.description">
+          <!-- The blocked-in-school refusal carries the lock face (DSGN-16
+               vocabulary); the semantic keys cover the rest. -->
+          <template v-if="blocked.icon === 'lock'" #icon>
+            <IconLock :size="48" />
+          </template>
+          <template #action>
+            <VButton v-if="blocked.open" variant="primary" block @click="openSchool">
+              {{ t('masterScreens.schoolJoin.open') }}
+            </VButton>
+            <VButton v-else variant="primary" block @click="router.replace({ name: 'root' })">
+              {{ t('common.backHome') }}
+            </VButton>
+          </template>
+        </VEmptyState>
       </template>
 
       <!-- The school card behind the link: the shared invite card (owner
@@ -139,7 +146,8 @@ import { useToast } from '@/composables/useToast'
 import { useSafeArea } from '@/composables/useSafeArea'
 import { useAuthStore } from '@/stores/auth'
 import { useSchoolsHubStore } from '@/stores/schoolsHub'
-import { VButton, VLoader } from '@/components/ui'
+import { IconLock } from '@/components/icons'
+import { VButton, VEmptyState, VLoader } from '@/components/ui'
 import SchoolInviteCard from '@/components/shared/SchoolInviteCard.vue'
 import OnboardingView from '@/views/auth/OnboardingView.vue'
 
@@ -171,6 +179,9 @@ interface RefusalView {
   description: string
   /** own_school / already_member offer a jump straight into the school page. */
   open: boolean
+  /** VEmptyState semantic glyph: notfound (dead link), group (already in),
+   *  lock (the blocked refusals, FE-97). */
+  icon: 'notfound' | 'group' | 'lock'
 }
 
 /** The not-found and can_join=false states share one honest-failure layout. */
@@ -180,6 +191,7 @@ const blocked = computed<RefusalView | null>(() => {
       title: t('masterScreens.schoolJoin.invalid.title'),
       description: t('masterScreens.schoolJoin.invalid.text'),
       open: false,
+      icon: 'notfound',
     }
   }
   const p = preview.value
@@ -190,26 +202,31 @@ const blocked = computed<RefusalView | null>(() => {
         title: t('masterScreens.schoolJoin.alreadyOwner.title'),
         description: t('masterScreens.schoolJoin.alreadyOwner.text'),
         open: true,
+        icon: 'group',
       }
     case 'already_member':
       return {
         title: t('masterScreens.schoolJoin.alreadyMember.title'),
         description: t('masterScreens.schoolJoin.alreadyMember.text'),
         open: true,
+        icon: 'group',
       }
     case 'blocked_by_curator':
       return {
         title: t('masterScreens.schoolJoin.unavailable'),
         description: t('masterScreens.schoolJoin.restricted.text'),
         open: false,
+        icon: 'lock',
       }
-    // BE-79 (DRAFT wording): blocked by the curator IN this school -- the
-    // preview says so, and a join refused 403 re-reads the preview (below).
+    // BE-79 (FE-97 final wording): blocked by the curator IN this school --
+    // the preview says so, and a join refused 403 re-reads the preview
+    // (below).
     case 'blocked_in_school':
       return {
         title: t('masterScreens.schoolJoin.unavailable'),
         description: t('masterScreens.schoolJoin.blocked.title'),
         open: false,
+        icon: 'lock',
       }
     default:
       // can_join=false with no reason is not a contract shape; stay honest
@@ -218,6 +235,7 @@ const blocked = computed<RefusalView | null>(() => {
         title: t('masterScreens.schoolJoin.unavailable'),
         description: '',
         open: false,
+        icon: 'lock',
       }
   }
 })

@@ -221,7 +221,9 @@ describe('SchoolJoinView -- preview states', () => {
   // GT-27: master_required left this table. It was the master link refusing
   // an unverified account; there is no master link, and the code now comes
   // from the appointment path, which is a different screen.
-  // BE-79 (2): blocked_in_school joins with its own description.
+  // BE-79 (2): blocked_in_school joins with its own description. FE-97: the
+  // refusal is the design-system screen (VEmptyState + the lock face), not
+  // bare text.
   it('blocked_in_school renders its own copy and no Join button', async () => {
     vi.mocked(cgApi.getSchoolInvitePreview).mockResolvedValue(
       previewResponse({ can_join: false, reason: 'blocked_in_school' }),
@@ -232,6 +234,10 @@ describe('SchoolJoinView -- preview states', () => {
     expect(text()).toContain('Вступление недоступно')
     expect(text()).toContain('Вы заблокированы в этой школе.')
     expect(buttonWith('Вступить')).toBeFalsy()
+    const plate = document.body.querySelector('.v-empty')
+    expect(plate).not.toBeNull()
+    expect(plate?.querySelector('svg')).not.toBeNull()
+    expect(buttonWith('На главную')).toBeTruthy()
   })
 
   it.each([['blocked_by_curator', 'Вступление недоступно']] as const)(

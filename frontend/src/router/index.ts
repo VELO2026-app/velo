@@ -405,7 +405,7 @@ const router = createRouter({
           // mounts it as 'practice-live' below. Here the server's ladder
           // answers 'host' and the screen starts the meeting inside VELO
           // (Meeting SDK); the zone picks the back target and hides the
-          // student-only actions (Check-in, i18n:user.screens.practiceLive.leave).
+          // student-only actions (Check-in).
           path: 'practice-live/:practiceId',
           name: 'master-practice-live',
           beforeEnter: masterStatusGuard,
