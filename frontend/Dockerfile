@@ -65,7 +65,7 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY frontend/package.json frontend/
 COPY packages/velo-ui/package.json packages/velo-ui/
-RUN npm install -g pnpm@12.4.2 && pnpm install --frozen-lockfile --trust-lockfile --filter velo-frontend
+RUN npm install -g pnpm@12.4.2 && pnpm install --frozen-lockfile --trust-lockfile --filter velo-frontend...
 
 # Copy source. This stage deliberately ENDS here: it is what `velo test`
 # builds, so building it must not execute the suite that `velo test` is
