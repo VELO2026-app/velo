@@ -43,7 +43,7 @@ export const ru = ruCatalog
 /**
  * vue-i18n's built-in plural choice is English-shaped (1 -> first form,
  * everything else -> last form). Our catalogs write CLDR forms -- ru messages
- * `one|few|many`, en/de/es `one|other` -- so the choice delegates to
+ * `one|few|many`, en `one|other` -- so the choice delegates to
  * Intl.PluralRules of the message's locale and maps the category onto the
  * form index (tz-i18n §4.4: the ONE plural mechanism):
  *   2-form messages: one -> 0, every other category -> 1
@@ -62,12 +62,14 @@ export function cldrPluralChoice(
   }
 }
 
+// Exactly the declared languages (instance.ts SUPPORTED_LOCALES == primer.yaml
+// `languages`): setLocale never switches outside the set, so a rules entry
+// without a declared locale is dead weight, and a declared locale without one
+// falls back to vue-i18n's English-shaped default -- both wrong.
 const PLURAL_RULES = {
   ru: cldrPluralChoice('ru'),
   en: cldrPluralChoice('en'),
   uk: cldrPluralChoice('uk'),
-  de: cldrPluralChoice('de'),
-  es: cldrPluralChoice('es'),
 }
 
 // No `messages` in the options: the composed catalog goes in through
@@ -218,7 +220,9 @@ export async function setLocale(locale: string): Promise<void> {
  * Locales that actually have catalog folders (default included), in
  * SUPPORTED_LOCALES order. The language switcher offers exactly these -- a
  * locale without a catalog would render fallback forever, and setLocale
- * no-ops on it. The list grows automatically when de/es catalogs land.
+ * no-ops on it. Adding a language is a release event, never a folder alone:
+ * a new catalog folder AND a SUPPORTED_LOCALES entry (FE-149 §4: the set is
+ * the primer.yaml `languages` declaration), both in the same commit.
  */
 export function availableLocales(): string[] {
   const withCatalogs = new Set(

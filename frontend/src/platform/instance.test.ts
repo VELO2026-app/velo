@@ -70,6 +70,24 @@ describe('INSTANCE -- locale parsing (tz-i18n 0.5)', () => {
 
     expect(INSTANCE.locales).toEqual(['ru'])
   })
+
+  it('the declared set is ru, en, uk -- de/es are outside it (FE-149 §4)', async () => {
+    const { INSTANCE, isSupportedLocale, SUPPORTED_LOCALES } = await loadInstance()
+
+    expect(SUPPORTED_LOCALES).toEqual(['ru', 'en', 'uk'])
+    expect(isSupportedLocale('de')).toBe(false)
+    expect(isSupportedLocale('es')).toBe(false)
+    // The backend keeps normalizing Telegram de/es into User.language; the
+    // UI treats them like any undeclared language -- the default renders.
+    expect(INSTANCE.defaultLocale).toBe('ru')
+  })
+
+  it('the instance locale list drops undeclared languages, keeping order', async () => {
+    vi.stubEnv('VITE_LOCALES', 'es,en,de,uk,ru')
+    const { INSTANCE } = await loadInstance()
+
+    expect(INSTANCE.locales).toEqual(['en', 'uk', 'ru'])
+  })
 })
 
 describe('INSTANCE -- feature registry (tz-whitelabel §4, F3 consumes this)', () => {

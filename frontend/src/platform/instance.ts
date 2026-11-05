@@ -8,12 +8,17 @@
 // build). tz-whitelabel F1: all seven former import.meta.env read sites
 // (5x VITE_API_BASE_URL, 2x VITE_TELEGRAM_BOT_URL) go through INSTANCE now.
 //
-// The locale set mirrors what the backend normalizes Telegram's
-// language_code to (backend auth/service.py normalize_language: en/de/es/ru);
-// User.language is the source of truth the UI follows (locales/index.ts).
+// The UI language set is the product's DECLARED languages (primer.yaml
+// `languages: [ru, en, uk]` -- FE-149 §4, owner decision 05.11.2026; the
+// machine checks the instance subset against this list before a rollout,
+// primer guide §2.5). The backend keeps normalizing Telegram's language_code
+// to en/de/es/ru (auth/service.py normalize_language -- backend is out of
+// this repo's scope), so a user may be STORED with de/es; the UI then
+// renders the default locale: isSupportedLocale filters the set, and
+// User.language stays the source of truth the UI follows (locales/index.ts).
 // =============================================================================
 
-export const SUPPORTED_LOCALES = ['ru', 'en', 'uk', 'de', 'es'] as const
+export const SUPPORTED_LOCALES = ['ru', 'en', 'uk'] as const
 
 export type Locale = (typeof SUPPORTED_LOCALES)[number]
 
