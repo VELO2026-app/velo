@@ -77,12 +77,12 @@ _TID_PARTICIPANT = 65910
 _TID_PARTICIPANT_B = 65911
 
 # The profile lives in the repository ROOT, which is two levels up from
-# backend/tests/ in a checkout and is bind-mounted at /comms-profile inside
-# velo-app (docker-compose.yml) -- the image's build context is ./backend,
-# so the files cannot be COPYed in and the mount is how they arrive. Both
-# layouts answer to the same expression; the candidate list exists so that a
-# third one fails HERE, by name, instead of surfacing as FileNotFoundError
-# inside seven assertions.
+# backend/tests/ in a checkout; in the backend test image (stage `test` of
+# backend/Dockerfile, built from the repository root) it is COPYed to
+# /comms-profile, which is where the same expression lands from /app/tests.
+# Both layouts answer to the same expression; the candidate list exists so
+# that a third one fails HERE, by name, instead of surfacing as
+# FileNotFoundError inside seven assertions.
 _PROFILE_CANDIDATES = (
     Path(__file__).resolve().parents[2] / "comms-profile",
     Path("/comms-profile"),
@@ -96,10 +96,11 @@ def _profile_dir() -> Path:
     raise AssertionError(
         "comms-profile/types.yaml found in none of: "
         + ", ".join(str(c) for c in _PROFILE_CANDIDATES)
-        + " -- in a container this means the read-only mount declared for "
-          "the app service in docker-compose.yml is missing. NOT skipped on "
-          "purpose: a profile check that goes quiet where the suite actually "
-          "runs is a green test that verifies nothing."
+        + " -- in the backend test image this means the stage `test` of "
+          "backend/Dockerfile no longer copies comms-profile/ to "
+          "/comms-profile. NOT skipped on purpose: a profile check that goes "
+          "quiet where the suite actually runs is a green test that verifies "
+          "nothing."
     )
 
 _CHECKIN_TYPE = "practice.checkin_received"

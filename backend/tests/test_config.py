@@ -221,10 +221,10 @@ def test_env_example_placeholders_match_config() -> None:
     the gate going quietly blind for years -- same defect class as T-35's
     two-language codec and T-13's three-place predicate.
 
-    Runs for real everywhere, including inside the built backend image:
-    .env.example is COPYed into it and no longer .dockerignore'd (see
-    backend/Dockerfile, backend/.dockerignore) -- it is documentation, not
-    a secret; only .env itself stays excluded from the build context.
+    Runs for real everywhere, including inside the backend test image:
+    .env.example is COPYed into its stage `test` and allowed into the build
+    context (see backend/Dockerfile, backend/Dockerfile.dockerignore) -- it
+    is documentation, not a secret; .env itself never enters the context.
     """
     env_example = (
         Path(__file__).resolve().parent.parent / ".env.example"

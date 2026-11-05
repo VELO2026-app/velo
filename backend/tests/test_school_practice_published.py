@@ -274,8 +274,9 @@ def _profile_dir() -> Path:
     raise AssertionError(
         "comms-profile/types.yaml found in none of: "
         + ", ".join(str(c) for c in _PROFILE_CANDIDATES)
-        + " -- inside a container this means the read-only mount declared "
-          "for the app service in docker-compose.yml is missing."
+        + " -- inside the backend test image this means the stage `test` "
+          "of backend/Dockerfile no longer copies comms-profile/ to "
+          "/comms-profile."
     )
 
 

@@ -14,8 +14,9 @@
 # THE SUITE OF THE STAND, NOT A SUITE OF ITS OWN. The stand runs
 # `python -m pytest tests/ -v --tb=short` inside the app container, next to
 # Postgres, Redis and velo-storage, with APP_ENV=production. Here the same
-# command runs in an image built from backend/Dockerfile, in one docker
-# network with:
+# command runs in the stage `test` of backend/Dockerfile (BE-189: the suite
+# no longer ships in the runtime image), built from the repository root with
+# the build arguments the deploy machine gives, in one docker network with:
 #   postgres, redis    -- the images docker-compose.yml pins, read FROM that
 #                         file (one place for the digests, BE-157);
 #   velo-storage       -- the stack docker-compose.storage.yml itself,
@@ -23,7 +24,13 @@
 #                         to the live storage at velo-storage:9000 (the
 #                         address is a constant in app/core/storage.py) and
 #                         works only in the test-twin buckets the init makes.
-# comms-profile/ is mounted at /comms-profile, as compose binds it for app.
+# comms-profile/ is NOT mounted: the test stage carries it at /comms-profile,
+# so a test image without it is red here.
+#
+# THE IMAGE ITSELF (BE-189). Before the suite, this job also builds the stage
+# `runtime` and checks what it must and must not hold, checks that a build
+# without PRIMER_RELEASE or with an empty PRIMER_COMMIT is refused, and that a
+# build with another commit takes every dependency layer from the cache.
 #
 # FORM OF THE COMPOSE FILES. Both are read as they are, and BE-193 will
 # change docker-compose.storage.yml. Every step that depends on their form
@@ -75,11 +82,124 @@ jobs:
       STORAGE_SECRET_KEY: velo-ci-storage-secret-0123456789abcdef
       POSTGRES_PASSWORD: velo-ci-postgres-password
       REDIS_PASSWORD: velo-ci-redis-password
+      # The build arguments the deploy machine gives (protocol 3.4); CI has
+      # no release tag, the commit is the real one.
+      RELEASE: ci-${{ github.run_number }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build the backend image (backend/Dockerfile, runtime)
-        run: docker build --target runtime -t "$IMAGE" ./backend
+      - name: Build the backend test image (backend/Dockerfile, stage test)
+        run: |
+          docker build -f backend/Dockerfile --target test \
+            --build-arg PRIMER_RELEASE="$RELEASE" \
+            --build-arg PRIMER_COMMIT="$GITHUB_SHA" \
+            -t "$IMAGE" .
+
+      - name: Check the runtime image and the test image
+        run: |
+          docker build -f backend/Dockerfile --target runtime \
+            --build-arg PRIMER_RELEASE="$RELEASE" \
+            --build-arg PRIMER_COMMIT="$GITHUB_SHA" \
+            -t "$IMAGE-runtime" .
+          # Every "X is absent" goes with a "Y is present": an image that
+          # holds nothing at all must not pass.
+          check='
+          import importlib.util, os, sys
+          kind = sys.argv[1]
+          bad = []
+          def absent(path):
+              if os.path.exists(path):
+                  bad.append("present, must be absent: " + path)
+          def present(path):
+              if not os.path.exists(path):
+                  bad.append("absent, must be present: " + path)
+          def module(name, want):
+              if (importlib.util.find_spec(name) is not None) != want:
+                  bad.append("module %s: importable=%s, want %s" % (name, not want, want))
+          for name in ("PRIMER_RELEASE", "PRIMER_COMMIT"):
+              if os.environ.get(name) != os.environ.get("WANT_" + name):
+                  bad.append("%s=%r, want %r" % (name, os.environ.get(name), os.environ.get("WANT_" + name)))
+          for path in ("/app/app/main.py", "/app/alembic.ini", "/app/migrations/env.py",
+                       "/app/migrations/versions", "/app/scripts/seed.py",
+                       "/app/scripts/seed_profiles"):
+              present(path)
+          if os.path.isdir("/app/migrations/versions") and not os.listdir("/app/migrations/versions"):
+              bad.append("empty: /app/migrations/versions")
+          for name in ("uvicorn", "fastapi", "alembic", "sqlalchemy"):
+              module(name, True)
+          dev = kind == "test"
+          for path in ("/app/tests", "/app/pyproject.toml", "/app/.env.example",
+                       "/comms-profile/types.yaml", "/opt/venv/bin/pytest", "/opt/venv/bin/ruff"):
+              (present if dev else absent)(path)
+          for name in ("pytest", "pytest_asyncio", "ruff"):
+              module(name, dev)
+          if os.getuid() != 1000:
+              bad.append("uid %d, want 1000 (velo)" % os.getuid())
+          for line in bad:
+              print(kind + ": " + line)
+          sys.exit(1 if bad else 0)
+          '
+          for kind in runtime test; do
+            image="$IMAGE-runtime"; [ "$kind" = test ] && image="$IMAGE"
+            docker run --rm \
+              -e WANT_PRIMER_RELEASE="$RELEASE" -e WANT_PRIMER_COMMIT="$GITHUB_SHA" \
+              "$image" python -c "$check" "$kind"
+            echo "$kind image: as expected"
+          done
+
+      - name: A build without its arguments is refused
+        run: |
+          # Each case must fail AND name the argument: a build that fails for
+          # another reason proves nothing about the check. The message is
+          # matched as the step's OUTPUT (`#<n> <seconds> ...`), not anywhere:
+          # the step's header line quotes the RUN itself.
+          refused() {
+            want="$1"; shift
+            if docker build -f backend/Dockerfile --target runtime --progress=plain "$@" . > build.log 2>&1; then
+              echo "built, but must be refused: $*"; exit 1
+            fi
+            if ! grep -Eq "^#[0-9]+ [0-9]+\.[0-9]+ build argument $want is required" build.log; then
+              echo "failed without naming $want:"; tail -n 40 build.log; exit 1
+            fi
+            echo "refused, names $want: $*"
+          }
+          refused PRIMER_RELEASE --build-arg PRIMER_COMMIT="$GITHUB_SHA"
+          refused PRIMER_COMMIT --build-arg PRIMER_RELEASE="$RELEASE" --build-arg PRIMER_COMMIT=
+
+      - name: Another commit takes the dependency layers from the cache
+        run: |
+          docker build -f backend/Dockerfile --target test --progress=plain \
+            --build-arg PRIMER_RELEASE="$RELEASE" \
+            --build-arg PRIMER_COMMIT=0000000000000000000000000000000000000000 \
+            . > rebuild.log 2>&1 || { tail -n 60 rebuild.log; exit 1; }
+          python3 - <<'PY'
+          import re, sys
+          log = open("rebuild.log", encoding="utf-8").read().splitlines()
+          steps, cached = {}, set()
+          for line in log:
+              m = re.match(r"#(\d+) \[([^\]]+)\] (.*)", line)
+              if m:
+                  steps.setdefault(m.group(1), (m.group(2), m.group(3)))
+              m = re.match(r"#(\d+) CACHED$", line)
+              if m:
+                  cached.add(m.group(1))
+          deps = {n: s for n, s in steps.items() if "pip install" in s[1]}
+          marker = "for name in PRIMER_RELEASE PRIMER_COMMIT"
+          check = {n: s for n, s in steps.items() if marker in s[1]}
+          bad = []
+          # Both dependency layers, and only they: builder and builder-test.
+          if sorted(s[0].split()[0] for s in deps.values()) != ["builder", "builder-test"]:
+              bad.append("dependency steps found: %r" % sorted(s[0] for s in deps.values()))
+          bad += ["rebuilt with another commit: [%s] %s" % s for n, s in deps.items() if n not in cached]
+          # And the build really saw the new commit: the argument check ran.
+          if not check or any(n in cached for n in check):
+              bad.append("the PRIMER_* check did not run again: %r" % check)
+          for line in bad:
+              print(line)
+          if bad:
+              sys.exit(1)
+          print("dependency layers cached: " + ", ".join(s[0] for s in deps.values()))
+          PY
 
       - name: Read the Postgres and Redis images from docker-compose.yml
         id: images
@@ -155,7 +275,6 @@ jobs:
       - name: Run the backend suite (python -m pytest tests/)
         run: |
           docker run --rm --network "$NET" \
-            -v "$GITHUB_WORKSPACE/comms-profile:/comms-profile:ro" \
             -e APP_ENV=production \
             -e LOG_LEVEL=INFO \
             -e SECRET_KEY=velo-ci-secret-key-0123456789abcdef0123456789abcdef \

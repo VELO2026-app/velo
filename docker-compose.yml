@@ -15,7 +15,11 @@
 services:
   app:
     build:
-      context: ./backend
+      # The repository root (backend/Dockerfile says why); what the context
+      # carries is backend/Dockerfile.dockerignore. The stage `test` of the
+      # same Dockerfile is primer.yaml's test.target.
+      context: .
+      dockerfile: backend/Dockerfile
       target: runtime
     environment:
       APP_ENV: ${APP_ENV:?}
@@ -60,10 +64,6 @@ services:
       retries: 3
       start_period: 15s
     restart: unless-stopped
-    # BE-33: the comms product profile, read-only, for the suite that checks
-    # it inside this container. A bind inside the repository (protocol 3.4).
-    volumes:
-      - ./comms-profile:/comms-profile:ro
 
   frontend:
     build:
