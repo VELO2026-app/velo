@@ -256,7 +256,12 @@ function walk(dir) {
     }
   }
 }
-walk('src')
+// FE-116 (tz-ui-package.md §3.7): the walk also covers packages/velo-ui/src
+// -- same rule for the UI kit, its copy lives in its own stories/tests in
+// English. Exemptions above are frontend-src-relative and never match the
+// ../packages/ prefix.
+const roots = ['src', '../packages/velo-ui/src']
+for (const r of roots) walk(r)
 for (const name of readdirSync('scripts')) {
   const p = join('scripts', name)
   if (statSync(p).isFile() && name.endsWith('.mjs')) commentFiles.push(p)

@@ -3,8 +3,12 @@
 #
 # Two jobs, no agents, no judgment:
 #   frontend    — the FE-73 zero-warning budget + prettier + vitest + vue-tsc
-#                 build, mirroring the pre-push hook (closes --no-verify),
-#                 then the whitelabel build-matrix gate (FE-114).
+#                 build, mirroring the pre-push hook (closes --no-verify).
+#                 Since FE-116 the job is the WORKSPACE gate: it installs the
+#                 pnpm workspace at the repo root, runs the application's
+#                 lint (which also polices packages/velo-ui) and builds the
+#                 @velo/ui package alongside the app, then runs the
+#                 whitelabel build-matrix gate (FE-114).
 #   drift-check — regenerate frontend/src/api/generated.ts from the app's own
 #                 OpenAPI schema and fail on any diff. Read-only w.r.t. the
 #                 backend. The generator is deterministic by contract
@@ -15,8 +19,9 @@
 # lockfile-range ruff, and wiring that gate (pinning ruff, fixing or scoping
 # findings) belongs to the backend owner. Add the job when they green-light it.
 #
-# Toolchain pins: pnpm 12.4.2 (mirrors frontend/package.json `packageManager`);
-# python 3.12 in the drift job keeps generated.ts stable.
+# Toolchain pins: pnpm 12.4.2 (mirrors the ROOT package.json `packageManager`,
+# the workspace root since FE-116); python 3.12 in the drift job keeps
+# generated.ts stable.
 # =============================================================================
 name: CI
 
@@ -32,40 +37,40 @@ concurrency:
 
 jobs:
   frontend:
-    name: frontend — lint / test / build
+    name: frontend — lint / test / build (+ @velo/ui)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
         with:
-          # Explicit: the action reads `packageManager` from a root package.json,
-          # and ours lives in frontend/ — see the failed first run.
+          # Explicit version: the action's packageManager lookup is a
+          # convenience, not a guarantee — see the failed first run.
           version: 12.4.2
 
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
-          cache-dependency-path: frontend/pnpm-lock.yaml
+          cache-dependency-path: pnpm-lock.yaml
 
-      - name: Install (frozen lockfile)
+      - name: Install (workspace root, frozen lockfile)
         run: pnpm install --frozen-lockfile
 
-      - name: Lint (zero-warning budget)
-        run: pnpm lint
+      - name: Lint (zero-warning budget; covers packages/ via lint-budget)
+        run: pnpm -C frontend lint
 
       - name: Format check
-        run: pnpm format:check
+        run: pnpm -C frontend format:check && pnpm -C packages/velo-ui format:check
 
-      - name: Tests
-        run: pnpm test
+      - name: Tests (frontend + @velo/ui)
+        run: pnpm -r test
+
+      - name: Build @velo/ui (vite lib + vue-tsc dts)
+        run: pnpm -C packages/velo-ui build
 
       - name: Build (vue-tsc + vite)
-        run: pnpm build
+        run: pnpm -C frontend build
 
       # tz-whitelabel F5 (FE-114): the build matrix IS the whitelabel gate --
       # three full editions (golden + 2 reference skins) + the feature-cut
@@ -74,7 +79,7 @@ jobs:
       # plain build so a red matrix reads as the whitelabel gate failing,
       # not as "the app does not build".
       - name: Build matrix (whitelabel gate)
-        run: pnpm build:matrix
+        run: pnpm -C frontend build:matrix
 
   drift-check:
     name: generated.ts drift

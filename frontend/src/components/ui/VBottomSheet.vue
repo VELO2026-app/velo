@@ -122,7 +122,7 @@
 <script setup lang="ts">
 import { onDocumentEvent, offDocumentEvent } from '@/platform/dom'
 import { ref, watch, onMounted, onUnmounted, onDeactivated } from 'vue'
-import { lockBodyScroll, unlockBodyScroll } from '@/composables/useBodyScrollLock'
+import { lockBodyScroll, unlockBodyScroll } from '@/components/ui'
 
 const props = withDefaults(
   defineProps<{

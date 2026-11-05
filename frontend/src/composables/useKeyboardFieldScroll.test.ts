@@ -13,12 +13,21 @@
 // idiom (matches useViewportGeometry.test.ts), not a call to onFieldFocus in
 // isolation -- calling it outside a component would make onUnmounted a no-op
 // and the test would pass for the wrong reason.
+//
+// [FE-143] The consumer door now resolves through the kit seam: the mount
+// wires the provider FIRST (provideKeyboardFieldScroll(), exactly what
+// App.vue does), then calls useKeyboardFieldScroll() -- so every case below
+// exercises the full seam (provide -> inject -> factory -> real behavior),
+// not just the local implementation.
 // =============================================================================
 
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, defineComponent, h, type App } from 'vue'
-import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
+import {
+  provideKeyboardFieldScroll,
+  useKeyboardFieldScroll,
+} from '@/composables/useKeyboardFieldScroll'
 
 // Tracks real add/remove calls against a single shared listener set, so
 // "the listener is gone after unmount" is an actual assertion, not a no-op
@@ -48,11 +57,22 @@ let inputEl: HTMLInputElement | null = null
 function mount(): void {
   host = document.createElement('div')
   document.body.appendChild(host)
-  const Host = defineComponent({
+  // FE-143: the seam shape is parent-provides / child-consumes (inject()
+  // never sees the calling component's own provide) -- the Field child is
+  // the useKeyboardFieldScroll() consumer, the Host root does the App.vue
+  // wiring.
+  const Field = defineComponent({
     setup() {
       const { onFieldFocus } = useKeyboardFieldScroll()
       return () =>
         h('input', { ref: (el) => (inputEl = el as HTMLInputElement), onFocus: onFieldFocus })
+    },
+  })
+  const Host = defineComponent({
+    setup() {
+      // FE-143: the App.vue wiring -- the real factory rides the kit seam.
+      provideKeyboardFieldScroll()
+      return () => h(Field)
     },
   })
   app = createApp(Host).use(createTestI18n())

@@ -32,9 +32,15 @@ export default defineConfig({
   define: featureDefines(undefined),
 
   resolve: {
-    // array form: the exact skin-brand key must win before the '@' prefix
+    // array form: the exact keys must win before the '@' prefix
     alias: [
       { find: '@/platform/skin-brand.generated', replacement: GOLDEN_BRAND_STUB },
+      // FE-117 batch A: the suite compiles @velo/ui from the kit's SOURCES
+      // (exact-match regex, before '@' -- mirrors vite.config.ts).
+      {
+        find: /^@velo\/ui$/,
+        replacement: fileURLToPath(new URL('../packages/velo-ui/src/index.ts', import.meta.url)),
+      },
       { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
     ],
   },

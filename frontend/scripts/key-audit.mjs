@@ -65,6 +65,10 @@ function walk(dir) {
   }
 }
 walk(srcRoot)
+// FE-116 (tz-ui-package.md §3.7): t() references from packages/velo-ui
+// resolve against the app catalogs too (the P3 i18n seam has the package
+// calling the host's keys) -- the audit must see them from day one.
+walk('../packages/velo-ui/src')
 
 const BLOCK_COMMENT = /\/\*[\s\S]*?\*\//g
 const LINE_COMMENT = /\/\/.*/g

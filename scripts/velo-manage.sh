@@ -690,17 +690,18 @@ ensure_shared_network() {
 
 # Run frontend tests in a throwaway container.
 # Uses `docker build --target source` to get node + deps + source with nothing
-# executed, then runs `npm run test` inside it -- see the note in the body for
-# why it is not `--target builder`.
+# executed, then runs the app's test script inside it -- see the note in the
+# body for why it is not `--target builder`.
 run_frontend_tests() {
     echo "Running frontend tests..."
     cd "$COMPOSE_DIR"
-    # --target source, NOT builder. The builder stage runs `npm run test`
-    # itself (it is the production gate), so building it here meant the suite
-    # ran TWICE per invocation -- once inside the build, silently, behind
-    # `-q`, and once again in the container below. On a cold cache that was
-    # ~3.5 minutes of total silence before the output a human is waiting for
-    # even started. The `source` stage stops at `npm ci` + COPY, so this build
+    # --target source, NOT builder. The builder stage runs the app's test
+    # script itself (it is the production gate), so building it here meant the
+    # suite ran TWICE per invocation -- once inside the build, silently,
+    # behind `-q`, and once again in the container below. On a cold cache
+    # that was ~3.5 minutes of total silence before the output a human is
+    # waiting for even started. The `source` stage stops at `pnpm install` +
+    # COPY, so this build
     # prepares the ground and the run below is the only place the suite
     # executes. The gate is untouched: `docker compose build` still goes
     # through builder.
@@ -712,11 +713,16 @@ run_frontend_tests() {
     # today's test result. `-q` keeps docker's own noise down; stderr is left
     # unredirected (the old code sent it to /dev/null too) so a real build
     # failure is visible instead of just "FAILED" with no reason.
-    if ! docker build --target source -t velo-frontend-test -f frontend/Dockerfile frontend/ -q > /dev/null; then
+    # FE-116: the build context is the REPO ROOT now -- the pnpm workspace
+    # (lockfile, member manifests) lives there; the Dockerfile stays in
+    # frontend/. The run targets the APPLICATION's suite explicitly
+    # (-C frontend): the image's WORKDIR is the workspace root and it deploys
+    # only the app's node_modules (--filter velo-frontend in the Dockerfile).
+    if ! docker build --target source -t velo-frontend-test -f frontend/Dockerfile . -q > /dev/null; then
         echo -e "${RED}✗ Frontend image build FAILED -- nothing was tested${NC}"
         return 1
     fi
-    if docker run --rm velo-frontend-test npm run test; then
+    if docker run --rm velo-frontend-test pnpm -C frontend run test; then
         echo -e "${GREEN}✓ Frontend tests passed${NC}"
         return 0
     else
@@ -2161,9 +2167,9 @@ Triggered by velo update on commit $NEW_COMMIT" || {
         # -- 4. Build and start frontend (with fresh types) --
         echo ""
         echo "Building frontend (tests run during build)..."
-        # The frontend Dockerfile runs `npm run test` before bundling, so a red
-        # test aborts THIS build. Without checking the exit code the script
-        # would fall through to `up -d` and silently restart the PREVIOUS
+        # The frontend Dockerfile runs the app's test script before bundling,
+        # so a red test aborts THIS build. Without checking the exit code the
+        # script would fall through to `up -d` and silently restart the PREVIOUS
         # image while printing success -- the gate would exist but never fire.
         # This script has no `set -e`, so the check must be explicit (same
         # shape as the backend build gate above).

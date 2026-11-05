@@ -1,9 +1,12 @@
 cd frontend || exit 1
 npx lint-staged
 
-# Total gate at commit: every commit touching frontend/ runs the full stack
-# (lint budget, typecheck, all tests). Commits outside frontend/ skip --
-# there is nothing frontend to verify. Bypass via --no-verify closes at CI.
-if git diff --cached --name-only --diff-filter=ACMR | grep -q '^frontend/'; then
-  pnpm verify
+# Total gate at commit: every commit touching the workspace's TS trees
+# (frontend/ OR packages/ -- the @velo/ui kit since FE-116) runs the full
+# stack of BOTH members (lint budget also polices packages/velo-ui through
+# lint-budget.mjs; -r runs every member's verify). Commits outside them
+# skip -- there is nothing frontend to verify. Bypass via --no-verify
+# closes at CI.
+if git diff --cached --name-only --diff-filter=ACMR | grep -qE '^(frontend|packages)/'; then
+  cd .. && pnpm -r verify
 fi
