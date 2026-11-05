@@ -10,15 +10,18 @@
 # whitelist -- what User.language may hold and what the T0 sync ships
 # to comms as `locale`.
 #
-# Ported 1:1 from the donor (modules/notifications/template_engine.py,
-# Phase 7.3) -- same values, same semantics.
+# Ported from the donor (modules/notifications/template_engine.py,
+# Phase 7.3) with the same semantics; the set itself is the product's
+# languages since BE-188 (below).
 # =============================================================================
 
-# Languages the product supports for user identity ("en-US" -> "en").
-# uk: the frontend interface switcher (tz-i18n) PATCHes User.language='uk'
-# directly; registering it here makes registration-time normalization
-# (Telegram language_code 'uk'/'uk-UA') land on 'uk' instead of 'en'.
-SUPPORTED_LANGUAGES = frozenset({"en", "de", "es", "ru", "uk"})
+# The product's languages (BE-188, owner ruling 2026-11-03; PRIMER-PROTOCOL
+# v1.7 5.2.2: the product declares every language it can do). Exactly the
+# frontend's catalogs (frontend/src/locales/: en, ru, uk). Any other code --
+# de and es included, which this list used to hold without a catalog behind
+# them -- normalizes to DEFAULT_LANGUAGE. PATCH /users/me accepts exactly
+# these (users/schemas.py). The instance's subset of them is BE-196.
+SUPPORTED_LANGUAGES = frozenset({"en", "ru", "uk"})
 
 # Default fallback language.
 DEFAULT_LANGUAGE = "en"
@@ -27,7 +30,8 @@ DEFAULT_LANGUAGE = "en"
 def normalize_language(lang: str | None) -> str:
     """Normalize language code to a supported value.
 
-    Handles cases like "en-US" -> "en", "DE" -> "de", None -> "en".
+    Handles cases like "en-US" -> "en", "RU" -> "ru", "de" -> "en",
+    None -> "en".
     """
     if not lang:
         return DEFAULT_LANGUAGE

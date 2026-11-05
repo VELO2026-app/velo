@@ -371,7 +371,7 @@ describe('language: optimistic switch with revert on failure', () => {
   async function flushLang(): Promise<void> {
     for (let i = 0; i < 60; i++) await nextTick()
   }
-  it('renders exactly the catalog-backed locales (ru + en + uk today, no de/es stubs)', async () => {
+  it('renders exactly the catalog-backed locales (ru + en + uk, no stubs)', async () => {
     mount()
     await flush()
 
@@ -379,8 +379,9 @@ describe('language: optimistic switch with revert on failure', () => {
       l.textContent?.trim(),
     )
     expect(labels).toEqual(['Русский', 'English', 'Українська'])
-    // de/es have no catalogs -- the switcher never advertises fallback-only
-    // locales (the old coming-soon stub pattern is deliberately gone).
+    // de/es are not product locales (BE-188) and have no catalogs -- the
+    // switcher never advertises a locale it cannot render (the old
+    // coming-soon stub pattern is deliberately gone).
     expect(labels).not.toContain('Deutsch')
     expect(labels).not.toContain('Español')
     expect(langRow('Русский')?.classList.contains('tz-settings__lang--active')).toBe(true)

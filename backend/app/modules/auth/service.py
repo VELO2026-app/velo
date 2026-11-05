@@ -362,8 +362,9 @@ async def upsert_user_on_login(
     Uses INSERT ... ON CONFLICT DO UPDATE (P-1) to avoid race conditions
     when two requests arrive simultaneously for a new user.
 
-    Phase 7.3: normalizes language_code from Telegram to supported set
-    (en/de/es/ru). Unsupported codes fall back to "en".
+    Phase 7.3: normalizes language_code from Telegram to the product's
+    languages (core/i18n.py SUPPORTED_LANGUAGES). Unsupported codes fall
+    back to "en".
 
     FIX 2.2: language is set only on INSERT (new users). Returning users
     keep their language preference set via PATCH /users/me.
@@ -393,8 +394,9 @@ async def upsert_user_on_login(
         "language_code": telegram_user.get("language_code"),
     }
 
-    # Phase 7.3: Normalize language_code to supported set (en/de/es/ru).
-    # Handles "en-US" -> "en", "pt-BR" -> "en" (unsupported -> fallback).
+    # Phase 7.3: Normalize language_code to the product's languages
+    # (core/i18n.py). Handles "en-US" -> "en", "pt-BR" -> "en" (unsupported
+    # -> fallback).
     normalized_lang = normalize_language(
         telegram_user.get("language_code"),
     )

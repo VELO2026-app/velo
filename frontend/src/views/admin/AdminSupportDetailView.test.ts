@@ -28,6 +28,10 @@ import * as supportApi from '@/api/support'
 import type { AdminSupportTicket, SupportMessage, SupportPerson } from '@/api/support'
 import type { UserResponse } from '@/api/types'
 import { ApiResponseError } from '@/api/client'
+import { SUPPORTED_LOCALES } from '@/platform/instance'
+import enAdmin from '@/locales/en/admin.json'
+import ruAdmin from '@/locales/ru/admin.json'
+import ukAdmin from '@/locales/uk/admin.json'
 
 vi.mock('@/api/support', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/api/support')>()
@@ -355,6 +359,17 @@ describe('AdminSupportDetailView', () => {
   // resolved the ticket.
   // ===========================================================================
   describe('the rating (FE-107)', () => {
+    it('names exactly the product locales in every catalog (BE-188)', () => {
+      // comment_locale is the backend's normalize_language of the person's
+      // language, so it is always one of SUPPORTED_LOCALES: a name for any
+      // other code would be text nobody can reach, a missing one a raw code.
+      for (const catalog of [enAdmin, ruAdmin, ukAdmin]) {
+        const names = catalog.adminScreens.adminSupport.rating.locales
+        expect(Object.keys(names).sort()).toEqual([...SUPPORTED_LOCALES].sort())
+        for (const name of Object.values(names)) expect(name).not.toBe('')
+      }
+    })
+
     it('a rated ticket shows the stars, the comment AS WRITTEN, its language and the admin it rated', async () => {
       mount(
         't_1',

@@ -107,7 +107,7 @@ const router = useRouter()
 const inTelegram = platform.name === 'telegram'
 
 // tz-i18n 0.3: the server owns the language (User.language, normalized by
-// the backend to en/de/es/ru); the UI follows it the moment the user record
+// the backend to en/ru/uk); the UI follows it the moment the user record
 // arrives or changes (profile edit, phase-5 switcher).
 watch(
   () => authStore.user?.language,
