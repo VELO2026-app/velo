@@ -38,6 +38,7 @@ import hashlib
 import hmac
 import json
 import secrets
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from urllib.parse import parse_qs
 from uuid import UUID
@@ -89,7 +90,21 @@ class TelegramValidationError(Exception):
     """Raised when initData signature or content is invalid."""
 
 
-def validate_telegram_init_data(init_data: str, bot_token: str) -> dict:
+@dataclass(frozen=True)
+class TelegramInitData:
+    """What validated initData hands back to the login handler.
+
+    user: the parsed `user` object from initData.
+    has_signature: whether the client sent a non-empty `signature` field
+        (BE-187: the measurement for BE-183, which moves the Mini App login
+        onto Telegram's public-key check).
+    """
+
+    user: dict
+    has_signature: bool
+
+
+def validate_telegram_init_data(init_data: str, bot_token: str) -> TelegramInitData:
     """Validate and parse Telegram WebApp initData.
 
     Args:
@@ -97,7 +112,8 @@ def validate_telegram_init_data(init_data: str, bot_token: str) -> dict:
         bot_token: Bot token from BotFather.
 
     Returns:
-        Parsed user data dict from Telegram.
+        The parsed user data dict from Telegram and whether initData
+        carried a non-empty `signature` field.
 
     Raises:
         TelegramValidationError: If signature is invalid or data expired.
@@ -220,7 +236,13 @@ def validate_telegram_init_data(init_data: str, bot_token: str) -> dict:
     if not isinstance(user_id, int) or isinstance(user_id, bool):
         raise TelegramValidationError("Invalid user data in initData")
 
-    return user_data
+    # BE-187: read from the same `parsed` the hash check used, first value
+    # of a repeated key -- exactly the value that went into the
+    # data-check-string above, so the flag is covered by the HMAC. An empty
+    # `signature=` counts as absent: a real signature is never empty.
+    has_signature = bool(parsed.get("signature", [""])[0])
+
+    return TelegramInitData(user=user_data, has_signature=has_signature)
 
 
 # ---------------------------------------------------------------------------
