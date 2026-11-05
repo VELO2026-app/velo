@@ -7,7 +7,8 @@
 #                 Since FE-116 the job is the WORKSPACE gate: it installs the
 #                 pnpm workspace at the repo root, runs the application's
 #                 lint (which also polices packages/velo-ui) and builds the
-#                 @velo/ui package alongside the app.
+#                 @velo/ui package alongside the app, then runs the
+#                 whitelabel build-matrix gate (FE-114).
 #   drift-check — regenerate frontend/src/api/generated.ts from the app's own
 #                 OpenAPI schema and fail on any diff. Read-only w.r.t. the
 #                 backend. The generator is deterministic by contract
@@ -70,6 +71,15 @@ jobs:
 
       - name: Build (vue-tsc + vite)
         run: pnpm -C frontend build
+
+      # tz-whitelabel F5 (FE-114): the build matrix IS the whitelabel gate --
+      # three full editions (golden + 2 reference skins) + the feature-cut
+      # one (VITE_FEATURES=ai: payments chunks must be physically absent),
+      # then a full restore build. ~5 vite builds, 3-4 min. Runs AFTER the
+      # plain build so a red matrix reads as the whitelabel gate failing,
+      # not as "the app does not build".
+      - name: Build matrix (whitelabel gate)
+        run: pnpm -C frontend build:matrix
 
   drift-check:
     name: generated.ts drift
