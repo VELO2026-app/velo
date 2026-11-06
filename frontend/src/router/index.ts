@@ -32,7 +32,8 @@ import AdminShell from '@/views/shells/AdminShell.vue'
 
 // -- Module route groups (tz-whitelabel §4, F3) --
 // Registration is gated by the BUILD-TIME feature literals (vite `define`,
-// materialized from VITE_FEATURES) -- never by a runtime helper: a literal
+// resolved from PRIMER_EDITION through editions.json; VITE_FEATURES is the
+// local-dev channel -- FE-130) -- never by a runtime helper: a literal
 // `false` folds `__VELO_FEATURE_X__ ? ROUTES : []` to an empty spread, the
 // group const becomes unreferenced, and Rollup tree-shakes its dynamic
 // imports -- the module's chunks are physically absent from dist/. A deep

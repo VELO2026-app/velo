@@ -18,7 +18,7 @@ import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 import VueI18nPlugin from '@intlify/unplugin-vue-i18n/vite'
 import { fileURLToPath, URL } from 'node:url'
-import { cpSync, existsSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pwaManifestWithPassport } from './src/pwa/manifest'
 // tz-whitelabel F1 (§2.2): resolves the %VITE_*% passport placeholders in
@@ -32,7 +32,7 @@ import { passportHtmlDefaults } from './src/platform/passport-html'
 // index.html theme-color/font, manifest identity/colours) materialize HERE,
 // at config time.
 import { materializedSkinTokens, readSkin } from './src/platform/skin'
-import { featureDefines } from './src/platform/features'
+import { featureDefineMap, resolveFeatureFlags, type EditionTable } from './src/platform/features'
 import type { Plugin } from 'vite'
 
 /** Modules of the Zoom Meeting SDK chunk: the SDK and its peer stack (its
@@ -148,14 +148,24 @@ function preloadAppChunk(): Plugin {
 export default defineConfig(({ mode }) => {
   const frontendDir = fileURLToPath(new URL('.', import.meta.url))
   const instanceEnv = loadEnv(mode, frontendDir, 'VITE_')
-  // tz-whitelabel §4 (F3, variant "a"): VITE_FEATURES materializes into one
-  // boolean literal per module (featureDefines() in platform/features -- the
-  // same builder vitest.config pins to the golden all-on set). Route gates in
-  // router/index.ts read these __VELO_FEATURE_*__ defines DIRECTLY -- a
-  // literal `false` folds the gate, Rollup tree-shakes the module's dynamic
-  // imports, and its chunks are physically absent from dist/. An undefined
-  // VITE_FEATURES is the golden build.
-  const defines = featureDefines(instanceEnv.VITE_FEATURES)
+  // tz-whitelabel §4 (F3, variant "a") + FE-130: the module flags resolve from
+  // the MACHINE's channel first -- PRIMER_EDITION through editions.json at
+  // the repo root (the ONE "edition -> modules" table, shared with the
+  // backend, BE-182); an unknown edition fails the build (repo/passport
+  // desync must be red). VITE_FEATURES stays the local-dev channel; neither
+  // input -- the golden all-on set. The map carries BOTH consumption shapes:
+  // per-module literals (route gates read them directly -- a literal `false`
+  // folds the gate, Rollup tree-shakes the module's dynamic imports, and its
+  // chunks are physically absent from dist/) and the resolved flags as JSON
+  // for the runtime accessor, so featureEnabled() can never disagree with
+  // the cut chunks.
+  const editionEnv = loadEnv(mode, frontendDir, 'PRIMER_')
+  const editions: EditionTable = JSON.parse(
+    readFileSync(join(frontendDir, '..', 'editions.json'), 'utf8'),
+  )
+  const defines = featureDefineMap(
+    resolveFeatureFlags(editionEnv.PRIMER_EDITION, instanceEnv.VITE_FEATURES, editions),
+  )
   const publicDir = join(frontendDir, 'public')
   const skin = readSkin(publicDir)
 
@@ -215,8 +225,8 @@ export const SKIN_BRAND: string | null = ${JSON.stringify(skin?.displayName ?? n
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
           // Don't precache source maps -- nor the Zoom Meeting SDK chunk
           // (Standalone F4, manualChunks below): about 5 MB that only the
-              // practice screen loads, on the practice-live join/start buttons
-              // (i18n:user.screens.practiceLive.join, i18n:user.screens.practiceLive.start). Precached, every
+          // practice screen loads, on the practice-live join/start buttons
+          // (i18n:user.screens.practiceLive.join, i18n:user.screens.practiceLive.start). Precached, every
           // install and every update would download it for everyone.
           globIgnores: ['**/*.map', '**/zoom-sdk-*.js'],
           // Runtime caching gives the service worker a valid strategy even when

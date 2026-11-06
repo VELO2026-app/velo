@@ -93,6 +93,11 @@ FROM source AS builder
 # it with no-cache.
 ARG PRIMER_RELEASE
 ARG PRIMER_COMMIT
+# FE-130: the edition channel -- the machine passes PRIMER_EDITION exactly to
+# builds of services with an apply:build package (ours: the skin); vite
+# resolves it through editions.json. Absent in the interim shell build -> the
+# golden all-on set (rule 19: this is the machine's third and last argument).
+ARG PRIMER_EDITION
 RUN test -n "$PRIMER_RELEASE" && test -n "$PRIMER_COMMIT"
 
 # Type-check + bundle (pnpm run build = vue-tsc --noEmit && vite build),
