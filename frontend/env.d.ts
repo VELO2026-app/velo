@@ -15,6 +15,10 @@ declare module '*.mjs' {
 }
 
 // Vite environment variables (VITE_ prefix required).
+// FE-132, by construction: a SECRET never lives in a VITE_* variable -- the
+// value is compiled into the client bundle and is public the moment the
+// build ships. Provider keys belong to the stack that checks them (the
+// backend, comms), never here.
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL: string
   readonly VITE_TELEGRAM_BOT_URL?: string
