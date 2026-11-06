@@ -78,6 +78,12 @@ RUN npm install -g pnpm@12.4.2 && pnpm install --frozen-lockfile --trust-lockfil
 # about to run itself.
 COPY frontend frontend
 COPY packages packages
+# FE-130: vite.config.ts reads the "edition -> modules" table from the repo
+# root (../editions.json from frontend/), the one table shared with the
+# backend. After the install layer, so editing the table does not throw
+# away the dependency cache. Every other path the build reads outside
+# frontend/ and packages/ is one of the three root files copied above.
+COPY editions.json ./
 
 # ---------------------------------------------------------------------------
 # Stage 2: Build
