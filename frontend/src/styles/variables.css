@@ -4,6 +4,10 @@
  * Distilled 1:1 from the original design reference; this file is now the
  * single source of truth for all visual values.
  *
+ * FE-124 (track T): GENERATED from frontend/tokens.json by
+ * scripts/generate-variables.mjs -- edit tokens.json (the source), run the
+ * generator; styles/tokens-roundtrip.test.ts pins this file byte-for-byte.
+ *
  * F8-fix (W-4): Added semantic tint variables (bg, border, text) for
  * warning / error / success / alert states. Admin views use these instead
  * of hardcoded hex values.
