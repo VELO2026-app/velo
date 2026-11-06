@@ -89,6 +89,7 @@ from app.modules.masters.groups_models import (  # noqa: F401  # P1
     MasterStudent,
 )
 from app.modules.mcp.models import McpToken  # noqa: F401  # BE-138
+from app.modules.auth.models import MiniAppSignatureSeen  # noqa: F401  # BE-201
 
 # ---------------------------------------------------------------------------
 # Alembic Config object — provides access to alembic.ini values.

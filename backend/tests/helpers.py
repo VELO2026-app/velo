@@ -30,6 +30,7 @@ from app.core.audit import AuditLog
 from app.core.config import settings
 from app.core.database import get_session_factory
 from app.core.events.models import OutboxEvent
+from app.modules.auth.models import MiniAppSignatureSeen
 from app.modules.bookings.models import Booking
 from app.modules.diary.models import Checkin, DiaryEvent, Feedback, Reflection
 from app.modules.masters.groups_models import (
@@ -358,6 +359,9 @@ async def full_cleanup_range(
     # 12. bookings    FK -> users.id (CASCADE), practices.id (CASCADE)
     # 13. withdrawals FK -> users.id (CASCADE)
     # 14. reports     FK -> users.id (CASCADE, reporter_id)
+    # 14a. mini_app_signature_seen  FK -> users.id (CASCADE). BE-201: users
+    #      outlive this helper by default (role reset), so their marks
+    #      would otherwise reach the next test of the same band.
     # ADD NEW TABLES HERE (domain tables that FK -> users / practices)
     # -----------------------------------------------------------------------
     await session.execute(
@@ -371,6 +375,11 @@ async def full_cleanup_range(
     )
     await session.execute(
         delete(Report).where(Report.reporter_id.in_(user_ids_subq))
+    )
+    await session.execute(
+        delete(MiniAppSignatureSeen).where(
+            MiniAppSignatureSeen.user_id.in_(user_ids_subq)
+        )
     )
 
     # -----------------------------------------------------------------------
