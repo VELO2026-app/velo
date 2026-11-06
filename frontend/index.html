@@ -1,7 +1,9 @@
 <!doctype html>
-<!-- tz-whitelabel §2.2/§3: passport values arrive as %VITE_*% placeholders
-     (Vite replaces defined env vars natively); an UNdefined var must not ship
-     the literal -- vite.config.ts resolves the rest to the golden defaults.
+<!-- tz-whitelabel §2.2/§3: the Vite-env placeholders below (lang, title) are
+     resolved at build time; an UNdefined var must not ship the literal --
+     vite.config.ts resolves the rest to the golden defaults. Under the deploy
+     machine the instance values ride the runtime config.json instead
+     (FE-129): these stay golden/skin at build, the app overrides at start.
      %VELO_THEME_COLOR% and the VELO:FONT block are the SKIN derivatives
      (§1/§3): materialized at build time from skin/brand.json by
      platform/passport-html.ts -- brand.json is the SINGLE header-color source

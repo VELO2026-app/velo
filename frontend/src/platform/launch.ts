@@ -35,6 +35,7 @@
 // =============================================================================
 
 import { host } from './host'
+import { applyInstanceConfig, type InstanceConfig } from './instance'
 
 /** Canonical URL of the Telegram WebApp script, loaded only inside Telegram. */
 export const TELEGRAM_SCRIPT_URL = 'https://telegram.org/js/telegram-web-app.js'
@@ -106,6 +107,37 @@ export function applyStandaloneViewport(doc: Document): void {
   meta.content = `${meta.content}, viewport-fit=cover`
 }
 
+/** The runtime instance config the container's nginx renders (FE-129). */
+export const INSTANCE_CONFIG_URL = '/config.json'
+
+/**
+ * Apply the runtime /config.json (FE-129): under the deploy machine the
+ * container's nginx renders it from its environment at start, and the app
+ * module graph is imported only AFTER this, so the snapshot seams (locales,
+ * brand, default locale) see it. Every non-JSON outcome is the golden path,
+ * not an error: local dev has no config.json (the dev server answers unknown
+ * paths with the SPA's index.html), and build-time VITE_* / golden defaults
+ * apply. A broken render is the machine's conformance finding, never the
+ * app's problem to crash on.
+ */
+export async function loadInstanceConfig(
+  fetchImpl: typeof fetch = fetch.bind(globalThis),
+): Promise<void> {
+  let response: Response
+  try {
+    response = await fetchImpl(INSTANCE_CONFIG_URL, { cache: 'no-store' })
+  } catch {
+    return
+  }
+  if (!response.ok) return
+  if (!(response.headers.get('content-type') ?? '').includes('application/json')) return
+  try {
+    applyInstanceConfig((await response.json()) as InstanceConfig)
+  } catch {
+    // Malformed JSON: build-time defaults apply.
+  }
+}
+
 /** Prepare the host for the platform main.ts is about to start. */
 export async function prepareHost(): Promise<void> {
   if (isTelegramLaunch(host.location.href, () => host.sessionStorage)) {
@@ -113,6 +145,7 @@ export async function prepareHost(): Promise<void> {
   } else {
     applyStandaloneViewport(host.document)
   }
+  await loadInstanceConfig()
 }
 
 /** Test seam: forget the memoised script load. */

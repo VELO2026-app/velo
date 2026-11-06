@@ -92,10 +92,29 @@ services:
       # The Dockerfile itself stays in frontend/.
       context: .
       dockerfile: frontend/Dockerfile
+      # PRIMER_* are the machine's mandatory build identity (contract 3 rule
+      # 19); the interim shell deploy passes neutral defaults -- the machine
+      # passes the real tag and commit. VITE_* build args are GONE (FE-129):
+      # instance values reach the container through `environment` ->
+      # /config.json, from the same vite.env the deploy scripts export
+      # before compose commands.
       args:
-        - VITE_API_BASE_URL
-        - VITE_TELEGRAM_BOT_URL
+        - PRIMER_RELEASE=${PRIMER_RELEASE:-dev}
+        - PRIMER_COMMIT=${PRIMER_COMMIT:-unknown}
     container_name: velo-frontend
+    environment:
+      # FE-129 transition: the instance values that used to bake into the
+      # build now ride the runtime /config.json (frontend/nginx/
+      # config.json.template, envsubst at container start). Same source as
+      # before (vite.env, exported by velo-manage.sh); under pridem the same
+      # keys arrive from primer.yaml env -- keys without the VITE_ prefix --
+      # and this mapping switches to `${VAR:?}` per the machine's compose
+      # rules. Empty values are the golden defaults.
+      API_BASE_URL: ${VITE_API_BASE_URL:-}
+      TELEGRAM_BOT_URL: ${VITE_TELEGRAM_BOT_URL:-}
+      DEFAULT_LOCALE: ${VITE_DEFAULT_LOCALE:-}
+      LOCALES: ${VITE_LOCALES:-}
+      BRAND: ${VITE_BRAND:-}
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
