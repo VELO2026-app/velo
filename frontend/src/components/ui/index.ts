@@ -157,8 +157,8 @@ export { VMenuRow } from '@velo/ui'
 export { VChip } from '@velo/ui'
 export { VPaginationDots } from '@velo/ui'
 export { VAccordion } from '@velo/ui'
-export { default as VMenu } from './VMenu.vue'
-export { default as VMenuItem } from './VMenuItem.vue'
+export { VMenu } from '@velo/ui'
+export { VMenuItem } from '@velo/ui'
 
 // FE-143: the kit's shared composable surface travels the same door as the
 // components. The ref-counted body-scroll lock moved into @velo/ui with its

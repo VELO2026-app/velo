@@ -34,19 +34,19 @@
 // exactly the component boundary, independent of any real screen.
 // =============================================================================
 
-import { createTestI18n } from '@/locales/testing'
-import { onDocumentEvent, offDocumentEvent } from '@/platform/dom'
+import { configureUi } from '../../i18n'
+import { onDocumentEvent, offDocumentEvent } from '../../platform/dom'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { createApp, nextTick, defineComponent, h, type App, type Component, type VNode } from 'vue'
-import VMenu from '@/components/ui/VMenu.vue'
-import VMenuItem from '@/components/ui/VMenuItem.vue'
+import VMenu from './VMenu.vue'
+import VMenuItem from './VMenuItem.vue'
 
 // FE-144: the seam mock. vi.fn wrappers DELEGATE to the real document, so
 // dispatch-based cases work unchanged while the CALLS stay countable. The
 // partial factory keeps every other export real ('@/locales' itself imports
 // setRootLang from this module, so a full stub would break module loading).
-vi.mock('@/platform/dom', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/platform/dom')>()
+vi.mock('../../platform/dom', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../platform/dom')>()
   return {
     ...actual,
     onDocumentEvent: vi.fn((type: string, listener: (ev: Event) => unknown) =>
@@ -57,6 +57,12 @@ vi.mock('@/platform/dom', async (importOriginal) => {
     ),
   }
 })
+
+// The kit t is the P3 seam, not the app singleton: this file configures its
+// own dictionary (the vitest per-file isolation makes it deterministic --
+// test-setup.ts). Same rendering as before the move: the same Russian
+// caption the assertions below pin.
+configureUi({ t: (key) => ({ 'ui.menuAria': 'Меню' })[key] ?? key })
 
 const onDoc = vi.mocked(onDocumentEvent)
 const offDoc = vi.mocked(offDocumentEvent)
@@ -101,7 +107,7 @@ function mountApp(opts: MountOpts = {}): void {
             })),
         ...(opts.trigger ? { trigger: opts.trigger } : {}),
       }),
-  }).use(createTestI18n())
+  })
   app.mount(host)
 }
 
@@ -117,9 +123,7 @@ interface MountItemProps {
 function mountItem(itemProps: MountItemProps, slot?: () => VNode): void {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(() => h(VMenuItem, itemProps, slot ? { default: slot } : {})).use(
-    createTestI18n(),
-  )
+  app = createApp(() => h(VMenuItem, itemProps, slot ? { default: slot } : {}))
   app.mount(host)
 }
 

@@ -29,7 +29,7 @@
       type="button"
       class="v-menu__trigger"
       :class="{ 'v-menu__trigger--open': open }"
-      :aria-label="ariaLabel"
+      :aria-label="ariaLabel ?? t('ui.menuAria')"
       :aria-expanded="open"
       aria-haspopup="menu"
       @click="toggle"
@@ -46,18 +46,19 @@
 </template>
 
 <script setup lang="ts">
-import { t } from '@/locales'
-import { onDocumentEvent, offDocumentEvent } from '@/platform/dom'
+import { t } from '../../i18n'
+import { onDocumentEvent, offDocumentEvent } from '../../platform/dom'
 import { ref, onBeforeUnmount, watch } from 'vue'
-import { IconDots } from '@/components/icons'
+import { IconDots } from '../../icons'
 
-withDefaults(
-  defineProps<{
-    /** Accessible label for the kebab trigger. */
-    ariaLabel?: string
-  }>(),
-  { ariaLabel: t('ui.menuAria') },
-)
+// The localized default resolves at RENDER time, not as a props default:
+// a withDefaults evaluation runs at module load, which is BEFORE any
+// configureUi({ t }) wiring (the app barrel's init) -- the raw key would be
+// frozen into every instance (the VAccordion render-time pattern).
+defineProps<{
+  /** Accessible label for the kebab trigger. */
+  ariaLabel?: string
+}>()
 
 const open = ref(false)
 const rootEl = ref<HTMLElement | null>(null)

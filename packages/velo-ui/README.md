@@ -79,6 +79,7 @@
 --transition-fast
 # --- semantic / component tokens (batch A FE-117 + batch B FE-140 + P3 FE-118) ---
 --z-modal
+--z-sticky                  # VMenu trigger stacking (P8 batch 4)
 # --- semantic / component tokens (batch A FE-117 + batch B FE-140 + P6b FE-145) ---
 --velo-bg-card-solid
 --velo-bg-subtle
@@ -126,6 +127,7 @@
 --velo-glass-white-30
 --velo-inset-12
 --velo-inset-row
+--velo-nav-active-bg        # VMenu/VMenuItem active row (P8 batch 4)
 --velo-nav-inactive-bg
 --velo-peach-500           # *legacy-ramp (VConfirmDialog warning panel text/icon, FE-145)
 --velo-peach-700           # *legacy-ramp (VBadge/VTag warning text)
