@@ -82,11 +82,7 @@ export type { DelayedFlagOptions, LoadingHold } from './useLoadingHold'
 // host wires once; the kit VToast renders whatever that provided instance
 // holds. The host's push-side composable (useToast) stays app-side and
 // builds on these exports.
-export {
-  createToastApi,
-  provideToast,
-  TOAST_INJECTION_KEY,
-} from './toast'
+export { createToastApi, provideToast, TOAST_INJECTION_KEY } from './toast'
 export type { Toast, ToastApi, ToastVariant } from './toast'
 export type { KeyboardFieldScrollApi, KeyboardFieldScrollFactory } from './keyboardFieldScroll'
 

@@ -44,10 +44,7 @@ const README = readFileSync(resolve(PKG_ROOT, 'README.md'), 'utf8')
 // (frontend/src/styles/diary-entry-scale.css), which declares --velo-de-k --
 // a subtree multiplier VSkeletonBubbles reads with a literal fallback 1
 // (P8 batch 1; optional for a kit consumer, required to resolve in the host).
-const GOLDEN_CSS = [
-  'variables.css',
-  'diary-entry-scale.css',
-]
+const GOLDEN_CSS = ['variables.css', 'diary-entry-scale.css']
   .map((name) => readFileSync(resolve(PKG_ROOT, '../../frontend/src/styles', name), 'utf8'))
   .join('\n')
 

@@ -32,7 +32,8 @@ function walkSources(dir: string, out: string[] = []): string[] {
   return out
 }
 
-const HOST_IMPORT = /from\s+['"](?:@\/|frontend\/|\.\.\/(?:\.\.\/)+(?:frontend|packages\/(?!velo-ui)))[^'"]*['"]/
+const HOST_IMPORT =
+  /from\s+['"](?:@\/|frontend\/|\.\.\/(?:\.\.\/)+(?:frontend|packages\/(?!velo-ui)))[^'"]*['"]/
 
 describe('@velo/ui reverse boundary (P8: the kit never imports the host)', () => {
   it('the detector works: host aliases and escapes are found in a fixture', () => {
