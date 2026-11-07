@@ -37,9 +37,9 @@
 # =============================================================================
 
 import re
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import Field, PrivateAttr, model_validator
+from pydantic import BeforeValidator, Field, PrivateAttr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.editions import EDITIONS
@@ -58,6 +58,39 @@ _HOST_RE = re.compile(
 # stub: velo-test and previews. Never prod.
 _STRIPE_STUB_ROLES = frozenset({"test", "preview"})
 
+# The instance options velo declares (BE-182, protocol 5.2.3): primer.yaml
+# `options`, one passport flag each -- OPTION_<NAME>, field option_<name>.
+OPTIONS = ("payments", "schools", "mcp", "zoom", "telegram", "llm")
+
+# The variables that exist only with an option (`when: <option>` in
+# primer.yaml). With the option off the machine passes the literal it
+# writes for a switched-off option; the code never reads it (protocol
+# 5.2.3) -- these are neither checked at start nor read while the option is
+# off. telegram's own variables are not here: telegram is in
+# options_required, so the machine never starts velo with it off.
+_OPTION_VARS: dict[str, tuple[str, ...]] = {
+    "zoom": (
+        "zoom_account_id",
+        "zoom_client_id",
+        "zoom_client_secret",
+        "zoom_sdk_client_id",
+        "zoom_sdk_client_secret",
+    ),
+}
+
+
+def _flag(value: object) -> object:
+    """A passport flag is the string `true` or `false` (protocol 5.2) --
+    nothing else. pydantic's bool would also take yes/no, on/off, 1/0 and
+    any case; a passport that says anything but the two words is refused at
+    start, not guessed. A bool passes through (Settings built in code)."""
+    if isinstance(value, bool) or value in ("true", "false"):
+        return value
+    raise ValueError("an option flag is `true` or `false`")
+
+
+OptionFlag = Annotated[bool, BeforeValidator(_flag)]
+
 # The instance values that must not be empty, by environment name. pydantic
 # refuses a missing one by itself; an empty string is a str and would pass.
 _REQUIRED_NON_EMPTY = (
@@ -66,11 +99,6 @@ _REQUIRED_NON_EMPTY = (
     "domain_api",
     "database_url",
     "telegram_bot_token",
-    "zoom_account_id",
-    "zoom_client_id",
-    "zoom_client_secret",
-    "zoom_sdk_client_id",
-    "zoom_sdk_client_secret",
     "telegram_login_client_id",
     "telegram_login_client_secret",
 )
@@ -88,9 +116,22 @@ class Settings(BaseSettings):
     # -- Application --
     # The passport's server.role (BE-192). Anything else: refused at start.
     server_role: Literal["test", "preview", "prod"]
-    # The passport's edition (BE-190): a key of app/core/editions.py's table,
+    # The passport's edition (BE-190): a key of the editions table
+    # (editions.json at the repository root, read by app/core/editions.py),
     # reported in /health with its modules. Anything else: refused at start.
     edition: str
+
+    # -- Instance options (BE-182, protocol 5.2.3) --
+    # The passport's options.<name>, one flag each, no default. What each
+    # one closes when false: app/core/options.py (require_option) and the
+    # places it names. telegram is in options_required: the machine never
+    # starts velo with it false, and velo writes no refusal of its own.
+    option_payments: OptionFlag
+    option_schools: OptionFlag
+    option_mcp: OptionFlag
+    option_zoom: OptionFlag
+    option_telegram: OptionFlag
+    option_llm: OptionFlag
 
     # -- Database --
     # Full async connection string for SQLAlchemy, put together by compose
@@ -282,7 +323,8 @@ class Settings(BaseSettings):
     # Not instance values on the deploy machine: neither primer.yaml nor
     # compose carries them. On test and preview payments run on the stub
     # (is_stripe_stub, from SERVER_ROLE); on prod the payments module is
-    # outside the edition until the new payments service (protocol 11.2).
+    # off: the option `payments` (BE-182) is refused there until the external
+    # Payments module, and Stripe is being cut out of velo.
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
     stripe_success_url: str = ""
@@ -561,8 +603,9 @@ class Settings(BaseSettings):
 
     # -- Zoom (E21) --
     # The Server-to-Server app. A channel in transition (protocol 11.2, until
-    # velo-meet): required on every instance, velo-test included -- there is
-    # no Zoom stub on any role (owner ruling, BE-192).
+    # velo-meet), under the option `zoom` (BE-182): required while it is on,
+    # neither checked nor read while it is off (_OPTION_VARS). There is no
+    # Zoom stub on any role (owner ruling, BE-192).
     zoom_account_id: str
     zoom_client_id: str
     zoom_client_secret: str
@@ -605,7 +648,7 @@ class Settings(BaseSettings):
     # above: an S2S app has no Meeting SDK, so these are a second key pair.
     # They sign the SDK JWT and nothing else; the secret never leaves the
     # server and is never logged. A channel in transition like the S2S keys
-    # above: required on every instance (BE-192).
+    # above: under the option `zoom` (BE-182, _OPTION_VARS).
     zoom_sdk_client_id: str
     zoom_sdk_client_secret: str
     # Per-user fixed window on sdk-join: every call reaches Zoom (meeting
@@ -669,7 +712,8 @@ class Settings(BaseSettings):
     guest_enter_rate_limit: int = 20
     guest_rate_limit_window_seconds: int = 600
 
-    # -- Schools killswitch (GT-19) --
+    # -- Schools: what option_schools = false means (GT-19; the passport's
+    # option since BE-182, the killswitch before it) --
     # AN EMERGENCY BRAKE, NOT A ROLLOUT TOGGLE. Default True: the feature
     # ships on, and this exists so it can be taken off the air without a
     # revert. The opposite default ("off until switched on") would make it a
@@ -713,19 +757,16 @@ class Settings(BaseSettings):
     # brake exists to stop. Forbidding creation would be the third candidate
     # meaning ("new schools only"), which was considered and not chosen.
     #
-    # Flipping this back to True restores everything with no rows touched:
+    # Flipping this back to true restores everything with no rows touched:
     # the flag writes nothing and no journal event records it (the fact that
     # it was pulled lives in the deployment, not in a school's history).
-    schools_enabled: bool = True
 
     # -- MCP (BE-138, phase 0: personal access tokens) --
-    # Killswitch. False -> every endpoint of the token router answers 404,
-    # unauthenticated callers included (a router-level dependency in
-    # app/modules/mcp/router.py, the same shape as schools_enabled and
-    # for the same reasons: no 503, no machine code). Token verification
-    # does not read it; the /mcp gate and the OAuth door (BE-141) do, in one
-    # place: door_closed in app/modules/mcp/server.py.
-    mcp_enabled: bool = True
+    # option_mcp = false (BE-182; mcp_enabled before it) -> every endpoint of
+    # the token router answers 404, unauthenticated callers included
+    # (require_option, app/core/options.py: no 503, no machine code). Token
+    # verification does not read it; the /mcp gate and the OAuth door
+    # (BE-141) do, in one place: door_closed in app/modules/mcp/server.py.
     # Live (not revoked) tokens one student may hold. Revoked tokens do not
     # count. The 11th create answers 409 mcp_token_limit_reached.
     mcp_tokens_max_active_per_user: int = 10
@@ -791,13 +832,40 @@ class Settings(BaseSettings):
         # BE-192: an empty instance value is refused, every empty key named
         # at once -- the operator fixes the passport in one pass. A missing
         # one pydantic has already refused, by field name.
+        # The variables of an option are checked only while it is on
+        # (BE-182, protocol 5.2.3): off, they hold the machine's literal,
+        # which the code never reads.
+        checked = [
+            *_REQUIRED_NON_EMPTY,
+            *(
+                name
+                for option, names in _OPTION_VARS.items()
+                if self.option_on(option)
+                for name in names
+            ),
+        ]
+        # Named in the order of the fields, the passport's order, whichever
+        # list a name comes from.
+        order = list(type(self).model_fields)
         empty = [
             name.upper()
-            for name in _REQUIRED_NON_EMPTY
+            for name in sorted(checked, key=order.index)
             if not getattr(self, name).strip()
         ]
         if empty:
             raise ValueError(f"empty: {', '.join(empty)}")
+
+        # BE-182: no payments on prod. Owner ruling: velo's payments leave for
+        # the external Payments module, which is not ready; until it is,
+        # prod runs with the option off, and a prod passport that turns it
+        # on is refused -- Stripe is being cut out, and its keys are not
+        # instance values, so on prod the module would have nothing to pay
+        # with. A ruling, not a gap: it changes with the Payments module.
+        if self.option_payments and self.server_role == "prod":
+            raise ValueError(
+                "OPTION_PAYMENTS: there are no payments on prod until the "
+                "external Payments module"
+            )
 
         # BE-190: the edition is one the table knows (core/editions.py).
         if self.edition not in EDITIONS:
@@ -937,6 +1005,17 @@ class Settings(BaseSettings):
         of every /z/{code} link and the OAuth issuer."""
         return f"https://{self.domain_api}"
 
+    def option_on(self, name: str) -> bool:
+        """Whether the instance option `name` (one of OPTIONS) is on."""
+        if name not in OPTIONS:
+            raise KeyError(f"not an option of velo: {name!r}")
+        return bool(getattr(self, f"option_{name}"))
+
+    @property
+    def enabled_options(self) -> list[str]:
+        """The options on, sorted -- /health details (BE-182)."""
+        return sorted(name for name in OPTIONS if self.option_on(name))
+
     @property
     def is_stripe_stub(self) -> bool:
         """True on the roles where payments run on the stub: test and
@@ -952,7 +1031,9 @@ class Settings(BaseSettings):
     def is_zoom_sdk_configured(self) -> bool:
         """True when the app can hand out Meeting SDK entry: Zoom is real.
 
-        The SDK key pair is always set (required at start). Under the stub
+        The SDK key pair is set whenever the option `zoom` is on (required
+        at start then); with it off sdk-join answers 404 before this is
+        read (BE-182, require_option). Under the stub
         every meeting number is fabricated, so a correctly signed JWT would
         still open nothing -- and sdk-join answers 409
         zoom_sdk_not_configured instead of handing the screen a meeting that

@@ -25,7 +25,9 @@
 #     before the first read alembic_head is null;
 #   - a check that turns to `error` is logged once (health.check_failed),
 #     and again only after it was `ok` in between;
-#   - no `details`: velo has nothing it must report beyond the fields.
+#   - `details` (BE-182): {"options": [...]} -- the instance options that
+#     are on, sorted, from the flags in memory; `modules` stays the
+#     edition's modules (protocol 9.1).
 # =============================================================================
 
 import asyncio
@@ -80,8 +82,14 @@ class Limits(_Closed):
     max_upload_mb: int = Field(ge=0)
 
 
+class Details(_Closed):
+    """velo's `details`: from the process's memory only (protocol 9.1)."""
+
+    options: list[str]
+
+
 class Health(_Closed):
-    """The /health document of protocol 9.1 (no `details`)."""
+    """The /health document of protocol 9.1."""
 
     service: str = Field(min_length=1)
     release: str = Field(min_length=1)
@@ -94,6 +102,7 @@ class Health(_Closed):
     checks: dict[str, CheckState] = Field(min_length=1)
     seams: Seams
     limits: Limits
+    details: Details
 
 
 class Ready(_Closed):
@@ -211,6 +220,7 @@ class Report:
             status="ok" if all(s == "ok" for s in checks.values()) else "degraded",
             checks=checks,
             seams=seams(),
+            details=Details(options=settings.enabled_options),
         )
         return JSONResponse(document.model_dump())
 

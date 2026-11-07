@@ -19,9 +19,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.core.database import get_db_reader, get_db_session
-from app.core.exceptions import NotFoundError
+from app.core.options import require_option
 from app.modules.auth.dependencies import get_current_user, get_current_user_write
 from app.modules.mcp.models import McpScope, scope_label
 from app.modules.mcp.schemas import (
@@ -38,24 +37,19 @@ from app.modules.mcp.service import (
 )
 from app.modules.users.models import User
 
-
-def _require_mcp_enabled() -> None:
-    """The MCP killswitch on this router (settings.mcp_enabled).
-
-    Same shape as _require_schools_enabled in
-    schools/router.py, for the reasons written there: a router-level
-    dependency so no endpoint can forget it; 404 with no machine code, so a
-    client cannot tell "switched off" from "never existed"; it runs before
-    the path dependencies, so an unauthenticated caller gets 404 too.
-    """
-    if not settings.mcp_enabled:
-        raise NotFoundError("Not found")
+# The MCP gate on this router: require_option("mcp") (BE-182; the
+# killswitch settings.mcp_enabled before it). Same shape as the schools gate
+# in schools/router.py, for the reasons written there: a router-level
+# dependency so no endpoint can forget it; 404 with no machine code, so a
+# client cannot tell "switched off" from "never existed"; it runs before the
+# path dependencies, so an unauthenticated caller gets 404 too.
+_require_mcp = require_option("mcp")
 
 
 router = APIRouter(
     prefix="/api/v1/users/me/mcp-tokens",
     tags=["mcp"],
-    dependencies=[Depends(_require_mcp_enabled)],
+    dependencies=[Depends(_require_mcp)],
 )
 
 

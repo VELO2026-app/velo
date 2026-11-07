@@ -4,7 +4,7 @@
 #
 # What is pinned here:
 #   - /health: always 200, exactly the eleven fields with their types and
-#     values, no `details`;
+#     values, and `details` with the options on (BE-182);
 #   - checks: the database and Redis only, measured AT ONCE, each under the
 #     timeout; raise or time out -> `error`; the revision is read in ONE
 #     query, kept when the database falls, null before the first read; no
@@ -52,6 +52,7 @@ FIELDS = {
     "checks",
     "seams",
     "limits",
+    "details",
 }
 
 
@@ -87,12 +88,12 @@ async def _revision_now() -> str:
 # -- /health ------------------------------------------------------------------
 
 
-async def test_health_is_the_eleven_fields(client: AsyncClient) -> None:
+async def test_health_is_the_eleven_fields_and_details(client: AsyncClient) -> None:
     resp = await client.get("/health")
 
     assert resp.status_code == 200
     doc = resp.json()
-    assert set(doc) == FIELDS  # no `details`, nothing else
+    assert set(doc) == FIELDS  # the eleven and details, nothing else
     assert doc["service"] == SERVICE == "velo"
     assert doc["release"] == os.environ["PRIMER_RELEASE"] and doc["release"]
     assert doc["commit"] == os.environ["PRIMER_COMMIT"] and doc["commit"]
@@ -107,6 +108,9 @@ async def test_health_is_the_eleven_fields(client: AsyncClient) -> None:
         "requires_satisfied": report.seams().requires_satisfied,
     }
     assert doc["limits"] == {"max_upload_mb": 3}
+    # BE-182: the options on, sorted, from the flags (protocol 9.1 details).
+    assert doc["details"] == {"options": settings.enabled_options}
+    assert doc["details"]["options"]  # the suite runs with options on
 
 
 async def test_the_database_check_is_one_query(client: AsyncClient) -> None:

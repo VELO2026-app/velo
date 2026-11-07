@@ -334,7 +334,12 @@ async def enqueue(
     Idempotent on (message, language, attempt): a second call -- the feed's
     catch-up racing a send, two admins reading at once -- inserts nothing
     and queues nothing. Returns whether a job was queued.
+
+    BE-182: with the option `llm` off nothing is queued -- every caller
+    (a send, the feed's catch-up, the admin's retry) comes through here.
     """
+    if not settings.option_llm:
+        return False
     key = job_key(message_id, locale, attempt)
     inserted = (
         await session.execute(
@@ -484,7 +489,11 @@ async def sweep() -> None:
     at intake): the job is read by its key, and on_key acts if it is over
     (refused at intake is a transport failure); otherwise the next pass
     tries again.
+
+    BE-182: skipped with the option `llm` off -- no job can come back.
     """
+    if not settings.option_llm:
+        return
     async with get_session_factory()() as session:
         rows = (
             (

@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db_session
+from app.core.options import option_dependency
 from app.modules.auth.dependencies import get_current_user_write
 from app.modules.payments.schemas import TopupRequest, TopupResponse
 from app.modules.payments.stripe import create_topup_session
@@ -27,6 +28,8 @@ from app.modules.users.models import User
 
 router = APIRouter(
     prefix="/api/v1/payments", tags=["payments"],
+    # BE-182: the option `payments` closes this router (app/core/options.py).
+    dependencies=[option_dependency("payments")],
 )
 
 

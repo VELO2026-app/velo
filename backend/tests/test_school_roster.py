@@ -323,7 +323,7 @@ async def test_the_killswitch_closes_the_roster(
     the schools killswitch: with the flag off it is the same 404."""
     w = await _school_with_people(client, db_session, 70550)
     url = ROSTER_URL.format(school_id=w["school"].id)
-    with patch.object(settings, "schools_enabled", True):
+    with patch.object(settings, "option_schools", True):
         assert (await _get(client, url, w["boris"])).status_code == 200
-    with patch.object(settings, "schools_enabled", False):
+    with patch.object(settings, "option_schools", False):
         assert (await _get(client, url, w["boris"])).status_code == 404

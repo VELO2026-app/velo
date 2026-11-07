@@ -9,11 +9,17 @@ dependencies:
   comms: { repo: git@github.com:aivis-one/comms.git, version: ">=4,<5" }
 
 editions:
-  # One edition, `ai` (owner ruling 5.11); its modules are the table in
-  # backend/app/core/editions.py, whose keys are these (backend
-  # tests/test_report.py). Payments, schools, MCP and the channels are
-  # instance options -- BE-182.
+  # One edition, `ai` (owner ruling 5.11); its modules are the table
+  # editions.json at the repository root, whose keys are these (backend
+  # tests/test_report.py).
   ai: { services: [comms] }
+
+# Instance options (protocol 5.2.3, BE-182): the passport turns on a subset;
+# each reaches the backend as the flag OPTION_<NAME> below. telegram is
+# required -- velo has no sign-in without it, and the machine refuses a
+# passport with it off.
+options: [payments, schools, mcp, zoom, telegram, llm]
+options_required: [telegram]
 
 stacks:
   velo:
@@ -48,17 +54,25 @@ env:
   DOMAIN_FRONTEND:      { source: passport, key: domains.frontend }
   DOMAIN_API:           { source: passport, key: domains.api }
   API_BASE_URL:         { source: passport, key: domains.api }
+  OPTION_PAYMENTS:      { source: passport, key: options.payments }
+  OPTION_SCHOOLS:       { source: passport, key: options.schools }
+  OPTION_MCP:           { source: passport, key: options.mcp }
+  OPTION_ZOOM:          { source: passport, key: options.zoom }
+  OPTION_TELEGRAM:      { source: passport, key: options.telegram }
+  OPTION_LLM:           { source: passport, key: options.llm }
   # params.velo.<name> of the passport
+  # `when: <option>`: with the option off the machine passes its literal
+  # and the backend neither checks nor reads the variable (protocol 5.2.3).
   SUPPORT_LANGUAGE:         { source: param }
-  ZOOM_ACCOUNT_ID:          { source: param }
-  ZOOM_CLIENT_ID:           { source: param }
-  ZOOM_SDK_CLIENT_ID:       { source: param }
-  TELEGRAM_LOGIN_CLIENT_ID: { source: param }
+  ZOOM_ACCOUNT_ID:          { source: param, when: zoom }
+  ZOOM_CLIENT_ID:           { source: param, when: zoom }
+  ZOOM_SDK_CLIENT_ID:       { source: param, when: zoom }
+  TELEGRAM_LOGIN_CLIENT_ID: { source: param, when: telegram }
   # asked: secrets of the passport
-  ZOOM_CLIENT_SECRET:           { source: asked }
-  ZOOM_SDK_CLIENT_SECRET:       { source: asked }
-  TELEGRAM_LOGIN_CLIENT_SECRET: { source: asked }
-  TELEGRAM_BOT_TOKEN:           { source: asked }
+  ZOOM_CLIENT_SECRET:           { source: asked, when: zoom }
+  ZOOM_SDK_CLIENT_SECRET:       { source: asked, when: zoom }
+  TELEGRAM_LOGIN_CLIENT_SECRET: { source: asked, when: telegram }
+  TELEGRAM_BOT_TOKEN:           { source: asked, when: telegram }
   # seams of comms
   COMMS_API_URL:         { source: seam, from: comms }
   COMMS_SERVICE_TOKEN:   { source: seam, from: comms }
@@ -74,12 +88,13 @@ packages:
       - { service: frontend, path: public/skin }
 
 # In transition (protocol 4.2, 11.2): each host leaves with its channel.
+# A host opens only while one of its options is on (protocol 4.2).
 egress:
-  - zoom.us               # Zoom, until velo-meet
-  - api.zoom.us           # Zoom, until velo-meet
-  - oauth.telegram.org    # sign-in with Telegram, until comms v4.x
-  - claude.ai             # MCP CIMD, until comms v4.x
-  - chatgpt.com           # MCP CIMD, until comms v4.x
+  - { host: zoom.us, when: [zoom] }                  # Zoom, until velo-meet
+  - { host: api.zoom.us, when: [zoom] }              # Zoom, until velo-meet
+  - { host: oauth.telegram.org, when: [telegram] }   # sign-in, until comms v4.x
+  - { host: claude.ai, when: [mcp] }                 # MCP CIMD, until comms v4.x
+  - { host: chatgpt.com, when: [mcp] }               # MCP CIMD, until comms v4.x
 
 host:
   domains: [frontend, api]

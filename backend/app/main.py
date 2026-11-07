@@ -202,7 +202,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Gated by settings for the same reason as the two workers above:
         # tests disable it so the loop can't race manual test calls via
         # FOR UPDATE SKIP LOCKED.
-        if settings.zoom_retry_enabled:
+        # BE-182: the Zoom pollers run only with the option `zoom` on.
+        if settings.zoom_retry_enabled and settings.option_zoom:
             zoom_retry_task = asyncio.create_task(
                 run_zoom_retry_poller(), name="zoom_retry_poller",
             )
@@ -212,7 +213,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Start Zoom report poller -- the attendance decision (E21 step F).
         # Gated for the same reason as every worker above: tests disable it
         # so the loop can't race manual test calls via FOR UPDATE SKIP LOCKED.
-        if settings.zoom_report_enabled:
+        if settings.zoom_report_enabled and settings.option_zoom:
             zoom_report_task = asyncio.create_task(
                 run_zoom_report_poller(), name="zoom_report_poller",
             )

@@ -162,7 +162,8 @@ async def _unauthorized(send) -> None:
 
 
 def door_closed() -> bool:
-    """True when this request must get the plain 404: MCP switched off.
+    """True when this request must get the plain 404: the option `mcp` is
+    off (BE-182; mcp_enabled before it).
     Shared by McpGate and the OAuth door (BE-141), so the two can never
     disagree.
 
@@ -170,7 +171,7 @@ def door_closed() -> bool:
     the API's own host (domains.api) -- the deploy machine has no separate
     short-link domain -- so a refusal on the public-link host would close
     /mcp on the only host it is served from."""
-    return not settings.mcp_enabled
+    return not settings.option_mcp
 
 
 class McpGate:

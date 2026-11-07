@@ -98,6 +98,9 @@ COPY backend/migrations/ ./migrations/
 # --log-config below, migrations/env.py and the app apply the same file
 # (app/core/logging.py).
 COPY backend/logging.json ./
+# The edition -> modules table, one for the repository (BE-182): at / so
+# that app/core/editions.py finds it at parents[3], as from the repository.
+COPY editions.json /editions.json
 
 ENV PATH="/opt/venv/bin:$PATH"
 ENV PYTHONDONTWRITEBYTECODE=1

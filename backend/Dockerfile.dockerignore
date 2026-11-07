@@ -21,6 +21,8 @@
 !backend/scripts/
 !backend/alembic.ini
 !backend/logging.json
+# BE-182: the edition table at the repository root, read by the runtime.
+!editions.json
 !backend/migrations/
 !backend/tests/
 !backend/pyproject.toml

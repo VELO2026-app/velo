@@ -17,6 +17,14 @@ MISSING = object()
 INSTANCE: dict[str, object] = {
     "server_role": "prod",
     "edition": "ai",
+    # BE-182: every option on but payments, which a prod instance may not
+    # turn on (core/config.py).
+    "option_payments": False,
+    "option_schools": True,
+    "option_mcp": True,
+    "option_zoom": True,
+    "option_telegram": True,
+    "option_llm": True,
     "domain_frontend": "app.example.com",
     "domain_api": "api.example.com",
     "database_url": "postgresql+asyncpg://u:p@h/db",

@@ -259,12 +259,12 @@ async def test_switched_off_mcp_is_the_apps_plain_404(
     client: AsyncClient, mcp, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _, _, token = await _student(client, 89068)
-    monkeypatch.setattr(settings, "mcp_enabled", False)
+    monkeypatch.setattr(settings, "option_mcp", False)
     for kw in ({}, {"token": token}):
         resp = await _rpc(client, "tools/list", **kw)
         assert resp.status_code == 404
         assert resp.json() == {"error": "not_found", "message": "Not found"}
-    monkeypatch.setattr(settings, "mcp_enabled", True)
+    monkeypatch.setattr(settings, "option_mcp", True)
     assert (await _rpc(client, "tools/list", token=token)).status_code == 200
 
 

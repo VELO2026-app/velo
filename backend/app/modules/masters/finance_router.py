@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_reader
+from app.core.options import option_dependency
 from app.modules.auth.dependencies import get_current_master
 from app.modules.masters.finance_schemas import (
     IncomeResponse,
@@ -34,7 +35,12 @@ from app.modules.users.models import User
 
 logger = structlog.get_logger()
 
-router = APIRouter(prefix="/api/v1/masters", tags=["master-finance"])
+router = APIRouter(
+    prefix="/api/v1/masters",
+    tags=["master-finance"],
+    # BE-182: the option `payments` closes this router (app/core/options.py).
+    dependencies=[option_dependency("payments")],
+)
 
 
 @router.get("/me/income", response_model=IncomeResponse)

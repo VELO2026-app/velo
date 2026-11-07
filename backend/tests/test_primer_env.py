@@ -104,13 +104,19 @@ def test_a_removed_key_is_neither_passed_nor_declared(removed: str) -> None:
 def test_the_cimd_hosts_are_the_cimd_hosts_of_egress() -> None:
     """MCP_OAUTH_CIMD_ALLOWED_HOSTS equals the CIMD hosts of egress (plan,
     decision 5): a host velo would fetch but cannot reach, or may reach but
-    would refuse, is a connector that never connects."""
-    egress = set(yaml.safe_load(PRIMER.read_text(encoding="utf-8"))["egress"])
+    would refuse, is a connector that never connects. BE-182: an entry is
+    {host, when: [options]} -- the CIMD hosts are exactly those of `mcp`."""
+    entries = yaml.safe_load(PRIMER.read_text(encoding="utf-8"))["egress"]
+    when = {e["host"]: tuple(e["when"]) for e in entries}
     assert MCP_OAUTH_CIMD_ALLOWED_HOSTS
-    assert egress >= MCP_OAUTH_CIMD_ALLOWED_HOSTS
+    assert {h for h, w in when.items() if w == ("mcp",)} == set(
+        MCP_OAUTH_CIMD_ALLOWED_HOSTS
+    )
     # The other hosts of egress are the channels in transition, not CIMD.
-    assert egress - MCP_OAUTH_CIMD_ALLOWED_HOSTS == {
-        "zoom.us", "api.zoom.us", "oauth.telegram.org",
+    assert {h: w for h, w in when.items() if w != ("mcp",)} == {
+        "zoom.us": ("zoom",),
+        "api.zoom.us": ("zoom",),
+        "oauth.telegram.org": ("telegram",),
     }
 
 

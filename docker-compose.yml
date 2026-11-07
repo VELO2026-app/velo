@@ -37,6 +37,13 @@ services:
       DOMAIN_FRONTEND: ${DOMAIN_FRONTEND:?}
       DOMAIN_API: ${DOMAIN_API:?}
       SUPPORT_LANGUAGE: ${SUPPORT_LANGUAGE:?}
+      # Instance options of the passport (BE-182): `true` or `false`.
+      OPTION_PAYMENTS: ${OPTION_PAYMENTS:?}
+      OPTION_SCHOOLS: ${OPTION_SCHOOLS:?}
+      OPTION_MCP: ${OPTION_MCP:?}
+      OPTION_ZOOM: ${OPTION_ZOOM:?}
+      OPTION_TELEGRAM: ${OPTION_TELEGRAM:?}
+      OPTION_LLM: ${OPTION_LLM:?}
       # Channels in transition: they leave with their hosts in egress.
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?}
       ZOOM_ACCOUNT_ID: ${ZOOM_ACCOUNT_ID:?}

@@ -72,7 +72,7 @@ _TID_OUTSIDER = 69503
 _TID_STUDENT = 69510
 _TID_OTHER_STUDENT = 69511
 
-_FLAG = "schools_enabled"
+_FLAG = "option_schools"
 
 
 # ===========================================================================

@@ -421,13 +421,13 @@ async def test_mcp_off_closes_every_oauth_path_with_the_plain_404(
     and the two Telegram login keys are required at start (OAuth is always
     configured), and the public short-link host no longer exists (the /z
     links live on the API's own host) -- so they have no case here."""
-    monkeypatch.setattr(settings, "mcp_enabled", False)
+    monkeypatch.setattr(settings, "option_mcp", False)
     for path in OAUTH_PATHS:
         for method in ("GET", "POST"):
             resp = await client.request(method, path)
             assert resp.status_code == 404, (path, method)
             assert resp.json() == {"error": "not_found", "message": "Not found"}
-    monkeypatch.setattr(settings, "mcp_enabled", True)
+    monkeypatch.setattr(settings, "option_mcp", True)
     assert (await client.get(AS_METADATA_PATH)).status_code == 200
     assert (await client.get(PRM_PATH)).status_code == 200
 

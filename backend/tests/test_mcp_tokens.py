@@ -609,13 +609,13 @@ async def test_every_operation_is_404_when_the_flag_is_off_and_401_when_on(
     """Unauthenticated on purpose: with the flag off the router dependency
     answers before authentication (404 with no code), with it on the same
     request reaches authentication (401)."""
-    monkeypatch.setattr(settings, "mcp_enabled", False)
+    monkeypatch.setattr(settings, "option_mcp", False)
     for method, path in _operations():
         resp = await client.request(method, path, json={"name": "n"})
         assert resp.status_code == 404, (method, path)
         assert resp.json()["error"] == "not_found"
 
-    monkeypatch.setattr(settings, "mcp_enabled", True)
+    monkeypatch.setattr(settings, "option_mcp", True)
     for method, path in _operations():
         resp = await client.request(method, path, json={"name": "n"})
         assert resp.status_code == 401, (method, path)
@@ -626,7 +626,7 @@ async def test_the_flag_off_also_hides_the_feature_from_a_signed_in_user(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _, headers = await _user(client, 89049)
-    monkeypatch.setattr(settings, "mcp_enabled", False)
+    monkeypatch.setattr(settings, "option_mcp", False)
     assert (await client.get(TOKENS_URL, headers=headers)).status_code == 404
     assert (
         await client.post(TOKENS_URL, json={"name": "n"}, headers=headers)

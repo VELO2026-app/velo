@@ -12,8 +12,19 @@ touching the suite's singleton: the contract is what a fresh process does.
 import pytest
 from pydantic import ValidationError
 
-from app.core.config import _REQUIRED_NON_EMPTY, Settings, settings
+from app.core.config import (
+    _OPTION_VARS,
+    _REQUIRED_NON_EMPTY,
+    OPTIONS,
+    Settings,
+    settings,
+)
 from tests.settings_instance import INSTANCE, MISSING, build_settings
+
+# BE-182: the variables of the options (checked while the option is on --
+# INSTANCE has every option but payments on) and the option flags.
+_OPTION_VAR_NAMES = tuple(n for names in _OPTION_VARS.values() for n in names)
+_FLAGS = tuple(f"option_{o}" for o in OPTIONS)
 
 
 def test_a_valid_instance_starts_and_builds_its_origins(
@@ -27,7 +38,7 @@ def test_a_valid_instance_starts_and_builds_its_origins(
     assert s.server_role == "prod"
 
 
-@pytest.mark.parametrize("name", _REQUIRED_NON_EMPTY)
+@pytest.mark.parametrize("name", [*_REQUIRED_NON_EMPTY, *_OPTION_VAR_NAMES])
 @pytest.mark.parametrize("empty", ["", "   "])
 def test_an_empty_instance_value_is_refused_by_name(
     monkeypatch: pytest.MonkeyPatch, name: str, empty: str
@@ -50,7 +61,9 @@ def test_every_empty_instance_value_is_named_at_once(
     )
 
 
-@pytest.mark.parametrize("name", [*_REQUIRED_NON_EMPTY, "server_role"])
+@pytest.mark.parametrize(
+    "name", [*_REQUIRED_NON_EMPTY, *_OPTION_VAR_NAMES, "server_role", *_FLAGS]
+)
 def test_an_absent_instance_value_is_refused_by_name(
     monkeypatch: pytest.MonkeyPatch, name: str
 ) -> None:
@@ -62,12 +75,19 @@ def test_an_absent_instance_value_is_refused_by_name(
 
 
 def test_the_required_values_are_exactly_the_fields_without_a_default() -> None:
-    """_REQUIRED_NON_EMPTY and the fields with no default are one list:
-    a required field left out of the emptiness check would start on ''."""
+    """The fields with no default are one list with the emptiness checks:
+    a required field left out of them would start on ''. BE-182: the
+    variables of an option are checked while it is on (_OPTION_VARS), and
+    the option flags and the role are checked by their own form."""
     no_default = {
         name for name, f in Settings.model_fields.items() if f.is_required()
     }
-    assert no_default == {*_REQUIRED_NON_EMPTY, "server_role"}
+    assert no_default == {
+        *_REQUIRED_NON_EMPTY,
+        *_OPTION_VAR_NAMES,
+        "server_role",
+        *_FLAGS,
+    }
 
 
 @pytest.mark.parametrize(

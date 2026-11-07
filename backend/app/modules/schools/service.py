@@ -2110,7 +2110,7 @@ async def curated_school_id_for_practice(
 
     Reads only. No commit, no flush (P-01).
     """
-    if not settings.schools_enabled:
+    if not settings.option_schools:
         return None
     if practice.school_id is None:
         return None
@@ -4583,7 +4583,7 @@ async def announce_published_practice(
     # fan-out ran on a path no router guards: a journal line in the school
     # and a notification to every member, about a practice the school page
     # and the audience predicate then hide from all of them.
-    if not settings.schools_enabled:
+    if not settings.option_schools:
         return (0, 0)
 
     school = (

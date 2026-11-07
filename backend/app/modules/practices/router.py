@@ -67,6 +67,7 @@ from app.core.config import settings
 from app.core.database import get_db_reader, get_db_session
 from app.core.exceptions import BadRequestError, NotFoundError
 from app.core.middleware import client_ip
+from app.core.options import option_dependency
 from app.modules.auth.dependencies import (
     get_current_master,
     get_current_user,
@@ -316,6 +317,8 @@ async def create_practice_endpoint(
 @router.post(
     "/{practice_id}/zoom/retry",
     response_model=PracticeResponse,
+    # BE-182: with the option `zoom` off no meeting is made or asked for.
+    dependencies=[option_dependency("zoom")],
 )
 async def retry_zoom_meeting_endpoint(
     practice_id: UUID,
@@ -454,6 +457,8 @@ async def resolve_zoom_entry_endpoint(
 @router.post(
     "/{practice_id}/zoom/sdk-join",
     response_model=ZoomSdkJoinResponse,
+    # BE-182: with the option `zoom` off there is no Zoom to enter.
+    dependencies=[option_dependency("zoom")],
 )
 async def zoom_sdk_join_endpoint(
     practice_id: UUID,

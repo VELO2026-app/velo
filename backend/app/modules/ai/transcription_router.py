@@ -26,6 +26,7 @@
 import structlog
 from fastapi import APIRouter, Depends
 
+from app.core.options import option_dependency
 from app.modules.ai.quota import consume_transcription_quota
 from app.modules.ai.schemas import TranscribeRequest, TranscribeResponse
 from app.modules.ai.transcription import (
@@ -38,7 +39,13 @@ from app.modules.users.models import User
 
 logger = structlog.get_logger()
 
-router = APIRouter(prefix="/api/v1/ai", tags=["ai"])
+router = APIRouter(
+    prefix="/api/v1/ai",
+    tags=["ai"],
+    # BE-182: voice transcription is an LLM function -- the option `llm`
+    # closes it (app/core/options.py).
+    dependencies=[option_dependency("llm")],
+)
 
 
 @router.post("/transcribe", response_model=TranscribeResponse)

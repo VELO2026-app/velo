@@ -1169,6 +1169,20 @@ _LIVE_BOOKING_STATUSES = (
 )
 
 
+# KNOWN CEILING -- with the option `zoom` off a student is told PENDING.
+#   1. Mechanics: with the option off no meeting row is made (BE-182:
+#      practices/service.py, practices/series_service.py), so step 3 of the
+#      ladder below answers a student PENDING -- "being prepared" -- for a
+#      meeting that will never exist on this instance.
+#   2. Status: acknowledged by design.
+#   3. Task: none -- unreachable while Zoom is on everywhere (owner ruling,
+#      BE-182): no passport turns the option off.
+#   4. Unfreeze trigger: the first passport of an instance with the option
+#      `zoom` off.
+#   5. Agreed fix: a step "no online room on this instance" in the API and
+#      on the frontend.
+#   6. Rejected: making that step now -- code and a frontend change for a
+#      state no instance is in.
 async def resolve_zoom_entry(
     practice: Practice,
     user: User | None,

@@ -508,7 +508,7 @@ async def test_an_outsider_cannot_tell_the_school_exists(client, s: _S) -> None:
 
 @pytest.mark.asyncio
 async def test_the_killswitch_refuses_the_delegation(client, s: _S) -> None:
-    with patch.object(settings, "schools_enabled", False):
+    with patch.object(settings, "option_schools", False):
         off = await _post(
             client, s.token("curator"),
             master_id=s.id("target"), school_id=str(s.school),

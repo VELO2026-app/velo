@@ -383,7 +383,7 @@ async def _usable_school_or_400(
 
     THE KILLSWITCH IS READ HERE (BE-74, new). Setting the owning school is
     a new write path outside the school routers, and a path that does not
-    listen to schools_enabled is the hole BE-43 closed twice. With
+    listen to the schools option is the hole BE-43 closed twice. With
     schools off, "this school" is not a school you can use.
 
     Single 400 with one message, no split by cause -- P-08 does not apply
@@ -391,7 +391,7 @@ async def _usable_school_or_400(
     else's). The same message as a school deleted between this check and
     the INSERT (create_practice), because it is the same fact.
     """
-    if not settings.schools_enabled:
+    if not settings.option_schools:
         raise BadRequestError(_SCHOOL_NOT_USABLE, code=_SCHOOL_NOT_USABLE_CODE)
     verified = (
         select(MasterProfile.user_id)
@@ -1065,6 +1065,23 @@ def _enforce_pricing(
             "price_cents must be > 0 for paid practices"
         )
     return price_cents
+
+
+# BE-182, owner ruling: with the option `payments` off no practice BECOMES
+# paid -- created paid, or edited from free to paid. A practice that is
+# already paid is left as it is (editing its other fields, or its price,
+# goes on). The code is a new one, payments_unavailable; 409: the request
+# is well-formed, this instance cannot take it.
+PAYMENTS_UNAVAILABLE = "payments_unavailable"
+
+
+def _refuse_paid_without_payments() -> None:
+    """Refuse a practice becoming paid while the option `payments` is off."""
+    if not settings.option_payments:
+        raise ConflictError(
+            "Paid practices are not available on this instance",
+            code=PAYMENTS_UNAVAILABLE,
+        )
 
 
 def _build_taxonomy(
@@ -1842,6 +1859,8 @@ async def create_practice(
         own=not for_another_master,
     )
     price_cents = _enforce_pricing(body.is_free, body.price_cents)
+    if not body.is_free:
+        _refuse_paid_without_payments()
     # P5 (PROMPT №594): reject a group_id that isn't one of THIS master's own
     # custom groups (another master's group, an unknown id, or a system
     # slug) before anything is inserted.
@@ -2302,8 +2321,11 @@ async def _after_publish(
     # status=scheduled and never pass through this branch, so they do not
     # get a Zoom meeting from this step -- out of scope for this prompt
     # (would touch series_service.py), flagged rather than silently patched.
-    from app.modules.zoom.service import create_meeting_for_practice
-    await create_meeting_for_practice(practice, session)
+    # BE-182: with the option `zoom` off no meeting row is made -- the
+    # practice is published without one (app/core/options.py).
+    if settings.option_zoom:
+        from app.modules.zoom.service import create_meeting_for_practice
+        await create_meeting_for_practice(practice, session)
 
     # BE-33: the master's own one-hour reminder, scheduled at publication.
     # Gated on the SAME transition as the Zoom block above and it inherits
@@ -2643,6 +2665,8 @@ async def update_practice(
     if "is_free" in update_data or "price_cents" in update_data:
         final_price = _enforce_pricing(final_is_free, final_price)
         update_data["price_cents"] = final_price
+    if not final_is_free and practice.is_free:
+        _refuse_paid_without_payments()
 
     # Capture the pre-update scheduled_at so we can detect a reschedule and
     # record old -> new in the diary feed projection below. Read BEFORE the
