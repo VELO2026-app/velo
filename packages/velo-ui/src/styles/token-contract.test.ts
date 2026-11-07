@@ -39,10 +39,17 @@ import { describe, expect, it } from 'vitest'
 
 const PKG_ROOT = process.cwd()
 const README = readFileSync(resolve(PKG_ROOT, 'README.md'), 'utf8')
-const GOLDEN_CSS = readFileSync(
-  resolve(PKG_ROOT, '../../frontend/src/styles/variables.css'),
-  'utf8',
-)
+// The golden token surface is BOTH app stylesheets that declare kit-consumed
+// tokens: variables.css (the frozen canon) and the diary-entry-scale layer
+// (frontend/src/styles/diary-entry-scale.css), which declares --velo-de-k --
+// a subtree multiplier VSkeletonBubbles reads with a literal fallback 1
+// (P8 batch 1; optional for a kit consumer, required to resolve in the host).
+const GOLDEN_CSS = [
+  'variables.css',
+  'diary-entry-scale.css',
+]
+  .map((name) => readFileSync(resolve(PKG_ROOT, '../../frontend/src/styles', name), 'utf8'))
+  .join('\n')
 
 /** The package's style carriers: *.vue SFC <style> blocks (the CSS strategy,
  * §3.3) plus any standalone *.css under src/. Colocized tests and stories

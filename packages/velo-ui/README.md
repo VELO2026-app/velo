@@ -67,16 +67,20 @@
 --radius-full
 --radius-md
 --radius-xl
+--size-select-chevron-clearance # VSelect chevron/clear-button offset (P8 batch 1)
 --space-1
 --space-2
 --space-3
 --space-4
 --space-5
+--space-8                 # VEmptyState note-variant spacing (P8 batch 1)
 --space-hairline
 --transition-base
 --transition-fast
 # --- semantic / component tokens (batch A FE-117 + batch B FE-140 + P3 FE-118) ---
 --z-modal
+--z-sticky                  # VMenu trigger stacking (P8 batch 4)
+--z-toast                   # VToast layer (P8 batch 6)
 # --- semantic / component tokens (batch A FE-117 + batch B FE-140 + P6b FE-145) ---
 --velo-bg-card-solid
 --velo-bg-subtle
@@ -87,8 +91,10 @@
 --velo-border-light
 --velo-border-width
 --velo-dur-base
+--velo-dur-fast            # VLoadingSwap content fade (P8 batch 5)
 --velo-dur-press
 --velo-dur-pulse
+--velo-dur-resize           # VLoadingSwap height glide (P8 batch 5)
 --velo-dur-sheet
 --velo-dur-sheet-exit
 --velo-ease-breath
@@ -111,6 +117,8 @@
 --velo-gap-3
 --velo-gap-6
 --velo-glass-blue-15
+--velo-glass-white-20       # VBackButton pill fill (P8 batch 3)
+--velo-glass-white-35       # VBackButton pill fill, pressed (P8 batch 3)
 --velo-glass-blue-200-15
 --velo-glass-blue-30
 --velo-glass-blue-60
@@ -122,6 +130,7 @@
 --velo-glass-white-30
 --velo-inset-12
 --velo-inset-row
+--velo-nav-active-bg        # VMenu/VMenuItem active row (P8 batch 4)
 --velo-nav-inactive-bg
 --velo-peach-500           # *legacy-ramp (VConfirmDialog warning panel text/icon, FE-145)
 --velo-peach-700           # *legacy-ramp (VBadge/VTag warning text)
@@ -154,6 +163,27 @@
 --velo-text-stroke-strong
 --velo-warning-bg
 --velo-white               # *legacy-ramp (active/danger text on fills, FE-119: IconRequiredDone check stroke)
+# --- P8 batch 1 (tz-ui-package §4 P8): skeleton family, VEmptyState, VMenuRow, field family ---
+--velo-border-input-focus  # VSelect focus ring
+--velo-card-height-list    # VSkeletonPracticeCard list-card skeleton height
+--velo-card-iconcol-w      # VSkeletonPracticeCard icon column
+--velo-card-letter-spacing-meta # VMoreLink meta label tracking (P8 batch 3)
+--velo-card-padding-x      # VSkeletonPracticeCard paddings
+--velo-card-padding-y
+--velo-danger-text         # VMenuRow destructive label
+--velo-de-k                # OPTIONAL host layout token: the diary-entry-scale
+                           # subtree multiplier (frontend styles/diary-entry-scale.css,
+                           # NOT variables.css); VSkeletonBubbles reads it with a
+                           # literal fallback 1, so a consumer without the scale
+                           # layer renders unscaled
+--velo-fs-48               # VEmptyState full-variant icon size
+--velo-radius-9            # VSkeleton bubbles/row radii
+--velo-required-done       # VSelect required-done glyph color
+--velo-size-46             # VSkeletonRow/VSkeletonPracticeCard row height
+--velo-size-56             # VInput affix-icon size (P8 batch 2)
+--velo-shadow-toast         # VToast elevation (P8 batch 6)
+--velo-success              # VToast success fill (P8 batch 6)
+--velo-text-placeholder    # VInput placeholder tint (P8 batch 2)
 ```
 
 ## Стратегия CSS (§3.3)

@@ -90,7 +90,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, nextTick, useId, useAttrs } from 'vue'
 import { IconRequired, IconRequiredDone } from '@/components/icons'
-import VFieldError from './VFieldError.vue'
+import { VFieldError } from '@velo/ui'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import { appendTranscript, useVoiceFieldInput } from '@/composables/useVoiceFieldInput'
 // Shared reach from ui (FE-94, a first for this folder): the voice family

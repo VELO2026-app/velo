@@ -1,12 +1,20 @@
 /**
- * VELO Frontend -- UI Components barrel export (Phase F2.1 + F4.1)
+ * VELO Frontend -- UI Components barrel export (Phase F2.1 + F4.1; P8 final)
  *
- * FE-117 batch A + FE-140 (tail of A, batch B) + FE-118 P3 + FE-145 P6b (the
- * modal family): migrated kit components are re-exported from `@velo/ui`
- * (tz-ui-package.md §4 P2/P3/P6 -- the barrel flips component-by-component;
- * consumers never change an import). The app resolves `@velo/ui` to the
- * package SOURCES (vite/vitest alias + tsconfig paths) -- see the package
- * README "CSS strategy" for the resolution decision.
+ * P8 (tz-ui-package.md §4 P8) is the migration's end state: EVERY kit
+ * component lives in `@velo/ui` and this barrel re-exports it -- no local
+ * component copies remain. What stays here deliberately:
+ *   - the i18n wrappers (VLoader/VModal/VConfirmDialog/VLoadingSwap): the
+ *     kit components are pure (§7.2 seams) and this door re-anchors the
+ *     localized defaults (P3; pinned by the *.localized.test.ts files);
+ *   - the domain trio that never leaves the app (§0): VeloLogo (renders
+ *     the skin-swapped public/icons path), VRatingBadges (utils/moodScale +
+ *     utils/ratingIcons) and VTextarea (the FE-94 voice field --
+ *     useVoiceFieldInput + the shared voice family).
+ * The app resolves `@velo/ui` to the package SOURCES (vite/vitest alias +
+ * tsconfig paths) -- see the package README "CSS strategy" for the
+ * resolution decision. The boundary law lives in eslint.config.js (P8) and
+ * ui-package-boundary.test.ts: only the doors import `@velo/ui`.
  *
  * Usage:
  *   `import { VButton, VInput, VCard, VModal } from '@/components/ui'`
@@ -16,6 +24,7 @@ import { h, type FunctionalComponent } from 'vue'
 
 import {
   VConfirmDialog as VConfirmDialogKit,
+  VLoadingSwap as VLoadingSwapKit,
   VLoader as VLoaderKit,
   configureUi,
   VModal as VModalKit,
@@ -117,31 +126,43 @@ const VConfirmDialog: FunctionalComponent<{
   )
 
 export { VButton } from '@velo/ui'
-export { default as VBackButton } from './VBackButton.vue'
-export { default as VMoreLink } from './VMoreLink.vue'
-export { default as VInput } from './VInput.vue'
-export { default as VFieldError } from './VFieldError.vue'
+export { VBackButton } from '@velo/ui'
+export { VMoreLink } from '@velo/ui'
+export { VInput } from '@velo/ui'
+export { VFieldError } from '@velo/ui'
 export { default as VTextarea } from './VTextarea.vue'
-export { default as VSelect } from './VSelect.vue'
+export { VSelect } from '@velo/ui'
 export { VSwitch } from '@velo/ui'
 export { VDayPicker } from '@velo/ui'
-export { default as VCheckbox } from './VCheckbox.vue'
-export { default as VRadioGroup } from './VRadioGroup.vue'
+export { VCheckbox } from '@velo/ui'
+export { VRadioGroup } from '@velo/ui'
 export { VWheel } from '@velo/ui'
 export { VBottomSheet } from '@velo/ui'
 export { VCard } from '@velo/ui'
 export { VBadge } from '@velo/ui'
 export { VAvatar } from '@velo/ui'
 export { VLoader }
-export { default as VSkeleton } from './VSkeleton.vue'
-export { default as VSkeletonPracticeCard } from './VSkeletonPracticeCard.vue'
-export { default as VSkeletonRow } from './VSkeletonRow.vue'
-export { default as VSkeletonBubbles } from './VSkeletonBubbles.vue'
-export { default as VLoadingSwap } from './VLoadingSwap.vue'
-export { default as VEmptyState } from './VEmptyState.vue'
-export { default as VToast } from './VToast.vue'
+export { VSkeleton } from '@velo/ui'
+export { VSkeletonPracticeCard } from '@velo/ui'
+export { VSkeletonRow } from '@velo/ui'
+export { VSkeletonBubbles } from '@velo/ui'
+// VLoadingSwap (P8 batch 5): the kit renders its sr-only status pure -- the
+// localized common.loading default is re-anchored here (the VLoader pattern;
+// pinned app-side by VLoadingSwap.localized.test.ts). Slots (skeleton +
+// default) forward untouched.
+const VLoadingSwap: FunctionalComponent<{
+  pending: boolean
+  label?: string
+  animateHeight?: boolean
+  memoryKey?: string
+  revision?: string | number
+}> = (props, { attrs, slots }) =>
+  h(VLoadingSwapKit, { ...attrs, ...props, label: props.label ?? t('common.loading') }, slots)
+export { VLoadingSwap }
+export { VEmptyState } from '@velo/ui'
+export { VToast } from '@velo/ui'
 export { VStatCard } from '@velo/ui'
-export { default as VProgressRow } from './VProgressRow.vue'
+export { VProgressRow } from '@velo/ui'
 export { VMetricHero } from '@velo/ui'
 export { VBarChart } from '@velo/ui'
 export { VRatingBar } from '@velo/ui'
@@ -153,12 +174,18 @@ export { VConfirmDialog }
 export { VTag } from '@velo/ui'
 export { VSegment } from '@velo/ui'
 export { VSegmentTrack } from '@velo/ui'
-export { default as VMenuRow } from './VMenuRow.vue'
+export { VMenuRow } from '@velo/ui'
 export { VChip } from '@velo/ui'
 export { VPaginationDots } from '@velo/ui'
 export { VAccordion } from '@velo/ui'
-export { default as VMenu } from './VMenu.vue'
-export { default as VMenuItem } from './VMenuItem.vue'
+export { VMenu } from '@velo/ui'
+export { VMenuItem } from '@velo/ui'
+
+// The toast seam (FE-141, P8 batch 6): the kit VToast renders whatever the
+// host-provided instance holds; App.vue calls provideToast() (from
+// composables/useToast, which builds on these) once in its setup.
+export { createToastApi, provideToast, TOAST_INJECTION_KEY } from '@velo/ui'
+export type { Toast, ToastApi, ToastVariant } from '@velo/ui'
 
 // FE-143: the kit's shared composable surface travels the same door as the
 // components. The ref-counted body-scroll lock moved into @velo/ui with its

@@ -35,12 +35,14 @@
  */
 export const UI_I18N_KEYS = [
   // -- static keys (8) --
+  'ui.back', // VBackButton (P8)
   'ui.cancel', // VConfirmDialog (batch F, P6)
   'ui.close', // VModal (batch F, P6)
   'ui.collapse', // VAccordion (P3)
   'ui.confirm', // VConfirmDialog (batch F, P6)
   'ui.expand', // VAccordion (P3)
   'ui.menuAria', // VMenu: registry aligned in P3, the component lands in P6
+  'ui.more', // VMoreLink (P8)
   'ui.noData', // VBarChart (P3; aligned from common.noData)
   'ui.weekdays', // VDayPicker (P3)
   // -- day-name families: ui.dayFull.<code> / ui.dayShort.<code>, Mon-first --

@@ -20,12 +20,24 @@
 //
 // The boundary law around those doors:
 //
-//   1. ONLY the three doors -- src/components/ui/index.ts,
-//      src/components/icons/index.ts and
-//      src/composables/useKeyboardFieldScroll.ts -- may import '@velo/ui';
-//      no view, store, or any other source touches the package directly;
+//   1. ONLY the doors -- src/components/ui/index.ts,
+//      src/components/icons/index.ts,
+//      src/composables/useKeyboardFieldScroll.ts and, since P8,
+//      src/components/ui/VTextarea.vue and
+//      src/composables/useLoadingHold.ts -- may import '@velo/ui';
+//      (the useLoadingHold door: the loading rule moved into the kit with
+//      VLoadingSwap; screens keep importing it from the composables door,
+//      the FE-143 shape)
+//      no view, store, or any other source touches the package directly.
+//      The VTextarea door (P8): the voice field is DOMAIN and stays
+//      app-side (tz-ui-package §0, third exception next to VeloLogo /
+//      VRatingBadges), yet it composes the kit's VFieldError; the door is
+//      the exact-barrel import, the same one the kit-resident fields use.
+//      A barrel-door import ('@/components/ui') here would CYCLE: the app
+//      barrel re-exports VTextarea itself. When the voice seam is cut and
+//      VTextarea moves, this door closes;
 //   2. the specifier must be the EXACT barrel '@velo/ui' -- a deep subpath
-//      ('@velo/ui/...') stays banned until P8 reviews the eslint boundary.
+//      ('@velo/ui/...') is banned by the P8 eslint boundary (no-restricted-imports).
 //
 // Scans *.ts and *.vue sources for imports of '@velo/ui' (any subpath).
 // =============================================================================
@@ -43,6 +55,10 @@ const BARREL_PATHS = new Set([
   'components/ui/index.ts',
   'components/icons/index.ts',
   'composables/useKeyboardFieldScroll.ts',
+  // P8: the residual voice field composes the kit's VFieldError (see above).
+  'components/ui/VTextarea.vue',
+  // P8: the loading rule moved into the kit with VLoadingSwap.
+  'composables/useLoadingHold.ts',
 ])
 
 describe('@velo/ui boundary (FE-117/FE-119: the barrels flip, nothing else touches the package)', () => {
