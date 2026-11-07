@@ -45,6 +45,7 @@ export { default as VSkeletonRow } from './components/VSkeletonRow'
 export { default as VStatCard } from './components/VStatCard'
 export { default as VSwitch } from './components/VSwitch'
 export { default as VTag } from './components/VTag'
+export { default as VToast } from './components/VToast'
 export { default as VWheel } from './components/VWheel'
 
 // Icons (FE-119, tz-ui-package.md §4 P4): the 12 cross-cutting glyphs (UI
@@ -77,6 +78,16 @@ export {
   LOADING_MIN_DURATION_MS,
 } from './useLoadingHold'
 export type { DelayedFlagOptions, LoadingHold } from './useLoadingHold'
+// The toast seam (FE-141, P8 batch 6): the state factory + injection key the
+// host wires once; the kit VToast renders whatever that provided instance
+// holds. The host's push-side composable (useToast) stays app-side and
+// builds on these exports.
+export {
+  createToastApi,
+  provideToast,
+  TOAST_INJECTION_KEY,
+} from './toast'
+export type { Toast, ToastApi, ToastVariant } from './toast'
 export type { KeyboardFieldScrollApi, KeyboardFieldScrollFactory } from './keyboardFieldScroll'
 
 // The i18n seam (FE-118, tz-ui-package.md §4 P3): the host injects its

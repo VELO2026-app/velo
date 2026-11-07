@@ -152,7 +152,7 @@ const VLoadingSwap: FunctionalComponent<{
   h(VLoadingSwapKit, { ...attrs, ...props, label: props.label ?? t('common.loading') }, slots)
 export { VLoadingSwap }
 export { VEmptyState } from '@velo/ui'
-export { default as VToast } from './VToast.vue'
+export { VToast } from '@velo/ui'
 export { VStatCard } from '@velo/ui'
 export { VProgressRow } from '@velo/ui'
 export { VMetricHero } from '@velo/ui'
@@ -172,6 +172,12 @@ export { VPaginationDots } from '@velo/ui'
 export { VAccordion } from '@velo/ui'
 export { VMenu } from '@velo/ui'
 export { VMenuItem } from '@velo/ui'
+
+// The toast seam (FE-141, P8 batch 6): the kit VToast renders whatever the
+// host-provided instance holds; App.vue calls provideToast() (from
+// composables/useToast, which builds on these) once in its setup.
+export { createToastApi, provideToast, TOAST_INJECTION_KEY } from '@velo/ui'
+export type { Toast, ToastApi, ToastVariant } from '@velo/ui'
 
 // FE-143: the kit's shared composable surface travels the same door as the
 // components. The ref-counted body-scroll lock moved into @velo/ui with its

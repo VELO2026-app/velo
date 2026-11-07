@@ -20,11 +20,10 @@
 // mocked) so VToast reacts to real state pushes.
 // =============================================================================
 
-import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, afterEach } from 'vitest'
 import { createApp, defineComponent, h, nextTick, type App } from 'vue'
-import VToast from '@/components/ui/VToast.vue'
-import { provideToast, type ToastApi } from '@/composables/useToast'
+import VToast from './VToast.vue'
+import { provideToast, type ToastApi } from '../../toast'
 
 let app: App | null = null
 let host: HTMLElement | null = null
@@ -46,7 +45,7 @@ const ToastHost = defineComponent({
 async function render(): Promise<ToastApi> {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(ToastHost).use(createTestI18n())
+  app = createApp(ToastHost)
   app.mount(host)
   await nextTick()
   return provided!

@@ -80,6 +80,7 @@
 # --- semantic / component tokens (batch A FE-117 + batch B FE-140 + P3 FE-118) ---
 --z-modal
 --z-sticky                  # VMenu trigger stacking (P8 batch 4)
+--z-toast                   # VToast layer (P8 batch 6)
 # --- semantic / component tokens (batch A FE-117 + batch B FE-140 + P6b FE-145) ---
 --velo-bg-card-solid
 --velo-bg-subtle
@@ -180,6 +181,8 @@
 --velo-required-done       # VSelect required-done glyph color
 --velo-size-46             # VSkeletonRow/VSkeletonPracticeCard row height
 --velo-size-56             # VInput affix-icon size (P8 batch 2)
+--velo-shadow-toast         # VToast elevation (P8 batch 6)
+--velo-success              # VToast success fill (P8 batch 6)
 --velo-text-placeholder    # VInput placeholder tint (P8 batch 2)
 ```
 

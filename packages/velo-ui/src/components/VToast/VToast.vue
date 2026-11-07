@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- VToast Component (Phase F2.1)
+  @velo/ui -- VToast Component (Phase F2.1; P8 batch 6 -- the toast seam)
 
   Renders active toasts. Mount once in App.vue.
   Matches mockup .toast styles: fixed bottom, slide up, auto-dismiss.
@@ -25,9 +25,34 @@
 </template>
 
 <script setup lang="ts">
-import { useToast } from '@/composables/useToast'
+import { inject, readonly, ref } from 'vue'
+import { TOAST_INJECTION_KEY, type Toast, type ToastApi } from '../../toast'
 
-const { toasts, dismiss } = useToast()
+// The P5 seam: the host provides the toast state once (provideToast() in
+// its root); this component only renders it. No provider -> an empty
+// overlay surface, with a loud dev warning so a host that forgot the
+// wiring does not silently swallow every toast (the FE-118 discipline).
+const EMPTY_API: ToastApi = {
+  toasts: readonly(ref<Toast[]>([])),
+  success: () => undefined,
+  error: () => undefined,
+  info: () => undefined,
+  dismiss: () => undefined,
+}
+
+const api =
+  inject(TOAST_INJECTION_KEY, null) ??
+  (() => {
+    if (import.meta.env.DEV) {
+      console.warn(
+        '[VToast] no toast provider above this mount -- rendering nothing. ' +
+          'Call provideToast() once in the host root (the FE-141 seam).',
+      )
+    }
+    return EMPTY_API
+  })()
+
+const { toasts, dismiss } = api
 </script>
 
 <style scoped>
