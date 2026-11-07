@@ -283,22 +283,16 @@ jobs:
           done
 
       - name: Run the backend suite (python -m pytest tests/)
+        # Every required key of Settings from backend/ci.env, the one settings
+        # environment of CI (tests/test_primer_env.py); here only what this
+        # place has of its own: the addresses of its services, the storage
+        # secret it minted, the bot's link. PRIMER_* come from the image's ENV.
         run: |
           docker run --rm --network "$NET" \
-            -e SERVER_ROLE=test \
+            --env-file backend/ci.env \
             -e DATABASE_URL="postgresql+asyncpg://velo:${POSTGRES_PASSWORD}@postgres:5432/velo_test" \
             -e REDIS_URL="redis://:${REDIS_PASSWORD}@redis:6379/0" \
-            -e DOMAIN_FRONTEND=app.velo-ci.invalid \
-            -e DOMAIN_API=api.velo-ci.invalid \
-            -e TELEGRAM_BOT_TOKEN=123456:velo-ci-bot-token \
             -e TELEGRAM_BOT_URL=https://telegram.me/velo_ci_bot \
-            -e TELEGRAM_LOGIN_CLIENT_ID=123456 \
-            -e TELEGRAM_LOGIN_CLIENT_SECRET=velo-ci-login-secret \
-            -e ZOOM_ACCOUNT_ID=velo-ci-zoom-account \
-            -e ZOOM_CLIENT_ID=velo-ci-zoom-client \
-            -e ZOOM_CLIENT_SECRET=velo-ci-zoom-secret \
-            -e ZOOM_SDK_CLIENT_ID=velo-ci-zoom-sdk-client \
-            -e ZOOM_SDK_CLIENT_SECRET=velo-ci-zoom-sdk-secret \
             -e STORAGE_SECRET_KEY \
             "$IMAGE" python -m pytest tests/ -v --tb=short
 

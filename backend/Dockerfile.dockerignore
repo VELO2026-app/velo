@@ -27,6 +27,10 @@
 # BE-192: the test stage needs them (tests/test_primer_env.py); no values.
 !primer.yaml
 !docker-compose.yml
+# BE-190 fix: the test stage needs them too (tests/test_primer_env.py).
+!backend/ci.env
+!.github/workflows/ci.yml
+!.github/workflows/backend-tests.yml
 !comms-profile/
 
 # Inside the allowed directories: local leftovers, never part of a build.

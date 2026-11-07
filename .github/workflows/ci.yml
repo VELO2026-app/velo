@@ -89,23 +89,18 @@ jobs:
 
       - name: Regenerate generated.ts from the app's OpenAPI schema
         working-directory: backend
-        # app.main builds Settings at import: every required key (BE-192),
-        # invented -- the schema reads none of them.
+        # app.main builds Settings at import: every required key, invented --
+        # the schema reads none of them -- from backend/ci.env, the one
+        # settings environment of CI (tests/test_primer_env.py). Here only
+        # what this place adds: its database address and the build identity
+        # the image's ENV carries elsewhere (/health, the log formatter).
         env:
-          SERVER_ROLE: test
           DATABASE_URL: postgresql+asyncpg://velo:velo@localhost:5432/velo
-          DOMAIN_FRONTEND: app.velo-ci.invalid
-          DOMAIN_API: api.velo-ci.invalid
-          TELEGRAM_BOT_TOKEN: 123456:velo-ci-bot-token
-          TELEGRAM_LOGIN_CLIENT_ID: '123456'
-          TELEGRAM_LOGIN_CLIENT_SECRET: velo-ci-login-secret
-          ZOOM_ACCOUNT_ID: velo-ci-zoom-account
-          ZOOM_CLIENT_ID: velo-ci-zoom-client
-          ZOOM_CLIENT_SECRET: velo-ci-zoom-secret
-          ZOOM_SDK_CLIENT_ID: velo-ci-zoom-sdk-client
-          ZOOM_SDK_CLIENT_SECRET: velo-ci-zoom-sdk-secret
+          PRIMER_RELEASE: ci
+          PRIMER_COMMIT: ${{ github.sha }}
           PYTHONPATH: ${{ github.workspace }}/backend
         run: |
+          set -a; . ./ci.env; set +a
           python -c "import json; from app.main import app; json.dump(app.openapi(), open('openapi.json', 'w'))"
           python scripts/generate_ts_types.py openapi.json ../frontend/src/api/generated.ts
 
