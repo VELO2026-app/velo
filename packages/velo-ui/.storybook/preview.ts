@@ -5,14 +5,25 @@
 // theme values (принцип 2: токены не уезжают), so the showcase imports the
 // GOLDEN variables.css from the application by a pinned relative path --
 // exactly what the app's cascade hands the package in a golden build
-// (variables.css -> @velo/ui css -> skin-tokens.css). A skinned showcase,
-// if ever wanted, is a storybook build-time concern, never a package one.
+// (variables.css -> @velo/ui css -> skin-tokens.css). A skinned showcase
+// stays a storybook build-time concern, never a package one -- §3.7 made
+// it a MANDATED one: the skin switcher below is that build-time concern.
 //
 // FE-118 (tz-ui-package.md §4 P3): the витрина is an i18n HOST too -- it
 // injects a demo translator with the golden ru values of the kit registry
 // (UI_I18N_KEYS), the same wiring app.ts does with the real composer. A
 // registry key missing from the demo map renders its raw key in the story,
 // which keeps the map and the registry from drifting apart.
+//
+// SKIN MODE (tz-ui-package.md §3.7, шаг 1 витрины): a toolbar "Skin" select
+// injects an etalon skin's tokens.css as ONE override layer appended after
+// the golden base -- the same cascade shape the app builds in main.ts
+// (variables.css -> kit css -> skin-tokens.css). The kit components consume
+// var(--velo-*) only, so the switch repaints every story with no component
+// change: значения = данные. Golden removes the layer entirely (the base IS
+// golden). The skin files are read as ?raw build-time inputs from the app's
+// skins/ directory -- showcase tooling, not package code (the boundary law
+// governs src/**, and nothing here ships in the package).
 // =============================================================================
 
 import type { Preview } from '@storybook/vue3-vite'
@@ -20,6 +31,8 @@ import type { Preview } from '@storybook/vue3-vite'
 import { configureUi } from '../src/i18n'
 
 import '../../../frontend/src/styles/variables.css'
+import testContrastCss from '../../../frontend/skins/test-contrast/tokens.css?raw'
+import nightfallCss from '../../../frontend/skins/nightfall/tokens.css?raw'
 
 // Golden ru values of the kit registry (UI_I18N_KEYS), spelled out so the
 // витрина needs no app import for the demo dictionary.
@@ -50,6 +63,35 @@ const DEMO_MESSAGES: Record<string, string> = {
 
 configureUi({ t: (key) => DEMO_MESSAGES[key] ?? key })
 
+// --- the skin layer (§3.7) ---------------------------------------------------
+
+/** The etalon skins, keyed by the toolbar value. A partner skin joins by
+ *  dropping its tokens.css into this table -- one entry, nothing else. */
+const SKIN_LAYERS: Record<string, string> = {
+  'test-contrast': testContrastCss,
+  nightfall: nightfallCss,
+}
+
+const SKIN_LAYER_ID = 'velo-skin-layer'
+
+function applySkinLayer(selection: string): void {
+  let layer = document.getElementById(SKIN_LAYER_ID)
+  const css = SKIN_LAYERS[selection]
+  if (css === undefined) {
+    // Golden (the default): the base layer IS golden -- remove the override.
+    layer?.remove()
+    return
+  }
+  if (layer === null) {
+    layer = document.createElement('style')
+    layer.id = SKIN_LAYER_ID
+    // Appended LAST: the override must win the cascade over the golden base
+    // and the kit's own css, the way main.ts orders skin-tokens.css.
+    document.head.appendChild(layer)
+  }
+  if (layer.textContent !== css) layer.textContent = css
+}
+
 const preview: Preview = {
   parameters: {
     controls: {
@@ -59,6 +101,29 @@ const preview: Preview = {
       },
     },
   },
+  globalTypes: {
+    veloSkin: {
+      name: 'Skin',
+      description: 'The token layer over the golden base (§3.7 skin mode)',
+      defaultValue: 'golden',
+      toolbar: {
+        icon: 'paintbrush',
+        items: [
+          { value: 'golden', title: 'Golden (variables.css)' },
+          { value: 'test-contrast', title: 'Test contrast (fixture)' },
+          { value: 'nightfall', title: 'Nightfall' },
+        ],
+      },
+    },
+  },
+  decorators: [
+    // context.globals rides every re-render: a toolbar switch re-decorates
+    // all stories at once -- no per-story wiring anywhere.
+    (Story, context) => {
+      applySkinLayer(context.globals.veloSkin as string)
+      return Story()
+    },
+  ],
 }
 
 export default preview
