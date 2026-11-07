@@ -66,8 +66,7 @@
       "moodEmpty": "Поки немає позначок",
       "moodOf": "{n} з {total}",
       "masterFallback": "Майстер",
-      "temporarilyHidden": "Тимчасово недоступний",
-      "menuAria": "Меню"
+      "temporarilyHidden": "Тимчасово недоступний"
     }
   }
 }

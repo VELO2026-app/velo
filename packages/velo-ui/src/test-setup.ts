@@ -16,12 +16,12 @@
 //    never computed styles.
 //
 // Package-wide test plumbing lands together with the seams that need it:
-// P3 injects the i18n translator here (configureUi({ t })); P5 wires the
-// toast provider. The package has owned ONE piece of module state since
-// FE-143 -- the body-scroll lock's reference count (src/useBodyScrollLock).
-// No reset hook for it: that suite pairs every lock/unlock so the count
-// returns to zero on its own (order-independent), the same discipline the
-// file carried in the application.
+// P3 (FE-118) landed the i18n seam, but NO global injection happens here --
+// each component test file calls configureUi with its own dictionary at
+// the top of the file, which vitest's per-file module isolation makes
+// deterministic (a fresh seam per file, the pre-configure behaviour even
+// stays testable, see src/i18n.test.ts). P5 will wire the toast provider.
+// The setup itself stays stateless on purpose.
 // =============================================================================
 
 export {}

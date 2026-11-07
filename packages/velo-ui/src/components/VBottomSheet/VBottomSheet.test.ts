@@ -1,11 +1,15 @@
 // =============================================================================
-// VELO Frontend -- VBottomSheet Unit Tests (FE-142: written BEFORE the move)
+// @velo/ui -- VBottomSheet Unit Tests (FE-142 pinned the contract app-side
+// BEFORE the move; FE-145 P6b carried the file into the kit with it)
 // =============================================================================
 //
-// P6a safety net: VBottomSheet moves to @velo/ui in FE-121 (P6), and until
-// now it had no tests. These pin the CURRENT component's contract as-is.
-// Zero component edits: anything that could only pass after an edit is a
-// component finding for the FE-142 report, not a fix in here.
+// P6a safety net: these were written app-side when VBottomSheet had no
+// tests -- moving untested code is forbidden -- pinning the
+// then-current contract as-is. FE-145 (the move this file travels with)
+// changes exactly ONE thing DELIBERATELY, a §7.2 seam re-pinned below:
+// caller attrs now MERGE onto the teleported overlay (inheritAttrs:false +
+// explicit v-bind, the attrs-root flip). The component had no i18n to cut
+// -- every label it renders is caller copy.
 //
 // What is pinned (markup + events ONLY -- happy-dom, tz-ui-package §4 P6:
 // no var() token assertions, no computed-style/DOM-scroll assertions):
@@ -15,11 +19,10 @@
 //   - the close triggers: a scrim tap (the .self guard), Escape (a DOCUMENT
 //     keydown -- no focus trap in this component; see the FE-142 report),
 //     the cancel button, and the swipe-to-close drag from the grab zone;
-//   - the body-scroll lock seam: the lock module is MOCKED (per FE-142) --
-//     the lock/unlock CALLS are asserted, never the DOM. FE-143 moved the
-//     module into @velo/ui (the component now reads it through the app's
-//     ui barrel), so the mock targets the kit module and the spies travel
-//     the same barrel the component does.
+//   - the body-scroll lock seam: the lock module is MOCKED -- the
+//     lock/unlock CALLS are asserted, never the DOM. The component imports
+//     the module by its relative id, the mock targets the SAME id, so this
+//     file and the component share one mocked pair.
 //
 // SC-07/SC-13b (SendMessageModal.test.ts): the sheet teleports to body, so
 // every query goes to document.body; a closed sheet PARKS at
@@ -32,21 +35,18 @@
 // happy-dom no-op-level builtin and does not stand in the way.
 // =============================================================================
 
-import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { createApp, nextTick, ref, h, type App, type Ref, type VNode } from 'vue'
-import VBottomSheet from '@/components/ui/VBottomSheet.vue'
-import { lockBodyScroll, unlockBodyScroll } from '@/components/ui'
+import VBottomSheet from './VBottomSheet.vue'
+import { lockBodyScroll, unlockBodyScroll } from '../../useBodyScrollLock'
 
 // FE-142: assert the lock CALLS, never body.overflow -- the ref-counted
 // composable itself has its own unit tests (useBodyScrollLock.test.ts,
-// living in @velo/ui since FE-143). FE-143 moved the module into the kit
-// and the component onto the app barrel, so the mock overrides the kit
-// module itself (spread + override: everything else stays real) -- the
-// barrel's re-export then hands this file and the component the SAME
-// mocked pair.
-vi.mock('@velo/ui', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@velo/ui')>()),
+// a kit resident since FE-143). The mock overrides this exact module
+// (spread + override: everything else stays real) and the component reads
+// the same id, so the mocked pair is shared.
+vi.mock('../../useBodyScrollLock', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../useBodyScrollLock')>()),
   lockBodyScroll: vi.fn(),
   unlockBodyScroll: vi.fn(),
 }))
@@ -94,7 +94,7 @@ function mountSheet(opts: MountOpts = {}): void {
         },
         { default: opts.slot ?? (() => h('p', 'Тело шторки')) },
       ),
-  }).use(createTestI18n())
+  })
   app.mount(host)
 }
 
@@ -218,6 +218,10 @@ describe('VBottomSheet (markup)', () => {
     await flush()
     expect(titleEl()?.classList.contains('v-sheet__title--compact')).toBe(true)
     expect(titleEl()?.classList.contains('v-sheet__title--strong')).toBe(true)
+    // The §7.2 additive variant hooks mirror the modifiers; the default
+    // h2 above carried neither attribute (undefined attrs are omitted).
+    expect(titleEl()?.getAttribute('data-velo-compact')).toBe('true')
+    expect(titleEl()?.getAttribute('data-velo-strong')).toBe('true')
   })
 })
 
@@ -246,6 +250,8 @@ describe('VBottomSheet (footers)', () => {
 
     const save = buttonWith('Отправить')!
     expect(save.disabled).toBe(true)
+    // The §7.2 additive state hook rides alongside the disabled attribute.
+    expect(save.getAttribute('data-velo-disabled')).toBe('true')
 
     save.click()
     await flush()
@@ -300,6 +306,9 @@ describe('VBottomSheet (footers)', () => {
     // var() tokens and are NOT asserted here (tz-ui-package §4 P6).
     expect(buttonWith('Отмена')!.classList.contains('v-sheet__cancel--danger')).toBe(true)
     expect(buttonWith('Добавить')!.classList.contains('v-sheet__save--primary')).toBe(true)
+    // The §7.2 additive variant hooks mirror the BEM modifiers.
+    expect(buttonWith('Отмена')!.getAttribute('data-velo-variant')).toBe('danger')
+    expect(buttonWith('Добавить')!.getAttribute('data-velo-variant')).toBe('primary')
   })
 })
 
@@ -475,17 +484,20 @@ describe('VBottomSheet (body scroll lock -- useBodyScrollLock mocked, calls only
   })
 })
 
-describe('VBottomSheet (attrs root -- §7.2 status quo, Teleport root)', () => {
-  it("a caller class neither crashes nor reaches the panel (the gap this component's own header documents)", async () => {
-    // The component header records it hitting the Vue warning "the hard
-    // way": attrs fallthrough onto a Teleported root is a no-op, which is
-    // why titleStrong had to become a prop. The §7.2 attrs-root convention
-    // is therefore NOT satisfied today -- a finding for the FE-121 move.
+describe('VBottomSheet (attrs root -- the §7.2 flip this move makes)', () => {
+  it('a caller class lands on the teleported OVERLAY root (inheritAttrs:false + explicit merge)', async () => {
+    // The FE-142 baseline pinned the OPPOSITE: the component header's own
+    // «the hard way» story -- attrs fallthrough onto a Teleported root was
+    // a silent no-op, which is why titleStrong had to become a prop. The
+    // FE-145 move flips it deliberately (inheritAttrs:false + v-bind="attrs"
+    // on the overlay), so a caller class finally reaches the sheet.
     mountSheet({ open: true, props: { class: 'caller-class' } })
     await flush()
 
     expect(liveSheet()).not.toBeNull()
-    expect(liveSheet()?.classList.contains('caller-class')).toBe(false)
+    expect(liveSheet()?.classList.contains('caller-class')).toBe(true)
+    // The merge is additive on the ROOT only -- the panel inside stays
+    // untouched.
     expect(panel()?.classList.contains('caller-class')).toBe(false)
   })
 })

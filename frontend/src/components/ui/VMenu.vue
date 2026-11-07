@@ -56,7 +56,7 @@ withDefaults(
     /** Accessible label for the kebab trigger. */
     ariaLabel?: string
   }>(),
-  { ariaLabel: t('shared.components.menuAria') },
+  { ariaLabel: t('ui.menuAria') },
 )
 
 const open = ref(false)
