@@ -11,13 +11,16 @@ export { default as VAccordion } from './components/VAccordion'
 export { default as VAvatar } from './components/VAvatar'
 export { default as VBadge } from './components/VBadge'
 export { default as VBarChart } from './components/VBarChart'
+export { default as VBottomSheet } from './components/VBottomSheet'
 export { default as VButton } from './components/VButton'
 export { default as VCard } from './components/VCard'
 export { default as VChip } from './components/VChip'
+export { default as VConfirmDialog } from './components/VConfirmDialog'
 export { default as VDayPicker } from './components/VDayPicker'
 export { default as VListRow } from './components/VListRow'
 export { default as VLoader } from './components/VLoader'
 export { default as VMetricHero } from './components/VMetricHero'
+export { default as VModal } from './components/VModal'
 export { default as VPaginationDots } from './components/VPaginationDots'
 export { default as VRatingBar } from './components/VRatingBar'
 export { default as VSegment } from './components/VSegment'
@@ -37,13 +40,14 @@ export * from './icons'
 
 // Seams & shared composables (FE-143, tz-ui-package.md §4 P5 -- the P6
 // prerequisites): the ref-counted body-scroll lock moved from the app
-// (VModal/VBottomSheet import it from here; its document writes go through
-// the kit's own document seam, src/platform/dom.ts, which stays
-// package-internal until a kit resident needs it), and the keyboard
-// field-scroll INVERSION -- the injection key the host provides at its
-// root (the app: provideKeyboardFieldScroll() in App.vue) plus the
-// consumer door with a no-op default. Kit fields (VInput/VTextarea, P6)
-// and host views resolve the same key.
+// (the FE-145 overlays VModal/VBottomSheet import it straight from here
+// now that they are kit residents; its document writes go through the
+// kit's own document seam, src/platform/dom.ts, which stays
+// package-internal), and the keyboard field-scroll INVERSION -- the
+// injection key the host provides at its root (the app:
+// provideKeyboardFieldScroll() in App.vue) plus the consumer door with a
+// no-op default. Kit fields (VInput/VTextarea, P6) and host views resolve
+// the same key.
 export { lockBodyScroll, unlockBodyScroll, SCROLL_LOCK_CLASS } from './useBodyScrollLock'
 export { KEYBOARD_FIELD_SCROLL_INJECTION_KEY, useKeyboardFieldScroll } from './keyboardFieldScroll'
 export type { KeyboardFieldScrollApi, KeyboardFieldScrollFactory } from './keyboardFieldScroll'

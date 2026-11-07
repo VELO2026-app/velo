@@ -1,5 +1,6 @@
 <!--
-  VELO Frontend -- VModal Component (Phase F4.1)
+  @velo/ui -- VModal Component (Phase F4.1; migrated FE-145 P6b -- the
+  modal family batch: VModal, VBottomSheet, VConfirmDialog)
 
   Reusable modal dialog with overlay, close on Escape/overlay click,
   enter/leave transitions. Content via default slot.
@@ -9,11 +10,22 @@
   sheets that dock to the bottom remain VBottomSheet's job -- the two
   components split the DS: VModal = dialog, VBottomSheet = sheet.
 
-  Used by: BookingPopup, CancelBookingPopup, VConfirmDialog, SendMessageModal,
-  the FE-87 role popup, and the filter modals.
+  §7.2 seams cut by the move (the FE-142 baseline was pinned app-side
+  first -- «переносить нетестированное запрещено»):
+  - attrs-root: inheritAttrs:false + an explicit v-bind merge onto the
+    teleported OVERLAY root. Before the move Vue silently dropped caller
+    attrs on a Teleport root (the «the hard way» warning in VBottomSheet's
+    header); now a caller class/data-* lands on the overlay deliberately.
+  - i18n: the kit is pure -- the × button's aria-label arrives through the
+    `closeLabel` prop and the application barrel re-anchors the localized
+    t('ui.close') default until P3 (the VLoader pattern, pinned app-side
+    by VModal.localized.test.ts).
+  - document access lives behind the kit's own seam (src/platform/dom.ts)
+    for the document-level Escape keydown, and the ref-counted body-scroll
+    lock is the kit's own (src/useBodyScrollLock.ts) -- both landed in P5.
 
   Usage:
-    <VModal :open="showModal" @close="showModal = false">
+    <VModal :open="showModal" close-label="Close" @close="showModal = false">
       <h2>Title</h2>
       <p>Content</p>
     </VModal>
@@ -29,12 +41,15 @@
       <div v-if="open" class="v-modal__scrim" aria-hidden="true" />
     </Transition>
     <Transition name="v-modal">
-      <div v-if="open" class="v-modal__overlay" @click.self="onOverlayClick">
+      <!-- §7.2 attrs-root: caller attrs merge HERE, onto the teleported
+           overlay -- inheritAttrs is false above, so nothing rides Vue's
+           (Teleport-blind) fallthrough. -->
+      <div v-if="open" class="v-modal__overlay" v-bind="attrs" @click.self="onOverlayClick">
         <div class="v-modal__container" role="dialog" aria-modal="true">
           <button
             v-if="showClose"
             class="v-modal__close"
-            :aria-label="t('ui.close')"
+            :aria-label="closeLabel"
             @click="$emit('close')"
           >
             <IconClose :size="16" />
@@ -49,17 +64,24 @@
 </template>
 
 <script setup lang="ts">
-import { t } from '@/locales'
-import { onDocumentEvent, offDocumentEvent } from '@/platform/dom'
-import { onMounted, onUnmounted, watch, onDeactivated } from 'vue'
-import { IconClose } from '@/components/icons'
-import { lockBodyScroll, unlockBodyScroll } from '@/components/ui'
+import { onDocumentEvent, offDocumentEvent } from '../../platform/dom'
+import { onMounted, onUnmounted, watch, onDeactivated, useAttrs } from 'vue'
+import { lockBodyScroll, unlockBodyScroll } from '../../useBodyScrollLock'
+import { IconClose } from '../../icons'
+
+defineOptions({ inheritAttrs: false })
+const attrs = useAttrs()
 
 const props = withDefaults(
   defineProps<{
     open: boolean
     closeOnOverlay?: boolean
     showClose?: boolean
+    /** The × button's aria-label. The kit's i18n seam (§7.2): undefined by
+     *  default -- the app barrel anchors the localized t('ui.close') until
+     *  P3 gives the kit its own i18n story, so the attribute is simply
+     *  omitted for a pure kit consumer that passes none. */
+    closeLabel?: string
   }>(),
   {
     closeOnOverlay: true,

@@ -1,12 +1,16 @@
 // =============================================================================
-// VELO Frontend -- VModal Unit Tests (FE-142: written BEFORE the @velo/ui move)
+// @velo/ui -- VModal Unit Tests (FE-142 pinned the contract app-side BEFORE
+// the move; FE-145 P6b carried the file into the kit with it)
 // =============================================================================
 //
-// P6a safety net: VModal moves to @velo/ui in FE-121 (P6), and until now it
-// had no tests -- "moving untested code is forbidden". These pin the
-// CURRENT component's contract as-is. Zero component edits: anything that
-// could only pass after an edit is a component finding for the FE-142 report,
-// not a fix in here.
+// P6a safety net: these were written app-side when VModal had no tests --
+// «переносить нетестированное запрещено» -- pinning the then-current
+// contract as-is. FE-145 (the move this file travels with) changes exactly
+// two things DELIBERATELY, both §7.2 seams, both re-pinned below: the ×
+// button's aria-label is now the pure `closeLabel` prop (the localized
+// default moved to the application barrel wrapper -- pinned app-side by
+// VModal.localized.test.ts), and caller attrs now MERGE onto the teleported
+// overlay (inheritAttrs:false + explicit v-bind, the attrs-root flip).
 //
 // What is pinned (markup + events ONLY -- happy-dom, tz-ui-package §4 P6:
 // no var() token assertions, no computed-style/DOM-scroll assertions):
@@ -17,11 +21,10 @@
 //   - the close triggers: the × button, an overlay tap (the .self guard),
 //     Escape -- a DOCUMENT keydown, so it fires with focus anywhere; there is
 //     NO focus trap in this component (see the FE-142 report);
-//   - the body-scroll lock seam: the lock module is MOCKED (per FE-142) --
-//     the lock/unlock CALLS are asserted, never the DOM. FE-143 moved the
-//     module into @velo/ui (the component now reads it through the app's
-//     ui barrel), so the mock targets the kit module and the spies travel
-//     the same barrel the component does.
+//   - the body-scroll lock seam: the lock module is MOCKED -- the
+//     lock/unlock CALLS are asserted, never the DOM. The component imports
+//     the module by its relative id, the mock targets the SAME id, so this
+//     file and the component share one mocked pair.
 //
 // SC-07/SC-13b (SendMessageModal.test.ts): content teleports to body, so
 // every query goes to document.body, never to the mount host. A closed modal
@@ -30,26 +33,23 @@
 // query excludes corpses parked by earlier closes.
 //
 // Dependency-free SFC mount (createApp + happy-dom), per velo-idiom §1
-// (matches VInput.test.ts / DatePickerSheet.test.ts -- no @vue/test-utils).
-// The parent here is a MINIMAL harness holding the open ref, so toggling
-// exercises exactly the component boundary, independent of any real screen.
+// (no @vue/test-utils). The parent here is a MINIMAL harness holding the
+// open ref, so toggling exercises exactly the component boundary,
+// independent of any real screen.
 // =============================================================================
 
-import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { createApp, nextTick, ref, h, type App, type Ref, type VNode } from 'vue'
-import VModal from '@/components/ui/VModal.vue'
-import { lockBodyScroll, unlockBodyScroll } from '@/components/ui'
+import VModal from './VModal.vue'
+import { lockBodyScroll, unlockBodyScroll } from '../../useBodyScrollLock'
 
 // FE-142: assert the lock CALLS, never body.overflow -- the ref-counted
 // composable itself has its own unit tests (useBodyScrollLock.test.ts,
-// living in @velo/ui since FE-143). FE-143 moved the module into the kit
-// and the component onto the app barrel, so the mock overrides the kit
-// module itself (spread + override: everything else stays real) -- the
-// barrel's re-export then hands this file and the component the SAME
-// mocked pair.
-vi.mock('@velo/ui', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@velo/ui')>()),
+// a kit resident since FE-143). The mock overrides this exact module
+// (spread + override: everything else stays real) and the component reads
+// the same id, so the mocked pair is shared.
+vi.mock('../../useBodyScrollLock', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../useBodyScrollLock')>()),
   lockBodyScroll: vi.fn(),
   unlockBodyScroll: vi.fn(),
 }))
@@ -95,7 +95,7 @@ function mountApp(opts: MountOpts = {}): void {
         },
         { default: opts.slot ?? (() => h('p', 'Диалоговое тело')) },
       ),
-  }).use(createTestI18n())
+  })
   app.mount(host)
 }
 
@@ -186,8 +186,8 @@ describe('VModal (markup)', () => {
 })
 
 describe('VModal (close events)', () => {
-  it('the × button emits close exactly once (aria-labelled for screen readers)', async () => {
-    mountApp({ open: true })
+  it('the × button emits close exactly once (aria-labelled via the pure closeLabel prop)', async () => {
+    mountApp({ open: true, props: { closeLabel: 'Закрыть' } })
     await flush()
 
     expect(closeButton()?.getAttribute('aria-label')).toBe('Закрыть')
@@ -195,6 +195,17 @@ describe('VModal (close events)', () => {
     await flush()
 
     expect(closed).toHaveBeenCalledTimes(1)
+  })
+
+  it("the i18n seam: with NO closeLabel the × button carries no aria-label (the label is the host barrel's job)", async () => {
+    // §7.2, the VLoader pattern: the kit component is pure -- the localized
+    // default (t('ui.close')) is anchored by the APPLICATION barrel wrapper
+    // until P3, pinned app-side by VModal.localized.test.ts. Here: nothing
+    // passed -> nothing rendered.
+    mountApp({ open: true })
+    await flush()
+
+    expect(closeButton()?.hasAttribute('aria-label')).toBe(false)
   })
 
   it('a tap on the overlay itself (the scrim area around the card) emits close', async () => {
@@ -337,18 +348,27 @@ describe('VModal (body scroll lock -- useBodyScrollLock mocked, calls only)', ()
   })
 })
 
-describe('VModal (attrs root -- §7.2 status quo, Teleport root)', () => {
-  it('a caller class neither crashes nor reaches the teleported dialog (no inheritAttrs merge today)', async () => {
-    // VModal's root is a Teleport: Vue does not forward caller attrs onto a
-    // teleported root (the dev warning VBottomSheet's header documents hitting
-    // "the hard way"). The §7.2 attrs-root convention (inheritAttrs:false +
-    // explicit merge) is therefore NOT satisfied yet -- a finding for the
-    // FE-121 move. Pinned so the move has a baseline to change deliberately.
+describe('VModal (attrs root -- the §7.2 flip this move makes)', () => {
+  it('a caller class lands on the teleported OVERLAY root (inheritAttrs:false + explicit merge)', async () => {
+    // The FE-142 baseline pinned the OPPOSITE: a Teleport root silently
+    // dropped caller attrs (the dev warning VBottomSheet's header documents
+    // hitting «the hard way»). The FE-145 move flips it deliberately --
+    // inheritAttrs:false + v-bind="attrs" on the overlay -- so a caller
+    // class/data-* finally reaches the dialog, and no Vue warning fires.
     mountApp({ open: true, props: { class: 'caller-class' } })
     await flush()
 
     expect(liveModal()).not.toBeNull()
-    expect(liveModal()?.classList.contains('caller-class')).toBe(false)
+    expect(liveModal()?.classList.contains('caller-class')).toBe(true)
+    // The merge is additive on the ROOT only -- the container inside stays
+    // untouched.
     expect(liveContainer()?.classList.contains('caller-class')).toBe(false)
+  })
+
+  it('a caller data-velo-* attribute rides the same merge (kit-wide variant hooks)', async () => {
+    mountApp({ open: true, props: { 'data-velo-surface': 'caller' } })
+    await flush()
+
+    expect(liveModal()?.getAttribute('data-velo-surface')).toBe('caller')
   })
 })

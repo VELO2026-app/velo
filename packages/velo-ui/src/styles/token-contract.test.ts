@@ -71,18 +71,20 @@ const DECLARED = /(--[a-zA-Z0-9-]+)\s*:/g
 const PRIMITIVE_RAMP = /^--velo-(teal|peach|pink|blue|sand)-\d+$/
 
 /** Ramp/white tokens carried VERBATIM by components that migrated as-is
- * (FE-117 batch A + FE-140 tail-of-A/batch B + FE-119 P4 icons + FE-118 P3,
- * tz-ui-package.md §3.3/§4 P2/P3: styles travel unchanged, and these usages
- * pre-date the semantic layer -- several variants have no semantic role to
- * this day; FE-119 added no entry, IconRequiredDone's --velo-white check
- * stroke rides the existing one). Semanticizing them means NEW host tokens,
- * which is a token-owner ruling (the PROMPT №437 line), not a migration
- * edit. The list is exact and closed: every token NOT on it still fails the
- * tier rule, and entries leave this set only in the PR that retires the
- * usage. */
+ * (FE-117 batch A + FE-140 tail-of-A/batch B + FE-119 P4 icons + FE-118 P3 +
+ * FE-145 P6b the modal family, tz-ui-package.md §3.3/§4: styles travel
+ * unchanged, and these usages pre-date the semantic layer -- several
+ * variants have no semantic role to this day; FE-119 added no entry,
+ * IconRequiredDone's --velo-white check stroke rides the existing one;
+ * FE-145 added --velo-peach-500, VConfirmDialog's warning-panel text/icon,
+ * the same as-is ruling). Semanticizing them means NEW host tokens, which
+ * is a token-owner ruling (the PROMPT №437 line), not a migration edit.
+ * The list is exact and closed: every token NOT on it still fails the tier
+ * rule, and entries leave this set only in the PR that retires the usage. */
 const LEGACY_MIGRATED_RAMP = new Set([
   '--velo-blue-100',
   '--velo-blue-300',
+  '--velo-peach-500',
   '--velo-peach-700',
   '--velo-pink-100',
   '--velo-pink-300',

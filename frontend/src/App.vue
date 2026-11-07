@@ -91,6 +91,7 @@ import { useViewportGeometry } from '@/composables/useViewportGeometry'
 import { useKeyboardDismiss } from '@/composables/useKeyboardDismiss'
 import { provideKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import { startRoleFreshnessPoll } from '@/composables/useRoleFreshness'
+import { provideToast } from '@/composables/useToast'
 import { VToast } from '@/components/ui'
 import AppFrame from '@/components/layout/AppFrame.vue'
 import LoadingView from '@/views/auth/LoadingView.vue'
@@ -158,6 +159,11 @@ useKeyboardDismiss()
 // the P6 move) resolves to it through @velo/ui; without a provider the kit
 // seam is a silent no-op, so this line is what keeps the feature alive.
 provideKeyboardFieldScroll()
+
+// FE-141: the ONE toast provider -- VToast and every useToast() caller in
+// the tree below inject this instance instead of reaching for the module
+// singleton (the seam VToast needs before it can move to @velo/ui, P6c).
+provideToast()
 
 /**
  * Entry stage after a successful auth. Null until initAuth() resolves and

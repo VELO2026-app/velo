@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- VToast Component Tests (PROMPT №500)
+// VELO Frontend -- VToast Component Tests (PROMPT №500; FE-141 inject state)
 // =============================================================================
 //
 // VToast is mounted exactly once (App.vue) and is the ONLY rendering surface
@@ -8,27 +8,48 @@
 // actually renders for the error variant (the surface a tester stares at)
 // had never been asserted.
 //
+// FE-141: toasts now reach VToast through provide/inject, not the module
+// singleton. VToast has no props/emits, so every mount is wrapped in a host
+// component that calls provideToast() exactly like App.vue does, and the
+// tests drive that provided instance. Its state is fresh per mount and
+// fully isolated from the singleton fallback, so rendering anything at all
+// proves VToast reads the injection.
+//
 // Dependency-free SFC mount (createApp + happy-dom), per velo-idiom §1, same
-// pattern as VEmptyState.test.ts. Drives the REAL useToast() singleton (not
+// pattern as VEmptyState.test.ts. Drives the REAL composable state (not
 // mocked) so VToast reacts to real state pushes.
 // =============================================================================
 
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, afterEach } from 'vitest'
-import { createApp, nextTick, type App } from 'vue'
+import { createApp, defineComponent, h, nextTick, type App } from 'vue'
 import VToast from '@/components/ui/VToast.vue'
-import { useToast } from '@/composables/useToast'
+import { provideToast, type ToastApi } from '@/composables/useToast'
 
 let app: App | null = null
 let host: HTMLElement | null = null
+let provided: ToastApi | null = null
 
-async function render(): Promise<HTMLElement> {
+/**
+ * Mount wrapper: the FE-141 host shape. VToast reads toasts via inject, so
+ * the provider must sit above it -- provideToast() in a parent setup, the
+ * same call App.vue makes. The provided instance is captured for the tests
+ * to push through (the only path VToast listens to).
+ */
+const ToastHost = defineComponent({
+  setup() {
+    provided = provideToast()
+    return () => h(VToast)
+  },
+})
+
+async function render(): Promise<ToastApi> {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(VToast).use(createTestI18n())
+  app = createApp(ToastHost).use(createTestI18n())
   app.mount(host)
   await nextTick()
-  return document.body
+  return provided!
 }
 
 function toastEls(): Element[] {
@@ -36,12 +57,11 @@ function toastEls(): Element[] {
 }
 
 afterEach(() => {
-  const { toasts, dismiss } = useToast()
-  for (const t of [...toasts.value]) dismiss(t.id)
   app?.unmount()
   host?.remove()
   app = null
   host = null
+  provided = null
 })
 
 describe('VToast', () => {
@@ -51,9 +71,9 @@ describe('VToast', () => {
   })
 
   it('renders an error toast with the error variant class and the message text', async () => {
-    const toast = useToast()
+    const toast = await render()
     toast.error('Недостаточно средств · код 238d15')
-    await render()
+    await nextTick()
 
     const els = toastEls()
     expect(els.length).toBe(1)
@@ -64,10 +84,10 @@ describe('VToast', () => {
   })
 
   it('renders the success and info variants with their own classes', async () => {
-    const toast = useToast()
+    const toast = await render()
     toast.success('Сохранено')
     toast.info('Обновлено')
-    await render()
+    await nextTick()
 
     const els = toastEls()
     expect(els.length).toBe(2)
@@ -76,11 +96,11 @@ describe('VToast', () => {
   })
 
   it('renders multiple active toasts at once, in push order', async () => {
-    const toast = useToast()
+    const toast = await render()
     toast.error('first')
     toast.error('second')
     toast.error('third')
-    await render()
+    await nextTick()
 
     const messages = toastEls().map((el) => el.querySelector('.v-toast__message')?.textContent)
     expect(messages).toEqual(['first', 'second', 'third'])
@@ -95,10 +115,10 @@ describe('VToast', () => {
     // test exists to prove -- verified directly (see commit report) that the
     // lingering DOM node carries `v-toast-leave-active` while the state has
     // already dropped to one entry.
-    const toast = useToast()
+    const toast = await render()
     toast.error('click-me')
     toast.error('stays')
-    await render()
+    await nextTick()
 
     const els = toastEls()
     expect(els.length).toBe(2)
