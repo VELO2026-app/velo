@@ -23,17 +23,16 @@
 // Dependency-free SFC mount (createApp + happy-dom), per velo-idiom §1.
 // =============================================================================
 
-import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { createApp, nextTick, ref, h, type App, type Ref } from 'vue'
-import VInput from '@/components/ui/VInput.vue'
+import VInput from './VInput.vue'
 
 // FE-144 (P6a-2, pre-@velo/ui-move): the keyboard focus-scroll seam is
 // MOCKED per the ticket -- only its WIRING (onFieldFocus bound as @focus on
 // each render path) is asserted in the FE-144 section at the bottom, never
 // the real scroll machinery.
 const onFieldFocus = vi.hoisted(() => vi.fn())
-vi.mock('@/composables/useKeyboardFieldScroll', () => ({
+vi.mock('../../keyboardFieldScroll', () => ({
   useKeyboardFieldScroll: () => ({ onFieldFocus }),
 }))
 
@@ -76,7 +75,7 @@ function mountWith(
         },
         slots,
       ),
-  }).use(createTestI18n())
+  })
   app.mount(host)
   const input = host.querySelector('input')
   if (!input) throw new Error('VInput rendered no <input>')
@@ -250,7 +249,7 @@ describe('VInput', () => {
             },
             { prefix: () => h('span', '€') },
           ),
-      }).use(createTestI18n())
+      })
       app.mount(host)
       const input = host.querySelector('input')!
       expect(host.querySelector('.v-input__field--bare')).not.toBeNull()

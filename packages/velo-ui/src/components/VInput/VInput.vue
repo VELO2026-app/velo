@@ -109,9 +109,9 @@
 
 <script setup lang="ts">
 import { ref, nextTick, useId } from 'vue'
-import { IconRequired, IconRequiredDone } from '@/components/icons'
-import VFieldError from './VFieldError.vue'
-import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
+import { IconRequired, IconRequiredDone } from '../../icons'
+import VFieldError from '../VFieldError'
+import { useKeyboardFieldScroll } from '../../keyboardFieldScroll'
 
 // inheritAttrs:false — forward native attrs (min/max/step/inputmode/…) onto the
 // inner <input>, not the wrapper div. Keeps VInput at parity with VSelect/VTextarea.

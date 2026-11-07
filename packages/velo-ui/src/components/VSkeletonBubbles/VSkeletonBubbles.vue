@@ -21,7 +21,7 @@
 </template>
 
 <script setup lang="ts">
-import VSkeleton from './VSkeleton.vue'
+import VSkeleton from '../VSkeleton'
 
 const bubbles = [
   { out: false, width: '62%', height: 'calc(56px * var(--velo-de-k, 1))' },

@@ -24,10 +24,9 @@
 // repo has no @vue/test-utils usage.
 // =============================================================================
 
-import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, afterEach } from 'vitest'
 import { createApp, nextTick, h, type App, type Slots } from 'vue'
-import VEmptyState from '@/components/ui/VEmptyState.vue'
+import VEmptyState from './VEmptyState.vue'
 
 let app: App | null = null
 let host: HTMLElement | null = null
@@ -48,7 +47,7 @@ async function render(
   document.body.appendChild(host)
   app = createApp({
     render: () => h(VEmptyState, props, slots as unknown as Slots),
-  }).use(createTestI18n())
+  })
   app.mount(host)
   await nextTick()
   return host

@@ -20,7 +20,7 @@
 
 import { describe, it, expect, afterEach } from 'vitest'
 import { createApp, nextTick, ref, h, type App, type Ref } from 'vue'
-import VFieldError from '@/components/ui/VFieldError.vue'
+import VFieldError from './VFieldError.vue'
 
 let app: App | null = null
 let host: HTMLElement | null = null

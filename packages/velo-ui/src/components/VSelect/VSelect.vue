@@ -48,8 +48,8 @@
 
 <script setup lang="ts">
 import { useId } from 'vue'
-import { IconRequired, IconRequiredDone } from '@/components/icons'
-import VFieldError from './VFieldError.vue'
+import { IconRequired, IconRequiredDone } from '../../icons'
+import VFieldError from '../VFieldError'
 
 export interface SelectOption {
   value: string

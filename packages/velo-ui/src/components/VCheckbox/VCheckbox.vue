@@ -31,7 +31,7 @@
 </template>
 
 <script setup lang="ts">
-import { IconCheck } from '@/components/icons'
+import { IconCheck } from '../../icons'
 
 const props = withDefaults(
   defineProps<{

@@ -64,7 +64,7 @@ import {
   IconGroup,
   IconSuccess,
   IconFile,
-} from '@/components/icons'
+} from '../../icons'
 
 const props = withDefaults(
   defineProps<{

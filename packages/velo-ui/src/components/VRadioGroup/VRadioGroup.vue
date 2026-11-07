@@ -35,7 +35,7 @@
 </template>
 
 <script setup lang="ts">
-import { IconCheck } from '@/components/icons'
+import { IconCheck } from '../../icons'
 
 export interface RadioOption {
   value: string

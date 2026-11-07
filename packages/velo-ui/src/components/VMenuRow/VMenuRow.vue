@@ -39,7 +39,7 @@
 </template>
 
 <script setup lang="ts">
-import { IconArrowRight } from '@/components/icons'
+import { IconArrowRight } from '../../icons'
 
 withDefaults(
   defineProps<{
