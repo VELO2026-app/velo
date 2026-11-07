@@ -90,6 +90,16 @@ async def setup_infrastructure():
     # same, for the reason of the Zoom pin above: a test's branch must not
     # depend on the environment it happens to run in.
     settings.server_role = "test"
+    # BE-196: every product language on, en the default -- for the reason of
+    # the two pins above. On the deploy machine the suite runs with velo-test's
+    # passport, whose languages may be any subset; a test that PATCHes uk or
+    # expects a person's language to read as en must not turn on which. A
+    # test of another set monkeypatches these two itself. SUPPORT_LANGUAGE is
+    # not pinned: the support tests read settings.support_language as they
+    # find it (test_support_t1.py says why), and it is among these languages
+    # whatever the passport says.
+    settings.languages = ("en", "ru", "uk")
+    settings.default_language = "en"
 
     # BE-86 / BE-191: the suite runs in the `*_test` database it is GIVEN
     # (DATABASE_URL, made by the deploy machine), never in the application's,

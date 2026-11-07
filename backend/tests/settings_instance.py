@@ -27,6 +27,11 @@ INSTANCE: dict[str, object] = {
     "option_llm": True,
     "domain_frontend": "app.example.com",
     "domain_api": "api.example.com",
+    # BE-196: the passport's languages, as the machine passes them, and the
+    # instance's default and support language among them.
+    "languages": "en,ru,uk",
+    "default_language": "en",
+    "support_language": "en",
     "database_url": "postgresql+asyncpg://u:p@h/db",
     "telegram_bot_token": "123456:bot-token",
     "zoom_account_id": "zoom-account",

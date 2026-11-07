@@ -50,7 +50,6 @@ from app.core.comms import comms_request, message_key, read_comms_page
 from app.core.config import settings
 from app.core.events import SECTION_SUPPORT_KEY, SECTION_SUPPORT_LABEL
 from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
-from app.core.i18n import normalize_language
 from app.modules.support import translation
 from app.modules.support.purge import SUPPORT_SPAM_RETENTION_DAYS
 from app.modules.support.models import (
@@ -867,7 +866,7 @@ def _rating_out(
     return {
         "stars": ticket.rating,
         "comment": ticket.rating_comment,
-        "comment_locale": normalize_language(opener.language) if opener else None,
+        "comment_locale": settings.language_of(opener.language) if opener else None,
         "rated_at": ticket.rated_at.isoformat() if ticket.rated_at else None,
         "rated_resolver": _peer_or_none(users, ticket.rated_resolver_user_id),
     }

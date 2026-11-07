@@ -51,7 +51,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.events import emit_user_upserted  # Phase 6 / T0
 from app.core.exceptions import TooManyRequestsError
-from app.core.i18n import normalize_language
 from app.core.ratelimit import count_in_window, limitable_source
 from app.core.redis import get_redis
 from app.core.telegram_links import TELEGRAM_LINK_DOMAIN, normalize_telegram_url
@@ -361,9 +360,9 @@ async def upsert_user_on_login(
     Uses INSERT ... ON CONFLICT DO UPDATE (P-1) to avoid race conditions
     when two requests arrive simultaneously for a new user.
 
-    Phase 7.3: normalizes language_code from Telegram to the product's
-    languages (core/i18n.py SUPPORTED_LANGUAGES). Unsupported codes fall
-    back to "en".
+    BE-196: the language written is settings.language_of(language_code) --
+    Telegram's code if the instance has that language on, else the
+    instance's default language. Telegram's own code stays in credentials.
 
     FIX 2.2: language is set only on INSERT (new users). Returning users
     keep their language preference set via PATCH /users/me.
@@ -393,12 +392,9 @@ async def upsert_user_on_login(
         "language_code": telegram_user.get("language_code"),
     }
 
-    # Phase 7.3: Normalize language_code to the product's languages
-    # (core/i18n.py). Handles "en-US" -> "en", "pt-BR" -> "en" (unsupported
-    # -> fallback).
-    normalized_lang = normalize_language(
-        telegram_user.get("language_code"),
-    )
+    # BE-196: the instance's language for this person ("uk-UA" -> "uk" if
+    # the instance has uk on; anything else -> the instance's default).
+    normalized_lang = settings.language_of(telegram_user.get("language_code"))
 
     # Atomic upsert: INSERT or UPDATE in a single statement.
     # No race condition possible -- PostgreSQL locks the row on conflict.

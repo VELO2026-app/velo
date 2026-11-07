@@ -36,6 +36,10 @@ services:
       # (contract 3 rule 18).
       DOMAIN_FRONTEND: ${DOMAIN_FRONTEND:?}
       DOMAIN_API: ${DOMAIN_API:?}
+      # The instance's languages and its default among them (protocol
+      # 5.2.2, BE-196): LANGUAGES is codes joined by commas, `en,ru,uk`.
+      LANGUAGES: ${LANGUAGES:?}
+      DEFAULT_LANGUAGE: ${DEFAULT_LANGUAGE:?}
       SUPPORT_LANGUAGE: ${SUPPORT_LANGUAGE:?}
       # Instance options of the passport (BE-182): `true` or `false`.
       OPTION_PAYMENTS: ${OPTION_PAYMENTS:?}

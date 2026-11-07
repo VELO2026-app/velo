@@ -467,7 +467,7 @@ export interface BookingWithPracticeResponse {
   zoom_registrant_link_unavailable?: boolean
 }
 
-/** POST /api/v1/auth/telegram/browser/complete -- request body. `code` and `state` are what Telegram put on the return address; `mark` is the browser's own. `language` is the browser's language tag: untrusted, optional, bounded here, and used only through normalize_language and only when the account is created (auth/service.py, upsert_user_on_login). */
+/** POST /api/v1/auth/telegram/browser/complete -- request body. `code` and `state` are what Telegram put on the return address; `mark` is the browser's own. `language` is the browser's language tag: untrusted, optional, bounded here, and used only through settings.language_of and only when the account is created (auth/service.py, upsert_user_on_login). */
 export interface BrowserLoginCompleteRequest {
   code: string
   state: string

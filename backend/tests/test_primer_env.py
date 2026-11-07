@@ -26,6 +26,7 @@ import pytest
 import yaml
 
 from app.core.config import Settings
+from app.core.i18n import SUPPORTED_LANGUAGES
 from app.modules.mcp.oauth import MCP_OAUTH_CIMD_ALLOWED_HOSTS
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -118,6 +119,34 @@ def test_the_cimd_hosts_are_the_cimd_hosts_of_egress() -> None:
         "api.zoom.us": ("zoom",),
         "oauth.telegram.org": ("telegram",),
     }
+
+
+# -- languages (BE-196, protocol 5.2.2) ----------------------------------------
+
+
+def test_primer_yaml_declares_exactly_the_product_languages() -> None:
+    """primer.yaml `languages` is the product's set, core/i18n.py
+    SUPPORTED_LANGUAGES: the machine checks a passport against the first,
+    the backend against the second -- a language in one only would pass the
+    machine and refuse the start, or the other way round."""
+    declared = yaml.safe_load(PRIMER.read_text(encoding="utf-8"))["languages"]
+    assert isinstance(declared, list) and declared, "languages: a non-empty list"
+    assert len(declared) == len(set(declared)), "languages: each code once"
+    assert set(declared) == SUPPORTED_LANGUAGES
+
+
+def test_the_instance_languages_come_from_the_passport() -> None:
+    """LANGUAGES and DEFAULT_LANGUAGE are the passport's `languages` and
+    `default_language` (protocol 5.2.2), and compose passes both."""
+    env = yaml.safe_load(PRIMER.read_text(encoding="utf-8"))["env"]
+    assert env["LANGUAGES"] == {"source": "passport", "key": "languages"}
+    assert env["DEFAULT_LANGUAGE"] == {
+        "source": "passport",
+        "key": "default_language",
+    }
+    passed = _app_environment()
+    assert passed["LANGUAGES"] == "${LANGUAGES:?}"
+    assert passed["DEFAULT_LANGUAGE"] == "${DEFAULT_LANGUAGE:?}"
 
 
 # -- backend/ci.env: the one settings environment of CI (BE-190 fix) ----------

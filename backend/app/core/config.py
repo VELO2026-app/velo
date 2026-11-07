@@ -40,7 +40,7 @@ import re
 from typing import Annotated, Literal
 
 from pydantic import BeforeValidator, Field, PrivateAttr, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from app.core.editions import EDITIONS
 from app.core.i18n import SUPPORTED_LANGUAGES
@@ -91,16 +91,44 @@ def _flag(value: object) -> object:
 
 OptionFlag = Annotated[bool, BeforeValidator(_flag)]
 
+
+def _language_list(value: object) -> object:
+    """The passport's languages (protocol 5.2.2) as the machine passes them:
+    codes joined by commas, `en,ru,uk` -- no spaces, no quotes. The one form
+    backend/ci.env can hold too (no quotes there), and the only one read: a
+    JSON list or a spaced list is not guessed, its items fail the checks of
+    Settings._validate and the start is refused. A list or tuple passes
+    through (Settings built in code)."""
+    if isinstance(value, str):
+        return tuple(value.split(","))
+    if isinstance(value, (list, tuple)):
+        return tuple(value)
+    raise ValueError("LANGUAGES: language codes joined by commas, e.g. 'en,ru,uk'")
+
+
+LanguageList = Annotated[tuple[str, ...], NoDecode, BeforeValidator(_language_list)]
+
+
+def _is_empty(value: object) -> bool:
+    """An instance value with nothing in it: a blank string, or a language
+    list whose every item is blank (LANGUAGES='' or '   ')."""
+    if isinstance(value, tuple):
+        return all(not item.strip() for item in value)
+    return not str(value).strip()
+
 # The instance values that must not be empty, by environment name. pydantic
 # refuses a missing one by itself; an empty string is a str and would pass.
 _REQUIRED_NON_EMPTY = (
     "edition",
+    "languages",
+    "default_language",
     "domain_frontend",
     "domain_api",
     "database_url",
     "telegram_bot_token",
     "telegram_login_client_id",
     "telegram_login_client_secret",
+    "support_language",
 )
 
 
@@ -132,6 +160,16 @@ class Settings(BaseSettings):
     option_zoom: OptionFlag
     option_telegram: OptionFlag
     option_llm: OptionFlag
+
+    # -- Languages (BE-196, protocol 5.2.2) --
+    # The passport's languages: the subset of the product's languages
+    # (core/i18n.py SUPPORTED_LANGUAGES) this instance turns on, and its
+    # default among them. No default here: an instance names its own. What
+    # anything outside the subset becomes: language_of() below. A list with
+    # a language velo cannot do, a repeat or an empty item, or a default
+    # outside the list: refused at start.
+    languages: LanguageList
+    default_language: str
 
     # -- Database --
     # Full async connection string for SQLAlchemy, put together by compose
@@ -447,9 +485,9 @@ class Settings(BaseSettings):
     # translated INTO it, an admin's reply is translated FROM it into the
     # user's language (users.language) -- unless the two are the same, when
     # the reply goes as it is. An admin's own interface language plays no
-    # part. One of the backend's languages (core/i18n.py
-    # SUPPORTED_LANGUAGES), or the start is refused below.
-    support_language: str = "en"
+    # part. A param of the passport with no default (protocol 5.2, BE-196),
+    # one of the instance's languages, or the start is refused below.
+    support_language: str
 
     # -- Comms integration: reminder orchestration (Phase 6 / T1) --
     # Booking reminders (ID-6): velo schedules the series product-side
@@ -850,7 +888,7 @@ class Settings(BaseSettings):
         empty = [
             name.upper()
             for name in sorted(checked, key=order.index)
-            if not getattr(self, name).strip()
+            if _is_empty(getattr(self, name))
         ]
         if empty:
             raise ValueError(f"empty: {', '.join(empty)}")
@@ -885,14 +923,37 @@ class Settings(BaseSettings):
                 )
             setattr(self, name, value.lower())
 
-        # BE-166: a language the backend does not know cannot be anybody's
-        # users.language, so every reply would be translated into it and
-        # every message out of it -- refused at start.
-        if self.support_language not in SUPPORTED_LANGUAGES:
+        # BE-196: the passport's languages are a subset of the product's,
+        # each named once, and the default is one of them (protocol 5.2.2;
+        # the machine checks the same before a rollout).
+        if "" in (item.strip() for item in self.languages):
+            raise ValueError(
+                f"LANGUAGES={','.join(self.languages)!r} has an empty item: "
+                "codes joined by commas, e.g. 'en,ru,uk'"
+            )
+        repeated = sorted({c for c in self.languages if self.languages.count(c) > 1})
+        if repeated:
+            raise ValueError(f"LANGUAGES names {', '.join(repeated)} more than once")
+        unknown = [c for c in self.languages if c not in SUPPORTED_LANGUAGES]
+        if unknown:
+            raise ValueError(
+                f"LANGUAGES: {', '.join(map(repr, unknown))} not among the "
+                f"languages of velo: {', '.join(sorted(SUPPORTED_LANGUAGES))}"
+            )
+        if self.default_language not in self.languages:
+            raise ValueError(
+                f"DEFAULT_LANGUAGE={self.default_language!r} is not one of "
+                f"the instance's languages: {', '.join(self.languages)}"
+            )
+
+        # BE-166: support writes in a language every person of the instance
+        # may read, so the support language is one the instance has on
+        # (BE-196); anything else would translate every reply into a
+        # language nobody here can choose -- refused at start.
+        if self.support_language not in self.languages:
             raise ValueError(
                 f"SUPPORT_LANGUAGE={self.support_language!r} is not one of "
-                f"the backend's languages: "
-                f"{', '.join(sorted(SUPPORTED_LANGUAGES))}"
+                f"the instance's languages: {', '.join(self.languages)}"
             )
 
         # TELEGRAM_BOT_URL: repair a stale host (2026-07-14). A value still
@@ -1010,6 +1071,28 @@ class Settings(BaseSettings):
         if name not in OPTIONS:
             raise KeyError(f"not an option of velo: {name!r}")
         return bool(getattr(self, f"option_{name}"))
+
+    def language_of(self, code: str | None) -> str:
+        """A person's language on this instance (BE-196, protocol 5.2.2):
+        the language `code` names if the instance has it on, else the
+        instance's default_language.
+
+        `code` is a stored users.language or the tag an entry brings
+        ("uk-UA", "RU", none at all); its first two characters, lower-cased,
+        name the language. Every place that shows or uses a person's
+        language goes through here. users.language itself is never
+        rewritten: a language the instance turns off and on again comes
+        back to the people who chose it. The one reader of the raw value is
+        the comms snapshot (core/events/sync.py): its content is a function
+        of the row and its version (comms refuses equal versions with other
+        content), and protocol 5.2.2 gives comms the instance's languages
+        to choose by itself.
+        """
+        if code:
+            short = code[:2].lower()
+            if short in self.languages:
+                return short
+        return self.default_language
 
     @property
     def enabled_options(self) -> list[str]:

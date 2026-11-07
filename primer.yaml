@@ -21,6 +21,12 @@ editions:
 options: [payments, schools, mcp, zoom, telegram, llm]
 options_required: [telegram]
 
+# The product's languages (protocol 5.2.2): every language velo can do --
+# backend core/i18n.py SUPPORTED_LANGUAGES, the same set (backend
+# tests/test_primer_env.py). The passport turns on a subset and its default
+# (LANGUAGES, DEFAULT_LANGUAGE below; BE-196).
+languages: [en, ru, uk]
+
 stacks:
   velo:
     compose: docker-compose.yml
@@ -60,6 +66,9 @@ env:
   OPTION_ZOOM:          { source: passport, key: options.zoom }
   OPTION_TELEGRAM:      { source: passport, key: options.telegram }
   OPTION_LLM:           { source: passport, key: options.llm }
+  # languages: codes joined by commas, `en,ru,uk` (BE-196)
+  LANGUAGES:            { source: passport, key: languages }
+  DEFAULT_LANGUAGE:     { source: passport, key: default_language }
   # params.velo.<name> of the passport
   # `when: <option>`: with the option off the machine passes its literal
   # and the backend neither checks nor reads the variable (protocol 5.2.3).

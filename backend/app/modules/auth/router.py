@@ -28,7 +28,6 @@ from app.core.exceptions import (
     TooManyRequestsError,
     VeloError,
 )
-from app.core.i18n import normalize_language
 from app.core.middleware import client_ip
 from app.modules.auth import browser_login, telegram_oidc
 from app.modules.auth.dependencies import get_current_user
@@ -289,8 +288,9 @@ async def browser_login_complete(
     # The same dict shape initData gives upsert_user_on_login. A claim
     # Telegram did not send is None, and the upsert writes it as such -- the
     # same as a field initData leaves out. The browser's language tag is
-    # untrusted: only its normalized form goes in, and the upsert applies the
-    # language column on INSERT only.
+    # untrusted: only the instance's language for it goes in
+    # (settings.language_of, BE-196), and the upsert applies the language
+    # column on INSERT only.
     user = await upsert_user_on_login(
         {
             "id": identity.telegram_id,
@@ -299,7 +299,7 @@ async def browser_login_complete(
             "username": identity.username,
             "photo_url": identity.photo_url,
             "language_code": (
-                normalize_language(body.language) if body.language else None
+                settings.language_of(body.language) if body.language else None
             ),
         },
         session,
