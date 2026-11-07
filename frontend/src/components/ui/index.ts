@@ -117,8 +117,8 @@ const VConfirmDialog: FunctionalComponent<{
   )
 
 export { VButton } from '@velo/ui'
-export { default as VBackButton } from './VBackButton.vue'
-export { default as VMoreLink } from './VMoreLink.vue'
+export { VBackButton } from '@velo/ui'
+export { VMoreLink } from '@velo/ui'
 export { VInput } from '@velo/ui'
 export { VFieldError } from '@velo/ui'
 export { default as VTextarea } from './VTextarea.vue'

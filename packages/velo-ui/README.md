@@ -113,6 +113,8 @@
 --velo-gap-3
 --velo-gap-6
 --velo-glass-blue-15
+--velo-glass-white-20       # VBackButton pill fill (P8 batch 3)
+--velo-glass-white-35       # VBackButton pill fill, pressed (P8 batch 3)
 --velo-glass-blue-200-15
 --velo-glass-blue-30
 --velo-glass-blue-60
@@ -160,6 +162,7 @@
 --velo-border-input-focus  # VSelect focus ring
 --velo-card-height-list    # VSkeletonPracticeCard list-card skeleton height
 --velo-card-iconcol-w      # VSkeletonPracticeCard icon column
+--velo-card-letter-spacing-meta # VMoreLink meta label tracking (P8 batch 3)
 --velo-card-padding-x      # VSkeletonPracticeCard paddings
 --velo-card-padding-y
 --velo-danger-text         # VMenuRow destructive label

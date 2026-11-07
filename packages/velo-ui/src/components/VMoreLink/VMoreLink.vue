@@ -29,8 +29,8 @@
 </template>
 
 <script setup lang="ts">
-import { t } from '@/locales'
-import { IconArrowRight } from '@/components/icons'
+import { t } from '../../i18n'
+import { IconArrowRight } from '../../icons'
 
 // tz-i18n 1.3: label fallback resolves at render time (?? t() in template).
 

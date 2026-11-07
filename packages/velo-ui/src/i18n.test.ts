@@ -62,20 +62,22 @@ describe('i18n seam: configured translator', () => {
 })
 
 describe('UI_I18N_KEYS registry', () => {
-  it('is the closed map the key-audit gate reads: 8 static keys + 14 day leaves', () => {
-    expect(i18n.UI_I18N_KEYS).toHaveLength(22)
+  it('is the closed map the key-audit gate reads: 10 static keys + 14 day leaves', () => {
+    expect(i18n.UI_I18N_KEYS).toHaveLength(24)
     const unique = new Set(i18n.UI_I18N_KEYS)
-    expect(unique.size).toBe(22)
+    expect(unique.size).toBe(24)
     const staticKeys = i18n.UI_I18N_KEYS.filter(
       (k) => !k.includes('dayFull') && !k.includes('dayShort'),
     )
     expect(staticKeys).toEqual([
+      'ui.back',
       'ui.cancel',
       'ui.close',
       'ui.collapse',
       'ui.confirm',
       'ui.expand',
       'ui.menuAria',
+      'ui.more',
       'ui.noData',
       'ui.weekdays',
     ])
