@@ -2,10 +2,10 @@
  * VELO Frontend -- UI Components barrel export (Phase F2.1 + F4.1)
  *
  * FE-117 batch A + FE-140 (tail of A, batch B) + FE-118 P3: migrated kit
- * components are re-exported from @velo/ui (tz-ui-package.md §4 P2/P3 --
+ * components are re-exported from `@velo/ui` (tz-ui-package.md §4 P2/P3 --
  * the barrel flips component-by-component; consumers never change an
- * import). The app resolves @velo/ui to the package SOURCES (vite/vitest
- * alias + tsconfig paths) -- see the package README "Стратегия CSS" for
+ * import). The app resolves `@velo/ui` to the package SOURCES (vite/vitest
+ * alias + tsconfig paths) -- see the package README "CSS strategy" for
  * the resolution decision.
  *
  * Usage:
