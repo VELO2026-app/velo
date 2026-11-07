@@ -9,7 +9,11 @@
 import type { StorybookConfig } from '@storybook/vue3-vite'
 
 const config: StorybookConfig = {
-  stories: ['../src/**/*.stories.ts'],
+  // The token registry page (§3.7) lives HERE, not in src/: it reads the
+  // host's variables.css and the skin files as build-time ?raw inputs --
+  // showcase tooling, which the boundary law (the kit never imports the
+  // host) deliberately scopes OUT of src/**.
+  stories: ['../src/**/*.stories.ts', '../.storybook/**/*.stories.ts'],
   framework: {
     name: '@storybook/vue3-vite',
     options: {},
