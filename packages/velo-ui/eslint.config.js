@@ -121,6 +121,30 @@ export default [
   },
 
   {
+    // --- P8: the reverse boundary (tz-ui-package.md §4 P8; principle 2). --
+    // The kit consumes the HOST's tokens and seams; it never reaches back
+    // into the host application ('@/...' aliases, 'frontend/...' paths) --
+    // a kit component importing app code would invert the dependency arrow
+    // the whole migration built. Mirrored by src/boundary.test.ts (the
+    // vitest gate that actually runs in CI).
+    files: ['src/**/*.{ts,vue}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@/*', '@/**', 'frontend/*', 'frontend/**'],
+              message:
+                'The kit never imports the host application -- host wiring arrives through seams (configureUi, provide keys) or props.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  {
     ignores: ['dist/', 'node_modules/', '*.config.*', 'storybook-static/'],
   },
 ]

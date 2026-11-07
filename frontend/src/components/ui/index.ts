@@ -1,12 +1,20 @@
 /**
- * VELO Frontend -- UI Components barrel export (Phase F2.1 + F4.1)
+ * VELO Frontend -- UI Components barrel export (Phase F2.1 + F4.1; P8 final)
  *
- * FE-117 batch A + FE-140 (tail of A, batch B) + FE-118 P3 + FE-145 P6b (the
- * modal family): migrated kit components are re-exported from `@velo/ui`
- * (tz-ui-package.md §4 P2/P3/P6 -- the barrel flips component-by-component;
- * consumers never change an import). The app resolves `@velo/ui` to the
- * package SOURCES (vite/vitest alias + tsconfig paths) -- see the package
- * README "CSS strategy" for the resolution decision.
+ * P8 (tz-ui-package.md §4 P8) is the migration's end state: EVERY kit
+ * component lives in `@velo/ui` and this barrel re-exports it -- no local
+ * component copies remain. What stays here deliberately:
+ *   - the i18n wrappers (VLoader/VModal/VConfirmDialog/VLoadingSwap): the
+ *     kit components are pure (§7.2 seams) and this door re-anchors the
+ *     localized defaults (P3; pinned by the *.localized.test.ts files);
+ *   - the domain trio that never leaves the app (§0): VeloLogo (renders
+ *     the skin-swapped public/icons path), VRatingBadges (utils/moodScale +
+ *     utils/ratingIcons) and VTextarea (the FE-94 voice field --
+ *     useVoiceFieldInput + the shared voice family).
+ * The app resolves `@velo/ui` to the package SOURCES (vite/vitest alias +
+ * tsconfig paths) -- see the package README "CSS strategy" for the
+ * resolution decision. The boundary law lives in eslint.config.js (P8) and
+ * ui-package-boundary.test.ts: only the doors import `@velo/ui`.
  *
  * Usage:
  *   `import { VButton, VInput, VCard, VModal } from '@/components/ui'`

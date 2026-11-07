@@ -165,6 +165,65 @@ export default [
     },
   },
 
+  // --- P8: the @velo/ui boundary (tz-ui-package.md §4 P8; mirrors the ----
+  // ui-package-boundary.test.ts law). The kit is imported ONLY through its
+  // doors -- the barrels that re-export it plus the two seam doors (the
+  // keyboard factory and the loading rule) and the domain-residue VTextarea
+  // (the FE-94 voice field composes the kit's VFieldError; see the test).
+  // Deep subpaths ('@velo/ui/...') stay banned everywhere. The doors
+  // override below REPLACES this rule (flat config does not merge), so it
+  // repeats the app-barrel deep-import patterns verbatim.
+  {
+    files: ['src/**/*.{ts,vue}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@velo/ui', '@velo/ui/*'],
+              message:
+                'The kit is imported through its doors only: @/components/ui (or @/components/icons).',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: [
+      'src/components/ui/index.ts',
+      'src/components/icons/index.ts',
+      'src/composables/useKeyboardFieldScroll.ts',
+      'src/composables/useLoadingHold.ts',
+      'src/components/ui/VTextarea.vue',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@/components/ui/*', '@/components/ui/*/*'],
+              message: 'Import from the barrel: import { VButton } from "@/components/ui".',
+            },
+            {
+              group: ['@/components/icons/*', '@/components/icons/*/*'],
+              message: 'Import from the barrel: import { IconHome } from "@/components/icons".',
+            },
+            // '@velo/ui' (exact barrel) is the door's whole point; deep
+            // subpaths stay banned -- the same law ui-package-boundary
+            // .test.ts enforces.
+            {
+              group: ['@velo/ui/*'],
+              message: 'The exact barrel specifier only: "@velo/ui".',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   {
     // Tests drive components through createApp(...) -- the component-per-file
     // and name-casing rules misread those prop/passing objects as component
