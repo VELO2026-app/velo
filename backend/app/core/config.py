@@ -61,6 +61,7 @@ _STRIPE_STUB_ROLES = frozenset({"test", "preview"})
 # The instance values that must not be empty, by environment name. pydantic
 # refuses a missing one by itself; an empty string is a str and would pass.
 _REQUIRED_NON_EMPTY = (
+    "edition",
     "domain_frontend",
     "domain_api",
     "database_url",

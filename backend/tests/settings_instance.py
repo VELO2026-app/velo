@@ -16,6 +16,7 @@ MISSING = object()
 
 INSTANCE: dict[str, object] = {
     "server_role": "prod",
+    "edition": "ai",
     "domain_frontend": "app.example.com",
     "domain_api": "api.example.com",
     "database_url": "postgresql+asyncpg://u:p@h/db",
