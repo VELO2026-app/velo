@@ -4,8 +4,9 @@
 #
 # Tests record_audit() function:
 #   - Creates an AuditLog entry in the database
-#   - Picks up trace_id from structlog contextvars
-#   - Works without trace_id (system actions outside request)
+#   - Picks up the request id (core/middleware.py) into trace_id (BE-190)
+#   - Leaves trace_id NULL for an id the column cannot hold (BE-190)
+#   - Works without a request id (system actions outside request)
 #   - Stores data dict as JSONB
 #
 # Uses db_session directly (no HTTP endpoints for audit yet).
@@ -14,11 +15,11 @@
 from uuid import uuid4
 
 import pytest
-import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import AuditLog, record_audit
+from app.core.middleware import REQUEST_ID
 
 
 @pytest.mark.asyncio
@@ -61,30 +62,41 @@ async def test_record_audit_basic(db_session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_record_audit_picks_up_trace_id(
-    db_session: AsyncSession,
+@pytest.mark.parametrize(
+    ("request_id", "stored"),
+    [
+        pytest.param("test-trace-999", "test-trace-999", id="short"),
+        pytest.param("a" * 36, "a" * 36, id="exactly-the-column"),
+        # KNOWN CEILING at _audit_request_id (core/audit.py): longer than the
+        # column -> NULL, and the operation still goes through.
+        pytest.param("a" * 37, None, id="one-over-the-column"),
+        pytest.param("a" * 128, None, id="the-longest-kept-id"),
+    ],
+)
+async def test_record_audit_picks_up_the_request_id(
+    db_session: AsyncSession, request_id: str, stored: str | None
 ) -> None:
-    """record_audit reads trace_id from structlog contextvars."""
-    structlog.contextvars.clear_contextvars()
-    structlog.contextvars.bind_contextvars(trace_id="test-trace-999")
-
-    target_id = uuid4()
-    entry = await record_audit(
-        event="purchase_created",
-        actor_id=uuid4(),
-        actor_type="user",
-        target_type="purchase",
-        target_id=target_id,
-        session=db_session,
-    )
-
-    await db_session.flush()
+    """record_audit writes the request id (BE-190: the request context of
+    core/middleware.py, no longer the structlog binding) into trace_id --
+    whole, or NULL when the column cannot hold it."""
+    token = REQUEST_ID.set(request_id)
+    try:
+        entry = await record_audit(
+            event="purchase_created",
+            actor_id=uuid4(),
+            actor_type="user",
+            target_type="purchase",
+            target_id=uuid4(),
+            session=db_session,
+        )
+        await db_session.flush()
+    finally:
+        REQUEST_ID.reset(token)
     await db_session.refresh(entry)
 
-    assert entry.trace_id == "test-trace-999"
+    assert entry.trace_id == stored
 
     # Cleanup.
-    structlog.contextvars.clear_contextvars()
     await db_session.delete(entry)
     await db_session.commit()
 
@@ -93,8 +105,8 @@ async def test_record_audit_picks_up_trace_id(
 async def test_record_audit_no_trace_id(
     db_session: AsyncSession,
 ) -> None:
-    """record_audit works without trace_id (e.g. system cron job)."""
-    structlog.contextvars.clear_contextvars()
+    """record_audit works without a request id (e.g. system cron job)."""
+    assert REQUEST_ID.get() is None
 
     target_id = uuid4()
     entry = await record_audit(

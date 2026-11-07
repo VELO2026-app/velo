@@ -94,6 +94,10 @@ COPY backend/app/ ./app/
 COPY backend/scripts/ ./scripts/
 COPY backend/alembic.ini ./
 COPY backend/migrations/ ./migrations/
+# The log configuration of protocol 9.4 (BE-190): uvicorn takes it with
+# --log-config below, migrations/env.py and the app apply the same file
+# (app/core/logging.py).
+COPY backend/logging.json ./
 
 ENV PATH="/opt/venv/bin:$PATH"
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -125,11 +129,16 @@ EXPOSE 8000
 # itself -- X-Real-IP from nginx, see _extract_client_ip in
 # app/core/middleware.py -- and needs scope["client"] to stay the TCP peer
 # the OS reported. Off, no environment variable can turn the header back on.
+#
+# --log-config (BE-190): every line uvicorn writes -- the supervisor process
+# of --workers included, which never imports the app -- is a JSON line of
+# protocol 9.4, and its access line (the client's address) is off.
 CMD ["uvicorn", "app.main:app", \
      "--host", "0.0.0.0", \
      "--port", "8000", \
      "--workers", "2", \
-     "--no-proxy-headers"]
+     "--no-proxy-headers", \
+     "--log-config", "/app/logging.json"]
 
 # ---------------------------------------------------------------------------
 # test -- the image the suite runs in (protocol 7.1)

@@ -462,7 +462,6 @@ async def upsert_user_on_login(
 
     logger.info(
         "user_upserted",
-        telegram_id=telegram_id,
         user_id=str(user.id),
     )
 

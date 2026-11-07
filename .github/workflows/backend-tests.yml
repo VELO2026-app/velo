@@ -128,7 +128,8 @@ jobs:
           for name in ("PRIMER_RELEASE", "PRIMER_COMMIT"):
               if os.environ.get(name) != os.environ.get("WANT_" + name):
                   bad.append("%s=%r, want %r" % (name, os.environ.get(name), os.environ.get("WANT_" + name)))
-          for path in ("/app/app/main.py", "/app/alembic.ini", "/app/migrations/env.py",
+          for path in ("/app/app/main.py", "/app/alembic.ini", "/app/logging.json",
+                       "/app/migrations/env.py",
                        "/app/migrations/versions", "/app/scripts/seed.py",
                        "/app/scripts/seed_profiles"):
               present(path)

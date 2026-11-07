@@ -9,6 +9,7 @@
 #
 # WIRE (frozen comms contract, app/transport/events.py 3c):
 #   XADD <COMMS_EVENTS_STREAM> * event <name> data <UTF-8 JSON>
+#        request_id <id>                       (protocol 9.6, BE-190)
 # The stream name mirrors the comms consumer's default
 # (comms app/core/config.py:66 `comms_events_stream: str =
 # "comms:events"`); the consumer itself creates the consumer group
@@ -73,12 +74,15 @@ from app.core.events.models import (
     REDACTED_PAYLOAD,
     OutboxEvent,
 )
+from app.core.events.service import REQUEST_ID_KEY
+from app.core.middleware import new_request_id
 
 logger = structlog.get_logger()
 
 # Envelope field names (frozen contract mirror).
 _ENVELOPE_EVENT_FIELD = "event"
 _ENVELOPE_DATA_FIELD = "data"
+_ENVELOPE_REQUEST_ID_FIELD = "request_id"
 
 # Redis errors that mean "the pipe is down", not "this event is bad".
 _CONNECTION_ERRORS = (RedisConnectionError, RedisTimeoutError, OSError)
@@ -160,10 +164,21 @@ _last_redaction_at: float | None = None
 
 
 def build_envelope(event: OutboxEvent) -> dict[str, str]:
-    """Assemble the wire envelope {event, data} for one outbox row."""
+    """Assemble the wire envelope {event, data, request_id} for one row.
+
+    BE-190: the request id the row was made in (REQUEST_ID_KEY of the
+    payload, core/events/service.py) is the envelope's `request_id` field,
+    next to `event` and `data` (protocol 9.6), and is taken out of `data`.
+    A row without one -- made before the key existed: the production
+    database moves to the machine with its outbox (migration plan, the
+    transfer) -- gets a fresh id here.
+    """
+    data = dict(event.payload)
+    request_id = data.pop(REQUEST_ID_KEY, None) or new_request_id()
     return {
         _ENVELOPE_EVENT_FIELD: event.event_type,
-        _ENVELOPE_DATA_FIELD: json.dumps(event.payload, ensure_ascii=False),
+        _ENVELOPE_DATA_FIELD: json.dumps(data, ensure_ascii=False),
+        _ENVELOPE_REQUEST_ID_FIELD: str(request_id),
     }
 
 

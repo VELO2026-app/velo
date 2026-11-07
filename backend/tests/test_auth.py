@@ -11,7 +11,6 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 from urllib.parse import urlencode
 
 import pytest
-import structlog
 from httpx import AsyncClient
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,8 +20,9 @@ from app.core.config import settings
 from app.core.exceptions import TooManyRequestsError
 from app.core.middleware import (
     _MAX_CLIENT_IP_LEN,
-    TraceIdMiddleware,
+    RequestContextMiddleware,
     _extract_client_ip,
+    client_ip,
 )
 from app.core.redis import get_redis
 from app.modules.auth.service import (
@@ -658,14 +658,16 @@ def test_client_ip_grid(peer_case: str, real_ip_case: str, xff_case: str) -> Non
 async def test_middleware_binds_real_ip_not_forwarded_for() -> None:
     """The layer the consumers read. record_audit (core/audit.py), the
     pre-HMAC login limiter (auth/router.py) and the guest limiter
-    (practices/router.py) all take the address from the structlog binding
-    TraceIdMiddleware makes -- so the binding is what is asserted here, not
-    the helper. A forged X-Forwarded-For alongside a real X-Real-IP from our
-    proxy: the binding is X-Real-IP, and the forged value is nowhere."""
+    (practices/router.py) all take the address from client_ip(), which
+    RequestContextMiddleware sets (BE-190: its own context variable, no
+    longer the structlog binding, which every log line used to carry) --
+    so that value is what is asserted here, not the helper. A forged
+    X-Forwarded-For alongside a real X-Real-IP from our proxy: the value is
+    X-Real-IP, and the forged one is nowhere."""
     seen: dict = {}
 
     async def inner(scope, receive, send) -> None:
-        seen.update(structlog.contextvars.get_contextvars())
+        seen["ip_address"] = client_ip()
 
     async def send(message) -> None:
         pass
@@ -674,9 +676,11 @@ async def test_middleware_binds_real_ip_not_forwarded_for() -> None:
         "type": "http",
         **_scope("172.18.0.1", "9.9.9.9", forwarded="1.1.1.1, 10.0.0.1"),
     }
-    await TraceIdMiddleware(inner)(scope, None, send)
+    await RequestContextMiddleware(inner)(scope, None, send)
     assert seen["ip_address"] == "9.9.9.9"
     assert "1.1.1.1" not in repr(seen)
+    # And the value is the request's only: outside it, nothing.
+    assert client_ip() is None
 
 
 async def test_forged_forwarded_for_does_not_pick_the_login_bucket(

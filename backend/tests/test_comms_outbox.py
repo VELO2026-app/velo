@@ -56,12 +56,14 @@ from app.core.events.relay import (
     create_relay_redis,
     relay_pending_batch,
 )
+from app.core.middleware import REQUEST_ID_FORM
 from app.modules.users.models import User
 from scripts.comms_outbox import _event_id
 from tests.helpers import (
     auth_headers,
     cleanup_range,
     login_user,
+    sent_data,
 )
 
 pytestmark = pytest.mark.asyncio
@@ -351,9 +353,13 @@ class TestRelay:
             },
         )
         envelope = build_envelope(e)
-        assert set(envelope) == {"event", "data"}
+        # BE-190: the request id is the envelope's third field (protocol
+        # 9.6), next to event and data, and is not inside data.
+        assert set(envelope) == {"event", "data", "request_id"}
+        assert REQUEST_ID_FORM.fullmatch(envelope["request_id"])
         data = json.loads(envelope["data"])
         assert data["v"] == 1
+        assert "_request_id" not in data
         # Snapshot discipline: every contract key present, explicit nulls.
         assert set(data) == {
             "v", "recipient_id", "telegram_id", "email", "locale",
@@ -1004,7 +1010,7 @@ class TestBackfill:
         assert (users2, masters2, admins2) == (users, masters, admins)
         events_a2 = await _events_for(db_session, a["user"]["id"])
         assert len(events_a2) == base_a + 2
-        assert events_a2[-1].payload == events_a2[-2].payload
+        assert sent_data(events_a2[-1]) == sent_data(events_a2[-2])
 
 
 class TestOneActiveRelay:

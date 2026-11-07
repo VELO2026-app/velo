@@ -30,6 +30,7 @@ from app.core.audit import AuditLog
 from app.core.config import settings
 from app.core.database import get_session_factory
 from app.core.events.models import OutboxEvent
+from app.core.events.relay import build_envelope
 from app.modules.bookings.models import Booking
 from app.modules.diary.models import Checkin, DiaryEvent, Feedback, Reflection
 from app.modules.masters.groups_models import (
@@ -185,6 +186,17 @@ async def cleanup_range(
         .where(in_range, User.role != UserRole.USER.value)
         .values(role=UserRole.USER.value)
     )
+
+
+def sent_data(event: OutboxEvent) -> dict:
+    """What comms receives as `data` for one outbox row.
+
+    BE-190: the row's payload also keeps the request id the event was made
+    in, which travels as the envelope's own field, not in `data` -- so a
+    test about the document comms gets reads it here, through the relay's
+    build_envelope, not off the payload.
+    """
+    return json.loads(build_envelope(event)["data"])
 
 
 async def full_cleanup_range(

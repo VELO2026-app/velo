@@ -733,7 +733,9 @@ async def sync_meeting_reschedule(
             "zoom_registrant_refetch_failed",
             practice_id=str(practice.id),
             status_code=exc.status_code,
-            error=str(exc),
+            # The class, not str(exc): the message embeds Zoom's response
+            # body -- here a list of registrants (BE-190).
+            error=type(exc).__name__,
         )
         return
 
@@ -1538,7 +1540,6 @@ async def claim_guest_name(
             logger.info(
                 "zoom_guest_name_race_lost",
                 practice_id=str(practice.id),
-                display_name=candidate.display,
             )
             continue
         return row

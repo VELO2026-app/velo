@@ -60,6 +60,7 @@ from tests.helpers import (
     fresh_get,
     full_cleanup_range,
     login_user,
+    sent_data,
 )
 from tests.test_master_notifications import _profile_dir
 
@@ -140,7 +141,7 @@ async def _events(uid: UUID) -> list[OutboxEvent]:
 
 async def _sections(uid: UUID) -> list[dict]:
     return [
-        e.payload
+        sent_data(e)
         for e in await _events(uid)
         if e.event_type == EVENT_SECTION_MEMBERSHIP_CHANGED
     ]
@@ -182,7 +183,7 @@ class TestRoster:
             EVENT_GROUP_CHANGED,
             EVENT_SECTION_MEMBERSHIP_CHANGED,
         ]
-        section = events[-1].payload
+        section = sent_data(events[-1])
         assert set(section) == _COMMS_SECTION_FIELDS
         assert section == {**_SECTION_ADD, "operator_id": str(user.id)}
 
@@ -203,7 +204,7 @@ class TestRoster:
             EVENT_SECTION_MEMBERSHIP_CHANGED,
         ]
         assert events[0].payload["member"] is False
-        assert events[1].payload == {
+        assert sent_data(events[1]) == {
             **_SECTION_ADD, "member": False, "operator_id": str(user.id),
         }
 
@@ -412,7 +413,7 @@ async def _signals(thread_id: UUID) -> list[dict]:
     button opens (the fix moved the button from the user to the thread)."""
     p = OutboxEvent.payload
     return [
-        e.payload
+        sent_data(e)
         for e in (
             await fresh_execute(
                 select(OutboxEvent)

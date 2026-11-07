@@ -66,6 +66,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_db_reader, get_db_session
 from app.core.exceptions import BadRequestError, NotFoundError
+from app.core.middleware import client_ip
 from app.modules.auth.dependencies import (
     get_current_master,
     get_current_user,
@@ -1217,7 +1218,7 @@ async def _guest_over_limit(which: str, practice: Practice) -> bool:
 
     from app.core.ratelimit import over_source_limit
 
-    source = structlog.contextvars.get_contextvars().get("ip_address")
+    source = client_ip()
     limit = (
         settings.guest_view_rate_limit
         if which == "view"
@@ -1242,7 +1243,6 @@ async def _guest_over_limit(which: str, practice: Practice) -> bool:
         logger.warning(
             "guest_rate_limited",
             limit=which,
-            source=source,
             practice_id=str(practice.id),
             count=count,
         )

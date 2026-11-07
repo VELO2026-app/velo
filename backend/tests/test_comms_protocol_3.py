@@ -61,7 +61,7 @@ from app.modules.masters.models import MasterProfile
 from app.modules.payments.models import Purchase, PurchaseStatus
 from app.modules.practices.models import Practice
 from app.modules.users.models import User, UserRole
-from tests.helpers import auth_headers, full_cleanup_range, login_user
+from tests.helpers import auth_headers, full_cleanup_range, login_user, sent_data
 
 _TID_MIN = 88000
 _TID_MAX = 88099
@@ -287,7 +287,7 @@ class TestEnvelopeStrings:
 
         (event,) = await _synth_events(db_session)
         assert event.event_type == EVENT_REMINDER_CANCEL
-        assert set(event.payload) == {"v", "types", "correlation"}
+        assert set(sent_data(event)) == {"v", "types", "correlation"}
 
 
 # ===========================================================================

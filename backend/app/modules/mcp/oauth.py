@@ -118,6 +118,7 @@ from starlette.routing import Route, Router
 
 from app.core.config import settings
 from app.core.database import get_session_factory
+from app.core.middleware import client_ip
 from app.core.ratelimit import over_source_limit
 from app.core.redis import get_redis
 from app.modules.auth import telegram_oidc
@@ -959,7 +960,7 @@ async def _registration_limit() -> Response | None:
     """Anonymous registration, limited per source address -- the pattern of
     check_source_rate_limit (auth/service.py): the address the middleware
     resolved, non-routable sources not counted, Redis down -> refuse."""
-    source = structlog.contextvars.get_contextvars().get("ip_address")
+    source = client_ip()
     try:
         over, _ = await over_source_limit(
             "mcp_oauth_register_src",

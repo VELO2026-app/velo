@@ -149,10 +149,10 @@ async function request<T>(
   // W29-trimmed: read once, right after the fetch, so every ApiResponseError
   // construction below can use it. Absent for ApiNetworkError/ApiTimeoutError
   // above -- those throw before a response exists, so there is honestly no
-  // trace id to show for them. suffixWithTraceId is called exactly once per
+  // request id to show for them. suffixWithRequestId is called exactly once per
   // throw site below, always on the raw backend-provided message -- never on
   // an already-suffixed string -- so the suffix can never be appended twice.
-  const traceId = response.headers.get('X-Trace-ID')
+  const requestId = response.headers.get('X-Request-ID')
 
   // 204 No Content (e.g. logout).
   if (response.status === 204) {
@@ -163,7 +163,11 @@ async function request<T>(
   // FIX 10.2: no direct token/sessionStorage mutation here.
   if (response.status === 401) {
     _onUnauthorized?.()
-    throw new ApiResponseError(401, suffixWithTraceId('Session expired', traceId), 'unauthorized')
+    throw new ApiResponseError(
+      401,
+      suffixWithRequestId('Session expired', requestId),
+      'unauthorized',
+    )
   }
 
   let data: unknown
@@ -172,7 +176,7 @@ async function request<T>(
   } catch {
     throw new ApiResponseError(
       response.status,
-      suffixWithTraceId('Invalid response from server', traceId),
+      suffixWithRequestId('Invalid response from server', requestId),
     )
   }
 
@@ -193,7 +197,7 @@ async function request<T>(
   if (typeof errorData?.message === 'string') {
     throw new ApiResponseError(
       response.status,
-      suffixWithTraceId(errorData.message, traceId),
+      suffixWithRequestId(errorData.message, requestId),
       errorData.error ?? 'unknown',
     )
   }
@@ -209,7 +213,7 @@ async function request<T>(
 
   throw new ApiResponseError(
     response.status,
-    suffixWithTraceId(detail, traceId),
+    suffixWithRequestId(detail, requestId),
     'validation_error',
     Array.isArray(rawDetail) ? rawDetail : undefined,
   )
@@ -217,15 +221,15 @@ async function request<T>(
 
 // W29-trimmed: append a greppable diagnostic key to a user-facing error
 // message, so a tester's bug report carries the same key as the backend log
-// line (TraceIdMiddleware, backend/app/core/middleware.py). FIRST six chars
+// line (request_id, backend/app/core/middleware.py). FIRST six chars
 // -- the log line carries the full id, so a prefix match finds it with one
 // grep. No header (network/timeout failures, which never reach this
 // function) -> no suffix; never render an empty or placeholder code.
 // tz-i18n 1.2: the "code" word in the rendered suffix is catalog copy
 // (i18n:common.traceSuffix).
-function suffixWithTraceId(message: string, traceId: string | null): string {
-  return traceId
-    ? i18n.global.t('common.traceSuffix', { message, code: traceId.slice(0, 6) })
+function suffixWithRequestId(message: string, requestId: string | null): string {
+  return requestId
+    ? i18n.global.t('common.traceSuffix', { message, code: requestId.slice(0, 6) })
     : message
 }
 

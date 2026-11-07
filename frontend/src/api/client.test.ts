@@ -1,12 +1,12 @@
 // =============================================================================
-// VELO Frontend -- api/client.ts Unit Tests (W29-trimmed: trace id suffix)
+// VELO Frontend -- api/client.ts Unit Tests (W29-trimmed: request id suffix)
 // =============================================================================
 //
 // Every OTHER consumer of @/api/client mocks the module itself (or a
 // domain-level @/api/* wrapper), so request()'s real body never runs under
 // test -- see api/bookings.test.ts's header comment ("Client mocked at the
 // seam"). This file stubs global fetch directly so request() executes for
-// real, which is the only way to exercise the trace-id suffix it appends.
+// real, which is the only way to exercise the request-id suffix it appends.
 // =============================================================================
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
@@ -28,40 +28,40 @@ async function captureError(): Promise<ApiResponseError> {
   throw new Error('expected api.get to reject')
 }
 
-describe('request() trace id suffix (W29-trimmed)', () => {
+describe('request() request id suffix (W29-trimmed)', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
 
-  it('appends " · код <first 6 chars>" when X-Trace-ID is present', async () => {
+  it('appends " · код <first 6 chars>" when X-Request-ID is present', async () => {
     stubFetch(
       400,
       { error: 'bad_request', message: 'Insufficient balance' },
-      { 'X-Trace-ID': 'abcdef1234567890' },
+      { 'X-Request-ID': 'abcdef1234567890' },
     )
     const err = await captureError()
     expect(err.detail).toBe('Insufficient balance · код abcdef')
   })
 
-  it('appends nothing when X-Trace-ID is absent', async () => {
+  it('appends nothing when X-Request-ID is absent', async () => {
     stubFetch(400, { error: 'bad_request', message: 'Insufficient balance' })
     const err = await captureError()
     expect(err.detail).toBe('Insufficient balance')
     expect(err.detail).not.toContain('код')
   })
 
-  it('uses the FIRST six characters of the trace id, not the last', async () => {
+  it('uses the FIRST six characters of the request id, not the last', async () => {
     // First 6 chars ("aaaaaa") deliberately differ from the last 6 ("zzzzzz")
     // so a wrong-end slice would be caught, not accidentally pass.
-    const fullTraceId = 'aaaaaa-1111-2222-3333-zzzzzz'
-    stubFetch(500, { error: 'server_error', message: 'Boom' }, { 'X-Trace-ID': fullTraceId })
+    const fullRequestId = 'aaaaaa-1111-2222-3333-zzzzzz'
+    stubFetch(500, { error: 'server_error', message: 'Boom' }, { 'X-Request-ID': fullRequestId })
     const err = await captureError()
-    expect(err.detail).toBe(`Boom · код ${fullTraceId.slice(0, 6)}`)
-    expect(err.detail).not.toContain(fullTraceId.slice(-6))
+    expect(err.detail).toBe(`Boom · код ${fullRequestId.slice(0, 6)}`)
+    expect(err.detail).not.toContain(fullRequestId.slice(-6))
   })
 
   it('also suffixes the 401 path (message constructed before the body is read)', async () => {
-    stubFetch(401, {}, { 'X-Trace-ID': 'ffffff000000' })
+    stubFetch(401, {}, { 'X-Request-ID': 'ffffff000000' })
     const err = await captureError()
     expect(err.detail).toBe('Session expired · код ffffff')
   })
@@ -70,7 +70,7 @@ describe('request() trace id suffix (W29-trimmed)', () => {
     stubFetch(
       422,
       { detail: [{ loc: ['body', 'title'], msg: 'field required', type: 'missing' }] },
-      { 'X-Trace-ID': '112233445566' },
+      { 'X-Request-ID': '112233445566' },
     )
     const err = await captureError()
     expect(err.detail).toBe('field required · код 112233')

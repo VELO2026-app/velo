@@ -29,6 +29,7 @@ from app.core.exceptions import (
     VeloError,
 )
 from app.core.i18n import normalize_language
+from app.core.middleware import client_ip
 from app.modules.auth import browser_login, telegram_oidc
 from app.modules.auth.dependencies import get_current_user
 from app.modules.auth.schemas import (
@@ -80,12 +81,12 @@ async def auth_telegram(
     # guessing bounded only by the cost of a HMAC. This one keys on the
     # client address the middleware already validated, so it applies to
     # attempts that never get as far as naming an account.
-    # The address comes from the middleware's contextvars, not from the
-    # request here: TraceIdMiddleware already resolved it once, applying the
-    # trust and form checks (T-47 finding 2), and record_audit reads the same
-    # binding. One resolution, one value -- re-deriving it here would be a
+    # The address comes from the middleware (client_ip), not from the
+    # request here: RequestContextMiddleware already resolved it once,
+    # applying the trust and form checks (T-47 finding 2), and record_audit
+    # reads the same value. One resolution, one value -- re-deriving it here would be a
     # second place that could disagree with the audit trail about who this is.
-    source = structlog.contextvars.get_contextvars().get("ip_address")
+    source = client_ip()
     await check_source_rate_limit(source)
 
     # Step 1: Validate initData from Telegram. This also rejects initData
@@ -110,10 +111,9 @@ async def auth_telegram(
     try:
         await check_auth_rate_limit(telegram_user["id"])
     except TelegramValidationError as e:
-        logger.warning(
-            "telegram_auth_rate_limited",
-            telegram_id=telegram_user["id"],
-        )
+        # No id in the line: the person has no internal id yet, and
+        # telegram_id is a person's data (protocol 9.4, BE-190).
+        logger.warning("telegram_auth_rate_limited")
         raise TooManyRequestsError(str(e)) from e
 
     # Step 3: Create or update user.
@@ -159,7 +159,8 @@ async def auth_telegram(
     #   4. Trigger: BE-183 is done.
     #   5. Agreed fix: delete the event. BackgroundTasks only if the
     #      measurement is needed for longer, and then first verify that
-    #      contextvars (trace_id) reach the background task.
+    #      the request id (REQUEST_ID, core/middleware.py) reaches the
+    #      background task.
     #   6. Rejected: an explicit session.commit() here before the event --
     #      it reorders the transaction on the login path, a C2 change for a
     #      temporary statistic; BackgroundTasks now -- the first use in the
@@ -202,7 +203,7 @@ def _unavailable() -> VeloError:
 async def _source_limit() -> None:
     """The /auth/telegram per-source limiter (T-47), on the same counter --
     a source spends one budget on both doors. Redis down -> 503."""
-    source = structlog.contextvars.get_contextvars().get("ip_address")
+    source = client_ip()
     try:
         await check_source_rate_limit(source)
     except RedisError:
@@ -279,7 +280,8 @@ async def browser_login_complete(
     try:
         await check_auth_rate_limit(identity.telegram_id)
     except TelegramValidationError as e:
-        logger.warning("telegram_auth_rate_limited", telegram_id=identity.telegram_id)
+        # No id in the line -- as in auth_telegram (BE-190).
+        logger.warning("telegram_auth_rate_limited")
         raise TooManyRequestsError(str(e)) from e
     except RedisError:
         raise _unavailable() from None

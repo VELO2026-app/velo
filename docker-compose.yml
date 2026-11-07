@@ -21,8 +21,8 @@ services:
       context: .
       dockerfile: backend/Dockerfile
       target: runtime
-    # Every key here is a field of the backend's Settings (EDITION: from
-    # BE-182), and every field without a default is a key here
+    # Every key here is a field of the backend's Settings, and every field
+    # without a default is a key here
     # (backend/tests/test_primer_env.py): a key Settings does not read would
     # be ignored without a word.
     environment:

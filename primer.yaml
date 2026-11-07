@@ -9,10 +9,11 @@ dependencies:
   comms: { repo: git@github.com:aivis-one/comms.git, version: ">=4,<5" }
 
 editions:
-  # One edition with every module until velo has its table "edition ->
-  # modules"; `full` is velo's own word for "every module on"
-  # (frontend/src/platform/features.ts).
-  full: { services: [comms] }
+  # One edition, `ai` (owner ruling 5.11); its modules are the table in
+  # backend/app/core/editions.py, whose keys are these (backend
+  # tests/test_report.py). Payments, schools, MCP and the channels are
+  # instance options -- BE-182.
+  ai: { services: [comms] }
 
 stacks:
   velo:

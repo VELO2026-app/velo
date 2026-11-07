@@ -154,7 +154,9 @@ async def create_topup_session(
             "stripe_checkout_creation_failed",
             user_id=str(user_id),
             amount_cents=amount_cents,
-            error=str(exc),
+            # The class, not str(exc): Stripe's message can carry the
+            # customer's data (BE-190).
+            error=type(exc).__name__,
         )
         raise BadRequestError(
             "Failed to create payment session"

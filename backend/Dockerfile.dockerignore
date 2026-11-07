@@ -20,6 +20,7 @@
 !backend/app/
 !backend/scripts/
 !backend/alembic.ini
+!backend/logging.json
 !backend/migrations/
 !backend/tests/
 !backend/pyproject.toml

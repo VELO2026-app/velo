@@ -247,7 +247,9 @@ async def ingest_report_for_meeting(
             "zoom_report_fetch_failed",
             practice_id=str(practice.id),
             status_code=exc.status_code,
-            error=str(exc),
+            # The class, not str(exc): the message embeds Zoom's response
+            # body, which can name a person (BE-190).
+            error=type(exc).__name__,
         )
         return False
 

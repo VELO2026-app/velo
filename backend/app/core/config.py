@@ -42,6 +42,7 @@ from typing import Literal
 from pydantic import Field, PrivateAttr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.editions import EDITIONS
 from app.core.i18n import SUPPORTED_LANGUAGES
 from app.core.telegram_links import TELEGRAM_LINK_DOMAIN, normalize_telegram_url
 
@@ -86,6 +87,9 @@ class Settings(BaseSettings):
     # -- Application --
     # The passport's server.role (BE-192). Anything else: refused at start.
     server_role: Literal["test", "preview", "prod"]
+    # The passport's edition (BE-190): a key of app/core/editions.py's table,
+    # reported in /health with its modules. Anything else: refused at start.
+    edition: str
 
     # -- Database --
     # Full async connection string for SQLAlchemy, put together by compose
@@ -793,6 +797,13 @@ class Settings(BaseSettings):
         ]
         if empty:
             raise ValueError(f"empty: {', '.join(empty)}")
+
+        # BE-190: the edition is one the table knows (core/editions.py).
+        if self.edition not in EDITIONS:
+            raise ValueError(
+                f"EDITION {self.edition!r} is not an edition of velo "
+                f"(known: {', '.join(sorted(EDITIONS))})"
+            )
 
         # BE-192: domains.* of the passport are hosts. A URL, a port or a
         # path here would become a second, wrong origin in every link.

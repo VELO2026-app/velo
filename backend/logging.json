@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "disable_existing_loggers": false,
+  "formatters": {
+    "primer": {
+      "()": "app.core.logging.PrimerJsonFormatter"
+    }
+  },
+  "handlers": {
+    "stdout": {
+      "class": "logging.StreamHandler",
+      "formatter": "primer",
+      "stream": "ext://sys.stdout"
+    }
+  },
+  "root": {
+    "level": "INFO",
+    "handlers": ["stdout"]
+  },
+  "loggers": {
+    "uvicorn": {"level": "INFO", "handlers": [], "propagate": true},
+    "uvicorn.error": {"level": "INFO", "handlers": [], "propagate": true},
+    "uvicorn.access": {"level": "WARNING", "handlers": [], "propagate": true},
+    "httpx": {"level": "WARNING", "handlers": [], "propagate": true},
+    "httpcore": {"level": "WARNING", "handlers": [], "propagate": true},
+    "sqlalchemy": {"level": "WARNING", "handlers": [], "propagate": true},
+    "alembic": {"level": "INFO", "handlers": [], "propagate": true}
+  }
+}

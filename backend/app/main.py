@@ -4,8 +4,8 @@
 #
 # ENDPOINTS:
 #   GET /        -> API name + version
-#   GET /health  -> DB + Redis connectivity check (always 200)
-#   GET /ready   -> Readiness probe (503 if degraded)
+#   GET /health  -> protocol 9.1, always 200 (core/report.py)
+#   GET /ready   -> protocol 9.2, 503 when a check fails
 #
 # B-03: allow_headers now lists headers explicitly instead of ["*"].
 #   Fetch spec forbids allow_headers=["*"] with allow_credentials=True.
@@ -19,15 +19,15 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import text
 from starlette.requests import Request
 
 from app.core.config import settings
-from app.core.database import dispose_engine, get_engine
+from app.core.database import dispose_engine
 from app.core.exceptions import VeloError
 from app.core.logging import setup_logging
-from app.core.middleware import TraceIdMiddleware
-from app.core.redis import close_redis, get_redis, init_redis
+from app.core.middleware import REQUEST_ID_HEADER, RequestContextMiddleware
+from app.core.report import Report
+from app.core.redis import close_redis, init_redis
 from app.modules.admin.router import router as admin_router
 from app.modules.auth.router import router as auth_router
 from app.modules.masters.router import router as masters_router
@@ -144,9 +144,8 @@ mcp_app = build_mcp_app()
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Manage application lifecycle: startup and shutdown."""
-    # JSON on every role (BE-192): every instance is a deploy-machine
-    # instance, and the machine reads JSON lines (protocol 9.4).
-    setup_logging(log_level=settings.log_level, json_logs=True)
+    # Log lines of protocol 9.4 on every role (BE-190, core/logging.py).
+    setup_logging(log_level=settings.log_level)
 
     relay_task: asyncio.Task | None = None
     listener_task: asyncio.Task | None = None
@@ -428,16 +427,20 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     # B-03: Fetch spec forbids allow_headers=["*"] with allow_credentials=True.
-    # List headers explicitly. X-Trace-ID is our custom tracing header.
-    allow_headers=["Authorization", "Content-Type", "X-Trace-ID"],
+    # List headers explicitly. X-Request-ID is the request id (protocol 9.6).
+    allow_headers=["Authorization", "Content-Type", REQUEST_ID_HEADER],
+    # The frontend is on another origin (domains.frontend) and shows the
+    # request id with an error (frontend/src/api/client.ts): a response
+    # header it may read only when exposed.
+    expose_headers=[REQUEST_ID_HEADER],
 )
 
 # ---------------------------------------------------------------------------
-# Trace ID (Pre-6.1)
+# Request context: request id, client address, User-Agent (BE-190)
 # ---------------------------------------------------------------------------
 # Added AFTER CORSMiddleware so Starlette applies it as the outermost
 # layer (LIFO order).
-app.add_middleware(TraceIdMiddleware)
+app.add_middleware(RequestContextMiddleware)
 
 
 # ---------------------------------------------------------------------------
@@ -449,37 +452,6 @@ async def root() -> dict:
     return {"name": "VELO API", "version": "0.1.0"}
 
 
-@app.get("/health")
-async def health() -> dict:
-    """Health check -- DB and Redis connectivity."""
-    result = {"status": "ok", "db": "ok", "redis": "ok"}
-
-    # Check DB.
-    try:
-        engine = get_engine()
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
-    except Exception:
-        result["db"] = "error"
-        result["status"] = "degraded"
-        logger.exception("health_check_db_failed")
-
-    # Check Redis.
-    try:
-        redis = get_redis()
-        await asyncio.wait_for(redis.ping(), timeout=2.0)
-    except Exception:
-        result["redis"] = "error"
-        result["status"] = "degraded"
-        logger.exception("health_check_redis_failed")
-
-    return result
-
-
-@app.get("/ready")
-async def readiness() -> JSONResponse:
-    """Readiness probe -- returns 503 if degraded (TD-003)."""
-    check = await health()
-    if check["status"] != "ok":
-        return JSONResponse(status_code=503, content=check)
-    return JSONResponse(status_code=200, content=check)
+# GET /health and GET /ready of protocol 9 (core/report.py).
+report_instance = Report()
+app.include_router(report_instance.router)
