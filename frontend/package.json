@@ -19,8 +19,9 @@
     "format:check": "prettier --check src/",
     "typecheck": "vue-tsc --noEmit --incremental",
     "docs": "typedoc",
-    "test": "vitest run",
+    "test": "vitest run && node --test scripts/lib/*.test.mjs",
     "test:watch": "vitest",
+    "tokens:sync": "node scripts/sync-figma-variables.mjs --rest",
     "test:coverage": "vitest run --coverage"
   },
   "lint-staged": {

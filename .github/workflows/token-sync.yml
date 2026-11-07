@@ -1,0 +1,111 @@
+# =============================================================================
+# VELO CI — track T stage 2: the Figma Variables autosync
+# (tz-ui-package.md, track T: "автосинк Variables -> tokens.json (автоПР)").
+#
+# A scheduled job, no agents, no judgment:
+#   1. pull the published variables of the "VELΘ App Актуальное" file
+#      through the REST API (secret FIGMA_TOKEN);
+#   2. compare against frontend/tokens.json by VALUE
+#      (scripts/lib/figma-token-sync.mjs: refs, ref chains, color-mix,
+#      dims and verbatim strings -- never string equality);
+#   3. in sync -> the job ends (nothing to review);
+#   4. drift -> an AUTO-PR: branch tokens/auto-sync/<date>, the lossless
+#      updates applied to tokens.json (+ regenerated variables.css), the
+#      full drift report as the PR body. "Диффы токенов проходят ревью
+#      как код" -- a human reviews and merges.
+#
+# Requires the repo secret FIGMA_TOKEN (a Figma token with read access to
+# the token file). Without the secret the job exits green with a notice --
+# safe to land before the secret exists. The Local Variables REST endpoint
+# is Enterprise-locked: this job reads the PUBLISHED-library API, so the
+# file's library must be published; if it is not, the job fails with the
+# API's message and the fallback is a local agent/bridge run
+# (pnpm tokens:sync --snapshot <dump.json>).
+# The sync script is Node-stdlib-only: no install, no cache, one process.
+# =============================================================================
+name: token-sync
+
+on:
+  schedule:
+    # Weekly, Monday 04:17 UTC -- off-peak, deterministic.
+    - cron: '17 4 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: token-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Figma Variables -> tokens.json (auto-PR on drift)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Compare Figma Variables with the registry
+        id: sync
+        working-directory: frontend
+        env:
+          FIGMA_TOKEN: ${{ secrets.FIGMA_TOKEN }}
+        run: |
+          if [ -z "$FIGMA_TOKEN" ]; then
+            echo "::notice::FIGMA_TOKEN secret is not set -- the autosync is idle. Add the secret to enable it."
+            echo "exit_code=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          set +e
+          node scripts/sync-figma-variables.mjs --rest --report /tmp/drift.md
+          code=$?
+          set -e
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          if [ -f /tmp/drift.md ]; then
+            {
+              echo 'report<<EOF'
+              cat /tmp/drift.md
+              echo EOF
+            } >> "$GITHUB_OUTPUT"
+          fi
+          # 2 = drift (a PR is needed); 0 = in sync; anything else = a real
+          # failure the job must surface in red.
+          if [ "$code" != "0" ] && [ "$code" != "2" ]; then exit "$code"; fi
+
+      - name: Open the auto-PR
+        if: steps.sync.outputs.exit_code == '2'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPORT: ${{ steps.sync.outputs.report }}
+        run: |
+          set -e
+          branch="tokens/auto-sync/$(date +%Y-%m-%d)"
+          git config user.name "velo-token-sync"
+          git config user.email "token-sync@velo.local"
+          git checkout -b "$branch"
+          git add frontend/tokens.json frontend/src/styles/variables.css
+          git diff --cached --quiet && { echo "lossless updates produced no diff"; exit 0; }
+          git commit -m "tokens: Figma Variables autosync (track T stage 2)
+
+          The lossless class only: hex/rgba literals, verbatim strings and
+          timing values whose Figma word differs from the registry. Broken
+          aliases, unit-less dimensions and multi-line mixes are REPORT-ONLY
+          -- see the table below.
+
+          ${REPORT}"
+          git push -u origin "$branch"
+          gh pr create \
+            --base test \
+            --head "$branch" \
+            --title "tokens: Figma Variables autosync ($(date +%Y-%m-%d))" \
+            --body "$REPORT
+
+          ---
+          АвтоПР трека T, этап 2 (\`token-sync.yml\`): lossless-обновления
+          применены, остальное — таблица выше на ревью. Источник снапшота —
+          опубликованные переменные файла «VELΘ App Актуальное»."
