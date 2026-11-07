@@ -4,7 +4,7 @@
 // =============================================================================
 //
 // P6a safety net: these were written app-side when VModal had no tests --
-// «переносить нетестированное запрещено» -- pinning the then-current
+// moving untested code is forbidden -- pinning the then-current
 // contract as-is. FE-145 (the move this file travels with) changes exactly
 // two things DELIBERATELY, both §7.2 seams, both re-pinned below: the ×
 // button's aria-label is now the pure `closeLabel` prop (the localized

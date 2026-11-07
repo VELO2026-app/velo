@@ -11,7 +11,7 @@
   components split the DS: VModal = dialog, VBottomSheet = sheet.
 
   §7.2 seams cut by the move (the FE-142 baseline was pinned app-side
-  first -- «переносить нетестированное запрещено»):
+  first -- moving untested code is forbidden):
   - attrs-root: inheritAttrs:false + an explicit v-bind merge onto the
     teleported OVERLAY root. Before the move Vue silently dropped caller
     attrs on a Teleport root (the «the hard way» warning in VBottomSheet's

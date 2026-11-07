@@ -4,7 +4,7 @@
 // =============================================================================
 //
 // P6a safety net: these were written app-side when VBottomSheet had no
-// tests -- «переносить нетестированное запрещено» -- pinning the
+// tests -- moving untested code is forbidden -- pinning the
 // then-current contract as-is. FE-145 (the move this file travels with)
 // changes exactly ONE thing DELIBERATELY, a §7.2 seam re-pinned below:
 // caller attrs now MERGE onto the teleported overlay (inheritAttrs:false +

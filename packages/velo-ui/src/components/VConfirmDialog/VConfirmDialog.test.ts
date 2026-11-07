@@ -5,7 +5,7 @@
 //
 // FE-142 pinned VModal/VBottomSheet app-side before their move; this
 // composition layer (VModal + VButton + IconWarning) had no suite of its
-// own, and «переносить нетестированное запрещено» applies to it too. The
+// own, and moving untested code is forbidden applies to it too. The
 // move itself cuts ONE seam this file pins first: the action-button labels
 // are now PURE prop copy (the localized t('ui.cancel')/t('ui.confirm')
 // defaults the app component used to resolve at render time moved to the
