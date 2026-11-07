@@ -6,9 +6,11 @@
     "back": "Back",
     "save": "Save",
     "more": "Details",
+    "noData": "No data yet",
     "collapse": "Collapse",
     "expand": "Expand",
     "weekdays": "Days of the week",
+    "menuAria": "Menu",
     "prevMonth": "Previous month",
     "nextMonth": "Next month",
     "dayShort": {
