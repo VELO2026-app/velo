@@ -90,8 +90,10 @@
 --velo-border-light
 --velo-border-width
 --velo-dur-base
+--velo-dur-fast            # VLoadingSwap content fade (P8 batch 5)
 --velo-dur-press
 --velo-dur-pulse
+--velo-dur-resize           # VLoadingSwap height glide (P8 batch 5)
 --velo-dur-sheet
 --velo-dur-sheet-exit
 --velo-ease-breath

@@ -23,7 +23,11 @@
 //   1. ONLY the doors -- src/components/ui/index.ts,
 //      src/components/icons/index.ts,
 //      src/composables/useKeyboardFieldScroll.ts and, since P8,
-//      src/components/ui/VTextarea.vue -- may import '@velo/ui';
+//      src/components/ui/VTextarea.vue and
+//      src/composables/useLoadingHold.ts -- may import '@velo/ui';
+//      (the useLoadingHold door: the loading rule moved into the kit with
+//      VLoadingSwap; screens keep importing it from the composables door,
+//      the FE-143 shape)
 //      no view, store, or any other source touches the package directly.
 //      The VTextarea door (P8): the voice field is DOMAIN and stays
 //      app-side (tz-ui-package §0, third exception next to VeloLogo /
@@ -53,6 +57,8 @@ const BARREL_PATHS = new Set([
   'composables/useKeyboardFieldScroll.ts',
   // P8: the residual voice field composes the kit's VFieldError (see above).
   'components/ui/VTextarea.vue',
+  // P8: the loading rule moved into the kit with VLoadingSwap.
+  'composables/useLoadingHold.ts',
 ])
 
 describe('@velo/ui boundary (FE-117/FE-119: the barrels flip, nothing else touches the package)', () => {

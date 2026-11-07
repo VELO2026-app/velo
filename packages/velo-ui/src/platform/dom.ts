@@ -45,3 +45,30 @@ export function setBodyOverflow(value: string): void {
 export function toggleRootClass(cls: string, force: boolean): void {
   document.documentElement.classList.toggle(cls, force)
 }
+
+/** getComputedStyle(document.documentElement).getPropertyValue(prop) -- a
+ *  token on the host root, read as-is (no var() resolution). */
+export function rootStyleValue(prop: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(prop)
+}
+
+/** A duration token on the root (`--velo-dur-*`) in ms. The unit-test DOM
+ *  (happy-dom resolves no styles) yields the fallback -- the same law as
+ *  everywhere in this package: tokens ride var(), tests assert the DOM,
+ *  never computed styles.
+ *
+ * @returns `fallback` where the token is not set or not parseable. */
+export function rootDurationMs(prop: string, fallback: number): number {
+  const raw = rootStyleValue(prop).trim()
+  const value = parseFloat(raw)
+  if (!Number.isFinite(value)) return fallback
+  return raw.endsWith('ms') ? value : raw.endsWith('s') ? value * 1000 : value
+}
+
+/** The user asked the OS for less motion (animations become instant). */
+export function prefersReducedMotion(): boolean {
+  return (
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+}

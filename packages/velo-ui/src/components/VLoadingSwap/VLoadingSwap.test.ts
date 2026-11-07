@@ -8,11 +8,10 @@
 // The crossfade itself is CSS (browser-verified).
 // =============================================================================
 
-import { createTestI18n } from '@/locales/testing'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp, h, nextTick, ref, type App } from 'vue'
-import VLoadingSwap from '@/components/ui/VLoadingSwap.vue'
-import { LOADING_DELAY_MS, LOADING_MIN_DURATION_MS } from '@/composables/useLoadingHold'
+import VLoadingSwap from './VLoadingSwap.vue'
+import { LOADING_DELAY_MS, LOADING_MIN_DURATION_MS } from '../../useLoadingHold'
 
 let app: App | null = null
 let host: HTMLElement | null = null
@@ -31,7 +30,7 @@ function mount(): void {
           default: () => h('div', { class: 'content' }, 'ready'),
         },
       ),
-  }).use(createTestI18n())
+  })
   app.mount(host)
 }
 

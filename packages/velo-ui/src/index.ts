@@ -23,6 +23,7 @@ export { default as VEmptyState } from './components/VEmptyState'
 export { default as VFieldError } from './components/VFieldError'
 export { default as VInput } from './components/VInput'
 export { default as VListRow } from './components/VListRow'
+export { default as VLoadingSwap } from './components/VLoadingSwap'
 export { default as VLoader } from './components/VLoader'
 export { default as VMenuRow } from './components/VMenuRow'
 export { default as VMenu } from './components/VMenu'
@@ -66,6 +67,16 @@ export * from './icons'
 // the same key.
 export { lockBodyScroll, unlockBodyScroll, SCROLL_LOCK_CLASS } from './useBodyScrollLock'
 export { KEYBOARD_FIELD_SCROLL_INJECTION_KEY, useKeyboardFieldScroll } from './keyboardFieldScroll'
+// The loading system's delayed-flag rule (P8 batch 5): the no-flash hold the
+// swap component and host screens share -- nothing shows before LOADING_DELAY_MS,
+// and once shown it stays at least LOADING_MIN_DURATION_MS.
+export {
+  useDelayedFlag,
+  useLoadingHold,
+  LOADING_DELAY_MS,
+  LOADING_MIN_DURATION_MS,
+} from './useLoadingHold'
+export type { DelayedFlagOptions, LoadingHold } from './useLoadingHold'
 export type { KeyboardFieldScrollApi, KeyboardFieldScrollFactory } from './keyboardFieldScroll'
 
 // The i18n seam (FE-118, tz-ui-package.md §4 P3): the host injects its

@@ -11,11 +11,10 @@
 // happy-dom has no layout, so heights come from a small model below.
 // =============================================================================
 
-import { createTestI18n } from '@/locales/testing'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp, h, nextTick, ref, type App } from 'vue'
-import VLoadingSwap from '@/components/ui/VLoadingSwap.vue'
-import { LOADING_DELAY_MS, LOADING_MIN_DURATION_MS } from '@/composables/useLoadingHold'
+import VLoadingSwap from './VLoadingSwap.vue'
+import { LOADING_DELAY_MS, LOADING_MIN_DURATION_MS } from '../../useLoadingHold'
 
 const SKELETON_H = 300
 const contentHRef = ref(80)
@@ -56,7 +55,7 @@ function mount(props: Record<string, unknown> = {}): void {
               : h('div', { class: 'content', 'data-h': contentHRef.value }, 'ready'),
         },
       ),
-  }).use(createTestI18n())
+  })
   app.mount(host)
 }
 

@@ -16,6 +16,7 @@ import { h, type FunctionalComponent } from 'vue'
 
 import {
   VConfirmDialog as VConfirmDialogKit,
+  VLoadingSwap as VLoadingSwapKit,
   VLoader as VLoaderKit,
   configureUi,
   VModal as VModalKit,
@@ -137,7 +138,19 @@ export { VSkeleton } from '@velo/ui'
 export { VSkeletonPracticeCard } from '@velo/ui'
 export { VSkeletonRow } from '@velo/ui'
 export { VSkeletonBubbles } from '@velo/ui'
-export { default as VLoadingSwap } from './VLoadingSwap.vue'
+// VLoadingSwap (P8 batch 5): the kit renders its sr-only status pure -- the
+// localized common.loading default is re-anchored here (the VLoader pattern;
+// pinned app-side by VLoadingSwap.localized.test.ts). Slots (skeleton +
+// default) forward untouched.
+const VLoadingSwap: FunctionalComponent<{
+  pending: boolean
+  label?: string
+  animateHeight?: boolean
+  memoryKey?: string
+  revision?: string | number
+}> = (props, { attrs, slots }) =>
+  h(VLoadingSwapKit, { ...attrs, ...props, label: props.label ?? t('common.loading') }, slots)
+export { VLoadingSwap }
 export { VEmptyState } from '@velo/ui'
 export { default as VToast } from './VToast.vue'
 export { VStatCard } from '@velo/ui'

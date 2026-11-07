@@ -1,5 +1,6 @@
 <!--
-  VELO Frontend -- VLoadingSwap (loading system, report §8.3.4)
+  @velo/ui -- VLoadingSwap (the loading system's swap, report §8.3.4;
+  P8 batch 5 -- tz-ui-package §4 P8)
 
   The one way a screen block goes from "loading" to "content":
     - `pending` = nothing to show yet AND a request is in flight (a block
@@ -53,7 +54,10 @@
     <Transition name="v-loading-swap-skeleton" :css="reveal">
       <div v-if="showSkeleton" class="v-loading-swap__layer v-loading-swap__skeleton">
         <slot name="skeleton" />
-        <span role="status" class="velo-sr-only">{{ label ?? t('common.loading') }}</span>
+        <!-- The i18n seam (the VLoader pattern): the kit is pure -- the
+             sr-only status text arrives through the `label` prop and the
+             application barrel anchors the localized common.loading default. -->
+        <span role="status" class="velo-sr-only">{{ label }}</span>
       </div>
     </Transition>
     <!-- Content fades in whenever it had to be waited for (even inside the
@@ -68,10 +72,9 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { t } from '@/locales'
-import { useLoadingHold } from '@/composables/useLoadingHold'
-import { prefersReducedMotion, rootDurationMs } from '@/platform/dom'
-import { readSessionNumber, writeSessionNumber } from '@/platform/session-memo'
+import { useLoadingHold } from '../../useLoadingHold'
+import { prefersReducedMotion, rootDurationMs } from '../../platform/dom'
+import { readSessionNumber, writeSessionNumber } from '../../platform/sessionMemory'
 
 const props = withDefaults(
   defineProps<{
