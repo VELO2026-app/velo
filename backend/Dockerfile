@@ -158,10 +158,12 @@ COPY backend/tests/ ./tests/
 COPY backend/pyproject.toml ./
 # BE-192: what the deploy machine is told about this product -- read by
 # tests/test_primer_env.py, which holds Settings, compose's app.environment
-# and primer.yaml's env and egress together. / is
+# and primer.yaml's env and egress together, and (BE-193) the storage
+# stack's root login against primer.yaml's env. / is
 # where the tests' Path(__file__).resolve().parents[2] lands from /app/tests,
-# as for the comms profile below. Neither file holds a value (protocol 5.1).
-COPY primer.yaml docker-compose.yml /
+# as for the comms profile below. No file holds a value (protocol 5.1); the
+# storage file holds one constant of the product, the root login.
+COPY primer.yaml docker-compose.yml docker-compose.storage.yml /
 # The one settings environment of CI and the two workflows that read it --
 # test_primer_env.py holds them and Settings together (BE-190 fix). The
 # values are invented; the runtime stage has none of them.

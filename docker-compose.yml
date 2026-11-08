@@ -110,7 +110,12 @@ services:
     volumes:
       - velo_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U velo -d velo"]
+      # Over TCP, not the socket: on a fresh volume the image first runs a
+      # temporary initdb server that listens on the socket only, and a
+      # socket probe would call the stack ready before the real server is
+      # up (finding of BE-197; the CI job of backend-tests.yml asks the same
+      # way).
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U velo -d velo"]
       interval: 5s
       timeout: 3s
       retries: 5

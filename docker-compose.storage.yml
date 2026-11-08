@@ -9,12 +9,24 @@
 #   velo-storage       the server, RustFS. No port on the host, no route.
 #   velo-storage-init  one-shot: buckets, privacy, lifecycle rules and service
 #                      keys from backend/app/core/storage_registry.yaml, on
-#                      every rollout. STORAGE_INIT_MODE=check makes it
-#                      read-only.
+#                      every rollout. With the argument `--check`
+#                      (`compose run velo-storage-init --check`) it only
+#                      reads and reports.
 #
 # The file sits in the repository root so that the registry is a bind inside
 # the repository without `..` (protocol 3.4).
 # =============================================================================
+
+# The LOGIN of the storage's root user is a constant of the product, not a
+# value of an instance (owner ruling 4.11): the service keys belong to the
+# root user that made them, and a root user with another login does not see
+# them -- the backend would get AccessDenied with a key that still exists.
+# Kept the same, it survives every rollout and a restore of the volume. Only
+# the root SECRET is minted; RustFS takes a new one over a kept volume
+# (measured 2.11). The init writes the login into the URL of RC_HOST_local,
+# so it stays lower-case letters, digits and hyphens
+# (backend/tests/test_primer_env.py).
+x-storage-root-login: &root-login velo-storage-root
 
 services:
   velo-storage:
@@ -25,7 +37,7 @@ services:
       RUSTFS_ADDRESS: ":9000"
       RUSTFS_VOLUMES: /data
       RUSTFS_CONSOLE_ENABLE: "false"
-      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:?}
+      RUSTFS_ACCESS_KEY: *root-login
       RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:?}
     volumes:
       - velo_storage_data:/data
@@ -42,8 +54,7 @@ services:
     depends_on:
       velo-storage: { condition: service_healthy }
     environment:
-      STORAGE_INIT_MODE: apply
-      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:?}
+      RUSTFS_ACCESS_KEY: *root-login
       RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:?}
       STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:?}
     volumes:
@@ -76,19 +87,25 @@ services:
         set -eu
         # rc keeps its state under $$HOME; the image's user may have no writable home.
         export HOME=/tmp
-        mode="$${STORAGE_INIT_MODE:-apply}"
-        case "$$mode" in
-          apply|check) ;;
-          *) echo "velo-storage-init: unknown STORAGE_INIT_MODE '$$mode'"; exit 2 ;;
-        esac
         say() { echo "velo-storage-init: $$*"; }
+        # The mode is an argument, not a variable: a verb of the machine runs
+        # this service with arguments and no environment of its own. No
+        # argument -- apply; exactly `--check` -- read only; anything else,
+        # an empty argument and a second argument included, is refused before
+        # the storage is touched.
+        case "$$#:$${1-}" in
+          0:) mode=apply ;;
+          1:--check) mode=check ;;
+          *) say "unknown arguments ($$# of them: '$$*') -- only --check is accepted; nothing was touched"; exit 2 ;;
+        esac
 
-        # REFUSE ON EMPTY CREDENTIALS, BEFORE TOUCHING ANYTHING: a bucket made
-        # with the root key and a service key made from an empty secret would
-        # leave the storage half-built and the backend holding a key that does
-        # not exist.
-        if [ -z "$${RUSTFS_ACCESS_KEY:-}" ] || [ -z "$${RUSTFS_SECRET_KEY:-}" ]; then
-          say "the root keys are empty -- nothing was touched"
+        # REFUSE ON AN EMPTY ROOT SECRET, BEFORE TOUCHING ANYTHING: a bucket
+        # made with the root key and a service key made from an empty secret
+        # would leave the storage half-built and the backend holding a key
+        # that does not exist. The root LOGIN is the constant at the top of
+        # this file.
+        if [ -z "$${RUSTFS_SECRET_KEY:-}" ]; then
+          say "the root secret is empty -- nothing was touched"
           exit 1
         fi
         reg=/tmp/registry.json
@@ -236,6 +253,8 @@ services:
           fail=1
         fi
         exit "$$fail"
+      # $0 of the script above; the arguments of `compose run` follow it.
+      - velo-storage-init
 
 volumes:
   velo_storage_data: {}

@@ -14,6 +14,9 @@ for every required key except the connection addresses. Three more
 statements keep that file whole and keep both CI places reading it, so a
 required key cannot be added to Settings and forgotten in CI again.
 
+BE-193: one more statement holds the storage stack's root login as a
+constant of docker-compose.storage.yml, not a value of primer.yaml's env.
+
 The files are read from the repository root -- in the test image they are
 at /, where Path(__file__).resolve().parents[2] lands from /app/tests
 (backend/Dockerfile, stage `test`).
@@ -31,6 +34,7 @@ from app.modules.mcp.oauth import MCP_OAUTH_CIMD_ALLOWED_HOSTS
 
 ROOT = Path(__file__).resolve().parents[2]
 COMPOSE = ROOT / "docker-compose.yml"
+STORAGE_COMPOSE = ROOT / "docker-compose.storage.yml"
 PRIMER = ROOT / "primer.yaml"
 CI_ENV = ROOT / "backend" / "ci.env"
 CI_YML = ROOT / ".github" / "workflows" / "ci.yml"
@@ -219,3 +223,31 @@ def test_the_suite_reads_ci_env() -> None:
     passed = set(re.findall(r"-e ([A-Z][A-Z0-9_]*)", run))
     assert passed, "the suite still passes its own addresses"
     assert not passed & set(_ci_env())
+
+
+def test_the_storage_root_login_is_a_constant_not_a_value() -> None:
+    """BE-193, owner ruling 4.11. The service keys of the storage belong to
+    the root user that made them; a root user with another login does not
+    see them, and the backend gets AccessDenied with a key that exists. So
+    the root LOGIN is one constant of docker-compose.storage.yml, the same in
+    both of its services, and never a key of primer.yaml's env (a minted
+    login would be new after a reinstall over a kept volume). The init
+    writes it into the URL of RC_HOST_local, hence its form. The root SECRET
+    stays a value: ${RUSTFS_SECRET_KEY:?} in both services, minted."""
+    compose = yaml.safe_load(STORAGE_COMPOSE.read_text(encoding="utf-8"))
+    environments = {
+        name: compose["services"][name]["environment"]
+        for name in ("velo-storage", "velo-storage-init")
+    }
+    logins = {name: env.get("RUSTFS_ACCESS_KEY") for name, env in environments.items()}
+    assert len(set(logins.values())) == 1, f"one root login for both: {logins}"
+    [login] = set(logins.values())
+    assert isinstance(login, str) and re.fullmatch(r"[a-z][a-z0-9-]{2,}", login), (
+        f"the root login: a literal of a-z, 0-9 and hyphens, not {login!r}"
+    )
+    primer = yaml.safe_load(PRIMER.read_text(encoding="utf-8"))["env"]
+    assert "RUSTFS_ACCESS_KEY" not in primer, "the root login is not in primer.yaml"
+    for name, env in environments.items():
+        secret = env.get("RUSTFS_SECRET_KEY")
+        assert secret == "${RUSTFS_SECRET_KEY:?}", f"{name}: {secret!r}"
+    assert primer["RUSTFS_SECRET_KEY"]["source"] == "minted"

@@ -85,8 +85,8 @@ jobs:
     env:
       PROJECT: velo-ci
       IMAGE: velo-ci-backend
-      # The storage stack's own three variables (docker-compose.storage.yml).
-      RUSTFS_ACCESS_KEY: velo-ci-root
+      # The storage stack's own two variables (docker-compose.storage.yml;
+      # the root login is a constant of that file).
       RUSTFS_SECRET_KEY: velo-ci-root-secret-0123456789abcdef0123
       STORAGE_SECRET_KEY: velo-ci-storage-secret-0123456789abcdef
       POSTGRES_PASSWORD: velo-ci-postgres-password
@@ -139,7 +139,7 @@ jobs:
               module(name, True)
           dev = kind == "test"
           for path in ("/app/tests", "/app/pyproject.toml", "/primer.yaml", "/docker-compose.yml",
-                       "/comms-profile/types.yaml", "/opt/venv/bin/pytest", "/opt/venv/bin/ruff"):
+                       "/docker-compose.storage.yml", "/comms-profile/types.yaml", "/opt/venv/bin/pytest", "/opt/venv/bin/ruff"):
               (present if dev else absent)(path)
           for name in ("pytest", "pytest_asyncio", "ruff"):
               module(name, dev)

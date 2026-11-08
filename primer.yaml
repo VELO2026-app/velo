@@ -52,7 +52,8 @@ env:
   POSTGRES_PASSWORD:    { source: minted }
   REDIS_PASSWORD:       { source: minted }
   STORAGE_SECRET_KEY:   { source: minted }
-  RUSTFS_ACCESS_KEY:    { source: minted }
+  # The storage's root SECRET only: its login is a constant of
+  # docker-compose.storage.yml (owner ruling 4.11).
   RUSTFS_SECRET_KEY:    { source: minted }
   # passport
   EDITION:              { source: passport, key: edition, enum: editions }
