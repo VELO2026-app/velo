@@ -1,0 +1,19 @@
+<!-- The showcase host loads the BRAND FONT the same way the app does
+     (frontend/index.html, VELO:FONT comment, tz-whitelabel §3): Marmelad
+     from Google Fonts, Noto Sans fallback. Without this the kit renders
+     every story in the browser fallback -- typography is most of the look,
+     so the showcase would not match the running app ("компоненты не
+     соответствуют реальности"). A skin's webfont (brand.json fontUrl)
+     replaces this at app runtime; the showcase keeps the golden font. -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Marmelad&display=swap" rel="stylesheet" />
+<style>
+  /* The app's global.css applies the font token to body; the showcase
+     imports only variables.css (tokens), so the host typography contract is
+     repeated HERE -- without it every story inherits the browser default
+     (Times), which is exactly "не соответствует реальности". */
+  body {
+    font-family: var(--font-body, 'Marmelad', 'Noto Sans', sans-serif);
+  }
+</style>
