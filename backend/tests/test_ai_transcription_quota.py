@@ -40,7 +40,6 @@ from httpx import ASGITransport, AsyncClient
 from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.core.redis import get_redis
 from app.main import app
 from app.modules.ai import quota
@@ -64,7 +63,7 @@ _TID_MIN = 74170
 _TID_MAX = 74199
 
 _TRANSCRIBE_SEAM = (
-    "app.modules.ai.transcription.OpenRouterTranscriptionService.transcribe"
+    "app.modules.ai.transcription.CommsTranscriptionService.transcribe"
 )
 # The route's own reference to the quota function -- the race test's seam.
 _QUOTA_SEAM = "app.modules.ai.transcription_router.consume_transcription_quota"
@@ -306,25 +305,6 @@ async def test_a_failed_provider_call_still_spends_a_unit(
     assert failed.json()["error"] == code
     assert next_take.status_code == 429
     assert transcribe.await_count == 1
-
-
-async def test_a_server_without_a_key_spends_the_quota_first(
-    client: AsyncClient,
-) -> None:
-    """The quota sits before the key -- the price named in the route's
-    docstring: a keyless server answers not_configured while the quota
-    lasts, and quota_exceeded after."""
-    token, _ = await _login(client)
-
-    with patch.object(quota, "TRANSCRIPTION_DAILY_LIMIT", 1), \
-         patch.object(settings, "openrouter_api_key", ""):
-        first = await _transcribe(client, token)
-        second = await _transcribe(client, token)
-
-    assert first.status_code == 400
-    assert first.json()["error"] == "transcription_not_configured"
-    assert second.status_code == 429
-    assert second.json()["error"] == "transcription_quota_exceeded"
 
 
 class _BrokenRedis:

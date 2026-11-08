@@ -1,5 +1,5 @@
 # =============================================================================
-# VELO Backend -- Voice transcription router (GT-41)
+# VELO Backend -- Voice transcription router (GT-41, BE-184)
 # =============================================================================
 #
 # ENDPOINT:
@@ -14,13 +14,14 @@
 # AUTH AND QUOTA: get_current_user keeps strangers away from our credit --
 # the dependency runs before a single byte of audio is looked at. Signed-in
 # people are bounded by a daily quota per person (BE-67, modules/ai/quota.py),
-# spent before the provider is called; the quota lives here, at VELO's entry
-# point, rather than in the provider client, so it survives voice moving to
-# comms (BE-136).
+# spent before the take is handed on; the quota lives here, at VELO's entry
+# point, because comms -- which carries the take to the model since BE-184 --
+# knows the request key, not a person's budget.
 #
-# SESSION: none. This endpoint touches no database at all -- it takes no
-# session dependency rather than taking one and ignoring it. The quota
-# counter is in Redis, not in Postgres.
+# SESSION: none here. The route takes no session dependency; the quota
+# counter is in Redis, and the service opens one short transaction of its
+# own for the job's outbox row, committed before it waits
+# (modules/ai/transcription.py, SESSION RULES).
 # =============================================================================
 
 import structlog
@@ -57,22 +58,18 @@ async def transcribe_endpoint(
     """Transcribe one recording for the authenticated user.
 
     Order of refusals is deliberate and asserted by tests: authentication
-    first (a stranger never reaches our provider), then the payload
+    first (a stranger never reaches our credit), then the payload
     (malformed or oversized audio costs us nothing to refuse, and does not
-    spend the person's quota), then the daily quota (BE-67), then the key
-    and the provider inside the service. A person who sends a huge file to a
-    server with no key is told the file is too large, because that is the
-    problem they can actually fix.
+    spend the person's quota), then the daily quota (BE-67), then the
+    storage, comms and the model inside the service.
 
-    The quota comes BEFORE the key, and that has a price, named here because
-    it is a decision and not an accident: on a server with no key every take
-    still spends a unit, although nothing is billed. The feature is off
-    there anyway; the person is told so until the quota runs out, and then
-    is told the quota is used up.
+    The quota comes BEFORE the storage, and that has a price, named here
+    because it is a decision and not an accident: a take the storage refuses
+    still spends a unit, although no model was asked.
     """
     audio = decode_audio(body.audio_base64)
     await consume_transcription_quota(user.id)
-    text = await service.transcribe(audio)
+    text = await service.transcribe(audio, user.id)
 
     logger.info(
         "transcription_completed",

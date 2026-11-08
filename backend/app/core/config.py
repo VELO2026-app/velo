@@ -464,22 +464,6 @@ class Settings(BaseSettings):
     # storage module refuses on an empty secret when it is called.
     storage_secret_key: str = ""
 
-    # -- Voice transcription (GT-41) --
-    # The key lives HERE, on the server, and nowhere else. Voice input used
-    # to call OpenRouter straight from the browser with a VITE_ key compiled
-    # into the bundle: anyone who opened the page could read it and spend our
-    # budget on any model, and per-person limits, audit and revocation were
-    # all impossible by construction. Empty key = the feature is off and says
-    # so with a machine code; it is never a 500 and never a silent nothing.
-    openrouter_api_key: str = ""
-    # OpenRouter RENAMED the OpenAI audio models in 2026 -- the old
-    # openai/gpt-4o-audio-preview slug 400s. Overridable without a redeploy
-    # precisely because that can happen again.
-    openrouter_transcribe_model: str = "openai/gpt-audio-mini"
-    # Shorter than the browser's own 30s abort on purpose: if the browser
-    # gave up first, the completion would keep running and we would pay for
-    # an answer nobody receives.
-    openrouter_http_timeout_seconds: float = 25.0
     # -- Support translation (BE-166, owner ruling 2026-10-22) --
     # The ONE language every support admin writes in. A user's message is
     # translated INTO it, an admin's reply is translated FROM it into the

@@ -110,7 +110,8 @@ async def test_put_same_key_twice_overwrites(ids: tuple[UUID, UUID]) -> None:
 
 async def test_empty_body_is_stored_and_read_back(ids: tuple[UUID, UUID]) -> None:
     """EMPTINESS: zero bytes is a valid object at this layer; the consumer
-    (BE-136) decides whether an empty recording is acceptable."""
+    decides whether an empty recording is acceptable -- voice input refuses
+    one before it is stored (modules/ai/transcription.py decode_audio)."""
     where = storage.bucket("voice", test=True)
     owner, obj = ids
     await storage.put_object(where, owner, obj, b"")

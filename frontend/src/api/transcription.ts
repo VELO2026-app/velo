@@ -17,7 +17,8 @@
  * 15 seconds; a minute of audio does not come back in 15 seconds, and an
  * abort on our side does not stop the completion the server is already
  * paying for. The timeout ladder is deliberate:
- * `browser 30s > backend 25s (OPENROUTER_HTTP_TIMEOUT_SECONDS) > the provider call`.
+ * `browser 30s > backend 25s (WAIT_SECONDS, backend modules/ai/transcription.py)`;
+ * a take the backend gives up on has its recording deleted, so a job not yet started never reaches the model.
  * Whoever gives up first must not be the party holding the bill.
  *
  * TranscribeResult is unchanged from the old module -- `{ok, text?, error?}` --

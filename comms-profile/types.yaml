@@ -289,6 +289,39 @@ types:
     push_on: outcome
     expires_after: 15m
 
+  # -- BE-184: voice input -- a recording to a model, the transcript back
+  #    (comms deploy/INTEGRATION.md section 11, `llm_audio`). The backend
+  #    puts the recording into velo-storage and the job carries a signed
+  #    link to it; comms fetches the body and appends it to the letter
+  #    (backend app/modules/ai/transcription.py). The person waits on the
+  #    request, so every number here is a rung of that module's time ladder
+  #    and is read together with it (tests/test_comms_protocol_3.py pins
+  #    both sides):
+  #    `llm_sets: [llm.audio]` -- a set whose model takes audio (owner ruling
+  #      at the BE-184 gate). comms REFUSES TO START on a box where it is
+  #      not defined: the set goes into LLM_KEY_SETS of the comms .env
+  #      before this profile is rolled out, on every box that takes it.
+  #    `interactive`: someone is waiting right now, and no type for people
+  #      travels in that lane.
+  #    `expires_after: 30s`: the endpoint gives up at 25 s, and a job not
+  #      started by then would be a paid answer nobody reads.
+  #    `retry_max_attempts: 1`: a second attempt comes after the person was
+  #      told "no" -- the same reason.
+  #    `answer_keep: 10m`: the backend reads the answer the moment the job
+  #      ends; a person's words need not wait a day in comms.
+  #    `max_audio_bytes: 2097152`: the backend's own ceiling,
+  #      MAX_AUDIO_BYTES -- a recording the backend took is never refused
+  #      by comms for its size. --
+
+  voice.transcribe:
+    channels: [llm]
+    llm_sets: [llm.audio]
+    lane: interactive
+    expires_after: 30s
+    retry_max_attempts: 1
+    answer_keep: 10m
+    max_audio_bytes: 2097152
+
   # -- BE-166: the reply to a user's support request could not be translated
   #    into their language (the translation job ended without an answer, or
   #    the model declined).

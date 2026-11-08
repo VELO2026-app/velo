@@ -173,11 +173,15 @@ def test_debug_logging_is_refused_on_every_role(
         "postgres_db",
         "postgres_user",
         "postgres_password",
+        # BE-184: voice goes through comms, the provider's key left with it.
+        "openrouter_api_key",
+        "openrouter_transcribe_model",
+        "openrouter_http_timeout_seconds",
     ],
 )
 def test_a_removed_key_is_no_field(removed: str) -> None:
-    """Removed whole (BE-192), not left as a fallback. Pair: the field list
-    is the real one -- it has the fields this delivery added."""
+    """Removed whole (BE-192, BE-184), not left as a fallback. Pair: the
+    field list is the real one -- it has the fields BE-192 added."""
     assert removed not in Settings.model_fields
     assert {"server_role", "domain_frontend", "domain_api"} <= set(
         Settings.model_fields

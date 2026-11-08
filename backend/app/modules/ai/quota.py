@@ -9,20 +9,17 @@
 # decision: 60; a constant since BE-192 -- the owner's number, the same on
 # every instance).
 #
-# WHY HERE AND NOT IN transcription.py. That module is the provider client,
-# and it is deleted whole when voice moves to comms (BE-136,
-# comms-llm-transport §0): comms knows the request key, not a person's
-# budget, so the quota is VELO's and lives at VELO's entry point -- the
-# route -- where it survives the move unchanged.
+# WHY HERE AND NOT IN transcription.py. That module hands the take to comms
+# (BE-184), and comms knows the request key, not a person's budget: the
+# quota is VELO's and lives at VELO's entry point -- the route -- whatever
+# carries the take to the model.
 #
 # WHAT COUNTS. Every request that gets past authentication and the payload
-# checks, counted BEFORE the provider is called. A failed provider call is
-# still paid for, so it still counts: a timeout, a provider error, and an
-# answer with no speech all spend one unit. On a server with no key the
-# request is counted too, although nothing is billed -- the order of
-# refusals puts the quota before the key (owner decision, see the route's
-# docstring); there the feature is off anyway, and the person is told so
-# until the quota runs out.
+# checks, counted BEFORE the take is handed on. A failed call is still paid
+# for, so it still counts: a timeout, a provider error, and an answer with
+# no speech all spend one unit. A take the storage refuses is counted too,
+# although no model was asked -- the order of refusals puts the quota before
+# the storage (see the route's docstring).
 #
 # THE DAY. A calendar day in UTC, the same boundary for everyone: the date is
 # part of the key, so a new day is a new key and needs no clock arithmetic.
@@ -54,9 +51,13 @@
 #      volume dropped from docker-compose.yml), or the provider bill shows
 #      one person above the daily limit on a day without a reinstall.
 #   5. Agreed fix form: a per-person, per-day counter row in Postgres.
-#   6. Rejected: Postgres now -- the endpoint takes no database session at
-#      all, and a row write per request on every take buys back a loss
-#      that is one day's quota after a wipe.
+#   6. Rejected: Postgres now -- a counter row per person and day is a row
+#      every take of that person writes, so it needs a lock (an UPDATE ...
+#      RETURNING) where Redis INCR is atomic, and two takes of one person
+#      would queue on it; all that to buy back a loss of one day's quota
+#      after a wipe. (Before BE-184 the reason was also that the endpoint
+#      touched no database at all; since then the service writes one outbox
+#      row per take, so that part no longer holds.)
 # =============================================================================
 
 from datetime import UTC, date, datetime
