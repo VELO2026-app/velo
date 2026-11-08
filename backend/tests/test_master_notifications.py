@@ -321,19 +321,27 @@ class TestProfile:
     def test_every_template_sheet_names_a_declared_type(self) -> None:
         """A sheet for a type nobody declares renders for nothing.
 
-        Templates are a SUBSET, not an equal set: the llm types
-        support.translate_for_support and support.translate_for_user (BE-166)
-        carry no sheet because comms refuses one on an llm type -- a letter
-        goes to a model, not to a person -- so the assertion is containment
-        and the known exceptions are named here rather than silently allowed
-        by a weaker check.
+        Templates are a SUBSET, not an equal set: an llm type (channels
+        exactly [llm]) carries no sheet, because comms refuses one on it --
+        the letter is written by the product and goes to a model, not to a
+        person (comms deploy/INTEGRATION.md section 11). So the assertion is
+        containment, and the types without a sheet must be EXACTLY the llm
+        types: a type for people without a sheet fails, and so does an llm
+        type with one.
+
+        Until BE-184 the exceptions were named here by hand -- the two
+        translations of BE-166 -- and that list was right while they were
+        the only llm types. BE-184 added voice.transcribe and the hand list
+        broke on it; the set is now read off the profile, with the pair that
+        keeps it honest: the llm set is not empty and holds voice.transcribe.
 
         The set used to hold a third member, support.thread_created, declared
         with no sheet because it went to group:admins with its Russian stored
         text. BE-172 removed that type; its successor support.message_received
         has sheets in both locales, so the exceptions are the llm types alone.
         """
-        types = set(_load_profile())
+        records = _load_profile()
+        types = set(records)
         for locale in ("ru", "en"):
             sheets = set(
                 yaml.safe_load(
@@ -347,10 +355,13 @@ class TestProfile:
                 (_profile_dir() / "templates" / "ru.yaml").read_text()
             )
         )
-        assert types - ru == {
-            "support.translate_for_support",
-            "support.translate_for_user",
+        llm = {
+            key
+            for key, record in records.items()
+            if record is not None and record.get("channels") == ["llm"]
         }
+        assert "voice.transcribe" in llm
+        assert types - ru == llm
 
     def test_the_two_locales_carry_the_same_sheets(self) -> None:
         """A type translated into one locale and not the other is how a
