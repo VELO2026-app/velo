@@ -21,8 +21,10 @@
 //                as MANUAL, owner's acceptance (tz-whitelabel §3: snapshots
 //                are manual)
 //
-// Usage: node scripts/validate-skin.mjs [skinDir]   (default: public/skin)
-// Exits 1 on any FAIL. validateSkin() is exported for the unit suite.
+// Usage: node scripts/validate-skin.mjs [skinDir] [--build]  (default: public/skin)
+// Exits 1 on any FAIL. --build is the `pnpm build` gate (FE-148): an absent
+// package passes (golden build), a present one must pass in full.
+// validateSkin() and skinBuildGate() are exported for the unit suite.
 // =============================================================================
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
@@ -319,12 +321,32 @@ export function validateSkin(skinDir, frontendDir) {
   return out
 }
 
+// -- build gate -----------------------------------------------------------------
+
+/** The build-time gate (FE-148): an invalid skin package fails the build.
+ * No `skinDir` at all = the golden build, nothing to check (returns null).
+ * A PRESENT directory is validated in full -- including one without
+ * brand.json, which the build itself would silently treat as "no skin"
+ * (`readSkin` keys on brand.json), so a half-delivered package can never
+ * pass as golden. */
+export function skinBuildGate(skinDir, frontendDir) {
+  if (!existsSync(resolve(skinDir))) return null
+  return validateSkin(skinDir, frontendDir)
+}
+
 // -- CLI ----------------------------------------------------------------------
+// --build: the gate mode of `pnpm build` -- an absent public/skin passes.
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const skinDir = process.argv[2] ?? 'public/skin'
+  const args = process.argv.slice(2)
+  const buildMode = args.includes('--build')
+  const skinDir = args.find((a) => !a.startsWith('--')) ?? 'public/skin'
   const frontendDir = resolve(import.meta.dirname, '..')
-  const report = validateSkin(skinDir, frontendDir)
+  const report = buildMode ? skinBuildGate(skinDir, frontendDir) : validateSkin(skinDir, frontendDir)
+  if (report === null) {
+    console.log(`validate-skin: no skin package at ${skinDir} -- golden build`)
+    process.exit(0)
+  }
   for (const line of [...report.fails, ...report.warns, ...report.manual, ...report.passed])
     console.log(line)
   console.log(

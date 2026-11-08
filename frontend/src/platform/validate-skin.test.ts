@@ -14,7 +14,7 @@ import { join } from 'node:path'
 
 // Plain ESM module (types loosely declared in env.d.ts).
 // @ts-expect-error -- *.mjs modules carry no type information
-import { validateSkin } from '../../scripts/validate-skin.mjs'
+import { skinBuildGate, validateSkin } from '../../scripts/validate-skin.mjs'
 
 // vitest runs from frontend/ (import.meta.url is not file:// here, so the
 // paths anchor to the working directory).
@@ -95,5 +95,25 @@ describe('validate-skin (tz-whitelabel §3)', () => {
     )
     const report = validateSkin(dir, FRONTEND) as { fails: string[] }
     expect(report.fails.join('\n')).toMatch(/contrast: --velo-text-primary on --velo-bg-card-solid/)
+  })
+})
+
+describe('skin build gate (FE-148: an invalid package fails the build)', () => {
+  it('no skin directory = the golden build, nothing to check', () => {
+    const dir = join(mkdtempSync(join(tmpdir(), 'velo-no-skin-')), 'skin')
+    expect(skinBuildGate(dir, FRONTEND)).toBeNull()
+  })
+
+  it('a valid package passes the gate', () => {
+    const report = skinBuildGate(REFERENCE_SKIN, FRONTEND) as { fails: string[] }
+    expect(report.fails).toEqual([])
+  })
+
+  it('a present directory without brand.json fails -- never passes as golden', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'velo-bad-skin-'))
+    cpSync(REFERENCE_SKIN, dir, { recursive: true })
+    rmSync(join(dir, 'brand.json'))
+    const report = skinBuildGate(dir, FRONTEND) as { fails: string[] }
+    expect(report.fails).toContain('FAIL brand.json: missing')
   })
 })
