@@ -69,8 +69,16 @@ jobs:
       - name: Build @velo/ui (vite lib + vue-tsc dts)
         run: pnpm -C packages/velo-ui build
 
-      - name: Build (vue-tsc + vite)
-        run: pnpm -C frontend build
+      # FE-153: the build log is gated too -- a cyclic cross-chunk re-export
+      # (broken chunk execution order) or an undefined VITE_ html placeholder
+      # fails the job (rules: frontend/scripts/lib/build-log-gate.mjs).
+      # pipefail is explicit: a step without `shell:` runs as `bash -e`,
+      # where `build | tee` would take tee's exit 0 and hide a failed build.
+      - name: Build (vue-tsc + vite) + build-log gate
+        run: |
+          set -o pipefail
+          pnpm -C frontend build 2>&1 | tee "$RUNNER_TEMP/frontend-build.log"
+          node frontend/scripts/build-log-gate.mjs "$RUNNER_TEMP/frontend-build.log"
 
       # tz-whitelabel F5 (FE-114): the build matrix IS the whitelabel gate --
       # three full editions (golden + 2 reference skins) + the feature-cut

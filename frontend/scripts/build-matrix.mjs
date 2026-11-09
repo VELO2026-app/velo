@@ -37,6 +37,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { loadEnv } from 'vite'
+import { findBuildLogWarnings } from './lib/build-log-gate.mjs'
 
 // Resolved lazily: under vitest import.meta.url is not file:// (the same
 // reason passport-html tests anchor to process.cwd()), and the unit suite
@@ -68,13 +69,26 @@ const run = (cmd, args) => {
   if (res.status !== 0) throw new Error(`\`${[cmd, ...args].join(' ')}\` failed`)
 }
 const apply = (arg) => run('node', ['scripts/apply-skin.mjs', arg])
+// FE-153: every matrix build's log goes through the same gate as the plain CI
+// build (scripts/lib/build-log-gate.mjs) -- a cycle that only one edition's
+// chunking produces must not slip through. The output is captured, then
+// echoed whole (no live streaming).
 const build = (features) => {
   const res = spawnSync('node_modules/.bin/vite', ['build'], {
     cwd: frontendDir(),
-    stdio: 'inherit',
+    stdio: ['inherit', 'pipe', 'pipe'],
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
     env: { ...process.env, VITE_FEATURES: features },
   })
+  process.stdout.write(res.stdout ?? '')
+  process.stderr.write(res.stderr ?? '')
   if (res.status !== 0) throw new Error(`vite build (VITE_FEATURES=${features}) failed`)
+  const findings = findBuildLogWarnings(`${res.stdout ?? ''}\n${res.stderr ?? ''}`)
+  if (findings.length > 0) {
+    const lines = findings.map(({ rule, line }) => `  [${rule}] ${line}`).join('\n')
+    throw new Error(`vite build (VITE_FEATURES=${features}): gated build-log warnings\n${lines}`)
+  }
 }
 const sha12 = (file) => createHash('sha256').update(readFileSync(file)).digest('hex').slice(0, 12)
 
@@ -118,7 +132,7 @@ function currentEdition() {
 }
 
 /** The skinless build's identity, resolved EXACTLY as passport-html resolves
- *  %VITE_BRAND% at build time: process.env -> .env files -> 'VELO'. */
+ *  %VELO_BRAND% at build time: process.env -> .env files -> 'VELO'. */
 function goldenBrand() {
   const fromFiles = loadEnv('production', frontendDir(), 'VITE_').VITE_BRAND
   return process.env.VITE_BRAND ?? fromFiles ?? 'VELO'

@@ -168,8 +168,8 @@ export default [
   // --- P8: the @velo/ui boundary (tz-ui-package.md §4 P8; mirrors the ----
   // ui-package-boundary.test.ts law). The kit is imported ONLY through its
   // doors -- the barrels that re-export it plus the two seam doors (the
-  // keyboard factory and the loading rule) and the domain-residue VTextarea
-  // (the FE-94 voice field composes the kit's VFieldError; see the test).
+  // keyboard factory and the loading rule). (The P8 VTextarea door closed
+  // with FE-153: the field moved into the kit.)
   // Deep subpaths ('@velo/ui/...') stay banned everywhere. The doors
   // override below REPLACES this rule (flat config does not merge), so it
   // repeats the app-barrel deep-import patterns verbatim.
@@ -196,7 +196,6 @@ export default [
       'src/components/icons/index.ts',
       'src/composables/useKeyboardFieldScroll.ts',
       'src/composables/useLoadingHold.ts',
-      'src/components/ui/VTextarea.vue',
     ],
     rules: {
       'no-restricted-imports': [

@@ -45,6 +45,7 @@ export { default as VSkeletonRow } from './components/VSkeletonRow'
 export { default as VStatCard } from './components/VStatCard'
 export { default as VSwitch } from './components/VSwitch'
 export { default as VTag } from './components/VTag'
+export { default as VTextarea } from './components/VTextarea'
 export { default as VToast } from './components/VToast'
 export { default as VWheel } from './components/VWheel'
 

@@ -54,7 +54,7 @@ export const COMPOSER_VOICE_INPUT = true
 // Field voice input, step 2 (FE-94, transcription via our own backend) --
 // kill-switch
 // Used by: EntryView (edit-mode content field), ExternalActivityCreateView
-// (thoughts VTextarea via :voice-input)
+// (thoughts VoiceTextarea via :voice-input)
 // ---------------------------------------------------------------------------
 
 /**
