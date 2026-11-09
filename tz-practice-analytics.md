@@ -1,5 +1,11 @@
 # Аналитика по практике — ТЗ с готовыми компонентами
 
+> **Статус на 2026-11-09: ✅ реализовано** (FE-96): компоненты —
+> `frontend/src/components/shared/practice-analytics/` (`PracticeAnalytics.vue`,
+> `PracticeMoodDistribution.vue`, `analytics.ts` + тесты), экран —
+> `views/master/PracticeReviewsView.vue`. Код ниже — исходная поставка,
+> действующая версия — в репозитории.
+
 Референс: изображение из задачи от 30 сентября 2026 года. Две его части — одна прокручиваемая страница.
 
 Код подготовлен для текущего VELO: Vue 3, TypeScript, `<script setup>`, scoped CSS. Используются существующие `VCard`, `VHeader`, `VShowMore`, `VAvatar`, `VButton`, `VEmptyState`, `VLoader`, иконки и общая пятиступенчатая шкала эмоций. Фон, шрифт Marmelad и безопасные отступы предоставляет существующая оболочка приложения. Приближённые цвета диаграммы допускают уточнение через переменные `--velo-analytics-*`.
