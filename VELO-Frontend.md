@@ -10,6 +10,13 @@
 > confirmed absent from `frontend/src/router/index.ts` and `api/admin.ts` today. Everything
 > else in this document is UNVERIFIED as of this pass.
 
+> **Freshness (2026-11-09, verified against `cad07f3f` on `test`):** §3.1 переписан под
+> кит `@velo/ui` (`packages/velo-ui`, миграция P1–P8 + FE-153 — `tz-ui-package.md`);
+> строки про отсутствие i18n и отложенную «Поддержку» исправлены (i18n — FE-113,
+> `tz-i18n.md`; поддержка — FE-103/104/107/108). Контракт входов инстанса
+> (`/config.json`, `PRIMER_EDITION`, скин `public/skin`) — `tz-whitelabel.md`.
+> Остальное — UNVERIFIED на эту дату.
+
 > **ИСТОЧНИК ДИЗАЙНА (канон, 2026-06):** Figma выведена из источников
 > **навсегда**. Источник дизайна каждого экрана — присланный оператором **SVG
 > текущего состояния экрана**. Любое UI-значение проходит через DS-токен
@@ -315,9 +322,17 @@ restoreUnreachable                         -> LoadingErrorView (вне Telegram:
 
 ## 3. Компоненты
 
-### 3.1. UI-примитивы (src/components/ui/)
+### 3.1. UI-примитивы — кит `@velo/ui` (`packages/velo-ui/`)
 
-Источник истины — барель `src/components/ui/index.ts`. Текущий набор:
+С 07.11.2026 примитивы живут в пакете `@velo/ui` монорепы
+(`packages/velo-ui/src/components`, сторис — Storybook кита). Приложение
+импортирует их **только** через барель `src/components/ui/index.ts` — это
+ре-экспорт пакета + i18n-обёртки + доменная пара `VeloLogo` / `VRatingBadges`,
+которые остаются в приложении. Граница двусторонняя и проверяется eslint и
+vitest-гейтами: кит не импортирует `@/`, приложение не ходит в пакет мимо
+бареля. Голосовой ввод — доменная обёртка `components/shared/VoiceTextarea.vue`
+поверх `VTextarea` (FE-153). Подробности — `tz-ui-package.md`, контракт
+токенов — `packages/velo-ui/README.md`. Набор (неполный, ориентир):
 
 | Компонент                                    | Ключевые пропсы / назначение                                                                                                                                                                                                  |
 | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -345,7 +360,7 @@ restoreUnreachable                         -> LoadingErrorView (вне Telegram:
 мастер) и визарда заявки. Пропы `total` / `active`: активная точка 13×13, неактивные 7×7.
 Ретрофитнут на обе карусели (заменил локальные пилюли-индикаторы).
 
-**Иконки** (`src/components/ui/icons/`): SVG-компоненты из `Design_prototype/assets/icons/`. Все принимают проп `size?: number` (default 24). Используются в `VTabBar` через `TabItem.icon: string | Component`.
+**Иконки** (кит: `packages/velo-ui/src/icons/`, 12 сквозных; доступны через тот же барель): SVG-компоненты из `Design_prototype/assets/icons/`. Все принимают проп `size?: number` (default 24). Используются в `VTabBar` через `TabItem.icon: string | Component`.
 
 **Доменные иконки** (`src/components/icons/`, barrel `index.ts`): отдельный набор Vue-компонентов
 для контентных экранов (НЕ путать с табовыми из `ui/icons/`). Все: `fill="currentColor"`,
@@ -508,16 +523,16 @@ hero — `VAvatar xl`. Единый паттерн вызова `:url="avatarUrl
 | C — Редактирование (72)    | `EditProfileView.vue` (`user-edit-profile`)           | Имя=`first_name`; E-mail=disabled-заглушка «появится позже» (не сохраняется); Телефон=`phone`, О себе=`bio` (оба в credentials JSONB, см. Бэк §3.11); «Изменить фото»=toast. Сохранение шлёт только изменённые поля; очистка phone/bio = пустая строка. `VInput` БЕЗ пропа `error` — ошибка телефона рисуется отдельным `<p>`. `bio` сравнивается/шлётся через `.trimEnd()` (S-1)                           |
 | D — Удаление (73)          | модалка в `EditProfileView` (`VModal`)                | «Удалить аккаунт» -> подтверждение -> `deleteMe()` (`DELETE /users/me`) -> `authStore.logout()`. MVP = сброс онбординга (Бэк §3.11), данные сохраняются. Текст модала ЧЕСТНЫЙ: «вернётся к начальному состоянию… данные сохранятся» (W-2), кнопка осталась «Удалить»                                                                                                                                        |
 | E — Уведомления (74)       | `NotificationsView.vue` (`user-notifications`)        | 4 свича (push / practice_reminders / master_messages / support_messages), все ON по умолчанию; хранение — вложенный `credentials.notifications` (Бэк §3.11); автосейв при флипе ТИХО (без тоста), revert-on-error; шлётся только флипнутый ключ                                                                                                                                                             |
-| G — Поддержка (76)         | — отложен                                             | Не реализован по решению заказчика. Пункт «Поддержка» на экране A — toast-заглушка. Задумано: форма (Тема+Сообщение+Отправить) + тост, без бэка                                                                                                                                                                                                                                                             |
+| G — Поддержка (76)         | `SupportView.vue` (`user-support` + `master-support`) | Реализовано: форма с кодом темы → тикет, переписка в «Сообщениях», оценка тикета (FE-103/104/107/108, контракт — `docs/support-sections-integration.md`)                                                                                                                                                                                                                                                             |
 
 **Новый UI-примитив `VSwitch`** (`components/ui/VSwitch.vue`, в barrel рядом с
 `VCheckbox`): boolean on/off (pill + ползунок), `v-model`, `disabled`, `aria-label`.
 Отличается от `VToggle` (segmented control) и `VCheckbox` (квадратный чек). Цвета —
 токены (`--velo-primary` вкл).
 
-**i18n НЕ существует** — язык на экране F это задел: переключатель показан, но
-интерфейс не переключает и предпочтение не сохраняется. Полноценная локализация —
-отдельная крупная задача, в MVP не входит.
+**i18n есть** (vue-i18n, FE-113): каталоги `src/locales/{ru,en,uk}`, раздел «Язык
+интерфейса» вернулся на экран F и сохраняет `user.language` через `PATCH /users/me`;
+список языков инстанса — `locales` в `/config.json` (FE-149). Подробности — `tz-i18n.md`.
 
 ---
 
@@ -983,7 +998,7 @@ if (role === 'master' || role === 'admin') && to === /user/dashboard:
 | **TD-CAL-DIRECTIONS-EXPAND** | 🧪    | `utils/displayHelpers.ts` (`DIRECTION_ICON`)                                               | Бэк добавит направления (somatic/womens_circle/mens_circle/tantra/kundalini)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Иконки уже Partial+fallback — добавить новые иконки в `DIRECTION_ICON` по мере появления (рост списка код не ломает)                                                                                           |
 | **TD-ZOOM-TEXT**             | 🧪    | `views/user/BookingConfirmedView.vue`                                                      | Текст «Ссылка на Zoom придёт за 10 минут» статичен независимо от типа практики (аудит S-2, осознанно отложено — все практики сейчас через Zoom)                                                                                                                                                                                                                                                                                                                                                                                                                                            | Сделать нейтральным («Детали подключения…») или условным по `practice.zoom_link`, когда появятся не-Zoom практики                                                                                              |
 | **TD-PROFILE-SUPPORT**       | 🧪    | раздел Профиль, экран G (node 76)                                                          | Экран «Поддержка» не реализован (отложен заказчиком). Пункт «Поддержка» на экране A — toast-заглушка. Единственный незакрытый экран раздела                                                                                                                                                                                                                                                                                                                                                                                                                                                | Сверстать форму (Тема+Сообщение+Отправить) + тост; бэка нет (витрина)                                                                                                                                          |
-| **TD-PROFILE-LANG-I18N**     | 🧪    | `TimezoneSettingsView.vue`                                                                 | Языковой раздел удалён с экрана настроек (2026-09-17): i18n в проекте нет, заглушка «Русский» только рекламировала нереальную смену                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Когда появится локализация (vue-i18n): вернуть раздел «Язык интерфейса» и сохранять `user.language`                                                                                                             |
+| **TD-PROFILE-LANG-I18N**     | ✅    | `TimezoneSettingsView.vue`                                                                 | Закрыт: раздел «Язык интерфейса» вернулся вместе с i18n (FE-113, фаза 5 `tz-i18n.md`), язык сохраняется в `user.language` | — |
 | **TD-PROFILE-AVATAR-UPLOAD** | 🧪    | `EditProfileView.vue`                                                                      | «Изменить фото» — toast-заглушка: инфраструктуры загрузки аватара нет (аватар приходит из Telegram `photo_url`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Реализовать загрузку при появлении файлового бэка/хранилища                                                                                                                                                    |
 
 > **Аудит итерации «Профиль» (2026-05-29):** закрыты W-2 (честный текст модала
