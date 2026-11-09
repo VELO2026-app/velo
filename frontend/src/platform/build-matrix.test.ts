@@ -154,7 +154,7 @@ describe('evaluateMatrix (tz-whitelabel §6.1 gate)', () => {
     expect(evaluateMatrix({ cells: CELLS, facts: GREEN, expected: EXPECTED })).toEqual([])
   })
 
-  it('a title that drifted from its brand.json fails, named (a)', () => {
+  it('a title that drifted from its brand record fails, named (a)', () => {
     const fails = withFact('nova/full', { title: ' velo ' })
     expect(fails).toHaveLength(1)
     expect(fails[0]).toContain('nova/full')

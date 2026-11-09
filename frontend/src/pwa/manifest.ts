@@ -24,14 +24,14 @@
 // module; and a dynamic env read here would inline the whole env into the
 // client bundle). description is Russian, matching lang: 'ru' (it used to be
 // English under a Russian lang); F2 lets a skin override identity via
-// brand.json materialization (§1).
+// its brand record (§1; FE-131: $extensions["velo-skin"] of the package).
 //
 // Colours: theme_color mirrors <meta name="theme-color"> in index.html;
 // background_color is the body background (--velo-bg-start in variables.css),
 // which is what the Android splash screen should match. tz-whitelabel §1:
-// the SINGLE source of the header colour will be skin/brand.json -- until F2
-// materializes it at build time, both consumers keep the golden default and
-// this file deliberately does not invent its own.
+// the SINGLE source of the header colour is the skin's brand record,
+// materialized at build time; without a skin both consumers keep the golden
+// default and this file deliberately does not invent its own.
 //
 // Icons: `any` and `maskable` are SEPARATE entries on purpose. A single
 // "any maskable" entry makes the launcher crop the transparent-cornered circle
@@ -71,10 +71,10 @@ export const pwaManifest: Partial<ManifestOptions> = {
 }
 
 /** Identity + colour overrides, in tz-whitelabel §1 priority order:
- *  the SKIN package (build-time, brand.json) wins over the instance ENV,
+ *  the SKIN package (build-time, its brand record) wins over the instance ENV,
  *  absent keys keep the golden values; an empty everything returns the
  *  golden object unchanged. theme_color/background_color come ONLY from the
- *  skin here (§1: brand.json is the single source; the env passport carries
+ *  skin here (§1: the brand record is the single source; the env passport carries
  *  no colours). */
 export function pwaManifestWithPassport(
   env: Record<string, string | undefined>,

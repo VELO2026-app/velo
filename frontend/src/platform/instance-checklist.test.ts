@@ -17,10 +17,10 @@ import { evaluateChecklist } from '../../scripts/instance-checklist.mjs'
 const EXPECTED = {
   skin: { displayName: 'НОВА', shortName: 'Нова', themeColor: '#1B1530' },
   brand: 'НОВА',
-  brandSource: 'skin/brand.json',
+  brandSource: 'skin package',
   shortBrand: 'Нова',
   themeColor: '#1B1530',
-  themeSource: 'skin/brand.json',
+  themeSource: 'skin package',
   defaultLocale: 'ru',
   locales: ['ru'],
   botUrl: 'https://telegram.me/veloappbot',
@@ -69,7 +69,7 @@ describe('evaluateChecklist (tz-whitelabel §6.4)', () => {
       rows.map((r) => [r.item, r]),
     )
     expect(byItem['manifest name']!.status).toBe('PASS')
-    expect(byItem['manifest name']!.source).toBe('skin/brand.json')
+    expect(byItem['manifest name']!.source).toBe('skin package')
     // No passport seam for description yet: reported, not gated.
     expect(byItem['manifest description']!.status).toBe('INFO')
     // The safe zone needs eyes and says so.

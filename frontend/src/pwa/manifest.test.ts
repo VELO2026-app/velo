@@ -71,6 +71,7 @@ describe('pwaManifest -- the single manifest', () => {
       shortName: 'Гармония',
       themeColor: '#1B2A41',
       backgroundColor: '#F5F1EA',
+      fonts: [],
     }
     expect(pwaManifestWithPassport({ VITE_BRAND: 'ENV-БРЕНД' }, skin)).toMatchObject({
       name: 'ШКОЛА ГАРМОНИИ',
@@ -97,7 +98,7 @@ describe('pwaManifest -- the single manifest', () => {
     // The source carries %VELO_THEME_COLOR%; passport-html resolves it (to
     // the golden default with no skin -- pinned in passport-html.test.ts).
     // The mirror holds by construction: both consumers resolve the SAME
-    // brand.json value at build time.
+    // brand-record value at build time.
     const meta = attr(/<meta name="theme-color"[^>]*>/, 'content')
 
     expect(meta).toBe('%VELO_THEME_COLOR%')

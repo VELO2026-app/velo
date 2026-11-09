@@ -16,13 +16,14 @@
 // The cells (not the full product -- tz-whitelabel §6, F5 rev.4):
 //
 //   golden x every edition of editions.json   (core, school, ...)
-//   every skin x full     (every package in skins/, or the --skin list)
+//   every skin x full     (the --skin list; velo carries no skins -- FE-131,
+//                          partner skins live in their own repositories)
 //
 // After each `vite build` the dist facts are snapshotted. The GATE part
 // (any FAIL = exit 1), all of it read from dist/:
 //
 //   a. identity: title + theme-color equal the cell's source of record --
-//      the skin's brand.json, or the golden defaults (VITE_BRAND ?? 'VELO',
+//      the skin's brand record, or the golden defaults (VITE_BRAND ?? 'VELO',
 //      #334D6E) for golden cells;
 //   b. brand grep: a skin cell's bundle carries the skin's displayName and
 //      every one of its token declarations; a golden cell carries NO
@@ -38,8 +39,8 @@
 // The pre-run public/skin/ is backed up and put back verbatim, then dist/ is
 // rebuilt from it with the ambient env (what a plain `pnpm build` makes).
 //
-// Usage: node scripts/build-matrix.mjs [--skin <name|path>]... [--no-restore]
-//          --skin        replaces the skins/ set (repeatable): a package
+// Usage: node scripts/build-matrix.mjs [--skin <path>]... [--no-restore]
+//          --skin        adds a skin package directory (repeatable): a package
 //                        directory -- a broken one fails the matrix
 //          --no-restore  skip the final rebuild (CI: dist/ is thrown away)
 //        (or: pnpm build:matrix)
@@ -62,6 +63,7 @@ import { basename, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { loadEnv } from 'vite'
 import { findBuildLogWarnings } from './lib/build-log-gate.mjs'
+import { loadSkinPackage, readGoldenTokens } from './lib/skin-package.mjs'
 
 // Resolved lazily: under vitest import.meta.url is not file:// (the same
 // reason passport-html tests anchor to process.cwd()), and the unit suite
@@ -133,7 +135,7 @@ export function normalizeDecl(decl) {
     .replace(/([^0-9])0\./g, '$1.')
 }
 
-/** The custom-property declarations of a tokens.css, normalized. */
+/** The custom-property declarations of a CSS text, normalized. */
 export function tokenDecls(css) {
   const flat = css.replace(/\/\*[\s\S]*?\*\//g, '')
   return [...flat.matchAll(/(--[a-zA-Z0-9-]+)\s*:\s*([^;}]+)[;}]/g)].map((m) =>
@@ -237,22 +239,13 @@ export function evaluateMatrix({ cells, facts, expected }) {
 
 const publicSkin = () => join(frontendDir(), 'public', 'skin')
 
-/** skins/<name> or a package directory -> { label, source }. */
+/** A package directory -> { label, source }. A missing one fails the
+ *  matrix in its pre-flight, named. */
 function resolveSkin(arg) {
-  const source = existsSync(arg) ? resolve(arg) : join(frontendDir(), 'skins', arg)
-  return { label: basename(source), source }
-}
-
-/** The default skin set: EVERY directory in skins/ -- not just the ones that
- *  look like packages: a skin that lost its brand.json must fail the
- *  matrix in validate-skin, never drop out of it silently. */
-function repoSkins() {
-  const dir = join(frontendDir(), 'skins')
-  if (!existsSync(dir)) return []
-  return readdirSync(dir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
-    .map((entry) => join(dir, entry.name))
-    .sort()
+  const source = resolve(arg)
+  // A package checked out as <repo>/skin is named after its repository.
+  const label = basename(source) === 'skin' ? basename(resolve(source, '..')) : basename(source)
+  return { label, source }
 }
 
 /** The machine's path: the package lands WHOLE in public/skin/ and is gated
@@ -314,11 +307,12 @@ function readAll(dir, ext) {
     .join('\n')
 }
 
-/** The skin's own identity + tokens, read from its source package. */
+/** The skin's own identity + tokens, read from its source package by the
+ *  engine the build converts it with (FE-131). */
 function skinRecord(skin) {
-  const brand = JSON.parse(readFileSync(join(skin.source, 'brand.json'), 'utf8'))
-  const decls = tokenDecls(readFileSync(join(skin.source, 'tokens.css'), 'utf8'))
-  return { brand, decls }
+  const pkg = loadSkinPackage(skin.source, readGoldenTokens(frontendDir()))
+  const decls = pkg.decls.map(([name, value]) => normalizeDecl(`${name}:${value}`))
+  return { brand: pkg.brand, decls }
 }
 
 function snapshot(cell, skins, goldenDecls) {
@@ -406,7 +400,7 @@ function parseArgs(argv) {
     else if (argv[i] === '--no-restore') restore = false
     else throw new Error(`unknown argument "${argv[i]}"`)
   }
-  return { skins: skins.length > 0 ? skins : repoSkins(), restore }
+  return { skins, restore }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
@@ -420,7 +414,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
 
   // Pre-flight: every skin is validated BEFORE the first build -- a broken
   // package fails fast and named (the golden cells read every skin's
-  // brand.json/tokens.css for the leak grep, so a package-less dir would
+  // brand record and tokens for the leak grep, so a package-less dir would
   // otherwise surface as a bare ENOENT). stageSkin() re-runs the validator
   // on public/skin/ -- the machine's path -- before each skin cell.
   {

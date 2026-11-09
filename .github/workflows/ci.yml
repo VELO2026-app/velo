@@ -83,9 +83,10 @@ jobs:
       # tz-whitelabel F5 (FE-114, FE-152): the build matrix IS the whitelabel
       # gate -- golden x every edition of editions.json through PRIMER_EDITION
       # (the machine's channel): a module outside the edition must leave NO
-      # chunks in dist (core: no ai, no payments) -- plus every skins/<name>
-      # x full (brand + tokens from the skin, none of them in golden). One
-      # vite build per cell; --no-restore skips the pointless final rebuild.
+      # chunks in dist (core: no ai, no payments). No skin cells: velo carries
+      # no skins since FE-131 (partner skins live in their own repositories;
+      # the skin path is pinned by the unit suite; `--skin <dir>` adds a skin
+      # x full cell locally). One vite build per cell; --no-restore skips the pointless final rebuild.
       # Runs AFTER the plain build so a red matrix reads as the whitelabel
       # gate failing, not as "the app does not build".
       - name: Build matrix (whitelabel gate)

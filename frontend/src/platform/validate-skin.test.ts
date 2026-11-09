@@ -1,25 +1,22 @@
 // =============================================================================
-// VELO Frontend -- validate-skin tests (tz-whitelabel §3, F2)
+// VELO Frontend -- validate-skin tests (tz-whitelabel §3, F2; FE-131)
 // =============================================================================
 // The validator is the "an invalid package never ships" gate. Pinned here: a
-// well-formed package must PASS -- so a golden change that breaks the
-// contract is caught by the suite, not by a deploy -- and deliberately
-// broken packages must FAIL with named reasons.
-//
-// The suite does not lean on skins/ (those are product content -- they
-// change, and a half-filled one may legitimately warn). It writes its own
-// minimal package into a temp dir: the validator reads PNG facts from IHDR
-// only, so a signature + IHDR chunk is a complete enough PNG for it.
+// well-formed package of the machine's DTCG format must PASS -- so a golden
+// change that breaks the contract is caught by the suite, not by a deploy --
+// and deliberately broken packages must FAIL with named reasons.
 // =============================================================================
 
-import { describe, expect, it } from 'vitest'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { afterEach, describe, expect, it } from 'vitest'
+import { rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 // Plain ESM module (types loosely declared in env.d.ts).
 // @ts-expect-error -- *.mjs modules carry no type information
 import { skinBuildGate, validateSkin } from '../../scripts/validate-skin.mjs'
+import { cleanupSkinFixtures, png, tempDir, writeSkinPackage } from './skin.test.fixture'
+
+afterEach(cleanupSkinFixtures)
 
 // vitest runs from frontend/ (import.meta.url is not file:// here, so the
 // paths anchor to the working directory).
@@ -27,152 +24,223 @@ const FRONTEND = process.cwd()
 
 type Report = { fails: string[]; passed: string[]; manual: string[]; warns: string[] }
 
-/** A PNG the validator can read: signature + an IHDR chunk. colorType 2 =
- *  RGB (no alpha), 6 = RGBA. */
-function png(width: number, height: number, colorType = 2): Buffer {
-  const ihdr = Buffer.alloc(25)
-  ihdr.writeUInt32BE(13, 0)
-  ihdr.write('IHDR', 4, 'ascii')
-  ihdr.writeUInt32BE(width, 8)
-  ihdr.writeUInt32BE(height, 12)
-  ihdr[16] = 8 // bit depth
-  ihdr[17] = colorType
-  return Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), ihdr])
-}
-
-const SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>'
-
-/** A complete, valid LIGHT package (dark text on the golden photo is fine,
- *  so no bg/ is needed). `patch` overrides brand.json / tokens.css. */
-function writePackage(patch: { brand?: object; tokens?: string; bg?: boolean } = {}): string {
-  const dir = mkdtempSync(join(tmpdir(), 'velo-skin-'))
-  const brand = patch.brand ?? {
-    displayName: 'Фикстура',
-    shortName: 'Фикс',
-    themeColor: '#1b2a41',
-    backgroundColor: '#f5f1ea',
-    fontUrl: 'https://fonts.googleapis.com/css2?family=Rubik:wght@400;600&display=swap',
-  }
-  const tokens =
-    patch.tokens ??
-    "--velo-tg-header: #1b2a41;\n--font-body: 'Rubik', 'Noto Sans', sans-serif;\n--velo-primary: #2c4a6e;\n"
-  writeFileSync(join(dir, 'brand.json'), JSON.stringify(brand))
-  writeFileSync(join(dir, 'tokens.css'), tokens)
-  for (const svg of ['velo-word-filled.svg', 'velo-word-blue.svg', 'logo-white.svg', 'favicon.svg'])
-    writeFileSync(join(dir, svg), SVG)
-  writeFileSync(join(dir, 'mandala-white.png'), png(64, 64, 6))
-  writeFileSync(join(dir, 'mandala-blue.png'), png(64, 64, 6))
-  writeFileSync(join(dir, 'icon-192.png'), png(192, 192, 6))
-  writeFileSync(join(dir, 'icon-512.png'), png(512, 512, 6))
-  writeFileSync(join(dir, 'icon-maskable-512.png'), png(512, 512, 6))
-  writeFileSync(join(dir, 'apple-touch-icon-180.png'), png(180, 180, 2))
-  if (patch.bg) {
-    mkdirSync(join(dir, 'bg'))
-    writeFileSync(join(dir, 'bg', 'background.png'), png(1080, 1920))
-  }
-  return dir
-}
+const failsOf = (dir: string): string => (validateSkin(dir, FRONTEND) as Report).fails.join('\n')
 
 describe('validate-skin (tz-whitelabel §3)', () => {
   it('a well-formed package passes the contract', () => {
-    const report = validateSkin(writePackage(), FRONTEND) as Report
+    const report = validateSkin(writeSkinPackage(), FRONTEND) as Report
     expect(report.fails).toEqual([])
-    expect(report.passed.length).toBeGreaterThan(10)
-    // The font seam is load-bearing: fontUrl and --font-body name one family.
-    expect(report.passed.some((line) => line.includes('Rubik'))).toBe(true)
+    expect(report.passed.length).toBeGreaterThan(8)
+    // The font seam is load-bearing: the shipped family is the one --font-body names.
+    expect(report.passed.some((line) => line.includes('self-hosted family "Rubik"'))).toBe(true)
     // The safe zone needs eyes -- it must never silently disappear.
     expect(report.manual.some((line) => line.includes('safe zone'))).toBe(true)
   })
 
-  it('a DARK package without bg/background.png fails: light text on the golden photo', () => {
+  it('a DARK package without assets/bg/background.png fails: light text on the golden photo', () => {
     // the velo_test_front_bot incident: tokens shipped, the background did
     // not -- light theme photo stayed under light text tokens
     const dark = {
       brand: {
-        displayName: 'Ночь',
-        shortName: 'Ночь',
+        displayName: 'Night',
+        shortName: 'Night',
         themeColor: '#1b1530',
         backgroundColor: '#14101f',
       },
-      tokens:
-        '--velo-tg-header: #1b1530;\n--velo-bg-card-solid: #1e1832;\n--velo-text-primary: #ece9f7;\n--velo-text-secondary: #c8c2e0;\n',
+      tokens: {
+        velo: {
+          tg: { header: { $value: '#1b1530' } },
+          bg: { card: { solid: { $value: '#1e1832' } } },
+          text: { primary: { $value: '#ece9f7' }, secondary: { $value: '#c8c2e0' } },
+        },
+      },
     }
-    expect((validateSkin(writePackage({ ...dark, bg: true }), FRONTEND) as Report).fails).toEqual(
-      [],
-    )
-    const report = validateSkin(writePackage(dark), FRONTEND) as Report
-    expect(report.fails.join('\n')).toContain('FAIL bg/background.png: missing')
+    expect(failsOf(writeSkinPackage({ ...dark, bg: true }))).toBe('')
+    expect(failsOf(writeSkinPackage(dark))).toContain('FAIL assets/bg/background.png: missing')
   })
 
-  it('a package with an unknown token and a 13-char shortName fails, named', () => {
-    const dir = writePackage({
+  it('a bad brand record fails, named', () => {
+    const joined = failsOf(
+      writeSkinPackage({
+        brand: {
+          displayName: 'X',
+          shortName: 'MuchTooLongName',
+          themeColor: '#12345',
+          backgroundColor: '#ffffff',
+        },
+      }),
+    )
+    expect(joined).toContain('exceeds 12 chars')
+    expect(joined).toContain('themeColor: must be a 6-digit hex color')
+  })
+
+  it('an external fontUrl is refused: a package makes no external request', () => {
+    const joined = failsOf(
+      writeSkinPackage({
+        brand: {
+          displayName: 'X',
+          shortName: 'X',
+          themeColor: '#1b2a41',
+          backgroundColor: '#ffffff',
+          fontUrl: 'https://fonts.googleapis.com/css2?family=Rubik',
+        },
+      }),
+    )
+    expect(joined).toContain('fontUrl: a package makes no external request')
+  })
+
+  it('an unknown token path fails, named (a typo themes nothing)', () => {
+    const dir = writeSkinPackage({
+      tokens: { velo: { tg: { header: { $value: '#1b2a41' } }, primari: { $value: '#ff0000' } } },
       brand: {
         displayName: 'X',
-        shortName: 'СлишкомДлинноеИмя',
-        themeColor: '#12345',
+        shortName: 'X',
+        themeColor: '#1b2a41',
         backgroundColor: '#ffffff',
       },
-      tokens: '--velo-primari: #ff0000;\n',
     })
-    const report = validateSkin(dir, FRONTEND) as Report
-    const joined = report.fails.join('\n')
-    expect(joined).toContain('exceeds 12 chars')
-    expect(joined).toContain('themeColor must be 6-digit hex')
+    expect(failsOf(dir)).toContain('velo.primari is not a token of the product')
   })
 
-  it('an unknown --velo-* token fails, named (a typo themes nothing)', () => {
-    const dir = writePackage({
-      tokens:
-        "--velo-tg-header: #1b2a41;\n--font-body: 'Rubik', sans-serif;\n--velo-primari: #ff0000;\n",
+  it('a frozen bare token fails -- velo.* and bare.font-body only', () => {
+    const dir = writeSkinPackage({
+      tokens: {
+        velo: { tg: { header: { $value: '#1b2a41' } } },
+        bare: { 'space-1': { $value: '2px' } },
+      },
+      brand: {
+        displayName: 'X',
+        shortName: 'X',
+        themeColor: '#1b2a41',
+        backgroundColor: '#ffffff',
+      },
     })
-    const report = validateSkin(dir, FRONTEND) as Report
-    expect(report.fails.join('\n')).toContain('--velo-primari does not exist in variables.css')
+    expect(failsOf(dir)).toContain('bare.space-1 is a frozen bare token')
+  })
+
+  it('a shipped font that --font-body never names fails', () => {
+    const dir = writeSkinPackage({ tokens: { velo: { tg: { header: { $value: '#1b2a41' } } } } })
+    expect(failsOf(dir)).toContain('bare.font-body is not set')
+  })
+
+  it('the shipped family is matched by exact name, not as a substring', () => {
+    const dir = writeSkinPackage({
+      brand: {
+        displayName: 'X',
+        shortName: 'X',
+        themeColor: '#1b2a41',
+        backgroundColor: '#ffffff',
+        fonts: [{ family: 'Rub', file: 'assets/fonts/rubik-400.woff2' }],
+      },
+    })
+    expect(failsOf(dir)).toContain('must name the shipped family "Rub"')
+  })
+
+  it('a reference cannot dodge the contrast gate', () => {
+    // white text on the white card, spelled as a reference
+    const dir = writeSkinPackage({
+      tokens: {
+        velo: {
+          tg: { header: { $value: '#1b2a41' } },
+          text: { primary: { $value: '{velo.bg.card.solid}' } },
+        },
+        bare: { 'font-body': { $value: ['Rubik', 'sans-serif'] } },
+      },
+    })
+    expect(failsOf(dir)).toMatch(
+      /FAIL contrast: --velo-text-primary on --velo-bg-card-solid is 1\.00:1/,
+    )
+  })
+
+  it.each([
+    ['an rgb() nested in color-mix()', 'color-mix(in srgb, rgb(0, 0, 0) 1%, rgb(255, 255, 255))'],
+    ['a var() fallback', 'var(--velo-bg-card-solid, rgb(0, 0, 0))'],
+  ])('%s cannot fake the contrast', (_, value) => {
+    const dir = writeSkinPackage({
+      tokens: {
+        velo: { tg: { header: { $value: '#1b2a41' } }, text: { primary: { $value: value } } },
+        bare: { 'font-body': { $value: ['Rubik', 'sans-serif'] } },
+      },
+    })
+    expect(failsOf(dir)).toMatch(/FAIL contrast: (cannot evaluate )?--velo-text-primary/)
+    expect(failsOf(dir)).not.toContain('21.00:1')
+  })
+
+  it('an overridden pair the gate cannot evaluate fails, not warns', () => {
+    const dir = writeSkinPackage({
+      tokens: {
+        velo: {
+          tg: { header: { $value: '#1b2a41' } },
+          text: { primary: { $value: 'color-mix(in srgb, #000 50%, #fff)' } },
+        },
+        bare: { 'font-body': { $value: ['Rubik', 'sans-serif'] } },
+      },
+    })
+    expect(failsOf(dir)).toContain('FAIL contrast: cannot evaluate --velo-text-primary')
+  })
+
+  it('velo.tg.header must equal the brand themeColor (§1 single source)', () => {
+    const dir = writeSkinPackage({
+      tokens: { velo: { tg: { header: { $value: '#000000' } } } },
+      brand: {
+        displayName: 'X',
+        shortName: 'X',
+        themeColor: '#1b2a41',
+        backgroundColor: '#ffffff',
+      },
+    })
+    expect(failsOf(dir)).toContain('FAIL §1 single source: velo.tg.header (#000000)')
   })
 
   it('a dark surface with golden text fails the contrast gate', () => {
-    const dir = writePackage({
+    const dir = writeSkinPackage({
       brand: {
-        displayName: 'Тёмная',
-        shortName: 'Тьма',
+        displayName: 'Dark',
+        shortName: 'Dark',
         themeColor: '#111111',
         backgroundColor: '#ffffff',
       },
-      tokens: '--velo-tg-header: #111111;\n--velo-bg-card-solid: #222222;\n',
+      tokens: {
+        velo: {
+          tg: { header: { $value: '#111111' } },
+          bg: { card: { solid: { $value: '#222222' } } },
+        },
+      },
     })
-    const report = validateSkin(dir, FRONTEND) as Report
-    expect(report.fails.join('\n')).toMatch(/contrast: --velo-text-primary on --velo-bg-card-solid/)
+    expect(failsOf(dir)).toMatch(/contrast: --velo-text-primary on --velo-bg-card-solid/)
   })
 
   it('an apple-touch icon with alpha fails (iOS paints it black)', () => {
-    const dir = writePackage()
-    writeFileSync(join(dir, 'apple-touch-icon-180.png'), png(180, 180, 6))
-    const report = validateSkin(dir, FRONTEND) as Report
-    expect(report.fails.join('\n')).toContain('apple-touch-icon-180.png: has an alpha channel')
+    const dir = writeSkinPackage()
+    writeFileSync(join(dir, 'assets', 'apple-touch-icon-180.png'), png(180, 180, 6))
+    expect(failsOf(dir)).toContain('assets/apple-touch-icon-180.png: has an alpha channel')
   })
 })
 
 describe('skin build gate (FE-148: an invalid package fails the build)', () => {
   it('no skin directory = the golden build, nothing to check', () => {
-    const dir = join(mkdtempSync(join(tmpdir(), 'velo-no-skin-')), 'skin')
+    const dir = join(tempDir('velo-no-skin-'), 'skin')
     expect(skinBuildGate(dir, FRONTEND)).toBeNull()
   })
 
   it('a well-formed package passes the gate', () => {
-    const report = skinBuildGate(writePackage(), FRONTEND) as Report
+    const report = skinBuildGate(writeSkinPackage(), FRONTEND) as Report
     expect(report.fails).toEqual([])
   })
 
-  it('a present directory without brand.json fails -- never passes as golden', () => {
-    const dir = writePackage()
-    rmSync(join(dir, 'brand.json'))
+  it('a present directory without primer-package.yaml fails -- never passes as golden', () => {
+    const dir = writeSkinPackage()
+    rmSync(join(dir, 'primer-package.yaml'))
     const report = skinBuildGate(dir, FRONTEND) as Report
-    expect(report.fails).toContain('FAIL brand.json: missing')
+    expect(report.fails.join('\n')).toContain('primer-package.yaml: missing')
   })
 
-  it('an empty present directory fails on every mandatory file', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'velo-empty-skin-'))
-    const report = skinBuildGate(dir, FRONTEND) as Report
-    expect(report.fails).toContain('FAIL brand.json: missing')
-    expect(report.fails).toContain('FAIL tokens.css: missing')
+  it('a generation-1 package (brand.json + tokens.css) fails, named', () => {
+    const dir = tempDir('velo-gen1-skin-')
+    writeFileSync(join(dir, 'brand.json'), '{}')
+    writeFileSync(join(dir, 'tokens.css'), '--velo-primary: #000;')
+    const joined = (skinBuildGate(dir, FRONTEND) as Report).fails.join('\n')
+    expect(joined).toContain('brand.json: not a file of the skin format')
+    expect(joined).toContain('primer-package.yaml: missing')
   })
 })

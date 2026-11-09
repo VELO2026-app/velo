@@ -6,7 +6,7 @@
 // passport seam yet), theme-color (index.html meta == manifest == the skin/
 // golden source), icons (present + declared dimensions), the bot URL (the
 // one the build actually inlined), and the locale set. Every fact carries its
-// SOURCE (skin brand.json / passport env / golden default) -- the §6.4
+// SOURCE (skin brand record / passport env / golden default) -- the §6.4
 // question "everything from config, nothing in code" is answered by the
 // source column.
 //
@@ -25,12 +25,13 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { loadEnv } from 'vite'
 import { pngInfo } from './validate-skin.mjs'
+import { isSkinPackage, loadSkinPackage, readGoldenTokens } from './lib/skin-package.mjs'
 
 // Lazy: under vitest import.meta.url is not file:// (see build-matrix.mjs);
 // the unit suite imports this module for evaluateChecklist() only.
 const frontendDir = () => resolve(fileURLToPath(new URL('..', import.meta.url)))
 
-/** The §1 priority order the build itself uses: skin brand.json > passport
+/** The §1 priority order the build itself uses: skin brand record > passport
  *  env (process.env > .env files) > golden default. Returns the expected
  *  values (and, per field, the winning source) every dist fact is checked
  *  against. Pure data -- the unit suite feeds evaluateChecklist() directly. */
@@ -39,11 +40,13 @@ export function expectedFromSources() {
     ...loadEnv('production', frontendDir(), 'VITE_'),
     ...Object.fromEntries(Object.entries(process.env).filter(([k]) => k.startsWith('VITE_'))),
   }
-  const brandPath = join(frontendDir(), 'public', 'skin', 'brand.json')
-  const skin = existsSync(brandPath) ? JSON.parse(readFileSync(brandPath, 'utf8')) : null
+  const skinDir = join(frontendDir(), 'public', 'skin')
+  const skin = isSkinPackage(skinDir)
+    ? loadSkinPackage(skinDir, readGoldenTokens(frontendDir())).brand
+    : null
   const pick = (skinValue, envKey, golden) =>
     skinValue !== undefined
-      ? { value: skinValue, source: 'skin/brand.json' }
+      ? { value: skinValue, source: 'skin package' }
       : env[envKey] !== undefined
         ? { value: env[envKey], source: 'passport env' }
         : { value: golden, source: 'golden default' }
