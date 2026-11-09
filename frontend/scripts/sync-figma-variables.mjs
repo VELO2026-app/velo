@@ -1,6 +1,6 @@
 // =============================================================================
 // FE-124 track T, stage 2 -- the Figma Variables autosync
-// (tz-ui-package.md, track T: the auto-PR stage of the token track).
+// (tz-whitelabel.md §3.3, track T: the auto-PR stage of the token track).
 // =============================================================================
 //
 // Figma is where a designer retokens the product; tokens.json is the

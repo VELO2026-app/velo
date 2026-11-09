@@ -1,6 +1,6 @@
 # =============================================================================
 # VELO CI — track T stage 2: the Figma Variables autosync
-# (tz-ui-package.md, track T: "автосинк Variables -> tokens.json (автоПР)").
+# (tz-whitelabel.md §3.3, track T: "автосинк Variables -> tokens.json (автоПР)").
 #
 # A scheduled job, no agents, no judgment:
 #   1. pull the published variables of the "VELΘ App Актуальное" file

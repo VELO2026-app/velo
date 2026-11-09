@@ -1,5 +1,5 @@
 // =============================================================================
-// FE-124 track T, step 1 -- the token pipeline (tz-ui-package): tokens.json is
+// FE-124 track T, step 1 -- the token pipeline (tz-whitelabel §3.3): tokens.json is
 // the SOURCE, variables.css is GENERATED from it.
 // =============================================================================
 // Rule-based inverse of the one-time extractor: walk the DTCG tree in

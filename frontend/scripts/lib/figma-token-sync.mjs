@@ -1,6 +1,6 @@
 // =============================================================================
 // FE-124 track T, stage 2 -- the Figma <-> registry equivalence engine
-// (tz-ui-package.md, track T; consumed by scripts/sync-figma-variables.mjs).
+// (tz-whitelabel.md §3.3, track T; consumed by scripts/sync-figma-variables.mjs).
 // =============================================================================
 //
 // tokens.json carries VERBATIM CSS values ($value: `var(--velo-white)`,
