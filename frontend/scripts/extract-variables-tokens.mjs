@@ -1,5 +1,5 @@
 // =============================================================================
-// FE-124 track T, step 1 -- ONE-TIME migration tool (tz-ui-package, track T).
+// FE-124 track T, step 1 -- ONE-TIME migration tool (tz-whitelabel §3.3, track T).
 // =============================================================================
 // Parses the hand-written variables.css into frontend/tokens.json (W3C DTCG
 // shape + $extensions carrying everything the generator needs to reproduce
