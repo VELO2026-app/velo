@@ -70,7 +70,9 @@ export const pwaManifest: Partial<ManifestOptions> = {
   ],
 }
 
-/** Identity + colour overrides, in tz-whitelabel §1 priority order:
+/** Identity + colour overrides, in tz-whitelabel §1 priority order (FE-155:
+ *  `lang`/`description` are NOT here -- they are the instance part, chosen at
+ *  container start from the per-locale files below):
  *  the SKIN package (build-time, brand.json) wins over the instance ENV,
  *  absent keys keep the golden values; an empty everything returns the
  *  golden object unchanged. theme_color/background_color come ONLY from the
@@ -81,12 +83,31 @@ export function pwaManifestWithPassport(
   skin?: SkinPackage | null,
 ): Partial<ManifestOptions> {
   const brand = skin?.displayName ?? env.VITE_BRAND
-  const lang = env.VITE_DEFAULT_LOCALE
-  if (!brand && !lang && !skin) return pwaManifest
+  if (!brand && !skin) return pwaManifest
   return {
     ...pwaManifest,
     ...(brand ? { name: brand, short_name: skin?.shortName ?? brand } : {}),
-    ...(lang ? { lang } : {}),
     ...(skin ? { theme_color: skin.themeColor, background_color: skin.backgroundColor } : {}),
   }
+}
+
+// -- Instance part of the manifest (FE-155) -----------------------------------
+//
+// `lang` and `description` belong to the INSTANCE (defaultLocale of
+// /config.json), not to the build: with the primer machine one image serves
+// instances of different languages. The build therefore emits one manifest per
+// shipped locale (manifest.<locale>.webmanifest, same skin part: colours,
+// icons, name); the container entrypoint (nginx/40-manifest-locale.sh) copies
+// the one matching DEFAULT_LOCALE over manifest.webmanifest at start. No
+// DEFAULT_LOCALE (or an unknown one) leaves the golden manifest untouched.
+
+export const MANIFEST_LOCALES = ['ru', 'en', 'uk'] as const
+
+/** The manifest of `locale`: base with `lang` and the localized description. */
+export function manifestForLocale(
+  base: Record<string, unknown>,
+  locale: string,
+  description: string,
+): Record<string, unknown> {
+  return { ...base, lang: locale, description }
 }

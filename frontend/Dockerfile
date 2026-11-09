@@ -130,6 +130,8 @@ ENV NGINX_ENVSUBST_TEMPLATE_DIR=/etc/nginx/templates \
     NGINX_ENVSUBST_OUTPUT_DIR=/usr/share/nginx/html \
     NGINX_ENVSUBST_FILTER='^(API_BASE_URL|TELEGRAM_BOT_URL|DEFAULT_LOCALE|LOCALES|BRAND)$'
 COPY frontend/nginx/config.json.template /etc/nginx/templates/config.json.template
+# FE-155: instance part of the manifest (lang, description) at start.
+COPY --chmod=755 frontend/nginx/40-manifest-locale.sh /docker-entrypoint.d/40-manifest-locale.sh
 
 # Copy our nginx config.
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf

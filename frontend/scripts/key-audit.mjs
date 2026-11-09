@@ -166,6 +166,8 @@ for (const path of usedExact) {
 // schoolBranding). Their leaves are exempt from the unused check.
 const DATA_ROOTS = new Set(['errors', 'storeErrors', 'transcription'])
 const SEED_FILES = new Set(['timezones.json', 'dates.json', 'languages.json', 'taxonomy.json'])
+// Read at BUILD time by Node (pwa/manifest-locales.ts, FE-155), never by t().
+const BUILD_TIME_KEYS = new Set(['common.pwaDescription'])
 const unusedSkippedFiles = new Set(
   files
     .filter((f) => SEED_FILES.has(f))
@@ -187,6 +189,7 @@ function walkUnused(node, path) {
     return
   }
   if (path.endsWith('._comment') || path === '_comment') return
+  if (BUILD_TIME_KEYS.has(path)) return
   if (DATA_ROOTS.has(path.split('.')[0]) || unusedSkippedFiles.has(path.split('.')[0])) return
   if (!usedExact.has(path) && !isDynUsed(path)) unused.push(path)
 }
