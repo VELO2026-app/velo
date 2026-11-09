@@ -54,7 +54,7 @@ describe('route table: module gates resolve in the golden build (tz-whitelabel �
     expect(router.resolve({ name: 'user-topup-cancel' }).href).toBe('/user/topup/cancel')
     // FE-112 (tz-whitelabel §4): the finance screen and the payout queue are
     // the payments module's master/admin surfaces -- same gate, same golden
-    // build resolution; the «cut» side is the feature-cut build (F5 matrix).
+    // build resolution; the «cut» side is the core/school cells of the F5 matrix.
     expect(router.resolve({ name: 'master-finance' }).href).toBe('/master/finance')
     expect(router.resolve({ name: 'admin-withdrawals' }).href).toBe('/admin/withdrawals')
     expect(router.resolve({ name: 'admin-withdrawal-detail', params: { id: 'w1' } }).href).toBe(
