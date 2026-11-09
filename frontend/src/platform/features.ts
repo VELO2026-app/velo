@@ -139,6 +139,10 @@ export function featureDefines(value: string | undefined): Record<string, string
 export function featureDefineMap(flags: Record<FeatureName, boolean>): Record<string, string> {
   return {
     ...flagsToDefines(flags),
-    __VELO_FEATURE_FLAGS__: JSON.stringify(flags),
+    // Stringified TWICE: vite `define` pastes the value in as an EXPRESSION,
+    // so a single stringify lands as an object literal and featureEnabled()'s
+    // JSON.parse throws ("[object Object]" is not valid JSON). The outer
+    // stringify makes the pasted expression a string literal holding the JSON.
+    __VELO_FEATURE_FLAGS__: JSON.stringify(JSON.stringify(flags)),
   }
 }
