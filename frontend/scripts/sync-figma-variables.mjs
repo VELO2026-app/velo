@@ -3,8 +3,12 @@
 // (tz-whitelabel.md §3.3, track T: the auto-PR stage of the token track).
 // =============================================================================
 //
-// Figma is where a designer retokens the product; tokens.json is the
-// registry the generator builds variables.css from (the FE-124 pipeline).
+// Direction (owner's decision 2026-11-09, tz-whitelabel.md §3.3): the code
+// is the source of truth -- tokens.json is the registry the generator builds
+// variables.css from (the FE-124 pipeline), and Figma is a mirror updated
+// FROM it. Today the useful mode is the dry-run --snapshot drift report
+// (no Figma token involved); --apply and --rest serve a possible future
+// "Figma -> code" direction and stay dormant until then.
 // This CLI is the bridge stage: it reads the Figma variable collections
 // (velo/legacy of the token file), pairs them with the registry by the
 // FE-124 name rule, compares by VALUE (not by string -- see

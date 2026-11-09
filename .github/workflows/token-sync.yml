@@ -25,10 +25,12 @@
 # =============================================================================
 name: token-sync
 
+# DORMANT since 2026-11-09 (owner's decision, tz-whitelabel.md §3.3): the
+# source of truth is the code (tokens.json); Figma is a mirror updated FROM
+# the code, and no Figma token is stored in the repo. The weekly schedule is
+# removed; the job stays for a future "Figma -> code" direction and can only
+# be started by hand (it exits with a notice while FIGMA_TOKEN is absent).
 on:
-  schedule:
-    # Weekly, Monday 04:17 UTC -- off-peak, deterministic.
-    - cron: '17 4 * * 1'
   workflow_dispatch: {}
 
 permissions:
