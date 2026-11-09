@@ -2,7 +2,7 @@
  * Diary entry scale -- see --velo-diary-entry-scale in variables.css.
  * Two levels on purpose: a custom property cannot reference itself
  * (--x: calc(var(--x) * k) is a cycle -> invalid at computed time), and a
- * hardcoded base would ignore skins (nightfall / test-contrast override
+ * hardcoded base would ignore skins (a skin may override
  * --velo-fs-12). Level 1 captures the INHERITED value (root or skin) times
  * k into --velo-de-*; level 2 re-points the real names for the subtree.
  * ========================================================================== */

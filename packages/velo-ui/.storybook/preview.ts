@@ -22,8 +22,9 @@
 // var(--velo-*) only, so the switch repaints every story with no component
 // change: значения = данные. Golden removes the layer entirely (the base IS
 // golden). The skin files are read as ?raw build-time inputs from the app's
-// skins/ directory -- showcase tooling, not package code (the boundary law
-// governs src/**, and nothing here ships in the package).
+// skins/ directory; a skin joins as one import plus one table entry --
+// showcase tooling, not package code (the boundary law governs src/**,
+// nothing here ships).
 // =============================================================================
 
 import type { Preview } from '@storybook/vue3-vite'
@@ -31,8 +32,7 @@ import type { Preview } from '@storybook/vue3-vite'
 import { configureUi } from '../src/i18n'
 
 import '../../../frontend/src/styles/variables.css'
-import testContrastCss from '../../../frontend/skins/test-contrast/tokens.css?raw'
-import nightfallCss from '../../../frontend/skins/nightfall/tokens.css?raw'
+import goodoCss from '../../../frontend/skins/goodo/tokens.css?raw'
 
 // Golden ru values of the kit registry (UI_I18N_KEYS), spelled out so the
 // витрина needs no app import for the demo dictionary.
@@ -65,11 +65,10 @@ configureUi({ t: (key) => DEMO_MESSAGES[key] ?? key })
 
 // --- the skin layer (§3.7) ---------------------------------------------------
 
-/** The etalon skins, keyed by the toolbar value. A partner skin joins by
- *  dropping its tokens.css into this table -- one entry, nothing else. */
+/** The skins, keyed by the toolbar value (tokens.css text). A skin joins by
+ *  one entry here -- the toolbar items follow the table. */
 const SKIN_LAYERS: Record<string, string> = {
-  'test-contrast': testContrastCss,
-  nightfall: nightfallCss,
+  goodo: goodoCss,
 }
 
 const SKIN_LAYER_ID = 'velo-skin-layer'
@@ -110,8 +109,7 @@ const preview: Preview = {
         icon: 'paintbrush',
         items: [
           { value: 'golden', title: 'Golden (variables.css)' },
-          { value: 'test-contrast', title: 'Test contrast (fixture)' },
-          { value: 'nightfall', title: 'Nightfall' },
+          ...Object.keys(SKIN_LAYERS).map((value) => ({ value, title: value })),
         ],
       },
     },
