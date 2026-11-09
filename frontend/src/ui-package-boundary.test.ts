@@ -23,19 +23,17 @@
 //   1. ONLY the doors -- src/components/ui/index.ts,
 //      src/components/icons/index.ts,
 //      src/composables/useKeyboardFieldScroll.ts and, since P8,
-//      src/components/ui/VTextarea.vue and
 //      src/composables/useLoadingHold.ts -- may import '@velo/ui';
 //      (the useLoadingHold door: the loading rule moved into the kit with
 //      VLoadingSwap; screens keep importing it from the composables door,
 //      the FE-143 shape)
 //      no view, store, or any other source touches the package directly.
-//      The VTextarea door (P8): the voice field is DOMAIN and stays
-//      app-side (tz-ui-package §0, third exception next to VeloLogo /
-//      VRatingBadges), yet it composes the kit's VFieldError; the door is
-//      the exact-barrel import, the same one the kit-resident fields use.
-//      A barrel-door import ('@/components/ui') here would CYCLE: the app
-//      barrel re-exports VTextarea itself. When the voice seam is cut and
-//      VTextarea moves, this door closes;
+//      (P8 had a fourth door, src/components/ui/VTextarea.vue -- the FE-94
+//      voice field stayed app-side yet composed the kit's VFieldError.
+//      FE-153 cut the voice seam and moved VTextarea into the kit; the
+//      door closed with it. The voice half, components/shared/
+//      VoiceTextarea.vue, takes the field through '@/components/ui' like
+//      any consumer.)
 //   2. the specifier must be the EXACT barrel '@velo/ui' -- a deep subpath
 //      ('@velo/ui/...') is banned by the P8 eslint boundary (no-restricted-imports).
 //
@@ -55,8 +53,6 @@ const BARREL_PATHS = new Set([
   'components/ui/index.ts',
   'components/icons/index.ts',
   'composables/useKeyboardFieldScroll.ts',
-  // P8: the residual voice field composes the kit's VFieldError (see above).
-  'components/ui/VTextarea.vue',
   // P8: the loading rule moved into the kit with VLoadingSwap.
   'composables/useLoadingHold.ts',
 ])

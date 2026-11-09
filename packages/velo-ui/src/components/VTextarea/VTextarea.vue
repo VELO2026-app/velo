@@ -1,14 +1,26 @@
 <!--
-  VELO Frontend -- VTextarea Component (Phase F2.1)
+  @velo/ui -- VTextarea (Phase F2.1; moved to the kit by FE-153)
 
   Multiline text input. Matches mockup .form-textarea styles.
   `required` (W22, PROMPT №409) -> renders the same pink IconRequired seal
   VInput/VSelect already do, for DS parity.
 
+  FE-153 cut the FE-94 voice seam: the field no longer knows about voice.
+  Two generic slots carry what the app's VoiceTextarea wrapper needs:
+    #trailing -- the row's right end, after the required seal (the mic disc);
+    #takeover -- rendered IN PLACE of the field while `takeover` is true
+                 (the recording panel). The textarea stays mounted (v-show),
+                 so focus and the autogrow height survive the takeover.
+  The exposed blur() lets a wrapper drop the soft keyboard before it takes
+  the field over.
+
   Usage:
     <VTextarea v-model="bio" label="About" :rows="4" placeholder="Tell us..." />
     <VTextarea v-model="bio" label="About" required />
-    <VTextarea v-model="thoughts" voice-input maxlength="2000" /> (FE-94)
+    <VTextarea v-model="text" :takeover="busy">
+      <template #takeover><MyPanel /></template>
+      <template #trailing><MyButton /></template>
+    </VTextarea>
 -->
 
 <template>
@@ -25,7 +37,7 @@
     >
     <div class="v-textarea__row">
       <textarea
-        v-show="!voiceActive"
+        v-show="!takeover"
         :id="fieldId"
         ref="fieldEl"
         class="v-textarea__field"
@@ -43,26 +55,17 @@
         @focus="onFieldFocus"
         @input="onInput"
       />
-      <!-- [FE-94, voice step 2] While a take owns the field, this wrapper
-           holds the plate's slot for the WHOLE span -- including the
-           `requesting` permission prompt, when it stays an honestly frozen
-           EMPTY band, the composer's own behaviour (no premature
-           i18n:voice.transcribing before there is a take to transcribe). The panel
-           itself mounts only once the recorder is actually rolling; the
-           textarea stays mounted (v-show) so focus and the autogrow height
-           survive the take. -->
+      <!-- [FE-153] While `takeover` is on, this region holds the field's
+           place in the row: an empty slot still renders the band (the
+           FE-94 voice take freezes it EMPTY during the permission prompt),
+           so the row keeps its shape. The fixed-rows variant wears the
+           field's own plate. -->
       <div
-        v-if="voiceActive"
-        class="v-textarea__voice"
-        :class="{ 'v-textarea__voice--plate': !autogrow }"
+        v-if="takeover"
+        class="v-textarea__takeover"
+        :class="{ 'v-textarea__takeover--plate': !autogrow }"
       >
-        <VoiceRecordingPanel
-          v-if="voicePanelVisible"
-          :state="voicePhase"
-          :elapsed-sec="voiceElapsed"
-          @cancel="cancel"
-          @stop="stop"
-        />
+        <slot name="takeover" />
       </div>
       <!-- Required marker (DS): mirrors VInput/VSelect's seal -- gutter always
            reserved while `required` so the field width never jumps on fill. -->
@@ -74,12 +77,8 @@
         <IconRequired v-if="!modelValue" :size="22" />
         <IconRequiredDone v-else :size="22" />
       </span>
-      <!-- [FE-94, voice step 2] The mic disc, opt-in via `voiceInput`. Unlike
-           the composer's mic it renders with text present too -- a transcript
-           here APPENDS (appendTranscript), so dictation is for adding to what
-           is written, not only for starting it. Gone for the whole span of a
-           take and whenever the field is disabled. -->
-      <VoiceMicButton v-if="voiceInput && !disabled && !voiceActive" @click="micTap" />
+      <!-- [FE-153] The row's right end (the app's voice mic disc). -->
+      <slot name="trailing" />
     </div>
     <!-- Animated error row (owner TZ 2026-11-01): always mounted, 0px closed.
          The legacy class stays so tests/view selectors keep resolving. -->
@@ -88,19 +87,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, nextTick, useId, useAttrs } from 'vue'
-import { IconRequired, IconRequiredDone } from '@/components/icons'
-import { VFieldError } from '@velo/ui'
-import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
-import { appendTranscript, useVoiceFieldInput } from '@/composables/useVoiceFieldInput'
-// Shared reach from ui (FE-94, a first for this folder): the voice family
-// lives in components/shared next to its Composer consumer. Relative file
-// imports -- shared has no barrel. This closes a module cycle
-// (ui barrel -> here -> VoiceRecordingPanel -> ui barrel for VLoader); it is
-// safe because BOTH cycle edges are render-time-only bindings, never
-// module-body reads, and the ui barrel itself is pure re-exports.
-import VoiceRecordingPanel from '../shared/VoiceRecordingPanel.vue'
-import VoiceMicButton from '../shared/VoiceMicButton.vue'
+import { ref, watch, onMounted, nextTick, useId } from 'vue'
+import { IconRequired, IconRequiredDone } from '../../icons'
+import VFieldError from '../VFieldError'
+import { useKeyboardFieldScroll } from '../../keyboardFieldScroll'
 
 // inheritAttrs:false — forward native attrs (maxlength/inputmode/…) onto the
 // inner <textarea>, not the wrapper div. Parity with VInput/VSelect.
@@ -146,12 +136,10 @@ const props = withDefaults(
      *  measured bordered-pill value in his files (the search screen). Default
      *  OFF -- every existing caller stays byte-identical. */
     borderedAtRest?: boolean
-    /** [FE-94, voice step 2; kill-switched per call site] The mic disc in the
-     *  field's row: `tap -> record -> transcribe -> the transcript APPENDS` to
-     *  the current value (appendTranscript), clamped to the caller's
-     *  maxlength attr. False (the default) keeps the disc unmounted and every
-     *  piece of voice machinery unreachable; no other behaviour changes. */
-    voiceInput?: boolean
+    /** [FE-153] Hide the field (kept mounted) and render the #takeover slot
+     *  in its place. Autogrow measuring pauses for the span and re-runs when
+     *  it ends. Default OFF. */
+    takeover?: boolean
   }>(),
   {
     modelValue: '',
@@ -164,7 +152,7 @@ const props = withDefaults(
     required: false,
     hideLabel: false,
     borderedAtRest: false,
-    voiceInput: false,
+    takeover: false,
   },
 )
 
@@ -174,38 +162,21 @@ const emit = defineEmits<{
 
 const fieldEl = ref<HTMLTextAreaElement | null>(null)
 
-// -- voice input (FE-94, step 2) ---------------------------------------------
-
-// maxlength reaches this component as a fallthrough ATTR (v-bind="$attrs"
-// puts it on the textarea); the append clamp needs it as a number.
-const attrs = useAttrs()
-function fieldMaxLength(): number | undefined {
-  const raw = attrs.maxlength
-  if (typeof raw === 'number' && Number.isFinite(raw)) return raw
-  if (typeof raw === 'string' && raw.trim() !== '') {
-    const parsed = Number.parseInt(raw, 10)
-    return Number.isFinite(parsed) ? parsed : undefined
-  }
-  return undefined
+/** [FE-153] Drop focus from the field (and with it the soft keyboard) -- a
+ *  wrapper calls this before it takes the field over. */
+function blur(): void {
+  fieldEl.value?.blur()
 }
-
-const { voiceActive, voicePhase, voicePanelVisible, voiceElapsed, micTap, stop, cancel } =
-  useVoiceFieldInput({
-    blurField: () => fieldEl.value?.blur(),
-    onTranscript: (text) => {
-      emit('update:modelValue', appendTranscript(props.modelValue, text, fieldMaxLength()))
-    },
-  })
+defineExpose({ blur })
 
 // Resize to content: reset to auto, then take scrollHeight. The CSS max-height
 // (--velo-textarea-autogrow-max) caps the visible box and overflow-y:auto kicks
 // in past the cap, so no min/max math is needed here.
 function resize(): void {
   if (!props.autogrow) return
-  // A voice take owns the row for its whole span (permission prompt included):
-  // the hidden field measures scrollHeight 0 and a resize now would bake a
-  // garbage height in for after the take.
-  if (voiceActive.value) return
+  // A takeover owns the row for its whole span: the hidden field measures
+  // scrollHeight 0 and a resize now would bake a garbage height in for after.
+  if (props.takeover) return
   const el = fieldEl.value
   if (!el) return
   el.style.height = 'auto'
@@ -228,11 +199,14 @@ watch(
     if (props.autogrow) void nextTick(resize)
   },
 )
-// A take's end is the first honest moment to measure a field that may have
-// just grown by a transcript while hidden behind the panel.
-watch(voiceActive, (active) => {
-  if (!active) void nextTick(resize)
-})
+// A takeover's end is the first honest moment to measure a field that may
+// have just grown (a voice transcript) while hidden behind the slot.
+watch(
+  () => props.takeover,
+  (active) => {
+    if (!active) void nextTick(resize)
+  },
+)
 </script>
 
 <style scoped>
@@ -270,13 +244,13 @@ watch(voiceActive, (active) => {
   gap: var(--space-2);
 }
 
-/* [FE-94, voice step 2] The take's slot while it owns the field -- from the
-   permission prompt (an empty frozen band) through the panel itself. Plate
-   parity for the fixed-rows variant: the wrapper wears the plate's own
-   surface so the row keeps its shape and the panel does not float
+/* [FE-153] The takeover region while it owns the field (FE-94: from the
+   voice permission prompt, an empty frozen band, through the panel itself).
+   Plate parity for the fixed-rows variant: the region wears the plate's own
+   surface so the row keeps its shape and the content does not float
    disembodied over the form; the autogrow variant stays transparent, its
    floor just one band tall. */
-.v-textarea__voice {
+.v-textarea__takeover {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -284,7 +258,7 @@ watch(voiceActive, (active) => {
   min-height: var(--velo-size-44);
 }
 
-.v-textarea__voice--plate {
+.v-textarea__takeover--plate {
   min-height: 100px;
   padding: var(--space-1) var(--space-2);
   box-sizing: border-box;

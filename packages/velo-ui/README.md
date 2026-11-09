@@ -184,6 +184,7 @@
 --velo-shadow-toast         # VToast elevation (P8 batch 6)
 --velo-success              # VToast success fill (P8 batch 6)
 --velo-text-placeholder    # VInput placeholder tint (P8 batch 2)
+--velo-textarea-autogrow-max # VTextarea autogrow cap (FE-153)
 ```
 
 ## Стратегия CSS (§3.3)
@@ -238,6 +239,15 @@ i18n-шов менялся — пин поехал вместе с измене�
 Teleport-корень молча пропадал, что VBottomSheet выяснил «the hard way»).
 Заглушка VStub, доказавшая конвейер
 в P1, удалена её же первым реальным батчем.
+
+**VTextarea (FE-153)** — последний из полей: в P8 он остался в приложении,
+потому что FE-94 вживил в него голосовой ввод. Шов разрезан слотами по
+конвенции §7.2: `#trailing` — правый конец ряда после печати required (там
+приложение ставит кнопку микрофона), `#takeover` + проп `takeover` —
+содержимое на месте поля (панель записи; само поле остаётся смонтированным
+через `v-show`, autogrow на это время не меряет), плюс `defineExpose({ blur })`,
+чтобы обёртка опускала клавиатуру перед захватом. Голос собирает
+`frontend/src/components/shared/VoiceTextarea.vue`; кит про голос не знает.
 
 **Иконки (FE-119, §4 P4)** — плоская семья, НЕ папка на компонент: глиф —
 один template-only SFC на общем контракте `size` (по умолчанию 24,

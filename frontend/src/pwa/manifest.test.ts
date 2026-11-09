@@ -158,12 +158,14 @@ describe('index.html head -- what the build is made from', () => {
     expect(iconFiles).toContain(href)
   })
 
-  it('passport placeholders: lang and title come from %VITE_*% (tz-whitelabel F1)', () => {
+  it('passport placeholders: lang and title come from %VELO_*% (tz-whitelabel F1, FE-153)', () => {
     // The source carries placeholders, not literals; the build substitutes
-    // them (Vite natively, leftovers via passportHtmlDefaults in
-    // vite.config.ts -- pinned in platform/passport-html.test.ts).
-    expect(attr(/<html[^>]*>/, 'lang')).toBe('%VITE_DEFAULT_LOCALE%')
-    expect(indexHtml).toMatch(/<title>%VITE_BRAND%<\/title>/)
+    // them (passportHtmlDefaults in vite.config.ts -- pinned in
+    // platform/passport-html.test.ts). FE-153: never %VITE_*% -- Vite's own
+    // html env pass warns on every env-less build for those.
+    expect(attr(/<html[^>]*>/, 'lang')).toBe('%VELO_DEFAULT_LOCALE%')
+    expect(indexHtml).toMatch(/<title>%VELO_BRAND%<\/title>/)
+    expect(indexHtml).not.toMatch(/%VITE_[A-Z0-9_]+%/)
   })
 
   it('viewport tag is the one Telegram has always had: NO viewport-fit here', () => {

@@ -61,14 +61,14 @@
 ## 0. Резюме
 
 35 из 37 компонентов `components/ui` переезжают в приватный пакет `@velo/ui`
-монорепы; **три остаются в приложении осознанно**: `VeloLogo.vue` (скиновый —
-рендерит `public/icons/…`, путь подменяется скин-пакетом), `VRatingBadges.vue`
-(доменный — тянет `utils/moodScale`, `utils/ratingIcons`) и `VTextarea.vue`
-(домен-голос: FE-94 вживил в поле useVoiceFieldInput и семейство
-`components/shared/VoiceRecordingPanel`/`VoiceMicButton` — принцип 4
-«доменное — не пакет»; чистый slot-разрез голосового шва — отдельная задача;
-VInput при этом в пакете, поле-собрат шва keyboardFieldScroll *(P8,
-07.11)*).
+монорепы; **два остаются в приложении осознанно**: `VeloLogo.vue` (скиновый —
+рендерит `public/icons/…`, путь подменяется скин-пакетом) и `VRatingBadges.vue`
+(доменный — тянет `utils/moodScale`, `utils/ratingIcons`). `VTextarea.vue`
+был третьим (FE-94 вживил в поле голос), пока FE-153 *(09.11)* не разрезал
+голосовой шов: поле в пакете получило слоты `#takeover`/`#trailing` и
+`blur()`, а голос собирает доменная обёртка
+`components/shared/VoiceTextarea.vue` — заодно исчез цикл импортов
+ui-баррел → VTextarea → VoiceRecordingPanel → ui-баррел.
 
 | Фаза | Что делается | Оценка | Статус (08.11) |
 |---|---|---|---|
@@ -78,7 +78,7 @@ VInput при этом в пакете, поле-собрат шва keyboardFie
 | P3 | i18n-шов: `configureUi({ t })`, ключи выровнены на `ui.*`, словарь остаётся в приложении | 1–1,5 д | ✅ FE-118 (PR #32, в `test`) |
 | P4 | Иконки: 12 шт. в пакет (аудит завершён, §4 P4) | ~1 д | ✅ FE-119 (в `test`) |
 | P5 | Поведенческие швы: composables, platform/dom | 2–3 д | ✅ FE-143 + FE-141 (PR #32, в `test`) |
-| P6 | Батч F: 7 сложных (модалки, меню, поля) | 3–4 д | ✅ контракты FE-142/144, переезд FE-145 (PR #32) и FE-146 (меню/поле/тост — в P8, PR #33); `VTextarea` остаётся в приложении (домен-голос) |
+| P6 | Батч F: 7 сложных (модалки, меню, поля) | 3–4 д | ✅ контракты FE-142/144, переезд FE-145 (PR #32) и FE-146 (меню/поле/тост — в P8, PR #33); `VTextarea` — FE-153 (PR #40, 09.11) |
 | P7 | Figma-контур: Code Connect, MCP-приёмка, свод витрины | 2–3 д | ◑ Storybook ✅; MCP-приёмка работает де-факто; шаг 1 витрины (доки токенов + скин-переключатель, §3.7) ✅ PR #36/#37; Code Connect отложен; свод витрины — открыто |
 | P8 | Финал: баррел → пакет, eslint-граница, удаление копий | 1 д | ✅ FE-123, P8 выполнен 07.11 (PR #33, см. §4 P8) |
 | T | Параллельный трек: DTCG-пайплайн токенов (Figma Variables → variables.css) | 2–3 д, поверх P2–P6 | ✅ FE-124: шаг 1 (PR #31) и этап 2 (PR #34: движок эквивалентности + `token-sync.yml`); автоПР включится с секретом `FIGMA_TOKEN` |
@@ -111,11 +111,10 @@ VInput при этом в пакете, поле-собрат шва keyboardFie
 3. **Storybook, шаг 1 витрины (§3.7)** ✅ (PR #36/#37): страница токенов
    (254 декларации) + скин-переключатель по таблице `skins/` (с 09.11 —
    golden / goodo; эталоны test-contrast и nightfall выведены владельцем
-   в FE-152). Дальше витрину не
-   раздувать (скоуп — только кит), критерий закрытия — §3.7.
-4. **Отложенный разрез**: голосовой шов VTextarea (slot вместо вживленного
-   семейства voice) — тогда поле переезжает в пакет и домен-исключений
-   снова два.
+   в FE-152). Дальше витрину не раздувать (скоуп — только кит), критерий
+   закрытия — §3.7.
+4. ✅ **Голосовой шов VTextarea** (FE-153, 09.11): слоты вместо вживленного
+   семейства voice, поле в пакете, домен-исключений два.
 
 ### Связь с Figma — где в плане
 
@@ -333,7 +332,7 @@ no-cyrillic / key-audit / stylelint наращивают glob на `packages/`),
 | `useKeyboardFieldScroll` (VInput, VTextarea) | инверсия: пакет принимает behavior через provide-ключ с дефолтом «ничего не делать»; реализация под TMA остаётся в приложении |
 | `platform/dom` (VMenu, VModal, VBottomSheet) | у пакета свой мини-seam (`document`-операции, нужные 3 компонентам), с тем же духом запрета сырых `window/document`; слияние с app-`platform/dom` не делается |
 
-### P6 — батч F: сложные (3–4 дня) — ✅ выполнено (FE-142/144/145/146, в `test`; `VTextarea` — в приложении)
+### P6 — батч F: сложные (3–4 дня) — ✅ выполнено (FE-142/144/145/146, в `test`; `VTextarea` — FE-153, PR #40)
 
 VToast (после P5), VModal, VBottomSheet, VConfirmDialog, VMenu, VMenuItem,
 VInput, VTextarea. Тесты `VInput`/`VToast` переезжают; для VModal и
@@ -414,10 +413,10 @@ tokens.json — решение владельца.
    (VLoader/VModal/VConfirmDialog/VLoadingSwap — ре-анкор локализованных
    дефолтов, P3) + домен-трио локально (`VeloLogo`, `VRatingBadges`,
    **`VTextarea`** — FE-94 голос, принцип 4; отклонение от карты 28.10,
-   см. §0). Пустых каталогов нет — файлы переехали `git mv`.
+   закрыто FE-153 — см. §0). Пустых каталогов нет — файлы переехали `git mv`.
 2. ✅ eslint-граница: во `frontend/eslint.config.js` — `@velo/ui` запрещён
    вне дверей (баррели ui/icons, `useKeyboardFieldScroll`,
-   `useLoadingHold`, `VTextarea.vue`), deep-subpath запрещён везде
+   `useLoadingHold`; дверь `VTextarea.vue` закрыта FE-153), deep-subpath запрещён везде
    (зеркало `ui-package-boundary.test.ts`); в пакете — запрет `@/…`
    (`eslint.config.js` + `src/boundary.test.ts`, CI-гейт).
 3. ✅ `package.json` frontend: `@velo/ui: workspace:*` (было ещё с P1).
@@ -533,8 +532,8 @@ API — эквивалент в `<script setup>`: композаблы и фаб
   в `variables.css`).
 - Трек T шаг 1 (FE-124): `tokens.json` — источник, `variables.css`
   генерируется 1:1; Figma Variables (253) импортированы.
-- Кит `@velo/ui` целиком (P1–P8, всё кроме домен-трио `VeloLogo`/
-  `VRatingBadges`/`VTextarea`) + 12 иконок — красится скином, как весь продукт.
+- Кит `@velo/ui` целиком (P1–P8, всё кроме домен-пары `VeloLogo`/
+  `VRatingBadges`; `VTextarea` переехал в FE-153) + 12 иконок — красится скином, как весь продукт.
 - Трек T этап 2 (PR #34): автосинк Figma Variables → `tokens.json`.
 - Контур Праймера: `/config.json` (FE-129), `PRIMER_EDITION` → фича-реестр
   (FE-130), `PRIMER_*` в Dockerfile, языки `ru, en, uk` (FE-149 §1–§4).

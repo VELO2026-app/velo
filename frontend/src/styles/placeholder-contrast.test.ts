@@ -44,17 +44,19 @@ import { resolve } from 'node:path'
 // off the project root vitest runs from.
 const variablesCss = readFileSync(resolve(process.cwd(), 'src/styles/variables.css'), 'utf8')
 
-const raw = import.meta.glob<string>(
-  ['/src/views/user/ExternalActivityCreateView.vue', '/src/components/ui/VTextarea.vue'],
-  {
-    query: '?raw',
-    import: 'default',
-    eager: true,
-  },
-)
+const raw = import.meta.glob<string>(['/src/views/user/ExternalActivityCreateView.vue'], {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+})
 
 const createView = raw['/src/views/user/ExternalActivityCreateView.vue'] ?? ''
-const vTextarea = raw['/src/components/ui/VTextarea.vue'] ?? ''
+// FE-153: VTextarea is a kit resident now -- read off disk like the token
+// canon (the package sits outside the app root the glob is anchored to).
+const vTextarea = readFileSync(
+  resolve(process.cwd(), '../packages/velo-ui/src/components/VTextarea/VTextarea.vue'),
+  'utf8',
+)
 
 // -- CSS reading helpers --------------------------------------------------------
 
