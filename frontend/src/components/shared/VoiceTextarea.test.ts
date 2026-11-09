@@ -1,5 +1,6 @@
 // =============================================================================
-// VELO Frontend -- VTextarea voice input tests (voice input, step 2: FE-94)
+// VELO Frontend -- VoiceTextarea tests (voice input, step 2: FE-94; moved
+// here by FE-153 when the voice seam left the kit VTextarea for this wrapper)
 //
 // The step-2 contract, and how it DIFFERS from the composer's (step 1):
 //   - the mic is opt-in per call site (`voiceInput`, kill-switched by
@@ -11,7 +12,7 @@
 //     past the caller's maxlength.
 //
 // The recorder composable and the transcription client are mocked at their
-// module seams (same as Composer.voice.test.ts): VTextarea + the extracted
+// module seams (same as Composer.voice.test.ts): VoiceTextarea + the extracted
 // useVoiceFieldInput pipeline are the unit under test. The recorder mock is a
 // plain mutable object built from real refs so the component's computeds
 // re-render when a test moves the state machine.
@@ -115,11 +116,11 @@ async function flush(ticks = 4): Promise<void> {
 }
 
 async function mount(props: Record<string, unknown> = {}): Promise<void> {
-  const { default: VTextarea } = await import('@/components/ui/VTextarea.vue')
+  const { default: VoiceTextarea } = await import('@/components/shared/VoiceTextarea.vue')
   host = document.createElement('div')
   document.body.appendChild(host)
   updates = []
-  app = createApp(VTextarea, {
+  app = createApp(VoiceTextarea, {
     'onUpdate:modelValue': (v: string) => updates.push(v),
     ...props,
   }).use(createTestI18n())
@@ -191,7 +192,7 @@ describe('appendTranscript (pure §11 join)', () => {
   })
 })
 
-describe('VTextarea -- mic visibility (opt-in, append-mode)', () => {
+describe('VoiceTextarea -- mic visibility (opt-in, append-mode)', () => {
   it('voiceInput off (the default): no mic, no panel -- every existing caller unchanged', async () => {
     await mount({ modelValue: 'текст' })
     expect(mic()).toBeNull()
@@ -211,7 +212,7 @@ describe('VTextarea -- mic visibility (opt-in, append-mode)', () => {
   })
 })
 
-describe('VTextarea -- the take owns the field', () => {
+describe('VoiceTextarea -- the take owns the field', () => {
   it('tap: recording starts, the panel stands in for the plate, mic unmounts', async () => {
     voice.start.mockImplementation(async () => {
       voice.state.value = 'recording'
@@ -258,7 +259,7 @@ describe('VTextarea -- the take owns the field', () => {
     expect(textareaEl().style.display).toBe('none')
     expect(mic()).toBeNull()
     expect(panel()).toBeNull()
-    const band = host!.querySelector('.v-textarea__voice')
+    const band = host!.querySelector('.v-textarea__takeover')
     expect(band).not.toBeNull() // the frozen band holds the row's shape
     expect(band!.querySelector('[data-testid="voice-panel"]')).toBeNull()
 
@@ -266,7 +267,7 @@ describe('VTextarea -- the take owns the field', () => {
     voiceState.value = 'idle'
     await flush()
     expect(textareaEl().style.display).not.toBe('none')
-    expect(host!.querySelector('.v-textarea__voice')).toBeNull()
+    expect(host!.querySelector('.v-textarea__takeover')).toBeNull()
     expect(mic()).not.toBeNull()
   })
 
@@ -279,7 +280,7 @@ describe('VTextarea -- the take owns the field', () => {
   })
 })
 
-describe('VTextarea -- stop, too-short, cancel', () => {
+describe('VoiceTextarea -- stop, too-short, cancel', () => {
   it('stop under 1s: cancel + honest hint, no transcription', async () => {
     beginRecording(0)
     await mount({ voiceInput: true })
@@ -308,7 +309,7 @@ describe('VTextarea -- stop, too-short, cancel', () => {
   })
 })
 
-describe('VTextarea -- the transcript APPENDS', () => {
+describe('VoiceTextarea -- the transcript APPENDS', () => {
   function audibleTake() {
     voice.stop.mockImplementation(async () => {
       voiceState.value = 'idle'
@@ -395,7 +396,7 @@ describe('VTextarea -- the transcript APPENDS', () => {
   })
 })
 
-describe('VTextarea -- honest failures', () => {
+describe('VoiceTextarea -- honest failures', () => {
   it('a denied mic permission answers with the exact toast, field untouched', async () => {
     voice.start.mockImplementation(async () => {
       voice.state.value = 'idle'
@@ -467,7 +468,7 @@ describe('VTextarea -- honest failures', () => {
   })
 })
 
-describe('VTextarea -- the processing freeze', () => {
+describe('VoiceTextarea -- the processing freeze', () => {
   it('pending transcription: busy panel, disabled controls, field stays hidden', async () => {
     let releaseTranscription: (r: { ok: boolean; text?: string }) => void = () => {}
     voice.stop.mockImplementation(async () => {

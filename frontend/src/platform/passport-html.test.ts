@@ -1,10 +1,11 @@
 // =============================================================================
 // VELO Frontend -- passportHtmlDefaults (tz-whitelabel F1, §2.2)
 // =============================================================================
-// index.html ships %VITE_*% passport placeholders; Vite replaces only DEFINED
-// env vars, and CI builds without a .env. The post-transform (build-side
-// seam in platform/passport-html.ts) resolves the leftovers to the golden
-// defaults. This suite pins that contract: undefined -> golden,
+// index.html ships %VELO_BRAND% / %VELO_DEFAULT_LOCALE% passport
+// placeholders (FE-153: no longer %VITE_*% -- Vite's own html pass warned on
+// every env-less build). The post-transform (build-side seam in
+// platform/passport-html.ts) is their only resolver: the VITE_* env var, else
+// the golden default. This suite pins that contract: undefined -> golden,
 // process.env -> wins, unknown placeholder -> untouched.
 // =============================================================================
 
@@ -44,7 +45,7 @@ describe('passportHtmlDefaults (tz-whitelabel F1)', () => {
     resolveWithRoot()
     vi.stubEnv('VITE_BRAND', undefined)
     vi.stubEnv('VITE_DEFAULT_LOCALE', undefined)
-    expect(transform('<html lang="%VITE_DEFAULT_LOCALE%"><title>%VITE_BRAND%</title>')).toBe(
+    expect(transform('<html lang="%VELO_DEFAULT_LOCALE%"><title>%VELO_BRAND%</title>')).toBe(
       '<html lang="ru"><title>VELO</title>',
     )
   })
@@ -53,7 +54,7 @@ describe('passportHtmlDefaults (tz-whitelabel F1)', () => {
     resolveWithRoot()
     vi.stubEnv('VITE_BRAND', 'ШКОЛА')
     vi.stubEnv('VITE_DEFAULT_LOCALE', 'en')
-    expect(transform('<html lang="%VITE_DEFAULT_LOCALE%"><title>%VITE_BRAND%</title>')).toBe(
+    expect(transform('<html lang="%VELO_DEFAULT_LOCALE%"><title>%VELO_BRAND%</title>')).toBe(
       '<html lang="en"><title>ШКОЛА</title>',
     )
   })
@@ -61,7 +62,9 @@ describe('passportHtmlDefaults (tz-whitelabel F1)', () => {
   it('an unknown placeholder is left as is (not our contract, not our business)', () => {
     resolveWithRoot()
     vi.stubEnv('VITE_SOMETHING_ELSE', undefined)
-    expect(transform('%VITE_SOMETHING_ELSE%')).toBe('%VITE_SOMETHING_ELSE%')
+    expect(transform('%VELO_SOMETHING_ELSE%')).toBe('%VELO_SOMETHING_ELSE%')
+    // A VITE_-spelled one is Vite's own html env pass, never this plugin's.
+    expect(transform('%VITE_BRAND%')).toBe('%VITE_BRAND%')
   })
 })
 

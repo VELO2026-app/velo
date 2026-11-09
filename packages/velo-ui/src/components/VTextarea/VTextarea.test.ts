@@ -1,6 +1,6 @@
 // =============================================================================
-// VELO Frontend -- VTextarea Unit Tests (FE-144: written BEFORE the @velo/ui
-// move)
+// @velo/ui -- VTextarea Unit Tests (FE-144: written BEFORE the @velo/ui move;
+// moved with the component by FE-153)
 // =============================================================================
 //
 // P6a-2 safety net, same pattern as VModal.test.ts from FE-142: VTextarea
@@ -28,45 +28,26 @@
 //     role=alert line inside VFieldError, the --error modifier;
 //   - the required seal trio (off / empty / done).
 //
-// The voice machinery is OUT OF SCOPE here (owned by VTextarea.voice.test.ts):
-// useVoiceFieldInput is MOCKED inert (idle refs, dead handlers) and
-// useKeyboardFieldScroll is MOCKED per the FE-144 order -- only its WIRING
-// (onFieldFocus bound as @focus) is asserted, never the real scroll.
+// FE-153 cut the voice seam: the field knows no voice, it offers the
+// #takeover/#trailing slots and an exposed blur() instead (pinned at the
+// bottom). The voice behaviour itself is the app's VoiceTextarea and its
+// own test. useKeyboardFieldScroll is MOCKED per the FE-144 order -- only its
+// WIRING (onFieldFocus bound as @focus) is asserted, never the real scroll.
 //
 // Dependency-free SFC mount (createApp + happy-dom), per velo-idiom §1 (no
 // @vue/test-utils). The parent is a MINIMAL two-way harness, so the DOM
 // re-bind assertions test the component boundary, not any real screen.
 // =============================================================================
 
-import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { createApp, nextTick, ref, h, type App, type Ref } from 'vue'
-import VTextarea from '@/components/ui/VTextarea.vue'
+import { createApp, nextTick, ref, h, type App, type Ref, type VNode } from 'vue'
+import VTextarea from './VTextarea.vue'
 
 // FE-144: the keyboard focus-scroll seam -- mocked, only the binding asserted.
 const onFieldFocus = vi.hoisted(() => vi.fn())
-vi.mock('@/composables/useKeyboardFieldScroll', () => ({
+vi.mock('../../keyboardFieldScroll', () => ({
   useKeyboardFieldScroll: () => ({ onFieldFocus }),
 }))
-
-// FE-144: the whole voice tree mocked inert. Fresh idle refs per call keep
-// v-show/v-if honest (template ref unwrapping needs real refs); the handlers
-// are dead stubs -- every voice behaviour lives in VTextarea.voice.test.ts.
-vi.mock('@/composables/useVoiceFieldInput', async () => {
-  const { ref } = await import('vue')
-  return {
-    appendTranscript: vi.fn(),
-    useVoiceFieldInput: () => ({
-      voiceActive: ref(false),
-      voicePhase: ref('idle'),
-      voicePanelVisible: ref(false),
-      voiceElapsed: ref(0),
-      micTap: vi.fn(),
-      stop: vi.fn(),
-      cancel: vi.fn(),
-    }),
-  }
-})
 
 // -- mount ------------------------------------------------------------------
 
@@ -77,20 +58,25 @@ let host: HTMLElement | null = null
 async function mountField(
   props: Record<string, unknown> = {},
   initial = '',
+  slots?: Record<string, () => VNode>,
 ): Promise<{ field: HTMLTextAreaElement; model: Ref<string> }> {
   const model = ref(initial)
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp({
     render: () =>
-      h(VTextarea, {
-        ...props,
-        modelValue: model.value,
-        'onUpdate:modelValue': (v: string) => {
-          model.value = v
+      h(
+        VTextarea,
+        {
+          ...props,
+          modelValue: model.value,
+          'onUpdate:modelValue': (v: string) => {
+            model.value = v
+          },
         },
-      }),
-  }).use(createTestI18n())
+        slots,
+      ),
+  })
   app.mount(host)
   await flush(2)
   const field = host.querySelector('textarea')
@@ -110,6 +96,11 @@ async function type(field: HTMLTextAreaElement, value: string): Promise<void> {
 
 function label(): HTMLLabelElement | null {
   return host?.querySelector('label.v-textarea__label') ?? null
+}
+
+/** FE-153: the takeover region (present only while `takeover` is on). */
+function takeoverRegion(): HTMLElement | null {
+  return host?.querySelector<HTMLElement>('.v-textarea__takeover') ?? null
 }
 
 /** The live error line inside the always-mounted VFieldError row. */
@@ -292,5 +283,97 @@ describe('VTextarea (the keyboard focus-scroll seam -- useKeyboardFieldScroll mo
     field.focus()
 
     expect(onFieldFocus).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('VTextarea (FE-153: the takeover/trailing slots -- the voice seam, cut)', () => {
+  it('takeover OFF (the default): the field shows, no takeover region, the slot content is not rendered', async () => {
+    const { field } = await mountField({ label: 'Описание' }, '', {
+      takeover: () => h('span', { class: 'probe-takeover' }, 'panel'),
+    })
+    expect(field.style.display).not.toBe('none')
+    expect(takeoverRegion()).toBeNull()
+    expect(host?.querySelector('.probe-takeover')).toBeNull()
+  })
+
+  it('takeover ON: the field hides but stays mounted, the slot renders in its place', async () => {
+    const { field } = await mountField({ label: 'Описание', takeover: true }, 'текст', {
+      takeover: () => h('span', { class: 'probe-takeover' }, 'panel'),
+    })
+    expect(field.style.display).toBe('none')
+    expect(field.value).toBe('текст')
+    const region = takeoverRegion()
+    expect(region?.querySelector('.probe-takeover')).not.toBeNull()
+  })
+
+  it('an EMPTY takeover still holds the band (the voice permission-prompt freeze)', async () => {
+    await mountField({ label: 'Описание', takeover: true })
+    const region = takeoverRegion()
+    expect(region).not.toBeNull()
+    expect(region?.children.length).toBe(0)
+  })
+
+  it('the fixed-rows variant wears the plate; autogrow stays transparent', async () => {
+    await mountField({ label: 'Описание', takeover: true })
+    expect(takeoverRegion()?.classList.contains('v-textarea__takeover--plate')).toBe(true)
+    host?.remove()
+    host = null
+
+    await mountField({ label: 'Описание', takeover: true, autogrow: true })
+    expect(takeoverRegion()?.classList.contains('v-textarea__takeover--plate')).toBe(false)
+  })
+
+  it('autogrow pauses for the takeover and re-measures when it ends', async () => {
+    const takeover = ref(true)
+    const model = ref('')
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    app = createApp({
+      render: () =>
+        h(VTextarea, {
+          autogrow: true,
+          takeover: takeover.value,
+          modelValue: model.value,
+        }),
+    })
+    app.mount(host)
+    await flush()
+    const field = host.querySelector('textarea')!
+    // Mounted under a takeover: the hidden field is never measured.
+    expect(field.style.height).toBe('')
+    model.value = 'пришло, пока поле скрыто'
+    await flush()
+    expect(field.style.height).toBe('')
+
+    takeover.value = false
+    await flush()
+    expect(field.style.height).toBe('0px')
+  })
+
+  it('#trailing renders at the row end, after the required seal', async () => {
+    await mountField({ label: 'Описание', required: true }, '', {
+      trailing: () => h('button', { class: 'probe-trailing' }, 'mic'),
+    })
+    const row = host?.querySelector('.v-textarea__row')
+    const last = row?.lastElementChild
+    expect(last?.classList.contains('probe-trailing')).toBe(true)
+    expect(last?.previousElementSibling?.classList.contains('v-textarea__seal')).toBe(true)
+  })
+
+  it('the exposed blur() drops focus from the field', async () => {
+    const exposed = ref<{ blur: () => void } | null>(null)
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    app = createApp({
+      render: () => h(VTextarea, { ref: exposed, label: 'Описание' }),
+    })
+    app.mount(host)
+    await flush()
+    const field = host.querySelector('textarea')!
+    field.focus()
+    expect(document.activeElement).toBe(field)
+
+    exposed.value?.blur()
+    expect(document.activeElement).not.toBe(field)
   })
 })

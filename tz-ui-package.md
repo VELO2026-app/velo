@@ -58,14 +58,14 @@
 ## 0. Резюме
 
 35 из 37 компонентов `components/ui` переезжают в приватный пакет `@velo/ui`
-монорепы; **три остаются в приложении осознанно**: `VeloLogo.vue` (скиновый —
-рендерит `public/icons/…`, путь подменяется скин-пакетом), `VRatingBadges.vue`
-(доменный — тянет `utils/moodScale`, `utils/ratingIcons`) и `VTextarea.vue`
-(домен-голос: FE-94 вживил в поле useVoiceFieldInput и семейство
-`components/shared/VoiceRecordingPanel`/`VoiceMicButton` — принцип 4
-«доменное — не пакет»; чистый slot-разрез голосового шва — отдельная задача;
-VInput при этом в пакете, поле-собрат шва keyboardFieldScroll *(P8,
-07.11)*).
+монорепы; **два остаются в приложении осознанно**: `VeloLogo.vue` (скиновый —
+рендерит `public/icons/…`, путь подменяется скин-пакетом) и `VRatingBadges.vue`
+(доменный — тянет `utils/moodScale`, `utils/ratingIcons`). `VTextarea.vue`
+был третьим (FE-94 вживил в поле голос), пока FE-153 *(09.11)* не разрезал
+голосовой шов: поле в пакете получило слоты `#takeover`/`#trailing` и
+`blur()`, а голос собирает доменная обёртка
+`components/shared/VoiceTextarea.vue` — заодно исчез цикл импортов
+ui-баррел → VTextarea → VoiceRecordingPanel → ui-баррел.
 
 | Фаза | Что делается | Оценка | Статус (07.11) |
 |---|---|---|---|
@@ -105,9 +105,8 @@ VInput при этом в пакете, поле-собрат шва keyboardFie
 3. **Storybook, шаг 1 витрины (§3.7)**: доки токенов + скин-переключатель
    (golden / test-контрастный / партнёрские) — ~0,5–1 день; дальше витрину
    не раздувать (скоуп — только кит), критерий закрытия — §3.7.
-4. **Отложенный разрез**: голосовой шов VTextarea (slot вместо вживленного
-   семейства voice) — тогда поле переезжает в пакет и домен-исключений
-   снова два.
+4. ✅ **Голосовой шов VTextarea** (FE-153, 09.11): слоты вместо вживленного
+   семейства voice, поле в пакете, домен-исключений два.
 
 ### Связь с Figma — где в плане
 
@@ -406,10 +405,10 @@ tokens.json — решение владельца.
    (VLoader/VModal/VConfirmDialog/VLoadingSwap — ре-анкор локализованных
    дефолтов, P3) + домен-трио локально (`VeloLogo`, `VRatingBadges`,
    **`VTextarea`** — FE-94 голос, принцип 4; отклонение от карты 28.10,
-   см. §0). Пустых каталогов нет — файлы переехали `git mv`.
+   закрыто FE-153 — см. §0). Пустых каталогов нет — файлы переехали `git mv`.
 2. ✅ eslint-граница: во `frontend/eslint.config.js` — `@velo/ui` запрещён
    вне дверей (баррели ui/icons, `useKeyboardFieldScroll`,
-   `useLoadingHold`, `VTextarea.vue`), deep-subpath запрещён везде
+   `useLoadingHold`; дверь `VTextarea.vue` закрыта FE-153), deep-subpath запрещён везде
    (зеркало `ui-package-boundary.test.ts`); в пакете — запрет `@/…`
    (`eslint.config.js` + `src/boundary.test.ts`, CI-гейт).
 3. ✅ `package.json` frontend: `@velo/ui: workspace:*` (было ещё с P1).

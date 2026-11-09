@@ -7,10 +7,11 @@
  *   - the i18n wrappers (VLoader/VModal/VConfirmDialog/VLoadingSwap): the
  *     kit components are pure (§7.2 seams) and this door re-anchors the
  *     localized defaults (P3; pinned by the *.localized.test.ts files);
- *   - the domain trio that never leaves the app (§0): VeloLogo (renders
- *     the skin-swapped public/icons path), VRatingBadges (utils/moodScale +
- *     utils/ratingIcons) and VTextarea (the FE-94 voice field --
- *     useVoiceFieldInput + the shared voice family).
+ *   - the domain pair that never leaves the app (§0): VeloLogo (renders
+ *     the skin-swapped public/icons path) and VRatingBadges (utils/moodScale +
+ *     utils/ratingIcons). VTextarea was the third until FE-153 cut its voice
+ *     seam: the kit field takes #takeover/#trailing slots and the voice
+ *     family lives in components/shared/VoiceTextarea.vue.
  * The app resolves `@velo/ui` to the package SOURCES (vite/vitest alias +
  * tsconfig paths) -- see the package README "CSS strategy" for the
  * resolution decision. The boundary law lives in eslint.config.js (P8) and
@@ -130,7 +131,7 @@ export { VBackButton } from '@velo/ui'
 export { VMoreLink } from '@velo/ui'
 export { VInput } from '@velo/ui'
 export { VFieldError } from '@velo/ui'
-export { default as VTextarea } from './VTextarea.vue'
+export { VTextarea } from '@velo/ui'
 export { VSelect } from '@velo/ui'
 export { VSwitch } from '@velo/ui'
 export { VDayPicker } from '@velo/ui'
