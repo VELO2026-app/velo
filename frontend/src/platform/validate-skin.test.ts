@@ -13,7 +13,7 @@
 // =============================================================================
 
 import { describe, expect, it } from 'vitest'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -157,16 +157,22 @@ describe('skin build gate (FE-148: an invalid package fails the build)', () => {
     expect(skinBuildGate(dir, FRONTEND)).toBeNull()
   })
 
-  it('a valid package passes the gate', () => {
-    const report = skinBuildGate(REFERENCE_SKIN, FRONTEND) as { fails: string[] }
+  it('a well-formed package passes the gate', () => {
+    const report = skinBuildGate(writePackage(), FRONTEND) as Report
     expect(report.fails).toEqual([])
   })
 
   it('a present directory without brand.json fails -- never passes as golden', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'velo-bad-skin-'))
-    cpSync(REFERENCE_SKIN, dir, { recursive: true })
+    const dir = writePackage()
     rmSync(join(dir, 'brand.json'))
-    const report = skinBuildGate(dir, FRONTEND) as { fails: string[] }
+    const report = skinBuildGate(dir, FRONTEND) as Report
     expect(report.fails).toContain('FAIL brand.json: missing')
+  })
+
+  it('an empty present directory fails on every mandatory file', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'velo-empty-skin-'))
+    const report = skinBuildGate(dir, FRONTEND) as Report
+    expect(report.fails).toContain('FAIL brand.json: missing')
+    expect(report.fails).toContain('FAIL tokens.css: missing')
   })
 })
