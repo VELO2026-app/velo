@@ -1,94 +1,108 @@
-# Карта компонентов — Vue DS ↔ Figma
+# Component map — Vue DS ↔ Figma
 
-> Сгенерирована из барелов и шапок компонентов 2026-09-18 (Фаза 3в, ТЗ п. 11.2/11.6.1).
-> Источник назначений — шапки самих файлов (`src/components/ui/*.vue`); здесь — краткая форма.
-> Колонка Figma заполняется по экспортам/списку компонентов Figma (Уровень 0, п. 11.5) — до тех пор «—».
+> Generated from the barrels and component headers on 2026-09-18 (Phase 3c, spec items 11.2/11.6.1).
+> The source of each component's purpose is the header of the file itself (`src/components/ui/*.vue`); this is the short form.
+> The Figma column is filled from the Figma exports / component list (Level 0, item 11.5) — the values are nodes of the mirror on the `front` page (file "VELΘ App Актуальное").
 >
-> **Правило:** компонент для экрана берётся только из этой карты, через барелы
-> `@/components/ui` и `@/components/icons`. Новый компонент = карта + барел + утверждение владельца.
-> Правила превращения дизайна в код — рядом: [design.rules.md](./design.rules.md).
+> **Rule:** a screen takes its components only from this map, through the barrels
+> `@/components/ui` and `@/components/icons`. A new component = map + barrel + owner approval.
+> The rules for turning a design into code are next to it: [design.rules.md](./design.rules.md).
 
-## Кнопки и навигация
+## Buttons and navigation
 
-| Vue                   | Назначение                                                   | Ключевые пропсы                                                                          | Figma |
-| --------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------- | ----- |
-| `VButton`             | основная кнопка, стеклянная пилюля                           | `variant` primary/secondary/danger/ghost/outline, `size`, `block`, `disabled`, `loading` | —     |
-| `VBackButton`         | единая кнопка «назад» (белый круг 44×44)                     | `ariaLabel`, `variant`                                                                   | —     |
-| `VMoreLink`           | единый контрол «Подробнее» (лейбл + пилюля со стрелкой)      | `label`                                                                                  | —     |
-| `VListRow`            | строка белой карточки-списка с опциональным lead-визуалом    | `title`, `subtitle`, `clickable`                                                         | —     |
-| `VMenuRow`            | строка настроек/профиля: белая плашка + иконка/стрелка/бейдж | `label`, `variant`, `showArrow`, `badge`, `dot`                                          | —     |
-| `VProgressRow`        | строка-метр с прогресс-треком (админ)                        | `label`, `value`, `chevron`, `clickable`                                                 | —     |
-| `VMenu` + `VMenuItem` | кебаб «…» + поповер круглых иконочных кнопок                 | `ariaLabel` / `icon`, `ariaLabel`                                                        | —     |
+| Vue                   | Purpose                                                 | Key props                                                                                | Figma                                                                                                                                                                       |
+| --------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VButton`             | primary button, glass pill                              | `variant` primary/secondary/danger/ghost/outline, `size`, `block`, `disabled`, `loading` | [`3976:1977`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3976-1977)                                                                                       |
+| `VBackButton`         | the single "back" button (white circle 44×44)           | `ariaLabel`, `variant`                                                                   | [`3918:384`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3918-384)                                                                                         |
+| `VMoreLink`           | the single "More" control (label + pill with an arrow)  | `label`                                                                                  | [`3913:2993`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3913-2993)                                                                                       |
+| `VListRow`            | a row of a white list card with an optional lead visual | `title`, `subtitle`, `clickable`                                                         | [`3905:1608`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3905-1608)                                                                                       |
+| `VMenuRow`            | settings/profile row: white plate + icon/arrow/badge    | `label`, `variant`, `showArrow`, `badge`, `dot`                                          | [`3918:382`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3918-382)                                                                                         |
+| `VProgressRow`        | meter row with a progress track (admin)                 | `label`, `value`, `chevron`, `clickable`                                                 | [`3917:290`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3917-290)                                                                                         |
+| `VMenu` + `VMenuItem` | kebab "…" + a popover of round icon buttons             | `ariaLabel` / `icon`, `ariaLabel`                                                        | [`3976:2243`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3976-2243) [`3976:2118`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3976-2118) |
 
-## Ввод и выбор
+## Input and selection
 
-| Vue                          | Назначение                                     | Ключевые пропсы                                                      | Figma |
-| ---------------------------- | ---------------------------------------------- | -------------------------------------------------------------------- | ----- |
-| `VInput`                     | инпут с лейблом, без рамки в покое, фокус-ринг | `modelValue`, `label`, `placeholder`, `type`, `error`, `disabled`    | —     |
-| `VTextarea`                  | многострочный ввод                             | `modelValue`, `label`, `placeholder`, `rows`, `error`, `disabled`    | —     |
-| `VSelect`                    | нативный select в белой плашке                 | `modelValue`, `label`, `placeholder`, `options`, `error`, `disabled` | —     |
-| `VCheckbox`                  | квадратный чекбокс + подпись                   | `modelValue`, `label`, `disabled`, `size`                            | —     |
-| `VSwitch`                    | булев переключатель (пилюля + ручка)           | `modelValue`, `disabled`, `ariaLabel`                                | —     |
-| `VRadioGroup`                | радио-список одиночного выбора                 | `modelValue`, `options`                                              | —     |
-| `VDayPicker`                 | выбор дня недели: семь круглых тумблеров ПН…ВС | `modelValue`, `ariaLabel`                                            | —     |
-| `VWheel`                     | iOS-скролл-вил: выбор центрированным элементом | `modelValue`, `options`, `itemHeight`                                | —     |
-| `VSegment` / `VSegmentTrack` | сегмент-контрол: пилюли / «трек + бегунок»     | `modelValue`, `options` (+ `variant` у track)                        | —     |
+| Vue                          | Purpose                                              | Key props                                                            | Figma                                                                                                                                                                       |
+| ---------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VInput`                     | input with a label, borderless at rest, focus ring   | `modelValue`, `label`, `placeholder`, `type`, `error`, `disabled`    | [`3976:2955`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3976-2955)                                                                                       |
+| `VTextarea`                  | multi-line input                                     | `modelValue`, `label`, `placeholder`, `rows`, `error`, `disabled`    | [`3976:2970`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3976-2970)                                                                                       |
+| `VSelect`                    | native select on a white plate                       | `modelValue`, `label`, `placeholder`, `options`, `error`, `disabled` | [`3918:380`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3918-380)                                                                                         |
+| `VCheckbox`                  | square checkbox + caption                            | `modelValue`, `label`, `disabled`, `size`                            | [`3918:374`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3918-374)                                                                                         |
+| `VSwitch`                    | boolean toggle (pill + knob)                         | `modelValue`, `disabled`, `ariaLabel`                                | [`3905:1459`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3905-1459)                                                                                       |
+| `VRadioGroup`                | single-choice radio list                             | `modelValue`, `options`                                              | [`3913:2769`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3913-2769)                                                                                       |
+| `VDayPicker`                 | weekday picker: seven round toggles Mon…Sun          | `modelValue`, `ariaLabel`                                            | [`3914:216`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3914-216)                                                                                         |
+| `VWheel`                     | iOS scroll wheel: the centered item is the selection | `modelValue`, `options`, `itemHeight`                                | [`3905:1636`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3905-1636)                                                                                       |
+| `VSegment` / `VSegmentTrack` | segmented control: pills / "track + thumb"           | `modelValue`, `options` (+ `variant` on track)                       | [`3905:1627`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3905-1627) [`3905:1465`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3905-1465) |
 
-## Оверлеи и обратная связь
+## Overlays and feedback
 
-| Vue              | Назначение                                              | Ключевые пропсы                            | Figma |
-| ---------------- | ------------------------------------------------------- | ------------------------------------------ | ----- |
-| `VModal`         | модальный диалог: оверлей, Esc/клик-вне, транзишены     | `open`, `closeOnOverlay`, `showClose`      | —     |
-| `VBottomSheet`   | флэш-шит: ручка, тайтл, контент, опц. primary-кнопка    | `open`, `title`, `saveLabel`               | —     |
-| `VConfirmDialog` | подтверждение поверх канона `VModal`                    | `open`, `title`, `message`, `confirmLabel` | —     |
-| `VToast`         | тосты снизу, автозакрытие (монтируется раз в `App.vue`) | —                                          | —     |
-| `VLoader`        | CSS-спиннер                                             | `size`                                     | —     |
-| `VEmptyState`    | пустое состояние                                        | `icon`, `title`, `description`, `variant`  | —     |
+| Vue              | Purpose                                                       | Key props                                  | Figma                                                                                 |
+| ---------------- | ------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------- |
+| `VModal`         | modal dialog: overlay, Esc / click-outside, transitions       | `open`, `closeOnOverlay`, `showClose`      | [`3976:2459`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3976-2459) |
+| `VBottomSheet`   | bottom sheet: handle, title, content, optional primary button | `open`, `title`, `saveLabel`               | [`3913:2840`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3913-2840) |
+| `VConfirmDialog` | confirmation on top of the `VModal` canon                     | `open`, `title`, `message`, `confirmLabel` | [`3976:2893`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3976-2893) |
+| `VToast`         | bottom toasts, auto-dismiss (mounted once in `App.vue`)       | —                                          | [`3918:376`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3918-376)   |
+| `VLoader`        | CSS spinner                                                   | `size`                                     | [`3905:1591`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3905-1591) |
+| `VEmptyState`    | empty state                                                   | `icon`, `title`, `description`, `variant`  | [`3918:386`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3918-386)   |
 
-## Отображение данных
+## Data display
 
-| Vue               | Назначение                                              | Ключевые пропсы                                 | Figma |
-| ----------------- | ------------------------------------------------------- | ----------------------------------------------- | ----- |
-| `VCard`           | белый card-канон (opaque white + бордер + radius)       | `clickable`, `padding`                          | —     |
-| `VStatCard`       | карточка числовой статистики + дельта-тренд             | `value`, `label`, `icon`, `clickable`, `layout` | —     |
-| `VMetricHero`     | hero-метрика: иконочный круг + крупное значение (админ) | `value`, `label`                                | —     |
-| `VBarChart`       | недельный бар-чарт (админ)                              | `bars`, `emptyText`                             | —     |
-| `VRatingBar`      | строка распределения оценок: иконка + цветной трек      | `label`, `value`, `barColor`                    | —     |
-| `VRatingBadges`   | трио бейджей fire/good/confused                         | `fire`, `good`, `confused`                      | —     |
-| `VBadge`          | пилюля-статус                                           | `variant`                                       | —     |
-| `VTag`            | пилюля-тег категории (стеклянный тинт)                  | `variant`                                       | —     |
-| `VChip`           | стеклянный чип: таг или фильтр                          | `size`, `active`, `clickable`                   | —     |
-| `VAvatar`         | круглый аватар: картинка или инициалы                   | `name`, `url`, `size`                           | —     |
-| `VAccordion`      | раскрывающаяся строка                                   | `title`, `defaultOpen`                          | —     |
-| `VPaginationDots` | канонические точки переключения шагов                   | `total`, `active`                               | —     |
-| `VeloLogo`        | логотип-мандала VELΘ                                    | `size`, `variant`, `spin`                       | —     |
+| Vue               | Purpose                                               | Key props                                       | Figma                                                                                 |
+| ----------------- | ----------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `VCard`           | the white card canon (opaque white + border + radius) | `clickable`, `padding`                          | [`3976:3105`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3976-3105) |
+| `VStatCard`       | numeric statistic card + delta trend                  | `value`, `label`, `icon`, `clickable`, `layout` | [`3905:1607`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3905-1607) |
+| `VMetricHero`     | hero metric: icon circle + large value (admin)        | `value`, `label`                                | [`3905:1697`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3905-1697) |
+| `VBarChart`       | weekly bar chart (admin)                              | `bars`, `emptyText`                             | [`3917:274`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3917-274)   |
+| `VRatingBar`      | rating distribution row: icon + colored track         | `label`, `value`, `barColor`                    | [`3905:1620`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3905-1620) |
+| `VRatingBadges`   | a trio of fire/good/confused badges                   | `fire`, `good`, `confused`                      | [`3917:299`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3917-299)   |
+| `VBadge`          | status pill                                           | `variant`                                       | [`3905:1438`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3905-1438) |
+| `VTag`            | category tag pill (glass tint)                        | `variant`                                       | [`3905:1445`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3905-1445) |
+| `VChip`           | glass chip: tag or filter                             | `size`, `active`, `clickable`                   | [`3905:1454`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3905-1454) |
+| `VAvatar`         | round avatar: image or initials                       | `name`, `url`, `size`                           | [`3905:1581`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3905-1581) |
+| `VAccordion`      | expandable row                                        | `title`, `defaultOpen`                          | [`3918:378`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3918-378)   |
+| `VPaginationDots` | the canonical step-switching dots                     | `total`, `active`                               | [`3905:1614`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3905-1614) |
+| `VeloLogo`        | the VELΘ mandala logo                                 | `size`, `variant`, `spin`                       | [`3913:3012`](https://www.figma.com/design/IV92js0q2cBHmHmDxB0zxM/?node-id=3913-3012) |
 
-## Иконки — 85 шт. (`@/components/icons`)
+## Icons — 85 total (`@/components/icons`)
 
-- все рисуются `currentColor`, принимают `size` (по умолчанию 24);
-- исключения-иллюстрации со своими градиентами: `IconMoodLow/Mid/High`, `VeloLogo`;
-- **новые иконочные пакеты не тянуть** — новая иконка = новый SVG-компонент в бареле (как в `Design_prototype/assets/icons/`).
-- школа (`tz-curator.md` §1.2/§1.4): `IconSchool` — таб «Школы» (академическая шапка); `IconUsers` — ученики, `IconMeditation` — мастера в строке и hero школы.
-- `IconLock` — «Заблокировать» в меню профиля ученика (мастер-зона); арт владельца (2026-09-30), monochrome `currentColor`.
+- all are drawn in `currentColor` and take `size` (24 by default);
+- exceptions, illustrations with their own gradients: `IconMoodLow/Mid/High`, `VeloLogo`;
+- **do not pull in new icon packages** — a new icon = a new SVG component in the barrel (as in `Design_prototype/assets/icons/`).
+- schools (`tz-curator.md` §1.2/§1.4): `IconSchool` — the "Schools" tab (academic cap); `IconUsers` — students, `IconMeditation` — masters in the school row and hero.
+- `IconLock` — "Block" in the student profile menu (master zone); the owner's artwork (2026-09-30), monochrome `currentColor`.
 
-## Фичевые композиты (`shared/`, `layout/`)
+## Feature composites (`shared/`, `layout/`)
 
-Не часть DS и не входят в карту: собираются из компонентов выше (примеры — `BookingCard`, `CalendarPracticeCard`, `DiarySearchResults`, `WeekStrip`, `VTabBar`). При сборке нового экрана сначала искать готовое здесь, затем — карту DS.
+Not part of the DS and not in the map: they are assembled from the components above (examples — `BookingCard`, `CalendarPracticeCard`, `DiarySearchResults`, `WeekStrip`, `VTabBar`). When building a new screen, look for a ready-made one here first, then in the DS map.
 
-Зарегистрированные новые (реестр `tz-curator.md` §7.2):
+Registered new ones (registry `tz-curator.md` §7.2):
 
-| Компонент               | Назначение                                                                                                                                                                                       | Примечание                                                                                                                 |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| `SchoolAvatarPicker`    | полноширинная upload-карточка аватара школы («Загрузить фото» → файл → локальное превью)                                                                                                         | отдельный последовательный блок, только за `SCHOOL_MEDIA_UPLOAD_ENABLED` (бэка нет, §7.1 №4); не overlay на фоне           |
-| `SchoolBannerPicker`    | полноширинная upload-карточка фона школы («Загрузить фото» → файл → локальное превью)                                                                                                            | следующий отдельный блок; там же, объектные URL отзывает сам                                                               |
-| `SchoolHeroCard`        | составной hero страницы школы: banner-полоса (слот под `SchoolBrandBanner` из §5), квадратное лого в белой рамке на шве, название, счётчики «ученики → мастера», copy (summary §6 → description) | фичевой композит `shared/`, каркас — `tz-curator.md` §1.10; копирайт: аналитика выигрывает, пример из макета не зашивается |
-| `SchoolInviteCard`      | карточка школы на экранах приглашений: квадратное лого (`avatar_url` → `SchoolMandalaBadge` → инициалы), название, счётчики «ученики → мастера», описание школы, жирная строка приглашения внизу карточки | фичевой композит `shared/`, макеты владельца 2026-10-02 («Вас пригласили в школу!» / «Приглашение стать мастером школы!»); БЕЗ аналитики — только счётчики участников и мастеров (решение владельца 2026-10-02) |
-| `SchoolMandalaBadge`    | квадратный логотип-мандала школы из хэша (`utils/schoolBranding`, data-URL `<img>`)                                                                                                              | §1.4 lead строки (когда нет `avatar_url`), §1.6 hero-лого, §5; SVG через `<img>` — без v-html                              |
-| `SchoolBrandBanner`     | детерминированный фон «роза-вихрь»: `variant="hero"` (полная сцена с фильтрами) / `variant="row"` (лёгкий crop правой трети, fade в белый, без фильтров)                                         | §1.4 right-crop строки, §1.6 hero-баннер, §5; в строках списка полный hero-SVG не монтируется                              |
-| `SchoolMemberRow`       | строка участника школы в §1.11-ростерах: `VListRow` + `VAvatar`, вся строка — touch-target перехода в профиль; suspended-мастер — подпись «Временно недоступен», действий на строке нет            | фичевой композит `shared/`; действия куратора живут на профиле участника, не на строке (правило T24-19)                    |
-| `SchoolInviteField`     | широкая узкая CTA «Копировать ссылку-приглашение» под hero (§1.6, куратору): жидкое стекло (синие glass-токены + blur, высота `--velo-size-44`), тап — ссылка в буфер обмена; рядом круг «Обновить ссылку» того же диаметра (confirm → revoke+create), без ссылки — «Повторить» | фичевой композит `shared/`; сам минтит на монтировании (идемпотентный get-or-mint), 503 `bot_url_not_configured` — CTA дизейблится, URL не фабрикуется; заменил удалённый лист приглашения школы |
-| `utils/schoolBranding/` | порт утверждённого генератора (прототип 2026-09-19, после апрува удалён): hash/palettes/params/geometry/noise/mandala/logo/banner + барел с кэшем params                        | §5.3; тот же хэш → тот же SVG (golden-тесты), редактируется по модулям                                                     |
+| Component               | Purpose                                                                                                                                                                                                                                                                                | Note                                                                                                                                                                                                                                                                                         |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SchoolAvatarPicker`    | full-width upload card for the school avatar ("Загрузить фото" / "Upload a photo" → file → local preview)                                                                                                                                                                              | a separate sequential block, only behind `SCHOOL_MEDIA_UPLOAD_ENABLED` (no backend, §7.1 no. 4); not an overlay on the background                                                                                                                                                            |
+| `SchoolBannerPicker`    | full-width upload card for the school background ("Загрузить фото" / "Upload a photo" → file → local preview)                                                                                                                                                                          | the next separate block; same flag, it revokes its own object URLs                                                                                                                                                                                                                           |
+| `SchoolHeroCard`        | composite hero of the school page: banner strip (a slot for `SchoolBrandBanner` from §5), square logo in a white frame on the seam, name, "students → masters" counters, copy (summary §6 → description)                                                                               | feature composite in `shared/`, skeleton — `tz-curator.md` §1.10; copy: analytics wins, the sample from the mockup is not hard-coded                                                                                                                                                         |
+| `SchoolInviteCard`      | school card on the invitation screens: square logo (`avatar_url` → `SchoolMandalaBadge` → initials), name, "students → masters" counters, school description, a bold invitation line at the bottom of the card                                                                         | feature composite in `shared/`, owner's mockups 2026-10-02 ("Вас пригласили в школу!" / "You are invited to a school!" and "Приглашение стать мастером школы!" / "Invitation to become a school master!"); NO analytics — only participant and master counters (owner's decision 2026-10-02) |
+| `SchoolMandalaBadge`    | square mandala logo of the school generated from a hash (`utils/schoolBranding`, data-URL `<img>`)                                                                                                                                                                                     | §1.4 row lead (when there is no `avatar_url`), §1.6 hero logo, §5; SVG through `<img>` — no v-html                                                                                                                                                                                           |
+| `SchoolBrandBanner`     | deterministic "rose-vortex" background: `variant="hero"` (full scene with filters) / `variant="row"` (light crop of the right third, fade to white, no filters)                                                                                                                        | §1.4 right-crop of the row, §1.6 hero banner, §5; the full hero SVG is not mounted in list rows                                                                                                                                                                                              |
+| `SchoolMemberRow`       | a school member row in the §1.11 rosters: `VListRow` + `VAvatar`, the whole row is the touch target for opening the profile; a suspended master gets the caption "Временно недоступен" ("Temporarily unavailable"), no actions on the row                                              | feature composite in `shared/`; the curator's actions live on the member profile, not on the row (rule T24-19)                                                                                                                                                                               |
+| `SchoolInviteField`     | wide, narrow CTA "Copy invite link" under the hero (§1.6, for the curator): liquid glass (blue glass tokens + blur, height `--velo-size-44`), tap — link to the clipboard; next to it a circle "Refresh link" of the same diameter (confirm → revoke+create), without a link — "Retry" | feature composite in `shared/`; it mints on mount (idempotent get-or-mint), 503 `bot_url_not_configured` — the CTA is disabled, the URL is never fabricated; replaced the removed school invitation sheet                                                                                    |
+| `utils/schoolBranding/` | port of the approved generator (prototype 2026-09-19, deleted after approval): hash/palettes/params/geometry/noise/mandala/logo/banner + a barrel with a params cache                                                                                                                  | §5.3; the same hash → the same SVG (golden tests), edited per module                                                                                                                                                                                                                         |
 
-## Как обновлять карту
+## Mirror of the feature composites (`front` page, 2026-11-09)
 
-Новый компонент: файл в `ui/` (или иконка в `icons/`) → экспорт в барел → строка в этой карте → утверждение владельца. Назначение компонента living в шапке файла; карта — краткая форма и единственный список.
+Feature composites are not in the DS map, but they are mirrored as COMPONENT / COMPONENT_SET (Auto Layout, bindings to `velo.*`):
+
+| Section in Figma                        | Node        | Contents                                                                                                                                                                                                                     |
+| --------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Kit additions — overlays & states       | `3975:1900` | `VModal`, `VConfirmDialog`, `VMenuItem`, `VMenu`, states of `VInput`/`VTextarea`, `VCard`, `VButton` (a single set: Type × Size md/sm × State default/disabled/loading; the former `VButton (ext)` merged into the original) |
+| Composites — School                     | `3976:2319` | the 8 school composites from the table above (mandala/banner — a static sample, the generator is not reproduced)                                                                                                             |
+| Composites — practices, bookings, chats | `3976:1986` | `PracticeListCard`, `PracticeHeroCard`, `BookingCard`, `CalendarPracticeCard`, `WeekStrip`, `Banner`, `NotificationRow`, `MasterCard`, `ChatListRow`, `MoodSlider`, `MoodAvatar`, `FormShell`, `ResultScreen`, etc. (19)     |
+| Composites — diary, sheets, modals      | `3975:1542` | Diary and chats, 7 sheets, 5 modals, 4 filters, pickers, onboarding (35)                                                                                                                                                     |
+
+Not mirrored: `DatePickerSheet`, `MethodTaxonomyPicker`, the calendar in `DiaryFilterModal`, the "recent" panel in `DiarySearchBar`, nine `PracticePlaceholder` artworks (`assets/practice-cards/*.svg`).
+The old simplified `PracticeCard` master was removed: the Dashboard/Practices screens are built on `PracticeListCard` (Actions=none; the Zoom/Check-in buttons sit outside the card, as in `UserDashboardView`). `VBadge` gained a boolean `Icon` property (a check mark).
+
+## How to update the map
+
+A new component: a file in `ui/` (or an icon in `icons/`) → export in the barrel → a row in this map → owner approval. A component's purpose lives in the file header; the map is the short form and the only list.
