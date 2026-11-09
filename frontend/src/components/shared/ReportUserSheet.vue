@@ -31,8 +31,7 @@
       not coloured text
     - round 20x20 checkbox rows (multi-select unchanged, only the visual
       changed from VChip pills)
-    - textarea: --velo-radius-4-5 (deliberately small) + --velo-border,
-      scoped to this instance
+    - textarea: VTextarea defaults + the bordered-at-rest variant
     - support notice: --velo-warning-bg peach panel, NO icon (unlike the
       two block-flow dialogs, which DO carry a warning icon -- see those
       files)
@@ -231,16 +230,13 @@ async function onSend(): Promise<void> {
   color: var(--velo-text-primary);
 }
 
-/* Measured rx4.5 -- deliberately small, NOT --radius-md. Scoped to THIS
-   instance via :deep() (the search-field glass-pill pattern), never
-   VTextarea's own default. T24-18 (PROMPT №639): the border-color override
-   that used to live here (--velo-border, #abbfda -- pale enough to read as
-   "no border" at rest, see the delivery report) is REPLACED by the
-   `bordered-at-rest` prop above -- a real DS variant now, not a local
-   :deep() color hack. -->
-.report-user__textarea :deep(.v-textarea__field) {
-  border-radius: var(--velo-radius-4-5);
-}
+/* Textarea: VTextarea's own radius (--velo-radius-badge, 5px) and its
+   `bordered-at-rest` variant (T24-18, PROMPT №639). The measured rx4.5
+   override that used to sit here never applied: its comment was closed with
+   "-->" (so the browser read the rule as comment text), and its selector
+   `.report-user__textarea :deep(.v-textarea__field)` looks for a DESCENDANT,
+   while the class lands on the <textarea> itself (inheritAttrs:false).
+   FE-150 removed it pixel-neutral and deprecated --velo-radius-4-5. */
 
 /* Support notice: peach panel, NO icon (measured -- unlike the two
    block-flow VConfirmDialogs, which DO carry a warning icon). Reuses
