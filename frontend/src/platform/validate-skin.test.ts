@@ -129,6 +129,17 @@ describe('validate-skin (tz-whitelabel §3)', () => {
     expect(report.fails.join('\n')).toContain('--velo-primari does not exist in variables.css')
   })
 
+  it('a deprecated token override warns, never fails (FE-150: Gen-1 keeps the name)', () => {
+    const dir = writePackage({
+      tokens:
+        "--velo-tg-header: #1b2a41;\n--font-body: 'Rubik', sans-serif;\n--velo-mood-low: #ff0000;\n",
+    })
+    const report = validateSkin(dir, FRONTEND) as Report
+    expect(report.fails).toEqual([])
+    expect(report.warns.join('\n')).toContain('--velo-mood-low is deprecated (2026-11-09')
+    expect(report.warns.join('\n')).not.toContain('--velo-tg-header')
+  })
+
   it('a dark surface with golden text fails the contrast gate', () => {
     const dir = writePackage({
       brand: {

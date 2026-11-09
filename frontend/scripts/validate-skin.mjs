@@ -88,6 +88,15 @@ function knownVeloTokens(frontendDir) {
   return new Set([...css.matchAll(/(--velo-[a-zA-Z0-9-]+)\s*:/g)].map((m) => m[1]))
 }
 
+/** FE-150: tokens the registry marks "@deprecated" (DTCG $deprecated, mirrored
+ *  by the generator as a comment line right above the declaration) -> the
+ *  deprecation note. */
+function deprecatedVeloTokens(frontendDir) {
+  const css = readFileSync(join(frontendDir, 'src', 'styles', 'variables.css'), 'utf8')
+  const DECL = /^ {2}\/\* @deprecated (.*?) \*\/\n {2}(--velo-[a-zA-Z0-9-]+):/gm
+  return new Map([...css.matchAll(DECL)].map((m) => [m[2], m[1]]))
+}
+
 /** PNG IHDR facts (width/height/colorType); null when not a readable PNG.
  *  Exported for scripts/instance-checklist.mjs (dist icon dimension facts). */
 export function pngInfo(file) {
@@ -192,10 +201,16 @@ export function validateSkin(skinDir, frontendDir) {
   const tokenNames = Object.keys(tokens)
   if (tokenNames.length === 0) warn(out, 'tokens.css declares no custom properties')
   const known = knownVeloTokens(frontendDir)
+  const deprecated = deprecatedVeloTokens(frontendDir)
   for (const name of tokenNames) {
     if (!name.startsWith('--velo-')) continue // bare tokens: judged by BARE_ALLOWED below
     if (!known.has(name))
       fail(out, `FAIL tokens.css: ${name} does not exist in variables.css (a typo themes nothing)`)
+    else if (deprecated.has(name))
+      warn(
+        out,
+        `tokens.css: ${name} is deprecated (${deprecated.get(name)}) -- nothing consumes it, the override themes nothing; drop it before the Gen-2 release`,
+      )
   }
   if (tokenNames.length > 0 && !tokenNames.some((n) => !n.startsWith('--')))
     ok(out, `tokens.css: ${tokenNames.length} token(s), all known --velo-*`)
