@@ -236,7 +236,7 @@ async function onSend(): Promise<void> {
    "-->" (so the browser read the rule as comment text), and its selector
    `.report-user__textarea :deep(.v-textarea__field)` looks for a DESCENDANT,
    while the class lands on the <textarea> itself (inheritAttrs:false).
-   FE-150 removed it pixel-neutral and deprecated --velo-radius-4-5. */
+   FE-150 removed it pixel-neutral; --velo-radius-4-5 went with Gen-2. */
 
 /* Support notice: peach panel, NO icon (measured -- unlike the two
    block-flow VConfirmDialogs, which DO carry a warning icon). Reuses

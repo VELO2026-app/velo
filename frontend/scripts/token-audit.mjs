@@ -1,9 +1,9 @@
 // =============================================================================
-// FE-150 -- token usage report (tz-whitelabel §3.3, Gen-2 registry reduction).
+// FE-150 -- token usage report (tz-whitelabel §3.3; Gen-2 registry reduction).
 // =============================================================================
 // Reads tokens.json and every consumer (src/, index.html, packages/velo-ui),
 // prints: violations (the guard in scripts/lib/token-audit.test.mjs), the
-// $deprecated tokens waiting for Gen-2 (with the skins that still set them),
+// $deprecated tokens waiting for the next generation (with the skins that still set them),
 // and the RARE tokens (1-2 product references) -- the input for the owner's
 // consolidation calls. The rules live in scripts/lib/token-audit.mjs.
 //
@@ -44,7 +44,7 @@ if (process.argv.includes('--json')) {
   out.push(`### Violations (${violations.length})`)
   for (const v of violations) out.push(`- ${v}`)
   out.push('')
-  out.push(`### Deprecated, removed in Gen-2 (${deprecated.length})`)
+  out.push(`### Deprecated, removed in the next generation (${deprecated.length})`)
   for (const r of deprecated) {
     const skinNote = r.skins.length > 0 ? ` -- still set by ${r.skins.join(', ')}` : ''
     out.push(`- \`${r.cssName}\`: ${oneLine(r.value)} (${r.deprecated})${skinNote}`)

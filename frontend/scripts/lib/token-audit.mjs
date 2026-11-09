@@ -204,7 +204,7 @@ export function auditTokens(doc, files, skins = []) {
 
 /**
  * The two standing rules the guard test pins (FE-150):
- *   - a $deprecated token has NO consumer (it stays deletable in Gen-2);
+ *   - a $deprecated token has NO consumer (the next generation can delete it);
  *   - every other token is alive (no new dead weight in the contract).
  */
 export function auditViolations(rows) {
@@ -218,7 +218,7 @@ export function auditViolations(rows) {
             ? 'a dynamic name builder'
             : 'an alive var() chain'
       out.push(
-        `${r.cssName} is $deprecated but consumed by ${how} -- migrate the consumer, the token goes in Gen-2`,
+        `${r.cssName} is $deprecated but consumed by ${how} -- migrate the consumer, the next generation deletes the token`,
       )
     }
     if (!r.deprecated && !r.alive) {

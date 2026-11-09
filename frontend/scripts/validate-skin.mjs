@@ -209,7 +209,7 @@ export function validateSkin(skinDir, frontendDir) {
     else if (deprecated.has(name))
       warn(
         out,
-        `tokens.css: ${name} is deprecated (${deprecated.get(name)}) -- nothing consumes it, the override themes nothing; drop it before the Gen-2 release`,
+        `tokens.css: ${name} is deprecated (${deprecated.get(name)}) -- nothing consumes it, the override themes nothing; drop it before the next generation removes the name`,
       )
   }
   if (tokenNames.length > 0 && !tokenNames.some((n) => !n.startsWith('--')))

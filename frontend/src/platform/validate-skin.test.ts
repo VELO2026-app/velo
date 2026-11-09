@@ -13,7 +13,7 @@
 // =============================================================================
 
 import { describe, expect, it } from 'vitest'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -129,14 +129,33 @@ describe('validate-skin (tz-whitelabel §3)', () => {
     expect(report.fails.join('\n')).toContain('--velo-primari does not exist in variables.css')
   })
 
-  it('a deprecated token override warns, never fails (FE-150: Gen-1 keeps the name)', () => {
+  it('a token removed in Gen-2 fails as unknown (FE-150)', () => {
     const dir = writePackage({
       tokens:
         "--velo-tg-header: #1b2a41;\n--font-body: 'Rubik', sans-serif;\n--velo-mood-low: #ff0000;\n",
     })
     const report = validateSkin(dir, FRONTEND) as Report
+    expect(report.fails.join('\n')).toContain('--velo-mood-low does not exist in variables.css')
+  })
+
+  it('a deprecated token override warns, never fails (the name stays until the next generation)', () => {
+    // A frontend whose registry carries one $deprecated token, rendered the
+    // way generate-variables.mjs mirrors it: a comment line above the decl.
+    const fe = mkdtempSync(join(tmpdir(), 'velo-fe-'))
+    mkdirSync(join(fe, 'src', 'styles'), { recursive: true })
+    const css = readFileSync(join(FRONTEND, 'src', 'styles', 'variables.css'), 'utf8').replace(
+      ':root {\n',
+      ':root {\n  /* @deprecated 2026-11-09: test, delete in Gen-3 */\n  --velo-old-test: 1px;\n',
+    )
+    writeFileSync(join(fe, 'src', 'styles', 'variables.css'), css)
+    const dir = writePackage({
+      tokens:
+        "--velo-tg-header: #1b2a41;\n--font-body: 'Rubik', sans-serif;\n--velo-old-test: 2px;\n",
+    })
+    const report = validateSkin(dir, fe) as Report
+    rmSync(fe, { recursive: true, force: true })
     expect(report.fails).toEqual([])
-    expect(report.warns.join('\n')).toContain('--velo-mood-low is deprecated (2026-11-09')
+    expect(report.warns.join('\n')).toContain('--velo-old-test is deprecated (2026-11-09: test')
     expect(report.warns.join('\n')).not.toContain('--velo-tg-header')
   })
 
