@@ -256,9 +256,9 @@ function repoSkins() {
 }
 
 /** The machine's path: the package lands WHOLE in public/skin/ and is gated
- *  there (FE-148: an unfit skin fails the build). Until FE-148 wires
- *  `validate-skin --build` into `pnpm build`, the matrix runs the same
- *  validator on the same directory itself. */
+ *  there (FE-148: an unfit skin fails the build). `pnpm build` runs that
+ *  gate as `validate-skin --build`; the matrix calls `vite build` directly,
+ *  so it runs the same validator on the same directory itself. */
 async function stageSkin(skin) {
   rmSync(publicSkin(), { recursive: true, force: true })
   if (!skin) return

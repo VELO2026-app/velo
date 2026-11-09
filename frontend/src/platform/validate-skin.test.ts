@@ -13,13 +13,13 @@
 // =============================================================================
 
 import { describe, expect, it } from 'vitest'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 // Plain ESM module (types loosely declared in env.d.ts).
 // @ts-expect-error -- *.mjs modules carry no type information
-import { validateSkin } from '../../scripts/validate-skin.mjs'
+import { skinBuildGate, validateSkin } from '../../scripts/validate-skin.mjs'
 
 // vitest runs from frontend/ (import.meta.url is not file:// here, so the
 // paths anchor to the working directory).
@@ -148,5 +148,31 @@ describe('validate-skin (tz-whitelabel §3)', () => {
     writeFileSync(join(dir, 'apple-touch-icon-180.png'), png(180, 180, 6))
     const report = validateSkin(dir, FRONTEND) as Report
     expect(report.fails.join('\n')).toContain('apple-touch-icon-180.png: has an alpha channel')
+  })
+})
+
+describe('skin build gate (FE-148: an invalid package fails the build)', () => {
+  it('no skin directory = the golden build, nothing to check', () => {
+    const dir = join(mkdtempSync(join(tmpdir(), 'velo-no-skin-')), 'skin')
+    expect(skinBuildGate(dir, FRONTEND)).toBeNull()
+  })
+
+  it('a well-formed package passes the gate', () => {
+    const report = skinBuildGate(writePackage(), FRONTEND) as Report
+    expect(report.fails).toEqual([])
+  })
+
+  it('a present directory without brand.json fails -- never passes as golden', () => {
+    const dir = writePackage()
+    rmSync(join(dir, 'brand.json'))
+    const report = skinBuildGate(dir, FRONTEND) as Report
+    expect(report.fails).toContain('FAIL brand.json: missing')
+  })
+
+  it('an empty present directory fails on every mandatory file', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'velo-empty-skin-'))
+    const report = skinBuildGate(dir, FRONTEND) as Report
+    expect(report.fails).toContain('FAIL brand.json: missing')
+    expect(report.fails).toContain('FAIL tokens.css: missing')
   })
 })

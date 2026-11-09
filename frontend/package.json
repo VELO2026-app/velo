@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --noEmit --incremental && vite build",
+    "build": "node scripts/validate-skin.mjs --build && vue-tsc --noEmit --incremental && vite build",
     "preview": "vite preview",
     "verify": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test",
     "verify:quick": "node scripts/verify-quick.mjs",
