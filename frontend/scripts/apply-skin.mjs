@@ -1,14 +1,14 @@
 // =============================================================================
 // VELO Frontend -- apply a skin package (tz-whitelabel §3)
 // =============================================================================
-// Copies a package from skins/<name> (or any path) into public/skin/ WHOLE,
+// Copies a package (skins/<name> or any path) into public/skin/ WHOLE,
 // then validates it. The whole-folder copy is the point: the velo_test_front_bot
 // incident happened because a partial package (brand.json + tokens.css
 // without bg/) can be assembled by hand -- this command cannot be run
 // halfway. Fails (exit 1) when the validator rejects the result; public/skin/
 // is gitignored, this is a local/stand step BEFORE `pnpm build`.
 //
-// Usage: node scripts/apply-skin.mjs <name|path>   (e.g. `pnpm skin nightfall`)
+// Usage: node scripts/apply-skin.mjs <name|path>   (e.g. `pnpm skin ../my-skin`)
 //        node scripts/apply-skin.mjs --remove      (back to the golden build)
 // =============================================================================
 

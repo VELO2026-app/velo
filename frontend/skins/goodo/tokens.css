@@ -1,0 +1,12 @@
+/* skins/goodo -- the Goodo skin (tz-whitelabel §3). SKELETON: the identity
+ * is named, everything else is still golden (colors, font, assets copied
+ * from public/icons). Fill in:
+ *   - brand.json themeColor/backgroundColor (and fontUrl if the font swaps);
+ *   - here: --velo-* overrides, flat (no selector), one per line;
+ *     changing themeColor means overriding --velo-tg-header to the SAME
+ *     value (§1 single source), a fontUrl means a --font-body naming its
+ *     family;
+ *   - the assets (logos, PWA icons, favicon), plus bg/background.png for a
+ *     dark theme.
+ * Check: `node scripts/validate-skin.mjs skins/goodo`, then
+ * `pnpm skin goodo && pnpm build`. */

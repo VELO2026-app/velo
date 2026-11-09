@@ -1,134 +1,359 @@
 // =============================================================================
-// VELO Frontend -- build matrix, the whitelabel acceptance GATE (FE-114, F5.1)
+// VELO Frontend -- build matrix, the whitelabel acceptance GATE
+// (FE-114, F5.1; moved onto the machine's channel by FE-152, F5 rev.4)
 // =============================================================================
-// Builds FOUR editions from the current working tree and checks the dist
-// facts against the edition's own sources (tz-whitelabel §6.1 + §4):
+// Builds a SKIN x EDITION matrix from the current working tree, through the
+// same two inputs the deploy machine uses -- and nothing else:
 //
-//   golden         apply-skin --remove      the VELO reference
-//   test-contrast  skins/test-contrast      the intentionally contrasty skin
-//   nightfall      skins/nightfall          the show-piece skin
-//   feature-cut    --remove + VITE_FEATURES=ai   golden skin, payments OFF
+//   edition   PRIMER_EDITION, resolved through editions.json at the repo
+//             root (FE-130). VITE_FEATURES is stripped from the build env:
+//             it is the local-dev channel, the machine never builds through
+//             it.
+//   skin      the package copied WHOLE into public/skin/ (the machine's
+//             build context, FE-148), then gated by validate-skin on that
+//             very directory. A rejected package aborts the matrix.
 //
-// apply-skin validates each package BEFORE it lands (a rejected package
-// aborts the matrix), then `vite build` runs and the dist facts are
-// snapshotted. The GATE part (any FAIL = exit 1):
+// The cells (not the full product -- tz-whitelabel §6, F5 rev.4):
 //
-//   a. title + theme-color of every edition equal its source of record --
+//   golden x every edition of editions.json   (core, school, ...)
+//   every skin x full     (every package in skins/, or the --skin list)
+//
+// After each `vite build` the dist facts are snapshotted. The GATE part
+// (any FAIL = exit 1), all of it read from dist/:
+//
+//   a. identity: title + theme-color equal the cell's source of record --
 //      the skin's brand.json, or the golden defaults (VITE_BRAND ?? 'VELO',
-//      #334D6E) for the skinless editions;
-//   b. golden: tokens-sha is 'golden' (no skin tokens leaked); the dist
-//      asset COUNT is equal across all full editions (a skin repaints, it
-//      never adds or removes chunks);
-//   c. full editions carry BOTH gated modules (ai + payments chunks);
-//   d. the feature-cut edition carries ai but NO payments chunks --
-//      Topup*, MasterFinanceView, AdminWithdrawals* must be physically
-//      absent from dist (§4 "a disabled module leaves no chunks", F3
-//      variant "a");
-//   e. the pre-run edition is restored with a fresh FULL build, so dist/
-//      matches the tree the matrix found.
+//      #334D6E) for golden cells;
+//   b. brand grep: a skin cell's bundle carries the skin's displayName and
+//      every one of its token declarations; a golden cell carries NO
+//      matrix skin's displayName and none of its distinctive declarations
+//      (the ones variables.css does not already declare verbatim), and no
+//      dist/skin/ copy of a package at all;
+//   c. DCE: a module the cell's edition turns on has its chunks in dist, a
+//      module it leaves off has NONE (tz-whitelabel §4: "a disabled module
+//      leaves no chunks", F3 variant "a");
+//   d. the dist asset COUNT is equal across all `full` cells (a skin
+//      repaints, it never adds or removes chunks).
 //
-// Usage: node scripts/build-matrix.mjs      (or: pnpm build:matrix)
-// evaluateMatrix() is exported for the unit suite (src/platform/build-matrix.test.ts).
+// The pre-run public/skin/ is backed up and put back verbatim, then dist/ is
+// rebuilt from it with the ambient env (what a plain `pnpm build` makes).
+//
+// Usage: node scripts/build-matrix.mjs [--skin <name|path>]... [--no-restore]
+//          --skin        replaces the skins/ set (repeatable): a package
+//                        directory -- a broken one fails the matrix
+//          --no-restore  skip the final rebuild (CI: dist/ is thrown away)
+//        (or: pnpm build:matrix)
+// evaluateMatrix() and planCells() are exported for the unit suite
+// (src/platform/build-matrix.test.ts).
 // =============================================================================
 
 import { spawnSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import {
+  cpSync,
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import { basename, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { loadEnv } from 'vite'
 import { findBuildLogWarnings } from './lib/build-log-gate.mjs'
 
 // Resolved lazily: under vitest import.meta.url is not file:// (the same
 // reason passport-html tests anchor to process.cwd()), and the unit suite
-// imports this module for evaluateMatrix() only.
+// imports this module for the pure functions only.
 const frontendDir = () => resolve(fileURLToPath(new URL('..', import.meta.url)))
 
-/** Chunk-name probes (§4): the route files a cut module would leave behind. */
-const AI_CHUNKS = [/AiSummary/, /AiConnections/]
-const PAYMENTS_CHUNKS = [/Topup/, /MasterFinanceView/, /AdminWithdrawals/]
+/** Chunk-name probes per switchable module (§4): the route files a cut
+ *  module would leave behind. Keys mirror FEATURE_NAMES (platform/
+ *  features.ts) -- the unit suite pins the two lists together. */
+export const MODULE_CHUNKS = {
+  ai: [/AiSummary/, /AiConnections/],
+  payments: [/Topup/, /MasterFinanceView/, /AdminWithdrawals/],
+}
 
 /** GOLDEN_SKIN.themeColor (platform/skin.ts) -- the skinless build's header
  *  color, pinned here the same mirror-and-pin way passport-html.test.ts and
  *  the manifest comments pin it. No env seam exists for colors (§1). */
 const GOLDEN_THEME = '#334D6E'
 
-/** The editions of the matrix. `features` is passed to the build as
- *  VITE_FEATURES (process.env wins over .env files in vite's loadEnv, so
- *  'full'/'ai' here is deterministic regardless of a local .env). */
-const EDITIONS = [
-  { name: 'golden', skinArg: '--remove', features: 'full' },
-  { name: 'test-contrast', skinArg: 'test-contrast', features: 'full' },
-  { name: 'nightfall', skinArg: 'nightfall', features: 'full' },
-  { name: 'feature-cut', skinArg: '--remove', features: 'ai' },
-]
-const FULL_EDITIONS = ['golden', 'test-contrast', 'nightfall']
+/** The edition every skin cell is built at. */
+const SKIN_EDITION = 'full'
 
-const run = (cmd, args) => {
-  const res = spawnSync(cmd, args, { cwd: frontendDir(), stdio: 'inherit' })
-  if (res.status !== 0) throw new Error(`\`${[cmd, ...args].join(' ')}\` failed`)
+/** The cells: golden x every edition, every skin x full. `skins` are
+ *  { label, source } pairs; `editions` is the parsed editions.json. Each
+ *  cell carries the module set its edition turns on (names outside
+ *  MODULE_CHUNKS are ignored -- the backend's list is a superset, the same
+ *  rule platform/features.ts applies). */
+export function planCells(editions, skins) {
+  const modulesOf = (edition) => {
+    const entry = editions.editions[edition]
+    if (!entry) {
+      throw new Error(
+        `edition "${edition}" is not in editions.json (known: ${Object.keys(editions.editions).join(', ')})`,
+      )
+    }
+    return Object.fromEntries(
+      Object.keys(MODULE_CHUNKS).map((name) => [name, entry.modules.includes(name)]),
+    )
+  }
+  const labels = skins.map((s) => s.label)
+  const dup = labels.find((label, i) => labels.indexOf(label) !== i)
+  if (dup !== undefined)
+    throw new Error(`two skins share the label "${dup}" -- their cells would overwrite each other`)
+  return [
+    ...Object.keys(editions.editions).map((edition) => ({
+      name: `golden/${edition}`,
+      skin: null,
+      edition,
+      modules: modulesOf(edition),
+    })),
+    ...skins.map((skin) => ({
+      name: `${skin.label}/${SKIN_EDITION}`,
+      skin,
+      edition: SKIN_EDITION,
+      modules: modulesOf(SKIN_EDITION),
+    })),
+  ]
 }
-const apply = (arg) => run('node', ['scripts/apply-skin.mjs', arg])
-// FE-153: every matrix build's log goes through the same gate as the plain CI
-// build (scripts/lib/build-log-gate.mjs) -- a cycle that only one edition's
-// chunking produces must not slip through. The output is captured, then
-// echoed whole (no live streaming).
-const build = (features) => {
+
+// -- the brand/token grep helpers ---------------------------------------------
+
+/** One CSS declaration value in a comparable shape: the minifier drops
+ *  spaces, leading zeros and may swap quote style; case is irrelevant. */
+export function normalizeDecl(decl) {
+  return decl
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/'/g, '"')
+    .replace(/([^0-9])0\./g, '$1.')
+}
+
+/** The custom-property declarations of a tokens.css, normalized. */
+export function tokenDecls(css) {
+  const flat = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  return [...flat.matchAll(/(--[a-zA-Z0-9-]+)\s*:\s*([^;}]+)[;}]/g)].map((m) =>
+    normalizeDecl(`${m[1]}:${m[2]}`),
+  )
+}
+
+/** Does the normalized dist CSS carry the WHOLE declaration `decl`? The
+ *  value must end where the declaration ends (`;`, `}` or the end of the
+ *  text) -- `--velo-radius:1` is not satisfied by `--velo-radius:12px`. The
+ *  name must start a declaration too (`{`, `;` or the start). */
+export function cssHasDecl(css, decl) {
+  for (let i = css.indexOf(decl); i !== -1; i = css.indexOf(decl, i + 1)) {
+    const before = i === 0 ? '' : css[i - 1]
+    const after = css[i + decl.length] ?? ''
+    if (
+      (before === '' || before === '{' || before === ';') &&
+      (after === '' || after === ';' || after === '}')
+    )
+      return true
+  }
+  return false
+}
+
+/** Does the bundle text carry `text` -- verbatim (UTF-8) or as the \uXXXX
+ *  escape esbuild may emit for non-ASCII? */
+export function bundleHas(bundle, text) {
+  if (bundle.includes(text)) return true
+  const escaped = [...text]
+    .map((ch) =>
+      ch.charCodeAt(0) > 0x7e ? `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}` : ch,
+    )
+    .join('')
+  return bundle.toLowerCase().includes(escaped.toLowerCase())
+}
+
+// -- the gate -----------------------------------------------------------------
+
+/** The gate: dist facts vs every cell's source of record. Pure -- the unit
+ *  suite pins every FAIL branch. `cells` come from planCells(); `facts` and
+ *  `expected` are keyed by cell name.
+ *
+ *  facts[cell]    { title, theme, assets, chunks: { <module>: [files] },
+ *                   brandMissing: bool,       (skin cells)
+ *                   tokensMissing: [decl],    (skin cells)
+ *                   leaked: [what] }          (golden cells)
+ *  expected[cell] { title, theme } */
+export function evaluateMatrix({ cells, facts, expected }) {
+  const fails = []
+  for (const cell of cells) {
+    const f = facts[cell.name]
+    if (!f) {
+      fails.push(`${cell.name}: no dist facts -- the cell never built`)
+      continue
+    }
+    const e = expected[cell.name]
+
+    // a. identity
+    if (f.title !== e.title)
+      fails.push(`${cell.name}: dist title "${f.title}" != expected "${e.title}" (brand source)`)
+    if (f.theme !== e.theme)
+      fails.push(`${cell.name}: dist theme-color "${f.theme}" != expected "${e.theme}"`)
+
+    // b. brand grep
+    if (cell.skin) {
+      if (f.brandMissing)
+        fails.push(`${cell.name}: the skin's displayName "${e.title}" is not in the JS bundle`)
+      if ((f.tokensMissing ?? []).length > 0)
+        fails.push(
+          `${cell.name}: skin token declarations missing from dist CSS: ${f.tokensMissing.join(', ')}`,
+        )
+    } else if ((f.leaked ?? []).length > 0) {
+      fails.push(`${cell.name}: skin leaked into a golden build: ${f.leaked.join(', ')}`)
+    }
+
+    // c. DCE per module
+    for (const [module, on] of Object.entries(cell.modules)) {
+      const survivors = f.chunks?.[module] ?? []
+      if (on && survivors.length === 0)
+        fails.push(
+          `${cell.name}: ${module} chunks missing -- edition "${cell.edition}" turns it on`,
+        )
+      if (!on && survivors.length > 0)
+        fails.push(
+          `${cell.name}: chunks of the DISABLED ${module} module survived the cut: ${survivors.join(', ')}`,
+        )
+    }
+  }
+
+  // d. asset-count invariant across the full cells that built
+  const full = cells.filter((c) => c.edition === SKIN_EDITION && facts[c.name])
+  const counts = full.map((c) => facts[c.name].assets)
+  if (new Set(counts).size > 1)
+    fails.push(
+      `asset count differs across full cells (${full.map((c) => `${c.name}:${facts[c.name].assets}`).join(' ')}) -- a skin must repaint, not re-chunk`,
+    )
+  return fails
+}
+
+// -- the impure part (CLI only) -----------------------------------------------
+
+const publicSkin = () => join(frontendDir(), 'public', 'skin')
+
+/** skins/<name> or a package directory -> { label, source }. */
+function resolveSkin(arg) {
+  const source = existsSync(arg) ? resolve(arg) : join(frontendDir(), 'skins', arg)
+  return { label: basename(source), source }
+}
+
+/** The default skin set: EVERY directory in skins/ -- not just the ones that
+ *  look like packages: a skin that lost its brand.json must fail the
+ *  matrix in validate-skin, never drop out of it silently. */
+function repoSkins() {
+  const dir = join(frontendDir(), 'skins')
+  if (!existsSync(dir)) return []
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
+    .map((entry) => join(dir, entry.name))
+    .sort()
+}
+
+/** The machine's path: the package lands WHOLE in public/skin/ and is gated
+ *  there (FE-148: an unfit skin fails the build). Until FE-148 wires
+ *  `validate-skin --build` into `pnpm build`, the matrix runs the same
+ *  validator on the same directory itself. */
+async function stageSkin(skin) {
+  rmSync(publicSkin(), { recursive: true, force: true })
+  if (!skin) return
+  if (!existsSync(skin.source))
+    throw new Error(`skin "${skin.label}": no package at ${skin.source}`)
+  cpSync(skin.source, publicSkin(), { recursive: true })
+  const { validateSkin } = await import('./validate-skin.mjs')
+  const report = validateSkin(publicSkin(), frontendDir())
+  if (report.fails.length > 0) {
+    for (const line of report.fails) console.error(`  ${line}`)
+    throw new Error(
+      `skin "${skin.label}" REJECTED by validate-skin (${report.fails.length} fail(s))`,
+    )
+  }
+}
+
+/** A matrix cell builds through the machine's channel only (`edition` set,
+ *  VITE_FEATURES stripped); `undefined` is the restore build -- the ambient
+ *  env untouched, i.e. what a plain `pnpm build` makes. */
+function build(edition) {
+  const env = { ...process.env }
+  if (edition) {
+    delete env.VITE_FEATURES
+    env.PRIMER_EDITION = edition
+  }
+  // FE-153: every matrix build's log goes through the same gate as the plain
+  // CI build (scripts/lib/build-log-gate.mjs) -- a cycle that only one
+  // edition's chunking produces must not slip through. The output is
+  // captured, then echoed whole (no live streaming).
   const res = spawnSync('node_modules/.bin/vite', ['build'], {
     cwd: frontendDir(),
     stdio: ['inherit', 'pipe', 'pipe'],
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
-    env: { ...process.env, VITE_FEATURES: features },
+    env,
   })
   process.stdout.write(res.stdout ?? '')
   process.stderr.write(res.stderr ?? '')
-  if (res.status !== 0) throw new Error(`vite build (VITE_FEATURES=${features}) failed`)
+  if (res.status !== 0) throw new Error(`vite build (PRIMER_EDITION=${edition ?? '-'}) failed`)
   const findings = findBuildLogWarnings(`${res.stdout ?? ''}\n${res.stderr ?? ''}`)
   if (findings.length > 0) {
     const lines = findings.map(({ rule, line }) => `  [${rule}] ${line}`).join('\n')
-    throw new Error(`vite build (VITE_FEATURES=${features}): gated build-log warnings\n${lines}`)
+    throw new Error(
+      `vite build (PRIMER_EDITION=${edition ?? '-'}): gated build-log warnings\n${lines}`,
+    )
   }
 }
-const sha12 = (file) => createHash('sha256').update(readFileSync(file)).digest('hex').slice(0, 12)
 
-function snapshot(name) {
-  const distDir = frontendDir() + '/dist'
+function readAll(dir, ext) {
+  return readdirSync(dir)
+    .filter((f) => f.endsWith(ext))
+    .map((f) => readFileSync(join(dir, f), 'utf8'))
+    .join('\n')
+}
+
+/** The skin's own identity + tokens, read from its source package. */
+function skinRecord(skin) {
+  const brand = JSON.parse(readFileSync(join(skin.source, 'brand.json'), 'utf8'))
+  const decls = tokenDecls(readFileSync(join(skin.source, 'tokens.css'), 'utf8'))
+  return { brand, decls }
+}
+
+function snapshot(cell, skins, goldenDecls) {
+  const distDir = join(frontendDir(), 'dist')
   const html = readFileSync(join(distDir, 'index.html'), 'utf8')
-  const theme = html.match(/theme-color" content="([^"]*)/)?.[1] ?? '?'
-  const title = html.match(/<title>([^<]*)<\/title>/)?.[1] ?? '?'
-  const bgPath = join(distDir, 'bg', 'background.png')
-  const bg = existsSync(bgPath) ? sha12(bgPath) : 'absent'
-  const tokensPath = join(frontendDir(), 'public', 'skin', 'tokens.css')
-  const tokens = existsSync(tokensPath) ? sha12(tokensPath) : 'golden'
-  const assets = readdirSync(join(distDir, 'assets'))
-  const survivors = (probes) => assets.filter((a) => probes.some((re) => re.test(a)))
-  return {
-    edition: name,
-    title,
-    theme,
-    bgSha: bg,
-    tokensSha: tokens,
+  const assetsDir = join(distDir, 'assets')
+  const assets = readdirSync(assetsDir)
+  const js = readAll(assetsDir, '.js')
+  const css = normalizeDecl(readAll(assetsDir, '.css'))
+  const facts = {
+    title: html.match(/<title>([^<]*)<\/title>/)?.[1] ?? '?',
+    theme: html.match(/theme-color" content="([^"]*)/)?.[1] ?? '?',
     assets: assets.length,
-    ai: survivors(AI_CHUNKS),
-    payments: survivors(PAYMENTS_CHUNKS),
+    chunks: Object.fromEntries(
+      Object.entries(MODULE_CHUNKS).map(([module, probes]) => [
+        module,
+        assets.filter((a) => probes.some((re) => re.test(a))),
+      ]),
+    ),
   }
-}
-
-// The pre-run edition: whatever public/skin holds now, matched back to a
-// skins/<name> package by its displayName (brand.json carries no other
-// stable key); anything else restores golden.
-function currentEdition() {
-  const brandPath = join(frontendDir(), 'public', 'skin', 'brand.json')
-  if (!existsSync(brandPath)) return '--remove'
-  const displayName = JSON.parse(readFileSync(brandPath, 'utf8')).displayName
-  const skinsDir = join(frontendDir(), 'skins')
-  for (const dir of existsSync(skinsDir) ? readdirSync(skinsDir) : []) {
-    const pkg = join(skinsDir, dir, 'brand.json')
-    if (existsSync(pkg) && JSON.parse(readFileSync(pkg, 'utf8')).displayName === displayName)
-      return dir
+  if (cell.skin) {
+    const { brand, decls } = skinRecord(cell.skin)
+    facts.brandMissing = !bundleHas(js, brand.displayName)
+    facts.tokensMissing = decls.filter((d) => !cssHasDecl(css, d))
+  } else {
+    facts.leaked = existsSync(join(distDir, 'skin')) ? ['dist/skin/ (a package shipped)'] : []
+    for (const skin of skins) {
+      const { brand, decls } = skinRecord(skin)
+      if (bundleHas(js, brand.displayName) || html.includes(brand.displayName))
+        facts.leaked.push(`${skin.label} displayName`)
+      const foreign = decls.filter((d) => !goldenDecls.has(d) && cssHasDecl(css, d))
+      if (foreign.length > 0) facts.leaked.push(`${skin.label} tokens (${foreign.join(', ')})`)
+    }
   }
-  return '--remove'
+  return facts
 }
 
 /** The skinless build's identity, resolved EXACTLY as passport-html resolves
@@ -138,123 +363,140 @@ function goldenBrand() {
   return process.env.VITE_BRAND ?? fromFiles ?? 'VELO'
 }
 
-/** Expected { title, theme } for a skinless edition: the golden defaults. */
-function goldenExpectation() {
-  return { title: goldenBrand(), theme: GOLDEN_THEME }
-}
-
-/** Expected { title, theme } for a skinned edition, read from the package
- *  the build just consumed (public/skin/brand.json AFTER a successful
- *  apply+build -- a broken package never gets this far, apply-skin rejects
- *  it with a named report first). */
-function appliedExpectation() {
-  const brand = JSON.parse(readFileSync(join(frontendDir(), 'public', 'skin', 'brand.json'), 'utf8'))
+function expectationOf(cell) {
+  if (!cell.skin) return { title: goldenBrand(), theme: GOLDEN_THEME }
+  const { brand } = skinRecord(cell.skin)
   return { title: brand.displayName, theme: brand.themeColor }
 }
 
-/** The gate: dist facts vs the editions' sources of record. Pure -- the unit
- *  suite pins every FAIL branch. `facts`/`expected` are keyed by edition. */
-export function evaluateMatrix({ facts, expected }) {
-  const fails = []
-  const fact = (name, field) => facts[name]?.[field]
-  const list = (name, field) => facts[name]?.[field] ?? []
-
-  // a. identity: title + theme-color come from the edition's own record
-  for (const name of [...FULL_EDITIONS, 'feature-cut']) {
-    const e = expected[name]
-    const title = fact(name, 'title')
-    if (title !== e.title)
-      fails.push(`${name}: dist title "${title}" != expected "${e.title}" (brand source)`)
-    const theme = fact(name, 'theme')
-    if (theme !== e.theme)
-      fails.push(`${name}: dist theme-color "${theme}" != expected "${e.theme}"`)
-  }
-
-  // b. golden purity + the asset-count invariant across full editions
-  if (fact('golden', 'tokensSha') !== 'golden')
-    fails.push(`golden: tokens-sha is "${fact('golden', 'tokensSha')}" -- skin tokens leaked into the golden build`)
-  const counts = FULL_EDITIONS.map((name) => fact(name, 'assets'))
-  if (new Set(counts).size > 1)
-    fails.push(
-      `asset count differs across full editions (${FULL_EDITIONS.map((n) => `${n}:${fact(n, 'assets')}`).join(' ')}) -- a skin must repaint, not re-chunk`,
+function printTable(cells, facts) {
+  const cols = ['cell', 'title', 'theme', 'assets', ...Object.keys(MODULE_CHUNKS), 'brand-grep']
+  const pad = (v, i) => v.padEnd(i === 0 ? 24 : 14)
+  console.log(`\n${cols.map(pad).join('  ')}`)
+  for (const cell of cells) {
+    const f = facts[cell.name]
+    if (!f) continue
+    const grep = cell.skin
+      ? !f.brandMissing && f.tokensMissing.length === 0
+        ? 'skin ok'
+        : 'SKIN MISSING'
+      : f.leaked.length === 0
+        ? 'no leak'
+        : 'LEAK'
+    console.log(
+      [
+        cell.name,
+        f.title.slice(0, 14),
+        f.theme,
+        String(f.assets),
+        ...Object.keys(MODULE_CHUNKS).map((m) => (f.chunks[m].length > 0 ? 'yes' : 'no')),
+        grep,
+      ]
+        .map(pad)
+        .join('  '),
     )
-
-  // c. full editions carry both gated modules
-  for (const name of FULL_EDITIONS) {
-    if (list(name, 'ai').length === 0) fails.push(`${name}: ai chunks missing from a FULL edition`)
-    if (list(name, 'payments').length === 0)
-      fails.push(`${name}: payments chunks missing from a FULL edition`)
   }
-
-  // d. the feature-cut edition: ai present, payments physically absent (§4)
-  if (list('feature-cut', 'ai').length === 0)
-    fails.push('feature-cut: ai chunks missing -- VITE_FEATURES=ai must keep the ai module')
-  const survivors = list('feature-cut', 'payments')
-  if (survivors.length > 0)
-    fails.push(
-      `feature-cut: chunks of the DISABLED payments module survived the cut: ${survivors.join(', ')}`,
-    )
-  return fails
 }
 
-// -- CLI ----------------------------------------------------------------------
+function parseArgs(argv) {
+  const skins = []
+  let restore = true
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === '--skin') skins.push(argv[++i])
+    else if (argv[i] === '--no-restore') restore = false
+    else throw new Error(`unknown argument "${argv[i]}"`)
+  }
+  return { skins: skins.length > 0 ? skins : repoSkins(), restore }
+}
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const before = currentEdition()
+  const args = parseArgs(process.argv.slice(2))
+  const editions = JSON.parse(readFileSync(join(frontendDir(), '..', 'editions.json'), 'utf8'))
+  const skins = args.skins.map(resolveSkin)
+  const cells = planCells(editions, skins)
+  const goldenDecls = new Set(
+    tokenDecls(readFileSync(join(frontendDir(), 'src', 'styles', 'variables.css'), 'utf8')),
+  )
+
+  // Pre-flight: every skin is validated BEFORE the first build -- a broken
+  // package fails fast and named (the golden cells read every skin's
+  // brand.json/tokens.css for the leak grep, so a package-less dir would
+  // otherwise surface as a bare ENOENT). stageSkin() re-runs the validator
+  // on public/skin/ -- the machine's path -- before each skin cell.
+  {
+    const { validateSkin } = await import('./validate-skin.mjs')
+    let rejected = 0
+    for (const skin of skins) {
+      const report = validateSkin(skin.source, frontendDir())
+      if (report.fails.length === 0) continue
+      rejected++
+      console.error(`build-matrix: skin "${skin.label}" REJECTED by validate-skin:`)
+      for (const line of report.fails) console.error(`  ${line}`)
+    }
+    if (rejected > 0) {
+      console.error(`\nbuild-matrix: ${rejected} skin(s) rejected -- matrix FAILED (nothing built)`)
+      process.exit(1)
+    }
+  }
+
+  // Back up the owner's public/skin/ -- restored verbatim, whatever it was.
+  const backup = existsSync(publicSkin()) ? mkdtempSync(join(tmpdir(), 'velo-matrix-skin-')) : null
+  if (backup) cpSync(publicSkin(), backup, { recursive: true })
+  // The build writes two TRACKED files at config time (vite.config.ts: the
+  // skin-tokens.css cascade + skin-brand.generated.ts); the last cell leaves
+  // ITS versions behind. The restore build regenerates them; --no-restore
+  // puts the pre-run bytes back, or a skin's brand rides into a commit.
+  const generated = [
+    join(frontendDir(), 'src', 'styles', 'skin-tokens.css'),
+    join(frontendDir(), 'src', 'platform', 'skin-brand.generated.ts'),
+  ].map((file) => ({ file, text: readFileSync(file, 'utf8') }))
+  const restore = () => {
+    if (!args.restore) for (const { file, text } of generated) writeFileSync(file, text)
+    rmSync(publicSkin(), { recursive: true, force: true })
+    if (backup) {
+      cpSync(backup, publicSkin(), { recursive: true })
+      rmSync(backup, { recursive: true, force: true })
+    }
+    if (args.restore) build(undefined)
+  }
+
   console.log(
-    `build-matrix: four editions from one tree (restores "${before}" with a full build at the end)\n`,
+    `build-matrix: ${cells.length} cells -- ${cells.map((c) => c.name).join(', ')}` +
+      (args.restore ? ' (then the pre-run tree is rebuilt)' : '') +
+      '\n',
   )
 
   const facts = {}
   const expected = {}
+  let aborted = null
   try {
-    for (const ed of EDITIONS) {
-      apply(ed.skinArg)
-      build(ed.features)
-      facts[ed.name] = snapshot(ed.name)
-      expected[ed.name] = ed.skinArg === '--remove' ? goldenExpectation() : appliedExpectation()
+    for (const cell of cells) {
+      console.log(`\n== build-matrix: ${cell.name} (PRIMER_EDITION=${cell.edition}) ==`)
+      await stageSkin(cell.skin)
+      build(cell.edition)
+      facts[cell.name] = snapshot(cell, skins, goldenDecls)
+      expected[cell.name] = expectationOf(cell)
     }
-    // e. restore the owner's pre-run edition and rebuild FULL onto it: the
-    // last matrix build (feature-cut) left a payments-less dist, which is
-    // never what the stand serves.
-    apply(before)
-    build('full')
   } catch (err) {
-    console.error(`build-matrix: ${err.message} -- restoring the pre-run edition`)
-    try {
-      apply(before)
-      build('full')
-    } catch (restoreErr) {
-      console.error(`build-matrix: restore failed too (${restoreErr.message}) -- fix the tree`)
-    }
+    aborted = err
+  }
+  try {
+    restore()
+  } catch (restoreErr) {
+    console.error(`build-matrix: restore failed (${restoreErr.message}) -- fix the tree`)
+    process.exit(1)
+  }
+  if (aborted) {
+    console.error(`\nbuild-matrix: ${aborted.message} -- matrix FAILED`)
     process.exit(1)
   }
 
-  const rows = EDITIONS.map(({ name }) => facts[name])
-  const header = ['edition', 'title', 'theme', 'bg-sha', 'tokens-sha', 'assets', 'ai', 'payments']
-    .map((k) => k.padEnd(12))
-    .join('  ')
-  console.log(`\n${header}`)
-  for (const r of rows) {
-    console.log(
-      [
-        r.edition.padEnd(12),
-        r.title.slice(0, 12).padEnd(12),
-        r.theme.padEnd(12),
-        r.bgSha.padEnd(12),
-        r.tokensSha.padEnd(12),
-        String(r.assets).padEnd(12),
-        (r.ai.length > 0 ? 'yes' : 'NO').padEnd(12),
-        r.payments.length > 0 ? 'yes' : 'NO',
-      ].join('  '),
-    )
-  }
-
-  const fails = evaluateMatrix({ facts, expected })
+  printTable(cells, facts)
+  const fails = evaluateMatrix({ cells, facts, expected })
   if (fails.length > 0) {
     console.error(`\nbuild-matrix: ${fails.length} FAIL(s):`)
     for (const f of fails) console.error('  FAIL ' + f)
     process.exit(1)
   }
-  console.log('\nbuild-matrix: green -- facts match every edition\'s source of record')
+  console.log("\nbuild-matrix: green -- facts match every cell's source of record")
 }

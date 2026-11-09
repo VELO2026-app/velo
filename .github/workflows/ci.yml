@@ -80,14 +80,16 @@ jobs:
           pnpm -C frontend build 2>&1 | tee "$RUNNER_TEMP/frontend-build.log"
           node frontend/scripts/build-log-gate.mjs "$RUNNER_TEMP/frontend-build.log"
 
-      # tz-whitelabel F5 (FE-114): the build matrix IS the whitelabel gate --
-      # three full editions (golden + 2 reference skins) + the feature-cut
-      # one (VITE_FEATURES=ai: payments chunks must be physically absent),
-      # then a full restore build. ~5 vite builds, 3-4 min. Runs AFTER the
-      # plain build so a red matrix reads as the whitelabel gate failing,
-      # not as "the app does not build".
+      # tz-whitelabel F5 (FE-114, FE-152): the build matrix IS the whitelabel
+      # gate -- golden x every edition of editions.json through PRIMER_EDITION
+      # (the machine's channel): a module outside the edition must leave NO
+      # chunks in dist (core: no ai, no payments) -- plus every skins/<name>
+      # x full (brand + tokens from the skin, none of them in golden). One
+      # vite build per cell; --no-restore skips the pointless final rebuild.
+      # Runs AFTER the plain build so a red matrix reads as the whitelabel
+      # gate failing, not as "the app does not build".
       - name: Build matrix (whitelabel gate)
-        run: pnpm -C frontend build:matrix
+        run: pnpm -C frontend build:matrix --no-restore
 
   drift-check:
     name: generated.ts drift
