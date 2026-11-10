@@ -120,8 +120,15 @@ def _build(name: str) -> str:
     return value
 
 
+PROVIDES = ("STORAGE_ADDRESS",)
+"""The names velo gives other stacks: `provides` of primer.yaml (BE-193 --
+the point of velo-storage for comms). The machine reads them in /health
+after `up` and holds each seam a service requires to one of them. The two
+are kept equal by tests/test_primer_env.py."""
+
+
 def seams() -> Seams:
-    """`provides`: primer.yaml declares nothing velo gives another stack.
+    """`provides`: PROVIDES.
     `requires_satisfied`: every seam of comms velo reads is set. On the
     machine compose refuses to start without them (`${VAR:?}`); empty is
     reachable where they are not passed -- the test suite, a local run."""
@@ -131,7 +138,9 @@ def seams() -> Seams:
         settings.comms_redis_url,
         settings.telegram_bot_url,
     )
-    return Seams(provides=[], requires_satisfied=all(v.strip() for v in required))
+    return Seams(
+        provides=list(PROVIDES), requires_satisfied=all(v.strip() for v in required)
+    )
 
 
 async def read_revision() -> str:

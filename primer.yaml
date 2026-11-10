@@ -48,6 +48,11 @@ stacks:
   velo-storage:
     compose: docker-compose.storage.yml
     persistent: true
+    # The point of the storage (protocol 4.4): for the app of velo and for
+    # comms, under one alias -- a link the app signs, comms opens by the
+    # same name. `scheme` tells the machine what it is, not the address.
+    expose:
+      files: { service: velo-storage, port: 9000, scheme: http }
 
 env:
   # minted: the machine mints once, the value lives between rollouts
@@ -91,6 +96,14 @@ env:
   TELEGRAM_BOT_URL:      { source: seam, from: comms }
   COMMS_EVENTS_ADDRESS:  { source: seam, from: comms }
   COMMS_EVENTS_PASSWORD: { source: seam, from: comms }
+  # the point of the stack velo-storage: <alias>:<port>, the URL is put
+  # together in docker-compose.yml (STORAGE_ENDPOINT)
+  STORAGE_ADDRESS:       { source: address, stack: velo-storage, endpoint: files }
+
+# What velo gives the services: comms takes it by a seam `from: product`.
+# The app names the same keys in /health (core/report.py, PROVIDES).
+provides:
+  STORAGE_ADDRESS: { stack: velo-storage, endpoint: files }
 
 packages:
   skin:

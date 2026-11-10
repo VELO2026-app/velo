@@ -18,6 +18,8 @@ BE-193: one more statement holds the storage stack's root login as a
 constant of docker-compose.storage.yml, not a value of primer.yaml's env.
 BE-194 part 2: one more holds the frontend's instance values -- the
 languages and the flag of every option -- against primer.yaml.
+BE-193 part 2a: the point of velo-storage reaches the app, what velo
+provides is what /health names, and each CI place passes its own.
 
 The files are read from the repository root -- in the test image they are
 at /, where Path(__file__).resolve().parents[2] lands from /app/tests
@@ -30,6 +32,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from app.core import report
 from app.core.config import Settings
 from app.core.i18n import SUPPORTED_LANGUAGES
 from app.modules.mcp.oauth import MCP_OAUTH_CIMD_ALLOWED_HOSTS
@@ -42,8 +45,13 @@ CI_ENV = ROOT / "backend" / "ci.env"
 CI_YML = ROOT / ".github" / "workflows" / "ci.yml"
 BACKEND_TESTS_YML = ROOT / ".github" / "workflows" / "backend-tests.yml"
 
-# Each CI place has its own -- they are not in ci.env.
-CONNECTION_ADDRESSES = frozenset({"DATABASE_URL", "REDIS_URL"})
+# Each CI place has its own -- they are not in ci.env: the addresses of its
+# services, and (BE-193) the storage secret -- the job that runs a live
+# storage sets the backend's key to its own secret, and the suite must hold
+# that very one.
+CONNECTION_ADDRESSES = frozenset({"DATABASE_URL", "REDIS_URL", "STORAGE_ENDPOINT"})
+PLACE_SECRETS = frozenset({"STORAGE_SECRET_KEY"})
+PLACE_OWN = CONNECTION_ADDRESSES | PLACE_SECRETS
 
 
 def _app_environment() -> dict[str, str]:
@@ -203,15 +211,19 @@ def _ci_env() -> dict[str, str]:
     return env
 
 
-def test_ci_env_holds_every_required_field_but_the_addresses() -> None:
+def test_ci_env_holds_every_required_field_but_each_places_own() -> None:
+    """Every required field but what each CI place has of its own. BE-193:
+    the storage secret joined the addresses here when it became required --
+    before, it had a default and was never asked of ci.env; it stays out of
+    ci.env because the place that runs the storage chooses it."""
     env = _ci_env()
-    wanted = _required() - CONNECTION_ADDRESSES
+    wanted = _required() - PLACE_OWN
     assert wanted, "Settings has required fields"
     missing = sorted(wanted - set(env))
     assert not missing, f"backend/ci.env lacks {missing}"
     empty = sorted(k for k in wanted if not env[k])
     assert not empty, f"backend/ci.env has empty {empty}"
-    assert not (set(env) & CONNECTION_ADDRESSES), "addresses are each place's own"
+    assert not (set(env) & PLACE_OWN), "each place's own: not in ci.env"
     assert set(env) <= _fields(), f"not fields: {sorted(set(env) - _fields())}"
 
 
@@ -275,3 +287,51 @@ def test_the_storage_root_login_is_a_constant_not_a_value() -> None:
         secret = env.get("RUSTFS_SECRET_KEY")
         assert secret == "${RUSTFS_SECRET_KEY:?}", f"{name}: {secret!r}"
     assert primer["RUSTFS_SECRET_KEY"]["source"] == "minted"
+
+
+# -- BE-193 part 2a: the point of velo-storage ---------------------------------
+
+
+def test_the_point_of_the_storage_reaches_the_app() -> None:
+    """The stack velo-storage exposes `files`; the app takes its address
+    (<alias>:<port>) and compose puts the URL together. The reference
+    ${STORAGE_ADDRESS:?} inside that value is what the machine reads to put
+    the app on the point's network: a literal URL here would leave the app
+    off it (contract 3 rule 22, DM-62)."""
+    primer = yaml.safe_load(PRIMER.read_text(encoding="utf-8"))
+    point = primer["stacks"]["velo-storage"]["expose"]["files"]
+    assert point == {"service": "velo-storage", "port": 9000, "scheme": "http"}
+    assert primer["env"]["STORAGE_ADDRESS"] == {
+        "source": "address",
+        "stack": "velo-storage",
+        "endpoint": "files",
+    }
+    passed = _app_environment()
+    assert passed.get("STORAGE_ENDPOINT") == "http://${STORAGE_ADDRESS:?}"
+    assert passed.get("STORAGE_SECRET_KEY") == "${STORAGE_SECRET_KEY:?}"
+
+
+def test_what_velo_provides_is_what_health_names() -> None:
+    """primer.yaml's `provides` and /health's `seams.provides`
+    (core/report.py PROVIDES) are one list: the machine holds a seam a
+    service requires to the live /health after `up`."""
+    provides = yaml.safe_load(PRIMER.read_text(encoding="utf-8"))["provides"]
+    assert isinstance(provides, dict) and provides, "primer.yaml provides"
+    assert report.PROVIDES, "report.PROVIDES is not empty"
+    assert len(set(report.PROVIDES)) == len(report.PROVIDES), "each name once"
+    assert set(provides) == set(report.PROVIDES)
+    assert provides["STORAGE_ADDRESS"] == {"stack": "velo-storage", "endpoint": "files"}
+
+
+def test_each_place_passes_its_own() -> None:
+    """What ci.env does not hold, each CI place that builds Settings passes
+    itself: the suite with -e, the drift check in its step's env. Without
+    one the app does not start there (BE-190 FIX 2, BE-193)."""
+    own = _required() & PLACE_OWN
+    assert own >= {"DATABASE_URL", "STORAGE_ENDPOINT", "STORAGE_SECRET_KEY"}
+    [suite] = [s for s in _steps(BACKEND_TESTS_YML) if "python -m pytest" in s["run"]]
+    passed = set(re.findall(r"-e ([A-Z][A-Z0-9_]*)", suite["run"]))
+    assert own <= passed, f"the suite lacks {sorted(own - passed)}"
+    [drift] = [s for s in _steps(CI_YML) if "from app.main import app" in s["run"]]
+    given = {k for k, v in (drift.get("env") or {}).items() if str(v).strip()}
+    assert own <= given, f"the drift check lacks {sorted(own - given)}"

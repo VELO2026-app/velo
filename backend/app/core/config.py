@@ -38,6 +38,7 @@
 
 import re
 from typing import Annotated, Literal
+from urllib.parse import urlsplit
 
 from pydantic import BeforeValidator, Field, PrivateAttr, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -129,7 +130,27 @@ _REQUIRED_NON_EMPTY = (
     "telegram_login_client_id",
     "telegram_login_client_secret",
     "support_language",
+    "storage_endpoint",
+    "storage_secret_key",
 )
+
+
+def _is_storage_endpoint(value: str) -> bool:
+    """http or https, a host and a port, nothing else (BE-193)."""
+    parts = urlsplit(value)
+    try:
+        port = parts.port
+    except ValueError:  # a port that is not a number in range
+        return False
+    return (
+        parts.scheme in ("http", "https")
+        and bool(parts.hostname)
+        and port is not None
+        and parts.username is None
+        and parts.password is None
+        and not (parts.path or parts.query or parts.fragment)
+        and not value.endswith(("?", "#"))
+    )
 
 
 class Settings(BaseSettings):
@@ -452,17 +473,17 @@ class Settings(BaseSettings):
     # the bell, never crash velo (T1 handoff constraint).
     comms_http_timeout_seconds: float = 5.0
 
-    # -- Object storage (BE-133) --
+    # -- Object storage (BE-133, BE-193) --
+    # The storage's URL, put together by compose from the point the machine
+    # gives the app: STORAGE_ENDPOINT: http://${STORAGE_ADDRESS:?} (protocol
+    # 4.4). Every client and every signed link is made against it, and comms
+    # opens a link by the same name -- so its form is checked at start.
+    storage_endpoint: str
     # The secret of the backend's own key to velo-storage. The key's NAME is
-    # fixed in app/core/storage_registry.yaml; only the secret lives in the
-    # environment. Nobody types it: `velo update` (and the installer) write
-    # it into backend/.env when it is absent, and the storage init sets the
-    # storage to it on every run -- so `velo env set STORAGE_SECRET_KEY`
-    # followed by `velo update` is a rotation. Empty by default, with no
-    # validator, on purpose: the first deploy of BE-133 runs the OLD update
-    # script, which writes no key, and the app must still start. The
-    # storage module refuses on an empty secret when it is called.
-    storage_secret_key: str = ""
+    # fixed in app/core/storage_registry.yaml; the secret is minted by the
+    # machine (primer.yaml), and velo-storage-init sets the key to it on
+    # every rollout.
+    storage_secret_key: str
 
     # -- Support translation (BE-166, owner ruling 2026-10-22) --
     # The ONE language every support admin writes in. A user's message is
@@ -906,6 +927,15 @@ class Settings(BaseSettings):
                     "scheme, port, path or userinfo, e.g. 'app.example.com'"
                 )
             setattr(self, name, value.lower())
+
+        # BE-193: the storage's URL is http(s)://host:port and nothing more.
+        # A bare host:port (compose without its scheme), a path or userinfo
+        # would sign every link for an address comms does not open.
+        if not _is_storage_endpoint(self.storage_endpoint):
+            raise ValueError(
+                f"STORAGE_ENDPOINT={self.storage_endpoint!r} is not "
+                "http(s)://host:port, e.g. 'http://velo-storage-velo-storage:9000'"
+            )
 
         # BE-196: the passport's languages are a subset of the product's,
         # each named once, and the default is one of them (protocol 5.2.2;

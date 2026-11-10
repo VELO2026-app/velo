@@ -41,6 +41,10 @@ INSTANCE: dict[str, object] = {
     "zoom_sdk_client_secret": "zoom-sdk-secret",
     "telegram_login_client_id": "123456",
     "telegram_login_client_secret": "login-secret",
+    # BE-193: the storage's point as compose puts its URL together, and the
+    # backend's minted secret.
+    "storage_endpoint": "http://velo-storage-velo-storage:9000",
+    "storage_secret_key": "minted-storage-secret",
     "comms_api_url": "",
     "comms_service_token": "",
     "comms_redis_url": "",

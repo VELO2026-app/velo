@@ -36,7 +36,7 @@ buckets:
     # process that died first.
     expire_days: 1
     backup: false
-    # Only comms reads it, by a signed GET link on velo-storage:9000.
+    # Only comms reads it, by a signed GET link on the storage's point.
     reader: signed_link
 
   master-documents:

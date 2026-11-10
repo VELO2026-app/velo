@@ -29,10 +29,12 @@ from uuid import UUID, uuid4
 import httpx
 import pytest
 from botocore.exceptions import ClientError
+from pydantic import ValidationError
 
 from app.core import storage
 from app.core.config import settings
 from app.core.storage_registry import load_registry
+from tests.settings_instance import MISSING, build_settings
 
 TYPES = [b.name for b in load_registry().buckets]
 
@@ -134,9 +136,13 @@ async def test_signed_link_reads_the_object(
     where, owner, obj, body = stored_voice
     link = await storage.signed_read_link(where, owner, obj, 60)
     parts = urlsplit(link)
-    # Signed for the internal name comms resolves, path-style, both UUIDs.
-    assert parts.scheme == "http"
-    assert parts.netloc == "velo-storage:9000"
+    # Signed for the endpoint the app is given -- on the machine the alias of
+    # the point, which comms opens by the same name (BE-193) -- path-style,
+    # both UUIDs. Was a literal "velo-storage:9000": the address of the
+    # stand, right while the module held it as a constant.
+    endpoint = urlsplit(settings.storage_endpoint)
+    assert parts.scheme == endpoint.scheme
+    assert parts.netloc == endpoint.netloc
     assert parts.path == f"/voice-test/{owner}/{obj}"
     assert "X-Amz-Signature=" in parts.query
     response = await _fetch(link)
@@ -237,7 +243,7 @@ async def test_key_parts_must_be_uuids(
 ) -> None:
     """Refused before the network: the endpoint points nowhere, and the
     error is TypeError, not StorageUnavailableError."""
-    monkeypatch.setattr(storage, "STORAGE_ENDPOINT", "http://127.0.0.1:9")
+    monkeypatch.setattr(settings, "storage_endpoint", "http://127.0.0.1:9")
     where = storage.bucket("voice", test=True)
     with pytest.raises(TypeError):
         await storage.put_object(where, owner, obj, b"x")
@@ -245,14 +251,17 @@ async def test_key_parts_must_be_uuids(
         await storage.signed_read_link(where, owner, obj, 60)
 
 
-async def test_empty_secret_refuses(
-    monkeypatch: pytest.MonkeyPatch, ids: tuple[UUID, UUID]
+@pytest.mark.parametrize("secret", ["", MISSING])
+def test_no_storage_secret_refuses_the_start(
+    secret: object, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Reachable: `velo env set STORAGE_SECRET_KEY` with an empty value, then
-    `velo restart` -- the next `velo update` mints a new one."""
-    monkeypatch.setattr(settings, "storage_secret_key", "")
-    with pytest.raises(storage.StorageNotConfiguredError):
-        await storage.put_object(storage.bucket("voice", test=True), *ids, b"x")
+    """Was test_empty_secret_refuses: an empty secret refused at the first
+    call (StorageNotConfiguredError) -- right while the setting had a
+    default "" for the shell's `velo update` to fill in. BE-193 made it
+    required and non-empty: the app does not start without one, so the
+    refusal is the settings', and the error class is gone."""
+    with pytest.raises(ValidationError, match=r"(?i)storage_secret_key"):
+        build_settings(monkeypatch, storage_secret_key=secret)
 
 
 async def test_unknown_type_is_refused() -> None:
@@ -269,7 +278,7 @@ async def test_storage_down_put_is_unavailable_but_link_is_signed(
     monkeypatch: pytest.MonkeyPatch, ids: tuple[UUID, UUID]
 ) -> None:
     """Signing is local: no storage needed. Storing is not."""
-    monkeypatch.setattr(storage, "STORAGE_ENDPOINT", "http://127.0.0.1:9")
+    monkeypatch.setattr(settings, "storage_endpoint", "http://127.0.0.1:9")
     where = storage.bucket("voice", test=True)
     link = await storage.signed_read_link(where, *ids, 60)
     assert link.startswith("http://127.0.0.1:9/voice-test/")

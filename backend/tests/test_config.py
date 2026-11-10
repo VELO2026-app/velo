@@ -227,3 +227,41 @@ async def test_app_redis_client_carries_socket_timeouts() -> None:
         # of the session without Redis.
         await core_redis.close_redis()
         core_redis._redis_client = previous
+
+
+# -- BE-193: the storage's URL -------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    ["http://velo-storage-velo-storage:9000", "https://store.example.com:443"],
+)
+def test_the_storage_endpoint_is_a_url_of_host_and_port(
+    endpoint: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    s = build_settings(monkeypatch, storage_endpoint=endpoint)
+    assert s.storage_endpoint == endpoint
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "velo-storage-velo-storage:9000",  # compose without its scheme
+        "ftp://h:21",
+        "http://h",  # no port
+        "http://:9000",
+        "http://h:9000/",
+        "http://h:9000/x",
+        "http://h:9000?q",
+        "http://h:9000?",
+        "http://h:9000#f",
+        "http://u:p@h:9000",
+        "http://h:99999",
+        "http://h:port",
+    ],
+)
+def test_a_storage_endpoint_of_another_form_is_refused(
+    endpoint: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with pytest.raises(ValidationError, match="STORAGE_ENDPOINT"):
+        build_settings(monkeypatch, storage_endpoint=endpoint)

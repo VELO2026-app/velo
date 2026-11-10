@@ -64,6 +64,11 @@ services:
       # The point of comms: address <alias>:<port> and password by seam, the
       # URL is put together here (protocol 4.4).
       COMMS_REDIS_URL: redis://:${COMMS_EVENTS_PASSWORD:?}@${COMMS_EVENTS_ADDRESS:?}/0
+      # The point of velo-storage: its address <alias>:<port> from the
+      # machine, the URL put together here (protocol 4.4). The reference
+      # ${STORAGE_ADDRESS:?} is also what puts this service on the point's
+      # network.
+      STORAGE_ENDPOINT: http://${STORAGE_ADDRESS:?}
       # The backend's own key to velo-storage.
       STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:?}
     depends_on:

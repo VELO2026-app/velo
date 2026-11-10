@@ -92,10 +92,14 @@ jobs:
         # app.main builds Settings at import: every required key, invented --
         # the schema reads none of them -- from backend/ci.env, the one
         # settings environment of CI (tests/test_primer_env.py). Here only
-        # what this place adds: its database address and the build identity
-        # the image's ENV carries elsewhere (/health, the log formatter).
+        # what this place adds: its database and storage addresses, a storage
+        # secret (each place has its own; nothing here reaches a storage) and
+        # the build identity the image's ENV carries elsewhere (/health, the
+        # log formatter).
         env:
           DATABASE_URL: postgresql+asyncpg://velo:velo@localhost:5432/velo
+          STORAGE_ENDPOINT: http://localhost:9000
+          STORAGE_SECRET_KEY: drift-check-no-storage
           PRIMER_RELEASE: ci
           PRIMER_COMMIT: ${{ github.sha }}
           PYTHONPATH: ${{ github.workspace }}/backend

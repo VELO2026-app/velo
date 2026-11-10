@@ -27,9 +27,11 @@
 #                         file (one place for the digests, BE-157);
 #   velo-storage       -- the stack docker-compose.storage.yml itself,
 #                         server and velo-storage-init: test_storage.py talks
-#                         to the live storage at velo-storage:9000 (the
-#                         address is a constant in app/core/storage.py) and
-#                         works only in the test-twin buckets the init makes.
+#                         to the live storage at velo-storage:9000 -- the
+#                         service's name on this network, given to the suite
+#                         as STORAGE_ENDPOINT (on the machine it is the
+#                         point's alias) -- and works only in the test-twin
+#                         buckets the init makes.
 # comms-profile/ is NOT mounted: the test stage carries it at /comms-profile,
 # so a test image without it is red here.
 #
@@ -285,14 +287,16 @@ jobs:
       - name: Run the backend suite (python -m pytest tests/)
         # Every required key of Settings from backend/ci.env, the one settings
         # environment of CI (tests/test_primer_env.py); here only what this
-        # place has of its own: the addresses of its services, the storage
-        # secret it minted, the bot's link. PRIMER_* come from the image's ENV.
+        # place has of its own: the addresses of its services (the storage's
+        # included), the storage secret it minted, the bot's link. PRIMER_*
+        # come from the image's ENV.
         run: |
           docker run --rm --network "$NET" \
             --env-file backend/ci.env \
             -e DATABASE_URL="postgresql+asyncpg://velo:${POSTGRES_PASSWORD}@postgres:5432/velo_test" \
             -e REDIS_URL="redis://:${REDIS_PASSWORD}@redis:6379/0" \
             -e TELEGRAM_BOT_URL=https://telegram.me/velo_ci_bot \
+            -e STORAGE_ENDPOINT=http://velo-storage:9000 \
             -e STORAGE_SECRET_KEY \
             "$IMAGE" python -m pytest tests/ -v --tb=short
 
