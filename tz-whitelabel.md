@@ -141,7 +141,7 @@ envsubst'ом в nginx при старте (FE-129); на переходный �
 | `skin/brand.json` | display name; short name (≤12 симв. — конвенция PWA); theme_color; background_color; семейство шрифта (опц., см. §7) | да |
 | `skin/mandala-white.png`, `skin/velo-word-filled.svg` (+ синяя пара) | логотип: `VeloLogo.vue` рендерит `<img src="/icons/…">` — скин кладёт файлы по тем же путям | да |
 | `skin/icon-192.png`, `icon-512.png`, `icon-maskable-512.png`, `apple-touch-icon-180.png` (непрозрачный — iOS красит прозрачность чёрным), `favicon.svg` | PWA/вкладка | да |
-| `skin/bg/background.webp` или `skin/bg/background.png` | мандала-фон `#app-bg` (рисуется `global.css` через токен `--velo-app-bg-image`, красится первым пикселем экрана). Эталон — WebP (≈19 КБ); выпущенные скины с PNG продолжают работать: `materializedSkinTokens` (`platform/skin.ts`) переопределяет токен на тот формат, что лежит в `skin/bg/`, WebP предпочтительнее. Валидатор принимает оба и предупреждает о PNG > 300 КБ | нет — фолбэк на эталон |
+| `skin/bg/background.webp` или `skin/bg/background.png` | мандала-фон `#app-bg` (рисуется `global.css` через токен `--velo-app-bg-image`, красится первым пикселем экрана). Эталон — WebP (≈44 КБ, качество 92: на q80 тонкие линии мандалы размываются); выпущенные скины с PNG продолжают работать: `materializedSkinTokens` (`platform/skin.ts`) переопределяет токен на тот формат, что лежит в `skin/bg/`, WebP предпочтительнее. Валидатор принимает оба и предупреждает о PNG > 300 КБ | нет — фолбэк на эталон |
 | `skin/onboarding/*.svg` | иллюстрации онбординга (`OnboardingView.vue:112`, абсолютные пути `/onboarding/…`) | нет — фолбэк на эталон |
 
 Правила:

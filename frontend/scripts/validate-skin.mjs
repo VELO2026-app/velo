@@ -110,9 +110,7 @@ export function pngInfo(file) {
 function luminance(color) {
   let value = color.trim()
   let alpha = 1
-  const rgba = value.match(
-    /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\s*\)/,
-  )
+  const rgba = value.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\s*\)/)
   if (rgba) {
     alpha = rgba[4] === undefined ? 1 : Number(rgba[4])
     return { lum: channelLum([+rgba[1], +rgba[2], +rgba[3]], alpha), alpha }
@@ -182,13 +180,17 @@ export function validateSkin(skinDir, frontendDir) {
   if (!str('displayName')) fail(out, 'FAIL brand.json: displayName must be a non-empty string')
   if (!str('shortName')) fail(out, 'FAIL brand.json: shortName must be a non-empty string')
   else if (brand['shortName'].trim().length > 12)
-    fail(out, `FAIL brand.json: shortName "${brand['shortName']}" exceeds 12 chars (PWA convention)`)
+    fail(
+      out,
+      `FAIL brand.json: shortName "${brand['shortName']}" exceeds 12 chars (PWA convention)`,
+    )
   const hex6 = (key) => str(key) && /^#[0-9a-fA-F]{6}$/.test(brand[key].trim())
   if (!hex6('themeColor')) fail(out, 'FAIL brand.json: themeColor must be 6-digit hex')
   if (!hex6('backgroundColor')) fail(out, 'FAIL brand.json: backgroundColor must be 6-digit hex')
   if (brand['fontUrl'] !== undefined && !/^https:\/\//.test(String(brand['fontUrl'])))
     fail(out, 'FAIL brand.json: fontUrl must be https://')
-  if (out.fails.length === 0) ok(out, `brand.json: "${brand['displayName']}" / "${brand['shortName']}"`)
+  if (out.fails.length === 0)
+    ok(out, `brand.json: "${brand['displayName']}" / "${brand['shortName']}"`)
 
   // 3. tokens.css: names + the §1 single source -------------------------------
   const tokens = parseTokens(readFileSync(tokensPath, 'utf8'))
@@ -256,7 +258,9 @@ export function validateSkin(skinDir, frontendDir) {
   // 4. contrast ---------------------------------------------------------------
   // Values resolve against the GOLDEN tokens: a skin that darkens a surface
   // without retouching the text on it fails right here.
-  const baseTokens = parseTokens(readFileSync(join(frontendDir, 'src', 'styles', 'variables.css'), 'utf8'))
+  const baseTokens = parseTokens(
+    readFileSync(join(frontendDir, 'src', 'styles', 'variables.css'), 'utf8'),
+  )
   for (const [fgName, bgName, min] of CONTRAST_PAIRS) {
     const fg = tokens[fgName] ?? baseTokens[fgName]
     const bg = bgName.startsWith('--') ? (tokens[bgName] ?? baseTokens[bgName]) : bgName
@@ -283,14 +287,19 @@ export function validateSkin(skinDir, frontendDir) {
   const bgWebp = join(skinDir, 'bg', 'background.webp')
   const bgPng = join(skinDir, 'bg', 'background.png')
   if (!existsSync(bgWebp) && !existsSync(bgPng)) {
-    const textPrimary = luminance(tokens['--velo-text-primary'] ?? baseTokens['--velo-text-primary'])
+    const textPrimary = luminance(
+      tokens['--velo-text-primary'] ?? baseTokens['--velo-text-primary'],
+    )
     if (textPrimary && textPrimary.lum > 0.35) {
       fail(
         out,
         'FAIL bg/background: missing (neither .webp nor .png) while --velo-text-primary is LIGHT -- the golden light photo stays and the light text on it is unreadable. Ship the full package including bg/, or use dark text tokens.',
       )
     } else {
-      warn(out, 'bg/background missing: the golden light photo stays (fine for a light-on-light skin)')
+      warn(
+        out,
+        'bg/background missing: the golden light photo stays (fine for a light-on-light skin)',
+      )
     }
   } else if (existsSync(bgWebp)) {
     ok(out, 'bg/background.webp present')
@@ -300,7 +309,7 @@ export function validateSkin(skinDir, frontendDir) {
     if (kb > BG_PNG_WARN_KB)
       warn(
         out,
-        `bg/background.png is ${kb} KB (> ${BG_PNG_WARN_KB} KB): ship bg/background.webp instead (-m 6, q80) -- the photo is the first thing every user downloads`,
+        `bg/background.png is ${kb} KB (> ${BG_PNG_WARN_KB} KB): ship bg/background.webp instead (cwebp -m 6 -q 92: lower qualities blur the fine line work) -- the photo is the first thing every user downloads`,
       )
   }
   // The manifest/HTML background: themeColor text on backgroundColor surface.
@@ -322,7 +331,10 @@ export function validateSkin(skinDir, frontendDir) {
       fail(out, `FAIL ${asset}: ${info.width}x${info.height}, expected ${w}x${h}`)
     else ok(out, `${asset}: ${info.width}x${info.height}`)
     if (asset.startsWith('apple-touch') && (info.colorType === 4 || info.colorType === 6))
-      fail(out, `FAIL ${asset}: has an alpha channel (colorType ${info.colorType}) -- iOS paints transparency black`)
+      fail(
+        out,
+        `FAIL ${asset}: has an alpha channel (colorType ${info.colorType}) -- iOS paints transparency black`,
+      )
   }
   for (const asset of ['favicon.svg', 'velo-word-filled.svg', 'velo-word-blue.svg']) {
     const head = readFileSync(join(skinDir, asset), 'utf8').slice(0, 200)
@@ -360,7 +372,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   const buildMode = args.includes('--build')
   const skinDir = args.find((a) => !a.startsWith('--')) ?? 'public/skin'
   const frontendDir = resolve(import.meta.dirname, '..')
-  const report = buildMode ? skinBuildGate(skinDir, frontendDir) : validateSkin(skinDir, frontendDir)
+  const report = buildMode
+    ? skinBuildGate(skinDir, frontendDir)
+    : validateSkin(skinDir, frontendDir)
   if (report === null) {
     console.log(`validate-skin: no skin package at ${skinDir} -- golden build`)
     process.exit(0)
