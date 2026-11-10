@@ -321,6 +321,9 @@ export const useCalendarStore = defineStore('calendar', () => {
             if (!res.items.length) break
             items.push(...res.items)
           }
+          // Superseded (a newer load, or the account-boundary reset): the
+          // newer truth owns the feed.
+          if (token !== loadToken) return
           schoolFeed.value = items
           seedPractices(items)
           // Open ON the practices: the default window is today's week, and a
@@ -484,6 +487,30 @@ export const useCalendarStore = defineStore('calendar', () => {
     await loadWeek()
   }
 
+  /**
+   * Back to the initial state at the account boundary (platform/session.ts):
+   * today's window, no filters or scopes, no data, first entry not yet made.
+   * Bumping the load token drops any week still in flight.
+   */
+  function $reset(): void {
+    loadToken += 1
+    lastLoadedKey = null
+    const today = todayMidnight()
+    weekAnchor.value = today
+    selectedDate.value = localDateKey(today)
+    weekPractices.value = []
+    for (const key of Object.keys(filters) as Array<keyof CalendarFacetFilters>) {
+      delete filters[key]
+    }
+    masterScope.value = null
+    masterSchoolFilter.value = null
+    schoolScope.value = null
+    schoolFeed.value = null
+    loading.value = false
+    error.value = null
+    initialized.value = false
+  }
+
   return {
     // state
     weekAnchor,
@@ -512,6 +539,7 @@ export const useCalendarStore = defineStore('calendar', () => {
     setMasterScope,
     setSchoolScope,
     init,
+    $reset,
     // helpers (exported for the view: local day key of a Date)
     localDateKey,
   }

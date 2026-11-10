@@ -5,8 +5,13 @@
 // Covers loginViaTelegram, restoreSession, logout -- per the ranked T1 plan,
 // sequenced after stores/bookings.ts since this store carries the most
 // incidental complexity relative to its money-criticality: a dynamic
-// @/composables/useAuth import inside logout(), a dynamic @/stores/master
-// import, and storage side effects.
+// @/composables/useAuth import inside logout() and storage side effects.
+//
+// FE-157: the end of a session resets the other stores through the account
+// scope (platform/session.ts), so the Pinia here is installed in an app with
+// accountScopePlugin -- the way app.ts installs it -- and the resets are
+// asserted on the REAL stores. Every store against the contract, over the
+// real client's 401, lives in stores/session-reset.test.ts.
 //
 // Standalone phase 3: the token's carrier is the PLATFORM's call
 // (platform/session-token.ts) -- sessionStorage in Telegram, localStorage
@@ -27,12 +32,23 @@
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { createApp } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
+import { useMasterStore } from '@/stores/master'
+import { useBookingsStore } from '@/stores/bookings'
+import { useSchoolsHubStore } from '@/stores/schoolsHub'
+import { accountScopePlugin } from '@/platform/session'
 import { flushPersisted, readPersisted, writePersisted } from '@/composables/persistedCache'
 import { api, ApiNetworkError, ApiResponseError } from '@/api/client'
 import * as usersApi from '@/api/users'
-import type { AuthResponse, UserResponse } from '@/api/types'
+import type {
+  AuthResponse,
+  BookingWithPracticeResponse,
+  MasterProfileResponse,
+  SchoolMineItem,
+  UserResponse,
+} from '@/api/types'
 
 vi.mock('@/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api/client')>()
@@ -48,16 +64,6 @@ vi.mock('@/api/client', async (importOriginal) => {
 })
 
 vi.mock('@/api/users')
-
-const masterReset = vi.fn()
-vi.mock('@/stores/master', () => ({
-  useMasterStore: () => ({ $reset: masterReset }),
-}))
-
-const bookingsReset = vi.fn()
-vi.mock('@/stores/bookings', () => ({
-  useBookingsStore: () => ({ $reset: bookingsReset }),
-}))
 
 const beginLogout = vi.fn()
 vi.mock('@/composables/useAuth', () => ({ beginLogout }))
@@ -82,6 +88,32 @@ vi.mock('@/platform', async () => {
   }
 })
 
+/** Put account data into the stores the old hand-kept reset lists covered. */
+function fillAccountStores(): void {
+  const master = useMasterStore()
+  master.profile = { id: 'master_1' } as unknown as MasterProfileResponse
+  master.profileLoaded = true
+  const bookings = useBookingsStore()
+  bookings.upcoming = [{ id: 'booking_1' } as BookingWithPracticeResponse]
+  bookings.upcomingLoaded = true
+  const hub = useSchoolsHubStore()
+  hub.mine = [{ id: 'school_1' } as SchoolMineItem]
+  hub.canCreate = true
+}
+
+/** The same stores are back to their initial state. */
+function expectAccountStoresReset(): void {
+  const master = useMasterStore()
+  expect(master.profile).toBeNull()
+  expect(master.profileLoaded).toBe(false)
+  const bookings = useBookingsStore()
+  expect(bookings.upcoming).toEqual([])
+  expect(bookings.upcomingLoaded).toBe(false)
+  const hub = useSchoolsHubStore()
+  expect(hub.mine).toEqual([])
+  expect(hub.canCreate).toBe(false)
+}
+
 function fakeUser(overrides: Partial<UserResponse> = {}): UserResponse {
   return {
     id: 'user_1',
@@ -95,13 +127,14 @@ function fakeUser(overrides: Partial<UserResponse> = {}): UserResponse {
 
 describe('useAuthStore', () => {
   beforeEach(() => {
-    setActivePinia(createPinia())
+    // Pinia runs plugins only once installed in an app (as in app.ts).
+    const pinia = createPinia().use(accountScopePlugin)
+    createApp({}).use(pinia)
+    setActivePinia(pinia)
     sessionStorage.clear()
     localStorage.clear()
     vi.mocked(api.post).mockReset()
     vi.mocked(usersApi.getMe).mockReset()
-    masterReset.mockReset()
-    bookingsReset.mockReset()
     beginLogout.mockReset()
     platformClose.mockReset()
     platformName = 'standalone'
@@ -254,33 +287,35 @@ describe('useAuthStore', () => {
       )
     })
 
-    it('the account boundary resets the bookings store with the session (W-1)', async () => {
-      platformName = 'standalone'
-      vi.mocked(api.post).mockResolvedValue(undefined)
+    it('a refused restore resets the other stores with the session (W-1)', async () => {
+      // The 401 path into _clearSession, not logout: before FE-157 it reset
+      // only the bookings store, and that one asynchronously.
       localStorage.setItem('velo_token', 'tok')
       const store = useAuthStore()
-      store.token = 'tok'
-      store.user = fakeUser()
+      fillAccountStores()
+      vi.mocked(usersApi.getMe).mockRejectedValue(
+        new ApiResponseError(401, 'Session expired', 'unauthorized'),
+      )
 
-      await store.logout()
-      // The reset rides a dynamic import out of _clearSession.
-      await new Promise((resolve) => setTimeout(resolve, 0))
-      expect(bookingsReset).toHaveBeenCalled()
+      await expect(store.restoreSession()).resolves.toBe('rejected')
+
+      expectAccountStoresReset()
     })
   })
 
   describe('logout', () => {
-    it('standalone: resets master store, posts logout, clears session, does NOT touch the Telegram gate', async () => {
+    it('standalone: posts logout, clears session and every store, does NOT touch the Telegram gate', async () => {
       platformName = 'standalone'
       vi.mocked(api.post).mockResolvedValue(undefined)
       localStorage.setItem('velo_token', 'tok')
       const store = useAuthStore()
       store.token = 'tok'
       store.user = fakeUser()
+      fillAccountStores()
 
       await store.logout()
 
-      expect(masterReset).toHaveBeenCalledTimes(1)
+      expectAccountStoresReset()
       expect(api.post).toHaveBeenCalledWith('/api/v1/auth/logout')
       expect(store.token).toBeNull()
       expect(store.user).toBeNull()
@@ -296,11 +331,12 @@ describe('useAuthStore', () => {
       const store = useAuthStore()
       store.token = 'tok'
       store.user = fakeUser()
+      fillAccountStores()
 
       await store.logout()
 
       expect(beginLogout).toHaveBeenCalledTimes(1)
-      expect(masterReset).toHaveBeenCalledTimes(1)
+      expectAccountStoresReset()
       expect(store.token).toBeNull()
       expect(platformClose).toHaveBeenCalledTimes(1)
     })
@@ -358,6 +394,47 @@ describe('useAuthStore', () => {
       // user/token would be resurrected here even though logout cleared them.
       expect(store.user).toBeNull()
       expect(store.token).toBeNull()
+    })
+
+    it('a 401 for a token replaced while in flight does not end the new session', async () => {
+      const store = useAuthStore()
+      store.token = 'tok_1'
+      store.user = fakeUser()
+      let rejectGetMe: (error: unknown) => void = () => {}
+      vi.mocked(usersApi.getMe).mockImplementation(
+        () =>
+          new Promise<UserResponse>((_resolve, reject) => {
+            rejectGetMe = reject
+          }),
+      )
+      const fetchPromise = store.fetchMe()
+
+      // A new session takes over while the old token's /me is in flight.
+      store.token = 'tok_2'
+      store.user = fakeUser({ id: 'user_2' })
+      fillAccountStores()
+      rejectGetMe(new ApiResponseError(401, 'Session expired', 'unauthorized'))
+
+      await expect(fetchPromise).resolves.toBe(true)
+      expect(store.token).toBe('tok_2')
+      expect(store.user?.id).toBe('user_2')
+      expect(useMasterStore().profileLoaded).toBe(true)
+    })
+
+    it('a 401 for the current token ends the session and resets the stores', async () => {
+      const store = useAuthStore()
+      store.token = 'tok_1'
+      store.user = fakeUser()
+      fillAccountStores()
+      vi.mocked(usersApi.getMe).mockRejectedValue(
+        new ApiResponseError(401, 'Session expired', 'unauthorized'),
+      )
+
+      await expect(store.fetchMe()).resolves.toBe(true)
+
+      expect(store.token).toBeNull()
+      expect(store.user).toBeNull()
+      expectAccountStoresReset()
     })
 
     it('still writes the result for a request that resolves BEFORE anything else changes the session', async () => {
