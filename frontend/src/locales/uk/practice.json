@@ -36,11 +36,6 @@
   "timePicker": {
     "title": "Час практики"
   },
-  "bookingCancel": {
-    "title": "Скасувати бронювання?",
-    "keep": "Ні, залишити",
-    "confirm": "Так, скасувати"
-  },
   "booking": {
     "title": "Бронювання",
     "labels": {
