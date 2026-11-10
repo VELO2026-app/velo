@@ -57,8 +57,8 @@ test('master creates and publishes a practice', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'New practice' })).toBeVisible()
 
   await page.getByPlaceholder('Title', { exact: true }).fill('Evening Meditation')
-  await page.getByRole('combobox').nth(0).selectOption('meditation')
-  await page.getByRole('combobox').nth(1).selectOption({ label: 'Beginner' })
+  await page.getByRole('combobox', { name: 'Practice direction' }).selectOption('meditation')
+  await page.getByRole('combobox', { name: 'Difficulty level' }).selectOption({ label: 'Beginner' })
 
   // Tomorrow (the clock is frozen on the 10th), 12:00 -- where the time sheet opens.
   await page.getByRole('button', { name: 'Date' }).click()
@@ -66,7 +66,7 @@ test('master creates and publishes a practice', async ({ page }) => {
   await page.getByRole('button', { name: 'Save' }).click()
   await page.getByRole('button', { name: 'Time' }).click()
   await page.getByRole('button', { name: 'Save' }).click()
-  await page.getByRole('combobox').nth(2).selectOption('60')
+  await page.getByRole('combobox', { name: 'Duration' }).selectOption('60')
 
   await page.getByRole('button', { name: 'Create the practice' }).click()
 

@@ -20,8 +20,8 @@ export type MockHandler = (request: { body: unknown; query: URLSearchParams }) =
 
 /** A mocked API: register handlers, read what was asked. */
 export interface MockApi {
-  /** Serve `method path` with a fixed body or a function of the request. */
-  on(method: string, path: string, reply: unknown | MockHandler): void
+  /** Serve `method path` with a fixed body or a {@link MockHandler} (a function of the request). */
+  on(method: string, path: string, reply: unknown): void
   /** Every `METHOD path` seen, in order, handled or not. */
   readonly calls: string[]
   /** The calls nothing was registered for. */

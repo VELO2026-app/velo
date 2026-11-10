@@ -19,6 +19,9 @@ if (!existsSync(summaryPath)) {
 const total = JSON.parse(readFileSync(summaryPath, 'utf8')).total
 const budget = JSON.parse(readFileSync(new URL('../coverage-budget.json', import.meta.url), 'utf8'))
 
+// A floor trailing the measurement by this many points (percent) is stale.
+const RAISE_AT = 0.2
+
 const failures = []
 const rows = METRICS.map((m) => {
   const actual = total[m].pct
@@ -28,8 +31,9 @@ const rows = METRICS.map((m) => {
   if (actual < floor) {
     status = 'BELOW FLOOR'
     failures.push(`${m} ${actual}% < ${floor}%`)
-  } else if (delta >= 0.5) {
-    status = 'raise the floor'
+  } else if (delta >= RAISE_AT) {
+    // Rounded down to 0.1, the value to paste into coverage-budget.json.
+    status = `raise the floor to ${(Math.floor(actual * 10) / 10).toFixed(1)}`
   }
   const sign = delta >= 0 ? '+' : ''
   return `| ${m} | ${total[m].covered}/${total[m].total} | ${actual.toFixed(2)}% | ${floor.toFixed(1)}% | ${sign}${delta.toFixed(2)} | ${status} |`

@@ -1,17 +1,27 @@
 # =============================================================================
 # Dependabot (FE-157 5A.4)
 # =============================================================================
-# npm: weekly, one grouped PR per area (vue / lint / test / build); anything a
+# npm: weekly, one grouped PR per area (build / lint / test / vue); anything a
 # group does not match gets its own PR. The pnpm workspace root owns the
-# lockfile, and the three manifests below are its members.
+# lockfile, and the manifests below are its members.
 # github-actions: monthly.
 #
-# cooldown 14 days mirrors the maturity rule of pnpm-workspace.yaml: no
-# version is proposed before it is two weeks old. Security updates are not
-# held back by the cooldown.
-#
 # Group order matters -- a package joins the FIRST group whose patterns match
-# it, so `test` precedes `vue` (@vue/test-utils belongs to the tests).
+# it. `test` precedes `vue` (@vue/test-utils belongs to the tests); `build`
+# and `lint` precede `vue` so the vue-named tooling (vue-tsc, @vitejs/plugin-vue,
+# vue-eslint-parser) rides with its peer (typescript, vite, eslint). Patterns
+# are explicit lists, never `vue-*`, which would swallow that tooling.
+#
+# Each group sets `group-by: dependency-name`: with several `directories`,
+# Dependabot otherwise opens one grouped PR per directory, and vite (pinned
+# exactly in frontend and packages/velo-ui) would be bumped in one manifest
+# only -- two vite copies in the lockfile. With it, one PR per dependency
+# spans all directories (GitHub Docs, "Dependabot options reference",
+# `groups.<name>.group-by`; version updates only, one ecosystem).
+#
+# cooldown 14 days holds every version back until it is two weeks old;
+# security updates are not delayed by it. The wider dependency-maturity rule
+# is tracked in FE-164.
 # =============================================================================
 version: 2
 
@@ -26,29 +36,26 @@ updates:
     cooldown:
       default-days: 14
     groups:
-      test:
+      build:
+        group-by: dependency-name
         patterns:
-          - vitest
-          - '@vitest/*'
-          - '@vue/test-utils'
-          - '@playwright/test'
-          - happy-dom
-      vue:
-        patterns:
-          - vue
-          - vue-*
-          - '@vue/*'
+          - vite
+          - 'vite-*'
           - '@vitejs/plugin-vue'
-          - pinia
-          - '@pinia/*'
-          - '@intlify/*'
-          - '@tma.js/*'
+          - typescript
+          - vue-tsc
+          - typedoc
+          - '@types/*'
+          - '@storybook/*'
+          - storybook
       lint:
+        group-by: dependency-name
         patterns:
           - eslint
           - 'eslint-*'
           - '@eslint/*'
           - typescript-eslint
+          - vue-eslint-parser
           - prettier
           - stylelint
           - 'stylelint-*'
@@ -56,16 +63,25 @@ updates:
           - globals
           - husky
           - lint-staged
-      build:
+      test:
+        group-by: dependency-name
         patterns:
-          - vite
-          - 'vite-*'
-          - typescript
-          - vue-tsc
-          - typedoc
-          - '@types/*'
-          - '@storybook/*'
-          - storybook
+          - vitest
+          - '@vitest/*'
+          - '@vue/test-utils'
+          - '@playwright/test'
+          - happy-dom
+      vue:
+        group-by: dependency-name
+        patterns:
+          - vue
+          - vue-i18n
+          - vue-router
+          - '@vue/*'
+          - pinia
+          - '@pinia/*'
+          - '@intlify/*'
+          - '@tma.js/*'
 
   - package-ecosystem: github-actions
     directory: /

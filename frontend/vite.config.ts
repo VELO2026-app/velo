@@ -184,9 +184,9 @@ export default defineConfig(({ mode }) => {
   // for the runtime accessor, so featureEnabled() can never disagree with
   // the cut chunks.
   const editionEnv = loadEnv(mode, frontendDir, 'PRIMER_')
-  const editions: EditionTable = JSON.parse(
+  const editions = JSON.parse(
     readFileSync(join(frontendDir, '..', 'editions.json'), 'utf8'),
-  )
+  ) as EditionTable
   const defines = featureDefineMap(
     resolveFeatureFlags(editionEnv.PRIMER_EDITION, instanceEnv.VITE_FEATURES, editions),
   )

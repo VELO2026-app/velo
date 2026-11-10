@@ -1,7 +1,8 @@
 {
-  // Build-tooling files outside src/: the .mjs scripts (plain JS, checked via
-  // checkJs) and the Vite/Vitest configs. Separate from tsconfig.json because
-  // the app config targets the browser and has no Node types.
+  // Build scripts outside src/: the .mjs files (plain JS, checked via checkJs).
+  // The TypeScript Vite/Vitest configs live in tsconfig.configs.json, where
+  // noImplicitAny stays on. Separate from tsconfig.json because the app config
+  // targets the browser and has no Node types.
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
@@ -24,5 +25,5 @@
       "@velo/ui": ["../packages/velo-ui/src/index.ts"]
     }
   },
-  "include": ["scripts/**/*.mjs", "vite.config.ts", "vitest.config.ts", "env.d.ts"]
+  "include": ["scripts/**/*.mjs", "env.d.ts"]
 }
