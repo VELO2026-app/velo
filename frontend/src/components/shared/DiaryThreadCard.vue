@@ -113,7 +113,7 @@
            (i18n:display.outcome.attended; thread target);
            a miss keeps its no-show label (i18n:display.outcome.no_show). -->
       <span class="tcard__prac-status" :class="`tcard__prac-status--${outcomeStatus}`">
-        <IconCheck v-if="outcomeAttended" :size="10" />{{ outcomeText }}
+        <IconCheck v-if="outcomeAttended" :size="10" />{{ outcomeLabel }}
       </span>
     </span>
   </button>
@@ -272,11 +272,12 @@ const bubbleA11y = computed(() =>
 
 // -- practice outcome ----------------------------------------------------------
 const outcomeAttended = computed(() => outcomeStatus.value === 'attended')
-const outcomeText = computed(() => (outcomeAttended.value ? 'Done' : outcomeLabel.value))
 
 const practiceA11y = computed(() => {
   const when = [practiceTime.value, practiceDuration.value].filter(Boolean).join(', ')
-  return [practiceTitle.value, masterName.value, when, outcomeText.value].filter(Boolean).join(', ')
+  return [practiceTitle.value, masterName.value, when, outcomeLabel.value]
+    .filter(Boolean)
+    .join(', ')
 })
 
 // -- note / dream ---------------------------------------------------------------

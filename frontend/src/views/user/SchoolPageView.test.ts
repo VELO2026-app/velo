@@ -748,6 +748,43 @@ describe('SchoolPageView -- §1.6 page body', () => {
   })
 })
 
+describe('SchoolPageView -- practices feed request', () => {
+  it('asks for the practices once, with limit 5 (no page walking)', async () => {
+    mockHappyLoad('student')
+    vi.mocked(cgApi.getSchoolPractices).mockResolvedValue({
+      items: Array.from({ length: 5 }, (_, i) => practiceFixture(`p${i + 1}`)),
+      total: 60,
+      limit: 5,
+      offset: 0,
+    })
+    mount()
+    await flush()
+
+    expect(cgApi.getSchoolPractices).toHaveBeenCalledTimes(1)
+    expect(cgApi.getSchoolPractices).toHaveBeenCalledWith('g1', 5, 0)
+    expect(text()).toContain('Практика p5')
+  })
+
+  it('renders the header without waiting for the practices', async () => {
+    mockHappyLoad('student')
+    vi.mocked(cgApi.getSchoolPractices).mockReturnValue(new Promise(() => {}))
+    mount()
+    await flush()
+
+    expect(text()).toContain(pageFixture('student').name)
+  })
+
+  it('a failed practices request leaves the header and an empty feed, not the error state', async () => {
+    mockHappyLoad('student')
+    vi.mocked(cgApi.getSchoolPractices).mockRejectedValue(new Error('boom'))
+    mount()
+    await flush()
+
+    expect(text()).toContain(pageFixture('student').name)
+    expect(text()).not.toContain('Практика p1')
+  })
+})
+
 // =============================================================================
 // FE-78.4: route reuse under the same record -- a slow answer for the
 // PREVIOUS school must never repaint the current one (loadEpoch guard).
