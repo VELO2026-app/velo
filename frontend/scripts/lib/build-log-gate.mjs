@@ -18,9 +18,11 @@
 //                      platform/passport-html.ts resolves them); a new
 //                      VITE_ one must not sneak back in.
 //
-// The patterns are the Rollup 4 / Vite 6 message texts verbatim. A bundler
-// switch (rolldown, Vite 7+) may reword them -- re-capture the fixtures in
-// build-log-gate.test.mjs then, or this gate silently goes blind.
+// The patterns are the Rollup 4 / Vite 6-7 message texts verbatim (re-checked
+// in the vite 7.3.7 and rollup 4.63.3 sources on the vite 7 upgrade,
+// FE-157 5A.5). A bundler switch (rolldown, Vite 8+) may reword them --
+// re-capture the fixtures in build-log-gate.test.mjs then, or this gate
+// silently goes blind.
 //
 // Pure (string in, findings out) so node:test pins it; the CLI wrapper is
 // scripts/build-log-gate.mjs. Other build notices (the locale catalogs'
