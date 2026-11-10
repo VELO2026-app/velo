@@ -29,6 +29,7 @@
 // =============================================================================
 
 import { api } from '@/api/client'
+import { path } from '@/api/path'
 
 /** One bell item (comms app/api/inbox.py `_serialize_item`, frozen). Every
  *  key below is ALWAYS present on the wire; `action_data` and `read_at` are
@@ -76,7 +77,7 @@ export function listNotifications(cursor?: string): Promise<NotificationList> {
 
 /** Mark one notification read (idempotent); returns the fresh badge. */
 export function markNotificationRead(id: string): Promise<NotificationUnread> {
-  return api.post<NotificationUnread>(`/api/v1/notifications/${id}/read`, {})
+  return api.post<NotificationUnread>(path`/api/v1/notifications/${id}/read`, {})
 }
 
 /** Mark every unread notification read; the badge returns to zero. */

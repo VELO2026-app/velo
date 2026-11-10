@@ -39,6 +39,7 @@ import type {
   ZoomEntryResolveResponse,
   ZoomSdkJoinResponse,
 } from '@/api/types'
+import { path, raw } from '@/api/path'
 
 // ============================================================================
 // Public
@@ -78,7 +79,7 @@ export function getPractices(
  * Fetch a single practice by ID.
  */
 export function getPractice(id: string): Promise<PracticeResponse> {
-  return api.get<PracticeResponse>(`/api/v1/practices/${id}`)
+  return api.get<PracticeResponse>(path`/api/v1/practices/${id}`)
 }
 
 // ============================================================================
@@ -108,7 +109,7 @@ export function createPractice(body: CreatePracticeRequest): Promise<PracticeRes
  * `"deleted" -> use deletePractice()` (soft-delete, draft only).
  */
 export function updatePractice(id: string, body: UpdatePracticeRequest): Promise<PracticeResponse> {
-  return api.patch<PracticeResponse>(`/api/v1/practices/${id}`, body)
+  return api.patch<PracticeResponse>(path`/api/v1/practices/${id}`, body)
 }
 
 /**
@@ -123,7 +124,7 @@ export function previewAudienceChange(
   id: string,
   body: AudiencePreviewRequest,
 ): Promise<AudiencePreviewResponse> {
-  return api.post<AudiencePreviewResponse>(`/api/v1/practices/${id}/audience-preview`, body)
+  return api.post<AudiencePreviewResponse>(path`/api/v1/practices/${id}/audience-preview`, body)
 }
 
 /**
@@ -131,7 +132,7 @@ export function previewAudienceChange(
  * Returns 204 No Content on success.
  */
 export function deletePractice(id: string): Promise<void> {
-  return api.delete(`/api/v1/practices/${id}`)
+  return api.delete(path`/api/v1/practices/${id}`)
 }
 
 /**
@@ -150,7 +151,10 @@ export function cancelPractice(
   id: string,
   scope?: 'this' | 'this_and_future',
 ): Promise<PracticeResponse> {
-  return api.post<PracticeResponse>(`/api/v1/practices/${id}/cancel`, scope ? { scope } : undefined)
+  return api.post<PracticeResponse>(
+    path`/api/v1/practices/${id}/cancel`,
+    scope ? { scope } : undefined,
+  )
 }
 
 /**
@@ -159,7 +163,7 @@ export function cancelPractice(
  * @returns Total, attended, no_show, pending counts + per-booking items.
  */
 export function getAttendance(id: string): Promise<AttendanceResponse> {
-  return api.get<AttendanceResponse>(`/api/v1/practices/${id}/attendance`)
+  return api.get<AttendanceResponse>(path`/api/v1/practices/${id}/attendance`)
 }
 
 /**
@@ -174,7 +178,7 @@ export function getAttendance(id: string): Promise<AttendanceResponse> {
  *   at all.
  */
 export function retryZoomMeeting(practiceId: string): Promise<PracticeResponse> {
-  return api.post<PracticeResponse>(`/api/v1/practices/${practiceId}/zoom/retry`)
+  return api.post<PracticeResponse>(path`/api/v1/practices/${practiceId}/zoom/retry`)
 }
 
 /**
@@ -198,7 +202,7 @@ export function retryZoomMeeting(practiceId: string): Promise<PracticeResponse> 
  *   empty screen.
  */
 export function resolveZoomEntry(practiceId: string): Promise<ZoomEntryResolveResponse> {
-  return api.get<ZoomEntryResolveResponse>(`/api/v1/practices/${practiceId}/zoom/resolve`)
+  return api.get<ZoomEntryResolveResponse>(path`/api/v1/practices/${practiceId}/zoom/resolve`)
 }
 
 /**
@@ -216,7 +220,7 @@ export function resolveZoomEntry(practiceId: string): Promise<ZoomEntryResolveRe
  *   Zoom did not answer; 429: the per-user limit.
  */
 export function joinZoomSdk(practiceId: string): Promise<ZoomSdkJoinResponse> {
-  return api.post<ZoomSdkJoinResponse>(`/api/v1/practices/${practiceId}/zoom/sdk-join`)
+  return api.post<ZoomSdkJoinResponse>(path`/api/v1/practices/${practiceId}/zoom/sdk-join`)
 }
 
 /**
@@ -233,7 +237,7 @@ export function getPracticeReviews(
   offset = 0,
 ): Promise<PaginatedReviewsResponse> {
   const query = buildQuery({ limit, offset })
-  return api.get<PaginatedReviewsResponse>(`/api/v1/practices/${id}/reviews${query}`)
+  return api.get<PaginatedReviewsResponse>(path`/api/v1/practices/${id}/reviews${raw(query)}`)
 }
 
 // ============================================================================
@@ -249,7 +253,7 @@ export function getPracticeReviews(
 
 /** Header + both zone distributions + the two list totals. */
 export function getPracticeAnalytics(id: string): Promise<PracticeAnalyticsResponse> {
-  return api.get<PracticeAnalyticsResponse>(`/api/v1/practices/${id}/analytics`)
+  return api.get<PracticeAnalyticsResponse>(path`/api/v1/practices/${id}/analytics`)
 }
 
 /** Came-left pairs (i18n:shared.analytics.cameLeft): attendees with a PRE
@@ -260,7 +264,9 @@ export function getPracticeAnalyticsPairs(
   offset = 0,
 ): Promise<PaginatedPracticeAnalyticsPairs> {
   const query = buildQuery({ limit, offset })
-  return api.get<PaginatedPracticeAnalyticsPairs>(`/api/v1/practices/${id}/analytics/pairs${query}`)
+  return api.get<PaginatedPracticeAnalyticsPairs>(
+    path`/api/v1/practices/${id}/analytics/pairs${raw(query)}`,
+  )
 }
 
 /** Reviews with text, newest first. */
@@ -271,6 +277,6 @@ export function getPracticeAnalyticsReviews(
 ): Promise<PaginatedPracticeAnalyticsReviews> {
   const query = buildQuery({ limit, offset })
   return api.get<PaginatedPracticeAnalyticsReviews>(
-    `/api/v1/practices/${id}/analytics/reviews${query}`,
+    path`/api/v1/practices/${id}/analytics/reviews${raw(query)}`,
   )
 }

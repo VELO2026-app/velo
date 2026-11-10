@@ -52,6 +52,7 @@ import type {
   CustomActivityNamesResponse,
   PracticeInsightsResponse,
 } from '@/api/types'
+import { path } from '@/api/path'
 
 // ============================================================================
 // Check-in
@@ -65,7 +66,7 @@ import type {
  * Repeated calls overwrite mood/comment.
  */
 export function upsertCheckin(practiceId: string, body: CheckinRequest): Promise<CheckinResponse> {
-  return api.post<CheckinResponse>(`/api/v1/practices/${practiceId}/checkin`, body)
+  return api.post<CheckinResponse>(path`/api/v1/practices/${practiceId}/checkin`, body)
 }
 
 /** Filters of the check-ins list endpoint: practice, date window, pagination. */
@@ -97,7 +98,7 @@ export function listMyCheckins(
  * Fetch a single check-in by ID (read-only detail).
  */
 export function getCheckin(id: string): Promise<CheckinResponse> {
-  return api.get<CheckinResponse>(`/api/v1/users/me/checkins/${id}`)
+  return api.get<CheckinResponse>(path`/api/v1/users/me/checkins/${id}`)
 }
 
 // ============================================================================
@@ -115,7 +116,7 @@ export function upsertFeedback(
   practiceId: string,
   body: FeedbackRequest,
 ): Promise<FeedbackResponse> {
-  return api.post<FeedbackResponse>(`/api/v1/practices/${practiceId}/feedback`, body)
+  return api.post<FeedbackResponse>(path`/api/v1/practices/${practiceId}/feedback`, body)
 }
 
 /**
@@ -128,7 +129,7 @@ export function createReflection(
   practiceId: string,
   body: ReflectionRequest,
 ): Promise<ReflectionResponse> {
-  return api.post<ReflectionResponse>(`/api/v1/practices/${practiceId}/reflection`, body)
+  return api.post<ReflectionResponse>(path`/api/v1/practices/${practiceId}/reflection`, body)
 }
 
 /** Filters of the feedbacks list endpoint: practice, rating, date window, pagination. */
@@ -163,7 +164,7 @@ export function listMyFeedbacks(
  * Fetch a single feedback by ID (read-only detail).
  */
 export function getFeedback(id: string): Promise<FeedbackResponse> {
-  return api.get<FeedbackResponse>(`/api/v1/users/me/feedbacks/${id}`)
+  return api.get<FeedbackResponse>(path`/api/v1/users/me/feedbacks/${id}`)
 }
 
 // ============================================================================
@@ -258,7 +259,7 @@ export function listDiaryFeed(params: ListDiaryFeedParams = {}): Promise<DiaryFe
  * Fetch a single diary entry by ID.
  */
 export function getDiaryEntry(id: string): Promise<DiaryEntryResponse> {
-  return api.get<DiaryEntryResponse>(`/api/v1/diary/${id}`)
+  return api.get<DiaryEntryResponse>(path`/api/v1/diary/${id}`)
 }
 
 /**
@@ -271,7 +272,7 @@ export function updateDiaryEntry(
   id: string,
   body: UpdateDiaryEntryRequest,
 ): Promise<DiaryEntryResponse> {
-  return api.patch<DiaryEntryResponse>(`/api/v1/diary/${id}`, body)
+  return api.patch<DiaryEntryResponse>(path`/api/v1/diary/${id}`, body)
 }
 
 /**
@@ -279,14 +280,14 @@ export function updateDiaryEntry(
  * Returns 204 No Content.
  */
 export function deleteDiaryEntry(id: string): Promise<void> {
-  return api.delete(`/api/v1/diary/${id}`)
+  return api.delete(path`/api/v1/diary/${id}`)
 }
 
 /**
  * Restore a soft-deleted diary entry (undo delete). Returns the entry.
  */
 export function restoreDiaryEntry(id: string): Promise<DiaryEntryResponse> {
-  return api.post<DiaryEntryResponse>(`/api/v1/diary/${id}/restore`)
+  return api.post<DiaryEntryResponse>(path`/api/v1/diary/${id}/restore`)
 }
 
 // ============================================================================
@@ -336,5 +337,5 @@ export function getExternalActivityCustomNames(): Promise<CustomActivityNamesRes
  * and feedback comments count. No individual user data exposed.
  */
 export function getPracticeInsights(practiceId: string): Promise<PracticeInsightsResponse> {
-  return api.get<PracticeInsightsResponse>(`/api/v1/practices/${practiceId}/insights`)
+  return api.get<PracticeInsightsResponse>(path`/api/v1/practices/${practiceId}/insights`)
 }
