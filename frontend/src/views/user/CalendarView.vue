@@ -68,7 +68,7 @@
         <WeekStrip
           :days="store.days"
           :selected-date="store.selectedDate"
-          :days-with-practices="store.daysWithPractices"
+          :days-with-practices="daysWithPractices"
           :local-date-key="store.localDateKey"
           :max-back-days="store.maxBackDays"
           @select-day="store.selectDay"
@@ -220,6 +220,7 @@ import { t } from '@/locales'
 import { ref, computed, onMounted, onUnmounted, onActivated } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCalendarStore } from '@/stores/calendar'
+import { useNow } from '@/composables/useNow'
 import { VSkeletonPracticeCard, VLoadingSwap, VEmptyState, VButton, VCard } from '@/components/ui'
 import WeekStrip from '@/components/shared/WeekStrip.vue'
 import { useFloatingHeader } from '@/components/layout/useFloatingHeader'
@@ -316,8 +317,14 @@ function openFilter(): void {
   showFilter.value = true
 }
 
+// The screen's own minute clock: the selected-day list and the strip's dots
+// drop a practice the moment it starts (it can no longer be booked). Owned
+// here, not by the store, so it pauses while the screen is kept alive
+// off-stage.
+const now = useNow(60_000)
 // Practices on the selected day (already sorted by the store).
-const dayPractices = computed<PracticeResponse[]>(() => store.selectedDayPractices)
+const dayPractices = computed<PracticeResponse[]>(() => store.selectedDayPractices(now.value))
+const daysWithPractices = computed<Set<string>>(() => store.daysWithPractices(now.value))
 // Skeleton in the size of the last settled day (see useRememberedCount).
 const daySkeletons = useRememberedCount(
   'calendar-day',

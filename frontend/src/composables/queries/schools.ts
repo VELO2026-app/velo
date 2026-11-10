@@ -14,9 +14,20 @@
 // so a longer window would show a stale is_paid / is_booked mark after a
 // booking made elsewhere. Raise it once those mutations invalidate
 // `keys.practices.root()`.
+//
+// Window focus (a return to Telegram): only the page payload revalidates,
+// the feed does not -- with staleTime 0 Colada's default (refetch when
+// stale) would send BOTH GETs on every return. The page carries the viewer's
+// relation, which changes outside this screen (an invite accepted in the bot
+// chat, a curator's removal); the feed's booking marks change through this
+// app's own mutations, which invalidate it (./invalidation.ts).
+//
+// Leaving a school (forgetSchool) drops both entries: the cached copy holds
+// the member relation, and a reopen would paint the member actions for a
+// moment before the refetch answers.
 // =============================================================================
 
-import { defineQueryOptions } from '@pinia/colada'
+import { defineQueryOptions, type QueryCache } from '@pinia/colada'
 import { getSchoolPage, getSchoolPractices } from '@/api/schools'
 import { keys } from '@/composables/queries/keys'
 
@@ -25,6 +36,7 @@ export const schoolPageQuery = defineQueryOptions((schoolId: string) => ({
   key: keys.schools.detail(schoolId),
   query: () => getSchoolPage(schoolId),
   staleTime: 0,
+  refetchOnWindowFocus: true,
 }))
 
 /** Query options for the first `limit` upcoming practices of a school (`GET /schools/{id}/practices`). */
@@ -33,5 +45,26 @@ export const schoolFeedQuery = defineQueryOptions(
     key: keys.practices.schoolFeed(schoolId, limit),
     query: async () => (await getSchoolPractices(schoolId, limit, 0)).items,
     staleTime: 0,
+    refetchOnWindowFocus: false,
   }),
 )
+
+/**
+ * Drop every cached entry of one school (page payload and feeds of any limit).
+ *
+ * @remarks
+ * For after the viewer left the school. An entry nobody holds is removed, so
+ * the next visit starts from the loader, not from the old relation. One still
+ * held by a screen cannot be removed (it would keep a detached copy); it is
+ * invalidated instead and refetches at once.
+ */
+export function forgetSchool(queryCache: QueryCache, schoolId: string): void {
+  const entries = [
+    ...queryCache.getEntries({ key: keys.schools.detail(schoolId) }),
+    ...queryCache.getEntries({ key: ['practices', 'list', { schoolId }] }),
+  ]
+  for (const entry of entries) {
+    if (entry.active) void queryCache.invalidate(entry)
+    else queryCache.remove(entry)
+  }
+}
