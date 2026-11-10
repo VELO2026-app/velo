@@ -197,6 +197,11 @@ export default [
               message:
                 'The kit is imported through its doors only: @/components/ui (or @/components/icons).',
             },
+            {
+              group: ['@tma.js/*'],
+              message:
+                'The Telegram SDK is reachable only inside src/platform/ (lazy-loaded seam): use @/platform/tma-viewport.',
+            },
           ],
         },
       ],
@@ -228,6 +233,11 @@ export default [
             {
               group: ['@velo/ui/*'],
               message: 'The exact barrel specifier only: "@velo/ui".',
+            },
+            {
+              group: ['@tma.js/*'],
+              message:
+                'The Telegram SDK is reachable only inside src/platform/ (lazy-loaded seam): use @/platform/tma-viewport.',
             },
           ],
         },
@@ -270,6 +280,35 @@ export default [
     files: ['src/components/ui/**', 'src/components/icons/**'],
     rules: {
       'no-restricted-imports': 'off',
+    },
+  },
+
+  {
+    // The platform seam is the one place allowed to import @tma.js/*; every
+    // other ban from the P8 block is repeated (flat config replaces, not
+    // merges, same-rule options).
+    files: ['src/platform/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@/components/ui/*', '@/components/ui/*/*'],
+              message: 'Import from the barrel: import { VButton } from "@/components/ui".',
+            },
+            {
+              group: ['@/components/icons/*', '@/components/icons/*/*'],
+              message: 'Import from the barrel: import { IconHome } from "@/components/icons".',
+            },
+            {
+              group: ['@velo/ui', '@velo/ui/*'],
+              message:
+                'The kit is imported through its doors only: @/components/ui (or @/components/icons).',
+            },
+          ],
+        },
+      ],
     },
   },
 

@@ -19,7 +19,7 @@
 // swallow errors to keep the standalone build and the test gate green.
 // =============================================================================
 
-import { init, viewport } from '@tma.js/sdk-vue'
+import { loadTmaSdk, type TmaViewport } from './tma-viewport'
 
 /** True when running inside a real Telegram client (launch params present). */
 function isTelegramEnv(): boolean {
@@ -33,22 +33,32 @@ let _initialized = false
  * once outside Telegram / when the SDK is unavailable. */
 let _viewportSettled: Promise<void> = Promise.resolve()
 
-/** Initialize the Telegram SDK and mount its viewport (no-op outside Telegram). */
+/**
+ * Start the Telegram SDK (no-op outside Telegram). The SDK chunk is loaded
+ * lazily here, so standalone sessions never fetch it; the first-screen gate
+ * waits on `viewportSettled`, so Telegram still paints with final insets.
+ */
 export function initTelegramSdk(): void {
   if (_initialized) return
   if (!isTelegramEnv()) return
+  _initialized = true
+  _viewportSettled = bootstrap()
+}
 
+/** Load the SDK, init it, mount the viewport (best-effort, never rejects). */
+async function bootstrap(): Promise<void> {
   try {
-    init()
-    _viewportSettled = mountViewport()
-    _initialized = true
+    const sdk = await loadTmaSdk()
+    sdk.init()
+    await mountViewport(sdk.viewport)
   } catch {
-    // Outside Telegram or unsupported client -- standalone/tests fall through.
+    // Chunk failed to load, or unsupported client -- safe-area stays at 0.
+    _initialized = false
   }
 }
 
 /** Mount viewport and bind its CSS vars (best-effort). No fullscreen request. */
-async function mountViewport(): Promise<void> {
+async function mountViewport(viewport: TmaViewport): Promise<void> {
   try {
     if (viewport.mount.isAvailable()) {
       await viewport.mount()

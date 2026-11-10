@@ -1,7 +1,7 @@
 import { host } from '@/platform/host'
 import { setRootStyleProperty } from '@/platform/dom'
 import { onMounted, onBeforeUnmount } from 'vue'
-import { viewport } from '@tma.js/sdk-vue'
+import { getTmaViewport } from '@/platform/tma-viewport'
 import { platform } from '@/platform'
 
 /**
@@ -105,7 +105,8 @@ function scheduleInitialFreeze(): void {
   }
   const deadline = Date.now() + EXPAND_SETTLE_TIMEOUT_MS
   const tick = (): void => {
-    if (viewport.isMounted() && viewport.isStable()) {
+    const viewport = getTmaViewport()
+    if (viewport?.isMounted() && viewport.isStable()) {
       freezeAppHeight()
       return
     }
