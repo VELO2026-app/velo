@@ -63,6 +63,11 @@ function skinAssetSpill(skinDir: string | null, distDir: string): Plugin {
     name: 'velo-skin-asset-spill',
     apply: 'build',
     closeBundle() {
+      // dist/skin/ is pruned on EVERY build: a public/skin/ that is not a
+      // package (no manifest -- a bare `vite build` past the gate) must not
+      // ship its files, a checkout's .git included.
+      const shipped = join(distDir, 'skin')
+      rmSync(shipped, { recursive: true, force: true })
       if (!skinDir) return
       const assets = join(skinDir, 'assets')
       // package assets/ -> /icons/ (logos + PWA icons + favicon)
@@ -76,8 +81,6 @@ function skinAssetSpill(skinDir: string | null, distDir: string): Plugin {
           cpSync(src, join(distDir, dir), { force: true, recursive: true, filter: shippable })
         }
       }
-      const shipped = join(distDir, 'skin')
-      rmSync(shipped, { recursive: true, force: true })
       const fonts = join(assets, 'fonts')
       if (existsSync(fonts)) {
         cpSync(fonts, join(shipped, 'assets', 'fonts'), { recursive: true, filter: shippable })

@@ -39,7 +39,10 @@ function veloSkins(): Plugin {
       const golden = readGoldenTokens(FRONTEND)
       const layers: Record<string, string> = {}
       const dirs = (process.env['VELO_SKINS'] ?? '').split(delimiter).filter(Boolean)
-      for (const pkgDir of dirs.map((d) => resolve(d))) {
+      // Relative paths resolve from where the command was typed (pnpm
+      // runs the script in packages/velo-ui; INIT_CWD is the caller's cwd).
+      const base = process.env['INIT_CWD'] ?? process.cwd()
+      for (const pkgDir of dirs.map((d) => resolve(base, d))) {
         // A package checked out as <repo>/skin is named after its repo.
         const name =
           basename(pkgDir) === 'skin' ? basename(resolve(pkgDir, '..')) : basename(pkgDir)

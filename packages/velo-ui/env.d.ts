@@ -10,8 +10,8 @@ declare module '*.vue' {
   export default component
 }
 
-// The storybook skin switcher's data (.storybook/main.ts, FE-131): every
-// skin package of frontend/skins/ as its token layer CSS, keyed by name.
+// The storybook skin switcher's data (.storybook/main.ts, FE-131): the skin
+// packages listed in VELO_SKINS as their token layer CSS, keyed by name.
 declare module 'virtual:velo-skins' {
   const layers: Record<string, string>
   export default layers

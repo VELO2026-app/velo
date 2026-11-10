@@ -32,6 +32,13 @@ const GOLDEN = readGoldenTokens(FRONTEND)
 const problemsOf = (dir: string): string => loadSkinPackage(dir, GOLDEN).problems.join('\n')
 
 describe('primer-package.yaml (contract 3 rule 10)', () => {
+  it('a BOM and CRLF line ends are not content (a Windows editor)', () => {
+    expect(parseManifest('\uFEFFschema: 1\r\ncontract: "1.0"\r\n').fields).toEqual({
+      schema: '1',
+      contract: '"1.0"',
+    })
+  })
+
   it('reads the block form, comments included', () => {
     expect(parseManifest('# a skin\nschema: 1\ncontract: "1.0" # point\n').fields).toEqual({
       schema: '1',
@@ -97,15 +104,53 @@ describe('the package is data (no code, nothing else)', () => {
     ['<svg><style>rect{fill:u\\72l(https://evil/x)}</style></svg>', 'has a <style> element'],
     ['<svg><rect style="fill:image-set(x 1x)"/></svg>', 'has a style attribute'],
     ['<svg><image src="https://evil/x.png"/></svg>', 'has a src attribute'],
+    // review of PR #47: a CSS escape in a presentation attribute, and XSLT
+    ['<svg><rect fill="u\\72 l(https://evil/x)"/></svg>', 'has a backslash (CSS escape)'],
+    [
+      '<?xml-stylesheet type="text/xsl" href="#t"?><svg><t xmlns="http://www.w3.org/1999/XSL/Transform" id="t"/></svg>',
+      'has a processing instruction',
+    ],
+    ['<svg><t xmlns="http://www.w3.org/1999/XSL/Transform"/></svg>', 'has an XSLT namespace'],
   ])('an unsafe SVG is refused: %s', (svg, reason) => {
     const dir = writeSkinPackage({ extra: { 'assets/logo-white.svg': svg } })
     expect(problemsOf(dir)).toContain(`assets/logo-white.svg: ${reason}`)
+  })
+
+  it('the XML declaration is fine (the golden SVGs carry one)', () => {
+    const svg = '<?xml version="1.0" encoding="UTF-8"?><svg/>'
+    expect(problemsOf(writeSkinPackage({ extra: { 'assets/logo-white.svg': svg } }))).toBe('')
+  })
+
+  it.each([
+    ['assets/fonts/rubik-400.woff2', '<html>not a font</html>', 'not a WOFF2 font'],
+    ['assets/bg/photo.jpg', '<html>', 'not a JPEG image'],
+    ['assets/bg/photo.webp', 'RIFF0000WAVE', 'not a WebP image'],
+  ])('a file is what its extension says: %s', (file, content, reason) => {
+    expect(problemsOf(writeSkinPackage({ extra: { [file]: content } }))).toContain(
+      `${file}: ${reason}`,
+    )
   })
 
   it('a local fragment link in an SVG is fine', () => {
     const svg =
       '<svg><defs><linearGradient id="g"/></defs><rect fill="url(#g)"/><use href="#g"/></svg>'
     expect(problemsOf(writeSkinPackage({ extra: { 'assets/logo-white.svg': svg } }))).toBe('')
+  })
+
+  it.each([
+    ['a right-to-left override', 'Goo\u202edo'],
+    ['an isolate', 'Goo\u2066do'],
+    ['a line separator', 'Goo\u2028do'],
+  ])('%s in the display name is refused (a spoofed tab / PWA name)', (_, name) => {
+    const dir = writeSkinPackage({
+      brand: {
+        displayName: name,
+        shortName: 'X',
+        themeColor: '#1b2a41',
+        backgroundColor: '#ffffff',
+      },
+    })
+    expect(problemsOf(dir)).toContain('displayName: no < > & " or control characters')
   })
 
   it('markup in the display name is refused (it lands in index.html)', () => {
@@ -202,6 +247,19 @@ describe('DTCG values -> CSS', () => {
     })
     expect(problemsOf(dir)).toBe('')
   })
+
+  it.each(['initial', 'inherit', 'unset', 'revert'])(
+    'the CSS-wide keyword %s is not a font family',
+    (keyword) => {
+      const dir = writeSkinPackage({
+        tokens: {
+          velo: { tg: { header: { $value: '#1b2a41' } } },
+          bare: { 'font-body': { $value: [keyword] } },
+        },
+      })
+      expect(problemsOf(dir)).toContain('is a CSS-wide keyword')
+    },
+  )
 
   it.each([
     ['a newline', ['Rubik', 'x\n} body { background: red } :root { --z: 1']],

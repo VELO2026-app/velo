@@ -63,7 +63,7 @@ import { basename, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { loadEnv } from 'vite'
 import { findBuildLogWarnings } from './lib/build-log-gate.mjs'
-import { loadSkinPackage, readGoldenTokens } from './lib/skin-package.mjs'
+import { MANDATORY_ASSETS, loadSkinPackage, readGoldenTokens } from './lib/skin-package.mjs'
 
 // Resolved lazily: under vitest import.meta.url is not file:// (the same
 // reason passport-html tests anchor to process.cwd()), and the unit suite
@@ -181,6 +181,8 @@ export function bundleHas(bundle, text) {
  *  facts[cell]    { title, theme, assets, chunks: { <module>: [files] },
  *                   brandMissing: bool,       (skin cells)
  *                   tokensMissing: [decl],    (skin cells)
+ *                   layout: [problem],        (skin cells: asset spill,
+ *                                              dist/skin prune, fonts)
  *                   leaked: [what] }          (golden cells)
  *  expected[cell] { title, theme } */
 export function evaluateMatrix({ cells, facts, expected }) {
@@ -207,6 +209,7 @@ export function evaluateMatrix({ cells, facts, expected }) {
         fails.push(
           `${cell.name}: skin token declarations missing from dist CSS: ${f.tokensMissing.join(', ')}`,
         )
+      for (const problem of f.layout ?? []) fails.push(`${cell.name}: ${problem}`)
     } else if ((f.leaked ?? []).length > 0) {
       fails.push(`${cell.name}: skin leaked into a golden build: ${f.leaked.join(', ')}`)
     }
@@ -312,7 +315,41 @@ function readAll(dir, ext) {
 function skinRecord(skin) {
   const pkg = loadSkinPackage(skin.source, readGoldenTokens(frontendDir()))
   const decls = pkg.decls.map(([name, value]) => normalizeDecl(`${name}:${value}`))
-  return { brand: pkg.brand, decls }
+  return { brand: pkg.brand, decls, files: pkg.files }
+}
+
+/** Where the build must have put the package (FE-131): the fixed assets on
+ *  /icons, assets/bg and assets/onboarding on /bg and /onboarding, byte for
+ *  byte; dist/skin/ pruned to the fonts; every font behind an @font-face
+ *  and a preload. Returns the problems, [] when the layout holds. */
+function skinLayout(source, files, brand, distDir, html, css) {
+  const problems = []
+  const same = (a, b) => existsSync(b) && readFileSync(a).equals(readFileSync(b))
+  for (const name of MANDATORY_ASSETS)
+    if (!same(join(source, 'assets', name), join(distDir, 'icons', name)))
+      problems.push(`dist/icons/${name} is not the package's assets/${name}`)
+  for (const file of files.filter((f) => /^assets\/(bg|onboarding)\//.test(f)))
+    if (!same(join(source, file), join(distDir, file.slice('assets/'.length))))
+      problems.push(`dist/${file.slice('assets/'.length)} is not the package's ${file}`)
+  const shipped = []
+  const walk = (rel) => {
+    const abs = join(distDir, 'skin', rel)
+    if (!existsSync(abs)) return
+    for (const entry of readdirSync(abs, { withFileTypes: true })) {
+      const next = rel ? `${rel}/${entry.name}` : entry.name
+      if (entry.isDirectory()) walk(next)
+      else shipped.push(next)
+    }
+  }
+  walk('')
+  const extra = shipped.filter((f) => !f.startsWith('assets/fonts/'))
+  if (extra.length > 0) problems.push(`dist/skin/ ships more than the fonts: ${extra.join(', ')}`)
+  for (const font of brand.fonts) {
+    if (!shipped.includes(font.file)) problems.push(`dist/skin/${font.file} missing`)
+    if (!css.includes(`/skin/${font.file}`)) problems.push(`no @font-face for ${font.file} in dist CSS`)
+    if (!html.includes(`href="/skin/${font.file}"`)) problems.push(`no preload of ${font.file} in index.html`)
+  }
+  return problems
 }
 
 function snapshot(cell, skins, goldenDecls) {
@@ -334,9 +371,10 @@ function snapshot(cell, skins, goldenDecls) {
     ),
   }
   if (cell.skin) {
-    const { brand, decls } = skinRecord(cell.skin)
+    const { brand, decls, files } = skinRecord(cell.skin)
     facts.brandMissing = !bundleHas(js, brand.displayName)
     facts.tokensMissing = decls.filter((d) => !cssHasDecl(css, d))
+    facts.layout = skinLayout(cell.skin.source, files, brand, distDir, html, readAll(assetsDir, '.css'))
   } else {
     facts.leaked = existsSync(join(distDir, 'skin')) ? ['dist/skin/ (a package shipped)'] : []
     for (const skin of skins) {

@@ -44,8 +44,10 @@
 //
 // Assets: the content rules of the machine's package.js for SVG (no script,
 // event handler, javascript:, foreignObject, embedded document, DOCTYPE /
-// ENTITY, link or url() out of the file) -- the files land on the app's
-// origin. The SIZE limits are this product's own (the golden logo is 330 KB,
+// ENTITY, link or url() out of the file), tightened (SVG_FORBIDDEN below) --
+// the files land on the app's origin; fonts, JPEG and WebP by signature.
+// Object DTCG values ({colorSpace, components}, {value, unit}) are not
+// read yet -- a value is a CSS string, a reference, a number or a family list. The SIZE limits are this product's own (the golden logo is 330 KB,
 // the background 804x1748): SVG <= 512 KiB, PNG <= 4 MiB and <= 4096 px.
 //
 // Pure Node (fs/path), no dependencies: the vite config and the scripts load
@@ -104,6 +106,13 @@ const FONT_MAX_BYTES = 2 * 1024 * 1024
 // src="" attributes. The golden SVGs use none of them.
 const SVG_FORBIDDEN = [
   [/<[A-Za-z_][\w.-]*:/, 'a namespace-prefixed element'],
+  // CSS escapes (u\72 l( in a presentation attribute) -- the golden SVGs
+  // carry no backslash at all
+  [/\\/, 'a backslash (CSS escape)'],
+  // any processing instruction but the XML declaration (xml-stylesheet ->
+  // XSLT), and the XSLT namespace itself
+  [/<\?(?!xml\s)/i, 'a processing instruction'],
+  [/XSL\/Transform/i, 'an XSLT namespace'],
   [/&#/, 'a numeric character reference'],
   [/<style/i, 'a <style> element'],
   [/[\s/"']style\s*=/i, 'a style attribute'],
@@ -137,8 +146,10 @@ const VALUE_FUNCTIONS = new Set([
 ])
 /** A font family name -- the same rule for brand.fonts and bare.font-body. */
 const FAMILY = /^[A-Za-z0-9 ._-]+$/
+/** initial/inherit/... in a family list invalidate font-family: var(--font-body). */
+const CSS_WIDE_KEYWORDS = new Set(['initial', 'inherit', 'unset', 'revert', 'revert-layer', 'default'])
 /** A display text: no markup, no control characters (it lands in HTML). */
-const UNSAFE_TEXT = /[<>&"\u0000-\u001f\u007f]/
+const UNSAFE_TEXT = /[<>&"\u0000-\u001f\u007f-\u009f\u200e\u200f\u2028-\u202e\u2066-\u2069\ufeff]/
 const NAME = /^[A-Za-z0-9_-]+$/
 const REFERENCE = /^\{([^{}]+)\}$/
 const TOKEN_KEYS = new Set(['$value', '$type', '$description', '$extensions', '$deprecated'])
@@ -232,7 +243,8 @@ function listFiles(dir, problems) {
 /** primer-package.yaml, block form: `key: value` lines, `#` comments. */
 export function parseManifest(text) {
   const out = {}
-  for (const raw of text.split('\n')) {
+  // A BOM (a Windows editor) and CRLF line ends are not content.
+  for (const raw of text.replace(/^\uFEFF/, '').split(/\r?\n/)) {
     const line = raw.replace(/\s+#.*$/, '').replace(/^#.*$/, '').trimEnd()
     if (line.trim() === '') continue
     const m = line.match(/^([a-z_]+):\s*(.*)$/)
@@ -317,6 +329,8 @@ function familyList(list) {
       .trim()
       .replace(/^(['"])(.*)\1$/, '$2')
     if (!FAMILY.test(name)) return { error: `font family "${raw}" is not a plain family name` }
+    if (CSS_WIDE_KEYWORDS.has(name.toLowerCase()))
+      return { error: `"${name}" is a CSS-wide keyword, not a font family` }
     names.push(GENERIC_FAMILIES.has(name) || /^[A-Za-z-]+$/.test(name) ? name : `'${name}'`)
   }
   return { css: names.join(', ') }
@@ -437,14 +451,24 @@ function checkAsset(dir, file, problems) {
     for (const [re, what] of SVG_FORBIDDEN) if (re.test(text)) problems.push(`${file}: has ${what}`)
   } else if (file.endsWith('.png') || file.endsWith('.jpg') || file.endsWith('.webp')) {
     if (size > PNG_MAX_BYTES) return problems.push(`${file}: larger than ${PNG_MAX_BYTES} bytes`)
-    if (!file.endsWith('.png')) return
     const head = readFileSync(path).subarray(0, 24)
+    if (file.endsWith('.jpg')) {
+      if (head.subarray(0, 3).toString('hex') !== 'ffd8ff') problems.push(`${file}: not a JPEG image`)
+      return
+    }
+    if (file.endsWith('.webp')) {
+      if (head.subarray(0, 4).toString('latin1') !== 'RIFF' || head.subarray(8, 12).toString('latin1') !== 'WEBP')
+        problems.push(`${file}: not a WebP image`)
+      return
+    }
     if (head.length < 24 || head.subarray(0, 8).toString('hex') !== PNG_MAGIC)
       return problems.push(`${file}: not a PNG image`)
     if (head.readUInt32BE(16) > PNG_MAX_SIDE || head.readUInt32BE(20) > PNG_MAX_SIDE)
       problems.push(`${file}: wider or taller than ${PNG_MAX_SIDE} px`)
   } else if (file.endsWith('.woff2')) {
-    if (size > FONT_MAX_BYTES) problems.push(`${file}: larger than ${FONT_MAX_BYTES} bytes`)
+    if (size > FONT_MAX_BYTES) return problems.push(`${file}: larger than ${FONT_MAX_BYTES} bytes`)
+    if (readFileSync(path).subarray(0, 4).toString('latin1') !== 'wOF2')
+      problems.push(`${file}: not a WOFF2 font`)
   }
 }
 
