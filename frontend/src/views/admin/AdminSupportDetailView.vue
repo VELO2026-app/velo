@@ -662,8 +662,18 @@ let pollTimer: ReturnType<typeof setTimeout> | null = null
 let polls = 0
 let disposed = false
 
+/** The ticket answered 404: the not-found screen shows, so the feed behind
+ *  it must not keep polling (the feed loads in parallel and may still have
+ *  translations in flight). */
+let ticketMissing = false
+
+function stopPolling(): void {
+  if (pollTimer) clearTimeout(pollTimer)
+  pollTimer = null
+}
+
 function schedulePoll(): void {
-  if (pollTimer || disposed || polls >= POLL_LIMIT) return
+  if (pollTimer || disposed || ticketMissing || polls >= POLL_LIMIT) return
   if (!inFlight(messages.value) && !inFlight(historyMessages.value)) return
   pollTimer = setTimeout(() => {
     pollTimer = null
@@ -754,9 +764,13 @@ async function fetchTicket(): Promise<void> {
   ticketError.value = null
   try {
     ticket.value = await getAdminTicket(ticketId)
+    ticketMissing = false
   } catch (e) {
-    if (isStatus(e, 404)) ticket.value = null
-    else
+    if (isStatus(e, 404)) {
+      ticket.value = null
+      ticketMissing = true
+      stopPolling()
+    } else
       ticketError.value = extractApiError(e, t('adminScreens.adminSupportDetail.ticketLoadError'))
   } finally {
     loadingTicket.value = false

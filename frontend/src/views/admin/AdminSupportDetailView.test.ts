@@ -1116,6 +1116,19 @@ describe('AdminSupportDetailView', () => {
       expect(reads()).toBe(3)
     })
 
+    it('a missing ticket (404) does not poll the feed behind the not-found screen', async () => {
+      feed([inFlight()], [inFlight()], [inFlight()])
+      vi.mocked(supportApi.getAdminTicket).mockRejectedValue(
+        new ApiResponseError(404, 'Ticket not found'),
+      )
+      mount('t_1', null)
+      await flush()
+      expect(text()).toContain('Обращение не найдено')
+
+      await tick(30000)
+      expect(reads()).toBe(1)
+    })
+
     it('`not_requested` is on its way too -- it is polled', async () => {
       feed([inFlight('not_requested')], [settled()])
       mount('t_1', ticket())
