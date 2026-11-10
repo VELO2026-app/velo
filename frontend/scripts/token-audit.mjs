@@ -1,5 +1,5 @@
 // =============================================================================
-// FE-150 -- token usage report (tz-whitelabel §3.3; Gen-2 registry reduction).
+// FE-150 -- token usage report (tz-whitelabel §3.3).
 // =============================================================================
 // Reads tokens.json and every consumer (src/, index.html, packages/velo-ui),
 // prints: violations (the guard in scripts/lib/token-audit.test.mjs), the
@@ -17,7 +17,7 @@ import { auditTokens, auditViolations, readTree } from './lib/token-audit.mjs'
 const frontendDir = join(dirname(fileURLToPath(import.meta.url)), '..')
 const { doc, files } = readTree(frontendDir)
 const rows = auditTokens(doc, files)
-const violations = auditViolations(rows)
+const violations = auditViolations(rows, doc)
 const deprecated = rows.filter((r) => r.deprecated)
 const rare = rows.filter((r) => !r.deprecated && r.prod > 0 && r.prod <= 2 && !r.dynamic)
 

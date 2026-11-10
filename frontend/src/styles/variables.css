@@ -560,7 +560,7 @@
      --velo-divider-width(3). The default 1px border/divider across admin lists. */
   --velo-border-width: 1px;
   /* Letter-spacing — uppercase admin labels (value-named, per --text-NN convention). */
-  --velo-letter-spacing-05: 0.5px; /* report-detail label tracking */
+  --velo-letter-spacing-05: 0.5px; /* report/support label + dashboard revenue tracking */
   /* Component-size ramp (value-named; extends --velo-size-40/44/46/50 above).
      Admin count-badges, avatars, id circles, week-nav button, review photo. */
   --velo-size-10: 10px; /* bell presence-dot diameter (user dashboard header bell) */
@@ -746,11 +746,14 @@
    *   depth     --velo-effect-glow, --velo-effect-focus
    *   radius    --velo-radius-4-5; folded: --velo-radius-3-5/24-5/31
    *             -> --velo-radius-pill (each was half its element's
-   *             height), --velo-radius-14 -> --radius-md (+1px)
+   *             height; the active admin tab is 63px, so its corner
+   *             grows 0.5px), --velo-radius-14 -> --radius-md (+1px;
+   *             bare, so a skin no longer retunes that photo corner)
    *   type      --velo-fs-11/13/25 (aliases of 12/12/24); folded:
    *             --velo-letter-spacing-064 -> --velo-letter-spacing-05
    * A package that still sets one of them FAILS validate-skin ("not a
-   * token of the product"); this product reads contract 2.x only. The path for the next removal: DTCG $deprecated in tokens.json
+   * token of the product"); this product reads contract 2.x only.
+   * The path for the next removal: DTCG $deprecated in tokens.json
    * (validate-skin warns, scripts/lib/token-audit.test.mjs keeps the token
    * consumer-free), then the next generation deletes it.
    * Report: node scripts/token-audit.mjs

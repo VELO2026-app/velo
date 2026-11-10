@@ -1,6 +1,6 @@
 // =============================================================================
 // FE-150 -- token usage audit: which registry tokens are consumed, which are
-// dead, which are rare (tz-whitelabel §3.3, the Gen-2 registry reduction).
+// dead, which are rare (tz-whitelabel §3.3; it drove the Gen-2 reduction).
 // =============================================================================
 // The registry is tokens.json (the source; variables.css is generated from
 // it). A token is ALIVE when at least one of these holds:
@@ -11,17 +11,30 @@
 //   dynamic   product code builds the name at runtime from a literal prefix
 //             (`--velo-fog-pd-${name}`): every token under that prefix is
 //             treated as consumed -- the reason a var()-only count reported
-//             ~15 false zeros on 06.11;
+//             ~15 false zeros on 06.11. A prefix that covers more than
+//             MAX_DYNAMIC tokens (`--velo-${x}`) would switch the audit off
+//             for a whole branch: it keeps nothing alive and is a violation
+//             (name the tokens literally);
 //   chain     an ALIVE token's value references it (var(--velo-blue-500)
 //             inside --velo-bg-subtle). Liveness is transitive: a primitive
 //             referenced only by dead aliases is dead too.
-// Tests and stories are counted apart: a token only a test names is dead
-// in the product. Skin packages live outside this repo (FE-131) and only
+// Tests and stories are counted apart (their name builders too): a token
+// only a test names is dead in the product. Everything else scanned counts as
+// product, .storybook config included. Skin packages live outside this repo (FE-131) and only
 // OVERRIDE tokens -- validate-skin warns when one sets a $deprecated token.
 //
 // Comments are stripped first, per language: a token named in prose is not
 // consumed (and a CSS comment closed with "-->" instead of "*/" swallows the
 // rule after it -- the scanner sees that exactly as the browser does).
+// Because comments matter here, a comment-only edit can kill a consumer:
+// the CI scope runs lint-only for such PRs, the full gate on the push to
+// test is the backstop.
+//
+// $deprecated (DTCG) is accepted in one shape only: a non-empty string on a
+// TOKEN ("<date>: <why>, delete in <generation>"); the generator, the audit
+// and validate-skin all read that string. Any other shape -- `true`, an
+// empty string, a flag on a GROUP -- is a violation, so the three never
+// disagree about what is deprecated.
 // =============================================================================
 
 import { readFileSync, readdirSync, statSync } from 'node:fs'
@@ -93,7 +106,9 @@ export function stripJsComments(src) {
 
 /** SFC: script blocks as JS, style blocks as CSS, the rest as template. */
 export function stripVueComments(src) {
-  const BLOCK = /(<(script|style)\b[^>]*>)([\s\S]*?)(<\/\2>)/g
+  // Top-level blocks only: the tags start a line (a "<style>" quoted in a
+  // template comment must not open a block).
+  const BLOCK = /^(<(script|style)\b[^>]*>)([\s\S]*?)^(<\/\2>)/gm
   let out = ''
   let last = 0
   for (const m of src.matchAll(BLOCK)) {
@@ -120,6 +135,14 @@ export function stripComments(file, src) {
 export const isNonProduct = (file) => /\.(test|spec|stories)\.[^/]+$/.test(file)
 
 const NAME = /--[a-zA-Z0-9_-]+/g
+/** A dynamic prefix wider than this is not a name builder but a blanket. */
+export const MAX_DYNAMIC = 12
+
+/** The DTCG $deprecated note of a token node, or null (see the header). */
+export function deprecationOf(node) {
+  const d = node?.$deprecated
+  return typeof d === 'string' && d.trim() !== '' ? d : null
+}
 /** `--velo-fog-pd-${x}` -> '--velo-fog-pd-' (template-literal name builders). */
 const DYNAMIC = /(--[a-zA-Z0-9_-]+-)\$\{/g
 
@@ -130,8 +153,9 @@ const DYNAMIC = /(--[a-zA-Z0-9_-]+-)\$\{/g
  * @param {Array<{file: string, src: string}>} files product + test sources
  *   (NOT variables.css -- it is the generated registry itself)
  * @returns {Array<object>} one row per token, registry order:
- *   { cssName, path, value, deprecated, prod, test, files, dynamic,
- *     refs, referrers, alive }
+ *   { cssName, path, value, deprecated, badDeprecated, prod, test, files,
+ *     dynamic, refs, referrers, alive }; the array also carries
+ *   `broadDynamic`: [{ prefix, files, covers }] for the refused blankets.
  */
 export function auditTokens(doc, files) {
   const leaves = collectLeaves(doc)
@@ -142,7 +166,8 @@ export function auditTokens(doc, files) {
         cssName: l.cssName,
         path: l.path,
         value: l.value.trim(),
-        deprecated: l.node.$deprecated ?? false,
+        deprecated: deprecationOf(l.node) ?? false,
+        badDeprecated: '$deprecated' in l.node && deprecationOf(l.node) === null,
         prod: 0,
         test: 0,
         files: new Set(),
@@ -154,11 +179,15 @@ export function auditTokens(doc, files) {
     ]),
   )
 
-  const dynamicPrefixes = new Set()
+  const dynamicFiles = new Map() // prefix -> Set(file), product code only
   for (const { file, src } of files) {
     const code = stripComments(file, src)
-    for (const m of code.matchAll(DYNAMIC)) dynamicPrefixes.add(m[1])
     const nonProduct = isNonProduct(file)
+    if (!nonProduct)
+      for (const m of code.matchAll(DYNAMIC)) {
+        if (!dynamicFiles.has(m[1])) dynamicFiles.set(m[1], new Set())
+        dynamicFiles.get(m[1]).add(file)
+      }
     for (const m of code.matchAll(NAME)) {
       const row = rows.get(m[0])
       if (!row) continue
@@ -170,8 +199,16 @@ export function auditTokens(doc, files) {
     }
   }
 
+  const names = [...rows.keys()]
+  const broadDynamic = []
+  const dynamicPrefixes = []
+  for (const [prefix, where] of dynamicFiles) {
+    const covers = names.filter((n) => n.startsWith(prefix)).length
+    if (covers > MAX_DYNAMIC) broadDynamic.push({ prefix, files: [...where], covers })
+    else dynamicPrefixes.push(prefix)
+  }
   for (const row of rows.values()) {
-    row.dynamic = [...dynamicPrefixes].some((p) => row.cssName.startsWith(p))
+    row.dynamic = dynamicPrefixes.some((p) => row.cssName.startsWith(p))
     for (const ref of row.refs) rows.get(ref)?.referrers.push(row.cssName)
   }
 
@@ -190,17 +227,42 @@ export function auditTokens(doc, files) {
     }
   }
 
-  return [...rows.values()]
+  const out = [...rows.values()]
+  out.broadDynamic = broadDynamic
+  return out
 }
 
 /**
- * The two standing rules the guard test pins (FE-150):
+ * The standing rules the guard test pins (FE-150):
  *   - a $deprecated token has NO consumer (the next generation can delete it);
- *   - every other token is alive (no new dead weight in the contract).
+ *   - every other token is alive (no new dead weight in the contract);
+ *   - $deprecated has the one accepted shape, on tokens only (pass `doc`);
+ *   - no dynamic name builder blankets a whole branch.
  */
-export function auditViolations(rows) {
+export function auditViolations(rows, doc) {
   const out = []
+  for (const b of rows.broadDynamic ?? []) {
+    out.push(
+      `a dynamic name builder \`${b.prefix}\${…}\` in ${b.files.join(', ')} would cover ${b.covers} tokens -- name them literally (MAX_DYNAMIC ${MAX_DYNAMIC})`,
+    )
+  }
+  if (doc) {
+    const walkGroups = (node, path) => {
+      for (const [key, value] of Object.entries(node)) {
+        if (key.startsWith('$') || !value || typeof value !== 'object') continue
+        const here = path ? `${path}.${key}` : key
+        if (!('$value' in value) && '$deprecated' in value)
+          out.push(`${here}: $deprecated on a group -- mark the tokens, one by one`)
+        walkGroups(value, here)
+      }
+    }
+    walkGroups(doc.root, '')
+  }
   for (const r of rows) {
+    if (r.badDeprecated)
+      out.push(
+        `${r.cssName}: $deprecated must be a non-empty string ("<date>: <why>, delete in <generation>")`,
+      )
     if (r.deprecated && r.alive) {
       const how =
         r.prod > 0
@@ -214,7 +276,7 @@ export function auditViolations(rows) {
     }
     if (!r.deprecated && !r.alive) {
       out.push(
-        `${r.cssName} has no consumer -- use it, or mark it $deprecated in tokens.json (removal = Gen-2, tz-whitelabel §3.1)`,
+        `${r.cssName} has no consumer -- use it, or mark it $deprecated in tokens.json (the next generation removes it, tz-whitelabel §3.1)`,
       )
     }
   }
