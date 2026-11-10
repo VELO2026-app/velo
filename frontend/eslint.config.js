@@ -170,9 +170,13 @@ export default [
   // doors -- the barrels that re-export it plus the two seam doors (the
   // keyboard factory and the loading rule). (The P8 VTextarea door closed
   // with FE-153: the field moved into the kit.)
-  // Deep subpaths ('@velo/ui/...') stay banned everywhere. The doors
-  // override below REPLACES this rule (flat config does not merge), so it
-  // repeats the app-barrel deep-import patterns verbatim.
+  // Deep subpaths ('@velo/ui/...') stay banned everywhere. Flat config does
+  // not merge rule options: a later block with the same rule REPLACES the
+  // earlier one for matching files. So this block carries the app-barrel
+  // deep-import patterns ('@/components/ui/*', '@/components/icons/*') too --
+  // otherwise it would silently erase the ban set in the base block above for
+  // every file under src/. The doors override below repeats the patterns it
+  // still needs verbatim.
   {
     files: ['src/**/*.{ts,vue}'],
     rules: {
@@ -180,6 +184,14 @@ export default [
         'error',
         {
           patterns: [
+            {
+              group: ['@/components/ui/*', '@/components/ui/*/*'],
+              message: 'Import from the barrel: import { VButton } from "@/components/ui".',
+            },
+            {
+              group: ['@/components/icons/*', '@/components/icons/*/*'],
+              message: 'Import from the barrel: import { IconHome } from "@/components/icons".',
+            },
             {
               group: ['@velo/ui', '@velo/ui/*'],
               message:

@@ -25,7 +25,7 @@
     "lint": "stylelint \"src/**/*.{css,vue}\"",
     "format": "prettier --write src/ .storybook/",
     "format:check": "prettier --check src/ .storybook/",
-    "verify": "pnpm lint && pnpm typecheck && pnpm test",
+    "verify": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
   },

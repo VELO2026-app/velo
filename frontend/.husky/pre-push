@@ -1,5 +1,6 @@
-# Pre-push gate (before CI -- the local source of truth): type-aware lint
-# with budget, unit tests and a production build of EVERY workspace member
-# (frontend + @velo/ui, FE-116; vue-tsc runs inside build). A red push does
-# not leave the machine. The hook runs from the workspace root, hence no cd.
-pnpm -r verify && pnpm -C frontend build && pnpm -C packages/velo-ui build
+# Pre-push gate (FE-157): cheap and changed-only. Type-check of EVERY
+# workspace member (frontend + @velo/ui; vue-tsc, incremental) plus the unit
+# tests that the diff against origin/test touches (vitest --changed). The
+# full verify and the production builds run in CI and before handing a task
+# over (AGENTS.md). The hook runs from the workspace root, hence no cd.
+pnpm -r typecheck && pnpm -r exec vitest run --changed origin/test --passWithNoTests
