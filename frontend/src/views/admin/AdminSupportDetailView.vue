@@ -956,7 +956,7 @@ onMounted(async () => {
   font-size: var(--text-sm);
   color: var(--velo-text-primary);
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .support-detail__rating-meta {

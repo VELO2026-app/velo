@@ -71,8 +71,12 @@ export default defineConfig({
     // Vitest reads coverage from the root config, not from a project.
     coverage: {
       provider: 'v8',
-      include: ['src/**/*.ts'],
+      // FE-157 5A.1: .vue is in -- screens and components are most of the app.
+      include: ['src/**/*.{ts,vue}'],
       exclude: ['src/**/*.test.ts', 'src/**/*.d.ts', 'src/main.ts'],
+      // json-summary feeds scripts/coverage-budget.mjs (the ratchet gate).
+      reporter: ['text-summary', 'json-summary'],
+      reportsDirectory: 'coverage',
     },
     // Two projects (FE-157 5C): the happy-dom environment cost 77 of 99 s.
     // Pure utils/platform tests need no DOM and run under plain node.

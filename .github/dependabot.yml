@@ -1,0 +1,75 @@
+# =============================================================================
+# Dependabot (FE-157 5A.4)
+# =============================================================================
+# npm: weekly, one grouped PR per area (vue / lint / test / build); anything a
+# group does not match gets its own PR. The pnpm workspace root owns the
+# lockfile, and the three manifests below are its members.
+# github-actions: monthly.
+#
+# cooldown 14 days mirrors the maturity rule of pnpm-workspace.yaml: no
+# version is proposed before it is two weeks old. Security updates are not
+# held back by the cooldown.
+#
+# Group order matters -- a package joins the FIRST group whose patterns match
+# it, so `test` precedes `vue` (@vue/test-utils belongs to the tests).
+# =============================================================================
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directories:
+      - /
+      - /frontend
+      - /packages/velo-ui
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    groups:
+      test:
+        patterns:
+          - vitest
+          - '@vitest/*'
+          - '@vue/test-utils'
+          - '@playwright/test'
+          - happy-dom
+      vue:
+        patterns:
+          - vue
+          - vue-*
+          - '@vue/*'
+          - '@vitejs/plugin-vue'
+          - pinia
+          - '@pinia/*'
+          - '@intlify/*'
+          - '@tma.js/*'
+      lint:
+        patterns:
+          - eslint
+          - 'eslint-*'
+          - '@eslint/*'
+          - typescript-eslint
+          - prettier
+          - stylelint
+          - 'stylelint-*'
+          - postcss-html
+          - globals
+          - husky
+          - lint-staged
+      build:
+        patterns:
+          - vite
+          - 'vite-*'
+          - typescript
+          - vue-tsc
+          - typedoc
+          - '@types/*'
+          - '@storybook/*'
+          - storybook
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 14
