@@ -380,7 +380,7 @@ ol {
 
 /* === Photo background layer (PROMPT №383) === */
 /* The photo URL is a token so a skin can swap the FORMAT: the golden ships
-   WebP, while already-released skins carry bg/background.png. The build
+   WebP, while already-released skins carry assets/bg/background.png. The build
    (platform/skin.ts materializedSkinTokens) re-points this to whichever file
    the skin package really holds. Also read by the two onboarding overlays. */
 :root {

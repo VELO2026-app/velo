@@ -12,6 +12,9 @@
 frontend/dist
 packages/*/dist
 .git
+# FE-131: a skin package the machine checks out into the build context
+# (frontend/public/skin/) may carry its own .git -- never into the image.
+**/.git
 .github
 backend
 storage

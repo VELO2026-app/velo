@@ -18,8 +18,8 @@ import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 import VueI18nPlugin from '@intlify/unplugin-vue-i18n/vite'
 import { fileURLToPath, URL } from 'node:url'
-import { cpSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import { pwaManifestWithPassport } from './src/pwa/manifest'
 import { keepManifestOutOfPrecache, perLocaleManifest } from './src/pwa/manifest-locales'
 // tz-whitelabel F1 (§2.2): resolves the %VELO_*% passport placeholders in
@@ -33,6 +33,7 @@ import { passportHtmlDefaults } from './src/platform/passport-html'
 // index.html theme-color/font, manifest identity/colours) materialize HERE,
 // at config time.
 import { materializedSkinTokens, readSkin } from './src/platform/skin'
+import { ASSET_DIRS, IGNORED_FILES, MANDATORY_ASSETS } from './scripts/lib/skin-package.mjs'
 import { featureDefineMap, resolveFeatureFlags, type EditionTable } from './src/platform/features'
 import type { Plugin } from 'vite'
 
@@ -42,42 +43,48 @@ const ZOOM_SDK_MODULE =
   /[\\/]node_modules[\\/](@zoom[\\/]meetingsdk|react|react-dom|react-redux|redux|redux-thunk|lodash|scheduler|use-sync-external-store|hoist-non-react-statics|react-is)[\\/]/
 
 /** tz-whitelabel §3: apply the skin's ASSETS on the build -- the deploy puts
- * the package into public/skin/, and its files must WIN on the canonical
- * public paths (VeloLogo renders /icons/..., the mandala lives on /bg/...).
- * Runs at closeBundle: the golden files are already in dist/, this copies
- * the skin's over them. The package itself also ships inside dist/skin/
- * (publicDir copy) -- that copy is inert, the spilled paths are canonical.
+ * the package into public/skin/ (FE-131: the machine's format, assets under
+ * assets/), and its files must WIN on the canonical public paths (VeloLogo
+ * renders /icons/..., the mandala lives on /bg/...). Runs at closeBundle: the
+ * golden files are already in dist/, this copies the skin's over them. The
+ * publicDir copy also drops the whole package into dist/skin/; only its
+ * assets/fonts/ is meant to be served (skin-tokens.css @font-face points
+ * there), so everything else -- the manifest, the token sources, a checkout's
+ * .git -- is removed from dist/skin/ here (FE-131). The PWA precache ignores
+ * skin/** (workbox globIgnores below), so the removal cannot race it.
  * Dev servers see the golden assets (a dev stand with a skin is not a
  * supported flow; build with the skin instead). */
+/** OS litter of a local working copy never reaches dist. */
+function shippable(from: string): boolean {
+  return !IGNORED_FILES.has(basename(from))
+}
+
 function skinAssetSpill(skinDir: string | null, distDir: string): Plugin {
   return {
     name: 'velo-skin-asset-spill',
     apply: 'build',
     closeBundle() {
+      // dist/skin/ is pruned on EVERY build: a public/skin/ that is not a
+      // package (no manifest -- a bare `vite build` past the gate) must not
+      // ship its files, a checkout's .git included.
+      const shipped = join(distDir, 'skin')
+      rmSync(shipped, { recursive: true, force: true })
       if (!skinDir) return
-      const spills: Array<[string, string]> = [
-        // package root -> /icons/ (logos + PWA icons + favicon)
-        [join(skinDir, 'mandala-white.png'), 'icons/mandala-white.png'],
-        [join(skinDir, 'mandala-blue.png'), 'icons/mandala-blue.png'],
-        [join(skinDir, 'velo-word-filled.svg'), 'icons/velo-word-filled.svg'],
-        [join(skinDir, 'velo-word-blue.svg'), 'icons/velo-word-blue.svg'],
-        [join(skinDir, 'logo-white.svg'), 'icons/logo-white.svg'],
-        [join(skinDir, 'favicon.svg'), 'icons/favicon.svg'],
-        [join(skinDir, 'icon-192.png'), 'icons/icon-192.png'],
-        [join(skinDir, 'icon-512.png'), 'icons/icon-512.png'],
-        [join(skinDir, 'icon-maskable-512.png'), 'icons/icon-maskable-512.png'],
-        [join(skinDir, 'apple-touch-icon-180.png'), 'icons/apple-touch-icon-180.png'],
-      ]
-      for (const [from, to] of spills) {
-        if (existsSync(from)) {
-          cpSync(from, join(distDir, to), { force: true })
+      const assets = join(skinDir, 'assets')
+      // package assets/ -> /icons/ (logos + PWA icons + favicon)
+      for (const name of MANDATORY_ASSETS) {
+        const from = join(assets, name)
+        if (existsSync(from)) cpSync(from, join(distDir, 'icons', name), { force: true })
+      }
+      for (const dir of ASSET_DIRS) {
+        const src = join(assets, dir)
+        if (existsSync(src)) {
+          cpSync(src, join(distDir, dir), { force: true, recursive: true, filter: shippable })
         }
       }
-      for (const dir of ['bg', 'onboarding']) {
-        const src = join(skinDir, dir)
-        if (existsSync(src)) {
-          cpSync(src, join(distDir, dir), { force: true, recursive: true })
-        }
+      const fonts = join(assets, 'fonts')
+      if (existsSync(fonts)) {
+        cpSync(fonts, join(shipped, 'assets', 'fonts'), { recursive: true, filter: shippable })
       }
     },
   }
@@ -232,7 +239,10 @@ export const SKIN_BRAND: string | null = ${JSON.stringify(skin?.displayName ?? n
           // practice screen loads, on the practice-live join/start buttons
           // (i18n:user.screens.practiceLive.join, i18n:user.screens.practiceLive.start). Precached, every
           // install and every update would download it for everyone.
-          globIgnores: ['**/*.map', '**/zoom-sdk-*.js'],
+          // skin/** (FE-131): the package copy in dist/skin/ is pruned to
+          // its fonts at closeBundle -- precaching it would race the prune;
+          // the fonts ride the runtime cache below.
+          globIgnores: ['**/*.map', '**/zoom-sdk-*.js', 'skin/**'],
           // Runtime caching gives the service worker a valid strategy even when
           // the precache manifest is empty. Without this, workbox-build aborts
           // with "Couldn't find configuration for either precaching or runtime

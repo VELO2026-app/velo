@@ -1,17 +1,21 @@
 // =============================================================================
-// VELO Frontend -- skin package validator (tz-whitelabel §3, F2)
+// VELO Frontend -- skin package validator (tz-whitelabel §3, F2; FE-131)
 // =============================================================================
 // A skin package (public/skin/) is checked BEFORE it is applied: a package
-// that fails here must not ship. Static checks only -- no rasterizer, no
-// browser (tz-whitelabel §3: "we test the contract, not every skin"):
+// that fails here must not ship. The package is the deploy machine's DTCG
+// format (FE-131, tz-whitelabel §3.2) -- structure, manifest, token paths and
+// the brand record are read by scripts/lib/skin-package.mjs, the SAME engine
+// the build converts it with. On top of that, the contract §3 content checks
+// (static only -- no rasterizer, no browser: "we test the contract, not every
+// skin"):
 //
-//   structure    brand.json + tokens.css + the mandatory asset set (§3 table)
-//   brand.json   display/short names (short_name <= 12, the PWA convention),
-//                6-digit hex colors, https fontUrl
-//   tokens.css   every custom property is a KNOWN --velo-* token of
-//                variables.css (a typo would silently theme nothing); the
-//                single-source rule (§1): a tokens.css --velo-tg-header must
-//                equal brand.json themeColor
+//   structure    primer-package.yaml (schema 1, contract "2.x"), tokens/,
+//                the mandatory assets/ set, nothing else (lib/skin-package)
+//   brand        $extensions["velo-skin"]: display/short names (short <= 12),
+//                6-digit hex colors, self-hosted fonts only
+//   tokens       every token path is a token of tokens.json (a typo would
+//                silently theme nothing); velo.* and bare.font-body only; the
+//                single-source rule (§1): velo.tg.header == brand themeColor
 //   contrast     WCAG ratios for the overridden text/background pairs
 //                (4.5:1 body text; 3:1 for the Telegram header chrome, whose
 //                text is white) -- thresholds per the variables.css comments
@@ -23,29 +27,25 @@
 //
 // Usage: node scripts/validate-skin.mjs [skinDir] [--build]  (default: public/skin)
 // Exits 1 on any FAIL. --build is the `pnpm build` gate (FE-148): an absent
-// package passes (golden build), a present one must pass in full.
+// package passes (golden build), a present one must pass in full (the slot
+// of an apply:build package has no `validate:` -- contract 3 rule 31 -- so
+// this gate inside the build IS the package check).
 // validateSkin() and skinBuildGate() are exported for the unit suite.
 // =============================================================================
 
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { pathToFileURL } from 'node:url'
+import {
+  ASSET_DIRS,
+  loadSkinPackage,
+  readGoldenTokens,
+  goldenTokenMap,
+} from './lib/skin-package.mjs'
 
-/** A bg/background.png above this is warned about: the golden ships WebP. */
+/** An assets/bg/background.png above this is warned about: the golden ships WebP. */
 const BG_PNG_WARN_KB = 300
 
-const MANDATORY_ASSETS = [
-  'mandala-white.png',
-  'mandala-blue.png',
-  'velo-word-filled.svg',
-  'velo-word-blue.svg',
-  'logo-white.svg',
-  'favicon.svg',
-  'icon-192.png',
-  'icon-512.png',
-  'icon-maskable-512.png',
-  'apple-touch-icon-180.png',
-]
 const PNG_SIZES = {
   'icon-192.png': [192, 192],
   'icon-512.png': [512, 512],
@@ -71,26 +71,6 @@ function ok(out, message) {
   out.passed.push(message)
 }
 
-/** Strip block and line comments (line-wise is enough for token lines). */
-function stripCssComments(css) {
-  return css.replace(/\/\*[\s\S]*?\*\//g, '')
-}
-
-/** The declared custom properties of a tokens.css: { name: value }. */
-function parseTokens(css) {
-  const tokens = {}
-  for (const line of stripCssComments(css).split('\n')) {
-    const m = line.match(/(--[a-zA-Z0-9-]+)\s*:\s*([^;]+);/)
-    if (m) tokens[m[1]] = m[2].trim()
-  }
-  return tokens
-}
-
-function knownVeloTokens(frontendDir) {
-  const css = readFileSync(join(frontendDir, 'src', 'styles', 'variables.css'), 'utf8')
-  return new Set([...css.matchAll(/(--velo-[a-zA-Z0-9-]+)\s*:/g)].map((m) => m[1]))
-}
-
 /** PNG IHDR facts (width/height/colorType); null when not a readable PNG.
  *  Exported for scripts/instance-checklist.mjs (dist icon dimension facts). */
 export function pngInfo(file) {
@@ -110,7 +90,9 @@ export function pngInfo(file) {
 function luminance(color) {
   let value = color.trim()
   let alpha = 1
-  const rgba = value.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\s*\)/)
+  // Anchored: the WHOLE value must be the color -- an rgb() nested inside
+  // color-mix() or a var() fallback is not the value's color.
+  const rgba = value.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\s*\)$/)
   if (rgba) {
     alpha = rgba[4] === undefined ? 1 : Number(rgba[4])
     return { lum: channelLum([+rgba[1], +rgba[2], +rgba[3]], alpha), alpha }
@@ -140,117 +122,82 @@ function contrast(a, b) {
   return (hi + 0.05) / (lo + 0.05)
 }
 
+/** FE-150: cssName -> its DTCG $deprecated note, for the registry tokens
+ *  marked deprecated in tokens.json. */
+function deprecatedTokens(tokensDoc) {
+  const out = new Map()
+  const walk = (node) => {
+    for (const [key, value] of Object.entries(node)) {
+      if (key.startsWith('$') || !value || typeof value !== 'object') continue
+      const cssName = value.$extensions?.pridem?.cssName
+      if (cssName && typeof value.$deprecated === 'string') out.set(cssName, value.$deprecated)
+      walk(value)
+    }
+  }
+  walk(tokensDoc.root)
+  return out
+}
+
 // -- the check ---------------------------------------------------------------
 
 /** Validates the skin package at `skinDir`. `frontendDir` anchors
- * variables.css (token-name check). Returns the report; `fails.length === 0`
+ * tokens.json (the token names a skin may set, and the golden values the
+ * contrast pairs resolve against). Returns the report; `fails.length === 0`
  * means the package may ship. */
 export function validateSkin(skinDir, frontendDir) {
   const out = { fails: [], warns: [], manual: [], passed: [] }
   skinDir = resolve(skinDir)
+  const assets = join(skinDir, 'assets')
 
-  // 1. structure ------------------------------------------------------------
-  const brandPath = join(skinDir, 'brand.json')
-  const tokensPath = join(skinDir, 'tokens.css')
-  if (!existsSync(brandPath)) fail(out, 'FAIL brand.json: missing')
-  if (!existsSync(tokensPath)) fail(out, 'FAIL tokens.css: missing')
-  for (const asset of MANDATORY_ASSETS) {
-    if (!existsSync(join(skinDir, asset))) fail(out, `FAIL asset: missing ${asset}`)
-    else ok(out, `asset present: ${asset}`)
-  }
-  const optional = ['bg', 'onboarding']
-  for (const dir of optional) {
-    const p = join(skinDir, dir)
-    if (existsSync(p) && statSync(p).isDirectory()) {
-      const count = readdirSync(p).length
-      ok(out, `optional dir present: ${dir}/ (${count} file(s))`)
-    }
-  }
+  // 1-3. structure, manifest, brand record, token paths -- the engine ------------
+  const goldenDoc = readGoldenTokens(frontendDir)
+  const pkg = loadSkinPackage(skinDir, goldenDoc)
+  for (const problem of pkg.problems) fail(out, `FAIL ${problem}`)
   if (out.fails.length > 0) return out
-
-  // 2. brand.json ------------------------------------------------------------
-  let brand
-  try {
-    brand = JSON.parse(readFileSync(brandPath, 'utf8'))
-  } catch {
-    fail(out, 'FAIL brand.json: not valid JSON')
-    return out
+  const brand = pkg.brand
+  ok(out, `primer-package.yaml: contract "${pkg.contract}"`)
+  ok(out, `brand: "${brand.displayName}" / "${brand.shortName}"`)
+  for (const dir of ASSET_DIRS) {
+    const count = pkg.files.filter((f) => f.startsWith(`assets/${dir}/`)).length
+    if (count > 0) ok(out, `optional dir present: assets/${dir}/ (${count} file(s))`)
   }
-  const str = (key) => typeof brand[key] === 'string' && brand[key].trim() !== ''
-  if (!str('displayName')) fail(out, 'FAIL brand.json: displayName must be a non-empty string')
-  if (!str('shortName')) fail(out, 'FAIL brand.json: shortName must be a non-empty string')
-  else if (brand['shortName'].trim().length > 12)
-    fail(
-      out,
-      `FAIL brand.json: shortName "${brand['shortName']}" exceeds 12 chars (PWA convention)`,
-    )
-  const hex6 = (key) => str(key) && /^#[0-9a-fA-F]{6}$/.test(brand[key].trim())
-  if (!hex6('themeColor')) fail(out, 'FAIL brand.json: themeColor must be 6-digit hex')
-  if (!hex6('backgroundColor')) fail(out, 'FAIL brand.json: backgroundColor must be 6-digit hex')
-  if (brand['fontUrl'] !== undefined && !/^https:\/\//.test(String(brand['fontUrl'])))
-    fail(out, 'FAIL brand.json: fontUrl must be https://')
-  if (out.fails.length === 0)
-    ok(out, `brand.json: "${brand['displayName']}" / "${brand['shortName']}"`)
-
-  // 3. tokens.css: names + the §1 single source -------------------------------
-  const tokens = parseTokens(readFileSync(tokensPath, 'utf8'))
+  const tokens = Object.fromEntries(pkg.decls)
   const tokenNames = Object.keys(tokens)
-  if (tokenNames.length === 0) warn(out, 'tokens.css declares no custom properties')
-  const known = knownVeloTokens(frontendDir)
-  for (const name of tokenNames) {
-    if (!name.startsWith('--velo-')) continue // bare tokens: judged by BARE_ALLOWED below
-    if (!known.has(name))
-      fail(out, `FAIL tokens.css: ${name} does not exist in variables.css (a typo themes nothing)`)
-  }
-  if (tokenNames.length > 0 && !tokenNames.some((n) => !n.startsWith('--')))
-    ok(out, `tokens.css: ${tokenNames.length} token(s), all known --velo-*`)
-  // The ONE bare token a skin may set: --font-body (the family swaps with the
-  // brand.json fontUrl link -- tz-whitelabel §7 "link and token substitution";
-  // every OTHER bare token stays golden, the frozen split owns them).
-  const BARE_ALLOWED = new Set(['--font-body'])
-  for (const name of tokenNames) {
-    if (!name.startsWith('--velo-') && !BARE_ALLOWED.has(name))
-      fail(out, `FAIL tokens.css: ${name} is neither a --velo-* token nor the allowed --font-body`)
-  }
-  const brandFamily = (() => {
-    const url = String(brand['fontUrl'] ?? '')
-    const m = url.match(/family=([^&:]+)/)
-    return m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : null
-  })()
-  if (brand['fontUrl'] !== undefined && brandFamily) {
-    const body = tokens['--font-body']
-    if (body === undefined)
-      fail(
+  if (tokenNames.length === 0) warn(out, 'the package sets no tokens')
+  else ok(out, `tokens: ${tokenNames.length} override(s), all known to tokens.json`)
+  // FE-150: a token the registry marks DTCG $deprecated has no consumer --
+  // the override themes nothing, and the next contract generation deletes
+  // the name (then this package would fail as "not a token").
+  const deprecated = deprecatedTokens(goldenDoc)
+  for (const name of tokenNames)
+    if (deprecated.has(name))
+      warn(
         out,
-        `FAIL tokens.css: fontUrl is set but --font-body is not overridden -- the link loads a font the app never uses`,
+        `tokens: ${name} is deprecated (${deprecated.get(name)}) -- nothing consumes it, the override themes nothing; drop it before the next contract generation removes the name`,
       )
-    else if (!body.includes(brandFamily))
-      fail(
-        out,
-        `FAIL tokens.css: --font-body must name the fontUrl family "${brandFamily}", got: ${body}`,
-      )
-    else ok(out, `font: --font-body carries the fontUrl family "${brandFamily}"`)
-  }
+
+  for (const family of new Set(brand.fonts.map((f) => f.family)))
+    ok(out, `font: --font-body carries the self-hosted family "${family}"`)
   if (tokens['--velo-tg-header'] !== undefined) {
     const declared = tokens['--velo-tg-header'].toLowerCase()
-    const brandColor = brand['themeColor'].trim().toLowerCase()
+    const brandColor = brand.themeColor.toLowerCase()
     if (declared !== brandColor) {
       fail(
         out,
-        `FAIL §1 single source: tokens.css --velo-tg-header (${declared}) != brand.json themeColor (${brandColor})`,
+        `FAIL §1 single source: velo.tg.header (${declared}) != brand themeColor (${brandColor})`,
       )
-    } else ok(out, '§1 single source: --velo-tg-header == brand.json themeColor')
+    } else ok(out, '§1 single source: velo.tg.header == brand themeColor')
   } else {
     warn(
       out,
-      'tokens.css does not override --velo-tg-header: the Telegram header stays the golden #334d6e while brand.json themeColor differs from it',
+      'the package does not override velo.tg.header: the Telegram header stays the golden #334d6e',
     )
-    if (brand['themeColor'].trim().toLowerCase() !== '#334d6e') {
+    if (brand.themeColor.toLowerCase() !== '#334d6e') {
       // The HTML meta and the manifest WILL carry themeColor (materialized),
       // so a mismatched native header is almost certainly unintended.
       fail(
         out,
-        'FAIL §1 single source: themeColor != #334d6e but tokens.css never overrides --velo-tg-header -- the Telegram header would stay VELO-colored',
+        'FAIL §1 single source: themeColor != #334d6e but the package never overrides velo.tg.header -- the Telegram header would stay VELO-colored',
       )
     }
   }
@@ -258,18 +205,36 @@ export function validateSkin(skinDir, frontendDir) {
   // 4. contrast ---------------------------------------------------------------
   // Values resolve against the GOLDEN tokens: a skin that darkens a surface
   // without retouching the text on it fails right here.
-  const baseTokens = parseTokens(
-    readFileSync(join(frontendDir, 'src', 'styles', 'variables.css'), 'utf8'),
+  const baseTokens = Object.fromEntries(
+    [...goldenTokenMap(goldenDoc).values()].map((t) => [t.cssName, t.value]),
   )
+  // A value may be a reference (var(--x), from a DTCG {ref}) -- follow it
+  // through the package's overrides, then the golden tokens, so a reference
+  // cannot dodge the gate.
+  const resolveToken = (name) => {
+    let value = tokens[name] ?? baseTokens[name]
+    for (let hop = 0; value !== undefined && hop < 16; hop++) {
+      // var(--x) and var(--x, fallback): the defined --x wins, the
+      // fallback is never the value of a known token.
+      const ref = value.trim().match(/^var\(\s*(--[A-Za-z0-9-]+)\s*(,[\s\S]*)?\)$/)
+      if (!ref) break
+      value = tokens[ref[1]] ?? baseTokens[ref[1]]
+    }
+    return value
+  }
   for (const [fgName, bgName, min] of CONTRAST_PAIRS) {
-    const fg = tokens[fgName] ?? baseTokens[fgName]
-    const bg = bgName.startsWith('--') ? (tokens[bgName] ?? baseTokens[bgName]) : bgName
-    if (fg === undefined || bg === undefined) continue
+    const fg = resolveToken(fgName)
+    const bg = bgName.startsWith('--') ? resolveToken(bgName) : bgName
     if (tokens[fgName] === undefined && tokens[bgName] === undefined && !bgName.startsWith('#'))
       continue // nothing overridden -- the golden pair is already accepted
-    const ratio = contrast(fg, bg)
+    const ratio = fg === undefined || bg === undefined ? null : contrast(fg, bg)
     if (ratio === null) {
-      warn(out, `contrast: cannot evaluate ${fgName} on ${bgName} (unsupported value format)`)
+      // An overridden pair the gate cannot evaluate is refused, not waved
+      // through: the contrast promise of the contract holds for every skin.
+      fail(
+        out,
+        `FAIL contrast: cannot evaluate ${fgName} on ${bgName} (${fg} on ${bg}) -- give the pair plain hex/rgb() colors`,
+      )
       continue
     }
     if (ratio < min)
@@ -279,41 +244,44 @@ export function validateSkin(skinDir, frontendDir) {
   // The background photo is the one optional asset that can quietly break a
   // theme: it is the app's bottom layer, and the GOLDEN one is light. A skin
   // that flips --velo-text-primary to a light color while shipping no
-  // bg/background.* paints light text over the light photo -- unreadable
+  // assets/bg/background.* paints light text over the light photo -- unreadable
   // (the velo_test_front_bot incident). Light-on-light skins may omit it.
   // Two formats are accepted, WebP preferred: released skins carry
   // background.png, the golden ships background.webp (platform/skin.ts
-  // re-points --velo-app-bg-image at whichever one lies there).
-  const bgWebp = join(skinDir, 'bg', 'background.webp')
-  const bgPng = join(skinDir, 'bg', 'background.png')
+  // re-points --velo-app-bg-image at whichever one lies there; FE-157).
+  const bgWebp = join(assets, 'bg', 'background.webp')
+  const bgPng = join(assets, 'bg', 'background.png')
   if (!existsSync(bgWebp) && !existsSync(bgPng)) {
-    const textPrimary = luminance(
-      tokens['--velo-text-primary'] ?? baseTokens['--velo-text-primary'],
-    )
-    if (textPrimary && textPrimary.lum > 0.35) {
+    const textPrimary = luminance(resolveToken('--velo-text-primary') ?? '')
+    if (tokens['--velo-text-primary'] !== undefined && !textPrimary) {
       fail(
         out,
-        'FAIL bg/background: missing (neither .webp nor .png) while --velo-text-primary is LIGHT -- the golden light photo stays and the light text on it is unreadable. Ship the full package including bg/, or use dark text tokens.',
+        'FAIL assets/bg/background: missing (neither .webp nor .png) and --velo-text-primary cannot be evaluated -- ship assets/bg/ or give the text a plain color',
+      )
+    } else if (textPrimary && textPrimary.lum > 0.35) {
+      fail(
+        out,
+        'FAIL assets/bg/background: missing (neither .webp nor .png) while --velo-text-primary is LIGHT -- the golden light photo stays and the light text on it is unreadable. Ship the full package including assets/bg/, or use dark text tokens.',
       )
     } else {
       warn(
         out,
-        'bg/background missing: the golden light photo stays (fine for a light-on-light skin)',
+        'assets/bg/background missing: the golden light photo stays (fine for a light-on-light skin)',
       )
     }
   } else if (existsSync(bgWebp)) {
-    ok(out, 'bg/background.webp present')
+    ok(out, 'assets/bg/background.webp present')
   } else {
-    ok(out, 'bg/background.png present')
+    ok(out, 'assets/bg/background.png present')
     const kb = Math.round(statSync(bgPng).size / 1024)
     if (kb > BG_PNG_WARN_KB)
       warn(
         out,
-        `bg/background.png is ${kb} KB (> ${BG_PNG_WARN_KB} KB): ship bg/background.webp instead (cwebp -m 6 -q 92: lower qualities blur the fine line work) -- the photo is the first thing every user downloads`,
+        `assets/bg/background.png is ${kb} KB (> ${BG_PNG_WARN_KB} KB): ship assets/bg/background.webp instead (cwebp -m 6 -q 92: lower qualities blur the fine line work) -- the photo is the first thing every user downloads`,
       )
   }
   // The manifest/HTML background: themeColor text on backgroundColor surface.
-  const splash = contrast(brand['themeColor'], brand['backgroundColor'])
+  const splash = contrast(brand.themeColor, brand.backgroundColor)
   if (splash !== null && splash < 3)
     warn(
       out,
@@ -322,28 +290,28 @@ export function validateSkin(skinDir, frontendDir) {
 
   // 5. PNG dimensions + apple-touch opacity -----------------------------------
   for (const [asset, [w, h]] of Object.entries(PNG_SIZES)) {
-    const info = pngInfo(join(skinDir, asset))
+    const info = pngInfo(join(assets, asset))
     if (!info) {
-      fail(out, `FAIL ${asset}: not a readable PNG (bad signature/IHDR)`)
+      fail(out, `FAIL assets/${asset}: not a readable PNG (bad signature/IHDR)`)
       continue
     }
     if (info.width !== w || info.height !== h)
-      fail(out, `FAIL ${asset}: ${info.width}x${info.height}, expected ${w}x${h}`)
+      fail(out, `FAIL assets/${asset}: ${info.width}x${info.height}, expected ${w}x${h}`)
     else ok(out, `${asset}: ${info.width}x${info.height}`)
     if (asset.startsWith('apple-touch') && (info.colorType === 4 || info.colorType === 6))
       fail(
         out,
-        `FAIL ${asset}: has an alpha channel (colorType ${info.colorType}) -- iOS paints transparency black`,
+        `FAIL assets/${asset}: has an alpha channel (colorType ${info.colorType}) -- iOS paints transparency black`,
       )
   }
   for (const asset of ['favicon.svg', 'velo-word-filled.svg', 'velo-word-blue.svg']) {
-    const head = readFileSync(join(skinDir, asset), 'utf8').slice(0, 200)
-    if (!/<svg|<\?xml/.test(head)) fail(out, `FAIL ${asset}: does not look like an SVG`)
+    const head = readFileSync(join(assets, asset), 'utf8').slice(0, 200)
+    if (!/<svg|<\?xml/.test(head)) fail(out, `FAIL assets/${asset}: does not look like an SVG`)
   }
 
   // 6. manual items -----------------------------------------------------------
   out.manual.push(
-    'MANUAL icon-maskable-512.png: the 80% safe zone needs pixel inspection (no rasterizer in this validator)',
+    'MANUAL assets/icon-maskable-512.png: the 80% safe zone needs pixel inspection (no rasterizer in this validator)',
   )
   out.manual.push(
     'MANUAL screens: the skin is pixel-checked against the reference snapshots (tz-whitelabel §3)',
@@ -356,9 +324,9 @@ export function validateSkin(skinDir, frontendDir) {
 /** The build-time gate (FE-148): an invalid skin package fails the build.
  * No `skinDir` at all = the golden build, nothing to check (returns null).
  * A PRESENT directory is validated in full -- including one without
- * brand.json, which the build itself would silently treat as "no skin"
- * (`readSkin` keys on brand.json), so a half-delivered package can never
- * pass as golden. */
+ * primer-package.yaml, which the build itself would silently treat as "no
+ * skin" (`readSkin` keys on the manifest), so a half-delivered package can
+ * never pass as golden. */
 export function skinBuildGate(skinDir, frontendDir) {
   if (!existsSync(resolve(skinDir))) return null
   return validateSkin(skinDir, frontendDir)

@@ -527,7 +527,7 @@ onMounted(() => {
   font-family: var(--font-heading);
   font-size: var(--velo-fs-32);
   color: var(--velo-text-primary);
-  letter-spacing: var(--velo-letter-spacing-064);
+  letter-spacing: var(--velo-letter-spacing-05);
   line-height: 1.1;
 }
 
