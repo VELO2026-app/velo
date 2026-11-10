@@ -2,7 +2,7 @@
 // VELO Frontend -- Skin package reader (tz-whitelabel §3, F2 "skin, layer 1")
 // =============================================================================
 // BUILD-side seam: vite.config.ts calls readSkin() at config time to
-// materialize the derivatives tz-whitelabel §1 lists -- skin-tokens.css,
+// materialize the derivatives tz-whitelabel §1 lists -- the skin-tokens.css module,
 // index.html theme-color/font link, and the manifest identity. It is NEVER
 // imported by the client bundle (node:fs does not exist in the browser).
 //
@@ -117,16 +117,16 @@ export function skinBackgroundFormat(publicDir: string): 'webp' | 'png' | null {
   return null
 }
 
-/** Content of the generated src/styles/skin-tokens.css: the skin's token
- *  overrides verbatim under a banner, or the golden stub. Written by
- *  vite.config.ts at config time so the CSS import order in app.ts
+/** Content of the virtual module virtual:skin-tokens.css: the skin's token
+ *  overrides verbatim under a banner, or the golden stub. Served by
+ *  platform/skin-virtual.ts at build time so the CSS import order in app.ts
  *  (`variables -> global -> skin`) is mechanical, never hopeful (tz-whitelabel
  *  §3, the cascade paragraph). */
 export function materializedSkinTokens(publicDir: string, skin: SkinPackage | null): string {
   if (skin === null) {
     return `/* GENERATED -- tz-whitelabel §3 cascade stub.
  * No skin package ships with this build (public/skin/brand.json absent):
- * this file is intentionally empty and MUST stay imported AFTER global.css
+ * this module is intentionally empty and MUST stay imported AFTER global.css
  * in app.ts. A build with a skin overwrites it with public/skin/tokens.css.
  */
 `

@@ -11,21 +11,16 @@ import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 import { featureDefines } from './src/platform/features'
-
-// tz-whitelabel §3: the unit suite ALWAYS runs against the GOLDEN build.
-// vite.config materializes skin-brand.generated.ts from whatever skin sits in
-// public/skin/ -- in a working tree used for a skin demo that is a real
-// brand, and the suite must not depend on deploy state. The alias pins the
-// golden stub for every test file.
-const GOLDEN_BRAND_STUB = fileURLToPath(
-  new URL('./src/platform/skin-brand.golden-test-stub.ts', import.meta.url),
-)
+import { skinVirtualModules } from './src/platform/skin-virtual'
 
 export default defineConfig({
-  plugins: [vue()],
+  // tz-whitelabel §3: the unit suite ALWAYS runs against the GOLDEN build --
+  // the virtual skin modules are served with no skin, whatever sits in
+  // public/skin/ of the working tree (a skin demo must not leak into tests).
+  plugins: [skinVirtualModules(fileURLToPath(new URL('./public', import.meta.url)), null), vue()],
 
   // tz-whitelabel §4 (F3): the unit suite ALWAYS runs the GOLDEN feature set
-  // (every module on) -- the same philosophy as the golden brand stub below.
+  // (every module on) -- the same philosophy as the golden skin modules above.
   // Route gates in router/index.ts read the __VELO_FEATURE_*__ literals;
   // without this define they would be bare undeclared identifiers under
   // vitest (vitest.config does NOT inherit vite.config).
@@ -34,7 +29,6 @@ export default defineConfig({
   resolve: {
     // array form: the exact keys must win before the '@' prefix
     alias: [
-      { find: '@/platform/skin-brand.generated', replacement: GOLDEN_BRAND_STUB },
       // FE-117 batch A: the suite compiles @velo/ui from the kit's SOURCES
       // (exact-match regex, before '@' -- mirrors vite.config.ts).
       {

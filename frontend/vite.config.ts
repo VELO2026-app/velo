@@ -18,7 +18,7 @@ import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 import VueI18nPlugin from '@intlify/unplugin-vue-i18n/vite'
 import { fileURLToPath, URL } from 'node:url'
-import { cpSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pwaManifestWithPassport } from './src/pwa/manifest'
 import { shellOnlyTransform } from './src/pwa/precache-shell'
@@ -30,10 +30,11 @@ import { keepManifestOutOfPrecache, perLocaleManifest } from './src/pwa/manifest
 // vitest, so the test cannot import this config file).
 import { passportHtmlDefaults } from './src/platform/passport-html'
 // tz-whitelabel F2 (§3): the skin package (public/skin/, deploy-supplied).
-// No package = the golden build; the derivatives (skin-tokens.css cascade,
+// No package = the golden build; the derivatives (the skin-tokens cascade,
 // index.html theme-color/font, manifest identity/colours) materialize HERE,
 // at config time.
-import { materializedSkinTokens, readSkin } from './src/platform/skin'
+import { readSkin } from './src/platform/skin'
+import { skinVirtualModules } from './src/platform/skin-virtual'
 import { featureDefineMap, resolveFeatureFlags, type EditionTable } from './src/platform/features'
 import type { Plugin } from 'vite'
 
@@ -192,24 +193,11 @@ export default defineConfig(({ mode }) => {
   const publicDir = join(frontendDir, 'public')
   const skin = readSkin(publicDir)
 
-  // §3 cascade, mechanically: the generated skin-tokens.css (the skin's
-  // token overrides, or the empty stub) is written BEFORE the bundle reads
-  // it -- app.ts imports it strictly after global.css.
-  writeFileSync(
-    join(frontendDir, 'src', 'styles', 'skin-tokens.css'),
-    materializedSkinTokens(publicDir, skin),
-  )
-  // The brand TEXT (tz-whitelabel §1, skin > env): locales/index.ts renders
-  // it through the @:brand link from every catalog string.
-  writeFileSync(
-    join(frontendDir, 'src', 'platform', 'skin-brand.generated.ts'),
-    `/* GENERATED -- the brand text of this build (tz-whitelabel §1/§3). */
-export const SKIN_BRAND: string | null = ${JSON.stringify(skin?.displayName ?? null)}
-`,
-  )
-
   return {
     plugins: [
+      // §3 cascade + the brand text (tz-whitelabel §1): virtual modules, served
+      // from memory -- a build writes nothing into tracked files.
+      skinVirtualModules(publicDir, skin),
       passportHtmlDefaults(skin),
       skinAssetSpill(skin ? join(publicDir, 'skin') : null, join(frontendDir, 'dist')),
       preloadAppChunk(),

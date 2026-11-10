@@ -524,16 +524,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   // Back up the owner's public/skin/ -- restored verbatim, whatever it was.
   const backup = existsSync(publicSkin()) ? mkdtempSync(join(tmpdir(), 'velo-matrix-skin-')) : null
   if (backup) cpSync(publicSkin(), backup, { recursive: true })
-  // The build writes two TRACKED files at config time (vite.config.ts: the
-  // skin-tokens.css cascade + skin-brand.generated.ts); the last cell leaves
-  // ITS versions behind. The restore build regenerates them; --no-restore
-  // puts the pre-run bytes back, or a skin's brand rides into a commit.
-  const generated = [
-    join(frontendDir(), 'src', 'styles', 'skin-tokens.css'),
-    join(frontendDir(), 'src', 'platform', 'skin-brand.generated.ts'),
-  ].map((file) => ({ file, text: readFileSync(file, 'utf8') }))
   const restore = () => {
-    if (!args.restore) for (const { file, text } of generated) writeFileSync(file, text)
     rmSync(publicSkin(), { recursive: true, force: true })
     if (backup) {
       cpSync(backup, publicSkin(), { recursive: true })

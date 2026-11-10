@@ -60,10 +60,6 @@ describe('brand-grep: the brand word (tz-i18n §7.2.3)', () => {
       ['src/pwa/manifest.ts', "export const pwaManifest = { name: 'VELO', short_name: 'VELO' }"],
       ['src/platform/skin.ts', "export const GOLDEN_SKIN = { displayName: 'VELO' }"],
       ['src/platform/instance.ts', "brand: import.meta.env.VITE_BRAND ?? 'VELO',"],
-      [
-        'src/platform/skin-brand.golden-test-stub.ts',
-        'export const SKIN_BRAND: string | null = null',
-      ],
     ])
     expect(report.brand).toEqual([])
   })

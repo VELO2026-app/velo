@@ -11,7 +11,7 @@
 //   src/pwa/manifest.ts       golden identity defaults (pinned by its tests)
 //   src/platform/skin.ts      GOLDEN_SKIN -- the no-skin build's identity
 //   src/platform/instance.ts  the VITE_BRAND ?? 'VELO' golden default
-//   src/platform/skin-brand.{generated,golden-test-stub}.ts
+//   (the skin brand is a virtual module now, nothing on disk)
 // (index.html placeholders/markers and skins/** are the other reference
 // carriers by design and are not src/ -- nothing to scan there.)
 // Header comments («VELO Frontend --») are NOT user strings: comments are
@@ -96,11 +96,7 @@ function cleanParts(raw) {
   const tplMatch = raw.match(/<template>[\s\S]*<\/template>/)
   const scriptMatch = raw.match(/<script[^>]*>([\s\S]*?)<\/script>/)
   return {
-    script: scriptMatch
-      ? stripJsComments(scriptMatch[1])
-      : tplMatch
-        ? ''
-        : stripJsComments(raw),
+    script: scriptMatch ? stripJsComments(scriptMatch[1]) : tplMatch ? '' : stripJsComments(raw),
     template: tplMatch ? stripHtmlComments(tplMatch[0]) : '',
   }
 }
@@ -136,8 +132,6 @@ const BRAND_REFERENCE_FILES = new Set([
   'src/pwa/manifest.ts',
   'src/platform/skin.ts',
   'src/platform/instance.ts',
-  'src/platform/skin-brand.generated.ts',
-  'src/platform/skin-brand.golden-test-stub.ts',
 ])
 
 function brandHits(files) {
@@ -181,7 +175,11 @@ const FEATURE_DEFINES_READERS = new Set([
   'vite.config.ts',
   'vitest.config.ts',
 ])
-const FEATURE_DEFINES_CALLERS = new Set(['src/platform/features.ts', 'vite.config.ts', 'vitest.config.ts'])
+const FEATURE_DEFINES_CALLERS = new Set([
+  'src/platform/features.ts',
+  'vite.config.ts',
+  'vitest.config.ts',
+])
 const FEATURE_LITERAL = /__VELO_FEATURE_[A-Z0-9_]+__/
 
 function featureHits(files) {
