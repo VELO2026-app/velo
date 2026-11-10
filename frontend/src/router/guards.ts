@@ -2,23 +2,25 @@
 // VELO Frontend -- Router Guards (Phase F2.2, updated F6, BUG-role-redirect, TD-F01)
 // =============================================================================
 //
-// Navigation guards for role-based access control.
+// Role-based routing for an authenticated session; the auth gate itself
+// (authenticated yes/no) lives in App.vue (Phase F1.3). Two shapes:
 //
-// Auth gate (authenticated yes/no) lives in App.vue (Phase F1.3).
-// These guards handle ROLE-BASED routing for authenticated users:
-//   - roleRedirect:      redirect / to role-specific dashboard
-//   - roleGuard:         require a minimum role to access a route group
-//   - masterStatusGuard: require verified master profile
+//   - ACCESS REQUIREMENTS (FE-157): a route record declares what entering it
+//     demands in meta.requires (RouteRequirement). installAccessGuard()
+//     registers the router's one access guard: auth readiness on the first
+//     navigation, the role freshness check, the P-1 dashboard redirect, then
+//     the requirement of every record the navigation enters, parent first.
+//     roleGuard, masterNoProfileGuard and masterStatusGuard are the checks
+//     behind the requirements (REQUIREMENT_CHECKS).
+//   - LANDING POLICIES: '/', /master/apply, /master/invite/:token and
+//     /master/pending keep their own beforeEnter (roleRedirect,
+//     masterApplyGuard, masterPendingGuard) -- each is the decision table of
+//     ONE landing, not a requirement other records share.
 //
-// F6 update: masterStatusGuard is now fully implemented.
-//   - Calls useMasterStore().fetchMyProfile() lazily (skips if loaded)
-//   - Redirects to /master/pending if profile missing or not verified
-//   - Guards are applied per-route in router/index.ts via beforeEnter
-//
-// BUG-role-redirect fix: roleRedirect is now async and awaits waitUntilReady()
-// before reading auth.role. Without this, the guard fires during the first
-// navigation (before App.vue mounts), sees role=null, and redirects every
-// user to /user/dashboard regardless of their real role.
+// BUG-role-redirect fix: roleRedirect awaits waitUntilReady() before reading
+// auth.role. Without this, the guard fires during the first navigation
+// (before App.vue mounts), sees role=null, and redirects every user to
+// /user/dashboard regardless of their real role.
 //
 // WARNING-3: if waitUntilReady() timed out and role is still null, redirect
 // to /auth-error so the user sees a recoverable error screen instead of
@@ -26,16 +28,23 @@
 //
 // TD-F01: roleRedirect consumes pendingStartParam after auth completes.
 // initAuth() stores the raw startapp value; roleRedirect parses it with the
-// session role (parseStartParam, Links) and redirects there instead of the
-// dashboard -- open_practice__{uuid} to the practice, zoom__{code} to
-// practice-live (T-35), a notification verb to the bell's screen. It is
-// cleared after first use to prevent stale redirects.
+// session role (parseStartParam, router/deepLinks.ts) and redirects there
+// instead of the dashboard -- open_practice__{uuid} to the practice,
+// zoom__{code} to practice-live (T-35), a notification verb to the bell's
+// screen. It is cleared after first use to prevent stale redirects.
 // =============================================================================
 
-import type { NavigationGuardWithThis, RouteLocationNormalized } from 'vue-router'
+import type {
+  NavigationGuardWithThis,
+  RouteLocationNormalized,
+  RouteRecordNormalized,
+  Router,
+} from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { waitUntilReady, pendingStartParam, parseStartParam } from '@/composables/useAuth'
+import { useUiStore } from '@/stores/ui'
+import { waitUntilReady, pendingStartParam } from '@/composables/useAuth'
 import type { ReadyResult } from '@/composables/useAuth'
+import { parseStartParam } from '@/router/deepLinks'
 import { refreshRoleIfStale } from '@/composables/useRoleFreshness'
 import type { UserRole } from '@/api/types'
 import { MASTER_APPLIED_KEY, masterRejectionSeenKey } from '@/utils/constants'
@@ -48,6 +57,67 @@ import { MASTER_APPLIED_KEY, masterRejectionSeenKey } from '@/utils/constants'
 async function loadMasterStore() {
   const { useMasterStore } = await import('@/stores/master')
   return useMasterStore()
+}
+
+/**
+ * What entering a route record demands of the session (meta.requires).
+ *
+ * @remarks
+ *   - `master-role`: role master or admin (an admin browses the master zone).
+ *   - `admin-role`: role admin.
+ *   - `master-application`: a role=master account with no master profile at
+ *     all is led to /master/apply (№257 honest entry).
+ *   - `verified-master`: a verified master profile; implies
+ *     `master-application`.
+ */
+export type RouteRequirement =
+  'master-role' | 'admin-role' | 'master-application' | 'verified-master'
+
+declare module 'vue-router' {
+  interface RouteMeta {
+    /** The record's own access requirement, checked when a navigation enters
+     * it (requirementsGuard). Read per record from `to.matched`: through the
+     * merged `to.meta` a child's value would hide its parent's. */
+    requires?: RouteRequirement
+  }
+}
+
+/** A guard verdict: let the navigation on, or redirect it. */
+type AccessResult = true | { path: string }
+
+/** The session check behind one RouteRequirement. Takes no route: the
+ * requirement already names what is checked. */
+type AccessCheck = () => AccessResult | Promise<AccessResult>
+
+/**
+ * Whether the session is a rejected applicant who has not seen the verdict
+ * screen yet (Bug 1, PROMPT №405; T21-4 on any route).
+ *
+ * @remarks ONE copy for roleRedirect and roleFreshnessGuard: a role='user'
+ * account whose master application was rejected, routed to /master/pending
+ * ONCE (operator decision: show the verdict, then treat them as an ordinary
+ * user). MasterPendingView marks the per-user key seen once the screen
+ * actually renders (mirrors masterApprovedSeenKey's placement for the
+ * approved case); re-applying clears it (MasterApplyView).
+ */
+function hasUnseenRejection(auth: ReturnType<typeof useAuthStore>): boolean {
+  const userId = auth.user?.id
+  if (auth.role !== 'user' || auth.masterApplication?.status !== 'rejected' || !userId) {
+    return false
+  }
+  return !localStorage.getItem(masterRejectionSeenKey(userId))
+}
+
+/** The dashboard of a role's own zone; /user/dashboard for any other role. */
+function zoneDashboard(role: UserRole | null): { path: string } {
+  switch (role) {
+    case 'admin':
+      return { path: '/admin/dashboard' }
+    case 'master':
+      return { path: '/master/dashboard' }
+    default:
+      return { path: '/user/dashboard' }
+  }
 }
 
 /**
@@ -67,8 +137,8 @@ async function loadMasterStore() {
  * Bug 1 (PROMPT №405, operator device testing 2026-07-15): a rejected
  * applicant returning later (role='user', no capability) is routed to
  * /master/pending ONCE (operator decision: show the verdict, then treat
- * them as an ordinary user) if they have not already seen it -- see the
- * masterRejectionSeenKey check below.
+ * them as an ordinary user) if they have not already seen it -- see
+ * hasUnseenRejection.
  */
 export const roleRedirect: NavigationGuardWithThis<undefined> = async () => {
   // Wait for initAuth() to complete so auth.role reflects the real session.
@@ -97,26 +167,10 @@ export const roleRedirect: NavigationGuardWithThis<undefined> = async () => {
   // ALLOWS a rejected applicant onto /master/pending, but nothing routed them
   // there -- roleRedirect switched on role alone and always sent role='user'
   // to /user/dashboard, so a returning rejected applicant never saw the
-  // screen the guard now permits. MasterPendingView marks the per-user key
-  // seen once the screen actually renders (mirrors masterApprovedSeenKey's
-  // placement for the approved case).
-  if (
-    auth.role === 'user' &&
-    auth.masterApplication?.status === 'rejected' &&
-    auth.user?.id &&
-    !localStorage.getItem(masterRejectionSeenKey(auth.user.id))
-  ) {
-    return { path: '/master/pending' }
-  }
+  // screen the guard now permits.
+  if (hasUnseenRejection(auth)) return { path: '/master/pending' }
 
-  switch (auth.role) {
-    case 'admin':
-      return { path: '/admin/dashboard' }
-    case 'master':
-      return { path: '/master/dashboard' }
-    default:
-      return { path: '/user/dashboard' }
-  }
+  return zoneDashboard(auth.role)
 }
 
 /**
@@ -126,10 +180,11 @@ export const roleRedirect: NavigationGuardWithThis<undefined> = async () => {
  * only ever fires for a fresh navigation to '/' -- for a session that's
  * already open and simply navigating around
  * (`dashboard -> calendar -> settings`), nothing previously re-checked this
- * at all (PROMPT №545 recon, B1's actual root cause). Called directly from
- * router/index.ts's global beforeEach rather than registered as its own
- * router.beforeEach, so it composes with the existing P-1 logic in one
- * guard chain instead of two independent ones racing on order.
+ * at all (PROMPT №545 recon, B1's actual root cause). Called from inside
+ * the access guard (installAccessGuard) rather than registered as its own
+ * router.beforeEach, so it composes with the P-1 logic and the route
+ * requirements in one guard chain instead of independent ones racing on
+ * order.
  *
  * refreshRoleIfStale() is deliberately NOT awaited (PROMPT №550, PROMPT №549
  * regression finding): this guard runs on EVERY navigation, for EVERY role
@@ -172,26 +227,18 @@ export const roleRedirect: NavigationGuardWithThis<undefined> = async () => {
  * owns that route's own access rules, this must not redirect a navigation
  * that's already headed there.
  *
- * Deliberately NOT typed as NavigationGuardWithThis (unlike every guard
- * above) -- it is never registered via router.beforeEach directly, only
- * called manually from inside the already-registered global beforeEach
- * (router/index.ts), which passes just `to`. That type's call signature
- * requires (to, from, next), which a direct 1-arg call does not satisfy.
+ * Deliberately NOT typed as NavigationGuardWithThis -- it is never
+ * registered via router.beforeEach directly, only called from inside the
+ * access guard (installAccessGuard), which passes just `to`. That type's
+ * call signature requires (to, from, next), which a direct 1-arg call does
+ * not satisfy.
  */
 export function roleFreshnessGuard(
   to: Pick<RouteLocationNormalized, 'name'>,
 ): true | { path: string } {
   void refreshRoleIfStale()
 
-  const auth = useAuthStore()
-
-  if (
-    to.name !== 'master-pending' &&
-    auth.role === 'user' &&
-    auth.masterApplication?.status === 'rejected' &&
-    auth.user?.id &&
-    !localStorage.getItem(masterRejectionSeenKey(auth.user.id))
-  ) {
+  if (to.name !== 'master-pending' && hasUnseenRejection(useAuthStore())) {
     return { path: '/master/pending' }
   }
 
@@ -199,14 +246,13 @@ export function roleFreshnessGuard(
 }
 
 /**
- * Factory: require a minimum role to access a route group.
+ * Factory: the role check behind `master-role` and `admin-role`; any other
+ * role goes to /user/dashboard.
  *
  * roleGuard('master') -- allows master + admin
  * roleGuard('admin')  -- allows admin only
  */
-export function roleGuard(
-  required: Extract<UserRole, 'master' | 'admin'>,
-): NavigationGuardWithThis<undefined> {
+export function roleGuard(required: Extract<UserRole, 'master' | 'admin'>): AccessCheck {
   return () => {
     const auth = useAuthStore()
     const role = auth.role
@@ -244,18 +290,19 @@ async function noProfileMasterRedirect(): Promise<{ path: string } | null> {
 
   const masterStore = await loadMasterStore()
   // Lazy-fetch profile (skips network if already loaded this session).
-  await masterStore.fetchMyProfile()
+  await masterStore.fetchMyProfile(false)
 
   return masterStore.profileMissing ? { path: '/master/apply' } : null
 }
 
 /**
- * Lead a no-application master to the apply wizard on dashboard entry.
+ * The `master-application` check: lead a no-application master to the apply
+ * wizard.
  *
- * Applied to: /master/dashboard (which has no status guard -- pending /
- * rejected masters may sit on it, byte-identical to before №257).
+ * Required by: /master/dashboard (which requires no verified status --
+ * pending / rejected masters may sit on it, byte-identical to before №257).
  */
-export const masterNoProfileGuard: NavigationGuardWithThis<undefined> = async () =>
+export const masterNoProfileGuard: AccessCheck = async () =>
   (await noProfileMasterRedirect()) ?? true
 
 /** Application and invite entry share the same server-backed status gate.
@@ -283,14 +330,85 @@ export const masterApplyGuard: NavigationGuardWithThis<undefined> = async () => 
 }
 
 /**
- * Require verified master profile before accessing protected master routes.
+ * How long an admin's master-profile answer serves the `verified-master`
+ * check before the next check refetches it (B1).
  *
- * Applied to: practices/*, finance (routes that require active master status).
- * Not applied to: /master/profile, /master/apply, /master/pending.
+ * @remarks The GET /users/me freshness window (useRoleFreshness.ts
+ * NAV_REFRESH_DEBOUNCE_MS): the staleness the app already accepts for a role
+ * change bounds B1's stale cached profile too.
+ */
+export const ADMIN_PROFILE_TTL_MS = 15_000
+
+/** The last admin profile fetch: when, and for which account. */
+let adminProfileFetch: { userId: string | null; at: number } | null = null
+
+type MasterStore = Awaited<ReturnType<typeof loadMasterStore>>
+
+/**
+ * Refetch an admin's master profile once ADMIN_PROFILE_TTL_MS has passed
+ * since the last fetch, or when that fetch was another account's; within
+ * the window the store's answer stands and no request leaves.
+ *
+ * @remarks Stamped whatever the answer: GET /masters/me refuses role=admin
+ * (403 from get_current_master, backend auth/dependencies.py), so for an
+ * admin an error IS the usual answer and cannot gate the stamp. Stamped
+ * after the fetch, so a check racing it waits on the same request (the API
+ * client dedupes the GET) instead of reading the store before it lands.
+ */
+async function refreshAdminProfile(master: MasterStore, userId: string | null): Promise<void> {
+  const last = adminProfileFetch
+  if (last && last.userId === userId && Date.now() - last.at < ADMIN_PROFILE_TTL_MS) return
+  await master.fetchMyProfile(true)
+  adminProfileFetch = { userId, at: Date.now() }
+}
+
+/**
+ * TEST-ONLY. Forget the last admin profile fetch, so each test starts with
+ * the TTL window closed. Never call from production code.
+ */
+export function __resetAdminProfileTtlForTest(): void {
+  adminProfileFetch = null
+}
+
+/**
+ * A master's application status when GET /masters/me brought no profile.
+ *
+ * @remarks The master store keeps no error kind: a 403 for an unverified
+ * application (master_profile_not_verified) and a request that never got an
+ * answer both leave it without a profile. The session's GET /users/me copy
+ * (master_application) tells them apart. It is fetched here once when the
+ * session holds none yet -- the user a fresh Telegram sign-in returns
+ * carries no master_application until the first refresh lands; the client
+ * joins the refresh roleFreshnessGuard already started (GET dedupe).
+ *
+ * @returns Undefined when neither request got an answer.
+ */
+async function applicationStatusWithoutProfile(
+  auth: ReturnType<typeof useAuthStore>,
+): Promise<string | undefined> {
+  if (!auth.masterApplication) await auth.fetchMe()
+  return auth.masterApplication?.status
+}
+
+/**
+ * The `verified-master` check: a verified master profile.
+ *
+ * Required by: practices/*, finance, students, groups, schools, summary
+ * (routes that require active master status; router/routes/master.ts).
+ * Not by: /master/profile, /master/apply, /master/pending.
  * №257: a confirmed no-application master goes to /master/apply (honest
  * entry); everything else non-verified keeps the /master/pending redirect.
+ *
+ * @remarks FE-157: a network error is not a verdict. For a master the
+ * status comes from the profile, else from GET /users/me
+ * (applicationStatusWithoutProfile); with no answer from either the
+ * navigation goes on, and the screen's own requests surface the connection
+ * error with their retry. Nothing is exposed by it: every master endpoint
+ * checks the verified status itself (get_current_master, backend
+ * auth/dependencies.py). It used to land a verified master on the verdict
+ * screen, a deep link included.
  */
-export const masterStatusGuard: NavigationGuardWithThis<undefined> = async () => {
+export const masterStatusGuard: AccessCheck = async () => {
   const redirect = await noProfileMasterRedirect()
   if (redirect) return redirect
 
@@ -307,11 +425,21 @@ export const masterStatusGuard: NavigationGuardWithThis<undefined> = async () =>
   // role-reset is conditional on `user.role == MASTER`, which is false for
   // an admin, so their profile can flip to 'suspended' while role stays
   // 'admin' -- profileLoaded would otherwise cache the old 'verified'
-  // forever. Force a real fetch for exactly this population; a real master
-  // keeps the existing lazy skip-if-loaded behaviour and pays no extra
-  // network call at all.
-  await masterStore.fetchMyProfile(auth.role !== 'master')
+  // forever. Refetch for exactly this population, at most once per
+  // ADMIN_PROFILE_TTL_MS (FE-157: it used to be on every check); a real
+  // master keeps the existing lazy skip-if-loaded behaviour and pays no
+  // extra network call at all (noProfileMasterRedirect above made its one
+  // lazy fetch).
+  if (auth.role === 'master') {
+    const status = masterStore.profile?.status ?? (await applicationStatusWithoutProfile(auth))
+    if (status === undefined) return true
+    return status === 'verified' ? true : { path: '/master/pending' }
+  }
 
+  // An admin: GET /masters/me refuses role=admin, so no profile is the usual
+  // answer, not a lost one -- the verdict screen bounces an admin to the
+  // admin dashboard (masterPendingGuard), the path admins always took.
+  await refreshAdminProfile(masterStore, auth.user?.id ?? null)
   if (!masterStore.profile || masterStore.profile.status !== 'verified') {
     return { path: '/master/pending' }
   }
@@ -370,4 +498,89 @@ export const masterPendingGuard: NavigationGuardWithThis<undefined> = async () =
   if (auth.masterApplication?.status === 'rejected') return true
 
   return { path: '/user/dashboard' }
+}
+
+/**
+ * P-1: a master or an admin opening the user dashboard lands on their own
+ * zone's dashboard -- unless they chose the user mode (ui store uiMode).
+ */
+export function zoneHomeGuard(to: Pick<RouteLocationNormalized, 'name' | 'path'>): AccessResult {
+  if (to.name !== 'user-dashboard' && to.path !== '/user' && to.path !== '/user/') {
+    return true
+  }
+
+  const auth = useAuthStore()
+  if (auth.role !== 'master' && auth.role !== 'admin') return true
+  if (useUiStore().uiMode === 'user') return true
+
+  return zoneDashboard(auth.role)
+}
+
+/** The check behind each RouteRequirement. */
+const REQUIREMENT_CHECKS: Record<RouteRequirement, AccessCheck> = {
+  'master-role': roleGuard('master'),
+  'admin-role': roleGuard('admin'),
+  'master-application': masterNoProfileGuard,
+  'verified-master': masterStatusGuard,
+}
+
+/** One record, also when reached through an alias (vue-router's own rule). */
+function sameRecord(a: RouteRecordNormalized, b: RouteRecordNormalized): boolean {
+  return (a.aliasOf ?? a) === (b.aliasOf ?? b)
+}
+
+/**
+ * Check the meta.requires of every record `to` enters, parent first; the
+ * first redirect wins.
+ *
+ * @remarks "Enters" is vue-router's own `beforeEnter` rule, so the 21
+ * per-record `beforeEnter: masterStatusGuard` this replaced still fire
+ * exactly as before: a record `from` already matched is not checked again --
+ * a param, query or hash change, or a move between two screens of one shell,
+ * checks only the records that change.
+ */
+export async function requirementsGuard(
+  to: Pick<RouteLocationNormalized, 'matched'>,
+  from: Pick<RouteLocationNormalized, 'matched'>,
+): Promise<AccessResult> {
+  for (const record of to.matched) {
+    const requirement = record.meta.requires
+    if (!requirement) continue
+    if (from.matched.some((left) => sameRecord(left, record))) continue
+    const result = await REQUIREMENT_CHECKS[requirement]()
+    if (result !== true) return result
+  }
+  return true
+}
+
+/**
+ * Register the router's one access guard (a global beforeEach).
+ *
+ * @remarks Order inside it: the first navigation waits for auth
+ * (waitUntilReady) -- it starts before App.vue mounts; then the role
+ * freshness check (T21-4/T21-5), the P-1 dashboard redirect, and the
+ * requirements of the records the navigation enters. Install it AFTER
+ * installRouteCatalogs: guards run in registration order, so a deep link into
+ * a zone starts its catalog fetch during the auth wait.
+ */
+export function installAccessGuard(router: Router): void {
+  let authSettled = false
+
+  router.beforeEach(async (to, from) => {
+    if (!authSettled) {
+      const { timedOut }: ReadyResult = await waitUntilReady()
+      authSettled = true
+      if (timedOut) {
+        console.warn('[router] auth initialization timed out on first navigation')
+      }
+    }
+
+    const freshness = roleFreshnessGuard(to)
+    if (freshness !== true) return freshness
+
+    const home = zoneHomeGuard(to)
+    if (home !== true) return home
+
+    return requirementsGuard(to, from)
+  })
 }
