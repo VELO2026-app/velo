@@ -209,7 +209,20 @@
             @click="router.push({ name: 'practice-detail', params: { id: $event } })"
           />
         </template>
-        <VEmptyState v-else variant="note" :title="t('user.screens.schoolPage.noUpcoming')" />
+        <!-- No empty claim while the feed is still loading: "no upcoming
+             practices" is said only by an answer that has none. A failed
+             feed says so (i18n:common.loadError) instead of claiming an
+             empty school. -->
+        <VEmptyState
+          v-else-if="feedState === 'ready'"
+          variant="note"
+          :title="t('user.screens.schoolPage.noUpcoming')"
+        />
+        <VEmptyState
+          v-else-if="feedState === 'failed'"
+          variant="note"
+          :title="t('common.loadError')"
+        />
       </template>
     </div>
 
@@ -315,6 +328,8 @@ const error = ref(false)
 const notFound = ref(false)
 const page = ref<SchoolPageResponse | null>(null)
 const practices = ref<PracticeResponse[]>([])
+/** The practices feed loads apart from the header: its own lifecycle. */
+const feedState = ref<'loading' | 'ready' | 'failed'>('loading')
 
 const relation = computed(() => page.value?.viewer.relation ?? null)
 const isCurator = computed(() => relation.value === 'curator')
@@ -405,15 +420,20 @@ async function load(): Promise<void> {
   error.value = false
   notFound.value = false
   practices.value = []
+  feedState.value = 'loading'
   // Both requests leave together; the header paints as soon as the page
   // payload lands and the practices feed fills in when its answer does.
-  // The feed is a bonus under the header: its failure leaves it empty
+  // The feed is a bonus under the header: its failure marks the feed only
   // instead of replacing the whole page with the error state.
   void getSchoolPractices(schoolId.value, FEED_LIMIT, 0)
     .then((res) => {
-      if (epoch === loadEpoch) practices.value = res.items
+      if (epoch !== loadEpoch) return
+      practices.value = res.items
+      feedState.value = 'ready'
     })
-    .catch(() => undefined)
+    .catch(() => {
+      if (epoch === loadEpoch) feedState.value = 'failed'
+    })
   try {
     const pageRes = await getSchoolPage(schoolId.value)
     if (epoch !== loadEpoch) return

@@ -783,14 +783,33 @@ describe('SchoolPageView -- practices feed request', () => {
     expect(cgApi.getSchoolPractices).toHaveBeenCalledWith('g1', 5, 0)
   })
 
-  it('a failed practices request leaves the header and an empty feed, not the error state', async () => {
+  it('a failed practices request keeps the header and marks only the feed as failed', async () => {
     mockHappyLoad('student')
     vi.mocked(cgApi.getSchoolPractices).mockRejectedValue(new Error('boom'))
     mount()
     await flush()
 
     expect(text()).toContain(pageFixture('student').name)
-    expect(text()).not.toContain('Практика p1')
+    expect(text()).toContain('Ошибка загрузки')
+    expect(text()).not.toContain('Ближайших практик нет')
+    expect(text()).not.toContain('Упс, что-то пошло не так')
+  })
+
+  it('claims "no upcoming practices" only after the feed answered empty, never while loading', async () => {
+    mockHappyLoad('student')
+    let answer!: (res: { items: never[]; total: number; limit: number; offset: number }) => void
+    vi.mocked(cgApi.getSchoolPractices).mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve
+      }),
+    )
+    mount()
+    await flush()
+    expect(text()).not.toContain('Ближайших практик нет')
+
+    answer({ items: [], total: 0, limit: 5, offset: 0 })
+    await flush()
+    expect(text()).toContain('Ближайших практик нет')
   })
 })
 
