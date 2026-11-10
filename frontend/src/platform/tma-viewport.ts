@@ -64,5 +64,9 @@ export function loadTmaSdk(): Promise<TmaSdk> {
     mirror(vp.contentSafeAreaInsetTop, tmaViewportState.contentSafeAreaInsetTop)
     return sdk
   })
+  // A failed chunk fetch must not stay cached: the next call retries.
+  _loading.catch(() => {
+    _loading = null
+  })
   return _loading
 }
