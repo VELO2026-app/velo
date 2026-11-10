@@ -44,7 +44,9 @@ const SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>'
 
 /** A complete, valid LIGHT package (dark text on the golden photo is fine,
  *  so no bg/ is needed). `patch` overrides brand.json / tokens.css. */
-function writePackage(patch: { brand?: object; tokens?: string; bg?: boolean } = {}): string {
+function writePackage(
+  patch: { brand?: object; tokens?: string; bg?: boolean | 'png' | 'webp' | 'big-png' } = {},
+): string {
   const dir = mkdtempSync(join(tmpdir(), 'velo-skin-'))
   const brand = patch.brand ?? {
     displayName: 'Фикстура',
@@ -68,7 +70,13 @@ function writePackage(patch: { brand?: object; tokens?: string; bg?: boolean } =
   writeFileSync(join(dir, 'apple-touch-icon-180.png'), png(180, 180, 2))
   if (patch.bg) {
     mkdirSync(join(dir, 'bg'))
-    writeFileSync(join(dir, 'bg', 'background.png'), png(1080, 1920))
+    if (patch.bg === 'webp') writeFileSync(join(dir, 'bg', 'background.webp'), Buffer.alloc(64))
+    else if (patch.bg === 'big-png')
+      writeFileSync(
+        join(dir, 'bg', 'background.png'),
+        Buffer.concat([png(1080, 1920), Buffer.alloc(400 * 1024)]),
+      )
+    else writeFileSync(join(dir, 'bg', 'background.png'), png(1080, 1920))
   }
   return dir
 }
@@ -84,7 +92,7 @@ describe('validate-skin (tz-whitelabel §3)', () => {
     expect(report.manual.some((line) => line.includes('safe zone'))).toBe(true)
   })
 
-  it('a DARK package without bg/background.png fails: light text on the golden photo', () => {
+  it('a DARK package without a bg photo fails: light text on the golden photo', () => {
     // the velo_test_front_bot incident: tokens shipped, the background did
     // not -- light theme photo stayed under light text tokens
     const dark = {
@@ -101,7 +109,27 @@ describe('validate-skin (tz-whitelabel §3)', () => {
       [],
     )
     const report = validateSkin(writePackage(dark), FRONTEND) as Report
-    expect(report.fails.join('\n')).toContain('FAIL bg/background.png: missing')
+    expect(report.fails.join('\n')).toContain('FAIL bg/background: missing')
+  })
+
+  it('bg/: absent warns, a webp passes clean, a small png passes clean', () => {
+    const absent = validateSkin(writePackage(), FRONTEND) as Report
+    expect(absent.warns.join('\n')).toContain('bg/background missing')
+    const webp = validateSkin(writePackage({ bg: 'webp' }), FRONTEND) as Report
+    expect(webp.fails).toEqual([])
+    expect(webp.passed).toContain('bg/background.webp present')
+    expect(webp.warns.join('\n')).not.toContain('bg/background')
+    const small = validateSkin(writePackage({ bg: 'png' }), FRONTEND) as Report
+    expect(small.fails).toEqual([])
+    expect(small.passed).toContain('bg/background.png present')
+    expect(small.warns.join('\n')).not.toContain('bg/background')
+  })
+
+  it('a png photo over 300 KB passes but warns to ship webp', () => {
+    const report = validateSkin(writePackage({ bg: 'big-png' }), FRONTEND) as Report
+    expect(report.fails).toEqual([])
+    expect(report.warns.join('\n')).toContain('bg/background.png is')
+    expect(report.warns.join('\n')).toContain('background.webp')
   })
 
   it('a package with an unknown token and a 13-char shortName fails, named', () => {
