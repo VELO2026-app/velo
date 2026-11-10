@@ -8,7 +8,7 @@ import {
   toggleRootClass,
 } from '@/platform/dom'
 import { onMounted, onBeforeUnmount, ref, readonly } from 'vue'
-import { viewport } from '@tma.js/sdk-vue'
+import { getTmaViewport } from '@/platform/tma-viewport'
 import router from '@/router'
 import { KEYBOARD_VIEWPORT_THRESHOLD } from '@/utils/constants'
 import { resetKeyboardViewportState } from '@/utils/keyboardViewportState'
@@ -103,7 +103,8 @@ const ORIENTATION_SETTLE_MS = 300
  *   the `@tma.js/sdk-vue` viewport never mounted).
  */
 export function nativeKeyboardDelta(): number | null {
-  if (!viewport.isMounted()) return null
+  const viewport = getTmaViewport()
+  if (!viewport?.isMounted()) return null
   return viewport.stableHeight() - viewport.height()
 }
 
