@@ -309,7 +309,8 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
+import { useNow } from '@/composables/useNow'
 import { useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'
 import { useBookingsStore } from '@/stores/bookings'
@@ -436,7 +437,7 @@ import { isInCheckinWindow, isInFeedbackWindow } from '@/composables/usePractice
 
 // Reactive clock -- updated every 60s so window computeds re-evaluate
 // without requiring a page reload (C-1 fix).
-const now = ref(Date.now())
+const now = useNow(60_000)
 
 /**
  * Returns the booking matching this practice (any active-ish status).
@@ -818,10 +819,6 @@ async function onCancelBooking(): Promise<void> {
 // Lifecycle
 // =========================================================================
 
-// Reactive clock: re-evaluate window computeds every minute so the button
-// switches without requiring a page reload.
-let clockInterval: ReturnType<typeof setInterval> | null = null
-
 onMounted(() => {
   const id = route.params.id as string
   void store.openPractice(id)
@@ -831,10 +828,6 @@ onMounted(() => {
   // badge below (attendancePending) would never clear. refreshMyBookings()
   // always re-fetches, without flashing the status row/Zoom card empty.
   void bookingsStore.refreshMyBookings()
-  // Refresh window checks every 60s.
-  clockInterval = setInterval(() => {
-    now.value = Date.now()
-  }, 60_000)
 })
 
 // F-01: Vue Router may reuse this component instance when navigating between
@@ -854,10 +847,6 @@ watch(
     }
   },
 )
-
-onUnmounted(() => {
-  if (clockInterval) clearInterval(clockInterval)
-})
 </script>
 
 <style scoped>

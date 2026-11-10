@@ -211,6 +211,8 @@ import { useAuthStore } from '@/stores/auth'
 import { extractApiError } from '@/composables/useApiError'
 import { ApiResponseError } from '@/api/client'
 import { useComposerGrowCap } from '@/composables/useComposerGrowCap'
+import { useViewerTimezone } from '@/composables/useViewerTimezone'
+import { formatTime as formatClockTime } from '@/utils/format'
 
 // tz-i18n 2.2b: load-failed/empty states via chat.* / common.retry.
 
@@ -320,10 +322,12 @@ const growCap = useComposerGrowCap(composing)
 let pollTimer: ReturnType<typeof setTimeout> | null = null
 let disposed = false
 
+/** Message clock time in the viewer's profile timezone and the active locale. */
+const viewerTz = useViewerTimezone()
+
 function formatTime(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  if (Number.isNaN(new Date(iso).getTime())) return ''
+  return formatClockTime(iso, viewerTz.value)
 }
 
 /** BE-166: a support feed may hold an admin reply the reader must never see

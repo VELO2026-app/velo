@@ -189,7 +189,8 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useNow } from '@/composables/useNow'
 import { useRoute, useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import { VButton, VLoader, VEmptyState, VSegmentTrack, VRatingBadges } from '@/components/ui'
@@ -245,8 +246,7 @@ const activeTab = ref<'upcoming' | 'past'>(route.query.tab === 'past' ? 'past' :
 // created and still legitimately belongs in t('masterScreens.masterPractices.tab.upcoming') until the
 // master publishes or deletes it -- it is not something the clock auto-
 // finalizes away.
-const now = ref(Date.now())
-let clockInterval: ReturnType<typeof setInterval> | null = null
+const now = useNow(60_000)
 
 const upcomingPractices = computed(() =>
   masterStore.practicesUpcoming.filter(
@@ -384,15 +384,8 @@ watch(activeTab, async (tab) => {
 })
 
 onMounted(async () => {
-  clockInterval = setInterval(() => {
-    now.value = Date.now()
-  }, 60_000)
   await ensureBucketLoaded(activeTab.value)
   await loadTabData()
-})
-
-onUnmounted(() => {
-  if (clockInterval) clearInterval(clockInterval)
 })
 </script>
 
