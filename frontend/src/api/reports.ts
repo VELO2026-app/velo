@@ -26,16 +26,10 @@
 // =============================================================================
 
 import { api } from '@/api/client'
+import type { CreateReportRequest } from '@/api/types'
 
 /** What a report targets: a user, a master or a practice. */
 export type ReportTargetType = 'user' | 'master' | 'practice'
-
-/** Report creation body: target type, target id, reason. */
-export interface CreateReportRequest {
-  target_type: ReportTargetType
-  target_id: string
-  reason: string
-}
 
 /** POST /api/v1/reports -- create a report. Resolves successfully on BOTH
  *  a genuinely new report (201) and a duplicate of the caller's own prior

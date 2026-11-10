@@ -37,6 +37,7 @@ import type {
   MasterStatsResponse,
   PaginatedMasterReviewsResponse,
 } from '@/api/types'
+import { path } from '@/api/path'
 
 /**
  * Submit a master application (3-step form).
@@ -102,7 +103,7 @@ export function updateMasterLanguages(languages: string[]): Promise<MasterProfil
  * or contact data -- safe public subset + practices_count / reviews_count.
  */
 export function getPublicMaster(userId: string): Promise<MasterPublicResponse> {
-  return api.get<MasterPublicResponse>(`/api/v1/masters/${userId}`)
+  return api.get<MasterPublicResponse>(path`/api/v1/masters/${userId}`)
 }
 
 /**
@@ -205,7 +206,7 @@ export type StudentDetailResponseWithBlocked = StudentDetailResponse & { blocked
  * Note: the response carries no name/avatar — the calling list passes those.
  */
 export function getStudent(id: string): Promise<StudentDetailResponseWithBlocked> {
-  return api.get<StudentDetailResponseWithBlocked>(`/api/v1/masters/me/students/${id}`)
+  return api.get<StudentDetailResponseWithBlocked>(path`/api/v1/masters/me/students/${id}`)
 }
 
 // =============================================================================

@@ -27,6 +27,7 @@ import type {
   PreviewPurchaseResponse,
   UserStatsResponse,
 } from '@/api/types'
+import { path } from '@/api/path'
 
 /**
  * Purchase a practice (creates Booking + Purchase + ledger entries).
@@ -39,7 +40,7 @@ export function purchasePractice(
   promoCode?: string,
 ): Promise<PurchaseResponse> {
   const body = promoCode ? { promo_code: promoCode } : undefined
-  return api.post<PurchaseResponse>(`/api/v1/practices/${practiceId}/purchase`, body)
+  return api.post<PurchaseResponse>(path`/api/v1/practices/${practiceId}/purchase`, body)
 }
 
 /**
@@ -53,7 +54,10 @@ export function previewPurchase(
   promoCode?: string,
 ): Promise<PreviewPurchaseResponse> {
   const body = promoCode ? { promo_code: promoCode } : undefined
-  return api.post<PreviewPurchaseResponse>(`/api/v1/practices/${practiceId}/preview-purchase`, body)
+  return api.post<PreviewPurchaseResponse>(
+    path`/api/v1/practices/${practiceId}/preview-purchase`,
+    body,
+  )
 }
 
 /**
@@ -108,7 +112,7 @@ export function getMyStats(): Promise<UserStatsResponse> {
  * @throws ApiResponseError -- 404 for anybody but the owner.
  */
 export function getBooking(bookingId: string): Promise<BookingDetailResponse> {
-  return api.get<BookingDetailResponse>(`/api/v1/bookings/${bookingId}`)
+  return api.get<BookingDetailResponse>(path`/api/v1/bookings/${bookingId}`)
 }
 
 /**
@@ -119,7 +123,7 @@ export function getBooking(bookingId: string): Promise<BookingDetailResponse> {
  *   `<= 24h before practice -> no refund (early finalize)`
  */
 export function cancelBooking(bookingId: string): Promise<void> {
-  return api.delete(`/api/v1/bookings/${bookingId}`)
+  return api.delete(path`/api/v1/bookings/${bookingId}`)
 }
 
 /**
@@ -130,7 +134,7 @@ export function cancelBooking(bookingId: string): Promise<void> {
  * @throws ApiResponseError -- 409 if already joined.
  */
 export function joinBooking(bookingId: string): Promise<BookingResponse> {
-  return api.post<BookingResponse>(`/api/v1/bookings/${bookingId}/join`)
+  return api.post<BookingResponse>(path`/api/v1/bookings/${bookingId}/join`)
 }
 
 /**
@@ -145,7 +149,7 @@ export function joinBooking(bookingId: string): Promise<BookingResponse> {
  * wrapper and the endpoint stay; the backend is not touched.
  */
 export function leaveBooking(bookingId: string): Promise<BookingResponse> {
-  return api.post<BookingResponse>(`/api/v1/bookings/${bookingId}/leave`)
+  return api.post<BookingResponse>(path`/api/v1/bookings/${bookingId}/leave`)
 }
 
 /**
@@ -156,7 +160,7 @@ export function leaveBooking(bookingId: string): Promise<BookingResponse> {
  * client-only before).
  */
 export function skipCheckin(bookingId: string): Promise<BookingResponse> {
-  return api.post<BookingResponse>(`/api/v1/bookings/${bookingId}/skip-checkin`)
+  return api.post<BookingResponse>(path`/api/v1/bookings/${bookingId}/skip-checkin`)
 }
 
 /**
@@ -170,5 +174,5 @@ export function skipCheckin(bookingId: string): Promise<BookingResponse> {
  * caller decides what to render for each.
  */
 export function getBookingRecording(bookingId: string): Promise<BookingRecordingResponse> {
-  return api.get<BookingRecordingResponse>(`/api/v1/bookings/${bookingId}/recording`)
+  return api.get<BookingRecordingResponse>(path`/api/v1/bookings/${bookingId}/recording`)
 }
