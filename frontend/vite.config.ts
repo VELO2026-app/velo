@@ -222,7 +222,9 @@ export const SKIN_BRAND: string | null = ${JSON.stringify(skin?.displayName ?? n
         registerType: 'autoUpdate',
         // Include these file types in precache.
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+          // webp: the background photo (bg/background.webp, FE-157) paints the
+          // first frame of every screen -- it must stay precached as the PNG was.
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff2}'],
           // Don't precache source maps -- nor the Zoom Meeting SDK chunk
           // (Standalone F4, manualChunks below): about 5 MB that only the
           // practice screen loads, on the practice-live join/start buttons

@@ -138,15 +138,19 @@ export function materializedSkinTokens(publicDir: string, skin: SkinPackage | nu
   // the first dark-theme build: the background applied, the tokens did not).
   // The photo URL token follows the file that really lies in skin/bg/ (the
   // build spills it over the canonical /bg/ path). No bg/ = the golden
-  // default from global.css stays. Declared last so the file on disk wins.
+  // default from global.css stays. A SEPARATE :root block after the skin's:
+  // the file on disk wins, and a skin declaration missing its trailing `;`
+  // cannot swallow the override.
   const bgFormat = skinBackgroundFormat(publicDir)
   const bgOverride =
-    bgFormat === null ? '' : `  --velo-app-bg-image: url('/bg/background.${bgFormat}');\n`
+    bgFormat === null
+      ? ''
+      : `:root {\n  --velo-app-bg-image: url('/bg/background.${bgFormat}');\n}\n`
   return `/* GENERATED from public/skin/tokens.css (tz-whitelabel §3 cascade) —
  * do not edit; regenerate by rebuilding. Imported AFTER global.css in app.ts.
  */
 :root {
 ${tokens}
-${bgOverride}}
-`
+}
+${bgOverride}`
 }

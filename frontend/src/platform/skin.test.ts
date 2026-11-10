@@ -125,5 +125,15 @@ describe('materializedSkinTokens (the §3 cascade file)', () => {
       const both = withBg('background.png', 'background.webp')
       expect(skinBackgroundFormat(both)).toBe('webp')
     })
+
+    it('the override is its own :root block -- a skin line without `;` cannot swallow it', () => {
+      const dir = withPackage(GOOD_BRAND, '--velo-tg-header: #1b2a41')
+      mkdirSync(join(dir, 'skin', 'bg'), { recursive: true })
+      writeFileSync(join(dir, 'skin', 'bg', 'background.webp'), 'x')
+      const css = materializedSkinTokens(dir, GOLDEN_SKIN)
+      expect(css).toMatch(
+        /--velo-tg-header: #1b2a41\s*\}\s*:root \{\s*--velo-app-bg-image: url\('\/bg\/background\.webp'\);\s*\}/,
+      )
+    })
   })
 })
