@@ -26,6 +26,8 @@ export interface ChatScrollOptions {
   nearBottomPx?: number
   /** Runs on every observed resize, before a pinned reader is re-pinned. */
   onResize?: () => void
+  /** Runs when a resize re-pins a reader who was at the bottom. */
+  onRepin?: () => void
 }
 
 /** Options for a sentinel observer created by `useChatScroll`. */
@@ -68,7 +70,7 @@ export function isNearBottomMetrics(
  * "reading history"). Observers are released with the calling scope.
  */
 export function useChatScroll(options: ChatScrollOptions) {
-  const { scrollEl, onResize } = options
+  const { scrollEl, onResize, onRepin } = options
   const nearBottomPx = options.nearBottomPx ?? DEFAULT_NEAR_BOTTOM_PX
 
   let pinned = true
@@ -114,7 +116,10 @@ export function useChatScroll(options: ChatScrollOptions) {
     if (resizeObserver || !el) return
     resizeObserver = new ResizeObserver(() => {
       onResize?.()
-      if (pinned) scrollToBottom()
+      if (pinned) {
+        scrollToBottom()
+        onRepin?.()
+      }
     })
     resizeObserver.observe(el)
   }

@@ -943,6 +943,11 @@ const chatScroll = useChatScroll({
   // composer clearance -- the pill is anchored to the root's bottom edge, so
   // its top moves with every height change of the screen itself.
   onResize: () => refreshComposerClearance(),
+  // Holding the bottom means the reader is back at "today": a saved mid-history
+  // offset no longer describes where they are, so a return must not restore it.
+  onRepin: () => {
+    diaryStore.feedScrollTop = 0
+  },
 })
 const { rememberBottomState, attachKeepBottom } = chatScroll
 

@@ -109,6 +109,24 @@ describe('useChatScroll keep-bottom', () => {
     expect(m.scrollTop).toBe(1000)
   })
 
+  it('reports a re-pin only when the reader was held at the bottom', () => {
+    const m = { scrollTop: 600, scrollHeight: 1000, clientHeight: 400 }
+    const scrollEl = ref<HTMLElement | null>(makeFeed(m))
+    const onRepin = vi.fn()
+    const chat = scope.run(() => useChatScroll({ scrollEl, onRepin }))!
+
+    chat.attachKeepBottom()
+    chat.rememberBottomState()
+    FakeResizeObserver.instances[0]!.callback()
+    expect(onRepin).toHaveBeenCalledTimes(1)
+
+    // The reader scrolled up into history: a resize leaves them, no report.
+    m.scrollTop = 100
+    chat.rememberBottomState()
+    FakeResizeObserver.instances[0]!.callback()
+    expect(onRepin).toHaveBeenCalledTimes(1)
+  })
+
   it('leaves a reader of history where they are', () => {
     const m = { scrollTop: 100, scrollHeight: 1000, clientHeight: 100 }
     const scrollEl = ref<HTMLElement | null>(makeFeed(m))
