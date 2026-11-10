@@ -42,7 +42,9 @@ stacks:
       23092026-cf-388101:       { run: python scripts/seed.py --profile 23092026-cf-388101, when: command }
       "26082026":               { run: python scripts/seed.py --profile 26082026, when: command }
       26082026-1:               { run: python scripts/seed.py --profile 26082026-1, when: command }
-      FE-54:                    { run: python scripts/seed.py --profile FE-54, when: command }
+      # The key is the machine's name (lower case, DM-78); the profile is
+      # the file seed_profiles/FE-54.json.
+      fe-54:                    { run: python scripts/seed.py --profile FE-54, when: command }
   velo-storage:
     compose: docker-compose.storage.yml
     persistent: true
@@ -112,9 +114,18 @@ host:
     frontend: { to: "frontend:3000" }
     api:      { to: "app:8000", max_body: 3M }
 
+# Each arg reaches the command as one value, in the order listed (BE-195).
 verbs:
   setrole:        { run: python scripts/set_role.py --yes, args: [telegram_id, role] }
-  comms-outbox:   { run: python scripts/comms_outbox.py, args: [command] }
   backfill-comms: { run: python scripts/backfill_comms_sync.py }
+  # The outbox dead-letter queue; `ids` is event ids joined by commas.
+  comms-outbox-list-dead:   { run: python scripts/comms_outbox.py list-dead }
+  comms-outbox-requeue:     { run: python scripts/comms_outbox.py requeue, args: [ids] }
+  comms-outbox-requeue-all: { run: python scripts/comms_outbox.py requeue --all, destructive: true }
+  # Resets of the seeds: they delete rows, the bookings of live people on
+  # seeded practices included -- destructive, and never on prod.
+  seed-reset:      { run: python scripts/seed.py --reset --profile, args: [profile], destructive: true, roles: [test, preview] }
+  seed-reset-only: { run: python scripts/seed.py --reset-only --profile, args: [profile], destructive: true, roles: [test, preview] }
+  seed-reset-all:  { run: python scripts/seed.py --reset-all, destructive: true, roles: [test, preview] }
 
 report: { health: /health, ready: /ready, logs: json, junit: true }
