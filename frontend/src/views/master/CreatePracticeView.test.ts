@@ -282,12 +282,12 @@ function choose(el: HTMLSelectElement | undefined, value: string): void {
   el.dispatchEvent(new Event('change'))
 }
 
-/** The date/time trigger fields (:125-160). The end-date trigger
- *  reuses .create-practice__picker, so it is excluded by its own modifier. */
+/** The date/time trigger plates (PracticeSchedulePicker). The series
+ *  end-date picker is the same component, excluded by its own class. */
 function pickerTriggers(): HTMLElement[] {
   return Array.from(
     host?.querySelectorAll<HTMLElement>(
-      '.create-practice__picker:not(.create-practice__end-control)',
+      '.practice-schedule-picker:not(.create-practice__end-control) > .practice-schedule-picker__trigger',
     ) ?? [],
   )
 }
@@ -339,7 +339,9 @@ async function pickDate(day: number): Promise<void> {
 
 /** Drive the REAL teleported DatePickerSheet behind `Finish -> pick a date`. */
 async function pickEndDate(day: number): Promise<void> {
-  host?.querySelector<HTMLElement>('.create-practice__end-control.create-practice__picker')?.click()
+  host
+    ?.querySelector<HTMLElement>('.create-practice__end-control .practice-schedule-picker__trigger')
+    ?.click()
   await flush()
   await tapDayAndSave(day)
 }
@@ -594,6 +596,32 @@ describe('CreatePracticeView', () => {
 
       expect(practicesApi.createPractice).not.toHaveBeenCalled()
       expect(text()).toContain('Введите название')
+    })
+
+    it('after a failed submit a fixed field loses its own error at once; the rest stay (FE-157)', async () => {
+      // Owner TZ 2026-11-01 §6, now ONE watcher over the shared validation
+      // (usePracticeForm) instead of nine per-field ones.
+      mount()
+      await flush()
+      submitForm()
+      await flush()
+      expect(host?.querySelector('.v-input--error')).not.toBeNull()
+
+      typeInto(inputByPlaceholder('Название'), 'Утренняя практика')
+      await flush()
+
+      expect(host?.querySelector('.v-input--error')).toBeNull()
+      expect(host?.querySelector('.v-select--error')).not.toBeNull()
+      expect(practicesApi.createPractice).not.toHaveBeenCalled()
+    })
+
+    it('typing never ADDS an error before the first submit (FE-157)', async () => {
+      mount()
+      await flush()
+      typeInto(inputByPlaceholder('Максимум мест'), '0')
+      await flush()
+
+      expect(host?.querySelectorAll('.v-field-error--open').length).toBe(0)
     })
 
     it('refuses a zero seat count', async () => {
@@ -979,7 +1007,9 @@ describe('CreatePracticeView', () => {
       await flush()
 
       host
-        ?.querySelector<HTMLElement>('.create-practice__end-control.create-practice__picker')
+        ?.querySelector<HTMLElement>(
+          '.create-practice__end-control .practice-schedule-picker__trigger',
+        )
         ?.click()
       await flush()
 
