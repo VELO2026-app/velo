@@ -3,7 +3,7 @@
 // =============================================================================
 // Reads tokens.json and every consumer (src/, index.html, packages/velo-ui),
 // prints: violations (the guard in scripts/lib/token-audit.test.mjs), the
-// $deprecated tokens waiting for the next generation (with the skins that still set them),
+// $deprecated tokens waiting for the next generation,
 // and the RARE tokens (1-2 product references) -- the input for the owner's
 // consolidation calls. The rules live in scripts/lib/token-audit.mjs.
 //
@@ -15,8 +15,8 @@ import { fileURLToPath } from 'node:url'
 import { auditTokens, auditViolations, readTree } from './lib/token-audit.mjs'
 
 const frontendDir = join(dirname(fileURLToPath(import.meta.url)), '..')
-const { doc, files, skins } = readTree(frontendDir)
-const rows = auditTokens(doc, files, skins)
+const { doc, files } = readTree(frontendDir)
+const rows = auditTokens(doc, files)
 const violations = auditViolations(rows)
 const deprecated = rows.filter((r) => r.deprecated)
 const rare = rows.filter((r) => !r.deprecated && r.prod > 0 && r.prod <= 2 && !r.dynamic)
@@ -46,8 +46,7 @@ if (process.argv.includes('--json')) {
   out.push('')
   out.push(`### Deprecated, removed in the next generation (${deprecated.length})`)
   for (const r of deprecated) {
-    const skinNote = r.skins.length > 0 ? ` -- still set by ${r.skins.join(', ')}` : ''
-    out.push(`- \`${r.cssName}\`: ${oneLine(r.value)} (${r.deprecated})${skinNote}`)
+    out.push(`- \`${r.cssName}\`: ${oneLine(r.value)} (${r.deprecated})`)
   }
   out.push('')
   out.push(`### Rare: 1-2 product references (${rare.length})`)

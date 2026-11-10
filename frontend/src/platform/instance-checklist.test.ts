@@ -17,10 +17,10 @@ import { evaluateChecklist } from '../../scripts/instance-checklist.mjs'
 const EXPECTED = {
   skin: { displayName: 'НОВА', shortName: 'Нова', themeColor: '#1B1530' },
   brand: 'НОВА',
-  brandSource: 'skin/brand.json',
+  brandSource: 'skin package',
   shortBrand: 'Нова',
   themeColor: '#1B1530',
-  themeSource: 'skin/brand.json',
+  themeSource: 'skin package',
   defaultLocale: 'ru',
   locales: ['ru'],
   botUrl: 'https://telegram.me/veloappbot',
@@ -31,6 +31,11 @@ const GREEN_FACTS = {
   title: 'НОВА',
   htmlLang: 'ru',
   themeMeta: '#1B1530',
+  localeManifests: {
+    ru: { lang: 'ru', description: 'a' },
+    en: { lang: 'en', description: 'b' },
+    uk: { lang: 'uk', description: 'c' },
+  },
   manifest: {
     name: 'НОВА',
     short_name: 'Нова',
@@ -69,9 +74,9 @@ describe('evaluateChecklist (tz-whitelabel §6.4)', () => {
       rows.map((r) => [r.item, r]),
     )
     expect(byItem['manifest name']!.status).toBe('PASS')
-    expect(byItem['manifest name']!.source).toBe('skin/brand.json')
-    // No passport seam for description yet: reported, not gated.
-    expect(byItem['manifest description']!.status).toBe('INFO')
+    expect(byItem['manifest name']!.source).toBe('skin package')
+    expect(byItem['manifest description']!.status).toBe('PASS')
+    expect(byItem['per-locale manifests']!.status).toBe('PASS')
     // The safe zone needs eyes and says so.
     expect(byItem['maskable safe-zone']!.status).toBe('MANUAL')
     expect(byItem['locales']!.status).toBe('INFO')

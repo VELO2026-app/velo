@@ -87,17 +87,6 @@ test('violations: dead and undeprecated is red; deprecated and consumed is red',
   )
 })
 
-test('skin overrides are reported, not counted as consumers', () => {
-  const rows = byName(
-    auditTokens(DOC, FILES, [
-      { file: 'skins/x/tokens.css', src: '/* --velo-pink: */\n--velo-old: 4px;\n' },
-    ]),
-  )
-  assert.deepEqual(rows['--velo-old'].skins, ['skins/x/tokens.css'])
-  assert.equal(rows['--velo-old'].alive, false)
-  assert.deepEqual(rows['--velo-pink'].skins, [], 'a commented-out override is not one')
-})
-
 test('strippers: CSS keeps //, JS keeps strings, a "-->"-closed CSS comment runs on', () => {
   assert.match(stripCssComments('a { b: url(//cdn/x); }'), /url\(\/\/cdn\/x\)/)
   assert.match(stripJsComments("const u = 'https://x/*' // c\n"), /'https:\/\/x\/\*'/)
@@ -112,8 +101,8 @@ test('strippers: CSS keeps //, JS keeps strings, a "-->"-closed CSS comment runs
 const FRONTEND = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 
 test('real registry: every token is consumed or $deprecated, no deprecated token is consumed', () => {
-  const { doc, files, skins } = readTree(FRONTEND)
-  const rows = auditTokens(doc, files, skins)
+  const { doc, files } = readTree(FRONTEND)
+  const rows = auditTokens(doc, files)
   assert.ok(rows.length > 200, `registry read (${rows.length} tokens)`)
   assert.ok(files.length > 300, `sources read (${files.length} files)`)
   assert.deepEqual(

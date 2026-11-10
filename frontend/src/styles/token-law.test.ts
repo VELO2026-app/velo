@@ -16,7 +16,7 @@
 //                            fallback) is the token-first pattern
 //   platform/zoom-sdk.ts     same boundary, same pattern
 //   pwa/manifest.ts          build-time instance metadata; moves into the
-//                            brand.json materialization (§1)
+//                            skin brand-record materialization (§1)
 //   utils/displayHelpers.ts  MOOD_SCALE_FILLS -- the TS mirror of the
 //                            analytics tokens (variables.css comment points
 //                            back); same token-first fallback shape

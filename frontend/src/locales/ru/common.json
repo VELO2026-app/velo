@@ -1,6 +1,7 @@
 {
   "common": {
     "brandName": "@:brand",
+    "pwaDescription": "Платформа для ведения практик благополучия",
     "today": "Сегодня",
     "tomorrow": "Завтра",
     "yesterday": "Вчера",

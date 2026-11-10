@@ -17,7 +17,14 @@
 
 import { describe, it, expect } from 'vitest'
 import indexHtml from '../../index.html?raw'
-import { pwaManifest, pwaManifestWithPassport } from '@/pwa/manifest'
+import { readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, writeFileSync, readFileSync as read } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { SUPPORTED_LOCALES } from '@/platform/instance'
+import { MANIFEST_LOCALES } from '@/pwa/manifest'
+import { pwaManifest, pwaManifestWithPassport, manifestForLocale } from '@/pwa/manifest'
 import { GOLDEN_SKIN } from '@/platform/skin'
 
 /** Files under public/icons, keyed as their served path (/icons/x.png). */
@@ -58,10 +65,9 @@ describe('pwaManifest -- the single manifest', () => {
       short_name: 'ШКОЛА',
       lang: 'ru',
     })
-    expect(pwaManifestWithPassport({ VITE_DEFAULT_LOCALE: 'en' })).toMatchObject({
-      name: 'VELO',
-      lang: 'en',
-    })
+    // FE-155: lang/description are the INSTANCE part (container start), the
+    // build never takes them from the env.
+    expect(pwaManifestWithPassport({ VITE_DEFAULT_LOCALE: 'en' })).toBe(pwaManifest)
     expect(pwaManifestWithPassport({})).toBe(pwaManifest)
   })
 
@@ -71,6 +77,7 @@ describe('pwaManifest -- the single manifest', () => {
       shortName: 'Гармония',
       themeColor: '#1B2A41',
       backgroundColor: '#F5F1EA',
+      fonts: [],
     }
     expect(pwaManifestWithPassport({ VITE_BRAND: 'ENV-БРЕНД' }, skin)).toMatchObject({
       name: 'ШКОЛА ГАРМОНИИ',
@@ -97,7 +104,7 @@ describe('pwaManifest -- the single manifest', () => {
     // The source carries %VELO_THEME_COLOR%; passport-html resolves it (to
     // the golden default with no skin -- pinned in passport-html.test.ts).
     // The mirror holds by construction: both consumers resolve the SAME
-    // brand.json value at build time.
+    // brand-record value at build time.
     const meta = attr(/<meta name="theme-color"[^>]*>/, 'content')
 
     expect(meta).toBe('%VELO_THEME_COLOR%')
@@ -174,5 +181,49 @@ describe('index.html head -- what the build is made from', () => {
     expect(attr(/<meta name="viewport"[^>]*>/, 'content')).toBe(
       'width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes, interactive-widget=resizes-visual',
     )
+  })
+})
+
+describe('instance part of the manifest (FE-155)', () => {
+  it('manifestForLocale swaps lang and description, keeps the skin part', () => {
+    const m = manifestForLocale(pwaManifest as Record<string, unknown>, 'en', 'A platform')
+    expect(m).toMatchObject({
+      lang: 'en',
+      description: 'A platform',
+      theme_color: '#334D6E',
+      name: 'VELO',
+    })
+    expect(m.icons).toBe(pwaManifest.icons)
+  })
+})
+
+describe('instance part: consistency and the start script (FE-155)', () => {
+  const catalog = (loc: string): { common: { pwaDescription: string } } =>
+    JSON.parse(readFileSync(`src/locales/${loc}/common.json`, 'utf8'))
+
+  it('MANIFEST_LOCALES is exactly SUPPORTED_LOCALES, each with a description', () => {
+    expect([...MANIFEST_LOCALES].sort()).toEqual([...SUPPORTED_LOCALES].sort())
+    for (const loc of MANIFEST_LOCALES) expect(catalog(loc).common.pwaDescription).toBeTruthy()
+  })
+
+  it('the golden description is the ru catalog text (one source of truth)', () => {
+    expect(pwaManifest.description).toBe(catalog('ru').common.pwaDescription)
+  })
+
+  it('40-manifest-locale.sh picks the matching file; unknown or empty keeps golden', () => {
+    const run = (locale: string): string => {
+      const dir = mkdtempSync(join(tmpdir(), 'manifest-'))
+      writeFileSync(join(dir, 'manifest.webmanifest'), 'golden')
+      for (const l of ['ru', 'en', 'uk']) writeFileSync(join(dir, `manifest.${l}.webmanifest`), l)
+      execFileSync('sh', ['nginx/40-manifest-locale.sh'], {
+        env: { PATH: process.env.PATH ?? '', MANIFEST_HTML_DIR: dir, DEFAULT_LANGUAGE: locale },
+      })
+      return read(join(dir, 'manifest.webmanifest'), 'utf8')
+    }
+    expect(run('en')).toBe('en')
+    expect(run('uk')).toBe('uk')
+    expect(run('')).toBe('golden')
+    expect(run('de')).toBe('golden')
+    expect(run('../x')).toBe('golden')
   })
 })

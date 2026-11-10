@@ -34,6 +34,7 @@ interface Facts {
   brandMissing?: boolean
   tokensMissing?: string[]
   leaked?: string[]
+  layout?: string[]
 }
 
 const {
@@ -154,7 +155,7 @@ describe('evaluateMatrix (tz-whitelabel §6.1 gate)', () => {
     expect(evaluateMatrix({ cells: CELLS, facts: GREEN, expected: EXPECTED })).toEqual([])
   })
 
-  it('a title that drifted from its brand.json fails, named (a)', () => {
+  it('a title that drifted from its brand record fails, named (a)', () => {
     const fails = withFact('nova/full', { title: ' velo ' })
     expect(fails).toHaveLength(1)
     expect(fails[0]).toContain('nova/full')
@@ -177,6 +178,18 @@ describe('evaluateMatrix (tz-whitelabel §6.1 gate)', () => {
     const fails = withFact('nova/full', { tokensMissing: ['--velo-primary:#8b7cf6'] })
     expect(fails).toHaveLength(1)
     expect(fails[0]).toContain('--velo-primary:#8b7cf6')
+  })
+
+  it('a skin cell whose dist layout is off fails, every problem named (FE-131)', () => {
+    const fails = withFact('nova/full', {
+      layout: [
+        "dist/icons/favicon.svg is not the package's assets/favicon.svg",
+        'dist/skin/ ships more than the fonts: tokens/skin.tokens.json',
+      ],
+    })
+    expect(fails).toHaveLength(2)
+    expect(fails.join('\n')).toContain('nova/full: dist/icons/favicon.svg')
+    expect(fails.join('\n')).toContain('ships more than the fonts')
   })
 
   it('skin identity leaking into any golden cell fails (b)', () => {

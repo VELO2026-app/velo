@@ -2,11 +2,12 @@
 // VELO Frontend -- instance checklist (FE-114, F5.4 / tz-whitelabel §6.4)
 // =============================================================================
 // The §6.4 acceptance checklist, automated where a machine can see it:
-// manifest identity (name/short_name/lang; description reported -- it has no
-// passport seam yet), theme-color (index.html meta == manifest == the skin/
+// manifest identity (name/short_name/lang/description; lang+description are
+// the INSTANCE part -- FE-155: per-locale files in dist, picked at container
+// start by DEFAULT_LANGUAGE), theme-color (index.html meta == manifest == the skin/
 // golden source), icons (present + declared dimensions), the bot URL (the
 // one the build actually inlined), and the locale set. Every fact carries its
-// SOURCE (skin brand.json / passport env / golden default) -- the §6.4
+// SOURCE (skin brand record / passport env / golden default) -- the §6.4
 // question "everything from config, nothing in code" is answered by the
 // source column.
 //
@@ -25,12 +26,13 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { loadEnv } from 'vite'
 import { pngInfo } from './validate-skin.mjs'
+import { isSkinPackage, loadSkinPackage, readGoldenTokens } from './lib/skin-package.mjs'
 
 // Lazy: under vitest import.meta.url is not file:// (see build-matrix.mjs);
 // the unit suite imports this module for evaluateChecklist() only.
 const frontendDir = () => resolve(fileURLToPath(new URL('..', import.meta.url)))
 
-/** The §1 priority order the build itself uses: skin brand.json > passport
+/** The §1 priority order the build itself uses: skin brand record > passport
  *  env (process.env > .env files) > golden default. Returns the expected
  *  values (and, per field, the winning source) every dist fact is checked
  *  against. Pure data -- the unit suite feeds evaluateChecklist() directly. */
@@ -39,15 +41,18 @@ export function expectedFromSources() {
     ...loadEnv('production', frontendDir(), 'VITE_'),
     ...Object.fromEntries(Object.entries(process.env).filter(([k]) => k.startsWith('VITE_'))),
   }
-  const brandPath = join(frontendDir(), 'public', 'skin', 'brand.json')
-  const skin = existsSync(brandPath) ? JSON.parse(readFileSync(brandPath, 'utf8')) : null
+  const skinDir = join(frontendDir(), 'public', 'skin')
+  const skin = isSkinPackage(skinDir)
+    ? loadSkinPackage(skinDir, readGoldenTokens(frontendDir())).brand
+    : null
   const pick = (skinValue, envKey, golden) =>
     skinValue !== undefined
-      ? { value: skinValue, source: 'skin/brand.json' }
+      ? { value: skinValue, source: 'skin package' }
       : env[envKey] !== undefined
         ? { value: env[envKey], source: 'passport env' }
         : { value: golden, source: 'golden default' }
-  const brand = skin?.displayName !== undefined ? pick(skin.displayName) : pick(undefined, 'VITE_BRAND', 'VELO')
+  const brand =
+    skin?.displayName !== undefined ? pick(skin.displayName) : pick(undefined, 'VITE_BRAND', 'VELO')
   return {
     skin,
     brand: brand.value,
@@ -56,7 +61,10 @@ export function expectedFromSources() {
     themeColor: pick(skin?.themeColor, undefined, '#334D6E').value,
     themeSource: pick(skin?.themeColor, undefined, '#334D6E').source,
     defaultLocale: pick(undefined, 'VITE_DEFAULT_LOCALE', 'ru').value,
-    locales: (env.VITE_LOCALES ?? 'ru').split(',').map((s) => s.trim()).filter(Boolean),
+    locales: (env.VITE_LOCALES ?? 'ru')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
     botUrl: env.VITE_TELEGRAM_BOT_URL || 'https://telegram.me/veloappbot',
     botUrlSource: env.VITE_TELEGRAM_BOT_URL ? 'passport env' : 'golden default',
   }
@@ -68,7 +76,13 @@ export function evaluateChecklist({ facts, expected }) {
   const rows = []
   const fails = []
   const add = (item, ok, fact, expect, source) => {
-    rows.push({ item, status: ok === true ? 'PASS' : ok === false ? 'FAIL' : ok, fact, expect: expect ?? '-', source: source ?? '-' })
+    rows.push({
+      item,
+      status: ok === true ? 'PASS' : ok === false ? 'FAIL' : ok,
+      fact,
+      expect: expect ?? '-',
+      source: source ?? '-',
+    })
     if (ok === false) fails.push(`${item}: got "${fact}", expected "${expect}"`)
   }
 
@@ -81,10 +95,32 @@ export function evaluateChecklist({ facts, expected }) {
     expected.shortBrand,
     expected.brandSource,
   )
-  // No passport seam exists for description yet (pwaManifestWithPassport
-  // overrides identity+colours only) -- report the fact, don't gate it.
-  add('manifest description', 'INFO', m.description, '-', 'golden default (no seam yet)')
-  add('manifest lang', m.lang === expected.defaultLocale, m.lang, expected.defaultLocale, 'passport env / golden')
+  // FE-155: description is localized from the catalog; every shipped locale
+  // must have its own manifest file whose lang matches.
+  const perLocale = facts.localeManifests ?? {}
+  const shipped = facts.catalogs?.length ? facts.catalogs : ['ru', 'en', 'uk']
+  const missing = shipped.filter((l) => perLocale[l]?.lang !== l || !perLocale[l]?.description)
+  add(
+    'manifest description',
+    typeof m.description === 'string' && m.description.length > 0,
+    m.description,
+    'non-empty',
+    'locale catalog (common.pwaDescription)',
+  )
+  add(
+    'per-locale manifests',
+    missing.length === 0,
+    missing.length === 0 ? shipped.join(', ') : `missing/invalid: ${missing.join(',')}`,
+    'manifest.<locale>.webmanifest',
+    'build; picked by DEFAULT_LANGUAGE at container start',
+  )
+  add(
+    'manifest lang',
+    m.lang === 'ru',
+    m.lang,
+    'ru',
+    'build = golden; instance lang comes at container start (per-locale files)',
+  )
   add(
     'index.html lang',
     facts.htmlLang === expected.defaultLocale,
@@ -92,7 +128,13 @@ export function evaluateChecklist({ facts, expected }) {
     expected.defaultLocale,
     'passport env / golden',
   )
-  add('index.html title', facts.title === expected.brand, facts.title, expected.brand, expected.brandSource)
+  add(
+    'index.html title',
+    facts.title === expected.brand,
+    facts.title,
+    expected.brand,
+    expected.brandSource,
+  )
   add(
     'theme-color (index.html)',
     facts.themeMeta === expected.themeColor,
@@ -126,17 +168,21 @@ export function evaluateChecklist({ facts, expected }) {
     }
     if (info === 'svg') continue
     const [w, h] = icon.sizes.split('x').map(Number)
-    if (info.width !== w || info.height !== h) iconFails.push(`${icon.src}: ${info.width}x${info.height}`)
+    if (info.width !== w || info.height !== h)
+      iconFails.push(`${icon.src}: ${info.width}x${info.height}`)
   }
   const apple = facts.distIcons['/icons/apple-touch-icon-180.png']
   if (!apple) iconFails.push('apple-touch-icon-180.png missing (index.html link)')
   else if (apple !== 'svg' && (apple.width !== 180 || apple.height !== 180))
     iconFails.push(`apple-touch-icon-180.png: ${apple.width}x${apple.height}`)
-  if (!facts.distIcons['/icons/favicon.svg']) iconFails.push('favicon.svg missing (index.html link)')
+  if (!facts.distIcons['/icons/favicon.svg'])
+    iconFails.push('favicon.svg missing (index.html link)')
   add(
     'icons',
     iconFails.length === 0,
-    iconFails.length === 0 ? `${(m.icons ?? []).length} manifest entries + iOS/favicon` : iconFails.join('; '),
+    iconFails.length === 0
+      ? `${(m.icons ?? []).length} manifest entries + iOS/favicon`
+      : iconFails.join('; '),
     'present, declared sizes',
     'skin assets / golden',
   )
@@ -196,7 +242,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         .join('\n')
     : ''
   const localesDir = join(frontendDir(), 'src', 'locales')
-  const catalogs = existsSync(localesDir) ? readdirSync(localesDir).filter((n) => !n.endsWith('.ts')) : []
+  const catalogs = existsSync(localesDir)
+    ? readdirSync(localesDir).filter((n) => !n.endsWith('.ts'))
+    : []
 
   const { rows, fails } = evaluateChecklist({
     facts: {
@@ -206,6 +254,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       manifest: existsSync(join(distDir, 'manifest.webmanifest'))
         ? JSON.parse(readFileSync(join(distDir, 'manifest.webmanifest'), 'utf8'))
         : {},
+      localeManifests: Object.fromEntries(
+        catalogs.flatMap((l) => {
+          const f = join(distDir, `manifest.${l}.webmanifest`)
+          return existsSync(f) ? [[l, JSON.parse(readFileSync(f, 'utf8'))]] : []
+        }),
+      ),
       distIcons,
       botUrlFound: js.includes(expected.botUrl),
       catalogs,
@@ -218,7 +272,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     rows
       .map((r) =>
         [r.item, r.status, r.fact, r.expect, r.source]
-          .map((v, i) => String(v).slice(0, widths[i] ?? 20).padEnd(widths[i] ?? 20))
+          .map((v, i) =>
+            String(v)
+              .slice(0, widths[i] ?? 20)
+              .padEnd(widths[i] ?? 20),
+          )
           .join('  '),
       )
       .join('\n'),

@@ -16,9 +16,8 @@
 //             inside --velo-bg-subtle). Liveness is transitive: a primitive
 //             referenced only by dead aliases is dead too.
 // Tests and stories are counted apart: a token only a test names is dead
-// in the product. Skin packages (skins/*/tokens.css) OVERRIDE tokens -- an
-// override is not a consumer; the report lists them so a Gen-2 removal
-// knows which skins to touch.
+// in the product. Skin packages live outside this repo (FE-131) and only
+// OVERRIDE tokens -- validate-skin warns when one sets a $deprecated token.
 //
 // Comments are stripped first, per language: a token named in prose is not
 // consumed (and a CSS comment closed with "-->" instead of "*/" swallows the
@@ -130,12 +129,11 @@ const DYNAMIC = /(--[a-zA-Z0-9_-]+-)\$\{/g
  * @param {object} doc parsed tokens.json
  * @param {Array<{file: string, src: string}>} files product + test sources
  *   (NOT variables.css -- it is the generated registry itself)
- * @param {Array<{file: string, src: string}>} [skins] skin tokens.css files
  * @returns {Array<object>} one row per token, registry order:
  *   { cssName, path, value, deprecated, prod, test, files, dynamic,
- *     refs, referrers, alive, skins }
+ *     refs, referrers, alive }
  */
-export function auditTokens(doc, files, skins = []) {
+export function auditTokens(doc, files) {
   const leaves = collectLeaves(doc)
   const rows = new Map(
     leaves.map((l) => [
@@ -152,7 +150,6 @@ export function auditTokens(doc, files, skins = []) {
         refs: [...l.value.matchAll(/var\(\s*(--[a-zA-Z0-9_-]+)/g)].map((m) => m[1]),
         referrers: [],
         alive: false,
-        skins: [],
       },
     ]),
   )
@@ -190,12 +187,6 @@ export function auditTokens(doc, files, skins = []) {
         target.alive = true
         queue.push(target)
       }
-    }
-  }
-
-  for (const { file, src } of skins) {
-    for (const m of stripCssComments(src).matchAll(/(--[a-zA-Z0-9_-]+)\s*:/g)) {
-      rows.get(m[1])?.skins.push(file)
     }
   }
 
@@ -252,10 +243,10 @@ function walk(dir, out) {
  * Read the registry and every consumer of it from a checkout.
  *
  * @param {string} frontendDir absolute path of frontend/
- * @returns {{doc: object, files: Array<{file: string, src: string}>, skins: Array<{file: string, src: string}>}}
+ * @returns {{doc: object, files: Array<{file: string, src: string}>}}
  *   file paths relative to frontendDir; the generated registry
  *   (styles/variables.css) and the cascade stub (styles/skin-tokens.css,
- *   overwritten by a skin's tokens.css at build) are not consumers.
+ *   overwritten by a skin package at build) are not consumers.
  */
 export function readTree(frontendDir) {
   const doc = JSON.parse(readFileSync(join(frontendDir, 'tokens.json'), 'utf8'))
@@ -271,8 +262,5 @@ export function readTree(frontendDir) {
     .map((abs) => relative(frontendDir, abs))
     .filter((f) => !NOT_CONSUMERS.has(f))
     .map((file) => ({ file, src: readFileSync(join(frontendDir, file), 'utf8') }))
-  const skins = walk(join(frontendDir, 'skins'), [])
-    .filter((abs) => abs.endsWith('tokens.css'))
-    .map((abs) => ({ file: relative(frontendDir, abs), src: readFileSync(abs, 'utf8') }))
-  return { doc, files, skins }
+  return { doc, files }
 }
