@@ -10,7 +10,8 @@
 #                  packages. Closes --no-verify past the pre-commit
 #                  lint-staged pass.
 #   test         — vue-tsc typecheck + vitest of the whole workspace
-#                  (frontend + @velo/ui).
+#                  (frontend with v8 coverage + the coverage ratchet, then
+#                  @velo/ui).
 #   build        — @velo/ui (vite lib + vue-tsc dts), then the app's
 #                  vue-tsc + vite build with the FE-153 build-log gate.
 #   matrix-plan, matrix, matrix-gate
@@ -152,8 +153,17 @@ jobs:
       - name: Typecheck (vue-tsc)
         run: pnpm -C frontend typecheck
 
-      - name: Tests (frontend + @velo/ui)
-        run: pnpm -r test
+      # FE-157 5A.1: the frontend suite runs with v8 coverage (one pass, not
+      # two); the ratchet (frontend/coverage-budget.json) fails below the
+      # floors and puts the table in the step summary.
+      - name: Tests + coverage (frontend)
+        run: pnpm -C frontend test:coverage
+
+      - name: Coverage ratchet
+        run: pnpm -C frontend coverage:budget
+
+      - name: Tests (@velo/ui)
+        run: pnpm -C packages/velo-ui test
 
   build:
     name: build — @velo/ui / app + build-log gate

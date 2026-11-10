@@ -1,0 +1,7 @@
+{
+  "_comment": "Ratchet for scripts/coverage-budget.mjs (FE-157 5A.1). Floors, in percent, for `vitest run --coverage` over src/**/*.{ts,vue}; taken 2026-11-10 (89.64 / 83.39 / 85.09 / 91.14, rounded down to 0.1). They may only go up: when the measured value is higher, the script says so -- raise the floor in the same commit. Lowering one is not allowed.",
+  "statements": 89.6,
+  "branches": 83.3,
+  "functions": 85.0,
+  "lines": 91.1
+}

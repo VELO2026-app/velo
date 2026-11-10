@@ -57,8 +57,12 @@ export default defineConfig({
     // Coverage (optional, run with --coverage)
     coverage: {
       provider: 'v8',
-      include: ['src/**/*.ts'],
+      // FE-157 5A.1: .vue is in -- screens and components are most of the app.
+      include: ['src/**/*.{ts,vue}'],
       exclude: ['src/**/*.test.ts', 'src/**/*.d.ts', 'src/main.ts'],
+      // json-summary feeds scripts/coverage-budget.mjs (the ratchet gate).
+      reporter: ['text-summary', 'json-summary'],
+      reportsDirectory: 'coverage',
     },
   },
 })

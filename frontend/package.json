@@ -22,7 +22,8 @@
     "test": "vitest run && node --test scripts/lib/*.test.mjs",
     "test:watch": "vitest",
     "tokens:sync": "node scripts/sync-figma-variables.mjs --rest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage && node --test scripts/lib/*.test.mjs",
+    "coverage:budget": "node scripts/coverage-budget.mjs"
   },
   "dependencies": {
     "@pinia/colada": "1.4.8",
@@ -48,6 +49,7 @@
     "@types/luxon": "^3.4.2",
     "@types/node": "^26.6.5",
     "@vitejs/plugin-vue": "^5.2.0",
+    "@vitest/coverage-v8": "4.1.12",
     "@vue/test-utils": "^2.4.11",
     "eslint": "^9.20.0",
     "eslint-plugin-tsdoc": "0.5.4",
