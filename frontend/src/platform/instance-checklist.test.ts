@@ -31,6 +31,11 @@ const GREEN_FACTS = {
   title: 'НОВА',
   htmlLang: 'ru',
   themeMeta: '#1B1530',
+  localeManifests: {
+    ru: { lang: 'ru', description: 'a' },
+    en: { lang: 'en', description: 'b' },
+    uk: { lang: 'uk', description: 'c' },
+  },
   manifest: {
     name: 'НОВА',
     short_name: 'Нова',
@@ -70,8 +75,8 @@ describe('evaluateChecklist (tz-whitelabel §6.4)', () => {
     )
     expect(byItem['manifest name']!.status).toBe('PASS')
     expect(byItem['manifest name']!.source).toBe('skin/brand.json')
-    // No passport seam for description yet: reported, not gated.
-    expect(byItem['manifest description']!.status).toBe('INFO')
+    expect(byItem['manifest description']!.status).toBe('PASS')
+    expect(byItem['per-locale manifests']!.status).toBe('PASS')
     // The safe zone needs eyes and says so.
     expect(byItem['maskable safe-zone']!.status).toBe('MANUAL')
     expect(byItem['locales']!.status).toBe('INFO')
