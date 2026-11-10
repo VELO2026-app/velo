@@ -29,7 +29,7 @@
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { pathToFileURL } from 'node:url'
 
 /** A bg/background.png above this is warned about: the golden ships WebP. */
 const BG_PNG_WARN_KB = 300

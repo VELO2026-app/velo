@@ -30,8 +30,11 @@ const cacheArgs = (name) => [
   `node_modules/.cache/eslint/${name}.json`,
 ]
 const args = ['src/', '--max-warnings', String(budget.maxWarnings)]
+// FE-157 5C: the app run also covers its build tooling (scripts/*.mjs and the
+// Vite/Vitest configs); the kit package has no such files.
+const appArgs = ['scripts/', 'vite.config.ts', 'vitest.config.ts', ...args]
 
-const fe = spawnSync('node_modules/.bin/eslint', [...args, ...cacheArgs('app')], {
+const fe = spawnSync('node_modules/.bin/eslint', [...appArgs, ...cacheArgs('app')], {
   stdio: 'inherit',
 })
 if (fe.error) throw fe.error

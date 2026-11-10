@@ -361,6 +361,43 @@ export default [
   },
 
   {
-    ignores: ['dist/', 'node_modules/', '*.config.*'],
+    // FE-157 5C: build tooling outside src/ -- the .mjs scripts and the
+    // Vite/Vitest configs. Same type-aware ruleset as the app, typed through
+    // tsconfig.scripts.json (checkJs); Node globals instead of the browser's.
+    files: ['scripts/**/*.mjs', 'vite.config.ts', 'vitest.config.ts'],
+    languageOptions: {
+      globals: { ...globals.node },
+      parserOptions: {
+        project: ['./tsconfig.scripts.json'],
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+      // The scripts are untyped JS (implicit-any parameters, JSON.parse
+      // results): the unsafe family would flag ~1300 sites of "any" that the
+      // JSDoc-less code cannot answer. Floating promises, unused vars and the
+      // rest of the type-aware set stay on.
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+    },
+  },
+
+  {
+    // node:test registers tests with top-level test(...) calls that return a
+    // promise nobody awaits by design.
+    files: ['scripts/**/*.test.mjs'],
+    rules: { '@typescript-eslint/no-floating-promises': 'off' },
+  },
+
+  {
+    // eslint.config.js and the other tooling configs stay unlinted; the two
+    // build configs above are linted.
+    ignores: ['dist/', 'node_modules/', 'eslint.config.js', 'stylelint.config.*'],
   },
 ]

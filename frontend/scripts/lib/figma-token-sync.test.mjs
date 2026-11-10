@@ -124,10 +124,13 @@ test('parseCssValue: multi-line verbatim values collapse before parsing', () => 
   assert.equal(mix.percent, 30)
   assert.deepEqual(mix.base, { kind: 'ref', cssName: '--velo-blue-500' })
   // and the raw compare sees the semantic text, not the authoring whitespace
-  assert.deepEqual(parseCssValue('inset 0 1px 0 rgba(255, 255, 255, 0.75),\n 0 0 18px rgba(150, 190, 255, 0.2)'), {
-    kind: 'raw',
-    text: 'inset 0 1px 0 rgba(255, 255, 255, 0.75), 0 0 18px rgba(150, 190, 255, 0.2)',
-  })
+  assert.deepEqual(
+    parseCssValue('inset 0 1px 0 rgba(255, 255, 255, 0.75),\n 0 0 18px rgba(150, 190, 255, 0.2)'),
+    {
+      kind: 'raw',
+      text: 'inset 0 1px 0 rgba(255, 255, 255, 0.75), 0 0 18px rgba(150, 190, 255, 0.2)',
+    },
+  )
 })
 
 test('compareValues: a Figma FLOAT alias resolves through the ref chain (dim-vs-ref)', () => {
@@ -173,7 +176,10 @@ test('parseCssValue: every registry value form', () => {
 test('resolveColor: refs follow the chain, mixes become alpha', () => {
   const ref = resolveColor(parseCssValue('var(--velo-bg-start)'), byCssName)
   assert.deepEqual(ref, { rgb: [255, 255, 255], a: 1 })
-  const mix = resolveColor(parseCssValue('color-mix(in srgb, var(--velo-primary) 6%, transparent)'), byCssName)
+  const mix = resolveColor(
+    parseCssValue('color-mix(in srgb, var(--velo-primary) 6%, transparent)'),
+    byCssName,
+  )
   assert.deepEqual(mix.rgb, [98, 122, 156])
   assert.ok(Math.abs(mix.a - 0.06) < 1e-9)
   assert.equal(resolveColor(parseCssValue('var(--velo-missing)'), byCssName), null)
@@ -199,13 +205,25 @@ const nameMap = new Map([
 const inverse = new Map([...nameMap].map(([k, v]) => [v, k]))
 
 test('figmaToComparableTyped: alias -> ref, seconds -> ms, floats stay dim', () => {
-  const alias = figmaToComparableTyped({ type: 'VARIABLE_ALIAS', id: 'aliasWhite' }, 'COLOR', figmaById, nameMap, inverse)
+  const alias = figmaToComparableTyped(
+    { type: 'VARIABLE_ALIAS', id: 'aliasWhite' },
+    'COLOR',
+    figmaById,
+    nameMap,
+    inverse,
+  )
   assert.deepEqual(alias, { kind: 'ref', cssName: '--velo-white' })
   const timing = figmaToComparableTyped(0.12, 'TIMING', figmaById, nameMap, inverse)
   assert.deepEqual(timing, { kind: 'dim', value: 120, unit: 'ms' })
   const float = figmaToComparableTyped(9, 'FLOAT', figmaById, nameMap, inverse)
   assert.deepEqual(float, { kind: 'dim', value: 9, unit: '' })
-  const color = figmaToComparableTyped({ r: 0.3843137323856354, g: 0.47843137383461, b: 0.6117647290229797, a: 1 }, 'COLOR', figmaById, nameMap, inverse)
+  const color = figmaToComparableTyped(
+    { r: 0.3843137323856354, g: 0.47843137383461, b: 0.6117647290229797, a: 1 },
+    'COLOR',
+    figmaById,
+    nameMap,
+    inverse,
+  )
   assert.deepEqual(color, { kind: 'color', rgb: [98, 122, 156], a: 1 })
 })
 
@@ -259,15 +277,35 @@ test('compareValues: ref registry vs solid figma = review (the designer broke th
 })
 
 test('compareValues: dims compare magnitude; the px/ms unit never drifts', () => {
-  assert.equal(compareValues(parseCssValue('9px'), { kind: 'dim', value: 9 }, byCssName).status, 'match')
-  assert.equal(compareValues(parseCssValue('120ms'), { kind: 'dim', value: 120 }, byCssName).status, 'match')
-  assert.equal(compareValues(parseCssValue('120ms'), { kind: 'dim', value: 150 }, byCssName).status, 'drift')
-  assert.equal(compareValues(parseCssValue('999'), { kind: 'dim', value: 999.2 }, byCssName).status, 'match')
+  assert.equal(
+    compareValues(parseCssValue('9px'), { kind: 'dim', value: 9 }, byCssName).status,
+    'match',
+  )
+  assert.equal(
+    compareValues(parseCssValue('120ms'), { kind: 'dim', value: 120 }, byCssName).status,
+    'match',
+  )
+  assert.equal(
+    compareValues(parseCssValue('120ms'), { kind: 'dim', value: 150 }, byCssName).status,
+    'drift',
+  )
+  assert.equal(
+    compareValues(parseCssValue('999'), { kind: 'dim', value: 999.2 }, byCssName).status,
+    'match',
+  )
 })
 
 test('compareValues: raw strings compare exactly', () => {
-  assert.equal(compareValues(parseCssValue('30px 30px 0 0'), { kind: 'raw', text: '30px 30px 0 0' }, byCssName).status, 'match')
-  assert.equal(compareValues(parseCssValue('30px 30px 0 0'), { kind: 'raw', text: '32px 32px 0 0' }, byCssName).status, 'drift')
+  assert.equal(
+    compareValues(parseCssValue('30px 30px 0 0'), { kind: 'raw', text: '30px 30px 0 0' }, byCssName)
+      .status,
+    'match',
+  )
+  assert.equal(
+    compareValues(parseCssValue('30px 30px 0 0'), { kind: 'raw', text: '32px 32px 0 0' }, byCssName)
+      .status,
+    'drift',
+  )
 })
 
 // --- reconstructCss: the lossless apply policy ---------------------------------------
@@ -291,12 +329,19 @@ test('reconstructCss: rgba literal re-renders at its shortest in-tolerance alpha
 })
 
 test('reconstructCss: timing rounds to whole ms', () => {
-  assert.equal(reconstructCss(parseCssValue('120ms'), { kind: 'dim', value: 150.0000001 }, 'TIMING'), '150ms')
+  assert.equal(
+    reconstructCss(parseCssValue('120ms'), { kind: 'dim', value: 150.0000001 }, 'TIMING'),
+    '150ms',
+  )
 })
 
 test('reconstructCss: raw strings (shadows, easings) pass verbatim', () => {
   assert.equal(
-    reconstructCss(parseCssValue('x'), { kind: 'raw', text: 'inset 0 1px 0 rgba(255,255,255,.75)' }, 'STRING'),
+    reconstructCss(
+      parseCssValue('x'),
+      { kind: 'raw', text: 'inset 0 1px 0 rgba(255,255,255,.75)' },
+      'STRING',
+    ),
     'inset 0 1px 0 rgba(255,255,255,.75)',
   )
 })
@@ -310,6 +355,13 @@ test('reconstructCss: refuses to rewrite a mix/ref registry side (report-only)',
     ),
     null,
   )
-  assert.equal(reconstructCss(parseCssValue('var(--velo-white)'), { kind: 'color', rgb: [1, 1, 1], a: 1 }, 'COLOR'), null)
+  assert.equal(
+    reconstructCss(
+      parseCssValue('var(--velo-white)'),
+      { kind: 'color', rgb: [1, 1, 1], a: 1 },
+      'COLOR',
+    ),
+    null,
+  )
   assert.equal(reconstructCss(parseCssValue('9px'), { kind: 'dim', value: 12 }, 'FLOAT'), null)
 })

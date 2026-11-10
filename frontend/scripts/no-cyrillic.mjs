@@ -30,8 +30,6 @@ const CYR = /[А-Яа-яЁё]/
 const EXEMPT_DIRS = ['src/utils/schoolBranding', 'src/pwa']
 const I18N_REF = /(?<![A-Za-z0-9_-])i18n:([A-Za-z0-9_.]+)/g
 const LINE_COMMENT = /\/\/.*/g
-const BLOCK_COMMENT = /\/\*.*?\*\//gs
-const HTML_COMMENT = /<!--.*?-->/gs
 const TAG = /<[^>]+>/g
 const STRING_LIT = /(`[^`\n]*`|'[^'\n]*'|"[^"\n]*")/g
 const ATTR = /([\w:-]+)="([^"]*[А-Яа-яЁё][^"]*)"/g
