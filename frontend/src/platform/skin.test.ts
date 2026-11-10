@@ -11,7 +11,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { GOLDEN_SKIN, materializedSkinTokens, readSkin } from './skin'
+import { GOLDEN_SKIN, materializedSkinTokens, readSkin, skinBackgroundFormat } from './skin'
 
 const created: string[] = []
 afterEach(() => {
@@ -89,5 +89,41 @@ describe('materializedSkinTokens (the §3 cascade file)', () => {
     // flat package declarations get wrapped in :root (bare ones are invalid CSS)
     expect(css).toContain(':root {')
     expect(css).toContain('--velo-tg-header: #1b2a41;')
+  })
+
+  describe('background photo token (bg/ format)', () => {
+    /** A package dir with the given files under skin/bg/ (none = no bg/). */
+    function withBg(...files: string[]): string {
+      const dir = withPackage(GOOD_BRAND, '--velo-tg-header: #1b2a41;')
+      if (files.length > 0) {
+        mkdirSync(join(dir, 'skin', 'bg'), { recursive: true })
+        for (const f of files) writeFileSync(join(dir, 'skin', 'bg', f), 'x')
+      }
+      return dir
+    }
+
+    it('no bg/ -> no override: the golden webp from global.css stays', () => {
+      const dir = withBg()
+      expect(skinBackgroundFormat(dir)).toBeNull()
+      expect(materializedSkinTokens(dir, GOLDEN_SKIN)).not.toContain('--velo-app-bg-image')
+    })
+
+    it('a legacy png skin -> the token points at the png', () => {
+      const dir = withBg('background.png')
+      expect(skinBackgroundFormat(dir)).toBe('png')
+      expect(materializedSkinTokens(dir, GOLDEN_SKIN)).toContain(
+        "--velo-app-bg-image: url('/bg/background.png');",
+      )
+    })
+
+    it('a webp skin -> the token points at the webp, and webp beats png', () => {
+      const dir = withBg('background.webp')
+      expect(skinBackgroundFormat(dir)).toBe('webp')
+      expect(materializedSkinTokens(dir, GOLDEN_SKIN)).toContain(
+        "--velo-app-bg-image: url('/bg/background.webp');",
+      )
+      const both = withBg('background.png', 'background.webp')
+      expect(skinBackgroundFormat(both)).toBe('webp')
+    })
   })
 })

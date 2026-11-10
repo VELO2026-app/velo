@@ -587,7 +587,7 @@ onUnmounted(() => {
   position: absolute;
   inset: 0;
   z-index: var(--z-popup);
-  background: url('/bg/background.png') center / cover no-repeat;
+  background: var(--velo-app-bg-image) center / cover no-repeat;
   box-sizing: border-box;
 }
 

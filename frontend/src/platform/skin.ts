@@ -100,6 +100,23 @@ export function readSkin(publicDir: string): SkinPackage | null {
   return readBrandJson(publicDir)
 }
 
+/**
+ * The background photo a skin package really ships, by what lies in
+ * `skin/bg/`: WebP is preferred (the golden format), PNG is the legacy one
+ * already-released skins carry (the file set is a product contract, not a
+ * format mandate).
+ *
+ * @returns The file extension, or null when the package has no photo.
+ *
+ * @param publicDir - The frontend/public directory.
+ */
+export function skinBackgroundFormat(publicDir: string): 'webp' | 'png' | null {
+  const bg = join(publicDir, 'skin', 'bg')
+  if (existsSync(join(bg, 'background.webp'))) return 'webp'
+  if (existsSync(join(bg, 'background.png'))) return 'png'
+  return null
+}
+
 /** Content of the generated src/styles/skin-tokens.css: the skin's token
  *  overrides verbatim under a banner, or the golden stub. Written by
  *  vite.config.ts at config time so the CSS import order in app.ts
@@ -119,11 +136,17 @@ export function materializedSkinTokens(publicDir: string, skin: SkinPackage | nu
   // non-CSS author; this file wraps them in :root, because bare declarations
   // outside a selector are invalid CSS the browser silently drops (caught by
   // the first dark-theme build: the background applied, the tokens did not).
+  // The photo URL token follows the file that really lies in skin/bg/ (the
+  // build spills it over the canonical /bg/ path). No bg/ = the golden
+  // default from global.css stays. Declared last so the file on disk wins.
+  const bgFormat = skinBackgroundFormat(publicDir)
+  const bgOverride =
+    bgFormat === null ? '' : `  --velo-app-bg-image: url('/bg/background.${bgFormat}');\n`
   return `/* GENERATED from public/skin/tokens.css (tz-whitelabel §3 cascade) —
  * do not edit; regenerate by rebuilding. Imported AFTER global.css in app.ts.
  */
 :root {
 ${tokens}
-}
+${bgOverride}}
 `
 }

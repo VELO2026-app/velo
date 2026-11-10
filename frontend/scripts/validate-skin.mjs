@@ -31,6 +31,9 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
+/** A bg/background.png above this is warned about: the golden ships WebP. */
+const BG_PNG_WARN_KB = 300
+
 const MANDATORY_ASSETS = [
   'mandala-white.png',
   'mandala-blue.png',
@@ -272,19 +275,34 @@ export function validateSkin(skinDir, frontendDir) {
   // The background photo is the one optional asset that can quietly break a
   // theme: it is the app's bottom layer, and the GOLDEN one is light. A skin
   // that flips --velo-text-primary to a light color while shipping no
-  // bg/background.png paints light text over the light photo -- unreadable
+  // bg/background.* paints light text over the light photo -- unreadable
   // (the velo_test_front_bot incident). Light-on-light skins may omit it.
-  if (!existsSync(join(skinDir, 'bg', 'background.png'))) {
+  // Two formats are accepted, WebP preferred: released skins carry
+  // background.png, the golden ships background.webp (platform/skin.ts
+  // re-points --velo-app-bg-image at whichever one lies there).
+  const bgWebp = join(skinDir, 'bg', 'background.webp')
+  const bgPng = join(skinDir, 'bg', 'background.png')
+  if (!existsSync(bgWebp) && !existsSync(bgPng)) {
     const textPrimary = luminance(tokens['--velo-text-primary'] ?? baseTokens['--velo-text-primary'])
     if (textPrimary && textPrimary.lum > 0.35) {
       fail(
         out,
-        'FAIL bg/background.png: missing while --velo-text-primary is LIGHT -- the golden light photo stays and the light text on it is unreadable. Ship the full package including bg/, or use dark text tokens.',
+        'FAIL bg/background: missing (neither .webp nor .png) while --velo-text-primary is LIGHT -- the golden light photo stays and the light text on it is unreadable. Ship the full package including bg/, or use dark text tokens.',
       )
     } else {
-      warn(out, 'bg/background.png missing: the golden light photo stays (fine for a light-on-light skin)')
+      warn(out, 'bg/background missing: the golden light photo stays (fine for a light-on-light skin)')
     }
-  } else ok(out, 'bg/background.png present')
+  } else if (existsSync(bgWebp)) {
+    ok(out, 'bg/background.webp present')
+  } else {
+    ok(out, 'bg/background.png present')
+    const kb = Math.round(statSync(bgPng).size / 1024)
+    if (kb > BG_PNG_WARN_KB)
+      warn(
+        out,
+        `bg/background.png is ${kb} KB (> ${BG_PNG_WARN_KB} KB): ship bg/background.webp instead (-m 6, q80) -- the photo is the first thing every user downloads`,
+      )
+  }
   // The manifest/HTML background: themeColor text on backgroundColor surface.
   const splash = contrast(brand['themeColor'], brand['backgroundColor'])
   if (splash !== null && splash < 3)
