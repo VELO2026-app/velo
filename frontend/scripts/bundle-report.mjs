@@ -105,7 +105,10 @@ function precacheOf(distDir) {
   const sw = readFileSync(swPath, 'utf8')
   const list = sw.match(/precacheAndRoute\(\s*\[([\s\S]*?)\]\s*[,)]/)
   if (!list) throw new Error('bundle-report: no precacheAndRoute([...]) list in sw.js')
-  const urls = [...list[1].matchAll(/url:\s*"([^"]+)"/g)].map((m) => m[1])
+  // Unique URLs: vite-plugin-pwa lists the manifest icons a second time, and
+  // the browser downloads each URL once -- counting duplicates would bill
+  // the budget for bytes no device fetches.
+  const urls = [...new Set([...list[1].matchAll(/url:\s*"([^"]+)"/g)].map((m) => m[1]))]
   let bytes = 0
   const missing = []
   for (const url of urls) {

@@ -32,14 +32,19 @@ const entryGzip = gzipSync(Buffer.from(noise)).length
 const precacheBytes = 1000
 
 /** Build a minimal dist/ plus a budget file, run the gate, return exit code and output. */
-function run(name: string, budget: Budget, withSw = true) {
+function run(
+  name: string,
+  budget: Budget,
+  withSw = true,
+  swList = '{url:"pre.bin",revision:null}',
+) {
   const dir = join(root, name)
   mkdirSync(join(dir, 'assets'), { recursive: true })
   writeFileSync(join(dir, 'index.html'), '<html></html>')
   writeFileSync(join(dir, 'assets/app-abc.js'), noise)
   writeFileSync(join(dir, 'pre.bin'), Buffer.alloc(precacheBytes))
   if (withSw) {
-    writeFileSync(join(dir, 'sw.js'), 'precacheAndRoute([{url:"pre.bin",revision:null}],{})')
+    writeFileSync(join(dir, 'sw.js'), `precacheAndRoute([${swList}],{})`)
   }
   const budgetPath = join(dir, 'budget.json')
   writeFileSync(budgetPath, JSON.stringify(budget))
@@ -75,6 +80,12 @@ describe('bundle-report --budget', () => {
     const r = run('over-precache', { entryGzip, precacheBytes: precacheBytes - 1 })
     expect(r.status).toBe(1)
     expect(r.out).toContain('precache')
+  })
+
+  it('counts a URL listed twice once (the PWA plugin repeats the manifest icons)', () => {
+    const twice = '{url:"pre.bin",revision:null},{url:"pre.bin",revision:null}'
+    const r = run('twice', { entryGzip, precacheBytes }, true, twice)
+    expect(r.status).toBe(0)
   })
 
   it('fails when dist has no sw.js', () => {
