@@ -1145,6 +1145,41 @@ describe('EditPracticeView', () => {
       expect(sentBody()).toEqual({ title: 'Новое имя' })
     })
 
+    it('a second Save diffs against what the first one saved, not against the load', async () => {
+      mountCached(practice({ title: 'Йога утром' }))
+      await flush()
+      await editTitle('Новое имя')
+      button('Сохранить')?.click()
+      await flush()
+
+      // Back to the loaded title: the server holds «Новое имя» now, so this
+      // IS a change and must reach the server.
+      await editTitle('Йога утром')
+      button('Сохранить')?.click()
+      await flush()
+
+      const calls = vi.mocked(practicesApi.updatePractice).mock.calls
+      expect(calls).toHaveLength(2)
+      expect(calls[1]?.[1]).toEqual({ title: 'Йога утром' })
+    })
+
+    it('after a save, an edit of another field does not resend the saved one', async () => {
+      mountCached(practice({ contraindications: null }))
+      await flush()
+      await editTitle('Новое имя')
+      button('Сохранить')?.click()
+      await flush()
+
+      typeInto(field('textarea[placeholder*="Беременность"]'), 'Беременность')
+      await flush()
+      button('Сохранить')?.click()
+      await flush()
+
+      const calls = vi.mocked(practicesApi.updatePractice).mock.calls
+      expect(calls).toHaveLength(2)
+      expect(calls[1]?.[1]).toEqual({ contraindications: 'Беременность' })
+    })
+
     it('an untouched Save sends no request at all and still reports saved', async () => {
       // Round-trip safety: populate -> save of an unchanged form must be a
       // no-op, not a rewrite of the schedule/price/audience from form strings.

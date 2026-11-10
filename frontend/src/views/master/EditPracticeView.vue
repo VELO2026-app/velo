@@ -36,7 +36,8 @@
 
   Fixes:
     W-2: DURATION_OPTIONS / TIMEZONE_OPTIONS imported from @/utils/practiceOptions
-    W-3: anyLoading computed = saving || transitioning || cancelling || deleting.
+    W-3: anyLoading computed = saving || transitioning || cancelling || deleting
+         || refreshing (the server copy still loading behind a cached placeholder).
          All action buttons and Save use :disabled="anyLoading" -- prevents
          concurrent save + publish / save + cancel / etc.
     W-5: confirm dialog overlay click blocked while confirmDialog.loading is true
@@ -638,7 +639,7 @@ function populateForm(p: PracticeResponse): void {
   form.contraindications = p.contraindications ?? ''
   form.audience_kind = p.audience_kind ?? 'public'
   // PracticeResponse carries audience_group_NAMES, not ids (see the field's
-  // own docstring in api/types.ts) -- CheckinView composes a message from
+  // docstring in api/generated.ts) -- CheckinView composes a message from
   // the names directly and never needed ids, so the backend never added an
   // id list to this response. Resolving name -> id against customGroups
   // (loaded in onMounted, below) is safe: create_group() 409s on a
@@ -773,8 +774,8 @@ function validate(): boolean {
 // True iff the FORM's audience differs from what's currently SAVED on
 // `practice.value` -- gates the stranded-bookers check below so it only
 // ever runs on an actual audience change, never on an unrelated save (e.g.
-// title-only) that happens to resend the same audience_kind/group_ids the
-// practice already has (this screen always sends both on every save).
+// title-only). Since FE-157 the PATCH carries the audience pair only when
+// it changed (buildPatch), but the check stays keyed on the saved practice.
 function audienceChanged(): boolean {
   if (!practice.value) return false
   const savedKind = practice.value.audience_kind ?? 'public'
@@ -853,6 +854,8 @@ async function save(): Promise<void> {
  * Build the PATCH body from what the master changed since the last load.
  * Unchanged fields are omitted (the backend applies `exclude_unset`), so a
  * stale form cannot overwrite a concurrent edit of a field it never touched.
+ * Two people editing the SAME field still race (last write wins): the
+ * backend has no version check yet -- see BE-204.
  * Coupled fields travel together: date/time/timezone, is_free/price, and the
  * audience pair (the backend checks each pair as a whole).
  *
@@ -927,8 +930,13 @@ async function commitSave(): Promise<void> {
       toast.success(t('ui.saved'))
       return
     }
+    // The values this PATCH carries; once it succeeds they are what the
+    // server holds, so the next Save diffs against them. Taken BEFORE the
+    // request: an edit made while it is in flight stays unsaved.
+    const sent = snapshotForm()
     const updated = await updatePractice(practiceId, body)
     practice.value = updated
+    baseline = sent
     confirmDialog.visible = false
     toast.success(t('ui.saved'))
     await masterStore.refreshMyPractices()
