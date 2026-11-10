@@ -174,9 +174,10 @@ export const useBookingsStore = defineStore('bookings', () => {
       // the caller can surface it. A failed REFRESH keeps the list already on
       // screen (a network blip must not empty the dashboard); a failed first
       // load stays the empty initial list, as before.
+      if (generation !== upcomingGeneration) return // superseded by $reset
       upcomingError.value = extractApiError(e, t('storeErrors.bookings.upcoming'))
     } finally {
-      upcomingLoading.value = false
+      if (generation === upcomingGeneration) upcomingLoading.value = false
     }
   }
 

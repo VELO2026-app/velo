@@ -66,12 +66,18 @@ export const useSchoolsHubStore = defineStore('schoolsHub', () => {
     return mine.value.some((g) => g.relation !== 'curator')
   })
 
+  // Account scope (platform/session.ts): $reset bumps it, and an answer that
+  // left before the reset is dropped instead of filling the next account.
+  let generation = 0
+
   async function ensureCurator(): Promise<void> {
+    const gen = generation
     const probes: Array<Promise<void>> = []
     if (!mineSettled.value) {
       probes.push(
         getMySchools()
           .then((res) => {
+            if (gen !== generation) return
             mine.value = res.items
             mineSettled.value = true
           })
@@ -95,6 +101,7 @@ export const useSchoolsHubStore = defineStore('schoolsHub', () => {
       probes.push(
         getSchools()
           .then((res) => {
+            if (gen !== generation) return
             canCreate.value = res.can_create_schools ?? false
             masterSettled.value = true
           })
@@ -118,6 +125,7 @@ export const useSchoolsHubStore = defineStore('schoolsHub', () => {
   /** Mirror of masterStore.$reset: a different account in the same tab must
    *  not inherit the previous one's schools (auth.logout, W-1). */
   function $reset(): void {
+    generation += 1
     canCreate.value = false
     mine.value = []
     mineSettled.value = false

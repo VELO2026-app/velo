@@ -30,6 +30,9 @@ import { useCalendarStore } from '@/stores/calendar'
 import { useDiaryStore } from '@/stores/diary'
 import { useNotificationsStore } from '@/stores/notifications'
 import { usePracticesStore } from '@/stores/practices'
+import { useMasterStore } from '@/stores/master'
+import { useSchoolsHubStore } from '@/stores/schoolsHub'
+import { useBookingsStore } from '@/stores/bookings'
 
 type StoreFactory = () => StoreGeneric
 
@@ -298,6 +301,10 @@ describe('the end of a session leaves every store in its initial state', () => {
       useDiaryStore().loadInsights('practice_1'),
       useNotificationsStore().refreshUnread(),
       usePracticesStore().fetchPractice('practice_1'),
+      useMasterStore().fetchMyProfile(true),
+      useMasterStore().fetchUpcomingPractices(),
+      useSchoolsHubStore().ensureCurator(),
+      useBookingsStore().fetchUpcoming(),
     ]
 
     await useAuthStore().logout()
@@ -318,6 +325,10 @@ describe('the end of a session leaves every store in its initial state', () => {
     ['diary insights', () => useDiaryStore().loadInsights('practice_1')],
     ['notifications badge', () => useNotificationsStore().refreshUnread()],
     ['practice detail', () => usePracticesStore().fetchPractice('practice_1')],
+    ['master profile', () => useMasterStore().fetchMyProfile(true)],
+    ['master upcoming practices', () => useMasterStore().fetchUpcomingPractices()],
+    ['schools hub probe', () => useSchoolsHubStore().ensureCurator()],
+    ['bookings upcoming', () => useBookingsStore().fetchUpcoming()],
   ]
   for (const [name, run] of ownRequests) {
     it(`after a 401 to the store's own request: ${name}`, async () => {
