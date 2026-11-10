@@ -9,7 +9,7 @@
 // (static only -- no rasterizer, no browser: "we test the contract, not every
 // skin"):
 //
-//   structure    primer-package.yaml (schema 1, contract "1.x"), tokens/,
+//   structure    primer-package.yaml (schema 1, contract "2.x"), tokens/,
 //                the mandatory assets/ set, nothing else (lib/skin-package)
 //   brand        $extensions["velo-skin"]: display/short names (short <= 12),
 //                6-digit hex colors, self-hosted fonts only

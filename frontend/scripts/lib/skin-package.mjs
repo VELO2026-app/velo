@@ -7,9 +7,9 @@
 // so the check and the CSS can never disagree (contract 3 rule 10: "the
 // converter into CSS variables is the product's engine").
 //
-// THE PACKAGE (contract "1.x" of the VELO skin slot; primer guide §4.4):
+// THE PACKAGE (contract "2.x" of the VELO skin slot; primer guide §4.4):
 //
-//   primer-package.yaml          block form: `schema: 1`, `contract: "1.0"` --
+//   primer-package.yaml          block form: `schema: 1`, `contract: "2.0"` --
 //                                the contract is a quoted POINT "X.Y" (a range
 //                                lives only in the product's packages.skin)
 //   tokens/<name>.tokens.json    W3C DTCG. Token paths are the paths of
@@ -57,10 +57,12 @@
 import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
-/** The major of the skin contract this product reads (`>=1,<2`). */
-export const SKIN_CONTRACT_MAJOR = 1
+/** The major of the skin contract this product reads (`>=2,<3`). Major 2 =
+ *  token generation 2 (FE-150): 27 token names gone (variables.css, the
+ *  GENERATION 2 section), so a 1.x package is refused rather than half-read. */
+export const SKIN_CONTRACT_MAJOR = 2
 /** The contract a package written by this product's tools declares. */
-export const SKIN_CONTRACT = '1.0'
+export const SKIN_CONTRACT = '2.0'
 export const MANIFEST = 'primer-package.yaml'
 /** The $extensions key of the brand record. */
 export const BRAND_EXTENSION = 'velo-skin'

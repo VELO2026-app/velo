@@ -53,10 +53,14 @@ describe('primer-package.yaml (contract 3 rule 10)', () => {
     expect(problemsOf(writeSkinPackage({ manifest: 'schema: 1\ncontract: ">=1,<2"\n' }))).toContain(
       'contract must be a quoted point',
     )
-    expect(problemsOf(writeSkinPackage({ manifest: 'schema: 1\ncontract: "2.0"\n' }))).toContain(
-      'this product reads contract 1.x',
+    // FE-150: a generation-1 package (contract 1.x) is refused by the Gen-2 product.
+    expect(problemsOf(writeSkinPackage({ manifest: 'schema: 1\ncontract: "1.0"\n' }))).toContain(
+      'this product reads contract 2.x',
     )
-    expect(problemsOf(writeSkinPackage({ manifest: 'schema: 2\ncontract: "1.0"\n' }))).toContain(
+    expect(problemsOf(writeSkinPackage({ manifest: 'schema: 1\ncontract: "3.0"\n' }))).toContain(
+      'this product reads contract 2.x',
+    )
+    expect(problemsOf(writeSkinPackage({ manifest: 'schema: 2\ncontract: "2.0"\n' }))).toContain(
       'schema must be 1',
     )
   })
@@ -178,7 +182,7 @@ describe('the package is data (no code, nothing else)', () => {
     writeFileSync(join(dir, 'assets', 'icon-192.png'), png(192, 192))
     expect(problemsOf(dir)).toBe('')
     const bare = tempDir('velo-skin-bare-')
-    writeFileSync(join(bare, 'primer-package.yaml'), 'schema: 1\ncontract: "1.0"\n')
+    writeFileSync(join(bare, 'primer-package.yaml'), 'schema: 1\ncontract: "2.0"\n')
     expect(problemsOf(bare)).toContain('assets/logo-white.svg: missing')
     expect(problemsOf(bare)).toContain('no brand record')
   })
@@ -385,7 +389,7 @@ describe('skin-to-dtcg: generation 1 -> package, no pixel changes', () => {
     // the brand record moved into the package's data carrier
     const brand = JSON.parse(readFileSync(join(out, 'tokens', 'brand.tokens.json'), 'utf8'))
     expect(brand.$extensions['velo-skin'].displayName).toBe('Contrast')
-    expect(readFileSync(join(out, 'primer-package.yaml'), 'utf8')).toContain('contract: "1.0"')
+    expect(readFileSync(join(out, 'primer-package.yaml'), 'utf8')).toContain('contract: "2.0"')
     expect(pkg.files).toContain('assets/bg/background.png')
   })
 
