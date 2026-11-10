@@ -1152,8 +1152,8 @@ describe('EditPracticeView', () => {
       button('Сохранить')?.click()
       await flush()
 
-      // Back to the loaded title: the server holds «Новое имя» now, so this
-      // IS a change and must reach the server.
+      // Back to the loaded title: the server holds the first save's title
+      // now, so this IS a change and must reach the server.
       await editTitle('Йога утром')
       button('Сохранить')?.click()
       await flush()
