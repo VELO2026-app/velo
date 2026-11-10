@@ -100,6 +100,11 @@ export interface PendingDiaryEntry {
 
 /** Diary state: check-in/feedback submit, the unified cursor feed, entry CRUD, master insights. */
 export const useDiaryStore = defineStore('diary', () => {
+  // Bumped by $reset (the account boundary): an answer that lands after it
+  // belongs to the previous account -- it writes nothing and refreshes
+  // nothing. On a 401 the reset runs before the failing request's own catch.
+  let generation = 0
+
   // ===========================================================================
   // Check-in submit (CheckinView)
   // ===========================================================================
@@ -114,13 +119,14 @@ export const useDiaryStore = defineStore('diary', () => {
   async function submitCheckin(practiceId: string, body: CheckinRequest): Promise<SubmitResult> {
     if (checkinSubmitting.value) return { ok: false, error: '' }
     checkinSubmitting.value = true
+    const gen = generation
     try {
       await upsertCheckin(practiceId, body)
       // The check-in is now a feed event and flips the booking's has_checkin
       // flag -- refresh both so the diary feed and dashboard banner update.
       // Not awaited: the check-in is saved, so the «done» screen shows now;
       // the timeline catches up in the background (it never fails the submit).
-      void refreshAfterDiaryMutation()
+      if (gen === generation) void refreshAfterDiaryMutation()
       return { ok: true, error: '' }
     } catch (e) {
       const message = extractApiError(e, t('storeErrors.diary.sendCheckin'))
@@ -145,12 +151,13 @@ export const useDiaryStore = defineStore('diary', () => {
   async function submitFeedback(practiceId: string, body: FeedbackRequest): Promise<SubmitResult> {
     if (feedbackSubmitting.value) return { ok: false, error: '' }
     feedbackSubmitting.value = true
+    const gen = generation
     try {
       await upsertFeedback(practiceId, body)
       // The feedback is now a feed event and flips the booking's has_feedback
       // flag -- refresh both so the diary feed and dashboard banner update.
       // Not awaited -- see submitCheckin.
-      void refreshAfterDiaryMutation()
+      if (gen === generation) void refreshAfterDiaryMutation()
       return { ok: true, error: '' }
     } catch (e) {
       const message = extractApiError(e, t('storeErrors.diary.sendFeedback'))
@@ -214,9 +221,10 @@ export const useDiaryStore = defineStore('diary', () => {
   ): Promise<SubmitResult & { fieldErrors?: ExternalActivityFieldErrors }> {
     if (externalActivitySubmitting.value) return { ok: false, error: '' }
     externalActivitySubmitting.value = true
+    const gen = generation
     try {
       await createExternalActivity(body)
-      await refreshAfterDiaryMutation()
+      if (gen === generation) await refreshAfterDiaryMutation()
       return { ok: true, error: '' }
     } catch (e) {
       const message = extractApiError(e, t('storeErrors.diary.saveEvent'))
@@ -381,6 +389,7 @@ export const useDiaryStore = defineStore('diary', () => {
    */
   async function jumpToEntry(item: DiaryFeedItem): Promise<boolean> {
     if (jumpLoading.value) return false
+    const gen = generation
     jumpTargetId.value = item.id
     jumpItems.value = []
     jumpCursor.value = null
@@ -392,15 +401,17 @@ export const useDiaryStore = defineStore('diary', () => {
         listDiaryFeed({ date_to: at, limit: JUMP_CONTEXT_LIMIT }),
         listDiaryFeed({ date_from: at, limit: JUMP_CONTEXT_LIMIT }),
       ])
+      if (gen !== generation) return false
       jumpItems.value = mergeJumpWindow(older.items, newer.items)
       jumpCursor.value = older.next_cursor
       return true
     } catch (e) {
+      if (gen !== generation) return false
       jumpTargetId.value = null
       jumpError.value = extractApiError(e, t('storeErrors.diary.jump'))
       return false
     } finally {
-      jumpLoading.value = false
+      if (gen === generation) jumpLoading.value = false
     }
   }
 
@@ -410,18 +421,22 @@ export const useDiaryStore = defineStore('diary', () => {
    */
   async function loadMoreJump(): Promise<void> {
     if (jumpMoreLoading.value || jumpCursor.value === null) return
+    const gen = generation
     jumpMoreLoading.value = true
     try {
       const result = await listDiaryFeed({
         cursor: jumpCursor.value,
         limit: JUMP_CONTEXT_LIMIT,
       })
+      if (gen !== generation) return
       jumpItems.value = [...jumpItems.value, ...result.items]
       jumpCursor.value = result.next_cursor
     } catch (e) {
-      jumpError.value = extractApiError(e, t('storeErrors.diary.loadEntries'))
+      if (gen === generation) {
+        jumpError.value = extractApiError(e, t('storeErrors.diary.loadEntries'))
+      }
     } finally {
-      jumpMoreLoading.value = false
+      if (gen === generation) jumpMoreLoading.value = false
     }
   }
 
@@ -463,15 +478,18 @@ export const useDiaryStore = defineStore('diary', () => {
    * DiaryEvent snapshots, not full DiaryEntry rows).
    */
   async function fetchEntry(id: string): Promise<void> {
+    const gen = generation
     selectedEntryLoading.value = true
     selectedEntryError.value = null
     try {
-      selectedEntry.value = await getDiaryEntry(id)
+      const entry = await getDiaryEntry(id)
+      if (gen === generation) selectedEntry.value = entry
     } catch (e) {
+      if (gen !== generation) return
       selectedEntryError.value = extractApiError(e, t('storeErrors.diary.entryNotFound'))
       selectedEntry.value = null
     } finally {
-      selectedEntryLoading.value = false
+      if (gen === generation) selectedEntryLoading.value = false
     }
   }
 
@@ -493,9 +511,10 @@ export const useDiaryStore = defineStore('diary', () => {
   async function createEntry(
     body: CreateDiaryEntryRequest,
   ): Promise<SubmitResult & { entry: DiaryEntryResponse | null }> {
+    const gen = generation
     try {
       const entry = await createDiaryEntry(body)
-      await feed.refreshInPlace()
+      if (gen === generation) await feed.refreshInPlace()
       return { ok: true, error: '', entry }
     } catch (e) {
       const message = extractApiError(e, t('storeErrors.diary.create'))
@@ -536,8 +555,11 @@ export const useDiaryStore = defineStore('diary', () => {
 
   async function deliverEntry(p: PendingDiaryEntry): Promise<SubmitResult> {
     p.status = 'sending'
+    const gen = generation
     try {
       const entry = await createDiaryEntry(p.body, p.key)
+      // Saved, but for the previous account: its row is already gone.
+      if (gen !== generation) return { ok: true, error: '' }
       keyByEntryId.set(entry.id, p.key)
       p.item = { ...p.item, source_id: entry.id }
       p.status = 'sent'
@@ -601,8 +623,10 @@ export const useDiaryStore = defineStore('diary', () => {
     id: string,
     body: UpdateDiaryEntryRequest,
   ): Promise<SubmitResult & { entry: DiaryEntryResponse | null }> {
+    const gen = generation
     try {
       const entry = await updateDiaryEntry(id, body)
+      if (gen !== generation) return { ok: true, error: '', entry }
       await feed.refreshInPlace()
       if (selectedEntry.value?.id === id) {
         selectedEntry.value = entry
@@ -618,8 +642,10 @@ export const useDiaryStore = defineStore('diary', () => {
    * Soft-delete a diary entry, then refresh the feed.
    */
   async function deleteEntry(id: string): Promise<SubmitResult> {
+    const gen = generation
     try {
       await deleteDiaryEntry(id)
+      if (gen !== generation) return { ok: true, error: '' }
       await feed.refreshInPlace()
       if (selectedEntry.value?.id === id) {
         selectedEntry.value = null
@@ -636,9 +662,10 @@ export const useDiaryStore = defineStore('diary', () => {
    * so the entry's event reappears in the timeline.
    */
   async function restoreEntry(id: string): Promise<SubmitResult> {
+    const gen = generation
     try {
       await restoreDiaryEntry(id)
-      await feed.refreshInPlace()
+      if (gen === generation) await feed.refreshInPlace()
       return { ok: true, error: '' }
     } catch (e) {
       const message = extractApiError(e, t('storeErrors.diary.restore'))
@@ -668,10 +695,12 @@ export const useDiaryStore = defineStore('diary', () => {
    */
   async function loadInsights(practiceId: string): Promise<void> {
     if (insightsLoadingSet.has(practiceId) || insightsCache.has(practiceId)) return
+    const gen = generation
     insightsErrorMap.delete(practiceId)
     insightsLoadingSet.add(practiceId)
     try {
       const data = await getPracticeInsights(practiceId)
+      if (gen !== generation) return
       // NEW-6: LRU eviction -- remove oldest entry when cache is full.
       if (insightsCache.size >= MAX_INSIGHTS_CACHE) {
         const oldest = insightsCache.keys().next().value
@@ -679,29 +708,38 @@ export const useDiaryStore = defineStore('diary', () => {
       }
       insightsCache.set(practiceId, data)
     } catch (e) {
+      if (gen !== generation) return
       insightsErrorMap.set(practiceId, extractApiError(e, t('storeErrors.diary.insights')))
     } finally {
-      insightsLoadingSet.delete(practiceId)
+      if (gen === generation) insightsLoadingSet.delete(practiceId)
     }
   }
 
   // ===========================================================================
-  // Reset (on logout)
+  // Reset (the account boundary: logout, a 401, any session end --
+  // platform/session.ts calls it; before FE-157 nothing did)
   // ===========================================================================
 
+  /** Back to the initial state; answers still in flight land nowhere. */
   function $reset(): void {
+    generation += 1
     checkinSubmitting.value = false
     feedbackSubmitting.value = false
     reflectionSubmitting.value = false
     externalActivitySubmitting.value = false
     exitJump()
     feed.reset()
+    // feed.reset() drops the in-flight page but leaves its loading flag, and
+    // the dropped page will not clear it: without this the next account's
+    // feed would sit on a loader, and its loadMore() would refuse to run.
+    feed.loading.value = false
     feedFilters.categories = []
     feedFilters.date_from = undefined
     feedFilters.date_to = undefined
     feedFilters.search = undefined
     feedScrollTop.value = 0
     selectedEntry.value = null
+    selectedEntryLoading.value = false
     selectedEntryError.value = null
     insightsCache.clear()
     insightsLoadingSet.clear()

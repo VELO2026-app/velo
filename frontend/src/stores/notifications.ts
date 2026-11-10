@@ -26,11 +26,16 @@ export const useNotificationsStore = defineStore('notifications', () => {
   /** Unread bell items; 0 = no dot (presence only -- no number by ruling). */
   const unread = ref(0)
 
+  // Bumped by $reset: a badge that lands after it is the previous account's.
+  let generation = 0
+
   /** Refetch the badge riding the feed response. Silent on failure: keeps
    *  the last known value, never throws into a host screen. */
   async function refreshUnread(): Promise<void> {
+    const gen = generation
     try {
-      unread.value = (await listNotifications()).unread
+      const { unread: next } = await listNotifications()
+      if (gen === generation) unread.value = next
     } catch {
       // silent by design
     }
@@ -41,5 +46,11 @@ export const useNotificationsStore = defineStore('notifications', () => {
     unread.value = value
   }
 
-  return { unread, refreshUnread, applyUnread }
+  /** Back to the initial state at the account boundary (platform/session.ts). */
+  function $reset(): void {
+    generation += 1
+    unread.value = 0
+  }
+
+  return { unread, refreshUnread, applyUnread, $reset }
 })
