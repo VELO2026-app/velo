@@ -23,6 +23,9 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, reactive, type App } from 'vue'
+import { createPinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import SchoolPageView from '@/views/user/SchoolPageView.vue'
 import * as cgApi from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
@@ -47,8 +50,8 @@ vi.mock('@/composables/useToast', () => ({
   useToast: () => ({ success: toastSuccess, error: toastError, info: toastInfo }),
 }))
 
-// CalendarPracticeCard reads the viewer timezone; mock the composable to
-// keep this suite pinia-free (the page itself never touches the store).
+// CalendarPracticeCard reads the viewer timezone; mock the composable so
+// the suite needs no auth store (the page reads no store of its own).
 vi.mock('@/composables/useViewerTimezone', async () => {
   const { ref } = await import('vue')
   return { useViewerTimezone: () => ref('Europe/Moscow') }
@@ -61,6 +64,9 @@ function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(SchoolPageView).use(createTestI18n())
+  // FE-157 4F: the page's data are Pinia Colada queries -- a fresh Pinia per
+  // mount is a fresh cache, so no test sees another's answers.
+  app.use(createPinia()).use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
@@ -815,7 +821,8 @@ describe('SchoolPageView -- practices feed request', () => {
 
 // =============================================================================
 // FE-78.4: route reuse under the same record -- a slow answer for the
-// PREVIOUS school must never repaint the current one (loadEpoch guard).
+// PREVIOUS school must never repaint the current one (it lands in that
+// school's own cache entry since FE-157 4F; was the loadEpoch guard).
 // =============================================================================
 describe('FE-78.4 -- a superseded load is a no-op', () => {
   it('a slow answer for the previous school never repaints the current one', async () => {
