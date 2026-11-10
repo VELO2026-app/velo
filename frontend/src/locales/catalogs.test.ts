@@ -48,7 +48,12 @@ describe('catalog split', () => {
   it('ru starts with its core only: no zone catalog, no timezones seed', async () => {
     const mod = await fresh()
     const held = heldRoots(mod, 'ru')
-    expect(held).toEqual(expect.arrayContaining([...rootsOf('common'), ...rootsOf('shared')]))
+    const lazyFiles = [...mod.ZONE_CATALOGS, 'timezones'] as string[]
+    const coreFiles = Object.keys(ruFiles)
+      .map((path) => path.slice('./ru/'.length, -'.json'.length))
+      .filter((file) => !lazyFiles.includes(file))
+    expect(coreFiles.length).toBeGreaterThan(10)
+    for (const file of coreFiles) expect(held, file).toEqual(expect.arrayContaining(rootsOf(file)))
     for (const zone of mod.ZONE_CATALOGS) {
       for (const root of rootsOf(zone)) expect(held, `${zone}: ${root}`).not.toContain(root)
     }
