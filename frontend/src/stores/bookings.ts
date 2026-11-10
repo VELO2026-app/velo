@@ -26,7 +26,7 @@ import i18n from '@/locales'
 
 const { t } = i18n.global
 import { extractApiError } from '@/composables/useApiError'
-import { readPersisted, writePersisted } from '@/composables/persistedCache'
+import { readPersisted, removePersisted, writePersisted } from '@/composables/persistedCache'
 import type { BookingWithPracticeResponse, BookingDetailResponse, BookingStatus } from '@/api/types'
 
 /** Result of join/skip-checkin actions: ok plus a user-facing error string. */
@@ -126,10 +126,15 @@ export const useBookingsStore = defineStore('bookings', () => {
     if (upcomingInFlight === null && upcomingAt > 0 && Date.now() - upcomingAt < maxAgeMs) {
       return Promise.resolve()
     }
-    upcomingInFlight ??= loadUpcoming().finally(() => {
-      upcomingInFlight = null
+    if (upcomingInFlight !== null) return upcomingInFlight
+    const p = loadUpcoming().finally(() => {
+      // Only our own slot: a request superseded by invalidateUpcoming settles
+      // AFTER its successor started, and must not orphan it (the next caller
+      // would fire a duplicate GET instead of joining).
+      if (upcomingInFlight === p) upcomingInFlight = null
     })
-    return upcomingInFlight
+    upcomingInFlight = p
+    return p
   }
 
   async function loadUpcoming(): Promise<void> {
@@ -187,11 +192,16 @@ export const useBookingsStore = defineStore('bookings', () => {
    * @remarks An answer still in flight predates the change and is dropped; a
    * list already known (on the dashboard, or restored from the last session)
    * reloads now, so a return to the dashboard does not show the cancelled
-   * booking. A list never loaded is left for its first reader.
+   * booking. A list never loaded is left for its first reader -- but its copy
+   * saved from the last session is dropped, so that reader does not flash the
+   * cancelled booking before its own request answers.
    */
   function invalidateUpcoming(): void {
     upcomingAt = 0
-    if (!upcomingLoaded.value && upcomingInFlight === null) return
+    if (!upcomingLoaded.value && upcomingInFlight === null) {
+      removePersisted(UPCOMING_PERSIST)
+      return
+    }
     upcomingGeneration += 1
     upcomingInFlight = null
     void fetchUpcoming()

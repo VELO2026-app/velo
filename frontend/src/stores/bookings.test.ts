@@ -13,6 +13,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useBookingsStore } from '@/stores/bookings'
 import { ApiResponseError } from '@/api/client'
+import { readPersisted, setPersistOwner, writePersisted } from '@/composables/persistedCache'
 import * as bookingsApi from '@/api/bookings'
 import type { BookingResponse } from '@/api/types'
 
@@ -166,6 +167,59 @@ describe('useBookingsStore', () => {
       const store = useBookingsStore()
       store.invalidateUpcoming()
       expect(bookingsApi.getUpcomingBookings).not.toHaveBeenCalled()
+    })
+
+    it("a list never loaded drops the last session's saved copy: its first reader does not flash it", async () => {
+      setPersistOwner('u-invalidate')
+      writePersisted('bookings.upcoming', before)
+      const store = useBookingsStore()
+
+      store.invalidateUpcoming()
+      expect(readPersisted('bookings.upcoming')).toBeUndefined()
+
+      let resolveFirst!: (value: Upcoming) => void
+      vi.mocked(bookingsApi.getUpcomingBookings).mockReturnValueOnce(
+        new Promise<Upcoming>((resolve) => {
+          resolveFirst = resolve
+        }),
+      )
+      const first = store.fetchUpcoming()
+      // While the first request is in flight nothing stale is on screen.
+      expect(store.upcoming).toEqual([])
+      expect(store.upcomingLoaded).toBe(false)
+      resolveFirst(after)
+      await first
+      expect(store.upcoming).toEqual(after)
+      setPersistOwner(null)
+    })
+
+    it('the superseded request settling late does not orphan its successor (no duplicate GET)', async () => {
+      let resolveOld!: (value: Upcoming) => void
+      let resolveNew!: (value: Upcoming) => void
+      vi.mocked(bookingsApi.getUpcomingBookings)
+        .mockReturnValueOnce(
+          new Promise<Upcoming>((resolve) => {
+            resolveOld = resolve
+          }),
+        )
+        .mockReturnValueOnce(
+          new Promise<Upcoming>((resolve) => {
+            resolveNew = resolve
+          }),
+        )
+        .mockResolvedValue(after)
+      const store = useBookingsStore()
+      const old = store.fetchUpcoming()
+      store.invalidateUpcoming() // starts the successor
+
+      resolveOld(before)
+      await old
+      // The successor is still in flight: a new reader joins it.
+      void store.fetchUpcoming()
+      expect(bookingsApi.getUpcomingBookings).toHaveBeenCalledTimes(2)
+
+      resolveNew(after)
+      await vi.waitFor(() => expect(store.upcoming).toEqual(after))
     })
   })
 

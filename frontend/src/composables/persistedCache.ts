@@ -95,6 +95,15 @@ export function writePersisted(name: string, data: unknown, at = Date.now()): vo
   if (flushTimer === null) flushTimer = setTimeout(flush, FLUSH_DELAY_MS)
 }
 
+/** Forget the current owner's copy of `name` (it no longer holds; batched write). */
+export function removePersisted(name: string): void {
+  if (owner === null) return
+  const all = load()
+  if (!(name in all)) return
+  delete all[name]
+  if (flushTimer === null) flushTimer = setTimeout(flush, FLUSH_DELAY_MS)
+}
+
 /** Forget everything, every account (sign-out). */
 export function clearPersisted(): void {
   if (flushTimer !== null) clearTimeout(flushTimer)

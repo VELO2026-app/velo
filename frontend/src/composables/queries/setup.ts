@@ -57,22 +57,37 @@ export function clearQueryCache(queryCache: QueryCache): void {
  * query cache and forgets every mutation entry.
  *
  * @remarks
- * Holds no state of its own. Created by `coladaOptions`'s plugin at
- * install; platform/session.ts enrolls it like any store with a `$reset()`,
- * and `resetAccountScope()` (stores/auth.ts, at every session end) calls it.
- * A mutation entry keeps the variables and the answer of its last call, so
- * it goes too; a mutation still in flight finishes on its own.
+ * Holds no state of its own beyond the session generation. Created by
+ * `coladaOptions`'s plugin at install; platform/session.ts enrolls it like
+ * any store with a `$reset()`, and `resetAccountScope()` (stores/auth.ts, at
+ * every session end) calls it. A mutation entry keeps the variables and the
+ * answer of its last call, so it goes too.
+ *
+ * A mutation still in flight cannot be cancelled and its `onSuccess` still
+ * runs when the answer lands -- by then on the next session's (reset)
+ * stores. The same generation guard every account-scope store keeps for its
+ * own requests (bumped by `$reset`) covers it: a mutation captures
+ * `generation()` in `onMutate` and its `onSuccess` returns early when the
+ * value moved on (see queries/bookings.ts).
  */
 export const useQueryScopeStore = defineStore(QUERY_SCOPE_STORE_ID, () => {
   const queryCache = useQueryCache()
   const mutationCache = useMutationCache()
+  // Bumped by $reset: a mutation answered after it belongs to the previous session.
+  let sessionGeneration = 0
+
+  /** The current session generation (changes at every session end). */
+  function generation(): number {
+    return sessionGeneration
+  }
 
   function $reset(): void {
+    sessionGeneration += 1
     clearQueryCache(queryCache)
     for (const entry of mutationCache.getEntries()) mutationCache.remove(entry)
   }
 
-  return { $reset }
+  return { generation, $reset }
 })
 
 /** Colada plugin: create the account-scope member as soon as Colada is installed. */
