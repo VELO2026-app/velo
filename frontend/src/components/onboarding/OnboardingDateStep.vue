@@ -43,7 +43,8 @@ import { getLocale, t } from '@/locales'
 import { IconCalendar } from '@/components/icons'
 
 // The sheet pulls in luxon (utils/calendarMath), which must stay out of the
-// startup chunk: the sheet is only mounted once the field is tapped.
+// startup chunk: its chunk loads when this step mounts (the sheet renders
+// closed), so it is usually in by the time the field is tapped.
 const BirthDateSheet = defineAsyncComponent(() => import('@/components/shared/BirthDateSheet.vue'))
 
 const props = withDefaults(
