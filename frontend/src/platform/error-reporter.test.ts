@@ -22,6 +22,21 @@ describe('reportError', () => {
   })
   afterEach(() => setErrorTransport(null))
 
+  it('the default transport prints to the console in every mode (R2, until BE-203)', () => {
+    vi.stubEnv('DEV', false)
+    vi.stubEnv('PROD', true)
+    setErrorTransport(null)
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      reportError(new Error('boom'), { source: 'vue' })
+      expect(spy).toHaveBeenCalledTimes(1)
+      expect(String(spy.mock.calls[0]?.[0])).toContain('boom')
+    } finally {
+      spy.mockRestore()
+      vi.unstubAllEnvs()
+    }
+  })
+
   it('passes a normalized event to the transport', () => {
     reportError(new TypeError('boom'), { source: 'vue', info: 'setup function' })
     expect(events).toHaveLength(1)

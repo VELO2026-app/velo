@@ -10,8 +10,11 @@
 // leave the box.
 //
 // Until the BE-203 endpoint exists in api/generated.ts the transport is the
-// console in dev and a no-op in production. A real transport plugs in with
-// setErrorTransport() and receives a ready-made, PII-free ErrorEvent.
+// console, in production too (owner decision R2: "until then, the console").
+// It must be: once app.config.errorHandler and router.onError are set, Vue
+// and vue-router no longer print the error themselves, so a silent default
+// would hide every render and navigation failure. A real transport plugs in
+// with setErrorTransport() and receives a ready-made, PII-free ErrorEvent.
 // =============================================================================
 
 import type { App } from 'vue'
@@ -51,16 +54,13 @@ export interface ClientErrorEvent {
 /** Receives every reportable error. Should not throw; a throw is swallowed anyway. */
 export type ErrorTransport = (event: ClientErrorEvent) => void
 
-/** Dev default: print to the console. */
+/** The default until BE-203 lands, in every mode: print to the console. */
 const consoleTransport: ErrorTransport = (event) => {
   console.error(`[velo:${event.source}] ${event.name}: ${event.message}`, event)
 }
 
-/** Production default until BE-203 lands: drop the event. */
-const noopTransport: ErrorTransport = () => {}
-
 function defaultTransport(): ErrorTransport {
-  return import.meta.env.DEV ? consoleTransport : noopTransport
+  return consoleTransport
 }
 
 let transport: ErrorTransport = defaultTransport()
