@@ -283,7 +283,7 @@ async function noProfileMasterRedirect(): Promise<{ path: string } | null> {
 
   const masterStore = await loadMasterStore()
   // Lazy-fetch profile (skips network if already loaded this session).
-  await masterStore.fetchMyProfile()
+  await masterStore.fetchMyProfile(false)
 
   return masterStore.profileMissing ? { path: '/master/apply' } : null
 }
@@ -364,6 +364,26 @@ export function __resetAdminProfileTtlForTest(): void {
 }
 
 /**
+ * A master's application status when GET /masters/me brought no profile.
+ *
+ * @remarks The master store keeps no error kind: a 403 for an unverified
+ * application (master_profile_not_verified) and a request that never got an
+ * answer both leave it without a profile. The session's GET /users/me copy
+ * (master_application) tells them apart. It is fetched here once when the
+ * session holds none yet -- the user a fresh Telegram sign-in returns
+ * carries no master_application until the first refresh lands; the client
+ * joins the refresh roleFreshnessGuard already started (GET dedupe).
+ *
+ * @returns Undefined when neither request got an answer.
+ */
+async function applicationStatusWithoutProfile(
+  auth: ReturnType<typeof useAuthStore>,
+): Promise<string | undefined> {
+  if (!auth.masterApplication) await auth.fetchMe()
+  return auth.masterApplication?.status
+}
+
+/**
  * The `verified-master` check: a verified master profile.
  *
  * Required by: practices/*, finance, students, groups, schools, summary
@@ -371,6 +391,15 @@ export function __resetAdminProfileTtlForTest(): void {
  * Not by: /master/profile, /master/apply, /master/pending.
  * №257: a confirmed no-application master goes to /master/apply (honest
  * entry); everything else non-verified keeps the /master/pending redirect.
+ *
+ * @remarks FE-157: a network error is not a verdict. For a master the
+ * status comes from the profile, else from GET /users/me
+ * (applicationStatusWithoutProfile); with no answer from either the
+ * navigation goes on, and the screen's own requests surface the connection
+ * error with their retry. Nothing is exposed by it: every master endpoint
+ * checks the verified status itself (get_current_master, backend
+ * auth/dependencies.py). It used to land a verified master on the verdict
+ * screen, a deep link included.
  */
 export const masterStatusGuard: AccessCheck = async () => {
   const redirect = await noProfileMasterRedirect()
@@ -392,10 +421,18 @@ export const masterStatusGuard: AccessCheck = async () => {
   // forever. Refetch for exactly this population, at most once per
   // ADMIN_PROFILE_TTL_MS (FE-157: it used to be on every check); a real
   // master keeps the existing lazy skip-if-loaded behaviour and pays no
-  // extra network call at all.
-  if (auth.role === 'master') await masterStore.fetchMyProfile(false)
-  else await refreshAdminProfile(masterStore, auth.user?.id ?? null)
+  // extra network call at all (noProfileMasterRedirect above made its one
+  // lazy fetch).
+  if (auth.role === 'master') {
+    const status = masterStore.profile?.status ?? (await applicationStatusWithoutProfile(auth))
+    if (status === undefined) return true
+    return status === 'verified' ? true : { path: '/master/pending' }
+  }
 
+  // An admin: GET /masters/me refuses role=admin, so no profile is the usual
+  // answer, not a lost one -- the verdict screen bounces an admin to the
+  // admin dashboard (masterPendingGuard), the path admins always took.
+  await refreshAdminProfile(masterStore, auth.user?.id ?? null)
   if (!masterStore.profile || masterStore.profile.status !== 'verified') {
     return { path: '/master/pending' }
   }

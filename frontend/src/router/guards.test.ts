@@ -407,6 +407,65 @@ describe('router/guards', () => {
     })
   })
 
+  // FE-157: the store keeps no error kind -- a 403 for an unverified
+  // application and a dropped connection both leave it WITHOUT a profile
+  // (profile null, profileMissing false). GET /users/me's
+  // master_application tells them apart; no answer at all is not a verdict.
+  describe('masterStatusGuard: a request without an answer is not a verdict', () => {
+    function stubFetchMe(result: { succeeds: boolean; application?: { status: string } }) {
+      return vi.spyOn(useAuthStore(), 'fetchMe').mockImplementation(async () => {
+        if (result.succeeds && result.application) {
+          setAuthUser({ role: 'master', master_application: result.application })
+        }
+        return result.succeeds
+      })
+    }
+
+    it('no profile, /users/me already says verified: the screen opens, not the verdict screen', async () => {
+      setAuthUser({ role: 'master', master_application: { status: 'verified' } })
+      const fetchMe = stubFetchMe({ succeeds: false })
+      expect(await call(masterStatusGuard)).toBe(true)
+      expect(fetchMe).not.toHaveBeenCalled()
+    })
+
+    it('no profile and nothing known, /users/me unreachable too: the screen opens', async () => {
+      setAuthUser({ role: 'master' })
+      const fetchMe = stubFetchMe({ succeeds: false })
+      expect(await call(masterStatusGuard)).toBe(true)
+      expect(fetchMe).toHaveBeenCalledTimes(1)
+    })
+
+    it('no profile, /users/me says pending (the 403 was a verdict): /master/pending', async () => {
+      setAuthUser({ role: 'master', master_application: { status: 'pending' } })
+      expect(await call(masterStatusGuard)).toEqual({ path: '/master/pending' })
+    })
+
+    it('fresh sign-in (no master_application yet): /users/me is asked once and decides', async () => {
+      setAuthUser({ role: 'master' })
+      const fetchMe = stubFetchMe({ succeeds: true, application: { status: 'rejected' } })
+      expect(await call(masterStatusGuard)).toEqual({ path: '/master/pending' })
+      expect(fetchMe).toHaveBeenCalledTimes(1)
+    })
+
+    it('the master profile request is not repeated within one check', async () => {
+      setAuthUser({ role: 'master', master_application: { status: 'verified' } })
+      await call(masterStatusGuard)
+      expect(fetchMyProfile).toHaveBeenCalledTimes(1)
+      expect(fetchMyProfile).toHaveBeenCalledWith(false)
+    })
+
+    it('a loaded profile still wins over /users/me', async () => {
+      setAuthUser({ role: 'master', master_application: { status: 'verified' } })
+      masterStoreState.profile = { status: 'suspended' }
+      expect(await call(masterStatusGuard)).toEqual({ path: '/master/pending' })
+    })
+
+    it('an admin without a profile keeps the verdict-screen path (the endpoint refuses admins)', async () => {
+      setAuthUser({ role: 'admin', master_application: { status: 'verified' } })
+      expect(await call(masterStatusGuard)).toEqual({ path: '/master/pending' })
+    })
+  })
+
   describe('masterApplyGuard', () => {
     it.each(['pending', 'verified'])(
       'user with %s application goes to its status, not another form',
@@ -642,6 +701,13 @@ describe('router/guards', () => {
       const router = accessRouter()
       expect(await go(router, '/master/groups')).toBe('/master/pending')
       expect(await go(router, '/master/inbox')).toBe('/master/inbox')
+    })
+
+    it('a deep link into a verified-master screen survives a dropped profile request', async () => {
+      setAuthUser({ role: 'master' })
+      vi.spyOn(useAuthStore(), 'fetchMe').mockResolvedValue(false)
+      const router = accessRouter()
+      expect(await go(router, '/master/practices/p1')).toBe('/master/practices/p1')
     })
 
     it('no-application master on the dashboard goes to the apply wizard', async () => {
