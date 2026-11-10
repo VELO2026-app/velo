@@ -93,19 +93,19 @@ Registered new ones (registry `tz-curator.md` §7.2):
 
 Feature composites are not in the DS map, but they are mirrored as COMPONENT / COMPONENT_SET (Auto Layout, bindings to `velo.*`):
 
-| Section in Figma                        | Node        | Contents                                                                                                                                                                                                                     |
-| --------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Section in Figma                                                                                      | Node         | Contents                                                                                                                                                                                                                     |
+| ----------------------------------------------------------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Component / Overlays — kit additions (+ Form fields — states `3997:19215`, Cards & rows `3997:19222`) | `3997:19229` | `VModal`, `VConfirmDialog`, `VMenuItem`, `VMenu`, states of `VInput`/`VTextarea`, `VCard`, `VButton` (a single set: Type × Size md/sm × State default/disabled/loading; the former `VButton (ext)` merged into the original) |
-| Component / School                      | `3997:19252` | the 8 school composites from the table above (mandala/banner — a static sample, the generator is not reproduced)                                                                                                             |
-| Component / Practices, bookings & chats | `3997:19244` | `PracticeListCard`, `PracticeHeroCard`, `BookingCard`, `CalendarPracticeCard`, `WeekStrip`, `Banner`, `NotificationRow`, `MasterCard`, `ChatListRow`, `MoodSlider`, `MoodAvatar`, `FormShell`, `ResultScreen`, etc. (19)     |
-| Component / Diary, sheets & modals      | `3997:19236` | Diary and chats, 7 sheets, 5 modals, 4 filters, pickers, onboarding (35)                                                                                                                                                     |
+| Component / School                                                                                    | `3997:19252` | the 8 school composites from the table above (mandala/banner — a static sample, the generator is not reproduced)                                                                                                             |
+| Component / Practices, bookings & chats                                                               | `3997:19244` | `PracticeListCard`, `PracticeHeroCard`, `BookingCard`, `CalendarPracticeCard`, `WeekStrip`, `Banner`, `NotificationRow`, `MasterCard`, `ChatListRow`, `MoodSlider`, `MoodAvatar`, `FormShell`, `ResultScreen`, etc. (19)     |
+| Component / Diary, sheets & modals                                                                    | `3997:19236` | Diary and chats, 7 sheets, 5 modals, 4 filters, pickers, onboarding (35)                                                                                                                                                     |
 
 Not mirrored: `DatePickerSheet`, `MethodTaxonomyPicker`, the calendar in `DiaryFilterModal`, the "recent" panel in `DiarySearchBar`, nine `PracticePlaceholder` artworks (`assets/practice-cards/*.svg`).
 The old simplified `PracticeCard` master was removed: the Dashboard/Practices screens are built on `PracticeListCard` (Actions=none; the Zoom/Check-in buttons sit outside the card, as in `UserDashboardView`). `VBadge` gained a boolean `Icon` property (a check mark).
 
 ## Master descriptions in Figma (FE-154, 2026-11-09)
 
-Every COMPONENT / COMPONENT_SET on `front` carries a `description`: `Code:` path, `Props:` (from this map), `Map:` section. A master with no code counterpart says "Figma-only" and is listed in [GAPS.md](./GAPS.md). `VDayPicker` has one master (`3914:216`); the duplicate in `Forms` was removed.
+Every COMPONENT / COMPONENT_SET on `front` carries a `description`: `Code:` path, `Props:` (from this map or the component's `defineProps`), `Map:` section and row. A master with no code counterpart says "Figma-only" and is listed in [GAPS.md](./GAPS.md). `VDayPicker` has one master (`3914:216`); its duplicate (in the old `Forms` frame of the Whitelabel mirror) was removed.
 
 ## How to update the map
 
