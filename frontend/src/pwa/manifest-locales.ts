@@ -7,20 +7,26 @@
 // (skin part) is copied as built.
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import type { Plugin } from 'vite'
 import { MANIFEST_LOCALES, manifestForLocale } from './manifest'
 
 export function perLocaleManifest(frontendDir: string): Plugin {
+  // The RESOLVED outDir, not frontend/dist: a build into another outDir
+  // (bundle-report --modules, FE-157) must neither fail on a missing
+  // frontend/dist nor rewrite the files of an earlier build there.
+  let dist = join(frontendDir, 'dist')
   return {
     name: 'velo-per-locale-manifest',
     apply: 'build',
     enforce: 'post',
+    configResolved(config) {
+      dist = resolve(config.root, config.build.outDir)
+    },
     closeBundle: {
       order: 'post',
       sequential: true,
       handler() {
-        const dist = join(frontendDir, 'dist')
         const built = join(dist, 'manifest.webmanifest')
         if (!existsSync(built)) throw new Error(`per-locale manifests: ${built} is missing`)
         const base = JSON.parse(readFileSync(built, 'utf8')) as Record<string, unknown>
