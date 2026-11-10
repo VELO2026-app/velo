@@ -361,10 +361,10 @@ export default [
   },
 
   {
-    // FE-157 5C: build tooling outside src/ -- the .mjs scripts and the
-    // Vite/Vitest configs. Same type-aware ruleset as the app, typed through
-    // tsconfig.scripts.json (checkJs); Node globals instead of the browser's.
-    files: ['scripts/**/*.mjs', 'vite.config.ts', 'vitest.config.ts'],
+    // FE-157 5C: the .mjs build scripts. Same type-aware ruleset as the app,
+    // typed through tsconfig.scripts.json (checkJs); Node globals instead of
+    // the browser's.
+    files: ['scripts/**/*.mjs'],
     languageOptions: {
       globals: { ...globals.node },
       parserOptions: {
@@ -379,12 +379,51 @@ export default [
       // The scripts are untyped JS (implicit-any parameters, JSON.parse
       // results): the unsafe family would flag ~1300 sites of "any" that the
       // JSDoc-less code cannot answer. Floating promises, unused vars and the
-      // rest of the type-aware set stay on.
+      // rest of the type-aware set stay on. Scoped to the .mjs scripts only:
+      // the TypeScript files below keep the full set.
       '@typescript-eslint/no-unsafe-argument': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-call': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
       '@typescript-eslint/no-unsafe-return': 'off',
+    },
+  },
+
+  {
+    // The TypeScript build configs (Vite/Vitest): typed code, so the whole
+    // type-aware set stays on (no no-unsafe-* relaxation), typed through
+    // tsconfig.configs.json (strict, noImplicitAny on); Node globals.
+    files: ['vite.config.ts', 'vitest.config.ts'],
+    languageOptions: {
+      globals: { ...globals.node },
+      parserOptions: {
+        project: ['./tsconfig.configs.json'],
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+    },
+  },
+
+  {
+    // The Playwright suite (e2e/ and its config), typed through
+    // e2e/tsconfig.json. Page callbacks run in the browser, hence both sets
+    // of globals.
+    files: ['e2e/**/*.ts', 'playwright.config.ts'],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.browser },
+      parserOptions: {
+        project: ['./e2e/tsconfig.json'],
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
     },
   },
 

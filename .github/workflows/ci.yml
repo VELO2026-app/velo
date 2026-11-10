@@ -122,7 +122,7 @@ jobs:
           path: |
             frontend/node_modules/.cache/eslint
             packages/velo-ui/node_modules/.cache/eslint
-          key: eslint-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'frontend/eslint.config.js', 'packages/velo-ui/eslint.config.js', 'frontend/tsconfig*.json', 'packages/velo-ui/tsconfig*.json', 'frontend/src/**', 'frontend/scripts/**', 'frontend/vite.config.ts', 'frontend/vitest.config.ts', 'packages/velo-ui/src/**') }}
+          key: eslint-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'frontend/eslint.config.js', 'packages/velo-ui/eslint.config.js', 'frontend/tsconfig*.json', 'packages/velo-ui/tsconfig*.json', 'frontend/src/**', 'frontend/scripts/**', 'frontend/e2e/**', 'frontend/playwright.config.ts', 'frontend/vite.config.ts', 'frontend/vitest.config.ts', 'packages/velo-ui/src/**') }}
 
       - name: Lint (zero-warning budget; covers packages/ via lint-budget)
         run: pnpm -C frontend lint

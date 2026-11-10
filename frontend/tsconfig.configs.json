@@ -1,0 +1,25 @@
+{
+  // The TypeScript build configs (Vite/Vitest): typed code, so unlike
+  // tsconfig.scripts.json (untyped .mjs under checkJs) noImplicitAny stays on
+  // via `strict`. Node types, no DOM.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "strict": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@velo/ui": ["../packages/velo-ui/src/index.ts"]
+    }
+  },
+  "include": ["vite.config.ts", "vitest.config.ts", "env.d.ts"]
+}
