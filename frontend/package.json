@@ -17,13 +17,15 @@
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write src/",
     "format:check": "prettier --check src/",
-    "typecheck": "vue-tsc --noEmit --incremental",
+    "typecheck": "vue-tsc --noEmit --incremental && tsc --noEmit -p e2e/tsconfig.json",
     "docs": "typedoc",
     "test": "vitest run && node --test scripts/lib/*.test.mjs",
     "test:watch": "vitest",
     "tokens:sync": "node scripts/sync-figma-variables.mjs --rest",
     "test:coverage": "vitest run --coverage && node --test scripts/lib/*.test.mjs",
-    "coverage:budget": "node scripts/coverage-budget.mjs"
+    "coverage:budget": "node scripts/coverage-budget.mjs",
+    "test:e2e": "pnpm build && playwright test",
+    "test:e2e:run": "playwright test"
   },
   "dependencies": {
     "@pinia/colada": "1.4.8",
@@ -46,6 +48,7 @@
     "@eslint/js": "^9.20.0",
     "@intlify/unplugin-vue-i18n": "11.2.7",
     "@pinia/testing": "^0.1.7",
+    "@playwright/test": "1.64.1",
     "@types/luxon": "^3.4.2",
     "@types/node": "^26.6.5",
     "@vitejs/plugin-vue": "^5.2.0",

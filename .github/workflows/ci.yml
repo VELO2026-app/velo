@@ -14,6 +14,8 @@
 #                  @velo/ui).
 #   build        — @velo/ui (vite lib + vue-tsc dts), then the app's
 #                  vue-tsc + vite build with the FE-153 build-log gate.
+#   e2e          — Playwright smoke scenarios on the golden build served by
+#                  `vite preview`, API mocked (frontend/e2e/); Chromium cached.
 #   matrix-plan, matrix, matrix-gate
 #                — the whitelabel build matrix (FE-114, FE-152) fanned out one
 #                  runner per cell (`build-matrix.mjs --cell`); matrix-gate
@@ -206,6 +208,69 @@ jobs:
       # the delta table goes to the step summary.
       - name: Bundle size budget
         run: node frontend/scripts/bundle-report.mjs --budget
+
+  # FE-157 5A.2: smoke e2e on Playwright -- the golden production build under
+  # `vite preview`, the API mocked at the network layer (frontend/e2e/), so
+  # no backend is needed. Its own job: a browser binary and a build of its
+  # own, kept off the fast gate. The Chromium binary is cached by the
+  # Playwright version (a new version = a new revision = a fresh download);
+  # system libraries are not part of the cache and are installed every run.
+  e2e:
+    name: e2e — Playwright smoke
+    needs: scope
+    if: needs.scope.outputs.frontend == 'full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install (workspace root, frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve the Playwright version
+        id: playwright
+        working-directory: frontend
+        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the Playwright browser
+        id: browser-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: Install Chromium (cache miss)
+        if: steps.browser-cache.outputs.cache-hit != 'true'
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Install Chromium system libraries (cache hit)
+        if: steps.browser-cache.outputs.cache-hit == 'true'
+        working-directory: frontend
+        run: pnpm exec playwright install-deps chromium
+
+      - name: Build the app (golden)
+        run: pnpm -C frontend build
+
+      - name: Smoke scenarios
+        run: pnpm -C frontend test:e2e:run
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: frontend/test-results
+          retention-days: 7
 
   # tz-whitelabel F5 (FE-114, FE-152): the build matrix IS the whitelabel
   # gate -- golden x every edition of editions.json through PRIMER_EDITION

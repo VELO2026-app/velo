@@ -7,6 +7,10 @@ dist/
 # Coverage report (vitest --coverage; scripts/coverage-budget.mjs reads it)
 coverage/
 
+# Playwright output (FE-157 5A.2)
+test-results/
+playwright-report/
+
 # typedoc HTML output (FE-136): regenerable with `pnpm run docs`;
 # publishing it is a separate decision (FE-135), it never gets committed.
 docs/api/
