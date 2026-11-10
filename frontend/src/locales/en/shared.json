@@ -68,5 +68,37 @@
       "masterFallback": "Master",
       "temporarilyHidden": "Temporarily hidden"
     }
+  },
+  "methodPicker": {
+    "custom": "Custom variant",
+    "directionPlaceholder": "Specify a direction…"
+  },
+  "masterCard": {
+    "profileUnavailable": "The master's profile is unavailable"
+  },
+  "admin": {
+    "fallbackUserName": "User",
+    "masterStatus": {
+      "pending": "Pending",
+      "verified": "Verified",
+      "rejected": "Rejected",
+      "suspended": "Blocked",
+      "cancelled_by_user": "Account deleted"
+    },
+    "reportStatus": {
+      "pending": "Pending",
+      "resolved": "Resolved",
+      "dismissed": "Dismissed"
+    },
+    "reportTarget": {
+      "user": "User",
+      "master": "Master",
+      "practice": "Practice"
+    },
+    "relative": {
+      "justNow": "just now",
+      "minutesAgo": "{n} min ago",
+      "hoursAgo": "{n} h ago"
+    }
   }
 }

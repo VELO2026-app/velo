@@ -78,13 +78,7 @@ import { useRouter } from 'vue-router'
 import { firstScreenReady } from '@/router/firstScreen'
 import { useAuth, isSchoolInviteStartParam } from '@/composables/useAuth'
 import { useAuthStore } from '@/stores/auth'
-import {
-  applyUserLanguage,
-  availableLocales,
-  clearLocaleHint,
-  loadLocale,
-  setLocale,
-} from '@/locales'
+import { applyUserLanguage, clearLocaleHint, setLocale } from '@/locales'
 import { INSTANCE } from '@/platform/instance'
 import { platform } from '@/platform'
 import { useBackgroundStabilizer } from '@/composables/useBackgroundStabilizer'
@@ -126,18 +120,10 @@ watch(
   },
 )
 
-// Prefetch the other catalog locales shortly after mount (tz-i18n phase 5):
-// warms the lazy chunk cache in the background so a switch is an instant
-// same-frame flip, not a network wait. loadLocale, NEVER setLocale -- warming
-// must not switch: a setLocale loop over availableLocales() ended every mount
-// on the last locale (en), silently reverting the UI to English two seconds
-// in. A plain timeout -- idle enough not to compete with the boot requests,
-// soon enough to warm before a tap.
-onMounted(() => {
-  setTimeout(() => {
-    for (const locale of availableLocales()) void loadLocale(locale)
-  }, 2000)
-})
+// No locale warm-up here (FE-157): warming every locale two seconds after
+// mount cost each session about 85 KB gzip in some 40 requests for a switch
+// few users make. The language switcher warms its own rows instead
+// (TimezoneSettingsView: when the screen opens and on a row's finger-down).
 
 // Pin the fixed photo-background against the iOS/Telegram keyboard viewport
 // shift (the "dancing background"). Mounted once here, on the app root.

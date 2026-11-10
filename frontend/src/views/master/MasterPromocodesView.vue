@@ -127,7 +127,7 @@ async function load(): Promise<void> {
 }
 
 function usedLabel(p: PromoResponse): string {
-  return t('adminScreens.adminPromos.usedOf', { used: p.used_count, max: p.max_uses ?? '∞' })
+  return t('masterScreens.masterPromocodes.usedOf', { used: p.used_count, max: p.max_uses ?? '∞' })
 }
 function untilLabel(p: PromoResponse): string {
   return p.valid_until

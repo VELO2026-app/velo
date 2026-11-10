@@ -16,6 +16,14 @@ import { resetClientState } from '@/api/client'
 import { queryCache } from '@/composables/useQuery'
 import { clearPersisted, setPersistOwner } from '@/composables/persistedCache'
 import { createTestI18n } from '@/locales/testing'
+import { ensureCatalogs, ZONE_CATALOGS } from '@/locales'
+
+// FE-157: the zone catalogs (master, admin) load with their routes in the
+// app; screen tests mount zone screens without the router, so the suite
+// holds every catalog up front. Whether a route asks for its zone is pinned
+// by router/catalogs.test.ts, and which code may read zone keys at all by
+// key-audit's zone check.
+await ensureCatalogs(ZONE_CATALOGS)
 
 // tz-i18n 0.4: every @vue/test-utils mount gets i18n injected -- components
 // read translations via `import { t } from '@/locales'` (the project-wide
