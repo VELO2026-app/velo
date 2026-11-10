@@ -315,7 +315,7 @@ describe('AdminSupportDetailView', () => {
 
     // Was: an id absent from the fallback LIST. Now the read answers 404 --
     // no such ticket, a person's history thread included.
-    it('a 404 from the read -> not-found state, and no feed is asked for', async () => {
+    it('a 404 from the read -> not-found state (the feed is asked for in parallel, its answer is moot)', async () => {
       vi.mocked(supportApi.getAdminTicket).mockRejectedValue(
         new ApiResponseError(404, 'Ticket not found'),
       )
@@ -323,7 +323,23 @@ describe('AdminSupportDetailView', () => {
       await flush()
 
       expect(text()).toContain('Обращение не найдено')
-      expect(supportApi.getAdminSupportMessages).not.toHaveBeenCalled()
+    })
+
+    it('FE-157: the ticket and the feed are requested together, not one after the other', async () => {
+      let resolveTicket!: (v: AdminSupportTicket) => void
+      vi.mocked(supportApi.getAdminTicket).mockReturnValue(
+        new Promise((r) => {
+          resolveTicket = r
+        }),
+      )
+      mount('t_1', null)
+      await flush()
+
+      // The ticket read is still pending, yet the feed has already left.
+      expect(supportApi.getAdminSupportMessages).toHaveBeenCalledTimes(1)
+      resolveTicket(ticket())
+      await flush()
+      expect(text()).toContain('Дана')
     })
 
     it('any other read failure -> an error state whose retry reads again', async () => {
