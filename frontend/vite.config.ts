@@ -266,12 +266,20 @@ export const SKIN_BRAND: string | null = ${JSON.stringify(skin?.displayName ?? n
           // master chunks are not in the startup closure, so they stay out
           // too; the Zoom Meeting SDK (about 5 MB, practice screen only,
           // Standalone F4) is also named in globIgnores as a belt.
+          //
+          // index.html is NOT precached, and navigations are not answered
+          // from the precache (navigateFallback: null): with the route chunks
+          // gone from the precache, a reload served the OLD index.html by the
+          // still-active worker would point at chunks the server no longer
+          // has, and platform/chunk-reload.ts (FE-106) would spend its reload
+          // on the old build. Navigations go network-first instead (the
+          // runtime rule below); there is no offline mode to lose.
           globPatterns: [
-            'index.html',
             'registerSW.js',
             'fonts/*.woff2',
-            // The background photo paints the first frame of every screen.
-            'bg/background.webp',
+            // The background photo paints the first frame of every screen;
+            // already-released skins ship it as PNG (platform/skin.ts).
+            'bg/background.{webp,png}',
             // PWA icons, favicon, and the splash logo (LoadingView: spinning
             // mandala ring under the filled wordmark).
             'icons/{icon-192,icon-512,icon-maskable-512,apple-touch-icon-180,favicon,mandala-white,velo-word-filled}.*',
@@ -280,6 +288,7 @@ export const SKIN_BRAND: string | null = ${JSON.stringify(skin?.displayName ?? n
           // Don't precache source maps -- nor the Zoom Meeting SDK chunk.
           globIgnores: ['**/*.map', '**/zoom-sdk-*.js'],
           manifestTransforms: [shellOnly],
+          navigateFallback: null,
           // Runtime caching also gives the service worker a valid strategy
           // when the precache manifest is empty (workbox-build otherwise
           // aborts, reproduced on workbox 7.3.0 and 7.4.0).
@@ -291,6 +300,17 @@ export const SKIN_BRAND: string | null = ${JSON.stringify(skin?.displayName ?? n
           // own files would be served back to Zoom's SDK.
           runtimeCaching: [
             {
+              // Navigations: always the CURRENT deploy's index.html when the
+              // network answers; the cached copy only when it does not.
+              urlPattern: ({ request, sameOrigin }) => sameOrigin && request.mode === 'navigate',
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'velo-pages',
+                expiration: { maxEntries: 10 },
+                cacheableResponse: { statuses: [200] },
+              },
+            },
+            {
               // Hashed build output: a URL never changes its bytes, so
               // CacheFirst is safe. The limits keep chunks of old builds from
               // piling up: least-recently-used entries go first, and nothing
@@ -299,7 +319,8 @@ export const SKIN_BRAND: string | null = ${JSON.stringify(skin?.displayName ?? n
               // After a deploy the server no longer has the old chunk names.
               // A miss falls through to the network, which fails or answers
               // 404; either way the import rejects and platform/chunk-reload.ts
-              // (FE-106) reloads onto the new build. Only 200 responses that
+              // (FE-106) reloads -- the navigation goes network-first, so the
+              // reload lands on the new build. Only 200 responses that
               // are not HTML are stored: an SPA fallback answers a missing
               // chunk with index.html, and caching that under a .js URL would
               // pin the failure.

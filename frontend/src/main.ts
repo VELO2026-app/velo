@@ -11,12 +11,16 @@
 //   2. prepareHost()            -- Telegram launch: load telegram-web-app.js
 //      and wait; otherwise: no telegram.org, viewport-fit=cover
 //      (platform/launch.ts);
-//   3. import('./app')          -- the application itself (app.ts).
+//   3. import('./app')          -- the application itself (app.ts);
+//   4. dropLegacyCaches()       -- after the app is up, delete runtime caches
+//      earlier service workers left behind (platform/sw-caches.ts).
 // =============================================================================
 
 import { installHostChunkReload } from './platform/chunk-reload'
 import { prepareHost } from './platform/launch'
+import { dropLegacyCaches } from './platform/sw-caches'
 
 installHostChunkReload()
 await prepareHost()
 await import('./app')
+void dropLegacyCaches()
