@@ -16,29 +16,36 @@ import {
   readonly,
   ref,
   type DeepReadonly,
+  type EffectScope,
   type Ref,
 } from 'vue'
 import { isDocumentHidden, offDocumentEvent, onDocumentEvent } from '@/platform/dom'
 
 interface Ticker {
-  now: Ref<number>
-  /** Consumers that are alive AND not deactivated. */
-  active: number
+  /**
+   * The refs of consumers that are alive AND not deactivated. Each consumer
+   * owns its ref, so a paused (kept-alive, off-stage) consumer keeps its
+   * last value and is not woken by ticks meant for the others.
+   */
+  subscribers: Set<Ref<number>>
   timer: ReturnType<typeof setInterval> | null
 }
 
-/** One ticker per interval length: every consumer of the same cadence shares it. */
+/** One ticker per interval length: every consumer of the same cadence shares its timer. */
 const tickers = new Map<number, Ticker>()
 let visibilityBound = false
 
+function tick(ticker: Ticker): void {
+  const at = Date.now()
+  for (const now of ticker.subscribers) now.value = at
+}
+
 function sync(intervalMs: number, ticker: Ticker): void {
-  const shouldRun = ticker.active > 0 && !isDocumentHidden()
+  const shouldRun = ticker.subscribers.size > 0 && !isDocumentHidden()
   if (shouldRun && ticker.timer === null) {
-    // Resuming after a pause: the stored value may be stale by minutes.
-    ticker.now.value = Date.now()
-    ticker.timer = setInterval(() => {
-      ticker.now.value = Date.now()
-    }, intervalMs)
+    // Resuming after a pause: the stored values may be stale by minutes.
+    tick(ticker)
+    ticker.timer = setInterval(() => tick(ticker), intervalMs)
   } else if (!shouldRun && ticker.timer !== null) {
     clearInterval(ticker.timer)
     ticker.timer = null
@@ -52,7 +59,7 @@ function onVisibility(): void {
 /** The document listener lives only while some consumer is active. */
 function syncVisibilityBinding(): void {
   let anyActive = false
-  for (const ticker of tickers.values()) if (ticker.active > 0) anyActive = true
+  for (const ticker of tickers.values()) if (ticker.subscribers.size > 0) anyActive = true
   if (anyActive && !visibilityBound) {
     onDocumentEvent('visibilitychange', onVisibility)
     visibilityBound = true
@@ -66,10 +73,23 @@ function syncVisibilityBinding(): void {
  * Reactive epoch-milliseconds clock that ticks every `intervalMs`.
  *
  * @remarks
- * All callers with the same interval share ONE timer. The timer runs only
- * while at least one consumer is mounted and not deactivated (keep-alive) and
- * the document is visible; on resume the value is refreshed at once. Cleanup
- * is automatic with the calling scope (component or store).
+ * Every call returns its OWN ref; callers with the same interval share one
+ * timer. The timer runs only while at least one consumer is active and the
+ * document is visible; a consumer that resumes is refreshed at once.
+ *
+ * Lifecycle binding:
+ * - Called directly in a component's `setup()` (the current effect scope IS
+ *   the component's scope): pauses on `deactivated`, resumes on `activated`
+ *   (keep-alive), stops on unmount.
+ * - Called in any other effect scope (a Pinia setup store, a manual
+ *   `effectScope()`): stops only when that scope is disposed. The keep-alive
+ *   hooks are deliberately NOT attached, even when a component happens to be
+ *   rendering -- a store created lazily from some component's `setup()` must
+ *   not borrow that component's lifecycle.
+ * - Called with no effect scope: never stops; avoid.
+ *
+ * Prefer calling it from the component that renders the time-dependent
+ * state, not from a store, so a kept-alive, off-stage screen does not tick.
  *
  * @param intervalMs - Tick period in milliseconds (default one minute).
  * @returns A read-only ref holding `Date.now()` as of the last tick.
@@ -77,37 +97,41 @@ function syncVisibilityBinding(): void {
 export function useNow(intervalMs = 60_000): DeepReadonly<Ref<number>> {
   let ticker = tickers.get(intervalMs)
   if (!ticker) {
-    ticker = { now: ref(Date.now()), active: 0, timer: null }
+    ticker = { subscribers: new Set(), timer: null }
     tickers.set(intervalMs, ticker)
   }
   const shared = ticker
-  let running = false
+  const now = ref(Date.now())
 
   function start(): void {
-    if (running) return
-    running = true
-    shared.active += 1
+    if (shared.subscribers.has(now)) return
+    // A resuming subscriber must not read a value that is up to a pause old.
+    now.value = Date.now()
+    shared.subscribers.add(now)
     syncVisibilityBinding()
     sync(intervalMs, shared)
   }
 
   function stop(): void {
-    if (!running) return
-    running = false
-    shared.active -= 1
+    if (!shared.subscribers.delete(now)) return
     sync(intervalMs, shared)
     syncVisibilityBinding()
   }
 
-  // A fresh subscriber must not read a value that is up to a tick old.
-  shared.now.value = Date.now()
   start()
 
-  if (getCurrentInstance()) {
+  const scope = getCurrentScope()
+  // getCurrentInstance() stays set while a component's setup() lazily creates
+  // a Pinia store (or runs any nested effectScope), so "is there an instance"
+  // is not enough: bind the keep-alive hooks only when the active scope IS the
+  // component's own. `scope` is marked internal in Vue's typings but has been
+  // a stable field of the component instance since 3.2.
+  const instance = getCurrentInstance() as { scope?: EffectScope } | null
+  if (instance && instance.scope === scope) {
     onDeactivated(stop)
     onActivated(start)
   }
-  if (getCurrentScope()) onScopeDispose(stop)
+  if (scope) onScopeDispose(stop)
 
-  return readonly(shared.now)
+  return readonly(now)
 }
