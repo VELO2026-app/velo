@@ -9,7 +9,7 @@
 // (static only -- no rasterizer, no browser: "we test the contract, not every
 // skin"):
 //
-//   structure    primer-package.yaml (schema 1, contract "1.x"), tokens/,
+//   structure    primer-package.yaml (schema 1, contract "2.x"), tokens/,
 //                the mandatory assets/ set, nothing else (lib/skin-package)
 //   brand        $extensions["velo-skin"]: display/short names (short <= 12),
 //                6-digit hex colors, self-hosted fonts only
@@ -121,6 +121,22 @@ function contrast(a, b) {
   return (hi + 0.05) / (lo + 0.05)
 }
 
+/** FE-150: cssName -> its DTCG $deprecated note, for the registry tokens
+ *  marked deprecated in tokens.json. */
+function deprecatedTokens(tokensDoc) {
+  const out = new Map()
+  const walk = (node) => {
+    for (const [key, value] of Object.entries(node)) {
+      if (key.startsWith('$') || !value || typeof value !== 'object') continue
+      const cssName = value.$extensions?.pridem?.cssName
+      if (cssName && typeof value.$deprecated === 'string') out.set(cssName, value.$deprecated)
+      walk(value)
+    }
+  }
+  walk(tokensDoc.root)
+  return out
+}
+
 // -- the check ---------------------------------------------------------------
 
 /** Validates the skin package at `skinDir`. `frontendDir` anchors
@@ -148,6 +164,16 @@ export function validateSkin(skinDir, frontendDir) {
   const tokenNames = Object.keys(tokens)
   if (tokenNames.length === 0) warn(out, 'the package sets no tokens')
   else ok(out, `tokens: ${tokenNames.length} override(s), all known to tokens.json`)
+  // FE-150: a token the registry marks DTCG $deprecated has no consumer --
+  // the override themes nothing, and the next contract generation deletes
+  // the name (then this package would fail as "not a token").
+  const deprecated = deprecatedTokens(goldenDoc)
+  for (const name of tokenNames)
+    if (deprecated.has(name))
+      warn(
+        out,
+        `tokens: ${name} is deprecated (${deprecated.get(name)}) -- nothing consumes it, the override themes nothing; drop it before the next contract generation removes the name`,
+      )
 
   for (const family of new Set(brand.fonts.map((f) => f.family)))
     ok(out, `font: --font-body carries the self-hosted family "${family}"`)

@@ -8,13 +8,19 @@
 // =============================================================================
 
 import { afterEach, describe, expect, it } from 'vitest'
-import { rmSync, writeFileSync } from 'node:fs'
+import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 // Plain ESM module (types loosely declared in env.d.ts).
 // @ts-expect-error -- *.mjs modules carry no type information
 import { skinBuildGate, validateSkin } from '../../scripts/validate-skin.mjs'
-import { cleanupSkinFixtures, png, tempDir, writeSkinPackage } from './skin.test.fixture'
+import {
+  FIXTURE_TOKENS,
+  cleanupSkinFixtures,
+  png,
+  tempDir,
+  writeSkinPackage,
+} from './skin.test.fixture'
 
 afterEach(cleanupSkinFixtures)
 
@@ -100,6 +106,38 @@ describe('validate-skin (tz-whitelabel §3)', () => {
       },
     })
     expect(failsOf(dir)).toContain('velo.primari is not a token of the product')
+  })
+
+  it('a token removed in the skin contract Gen-2 fails as unknown (FE-150)', () => {
+    // goodo-brand v0.1.1 sets velo.mood.low: after Gen-2 nothing reads it.
+    const dir = writeSkinPackage({
+      tokens: {
+        ...FIXTURE_TOKENS,
+        velo: { ...FIXTURE_TOKENS.velo, mood: { low: { $value: '#726bcf' } } },
+      },
+    })
+    expect(failsOf(dir)).toContain('velo.mood.low is not a token of the product')
+  })
+
+  it('a deprecated token override warns, never fails (the name stays until the next generation)', () => {
+    // A frontend whose registry marks velo.primary.dark DTCG $deprecated.
+    const fe = tempDir()
+    const doc = JSON.parse(readFileSync(join(FRONTEND, 'tokens.json'), 'utf8'))
+    doc.root.velo.primary.dark.$deprecated = '2026-11-10: test, delete in Gen-3'
+    writeFileSync(join(fe, 'tokens.json'), JSON.stringify(doc))
+    const dir = writeSkinPackage({
+      tokens: {
+        ...FIXTURE_TOKENS,
+        velo: {
+          ...FIXTURE_TOKENS.velo,
+          primary: { $value: '#2c4a6e', dark: { $value: '#1b2a41' } },
+        },
+      },
+    })
+    const report = validateSkin(dir, fe) as Report
+    expect(report.fails).toEqual([])
+    expect(report.warns.join('\n')).toContain('--velo-primary-dark is deprecated (2026-11-10: test')
+    expect(report.warns.join('\n')).not.toContain('--velo-primary is deprecated')
   })
 
   it('a frozen bare token fails -- velo.* and bare.font-body only', () => {

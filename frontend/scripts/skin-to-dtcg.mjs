@@ -5,7 +5,7 @@
 // root, tz-whitelabel §3) into the deploy machine's package format
 // (tz-whitelabel §3.2; scripts/lib/skin-package.mjs documents it):
 //
-//   primer-package.yaml          schema: 1, contract: "1.0"
+//   primer-package.yaml          schema: 1, contract: "2.0"
 //   tokens/brand.tokens.json     $extensions["velo-skin"] = brand.json
 //   tokens/skin.tokens.json      every --velo-* / --font-body override at its
 //                                tokens.json path (velo.text.primary, ...)

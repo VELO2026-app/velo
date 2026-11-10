@@ -86,7 +86,7 @@ export function writeSkinPackage(patch: FixturePatch = {}, dir?: string): string
     mkdirSync(join(root, rel, '..'), { recursive: true })
     writeFileSync(join(root, rel), content)
   }
-  put('primer-package.yaml', patch.manifest ?? 'schema: 1\ncontract: "1.0"\n')
+  put('primer-package.yaml', patch.manifest ?? 'schema: 1\ncontract: "2.0"\n')
   put(
     'tokens/brand.tokens.json',
     JSON.stringify({ $extensions: { 'velo-skin': patch.brand ?? FIXTURE_BRAND } }),
