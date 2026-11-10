@@ -20,7 +20,7 @@
 
 <template>
   <div class="timeline">
-    <div v-for="(group, gi) in dayGroups" :key="group.dayKey" class="timeline__day">
+    <template v-for="(group, gi) in dayGroups" :key="group.dayKey">
       <!-- Day separator: big decor link above the date node (Decor 2 / big).
            The FIRST group carries none: a connector hanging from nothing read
            as a dead gap above the thread's very first entry (owner request). -->
@@ -63,7 +63,7 @@
           </p>
         </div>
       </template>
-    </div>
+    </template>
   </div>
 </template>
 
@@ -132,8 +132,6 @@ const dayGroups = computed<DayGroup[]>(() => {
 
 <style scoped>
 .timeline {
-  /* Rough height of a day group, used only until it is first rendered. */
-  --diary-day-intrinsic-height: 40rem;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -144,19 +142,6 @@ const dayGroups = computed<DayGroup[]>(() => {
      above the first date node read as a big gap before the thread's first
      entry (owner request). */
   padding: 0 0 var(--space-3);
-}
-
-/* One day group. content-visibility skips layout/paint of off-screen days in a
-   long feed; `auto` in contain-intrinsic-size makes the browser remember the
-   real height once rendered, so the scrollbar and the load-older scroll
-   anchoring stay stable. */
-.timeline__day {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 100%;
-  content-visibility: auto;
-  contain-intrinsic-size: auto var(--diary-day-intrinsic-height);
 }
 
 /* Date node: decor flourish + label + decor flourish. No axis line — the

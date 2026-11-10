@@ -23,12 +23,10 @@ const ids = (w: { findAll: (s: string) => { attributes: (n: string) => string | 
   w.findAll('[data-entry-id]').map((e) => e.attributes('data-entry-id'))
 
 describe('DiaryTimeline', () => {
-  it('groups chronologically into one wrapper per day', () => {
+  it('renders days chronologically, oldest first, one date node per day', () => {
     const w = mount(DiaryTimeline, { props: { items, timezone: 'UTC' }, global: { stubs } })
-    const days = w.findAll('.timeline__day')
-    expect(days).toHaveLength(2)
-    expect(ids(days[0]!)).toEqual(['a'])
-    expect(ids(days[1]!)).toEqual(['b', 'c'])
+    expect(w.findAll('.timeline__date-node')).toHaveLength(2)
+    expect(ids(w)).toEqual(['a', 'b', 'c'])
   })
 
   it('resolves pendingState once per row and renders it', () => {
