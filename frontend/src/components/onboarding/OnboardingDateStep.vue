@@ -38,10 +38,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, defineAsyncComponent } from 'vue'
 import { getLocale, t } from '@/locales'
 import { IconCalendar } from '@/components/icons'
-import BirthDateSheet from '@/components/shared/BirthDateSheet.vue'
+
+// The sheet pulls in luxon (utils/calendarMath), which must stay out of the
+// startup chunk: the sheet is only mounted once the field is tapped.
+const BirthDateSheet = defineAsyncComponent(() => import('@/components/shared/BirthDateSheet.vue'))
 
 const props = withDefaults(
   defineProps<{

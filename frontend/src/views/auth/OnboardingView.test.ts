@@ -169,6 +169,12 @@ async function pickDefaultBirthDate(): Promise<void> {
   if (!field) throw new Error('.ob-date__field did not render')
   field.click()
   await flush()
+  // BirthDateSheet is an async component (keeps luxon out of the startup
+  // chunk): wait until its lazy chunk has resolved and the sheet is mounted.
+  await vi.waitFor(() => {
+    if (!document.body.querySelector('.v-sheet__save')) throw new Error('sheet not mounted yet')
+  })
+  await flush()
   const save = document.body.querySelector<HTMLButtonElement>('.v-sheet__save')
   if (!save) throw new Error('the birth-date sheet did not open')
   save.click()
