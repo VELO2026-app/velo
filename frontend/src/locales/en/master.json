@@ -690,6 +690,7 @@
       "audienceUnavailable": "The school is unavailable — nobody but you and those already booked can see the practice.",
       "copy": "Copy",
       "noReviewsYet": "No reviews yet",
+      "attendanceLoadFailed": "Could not load attendance",
       "stats": {
         "enrolled": "Booked",
         "capacity": "Spots"
