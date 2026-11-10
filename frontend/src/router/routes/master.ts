@@ -22,12 +22,15 @@
 import type { RouteRecordRaw } from 'vue-router'
 import { masterPendingGuard, masterApplyGuard } from '@/router/guards'
 
-// FE-112 (tz-whitelabel §4): the payments module is ALL of its surfaces --
-// the user's top-ups (routes/user.ts), the master's finance screen here and
-// the admin's payout queue (routes/admin.ts). An edition without payments
-// registers none of them, so a feature-cut build carries no chunk of any
-// payment screen (ConfirmPaymentModal rides AdminWithdrawalDetailView's
-// chunk).
+/**
+ * The «payments» module's master surface: the finance screen (FE-112).
+ *
+ * @remarks tz-whitelabel §4: the payments module is ALL of its surfaces --
+ * the user's top-ups (routes/user.ts), this screen and the admin's payout
+ * queue (routes/admin.ts). An edition without payments registers none of
+ * them, so a feature-cut build carries no chunk of any payment screen
+ * (ConfirmPaymentModal rides AdminWithdrawalDetailView's chunk).
+ */
 export const PAYMENTS_MASTER_ROUTES: RouteRecordRaw[] = [
   {
     path: 'finance',

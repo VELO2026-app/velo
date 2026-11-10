@@ -16,6 +16,7 @@ import type { RouteRecordRaw } from 'vue-router'
 // routes/admin.ts).
 import UserShell from '@/views/shells/UserShell.vue'
 
+/** The «ai» module's user screens: MCP tokens (BE-138) and the AI summary. */
 export const AI_USER_ROUTES: RouteRecordRaw[] = [
   {
     // BE-138: personal tokens for the user's MCP clients.
@@ -30,6 +31,7 @@ export const AI_USER_ROUTES: RouteRecordRaw[] = [
   },
 ]
 
+/** The «payments» module's user screens: the top-up and its two returns. */
 export const PAYMENTS_USER_ROUTES: RouteRecordRaw[] = [
   {
     path: 'topup',

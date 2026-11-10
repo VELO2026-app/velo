@@ -11,6 +11,7 @@
 
 import type { RouteRecordRaw } from 'vue-router'
 
+/** The «payments» module's admin surface: the payout queue (FE-112). */
 export const PAYMENTS_ADMIN_ROUTES: RouteRecordRaw[] = [
   {
     path: 'withdrawals',
