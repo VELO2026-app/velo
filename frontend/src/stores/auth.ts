@@ -30,7 +30,7 @@ import { queryCache } from '@/composables/useQuery'
 import { clearPersisted, setPersistOwner } from '@/composables/persistedCache'
 import { host } from '@/platform/host'
 import { newMark, rememberLoginMark } from '@/platform/browser-login'
-import { resetAccountScope } from '@/platform/session'
+import { notifySessionEnd, resetAccountScope, type SessionEndReason } from '@/platform/session'
 import type {
   AuthResponse,
   BrowserLoginResponse,
@@ -100,10 +100,16 @@ export const useAuthStore = defineStore(AUTH_STORE_ID, () => {
   }
 
   /**
-   * End the session: clear the token and user, the cached screen data, and
+   * End the session: tell the `onSessionEnd` subscribers (composables with
+   * module state), clear the token and user, the cached screen data, and
    * every other store (used by the 401 handler, logout and failed sign-ins).
+   *
+   * @param reason - `logout` when the person signed out, `dropped` otherwise.
    */
-  function _clearSession(): void {
+  function _clearSession(reason: SessionEndReason = 'dropped'): void {
+    // First, before anything is cleared: the Telegram logout gate (useAuth)
+    // and the role-freshness poll (useRoleFreshness) hook in here.
+    notifySessionEnd(reason)
     _setToken(null)
     _setUser(null)
     // Cached screen data belongs to the account that fetched it -- in
@@ -331,13 +337,6 @@ export const useAuthStore = defineStore(AUTH_STORE_ID, () => {
    * closes the Mini App.
    */
   async function logout(): Promise<void> {
-    // T21-4/T21-5 (PROMPT №546): stop the foreground role-freshness poll so it
-    // doesn't keep ticking a fetchMe() against a session that's about to be
-    // cleared. Dynamic import: useRoleFreshness imports this store, and the
-    // account scope (platform/session.ts) resets stores, not composables.
-    const { stopRoleFreshnessPoll } = await import('@/composables/useRoleFreshness')
-    stopRoleFreshnessPoll()
-
     // In Telegram, "logout" closes the Mini App (product decision): on the
     // next open it starts fresh -> LoadingView -> auto re-login via initData.
     // Arm the logging-out gate FIRST so the App.vue gate shows LoadingView
@@ -345,20 +344,17 @@ export const useAuthStore = defineStore(AUTH_STORE_ID, () => {
     // and the Mini App actually closing -- otherwise it would flash the
     // TelegramStubView ("Open via Telegram"). Outside Telegram there is
     // nothing to close: the cleared session puts the login screen up, and
-    // the token is gone from storage (_setToken). Dynamic import breaks the
-    // circular dep auth -> useAuth -> auth (same reasoning as the poll above).
+    // the token is gone from storage (_setToken). useAuth arms the gate and
+    // useRoleFreshness stops its poll (T21-4/T21-5) through onSessionEnd when
+    // _clearSession('logout') announces the end -- before anything is cleared.
     const inTelegram = platform.name === 'telegram'
-    if (inTelegram) {
-      const { beginLogout } = await import('@/composables/useAuth')
-      beginLogout()
-    }
 
     try {
       await api.post('/api/v1/auth/logout')
     } catch {
       // Ignore -- logging out anyway.
     } finally {
-      _clearSession()
+      _clearSession('logout')
       if (inTelegram) {
         // close() returns the user to the chat. Wrapped in try/catch so a
         // missing SDK (getWebApp throws) degrades to the previous behaviour

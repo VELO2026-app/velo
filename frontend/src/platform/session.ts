@@ -85,3 +85,47 @@ export function resetAccountScope(pinia: Pinia, keepId: string): void {
     }
   }
 }
+
+/** Why a session ended: the person signed out, or the app dropped it (401, refused restore, failed sign-in). */
+export type SessionEndReason = 'logout' | 'dropped'
+
+const sessionEndListeners = new Set<(reason: SessionEndReason) => void>()
+
+/**
+ * Subscribe a module to the end of the session, for state that lives outside
+ * a Pinia store (composables with module-level state, timers).
+ *
+ * @remarks
+ * The account scope above resets stores; this is the same seam for the rest.
+ * Like it, this module imports nothing from stores, so a composable that
+ * itself imports the auth store can register here without an import cycle
+ * through stores/auth.ts. Register once, at module scope.
+ *
+ * @param listener - Called synchronously by `notifySessionEnd`.
+ */
+export function onSessionEnd(listener: (reason: SessionEndReason) => void): void {
+  sessionEndListeners.add(listener)
+}
+
+/**
+ * Tell every `onSessionEnd` subscriber the session is ending.
+ *
+ * @remarks
+ * Called by stores/auth.ts at the START of `_clearSession`, before the token
+ * and user are cleared, so a subscriber can arm state (the Telegram logout
+ * gate) before `isAuthenticated` flips. A throwing listener does not stop the
+ * others; the error is rethrown on a microtask like in `resetAccountScope`.
+ *
+ * @param reason - Why the session ends.
+ */
+export function notifySessionEnd(reason: SessionEndReason): void {
+  for (const listener of sessionEndListeners) {
+    try {
+      listener(reason)
+    } catch (error) {
+      queueMicrotask(() => {
+        throw error
+      })
+    }
+  }
+}
