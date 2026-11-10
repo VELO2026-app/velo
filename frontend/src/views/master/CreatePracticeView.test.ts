@@ -149,7 +149,7 @@ const masterState: {
 } = {
   practices: [],
   profile: null,
-  // PROMPT №556: defaults true -- masterStatusGuard (router/index.ts) already
+  // PROMPT №556: defaults true -- masterStatusGuard (router/guards.ts, meta.requires verified-master) already
   // awaits fetchMyProfile() before this screen mounts in the real app, so
   // "not yet loaded" is the abnormal case, not the default one. The two
   // tests that specifically exercise "profile hasn't loaded" override this.
@@ -488,7 +488,7 @@ describe('CreatePracticeView', () => {
       // the full catalog while the profile was unloaded -- exactly the gap
       // that let a form present a direction/style the master was never
       // confirmed for. An unknown confirmed-set must never read as
-      // "everything is allowed"; masterStatusGuard (router/index.ts) already
+      // "everything is allowed"; masterStatusGuard (router/guards.ts, meta.requires verified-master) already
       // awaits fetchMyProfile() before this screen mounts in the real app, so
       // this is a defensive state, not the normal one.
       masterState.profile = null
