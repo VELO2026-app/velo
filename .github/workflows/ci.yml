@@ -1,18 +1,26 @@
 # =============================================================================
 # VELO CI — the deterministic gate (factory Phase 1, docs/ai-dev-factory-tz.md §8.4)
 #
-# Three jobs (scope + the two gates), no agents, no judgment:
-#   frontend    — the FE-73 zero-warning budget + prettier + vitest + vue-tsc
-#                 build, mirroring the pre-push hook (closes --no-verify).
-#                 Since FE-116 the job is the WORKSPACE gate: it installs the
-#                 pnpm workspace at the repo root, runs the application's
-#                 lint (which also polices packages/velo-ui) and builds the
-#                 @velo/ui package alongside the app, then runs the
-#                 whitelabel build-matrix gate (FE-114).
-#   drift-check — regenerate frontend/src/api/generated.ts from the app's own
-#                 OpenAPI schema and fail on any diff. Read-only w.r.t. the
-#                 backend. The generator is deterministic by contract
-#                 (backend/scripts/generate_ts_types.py).
+# No agents, no judgment. Jobs (FE-157 s1: the former single `frontend` job is
+# split so the pieces run in parallel; every step it had is kept, see below):
+#   scope        — classifies the PR diff, sizes the jobs below.
+#   lint         — the FE-73 zero-warning budget (eslint over the app AND
+#                  packages/velo-ui, content-hash cache restored between runs)
+#                  + the other lint gates + prettier, both packages. The
+#                  pre-push hook's lint half (closes --no-verify).
+#   test         — vue-tsc typecheck + vitest of the whole workspace
+#                  (frontend + @velo/ui).
+#   build        — @velo/ui (vite lib + vue-tsc dts), then the app's
+#                  vue-tsc + vite build with the FE-153 build-log gate.
+#   matrix-plan, matrix, matrix-gate
+#                — the whitelabel build matrix (FE-114, FE-152) fanned out one
+#                  runner per cell (`build-matrix.mjs --cell`); matrix-gate
+#                  is the fan-in (invariant d spans cells) and the one check
+#                  to require.
+#   drift-check  — regenerate frontend/src/api/generated.ts from the app's own
+#                  OpenAPI schema and fail on any diff. Read-only w.r.t. the
+#                  backend. The generator is deterministic by contract
+#                  (backend/scripts/generate_ts_types.py).
 #
 # The BACKEND gate (ruff / pytest) is deliberately absent: the backend is
 # owned outside this contour — first CI run measured 383 ruff errors at the
@@ -21,12 +29,16 @@
 #
 # Scope (per PR type): a `scope` job classifies the PR's diff
 # (.github/scripts/ci-scope.mjs) and the jobs below size themselves:
-#   docs-only PR            -> frontend + drift skipped (green in seconds)
-#   comment-only code edits -> frontend runs lint + format only
-#   backend/**              -> drift; frontend skipped unless touched too
+#   docs-only PR            -> everything skipped (green in seconds)
+#   comment-only code edits -> lint (lint + format) only
+#   backend/**              -> drift; frontend jobs skipped unless touched too
 #   anything else           -> the full gate
 # Pushes to test always run the full gate -- the trunk is the backstop.
 # Skipped jobs report "skipped", which satisfies a required status check.
+#
+# Runs are cancelled only for pull requests (a newer push supersedes the old
+# one); a push to test is never cancelled -- every trunk commit gets its
+# verdict.
 #
 # Toolchain pins: pnpm 12.4.2 (mirrors the ROOT package.json `packageManager`,
 # the workspace root since FE-116); python 3.12 in the drift job keeps
@@ -40,14 +52,18 @@ on:
   pull_request:
     branches: [test]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   scope:
     name: scope
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       frontend: ${{ steps.scope.outputs.frontend || 'full' }}
       drift: ${{ steps.scope.outputs.drift || 'true' }}
@@ -64,13 +80,12 @@ jobs:
         if: github.event_name == 'pull_request'
         run: node .github/scripts/ci-scope.mjs HEAD^1 HEAD
 
-  frontend:
-    name: frontend — lint / test / build (+ @velo/ui)
+  lint:
+    name: lint — eslint budget / format
     needs: scope
     if: needs.scope.outputs.frontend != 'skip'
     runs-on: ubuntu-latest
-    env:
-      FULL: ${{ needs.scope.outputs.frontend == 'full' }}
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -89,18 +104,78 @@ jobs:
       - name: Install (workspace root, frozen lockfile)
         run: pnpm install --frozen-lockfile
 
+      # lint-budget.mjs writes the ESLint caches here (content strategy, so a
+      # fresh checkout's mtimes do not matter). A new key per commit, the
+      # newest earlier cache as the fallback; ESLint itself discards entries
+      # whose file content or config changed, so a stale cache cannot pass
+      # what a cold run would fail.
+      - name: Restore ESLint cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            frontend/node_modules/.cache/eslint
+            packages/velo-ui/node_modules/.cache/eslint
+          key: eslint-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            eslint-${{ runner.os }}-
+
       - name: Lint (zero-warning budget; covers packages/ via lint-budget)
         run: pnpm -C frontend lint
 
       - name: Format check
         run: pnpm -C frontend format:check && pnpm -C packages/velo-ui format:check
 
+  test:
+    name: test — typecheck / vitest (+ @velo/ui)
+    needs: scope
+    if: needs.scope.outputs.frontend == 'full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install (workspace root, frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck (vue-tsc)
+        run: pnpm -C frontend typecheck
+
       - name: Tests (frontend + @velo/ui)
-        if: env.FULL == 'true'
         run: pnpm -r test
 
+  build:
+    name: build — @velo/ui / app + build-log gate
+    needs: scope
+    if: needs.scope.outputs.frontend == 'full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install (workspace root, frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
       - name: Build @velo/ui (vite lib + vue-tsc dts)
-        if: env.FULL == 'true'
         run: pnpm -C packages/velo-ui build
 
       # FE-153: the build log is gated too -- a cyclic cross-chunk re-export
@@ -109,29 +184,120 @@ jobs:
       # pipefail is explicit: a step without `shell:` runs as `bash -e`,
       # where `build | tee` would take tee's exit 0 and hide a failed build.
       - name: Build (vue-tsc + vite) + build-log gate
-        if: env.FULL == 'true'
         run: |
           set -o pipefail
           pnpm -C frontend build 2>&1 | tee "$RUNNER_TEMP/frontend-build.log"
           node frontend/scripts/build-log-gate.mjs "$RUNNER_TEMP/frontend-build.log"
 
-      # tz-whitelabel F5 (FE-114, FE-152): the build matrix IS the whitelabel
-      # gate -- golden x every edition of editions.json through PRIMER_EDITION
-      # (the machine's channel): a module outside the edition must leave NO
-      # chunks in dist (core: no ai, no payments) -- plus every skins/<name>
-      # x full (brand + tokens from the skin, none of them in golden). One
-      # vite build per cell; --no-restore skips the pointless final rebuild.
-      # Runs AFTER the plain build so a red matrix reads as the whitelabel
-      # gate failing, not as "the app does not build".
-      - name: Build matrix (whitelabel gate)
-        if: env.FULL == 'true'
-        run: pnpm -C frontend build:matrix --no-restore
+  # tz-whitelabel F5 (FE-114, FE-152): the build matrix IS the whitelabel
+  # gate -- golden x every edition of editions.json through PRIMER_EDITION
+  # (the machine's channel): a module outside the edition must leave NO
+  # chunks in dist (core: no ai, no payments) -- plus every skins/<name>
+  # x full (brand + tokens from the skin, none of them in golden). One
+  # vite build per cell, one runner per cell; the cell list comes from the
+  # script itself (--list), so a new edition or skin joins the gate without
+  # touching this file.
+  matrix-plan:
+    name: matrix — plan
+    needs: scope
+    if: needs.scope.outputs.frontend == 'full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      cells: ${{ steps.plan.outputs.cells }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # --list needs no node_modules (vite is imported lazily).
+      - name: List the cells
+        id: plan
+        run: echo "cells=$(node frontend/scripts/build-matrix.mjs --list)" >> "$GITHUB_OUTPUT"
+
+  matrix:
+    name: matrix — ${{ matrix.cell }}
+    needs: matrix-plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        cell: ${{ fromJSON(needs.matrix-plan.outputs.cells) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install (workspace root, frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      # Runs on the plain checkout (no prior plain build): a red cell reads
+      # as the whitelabel gate failing. --no-restore skips the pointless
+      # final rebuild; --facts-out feeds the fan-in below.
+      - name: Build + gate the cell
+        env:
+          CELL: ${{ matrix.cell }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/facts"
+          pnpm -C frontend build:matrix --no-restore --cell "$CELL" --facts-out "$RUNNER_TEMP/facts/cell.json"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: matrix-facts-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/facts/cell.json
+          retention-days: 1
+
+  # Fan-in: invariant d (equal asset count across the `full` cells) spans
+  # cells, and a cell that never reported must not read as green. Also the
+  # single status to require for the whitelabel gate.
+  matrix-gate:
+    name: matrix — gate
+    needs: matrix
+    if: ${{ !cancelled() && needs.matrix.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: A cell failed
+        if: needs.matrix.result != 'success'
+        run: |
+          echo "a matrix cell did not pass (${{ needs.matrix.result }})" >&2
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: matrix-facts-*
+          path: ${{ runner.temp }}/facts
+
+      - name: Asset-count invariant across the full cells
+        run: |
+          mkdir -p "$RUNNER_TEMP/facts-flat"
+          i=0
+          for f in "$RUNNER_TEMP"/facts/*/cell.json; do i=$((i + 1)); cp "$f" "$RUNNER_TEMP/facts-flat/$i.json"; done
+          node frontend/scripts/build-matrix.mjs --check-assets "$RUNNER_TEMP/facts-flat"
 
   drift-check:
     name: generated.ts drift
     needs: scope
     if: needs.scope.outputs.drift == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
