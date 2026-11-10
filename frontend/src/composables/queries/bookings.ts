@@ -19,6 +19,7 @@ import { invalidateAfter } from '@/composables/queries/invalidation'
 import { useQueryScopeStore } from '@/composables/queries/setup'
 import { queryCache as legacyQueryCache } from '@/composables/useQuery'
 import { queryKeys as legacyKeys } from '@/composables/queryKeys'
+import { useBalanceStore } from '@/stores/balance'
 import { useBookingsStore } from '@/stores/bookings'
 import { useCalendarStore } from '@/stores/calendar'
 import { useDiaryStore } from '@/stores/diary'
@@ -42,9 +43,9 @@ export interface CancelBookingVars {
  * failed DELETE changed nothing on the server).
  *
  * Refreshed on success: the Colada keys of `INVALIDATES.cancelBooking`, plus,
- * until their stores move to Colada, the legacy holders below. The balance
- * (refund) is not: it is the auth profile, which its readers refresh on use
- * (the booking popup) and the role-freshness poll re-reads.
+ * until their stores move to Colada, the legacy holders below. That includes
+ * the balance: a cancellation can refund the booking, and the balance is the
+ * auth profile (`GET /users/me`), so it is re-read at once (balance store).
  */
 export function useCancelBooking() {
   const queryCache = useQueryCache()
@@ -53,6 +54,7 @@ export function useCancelBooking() {
   const practices = usePracticesStore()
   const calendar = useCalendarStore()
   const diary = useDiaryStore()
+  const balance = useBalanceStore()
 
   /** Legacy holders of the same server data (each line leaves with its store's migration). */
   function refreshLegacyHolders(practiceId: string): void {
@@ -67,6 +69,10 @@ export function useCancelBooking() {
     // The cancellation projects a "booking_cancelled_by_user" event onto the
     // diary timeline.
     void diary.refreshFeed()
+    // The refund (if the cancellation earned one) changed the balance, which
+    // is the auth profile. fetchMe() never rejects and drops an answer that
+    // lands after the session changed.
+    void balance.refresh()
   }
 
   return useMutation({

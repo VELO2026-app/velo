@@ -249,7 +249,7 @@ export default defineConfig(({ mode }) => {
           //
           // The globs are the candidates; shellOnly() below cuts assets/ down
           // to the startup closure. Not listed on purpose: onboarding art,
-          // feat-*.png, the blue logo variant, logo-white.svg (welcome screen
+          // the blue logo variant, logo-white.svg (welcome screen
           // only) -- lazy screens fetch them on demand. Zoom SDK, admin and
           // master chunks are not in the startup closure, so they stay out
           // too; the Zoom Meeting SDK (about 5 MB, practice screen only,

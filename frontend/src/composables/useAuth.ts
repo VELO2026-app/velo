@@ -33,6 +33,7 @@
 import { ref, computed, watch } from 'vue'
 import { platform } from '@/platform'
 import { takeLoginMark, takeLoginReturn } from '@/platform/browser-login'
+import { onSessionEnd } from '@/platform/session'
 import { useAuthStore } from '@/stores/auth'
 import { ApiNetworkError, ApiResponseError, ApiTimeoutError } from '@/api/client'
 import { isSchoolInviteParam } from '@/router/deepLinks'
@@ -119,6 +120,14 @@ const isLoggingOut = ref(false)
 export function beginLogout(): void {
   isLoggingOut.value = true
 }
+
+// In Telegram, signing out closes the Mini App, so the gate is armed the
+// moment stores/auth.ts announces a LOGOUT (not a dropped session: a 401
+// goes back to sign-in). Subscribing here, instead of auth.ts importing this
+// module on demand, is what keeps auth -> useAuth -> auth out of the graph.
+onSessionEnd((reason) => {
+  if (reason === 'logout' && platform.name === 'telegram') beginLogout()
+})
 
 /**
  * The raw startapp parameter of this launch, pending its deep link (TD-F01).
