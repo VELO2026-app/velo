@@ -90,7 +90,9 @@ jobs:
       # The storage stack's own two variables (docker-compose.storage.yml;
       # the root login is a constant of that file).
       RUSTFS_SECRET_KEY: velo-ci-root-secret-0123456789abcdef0123
-      STORAGE_SECRET_KEY: velo-ci-storage-secret-0123456789abcdef
+      # Both of the form the machine mints (primer.yaml: length 40): the
+      # service key is made at the edge RustFS takes (tests/test_primer_env.py).
+      STORAGE_SECRET_KEY: velo-ci-storage-secret-0123456789abcdef0
       POSTGRES_PASSWORD: velo-ci-postgres-password
       REDIS_PASSWORD: velo-ci-redis-password
       # The build arguments the deploy machine gives (protocol 3.4); CI has

@@ -20,6 +20,8 @@ BE-194 part 2: one more holds the frontend's instance values -- the
 languages and the flag of every option -- against primer.yaml.
 BE-193 part 2a: the point of velo-storage reaches the app, what velo
 provides is what /health names, and each CI place passes its own.
+BE-193 part 2b: velo-storage-init is the stack's job, and the storage's
+secrets are of one minted form, in CI too.
 
 The files are read from the repository root -- in the test image they are
 at /, where Path(__file__).resolve().parents[2] lands from /app/tests
@@ -335,3 +337,52 @@ def test_each_place_passes_its_own() -> None:
     [drift] = [s for s in _steps(CI_YML) if "from app.main import app" in s["run"]]
     given = {k for k, v in (drift.get("env") or {}).items() if str(v).strip()}
     assert own <= given, f"the drift check lacks {sorted(own - given)}"
+
+
+# -- BE-193 part 2b: the job of velo-storage, the secrets of the storage -------
+
+STORAGE_SECRETS = ("STORAGE_SECRET_KEY", "RUSTFS_SECRET_KEY")
+MINTED_ALPHABET = re.compile(r"[A-Za-z0-9_-]+")
+
+
+def _services(path: Path) -> dict:
+    return yaml.safe_load(path.read_text(encoding="utf-8"))["services"]
+
+
+def test_velo_storage_init_is_the_job_of_its_stack() -> None:
+    """Contract 3 rule 24 (DM-22). The machine runs the job after what it
+    depends on is healthy and before the rest -- it learns that order from
+    the job's own depends_on (needed_by), so velo-storage stays there; it
+    checks neither that nor the job's healthcheck, this does."""
+    stack = yaml.safe_load(PRIMER.read_text(encoding="utf-8"))["stacks"]["velo-storage"]
+    assert stack.get("jobs") == {"storage-init": {"service": "velo-storage-init"}}
+    job = _services(STORAGE_COMPOSE)["velo-storage-init"]
+    assert job.get("restart", "no") == "no", job.get("restart")
+    assert "healthcheck" not in job
+    assert set(job.get("depends_on") or {}) == {"velo-storage"}
+
+
+def test_nothing_depends_on_the_job_and_every_other_service_is_checked() -> None:
+    """No service of either compose depends on the job -- compose would run
+    it again as a dependency -- and every service but the job declares a
+    healthcheck (protocol 3.4)."""
+    every = {**_services(COMPOSE), **_services(STORAGE_COMPOSE)}
+    assert len(every) == len(_services(COMPOSE)) + len(_services(STORAGE_COMPOSE))
+    for name, body in every.items():
+        assert "velo-storage-init" not in (body.get("depends_on") or {}), name
+        if name != "velo-storage-init":
+            assert body.get("healthcheck"), f"{name}: no healthcheck"
+
+
+def test_the_storage_secrets_are_minted_at_40_in_ci_too() -> None:
+    """RustFS takes the secret of a service key of 8..40; the machine mints
+    a value once, of exactly `length`. CI makes the storage with values of
+    that very form, so its live run is the edge the machine gives."""
+    env = yaml.safe_load(PRIMER.read_text(encoding="utf-8"))["env"]
+    job = yaml.safe_load(BACKEND_TESTS_YML.read_text(encoding="utf-8"))["jobs"]
+    ci = {k: v for j in job.values() for k, v in (j.get("env") or {}).items()}
+    for name in STORAGE_SECRETS:
+        assert env[name] == {"source": "minted", "length": 40}, name
+        value = ci.get(name)
+        assert isinstance(value, str) and len(value) == 40, (name, value)
+        assert MINTED_ALPHABET.fullmatch(value), name

@@ -53,15 +53,22 @@ stacks:
     # same name. `scheme` tells the machine what it is, not the address.
     expose:
       files: { service: velo-storage, port: 9000, scheme: http }
+    # Run on every rollout that changes this entry: after what it depends on
+    # (velo-storage, healthy) and before the rest; nothing depends on it.
+    jobs:
+      storage-init: { service: velo-storage-init }
 
 env:
   # minted: the machine mints once, the value lives between rollouts
   POSTGRES_PASSWORD:    { source: minted }
   REDIS_PASSWORD:       { source: minted }
-  STORAGE_SECRET_KEY:   { source: minted }
+  # The storage's two secrets, one form: exactly 40 characters -- RustFS
+  # takes the secret of a service key of 8..40, and a minted value is
+  # minted once (a new length later is a red rollout).
+  STORAGE_SECRET_KEY:   { source: minted, length: 40 }
   # The storage's root SECRET only: its login is a constant of
   # docker-compose.storage.yml (owner ruling 4.11).
-  RUSTFS_SECRET_KEY:    { source: minted }
+  RUSTFS_SECRET_KEY:    { source: minted, length: 40 }
   # passport
   EDITION:              { source: passport, key: edition, enum: editions }
   SERVER_ROLE:          { source: passport, key: server.role }

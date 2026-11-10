@@ -7,9 +7,11 @@
 # the volume and the networks; values come through `--env-file`, ${VAR:?}.
 #
 #   velo-storage       the server, RustFS. No port on the host, no route.
-#   velo-storage-init  one-shot: buckets, privacy, lifecycle rules and service
-#                      keys from backend/app/core/storage_registry.yaml, on
-#                      every rollout. With the argument `--check`
+#   velo-storage-init  the job of this stack (primer.yaml `jobs`): buckets,
+#                      privacy, lifecycle rules and service keys from
+#                      backend/app/core/storage_registry.yaml, on every
+#                      rollout that changes the entry. No healthcheck, no
+#                      restart, and nothing depends on it. With the argument `--check`
 #                      (`compose run velo-storage-init --check`) it only
 #                      reads and reports.
 #
@@ -51,6 +53,8 @@ services:
 
   velo-storage-init:
     image: rustfs/rc:v0.1.36@sha256:ab024bfebee49a750ce886b4c70963ccd9ddaa03f491704a90710641d7a26699
+    # Read by the machine: what it brings up, healthy, before it runs the
+    # job (contract 3 rule 24). Without it the job would run first.
     depends_on:
       velo-storage: { condition: service_healthy }
     environment:

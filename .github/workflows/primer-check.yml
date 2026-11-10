@@ -64,8 +64,9 @@ jobs:
       #   6. Rejected: waiting for the tag -- the step would stay out of CI
       #      with no date.
       PRIDEM_REPOSITORY: inzoddwetrust/primer
-      # BE-193 part 2a: the release with points (DM-62).
-      PRIDEM_COMMIT: 7583d0c98ad9ba3ed0a9d778698903c48849e1ae
+      # BE-193 part 2b: the release with jobs of a stack and the length of a
+      # minted value (DM-22).
+      PRIDEM_COMMIT: 63844b48d9b451ee231f9c0d37617b303fc84fe5
     steps:
       - uses: actions/checkout@v4
         with:
