@@ -19,7 +19,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 import VueI18nPlugin from '@intlify/unplugin-vue-i18n/vite'
 import { fileURLToPath, URL } from 'node:url'
 import { cpSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { pwaManifestWithPassport } from './src/pwa/manifest'
 import { shellOnlyTransform } from './src/pwa/precache-shell'
 import { keepManifestOutOfPrecache, perLocaleManifest } from './src/pwa/manifest-locales'
@@ -148,13 +148,25 @@ function preloadAppChunk(): Plugin {
 // tz-whitelabel F2 (§3): the skin package (when the deploy ships one in
 // public/skin/) rides on top and materializes its derivatives.
 // FE-157 s2: the precache cut to the app shell (see workbox.globPatterns).
+// It reads the built files from the RESOLVED outDir (set by the plugin
+// below): a build into another outDir (bundle-report --modules) must not
+// read an earlier frontend/dist build.
+let builtDir = fileURLToPath(new URL('./dist/', import.meta.url))
 const shellOnly = shellOnlyTransform((url) => {
   try {
-    return readFileSync(join(fileURLToPath(new URL('./dist/', import.meta.url)), url), 'utf8')
+    return readFileSync(join(builtDir, url), 'utf8')
   } catch {
     return ''
   }
 })
+/** Points the precache transform at this build's outDir. */
+const precacheReadsOutDir: Plugin = {
+  name: 'velo-precache-outdir',
+  apply: 'build',
+  configResolved(config) {
+    builtDir = resolve(config.root, config.build.outDir)
+  },
+}
 
 export default defineConfig(({ mode }) => {
   const frontendDir = fileURLToPath(new URL('.', import.meta.url))
@@ -202,6 +214,7 @@ export const SKIN_BRAND: string | null = ${JSON.stringify(skin?.displayName ?? n
       skinAssetSpill(skin ? join(publicDir, 'skin') : null, join(frontendDir, 'dist')),
       preloadAppChunk(),
       perLocaleManifest(frontendDir),
+      precacheReadsOutDir,
       // tz-i18n §4.1: locale catalogs (src/locales/*.json) compile ahead of
       // runtime into message ASTs. Precompiling alone did NOT keep the
       // message compiler out of the bundle: vue-i18n still shipped it for
