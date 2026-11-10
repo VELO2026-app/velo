@@ -93,13 +93,8 @@ function onClose(): void {
   font-weight: 400;
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
-  margin: 0 0 var(--space-3);
-}
-
-/* Title needs a little breathing room before the actions now that the
-   subtitle + warning are gone. */
-.cancel__title {
-  margin-bottom: var(--space-5);
+  /* Breathing room before the actions now that the subtitle + warning are gone. */
+  margin: 0 0 var(--space-5);
 }
 
 /* Actions: side-by-side (F-5.3 sync with Figma cancel-reservation.svg).

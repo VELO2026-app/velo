@@ -232,7 +232,7 @@ watch(
   padding: 0;
   margin: calc(-1 * var(--space-hairline));
   overflow: hidden;
-  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
 }

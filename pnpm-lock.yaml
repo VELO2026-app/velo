@@ -292,6 +292,15 @@ importers:
       stylelint:
         specifier: ^17.16.0
         version: 17.16.0(supports-color@7.2.0)(typescript@5.7.3)
+      stylelint-config-html:
+        specifier: 2.0.0
+        version: 2.0.0(postcss-html@2.0.0(postcss@8.5.28))(stylelint@17.16.0(supports-color@7.2.0)(typescript@5.7.3))
+      stylelint-config-recommended:
+        specifier: 18.0.0
+        version: 18.0.0(stylelint@17.16.0(supports-color@7.2.0)(typescript@5.7.3))
+      stylelint-config-recommended-vue:
+        specifier: 2.0.0
+        version: 2.0.0(postcss-html@2.0.0(postcss@8.5.28))(stylelint-config-html@2.0.0(postcss-html@2.0.0(postcss@8.5.28))(stylelint@17.16.0(supports-color@7.2.0)(typescript@5.7.3)))(stylelint-config-recommended@18.0.0(stylelint@17.16.0(supports-color@7.2.0)(typescript@5.7.3)))(stylelint@17.16.0(supports-color@7.2.0)(typescript@5.7.3))
       typedoc:
         specifier: 0.28.20
         version: 0.28.20(typescript@5.7.3)
@@ -3888,6 +3897,32 @@ packages:
   strip-json-comments@3.1.1:
     resolution: {integrity: sha512-6fPc+R4ihwqP6N/aIv2f1gMH8lOVtWQHoqC4yK6oSDVVocumAsfCqjkXnqiYMhmMwS/mEHLp7Vehlt3ql6lEig==}
     engines: {node: '>=8'}
+
+  stylelint-config-html@2.0.0:
+    resolution: {integrity: sha512-Lk1NPEdUxzHkPv3ehktjpiOk4MPaqQ3H8fkvhxdWlQpaZCm9ze0SoMbRQLqkUxEMfPE1G9/x968uxm/+d2njoA==}
+    engines: {node: ^22.12 || >=24}
+    peerDependencies:
+      postcss-html: ^2.0.0
+      stylelint: '>=16.0.0'
+
+  stylelint-config-recommended-vue@2.0.0:
+    resolution: {integrity: sha512-SrGBfxgX+CmxRoFOl6HHhfKrp+6YvGnuiHj/N+/deI310eGNhix8aZOtPHG+OeqB6+5Si5BbjsZiC+kULUO1DQ==}
+    engines: {node: ^22.12 || >=24}
+    peerDependencies:
+      postcss-html: ^2.0.0
+      stylelint: '>=16.0.0'
+      stylelint-config-html: '>=2.0.0'
+      stylelint-config-recommended: '>=14.0.0'
+      stylelint-config-recommended-scss: '>=14.0.0'
+    peerDependenciesMeta:
+      stylelint-config-recommended-scss:
+        optional: true
+
+  stylelint-config-recommended@18.0.0:
+    resolution: {integrity: sha512-mxgT2XY6YZ3HWWe3Di8umG6aBmWmHTblTgu/f10rqFXnyWxjKWwNdjSWkgkwCtxIKnqjSJzvFmPT5yabVIRxZg==}
+    engines: {node: '>=20.19.0'}
+    peerDependencies:
+      stylelint: ^17.0.0
 
   stylelint@17.16.0:
     resolution: {integrity: sha512-ejlWnbJ13x1GU32+zZXa6sYQJsKKkwSdv2B4rAdO3OWdEmvhSJKcXi5pOphQYSzyaj1kXpuGJr7pcMBNfDIuPw==}
@@ -8211,6 +8246,23 @@ snapshots:
       min-indent: 1.0.1
 
   strip-json-comments@3.1.1: {}
+
+  stylelint-config-html@2.0.0(postcss-html@2.0.0(postcss@8.5.28))(stylelint@17.16.0(supports-color@7.2.0)(typescript@5.7.3)):
+    dependencies:
+      postcss-html: 2.0.0(postcss@8.5.28)
+      stylelint: 17.16.0(supports-color@7.2.0)(typescript@5.7.3)
+
+  stylelint-config-recommended-vue@2.0.0(postcss-html@2.0.0(postcss@8.5.28))(stylelint-config-html@2.0.0(postcss-html@2.0.0(postcss@8.5.28))(stylelint@17.16.0(supports-color@7.2.0)(typescript@5.7.3)))(stylelint-config-recommended@18.0.0(stylelint@17.16.0(supports-color@7.2.0)(typescript@5.7.3)))(stylelint@17.16.0(supports-color@7.2.0)(typescript@5.7.3)):
+    dependencies:
+      postcss-html: 2.0.0(postcss@8.5.28)
+      semver: 7.8.5
+      stylelint: 17.16.0(supports-color@7.2.0)(typescript@5.7.3)
+      stylelint-config-html: 2.0.0(postcss-html@2.0.0(postcss@8.5.28))(stylelint@17.16.0(supports-color@7.2.0)(typescript@5.7.3))
+      stylelint-config-recommended: 18.0.0(stylelint@17.16.0(supports-color@7.2.0)(typescript@5.7.3))
+
+  stylelint-config-recommended@18.0.0(stylelint@17.16.0(supports-color@7.2.0)(typescript@5.7.3)):
+    dependencies:
+      stylelint: 17.16.0(supports-color@7.2.0)(typescript@5.7.3)
 
   stylelint@17.16.0(supports-color@7.2.0)(typescript@5.7.3):
     dependencies:
