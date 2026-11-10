@@ -71,3 +71,26 @@ describe('tma-viewport seam', () => {
     expect(a).toBe(b)
   })
 })
+
+describe('tma-viewport seam -- chunk failure', () => {
+  it('a failed load is not cached: the next call retries the import', async () => {
+    vi.resetModules()
+    vi.doMock('@tma.js/sdk-vue', () => {
+      throw new Error('chunk failed')
+    })
+    const seam = await import('@/platform/tma-viewport')
+    await expect(seam.loadTmaSdk()).rejects.toThrow()
+    expect(seam.getTmaViewport()).toBeNull()
+
+    vi.doMock('@tma.js/sdk-vue', () => ({
+      viewport: {
+        isMounted: fakeSignal(true),
+        safeAreaInsetTop: fakeSignal<number | undefined>(10),
+        contentSafeAreaInsetTop: fakeSignal<number | undefined>(36),
+      },
+    }))
+    await expect(seam.loadTmaSdk()).resolves.toBeDefined()
+    expect(seam.getTmaViewport()).not.toBeNull()
+    vi.doUnmock('@tma.js/sdk-vue')
+  })
+})

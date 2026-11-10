@@ -756,6 +756,37 @@ describe('PracticeDetailView', () => {
       expect(toastSuccess).not.toHaveBeenCalled()
     })
 
+    it('an unmapped error code falls back to the generic cancel message', async () => {
+      // 'cancel_window_closed' is not a real backend code, so the catalog has
+      // no phrase for it and the call site's own fallback
+      // (i18n:storeErrors.bookings.cancel) is shown.
+      cancelBooking.mockRejectedValue(
+        new ApiResponseError(400, 'Too close to start time', 'cancel_window_closed'),
+      )
+      bookingsState.bookings = [booking({ status: 'confirmed' })]
+      mount()
+      await flush()
+
+      button('Отменить бронирование')?.click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Не удалось отменить бронирование')
+      expect(toastSuccess).not.toHaveBeenCalled()
+    })
+
+    it('a non-API error falls back to the generic cancel message', async () => {
+      cancelBooking.mockRejectedValue(new Error('boom'))
+      bookingsState.bookings = [booking({ status: 'confirmed' })]
+      mount()
+      await flush()
+
+      button('Отменить бронирование')?.click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Не удалось отменить бронирование')
+      expect(toastSuccess).not.toHaveBeenCalled()
+    })
+
     it('does NOT double-cancel when the button is hit twice in flight', async () => {
       let resolve!: (v: undefined) => void
       cancelBooking.mockReturnValue(
