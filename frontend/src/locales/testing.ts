@@ -12,10 +12,10 @@
 // do not disable isolation, and any new singleton-mutating test must reset
 // the same way.
 //
-// locale 'ru' + the verbatim catalog, so existing text assertions keep
-// passing untouched (tz-i18n §4.5). Warnings off: a missing key must not
-// flood test output -- the CI key audit (tz-i18n §4.4) is the guard, not
-// console noise.
+// locale 'ru' + the singleton's ru messages as they stand (test-setup.ts
+// loads the zone catalogs first), so existing text assertions keep passing
+// untouched (tz-i18n §4.5). Warnings off: a missing key must not flood test
+// output -- the CI key audit (tz-i18n §4.4) is the guard, not console noise.
 //
 // Wiring: @vue/test-utils mounts get it via config.global.plugins
 // (test-setup.ts). Raw `createApp(...)` test mounts (120 files) take
@@ -25,7 +25,7 @@
 
 import { createI18n } from 'vue-i18n'
 
-import { cldrPluralChoice, ru } from './index'
+import i18n, { cldrPluralChoice } from './index'
 
 export function createTestI18n() {
   const instance = createI18n({
@@ -37,6 +37,6 @@ export function createTestI18n() {
     missingWarn: false,
     fallbackWarn: false,
   })
-  instance.global.setLocaleMessage('ru', ru)
+  instance.global.setLocaleMessage('ru', i18n.global.getLocaleMessage('ru'))
   return instance
 }

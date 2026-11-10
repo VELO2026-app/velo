@@ -34,12 +34,21 @@
 
 import type { NavigationGuardWithThis, RouteLocationNormalized } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { useMasterStore } from '@/stores/master'
 import { waitUntilReady, pendingStartParam, parseStartParam } from '@/composables/useAuth'
 import type { ReadyResult } from '@/composables/useAuth'
 import { refreshRoleIfStale } from '@/composables/useRoleFreshness'
 import type { UserRole } from '@/api/types'
 import { MASTER_APPLIED_KEY, masterRejectionSeenKey } from '@/utils/constants'
+
+/**
+ * The master store, imported on first use (FE-157): only the master-zone
+ * guards read it, so a student's startup bundle carries neither the store
+ * nor the master API module behind it.
+ */
+async function loadMasterStore() {
+  const { useMasterStore } = await import('@/stores/master')
+  return useMasterStore()
+}
 
 /**
  * Redirect `/` to the correct dashboard based on user role.
@@ -233,7 +242,7 @@ async function noProfileMasterRedirect(): Promise<{ path: string } | null> {
   const auth = useAuthStore()
   if (auth.role !== 'master') return null
 
-  const masterStore = useMasterStore()
+  const masterStore = await loadMasterStore()
   // Lazy-fetch profile (skips network if already loaded this session).
   await masterStore.fetchMyProfile()
 
@@ -257,7 +266,7 @@ export const masterApplyGuard: NavigationGuardWithThis<undefined> = async () => 
   if (timedOut && auth.role === null) return { path: '/auth-error' }
   if (auth.role === 'admin') return { path: '/admin/dashboard' }
   if (auth.role === 'master') {
-    const master = useMasterStore()
+    const master = await loadMasterStore()
     await master.fetchMyProfile()
     if (master.profile?.status === 'verified') return { path: '/master/dashboard' }
     if (master.profile?.status === 'pending') return { path: '/master/pending' }
@@ -286,7 +295,7 @@ export const masterStatusGuard: NavigationGuardWithThis<undefined> = async () =>
   if (redirect) return redirect
 
   const auth = useAuthStore()
-  const masterStore = useMasterStore()
+  const masterStore = await loadMasterStore()
 
   // B1 (PROMPT №726): roleGuard('master') admits role=='admin' too (no role
   // change involved -- an admin browses /master/* directly, never switching

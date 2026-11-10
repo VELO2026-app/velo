@@ -10,6 +10,7 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { installViewTransitions } from '@/router/viewTransition'
 import { installTabPrefetch } from '@/router/prefetch'
 import { installDataPrefetch } from '@/router/dataPrefetch'
+import { installRouteCatalogs } from '@/router/catalogs'
 import { useAuthStore } from '@/stores/auth'
 import { RETURN_PATH } from '@/platform/browser-login'
 import { useUiStore } from '@/stores/ui'
@@ -26,9 +27,12 @@ import { waitUntilReady } from '@/composables/useAuth'
 import type { ReadyResult } from '@/composables/useAuth'
 
 // -- Shell layouts --
+// The user shell is in the main bundle: the user zone is everyone's first
+// screen. The master and admin shells (with the admin store and API they
+// pull in) are lazy like their screens (FE-157): a student never downloads
+// them, and for a master or an admin the shell chunk loads in parallel with
+// the first screen's chunk and the zone catalog (router/catalogs.ts).
 import UserShell from '@/views/shells/UserShell.vue'
-import MasterShell from '@/views/shells/MasterShell.vue'
-import AdminShell from '@/views/shells/AdminShell.vue'
 
 // -- Module route groups (tz-whitelabel §4, F3) --
 // Registration is gated by the BUILD-TIME feature literals (vite `define`,
@@ -357,8 +361,9 @@ const router = createRouter({
     // =========================================================================
     {
       path: '/master',
-      component: MasterShell,
+      component: () => import('@/views/shells/MasterShell.vue'),
       beforeEnter: roleGuard('master'),
+      meta: { catalogs: ['master'] },
       children: [
         {
           path: 'dashboard',
@@ -614,6 +619,8 @@ const router = createRouter({
       ],
     },
 
+    // Standalone master-zone screens (views/master, outside MasterShell): each
+    // declares the master catalog itself -- no parent record does it for them.
     {
       // Batch-INVITE (№258): landing for the one-time master invite deeplink
       // (startapp=master_onboarding__<token>). Standalone like /master/apply;
@@ -622,12 +629,14 @@ const router = createRouter({
       path: '/master/invite/:token',
       name: 'master-invite',
       beforeEnter: masterApplyGuard,
+      meta: { catalogs: ['master'] },
       component: () => import('@/views/master/MasterInviteClaimView.vue'),
     },
     {
       path: '/master/apply',
       name: 'master-apply',
       beforeEnter: masterApplyGuard,
+      meta: { catalogs: ['master'] },
       component: () => import('@/views/master/MasterApplyView.vue'),
     },
     {
@@ -639,6 +648,7 @@ const router = createRouter({
       // -- and therefore this route -- never renders for a logged-out visitor.
       path: '/groups/join/:token',
       name: 'group-join',
+      meta: { catalogs: ['master'] },
       component: () => import('@/views/master/GroupJoinView.vue'),
     },
     {
@@ -650,6 +660,7 @@ const router = createRouter({
       // master/student flavour is resolved by GET /schools/invites/{token}.
       path: '/schools/join/:token',
       name: 'school-join',
+      meta: { catalogs: ['master'] },
       component: () => import('@/views/master/SchoolJoinView.vue'),
     },
     {
@@ -661,12 +672,14 @@ const router = createRouter({
       // school page and the accept endpoint decide who sees what.
       path: '/schools/:id/master-offer',
       name: 'school-master-offer',
+      meta: { catalogs: ['master'] },
       component: () => import('@/views/master/SchoolMasterOfferView.vue'),
     },
     {
       path: '/master/pending',
       name: 'master-pending',
       beforeEnter: masterPendingGuard,
+      meta: { catalogs: ['master'] },
       component: () => import('@/views/master/MasterPendingView.vue'),
     },
 
@@ -675,8 +688,9 @@ const router = createRouter({
     // =========================================================================
     {
       path: '/admin',
-      component: AdminShell,
+      component: () => import('@/views/shells/AdminShell.vue'),
       beforeEnter: roleGuard('admin'),
+      meta: { catalogs: ['admin'] },
       children: [
         {
           path: 'dashboard',
@@ -840,6 +854,10 @@ const router = createRouter({
     },
   ],
 })
+
+// Installed BEFORE the auth guard below: guards run in registration order,
+// so a deep link into a zone starts its catalog fetch during the auth wait.
+installRouteCatalogs(router)
 
 // =============================================================================
 // Global guard (P-1): redirect master/admin away from /user/dashboard only.
