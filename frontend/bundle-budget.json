@@ -1,5 +1,5 @@
 {
-  "_comment": "Size budget for scripts/bundle-report.mjs --budget. Golden build after FE-157 s4/platform (@tma.js lazy-loaded, out of the entry and the shell precache). entryGzip = gzip bytes of assets/app-*.js (gate: +2% tolerance); precacheBytes = PWA precache bytes (gate: no tolerance). Raise only deliberately, in the PR that grows the bundle.",
-  "entryGzip": 130136,
-  "precacheBytes": 605727
+  "_comment": "Size budget for scripts/bundle-report.mjs --budget. Golden build after FE-157 s4/colada: Pinia Colada 1.4.8 joins the entry (app.ts installs it, so the whole tree-shaken library rides in assets/app-*.js: +3753 B gzip, +9433 B raw -- and the same +9433 B in the precache, which holds that chunk). The precache value also absorbs +92 B the stage-4 head already carried over its budget before this track. entryGzip = gzip bytes of assets/app-*.js (gate: +2% tolerance); precacheBytes = PWA precache bytes (gate: no tolerance). Raise only deliberately, in the PR that grows the bundle.",
+  "entryGzip": 133961,
+  "precacheBytes": 615252
 }

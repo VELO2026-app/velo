@@ -26,6 +26,7 @@
 
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
 
 import App from './App.vue'
 import router from './router'
@@ -47,6 +48,7 @@ import { initTelegramSdk } from './platform/telegram-sdk'
 import { installRenderDebug } from './platform/render-debug'
 import { installGlobalErrorHandlers } from './platform/error-reporter'
 import { accountScopePlugin } from './platform/session'
+import { coladaOptions } from './composables/queries/setup'
 import { readLocaleHint, setLocale } from './locales'
 import { isSupportedLocale } from './platform/instance'
 
@@ -59,6 +61,10 @@ const app = createApp(App)
 // Pinia = state manager (like a global dict of reactive objects).
 // Account scope (platform/session.ts): every store resets when the session ends.
 app.use(createPinia().use(accountScopePlugin))
+
+// Pinia Colada (FE-157 4F) = the server-data cache, kept in the Pinia above;
+// its caches join the same account scope (composables/queries/setup.ts).
+app.use(PiniaColada, coladaOptions)
 
 // i18n (tz-i18n phase 0): the ru catalog is verbatim the previously
 // hardcoded strings, so this changes no rendered text. The UI language
