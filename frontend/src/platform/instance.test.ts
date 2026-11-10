@@ -84,7 +84,6 @@ describe('INSTANCE -- locale parsing (tz-i18n 0.5)', () => {
 
 describe('INSTANCE -- runtime config.json (FE-129)', () => {
   it('runtime values win over the build env', async () => {
-    vi.stubEnv('VITE_BRAND', 'ENV-БРЕНД')
     const { INSTANCE, applyInstanceConfig } = await loadInstance()
 
     applyInstanceConfig({
@@ -92,33 +91,23 @@ describe('INSTANCE -- runtime config.json (FE-129)', () => {
       telegramBotUrl: 'https://t.me/schoolbot',
       defaultLocale: 'en',
       locales: 'en,ru',
-      brand: 'ШКОЛА',
     })
 
     expect(INSTANCE.apiBaseUrl).toBe('https://api.school.example')
     expect(INSTANCE.telegramBotUrl).toBe('https://t.me/schoolbot')
     expect(INSTANCE.defaultLocale).toBe('en')
     expect(INSTANCE.locales).toEqual(['en', 'ru'])
-    expect(INSTANCE.brand).toBe('ШКОЛА')
   })
 
   it('empty runtime values fall through to the build env and golden defaults', async () => {
-    vi.stubEnv('VITE_BRAND', 'ENV-БРЕНД')
     const { INSTANCE, applyInstanceConfig } = await loadInstance()
 
-    applyInstanceConfig({
-      apiBaseUrl: '',
-      telegramBotUrl: '',
-      defaultLocale: '',
-      locales: '',
-      brand: '',
-    })
+    applyInstanceConfig({ apiBaseUrl: '', telegramBotUrl: '', defaultLocale: '', locales: '' })
 
     expect(INSTANCE.apiBaseUrl).toBe('')
     expect(INSTANCE.telegramBotUrl).toBe('https://telegram.me/veloappbot')
     expect(INSTANCE.defaultLocale).toBe('ru')
     expect(INSTANCE.locales).toEqual(['ru'])
-    expect(INSTANCE.brand).toBe('ENV-БРЕНД')
   })
 
   it('a runtime defaultLocale outside the declared set falls back to ru', async () => {
@@ -132,11 +121,60 @@ describe('INSTANCE -- runtime config.json (FE-129)', () => {
   it('null/undefined config resets to build env and golden', async () => {
     const { INSTANCE, applyInstanceConfig } = await loadInstance()
 
-    applyInstanceConfig({ brand: 'ШКОЛА' })
-    expect(INSTANCE.brand).toBe('ШКОЛА')
+    applyInstanceConfig({ apiBaseUrl: 'api.school.example' })
+    expect(INSTANCE.apiBaseUrl).toBe('https://api.school.example')
 
     applyInstanceConfig(null)
-    expect(INSTANCE.brand).toBe('VELO')
+    expect(INSTANCE.apiBaseUrl).toBe('')
+  })
+
+  it('an unrendered envsubst placeholder is treated as empty', async () => {
+    const { INSTANCE, applyInstanceConfig } = await loadInstance()
+
+    // An env var absent at container start leaves `${NAME}` in /config.json.
+    applyInstanceConfig({
+      apiBaseUrl: '${API_BASE_URL}',
+      telegramBotUrl: '${TELEGRAM_BOT_URL}',
+      defaultLocale: '${DEFAULT_LANGUAGE}',
+      locales: '${LANGUAGES}',
+    })
+
+    expect(INSTANCE.apiBaseUrl).toBe('')
+    expect(INSTANCE.telegramBotUrl).toBe('https://telegram.me/veloappbot')
+    expect(INSTANCE.defaultLocale).toBe('ru')
+    expect(INSTANCE.locales).toEqual(['ru'])
+  })
+
+  it('the brand is a skin property: a runtime config never sets it (owner 09.11)', async () => {
+    vi.stubEnv('VITE_BRAND', 'SKIN-BRAND')
+    const { INSTANCE, applyInstanceConfig } = await loadInstance()
+
+    // An old template could still ship the key -- it must be ignored.
+    applyInstanceConfig({ brand: 'RUNTIME-BRAND' } as unknown as Parameters<
+      typeof applyInstanceConfig
+    >[0])
+
+    expect(INSTANCE.brand).toBe('SKIN-BRAND')
+  })
+})
+
+describe('normalizeApiBase -- two domains, the passport ships a host (owner 09.11)', () => {
+  it('a bare host gets https://', async () => {
+    const { normalizeApiBase } = await loadInstance()
+    expect(normalizeApiBase('api.velo-test.xyz')).toBe('https://api.velo-test.xyz')
+  })
+
+  it('an explicit scheme is kept, the trailing slash dropped', async () => {
+    const { normalizeApiBase } = await loadInstance()
+    expect(normalizeApiBase('https://api.velo-test.xyz/')).toBe('https://api.velo-test.xyz')
+    expect(normalizeApiBase('http://localhost:8000')).toBe('http://localhost:8000')
+  })
+
+  it('empty and whitespace stay same-origin', async () => {
+    const { normalizeApiBase } = await loadInstance()
+    expect(normalizeApiBase('')).toBe('')
+    expect(normalizeApiBase('  ')).toBe('')
+    expect(normalizeApiBase(undefined)).toBe('')
   })
 })
 

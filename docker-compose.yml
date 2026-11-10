@@ -109,12 +109,13 @@ services:
       # before (vite.env, exported by velo-manage.sh); under pridem the same
       # keys arrive from primer.yaml env -- keys without the VITE_ prefix --
       # and this mapping switches to `${VAR:?}` per the machine's compose
-      # rules. Empty values are the golden defaults.
+      # rules. Empty values are the golden defaults. The names are
+      # primer.yaml's (DEFAULT_LANGUAGE / LANGUAGES); the brand is a skin
+      # property, not a start value (owner 09.11).
       API_BASE_URL: ${VITE_API_BASE_URL:-}
       TELEGRAM_BOT_URL: ${VITE_TELEGRAM_BOT_URL:-}
-      DEFAULT_LOCALE: ${VITE_DEFAULT_LOCALE:-}
-      LOCALES: ${VITE_LOCALES:-}
-      BRAND: ${VITE_BRAND:-}
+      DEFAULT_LANGUAGE: ${VITE_DEFAULT_LOCALE:-}
+      LANGUAGES: ${VITE_LOCALES:-}
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:

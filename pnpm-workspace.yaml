@@ -19,13 +19,12 @@ allowBuilds:
   '@zoom/meetingsdk': false
   esbuild: true
   vue-demi: true
-# Pinned past the Dependabot highs (FE-105): the audit needs these exact
-# floors, while the newest releases above them (vite 6.4.5, 2026-10-21;
-# serialize-javascript 7.1.4, 2026-10-23; postcss-selector-parser 7.1.7,
-# 2026-10-20) are younger than the two-week maturity rule. Revisit when
-# they age past it. postcss-selector-parser is scoped: eslint-plugin-vue
+# Pinned past the Dependabot alerts (FE-105; vite 6.4.5 on 2026-11-09 for
+# GHSA-8g5g-mxqh-grgj, server.fs.deny bypass, past the two-week maturity
+# rule). The newer serialize-javascript 7.1.4 (2026-10-23) and
+# postcss-selector-parser 7.1.7 (2026-10-20) are still to revisit. postcss-selector-parser is scoped: eslint-plugin-vue
 # declares ^6, the stylelint chain already resolves 7.1.7 on its own.
 overrides:
-  vite: 6.4.4
+  vite: 6.4.5
   serialize-javascript: 7.1.3
   eslint-plugin-vue>postcss-selector-parser: 7.1.6

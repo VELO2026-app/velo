@@ -1,7 +1,7 @@
 # =============================================================================
 # VELO CI — the deterministic gate (factory Phase 1, docs/ai-dev-factory-tz.md §8.4)
 #
-# Two jobs, no agents, no judgment:
+# Three jobs (scope + the two gates), no agents, no judgment:
 #   frontend    — the FE-73 zero-warning budget + prettier + vitest + vue-tsc
 #                 build, mirroring the pre-push hook (closes --no-verify).
 #                 Since FE-116 the job is the WORKSPACE gate: it installs the
@@ -18,6 +18,15 @@
 # owned outside this contour — first CI run measured 383 ruff errors at the
 # lockfile-range ruff, and wiring that gate (pinning ruff, fixing or scoping
 # findings) belongs to the backend owner. Add the job when they green-light it.
+#
+# Scope (per PR type): a `scope` job classifies the PR's diff
+# (.github/scripts/ci-scope.mjs) and the jobs below size themselves:
+#   docs-only PR            -> frontend + drift skipped (green in seconds)
+#   comment-only code edits -> frontend runs lint + format only
+#   backend/**              -> drift; frontend skipped unless touched too
+#   anything else           -> the full gate
+# Pushes to test always run the full gate -- the trunk is the backstop.
+# Skipped jobs report "skipped", which satisfies a required status check.
 #
 # Toolchain pins: pnpm 12.4.2 (mirrors the ROOT package.json `packageManager`,
 # the workspace root since FE-116); python 3.12 in the drift job keeps
@@ -36,9 +45,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  scope:
+    name: scope
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.scope.outputs.frontend || 'full' }}
+      drift: ${{ steps.scope.outputs.drift || 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+        if: github.event_name == 'pull_request'
+        with:
+          # The PR merge commit + its first parent (the base tip): the diff
+          # between them is exactly what the PR contributes.
+          fetch-depth: 2
+
+      - name: Classify the PR diff
+        id: scope
+        if: github.event_name == 'pull_request'
+        run: node .github/scripts/ci-scope.mjs HEAD^1 HEAD
+
   frontend:
     name: frontend — lint / test / build (+ @velo/ui)
+    needs: scope
+    if: needs.scope.outputs.frontend != 'skip'
     runs-on: ubuntu-latest
+    env:
+      FULL: ${{ needs.scope.outputs.frontend == 'full' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -64,9 +96,11 @@ jobs:
         run: pnpm -C frontend format:check && pnpm -C packages/velo-ui format:check
 
       - name: Tests (frontend + @velo/ui)
+        if: env.FULL == 'true'
         run: pnpm -r test
 
       - name: Build @velo/ui (vite lib + vue-tsc dts)
+        if: env.FULL == 'true'
         run: pnpm -C packages/velo-ui build
 
       # FE-153: the build log is gated too -- a cyclic cross-chunk re-export
@@ -75,6 +109,7 @@ jobs:
       # pipefail is explicit: a step without `shell:` runs as `bash -e`,
       # where `build | tee` would take tee's exit 0 and hide a failed build.
       - name: Build (vue-tsc + vite) + build-log gate
+        if: env.FULL == 'true'
         run: |
           set -o pipefail
           pnpm -C frontend build 2>&1 | tee "$RUNNER_TEMP/frontend-build.log"
@@ -92,12 +127,15 @@ jobs:
       # Runs AFTER the plain build so a red matrix reads as the whitelabel
       # gate failing, not as "the app does not build".
       - name: Build matrix (whitelabel gate)
+        if: env.FULL == 'true'
         run: |
           node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
           pnpm -C frontend build:matrix --no-restore --skin "$RUNNER_TEMP/ci-skin"
 
   drift-check:
     name: generated.ts drift
+    needs: scope
+    if: needs.scope.outputs.drift == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
