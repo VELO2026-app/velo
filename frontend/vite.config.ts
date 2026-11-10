@@ -21,6 +21,7 @@ import { fileURLToPath, URL } from 'node:url'
 import { cpSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pwaManifestWithPassport } from './src/pwa/manifest'
+import { shellOnlyTransform } from './src/pwa/precache-shell'
 import { keepManifestOutOfPrecache, perLocaleManifest } from './src/pwa/manifest-locales'
 // tz-whitelabel F1 (§2.2): resolves the %VELO_*% passport placeholders in
 // index.html (lang, brand title) to the golden defaults when the env var is
@@ -146,6 +147,15 @@ function preloadAppChunk(): Plugin {
 // to pwaManifestWithPassport(), so two .env files produce two builds (§2.4).
 // tz-whitelabel F2 (§3): the skin package (when the deploy ships one in
 // public/skin/) rides on top and materializes its derivatives.
+// FE-157 s2: the precache cut to the app shell (see workbox.globPatterns).
+const shellOnly = shellOnlyTransform((url) => {
+  try {
+    return readFileSync(join(fileURLToPath(new URL('./dist/', import.meta.url)), url), 'utf8')
+  } catch {
+    return ''
+  }
+})
+
 export default defineConfig(({ mode }) => {
   const frontendDir = fileURLToPath(new URL('.', import.meta.url))
   const instanceEnv = loadEnv(mode, frontendDir, 'VITE_')
@@ -228,40 +238,73 @@ export const SKIN_BRAND: string | null = ${JSON.stringify(skin?.displayName ?? n
         registerType: 'autoUpdate',
         // Include these file types in precache.
         workbox: {
-          // webp: the background photo (bg/background.webp, FE-157) paints the
-          // first frame of every screen -- it must stay precached as the PNG was.
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff2}'],
-          // Don't precache source maps -- nor the Zoom Meeting SDK chunk
-          // (Standalone F4, manualChunks below): about 5 MB that only the
-          // practice screen loads, on the practice-live join/start buttons
-          // (i18n:user.screens.practiceLive.join, i18n:user.screens.practiceLive.start). Precached, every
-          // install and every update would download it for everyone.
+          // FE-157 s2 (owner decision R1): the precache is the SHELL only --
+          // the entry, its CSS and static imports, the font, the PWA icons,
+          // the background photo and the splash logo. The app has no offline
+          // mode (every screen needs the API), so precaching all routes bought
+          // nothing and cost every install the whole build, and every deploy a
+          // background re-download of each changed chunk. Everything else is
+          // cached on first use by the /assets/ rule in runtimeCaching below.
+          //
+          // The globs are the candidates; shellOnly() below cuts assets/ down
+          // to the startup closure. Not listed on purpose: onboarding art,
+          // feat-*.png, the blue logo variant, logo-white.svg (welcome screen
+          // only) -- lazy screens fetch them on demand. Zoom SDK, admin and
+          // master chunks are not in the startup closure, so they stay out
+          // too; the Zoom Meeting SDK (about 5 MB, practice screen only,
+          // Standalone F4) is also named in globIgnores as a belt.
+          globPatterns: [
+            'index.html',
+            'registerSW.js',
+            'fonts/*.woff2',
+            // The background photo paints the first frame of every screen.
+            'bg/background.webp',
+            // PWA icons, favicon, and the splash logo (LoadingView: spinning
+            // mandala ring under the filled wordmark).
+            'icons/{icon-192,icon-512,icon-maskable-512,apple-touch-icon-180,favicon,mandala-white,velo-word-filled}.*',
+            'assets/*.{js,css}',
+          ],
+          // Don't precache source maps -- nor the Zoom Meeting SDK chunk.
           globIgnores: ['**/*.map', '**/zoom-sdk-*.js'],
-          // Runtime caching gives the service worker a valid strategy even when
-          // the precache manifest is empty. Without this, workbox-build aborts
-          // with "Couldn't find configuration for either precaching or runtime
-          // caching" (reproduced on workbox 7.3.0 AND 7.4.0 -- not a version
-          // issue). network-first: try network, fall back to cache offline.
+          manifestTransforms: [shellOnly],
+          // Runtime caching also gives the service worker a valid strategy
+          // when the precache manifest is empty (workbox-build otherwise
+          // aborts, reproduced on workbox 7.3.0 and 7.4.0).
           //
           // SAME ORIGIN ONLY (Standalone F4): the Zoom Meeting SDK pulls its
-          // scripts, styles and images from Zoom's CDN (source.zoom.us). Without
-          // this check they matched by destination and were cached here --
-          // opaque cross-origin responses, which the browser books against the
-          // storage quota far above their size, and a stale copy of Zoom's own
-          // files served back to Zoom's SDK. Zoom's files are Zoom's to cache.
+          // scripts, styles and images from Zoom's CDN (source.zoom.us).
+          // Cross-origin responses would be opaque -- booked against the
+          // storage quota far above their size -- and a stale copy of Zoom's
+          // own files would be served back to Zoom's SDK.
           runtimeCaching: [
             {
-              urlPattern: ({ request, sameOrigin }) =>
-                sameOrigin &&
-                (request.destination === 'document' ||
-                  request.destination === 'script' ||
-                  request.destination === 'style' ||
-                  request.destination === 'image' ||
-                  request.destination === 'font'),
-              handler: 'NetworkFirst',
+              // Hashed build output: a URL never changes its bytes, so
+              // CacheFirst is safe. The limits keep chunks of old builds from
+              // piling up: least-recently-used entries go first, and nothing
+              // lives past 30 days.
+              //
+              // After a deploy the server no longer has the old chunk names.
+              // A miss falls through to the network, which fails or answers
+              // 404; either way the import rejects and platform/chunk-reload.ts
+              // (FE-106) reloads onto the new build. Only 200 responses that
+              // are not HTML are stored: an SPA fallback answers a missing
+              // chunk with index.html, and caching that under a .js URL would
+              // pin the failure.
+              urlPattern: ({ url, sameOrigin }) =>
+                sameOrigin && url.pathname.startsWith('/assets/'),
+              handler: 'CacheFirst',
               options: {
-                cacheName: 'velo-runtime',
-                expiration: { maxEntries: 200 },
+                cacheName: 'velo-assets',
+                expiration: { maxEntries: 150, maxAgeSeconds: 30 * 24 * 60 * 60 },
+                cacheableResponse: { statuses: [200] },
+                plugins: [
+                  {
+                    cacheWillUpdate: async ({ response }: { response: Response }) =>
+                      (response.headers.get('content-type') ?? '').includes('text/html')
+                        ? null
+                        : response,
+                  },
+                ],
               },
             },
           ],
