@@ -328,6 +328,8 @@ import { VHeader } from '@/components/layout'
 import { useAuthStore } from '@/stores/auth'
 import { useSchoolsHubStore } from '@/stores/schoolsHub'
 import { useToast } from '@/composables/useToast'
+import { useCancelBooking } from '@/composables/queries/bookings'
+import { extractApiError } from '@/composables/useApiError'
 import { useLoadingHold } from '@/composables/useLoadingHold'
 import BookingPopup from '@/components/shared/BookingPopup.vue'
 import PracticeSoldOut from '@/components/shared/PracticeSoldOut.vue'
@@ -801,15 +803,26 @@ function onReflect(): void {
   void router.push({ name: 'user-reflection', params: { practiceId: practice.value.id } })
 }
 
+// FE-157 4F: a Pinia Colada mutation -- it refreshes every screen that showed
+// the booking (composables/queries/invalidation.ts), and resolves once the
+// bookings list above holds the cancelled status.
+const cancelBooking = useCancelBooking()
+
 async function onCancelBooking(): Promise<void> {
   if (!myBooking.value || cancelling.value) return
   cancelling.value = true
-  const result = await bookingsStore.cancelBooking(myBooking.value.id)
-  cancelling.value = false
-  if (!result.ok) {
-    // The store returns { ok, error } but does not raise a toast itself.
-    toast.error(result.error)
+  try {
+    await cancelBooking.mutateAsync({
+      bookingId: myBooking.value.id,
+      practiceId: myBooking.value.practice_id,
+    })
+  } catch (e) {
+    // The mutation rejects with the API error; the text is made here, where
+    // it is shown.
+    toast.error(extractApiError(e, t('storeErrors.bookings.cancel')))
     return
+  } finally {
+    cancelling.value = false
   }
   toast.success(t('user.screens.practiceDetail.cancelledToast'))
   justPurchased.value = false
