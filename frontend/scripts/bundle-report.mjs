@@ -13,7 +13,9 @@
 //   node scripts/bundle-report.mjs --modules       per-chunk module dump, see below
 //
 // --modules runs its OWN production build into a temporary outDir (dist/ is
-// left untouched) with vite.config.ts unchanged: the config file is loaded as
+// left untouched on the golden build; with a skin in public/skin/ the
+// config's skinAssetSpill still copies the skin assets into frontend/dist/,
+// its path is fixed there) with vite.config.ts unchanged: the config file is loaded as
 // is, and an inline config (Vite's JS API merges it over the file) adds one
 // generateBundle plugin that records chunk -> modules[renderedLength], plus
 // the temporary outDir. No extra dependency. It answers "is X still in the

@@ -109,7 +109,7 @@
       <span v-if="practiceDuration" class="tcard__prac-cell">
         <IconClock :size="11" />{{ practiceDuration }}
       </span>
-      <!-- Attended shows BOTH the check and the word "Done"
+      <!-- Attended shows BOTH the check and the attended label
            (i18n:display.outcome.attended; thread target);
            a miss keeps its no-show label (i18n:display.outcome.no_show). -->
       <span class="tcard__prac-status" :class="`tcard__prac-status--${outcomeStatus}`">

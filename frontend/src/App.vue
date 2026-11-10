@@ -6,9 +6,10 @@
        undecided (stage === null), or while a Telegram logout is in progress
        (isLoggingOut) -- the latter keeps the stub from flashing between
        session clear and the Mini App closing.
-    2. The saved session could not be checked (no answer, outside Telegram:
-       restoreUnreachable) -> LoadingErrorView ("try again"); the token stays
-       saved for that attempt.
+    2. The start could not complete (restoreUnreachable) -> LoadingErrorView
+       ("try again"): the saved session got no answer outside Telegram (the
+       token stays saved for that attempt), or the bootstrap itself threw --
+       platform.init() or the first-screen gate, in Telegram too (FE-157).
     3. Not authenticated:
          in Telegram  -> TelegramStubView (initData sign-in failed or the
                          session ended -- unchanged by Standalone phase 3);
