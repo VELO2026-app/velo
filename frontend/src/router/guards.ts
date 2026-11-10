@@ -26,7 +26,7 @@
 //
 // TD-F01: roleRedirect consumes pendingStartParam after auth completes.
 // initAuth() stores the raw startapp value; roleRedirect parses it with the
-// session role (parseStartParam, Links) and redirects there instead of the
+// session role (parseStartParam, router/deepLinks.ts, Links) and redirects there instead of the
 // dashboard -- open_practice__{uuid} to the practice, zoom__{code} to
 // practice-live (T-35), a notification verb to the bell's screen. It is
 // cleared after first use to prevent stale redirects.
@@ -34,8 +34,9 @@
 
 import type { NavigationGuardWithThis, RouteLocationNormalized } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { waitUntilReady, pendingStartParam, parseStartParam } from '@/composables/useAuth'
+import { waitUntilReady, pendingStartParam } from '@/composables/useAuth'
 import type { ReadyResult } from '@/composables/useAuth'
+import { parseStartParam } from '@/router/deepLinks'
 import { refreshRoleIfStale } from '@/composables/useRoleFreshness'
 import type { UserRole } from '@/api/types'
 import { MASTER_APPLIED_KEY, masterRejectionSeenKey } from '@/utils/constants'
