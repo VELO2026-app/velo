@@ -104,6 +104,10 @@ let _token: string | null = null
 
 /** Called by auth store to set/clear the token. */
 export function setAuthToken(token: string | null): void {
+  // A GET in flight for the previous token must not be joined under the new
+  // one (dedupe is keyed by path alone): a new session starts with no shared
+  // reads.
+  if (token !== _token) _inFlight.clear()
   _token = token
 }
 
@@ -258,6 +262,7 @@ async function send<T>(method: HttpMethod, path: string, options: RequestOptions
   try {
     data = await response.json()
   } catch {
+    if (signal?.aborted) throw abortReason(signal)
     throw withTraceId(
       traceId,
       new ApiResponseError(
@@ -266,6 +271,10 @@ async function send<T>(method: HttpMethod, path: string, options: RequestOptions
       ),
     )
   }
+
+  // A cancel that lands while the body is read: the caller still gets the
+  // rejection RequestOptions.signal promises, not the late data.
+  if (signal?.aborted) throw abortReason(signal)
 
   if (response.ok) {
     return data as T

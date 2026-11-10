@@ -349,7 +349,8 @@ import { IconTrash } from '@/components/icons'
 import { moodKeyFromScore, moodLabelFromScore } from '@/utils/moodScale'
 import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
 import { formatShortDate } from '@/utils/format'
-import { getStudent, type StudentDetailResponseWithBlocked } from '@/api/masters'
+import { getStudent } from '@/api/masters'
+import type { StudentDetailResponse } from '@/api/types'
 import { getStudentGroups, getGroups, blockStudent, unblockStudent } from '@/api/groups'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
@@ -374,7 +375,7 @@ const name = computed((): string => {
 const avatarUrl = computed((): string => detail.value?.avatar_url ?? '')
 
 // -- Per-student aggregate (E5: GET /masters/me/students/{id}). --
-const detail = ref<StudentDetailResponseWithBlocked | null>(null)
+const detail = ref<StudentDetailResponse | null>(null)
 const loading = ref(true)
 const error = ref('')
 

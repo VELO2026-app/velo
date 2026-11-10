@@ -377,3 +377,49 @@ describe('api.request options: timeoutMs and signal (FE-157)', () => {
     expect(methods).toEqual(['GET', 'POST', 'GET'])
   })
 })
+
+describe('FE-157 s3 review: cancel during the body, token change', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    resetClientState()
+  })
+
+  it('a cancel that lands while the body is read still rejects', async () => {
+    const controller = new AbortController()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        status: 200,
+        ok: true,
+        headers: new Headers(),
+        json: async () => {
+          controller.abort()
+          return { late: true }
+        },
+      })),
+    )
+    await expect(api.request('GET', '/x', { signal: controller.signal })).rejects.toMatchObject({
+      name: 'AbortError',
+    })
+  })
+
+  it('a GET in flight for the previous token is not joined under a new one', async () => {
+    const pending: Array<() => void> = []
+    const fetchMock = vi.fn(
+      () =>
+        new Promise((resolve) =>
+          pending.push(() =>
+            resolve({ status: 200, ok: true, headers: new Headers(), json: async () => ({}) }),
+          ),
+        ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    setAuthToken('token-a')
+    const first = api.get('/x')
+    setAuthToken('token-b')
+    const second = api.get('/x')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    for (const settle of pending) settle()
+    await Promise.all([first, second])
+  })
+})
