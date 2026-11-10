@@ -5,9 +5,10 @@
 # split so the pieces run in parallel; every step it had is kept, see below):
 #   scope        — classifies the PR diff, sizes the jobs below.
 #   lint         — the FE-73 zero-warning budget (eslint over the app AND
-#                  packages/velo-ui, content-hash cache restored between runs)
-#                  + the other lint gates + prettier, both packages. The
-#                  pre-push hook's lint half (closes --no-verify).
+#                  packages/velo-ui; its cache is reused only for identical
+#                  lint inputs) + the other lint gates + prettier, both
+#                  packages. Closes --no-verify past the pre-commit
+#                  lint-staged pass.
 #   test         — vue-tsc typecheck + vitest of the whole workspace
 #                  (frontend + @velo/ui).
 #   build        — @velo/ui (vite lib + vue-tsc dts), then the app's
@@ -37,8 +38,9 @@
 # Skipped jobs report "skipped", which satisfies a required status check.
 #
 # Runs are cancelled only for pull requests (a newer push supersedes the old
-# one); a push to test is never cancelled -- every trunk commit gets its
-# verdict.
+# one). Pushes to test group by commit sha: in a shared group GitHub would
+# still drop a PENDING trunk run when the next push queues, so a commit in a
+# burst of merges would get no verdict.
 #
 # Toolchain pins: pnpm 12.4.2 (mirrors the ROOT package.json `packageManager`,
 # the workspace root since FE-116); python 3.12 in the drift job keeps
@@ -56,7 +58,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -105,19 +107,19 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # lint-budget.mjs writes the ESLint caches here (content strategy, so a
-      # fresh checkout's mtimes do not matter). A new key per commit, the
-      # newest earlier cache as the fallback; ESLint itself discards entries
-      # whose file content or config changed, so a stale cache cannot pass
-      # what a cold run would fail.
+      # fresh checkout's mtimes do not matter). EXACT key over every lint
+      # input, no restore-keys fallback: ESLint invalidates an entry only when
+      # that file or the config changes, while the type-aware rules (no-unsafe-*,
+      # no-floating-promises...) read types from OTHER files -- a cache carried
+      # across a code change could pass a file a cold run fails. The cache
+      # therefore only saves re-runs and runs whose lint inputs are unchanged.
       - name: Restore ESLint cache
         uses: actions/cache@v4
         with:
           path: |
             frontend/node_modules/.cache/eslint
             packages/velo-ui/node_modules/.cache/eslint
-          key: eslint-${{ runner.os }}-${{ github.sha }}
-          restore-keys: |
-            eslint-${{ runner.os }}-
+          key: eslint-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'frontend/eslint.config.js', 'packages/velo-ui/eslint.config.js', 'frontend/tsconfig*.json', 'packages/velo-ui/tsconfig*.json', 'frontend/src/**', 'packages/velo-ui/src/**') }}
 
       - name: Lint (zero-warning budget; covers packages/ via lint-budget)
         run: pnpm -C frontend lint
@@ -261,17 +263,20 @@ jobs:
   # Fan-in: invariant d (equal asset count across the `full` cells) spans
   # cells, and a cell that never reported must not read as green. Also the
   # single status to require for the whitelabel gate.
+  # Keyed on matrix-plan, not on matrix: a FAILED plan skips matrix, and a
+  # gate that skipped along with it would read as a passed required check.
+  # The plan is skipped only when scope sized the run below `full`.
   matrix-gate:
     name: matrix — gate
-    needs: matrix
-    if: ${{ !cancelled() && needs.matrix.result != 'skipped' }}
+    needs: [matrix-plan, matrix]
+    if: ${{ !cancelled() && needs.matrix-plan.result != 'skipped' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: A cell failed
-        if: needs.matrix.result != 'success'
+      - name: The plan or a cell failed
+        if: needs.matrix-plan.result != 'success' || needs.matrix.result != 'success'
         run: |
-          echo "a matrix cell did not pass (${{ needs.matrix.result }})" >&2
+          echo "matrix plan: ${{ needs.matrix-plan.result }}, cells: ${{ needs.matrix.result }}" >&2
           exit 1
 
       - uses: actions/checkout@v4

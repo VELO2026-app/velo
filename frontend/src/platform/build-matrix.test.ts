@@ -10,6 +10,7 @@
 // the shapes the minifier actually emits.
 // =============================================================================
 
+import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -26,6 +27,12 @@ interface Cell {
   edition: string
   modules: Modules
 }
+/** One --facts-out record of a per-cell CI run. */
+interface FactsEntry {
+  cell: string
+  edition: string
+  assets: number
+}
 interface Facts {
   title: string
   theme: string
@@ -37,14 +44,18 @@ interface Facts {
 }
 
 const {
+  assetCountFails,
   bundleHas,
   cssHasDecl,
   evaluateMatrix,
+  fanInFails,
   MODULE_CHUNKS,
   normalizeDecl,
   planCells,
   tokenDecls,
 } = matrixModule as unknown as {
+  assetCountFails(entries: FactsEntry[]): string[]
+  fanInFails(cellNames: string[], entries: FactsEntry[]): string[]
   bundleHas(bundle: string, text: string): boolean
   cssHasDecl(css: string, decl: string): boolean
   evaluateMatrix(input: {
@@ -249,5 +260,59 @@ describe('brand/token grep helpers', () => {
     expect(bundleHas('const b="НОВА"', 'НОВА')).toBe(true)
     expect(bundleHas('const b="\\u041D\\u041E\\u0412\\u0410"', 'НОВА')).toBe(true)
     expect(bundleHas('const b="VELO"', 'НОВА')).toBe(false)
+  })
+})
+
+// FE-157 s1: CI fans the matrix out one runner per cell; invariant d spans
+// cells, so it moved to the fan-in (--check-assets) and is pinned here.
+describe('per-cell CI mode: the fan-in (--check-assets)', () => {
+  const entry = (cell: string, edition: string, assets: number): FactsEntry => ({
+    cell,
+    edition,
+    assets,
+  })
+
+  it('agreeing full cells pass; cut editions may differ', () => {
+    expect(
+      assetCountFails([
+        entry('golden/full', 'full', 392),
+        entry('goodo/full', 'full', 392),
+        entry('golden/core', 'core', 371),
+      ]),
+    ).toEqual([])
+  })
+
+  it('a full cell with a different asset count fails (d)', () => {
+    const fails = assetCountFails([
+      entry('golden/full', 'full', 392),
+      entry('goodo/full', 'full', 393),
+    ])
+    expect(fails).toHaveLength(1)
+    expect(fails[0]).toContain('goodo/full:393')
+  })
+
+  it('a planned cell without a facts file fails -- never a silent green', () => {
+    const fails = fanInFails(['golden/full', 'goodo/full'], [entry('golden/full', 'full', 392)])
+    expect(fails).toEqual(['goodo/full: no facts file -- the cell never reported'])
+  })
+
+  const cli = (...args: string[]) =>
+    spawnSync(process.execPath, [join(__dirname, '../../scripts/build-matrix.mjs'), ...args], {
+      encoding: 'utf8',
+    })
+
+  it('--list prints the planned cells as JSON and builds nothing', () => {
+    const run = cli('--list')
+    expect(run.status).toBe(0)
+    const cells = JSON.parse(run.stdout) as string[]
+    expect(cells).toContain('golden/full')
+    expect(cells).toContain('golden/core')
+  })
+
+  it('--cell with an unknown name fails and names the known cells', () => {
+    const run = cli('--cell', 'nope/none')
+    expect(run.status).toBe(1)
+    expect(run.stderr).toContain('no cell "nope/none"')
+    expect(run.stderr).toContain('golden/full')
   })
 })

@@ -18,6 +18,10 @@ const budget = JSON.parse(readFileSync(new URL('../lint-budget.json', import.met
 // would invalidate a metadata cache on each run. The cache lives under
 // node_modules (git-ignored, outside both source trees). ESLint stores the
 // warnings of a cached file too, so the --max-warnings budget stays exact.
+// Limit: an entry is invalidated only by ITS file or the config, while the
+// type-aware rules read types from other files -- after a cross-file type
+// change a local cached run can stay green where a cold run fails. CI reuses
+// a cache only for identical lint inputs (ci.yml), so the gate stays cold.
 const cacheArgs = (name) => [
   '--cache',
   '--cache-strategy',

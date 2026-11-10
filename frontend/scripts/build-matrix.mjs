@@ -252,6 +252,16 @@ export function assetCountFails(entries) {
   ]
 }
 
+/** The whole fan-in verdict (--check-assets): every planned cell reported --
+ *  a cell that never ran is not a green cell -- and invariant d holds. */
+export function fanInFails(cellNames, entries) {
+  const missing = cellNames.filter((n) => !entries.some((e) => e.cell === n))
+  return [
+    ...missing.map((n) => `${n}: no facts file -- the cell never reported`),
+    ...assetCountFails(entries),
+  ]
+}
+
 // -- the impure part (CLI only) -----------------------------------------------
 
 const publicSkin = () => join(frontendDir(), 'public', 'skin')
@@ -466,13 +476,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     const entries = readdirSync(dir)
       .filter((f) => f.endsWith('.json'))
       .map((f) => JSON.parse(readFileSync(join(dir, f), 'utf8')))
-    // Every planned cell must have reported: a cell that never ran is not
-    // a green cell.
-    const missing = allCells.map((c) => c.name).filter((n) => !entries.some((e) => e.cell === n))
-    const fails = [
-      ...missing.map((n) => `${n}: no facts file -- the cell never reported`),
-      ...assetCountFails(entries),
-    ]
+    const fails = fanInFails(
+      allCells.map((c) => c.name),
+      entries,
+    )
     if (fails.length > 0) {
       for (const f of fails) console.error('  FAIL ' + f)
       console.error(`\nbuild-matrix: ${fails.length} FAIL(s) at the fan-in`)
