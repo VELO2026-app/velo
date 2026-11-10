@@ -41,14 +41,17 @@
          All action buttons and Save use :disabled="anyLoading" -- prevents
          concurrent save + publish / save + cancel / etc.
     W-5: confirm dialog overlay click blocked while confirmDialog.loading is true
-    W-6: priceCents uses eurStringToCents() -- no float arithmetic.
-         populateForm uses centsToEurString() -- no float precision issues.
-    W-8: date input has :min="todayDate" to prevent setting past dates
+    W-6: price cents <-> euro string without float arithmetic (usePracticeForm).
+    W-8: the date picker never offers a day before today (PracticeSchedulePicker).
     W-9: commission calc uses COMMISSION_RATE from @/utils/commission
     A4 V3 (PROMPT №571): direction/style options filtered to the master's own
-        CONFIRMED methods (mirrors CreatePracticeView), and the taxonomy
-        rejection codes (direction_not_confirmed/style_not_confirmed) get the
-        same Russian toast translation as CreatePracticeView's submit() catch.
+        CONFIRMED methods, and the taxonomy rejection codes
+        (direction_not_confirmed/style_not_confirmed) get the same translated
+        toast as CreatePracticeView's -- both through the shared composables.
+
+  FE-157 (stage 4, 4A): the form model, its validation and the PATCH body
+  live in composables/usePracticeForm.ts, shared with CreatePracticeView --
+  one validation for both screens (a moved start must lie in the future).
 -->
 
 <template>
@@ -120,50 +123,42 @@
 
           <!-- Practice style — shown only when the direction has styles
                (Q4=A, mirrors CreatePracticeView: no explicit "no style" option). -->
-          <div v-if="styleOptionsForForm.length > 0">
+          <div v-if="styleOptions.length > 0">
             <VSelect
               v-model="form.style"
               :label="t('masterScreens.editPractice.fields.style')"
-              :options="styleOptionsForForm"
+              :options="styleOptions"
             />
           </div>
 
           <!-- Date — DS picker (decision V: returned by logic — rescheduling a
                practice is a normal operation; the native type=date was
-               replaced with the branded picker). -->
-          <div class="edit-practice__field">
-            <label class="edit-practice__field-label">{{
-              t('masterScreens.editPractice.fields.date')
-            }}</label>
-            <button
-              type="button"
-              class="edit-practice__picker"
-              :class="{ 'edit-practice__picker--empty': !form.date }"
-              @click="showDate = true"
-            >
-              {{ form.date ? dateDisplay : t('ui.pickerChooseDate') }}
-            </button>
-          </div>
-
-          <!-- Time — DS picker (24h, 5-minute step). -->
-          <div class="edit-practice__field">
-            <label class="edit-practice__field-label">{{
-              t('masterScreens.editPractice.fields.time')
-            }}</label>
-            <button
-              type="button"
-              class="edit-practice__picker"
-              :class="{ 'edit-practice__picker--empty': !form.time }"
-              @click="showTime = true"
-            >
-              {{ form.time || t('masterScreens.editPractice.pickers.time') }}
-            </button>
-          </div>
+               replaced with the branded picker). Time — 24h, 5-minute step.
+               A moved start must lie in the future (the shared validation). -->
+          <PracticeSchedulePicker
+            v-model="form.date"
+            kind="date"
+            class="edit-practice__field"
+            :label="t('masterScreens.editPractice.fields.date')"
+            :placeholder="t('ui.pickerChooseDate')"
+            :error="errors.date"
+            error-id="err-date"
+          />
+          <PracticeSchedulePicker
+            v-model="form.time"
+            kind="time"
+            class="edit-practice__field"
+            :label="t('masterScreens.editPractice.fields.time')"
+            :placeholder="t('masterScreens.editPractice.pickers.time')"
+            :error="errors.time"
+            error-id="err-time"
+          />
 
           <VSelect
             v-model="form.duration_minutes"
             :label="t('masterScreens.editPractice.fields.duration')"
             :options="DURATION_OPTIONS"
+            :error="errors.duration_minutes"
           />
 
           <VInput
@@ -338,21 +333,6 @@
         @confirm="cancel"
         @cancel="cancelModalOpen = false"
       />
-
-      <!-- Date/time picker sheets (teleport to body; open on field tap). -->
-      <DatePickerSheet
-        :open="showDate"
-        :model-value="form.date"
-        :min="todayDate"
-        @update:model-value="form.date = $event"
-        @close="showDate = false"
-      />
-      <TimePickerSheet
-        :open="showTime"
-        :model-value="form.time"
-        @update:model-value="form.time = $event"
-        @close="showTime = false"
-      />
     </template>
   </div>
 </template>
@@ -361,7 +341,6 @@
 import { t } from '@/locales'
 import { historyHasBack } from '@/platform/history'
 import { ref, reactive, computed, onMounted } from 'vue'
-import { DateTime } from 'luxon'
 import { useRoute, useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import {
@@ -374,9 +353,10 @@ import {
   VEmptyState,
   VConfirmDialog,
 } from '@/components/ui'
-import DatePickerSheet from '@/components/shared/DatePickerSheet.vue'
-import TimePickerSheet from '@/components/shared/TimePickerSheet.vue'
 import CancelPracticeDialog from '@/components/shared/CancelPracticeDialog.vue'
+import PracticeAudiencePicker from '@/components/shared/PracticeAudiencePicker.vue'
+import PracticeSchedulePicker from '@/components/shared/PracticeSchedulePicker.vue'
+import type { AudienceSchoolOption } from '@/components/shared/practiceAudience'
 import { useToast } from '@/composables/useToast'
 import { useMasterStore } from '@/stores/master'
 import {
@@ -386,23 +366,25 @@ import {
   cancelPractice,
   previewAudienceChange,
 } from '@/api/practices'
-import { getGroups } from '@/api/groups'
-import { formatShortDate, todayLocalISO } from '@/utils/format'
 import { masterPracticeBadge } from '@/utils/practiceStatus'
-import { ApiResponseError } from '@/api/client'
-import { errorMessage, extractApiError } from '@/composables/useApiError'
+import { extractApiError } from '@/composables/useApiError'
+import { DURATION_OPTIONS } from '@/utils/practiceOptions'
+import { usePracticeTaxonomyOptions } from '@/composables/usePracticeTaxonomyOptions'
 import {
-  DURATION_OPTIONS,
-  catalogDirectionOptions,
-  catalogStylesForDirection,
-} from '@/utils/practiceOptions'
-import { ensureTaxonomyCatalog, parseMethods } from '@/utils/methodTaxonomy'
-import { eurStringToCents, centsToEurString } from '@/utils/currency'
-import type { TaxonomyListResponse } from '@/api/taxonomy'
-import type { PracticeAudienceKind, PracticeResponse, UpdatePracticeRequest } from '@/api/types'
-import type { GroupListItem } from '@/api/groups'
-import type { AudienceSchoolOption } from '@/components/shared/practiceAudience'
-import PracticeAudiencePicker from '@/components/shared/PracticeAudiencePicker.vue'
+  SCHOOL_AUDIENCE_KINDS,
+  emptyPracticeForm,
+  invalidScheduleText,
+  practiceSaveErrorText,
+  practiceToForm,
+  revealFirstFieldError,
+  scheduleChanged,
+  snapshotPracticeForm,
+  toPracticePatch,
+  usePracticeCustomGroups,
+  usePracticeForm,
+  type PracticeFormValues,
+} from '@/composables/usePracticeForm'
+import type { PracticeResponse } from '@/api/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -431,15 +413,8 @@ const transitioning = ref(false)
 const cancelling = ref(false)
 const deleting = ref(false)
 
-// Date/time picker sheets + branded cancel modal (Q1=V / Q3=A, 2026-06-12).
-const showDate = ref(false)
-const showTime = ref(false)
+// Branded cancel modal (Q3=A, 2026-06-12).
 const cancelModalOpen = ref(false)
-
-// T2 stage 2 (2026-07-15): taxonomy catalog, primed in parallel with the
-// practice fetch below (mirrors CreatePracticeView). Rides the shared cache
-// (ensureTaxonomyCatalog()) -- zero fetch if another screen already warmed it.
-const catalog = ref<TaxonomyListResponse | null>(null)
 
 // W-3: single guard covering all mutually exclusive actions.
 // Every action button and the Save button use :disabled="anyLoading".
@@ -461,74 +436,38 @@ const confirmDialog = reactive({
   },
 })
 
-// W-8: computed so todayDate is never stale after midnight. Local-time date floor
-// (not UTC) so it doesn't drift a day near midnight for east/west-of-UTC users.
-const todayDate = computed(() => todayLocalISO())
+/**
+ * What the form held right after the last populate from the server. `save`
+ * diffs against it, so a PATCH carries only what the master changed and
+ * cannot overwrite a field somebody else edited meanwhile with a stale value.
+ */
+let baseline: PracticeFormValues | null = null
 
-// Friendly date for the picker trigger, e.g. "25 Jan 2026" in the ru short
-// form (mirrors Create).
-const dateDisplay = computed((): string =>
-  form.date ? `${formatShortDate(`${form.date}T12:00:00`)} ${form.date.slice(0, 4)}` : '',
-)
-
-// -- Form state (populated from practice on load) --
-const form = reactive({
-  title: '',
-  direction: 'meditation',
-  difficulty: 'beginner',
-  style: '',
-  date: '',
-  time: '',
-  duration_minutes: '60',
-  timezone: 'Europe/Moscow',
-  max_participants_raw: '',
-  is_free: false,
-  price_eur_raw: '',
-  description: '',
-  what_to_prepare: '',
-  contraindications: '',
-  // P5 port (PROMPT №606): audience_kind + audience_group_ids, mirrors
-  // CreatePracticeView's own form fields exactly.
-  //
-  // GT-11 (P5/schools): the union is NO LONGER hand-typed here. It
-  // used to read `'public' | 'students' | 'groups'`, and the day the backend
-  // added a fourth value the regenerated AudienceKind stopped fitting into
-  // it -- loadPractice() below assigns straight from the API response, so
-  // `vue-tsc` failed the whole build on a file nobody had touched. Widening
-  // it by hand would only move the same break to the fifth value; taking the
-  // type from the generated contract removes the copy that can drift.
-  // Load-bearing assertion: widens the literal for the typed consumers
-  // below (payload/guards); without it reactive infers plain string.
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-  audience_kind: 'public' as PracticeAudienceKind,
-  audience_group_ids: [] as string[],
-})
+// -- Form state (populated from the practice on load) and validation: the
+// shared practice-form model (usePracticeForm), the same rules as create.
+// The start must lie in the future only when the schedule itself changed:
+// that is exactly when the PATCH carries scheduled_at, the one case the
+// backend refuses a past start (see usePracticeForm's header). A practice
+// that has already started stays editable in every other field.
+const { form, errors, validate } = usePracticeForm(emptyPracticeForm(), (v) => ({
+  checkFuture: scheduleChanged(v, baseline),
+}))
 
 // P5 port (PROMPT №606): this master's own custom groups, for the
-// specific-groups (i18n:practice.audience.groups) multi-select -- loaded in
-// onMounted below, same recipe as CreatePracticeView.
-const customGroups = ref<GroupListItem[]>([])
+// specific-groups (i18n:practice.audience.groups) multi-select. Re-resolves
+// the name->id selection once they land, in case populateForm() already ran
+// against an empty list.
+const customGroups = usePracticeCustomGroups(() => resolveAudienceGroupIds())
 
 // BE-74 + FE-92: a school practice's KIND is editable, but only within the
-// pair the backend accepts (check_school_audience's SCHOOL_PRACTICE_AUDIENCES)
-// -- the same pair the curator-on-behalf create flow offers. The SCHOOL
-// itself never changes, so the picker gets exactly the practice's own school
-// (which makes audienceOptions() offer the pair) with schoolLocked on: no
-// chips. Exact mirror of CreatePracticeView's SCHOOL_AUDIENCE_KINDS; both
-// must track the backend pair.
-const SCHOOL_AUDIENCE_KINDS: PracticeAudienceKind[] = ['public', 'schools']
-
+// pair the backend accepts (SCHOOL_AUDIENCE_KINDS) -- the same pair the
+// curator-on-behalf create flow offers. The SCHOOL itself never changes, so
+// the picker gets exactly the practice's own school (which makes
+// audienceOptions() offer the pair) with schoolLocked on: no chips.
 const practiceSchool = computed<AudienceSchoolOption[]>(() => {
   const p = practice.value
   if (!p?.school_id) return []
   return [{ id: p.school_id, name: p.school_name ?? '' }]
-})
-
-const errors = reactive({
-  title: '',
-  direction: '',
-  max_participants: '',
-  audience_group_ids: '',
 })
 
 // -- Derived --
@@ -539,18 +478,10 @@ const isTerminal = computed(
     practice.value?.status === 'deleted',
 )
 
-// W-6: use eurStringToCents() -- avoids parseFloat(raw) * 100 float precision trap.
-const priceCents = computed((): number => eurStringToCents(form.price_eur_raw))
-
-// A4 V3 (PROMPT №571): this master's OWN CONFIRMED methods, same resolver
-// and same fail-CLOSED posture as CreatePracticeView (PROMPT №556/№546) --
-// this screen shares masterStatusGuard with master-practice-new (router/
-// index.ts), so masterStore.profileLoaded is already true on first render
-// in the normal navigation case; the "not loaded yet" branch below is a
-// defensive fallback, not the master line of defense. Deliberately reads
-// masterStore.profile?.methods, never method_change_request.proposed_
-// methods -- a pending, unapproved request must not unlock a direction
-// early.
+// A4 V3 (PROMPT №571): direction/style options filtered to the confirmed
+// methods, same composable and fail-CLOSED posture as CreatePracticeView.
+// Before this, Edit offered the WHOLE active catalogue unfiltered and the
+// master only learned from the backend's raw rejection on save.
 //
 // BE-63: the OTHER manager the backend accepts on PATCH is the school's
 // curator, and for a foreign practice it validates direction/style against
@@ -562,94 +493,33 @@ const priceCents = computed((): number => eurStringToCents(form.price_eur_raw))
 // CALLER's own practice (GET /masters/me/practices) -- for those the
 // profile fallback reads the same set. A curator therefore never reaches
 // this filter without the owner's methods on the practice.
-const confirmedMethods = computed(() => {
-  const methods = practice.value?.master_methods?.length
-    ? practice.value.master_methods
-    : masterStore.profile?.methods
-  if (!methods) return null
-  return parseMethods(methods)
-})
-
-// Direction/style options, catalog-first (T2 stage 2), filtered to the
-// master's own confirmed methods -- mirrors CreatePracticeView's
-// directionOptions/styleOptionsForForm exactly (PROMPT №556/№546). Before
-// this, EditPracticeView offered the WHOLE active catalogue unfiltered,
-// so a master could re-pick (or leave untouched, see populateForm) a
-// direction/style their profile was never confirmed for and only find out
-// from the backend's raw rejection on save -- see the catch block below.
-const directionOptions = computed(() => {
-  if (!masterStore.profileLoaded) return []
-  const confirmed = confirmedMethods.value
-  if (!confirmed) return []
-  const all = catalogDirectionOptions(catalog.value)
-  return all.filter((opt) => confirmed.directions.includes(opt.value))
-})
-const styleOptionsForForm = computed(() => {
-  if (!masterStore.profileLoaded) return []
-  const confirmed = confirmedMethods.value
-  if (!confirmed) return []
-  const all = catalogStylesForDirection(catalog.value, form.direction)
-  const confirmedStyleValues = confirmed.styles[form.direction] ?? []
-  return all.filter((opt) => confirmedStyleValues.includes(opt.value))
-})
-
-/** Reset style when direction changes — the previous value is likely
- *  invalid for the new direction (mirrors CreatePracticeView). */
-function onDirectionChange(): void {
-  form.style = ''
-}
-
-/** Form shape; the baseline and the diff are typed off it. */
-type FormValues = typeof form
-
-/**
- * What the form held right after the last populate from the server. `save`
- * diffs against it, so a PATCH carries only what the master changed and
- * cannot overwrite a field somebody else edited meanwhile with a stale value.
- */
-let baseline: FormValues | null = null
-
-function snapshotForm(): FormValues {
-  return { ...form, audience_group_ids: [...form.audience_group_ids] }
-}
+const { directionOptions, styleOptions, onDirectionChange } = usePracticeTaxonomyOptions(
+  form,
+  () =>
+    practice.value?.master_methods?.length
+      ? practice.value.master_methods
+      : masterStore.profile?.methods,
+)
 
 // -- Populate form from practice --
 function populateForm(p: PracticeResponse): void {
-  form.title = p.title
-  // Taxonomy (data.taxonomy on the backend). Older practices created before
-  // the Calendar iteration may have null facets -> fall back to defaults so
-  // the selects always show a valid option.
-  form.direction = p.direction ?? 'meditation'
-  form.difficulty = p.difficulty ?? 'beginner'
-  form.style = p.style ?? ''
-  // Render the stored UTC instant as wall-clock date + time in the practice's
-  // OWN timezone (the one the master created it in), so the form shows the
-  // same values the master originally entered -- not the editor's browser tz.
-  const scheduledDt = DateTime.fromISO(p.scheduled_at, { zone: 'utc' }).setZone(p.timezone)
-  form.date = scheduledDt.toFormat('yyyy-MM-dd')
-  form.time = scheduledDt.toFormat('HH:mm')
-  form.duration_minutes = String(p.duration_minutes)
-  form.timezone = p.timezone
-  form.max_participants_raw = p.max_participants != null ? String(p.max_participants) : ''
-  form.is_free = p.is_free
-  // W-6: centsToEurString uses integer division + toFixed(2), no float multiplication.
-  form.price_eur_raw = p.is_free ? '' : centsToEurString(p.price_cents)
-  form.description = p.description ?? ''
-  form.what_to_prepare = p.what_to_prepare ?? ''
-  form.contraindications = p.contraindications ?? ''
-  form.audience_kind = p.audience_kind ?? 'public'
+  Object.assign(form, practiceToForm(p), {
+    // Older practices created before the Calendar iteration may have null
+    // facets -> fall back to defaults so the selects always show a valid
+    // option. Difficulty has no field here (set at creation, decision V),
+    // so the fallback is also what keeps the shared validation satisfied.
+    direction: p.direction ?? 'meditation',
+    difficulty: p.difficulty ?? 'beginner',
+  })
   // PracticeResponse carries audience_group_NAMES, not ids (see the field's
   // docstring in api/generated.ts) -- CheckinView composes a message from
   // the names directly and never needed ids, so the backend never added an
-  // id list to this response. Resolving name -> id against customGroups
-  // (loaded in onMounted, below) is safe: create_group() 409s on a
-  // duplicate name for the SAME master (groups_service.py:416-424), so a
-  // name uniquely identifies one of this master's groups. Called again from
-  // onMounted's getGroups().then() below, in case the groups fetch hasn't
-  // resolved yet when populateForm first runs (the cached-practice branch
-  // in onMounted can beat it).
+  // id list to this response. Resolving name -> id against customGroups is
+  // safe: create_group() 409s on a duplicate name for the SAME master
+  // (groups_service.py:416-424), so a name uniquely identifies one of this
+  // master's groups.
   resolveAudienceGroupIds()
-  baseline = snapshotForm()
+  baseline = snapshotPracticeForm(form)
 }
 
 // Resolve form.audience_kind === 'groups' names -> ids once customGroups is
@@ -665,33 +535,6 @@ function resolveAudienceGroupIds(): void {
 
 // -- Load practice --
 onMounted(async () => {
-  // T2 stage 2: prime the taxonomy catalog IN PARALLEL with the practice
-  // fetch below, not sequenced after it -- fire-and-forget so it runs
-  // regardless of which branch (cached vs network) the practice load takes.
-  void ensureTaxonomyCatalog().then((c) => {
-    catalog.value = c
-  })
-
-  // P5 port (PROMPT №606): this master's own custom groups, for the
-  // specific-groups (i18n:practice.audience.groups) multi-select -- same
-  // fire-and-forget-before-the-cached-check
-  // placement as the taxonomy fetch above, so it runs on both branches.
-  // The deleted bucket is a system slug (never a real MasterGroup row) and
-  // the default students group is not target-able either -- getGroups()
-  // already returns both alongside custom ones, so filter here (mirrors
-  // CreatePracticeView). Re-resolves the name->id selection afterward in
-  // case populateForm() already ran against an empty customGroups list.
-  void getGroups()
-    .then((res) => {
-      customGroups.value = res.items.filter((g) => g.kind === 'custom')
-      resolveAudienceGroupIds()
-    })
-    .catch(() => {
-      // Surface the failure instead of an empty group list that reads as
-      // "no groups yet" (and avoid an unhandled rejection).
-      toast.error(t('masterScreens.createPractice.error.loadGroups'))
-    })
-
   // The form is always filled from the server (`getPractice`): the list cache
   // may be stale (another editor, a status change) and a PATCH built from it
   // would write old values back. The cached row is only a placeholder that
@@ -725,48 +568,18 @@ onMounted(async () => {
  */
 function applyFresh(fresh: PracticeResponse): void {
   const before = baseline
-  const edited = before ? snapshotForm() : null
+  const edited = before ? snapshotPracticeForm(form) : null
   practice.value = fresh
   populateForm(fresh)
   if (!before || !edited) return
-  const target = form as Record<string, unknown>
-  const typedBefore = before as Record<string, unknown>
-  const typedEdited = edited as Record<string, unknown>
+  const target = form as unknown as Record<string, unknown>
+  const typedBefore = before as unknown as Record<string, unknown>
+  const typedEdited = edited as unknown as Record<string, unknown>
   for (const key of Object.keys(typedEdited)) {
     if (JSON.stringify(typedEdited[key]) !== JSON.stringify(typedBefore[key])) {
       target[key] = typedEdited[key]
     }
   }
-}
-
-// -- Validate --
-function validate(): boolean {
-  let ok = true
-  errors.title = ''
-  errors.direction = ''
-  errors.max_participants = ''
-  errors.audience_group_ids = ''
-
-  if (!form.title.trim()) {
-    errors.title = t('masterScreens.editPractice.validation.enterTitle')
-    ok = false
-  }
-  if (!form.direction) {
-    errors.direction = t('masterScreens.editPractice.validation.chooseDirection')
-    ok = false
-  }
-  if (form.max_participants_raw) {
-    const n = parseInt(form.max_participants_raw, 10)
-    if (isNaN(n) || n < 1) {
-      errors.max_participants = t('masterScreens.editPractice.validation.positiveNumber')
-      ok = false
-    }
-  }
-  if (form.audience_kind === 'groups' && form.audience_group_ids.length === 0) {
-    errors.audience_group_ids = t('masterScreens.editPractice.validation.chooseGroup')
-    ok = false
-  }
-  return ok
 }
 
 // -- Audience-narrowing warning (owner Q15, PROMPT №613) --
@@ -775,7 +588,7 @@ function validate(): boolean {
 // `practice.value` -- gates the stranded-bookers check below so it only
 // ever runs on an actual audience change, never on an unrelated save (e.g.
 // title-only). Since FE-157 the PATCH carries the audience pair only when
-// it changed (buildPatch), but the check stays keyed on the saved practice.
+// it changed (toPracticePatch), but the check stays keyed on the saved practice.
 function audienceChanged(): boolean {
   if (!practice.value) return false
   const savedKind = practice.value.audience_kind ?? 'public'
@@ -798,7 +611,11 @@ function audienceChanged(): boolean {
 
 // -- Save --
 async function save(): Promise<void> {
-  if (!validate() || saving.value) return
+  if (!validate()) {
+    await revealFirstFieldError()
+    return
+  }
+  if (saving.value) return
 
   if (audienceChanged()) {
     saving.value = true
@@ -850,80 +667,16 @@ async function save(): Promise<void> {
   await commitSave()
 }
 
-/**
- * Build the PATCH body from what the master changed since the last load.
- * Unchanged fields are omitted (the backend applies `exclude_unset`), so a
- * stale form cannot overwrite a concurrent edit of a field it never touched.
- * Two people editing the SAME field still race (last write wins): the
- * backend has no version check yet -- see BE-204.
- * Coupled fields travel together: date/time/timezone, is_free/price, and the
- * audience pair (the backend checks each pair as a whole).
- *
- * @returns the partial body, `null` when nothing changed, or `undefined`
- *   (after a toast) when the date/time cannot be built.
- */
-function buildPatch(): UpdatePracticeRequest | null | undefined {
-  const base = baseline
-  if (!base) return null
-  const body: UpdatePracticeRequest = {}
-  const text = (v: string): string | null => v.trim() || null
-
-  if (form.title !== base.title) body.title = form.title.trim()
-  if (form.direction !== base.direction) body.direction = form.direction
-  if (form.difficulty !== base.difficulty) body.difficulty = form.difficulty
-  if (form.style !== base.style) body.style = text(form.style)
-  if (form.description !== base.description) body.description = text(form.description)
-  if (form.what_to_prepare !== base.what_to_prepare) {
-    body.what_to_prepare = text(form.what_to_prepare)
-  }
-  if (form.contraindications !== base.contraindications) {
-    body.contraindications = text(form.contraindications)
-  }
-
-  if (form.date !== base.date || form.time !== base.time || form.timezone !== base.timezone) {
-    // Wall-clock date + time -> UTC instant in the selected timezone (mirrors
-    // CreatePracticeView). Omitted when a field is empty: never send a bad one.
-    if (form.date && form.time) {
-      const dt = DateTime.fromISO(`${form.date}T${form.time}`, { zone: form.timezone })
-      if (!dt.isValid) {
-        toast.error(t('masterScreens.editPractice.validation.invalidDateTime'))
-        return undefined
-      }
-      const iso = dt.toUTC().toISO()
-      if (iso) body.scheduled_at = iso
-    }
-    if (form.timezone !== base.timezone) body.timezone = form.timezone
-  }
-  if (form.duration_minutes !== base.duration_minutes) {
-    body.duration_minutes = parseInt(form.duration_minutes, 10)
-  }
-  if (form.max_participants_raw !== base.max_participants_raw) {
-    body.max_participants = form.max_participants_raw
-      ? parseInt(form.max_participants_raw, 10)
-      : null
-  }
-  if (form.is_free !== base.is_free || form.price_eur_raw !== base.price_eur_raw) {
-    body.is_free = form.is_free
-    body.price_cents = form.is_free ? 0 : priceCents.value
-  }
-
-  // P5 port (PROMPT №606): group_ids only means something for kind 'groups'.
-  // BE-74: school_id is never sent -- the school is fixed at creation.
-  if (audienceChanged()) {
-    body.audience_kind = form.audience_kind
-    body.group_ids = form.audience_kind === 'groups' ? form.audience_group_ids : []
-  }
-
-  return Object.keys(body).length > 0 ? body : null
-}
-
 async function commitSave(): Promise<void> {
   if (saving.value) return
   saving.value = true
   confirmDialog.loading = true
   try {
-    const body = buildPatch()
-    if (body === undefined) return
+    const body = baseline ? toPracticePatch(form, baseline, audienceChanged()) : null
+    if (body === undefined) {
+      toast.error(invalidScheduleText())
+      return
+    }
     if (body === null) {
       // Nothing differs from the server record: no request, no lost-update risk.
       confirmDialog.visible = false
@@ -933,7 +686,7 @@ async function commitSave(): Promise<void> {
     // The values this PATCH carries; once it succeeds they are what the
     // server holds, so the next Save diffs against them. Taken BEFORE the
     // request: an edit made while it is in flight stays unsaved.
-    const sent = snapshotForm()
+    const sent = snapshotPracticeForm(form)
     const updated = await updatePractice(practiceId, body)
     practice.value = updated
     baseline = sent
@@ -941,18 +694,7 @@ async function commitSave(): Promise<void> {
     toast.success(t('ui.saved'))
     await masterStore.refreshMyPractices()
   } catch (e) {
-    // A4 V3 (PROMPT №571): _assert_master_confirmed_taxonomy's rejection is a
-    // raw, English, API-shaped message (e.detail) -- must never reach a human
-    // directly. Same codes, same translation, same pattern as
-    // CreatePracticeView's submit() catch (PROMPT №556, OWNER-2).
-    // B8 (PROMPT №746): both phrases now live in errorMessages.ts.
-    if (e instanceof ApiResponseError && e.code === 'direction_not_confirmed') {
-      toast.error(errorMessage('direction_not_confirmed'))
-    } else if (e instanceof ApiResponseError && e.code === 'style_not_confirmed') {
-      toast.error(errorMessage('style_not_confirmed'))
-    } else {
-      toast.error(extractApiError(e, t('masterScreens.editPractice.toast.saveFailed')))
-    }
+    toast.error(practiceSaveErrorText(e, t('masterScreens.editPractice.toast.saveFailed')))
   } finally {
     saving.value = false
     confirmDialog.loading = false
@@ -1087,7 +829,8 @@ async function remove(): Promise<void> {
   pointer-events: none;
 }
 
-/* -- Date/time picker trigger field (mirrors the white VInput plate). -- */
+/* -- A labelled field outside the DS inputs: the date/time pickers
+   (PracticeSchedulePicker, which owns the plate) and the audience block. -- */
 .edit-practice__field {
   margin-bottom: var(--space-4);
 }
@@ -1097,51 +840,6 @@ async function remove(): Promise<void> {
   font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   margin-bottom: var(--space-2);
-}
-
-/* -- Audience (P5 port, PROMPT №606): same token recipe as
-   CreatePracticeView's .create-practice__audience-chips/__empty (itself
-   AddToGroupSheet's .add-to-group__chips/__empty recipe). -- */
-.edit-practice__audience-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-}
-
-.edit-practice__audience-empty {
-  font-family: var(--font-body);
-  font-size: var(--velo-fs-16);
-  color: var(--velo-text-muted);
-  margin: var(--space-3) 0 0;
-}
-
-/* T21-1 (PROMPT №541): honest caption for the now-fallback Zoom field. */
-.edit-practice__hint {
-  margin: 0 0 var(--space-2);
-  font-size: var(--velo-fs-14);
-  color: var(--velo-text-secondary);
-  line-height: 1.4;
-}
-
-.edit-practice__picker {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  height: var(--velo-size-40);
-  text-align: left;
-  padding: 0 var(--space-4);
-  font-family: var(--font-body);
-  font-size: var(--velo-fs-18);
-  color: var(--velo-text-primary);
-  background: var(--velo-bg-card-solid);
-  border: 2px solid transparent;
-  border-radius: var(--velo-radius-badge);
-  cursor: pointer;
-}
-
-.edit-practice__picker--empty {
-  color: var(--velo-text-muted);
 }
 
 /* -- Actions section (no "Actions" label/divider — just the buttons; operator

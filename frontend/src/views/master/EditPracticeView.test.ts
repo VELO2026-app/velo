@@ -287,7 +287,7 @@ function confirmDialogConfirm(label: string): HTMLButtonElement | undefined {
 
 /** Drive the REAL teleported DatePickerSheet: open it, tap `day`, save. */
 async function pickDay(day: number): Promise<void> {
-  host?.querySelector<HTMLElement>('.edit-practice__picker')?.click()
+  host?.querySelector<HTMLElement>('.practice-schedule-picker__trigger')?.click()
   await flush()
 
   const cell = Array.from(document.body.querySelectorAll<HTMLButtonElement>('.dps__day')).find(
@@ -514,7 +514,7 @@ describe('EditPracticeView', () => {
       mountCached(practice())
       await flush()
 
-      const pickers = Array.from(host?.querySelectorAll('.edit-practice__picker') ?? [])
+      const pickers = Array.from(host?.querySelectorAll('.practice-schedule-picker__trigger') ?? [])
       expect(pickers[0]?.textContent?.trim()).toBe('22 июля 2026')
       expect(pickers[1]?.textContent?.trim()).toBe('13:00')
     })
@@ -1094,6 +1094,24 @@ describe('EditPracticeView', () => {
       expect(text()).toContain('Введите название')
     })
 
+    it('after a refused Save a fixed field loses its own error at once (FE-157)', async () => {
+      // The shared validation (usePracticeForm) brings create's rule here: a
+      // field the master fixed clears its error without another Save.
+      mountCached(practice())
+      await flush()
+      typeInto(titleField(), '')
+      await flush()
+      button('Сохранить')?.click()
+      await flush()
+      expect(host?.querySelector('.v-input--error')).not.toBeNull()
+
+      typeInto(titleField(), 'Новое имя')
+      await flush()
+
+      expect(host?.querySelector('.v-input--error')).toBeNull()
+      expect(practicesApi.updatePractice).not.toHaveBeenCalled()
+    })
+
     // T-35: "refuses a non-https zoom link" lived here. It guarded the manual
     // Zoom URL field, which no longer exists -- there is nothing left on this
     // form for a master to type a link into, so the https validator went with
@@ -1354,7 +1372,7 @@ describe('EditPracticeView', () => {
 
       await pickDay(25)
 
-      expect(host?.querySelector('.edit-practice__picker')?.textContent?.trim()).toBe(
+      expect(host?.querySelector('.practice-schedule-picker__trigger')?.textContent?.trim()).toBe(
         '25 июля 2026',
       )
 
@@ -1371,7 +1389,7 @@ describe('EditPracticeView', () => {
       mountCached(practice())
       await flush()
 
-      host?.querySelector<HTMLElement>('.edit-practice__picker')?.click()
+      host?.querySelector<HTMLElement>('.practice-schedule-picker__trigger')?.click()
       await flush()
 
       const cells = Array.from(document.body.querySelectorAll<HTMLButtonElement>('.dps__day'))
@@ -1384,6 +1402,39 @@ describe('EditPracticeView', () => {
       // Today itself stays selectable -- `ymd < min` is strict.
       expect(dayCell(20)?.disabled).toBe(false)
       expect(dayCell(21)?.disabled).toBe(false)
+    })
+
+    it('a start moved into the past today is refused with the future-date error (FE-157)', async () => {
+      // The sheet allows today, so the day alone cannot stop it: frozen at
+      // 12:00Z = 15:00 Moscow, the practice's 13:00 on the 20th is two hours
+      // gone. The backend refuses a past scheduled_at with a 422
+      // (UpdatePracticeRequest.scheduled_at_must_be_future); the shared
+      // validation now explains it on the field, as create always did.
+      mountCached(practice())
+      await flush()
+
+      await pickDay(20)
+      button('Сохранить')?.click()
+      await flush()
+
+      expect(practicesApi.updatePractice).not.toHaveBeenCalled()
+      expect(text()).toContain('Дата должна быть в будущем')
+      expect(host?.querySelector('.practice-schedule-picker__trigger--error')).not.toBeNull()
+    })
+
+    it('a practice that has already started stays editable while its start is untouched (FE-157)', async () => {
+      // update_practice refuses only a deleted practice, and the past-start
+      // check runs only when scheduled_at is in the PATCH -- so the future
+      // check must not block a title fix on a running practice.
+      mountCached(practice({ status: 'live', scheduled_at: '2026-07-20T11:30:00Z' }))
+      await flush()
+
+      await editTitle()
+      button('Сохранить')?.click()
+      await flush()
+
+      expect(sentBody()).toEqual({ title: 'Новое имя' })
+      expect(text()).not.toContain('Дата должна быть в будущем')
     })
   })
 
