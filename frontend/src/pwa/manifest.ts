@@ -98,8 +98,8 @@ export function pwaManifestWithPassport(
 // instances of different languages. The build therefore emits one manifest per
 // shipped locale (manifest.<locale>.webmanifest, same skin part: colours,
 // icons, name); the container entrypoint (nginx/40-manifest-locale.sh) copies
-// the one matching DEFAULT_LOCALE over manifest.webmanifest at start. No
-// DEFAULT_LOCALE (or an unknown one) leaves the golden manifest untouched.
+// the one matching DEFAULT_LANGUAGE over manifest.webmanifest at start. No
+// DEFAULT_LANGUAGE (or an unknown one) leaves the golden manifest untouched.
 
 export const MANIFEST_LOCALES = ['ru', 'en', 'uk'] as const
 

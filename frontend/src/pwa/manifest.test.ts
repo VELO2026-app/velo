@@ -215,7 +215,7 @@ describe('instance part: consistency and the start script (FE-155)', () => {
       writeFileSync(join(dir, 'manifest.webmanifest'), 'golden')
       for (const l of ['ru', 'en', 'uk']) writeFileSync(join(dir, `manifest.${l}.webmanifest`), l)
       execFileSync('sh', ['nginx/40-manifest-locale.sh'], {
-        env: { PATH: process.env.PATH ?? '', MANIFEST_HTML_DIR: dir, DEFAULT_LOCALE: locale },
+        env: { PATH: process.env.PATH ?? '', MANIFEST_HTML_DIR: dir, DEFAULT_LANGUAGE: locale },
       })
       return read(join(dir, 'manifest.webmanifest'), 'utf8')
     }

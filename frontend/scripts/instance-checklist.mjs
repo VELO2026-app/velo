@@ -4,7 +4,7 @@
 // The §6.4 acceptance checklist, automated where a machine can see it:
 // manifest identity (name/short_name/lang/description; lang+description are
 // the INSTANCE part -- FE-155: per-locale files in dist, picked at container
-// start by DEFAULT_LOCALE), theme-color (index.html meta == manifest == the skin/
+// start by DEFAULT_LANGUAGE), theme-color (index.html meta == manifest == the skin/
 // golden source), icons (present + declared dimensions), the bot URL (the
 // one the build actually inlined), and the locale set. Every fact carries its
 // SOURCE (skin brand.json / passport env / golden default) -- the §6.4
@@ -109,7 +109,7 @@ export function evaluateChecklist({ facts, expected }) {
     missing.length === 0,
     missing.length === 0 ? shipped.join(', ') : `missing/invalid: ${missing.join(',')}`,
     'manifest.<locale>.webmanifest',
-    'build; picked by DEFAULT_LOCALE at container start',
+    'build; picked by DEFAULT_LANGUAGE at container start',
   )
   add(
     'manifest lang',

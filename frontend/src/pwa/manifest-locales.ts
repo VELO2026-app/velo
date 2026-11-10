@@ -43,7 +43,7 @@ export function perLocaleManifest(frontendDir: string): Plugin {
 
 /** FE-155: the manifest's lang/description are chosen at CONTAINER START,
  *  after the build stamped the precache revision -- a precached copy would go
- *  stale on a DEFAULT_LOCALE change under the same sw.js. vite-plugin-pwa adds
+ *  stale on a DEFAULT_LANGUAGE change under the same sw.js. vite-plugin-pwa adds
  *  the manifest to the precache on its own (workbox manifestTransforms never
  *  sees that entry), so drop it through the plugin's own api; nginx serves the
  *  manifest no-cache. */

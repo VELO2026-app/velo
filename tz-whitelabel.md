@@ -98,7 +98,7 @@ envsubst'ом в nginx при старте (FE-129); на переходный �
 пакета; инстанс-часть (`name`/`short_name` манифеста, `<html lang>`) — при
 старте контейнера (`<html lang>` и `lang`/`description` манифеста — сделано,
 FE-155: сборка кладёт `manifest.<locale>.webmanifest`, скрипт
-`nginx/40-manifest-locale.sh` выбирает файл по `DEFAULT_LOCALE`; манифест вне
+`nginx/40-manifest-locale.sh` выбирает файл по `DEFAULT_LANGUAGE`; манифест вне
 precache SW) (`pwa/manifest.ts`, `index.html` — см. реестр исключений
 §3.1).
 
