@@ -19,13 +19,16 @@ allowBuilds:
   '@zoom/meetingsdk': false
   esbuild: true
   vue-demi: true
-# Pinned past the Dependabot alerts (FE-105; vite 6.4.5 on 2026-11-09 for
-# GHSA-8g5g-mxqh-grgj, server.fs.deny bypass, past the two-week maturity
-# rule). The newer serialize-javascript 7.1.4 (2026-10-23) is still to
-# revisit. The scoped postcss-selector-parser 7.1.6 pin
+# Pinned past the Dependabot alerts (FE-105). The newer serialize-javascript
+# 7.1.4 (2026-10-23) is still to revisit.
+# The vite 6.4.5 override (GHSA-8g5g-mxqh-grgj, server.fs.deny bypassed with
+# queries -- a regression of the 6.4.4 backport only) was dropped with the
+# move to vite 7 (FE-157 5A.5): both members pin vite 7.3.7, which already
+# carries the underlying fixes (GHSA-v2wj-q39q-566r fixed in 7.3.2,
+# GHSA-rq7h-c2jc-7f22 fixed in 7.3.7) and is the only vite in the lockfile
+# (vitest resolves the same copy). The scoped postcss-selector-parser 7.1.6 pin
 # (GHSA-rj75-hqrm-r3gf) was dropped with eslint-plugin-vue 10 (FE-157 5A.5):
 # the plugin itself now declares ^7.1.4 and resolves 7.1.7 (2026-10-20),
 # the same version the stylelint chain uses.
 overrides:
-  vite: 6.4.5
   serialize-javascript: 7.1.3
