@@ -195,6 +195,9 @@ importers:
 
   frontend:
     dependencies:
+      '@pinia/colada':
+        specifier: 1.4.8
+        version: 1.4.8(pinia@2.3.1(typescript@5.7.3)(vue@3.5.42(typescript@5.7.3)))(vue@3.5.42(typescript@5.7.3))
       '@tma.js/sdk-vue':
         specifier: ^1.0.19
         version: 1.0.23(typescript@5.7.3)(vue@3.5.42(typescript@5.7.3))
@@ -1520,6 +1523,12 @@ packages:
     resolution: {integrity: sha512-VPoCAhKvCQTlG7vxqaBXcmuvbh77BfnGXj8g0pbvVXpm1F/R8rDVwqIWcEbMzrI1JvJlm8v7T9uMVQb6UctMRg==}
     cpu: [x64]
     os: [win32]
+
+  '@pinia/colada@1.4.8':
+    resolution: {integrity: sha512-WkfCM0Z2GF2zW0uzaMWfRs5OcIViMMou6zTeZ8gtvaJfdPDsmDWVgx4la+BzWWQuvBiDuH4Bm9R8/T50EpmgBQ==}
+    peerDependencies:
+      pinia: ^2.2.6 || ^3.0.0 || ^4.0.2
+      vue: ^3.5.41
 
   '@pinia/testing@0.1.7':
     resolution: {integrity: sha512-xcDq6Ry/kNhZ5bsUMl7DeoFXwdume1NYzDggCiDUDKoPQ6Mo0eH9VU7bJvBtlurqe6byAntWoX5IhVFqWzRz/Q==}
@@ -3314,6 +3323,9 @@ packages:
   normalize-path@3.0.0:
     resolution: {integrity: sha512-6eZs5Ls3WtCisHWp9S2GUy8dqkpGi4BVSz3GaqiE6ezub0512ESztXUwUB6C6IKbQkY2Pnb/mD4WYojCRwcwLA==}
     engines: {node: '>=0.10.0'}
+
+  nostics@1.3.0:
+    resolution: {integrity: sha512-wzRsrJwNlFbqIRQt8aCeL2WE8USip/uuvGSOZV1D02CxX8ABTMbw8IywKjH7yWHETMXbWJI4OBpihg9rmz2Vyg==}
 
   nth-check@2.1.1:
     resolution: {integrity: sha512-lqjrjmaOoAnWfMmBPL+XNnynZh2+swxiX3WUE0s4yEHI6m+AwrK2UZOimIRl3X/4QctVqS8AiZjFqyOGrMXb/w==}
@@ -5497,6 +5509,12 @@ snapshots:
   '@oxc-resolver/binding-win32-x64-msvc@11.21.2':
     optional: true
 
+  '@pinia/colada@1.4.8(pinia@2.3.1(typescript@5.7.3)(vue@3.5.42(typescript@5.7.3)))(vue@3.5.42(typescript@5.7.3))':
+    dependencies:
+      nostics: 1.3.0
+      pinia: 2.3.1(typescript@5.7.3)(vue@3.5.42(typescript@5.7.3))
+      vue: 3.5.42(typescript@5.7.3)
+
   '@pinia/testing@0.1.7(pinia@2.3.1(typescript@5.7.3)(vue@3.5.42(typescript@5.7.3)))(vue@3.5.42(typescript@5.7.3))':
     dependencies:
       pinia: 2.3.1(typescript@5.7.3)(vue@3.5.42(typescript@5.7.3))
@@ -7433,6 +7451,8 @@ snapshots:
       abbrev: 5.0.0
 
   normalize-path@3.0.0: {}
+
+  nostics@1.3.0: {}
 
   nth-check@2.1.1:
     dependencies:

@@ -2,13 +2,11 @@
 // VELO Frontend -- stores/bookings.ts Unit Tests (T1 stage 2 -- harness + stores)
 // =============================================================================
 //
-// Covers the money-adjacent actions: cancelBooking (backend refund by
-// deadline, plus its diary.refreshFeed() side effect), joinBooking,
-// skipCheckin. Mocked at the wrapper layer (@/api/bookings) --
-// the store imports named functions directly, so this is the correct seam
-// (no MSW needed). @/stores/diary is mocked wholesale since cancelBooking
-// pulls in useDiaryStore() lazily as a side effect, not a dependency under
-// test here.
+// Covers the money-adjacent actions joinBooking and skipCheckin, the
+// upcoming list and its invalidation. Cancelling moved to a Pinia Colada
+// mutation (FE-157 4F): composables/queries/bookings.test.ts covers it.
+// Mocked at the wrapper layer (@/api/bookings) -- the store imports named
+// functions directly, so this is the correct seam (no MSW needed).
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -20,11 +18,6 @@ import type { BookingResponse } from '@/api/types'
 
 vi.mock('@/api/bookings')
 
-const refreshFeed = vi.fn()
-vi.mock('@/stores/diary', () => ({
-  useDiaryStore: () => ({ refreshFeed }),
-}))
-
 function emptyPage() {
   return { items: [], total: 0, limit: 20, offset: 0 }
 }
@@ -33,10 +26,8 @@ describe('useBookingsStore', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.mocked(bookingsApi.getMyBookings).mockReset().mockResolvedValue(emptyPage())
-    vi.mocked(bookingsApi.cancelBooking).mockReset()
     vi.mocked(bookingsApi.joinBooking).mockReset()
     vi.mocked(bookingsApi.skipCheckin).mockReset()
-    refreshFeed.mockReset()
   })
 
   describe('fetchUpcoming', () => {
@@ -125,41 +116,56 @@ describe('useBookingsStore', () => {
     })
   })
 
-  describe('cancelBooking', () => {
-    it('on success: calls the API, refreshes the list, and fires diary.refreshFeed', async () => {
-      vi.mocked(bookingsApi.cancelBooking).mockResolvedValue(undefined)
-      const store = useBookingsStore()
+  describe('invalidateUpcoming (a booking changed, FE-157 4F)', () => {
+    type Upcoming = Awaited<ReturnType<typeof bookingsApi.getUpcomingBookings>>
+    const before = [{ id: 'b1' }, { id: 'b2' }] as unknown as Upcoming
+    const after = [{ id: 'b2' }] as unknown as Upcoming
 
-      const result = await store.cancelBooking('booking_1')
-
-      expect(result).toEqual({ ok: true, error: '' })
-      expect(bookingsApi.cancelBooking).toHaveBeenCalledWith('booking_1')
-      expect(bookingsApi.getMyBookings).toHaveBeenCalled()
-      expect(refreshFeed).toHaveBeenCalledTimes(1)
+    beforeEach(() => {
+      vi.mocked(bookingsApi.getUpcomingBookings).mockReset()
     })
 
-    it('on failure: falls back to the generic message (unmapped code) and does NOT fire diary.refreshFeed', async () => {
-      // B8 (PROMPT №747): 'cancel_window_closed' is not a real backend code
-      // and extractApiError no longer reads e.detail -- an unmapped code
-      // lands on the call site's own fallback (bookings.ts:185).
-      vi.mocked(bookingsApi.cancelBooking).mockRejectedValue(
-        new ApiResponseError(400, 'Too close to start time', 'cancel_window_closed'),
-      )
+    it('a known list reloads at once, and the freshness skip goes with it', async () => {
       const store = useBookingsStore()
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValueOnce(before)
+      await store.fetchUpcoming()
 
-      const result = await store.cancelBooking('booking_1')
+      vi.mocked(bookingsApi.getUpcomingBookings).mockClear().mockResolvedValue(after)
+      store.invalidateUpcoming()
+      await vi.waitFor(() => expect(store.upcoming).toEqual(after))
+      expect(bookingsApi.getUpcomingBookings).toHaveBeenCalledTimes(1)
 
-      expect(result).toEqual({ ok: false, error: 'Не удалось отменить бронирование' })
-      expect(refreshFeed).not.toHaveBeenCalled()
+      // The dashboard's mount inside the freshness window asks again only
+      // because the reload above answered -- not because the skip survived.
+      await store.fetchUpcoming({ maxAgeMs: 10_000 })
+      expect(bookingsApi.getUpcomingBookings).toHaveBeenCalledTimes(1)
     })
 
-    it('on failure with a non-ApiResponseError: falls back to the generic message', async () => {
-      vi.mocked(bookingsApi.cancelBooking).mockRejectedValue(new Error('boom'))
+    it('an answer in flight from before the change is dropped', async () => {
+      let resolveOld!: (value: Upcoming) => void
+      vi.mocked(bookingsApi.getUpcomingBookings)
+        .mockReturnValueOnce(
+          new Promise<Upcoming>((resolve) => {
+            resolveOld = resolve
+          }),
+        )
+        .mockResolvedValueOnce(after)
       const store = useBookingsStore()
+      const old = store.fetchUpcoming()
 
-      const result = await store.cancelBooking('booking_1')
+      store.invalidateUpcoming()
+      await vi.waitFor(() => expect(store.upcoming).toEqual(after))
+      resolveOld(before)
+      await old
 
-      expect(result).toEqual({ ok: false, error: 'Не удалось отменить бронирование' })
+      expect(store.upcoming).toEqual(after)
+      expect(store.upcomingLoading).toBe(false)
+    })
+
+    it('a list never loaded is left for its first reader', () => {
+      const store = useBookingsStore()
+      store.invalidateUpcoming()
+      expect(bookingsApi.getUpcomingBookings).not.toHaveBeenCalled()
     })
   })
 

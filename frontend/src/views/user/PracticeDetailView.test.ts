@@ -37,6 +37,7 @@ import { createApp, nextTick, shallowReactive, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import PracticeDetailView from '@/views/user/PracticeDetailView.vue'
 import type { BookingWithPracticeResponse, SchoolMineItem, PracticeResponse } from '@/api/types'
+import { ApiResponseError } from '@/api/client'
 
 const push = vi.fn()
 const back = vi.fn()
@@ -91,7 +92,6 @@ const bookingsState = shallowReactive<{ bookings: BookingWithPracticeResponse[] 
 const fetchMyBookings = vi.fn()
 const refreshBookings = vi.fn()
 const refreshMyBookings = vi.fn()
-const cancelBooking = vi.fn()
 vi.mock('@/stores/bookings', () => ({
   useBookingsStore: () => ({
     get bookings() {
@@ -100,8 +100,16 @@ vi.mock('@/stores/bookings', () => ({
     fetchMyBookings,
     refreshBookings,
     refreshMyBookings,
-    cancelBooking,
   }),
+}))
+
+// -- the cancel mutation (dependency, FE-157 4F): what it refreshes is
+//    composables/queries/bookings.test.ts's business; this screen owns the
+//    call, the double-tap guard and the toasts. `cancelBooking` stands for
+//    mutateAsync: it resolves on success and rejects with the API error. --
+const cancelBooking = vi.fn()
+vi.mock('@/composables/queries/bookings', () => ({
+  useCancelBooking: () => ({ mutateAsync: cancelBooking }),
 }))
 
 // -- auth store (dependency): user.id drives isMaster; role gates the manage
@@ -297,7 +305,7 @@ beforeEach(() => {
   fetchMyBookings.mockReset()
   refreshBookings.mockReset()
   refreshMyBookings.mockReset()
-  cancelBooking.mockReset().mockResolvedValue({ ok: true })
+  cancelBooking.mockReset().mockResolvedValue(undefined)
   push.mockReset()
   back.mockReset()
   toastError.mockReset()
@@ -715,7 +723,7 @@ describe('PracticeDetailView', () => {
       expect(button('Отменить бронирование')).toBeUndefined()
     })
 
-    it('cancels through the store and reports success', async () => {
+    it('cancels through the cancel mutation and reports success', async () => {
       bookingsState.bookings = [booking({ id: 'b7', status: 'confirmed' })]
       mount()
       await flush()
@@ -723,15 +731,18 @@ describe('PracticeDetailView', () => {
       button('Отменить бронирование')?.click()
       await flush()
 
-      expect(cancelBooking).toHaveBeenCalledWith('b7')
+      expect(cancelBooking).toHaveBeenCalledWith({ bookingId: 'b7', practiceId: 'p1' })
       expect(toastSuccess).toHaveBeenCalledWith('Бронирование отменено')
     })
 
-    it("surfaces the store's REAL error and does NOT claim success", async () => {
-      // W-25: the store returns { ok, error } and raises no toast itself
-      // (PracticeDetailView.vue:~318-325). Swallowing this would tell a user
+    it("surfaces the server's REAL error and does NOT claim success", async () => {
+      // The mutation rejects with the API error and raises no toast itself;
+      // the screen maps the code to its catalog phrase
+      // (i18n:errors.practice_completed). Swallowing this would tell a user
       // their money-back cancel worked when it did not.
-      cancelBooking.mockResolvedValue({ ok: false, error: 'Отмена невозможна менее чем за час' })
+      cancelBooking.mockRejectedValue(
+        new ApiResponseError(400, 'practice completed', 'practice_completed'),
+      )
       bookingsState.bookings = [booking({ status: 'confirmed' })]
       mount()
       await flush()
@@ -739,12 +750,14 @@ describe('PracticeDetailView', () => {
       button('Отменить бронирование')?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Отмена невозможна менее чем за час')
+      expect(toastError).toHaveBeenCalledWith(
+        'Эта практика уже завершена — отменить бронирование нельзя',
+      )
       expect(toastSuccess).not.toHaveBeenCalled()
     })
 
     it('does NOT double-cancel when the button is hit twice in flight', async () => {
-      let resolve!: (v: { ok: boolean }) => void
+      let resolve!: (v: undefined) => void
       cancelBooking.mockReturnValue(
         new Promise((r) => {
           resolve = r
@@ -761,7 +774,7 @@ describe('PracticeDetailView', () => {
 
       expect(cancelBooking).toHaveBeenCalledTimes(1)
 
-      resolve({ ok: true })
+      resolve(undefined)
       await flush()
     })
   })

@@ -5,9 +5,9 @@
 // Pinia store for the current user's bookings. Uses usePagination
 // composable for load-more pattern (same as practices store).
 //
-// F5 review fix:
-//   W-25: cancelBooking returns { ok, error } instead of boolean,
-//         so caller gets specific error message for toast.
+// Cancelling a booking is a Pinia Colada mutation since FE-157 4F
+// (composables/queries/bookings.ts, useCancelBooking): it refreshes this
+// store's list and calls invalidateUpcoming() below.
 // =============================================================================
 
 import { defineStore } from 'pinia'
@@ -17,7 +17,6 @@ import {
   getMyBookings,
   getUpcomingBookings,
   getBooking,
-  cancelBooking as apiCancelBooking,
   joinBooking as apiJoinBooking,
   skipCheckin as apiSkipCheckin,
 } from '@/api/bookings'
@@ -28,24 +27,9 @@ import i18n from '@/locales'
 const { t } = i18n.global
 import { extractApiError } from '@/composables/useApiError'
 import { readPersisted, writePersisted } from '@/composables/persistedCache'
-// One-way dependency: bookings -> diary. Used only inside actions, never at
-// module scope or in the store's setup body -- keep it that way.
-//
-// W27 (PROMPT №438): this comment used to read «mirrors diary.ts using
-// useBookingsStore(); avoids a top-level circular evaluation» -- true when
-// written, false now. diary.ts no longer imports this store (its
-// refreshBookings() call was redundant; the views already do it), so there is no
-// cycle left to avoid and nothing to mirror.
-import { useDiaryStore } from '@/stores/diary'
 import type { BookingWithPracticeResponse, BookingDetailResponse, BookingStatus } from '@/api/types'
 
-/** Result of a booking cancel: ok plus a user-facing error string. */
-export interface CancelResult {
-  ok: boolean
-  error: string
-}
-
-/** Result of join/skip-checkin actions (same shape as CancelResult). */
+/** Result of join/skip-checkin actions: ok plus a user-facing error string. */
 export interface ActionResult {
   ok: boolean
   error: string
@@ -58,7 +42,7 @@ export interface ActionResult {
 /** persistedCache slot of the dashboard's upcoming bookings. */
 const UPCOMING_PERSIST = 'bookings.upcoming'
 
-/** The user's bookings: paginated list, the dashboard's upcoming slice, join/leave/cancel actions. */
+/** The user's bookings: paginated list, the dashboard's upcoming slice, join and skip-checkin actions. */
 export const useBookingsStore = defineStore('bookings', () => {
   // -- Status filter --
   const statusFilter = ref<BookingStatus | undefined>(undefined)
@@ -82,8 +66,9 @@ export const useBookingsStore = defineStore('bookings', () => {
   let upcomingInFlight: Promise<void> | null = null
   /** When the list was last answered by the server (0 = never / restored). */
   let upcomingAt = 0
-  /** Bumped by $reset: an in-flight answer belongs to the previous account
-   * and is dropped when it lands (usePagination's requestId, W17). */
+  /** Bumped by $reset and invalidateUpcoming: an in-flight answer belongs to
+   * the previous account, or predates a change, and is dropped when it lands
+   * (usePagination's requestId, W17). */
   let upcomingGeneration = 0
   const upcomingError = ref('')
 
@@ -196,25 +181,20 @@ export const useBookingsStore = defineStore('bookings', () => {
   }
 
   /**
-   * Cancel a booking by ID, then refresh the list.
+   * A booking of this user changed on the server (cancelled -- see
+   * useCancelBooking): the upcoming list no longer holds.
    *
-   * @returns W-25: `{ ok, error }` with specific error message instead of
-   *   silent boolean. Caller shows toast with error detail.
+   * @remarks An answer still in flight predates the change and is dropped; a
+   * list already known (on the dashboard, or restored from the last session)
+   * reloads now, so a return to the dashboard does not show the cancelled
+   * booking. A list never loaded is left for its first reader.
    */
-  async function cancelBooking(bookingId: string): Promise<CancelResult> {
-    try {
-      await apiCancelBooking(bookingId)
-      // Refresh bookings list to reflect new status.
-      await pagination.refreshInPlace()
-      // A cancellation projects a "booking_cancelled_by_user" event onto the
-      // diary timeline; refresh the feed (best-effort) so it shows up without
-      // an app reload.
-      void useDiaryStore().refreshFeed()
-      return { ok: true, error: '' }
-    } catch (e) {
-      const message = extractApiError(e, t('storeErrors.bookings.cancel'))
-      return { ok: false, error: message }
-    }
+  function invalidateUpcoming(): void {
+    upcomingAt = 0
+    if (!upcomingLoaded.value && upcomingInFlight === null) return
+    upcomingGeneration += 1
+    upcomingInFlight = null
+    void fetchUpcoming()
   }
 
   /**
@@ -301,6 +281,7 @@ export const useBookingsStore = defineStore('bookings', () => {
     upcomingLoaded,
     upcomingError,
     fetchUpcoming,
+    invalidateUpcoming,
     $reset,
 
     // Single booking detail (screen 18)
@@ -314,7 +295,6 @@ export const useBookingsStore = defineStore('bookings', () => {
     setStatusFilter,
 
     // Actions
-    cancelBooking,
     joinBooking,
     skipCheckin,
 
