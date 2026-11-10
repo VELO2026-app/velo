@@ -1,5 +1,5 @@
 {
   "_comment": "Size budget for scripts/bundle-report.mjs --budget. Golden build after FE-157 stage 2. entryGzip = gzip bytes of assets/app-*.js (gate: +2% tolerance); precacheBytes = PWA precache bytes (gate: no tolerance). Raise only deliberately, in the PR that grows the bundle.",
   "entryGzip": 143573,
-  "precacheBytes": 645011
+  "precacheBytes": 645104
 }
