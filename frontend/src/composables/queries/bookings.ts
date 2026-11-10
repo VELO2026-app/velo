@@ -16,6 +16,7 @@
 import { useMutation, useQueryCache } from '@pinia/colada'
 import { cancelBooking } from '@/api/bookings'
 import { invalidateAfter } from '@/composables/queries/invalidation'
+import { useQueryScopeStore } from '@/composables/queries/setup'
 import { queryCache as legacyQueryCache } from '@/composables/useQuery'
 import { queryKeys as legacyKeys } from '@/composables/queryKeys'
 import { useBookingsStore } from '@/stores/bookings'
@@ -47,6 +48,7 @@ export interface CancelBookingVars {
  */
 export function useCancelBooking() {
   const queryCache = useQueryCache()
+  const scope = useQueryScopeStore()
   const bookings = useBookingsStore()
   const practices = usePracticesStore()
   const calendar = useCalendarStore()
@@ -68,8 +70,14 @@ export function useCancelBooking() {
   }
 
   return useMutation({
+    // The session the cancel was started in (queries/setup.ts, useQueryScopeStore).
+    onMutate: () => ({ sessionGeneration: scope.generation() }),
     mutation: ({ bookingId }: CancelBookingVars) => cancelBooking(bookingId),
-    async onSuccess(_data, { practiceId }) {
+    async onSuccess(_data, { practiceId }, { sessionGeneration }) {
+      // The session ended while the DELETE was in flight (logout, a 401):
+      // the stores and caches are already reset, and a refresh now would
+      // load the next session's data on this session's behalf.
+      if (sessionGeneration !== scope.generation()) return
       refreshLegacyHolders(practiceId)
       void invalidateAfter(queryCache, 'cancelBooking')
       await bookings.refreshMyBookings()

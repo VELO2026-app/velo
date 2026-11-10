@@ -19,7 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp, defineComponent, h, nextTick, type App } from 'vue'
 import { createPinia } from 'pinia'
 import { PiniaColada, useQuery, useQueryCache, type QueryCache } from '@pinia/colada'
-import { coladaOptions } from '@/composables/queries/setup'
+import { coladaOptions, useQueryScopeStore } from '@/composables/queries/setup'
 import { keys } from '@/composables/queries/keys'
 import { schoolFeedQuery } from '@/composables/queries/schools'
 import { useCancelBooking, type CancelBookingVars } from '@/composables/queries/bookings'
@@ -162,6 +162,32 @@ describe('useCancelBooking -- success', () => {
     expect(stores.calendar.loadWeek).not.toHaveBeenCalled()
     // The cached detail still goes stale: the next open refetches it.
     expect(legacyQueryCache.isFresh(legacyKeys.practice('p1'), 60_000)).toBe(false)
+  })
+})
+
+describe('useCancelBooking -- the session ends while the DELETE is in flight', () => {
+  it('refreshes nothing on the reset stores, and still resolves', async () => {
+    let answer!: () => void
+    vi.mocked(bookingsApi.cancelBooking).mockReturnValue(
+      new Promise<undefined>((resolve) => {
+        answer = () => resolve(undefined)
+      }),
+    )
+    const done = cancel(VARS)
+    await flush()
+
+    // Logout / 401: resetAccountScope calls every member's $reset.
+    useQueryScopeStore(app!.config.globalProperties.$pinia).$reset()
+    answer()
+    await done
+    await flush()
+
+    expect(stores.bookings.refreshMyBookings).not.toHaveBeenCalled()
+    expect(stores.bookings.invalidateUpcoming).not.toHaveBeenCalled()
+    expect(stores.practices.fetchPractice).not.toHaveBeenCalled()
+    expect(stores.calendar.loadWeek).not.toHaveBeenCalled()
+    expect(stores.diary.refreshFeed).not.toHaveBeenCalled()
+    expect(legacyQueryCache.isFresh(legacyKeys.practice('p1'), 60_000)).toBe(true)
   })
 })
 
