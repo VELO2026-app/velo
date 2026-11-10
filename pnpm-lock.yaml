@@ -177,6 +177,9 @@ importers:
       husky:
         specifier: ^9.1.7
         version: 9.1.7
+      lint-staged:
+        specifier: ^17.2.0
+        version: 17.5.1
       prettier:
         specifier: ^3.5.0
         version: 3.9.6
@@ -271,9 +274,6 @@ importers:
       happy-dom:
         specifier: ^21.0.4
         version: 21.0.4
-      lint-staged:
-        specifier: ^17.2.0
-        version: 17.5.1
       postcss-html:
         specifier: ^2.0.0
         version: 2.0.0(postcss@8.5.28)

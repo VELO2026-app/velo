@@ -24,10 +24,6 @@
     "tokens:sync": "node scripts/sync-figma-variables.mjs --rest",
     "test:coverage": "vitest run --coverage"
   },
-  "lint-staged": {
-    "*.{js,ts,vue}": "prettier --write",
-    "{frontend,packages}/**/*.{js,ts,vue}": "prettier --write"
-  },
   "dependencies": {
     "@tma.js/sdk-vue": "^1.0.19",
     "@velo/ui": "workspace:*",
@@ -57,7 +53,6 @@
     "eslint-plugin-vue": "^9.32.0",
     "globals": "^15.15.0",
     "happy-dom": "^21.0.4",
-    "lint-staged": "^17.2.0",
     "postcss-html": "^2.0.0",
     "prettier": "^3.5.0",
     "stylelint": "^17.16.0",
