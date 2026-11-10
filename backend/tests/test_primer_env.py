@@ -16,6 +16,8 @@ required key cannot be added to Settings and forgotten in CI again.
 
 BE-193: one more statement holds the storage stack's root login as a
 constant of docker-compose.storage.yml, not a value of primer.yaml's env.
+BE-194 part 2: one more holds the frontend's instance values -- the
+languages and the flag of every option -- against primer.yaml.
 
 The files are read from the repository root -- in the test image they are
 at /, where Path(__file__).resolve().parents[2] lands from /app/tests
@@ -151,6 +153,28 @@ def test_the_instance_languages_come_from_the_passport() -> None:
     passed = _app_environment()
     assert passed["LANGUAGES"] == "${LANGUAGES:?}"
     assert passed["DEFAULT_LANGUAGE"] == "${DEFAULT_LANGUAGE:?}"
+
+
+def test_the_frontend_gets_the_languages_and_every_option() -> None:
+    """BE-194 part 2. The frontend takes its instance values at the start of
+    the container, not at the build (protocol 5.2.2, 5.2.3): LANGUAGES,
+    DEFAULT_LANGUAGE and the flag OPTION_<O> of every option the product
+    declares. The flags are derived from primer.yaml's `options`, so a new
+    option cannot reach the backend and be forgotten here. Each is passed as
+    exactly ${K:?} and is the passport key of primer.yaml's env."""
+    primer = yaml.safe_load(PRIMER.read_text(encoding="utf-8"))
+    options = primer["options"]
+    assert isinstance(options, list) and options, "primer.yaml declares options"
+    compose = yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))
+    passed = compose["services"]["frontend"]["environment"]
+    assert isinstance(passed, dict) and passed, "frontend.environment: not empty"
+    wanted = {"LANGUAGES": "languages", "DEFAULT_LANGUAGE": "default_language"}
+    wanted |= {f"OPTION_{option.upper()}": f"options.{option}" for option in options}
+    for key, passport_key in wanted.items():
+        value = passed.get(key)
+        assert value == f"${{{key}:?}}", f"frontend: {key} is {value!r}"
+        source = primer["env"].get(key)
+        assert source == {"source": "passport", "key": passport_key}, (key, source)
 
 
 # -- backend/ci.env: the one settings environment of CI (BE-190 fix) ----------

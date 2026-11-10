@@ -81,11 +81,25 @@ services:
     build:
       context: ./frontend
       target: runtime
-    # Read by the SPA at the start of the container, not at the build
-    # (contract 3 rule 19): one image for every instance of a commit.
+    # Instance values at the start of the container, not at the build
+    # (contract 3 rule 19): one image for every instance of a commit. The
+    # readers live on the branch `test` and come here with its merge:
+    # API_BASE_URL, TELEGRAM_BOT_URL, LANGUAGES, DEFAULT_LANGUAGE ->
+    # /config.json (FE-129); DEFAULT_LANGUAGE also -> the manifest (FE-155).
+    # The option flags OPTION_<O> have no reader yet: FE-151 adds them to
+    # /config.json. Every option of primer.yaml reaches this service
+    # (backend/tests/test_primer_env.py).
     environment:
       API_BASE_URL: ${API_BASE_URL:?}
       TELEGRAM_BOT_URL: ${TELEGRAM_BOT_URL:?}
+      LANGUAGES: ${LANGUAGES:?}
+      DEFAULT_LANGUAGE: ${DEFAULT_LANGUAGE:?}
+      OPTION_PAYMENTS: ${OPTION_PAYMENTS:?}
+      OPTION_SCHOOLS: ${OPTION_SCHOOLS:?}
+      OPTION_MCP: ${OPTION_MCP:?}
+      OPTION_ZOOM: ${OPTION_ZOOM:?}
+      OPTION_TELEGRAM: ${OPTION_TELEGRAM:?}
+      OPTION_LLM: ${OPTION_LLM:?}
     depends_on:
       app: { condition: service_healthy }
     healthcheck:
