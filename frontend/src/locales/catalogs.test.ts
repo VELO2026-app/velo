@@ -41,7 +41,7 @@ function withoutCompiler<T>(run: () => T): T {
 
 afterEach(() => {
   localStorage.clear()
-  vi.doUnmock('@/platform/skin-brand.generated')
+  vi.doUnmock('virtual:skin-brand')
 })
 
 describe('catalog split', () => {
@@ -126,7 +126,7 @@ describe('brand (a message function)', () => {
   })
 
   it('renders a skin brand verbatim, message syntax and all', async () => {
-    vi.doMock('@/platform/skin-brand.generated', () => ({ SKIN_BRAND: 'Yoga | {Life} @home' }))
+    vi.doMock('virtual:skin-brand', () => ({ SKIN_BRAND: 'Yoga | {Life} @home' }))
     const mod = await fresh()
     expect(mod.t('common.brandName')).toBe('Yoga | {Life} @home')
     expect(mod.t('chat.supportTitle')).toContain('Yoga | {Life} @home')

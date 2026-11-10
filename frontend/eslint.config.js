@@ -322,9 +322,8 @@ export default [
 
   {
     // --- Generated code: not held to the comment standard. ----------------
-    // src/api/generated.ts (the OpenAPI client) and
-    // src/platform/skin-brand.generated.ts are build output of generators
-    // that live in backend/** and carry "DO NOT EDIT" headers. Their
+    // src/api/generated.ts (the OpenAPI client) is build output of a
+    // generator that lives in backend/** and carries a "DO NOT EDIT" header. Its
     // docstrings keep `->`, {placeholders} and @-aliases verbatim (~182
     // TSDoc grammar findings in generated.ts alone): hand-escaping is
     // futile -- the next regen wipes it -- and fixing the generator is a

@@ -39,7 +39,7 @@ import { createI18n, type MessageFunction } from 'vue-i18n'
 import { toMessageFunctions } from '@/locales/messageFunction'
 import { setRootLang } from '@/platform/dom'
 import { INSTANCE, isSupportedLocale, SUPPORTED_LOCALES, type Locale } from '@/platform/instance'
-import { SKIN_BRAND } from '@/platform/skin-brand.generated'
+import { SKIN_BRAND } from 'virtual:skin-brand'
 
 /** Catalog files that load with their zone's routes, not with the locale. */
 export const ZONE_CATALOGS = ['master', 'admin'] as const
