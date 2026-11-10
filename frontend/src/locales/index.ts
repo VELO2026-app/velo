@@ -24,13 +24,19 @@
 //   - timezones.json is DATA, not messages: utils/timezoneCities.ts reads it
 //     with ?raw on the timezone screen; no t() key points into it.
 //
+// The bundle has no message compiler (vite.config.ts, dropMessageCompiler):
+// the catalogs arrive precompiled, and every message created at runtime
+// (the brand, instance overlays) is a message FUNCTION -- a plain string
+// would render as raw text, placeholders included.
+//
 // utils/ may import this module for getLocale()/the composer: it is a plain
 // module, no Vue component context required (tz-i18n 0.3).
 // =============================================================================
 
 import { toRaw } from 'vue'
-import { createI18n } from 'vue-i18n'
+import { createI18n, type MessageFunction } from 'vue-i18n'
 
+import { toMessageFunctions } from '@/locales/messageFunction'
 import { setRootLang } from '@/platform/dom'
 import { INSTANCE, isSupportedLocale, SUPPORTED_LOCALES, type Locale } from '@/platform/instance'
 import { SKIN_BRAND } from '@/platform/skin-brand.generated'
@@ -108,8 +114,11 @@ const i18n = createI18n({
 // reference it as the linked key @:brand, so every locale that gets messages
 // gets the brand with them (mergeRuntimeMessages). The brand word of THIS
 // build: a skin's displayName wins (tz-whitelabel §1 priority, skin > env);
-// no skin -> the VITE_BRAND passport value.
-const BRAND_MESSAGE = { brand: SKIN_BRAND ?? INSTANCE.brand } as const
+// no skin -> the VITE_BRAND passport value. A message function, not a
+// string: there is no compiler at runtime, and the brand is raw text that
+// must never be read as message syntax ('@', '|' or braces in a name).
+const BRAND_TEXT = SKIN_BRAND ?? INSTANCE.brand
+const BRAND_MESSAGE = { brand: (() => BRAND_TEXT) as MessageFunction }
 
 // Instance overlays (applyInstanceOverrides), per locale, in the order they
 // came. Kept so they can be merged again on top of every catalog load: a
@@ -165,7 +174,9 @@ export function getLocale(): string {
  * terminology without forking the base catalogs.
  *
  * @remarks
- * An overlay wins over the base catalogs for good: it is
+ * Overlay strings use the catalog syntax and become message functions
+ * (locales/messageFunction.ts) -- the bundle has no compiler to turn them
+ * into messages. An overlay wins over the base catalogs for good: it is
  * merged again after every later catalog load of its locale (a locale
  * switch, a zone entry). A locale whose catalogs are not loaded yet gets
  * its overlay with them.
@@ -173,7 +184,7 @@ export function getLocale(): string {
 export function applyInstanceOverrides(overrides: Partial<Record<string, Messages>>): void {
   for (const [locale, messages] of Object.entries(overrides)) {
     if (!messages) continue
-    const overlay = messages
+    const overlay = toMessageFunctions(messages)
     instanceOverlays.set(locale, [...(instanceOverlays.get(locale) ?? []), overlay])
     if (appliedParts.get(locale)?.has('core')) i18n.global.mergeLocaleMessage(locale, overlay)
   }

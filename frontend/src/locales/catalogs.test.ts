@@ -1,11 +1,15 @@
 // FE-157: what the i18n singleton holds when. The ru core is eager; the
 // zone catalogs (ZONE_CATALOGS) arrive only through ensureCatalogs; the
 // timezones seed is never a message catalog; the brand and instance
-// overlays survive every later load.
+// overlays are message functions that survive every later load -- also
+// with the message compiler dropped, as in the production bundle.
 //
 // test-setup.ts preloads every zone catalog into the shared singleton, so
 // each test here works on a FRESH module instance (vi.resetModules).
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { compileMessage } from '@/locales/messageFunction'
+
 type LocalesModule = typeof import('@/locales')
 type Tree = Record<string, unknown>
 
@@ -19,8 +23,25 @@ const rootsOf = (file: string): string[] => Object.keys(ruFiles[`./ru/${file}.js
 const heldRoots = (mod: LocalesModule, locale: string): string[] =>
   Object.keys(mod.default.global.getLocaleMessage(locale))
 
+// The production bundle has no message compiler (vite.config.ts,
+// dropMessageCompiler); the unit suite does. core-base reads this global at
+// every compile, so flipping it makes the suite's composer behave like the
+// bundle's: a string message then renders as raw text.
+type DropFlag = { __INTLIFY_DROP_MESSAGE_COMPILER__?: boolean }
+function withoutCompiler<T>(run: () => T): T {
+  const flag = globalThis as DropFlag
+  const before = flag.__INTLIFY_DROP_MESSAGE_COMPILER__
+  flag.__INTLIFY_DROP_MESSAGE_COMPILER__ = true
+  try {
+    return run()
+  } finally {
+    flag.__INTLIFY_DROP_MESSAGE_COMPILER__ = before
+  }
+}
+
 afterEach(() => {
   localStorage.clear()
+  vi.doUnmock('@/platform/skin-brand.generated')
 })
 
 describe('catalog split', () => {
@@ -86,9 +107,39 @@ describe('brand (a message function)', () => {
     expect(mod.t('chat.supportTitle')).toContain('VELO')
     expect(mod.t('masterScreens.masterOnboarding.welcome.text')).toContain('VELO')
   })
+
+  it.each(['ru', 'en', 'uk'])('renders in %s without a compiler', async (locale) => {
+    const mod = await fresh()
+    await mod.setLocale(locale)
+    // The suite's catalogs are strings (no build step); a message function
+    // stands in for a precompiled catalog message that links the brand.
+    mod.default.global.mergeLocaleMessage(locale, { probe: compileMessage('Support @:brand') })
+    withoutCompiler(() => {
+      expect(mod.t('brand')).toBe('VELO')
+      expect(mod.t('probe')).toBe('Support VELO')
+    })
+  })
+
+  it('renders a skin brand verbatim, message syntax and all', async () => {
+    vi.doMock('@/platform/skin-brand.generated', () => ({ SKIN_BRAND: 'Yoga | {Life} @home' }))
+    const mod = await fresh()
+    expect(mod.t('common.brandName')).toBe('Yoga | {Life} @home')
+    expect(mod.t('chat.supportTitle')).toContain('Yoga | {Life} @home')
+  })
 })
 
 describe('instance overlays (applyInstanceOverrides)', () => {
+  it('render with placeholders and plurals without a compiler', async () => {
+    const mod = await fresh()
+    mod.applyInstanceOverrides({ ru: { common: { skip: 'Later, {name}' } } })
+    withoutCompiler(() => {
+      expect(mod.t('common.skip', { name: 'Olga' })).toBe('Later, Olga')
+      // The contrast: a raw string message stays raw without a compiler.
+      mod.default.global.mergeLocaleMessage('ru', { common: { skip: 'Later, {name}' } })
+      expect(mod.t('common.skip', { name: 'Olga' })).toBe('Later, {name}')
+    })
+  })
+
   it('survive a later zone load of the same locale', async () => {
     const mod = await fresh()
     const key = 'masterScreens.analytics.morePractices'
@@ -100,8 +151,10 @@ describe('instance overlays (applyInstanceOverrides)', () => {
       },
     })
     await mod.ensureCatalogs(['master'])
-    expect(mod.t(key, { count: 1 }, 1)).toBe('1 class')
-    expect(mod.t(key, { count: 5 }, 5)).toBe('5 lots')
+    withoutCompiler(() => {
+      expect(mod.t(key, { count: 1 }, 1)).toBe('1 class')
+      expect(mod.t(key, { count: 5 }, 5)).toBe('5 lots')
+    })
     // The rest of the zone catalog is intact around the overlay.
     expect(mod.t('masterScreens.masterOnboarding.welcome.text')).toContain('VELO')
   })
@@ -112,6 +165,6 @@ describe('instance overlays (applyInstanceOverrides)', () => {
     // ru is untouched by an en overlay.
     expect(mod.t('common.skip')).not.toBe('Not now')
     await mod.setLocale('en')
-    expect(mod.t('common.skip')).toBe('Not now')
+    withoutCompiler(() => expect(mod.t('common.skip')).toBe('Not now'))
   })
 })

@@ -193,14 +193,18 @@ export const SKIN_BRAND: string | null = ${JSON.stringify(skin?.displayName ?? n
       preloadAppChunk(),
       perLocaleManifest(frontendDir),
       // tz-i18n §4.1: locale catalogs (src/locales/*.json) compile ahead of
-      // runtime -- the message compiler stays out of the bundle and the PWA
-      // precache. Include is scoped to the catalogs; other .json imports
-      // (package.json etc.) must not be treated as messages.
+      // runtime into message ASTs. Precompiling alone did NOT keep the
+      // message compiler out of the bundle: vue-i18n still shipped it for
+      // runtime strings (about 41 KB raw). dropMessageCompiler removes it
+      // (FE-157), so a plain string message now renders as raw text -- every
+      // message created at runtime is a message function instead
+      // (locales/index.ts: the brand, applyInstanceOverrides).
       VueI18nPlugin({
         // Only the catalogs themselves: the plugin requires `export default`
         // message objects, and locales/*.ts (the singleton, test helper) are
         // regular modules.
         include: [fileURLToPath(new URL('./src/locales/**/*.json', import.meta.url))],
+        dropMessageCompiler: true,
       }),
       vue(),
       VitePWA({
