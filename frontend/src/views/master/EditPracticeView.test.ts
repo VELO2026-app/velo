@@ -1395,6 +1395,14 @@ describe('EditPracticeView', () => {
       expect(sentBody().group_ids).toEqual(['g2'])
     })
 
+    it('a failed groups request surfaces a toast instead of an unhandled rejection', async () => {
+      vi.mocked(groupsApi.getGroups).mockRejectedValue(new Error('boom'))
+      mountCached(practice({}))
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Не удалось загрузить группы')
+    })
+
     it('the group multi-select renders ONLY for «Конкретные группы»', async () => {
       vi.mocked(groupsApi.getGroups).mockResolvedValue({
         items: [{ id: 'g1', kind: 'custom', name: 'VIP', members_count: 3, description: null }],

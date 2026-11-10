@@ -212,7 +212,7 @@ describe('DiaryThreadCard -- practice outcome', () => {
     outcome_status: 'attended',
   }
 
-  it('attended: full metadata card with BOTH the check and Done', () => {
+  it('attended: full metadata card with BOTH the check and the localized label', () => {
     mountCard(feedItem('practice_outcome', PRACTICE_SNAPSHOT))
 
     expect(q('.tcard__prac-title')?.textContent?.trim()).toBe('Утренняя йога')
@@ -224,7 +224,11 @@ describe('DiaryThreadCard -- practice outcome', () => {
     const status = q('.tcard__prac-status--attended')
     expect(status).not.toBeNull()
     expect(status?.querySelector('svg')).not.toBeNull() // the check half of «✓ Done»
-    expect(status?.textContent?.trim()).toBe('Done') // ...and the word half
+    expect(status?.textContent?.trim()).toBe('Вы пришли') // ...and the word half
+    expect(host?.textContent).not.toContain('Done')
+    const label = q('.tcard--practice')?.getAttribute('aria-label') ?? ''
+    expect(label).toContain('Вы пришли')
+    expect(label).not.toContain('Done')
   })
 
   it('no_show: «Вы не пришли», neutral status', () => {

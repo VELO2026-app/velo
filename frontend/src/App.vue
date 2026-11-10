@@ -213,7 +213,13 @@ onMounted(() => {
   // dock and insets are in (capped) -- the screen paints once, finished.
   void initAuth().then(async () => {
     const next = decideInitialStage()
-    if (next === 'app' && isAuthenticated.value) await firstScreenReady(router)
+    try {
+      if (next === 'app' && isAuthenticated.value) await firstScreenReady(router)
+    } catch {
+      // A throwing first-screen gate must not strand the splash: show the
+      // "try again" screen (LoadingErrorView) instead.
+      restoreUnreachable.value = true
+    }
     stage.value = next
   })
   // T21-4/T21-5 (PROMPT №546): foreground-only poll so a role/master-

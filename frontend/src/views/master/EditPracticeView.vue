@@ -660,10 +660,16 @@ onMounted(async () => {
   // already returns both alongside custom ones, so filter here (mirrors
   // CreatePracticeView). Re-resolves the name->id selection afterward in
   // case populateForm() already ran against an empty customGroups list.
-  void getGroups().then((res) => {
-    customGroups.value = res.items.filter((g) => g.kind === 'custom')
-    resolveAudienceGroupIds()
-  })
+  void getGroups()
+    .then((res) => {
+      customGroups.value = res.items.filter((g) => g.kind === 'custom')
+      resolveAudienceGroupIds()
+    })
+    .catch(() => {
+      // Surface the failure instead of an empty group list that reads as
+      // "no groups yet" (and avoid an unhandled rejection).
+      toast.error(t('masterScreens.createPractice.error.loadGroups'))
+    })
 
   const cached = masterStore.practices.find((p) => p.id === practiceId)
   if (cached) {

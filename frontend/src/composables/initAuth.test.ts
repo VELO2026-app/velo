@@ -30,6 +30,7 @@ vi.mock('@/api/users')
 
 let platformName: 'telegram' | 'standalone' = 'standalone'
 let initData: string | null = null
+let platformInitError: Error | null = null
 vi.mock('@/platform', async () => {
   const { sessionTokenStore } = await import('@/platform/session-token')
   const carriers = {
@@ -40,7 +41,9 @@ vi.mock('@/platform', async () => {
     get platform() {
       return {
         name: platformName,
-        init: async () => {},
+        init: async () => {
+          if (platformInitError) throw platformInitError
+        },
         getStartParam: () => null,
         getInitData: () => initData,
         close: () => {},
@@ -80,6 +83,7 @@ async function run(): Promise<ReturnType<typeof useAuth>> {
 }
 
 beforeEach(() => {
+  platformInitError = null
   setActivePinia(createPinia())
   localStorage.clear()
   sessionStorage.clear()
@@ -119,6 +123,16 @@ describe('initAuth outside Telegram', () => {
     expect(auth.isAuthenticated.value).toBe(false)
     expect(auth.restoreUnreachable.value).toBe(true)
     expect(localStorage.getItem(SESSION_TOKEN_KEY)).toBe('kept_tok')
+  })
+
+  it('platform.init() throws: initAuth resolves ready with the "try again" screen, not a stuck splash', async () => {
+    platformInitError = new Error('sdk boot failed')
+
+    const auth = await run()
+
+    expect(auth.isReady.value).toBe(true)
+    expect(auth.restoreUnreachable.value).toBe(true)
+    expect(auth.isAuthenticated.value).toBe(false)
   })
 
   it('the return with a matching mark: signed in, address wiped, mark spent', async () => {

@@ -436,8 +436,22 @@ export function waitUntilReady(): Promise<ReadyResult> {
 /**
  * Run the full auth initialization flow.
  * Should be called once from App.vue on mount.
+ *
+ * Never rejects: an exception from the bootstrap (platform.init() or a
+ * failure the flow does not handle itself) marks the run as unreachable and
+ * ready, so App.vue shows the "try again" screen (LoadingErrorView) instead
+ * of the splash forever.
  */
 async function initAuth(): Promise<void> {
+  try {
+    await runInitAuth()
+  } catch {
+    restoreUnreachable.value = true
+    isReady.value = true
+  }
+}
+
+async function runInitAuth(): Promise<void> {
   const authStore = useAuthStore()
 
   // Reset in case of re-initialization.
