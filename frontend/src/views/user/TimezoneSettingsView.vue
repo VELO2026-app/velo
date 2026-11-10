@@ -50,6 +50,7 @@
             class="tz-settings__lang"
             :class="{ 'tz-settings__lang--active': code === selectedLanguage }"
             :disabled="savingLanguage"
+            @pointerdown="warmLocale(code)"
             @click="onSelectLanguage(code)"
           >
             <IconGlobe :size="22" class="tz-settings__lang-globe" />
@@ -86,8 +87,9 @@
 </template>
 
 <script setup lang="ts">
-import { t, availableLocales, setLocale } from '@/locales'
-import { computed, ref } from 'vue'
+import { t, availableLocales, setLocale, warmLocale } from '@/locales'
+import { computed, onMounted, ref } from 'vue'
+import { isConstrainedNetwork, whenIdle } from '@/platform/dom'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import { VSelect } from '@/components/ui'
@@ -105,6 +107,17 @@ const authStore = useAuthStore()
 // Options: locales that actually have catalogs, in canonical order -- the
 // switcher never advertises a locale that would render fallback forever.
 const languageOptions = availableLocales()
+
+// The switcher warms its own rows (FE-157; App.vue no longer warms every
+// locale at boot): every offered locale once the screen is idle -- skipped
+// on a constrained link -- and a row's locale on finger-down, so the click
+// mostly flips a warm cache. loadLocale only: warming never switches.
+onMounted(() => {
+  if (isConstrainedNetwork()) return
+  whenIdle(() => {
+    for (const code of languageOptions) warmLocale(code)
+  })
+})
 
 // The stored value if it is an offered option, else the default locale.
 const selectedLanguage = ref(
