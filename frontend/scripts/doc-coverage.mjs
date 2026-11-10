@@ -16,7 +16,7 @@
 //   - src/api/generated.ts and *.generated.ts -- openapi/skin codegen
 //     output, not hand-written API surface (same exemption as no-cyrillic
 //     and typedoc.json, FE-136);
-//   - *.test.ts and *.golden-test-stub.ts -- test internals, excluded from
+//   - *.test.ts -- test internals, excluded from
 //     the typedoc entry set as well;
 //   - `export ... from` declarations -- re-exports; the doc lives at the
 //     original declaration;
@@ -54,7 +54,6 @@ const isGenerated = (p) => p.endsWith('.generated.ts') || p === 'src/api/generat
 const isExcludedName = (name) =>
   name === 'index.ts' || // barrel
   name.includes('.test.') ||
-  name.includes('.golden-test-stub') ||
   isGenerated(name)
 
 const files = []
