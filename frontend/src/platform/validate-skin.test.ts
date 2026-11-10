@@ -43,7 +43,7 @@ describe('validate-skin (tz-whitelabel §3)', () => {
     expect(report.manual.some((line) => line.includes('safe zone'))).toBe(true)
   })
 
-  it('a DARK package without assets/bg/background.png fails: light text on the golden photo', () => {
+  it('a DARK package without an assets/bg photo fails: light text on the golden photo', () => {
     // the velo_test_front_bot incident: tokens shipped, the background did
     // not -- light theme photo stayed under light text tokens
     const dark = {
@@ -62,7 +62,33 @@ describe('validate-skin (tz-whitelabel §3)', () => {
       },
     }
     expect(failsOf(writeSkinPackage({ ...dark, bg: true }))).toBe('')
-    expect(failsOf(writeSkinPackage(dark))).toContain('FAIL assets/bg/background.png: missing')
+    expect(failsOf(writeSkinPackage(dark))).toContain('FAIL assets/bg/background: missing')
+  })
+
+  // FE-157: the photo may be WebP (preferred) or PNG (released skins).
+  const WEBP = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WEBPVP8 ')])
+  const report = (extra: Record<string, Buffer> = {}): Report =>
+    validateSkin(writeSkinPackage({ extra }), FRONTEND) as Report
+
+  it('assets/bg/: absent warns, a webp passes clean, a small png passes clean', () => {
+    expect(report().warns.join('\n')).toContain('assets/bg/background missing')
+    const webp = report({ 'assets/bg/background.webp': WEBP })
+    expect(webp.fails).toEqual([])
+    expect(webp.passed).toContain('assets/bg/background.webp present')
+    expect(webp.warns.join('\n')).not.toContain('bg/background')
+    const small = report({ 'assets/bg/background.png': png(1080, 1920) })
+    expect(small.fails).toEqual([])
+    expect(small.passed).toContain('assets/bg/background.png present')
+    expect(small.warns.join('\n')).not.toContain('bg/background')
+  })
+
+  it('a png photo over 300 KB passes but warns to ship webp', () => {
+    const big = report({
+      'assets/bg/background.png': Buffer.concat([png(1080, 1920), Buffer.alloc(400 * 1024)]),
+    })
+    expect(big.fails).toEqual([])
+    expect(big.warns.join('\n')).toContain('assets/bg/background.png is')
+    expect(big.warns.join('\n')).toContain('background.webp')
   })
 
   it('a bad brand record fails, named', () => {

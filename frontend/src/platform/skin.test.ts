@@ -12,8 +12,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { materializedSkinTokens, readSkin } from './skin'
-import { writeSkinPackage, type FixturePatch } from './skin.test.fixture'
+import { materializedSkinTokens, readSkin, skinBackgroundFormat } from './skin'
+import { png, writeSkinPackage, type FixturePatch } from './skin.test.fixture'
 
 const created: string[] = []
 afterEach(() => {
@@ -81,5 +81,46 @@ describe('materializedSkinTokens (the §3 cascade file)', () => {
     expect(css).toContain("  --font-body: Rubik, 'Noto Sans', sans-serif;")
     expect(css).toContain("src: url('/skin/assets/fonts/rubik-400.woff2') format('woff2');")
     expect(css.indexOf('@font-face')).toBeLessThan(css.indexOf(':root'))
+  })
+
+  describe('background photo token (assets/bg/ format, FE-157)', () => {
+    /** A minimal RIFF/WEBP header -- what the package engine sniffs. */
+    const WEBP = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WEBPVP8 ')])
+    const BG: Record<string, Buffer> = {
+      'background.png': png(1080, 1920),
+      'background.webp': WEBP,
+    }
+    /** A valid package with the given files under assets/bg/ (none = no bg/). */
+    function withBg(...files: string[]): string {
+      const extra: Record<string, Buffer> = {}
+      for (const f of files) extra[`assets/bg/${f}`] = BG[f] as Buffer
+      return withPackage({ extra })
+    }
+    const css = (dir: string): string => materializedSkinTokens(dir, readSkin(dir))
+
+    it('no bg/ -> no override: the golden webp from global.css stays', () => {
+      const dir = withBg()
+      expect(skinBackgroundFormat(dir)).toBeNull()
+      expect(css(dir)).not.toContain('--velo-app-bg-image')
+    })
+
+    it('a legacy png skin -> the token points at the png', () => {
+      const dir = withBg('background.png')
+      expect(skinBackgroundFormat(dir)).toBe('png')
+      expect(css(dir)).toContain("--velo-app-bg-image: url('/bg/background.png');")
+    })
+
+    it('a webp skin -> the token points at the webp, and webp beats png', () => {
+      const dir = withBg('background.webp')
+      expect(skinBackgroundFormat(dir)).toBe('webp')
+      expect(css(dir)).toContain("--velo-app-bg-image: url('/bg/background.webp');")
+      expect(skinBackgroundFormat(withBg('background.png', 'background.webp'))).toBe('webp')
+    })
+
+    it("the override is its own :root block AFTER the package's tokens", () => {
+      expect(css(withBg('background.webp'))).toMatch(
+        /--velo-tg-header: #1b2a41;\s*\}\s*:root \{\s*--velo-app-bg-image: url\('\/bg\/background\.webp'\);\s*\}\s*$/,
+      )
+    })
   })
 })

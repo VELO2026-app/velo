@@ -5,3 +5,7 @@ src/api/generated.ts
 # (`pnpm skin <name>`) — regenerating overwrites any hand-formatting.
 src/platform/skin-brand.generated.ts
 src/styles/skin-tokens.css
+# Written by scripts/sync-figma-variables.mjs and extract-variables-tokens.mjs
+# as JSON.stringify(doc, null, 2); the root lint-staged prettier pass
+# (FE-157) would collapse its short arrays and the next sync would undo it.
+tokens.json

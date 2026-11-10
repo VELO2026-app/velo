@@ -50,7 +50,7 @@
       "custom": ""
     },
     "outcome": {
-      "attended": "Done",
+      "attended": "Вы пришли",
       "no_show": "Вы не пришли"
     },
     "weekdayAbbr": {

@@ -76,9 +76,10 @@ export const loginNotice = ref<LoginNotice | null>(null)
 export const botAccessHint = ref(false)
 
 /**
- * The saved session could not be checked (no answer from the server). The
- * token is still saved; App.vue shows the "try again" screen instead of the
- * login screen.
+ * The start could not complete: the saved session got no answer from the
+ * server (the token is still saved), or the bootstrap threw (platform.init()
+ * or the first-screen gate, FE-157). App.vue shows the "try again" screen
+ * instead of the login screen or an endless splash.
  */
 export const restoreUnreachable = ref(false)
 
@@ -436,8 +437,22 @@ export function waitUntilReady(): Promise<ReadyResult> {
 /**
  * Run the full auth initialization flow.
  * Should be called once from App.vue on mount.
+ *
+ * Never rejects: an exception from the bootstrap (platform.init() or a
+ * failure the flow does not handle itself) marks the run as unreachable and
+ * ready, so App.vue shows the "try again" screen (LoadingErrorView) instead
+ * of the splash forever.
  */
 async function initAuth(): Promise<void> {
+  try {
+    await runInitAuth()
+  } catch {
+    restoreUnreachable.value = true
+    isReady.value = true
+  }
+}
+
+async function runInitAuth(): Promise<void> {
   const authStore = useAuthStore()
 
   // Reset in case of re-initialization.

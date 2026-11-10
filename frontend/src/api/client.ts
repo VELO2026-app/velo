@@ -115,6 +115,25 @@ async function request<T>(
   body?: unknown,
   extraHeaders?: Record<string, string>,
 ): Promise<T> {
+  if (method === 'GET') return send<T>(method, path, body, extraHeaders)
+  // Any mutation may change what a GET returns, so the in-flight GETs are
+  // dropped when it starts AND when it settles: a GET that left while the
+  // mutation was in flight may carry the pre-mutation state, and a read
+  // issued after the mutation must go to the network, not join it.
+  _inFlight.clear()
+  try {
+    return await send<T>(method, path, body, extraHeaders)
+  } finally {
+    _inFlight.clear()
+  }
+}
+
+async function send<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  extraHeaders?: Record<string, string>,
+): Promise<T> {
   const headers: Record<string, string> = { ...extraHeaders }
 
   if (_token) {
@@ -238,7 +257,9 @@ export const api = {
     const existing = _inFlight.get(path)
     if (existing) return existing as Promise<T>
     const promise = request<T>('GET', path).finally(() => {
-      _inFlight.delete(path)
+      // Only our own entry: a mutation may have cleared the map and a newer
+      // GET for the same path may already be registered.
+      if (_inFlight.get(path) === promise) _inFlight.delete(path)
     })
     _inFlight.set(path, promise)
     return promise

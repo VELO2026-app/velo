@@ -13,13 +13,31 @@ import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 
 const budget = JSON.parse(readFileSync(new URL('../lint-budget.json', import.meta.url), 'utf8'))
+// Content-hash cache (CI: restored by actions/cache). `content`, not the
+// default `metadata`: a fresh checkout has new mtimes on every file, which
+// would invalidate a metadata cache on each run. The cache lives under
+// node_modules (git-ignored, outside both source trees). ESLint stores the
+// warnings of a cached file too, so the --max-warnings budget stays exact.
+// Limit: an entry is invalidated only by ITS file or the config, while the
+// type-aware rules read types from other files -- after a cross-file type
+// change a local cached run can stay green where a cold run fails. CI reuses
+// a cache only for identical lint inputs (ci.yml), so the gate stays cold.
+const cacheArgs = (name) => [
+  '--cache',
+  '--cache-strategy',
+  'content',
+  '--cache-location',
+  `node_modules/.cache/eslint/${name}.json`,
+]
 const args = ['src/', '--max-warnings', String(budget.maxWarnings)]
 
-const fe = spawnSync('node_modules/.bin/eslint', args, { stdio: 'inherit' })
+const fe = spawnSync('node_modules/.bin/eslint', [...args, ...cacheArgs('app')], {
+  stdio: 'inherit',
+})
 if (fe.error) throw fe.error
 if (fe.status !== 0) process.exit(fe.status ?? 1)
 
-const ui = spawnSync('node_modules/.bin/eslint', args, {
+const ui = spawnSync('node_modules/.bin/eslint', [...args, ...cacheArgs('ui')], {
   stdio: 'inherit',
   cwd: '../packages/velo-ui',
 })

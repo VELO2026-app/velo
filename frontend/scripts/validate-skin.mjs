@@ -33,7 +33,7 @@
 // validateSkin() and skinBuildGate() are exported for the unit suite.
 // =============================================================================
 
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import {
@@ -42,6 +42,9 @@ import {
   readGoldenTokens,
   goldenTokenMap,
 } from './lib/skin-package.mjs'
+
+/** An assets/bg/background.png above this is warned about: the golden ships WebP. */
+const BG_PNG_WARN_KB = 300
 
 const PNG_SIZES = {
   'icon-192.png': [192, 192],
@@ -89,9 +92,7 @@ function luminance(color) {
   let alpha = 1
   // Anchored: the WHOLE value must be the color -- an rgb() nested inside
   // color-mix() or a var() fallback is not the value's color.
-  const rgba = value.match(
-    /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\s*\)$/,
-  )
+  const rgba = value.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\s*\)$/)
   if (rgba) {
     alpha = rgba[4] === undefined ? 1 : Number(rgba[4])
     return { lum: channelLum([+rgba[1], +rgba[2], +rgba[3]], alpha), alpha }
@@ -243,24 +244,42 @@ export function validateSkin(skinDir, frontendDir) {
   // The background photo is the one optional asset that can quietly break a
   // theme: it is the app's bottom layer, and the GOLDEN one is light. A skin
   // that flips --velo-text-primary to a light color while shipping no
-  // bg/background.png paints light text over the light photo -- unreadable
+  // assets/bg/background.* paints light text over the light photo -- unreadable
   // (the velo_test_front_bot incident). Light-on-light skins may omit it.
-  if (!existsSync(join(assets, 'bg', 'background.png'))) {
+  // Two formats are accepted, WebP preferred: released skins carry
+  // background.png, the golden ships background.webp (platform/skin.ts
+  // re-points --velo-app-bg-image at whichever one lies there; FE-157).
+  const bgWebp = join(assets, 'bg', 'background.webp')
+  const bgPng = join(assets, 'bg', 'background.png')
+  if (!existsSync(bgWebp) && !existsSync(bgPng)) {
     const textPrimary = luminance(resolveToken('--velo-text-primary') ?? '')
     if (tokens['--velo-text-primary'] !== undefined && !textPrimary) {
       fail(
         out,
-        'FAIL assets/bg/background.png: missing and --velo-text-primary cannot be evaluated -- ship assets/bg/ or give the text a plain color',
+        'FAIL assets/bg/background: missing (neither .webp nor .png) and --velo-text-primary cannot be evaluated -- ship assets/bg/ or give the text a plain color',
       )
     } else if (textPrimary && textPrimary.lum > 0.35) {
       fail(
         out,
-        'FAIL assets/bg/background.png: missing while --velo-text-primary is LIGHT -- the golden light photo stays and the light text on it is unreadable. Ship the full package including assets/bg/, or use dark text tokens.',
+        'FAIL assets/bg/background: missing (neither .webp nor .png) while --velo-text-primary is LIGHT -- the golden light photo stays and the light text on it is unreadable. Ship the full package including assets/bg/, or use dark text tokens.',
       )
     } else {
-      warn(out, 'assets/bg/background.png missing: the golden light photo stays (fine for a light-on-light skin)')
+      warn(
+        out,
+        'assets/bg/background missing: the golden light photo stays (fine for a light-on-light skin)',
+      )
     }
-  } else ok(out, 'assets/bg/background.png present')
+  } else if (existsSync(bgWebp)) {
+    ok(out, 'assets/bg/background.webp present')
+  } else {
+    ok(out, 'assets/bg/background.png present')
+    const kb = Math.round(statSync(bgPng).size / 1024)
+    if (kb > BG_PNG_WARN_KB)
+      warn(
+        out,
+        `assets/bg/background.png is ${kb} KB (> ${BG_PNG_WARN_KB} KB): ship assets/bg/background.webp instead (cwebp -m 6 -q 92: lower qualities blur the fine line work) -- the photo is the first thing every user downloads`,
+      )
+  }
   // The manifest/HTML background: themeColor text on backgroundColor surface.
   const splash = contrast(brand.themeColor, brand.backgroundColor)
   if (splash !== null && splash < 3)
@@ -280,7 +299,10 @@ export function validateSkin(skinDir, frontendDir) {
       fail(out, `FAIL assets/${asset}: ${info.width}x${info.height}, expected ${w}x${h}`)
     else ok(out, `${asset}: ${info.width}x${info.height}`)
     if (asset.startsWith('apple-touch') && (info.colorType === 4 || info.colorType === 6))
-      fail(out, `FAIL assets/${asset}: has an alpha channel (colorType ${info.colorType}) -- iOS paints transparency black`)
+      fail(
+        out,
+        `FAIL assets/${asset}: has an alpha channel (colorType ${info.colorType}) -- iOS paints transparency black`,
+      )
   }
   for (const asset of ['favicon.svg', 'velo-word-filled.svg', 'velo-word-blue.svg']) {
     const head = readFileSync(join(assets, asset), 'utf8').slice(0, 200)
@@ -318,7 +340,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   const buildMode = args.includes('--build')
   const skinDir = args.find((a) => !a.startsWith('--')) ?? 'public/skin'
   const frontendDir = resolve(import.meta.dirname, '..')
-  const report = buildMode ? skinBuildGate(skinDir, frontendDir) : validateSkin(skinDir, frontendDir)
+  const report = buildMode
+    ? skinBuildGate(skinDir, frontendDir)
+    : validateSkin(skinDir, frontendDir)
   if (report === null) {
     console.log(`validate-skin: no skin package at ${skinDir} -- golden build`)
     process.exit(0)

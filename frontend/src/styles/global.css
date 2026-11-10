@@ -379,6 +379,14 @@ ol {
    ============================================================================= */
 
 /* === Photo background layer (PROMPT №383) === */
+/* The photo URL is a token so a skin can swap the FORMAT: the golden ships
+   WebP, while already-released skins carry assets/bg/background.png. The build
+   (platform/skin.ts materializedSkinTokens) re-points this to whichever file
+   the skin package really holds. Also read by the two onboarding overlays. */
+:root {
+  --velo-app-bg-image: url('/bg/background.webp');
+}
+
 /* `#app-bg` is a STATIC element in index.html (first child of <body>, before
    #app) -- not Vue-rendered -- so it paints at first paint with zero
    mount-delay flash. Body-level, not `#app::before`: `#app` sits inside a
@@ -404,7 +412,7 @@ ol {
   height: 100lvh; /* pre-JS-paint fallback, overridden by the var below once JS runs */
   height: var(--velo-frozen-vh, 100lvh);
   z-index: -1;
-  background: url('/bg/background.png') center / cover no-repeat;
+  background: var(--velo-app-bg-image) center / cover no-repeat;
   pointer-events: none;
   /* [FE-44] Own compositing layer -- the standard iOS WebKit insurance for
      full-screen position:fixed layers: after keyboard interactions WebKit

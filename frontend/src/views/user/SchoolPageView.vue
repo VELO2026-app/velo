@@ -209,7 +209,20 @@
             @click="router.push({ name: 'practice-detail', params: { id: $event } })"
           />
         </template>
-        <VEmptyState v-else variant="note" :title="t('user.screens.schoolPage.noUpcoming')" />
+        <!-- No empty claim while the feed is still loading: "no upcoming
+             practices" is said only by an answer that has none. A failed
+             feed says so (i18n:common.loadError) instead of claiming an
+             empty school. -->
+        <VEmptyState
+          v-else-if="feedState === 'ready'"
+          variant="note"
+          :title="t('user.screens.schoolPage.noUpcoming')"
+        />
+        <VEmptyState
+          v-else-if="feedState === 'failed'"
+          variant="note"
+          :title="t('common.loadError')"
+        />
       </template>
     </div>
 
@@ -315,6 +328,8 @@ const error = ref(false)
 const notFound = ref(false)
 const page = ref<SchoolPageResponse | null>(null)
 const practices = ref<PracticeResponse[]>([])
+/** The practices feed loads apart from the header: its own lifecycle. */
+const feedState = ref<'loading' | 'ready' | 'failed'>('loading')
 
 const relation = computed(() => page.value?.viewer.relation ?? null)
 const isCurator = computed(() => relation.value === 'curator')
@@ -368,9 +383,11 @@ function openPracticesCalendar(): void {
 }
 
 // Owner 2026-09-19: at most FIVE upcoming school practices render, and the
-// feed is the page's last element. The fetch itself stays whole-list (the
-// API contract is untouched); the cap is presentation-only.
-const upcomingPractices = computed(() => practices.value.slice(0, 5))
+// feed is the page's last element. The page asks the API for exactly five
+// (the first five of all pages equal the first five of page one); the slice
+// below is a defensive cap.
+const FEED_LIMIT = 5
+const upcomingPractices = computed(() => practices.value.slice(0, FEED_LIMIT))
 
 // §6 MVP (owner 2026-10-02): the school's analytics screen. FE-93: it mounts
 // in the master zone only -- the user zone has no route for it anymore.
@@ -390,27 +407,6 @@ function openRoster(): void {
   })
 }
 
-// Review P2: the school endpoints are paginated (limit 20). A single first
-// page hid rows 21+ -- a master beyond the picker for transfer/removal,
-// practices beyond the feed. Load ALL pages, with an honest stop: 10 pages
-// (200 rows) is beyond any real school and protects against a lying total.
-const PAGE = 20
-const MAX_PAGES = 10
-
-async function fetchAllPages<T>(
-  fetchPage: (offset: number) => Promise<{ items: T[]; total: number }>,
-): Promise<T[]> {
-  const first = await fetchPage(0)
-  const out = [...first.items]
-  const pages = Math.ceil(first.total / PAGE)
-  for (let p = 1; p < Math.min(pages, MAX_PAGES); p++) {
-    const res = await fetchPage(p * PAGE)
-    if (!res.items.length) break
-    out.push(...res.items)
-  }
-  return out
-}
-
 // FE-78.4: see load() -- bumps on every load attempt; a stale answer is a no-op.
 let loadEpoch = 0
 
@@ -423,14 +419,25 @@ async function load(): Promise<void> {
   loading.value = true
   error.value = false
   notFound.value = false
+  practices.value = []
+  feedState.value = 'loading'
+  // Both requests leave together; the header paints as soon as the page
+  // payload lands and the practices feed fills in when its answer does.
+  // The feed is a bonus under the header: its failure marks the feed only
+  // instead of replacing the whole page with the error state.
+  void getSchoolPractices(schoolId.value, FEED_LIMIT, 0)
+    .then((res) => {
+      if (epoch !== loadEpoch) return
+      practices.value = res.items
+      feedState.value = 'ready'
+    })
+    .catch(() => {
+      if (epoch === loadEpoch) feedState.value = 'failed'
+    })
   try {
-    const [pageRes, practicesItems] = await Promise.all([
-      getSchoolPage(schoolId.value),
-      fetchAllPages((offset) => getSchoolPractices(schoolId.value, PAGE, offset)),
-    ])
+    const pageRes = await getSchoolPage(schoolId.value)
     if (epoch !== loadEpoch) return
     page.value = pageRes
-    practices.value = practicesItems
   } catch (e) {
     if (epoch !== loadEpoch) return
     if (e instanceof ApiResponseError && e.status === 404) {

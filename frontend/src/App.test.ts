@@ -79,6 +79,19 @@ vi.mock('@/composables/useAuth', async () => {
   }
 })
 
+// The first-screen gate delegates to the real one unless a test makes it throw.
+let firstScreenError: Error | null = null
+vi.mock('@/router/firstScreen', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/router/firstScreen')>()
+  return {
+    ...actual,
+    firstScreenReady: (...args: Parameters<typeof actual.firstScreenReady>) => {
+      if (firstScreenError) return Promise.reject(firstScreenError)
+      return actual.firstScreenReady(...args)
+    },
+  }
+})
+
 vi.mock('@/composables/useBackgroundStabilizer', () => ({
   useBackgroundStabilizer: vi.fn(),
 }))
@@ -150,6 +163,7 @@ beforeEach(() => {
   platformName = 'standalone'
   initAuth.mockReset()
   schoolInviteStartParam = false
+  firstScreenError = null
   // Default: a clean auth init -- the promise resolves AFTER flipping
   // readiness, mirroring initAuth()'s own ordering.
   initAuth.mockImplementation(async () => {
@@ -261,6 +275,17 @@ describe('App entry gate (FE-39)', () => {
 
     expect(w.find('.auth-error').exists()).toBe(true)
     expect(w.find('.login').exists()).toBe(false)
+  })
+
+  it('first-screen gate throws: the "try again" screen, not an endless splash', async () => {
+    firstScreenError = new Error('route resolution failed')
+    setAuthUser({ onboarding_completed: true })
+    const w = await mountGate()
+    await flushPromises()
+
+    expect(w.find('.loading').exists()).toBe(false)
+    expect(w.find('.auth-error').exists()).toBe(true)
+    expect(w.find('.route-stub').exists()).toBe(false)
   })
 
   it('signed in from the browser (isStandalone gone): the app, not the login screen', async () => {

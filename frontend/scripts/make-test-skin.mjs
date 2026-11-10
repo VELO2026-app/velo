@@ -50,8 +50,12 @@ const distinct = (from, to) => {
   const body = readFileSync(from)
   writeFileSync(to, Buffer.concat([body, Buffer.from(from.endsWith('.svg') ? MARK : 'ci-skin')]))
 }
-for (const name of MANDATORY_ASSETS) distinct(join(publicDir, 'icons', name), join(dir, 'assets', name))
-distinct(join(publicDir, 'bg', 'background.png'), join(dir, 'assets', 'bg', 'background.png'))
+for (const name of MANDATORY_ASSETS)
+  distinct(join(publicDir, 'icons', name), join(dir, 'assets', name))
+// The golden photo is WebP since FE-157 (trailing bytes after the RIFF
+// chunk are ignored the same way); the build re-points --velo-app-bg-image
+// at it, so the skin cell exercises the WebP path.
+distinct(join(publicDir, 'bg', 'background.webp'), join(dir, 'assets', 'bg', 'background.webp'))
 // A WOFF2 signature is all the engine checks; the browser never sees CI dist.
 writeFileSync(join(dir, 'assets', 'fonts', 'ci-sans-400.woff2'), 'wOF2')
 
