@@ -185,7 +185,7 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import {
@@ -216,6 +216,7 @@ import {
 import { ApiResponseError } from '@/api/client'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import { useToast } from '@/composables/useToast'
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
 import { errorMessage, extractApiError } from '@/composables/useApiError'
 import type { GroupMemberItem, GroupListItem, GroupKind } from '@/api/groups'
 
@@ -296,28 +297,28 @@ async function loadGroups(): Promise<void> {
   }
 }
 
+// Bumps on every members load; an answer for a superseded query is a no-op.
+let loadEpoch = 0
+
 async function load(): Promise<void> {
+  const epoch = ++loadEpoch
   loading.value = true
   error.value = ''
   try {
     const res = await getGroupMembers(groupId.value, search.value)
+    if (epoch !== loadEpoch) return
     members.value = res.items
   } catch (e) {
+    if (epoch !== loadEpoch) return
     error.value = extractApiError(e, t('common.tryAgain'))
   } finally {
-    loading.value = false
+    if (epoch === loadEpoch) loading.value = false
   }
 }
 
 // Server-side search (?search=) -- lightly debounced so it doesn't refetch
-// on every keystroke.
-let searchTimer: ReturnType<typeof setTimeout> | undefined
-watch(search, () => {
-  clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    void load()
-  }, 300)
-})
+// on every keystroke; the timer dies with the component.
+useDebouncedSearch(search, () => load())
 
 // Sequenced (not parallel with load() below): a genuinely deleted/invalid
 // group must be caught BEFORE attempting the members fetch, so the error

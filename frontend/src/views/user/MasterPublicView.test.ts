@@ -635,12 +635,15 @@ describe('MasterPublicView', () => {
 
   // ===========================================================================
   describe('the two independent fetches', () => {
-    it('a master-fetch failure never even calls getPractices (sequential, not parallel)', async () => {
+    it('FE-157: a master-fetch failure still lands on the error rung (the feed leaves in parallel, its answer is dropped)', async () => {
       vi.mocked(mastersApi.getPublicMaster).mockRejectedValue(new Error('boom'))
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([practice('p1')]))
       mount()
       await flush()
 
-      expect(practicesApi.getPractices).not.toHaveBeenCalled()
+      expect(practicesApi.getPractices).toHaveBeenCalledTimes(1)
+      expect(emptyState()).not.toBeNull()
+      expect(practiceCards()).toHaveLength(0)
     })
 
     it('a practices-fetch failure is non-fatal: the profile still renders in full, the section keeps the title with the honest note', async () => {
@@ -1018,6 +1021,48 @@ describe('MasterPublicView', () => {
 
   // ===========================================================================
   describe('route param watch (B11 item 2)', () => {
+    it('FE-157: fires the master and practices requests together, not one after the other', async () => {
+      let resolveProfile: (v: MasterPublicResponse) => void = () => {}
+      vi.mocked(mastersApi.getPublicMaster).mockReturnValueOnce(
+        new Promise<MasterPublicResponse>((r) => {
+          resolveProfile = r
+        }),
+      )
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      mount()
+      await flush()
+
+      // The profile is still pending, yet the feed request already left.
+      expect(practicesApi.getPractices).toHaveBeenCalledTimes(1)
+      resolveProfile(masterProfile())
+      await flush()
+      expect(content()).not.toBeNull()
+    })
+
+    it('FE-157: a slow answer for master A never repaints the page after navigating to B', async () => {
+      let resolveA: (v: MasterPublicResponse) => void = () => {}
+      vi.mocked(mastersApi.getPublicMaster).mockReturnValueOnce(
+        new Promise<MasterPublicResponse>((r) => {
+          resolveA = r
+        }),
+      )
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      mount()
+      await flush()
+
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValueOnce(
+        masterProfile({ user_id: 'm2', display_name: 'Борис Второй' }),
+      )
+      routeParams.id = 'm2'
+      await flush()
+      expect(content()?.textContent).toContain('Борис Второй')
+
+      resolveA(masterProfile({ user_id: 'm1', display_name: 'Анна Первая' }))
+      await flush()
+      expect(content()?.textContent).toContain('Борис Второй')
+      expect(content()?.textContent).not.toContain('Анна Первая')
+    })
+
     it('mutating route.params.id on an ALREADY-MOUNTED instance re-fetches the new master -- Vue Router reuses the component instance when only params change under the same matched route', async () => {
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValueOnce(masterProfile({ user_id: 'm1' }))
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))

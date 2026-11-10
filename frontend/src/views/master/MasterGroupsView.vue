@@ -102,7 +102,9 @@
           :title="t('masterScreens.masterGroups.toast.searchFailed')"
           :description="searchError"
         >
-          <VButton size="sm" variant="outline" @click="loadSearch">{{ t('common.retry') }}</VButton>
+          <VButton size="sm" variant="outline" @click="retrySearch">{{
+            t('common.retry')
+          }}</VButton>
         </VEmptyState>
 
         <template v-else-if="searchResults.length">
@@ -188,7 +190,7 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import { VLoader, VEmptyState, VButton, VListRow, VInput, VAvatar, VChip } from '@/components/ui'
@@ -196,6 +198,7 @@ import { IconPlusFilled } from '@/components/icons'
 import VShowMore from '@/components/shared/VShowMore.vue'
 import { getGroups, searchGroupMemberships } from '@/api/groups'
 import { extractApiError } from '@/composables/useApiError'
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import type { GroupListItem, GroupSearchMemberItem } from '@/api/groups'
 
@@ -232,31 +235,36 @@ const searchResults = ref<GroupSearchMemberItem[]>([])
 const searchLoading = ref(false)
 const searchError = ref('')
 
-async function loadSearch(): Promise<void> {
+async function loadSearch(query: string, isStale: () => boolean): Promise<void> {
   searchLoading.value = true
   searchError.value = ''
   try {
-    const res = await searchGroupMemberships(search.value)
+    const res = await searchGroupMemberships(query)
+    if (isStale()) return
     searchResults.value = res.items
   } catch (e) {
+    if (isStale()) return
     searchError.value = extractApiError(e, t('common.tryAgain'))
   } finally {
-    searchLoading.value = false
+    if (!isStale()) searchLoading.value = false
   }
 }
 
-let searchTimer: ReturnType<typeof setTimeout> | undefined
-watch(search, (value) => {
-  clearTimeout(searchTimer)
-  if (!value.trim()) {
+// An emptied query cancels the pending/in-flight fetch and clears results.
+const searchRunner = useDebouncedSearch(search, (query, run) => loadSearch(query, run.isStale), {
+  beforeSchedule: (value) => {
+    if (value.trim()) return true
     searchResults.value = []
     searchError.value = ''
-    return
-  }
-  searchTimer = setTimeout(() => {
-    void loadSearch()
-  }, 300)
+    searchLoading.value = false
+    return false
+  },
 })
+
+/** Retry button of the search error state: re-runs the current query now. */
+function retrySearch(): void {
+  searchRunner.flush(search.value)
+}
 
 // Show the first 5 (owner Q7, PROMPT №610 -- was 10); the rest hide behind
 // the outlined t('masterScreens.masterGroups.moreGroups') pill (VShowMore already built this exact

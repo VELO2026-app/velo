@@ -528,41 +528,58 @@ function goCreatePractice(): void {
   })
 }
 
+// Bumps on every load attempt (master A -> master B under one reused
+// instance); a superseded answer is a no-op. Same pattern as SchoolPageView.
+let loadEpoch = 0
+
+/** Upcoming practices by this master; a failure is non-fatal (empty list). */
+async function fetchUpcoming(id: string): Promise<PracticeResponse[]> {
+  // Reuse the public feed with a master_id filter + scheduled status. Owner
+  // 2026-10-03: in the curator's school context (?schoolId=) only the
+  // master's practices in THAT school are listed -- the public feed has no
+  // school param, so the page is fetched larger and filtered client-side by
+  // the practices' own school_id (null on personal practices, a foreign
+  // school's id otherwise). Outside the school context the plain feed stands.
+  try {
+    const res = await getPractices(
+      {
+        master_id: id,
+        status: 'scheduled',
+        sort_by: 'scheduled_at',
+        sort_order: 'asc',
+      },
+      schoolContext.value ? 50 : 5,
+      0,
+    )
+    // The <=5 cap is also enforced locally: the owner's 2026-09-30 spec is
+    // "up to 5 cards", independent of any server limit regression.
+    const items = schoolContext.value
+      ? res.items.filter((p) => p.school_id === schoolId.value)
+      : res.items
+    return items.slice(0, 5)
+  } catch {
+    // Non-fatal: the profile still renders without the upcoming list.
+    return []
+  }
+}
+
 async function loadMaster(id: string): Promise<void> {
+  const epoch = ++loadEpoch
   loading.value = true
   error.value = null
   notFound.value = false
+  upcoming.value = []
+  // Both requests leave together; the practices call never rejects, so the
+  // profile failing cannot leave an unhandled rejection behind.
+  const upcomingPromise = fetchUpcoming(id)
   try {
-    profile.value = await getPublicMaster(id)
-    // Upcoming practices by this master: reuse the public feed with a
-    // master_id filter + scheduled status. Owner 2026-10-03: in the curator's
-    // school context (?schoolId=) only the master's practices in THAT school
-    // are listed -- the public feed has no school param, so the page is
-    // fetched larger and filtered client-side by the practices' own
-    // school_id (null on personal practices, a foreign school's id
-    // otherwise). Outside the school context the plain feed stands.
-    try {
-      const res = await getPractices(
-        {
-          master_id: id,
-          status: 'scheduled',
-          sort_by: 'scheduled_at',
-          sort_order: 'asc',
-        },
-        schoolContext.value ? 50 : 5,
-        0,
-      )
-      // The ≤5 cap is also enforced locally: the owner's 2026-09-30 spec is
-      // "up to 5 cards", independent of any server limit regression.
-      const items = schoolContext.value
-        ? res.items.filter((p) => p.school_id === schoolId.value)
-        : res.items
-      upcoming.value = items.slice(0, 5)
-    } catch {
-      // Non-fatal: the profile still renders without the upcoming list.
-      upcoming.value = []
-    }
+    const profileRes = await getPublicMaster(id)
+    const upcomingRes = await upcomingPromise
+    if (epoch !== loadEpoch) return
+    profile.value = profileRes
+    upcoming.value = upcomingRes
   } catch (e) {
+    if (epoch !== loadEpoch) return
     const is404 = e instanceof ApiResponseError && e.status === 404
     notFound.value = is404
     error.value = extractApiError(
@@ -573,7 +590,7 @@ async function loadMaster(id: string): Promise<void> {
     )
     profile.value = null
   } finally {
-    loading.value = false
+    if (epoch === loadEpoch) loading.value = false
   }
 }
 

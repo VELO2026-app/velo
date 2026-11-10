@@ -435,20 +435,44 @@ describe('MasterPracticeDetailView', () => {
       expect(text()).toContain('Ошибка загрузки')
     })
 
-    it('a failing ATTENDANCE call errors the whole screen -- it is inside the try', async () => {
-      // getAttendance sits in load()'s try (.vue:580-584), unlike loadReviews
-      // which is deliberately non-fatal. Roster and stats are the point of this
-      // screen, so a half-rendered hero would be worse than the error state.
-      // B8 (PROMPT №747): 'server_error' is not a real backend code --
-      // unmapped, lands on load()'s own fallback (.vue:626).
-      vi.mocked(practicesApi.getAttendance).mockRejectedValue(
-        new ApiResponseError(500, 'Список участников недоступен', 'server_error'),
+    it('FE-157: a failing ATTENDANCE call does not error the screen -- it gets its own retry note', async () => {
+      vi.mocked(practicesApi.getAttendance)
+        .mockRejectedValueOnce(
+          new ApiResponseError(500, 'Список участников недоступен', 'server_error'),
+        )
+        .mockResolvedValue(attendance({ total: 7 }))
+      mount()
+      await flush()
+
+      // The hero stays up; only the attendance block reports the failure.
+      expect(host?.querySelector('.hero-card')).not.toBeNull()
+      expect(text()).not.toContain('Ошибка загрузки')
+      expect(text()).toContain('Не удалось загрузить посещаемость')
+
+      const retry = Array.from(host?.querySelectorAll('button') ?? []).find(
+        (b) => b.textContent?.trim() === 'Повторить',
+      )
+      retry?.click()
+      await flush()
+
+      expect(practicesApi.getAttendance).toHaveBeenCalledTimes(2)
+      expect(text()).not.toContain('Не удалось загрузить посещаемость')
+    })
+
+    it('FE-157: attendance leaves in parallel with the practice read', async () => {
+      let resolvePractice: (v: ReturnType<typeof practice>) => void = () => {}
+      vi.mocked(practicesApi.getPractice).mockReturnValue(
+        new Promise((r) => {
+          resolvePractice = r
+        }),
       )
       mount()
       await flush()
 
-      expect(text()).toContain('Ошибка загрузки')
-      expect(host?.querySelector('.hero-card')).toBeNull()
+      expect(practicesApi.getAttendance).toHaveBeenCalledTimes(1)
+      resolvePractice(practice())
+      await flush()
+      expect(host?.querySelector('.hero-card')).not.toBeNull()
     })
 
     it('«Повторить» re-runs the load and recovers', async () => {

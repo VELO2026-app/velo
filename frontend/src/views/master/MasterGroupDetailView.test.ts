@@ -333,6 +333,55 @@ describe('MasterGroupDetailView', () => {
       expect(groupsApi.getGroupMembers).toHaveBeenCalledTimes(2)
       expect(groupsApi.getGroupMembers).toHaveBeenLastCalledWith('g1', 'ан')
     })
+
+    it('FE-157: a slow answer for an older query never overwrites the newer one', async () => {
+      vi.useFakeTimers()
+      mount()
+      await flush()
+
+      let resolveOld: (v: ReturnType<typeof page>) => void = () => {}
+      vi.mocked(groupsApi.getGroupMembers).mockReturnValueOnce(
+        new Promise((r) => {
+          resolveOld = r
+        }),
+      )
+      const input = host?.querySelector<HTMLInputElement>('input')
+      input!.value = 'ан'
+      input!.dispatchEvent(new Event('input'))
+      await nextTick()
+      vi.advanceTimersByTime(300)
+
+      vi.mocked(groupsApi.getGroupMembers).mockResolvedValueOnce(
+        page([member('s2', { name: 'Новый' })]),
+      )
+      input!.value = 'анн'
+      input!.dispatchEvent(new Event('input'))
+      await nextTick()
+      vi.advanceTimersByTime(300)
+      await flush()
+
+      resolveOld(page([member('s1', { name: 'Старый' })]))
+      await flush()
+
+      expect(text()).toContain('Новый')
+      expect(text()).not.toContain('Старый')
+    })
+
+    it('FE-157: unmounting with a pending debounce timer never fires the request', async () => {
+      vi.useFakeTimers()
+      mount()
+      await flush()
+      const input = host?.querySelector<HTMLInputElement>('input')
+      input!.value = 'ан'
+      input!.dispatchEvent(new Event('input'))
+      await nextTick()
+
+      app?.unmount()
+      app = null
+      vi.advanceTimersByTime(1000)
+
+      expect(groupsApi.getGroupMembers).toHaveBeenCalledTimes(1)
+    })
   })
 
   describe('navigation', () => {

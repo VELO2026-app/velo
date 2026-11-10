@@ -629,6 +629,9 @@ const _RECORDING_ELIGIBLE_STATUSES = ['confirmed', 'attended', 'no_show'] as con
 // worse than an absent one and the state is transient).
 const recordingUrl = ref<string | null>(null)
 
+// Bumps on every refreshRecording() call; a superseded answer is dropped.
+let recordingEpoch = 0
+
 /** Fetch the recording link once per (booking, "has it ended") change --
  * NOT a poll, NOT a retry loop. hasEnded() only gates WHETHER to call: a
  * premature call is free (the backend just 404s and nothing renders), so
@@ -638,6 +641,9 @@ const recordingUrl = ref<string | null>(null)
  * flag: the other half -- never re-derive "ended" for a correctness
  * decision -- still holds, and this design honours it by never trying). */
 async function refreshRecording(): Promise<void> {
+  // Every call (including one that bails out below) supersedes the previous
+  // one: a slow answer for an OLD booking must not surface its link.
+  const epoch = ++recordingEpoch
   recordingUrl.value = null
   const b = myAnyBooking.value
   if (!b) return
@@ -645,6 +651,7 @@ async function refreshRecording(): Promise<void> {
   if (!hasEnded(b, now.value)) return
   try {
     const res = await getBookingRecording(b.id)
+    if (epoch !== recordingEpoch) return
     // B27 (PROMPT №724): the generated type has url as optional
     // (string | null | undefined), the old hand-typed one required it
     // (string | null) -- ?? null keeps recordingUrl's own ref<string | null>
@@ -655,7 +662,7 @@ async function refreshRecording(): Promise<void> {
     // Network/auth/unexpected failure -- same rendering as 'error' above:
     // no button. Never a toast; this is a silent "don't show", not a
     // user-facing action that failed.
-    recordingUrl.value = null
+    if (epoch === recordingEpoch) recordingUrl.value = null
   }
 }
 
