@@ -26,6 +26,23 @@ import datesSeedRaw from '@/locales/ru/dates.json?raw'
 
 const { t } = i18n.global
 
+/**
+ * Memoised Intl.DateTimeFormat. Constructing a formatter is the expensive part
+ * of date formatting (hot in the diary feed: one per card and per day group),
+ * so one instance is kept per (locale, options) -- options carry the timeZone.
+ * Option objects here are small flat literals, so JSON is a stable cache key.
+ */
+const dtfCache = new Map<string, Intl.DateTimeFormat>()
+function dateTimeFormat(locale: string, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = `${locale}|${JSON.stringify(options)}`
+  let fmt = dtfCache.get(key)
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat(locale, options)
+    dtfCache.set(key, fmt)
+  }
+  return fmt
+}
+
 const datesSeed = JSON.parse(datesSeedRaw) as { dates?: { shortMonths?: string[] } }
 const VELO_SHORT_MONTHS: readonly string[] = datesSeed.dates?.shortMonths ?? []
 
@@ -72,7 +89,7 @@ export function formatDate(
   locale: string = getLocale(),
 ): string {
   const date = new Date(isoString)
-  return new Intl.DateTimeFormat(locale, {
+  return dateTimeFormat(locale, {
     day: 'numeric',
     month: 'long',
     hour: '2-digit',
@@ -96,7 +113,7 @@ export function formatDateShort(
   if (code === 'tomorrow') return t('common.tomorrow')
 
   const date = new Date(isoString)
-  return new Intl.DateTimeFormat(locale, {
+  return dateTimeFormat(locale, {
     day: 'numeric',
     month: 'long',
     timeZone: timezone,
@@ -122,7 +139,7 @@ export function relativeDayCode(isoString: string, timezone = 'UTC'): 'today' | 
 
   // Compare calendar dates in the target timezone
   const fmt = (d: Date) =>
-    new Intl.DateTimeFormat('en-CA', {
+    dateTimeFormat('en-CA', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -152,7 +169,7 @@ export function relativeDayCode(isoString: string, timezone = 'UTC'): 'today' | 
 export function formatShortDate(isoString: string, timezone = 'UTC'): string {
   const date = new Date(isoString)
   const locale = getLocale()
-  const parts = new Intl.DateTimeFormat('en-CA', {
+  const parts = dateTimeFormat('en-CA', {
     day: 'numeric',
     month: 'numeric',
     timeZone: timezone,
@@ -172,7 +189,7 @@ export function formatShortDate(isoString: string, timezone = 'UTC'): string {
   const month =
     locale === 'ru'
       ? (VELO_SHORT_MONTHS[monthNum - 1] ?? '')
-      : new Intl.DateTimeFormat(locale, { month: 'short', timeZone: timezone }).format(date)
+      : dateTimeFormat(locale, { month: 'short', timeZone: timezone }).format(date)
   return `${day} ${month}`.trim()
 }
 
@@ -183,7 +200,7 @@ export function formatShortDate(isoString: string, timezone = 'UTC'): string {
  */
 export function isToday(isoString: string, timezone = 'UTC'): boolean {
   const calendarDay = (d: Date) =>
-    new Intl.DateTimeFormat('en-CA', {
+    dateTimeFormat('en-CA', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -198,7 +215,7 @@ export function isToday(isoString: string, timezone = 'UTC'): boolean {
  * truth for the diary day-grouping and the today/yesterday relative labels.
  */
 export function dayKeyOf(isoString: string, timezone = 'UTC'): string {
-  return new Intl.DateTimeFormat('en-CA', {
+  return dateTimeFormat('en-CA', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -225,7 +242,7 @@ export function dayLabelOf(isoString: string, timezone = 'UTC'): string {
   )
   if (key === todayKey) return t('common.today')
   if (key === yesterdayKey) return t('common.yesterday')
-  return new Intl.DateTimeFormat(getLocale(), {
+  return dateTimeFormat(getLocale(), {
     day: 'numeric',
     month: 'long',
     timeZone: timezone,
@@ -257,7 +274,7 @@ export function formatTime(
   locale: string = getLocale(),
 ): string {
   const date = new Date(isoString)
-  return new Intl.DateTimeFormat(locale, {
+  return dateTimeFormat(locale, {
     hour: '2-digit',
     minute: '2-digit',
     timeZone: timezone,
@@ -284,7 +301,7 @@ export function formatTime(
  * absolute epoch.
  */
 export function localSortKey(isoString: string, timezone = 'UTC'): number {
-  const parts = new Intl.DateTimeFormat('en-CA', {
+  const parts = dateTimeFormat('en-CA', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -320,16 +337,16 @@ export function formatFeedDateTime(
   locale: string = getLocale(),
 ): string {
   const date = new Date(isoString)
-  const dayMonth = new Intl.DateTimeFormat(locale, {
+  const dayMonth = dateTimeFormat(locale, {
     day: 'numeric',
     month: 'long',
     timeZone: timezone,
   }).format(date)
-  const weekday = new Intl.DateTimeFormat(locale, {
+  const weekday = dateTimeFormat(locale, {
     weekday: 'long',
     timeZone: timezone,
   }).format(date)
-  const time = new Intl.DateTimeFormat(locale, {
+  const time = dateTimeFormat(locale, {
     hour: '2-digit',
     minute: '2-digit',
     timeZone: timezone,
