@@ -115,10 +115,25 @@ async function request<T>(
   body?: unknown,
   extraHeaders?: Record<string, string>,
 ): Promise<T> {
-  // Any mutation may change what a GET returns: drop the in-flight GETs so the
-  // next read goes to the network instead of joining a pre-mutation response.
-  if (method !== 'GET') _inFlight.clear()
+  if (method === 'GET') return send<T>(method, path, body, extraHeaders)
+  // Any mutation may change what a GET returns, so the in-flight GETs are
+  // dropped when it starts AND when it settles: a GET that left while the
+  // mutation was in flight may carry the pre-mutation state, and a read
+  // issued after the mutation must go to the network, not join it.
+  _inFlight.clear()
+  try {
+    return await send<T>(method, path, body, extraHeaders)
+  } finally {
+    _inFlight.clear()
+  }
+}
 
+async function send<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  extraHeaders?: Record<string, string>,
+): Promise<T> {
   const headers: Record<string, string> = { ...extraHeaders }
 
   if (_token) {
