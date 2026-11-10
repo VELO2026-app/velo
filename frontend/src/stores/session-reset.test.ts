@@ -48,22 +48,18 @@ const factories: StoreFactory[] = Object.values(modules).flatMap((module) =>
 const SESSION_OWNER = 'auth'
 
 /**
- * Stores that do not own a $reset yet, so the account scope leaves them out.
- * `ui` (the master/admin "browse as user" mode) is outside the FE-157 3B
- * file list; adding its $reset is an open owner question. The test below
- * fails once one of these gains a reset -- then drop it from this list.
+ * Stores that do not own a $reset, so the account scope leaves them out.
+ * Empty since FE-157 gave `ui` its reset; a store listed here must really
+ * have none (the test below checks it).
  */
-const KNOWN_WITHOUT_RESET = ['ui']
+const KNOWN_WITHOUT_RESET: string[] = []
 
 /**
  * Stores whose $reset is complete but that start a request right after it.
- * `bookings`: $reset clears statusFilter, and `watch(statusFilter)` then runs
- * pagination.refresh() -- an anonymous GET after logout whose 401 lands in
- * the fresh store. bookings.ts is outside the FE-157 3B file list (owner
- * question: refresh from setStatusFilter instead of a watcher). The
- * `it.fails` cases below pin it and break once it is fixed.
+ * Empty since FE-157 moved the bookings reload from a statusFilter watcher
+ * into setStatusFilter; a store listed here gets `it.fails` cases below.
  */
-const KNOWN_REFETCH_AFTER_RESET = ['bookings']
+const KNOWN_REFETCH_AFTER_RESET: string[] = []
 
 /** A Pinia set up the way app.ts sets it up, with every store created in it. */
 function installAllStores(): { pinia: Pinia; stores: Map<string, StoreGeneric> } {

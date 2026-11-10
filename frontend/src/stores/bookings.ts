@@ -12,7 +12,7 @@
 
 import { defineStore } from 'pinia'
 import { replaceEqualDeep } from '@/utils/structuralShare'
-import { ref, watch } from 'vue'
+import { ref } from 'vue'
 import {
   getMyBookings,
   getUpcomingBookings,
@@ -182,16 +182,17 @@ export const useBookingsStore = defineStore('bookings', () => {
 
   /**
    * Change status filter and reload from scratch.
+   *
+   * @remarks The reload lives HERE, not in a watcher on statusFilter: $reset
+   * clears the filter at the end of a session, and a watcher would then fire
+   * an anonymous GET whose 401 lands in the freshly reset store (FE-157).
    */
   function setStatusFilter(status: BookingStatus | undefined): void {
+    if (statusFilter.value === status) return
     statusFilter.value = status
-  }
-
-  // Auto-refresh when status filter changes.
-  watch(statusFilter, () => {
     // Fire-and-forget: refresh manages its own loading/error state.
     void pagination.refresh()
-  })
+  }
 
   /**
    * Cancel a booking by ID, then refresh the list.

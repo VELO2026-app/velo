@@ -46,6 +46,7 @@ import './styles/skin-tokens.css'
 import { initTelegramSdk } from './platform/telegram-sdk'
 import { installRenderDebug } from './platform/render-debug'
 import { installGlobalErrorHandlers } from './platform/error-reporter'
+import { accountScopePlugin } from './platform/session'
 import { readLocaleHint, setLocale } from './locales'
 import { isSupportedLocale } from './platform/instance'
 
@@ -56,7 +57,8 @@ initTelegramSdk()
 const app = createApp(App)
 
 // Pinia = state manager (like a global dict of reactive objects).
-app.use(createPinia())
+// Account scope (platform/session.ts): every store resets when the session ends.
+app.use(createPinia().use(accountScopePlugin))
 
 // i18n (tz-i18n phase 0): the ru catalog is verbatim the previously
 // hardcoded strings, so this changes no rendered text. The UI language

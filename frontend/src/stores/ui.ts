@@ -21,8 +21,14 @@ export const useUiStore = defineStore('ui', () => {
     uiMode.value = mode
   }
 
+  /** Account scope (platform/session.ts): a new account starts in its own role's mode. */
+  function $reset(): void {
+    uiMode.value = 'default'
+  }
+
   return {
     uiMode,
     setUiMode,
+    $reset,
   }
 })
