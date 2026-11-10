@@ -258,6 +258,31 @@ describe('router/guards', () => {
     })
   })
 
+  // FE-157: roleRedirect and roleFreshnessGuard share ONE rejection check
+  // (hasUnseenRejection) -- they must never disagree on who sees the verdict.
+  describe('the unseen-rejection rule is the same for both guards', () => {
+    const toVerdict = (result: unknown) =>
+      JSON.stringify(result) === JSON.stringify({ path: '/master/pending' })
+
+    it.each([
+      ['rejected, unseen', 'user', 'rejected', false, true],
+      ['rejected, seen', 'user', 'rejected', true, false],
+      ['pending', 'user', 'pending', false, false],
+      ['rejected, master role', 'master', 'rejected', false, false],
+      ['never applied', 'user', null, false, false],
+    ] as const)('%s', async (_label, role, status, seen, routed) => {
+      __setReadyForTest(true)
+      setAuthUser({
+        id: 'user_1',
+        role,
+        ...(status ? { master_application: { status } } : {}),
+      })
+      if (seen) localStorage.setItem(masterRejectionSeenKey('user_1'), '1')
+      expect(toVerdict(await call(roleRedirect))).toBe(routed)
+      expect(toVerdict(roleFreshnessGuard({ name: 'user-calendar' }))).toBe(routed)
+    })
+  })
+
   describe('roleGuard', () => {
     it("roleGuard('admin'): admin passes", () => {
       setAuthUser({ role: 'admin' })

@@ -90,6 +90,37 @@ type AccessResult = true | { path: string }
 type AccessCheck = () => AccessResult | Promise<AccessResult>
 
 /**
+ * Whether the session is a rejected applicant who has not seen the verdict
+ * screen yet (Bug 1, PROMPT №405; T21-4 on any route).
+ *
+ * @remarks ONE copy for roleRedirect and roleFreshnessGuard: a role='user'
+ * account whose master application was rejected, routed to /master/pending
+ * ONCE (operator decision: show the verdict, then treat them as an ordinary
+ * user). MasterPendingView marks the per-user key seen once the screen
+ * actually renders (mirrors masterApprovedSeenKey's placement for the
+ * approved case); re-applying clears it (MasterApplyView).
+ */
+function hasUnseenRejection(auth: ReturnType<typeof useAuthStore>): boolean {
+  const userId = auth.user?.id
+  if (auth.role !== 'user' || auth.masterApplication?.status !== 'rejected' || !userId) {
+    return false
+  }
+  return !localStorage.getItem(masterRejectionSeenKey(userId))
+}
+
+/** The dashboard of a role's own zone; /user/dashboard for any other role. */
+function zoneDashboard(role: UserRole | null): { path: string } {
+  switch (role) {
+    case 'admin':
+      return { path: '/admin/dashboard' }
+    case 'master':
+      return { path: '/master/dashboard' }
+    default:
+      return { path: '/user/dashboard' }
+  }
+}
+
+/**
  * Redirect `/` to the correct dashboard based on user role.
  * Falls back to /user/dashboard for unknown roles.
  *
@@ -106,8 +137,8 @@ type AccessCheck = () => AccessResult | Promise<AccessResult>
  * Bug 1 (PROMPT №405, operator device testing 2026-07-15): a rejected
  * applicant returning later (role='user', no capability) is routed to
  * /master/pending ONCE (operator decision: show the verdict, then treat
- * them as an ordinary user) if they have not already seen it -- see the
- * masterRejectionSeenKey check below.
+ * them as an ordinary user) if they have not already seen it -- see
+ * hasUnseenRejection.
  */
 export const roleRedirect: NavigationGuardWithThis<undefined> = async () => {
   // Wait for initAuth() to complete so auth.role reflects the real session.
@@ -136,26 +167,10 @@ export const roleRedirect: NavigationGuardWithThis<undefined> = async () => {
   // ALLOWS a rejected applicant onto /master/pending, but nothing routed them
   // there -- roleRedirect switched on role alone and always sent role='user'
   // to /user/dashboard, so a returning rejected applicant never saw the
-  // screen the guard now permits. MasterPendingView marks the per-user key
-  // seen once the screen actually renders (mirrors masterApprovedSeenKey's
-  // placement for the approved case).
-  if (
-    auth.role === 'user' &&
-    auth.masterApplication?.status === 'rejected' &&
-    auth.user?.id &&
-    !localStorage.getItem(masterRejectionSeenKey(auth.user.id))
-  ) {
-    return { path: '/master/pending' }
-  }
+  // screen the guard now permits.
+  if (hasUnseenRejection(auth)) return { path: '/master/pending' }
 
-  switch (auth.role) {
-    case 'admin':
-      return { path: '/admin/dashboard' }
-    case 'master':
-      return { path: '/master/dashboard' }
-    default:
-      return { path: '/user/dashboard' }
-  }
+  return zoneDashboard(auth.role)
 }
 
 /**
@@ -223,15 +238,7 @@ export function roleFreshnessGuard(
 ): true | { path: string } {
   void refreshRoleIfStale()
 
-  const auth = useAuthStore()
-
-  if (
-    to.name !== 'master-pending' &&
-    auth.role === 'user' &&
-    auth.masterApplication?.status === 'rejected' &&
-    auth.user?.id &&
-    !localStorage.getItem(masterRejectionSeenKey(auth.user.id))
-  ) {
+  if (to.name !== 'master-pending' && hasUnseenRejection(useAuthStore())) {
     return { path: '/master/pending' }
   }
 
@@ -506,7 +513,7 @@ export function zoneHomeGuard(to: Pick<RouteLocationNormalized, 'name' | 'path'>
   if (auth.role !== 'master' && auth.role !== 'admin') return true
   if (useUiStore().uiMode === 'user') return true
 
-  return auth.role === 'admin' ? { path: '/admin/dashboard' } : { path: '/master/dashboard' }
+  return zoneDashboard(auth.role)
 }
 
 /** The check behind each RouteRequirement. */
