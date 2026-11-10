@@ -41,8 +41,10 @@ function parseLocales(value: string | undefined): Locale[] {
 // =============================================================================
 // Runtime instance config (FE-129). The deploy machine renders /config.json
 // from the container environment at start (nginx/config.json.template); the
-// keys follow primer.yaml's env schema -- API_BASE_URL, TELEGRAM_BOT_URL,
-// DEFAULT_LOCALE, LOCALES, BRAND. launch.ts applies it before `import('./app')`,
+// env names are primer.yaml's -- API_BASE_URL, TELEGRAM_BOT_URL,
+// DEFAULT_LANGUAGE, LANGUAGES. The brand is NOT a start value: it is a skin
+// property (brand.json displayName, materialized at build -- owner 09.11).
+// launch.ts applies it before `import('./app')`,
 // because i18n and the manifest read the snapshot fields below at module
 // evaluation. An empty/absent value falls through to the build-time VITE_*
 // variable and then to the golden default.
@@ -55,14 +57,41 @@ export interface InstanceConfig {
   defaultLocale?: string
   /** Comma-separated locale codes, as the machine ships them (guide §2.5). */
   locales?: string
-  brand?: string
+}
+
+/**
+ * The API base as the app uses it. Two domains (owner 09.11, primer.yaml
+ * `domains: [frontend, api]`): the passport ships `domains.api` as a bare
+ * HOST, so a value without a scheme gets `https://`; a trailing slash is
+ * dropped (paths are joined as `${base}/api/...`). Empty stays empty -- the
+ * same-origin path that local dev and the interim stand still use.
+ *
+ * @param value - the raw API_BASE_URL / VITE_API_BASE_URL value
+ * @returns the absolute origin, or '' for same-origin
+ */
+export function normalizeApiBase(value: string | undefined): string {
+  const raw = (value ?? '').trim()
+  if (raw === '') return ''
+  const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`
+  return withScheme.replace(/\/+$/, '')
 }
 
 let runtimeConfig: InstanceConfig = {}
 
+/** envsubst substitutes only variables that EXIST in the environment: an
+ * unset one leaves its `${NAME}` placeholder in /config.json verbatim. A
+ * placeholder is not a value -- treat it as empty (golden fallback). */
+const UNRENDERED = /^\$\{[A-Z0-9_]+\}$/
+
 /** Apply the runtime /config.json. Called from launch.ts, pre-app-import. */
 export function applyInstanceConfig(config: InstanceConfig | null | undefined): void {
-  runtimeConfig = config ?? {}
+  const clean: InstanceConfig = {}
+  for (const [key, value] of Object.entries(config ?? {})) {
+    if (typeof value === 'string' && !UNRENDERED.test(value.trim())) {
+      clean[key as keyof InstanceConfig] = value
+    }
+  }
+  runtimeConfig = clean
 }
 
 /**
@@ -91,10 +120,11 @@ export const INSTANCE = {
   // the exact per-mount semantics the former inline reads had (views read
   // them in setup; vi.stubEnv in tests keeps working unchanged) -- and the
   // runtime config wins at access time for free.
-  /** Empty = same-origin: the machine routes the whole domain here and this
-   * app's nginx proxies /api to the backend (FE-149 §2, decision A). */
+  /** The API origin. Under the machine the API lives on its own domain
+   * (`domains.api`, a bare host that gets `https://`); empty = same-origin, the
+   * local-dev / interim path through this container's /api proxy. */
   get apiBaseUrl(): string {
-    return runtimeConfig.apiBaseUrl || import.meta.env.VITE_API_BASE_URL || ''
+    return normalizeApiBase(runtimeConfig.apiBaseUrl || import.meta.env.VITE_API_BASE_URL)
   },
   get telegramBotUrl(): string {
     return (
@@ -109,8 +139,10 @@ export const INSTANCE = {
   // Live reads are correct: the consumers (i18n's catalog setup, the manifest
   // is build-time) evaluate later, inside the dynamically imported app
   // graph -- after the config is in.
+  // The brand is a skin property (owner 09.11): never read from the runtime
+  // config -- only the build env the skin materializes, then the golden name.
   get brand(): string {
-    return runtimeConfig.brand || import.meta.env.VITE_BRAND || 'VELO'
+    return import.meta.env.VITE_BRAND || 'VELO'
   },
   get defaultLocale(): Locale {
     return parseLocale(runtimeConfig.defaultLocale || import.meta.env.VITE_DEFAULT_LOCALE, 'ru')

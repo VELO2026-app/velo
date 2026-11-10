@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   FEATURE_NAMES,
   editionFlags,
@@ -96,9 +96,45 @@ describe('edition channel (FE-130: PRIMER_EDITION -> editions.json)', () => {
     expect(map['__VELO_FEATURE_PAYMENTS__']).toBe('true')
     // The map WE built always carries the key; the Record<string, string>
     // index type is `string | undefined` under noUncheckedIndexedAccess.
-    expect(JSON.parse(map['__VELO_FEATURE_FLAGS__'] as string)).toEqual({
+    // The define value is pasted in as an expression: evaluating it must give
+    // the JSON STRING featureEnabled() parses, not an object (an object made
+    // JSON.parse throw and blanked every screen calling featureEnabled()).
+    const pasted: unknown = JSON.parse(map['__VELO_FEATURE_FLAGS__'] as string)
+    expect(typeof pasted).toBe('string')
+    expect(JSON.parse(pasted as string)).toEqual({
       ai: false,
       payments: true,
     })
+  })
+
+  // Regression guard: vitest.config pins the flags define away, so no other
+  // test ever runs featureEnabled() on the value vite really injects. Here
+  // every define of the map is evaluated as vite pastes it (an expression),
+  // installed as the global, and featureEnabled() must read it back intact.
+  // Every value is JSON text, and a JSON text evaluates as a JS expression to
+  // exactly what JSON.parse returns -- so `pasted` is what vite injects.
+  const pasted = (value: string | undefined): unknown => JSON.parse(value as string)
+  it('featureEnabled works on the define map exactly as vite injects it', () => {
+    const flagSets = [
+      editionFlags('core', TABLE),
+      editionFlags('school-payments', TABLE),
+      featureFlags(undefined), // golden: every module on
+    ]
+    for (const flags of flagSets) {
+      const map = featureDefineMap(flags)
+      // Per-module literals must evaluate to booleans (route gates fold them).
+      for (const name of FEATURE_NAMES) {
+        const key = `__VELO_FEATURE_${name.toUpperCase()}__`
+        expect(typeof pasted(map[key])).toBe('boolean')
+      }
+      vi.stubGlobal('__VELO_FEATURE_FLAGS__', pasted(map['__VELO_FEATURE_FLAGS__']))
+      try {
+        for (const name of FEATURE_NAMES) {
+          expect(featureEnabled(name)).toBe(flags[name])
+        }
+      } finally {
+        vi.unstubAllGlobals()
+      }
+    }
   })
 })
