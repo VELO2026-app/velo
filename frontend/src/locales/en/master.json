@@ -1,11 +1,4 @@
 {
-  "methodPicker": {
-    "custom": "Custom variant",
-    "directionPlaceholder": "Specify a direction…"
-  },
-  "masterCard": {
-    "profileUnavailable": "The master's profile is unavailable"
-  },
   "masterScreens": {
     "masterMessages": {
       "empty": {
@@ -769,7 +762,8 @@
       "newAria": "New promo code",
       "loadFailed": "Failed to load the promo codes",
       "discount": "Discount: {n}%",
-      "used": "Used: {label}"
+      "used": "Used: {label}",
+      "usedOf": "{used} of {max}"
     },
     "masterStudentProfile": {
       "addToGroup": "Add to a group",

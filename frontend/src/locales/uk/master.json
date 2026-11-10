@@ -1,11 +1,4 @@
 {
-  "methodPicker": {
-    "custom": "Свій варіант",
-    "directionPlaceholder": "Укажіть напрямок…"
-  },
-  "masterCard": {
-    "profileUnavailable": "Профіль майстра недоступний"
-  },
   "masterScreens": {
     "masterMessages": {
       "empty": {
@@ -769,7 +762,8 @@
       "newAria": "Новий промокод",
       "loadFailed": "Не вдалося завантажити промокоди",
       "discount": "Знижка: {n}%",
-      "used": "Використано: {label}"
+      "used": "Використано: {label}",
+      "usedOf": "{used} з {max}"
     },
     "masterStudentProfile": {
       "addToGroup": "Додати до групи",
