@@ -122,13 +122,14 @@ RUN rm -f /etc/nginx/conf.d/default.conf
 
 # Runtime instance config (FE-129): the stock nginx image entrypoint runs
 # 30-envsubst-on-templates.sh at start. The template renders /config.json
-# from the container environment; the FILTER keeps envsubst to the five
-# declared keys (primer-blank's pattern -- no instance value can leak into
+# from the container environment; the FILTER keeps envsubst to the four
+# declared keys -- primer.yaml's env names (the brand is a skin property,
+# not a start value -- owner 09.11) (primer-blank's pattern -- no instance value can leak into
 # anything else, and nothing else can leak into the config). The context is
 # the repo root since FE-116, so COPY paths carry the frontend/ prefix.
 ENV NGINX_ENVSUBST_TEMPLATE_DIR=/etc/nginx/templates \
     NGINX_ENVSUBST_OUTPUT_DIR=/usr/share/nginx/html \
-    NGINX_ENVSUBST_FILTER='^(API_BASE_URL|TELEGRAM_BOT_URL|DEFAULT_LOCALE|LOCALES|BRAND)$'
+    NGINX_ENVSUBST_FILTER='^(API_BASE_URL|TELEGRAM_BOT_URL|DEFAULT_LANGUAGE|LANGUAGES)$'
 COPY frontend/nginx/config.json.template /etc/nginx/templates/config.json.template
 
 # Copy our nginx config.
