@@ -89,19 +89,23 @@ Registered new ones (registry `tz-curator.md` §7.2):
 | `SchoolInviteField`     | wide, narrow CTA "Copy invite link" under the hero (§1.6, for the curator): liquid glass (blue glass tokens + blur, height `--velo-size-44`), tap — link to the clipboard; next to it a circle "Refresh link" of the same diameter (confirm → revoke+create), without a link — "Retry" | feature composite in `shared/`; it mints on mount (idempotent get-or-mint), 503 `bot_url_not_configured` — the CTA is disabled, the URL is never fabricated; replaced the removed school invitation sheet                                                                                    |
 | `utils/schoolBranding/` | port of the approved generator (prototype 2026-09-19, deleted after approval): hash/palettes/params/geometry/noise/mandala/logo/banner + a barrel with a params cache                                                                                                                  | §5.3; the same hash → the same SVG (golden tests), edited per module                                                                                                                                                                                                                         |
 
-## Mirror of the feature composites (`front` page, 2026-11-09)
+## Mirror of the feature composites (`front` page, sheets as of FE-154, 2026-11-09)
 
 Feature composites are not in the DS map, but they are mirrored as COMPONENT / COMPONENT_SET (Auto Layout, bindings to `velo.*`):
 
 | Section in Figma                        | Node        | Contents                                                                                                                                                                                                                     |
 | --------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Kit additions — overlays & states       | `3975:1900` | `VModal`, `VConfirmDialog`, `VMenuItem`, `VMenu`, states of `VInput`/`VTextarea`, `VCard`, `VButton` (a single set: Type × Size md/sm × State default/disabled/loading; the former `VButton (ext)` merged into the original) |
-| Composites — School                     | `3976:2319` | the 8 school composites from the table above (mandala/banner — a static sample, the generator is not reproduced)                                                                                                             |
-| Composites — practices, bookings, chats | `3976:1986` | `PracticeListCard`, `PracticeHeroCard`, `BookingCard`, `CalendarPracticeCard`, `WeekStrip`, `Banner`, `NotificationRow`, `MasterCard`, `ChatListRow`, `MoodSlider`, `MoodAvatar`, `FormShell`, `ResultScreen`, etc. (19)     |
-| Composites — diary, sheets, modals      | `3975:1542` | Diary and chats, 7 sheets, 5 modals, 4 filters, pickers, onboarding (35)                                                                                                                                                     |
+| Component / Overlays — kit additions (+ Form fields — states `3997:19215`, Cards & rows `3997:19222`) | `3997:19229` | `VModal`, `VConfirmDialog`, `VMenuItem`, `VMenu`, states of `VInput`/`VTextarea`, `VCard`, `VButton` (a single set: Type × Size md/sm × State default/disabled/loading; the former `VButton (ext)` merged into the original) |
+| Component / School                      | `3997:19252` | the 8 school composites from the table above (mandala/banner — a static sample, the generator is not reproduced)                                                                                                             |
+| Component / Practices, bookings & chats | `3997:19244` | `PracticeListCard`, `PracticeHeroCard`, `BookingCard`, `CalendarPracticeCard`, `WeekStrip`, `Banner`, `NotificationRow`, `MasterCard`, `ChatListRow`, `MoodSlider`, `MoodAvatar`, `FormShell`, `ResultScreen`, etc. (19)     |
+| Component / Diary, sheets & modals      | `3997:19236` | Diary and chats, 7 sheets, 5 modals, 4 filters, pickers, onboarding (35)                                                                                                                                                     |
 
 Not mirrored: `DatePickerSheet`, `MethodTaxonomyPicker`, the calendar in `DiaryFilterModal`, the "recent" panel in `DiarySearchBar`, nine `PracticePlaceholder` artworks (`assets/practice-cards/*.svg`).
 The old simplified `PracticeCard` master was removed: the Dashboard/Practices screens are built on `PracticeListCard` (Actions=none; the Zoom/Check-in buttons sit outside the card, as in `UserDashboardView`). `VBadge` gained a boolean `Icon` property (a check mark).
+
+## Master descriptions in Figma (FE-154, 2026-11-09)
+
+Every COMPONENT / COMPONENT_SET on `front` carries a `description`: `Code:` path, `Props:` (from this map), `Map:` section. A master with no code counterpart says "Figma-only" and is listed in [GAPS.md](./GAPS.md). `VDayPicker` has one master (`3914:216`); the duplicate in `Forms` was removed.
 
 ## How to update the map
 
