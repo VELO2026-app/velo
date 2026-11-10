@@ -115,6 +115,10 @@ async function request<T>(
   body?: unknown,
   extraHeaders?: Record<string, string>,
 ): Promise<T> {
+  // Any mutation may change what a GET returns: drop the in-flight GETs so the
+  // next read goes to the network instead of joining a pre-mutation response.
+  if (method !== 'GET') _inFlight.clear()
+
   const headers: Record<string, string> = { ...extraHeaders }
 
   if (_token) {
@@ -238,7 +242,9 @@ export const api = {
     const existing = _inFlight.get(path)
     if (existing) return existing as Promise<T>
     const promise = request<T>('GET', path).finally(() => {
-      _inFlight.delete(path)
+      // Only our own entry: a mutation may have cleared the map and a newer
+      // GET for the same path may already be registered.
+      if (_inFlight.get(path) === promise) _inFlight.delete(path)
     })
     _inFlight.set(path, promise)
     return promise

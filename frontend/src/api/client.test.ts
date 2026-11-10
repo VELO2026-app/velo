@@ -10,7 +10,7 @@
 // =============================================================================
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { api, ApiResponseError } from '@/api/client'
+import { api, ApiResponseError, resetClientState } from '@/api/client'
 
 function stubFetch(status: number, body: unknown, headers?: Record<string, string>) {
   vi.stubGlobal(
@@ -74,5 +74,43 @@ describe('request() trace id suffix (W29-trimmed)', () => {
     )
     const err = await captureError()
     expect(err.detail).toBe('field required · код 112233')
+  })
+})
+
+describe('GET in-flight dedupe', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    resetClientState()
+  })
+
+  const ok = () => new Response(JSON.stringify({}), { status: 200 })
+
+  it('joins identical simultaneous GETs into one network call', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => ok())
+    vi.stubGlobal('fetch', fetchMock)
+    await Promise.all([api.get('/x'), api.get('/x')])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('a mutation while a GET is in flight makes the next GET hit the network', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => ok())
+    vi.stubGlobal('fetch', fetchMock)
+    const first = api.get('/x')
+    const mutation = api.post('/x', { a: 1 })
+    const second = api.get('/x')
+    await Promise.all([first, mutation, second])
+    const methods = fetchMock.mock.calls.map((c) => (c[1] as RequestInit).method)
+    expect(methods).toEqual(['GET', 'POST', 'GET'])
+  })
+
+  it('a settled pre-mutation GET does not evict the newer in-flight GET', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => ok())
+    vi.stubGlobal('fetch', fetchMock)
+    const first = api.get('/x')
+    await api.patch('/x', {})
+    const second = api.get('/x')
+    const third = api.get('/x') // joins `second`
+    await Promise.all([first, second, third])
+    expect(fetchMock).toHaveBeenCalledTimes(3) // GET, PATCH, one shared GET
   })
 })
