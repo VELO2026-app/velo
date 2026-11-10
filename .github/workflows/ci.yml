@@ -118,14 +118,19 @@ jobs:
       # tz-whitelabel F5 (FE-114, FE-152): the build matrix IS the whitelabel
       # gate -- golden x every edition of editions.json through PRIMER_EDITION
       # (the machine's channel): a module outside the edition must leave NO
-      # chunks in dist (core: no ai, no payments) -- plus every skins/<name>
-      # x full (brand + tokens from the skin, none of them in golden). One
-      # vite build per cell; --no-restore skips the pointless final rebuild.
+      # chunks in dist (core: no ai, no payments) -- plus ONE skin x full cell
+      # on a synthetic package written to the runner's temp dir (velo carries
+      # no skins since FE-131; scripts/make-test-skin.mjs: golden assets, a
+      # contrasting palette, a font) -- the build's skin path (asset spill,
+      # dist/skin prune, @font-face, brand grep) runs on every PR. One vite
+      # build per cell; --no-restore skips the pointless final rebuild.
       # Runs AFTER the plain build so a red matrix reads as the whitelabel
       # gate failing, not as "the app does not build".
       - name: Build matrix (whitelabel gate)
         if: env.FULL == 'true'
-        run: pnpm -C frontend build:matrix --no-restore
+        run: |
+          node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
+          pnpm -C frontend build:matrix --no-restore --skin "$RUNNER_TEMP/ci-skin"
 
   drift-check:
     name: generated.ts drift

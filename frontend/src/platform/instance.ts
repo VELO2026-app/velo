@@ -43,7 +43,8 @@ function parseLocales(value: string | undefined): Locale[] {
 // from the container environment at start (nginx/config.json.template); the
 // env names are primer.yaml's -- API_BASE_URL, TELEGRAM_BOT_URL,
 // DEFAULT_LANGUAGE, LANGUAGES. The brand is NOT a start value: it is a skin
-// property (brand.json displayName, materialized at build -- owner 09.11).
+// property (the skin brand record's displayName, materialized at build --
+// owner 09.11).
 // launch.ts applies it before `import('./app')`,
 // because i18n and the manifest read the snapshot fields below at module
 // evaluation. An empty/absent value falls through to the build-time VITE_*
