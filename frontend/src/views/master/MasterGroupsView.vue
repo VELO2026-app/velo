@@ -102,7 +102,9 @@
           :title="t('masterScreens.masterGroups.toast.searchFailed')"
           :description="searchError"
         >
-          <VButton size="sm" variant="outline" @click="loadSearch">{{ t('common.retry') }}</VButton>
+          <VButton size="sm" variant="outline" @click="retrySearch">{{
+            t('common.retry')
+          }}</VButton>
         </VEmptyState>
 
         <template v-else-if="searchResults.length">
@@ -249,7 +251,7 @@ async function loadSearch(query: string, isStale: () => boolean): Promise<void> 
 }
 
 // An emptied query cancels the pending/in-flight fetch and clears results.
-useDebouncedSearch(search, (query, run) => loadSearch(query, run.isStale), {
+const searchRunner = useDebouncedSearch(search, (query, run) => loadSearch(query, run.isStale), {
   beforeSchedule: (value) => {
     if (value.trim()) return true
     searchResults.value = []
@@ -258,6 +260,11 @@ useDebouncedSearch(search, (query, run) => loadSearch(query, run.isStale), {
     return false
   },
 })
+
+/** Retry button of the search error state: re-runs the current query now. */
+function retrySearch(): void {
+  searchRunner.flush(search.value)
+}
 
 // Show the first 5 (owner Q7, PROMPT №610 -- was 10); the rest hide behind
 // the outlined t('masterScreens.masterGroups.moreGroups') pill (VShowMore already built this exact

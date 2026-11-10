@@ -19,7 +19,7 @@ describe('useDebouncedSearch', () => {
     expect(handler).not.toHaveBeenCalled()
     vi.advanceTimersByTime(1)
     expect(handler).toHaveBeenCalledTimes(1)
-    expect(handler.mock.calls[0][0]).toBe('ab')
+    expect(handler.mock.calls[0]![0]).toBe('ab')
     scope.stop()
   })
 
@@ -35,8 +35,8 @@ describe('useDebouncedSearch', () => {
     await nextTick()
     vi.advanceTimersByTime(300)
     expect(runs).toHaveLength(2)
-    expect(runs[0].isStale()).toBe(true)
-    expect(runs[1].isStale()).toBe(false)
+    expect(runs[0]!.isStale()).toBe(true)
+    expect(runs[1]!.isStale()).toBe(false)
     scope.stop()
   })
 
@@ -53,7 +53,7 @@ describe('useDebouncedSearch', () => {
     scope.stop()
     vi.advanceTimersByTime(1000)
     expect(runs).toHaveLength(1)
-    expect(runs[0].isStale()).toBe(true)
+    expect(runs[0]!.isStale()).toBe(true)
   })
 
   it('beforeSchedule=false cancels the pending fetch', async () => {
