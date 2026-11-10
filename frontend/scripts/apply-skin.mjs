@@ -14,7 +14,7 @@
 
 import { cpSync, existsSync, rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 
 const frontendDir = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const target = join(frontendDir, 'public', 'skin')

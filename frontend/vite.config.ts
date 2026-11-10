@@ -321,6 +321,8 @@ export default defineConfig(({ mode }) => {
                 cacheableResponse: { statuses: [200] },
                 plugins: [
                   {
+                    // Workbox expects a promise; the function is serialised into the SW as-is.
+                    // eslint-disable-next-line @typescript-eslint/require-await
                     cacheWillUpdate: async ({ response }: { response: Response }) =>
                       (response.headers.get('content-type') ?? '').includes('text/html')
                         ? null
