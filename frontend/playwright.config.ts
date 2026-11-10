@@ -19,7 +19,10 @@ export default defineConfig({
   outputDir: 'test-results',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  // No retries anywhere: a retry would turn a flaky scenario green. (The
+  // `failOnFlakyTests` option would fail the run anyway but still burn a
+  // second attempt per flake; zero retries reports the first failure.)
+  retries: 0,
   reporter: process.env.CI ? [['list'], ['github']] : 'list',
   timeout: 30_000,
   expect: { timeout: 10_000 },

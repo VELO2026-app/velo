@@ -1,7 +1,9 @@
 <!--
   VELO Frontend -- VSelect Component (Phase F2.1)
 
-  Native select dropdown. Matches mockup .form-select styles.
+  Native select dropdown. Without a visible `label` the in-field `placeholder`
+  is the field's name, so it doubles as the select's aria-label (a disabled
+  placeholder <option> is not an accessible name). Matches mockup .form-select styles.
   White plate canon (Phase-3) — unified with VInput as the single field surface
   (was glass-blue). `required` -> pink IconRequired seal in the right gutter.
 
@@ -19,6 +21,7 @@
         class="v-select__field"
         :value="modelValue"
         :disabled="disabled"
+        :aria-label="label ? undefined : placeholder || undefined"
         :aria-invalid="!!error || undefined"
         :aria-describedby="error ? errorId : undefined"
         @change="$emit('update:modelValue', ($event.target as HTMLSelectElement).value)"
