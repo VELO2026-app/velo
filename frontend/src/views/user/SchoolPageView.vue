@@ -284,13 +284,13 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery, useQueryCache } from '@pinia/colada'
 import { getSchoolLeavePreview, leaveSchool, updateSchool } from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
 import type { SchoolPageResponse } from '@/api/types'
-import { schoolFeedQuery, schoolPageQuery } from '@/composables/queries/schools'
+import { forgetSchool, schoolFeedQuery, schoolPageQuery } from '@/composables/queries/schools'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import CalendarPracticeCard from '@/components/shared/CalendarPracticeCard.vue'
@@ -338,6 +338,16 @@ const FEED_LIMIT = 5
 const queryCache = useQueryCache()
 const pageQuery = useQuery(() => schoolPageQuery(schoolId.value))
 const feedQuery = useQuery(() => schoolFeedQuery({ schoolId: schoolId.value, limit: FEED_LIMIT }))
+
+// Schools left from this screen. Their cache entries go once the screen is
+// gone: dropping them earlier would repaint this page (loader or 404) under
+// the success toast. onUnmounted, not onScopeDispose: Colada releases the
+// entries in its own onUnmounted (registered above, so it runs first), and
+// only a released entry can be removed.
+const leftSchools = new Set<string>()
+onUnmounted(() => {
+  for (const id of leftSchools) forgetSchool(queryCache, id)
+})
 
 /** The server says the school is not there for this viewer (frozen, deleted, mistyped id). */
 const notFound = computed(() => {
@@ -498,6 +508,7 @@ async function onLeaveConfirm(): Promise<void> {
   leaving.value = true
   try {
     await leaveSchool(schoolId.value)
+    leftSchools.add(schoolId.value)
     leaveConfirmOpen.value = false
     toast.success(t('user.screens.schoolPage.toast.left'))
     void router.replace(listRoute.value)
