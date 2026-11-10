@@ -197,7 +197,8 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useNow } from '@/composables/useNow'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'
 import { useBookingsStore } from '@/stores/bookings'
@@ -235,8 +236,7 @@ const entering = ref(false)
 
 /** Reactive clock (60s tick -- the PracticeDetailView pattern) so the check-in
  * button disappears live if the start time passes while the screen is open. */
-const now = ref(Date.now())
-let clockInterval: ReturnType<typeof setInterval> | null = null
+const now = useNow(60_000)
 
 /** F4 fix: the top safe area the meeting's root keeps clear -- the SAME
  * source as every screen of ours (Telegram fullscreen controls, or
@@ -428,18 +428,7 @@ onBeforeRouteLeave(() => {
   return true
 })
 
-onUnmounted(() => {
-  if (clockInterval) clearInterval(clockInterval)
-})
-
 onMounted(async () => {
-  // The 60s clock keeps practiceStarted honest while the screen stays open.
-  // Started BEFORE the first await: if the person leaves before the resolve
-  // call answers, onUnmounted must already have an interval to clear.
-  clockInterval = setInterval(() => {
-    now.value = Date.now()
-  }, 60_000)
-
   if (practicesStore.selected?.id !== practiceId) {
     void practicesStore.fetchPractice(practiceId)
   }

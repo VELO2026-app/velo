@@ -47,6 +47,7 @@ import i18n from '@/locales'
 
 const { t } = i18n.global
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
+import { useNow } from '@/composables/useNow'
 import type { PracticeFilters, PracticeResponse } from '@/api/types'
 
 // Calendar-specific facet filters (excludes pagination/sort/date-range,
@@ -173,10 +174,7 @@ export const useCalendarStore = defineStore('calendar', () => {
   // starts (a started practice can no longer be booked). The backend feed
   // already excludes started practices on fetch; this keeps the open calendar
   // correct live, without waiting for a reload.
-  const now = ref<number>(Date.now())
-  setInterval(() => {
-    now.value = Date.now()
-  }, 60_000)
+  const now = useNow(60_000)
 
   // F5: the timezone in which THIS VIEWER sees practice times (their profile).
   // Used to bucket practices into calendar days so the day matches the time

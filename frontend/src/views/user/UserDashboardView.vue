@@ -272,7 +272,8 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { onDocumentEvent, offDocumentEvent, isDocumentHidden } from '@/platform/dom'
-import { computed, ref, onMounted, onUnmounted, onActivated, onDeactivated } from 'vue'
+import { computed, onMounted, onUnmounted, onActivated, onDeactivated } from 'vue'
+import { useNow } from '@/composables/useNow'
 import { useRouter } from 'vue-router'
 import { useBookingsStore } from '@/stores/bookings'
 import { UPCOMING_FRESH_MS } from '@/router/dataPrefetch'
@@ -309,8 +310,7 @@ const toast = useToast()
 const notifications = useNotificationsStore()
 
 // -- Reactive clock: updated every 60s so alert computeds re-evaluate --
-const now = ref(Date.now())
-let clockInterval: ReturnType<typeof setInterval> | null = null
+const now = useNow(60_000)
 
 // -- Profile stats (attended count + hours): server-side aggregate over ALL
 // attended bookings -- not derived from the paginated bookings page (W-6).
@@ -623,23 +623,17 @@ function loadUpcoming(): void {
 }
 
 /** Screen on: bell (silent refresh -- a failure keeps the last known value,
- * stores/notifications.ts), its poll, and the minute clock. */
+ * stores/notifications.ts), and its poll (the minute clock is useNow's, kept-alive aware). */
 function resume(): void {
-  now.value = Date.now()
   void notifications.refreshUnread()
   startBellPoll()
   onDocumentEvent('visibilitychange', onBellVisibility)
-  clockInterval ??= setInterval(() => {
-    now.value = Date.now()
-  }, 60_000)
 }
 
 /** Screen off (left or kept in the background by TabRouterView). */
 function pause(): void {
   offDocumentEvent('visibilitychange', onBellVisibility)
   stopBellPoll()
-  if (clockInterval) clearInterval(clockInterval)
-  clockInterval = null
 }
 
 onMounted(() => {
