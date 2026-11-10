@@ -21,6 +21,8 @@ import { setActivePinia, createPinia } from 'pinia'
 import { defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import {
+  ADMIN_PROFILE_TTL_MS,
+  __resetAdminProfileTtlForTest,
   installAccessGuard,
   requirementsGuard,
   zoneHomeGuard,
@@ -100,6 +102,7 @@ describe('router/guards', () => {
     masterStoreState.profile = null
     fetchMyProfile.mockClear()
     refreshRoleIfStale.mockClear()
+    __resetAdminProfileTtlForTest()
   })
 
   afterEach(() => {
@@ -347,6 +350,60 @@ describe('router/guards', () => {
       masterStoreState.profile = { status: 'verified' }
       await call(masterStatusGuard)
       expect(fetchMyProfile).toHaveBeenCalledWith(false)
+    })
+  })
+
+  // FE-157: B1's refetch for an admin used to leave on EVERY check. It now
+  // leaves at most once per ADMIN_PROFILE_TTL_MS per account; in between, the
+  // store's last answer decides.
+  describe('masterStatusGuard: the admin profile TTL', () => {
+    it('a second check inside the window sends no request', async () => {
+      setAuthUser({ role: 'admin' })
+      masterStoreState.profile = { status: 'verified' }
+      expect(await call(masterStatusGuard)).toBe(true)
+      expect(await call(masterStatusGuard)).toBe(true)
+      expect(fetchMyProfile).toHaveBeenCalledTimes(1)
+      expect(fetchMyProfile).toHaveBeenCalledWith(true)
+    })
+
+    it('inside the window the cached answer still decides', async () => {
+      setAuthUser({ role: 'admin' })
+      masterStoreState.profile = { status: 'verified' }
+      expect(await call(masterStatusGuard)).toBe(true)
+      // The store learned of a suspension some other way (a screen's own
+      // forced fetch): no request from the guard, and it reads the news.
+      masterStoreState.profile = { status: 'suspended' }
+      expect(await call(masterStatusGuard)).toEqual({ path: '/master/pending' })
+      expect(fetchMyProfile).toHaveBeenCalledTimes(1)
+    })
+
+    it('once the window has passed, the next check refetches', async () => {
+      vi.useFakeTimers()
+      setAuthUser({ role: 'admin' })
+      masterStoreState.profile = { status: 'verified' }
+      await call(masterStatusGuard)
+      vi.advanceTimersByTime(ADMIN_PROFILE_TTL_MS - 1)
+      await call(masterStatusGuard)
+      expect(fetchMyProfile).toHaveBeenCalledTimes(1)
+      vi.advanceTimersByTime(1)
+      await call(masterStatusGuard)
+      expect(fetchMyProfile).toHaveBeenCalledTimes(2)
+    })
+
+    it("another account is not served by the previous account's window", async () => {
+      setAuthUser({ id: 'admin_a', role: 'admin' })
+      await call(masterStatusGuard)
+      setAuthUser({ id: 'admin_b', role: 'admin' })
+      await call(masterStatusGuard)
+      expect(fetchMyProfile).toHaveBeenCalledTimes(2)
+    })
+
+    it('a real master never forces: the lazy fetch on every check, as before', async () => {
+      setAuthUser({ role: 'master' })
+      masterStoreState.profile = { status: 'verified' }
+      await call(masterStatusGuard)
+      await call(masterStatusGuard)
+      expect(fetchMyProfile).not.toHaveBeenCalledWith(true)
     })
   })
 

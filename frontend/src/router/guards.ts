@@ -323,6 +323,47 @@ export const masterApplyGuard: NavigationGuardWithThis<undefined> = async () => 
 }
 
 /**
+ * How long an admin's master-profile answer serves the `verified-master`
+ * check before the next check refetches it (B1).
+ *
+ * @remarks The GET /users/me freshness window (useRoleFreshness.ts
+ * NAV_REFRESH_DEBOUNCE_MS): the staleness the app already accepts for a role
+ * change bounds B1's stale cached profile too.
+ */
+export const ADMIN_PROFILE_TTL_MS = 15_000
+
+/** The last admin profile fetch: when, and for which account. */
+let adminProfileFetch: { userId: string | null; at: number } | null = null
+
+type MasterStore = Awaited<ReturnType<typeof loadMasterStore>>
+
+/**
+ * Refetch an admin's master profile once ADMIN_PROFILE_TTL_MS has passed
+ * since the last fetch, or when that fetch was another account's; within
+ * the window the store's answer stands and no request leaves.
+ *
+ * @remarks Stamped whatever the answer: GET /masters/me refuses role=admin
+ * (403 from get_current_master, backend auth/dependencies.py), so for an
+ * admin an error IS the usual answer and cannot gate the stamp. Stamped
+ * after the fetch, so a check racing it waits on the same request (the API
+ * client dedupes the GET) instead of reading the store before it lands.
+ */
+async function refreshAdminProfile(master: MasterStore, userId: string | null): Promise<void> {
+  const last = adminProfileFetch
+  if (last && last.userId === userId && Date.now() - last.at < ADMIN_PROFILE_TTL_MS) return
+  await master.fetchMyProfile(true)
+  adminProfileFetch = { userId, at: Date.now() }
+}
+
+/**
+ * TEST-ONLY. Forget the last admin profile fetch, so each test starts with
+ * the TTL window closed. Never call from production code.
+ */
+export function __resetAdminProfileTtlForTest(): void {
+  adminProfileFetch = null
+}
+
+/**
  * The `verified-master` check: a verified master profile.
  *
  * Required by: practices/*, finance, students, groups, schools, summary
@@ -348,10 +389,12 @@ export const masterStatusGuard: AccessCheck = async () => {
   // role-reset is conditional on `user.role == MASTER`, which is false for
   // an admin, so their profile can flip to 'suspended' while role stays
   // 'admin' -- profileLoaded would otherwise cache the old 'verified'
-  // forever. Force a real fetch for exactly this population; a real master
-  // keeps the existing lazy skip-if-loaded behaviour and pays no extra
-  // network call at all.
-  await masterStore.fetchMyProfile(auth.role !== 'master')
+  // forever. Refetch for exactly this population, at most once per
+  // ADMIN_PROFILE_TTL_MS (FE-157: it used to be on every check); a real
+  // master keeps the existing lazy skip-if-loaded behaviour and pays no
+  // extra network call at all.
+  if (auth.role === 'master') await masterStore.fetchMyProfile(false)
+  else await refreshAdminProfile(masterStore, auth.user?.id ?? null)
 
   if (!masterStore.profile || masterStore.profile.status !== 'verified') {
     return { path: '/master/pending' }
