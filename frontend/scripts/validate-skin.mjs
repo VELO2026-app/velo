@@ -53,6 +53,7 @@ const PNG_SIZES = {
   'apple-touch-icon-180.png': [180, 180],
 }
 /** Text/background pairs checked when the skin overrides either side. */
+/** @type {[string, string, number][]} */
 const CONTRAST_PAIRS = [
   ['--velo-text-primary', '--velo-bg-card-solid', 4.5],
   ['--velo-text-secondary', '--velo-bg-card-solid', 4.5],
@@ -146,6 +147,7 @@ function contrast(a, b) {
  * variables.css (token-name check). Returns the report; `fails.length === 0`
  * means the package may ship. */
 export function validateSkin(skinDir, frontendDir) {
+  /** @type {{ fails: string[], warns: string[], manual: string[], passed: string[] }} */
   const out = { fails: [], warns: [], manual: [], passed: [] }
   skinDir = resolve(skinDir)
 

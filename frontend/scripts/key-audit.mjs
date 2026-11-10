@@ -256,7 +256,7 @@ function walkCompile(node, path) {
   try {
     compileI18n.global.t(path)
   } catch (e) {
-    compileFails.push(`${path} :: ${String(e.message).slice(0, 100)}`)
+    compileFails.push(`${path} :: ${String(e instanceof Error ? e.message : e).slice(0, 100)}`)
   }
 }
 walkCompile(catalog, '')
@@ -292,7 +292,9 @@ for (const locale of localeDirs) {
     try {
       compileI18n.global.t(path)
     } catch (e) {
-      foreignCompileFails.push(`${locale}: ${path} :: ${String(e.message).slice(0, 90)}`)
+      foreignCompileFails.push(
+        `${locale}: ${path} :: ${String(e instanceof Error ? e.message : e).slice(0, 90)}`,
+      )
     }
   }
   walkCompileLocale(cat, '')

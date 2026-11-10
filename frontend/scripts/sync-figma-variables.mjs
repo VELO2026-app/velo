@@ -90,7 +90,12 @@ async function loadFigmaVariables() {
         } else {
           value = entry.v
         }
-        return { id: `name:${entry.n}`, name: entry.n, resolvedType: entry.t, valuesByMode: { m: value } }
+        return {
+          id: `name:${entry.n}`,
+          name: entry.n,
+          resolvedType: entry.t,
+          valuesByMode: { m: value },
+        }
       })
     }
     return raw
@@ -98,7 +103,9 @@ async function loadFigmaVariables() {
   if (useRest) {
     const token = process.env.FIGMA_TOKEN
     if (!token) {
-      throw new Error('--rest needs FIGMA_TOKEN in the environment (the published-variables REST API)')
+      throw new Error(
+        '--rest needs FIGMA_TOKEN in the environment (the published-variables REST API)',
+      )
     }
     const res = await fetch(`https://api.figma.com/v1/files/${fileKey}/variables`, {
       headers: { 'X-Figma-Token': token },
@@ -106,6 +113,7 @@ async function loadFigmaVariables() {
     if (!res.ok) {
       throw new Error(`Figma REST ${res.status}: ${await res.text()}`)
     }
+    /** @type {any} */
     const json = await res.json()
     if (json.error) throw new Error(`Figma REST: ${JSON.stringify(json.error)}`)
     // Published variables arrive as {variables:[{id,name,resolvedType,
@@ -160,7 +168,7 @@ for (const leaf of leaves) {
   const newValue = reconstructCss(regComparable, figComparable, figVar.resolvedType)
   const shownFig =
     figComparable.kind === 'color'
-      ? `rgba(${figComparable.rgb.join(', ')}, ${figComparable.a.toFixed(3)})`
+      ? `rgba(${(figComparable.rgb ?? []).join(', ')}, ${figComparable.a.toFixed(3)})`
       : figComparable.kind === 'dim'
         ? `${figComparable.value}${figComparable.unit}`
         : figComparable.kind === 'ref'
@@ -189,20 +197,28 @@ if (apply && updates.length > 0) {
 const lines = []
 lines.push('## Figma Variables drift report (track T stage 2)')
 lines.push('')
-lines.push(`Registry: ${leaves.length} tokens · Figma: ${figmaVariables.length} variables · mapped: ${map.size}`)
+lines.push(
+  `Registry: ${leaves.length} tokens · Figma: ${figmaVariables.length} variables · mapped: ${map.size}`,
+)
 if (registryOrphans.length > 0) {
   lines.push('')
-  lines.push(`### Registry tokens with NO Figma pair (${registryOrphans.length}) -- a Figma import is missing them`)
+  lines.push(
+    `### Registry tokens with NO Figma pair (${registryOrphans.length}) -- a Figma import is missing them`,
+  )
   for (const n of registryOrphans) lines.push(`- \`${n}\``)
 }
 if (figmaOrphans.length > 0) {
   lines.push('')
-  lines.push(`### Figma variables with NO registry pair (${figmaOrphans.length}) -- new designer tokens, code has no owner yet`)
+  lines.push(
+    `### Figma variables with NO registry pair (${figmaOrphans.length}) -- new designer tokens, code has no owner yet`,
+  )
   for (const n of figmaOrphans) lines.push(`- \`${n}\``)
 }
 if (drift.length > 0) {
   lines.push('')
-  lines.push(`### Value drift (${drift.length}) -- Figma is the designer's word, the registry the code's`)
+  lines.push(
+    `### Value drift (${drift.length}) -- Figma is the designer's word, the registry the code's`,
+  )
   lines.push('')
   lines.push('| token | registry | Figma | applied |')
   lines.push('|---|---|---|---|')
@@ -216,7 +232,12 @@ if (review.length > 0) {
   lines.push(`### Needs a human decision (${review.length})`)
   for (const r of review) lines.push(`- \`${r.cssName}\`: ${r.reason}`)
 }
-if (drift.length === 0 && review.length === 0 && registryOrphans.length === 0 && figmaOrphans.length === 0) {
+if (
+  drift.length === 0 &&
+  review.length === 0 &&
+  registryOrphans.length === 0 &&
+  figmaOrphans.length === 0
+) {
   lines.push('')
   lines.push('**In sync.** No drift, no orphans.')
 }
@@ -228,9 +249,12 @@ if (reportPath === undefined) console.log(report)
 else console.log(`report: ${reportPath}`)
 
 if (apply && updates.length > 0) {
-  console.log(`applied: ${updates.length} lossless value update(s) into tokens.json + regenerated variables.css`)
+  console.log(
+    `applied: ${updates.length} lossless value update(s) into tokens.json + regenerated variables.css`,
+  )
 }
 
 // The exit code IS the automation contract: 2 = a PR is needed.
-const drifted = drift.length > 0 || review.length > 0 || registryOrphans.length > 0 || figmaOrphans.length > 0
+const drifted =
+  drift.length > 0 || review.length > 0 || registryOrphans.length > 0 || figmaOrphans.length > 0
 process.exit(drifted ? 2 : 0)

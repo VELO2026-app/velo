@@ -42,7 +42,14 @@ const require = createRequire(import.meta.url)
 const ts = require('typescript')
 
 // Same module areas as typedoc.json entryPoints (FE-136).
-const SCOPE_DIRS = ['src/composables', 'src/stores', 'src/api', 'src/utils', 'src/platform', 'src/router']
+const SCOPE_DIRS = [
+  'src/composables',
+  'src/stores',
+  'src/api',
+  'src/utils',
+  'src/platform',
+  'src/router',
+]
 const isGenerated = (p) => p.endsWith('.generated.ts') || p === 'src/api/generated.ts'
 const isExcludedName = (name) =>
   name === 'index.ts' || // barrel
@@ -97,7 +104,10 @@ for (const p of files) {
   for (const st of sf.statements) {
     if (ts.isFunctionDeclaration(st) && st.name) localByName.set(st.name.text, st)
     else if (
-      (ts.isClassDeclaration(st) || ts.isInterfaceDeclaration(st) || ts.isTypeAliasDeclaration(st) || ts.isEnumDeclaration(st)) &&
+      (ts.isClassDeclaration(st) ||
+        ts.isInterfaceDeclaration(st) ||
+        ts.isTypeAliasDeclaration(st) ||
+        ts.isEnumDeclaration(st)) &&
       st.name
     )
       localByName.set(st.name.text, st)
@@ -108,7 +118,9 @@ for (const p of files) {
 
   const prevOverloadNames = new Set()
   for (const st of sf.statements) {
-    const hasExport = st.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
+    const hasExport = (ts.canHaveModifiers(st) ? ts.getModifiers(st) : undefined)?.some(
+      (m) => m.kind === ts.SyntaxKind.ExportKeyword,
+    )
 
     // export { a, type B } -- resolve each name to its local declaration;
     // type-only elements are exempt (duplicates of documented types), and
@@ -124,7 +136,9 @@ for (const p of files) {
         exportsChecked++
         const doc = docCommentOf(sf, decl)
         if (!doc || docSummary(doc) === '')
-          misses.push(`${p}:~${sf.getLineAndCharacterOfPosition(el.name.getStart()).line + 1} export ${el.name.text}`)
+          misses.push(
+            `${p}:~${sf.getLineAndCharacterOfPosition(el.name.getStart()).line + 1} export ${el.name.text}`,
+          )
       }
       continue
     }
@@ -135,7 +149,9 @@ for (const p of files) {
       exportsChecked++
       const doc = docCommentOf(sf, st)
       if (!doc || docSummary(doc) === '')
-        misses.push(`${p}:~${sf.getLineAndCharacterOfPosition(st.getStart()).line + 1} export default`)
+        misses.push(
+          `${p}:~${sf.getLineAndCharacterOfPosition(st.getStart()).line + 1} export default`,
+        )
       continue
     }
 
@@ -148,14 +164,21 @@ for (const p of files) {
       prevOverloadNames.add(st.name.text)
     }
 
-    const name = ts.isFunctionDeclaration(st) || ts.isClassDeclaration(st) || ts.isInterfaceDeclaration(st) || ts.isTypeAliasDeclaration(st) || ts.isEnumDeclaration(st)
-      ? st.name?.text ?? 'default'
-      : ts.isVariableStatement(st)
-        ? st.declarationList.declarations.map((d) => d.name.getText()).join(', ')
-        : 'default'
+    const name =
+      ts.isFunctionDeclaration(st) ||
+      ts.isClassDeclaration(st) ||
+      ts.isInterfaceDeclaration(st) ||
+      ts.isTypeAliasDeclaration(st) ||
+      ts.isEnumDeclaration(st)
+        ? (st.name?.text ?? 'default')
+        : ts.isVariableStatement(st)
+          ? st.declarationList.declarations.map((d) => d.name.getText()).join(', ')
+          : 'default'
     const doc = docCommentOf(sf, st)
     if (!doc || docSummary(doc) === '')
-      misses.push(`${p}:~${sf.getLineAndCharacterOfPosition(st.getStart()).line + 1} export ${name}`)
+      misses.push(
+        `${p}:~${sf.getLineAndCharacterOfPosition(st.getStart()).line + 1} export ${name}`,
+      )
   }
 }
 
@@ -166,4 +189,6 @@ if (misses.length > 0) {
   for (const m of misses) console.error('  ' + m)
   process.exit(1)
 }
-console.log(`doc-coverage: clean (${exportsChecked} exports across ${files.length} files, 100% documented)`)
+console.log(
+  `doc-coverage: clean (${exportsChecked} exports across ${files.length} files, 100% documented)`,
+)

@@ -132,6 +132,7 @@ function stripHtmlComments(src) {
 // before testing block tags, so a literal "<template>"/"<style>" WORD inside
 // a comment never opens a block.
 function vueCommentSpans(raw) {
+  /** @type {{ text: string, at: number, line?: number }[]} */
   const out = []
   const openRe = /<(template|script|style)(?=[\s>])/g
   let i = 0
@@ -151,7 +152,7 @@ function vueCommentSpans(raw) {
       i = next
       continue
     }
-    if (oAt === Infinity) break
+    if (!o || oAt === Infinity) break
     const tag = o[1]
     const openEnd = raw.indexOf('>', oAt)
     if (openEnd === -1) break
@@ -198,6 +199,7 @@ function vueCommentSpans(raw) {
 }
 
 function commentsOf(raw, isVue, isCss) {
+  /** @type {{ text: string, at: number, line?: number }[]} */
   const out = []
   const lineOf = (at) => raw.slice(0, at).split('\n').length
   if (isVue) {

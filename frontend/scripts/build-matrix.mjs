@@ -541,6 +541,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
 
   const facts = {}
   const expected = {}
+  /** @type {Error | null} */
   let aborted = null
   try {
     for (const cell of cells) {
@@ -560,12 +561,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         )
     }
   } catch (err) {
-    aborted = err
+    aborted = err instanceof Error ? err : new Error(String(err))
   }
   try {
     restore()
   } catch (restoreErr) {
-    console.error(`build-matrix: restore failed (${restoreErr.message}) -- fix the tree`)
+    console.error(
+      `build-matrix: restore failed (${restoreErr instanceof Error ? restoreErr.message : String(restoreErr)}) -- fix the tree`,
+    )
     process.exit(1)
   }
   if (aborted) {

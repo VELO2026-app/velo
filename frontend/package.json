@@ -17,7 +17,7 @@
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write src/",
     "format:check": "prettier --check src/",
-    "typecheck": "vue-tsc --noEmit --incremental",
+    "typecheck": "vue-tsc --noEmit --incremental && tsc -p tsconfig.scripts.json",
     "docs": "typedoc",
     "test": "vitest run && node --test scripts/lib/*.test.mjs",
     "test:watch": "vitest",
