@@ -95,8 +95,8 @@ describe('route table: access requirements (meta.requires, router/guards.ts)', (
   const record = (path: string) => router.options.routes.find((r) => r.path === path)
 
   it('the zone shells require their role', () => {
-    expect(record('/master')?.meta.requires).toBe('master-role')
-    expect(record('/admin')?.meta.requires).toBe('admin-role')
+    expect(record('/master')?.meta?.requires).toBe('master-role')
+    expect(record('/admin')?.meta?.requires).toBe('admin-role')
   })
 
   // Every MasterShell child is classified here on purpose: a new master
@@ -162,7 +162,7 @@ describe('route table: access requirements (meta.requires, router/guards.ts)', (
     expect(outside).toEqual([])
     // The standalone master landings keep their own beforeEnter policies.
     for (const path of ['/master/apply', '/master/invite/:token', '/master/pending']) {
-      expect(record(path)?.meta.requires, path).toBeUndefined()
+      expect(record(path)?.meta?.requires, path).toBeUndefined()
       expect(record(path)?.beforeEnter, path).toBeTypeOf('function')
     }
   })
