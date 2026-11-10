@@ -10,7 +10,6 @@
 // =============================================================================
 
 import type { RouteRecordRaw } from 'vue-router'
-import { roleGuard } from '@/router/guards'
 
 export const PAYMENTS_ADMIN_ROUTES: RouteRecordRaw[] = [
   {
@@ -36,8 +35,7 @@ export function adminRoutes(modules: AdminModuleRoutes): RouteRecordRaw[] {
     {
       path: '/admin',
       component: () => import('@/views/shells/AdminShell.vue'),
-      beforeEnter: roleGuard('admin'),
-      meta: { catalogs: ['admin'] },
+      meta: { catalogs: ['admin'], requires: 'admin-role' },
       children: [
         {
           path: 'dashboard',

@@ -10,16 +10,17 @@
 // through the shell record (pinned by router/catalogs.test.ts). The module
 // group is handed back by router/index.ts through its build-time feature
 // gate (routes/user.ts explains why the gate lives there).
+//
+// Access is declared in meta.requires (router/guards.ts RouteRequirement):
+// the shell record requires `master-role`, the dashboard
+// `master-application`, and every screen that needs an active master
+// `verified-master`; screens without one stay open to a pending master. The
+// standalone landings keep their own beforeEnter policies. Every shell child
+// is classified in router/routes.test.ts -- a new screen must pick a side.
 // =============================================================================
 
 import type { RouteRecordRaw } from 'vue-router'
-import {
-  roleGuard,
-  masterStatusGuard,
-  masterPendingGuard,
-  masterApplyGuard,
-  masterNoProfileGuard,
-} from '@/router/guards'
+import { masterPendingGuard, masterApplyGuard } from '@/router/guards'
 
 // FE-112 (tz-whitelabel §4): the payments module is ALL of its surfaces --
 // the user's top-ups (routes/user.ts), the master's finance screen here and
@@ -31,8 +32,7 @@ export const PAYMENTS_MASTER_ROUTES: RouteRecordRaw[] = [
   {
     path: 'finance',
     name: 'master-finance',
-    beforeEnter: masterStatusGuard,
-    meta: { hideTabBar: true },
+    meta: { requires: 'verified-master', hideTabBar: true },
     component: () => import('@/views/master/MasterFinanceView.vue'),
   },
 ]
@@ -48,18 +48,16 @@ export function masterRoutes(modules: MasterModuleRoutes): RouteRecordRaw[] {
     {
       path: '/master',
       component: () => import('@/views/shells/MasterShell.vue'),
-      beforeEnter: roleGuard('master'),
-      meta: { catalogs: ['master'] },
+      meta: { catalogs: ['master'], requires: 'master-role' },
       children: [
         {
           path: 'dashboard',
           name: 'master-dashboard',
           // №257 honest entry: a master with NO application is led to the
           // apply wizard; pending/rejected keep the dashboard as before.
-          beforeEnter: masterNoProfileGuard,
           // HEADERLESS hub (DB-1b): no VHeader teleports here — MobileLayout
           // pads by --velo-fog-headerless-top instead of the header fallback.
-          meta: { headerless: true },
+          meta: { requires: 'master-application', headerless: true },
           component: () => import('@/views/master/MasterDashboardView.vue'),
         },
         {
@@ -74,21 +72,19 @@ export function masterRoutes(modules: MasterModuleRoutes): RouteRecordRaw[] {
         {
           path: 'practices',
           name: 'master-practices',
-          beforeEnter: masterStatusGuard,
+          meta: { requires: 'verified-master' },
           component: () => import('@/views/master/MasterPracticesView.vue'),
         },
         {
           path: 'practices/new',
           name: 'master-practice-new',
-          beforeEnter: masterStatusGuard,
-          meta: { hideTabBar: true },
+          meta: { requires: 'verified-master', hideTabBar: true },
           component: () => import('@/views/master/CreatePracticeView.vue'),
         },
         {
           path: 'practices/:id',
           name: 'master-practice-edit',
-          beforeEnter: masterStatusGuard,
-          meta: { hideTabBar: true },
+          meta: { requires: 'verified-master', hideTabBar: true },
           component: () => import('@/views/master/EditPracticeView.vue'),
         },
         {
@@ -100,29 +96,25 @@ export function masterRoutes(modules: MasterModuleRoutes): RouteRecordRaw[] {
           // student-only actions (Check-in).
           path: 'practice-live/:practiceId',
           name: 'master-practice-live',
-          beforeEnter: masterStatusGuard,
-          meta: { headerless: true, hideTabBar: true },
+          meta: { requires: 'verified-master', headerless: true, hideTabBar: true },
           component: () => import('@/views/user/PracticeLiveView.vue'),
         },
         {
           path: 'practices/:id/attendance',
           name: 'master-attendance',
-          beforeEnter: masterStatusGuard,
-          meta: { hideTabBar: true },
+          meta: { requires: 'verified-master', hideTabBar: true },
           component: () => import('@/views/master/AttendanceView.vue'),
         },
         {
           path: 'practices/:id/detail',
           name: 'master-practice-detail',
-          beforeEnter: masterStatusGuard,
-          meta: { hideTabBar: true },
+          meta: { requires: 'verified-master', hideTabBar: true },
           component: () => import('@/views/master/MasterPracticeDetailView.vue'),
         },
         {
           path: 'practices/:id/roster',
           name: 'master-attendance-roster',
-          beforeEnter: masterStatusGuard,
-          meta: { hideTabBar: true },
+          meta: { requires: 'verified-master', hideTabBar: true },
           component: () => import('@/views/master/AttendanceRosterView.vue'),
         },
         {
@@ -133,8 +125,7 @@ export function masterRoutes(modules: MasterModuleRoutes): RouteRecordRaw[] {
         {
           path: 'analytics/practice/:id',
           name: 'master-practice-reviews',
-          beforeEnter: masterStatusGuard,
-          meta: { hideTabBar: true },
+          meta: { requires: 'verified-master', hideTabBar: true },
           component: () => import('@/views/master/PracticeReviewsView.vue'),
         },
         {
@@ -203,36 +194,31 @@ export function masterRoutes(modules: MasterModuleRoutes): RouteRecordRaw[] {
         {
           path: 'students',
           name: 'master-students',
-          beforeEnter: masterStatusGuard,
-          meta: { hideTabBar: true },
+          meta: { requires: 'verified-master', hideTabBar: true },
           component: () => import('@/views/master/MasterStudentsView.vue'),
         },
         {
           path: 'students/:id',
           name: 'master-student-profile',
-          beforeEnter: masterStatusGuard,
-          meta: { hideTabBar: true },
+          meta: { requires: 'verified-master', hideTabBar: true },
           component: () => import('@/views/master/MasterStudentProfileView.vue'),
         },
         {
           path: 'groups',
           name: 'master-groups',
-          beforeEnter: masterStatusGuard,
-          meta: { hideTabBar: true },
+          meta: { requires: 'verified-master', hideTabBar: true },
           component: () => import('@/views/master/MasterGroupsView.vue'),
         },
         {
           path: 'groups/new',
           name: 'master-group-create',
-          beforeEnter: masterStatusGuard,
-          meta: { hideTabBar: true },
+          meta: { requires: 'verified-master', hideTabBar: true },
           component: () => import('@/views/master/MasterGroupCreateView.vue'),
         },
         {
           path: 'groups/:id',
           name: 'master-group-detail',
-          beforeEnter: masterStatusGuard,
-          meta: { hideTabBar: true },
+          meta: { requires: 'verified-master', hideTabBar: true },
           component: () => import('@/views/master/MasterGroupDetailView.vue'),
         },
         {
@@ -243,21 +229,19 @@ export function masterRoutes(modules: MasterModuleRoutes): RouteRecordRaw[] {
           // active, so no hideTabBar meta here.
           path: 'schools',
           name: 'master-schools',
-          beforeEnter: masterStatusGuard,
+          meta: { requires: 'verified-master' },
           component: () => import('@/views/master/MasterSchoolsView.vue'),
         },
         {
           path: 'schools/new',
           name: 'master-school-create',
-          beforeEnter: masterStatusGuard,
-          meta: { hideTabBar: true },
+          meta: { requires: 'verified-master', hideTabBar: true },
           component: () => import('@/views/master/MasterSchoolCreateView.vue'),
         },
         {
           path: 'schools/:id',
           name: 'master-school',
-          beforeEnter: masterStatusGuard,
-          meta: { hideTabBar: true },
+          meta: { requires: 'verified-master', hideTabBar: true },
           // The SAME page component the user zone mounts (TZ 6.3) -- the
           // server's viewer.relation drives the action set; this route's
           // name prefix is all the view reads to pick its back target.
@@ -269,8 +253,7 @@ export function masterRoutes(modules: MasterModuleRoutes): RouteRecordRaw[] {
           // targets.
           path: 'schools/:id/members',
           name: 'master-school-members',
-          beforeEnter: masterStatusGuard,
-          meta: { hideTabBar: true },
+          meta: { requires: 'verified-master', hideTabBar: true },
           component: () => import('@/views/user/SchoolMembersView.vue'),
         },
         {
@@ -278,8 +261,7 @@ export function masterRoutes(modules: MasterModuleRoutes): RouteRecordRaw[] {
           // mounts; the zone only picks the back target.
           path: 'schools/:id/analytics',
           name: 'master-school-analytics',
-          beforeEnter: masterStatusGuard,
-          meta: { hideTabBar: true },
+          meta: { requires: 'verified-master', hideTabBar: true },
           component: () => import('@/views/user/SchoolAnalyticsView.vue'),
         },
         {
@@ -287,15 +269,13 @@ export function masterRoutes(modules: MasterModuleRoutes): RouteRecordRaw[] {
           // component as the user zone; the zone picks the back target.
           path: 'schools/:schoolId/students/:userId',
           name: 'master-school-student',
-          beforeEnter: masterStatusGuard,
-          meta: { hideTabBar: true },
+          meta: { requires: 'verified-master', hideTabBar: true },
           component: () => import('@/views/user/SchoolStudentProfileView.vue'),
         },
         {
           path: 'summary',
           name: 'master-summary',
-          beforeEnter: masterStatusGuard,
-          meta: { hideTabBar: true },
+          meta: { requires: 'verified-master', hideTabBar: true },
           component: () => import('@/views/master/MasterSummaryView.vue'),
         },
         {

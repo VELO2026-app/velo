@@ -18,7 +18,12 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
+import { defineComponent, h } from 'vue'
+import { createMemoryHistory, createRouter } from 'vue-router'
 import {
+  installAccessGuard,
+  requirementsGuard,
+  zoneHomeGuard,
   roleRedirect,
   roleGuard,
   masterNoProfileGuard,
@@ -28,6 +33,7 @@ import {
   roleFreshnessGuard,
 } from '@/router/guards'
 import { useAuthStore } from '@/stores/auth'
+import { useUiStore } from '@/stores/ui'
 import { resetAuthState, __setReadyForTest, pendingStartParam } from '@/composables/useAuth'
 import { MASTER_APPLIED_KEY, masterRejectionSeenKey } from '@/utils/constants'
 import type { UserResponse } from '@/api/types'
@@ -511,6 +517,150 @@ describe('router/guards', () => {
 
       expect(result).toBe(true)
       expect(refreshSettled).toBe(false)
+    })
+  })
+
+  // =============================================================================
+  // FE-157: the access guard (installAccessGuard) -- meta.requires replaces the
+  // per-record beforeEnter role/status guards. Driven through a REAL router
+  // (memory history) over a stub table shaped like the master zone, so the
+  // "entering" rule is vue-router's own matching, not a re-implementation.
+  // =============================================================================
+  describe('installAccessGuard + requirementsGuard', () => {
+    const Stub = defineComponent({ render: () => h('div') })
+
+    function accessRouter() {
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [
+          { path: '/', component: Stub },
+          { path: '/user/dashboard', name: 'user-dashboard', component: Stub },
+          { path: '/user/calendar', name: 'user-calendar', component: Stub },
+          { path: '/master/pending', name: 'master-pending', component: Stub },
+          { path: '/master/apply', component: Stub },
+          { path: '/admin/dashboard', component: Stub },
+          {
+            path: '/master',
+            component: Stub,
+            meta: { requires: 'master-role' },
+            children: [
+              { path: 'dashboard', component: Stub, meta: { requires: 'master-application' } },
+              { path: 'inbox', component: Stub },
+              { path: 'practices/:id', component: Stub, meta: { requires: 'verified-master' } },
+              { path: 'groups', component: Stub, meta: { requires: 'verified-master' } },
+            ],
+          },
+        ],
+      })
+      installAccessGuard(router)
+      return router
+    }
+
+    async function go(router: ReturnType<typeof accessRouter>, path: string): Promise<string> {
+      await router.push(path)
+      return router.currentRoute.value.fullPath
+    }
+
+    beforeEach(() => {
+      __setReadyForTest(true)
+    })
+
+    it('the parent role requirement runs first: a user never reaches the status check', async () => {
+      setAuthUser({ role: 'user' })
+      const router = accessRouter()
+      expect(await go(router, '/master/practices/p1')).toBe('/user/dashboard')
+      expect(fetchMyProfile).not.toHaveBeenCalled()
+    })
+
+    it('verified master: the shell and the screen pass', async () => {
+      setAuthUser({ role: 'master' })
+      masterStoreState.profile = { status: 'verified' }
+      const router = accessRouter()
+      expect(await go(router, '/master/practices/p1')).toBe('/master/practices/p1')
+    })
+
+    it('pending master: a verified-master screen redirects, an open one does not', async () => {
+      setAuthUser({ role: 'master' })
+      masterStoreState.profile = { status: 'pending' }
+      const router = accessRouter()
+      expect(await go(router, '/master/groups')).toBe('/master/pending')
+      expect(await go(router, '/master/inbox')).toBe('/master/inbox')
+    })
+
+    it('no-application master on the dashboard goes to the apply wizard', async () => {
+      setAuthUser({ role: 'master' })
+      masterStoreState.profileMissing = true
+      const router = accessRouter()
+      expect(await go(router, '/master/dashboard')).toBe('/master/apply')
+    })
+
+    // The beforeEnter rule the 21 per-record guards had: a record the
+    // navigation does not ENTER is not checked again.
+    it('a param change inside one screen does not re-run its check', async () => {
+      setAuthUser({ role: 'master' })
+      masterStoreState.profile = { status: 'verified' }
+      const router = accessRouter()
+      await go(router, '/master/practices/p1')
+      const calls = fetchMyProfile.mock.calls.length
+
+      masterStoreState.profile = { status: 'pending' }
+      expect(await go(router, '/master/practices/p2')).toBe('/master/practices/p2')
+      expect(fetchMyProfile.mock.calls.length).toBe(calls)
+
+      // Entering a sibling record checks it.
+      expect(await go(router, '/master/groups')).toBe('/master/pending')
+    })
+
+    it('a move between two screens of the shell does not re-run the shell role check', async () => {
+      setAuthUser({ role: 'master' })
+      const router = accessRouter()
+      await go(router, '/master/inbox')
+
+      setAuthUser({ role: 'user' })
+      expect(await go(router, '/master/inbox?tab=all')).toBe('/master/inbox?tab=all')
+      expect(await go(router, '/master/dashboard')).toBe('/master/dashboard')
+
+      // Re-entering the shell from outside checks the role again.
+      await go(router, '/user/calendar')
+      expect(await go(router, '/master/inbox')).toBe('/user/dashboard')
+    })
+
+    it('requirementsGuard reads each record, not the merged meta', async () => {
+      setAuthUser({ role: 'user' })
+      const router = accessRouter()
+      const to = router.resolve('/master/practices/p1')
+      // The merged meta carries only the child's requirement ...
+      expect(to.meta.requires).toBe('verified-master')
+      // ... yet the parent's role requirement still decides first.
+      expect(await requirementsGuard(to, router.resolve('/'))).toEqual({ path: '/user/dashboard' })
+    })
+
+    it('P-1 runs in the same guard: a master on the user dashboard goes to the master zone', async () => {
+      setAuthUser({ role: 'master' })
+      const router = accessRouter()
+      expect(await go(router, '/user/dashboard')).toBe('/master/dashboard')
+    })
+  })
+
+  describe('zoneHomeGuard (P-1)', () => {
+    it.each([
+      ['admin', { path: '/admin/dashboard' }],
+      ['master', { path: '/master/dashboard' }],
+      ['user', true],
+    ] as const)('%s opening the user dashboard', (role, expected) => {
+      setAuthUser({ role })
+      expect(zoneHomeGuard({ name: 'user-dashboard', path: '/user/dashboard' })).toEqual(expected)
+    })
+
+    it('the user mode keeps a master on the user dashboard', () => {
+      setAuthUser({ role: 'master' })
+      useUiStore().setUiMode('user')
+      expect(zoneHomeGuard({ name: 'user-dashboard', path: '/user/dashboard' })).toBe(true)
+    })
+
+    it('any other user-zone screen is left alone', () => {
+      setAuthUser({ role: 'admin' })
+      expect(zoneHomeGuard({ name: 'user-calendar', path: '/user/calendar' })).toBe(true)
     })
   })
 })
