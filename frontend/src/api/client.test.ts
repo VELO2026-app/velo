@@ -51,6 +51,8 @@ describe('request() trace id suffix (W29-trimmed)', () => {
     )
     const err = await captureError()
     expect(err.detail).toBe('Insufficient balance · код abcdef')
+    // The full id travels as data too (useApiError reads it from here).
+    expect(err.traceId).toBe('abcdef1234567890')
   })
 
   it('appends nothing when X-Trace-ID is absent', async () => {
@@ -58,6 +60,7 @@ describe('request() trace id suffix (W29-trimmed)', () => {
     const err = await captureError()
     expect(err.detail).toBe('Insufficient balance')
     expect(err.detail).not.toContain('код')
+    expect(err.traceId).toBeNull()
   })
 
   it('uses the FIRST six characters of the trace id, not the last', async () => {
@@ -74,6 +77,7 @@ describe('request() trace id suffix (W29-trimmed)', () => {
     stubFetch(401, {}, { 'X-Trace-ID': 'ffffff000000' })
     const err = await captureError()
     expect(err.detail).toBe('Session expired · код ffffff')
+    expect(err.traceId).toBe('ffffff000000')
   })
 
   it('also suffixes the Pydantic 422 validation-error path', async () => {

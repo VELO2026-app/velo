@@ -49,6 +49,14 @@ export class ApiResponseError extends Error {
     super(detail)
     this.name = 'ApiResponseError'
   }
+
+  /**
+   * The backend trace id of the failed response (X-Trace-ID), or null when
+   * the response carried none. The full id; `detail` already shows its
+   * first six characters (i18n:common.traceSuffix), this keeps it readable
+   * as data (useApiError, the error reporter) without parsing the text.
+   */
+  traceId: string | null = null
 }
 
 /** The request never reached the backend (network failure). */
@@ -240,16 +248,22 @@ async function send<T>(method: HttpMethod, path: string, options: RequestOptions
   // FE-157: only a 401 for the token that is still current ends the session.
   if (response.status === 401) {
     if (sentToken !== null && sentToken === _token) _onUnauthorized?.()
-    throw new ApiResponseError(401, suffixWithTraceId('Session expired', traceId), 'unauthorized')
+    throw withTraceId(
+      traceId,
+      new ApiResponseError(401, suffixWithTraceId('Session expired', traceId), 'unauthorized'),
+    )
   }
 
   let data: unknown
   try {
     data = await response.json()
   } catch {
-    throw new ApiResponseError(
-      response.status,
-      suffixWithTraceId('Invalid response from server', traceId),
+    throw withTraceId(
+      traceId,
+      new ApiResponseError(
+        response.status,
+        suffixWithTraceId('Invalid response from server', traceId),
+      ),
     )
   }
 
@@ -268,10 +282,13 @@ async function send<T>(method: HttpMethod, path: string, options: RequestOptions
 
   // VeloError format: { error, message }
   if (typeof errorData?.message === 'string') {
-    throw new ApiResponseError(
-      response.status,
-      suffixWithTraceId(errorData.message, traceId),
-      errorData.error ?? 'unknown',
+    throw withTraceId(
+      traceId,
+      new ApiResponseError(
+        response.status,
+        suffixWithTraceId(errorData.message, traceId),
+        errorData.error ?? 'unknown',
+      ),
     )
   }
 
@@ -284,12 +301,21 @@ async function send<T>(method: HttpMethod, path: string, options: RequestOptions
         ? rawDetail.map((e) => e.msg).join('; ')
         : `Request failed (${response.status})`
 
-  throw new ApiResponseError(
-    response.status,
-    suffixWithTraceId(detail, traceId),
-    'validation_error',
-    Array.isArray(rawDetail) ? rawDetail : undefined,
+  throw withTraceId(
+    traceId,
+    new ApiResponseError(
+      response.status,
+      suffixWithTraceId(detail, traceId),
+      'validation_error',
+      Array.isArray(rawDetail) ? rawDetail : undefined,
+    ),
   )
+}
+
+/** Attach the response's trace id to an error built from it (ApiResponseError.traceId). */
+function withTraceId(traceId: string | null, error: ApiResponseError): ApiResponseError {
+  error.traceId = traceId
+  return error
 }
 
 // W29-trimmed: append a greppable diagnostic key to a user-facing error
