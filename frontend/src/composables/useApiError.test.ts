@@ -59,4 +59,30 @@ describe('extractApiError', () => {
     const result = extractApiError('a raw string throw', 'fallback message')
     expect(result).toBe('fallback message')
   })
+
+  describe('trace code suffix', () => {
+    it('appends the trace code folded into detail to a catalog phrase', () => {
+      const result = extractApiError(
+        new ApiResponseError(400, 'raw · код a1b2c3', 'insufficient_balance'),
+        'fallback',
+      )
+      expect(result).toBe(`${errorMessage('insufficient_balance')} · код a1b2c3`)
+    })
+
+    it('appends the trace code to the caller fallback for an unmapped code', () => {
+      const result = extractApiError(
+        new ApiResponseError(500, 'raw · код a1b2c3', 'some_unmapped_future_code'),
+        'fallback',
+      )
+      expect(result).toBe('fallback · код a1b2c3')
+    })
+
+    it('adds nothing when the detail carries no trace code', () => {
+      const result = extractApiError(
+        new ApiResponseError(500, 'raw only', 'some_unmapped_future_code'),
+        'fallback',
+      )
+      expect(result).toBe('fallback')
+    })
+  })
 })

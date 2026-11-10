@@ -45,6 +45,7 @@ import './styles/skin-tokens.css'
 
 import { initTelegramSdk } from './platform/telegram-sdk'
 import { installRenderDebug } from './platform/render-debug'
+import { installGlobalErrorHandlers } from './platform/error-reporter'
 import { readLocaleHint, setLocale } from './locales'
 import { isSupportedLocale } from './platform/instance'
 
@@ -64,6 +65,10 @@ app.use(i18n)
 
 // Router = URL -> component mapping (like FastAPI include_router).
 app.use(router)
+
+// Uncaught errors (Vue, window, unhandledrejection, router) funnel into
+// reportError(): console in dev, no-op in production until BE-203 (R2).
+installGlobalErrorHandlers(app, router)
 
 // Dev-only render log (platform/render-debug.ts): off unless the
 // 'velo:debug-renders' storage flag is set; a no-op in production builds.
