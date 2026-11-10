@@ -25,6 +25,7 @@
   },
   "lint-staged": {
     "{frontend,packages}/**/*.{js,mjs,ts,vue,css,json}": "prettier --write --ignore-unknown --ignore-path frontend/.prettierignore",
-    "frontend/**/*.{ts,vue}": "pnpm -C frontend exec eslint --cache --max-warnings 0"
+    "frontend/**/*.{ts,vue}": "pnpm -C frontend exec eslint --cache --max-warnings 0",
+    "packages/velo-ui/**/*.{ts,vue}": "pnpm -C packages/velo-ui exec eslint --cache --max-warnings 0"
   }
 }
