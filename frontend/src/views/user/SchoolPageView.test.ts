@@ -774,6 +774,15 @@ describe('SchoolPageView -- practices feed request', () => {
     expect(text()).toContain(pageFixture('student').name)
   })
 
+  it('asks for the practices without waiting for the page payload', async () => {
+    mockHappyLoad('student')
+    vi.mocked(cgApi.getSchoolPage).mockReturnValue(new Promise(() => {}))
+    mount()
+    await flush()
+
+    expect(cgApi.getSchoolPractices).toHaveBeenCalledWith('g1', 5, 0)
+  })
+
   it('a failed practices request leaves the header and an empty feed, not the error state', async () => {
     mockHappyLoad('student')
     vi.mocked(cgApi.getSchoolPractices).mockRejectedValue(new Error('boom'))

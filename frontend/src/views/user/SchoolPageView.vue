@@ -404,22 +404,20 @@ async function load(): Promise<void> {
   loading.value = true
   error.value = false
   notFound.value = false
+  practices.value = []
+  // Both requests leave together; the header paints as soon as the page
+  // payload lands and the practices feed fills in when its answer does.
+  // The feed is a bonus under the header: its failure leaves it empty
+  // instead of replacing the whole page with the error state.
+  void getSchoolPractices(schoolId.value, FEED_LIMIT, 0)
+    .then((res) => {
+      if (epoch === loadEpoch) practices.value = res.items
+    })
+    .catch(() => undefined)
   try {
-    // The header needs only the page payload: it paints as soon as that
-    // lands, and the practices feed fills in behind it.
     const pageRes = await getSchoolPage(schoolId.value)
     if (epoch !== loadEpoch) return
     page.value = pageRes
-    practices.value = []
-    loading.value = false
-    void getSchoolPractices(schoolId.value, FEED_LIMIT, 0)
-      .then((res) => {
-        if (epoch === loadEpoch) practices.value = res.items
-      })
-      .catch(() => {
-        // The feed is a bonus under the header: a failure leaves it empty
-        // instead of replacing the whole page with the error state.
-      })
   } catch (e) {
     if (epoch !== loadEpoch) return
     if (e instanceof ApiResponseError && e.status === 404) {
