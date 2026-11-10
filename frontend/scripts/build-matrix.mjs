@@ -42,6 +42,15 @@
 //          --skin        replaces the skins/ set (repeatable): a package
 //                        directory -- a broken one fails the matrix
 //          --no-restore  skip the final rebuild (CI: dist/ is thrown away)
+//          --cell <name> build and gate ONE cell (e.g. golden/core) -- CI
+//                        fans the cells out as a job matrix. Invariant d
+//                        spans cells, so it is checked after the fan-in
+//                        (--check-assets); a lone cell cannot trip it.
+//          --facts-out <file>  write the cell's asset facts as JSON
+//          --list        print the cell names as a JSON array and exit
+//                        (builds nothing; needs no node_modules)
+//          --check-assets <dir>  fan-in: invariant d over every --facts-out
+//                        file in <dir>
 //        (or: pnpm build:matrix)
 // evaluateMatrix() and planCells() are exported for the unit suite
 // (src/platform/build-matrix.test.ts).
@@ -60,7 +69,6 @@ import {
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { loadEnv } from 'vite'
 import { findBuildLogWarnings } from './lib/build-log-gate.mjs'
 
 // Resolved lazily: under vitest import.meta.url is not file:// (the same
@@ -233,6 +241,17 @@ export function evaluateMatrix({ cells, facts, expected }) {
   return fails
 }
 
+/** Invariant d on its own, for the fan-in of per-cell runs: `entries` are
+ *  the --facts-out records ({ cell, edition, assets }). Same rule as in
+ *  evaluateMatrix(): every `full`-edition cell has the same asset count. */
+export function assetCountFails(entries) {
+  const full = entries.filter((e) => e.edition === SKIN_EDITION)
+  if (new Set(full.map((e) => e.assets)).size <= 1) return []
+  return [
+    `asset count differs across full cells (${full.map((e) => `${e.cell}:${e.assets}`).join(' ')}) -- a skin must repaint, not re-chunk`,
+  ]
+}
+
 // -- the impure part (CLI only) -----------------------------------------------
 
 const publicSkin = () => join(frontendDir(), 'public', 'skin')
@@ -358,13 +377,15 @@ function snapshot(cell, skins, goldenDecls) {
 
 /** The skinless build's identity, resolved EXACTLY as passport-html resolves
  *  %VELO_BRAND% at build time: process.env -> .env files -> 'VELO'. */
-function goldenBrand() {
+async function goldenBrand() {
+  // Lazy: `--list` must run without node_modules.
+  const { loadEnv } = await import('vite')
   const fromFiles = loadEnv('production', frontendDir(), 'VITE_').VITE_BRAND
   return process.env.VITE_BRAND ?? fromFiles ?? 'VELO'
 }
 
-function expectationOf(cell) {
-  if (!cell.skin) return { title: goldenBrand(), theme: GOLDEN_THEME }
+async function expectationOf(cell) {
+  if (!cell.skin) return { title: await goldenBrand(), theme: GOLDEN_THEME }
   const { brand } = skinRecord(cell.skin)
   return { title: brand.displayName, theme: brand.themeColor }
 }
@@ -401,19 +422,73 @@ function printTable(cells, facts) {
 function parseArgs(argv) {
   const skins = []
   let restore = true
+  let cell = null
+  let factsOut = null
+  let list = false
+  let checkAssets = null
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--skin') skins.push(argv[++i])
     else if (argv[i] === '--no-restore') restore = false
+    else if (argv[i] === '--cell') cell = argv[++i]
+    else if (argv[i] === '--facts-out') factsOut = argv[++i]
+    else if (argv[i] === '--list') list = true
+    else if (argv[i] === '--check-assets') checkAssets = argv[++i]
     else throw new Error(`unknown argument "${argv[i]}"`)
   }
-  return { skins: skins.length > 0 ? skins : repoSkins(), restore }
+  if (
+    (cell !== null && !cell) ||
+    (factsOut !== null && !factsOut) ||
+    (checkAssets !== null && !checkAssets)
+  )
+    throw new Error('--cell, --facts-out and --check-assets need a value')
+  return {
+    skins: skins.length > 0 ? skins : repoSkins(),
+    restore,
+    cell,
+    factsOut,
+    list,
+    checkAssets,
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const args = parseArgs(process.argv.slice(2))
   const editions = JSON.parse(readFileSync(join(frontendDir(), '..', 'editions.json'), 'utf8'))
   const skins = args.skins.map(resolveSkin)
-  const cells = planCells(editions, skins)
+  const allCells = planCells(editions, skins)
+
+  if (args.list) {
+    console.log(JSON.stringify(allCells.map((c) => c.name)))
+    process.exit(0)
+  }
+  if (args.checkAssets) {
+    const dir = resolve(args.checkAssets)
+    const entries = readdirSync(dir)
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => JSON.parse(readFileSync(join(dir, f), 'utf8')))
+    // Every planned cell must have reported: a cell that never ran is not
+    // a green cell.
+    const missing = allCells.map((c) => c.name).filter((n) => !entries.some((e) => e.cell === n))
+    const fails = [
+      ...missing.map((n) => `${n}: no facts file -- the cell never reported`),
+      ...assetCountFails(entries),
+    ]
+    if (fails.length > 0) {
+      for (const f of fails) console.error('  FAIL ' + f)
+      console.error(`\nbuild-matrix: ${fails.length} FAIL(s) at the fan-in`)
+      process.exit(1)
+    }
+    console.log(`build-matrix: fan-in green -- ${entries.length} cells, asset counts agree`)
+    process.exit(0)
+  }
+
+  const cells = args.cell ? allCells.filter((c) => c.name === args.cell) : allCells
+  if (cells.length === 0) {
+    console.error(
+      `build-matrix: no cell "${args.cell}" (known: ${allCells.map((c) => c.name).join(', ')})`,
+    )
+    process.exit(1)
+  }
   const goldenDecls = new Set(
     tokenDecls(readFileSync(join(frontendDir(), 'src', 'styles', 'variables.css'), 'utf8')),
   )
@@ -475,7 +550,16 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       await stageSkin(cell.skin)
       build(cell.edition)
       facts[cell.name] = snapshot(cell, skins, goldenDecls)
-      expected[cell.name] = expectationOf(cell)
+      expected[cell.name] = await expectationOf(cell)
+      if (args.factsOut)
+        writeFileSync(
+          args.factsOut,
+          JSON.stringify({
+            cell: cell.name,
+            edition: cell.edition,
+            assets: facts[cell.name].assets,
+          }),
+        )
     }
   } catch (err) {
     aborted = err
