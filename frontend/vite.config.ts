@@ -21,6 +21,7 @@ import { fileURLToPath, URL } from 'node:url'
 import { cpSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pwaManifestWithPassport } from './src/pwa/manifest'
+import { keepManifestOutOfPrecache, perLocaleManifest } from './src/pwa/manifest-locales'
 // tz-whitelabel F1 (§2.2): resolves the %VELO_*% passport placeholders in
 // index.html (lang, brand title) to the golden defaults when the env var is
 // undefined -- CI builds without a .env. Lives in src/platform/passport-html
@@ -190,6 +191,7 @@ export const SKIN_BRAND: string | null = ${JSON.stringify(skin?.displayName ?? n
       passportHtmlDefaults(skin),
       skinAssetSpill(skin ? join(publicDir, 'skin') : null, join(frontendDir, 'dist')),
       preloadAppChunk(),
+      perLocaleManifest(frontendDir),
       // tz-i18n §4.1: locale catalogs (src/locales/*.json) compile ahead of
       // runtime -- the message compiler stays out of the bundle and the PWA
       // precache. Include is scoped to the catalogs; other .json imports
@@ -261,6 +263,8 @@ export const SKIN_BRAND: string | null = ${JSON.stringify(skin?.displayName ?? n
           ],
         },
       }),
+      // After VitePWA: its options are resolved in its own configResolved.
+      keepManifestOutOfPrecache(),
     ],
 
     // tz-whitelabel §4: the per-module literals from `defines` above.
