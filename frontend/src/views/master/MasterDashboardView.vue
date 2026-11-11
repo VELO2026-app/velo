@@ -130,7 +130,7 @@
         }}
       </h2>
 
-      <template v-if="masterStore.practicesUpcomingLoading && nearestPractices.length === 0">
+      <template v-if="upcoming.loading.value">
         <div class="master-dashboard__loading-row">
           <VLoader size="sm" />
         </div>
@@ -291,7 +291,8 @@ import {
   IconHourglass,
 } from '@/components/icons'
 import { useMasterStore } from '@/stores/master'
-import { useMasterProfile } from '@/composables/queries/master'
+import { myPracticesChanged, useMasterProfile, useMyPractices } from '@/composables/queries/master'
+import { useQueryCache } from '@pinia/colada'
 import { useAuthStore } from '@/stores/auth'
 import { useSafeArea } from '@/composables/useSafeArea'
 import MasterOnboardingView from '@/views/master/MasterOnboardingView.vue'
@@ -328,10 +329,20 @@ const PERIOD_OPTIONS: ReadonlyArray<{ value: 'week' | 'month' | 'quarter'; label
   { value: 'quarter', label: t('masterScreens.masterDashboard.period.quarter') },
 ]
 
+// The master's own practices (queries/master.ts). FE-53: the practice cards
+// are the one section whose numbers move by ANOTHER actor's hand (a
+// student's booking bumps current_participants, their PRE check-in bumps
+// checkin_count) and no push exists, so the upcoming list is asked again on
+// EVERY mount -- the same per-mount contract loadStats() / loadUnreadCount()
+// follow, with the same failure disposition: a failed refetch keeps the
+// cards already on screen. Past only feeds the zero state's total: the
+// staleness window is enough there.
+const queryCache = useQueryCache()
+const upcoming = useMyPractices('upcoming', { refetchOnMount: 'always' })
+const past = useMyPractices('past')
+
 // True for a brand-new master with no practices at all (zero state).
-const isNewMaster = computed(
-  (): boolean => (masterStore.practicesTotal ?? masterStore.practices.length) === 0,
-)
+const isNewMaster = computed((): boolean => upcoming.total.value + past.total.value === 0)
 
 // =========================================================================
 // Stats (E7: GET /masters/me/stats?period). Both the practices stat
@@ -414,14 +425,14 @@ async function loadUnreadCount(): Promise<void> {
 // =========================================================================
 const now = useNow(60_000)
 
-// T22-3 (PROMPT №561): practicesUpcoming is already server-ordered nearest
+// T22-3 (PROMPT №561): the upcoming list is already server-ordered nearest
 // first (draft/scheduled/live) -- no client re-sort left to hide the next
 // ordering bug. Draft and already-ended occurrences are filtered out of the
 // (small, already-in-order) loaded window; a genuinely correct "nearest 2"
 // no longer depends on how many pages happen to be loaded, the way the old
 // single futures-first cursor did.
 const nearestPractices = computed((): PracticeResponse[] =>
-  masterStore.practicesUpcoming
+  upcoming.practices.value
     .filter(
       (p) => (p.status === 'scheduled' || p.status === 'live') && !practiceHasEnded(p, now.value),
     )
@@ -449,7 +460,7 @@ function openPractice(p: PracticeResponse): void {
   void router.push({ name: 'master-practice-detail', params: { id: p.id } })
 }
 // Zoom state for one card. Every card here is the current master's OWN
-// practice (masterStore.practicesUpcoming is scoped server-side), so "can he
+// practice (the upcoming list is scoped server-side), so "can he
 // start it" is "is the meeting ACTIVE" -- the same condition the server's
 // ladder puts before its HOST rung. 'failed' (A4 V2 / PROMPT №572) and
 // 'pending' as for every list row (utils/zoomEntryState.ts).
@@ -489,12 +500,12 @@ async function onRetryZoom(p: PracticeResponse): Promise<void> {
     } else {
       toast.error(t('masterScreens.masterDashboard.toast.zoomStillFailed'))
     }
-    await masterStore.refreshMyPractices()
+    await myPracticesChanged(queryCache)
   } catch (e) {
     if (e instanceof ApiResponseError && e.code === 'zoom_meeting_not_failed') {
       // Recovered by itself (poller won the race) -- refresh, no error tone.
       toast.info(t('masterScreens.masterDashboard.toast.zoomAlreadyUpdated'))
-      await masterStore.refreshMyPractices()
+      await myPracticesChanged(queryCache)
     } else {
       toast.error(t('masterScreens.masterDashboard.toast.retryFailed'))
     }
@@ -559,7 +570,7 @@ async function persistMasterOnboarding(): Promise<void> {
 }
 
 // -- Load data on mount --
-onMounted(async () => {
+onMounted(() => {
   // Period-scoped stats row (E7); independent of the practices list fetch.
   void loadStats().catch(() => {
     /* leave cards at "—" if the stats fetch fails */
@@ -570,19 +581,9 @@ onMounted(async () => {
   void loadUnreadCount().catch(() => {
     /* leave the badge at 0 if the fetch fails */
   })
-  // FE-53: the practice cards are the one section whose numbers move by
-  // ANOTHER actor's hand (a student's booking bumps current_participants,
-  // their PRE check-in bumps checkin_count) and no push exists, so the lazy
-  // fetchMyPractices() froze the cards at the session's first load. The
-  // upcoming bucket is force-refreshed on every mount -- the same per-mount
-  // contract loadStats() / loadUnreadCount() above already follow, and with
-  // the same failure disposition: refreshInPlace keeps the previous cards
-  // when the check fails. Past stays lazy: only the zero-state reads its
-  // total.
-  await Promise.all([masterStore.fetchPastPractices(), masterStore.refreshUpcomingPractices()])
-  // E12 swap (PROMPT №419): the check-in meta now reads checkin_count straight
-  // off the practice (already on masterStore.practices) -- the insights
-  // eager-load that used to feed it is gone, one fewer network round-trip.
+  // The practice lists load themselves (useMyPractices above). E12 swap
+  // (PROMPT №419): the check-in meta reads checkin_count straight off the
+  // practice -- no insights eager-load, one fewer network round-trip.
 })
 </script>
 

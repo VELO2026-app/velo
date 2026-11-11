@@ -1,29 +1,18 @@
 // =============================================================================
-// VELO Frontend -- Master Store (Phase F6, fixed W-4)
+// VELO Frontend -- Master Store (Phase F6; FE-166 step 5)
 // =============================================================================
 //
-// W-4: fetchMyPractices() now uses a dedicated practicesLoaded flag instead
-// of checking items.length > 0. The old guard incorrectly re-fetched every
-// time a master with zero practices visited the list view.
+// Client state of the master zone only. The server data that used to live
+// here -- the master profile and the master's own practices -- is Colada
+// queries since FE-166 step 5 (composables/queries/master.ts).
 // =============================================================================
 
 import { defineStore } from 'pinia'
-import { useQueryCache } from '@pinia/colada'
-import { invalidateAfter } from '@/composables/queries/invalidation'
-import { ref, computed } from 'vue'
-import { getMyPractices } from '@/api/masters'
-import { usePagination } from '@/composables/usePagination'
+import { ref } from 'vue'
 import { MASTER_APPLIED_KEY } from '@/utils/constants'
-import type { PracticeResponse } from '@/api/types'
 
-/**
- * Master-zone state: the master's own practices list and the onboarding flag
- * of this session. The master profile is a Colada query
- * (composables/queries/master.ts, FE-166 step 5).
- */
+/** Master-zone client state: the onboarding flag of this session. */
 export const useMasterStore = defineStore('master', () => {
-  // Colada entries a practice change makes stale (refreshMyPractices).
-  const queryCache = useQueryCache()
   // Per-session suppression for the post-approval onboarding carousel
   // (MasterOnboardingView, Phase D). Set true on done/skip so the overlay does
   // not re-trigger within a session; the persisted server flag
@@ -31,171 +20,12 @@ export const useMasterStore = defineStore('master', () => {
   // $reset/logout so a different account in the same tab starts fresh.
   const onboardingShownThisSession = ref(false)
 
-  // =========================================================================
-  // Practices (paginated) -- T22-3/T22-5 (PROMPT №561): TWO independent
-  // cursors, not one. The practices-list tabs -- upcoming
-  // (i18n:masterScreens.masterPractices.tab.upcoming) and past
-  // (i18n:masterScreens.masterPractices.tab.past) -- are different questions
-  // to the server (nearest-first vs most-recent-first over disjoint status
-  // sets), so one shared futures-first cursor could never answer both --
-  // page 1 of a single cursor was always the FURTHEST-future rows, which is
-  // exactly what made a far-future occurrence read as "nearest" and buried
-  // every completed practice behind the whole future backlog. Each cursor
-  // fetches independently and lazily: a screen that only needs one bucket
-  // (AnalyticsView: past only) never fetches the other.
-  // =========================================================================
-
-  const paginationUpcoming = usePagination<PracticeResponse>((limit, offset) =>
-    getMyPractices('upcoming', limit, offset),
-  )
-  const paginationPast = usePagination<PracticeResponse>((limit, offset) =>
-    getMyPractices('past', limit, offset),
-  )
-
-  // W-4: separate flag instead of items.length > 0 check.
-  // Prevents re-fetching when master legitimately has zero practices.
-  const upcomingLoaded = ref(false)
-  const pastLoaded = ref(false)
-
-  /** Combined view across both cursors -- for consumers that need a practice
-   *  by id regardless of bucket (EditPracticeView/MasterPracticeDetailView/
-   *  AttendanceView/AttendanceRosterView's cache lookups) or a mixed-status
-   *  set (CreatePracticeView's use-template section,
-   *  i18n:masterScreens.createPractice.useTemplate, which re-sorts by
-   *  created_at itself and does not care which bucket a template came from).
-   *  Order is NOT meaningful here -- callers that care about order use
-   *  practicesUpcoming/practicesPast directly. */
-  const practices = computed<PracticeResponse[]>(() => [
-    ...paginationUpcoming.items.value,
-    ...paginationPast.items.value,
-  ])
-  const practicesTotal = computed(() => paginationUpcoming.total.value + paginationPast.total.value)
-
-  /**
-   * Initial load of the upcoming bucket only.
-   * Skips if already loaded (navigating back to list).
-   */
-  async function fetchUpcomingPractices(): Promise<void> {
-    if (upcomingLoaded.value) return
-    const gen = generation
-    await paginationUpcoming.refreshInPlace()
-    if (gen === generation) upcomingLoaded.value = true
-  }
-
-  /**
-   * Initial load of the past bucket only. Lazy -- called when a
-   * screen actually needs past practices (the practices-list past tab,
-   * i18n:masterScreens.masterPractices.tab.past, on activation;
-   * AnalyticsView's reviews tab on mount), never eagerly.
-   */
-  async function fetchPastPractices(): Promise<void> {
-    if (pastLoaded.value) return
-    const gen = generation
-    await paginationPast.refresh()
-    if (gen === generation) pastLoaded.value = true
-  }
-
-  /**
-   * Initial load of BOTH buckets. For consumers that need the combined
-   * view up front (dashboard's zero-state + nearest-practice card,
-   * create-practice's template list) and previously relied on the single
-   * shared cursor warming everything in one call.
-   */
-  async function fetchMyPractices(): Promise<void> {
-    await Promise.all([fetchUpcomingPractices(), fetchPastPractices()])
-  }
-
-  /**
-   * Force-reload BOTH buckets.
-   * Called after create / edit / delete / cancel operations -- any of them
-   * can move a practice between buckets (e.g. cancelling removes it from
-   * upcoming and it never appears in past either). The same change reaches
-   * every Colada practice list and detail (a school feed shows the
-   * practice), so they go stale here too (INVALIDATES.changePractice).
-   */
-  async function refreshMyPractices(): Promise<void> {
-    const gen = generation
-    void invalidateAfter(queryCache, 'changePractice')
-    await Promise.all([paginationUpcoming.refreshInPlace(), paginationPast.refresh()])
-    if (gen !== generation) return
-    upcomingLoaded.value = true
-    pastLoaded.value = true
-  }
-
-  /**
-   * Force-reload the upcoming bucket ONLY (FE-53). The dashboard card's
-   * figures -- current_participants / checkin_count -- move by ANOTHER actor's
-   * hand (a student's booking, a student's PRE check-in), and with no push
-   * mechanism the lazy guard above froze them at whatever the session's first
-   * load saw. The dashboard calls this on every mount, the same per-mount
-   * contract its stats row and bell badge already follow. Past stays lazy:
-   * the dashboard reads only its total, and its own staleness is out of scope.
-   *
-   * refreshInPlace, not refresh (review pass): refresh() reset()s the list
-   * synchronously, so every remount would flash the loader over cards already
-   * on screen, and a transient failure on a remount would wipe them into the
-   * zero state. In-place keeps the cards up, swaps the fresh page in when it
-   * lands, and on a populated list swallows the failure keeping the stale
-   * figures -- the same disposition the screen already gives loadStats(). An
-   * empty (first-ever) load still sets loading/error like a normal initial
-   * load. Same pattern as bookings.ts's B1 nearest-set refresh.
-   */
-  async function refreshUpcomingPractices(): Promise<void> {
-    const gen = generation
-    await paginationUpcoming.refreshInPlace()
-    if (gen === generation) upcomingLoaded.value = true
-  }
-
-  // =========================================================================
-  // Reset (on logout -- W-1)
-  // =========================================================================
-
-  // Account scope (platform/session.ts): $reset bumps it, and an answer that
-  // left before the reset is dropped instead of filling the next account.
-  let generation = 0
-
+  // Reset on logout (W-1, the account scope: platform/session.ts).
   function $reset(): void {
-    generation += 1
     onboardingShownThisSession.value = false
-    paginationUpcoming.reset()
-    paginationPast.reset()
-    upcomingLoaded.value = false
-    pastLoaded.value = false
     // Drop the applicant marker so a logged-out tab can't reach master-pending.
     sessionStorage.removeItem(MASTER_APPLIED_KEY)
   }
 
-  return {
-    onboardingShownThisSession,
-
-    // Practices -- combined view (order not meaningful; id-lookup/template use)
-    practices,
-    practicesTotal,
-    fetchMyPractices,
-    refreshMyPractices,
-
-    // Practices -- upcoming bucket (nearest first)
-    practicesUpcoming: paginationUpcoming.items,
-    practicesUpcomingTotal: paginationUpcoming.total,
-    practicesUpcomingLoading: paginationUpcoming.loading,
-    practicesUpcomingError: paginationUpcoming.error,
-    practicesUpcomingLoadMoreError: paginationUpcoming.loadMoreError,
-    practicesUpcomingHasMore: paginationUpcoming.hasMore,
-    fetchUpcomingPractices,
-    refreshUpcomingPractices,
-    loadMoreUpcomingPractices: paginationUpcoming.loadMore,
-
-    // Practices -- past bucket (most recent first)
-    practicesPast: paginationPast.items,
-    practicesPastTotal: paginationPast.total,
-    practicesPastLoading: paginationPast.loading,
-    practicesPastError: paginationPast.error,
-    practicesPastLoadMoreError: paginationPast.loadMoreError,
-    practicesPastHasMore: paginationPast.hasMore,
-    fetchPastPractices,
-    loadMorePastPractices: paginationPast.loadMore,
-
-    // Reset
-    $reset,
-  }
+  return { onboardingShownThisSession, $reset }
 })

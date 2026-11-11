@@ -48,7 +48,7 @@ export const INVALIDATES = {
   submitReflection: [keys.bookings.root()],
   /**
    * The master's own practice changed: created, edited, published, cancelled
-   * or deleted (stores/master.ts, refreshMyPractices). Every list that shows
+   * or deleted (queries/master.ts, myPracticesChanged). Every list that shows
    * it -- a school feed included -- and its detail.
    */
   changePractice: [keys.practices.root()],

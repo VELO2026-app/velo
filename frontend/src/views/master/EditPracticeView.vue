@@ -5,7 +5,7 @@
   Protected by masterStatusGuard. Rendered inside MasterShell.
 
   Load order:
-    1. Try masterStore.practices cache (instant if already loaded)
+    1. Try the master's practice lists (instant if already loaded)
     2. Fallback: GET /api/v1/practices/:id
 
   Editable fields (draft / scheduled only -- completed/cancelled are readonly):
@@ -31,7 +31,7 @@
     completed / cancelled / deleted -> readonly info banner
 
   After any successful mutation:
-    - refreshMyPractices() to invalidate cache
+    - myPracticesChanged() to refresh the master's lists
     - navigate back to master-practices
 
   Fixes:
@@ -358,8 +358,12 @@ import PracticeAudiencePicker from '@/components/shared/PracticeAudiencePicker.v
 import PracticeSchedulePicker from '@/components/shared/PracticeSchedulePicker.vue'
 import type { AudienceSchoolOption } from '@/components/shared/practiceAudience'
 import { useToast } from '@/composables/useToast'
-import { useMasterStore } from '@/stores/master'
-import { useMasterProfile } from '@/composables/queries/master'
+import {
+  cachedMyPractice,
+  myPracticesChanged,
+  useMasterProfile,
+} from '@/composables/queries/master'
+import { useQueryCache } from '@pinia/colada'
 import {
   getPractice,
   updatePractice,
@@ -390,7 +394,7 @@ import type { PracticeResponse } from '@/api/types'
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
-const masterStore = useMasterStore()
+const queryCache = useQueryCache()
 const { profile: masterProfile } = useMasterProfile()
 
 const practiceId = route.params.id as string
@@ -541,7 +545,7 @@ onMounted(async () => {
   // may be stale (another editor, a status change) and a PATCH built from it
   // would write old values back. The cached row is only a placeholder that
   // spares the master a spinner; Save stays disabled until the fetch lands.
-  const cached = masterStore.practices.find((p) => p.id === practiceId)
+  const cached = cachedMyPractice(queryCache, practiceId)
   if (cached) {
     practice.value = cached
     populateForm(cached)
@@ -694,7 +698,7 @@ async function commitSave(): Promise<void> {
     baseline = sent
     confirmDialog.visible = false
     toast.success(t('ui.saved'))
-    await masterStore.refreshMyPractices()
+    await myPracticesChanged(queryCache)
   } catch (e) {
     toast.error(practiceSaveErrorText(e, t('masterScreens.editPractice.toast.saveFailed')))
   } finally {
@@ -711,7 +715,7 @@ async function publish(): Promise<void> {
     const updated = await updatePractice(practiceId, { status: 'scheduled' })
     practice.value = updated
     toast.success(t('masterScreens.editPractice.toast.published'))
-    await masterStore.refreshMyPractices()
+    await myPracticesChanged(queryCache)
     void router.push({ name: 'master-practices' })
   } catch (e) {
     toast.error(extractApiError(e, t('masterScreens.editPractice.toast.publishFailed')))
@@ -735,7 +739,7 @@ async function cancel(scope: 'this' | 'this_and_future'): Promise<void> {
     practice.value = updated
     cancelModalOpen.value = false
     toast.success(t('masterScreens.editPractice.toast.cancelledRefunded'))
-    await masterStore.refreshMyPractices()
+    await myPracticesChanged(queryCache)
     void router.push({ name: 'master-practices' })
   } catch (e) {
     toast.error(extractApiError(e, t('masterScreens.editPractice.toast.cancelFailed')))
@@ -763,7 +767,7 @@ async function remove(): Promise<void> {
     await deletePractice(practiceId)
     confirmDialog.visible = false
     toast.success(t('masterScreens.editPractice.toast.draftDeleted'))
-    await masterStore.refreshMyPractices()
+    await myPracticesChanged(queryCache)
     void router.push({ name: 'master-practices' })
   } catch (e) {
     toast.error(extractApiError(e, t('masterScreens.editPractice.toast.deleteFailed')))

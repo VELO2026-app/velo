@@ -29,7 +29,6 @@ import { useAdminStore } from '@/stores/admin'
 import { useDiaryStore } from '@/stores/diary'
 import { useNotificationsStore } from '@/stores/notifications'
 import { usePracticesStore } from '@/stores/practices'
-import { useMasterStore } from '@/stores/master'
 
 type StoreFactory = () => StoreGeneric
 
@@ -296,11 +295,10 @@ describe('the end of a session leaves every store in its initial state', () => {
       useDiaryStore().loadInsights('practice_1'),
       useNotificationsStore().refreshUnread(),
       usePracticesStore().fetchPractice('practice_1'),
-      useMasterStore().fetchUpcomingPractices(),
       // The bookings and calendar stores hold no server data since FE-166
-      // steps 3-4, and the schools hub and the master profile are no store
-      // at all since step 5; their queries are Colada entries, emptied by
-      // the account scope (composables/queries/setup.test.ts,
+      // steps 3-4, and neither do the schools hub (no store at all) and the
+      // master store since step 5; their queries are Colada entries, emptied
+      // by the account scope (composables/queries/setup.test.ts,
       // schoolsHub.test.ts, master.test.ts).
     ]
 
@@ -321,7 +319,6 @@ describe('the end of a session leaves every store in its initial state', () => {
     ['diary insights', () => useDiaryStore().loadInsights('practice_1')],
     ['notifications badge', () => useNotificationsStore().refreshUnread()],
     ['practice detail', () => usePracticesStore().fetchPractice('practice_1')],
-    ['master upcoming practices', () => useMasterStore().fetchUpcomingPractices()],
   ]
   for (const [name, run] of ownRequests) {
     it(`after a 401 to the store's own request: ${name}`, async () => {

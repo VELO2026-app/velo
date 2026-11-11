@@ -11,7 +11,8 @@
 //
 // PATTERN C (hybrid) -- and both halves are driven, per the skill's warning that
 // mocking one layer for both guts the test:
-//   - DATA HALF (Reviews tab): past practices come from a REAL useMasterStore, and
+//   - DATA HALF (Reviews tab): past practices come from the REAL Colada list
+//     (useMyPractices('past')), and
 //     per-practice insights from a REAL useDiaryStore's reactive insightsCache
 //     (.vue:268-272). Real stores, not mocked ones: the screen's aggregates hang
 //     off that reactive Map, and a hand-rolled fake Map is exactly the kind of
@@ -62,6 +63,8 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import AnalyticsView from '@/views/master/AnalyticsView.vue'
 import * as mastersApi from '@/api/masters'
 import * as diaryApi from '@/api/diary'
@@ -307,9 +310,9 @@ function practicesPage(items: PracticeResponse[], total = items.length, offset =
 // T22-5 (PROMPT №561): the server now owns the completed-only, most-recent-
 // first ordering -- pastPractices no longer re-sorts client-side (.vue), so
 // the fake server must actually behave like one. This screen only ever
-// fetches the "past" bucket (fetchPastPractices), but the helper mirrors
+// fetches the "past" bucket (useMyPractices('past')), but the helper mirrors
 // both bucket semantics from listing_service.py for consistency with the
-// other master-store test files.
+// other master test files.
 function mockBucketedPractices(items: PracticeResponse[]): void {
   vi.mocked(mastersApi.getMyPractices).mockImplementation(
     async (bucket: 'upcoming' | 'past', limit = 20, offset = 0) => {
@@ -349,16 +352,16 @@ function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(AnalyticsView).use(createTestI18n())
-  app.use(pinia)
+  app.use(pinia).use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
 // COUNTED, not copied (velo-idiom §3, SC-08). The deepest chain onMounted
 // (.vue:542-547) kicks off is the SEQUENTIAL practices -> insights one:
-//   (1) await getMyPractices inside usePagination.loadMore
-//   (2) loadMore's continuation resolves -> (3) refresh's -> (4) fetchMyPractices'
-//   (5) onMounted resumes and calls loadVisibleInsights
+//   (1) await getMyPractices inside the Colada infinite query
+//   (2)-(4) the entry's state lands -> the pastPractices watch
+//   (5) calls loadVisibleInsights
 //   (6) await getPracticeInsights -> (7) loadInsights resolves
 //   (8) the Promise.all over them -> (9) onMounted resumes -> (10) re-render.
 // The fire-and-forget loadPayments()/loadReviews() run alongside and are
@@ -656,9 +659,8 @@ describe('AnalyticsView', () => {
 
     it('a FAILED practices load shows the EMPTY state, not an error (known gap)', async () => {
       // Asserted because it is what the screen does, NOT because it is right.
-      // usePagination catches into `error` (composables/usePagination.ts:67-70)
-      // and useMasterStore re-exports it as practicesError -- but this template
-      // never binds it (.vue:113-124), so a network failure is rendered as the
+      // The past list records the error (queries/master.ts) -- but this
+      // template never binds it (.vue:113-124), so a network failure is rendered as the
       // factual claim of the no-practices copy (i18n:masterScreens.analytics.empty.noPractices).
       // Reported as a finding;
       // this test is the tripwire for the day it is repaired.
@@ -858,8 +860,8 @@ describe('AnalyticsView', () => {
       expect(paneText(reviewsPane())).not.toContain('+ ещё')
     })
 
-    it('once expanded, «Показать ещё» pages the store AND loads the new insights', async () => {
-      // onLoadMore (.vue:528-531) must re-run loadVisibleInsights, or the newly
+    it('once expanded, «Показать ещё» pages the list AND loads the new insights', async () => {
+      // The new page must re-run loadVisibleInsights (the pastPractices watch), or the newly
       // paged-in cards render with no badges until something else re-triggers it.
       // A custom mock (not mockBucketedPractices) here: total=6 while only 5
       // are loaded, to simulate a 6th completed practice still on the server.

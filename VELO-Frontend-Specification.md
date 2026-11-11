@@ -917,6 +917,7 @@ export const api = {
   - `fetchMyPractices()` — GET /api/v1/masters/me/practices
   - `refreshMyPractices()` — принудительный рефреш кэша
   - `fetchMyProfile(force?)` — GET /api/v1/masters/me, lazy по умолчанию
+  - FE-166 шаг 5 (FE-179): профиль и оба списка практик переехали в Pinia Colada (`composables/queries/master.ts`); в сторе остался только флаг онбординга сессии
 - [x] src/views/master/MasterPracticesView.vue:
   - Список практик мастера (upcoming / past)
   - Кнопка "Создать практику"

@@ -2,10 +2,12 @@
 // VELO Frontend -- the master's own account on Pinia Colada (FE-166 step 5)
 // =============================================================================
 //
+// Two things that used to live in stores/master.ts (the store now keeps only
+// client state: the onboarding flag of this session): the master profile and
+// the master's own practices (further down).
+//
 // The master profile (`GET /masters/me`): status, confirmed methods,
-// languages, balance, payout details. It used to live in stores/master.ts;
-// the store keeps the onboarding flag of this session and, until the next
-// step (FE-179 part 2b), the master's own practices lists.
+// languages, balance, payout details.
 //
 // Freshness: one answer per session, as in the store -- the router guards
 // read it on every master-zone navigation, and a refetch per navigation
@@ -28,10 +30,22 @@
 // =============================================================================
 
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
-import { defineQueryOptions, useQuery, useQueryCache, type QueryCache } from '@pinia/colada'
+import {
+  defineInfiniteQueryOptions,
+  defineQueryOptions,
+  useInfiniteQuery,
+  useQuery,
+  useQueryCache,
+  type QueryCache,
+} from '@pinia/colada'
 import { ApiResponseError } from '@/api/client'
-import { getMyMasterProfile } from '@/api/masters'
-import type { MasterProfileResponse } from '@/api/types'
+import { getMyMasterProfile, getMyPractices } from '@/api/masters'
+import type {
+  MasterProfileResponse,
+  PaginatedPracticesResponse,
+  PracticeResponse,
+} from '@/api/types'
+import { invalidateAfter } from '@/composables/queries/invalidation'
 import { keys } from '@/composables/queries/keys'
 import { screenQueryState } from '@/composables/queries/screenState'
 
@@ -136,4 +150,126 @@ export function useMasterProfile(enabled: MaybeRefOrGetter<boolean> = true) {
      */
     reload: () => query.refetch(),
   }
+}
+
+// =============================================================================
+// The master's own practices: two lists, upcoming and past (T22-3/T22-5)
+// =============================================================================
+//
+// TWO independent lists, not one: upcoming (draft / scheduled / live,
+// nearest first) and past (completed, most recent first) are different
+// questions to the server over disjoint status sets, so one shared cursor
+// could never answer both -- its page 1 was the furthest-future rows (PROMPT
+// №561). Each list loads when a screen needs it: the practices list's past
+// tab only once it is opened, the analytics screen only the past.
+//
+// Under `keys.practices.root()`: every change to a practice made in this app
+// -- the master's own create / edit / publish / cancel / delete
+// (myPracticesChanged), a booking taken or cancelled -- invalidates them
+// (./invalidation.ts). Seats, check-ins and statuses also move by other
+// hands (a student's booking, the autofinalize worker): the default staleness
+// window covers a revisit, and the dashboard asks again on every mount
+// (FE-53, `refetchOnMount: 'always'`). A refetch reloads every page loaded
+// so far (Colada infinite queries).
+
+/** Practices per page of `GET /masters/me/practices`. */
+export const MY_PRACTICES_PAGE_SIZE = 20
+
+/** One of the master's own practice lists. */
+export type MyPracticesBucket = 'upcoming' | 'past'
+
+/** Infinite query options for one list of my practices (`GET /masters/me/practices?bucket=`). */
+export const myPracticesQuery = defineInfiniteQueryOptions((bucket: MyPracticesBucket) => ({
+  key: keys.practices.mine(bucket),
+  query: ({ pageParam }: { pageParam: number }) =>
+    getMyPractices(bucket, MY_PRACTICES_PAGE_SIZE, pageParam),
+  initialPageParam: 0,
+  getNextPageParam: (last: PaginatedPracticesResponse) => {
+    const next = last.offset + last.items.length
+    return next < last.total ? next : null
+  },
+}))
+
+/** Options of a screen's reader of one practices list. */
+export interface UseMyPracticesOptions {
+  /** Whether the list loads (default true): the past tab passes "is it open". */
+  enabled?: MaybeRefOrGetter<boolean>
+  /** `'always'`: ask the server on every mount, even within the staleness window (the dashboard, FE-53). */
+  refetchOnMount?: 'always'
+}
+
+/**
+ * One list of my practices for a screen: the loaded practices flattened, the
+ * total, and the loading / error state (queries/screenState.ts).
+ *
+ * @remarks
+ * `error` is the raw error of the last request (ADR: the screen turns it into
+ * text); `failed` is true only when there is nothing to show. `loadMore()`
+ * rejects with the error of a failed next page and keeps the list.
+ */
+export function useMyPractices(bucket: MyPracticesBucket, options: UseMyPracticesOptions = {}) {
+  const query = useInfiniteQuery(() => ({
+    ...myPracticesQuery(bucket),
+    enabled: toValue(options.enabled ?? true),
+    ...(options.refetchOnMount ? { refetchOnMount: options.refetchOnMount } : {}),
+  }))
+  const { loading, failed } = screenQueryState(query)
+  return {
+    practices: computed<PracticeResponse[]>(
+      () => query.data.value?.pages.flatMap((page) => page.items) ?? [],
+    ),
+    /** The server's total for the list (0 until the first page answers). */
+    total: computed(() => query.data.value?.pages.at(-1)?.total ?? 0),
+    loading,
+    failed,
+    error: query.error,
+    /** Any request of the list in flight (first page, next page, refetch). */
+    fetching: computed(() => query.asyncStatus.value === 'loading'),
+    hasMore: query.hasNextPage,
+    // cancelRefetch false: a tap during a refetch (a practice just changed)
+    // waits for it instead of cancelling it and gluing the old page 1 to a
+    // new page 2.
+    loadMore: () => query.loadNextPage({ throwOnError: true, cancelRefetch: false }),
+    /** Ask again now, keeping the list on screen. Never rejects. */
+    refetch: () => query.refetch(),
+  }
+}
+
+/**
+ * One of my practices from the lists already loaded, without a request --
+ * the placeholder a practice screen paints before its own fetch answers.
+ */
+export function cachedMyPractice(
+  queryCache: QueryCache,
+  practiceId: string,
+): PracticeResponse | undefined {
+  for (const entry of queryCache.getEntries({ key: keys.practices.mineAll() })) {
+    const data = entry.state.value.data as { pages: PaginatedPracticesResponse[] } | undefined
+    for (const page of data?.pages ?? []) {
+      const hit = page.items.find((p) => p.id === practiceId)
+      if (hit) return hit
+    }
+  }
+  return undefined
+}
+
+/**
+ * One of my practices changed in this app (created, edited, published,
+ * cancelled, deleted): invalidate `INVALIDATES.changePractice` -- every
+ * practice list (a school feed shows it too) and detail -- and refetch my own
+ * lists at once, even with no screen showing them, so the list the screen
+ * navigates back to is already current (they are small, and a cancelled
+ * practice must not flash back). Resolves when every refetch settled; never
+ * rejects.
+ */
+export async function myPracticesChanged(queryCache: QueryCache): Promise<void> {
+  const invalidation = invalidateAfter(queryCache, 'changePractice')
+  // invalidateAfter refetched the lists on screen; these are the others.
+  const offScreen = queryCache
+    .getEntries({ key: keys.practices.mineAll() })
+    // Only a list some screen has loaded: one never opened (the past tab
+    // nobody switched to) stays unasked -- its first reader loads it.
+    .filter((entry) => !entry.active && entry.options && entry.state.value.data !== undefined)
+    .map((entry) => queryCache.fetch(entry))
+  await Promise.allSettled([invalidation, ...offScreen])
 }

@@ -21,12 +21,11 @@
 //   3. goDetail pushes an id (.vue:291-293). A wrong id opens somebody else's
 //      practice; assertions are on the ROUTE OBJECT, not that push fired.
 //
-// PATTERN A (store-backed), with one local view-state ref.
-//   - DATA: masterStore.practices/practicesLoading/practicesError/
-//     practicesHasMore (.vue:50-160) and diaryStore.insightsCache (.vue:194).
-//     Both stores are REAL, seamed at the two API modules they import
-//     (@/api/masters, @/api/diary) -- one mock pair covers both. The stores are
-//     NOT mocked, deliberately: `insightsCache` is grabbed BY REFERENCE at
+// PATTERN A (data-holder-backed), with one local view-state ref.
+//   - DATA: the master's practice lists (Colada, useMyPractices) and
+//     diaryStore.insightsCache. Both are REAL, seamed at the two API modules
+//     they import (@/api/masters, @/api/diary) -- one mock pair covers both.
+//     They are NOT mocked, deliberately: `insightsCache` is grabbed BY REFERENCE at
 //     setup (.vue:194) and the rating badges derive off that reactive Map, so a
 //     hand-rolled fake Map risks being quietly non-reactive and the badge tests
 //     would then prove the fixture instead of the screen.
@@ -84,17 +83,17 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import MasterPracticesView from '@/views/master/MasterPracticesView.vue'
-// The REAL store, read in two tests -- the data always survived a failed
-// load-more; it was the template that hid it (fixed №441, see the
-// failed-load-more test below).
-import { useMasterStore } from '@/stores/master'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
+import { myPracticesChanged } from '@/composables/queries/master'
 import * as mastersApi from '@/api/masters'
 import * as diaryApi from '@/api/diary'
 import { ApiResponseError } from '@/api/client'
 import type { PracticeResponse, PracticeInsightsResponse, ScoreZoneCounts } from '@/api/types'
 
-// The two seams under the two REAL stores: useMasterStore reads @/api/masters
-// (stores/master.ts:12), useDiaryStore reads @/api/diary. ApiResponseError is
+// The two seams under the REAL data holders: the practice lists (Colada,
+// composables/queries/master.ts) read @/api/masters, useDiaryStore reads
+// @/api/diary. ApiResponseError is
 // left REAL (it lives in @/api/client, unmocked) so the error rung asserts
 // against the real class.
 vi.mock('@/api/masters')
@@ -285,26 +284,27 @@ function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(MasterPracticesView).use(createTestI18n())
-  app.use(pinia)
+  app.use(pinia).use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
 // COUNTED, not copied (velo-idiom §3, SC-08). The deepest chain onMounted
 // (.vue:308-311) kicks off is the PAST tab's practices -> insights one:
-//   (1) await getMyPractices inside usePagination.loadMore
-//   (2) loadMore's continuation resolves -> (3) refresh's await loadMore
-//   (4) fetchMyPractices' await refresh -> onMounted resumes, calls loadTabData
+//   (1) await getMyPractices inside the Colada infinite query
+//   (2)-(4) the entry's state lands the page -> the pastPractices
+//   watch calls loadTabData
 //   (5) await getPracticeInsights inside diaryStore.loadInsights
 //   (6) loadInsights' own continuation -> (7) the Promise.all over them
 //   (8) loadTabInsights resolves -> (9) loadTabData's await resumes
 //   (10) onMounted resumes -> (11) re-render.
-// Eleven counted; twelve used. Over-counting is free and this chain grows the
+// Eleven counted, plus the Colada cache's own hops (a load-more's rejection
+// reaches the screen several microtasks later); twenty used. Over-counting is free and this chain grows the
 // moment anything else joins that onMounted. The UPCOMING tab is shallower
 // (loadTabInsights short-circuits to Promise.resolve([]), .vue:276) -- one
 // number for both, sized to the deeper one.
 async function flush(): Promise<void> {
-  for (let i = 0; i < 12; i++) await nextTick()
+  for (let i = 0; i < 20; i++) await nextTick()
 }
 
 // Intl emits U+00A0 / U+202F / U+2009 around times depending on the Node/ICU
@@ -385,7 +385,7 @@ beforeEach(() => {
   // Fake timers, not a bare setSystemTime (A4 V5, mirrors
   // MasterDashboardView.test.ts): the screen now installs a 60s setInterval
   // (.vue) that the clock test below drives directly. Nothing in the mount
-  // chain awaits a timer (the API is mocked and usePagination holds none),
+  // chain awaits a timer (the API is mocked and the Colada lists hold none),
   // and microtasks are not faked, so flush() is unaffected.
   vi.useFakeTimers()
   vi.setSystemTime(NOW)
@@ -446,11 +446,11 @@ describe('MasterPracticesView', () => {
       expect(text()).not.toContain('Нет предстоящих практик')
     })
 
-    it('error: surfaces the REAL backend detail, not a hardcoded fallback', async () => {
-      // Meaningful, unlike SC-05's swallow-and-substitute case: usePagination
-      // sets `error = e.message` (usePagination.ts:69) and ApiResponseError
-      // does `super(detail)` (api/client.ts:34), so the backend's own words
-      // reach `:description="masterStore.practicesError"` (.vue:61).
+    it('error: an unmapped backend code reads as the connection hint, not the raw detail', async () => {
+      // FE-166 (ADR error convention): the screen turns the raw error into
+      // text with extractApiError -- a mapped code gets its catalog phrase,
+      // anything else the fallback. The backend's raw detail no longer
+      // reaches the description.
       vi.mocked(mastersApi.getMyPractices).mockRejectedValue(
         new ApiResponseError(503, 'Хранилище практик недоступно', 'db_down'),
       )
@@ -458,21 +458,21 @@ describe('MasterPracticesView', () => {
       await flush()
 
       expect(text()).toContain('Не удалось загрузить практики')
-      expect(text()).toContain('Хранилище практик недоступно')
+      expect(text()).toContain('Проверьте соединение и попробуйте ещё раз')
+      expect(text()).not.toContain('Хранилище практик недоступно')
       expect(cards()).toHaveLength(0)
       expect(loader()).toBeNull()
     })
 
-    it('error: a non-API failure leaks its raw JS message to the master', async () => {
-      // Asserted because it is what the screen DOES, not because it is right.
-      // `e.message` is taken verbatim off ANY Error (usePagination.ts:69) -- so
-      // a fetch failure puts English engine text into a Russian UI. Reported as
-      // a finding; this test is the tripwire for the day it is repaired.
+    it('error: a non-API failure no longer leaks its raw JS message (fixed by FE-166)', async () => {
+      // Was the tripwire for English engine text in a Russian UI
+      // (usePagination took `e.message` off any Error).
       vi.mocked(mastersApi.getMyPractices).mockRejectedValue(new TypeError('Failed to fetch'))
       mount()
       await flush()
 
-      expect(text()).toContain('Failed to fetch')
+      expect(text()).not.toContain('Failed to fetch')
+      expect(text()).toContain('Проверьте соединение и попробуйте ещё раз')
     })
 
     it('error: «Повторить» re-fetches and recovers into the real list', async () => {
@@ -616,12 +616,12 @@ describe('MasterPracticesView', () => {
       expect(replace).toHaveBeenCalledWith({ query: { from: 'dashboard', tab: 'past' } })
     })
 
-    it('fetches each bucket ONCE on first activation, never again on repeat switches (T22-3/T22-5, PROMPT №561)', async () => {
+    it('fetches each bucket ONCE on first activation, not again on repeat switches within the staleness window (T22-3/T22-5, PROMPT №561)', async () => {
       // Was "does NOT re-fetch ... one dataset partitioned client-side": that
       // premise is gone by design -- the two tabs are now two independent
-      // server queries (ensureBucketLoaded, .vue), each fetched lazily ON
-      // ACTIVATION. What must still hold is the guard: a bucket already
-      // loaded is never re-fetched, which is what protects the master's
+      // server queries (useMyPractices, enabled per tab), each fetched lazily
+      // ON ACTIVATION. What must still hold is the guard: a bucket already
+      // loaded is not re-fetched within the staleness window, which is what protects the master's
       // show-more (i18n:common.showMore) progress from being reset by a
       // stray tab tap.
       mount()
@@ -1142,7 +1142,7 @@ describe('MasterPracticesView', () => {
   // ===========================================================================
   describe('«Показать ещё»', () => {
     it('is absent when the first page is everything', async () => {
-      // hasMore is `offset < total` (usePagination.ts:35); 7 of 7 -> no button.
+      // hasMore is `offset + items < total` (queries/master.ts); 7 of 7 -> no button.
       mount()
       await flush()
 
@@ -1235,53 +1235,30 @@ describe('MasterPracticesView', () => {
       expect(cardTitles()).toEqual(['Завтрашняя'])
       expect(text()).not.toContain('Не удалось загрузить практики')
 
-      // ...and the master is TOLD, with the real backend message, not silently.
-      expect(toastError).toHaveBeenCalledWith('Сеть недоступна')
-
-      // The store's data was never the problem and still is not.
-      expect(useMasterStore().practices.map((p) => p.title)).toEqual(['Завтрашняя'])
+      // ...and the master is TOLD, not silently (an unmapped code: the
+      // screen's fallback, extractApiError).
+      expect(toastError).toHaveBeenCalledWith('Не удалось загрузить практики')
     })
 
-    it('the error rung is initial-load-only: an error over a POPULATED list never hides it', async () => {
-      // This drives the store directly (Pattern A) rather than through the
-      // load-more path, and it has to: onLoadMore nulls the error immediately
-      // after toasting, so the template never observes it truthy and the
-      // `&& practices.length === 0` guard (.vue:57) looks redundant from that
-      // angle -- a mutation removing the guard still passed the toast tests.
-      //
-      // The guard is what makes the behaviour structural instead of dependent on
-      // Vue's scheduler racing the clear. Setting the state the template reads is
-      // the only way to prove it: error truthy + list non-empty => list wins.
+    it('the error rung is initial-load-only: a failed refetch over a POPULATED list never hides it', async () => {
+      // The list holds data and a later request fails (a practice change
+      // refetches it): the cards stay, no full-screen error.
       vi.mocked(mastersApi.getMyPractices).mockResolvedValue(page([U_SCHED], 2, 0))
       mount()
       await flush()
 
-      useMasterStore().practicesUpcomingError = 'Сеть недоступна'
+      vi.mocked(mastersApi.getMyPractices).mockRejectedValue(
+        new ApiResponseError(503, 'Сеть недоступна', 'net_down'),
+      )
+      await myPracticesChanged(useQueryCache())
       await flush()
 
+      expect(mastersApi.getMyPractices).toHaveBeenLastCalledWith('upcoming', 20, 0)
       expect(cardTitles()).toEqual(['Завтрашняя'])
       expect(text()).not.toContain('Не удалось загрузить практики')
     })
 
-    it('the error rung STILL renders when the list is empty (the guard is not a blanket mute)', async () => {
-      // The other side of the guard, so it cannot be "fixed" by deleting the rung.
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(page([], 0, 0))
-      mount()
-      await flush()
-
-      useMasterStore().practicesUpcomingError = 'Сеть недоступна'
-      await flush()
-
-      expect(text()).toContain('Не удалось загрузить практики')
-      expect(text()).toContain('Сеть недоступна')
-    })
-
-    it('routes a load-more failure to loadMoreError, never to the rung error (№442 root fix)', async () => {
-      // usePagination now splits the two failures at the source (usePagination.ts:
-      // `error` = first page, `loadMoreError` = later page), so the screen no
-      // longer has to null anything out by hand. `practicesError` staying null is
-      // the proof the rung can never be primed by a page-N failure -- that used to
-      // be one shared ref, which is what produced the destroy-the-list bug.
+    it('a failed load-more toasts once; the next attempt appends and does not re-toast', async () => {
       vi.mocked(mastersApi.getMyPractices).mockResolvedValue(page([U_SCHED], 2, 0))
       mount()
       await flush()
@@ -1291,25 +1268,8 @@ describe('MasterPracticesView', () => {
       )
       buttonWith('Показать ещё')?.click()
       await flush()
-
-      expect(toastError).toHaveBeenCalledWith('Сеть недоступна')
-      expect(useMasterStore().practicesUpcomingError).toBeNull()
-      expect(useMasterStore().practicesUpcomingLoadMoreError).toBe('Сеть недоступна')
-    })
-
-    it('clears loadMoreError on the next attempt, so a stale message cannot re-toast', async () => {
-      // The composable resets it at the START of each loadMore -- the reason the
-      // screen carries no manual clearing any more.
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(page([U_SCHED], 2, 0))
-      mount()
-      await flush()
-
-      vi.mocked(mastersApi.getMyPractices).mockRejectedValue(
-        new ApiResponseError(503, 'Сеть недоступна', 'net_down'),
-      )
-      buttonWith('Показать ещё')?.click()
-      await flush()
-      expect(useMasterStore().practicesUpcomingLoadMoreError).toBe('Сеть недоступна')
+      expect(toastError).toHaveBeenCalledTimes(1)
+      expect(text()).not.toContain('Не удалось загрузить практики')
 
       vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
         page([practice('p-ok', { title: 'Догруженная', status: 'scheduled' })], 2, 1),
@@ -1317,7 +1277,8 @@ describe('MasterPracticesView', () => {
       buttonWith('Показать ещё')?.click()
       await flush()
 
-      expect(useMasterStore().practicesUpcomingLoadMoreError).toBeNull()
+      expect(mastersApi.getMyPractices).toHaveBeenLastCalledWith('upcoming', 20, 1)
+      expect(cardTitles()).toEqual(['Завтрашняя', 'Догруженная'])
       expect(toastError).toHaveBeenCalledTimes(1)
     })
   })
@@ -1455,8 +1416,8 @@ describe('MasterPracticesView', () => {
   //   no assertion here reads the icon.
   // - diaryStore.loadInsights' skip-if-cached guard and its LRU eviction
   //   (stores/diary.ts:363-380): store behaviour -> probekit-unit-test.
-  // - usePagination's W17 requestId race (usePagination.ts:45-73): composable
-  //   behaviour, and not reachable through this screen's controls.
+  // - a load-more racing a refetch (queries/master.ts, cancelRefetch): the
+  //   lists' behaviour, covered in composables/queries/master.test.ts.
   // - masterStatusGuard, which fronts this route: the guard layer ->
   //   guards.test.ts (velo-idiom §6).
   //
