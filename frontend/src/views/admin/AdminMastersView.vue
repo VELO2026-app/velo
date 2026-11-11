@@ -40,8 +40,14 @@
       {{ t('adminScreens.adminMasters.inviteCta') }}
     </VButton>
 
-    <!-- FE-23 (GT P4): all schools incl. frozen, read-only. -->
-    <VButton variant="outline" block @click="router.push({ name: 'admin-schools' })">
+    <!-- FE-23 (GT P4): all schools incl. frozen, read-only. FE-151: only
+         with the «schools» instance option on. -->
+    <VButton
+      v-if="schoolsEnabled"
+      variant="outline"
+      block
+      @click="router.push({ name: 'admin-schools' })"
+    >
       {{ t('adminScreens.adminMasters.schoolsTab') }}
     </VButton>
 
@@ -158,6 +164,7 @@ import {
 import { formatMoney } from '@/utils/format'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
+import { isOptionEnabled } from '@/platform/instance'
 
 /** Direction+style as chip-language entries: filled (active) for the
  *  direction, muted for its styles -- same visual vocabulary as
@@ -193,6 +200,8 @@ function payoutVal(cents: number | null | undefined): string {
 }
 
 const router = useRouter()
+/** FE-151: the schools list button follows the «schools» instance option. */
+const schoolsEnabled = isOptionEnabled('schools')
 const toast = useToast()
 
 const filter = ref('all')

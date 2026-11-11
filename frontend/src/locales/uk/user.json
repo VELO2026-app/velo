@@ -441,6 +441,7 @@
           "bookFree": "Записатися безкоштовно"
         },
         "state": {
+          "bookingUnavailable": "Запис недоступний",
           "booked": "Ви записані",
           "pending": "Очікує",
           "completed": "Завершена",

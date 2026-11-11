@@ -13,9 +13,9 @@ import { installDataPrefetch } from '@/router/dataPrefetch'
 import { installRouteCatalogs } from '@/router/catalogs'
 import { installAccessGuard } from '@/router/guards'
 import { ROOT_ROUTE, PUBLIC_ROUTES } from '@/router/routes/public'
-import { AI_USER_ROUTES, PAYMENTS_USER_ROUTES, userRoutes } from '@/router/routes/user'
-import { PAYMENTS_MASTER_ROUTES, masterRoutes } from '@/router/routes/master'
-import { PAYMENTS_ADMIN_ROUTES, adminRoutes } from '@/router/routes/admin'
+import { AI_USER_ROUTES, userRoutes } from '@/router/routes/user'
+import { masterRoutes } from '@/router/routes/master'
+import { adminRoutes } from '@/router/routes/admin'
 
 // -- Module route groups (tz-whitelabel §4, F3) --
 // Registration is gated by the BUILD-TIME feature literals (vite `define`,
@@ -28,18 +28,19 @@ import { PAYMENTS_ADMIN_ROUTES, adminRoutes } from '@/router/routes/admin'
 // nowhere else); the zone modules declare the groups and take them back as
 // arguments. A deep link into a disabled module misses these records and
 // lands on the catch-all's /404 (NotFoundView), per §4.
+//
+// Instance options (FE-151: payments, schools, mcp) are not gated here: the
+// flag arrives at container start, so their records are always registered
+// with meta.option, and the access guard's optionGuard sends a navigation
+// into a switched-off option to the "section unavailable" screen
+// (/unavailable, FE-163).
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     ROOT_ROUTE,
-    ...userRoutes({
-      ai: __VELO_FEATURE_AI__ ? AI_USER_ROUTES : [],
-      payments: __VELO_FEATURE_PAYMENTS__ ? PAYMENTS_USER_ROUTES : [],
-    }),
-    // FE-112: the payments module is ALL of its surfaces -- the user's
-    // top-ups, the master's finance screen and the admin's payout queue.
-    ...masterRoutes({ payments: __VELO_FEATURE_PAYMENTS__ ? PAYMENTS_MASTER_ROUTES : [] }),
-    ...adminRoutes({ payments: __VELO_FEATURE_PAYMENTS__ ? PAYMENTS_ADMIN_ROUTES : [] }),
+    ...userRoutes({ ai: __VELO_FEATURE_AI__ ? AI_USER_ROUTES : [] }),
+    ...masterRoutes(),
+    ...adminRoutes(),
     ...PUBLIC_ROUTES,
   ],
 })

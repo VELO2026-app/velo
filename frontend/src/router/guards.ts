@@ -48,6 +48,7 @@ import { parseStartParam } from '@/router/deepLinks'
 import { refreshRoleIfStale } from '@/composables/useRoleFreshness'
 import type { UserRole } from '@/api/types'
 import { MASTER_APPLIED_KEY, masterRejectionSeenKey } from '@/utils/constants'
+import { isOptionEnabled, type OptionName } from '@/platform/instance'
 
 /**
  * The master store, imported on first use (FE-157): only the master-zone
@@ -79,11 +80,15 @@ declare module 'vue-router' {
      * it (requirementsGuard). Read per record from `to.matched`: through the
      * merged `to.meta` a child's value would hide its parent's. */
     requires?: RouteRequirement
+    /** The instance option the record belongs to (FE-151): with the option
+     * off the record is not there for the user -- optionGuard sends the
+     * navigation to the 404 screen. Read per record from `to.matched`. */
+    option?: OptionName
   }
 }
 
 /** A guard verdict: let the navigation on, or redirect it. */
-type AccessResult = true | { path: string }
+type AccessResult = true | { path: string; replace?: boolean }
 
 /** The session check behind one RouteRequirement. Takes no route: the
  * requirement already names what is checked. */
@@ -554,11 +559,30 @@ export async function requirementsGuard(
 }
 
 /**
+ * Send a navigation into a switched-off option's section to the
+ * "section unavailable" screen (FE-151, tz-whitelabel §4; the screen is
+ * FE-163, PM-22 p.13).
+ *
+ * @remarks The option's code is always in the bundle (variant A) and its
+ * records are always registered, so a named push from a leftover link still
+ * resolves -- and lands here instead of a screen whose API the backend has
+ * closed. `replace`: the dead address does not stay in history.
+ */
+export function optionGuard(to: Pick<RouteLocationNormalized, 'matched'>): AccessResult {
+  const off = to.matched.some((record) => {
+    const option = record.meta.option
+    return option !== undefined && !isOptionEnabled(option)
+  })
+  return off ? { path: '/unavailable', replace: true } : true
+}
+
+/**
  * Register the router's one access guard (a global beforeEach).
  *
  * @remarks Order inside it: the first navigation waits for auth
- * (waitUntilReady) -- it starts before App.vue mounts; then the role
- * freshness check (T21-4/T21-5), the P-1 dashboard redirect, and the
+ * (waitUntilReady) -- it starts before App.vue mounts; then the instance
+ * options (optionGuard, FE-151), the role freshness check (T21-4/T21-5),
+ * the P-1 dashboard redirect, and the
  * requirements of the records the navigation enters. Install it AFTER
  * installRouteCatalogs: guards run in registration order, so a deep link into
  * a zone starts its catalog fetch during the auth wait.
@@ -574,6 +598,9 @@ export function installAccessGuard(router: Router): void {
         console.warn('[router] auth initialization timed out on first navigation')
       }
     }
+
+    const option = optionGuard(to)
+    if (option !== true) return option
 
     const freshness = roleFreshnessGuard(to)
     if (freshness !== true) return freshness

@@ -33,7 +33,9 @@ import {
   masterPendingGuard,
   masterApplyGuard,
   roleFreshnessGuard,
+  optionGuard,
 } from '@/router/guards'
+import { applyInstanceConfig } from '@/platform/instance'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { resetAuthState, __setReadyForTest, pendingStartParam } from '@/composables/useAuth'
@@ -809,6 +811,78 @@ describe('router/guards', () => {
     it('any other user-zone screen is left alone', () => {
       setAuthUser({ role: 'admin' })
       expect(zoneHomeGuard({ name: 'user-calendar', path: '/user/calendar' })).toBe(true)
+    })
+  })
+
+  describe('optionGuard (FE-151: instance options)', () => {
+    const Stub = defineComponent({ render: () => h('div') })
+
+    function optionRouter() {
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [
+          { path: '/', component: Stub },
+          { path: '/unavailable', name: 'section-unavailable', component: Stub },
+          {
+            path: '/user',
+            component: Stub,
+            children: [
+              { path: 'dashboard', component: Stub },
+              { path: 'topup', component: Stub, meta: { option: 'payments' } },
+              { path: 'schools', component: Stub, meta: { option: 'schools' } },
+            ],
+          },
+          {
+            path: '/schools',
+            component: Stub,
+            meta: { option: 'schools' },
+            children: [{ path: 'join/:token', component: Stub }],
+          },
+        ],
+      })
+      installAccessGuard(router)
+      return router
+    }
+
+    beforeEach(() => {
+      __setReadyForTest(true)
+      setAuthUser({ role: 'user' })
+    })
+    afterEach(() => {
+      applyInstanceConfig(null)
+    })
+
+    it('no options block (golden build): every option record is open', async () => {
+      const router = optionRouter()
+      await router.push('/user/topup')
+      expect(router.currentRoute.value.fullPath).toBe('/user/topup')
+    })
+
+    it('an option off: its record lands on /unavailable; another option stays open', async () => {
+      applyInstanceConfig({ options: { payments: 'false', schools: 'true' } })
+      const router = optionRouter()
+      await router.push('/user/dashboard')
+      await router.push('/user/topup')
+      expect(router.currentRoute.value.fullPath).toBe('/unavailable')
+      await router.push('/user/schools')
+      expect(router.currentRoute.value.fullPath).toBe('/user/schools')
+    })
+
+    it('an unset flag (placeholder) is off', async () => {
+      applyInstanceConfig({ options: { payments: 'true', schools: '${OPTION_SCHOOLS}' } })
+      const router = optionRouter()
+      await router.push('/user/schools')
+      expect(router.currentRoute.value.fullPath).toBe('/unavailable')
+    })
+
+    it('a parent record carrying the option closes every child', () => {
+      applyInstanceConfig({ options: { schools: 'false' } })
+      const router = optionRouter()
+      expect(optionGuard(router.resolve('/schools/join/t1'))).toEqual({
+        path: '/unavailable',
+        replace: true,
+      })
+      expect(optionGuard(router.resolve('/user/dashboard'))).toBe(true)
     })
   })
 })

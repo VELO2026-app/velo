@@ -164,7 +164,11 @@
       <section v-if="showZoom" class="detail__section">
         <h3 class="detail__section-title">ZOOM</h3>
         <VCard class="detail__zoom-card">
-          {{ t('user.screens.practiceDetail.zoomAfterBooking') }}
+          {{
+            isOptionEnabled('zoom')
+              ? t('user.screens.practiceDetail.zoomAfterBooking')
+              : t('common.onlineUnavailable')
+          }}
         </VCard>
       </section>
 
@@ -186,7 +190,7 @@
            view (i18n:user.screens.practiceDetail.titleBooked, Figma 15) the
            practice is already paid for,
            so the price row is hidden. -->
-      <VCard v-if="!booked" class="detail__price-row" padding="none">
+      <VCard v-if="!booked && !bookingClosedByPayments" class="detail__price-row" padding="none">
         <span class="detail__price-label">{{ t('user.screens.practiceDetail.fields.price') }}</span>
         <span
           class="detail__price-value"
@@ -266,6 +270,12 @@
            longer be booked (backend enforces the same). A cancelled booking
            on a not-yet-started practice still may re-book. When hidden for a
            started practice we simply show no CTA. -->
+      <p
+        v-else-if="bookingClosedByPayments && !isMaster && !isPastBooking && !practiceStarted"
+        class="detail__booking-closed"
+      >
+        {{ t('user.screens.practiceDetail.state.bookingUnavailable') }}
+      </p>
       <VButton
         v-else-if="!booked && !isMaster && !isPastBooking && !practiceStarted"
         variant="primary"
@@ -342,6 +352,7 @@ import { DIFFICULTY_DOTS, DIFFICULTY_LABEL } from '@/utils/displayHelpers'
 import { hasEnded } from '@/utils/bookingStatus'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import { platform } from '@/platform'
+import { isOptionEnabled } from '@/platform/instance'
 import { getBookingRecording } from '@/api/bookings'
 import type { BookingStatus, BookingWithPracticeResponse, PracticeDifficulty } from '@/api/types'
 
@@ -714,6 +725,13 @@ const formattedPrice = computed(() => {
   return formatMoney(practice.value.price_cents, practice.value.currency)
 })
 
+/** PM-22 p.2: payments are off and the practice is paid: a viewer who has
+ *  no booking cannot book it and sees no price. A viewer who already booked
+ *  (and paid) sees no change: `booked` keeps the view, check-in and cancel. */
+const bookingClosedByPayments = computed(
+  () => !isOptionEnabled('payments') && practice.value?.is_free === false && !booked.value,
+)
+
 const full = computed(() => {
   if (!practice.value) return false
   return isFull(practice.value.current_participants, practice.value.max_participants)
@@ -989,6 +1007,12 @@ watch(
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+.detail__booking-closed {
+  margin: 0;
+  text-align: center;
+  color: var(--velo-text-secondary, inherit);
 }
 
 .detail__price-row {

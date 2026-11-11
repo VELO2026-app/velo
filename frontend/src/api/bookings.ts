@@ -7,6 +7,8 @@
 // Backend endpoints used:
 //   POST /api/v1/practices/{id}/purchase          -- purchase (booking + ledger)
 //   POST /api/v1/practices/{id}/preview-purchase   -- pricing preview
+//   POST /api/v1/bookings                          -- book (same service; open
+//                                                     with the payments option off)
 //   GET  /api/v1/bookings/me                       -- my bookings (paginated)
 //   DELETE /api/v1/bookings/{id}                   -- cancel booking
 //   POST /api/v1/bookings/{id}/join                -- check-in (Phase 5.4)
@@ -41,6 +43,18 @@ export function purchasePractice(
 ): Promise<PurchaseResponse> {
   const body = promoCode ? { promo_code: promoCode } : undefined
   return api.post<PurchaseResponse>(path`/api/v1/practices/${practiceId}/purchase`, body)
+}
+
+/**
+ * Book a practice through POST /api/v1/bookings (FE-151).
+ *
+ * The same booking service as purchasePractice (booking + ledger), but the
+ * bookings router stays open when the instance's payments option is off,
+ * while the purchase router is closed with it (BE-182). BookingPopup uses
+ * this path on such an instance.
+ */
+export function createBooking(practiceId: string): Promise<BookingResponse> {
+  return api.post<BookingResponse>('/api/v1/bookings', { practice_id: practiceId })
 }
 
 /**

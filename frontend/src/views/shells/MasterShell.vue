@@ -29,7 +29,7 @@ import { MobileLayout } from '@/components/layout'
 import { MASTER_TABS, type TabItem } from '@/router/tabs'
 import { useKeyboardOpen } from '@/composables/useKeyboardOpen'
 import { useSchoolsHubStore } from '@/stores/schoolsHub'
-import { featureEnabled } from '@/platform/features'
+import { isOptionEnabled } from '@/platform/instance'
 
 const route = useRoute()
 const router = useRouter()
@@ -49,10 +49,10 @@ onMounted(() => {
 const visibleTabs = computed<TabItem[]>(() =>
   MASTER_TABS.filter((tab) => {
     if (!tab.requires) return true
-    // tz-whitelabel §4: an edition require is the feature registry's call;
-    // 'schools' stays the server-data condition (membership OR founding right).
-    if (tab.requires === 'schools') return schoolsHub.hasSchools || schoolsHub.canCreate
-    return featureEnabled(tab.requires)
+    // FE-151: the instance option first; then the server-data condition
+    // (membership OR founding right).
+    if (!isOptionEnabled('schools')) return false
+    return schoolsHub.hasSchools || schoolsHub.canCreate
   }),
 )
 

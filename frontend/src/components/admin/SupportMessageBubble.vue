@@ -70,6 +70,7 @@
 import { t } from '@/locales'
 import { computed } from 'vue'
 import type { SupportMessage } from '@/api/support'
+import { isOptionEnabled } from '@/platform/instance'
 
 const props = defineProps<{
   message: SupportMessage
@@ -89,7 +90,11 @@ const emit = defineEmits<{
 
 type Mark = 'translating' | 'failed' | 'undelivered'
 
-const state = computed(() => props.message.translation?.state ?? null)
+/** FE-163 (PM-22 p.11): llm off: messages read in the language they were
+ *  written in; no translation toggle, state mark or retry. */
+const translationOn = isOptionEnabled('llm')
+
+const state = computed(() => (translationOn ? (props.message.translation?.state ?? null) : null))
 
 const mark = computed<Mark | null>(() => {
   if (state.value === 'preparing' || state.value === 'not_requested') return 'translating'
@@ -106,10 +111,14 @@ const markLabel = computed<string>(() => {
 
 /** Only a person's translated message has an original to show. */
 const canToggle = computed<boolean>(() => props.fromPerson && state.value === 'ready')
-const canRetry = computed<boolean>(() => props.message.translation?.retryable === true)
+const canRetry = computed<boolean>(
+  () => translationOn && props.message.translation?.retryable === true,
+)
 
 const shownText = computed<string>(() =>
-  canToggle.value && props.showOriginal ? props.message.original : props.message.body,
+  !translationOn || (canToggle.value && props.showOriginal)
+    ? props.message.original
+    : props.message.body,
 )
 </script>
 

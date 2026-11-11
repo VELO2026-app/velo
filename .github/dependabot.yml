@@ -20,8 +20,9 @@
 # `groups.<name>.group-by`; version updates only, one ecosystem).
 #
 # cooldown 14 days holds every version back until it is two weeks old;
-# security updates are not delayed by it. The wider dependency-maturity rule
-# is tracked in FE-164.
+# security updates are not delayed by it. The same rule is enforced for every
+# other install path (manual or agent bumps) by `minimumReleaseAge` in
+# pnpm-workspace.yaml (FE-164); keep the two at 14 days together.
 # =============================================================================
 version: 2
 
