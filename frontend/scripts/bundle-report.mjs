@@ -11,6 +11,17 @@
 //   node scripts/bundle-report.mjs --json          the same facts as JSON (CI)
 //   node scripts/bundle-report.mjs --dist <dir>    report another output dir
 //   node scripts/bundle-report.mjs --modules       per-chunk module dump, see below
+//   node scripts/bundle-report.mjs --budget [file] size gate, see below
+//
+// --budget compares the built dist/ with the baseline in bundle-budget.json
+// (default: frontend/bundle-budget.json; values = the golden build after
+// FE-157 stage 2). Exit code 1 when
+//   - the app chunk gzip exceeds the budget by more than 2% (tolerance for
+//     build noise), or
+//   - the PWA precache bytes exceed the budget (no tolerance).
+// It always prints a markdown table with the delta against the budget, and
+// appends it to $GITHUB_STEP_SUMMARY when that is set (CI). Raising the
+// budget is a deliberate edit of bundle-budget.json in the same PR.
 //
 // --modules runs its OWN production build into a temporary outDir (dist/ is
 // left untouched on the golden build; with a skin in public/skin/ the
@@ -28,6 +39,7 @@
 //   --keep           keep the temporary directory (its modules.json path is printed)
 // With --json, --modules prints the whole dump as JSON instead.
 import {
+  appendFileSync,
   existsSync,
   mkdtempSync,
   readdirSync,
@@ -93,7 +105,10 @@ function precacheOf(distDir) {
   const sw = readFileSync(swPath, 'utf8')
   const list = sw.match(/precacheAndRoute\(\s*\[([\s\S]*?)\]\s*[,)]/)
   if (!list) throw new Error('bundle-report: no precacheAndRoute([...]) list in sw.js')
-  const urls = [...list[1].matchAll(/url:\s*"([^"]+)"/g)].map((m) => m[1])
+  // Unique URLs: vite-plugin-pwa lists the manifest icons a second time, and
+  // the browser downloads each URL once -- counting duplicates would bill
+  // the budget for bytes no device fetches.
+  const urls = [...new Set([...list[1].matchAll(/url:\s*"([^"]+)"/g)].map((m) => m[1]))]
   let bytes = 0
   const missing = []
   for (const url of urls) {
@@ -263,6 +278,60 @@ function printModules(chunks, { find, top }) {
   if (!hits) console.log('  no module matches')
 }
 
+/** Entry gzip may exceed the budget by this fraction before the gate fails. */
+const ENTRY_TOLERANCE = 0.02
+
+/** Signed delta of `actual` against `base`: "+1.20 kB (+0.8%)". */
+function delta(actual, base) {
+  const diff = actual - base
+  const pct = base === 0 ? 0 : (diff / base) * 100
+  const sign = diff > 0 ? '+' : diff < 0 ? '-' : '±'
+  return `${sign}${(Math.abs(diff) / 1000).toFixed(2)} kB (${sign}${Math.abs(pct).toFixed(1)}%)`
+}
+
+/**
+ * Check a report against the budget.
+ *
+ * @returns Markdown summary and the list of failures (empty = within budget).
+ */
+function checkBudget(r, budget) {
+  const failures = []
+  const entryLimit = Math.floor(budget.entryGzip * (1 + ENTRY_TOLERANCE))
+  const entryOk = r.entry.gzip <= entryLimit
+  if (!entryOk) {
+    failures.push(
+      `app chunk gzip ${kb(r.entry.gzip)} exceeds budget ${kb(budget.entryGzip)} by more than ${ENTRY_TOLERANCE * 100}% (limit ${kb(entryLimit)})`,
+    )
+  }
+  const rows = [
+    `| app chunk gzip | ${kb(budget.entryGzip)} | ${kb(r.entry.gzip)} | ${delta(r.entry.gzip, budget.entryGzip)} | limit ${kb(entryLimit)} | ${entryOk ? 'ok' : 'FAIL'} |`,
+  ]
+  if (!r.precache) {
+    failures.push('no sw.js in dist/: precache cannot be checked')
+    rows.push(
+      `| precache bytes | ${kb(budget.precacheBytes)} | n/a | n/a | limit ${kb(budget.precacheBytes)} | FAIL |`,
+    )
+  } else {
+    const ok = r.precache.bytes <= budget.precacheBytes
+    if (!ok) {
+      failures.push(`precache ${kb(r.precache.bytes)} exceeds budget ${kb(budget.precacheBytes)}`)
+    }
+    rows.push(
+      `| precache bytes | ${kb(budget.precacheBytes)} | ${kb(r.precache.bytes)} | ${delta(r.precache.bytes, budget.precacheBytes)} | limit ${kb(budget.precacheBytes)} | ${ok ? 'ok' : 'FAIL'} |`,
+    )
+  }
+  const md = [
+    `### Bundle budget: ${failures.length ? 'FAIL' : 'ok'}`,
+    '',
+    '| metric | budget | actual | delta | gate | status |',
+    '| --- | --- | --- | --- | --- | --- |',
+    ...rows,
+    '',
+    ...failures.map((f) => `- ${f}`),
+  ].join('\n')
+  return { md, failures }
+}
+
 const argv = process.argv.slice(2)
 const asJson = argv.includes('--json')
 
@@ -281,6 +350,22 @@ if (argv.includes('--modules')) {
 } else {
   const distDir = flagValue(argv, '--dist') ?? join(frontendDir, 'dist')
   const r = report(distDir)
-  if (asJson) console.log(JSON.stringify(r, null, 2))
+  if (argv.includes('--budget')) {
+    const next = argv[argv.indexOf('--budget') + 1]
+    const budgetPath =
+      next && !next.startsWith('--') ? next : join(frontendDir, 'bundle-budget.json')
+    const budget = JSON.parse(readFileSync(budgetPath, 'utf8'))
+    for (const key of ['entryGzip', 'precacheBytes']) {
+      if (!Number.isFinite(budget[key])) {
+        throw new Error(`bundle-report: ${budgetPath} has no numeric ${key}`)
+      }
+    }
+    const { md, failures } = checkBudget(r, budget)
+    console.log(md)
+    if (process.env.GITHUB_STEP_SUMMARY) {
+      appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${md}\n`)
+    }
+    if (failures.length) process.exit(1)
+  } else if (asJson) console.log(JSON.stringify(r, null, 2))
   else printReport(r)
 }

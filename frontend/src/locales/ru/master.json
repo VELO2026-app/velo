@@ -1,11 +1,4 @@
 {
-  "methodPicker": {
-    "custom": "Свой вариант",
-    "directionPlaceholder": "Укажите направление…"
-  },
-  "masterCard": {
-    "profileUnavailable": "Профиль мастера недоступен"
-  },
   "masterScreens": {
     "masterMessages": {
       "empty": {
@@ -769,7 +762,8 @@
       "newAria": "Новый промокод",
       "loadFailed": "Не удалось загрузить промокоды",
       "discount": "Скидка: {n}%",
-      "used": "Использовано: {label}"
+      "used": "Использовано: {label}",
+      "usedOf": "{used} из {max}"
     },
     "masterStudentProfile": {
       "addToGroup": "Добавить в группу",

@@ -9,6 +9,9 @@
 // process.env -> wins, unknown placeholder -> untouched.
 // =============================================================================
 
+import { readFileSync, existsSync } from 'node:fs'
+import { resolve } from 'node:path'
+
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { passportHtmlDefaults } from '@/platform/passport-html'
@@ -140,5 +143,40 @@ describe('passportHtmlDefaults -- skin derivatives (tz-whitelabel F2, §1/§3)',
     })
     const hook = (plugin as unknown as HtmlPlugin).transformIndexHtml
     expect(hook.handler('<title>VELO</title>')).toBe('<title>VELO</title>')
+  })
+})
+
+describe('real index.html font block -- golden self-host vs skin webfont (FE-157 s2/font)', () => {
+  const INDEX_HTML = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8')
+  const run = (skin: Parameters<typeof passportHtmlDefaults>[0]): string => {
+    const p = passportHtmlDefaults(skin) as unknown as HtmlPlugin
+    p.configResolved({ mode: 'production', root: process.cwd(), envDir: NO_ENV_DIR })
+    return p.transformIndexHtml.handler(INDEX_HTML)
+  }
+
+  it('golden: Marmelad is preloaded from our own origin, no Google Fonts anywhere', () => {
+    const out = run(null)
+    expect(out).toMatch(
+      /<link rel="preload" href="\/fonts\/marmelad-subset\.woff2" as="font" type="font\/woff2" crossorigin \/>/,
+    )
+    expect(out).not.toContain('googleapis')
+    expect(out).not.toContain('gstatic')
+    expect(existsSync(resolve(process.cwd(), 'public/fonts/marmelad-subset.woff2'))).toBe(true)
+  })
+
+  it('skin fonts still replace the block: their preloads in, ours out (FE-131)', () => {
+    const out = run({
+      displayName: 'ШКОЛА',
+      shortName: 'Школа',
+      themeColor: '#1B2A41',
+      backgroundColor: '#F5F1EA',
+      fonts: [
+        { family: 'Rubik', file: 'assets/fonts/rubik-400.woff2', weight: 400, style: 'normal' },
+      ],
+    })
+    expect(out).toContain(
+      '<link rel="preload" href="/skin/assets/fonts/rubik-400.woff2" as="font" type="font/woff2" crossorigin />',
+    )
+    expect(out).not.toContain('marmelad-subset')
   })
 })

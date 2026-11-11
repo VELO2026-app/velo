@@ -4,9 +4,25 @@
  * CSS reset + base typography.
  * Imported once in main.ts, applies to the entire app.
  *
- * FIX 10.6: Google Fonts loaded via <link> in index.html instead of
- * @import here. Eliminates render-blocking CSS request (+200-500ms FCP).
+ * Marmelad is self-hosted (@font-face below, preloaded from index.html), so
+ * there is no third-party font request on the golden build.
  * =========================================================================== */
+
+/* === Font === */
+/* Cyrillic+latin subset of Marmelad Regular (OFL 1.1; text in
+   public/fonts/OFL.txt). `swap` shows the fallback stack at once. A skin that
+   sets brand.json fontUrl replaces the preload in index.html; this face then
+   simply goes unused and is never fetched. */
+@font-face {
+  /* The face NAME this rule declares (the descriptor --font-body points at),
+     not a property use -- the FE-154 token gate does not apply. */
+  /* stylelint-disable-next-line declaration-property-value-allowed-list */
+  font-family: 'Marmelad';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/marmelad-subset.woff2') format('woff2');
+}
 
 /* === Reset === */
 *,

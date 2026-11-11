@@ -191,6 +191,12 @@ jobs:
           pnpm -C frontend build 2>&1 | tee "$RUNNER_TEMP/frontend-build.log"
           node frontend/scripts/build-log-gate.mjs "$RUNNER_TEMP/frontend-build.log"
 
+      # FE-157 2E: size budget (frontend/bundle-budget.json). Fails when the
+      # app chunk gzip is >2% over budget or the PWA precache is over budget;
+      # the delta table goes to the step summary.
+      - name: Bundle size budget
+        run: node frontend/scripts/bundle-report.mjs --budget
+
   # tz-whitelabel F5 (FE-114, FE-152): the build matrix IS the whitelabel
   # gate -- golden x every edition of editions.json through PRIMER_EDITION
   # (the machine's channel): a module outside the edition must leave NO

@@ -34,6 +34,25 @@ import App from '@/App.vue'
 import { useAuthStore } from '@/stores/auth'
 import type { UserResponse } from '@/api/types'
 
+// FE-157 s2: the boot must not warm the other locales (App.vue used to load
+// every catalog two seconds after mount). The real module, with the two
+// loaders App could call wrapped in spies.
+const localeLoads = vi.hoisted(() => ({ load: vi.fn(), warm: vi.fn() }))
+vi.mock('@/locales', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/locales')>()
+  return {
+    ...real,
+    loadLocale: (code: string) => {
+      localeLoads.load(code)
+      return real.loadLocale(code)
+    },
+    warmLocale: (code: string) => {
+      localeLoads.warm(code)
+      real.warmLocale(code)
+    },
+  }
+})
+
 // Shared refs the mocked useAuth() hands to App.vue. Declared in the module
 // body and only DEREFERENCED inside the useAuth() closure -- the vi.mock
 // factory itself must not touch them (factories run before module bodies,
@@ -326,5 +345,23 @@ describe('App entry gate (FE-39)', () => {
     await flushPromises()
 
     expect(w.find('.bot-hint').exists()).toBe(false)
+  })
+})
+
+describe('App boot -- no locale warm-up (FE-157 s2)', () => {
+  it('a returning ru user: no other locale is loaded or warmed after mount', async () => {
+    vi.useFakeTimers()
+    try {
+      localeLoads.load.mockReset()
+      localeLoads.warm.mockReset()
+      setAuthUser({ onboarding_completed: true, language: 'ru' })
+      await mountGate()
+      await vi.advanceTimersByTimeAsync(5000)
+
+      expect(localeLoads.load).not.toHaveBeenCalled()
+      expect(localeLoads.warm).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

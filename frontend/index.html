@@ -23,10 +23,11 @@
          package's assets/fonts/ (platform/passport-html.ts, FE-131); without
          one this stays Marmelad. -->
     <!--VELO:FONT-->
-    <!-- Google Fonts: preconnect + link (10.6: replaces @import in global.css). -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Marmelad&display=swap" rel="stylesheet" />
+    <!-- Marmelad is self-hosted (OFL 1.1, see public/fonts/OFL.txt): a
+         cyrillic+latin woff2 subset, declared by @font-face in
+         styles/global.css. The preload fetches it in parallel with the CSS;
+         crossorigin is required for font preloads even same-origin. -->
+    <link rel="preload" href="/fonts/marmelad-subset.woff2" as="font" type="font/woff2" crossorigin />
     <!--/VELO:FONT-->
 
     <!-- Telegram WebApp SDK: NOT here. src/platform/launch.ts loads it, and
