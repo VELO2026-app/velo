@@ -292,6 +292,45 @@ describe('useCalendarWeek -- review fixes (FE-178)', () => {
   })
 })
 
+describe('useCalendarWeek -- second review (FE-178)', () => {
+  it('a cancelled request seeds no practice details (the session may have ended)', async () => {
+    let answer!: () => void
+    vi.mocked(practicesApi.getPractices).mockReturnValue(
+      new Promise((resolve) => {
+        answer = () => resolve(page([practice('late', '2026-06-16T10:00:00Z')]))
+      }),
+    )
+    mount()
+    await nextTick()
+    const cache = useQueryCache(pinia)
+    const entry = cache.getEntries({ key: ['practices', 'list'] })[0]!
+    cache.cancel(entry)
+    answer()
+    await flush()
+
+    expect(cache.getQueryData(['practices', 'detail', 'late'])).toBeUndefined()
+  })
+
+  it("a failed quiet refresh never shows another scope's week", async () => {
+    // The kept-alive tab saw a master's week while a stacked calendar was open.
+    vi.mocked(practicesApi.getPractices).mockResolvedValue(
+      page([practice('masters', '2026-06-16T10:00:00Z')]),
+    )
+    mount(() => useCalendarStore().setMasterScope('m1'))
+    await flush()
+    expect(week.weekPractices.value.map((p) => p.id)).toEqual(['masters'])
+
+    // Back on the tab: its own week fails, then a ribbon scroll fails too.
+    vi.mocked(practicesApi.getPractices).mockRejectedValue(new Error('offline'))
+    useCalendarStore().setMasterScope(null)
+    await flush()
+    useCalendarStore().shiftDays(2)
+    await flush()
+
+    expect(week.weekPractices.value).toEqual([])
+  })
+})
+
 describe('useCalendarWeek -- school scope', () => {
   it("slices the window out of the school's whole feed and opens on its nearest practice", async () => {
     vi.mocked(schoolsApi.getSchoolPractices).mockResolvedValue(

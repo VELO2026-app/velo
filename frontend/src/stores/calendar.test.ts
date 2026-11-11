@@ -206,6 +206,37 @@ describe('useCalendarStore', () => {
     })
   })
 
+  describe('tabWeekParams (the idle prefetch, FE-178 review)', () => {
+    it("before the first entry: today's home week, without touching the store", () => {
+      const store = useCalendarStore()
+      store.setMasterScope('m1')
+
+      expect(store.tabWeekParams()).toMatchObject({
+        from: '2026-06-14T00:00:00.000Z',
+        master: null,
+        school: null,
+      })
+      expect(store.masterScope).toBe('m1')
+    })
+
+    it('after it: the window the user left the tab on, with its filters, without the scope', () => {
+      const store = useCalendarStore()
+      store.init()
+      store.nextWeek()
+      store.applyFilters({ direction: ['meditation'] })
+      store.setMasterScope('m1', 'g1')
+
+      expect(store.tabWeekParams()).toEqual({
+        ...store.weekParams,
+        master: null,
+        schoolFilter: null,
+        school: null,
+      })
+      expect(store.tabWeekParams().filters).toMatchObject({ direction: ['meditation'] })
+      expect(store.quietWindow).toBe(false)
+    })
+  })
+
   describe('snapToSchoolFeed (school scope opens ON the practices)', () => {
     it('moves the window and the selection to the nearest upcoming practice, once per mode entry', () => {
       const store = useCalendarStore()

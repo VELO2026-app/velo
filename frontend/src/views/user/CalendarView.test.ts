@@ -102,7 +102,7 @@
 
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { createApp, nextTick, type App } from 'vue'
+import { createApp, nextTick, reactive, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import { PiniaColada } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
@@ -128,13 +128,15 @@ const push = vi.fn()
 const back = vi.fn()
 // Master mode (owner 2026-09-30): the stacked route carries :masterId.
 // Owner 2026-10-03: it may also carry ?schoolId (the curator's school context).
-const routeState = {
+// Reactive, like the real route: a navigation changes what the screen's
+// computeds read (the scope reset on unmount depends on it).
+const routeState = reactive({
   params: {} as Record<string, string>,
   query: {} as Record<string, string | undefined>,
-}
+})
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push, back }),
-  useRoute: () => ({ params: routeState.params, query: routeState.query }),
+  useRoute: () => routeState,
 }))
 
 // -----------------------------------------------------------------------------
@@ -879,7 +881,14 @@ describe('CalendarView', () => {
   })
 
   describe('leaving a stacked calendar through a route change (FE-178 review)', () => {
-    it('the scope this screen set is cleared even though the route already moved on', async () => {
+    function leave(): void {
+      app?.unmount()
+      host?.remove()
+      app = null
+      host = null
+    }
+
+    it('master: the scope this screen set is cleared although the route already moved on', async () => {
       mount({ masterId: 'm1' })
       await flush()
       const store = useCalendarStore()
@@ -887,12 +896,53 @@ describe('CalendarView', () => {
 
       // router.back() to the master profile: the route is the next one by unmount.
       routeState.params = { id: 'm1' }
-      app?.unmount()
-      host?.remove()
-      app = null
-      host = null
+      await nextTick()
+      leave()
 
       expect(store.masterScope).toBeNull()
+      expect(store.weekParams.master).toBeNull()
+    })
+
+    it('school: the same, for the school scope', async () => {
+      mount({ schoolId: 'g7' })
+      await flush()
+      const store = useCalendarStore()
+      expect(store.schoolScope).toBe('g7')
+
+      routeState.params = { id: 'g7' }
+      await nextTick()
+      leave()
+
+      expect(store.schoolScope).toBeNull()
+    })
+
+    it('a scope another screen set meanwhile is left alone', async () => {
+      mount({ masterId: 'm1' })
+      await flush()
+      const store = useCalendarStore()
+      // A newer stacked calendar took the store over before this one unmounted.
+      store.setMasterScope('m2')
+
+      leave()
+
+      expect(store.masterScope).toBe('m2')
+    })
+
+    it('a retry after an error shows the loader, not the old error', async () => {
+      vi.mocked(practicesApi.getPractices).mockRejectedValue(new Error('offline'))
+      mount()
+      await flush()
+      expect(host?.textContent).toContain('Повторить')
+
+      vi.mocked(practicesApi.getPractices).mockReturnValue(new Promise(() => {}))
+      const retry = [...(host?.querySelectorAll('button') ?? [])].find((b) =>
+        b.textContent?.includes('Повторить'),
+      )
+      retry?.click()
+      await flush()
+
+      expect(host?.textContent).not.toContain('Повторить')
+      expect(loader()).not.toBeNull()
     })
   })
 })

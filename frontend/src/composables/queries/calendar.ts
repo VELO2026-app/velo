@@ -176,8 +176,20 @@ export function useCalendarWeek() {
     { immediate: true },
   )
 
-  /** The last week shown -- what a failed quiet refresh keeps on screen. */
-  const lastShown = shallowRef<PracticeResponse[]>([])
+  /**
+   * The last week shown, with the scope it belongs to -- what a failed quiet
+   * refresh keeps on screen. A kept-alive tab follows the store while a
+   * stacked calendar is open, so the last week it saw may be a master's or a
+   * school's: never shown under another scope.
+   */
+  const lastShown = shallowRef<{ scope: string; week: PracticeResponse[] }>({ scope: '', week: [] })
+  /** The scope of the key on screen (see scopeOf). */
+  const currentScope = (): string => {
+    const { school, ...feed } = store.weekParams
+    return scopeOf(
+      school ? keys.practices.schoolUpcoming(school) : keys.practices.calendarWeek(feed),
+    )
+  }
   const loaded = computed<PracticeResponse[] | undefined>(() => {
     const data = query.data.value
     if (data === undefined) return undefined
@@ -193,7 +205,7 @@ export function useCalendarWeek() {
   watch(
     loaded,
     (week) => {
-      if (week !== undefined) lastShown.value = week
+      if (week !== undefined) lastShown.value = { scope: currentScope(), week }
     },
     // A week already in the cache at mount (warmed, persisted) counts too.
     { immediate: true },
@@ -201,7 +213,10 @@ export function useCalendarWeek() {
 
   const weekPractices = computed<PracticeResponse[]>(() => {
     if (loaded.value !== undefined) return loaded.value
-    return store.quietWindow && query.error.value != null ? lastShown.value : []
+    const kept = lastShown.value
+    return store.quietWindow && query.error.value != null && kept.scope === currentScope()
+      ? kept.week
+      : []
   })
 
   const fetching = computed(() => query.asyncStatus.value === 'loading')
