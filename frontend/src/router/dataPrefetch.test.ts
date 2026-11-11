@@ -5,7 +5,8 @@
 // Contract: after the first screen of the user zone, past the delay and in an
 // idle slot, every OTHER tab's warmer runs -- once per session, one after
 // another, never for the open tab, never on a constrained network; a failing
-// warmer stops nothing.
+// warmer stops nothing. Only with a session (a token or a user): without one
+// nothing is requested, and the zone is warmed once a session appears.
 // =============================================================================
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -49,7 +50,15 @@ vi.mock('@/stores/diary', () => ({
   }),
 }))
 vi.mock('@/stores/schoolsHub', () => ({ useSchoolsHubStore: () => ({ hasSchools: false }) }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ role: 'user' }) }))
+const session = vi.hoisted(() => ({
+  auth: null as null | { token: string | null; user: object | null; role: string },
+}))
+vi.mock('@/stores/auth', async () => {
+  const { reactive } = await import('vue')
+  const auth = reactive({ token: 'tok' as string | null, user: null, role: 'user' })
+  session.auth = auth
+  return { useAuthStore: () => auth }
+})
 vi.mock('@/api/bookings', () => ({
   getMyStats: () => {
     calls.push('stats')
@@ -86,6 +95,10 @@ beforeEach(() => {
   vi.useFakeTimers()
   calls.length = 0
   constrained.value = false
+  if (session.auth) {
+    session.auth.token = 'tok'
+    session.auth.user = null
+  }
 })
 
 afterEach(() => {
@@ -121,6 +134,42 @@ describe('installDataPrefetch', () => {
     constrained.value = true
     const router = makeRouter()
     await router.push('/user/dashboard')
+    await runAll()
+    expect(calls).toEqual([])
+  })
+
+  it('no session: no requests; the zone is warmed once a session appears', async () => {
+    await import('@/stores/auth') // create the reactive mock
+    session.auth!.token = null
+    const router = makeRouter()
+    await router.push('/user/dashboard')
+    await runAll()
+    expect(calls).toEqual([])
+
+    session.auth!.user = {} // a user alone counts as a session
+    await runAll()
+    expect(calls).toContain('calendar')
+    expect(calls).toContain('diary')
+    expect(calls).not.toContain('upcoming') // the open tab loads itself
+
+    const first = calls.length
+    session.auth!.user = null
+    session.auth!.token = 'tok'
+    await runAll()
+    expect(calls.length).toBe(first) // one-shot: the watcher is gone
+  })
+
+  it('a second touch before the auth chunk lands is throttled', async () => {
+    warmTabData('/user/profile')
+    warmTabData('/user/profile')
+    await runAll()
+    expect(calls.filter((c) => c === 'stats')).toHaveLength(1)
+  })
+
+  it('no session: a dock finger-down warms nothing', async () => {
+    await import('@/stores/auth')
+    session.auth!.token = null
+    warmTabData('/user/profile')
     await runAll()
     expect(calls).toEqual([])
   })

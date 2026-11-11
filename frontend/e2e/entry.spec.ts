@@ -30,17 +30,13 @@ test.describe('browser tab', () => {
     await page.goto('/')
 
     await expect(page.getByRole('button', { name: 'Log in with Telegram' })).toBeVisible()
-    // Only the session restore is asserted: the idle data prefetch races the
-    // login screen (see the fixme below), so "no traffic at all" is flaky here.
+    // Only the session restore is asserted here; "no traffic at all" is the next test.
     expect(api.calls).not.toContain('GET /api/v1/users/me')
   })
 
-  // Known defect, surfaced once the check waited for the network to settle:
-  // without a session the idle data prefetch (src/router/dataPrefetch.ts)
-  // still fires ~1s after the login screen and calls bookings, notifications,
-  // practices and the diary feed (unauthenticated, 401 against a real API).
-  // Un-fixme when the prefetch is gated on a session.
-  test.fixme('no session: no late API traffic once the network settles', async ({ page }) => {
+  // The idle data prefetch (src/router/dataPrefetch.ts) is gated on a session:
+  // the login screen must not call bookings, notifications, practices or diary.
+  test('no session: no late API traffic once the network settles', async ({ page }) => {
     const api = await mockApi(page)
     await page.addInitScript(() => localStorage.setItem('velo.locale', 'en'))
 
