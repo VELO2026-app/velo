@@ -37,7 +37,7 @@ Sweep дополнительно проверяет, что вместо экр�
 
 ```sh
 sh ~/work/velo-dev/velo-dev-up.sh
-velo seed --profile e2e && velo setrole 607031 A --yes   # один раз
+python frontend/e2e/stack/seed_e2e.py && velo setrole 607031 A --yes   # один раз; сид — обёртка, `velo seed` профиль не видит
 pnpm -C frontend build                                     # golden-сборка для vite preview
 pnpm -C frontend e2e:sweep
 ```
@@ -89,7 +89,7 @@ WebKit: `pnpm -C frontend exec playwright test --project=sweep-webkit`.
 ```
 
 - `path` — ровно как в роутере (тест сверяет);
-- `roles` — `student` (ada), `master` (mira), `admin` (root), `cara`, `ben` — люди сида `backend/scripts/seed_profiles/e2e.json`;
+- `roles` — `student` (ada), `master` (mira), `admin` (root), `cara`, `ben` — люди сида `frontend/e2e/stack/seed/e2e.json` (подключается обёрткой `seed_e2e.py`, `backend/**` не трогаем);
 - `params` — ключ из `e2e/.state/params.json` или литерал `'=value'`; новый ключ — добавить сбор в `frontend/e2e/stack/stack.setup.ts` (из API; если объекта нет — создать через API, идемпотентно, по имени);
 - `lands` — URL, где экран оказывается по задумке (редирект);
 - `allow` — сигналы, которые экран даёт по задумке, с причиной;

@@ -6,7 +6,8 @@
 # Postgres and Redis must already run (CI: job services; locally: brew). This
 # script, from the repo root:
 #   1. alembic upgrade head
-#   2. seed the `e2e` profile (backend/scripts/seed_profiles/e2e.json)
+#   2. seed the `e2e` profile (frontend/e2e/stack/seed/e2e.json,
+#      via the seed_e2e.py wrapper -- backend/** stays untouched)
 #   3. make the sweep's admin (607031) an admin -- the profile has no admin role
 #   4. start the comms stub (:8899) and uvicorn (:8000) in the background
 #   5. wait for /ready
@@ -19,7 +20,8 @@
 #   E2E_LOG_DIR   where the two servers log (default: /tmp/velo-e2e)
 #
 # The velo-dev stand (~/work/velo-dev) does not need this: there it is
-#   velo seed --profile e2e && velo setrole 607031 A --yes
+#   python frontend/e2e/stack/seed_e2e.py && velo setrole 607031 A --yes
+# (`velo seed` cannot see the profile: it lives in frontend/e2e/stack/seed/)
 # =============================================================================
 set -eu
 
@@ -32,7 +34,7 @@ cd "$ROOT/backend"
 export PYTHONPATH="$ROOT/backend${PYTHONPATH:+:$PYTHONPATH}"
 
 "$PYTHON" -m alembic upgrade head
-"$PYTHON" scripts/seed.py --profile e2e
+"$PYTHON" "$ROOT/frontend/e2e/stack/seed_e2e.py"
 "$PYTHON" scripts/set_role.py 607031 A --yes
 
 nohup "$PYTHON" "$ROOT/frontend/e2e/stack/comms-stub.py" --port 8899 \

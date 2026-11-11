@@ -5,7 +5,7 @@
  * when a row's path drifts from the router's, or when a parameter has no
  * source -- so a new screen cannot fall out of the sweep.
  *
- * Roles are the seeded people of backend/scripts/seed_profiles/e2e.json:
+ * Roles are the seeded people of frontend/e2e/stack/seed/e2e.json:
  *   student = ada, master = mira (school curator), admin = root;
  *   cara and ben are students for the screens ada cannot see in their normal
  *   state (cara waits on a waitlist; ben has an attended practice without a

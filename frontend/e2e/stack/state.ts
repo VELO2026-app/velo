@@ -1,6 +1,6 @@
 /**
  * The sweep's shared state (FE-161): who the sweep is (the seeded people of
- * backend/scripts/seed_profiles/e2e.json), where the backend is, and the two
+ * frontend/e2e/stack/seed/e2e.json), where the backend is, and the two
  * files the setup project leaves for the sweep under `e2e/.state/`
  * (gitignored): the session token of each role and the ids the
  * parameterized routes need.
