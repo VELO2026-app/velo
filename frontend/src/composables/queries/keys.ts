@@ -85,6 +85,8 @@ export const keys = {
      */
     members: (schoolId: string, params: { source: string; kind: string; search: string }) =>
       ['schools', 'detail', schoolId, 'members', params] as const,
+    /** Prefix of every roster of one school. */
+    membersAll: (schoolId: string) => ['schools', 'detail', schoolId, 'members'] as const,
     /**
      * `GET /schools/mine` (+ the create right) as one screen shows it: the user
      * zone's schools tab for a role, or the master's schools hub.

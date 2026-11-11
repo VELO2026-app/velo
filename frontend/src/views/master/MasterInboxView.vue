@@ -49,7 +49,8 @@
   owner saw and confirmed; "load more" is future scope.
 
   BADGE: this screen keeps NO badge sync -- the unread badge query
-  (composables/queries/notifications.ts) is the USER bell's state; the master dashboard fetches its own badge and
+  (composables/queries/notifications.ts) is the USER bell's state; the
+  master dashboard fetches its own badge and
   remounts (refetches) on return from here.
 
   Route: /master/notifications (name: 'master-inbox') -- distinct from

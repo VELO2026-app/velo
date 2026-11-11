@@ -158,6 +158,17 @@ export const schoolMembersQuery = defineInfiniteQueryOptions(
   }),
 )
 
+/**
+ * A school's membership changed from its roster screen (an unblock): drop
+ * every roster of the school nobody holds, so another tab opens from the
+ * loader instead of a stale roster; the held ones the screen re-reads itself.
+ */
+export function forgetSchoolRosters(queryCache: QueryCache, schoolId: string): void {
+  for (const entry of queryCache.getEntries({ key: keys.schools.membersAll(schoolId) })) {
+    if (!entry.active) queryCache.remove(entry)
+  }
+}
+
 /** Query options for the first `limit` upcoming practices of a school (`GET /schools/{id}/practices`). */
 export const schoolFeedQuery = defineQueryOptions(
   ({ schoolId, limit }: { schoolId: string; limit: number }) => ({

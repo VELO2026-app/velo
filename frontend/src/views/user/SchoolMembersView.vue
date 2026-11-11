@@ -174,8 +174,9 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { computed, ref, watch, type Component } from 'vue'
-import { useInfiniteQuery, useQuery } from '@pinia/colada'
+import { useInfiniteQuery, useQuery, useQueryCache } from '@pinia/colada'
 import {
+  forgetSchoolRosters,
   schoolMembersQuery,
   schoolPageQuery,
   type SchoolMembersSource,
@@ -233,11 +234,10 @@ const inMasterZone = computed(() => String(route.name ?? '').startsWith('master'
 // what a tap does. The curator reads /members (with his working fields) and
 // opens the school-context profiles; a school MASTER, in the master zone only
 // (owner decision; the user zone is FE-93's), reads /roster and messages a
-// student directly. Fetched once per school, before the first roster page --
-// the roster fetcher awaits it, so a 404 here is the same masked rung.
-// The school page entry is shared with the school page screen
+// student directly. The school page entry is shared with the school page screen
 // (schoolPageQuery): the roster waits for its answer, so a 404 there is the
 // same masked rung.
+const queryCache = useQueryCache()
 const pageQuery = useQuery(() => schoolPageQuery(schoolId.value))
 const relation = computed<SchoolViewer['relation'] | null>(
   () => pageQuery.data.value?.viewer.relation ?? null,
@@ -340,12 +340,18 @@ function resetSearch(): void {
 
 // The removed tab is the curator's alone; anyone else who lands on
 // ?kind=blocked is moved to the masters tab once the relation is known.
-watch(relation, (viewer) => {
-  if (viewer !== null && viewer !== 'curator' && kind.value === 'blocked') {
-    kind.value = 'master'
-    void router.replace({ ...route, query: { ...route.query, kind: 'master' } })
-  }
-})
+// Immediate: the relation is often already cached (the school page screen
+// just read it), and a lazy watch would never see it change.
+watch(
+  relation,
+  (viewer) => {
+    if (viewer !== null && viewer !== 'curator' && kind.value === 'blocked') {
+      kind.value = 'master'
+      void router.replace({ ...route, query: { ...route.query, kind: 'master' } })
+    }
+  },
+  { immediate: true },
+)
 
 /** Which endpoint answers this viewer and tab (BE-76, BE-79). */
 const source = computed<SchoolMembersSource>(() => {
@@ -380,7 +386,13 @@ function is404(e: unknown): boolean {
 
 // A 404 means THIS SCHOOL is not available to the viewer (P-08 masking), not
 // "the list is empty" -- a different rung entirely; from the page or the list.
-const notFound = computed(() => is404(pageQuery.error.value) || is404(listQuery.error.value))
+// Only from a settled request: an entry keeps its error while it refetches,
+// and a school answering again must not read as unavailable meanwhile.
+const notFound = computed(
+  () =>
+    (is404(pageQuery.error.value) && pageQuery.asyncStatus.value === 'idle') ||
+    (is404(listQuery.error.value) && listQuery.asyncStatus.value === 'idle'),
+)
 const pageFailed = computed(
   () =>
     pageQuery.data.value === undefined &&
@@ -461,16 +473,22 @@ const blockedItems = computed(() =>
 // was simply stale; anything else -> the error toast, the row stays.
 const unblocking = ref<string | null>(null)
 
+/** The person is back in the school: this tab re-reads in place, the other tabs' cached rosters go. */
+async function rereadRosters(): Promise<void> {
+  forgetSchoolRosters(queryCache, schoolId.value)
+  await listQuery.refetch()
+}
+
 async function onUnblock(person: SchoolBlockedItem): Promise<void> {
   if (unblocking.value) return
   unblocking.value = person.user_id
   try {
     await unblockSchoolMember(schoolId.value, person.user_id)
     toast.success(t('user.screens.schoolMembers.toast.unblocked'))
-    await listQuery.refetch()
+    await rereadRosters()
   } catch (e) {
     if (e instanceof ApiResponseError && e.status === 404) {
-      await listQuery.refetch()
+      await rereadRosters()
       return
     }
     toast.error(extractApiError(e, t('user.screens.schoolMembers.toast.unblockFailed')))

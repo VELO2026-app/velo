@@ -292,9 +292,13 @@ const analyticsQuery = useQuery(() =>
 )
 const analyticsState = screenQueryState(analyticsQuery)
 
+// Only from a settled request: an entry keeps its error while it refetches,
+// and a school answering again must not read as unavailable meanwhile.
 const notFound = computed(() => {
   const e = analyticsQuery.error.value
-  return e instanceof ApiResponseError && e.status === 404
+  return (
+    e instanceof ApiResponseError && e.status === 404 && analyticsQuery.asyncStatus.value === 'idle'
+  )
 })
 const data = computed<SchoolAnalyticsResponse | null>(() =>
   notFound.value ? null : (analyticsQuery.data.value ?? null),

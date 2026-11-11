@@ -130,8 +130,8 @@ import {
 
 const router = useRouter()
 const toast = useToast()
-// The dashboard bell's presence dot (UserDashboardView) reads this store;
-// every server-confirmed badge below keeps it in step with this screen's
+// The dashboard bell's presence dot (UserDashboardView) reads the badge
+// entry (queries/notifications.ts); every server-confirmed badge below keeps it in step with this screen's
 // actions.
 const queryCache = useQueryCache()
 const auth = useAuthStore()

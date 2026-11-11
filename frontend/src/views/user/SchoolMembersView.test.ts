@@ -16,9 +16,10 @@
 
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { createApp, nextTick, type App } from 'vue'
-import { createPinia } from 'pinia'
-import { PiniaColada } from '@pinia/colada'
+import { createApp, nextTick, reactive, type App } from 'vue'
+import { createPinia, setActivePinia, type Pinia } from 'pinia'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { schoolPageQuery } from '@/composables/queries/schools'
 import { coladaOptions } from '@/composables/queries/setup'
 import SchoolMembersView from '@/views/user/SchoolMembersView.vue'
 import * as cgApi from '@/api/schools'
@@ -35,16 +36,24 @@ vi.mock('@/api/chats')
 
 const push = vi.fn()
 const replace = vi.fn()
-const routeState = {
+// Reactive, behind getters: a test can move the route under a mounted screen
+// (router reuse to another school, a history step between ?kind= tabs).
+const routeState = reactive({
   name: 'master-school-members',
   id: 'g1',
   query: {} as Record<string, string>,
-}
+})
 vi.mock('vue-router', () => ({
   useRoute: () => ({
-    params: { id: routeState.id },
-    name: routeState.name,
-    query: routeState.query,
+    get params() {
+      return { id: routeState.id }
+    },
+    get name() {
+      return routeState.name
+    },
+    get query() {
+      return routeState.query
+    },
   }),
   useRouter: () => ({ push, replace }),
 }))
@@ -56,6 +65,9 @@ vi.mock('@/composables/useToast', () => ({
   useToast: () => ({ success: toastSuccess, error: toastError, info: toastInfo }),
 }))
 
+// One Pinia + Colada per test (beforeEach): a test can seed the cache first,
+// as an earlier screen of the session does.
+let pinia: Pinia
 let app: App | null = null
 let host: HTMLElement | null = null
 
@@ -63,10 +75,7 @@ function mountWith(query: Record<string, string> = {}): HTMLElement {
   routeState.query = query
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(SchoolMembersView)
-    .use(createTestI18n())
-    .use(createPinia())
-    .use(PiniaColada, coladaOptions)
+  app = createApp(SchoolMembersView).use(createTestI18n()).use(pinia)
   app.mount(host)
   return host
 }
@@ -135,6 +144,9 @@ function showMore(): HTMLElement | null {
 }
 
 beforeEach(() => {
+  pinia = createPinia()
+  createApp({}).use(pinia).use(PiniaColada, coladaOptions)
+  setActivePinia(pinia)
   routeState.name = 'master-school-members'
   routeState.id = 'g1'
   routeState.query = {}
@@ -312,6 +324,50 @@ describe('SchoolMembersView', () => {
     back?.click()
     await flush()
     expect(push).toHaveBeenCalledWith({ name: 'master-school', params: { id: 'g1' } })
+  })
+
+  it("router reuse: another school's roster is asked, the previous school's rows never stay", async () => {
+    vi.mocked(cgApi.getSchoolMembers).mockResolvedValue(page(membersOf('master', ['a1'])))
+    mountWith()
+    await flush()
+    expect(text()).toContain('Участник a1')
+
+    vi.mocked(cgApi.getSchoolMembers).mockReturnValue(new Promise(() => {}))
+    routeState.id = 'g2'
+    await flush()
+
+    expect(cgApi.getSchoolMembers).toHaveBeenLastCalledWith(
+      'g2',
+      expect.objectContaining({ kind: 'master' }),
+    )
+    expect(text()).not.toContain('Участник a1')
+  })
+
+  it('a history step to another ?kind= syncs the tab, clears the search, asks once', async () => {
+    vi.useFakeTimers()
+    try {
+      mountWith({ kind: 'master' })
+      await vi.advanceTimersByTimeAsync(0)
+      const input = inputEl()
+      input!.value = 'анна'
+      input!.dispatchEvent(new Event('input'))
+      await vi.advanceTimersByTimeAsync(300)
+      vi.mocked(cgApi.getSchoolMembers).mockClear()
+
+      routeState.query = { kind: 'student' }
+      await vi.advanceTimersByTimeAsync(400)
+
+      expect(cgApi.getSchoolMembers).toHaveBeenCalledTimes(1)
+      expect(cgApi.getSchoolMembers).toHaveBeenCalledWith('g1', {
+        kind: 'student',
+        search: undefined,
+        limit: 20,
+        offset: 0,
+      })
+      expect(inputEl()?.value).toBe('')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('student rows push the school-context profile with the row data in query', async () => {
@@ -564,6 +620,22 @@ describe('SchoolMembersView -- a master of the school (BE-76)', () => {
     )
     expect(replace).toHaveBeenCalledWith(expect.objectContaining({ query: { kind: 'master' } }))
     // The removed tab is the curator's: never asked for a school master.
+    expect(cgApi.getSchoolBlocks).not.toHaveBeenCalled()
+  })
+
+  it('?kind=blocked with the relation ALREADY cached (the school page just read it) still lands on the masters tab', async () => {
+    const queryCache = useQueryCache()
+    queryCache.setQueryData(queryCache.ensure(schoolPageQuery('g1')).key, {
+      viewer: { relation: 'master' },
+    } as unknown as SchoolPageResponse)
+    mountWith({ kind: 'blocked' })
+    await flush()
+
+    expect(cgApi.getSchoolRoster).toHaveBeenCalledWith(
+      'g1',
+      expect.objectContaining({ kind: 'master' }),
+    )
+    expect(host?.querySelector('.school-members__state')).toBeNull()
     expect(cgApi.getSchoolBlocks).not.toHaveBeenCalled()
   })
 
