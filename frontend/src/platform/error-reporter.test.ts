@@ -7,6 +7,7 @@ import { createApp } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiResponseError } from '@/api/client'
 import {
+  ERROR_EVENT,
   installGlobalErrorHandlers,
   reportError,
   setErrorTransport,
@@ -67,6 +68,23 @@ describe('reportError', () => {
     expect(events).toHaveLength(0)
     reportError(new ApiResponseError(500, 'oops', 'internal_error'), { source: 'vue' })
     expect(events).toHaveLength(1)
+  })
+
+  it('announces every reported error as a velo:error window event (FE-161)', () => {
+    const seen: ClientErrorEvent[] = []
+    const listener = (e: Event): void => {
+      seen.push((e as CustomEvent<ClientErrorEvent>).detail)
+    }
+    window.addEventListener(ERROR_EVENT, listener)
+    try {
+      reportError(new TypeError('boom'), { source: 'vue' })
+      reportError(new ApiResponseError(404, 'nf', 'not_found'), { source: 'vue' })
+    } finally {
+      window.removeEventListener(ERROR_EVENT, listener)
+    }
+    expect(ERROR_EVENT).toBe('velo:error')
+    expect(seen).toEqual([expect.objectContaining({ name: 'TypeError', message: 'boom' })])
+    expect(seen[0]).toBe(events[0])
   })
 
   it('survives a throwing transport', () => {

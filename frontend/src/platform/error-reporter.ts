@@ -92,20 +92,35 @@ function toEvent(err: unknown, context: ErrorContext): ClientErrorEvent {
   }
 }
 
+/**
+ * DOM event fired on `window` for every reported error, whatever the
+ * transport. The e2e crash detector (FE-161) listens to it; nothing in the app
+ * does, so in production it is a no-op.
+ */
+export const ERROR_EVENT = 'velo:error'
+
+function announce(event: ClientErrorEvent): void {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent<ClientErrorEvent>(ERROR_EVENT, { detail: event }))
+}
+
 let reporting = false
 
 /**
  * Report an uncaught error to the active transport.
  *
  * @remarks
- * Expected 4xx `ApiResponseError`s are ignored. Never throws and never
+ * Expected 4xx `ApiResponseError`s are ignored. Every reported error is also
+ * announced as a `velo:error` window event (`ERROR_EVENT`). Never throws and never
  * recurses: an error raised by the transport itself is dropped.
  */
 export function reportError(err: unknown, context: ErrorContext): void {
   if (reporting || isExpected(err)) return
   reporting = true
   try {
-    transport(toEvent(err, context))
+    const event = toEvent(err, context)
+    announce(event)
+    transport(event)
   } catch {
     // The reporter must never become a new source of errors.
   } finally {

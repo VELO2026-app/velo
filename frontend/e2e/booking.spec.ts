@@ -2,7 +2,7 @@
  * Booking scenario (FE-157 5A.2): a student finds a practice in the calendar,
  * opens it, books it and lands on the confirmation screen.
  */
-import { expect, test } from '@playwright/test'
+import { expect, test } from './support/test'
 import { mockApi } from './support/api'
 import {
   freezeClock,

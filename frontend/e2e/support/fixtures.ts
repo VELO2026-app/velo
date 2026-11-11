@@ -119,21 +119,37 @@ export async function seedSession(page: Page): Promise<void> {
   )
 }
 
+/** A real launch for stubTelegram(): signed initData and the user it carries. */
+export interface TelegramLaunch {
+  initData: string
+  user: { id: number; first_name: string }
+}
+
 /**
  * Launch the page the way Telegram does: the launch parameters in the URL
  * hash (so platform/launch.ts loads the SDK script), and that script itself
  * -- telegram.org is never contacted -- answered with a `window.Telegram.WebApp`
  * stub. `initData` is non-empty, which is what platform/index.ts keys on.
  *
+ * On the mocks the initData is a fake (`hash=e2e-stub`); the sweep passes a
+ * really signed one (`launch`, e2e/stack/auth.ts) that the backend accepts.
+ *
  * @returns the path+hash to `goto`
  */
-export async function stubTelegram(page: Page, startParam?: string): Promise<string> {
-  const initData = new URLSearchParams({
-    user: JSON.stringify({ id: TELEGRAM_USER_ID, first_name: 'Ada' }),
-    auth_date: '1700000000',
-    hash: 'e2e-stub',
-    ...(startParam ? { start_param: startParam } : {}),
-  }).toString()
+export async function stubTelegram(
+  page: Page,
+  startParam?: string,
+  launch?: TelegramLaunch,
+): Promise<string> {
+  const user = launch?.user ?? { id: TELEGRAM_USER_ID, first_name: 'Ada' }
+  const initData =
+    launch?.initData ??
+    new URLSearchParams({
+      user: JSON.stringify(user),
+      auth_date: '1700000000',
+      hash: 'e2e-stub',
+      ...(startParam ? { start_param: startParam } : {}),
+    }).toString()
 
   await page.route('https://telegram.org/js/telegram-web-app.js', (route) =>
     route.fulfill({
@@ -142,7 +158,7 @@ export async function stubTelegram(page: Page, startParam?: string): Promise<str
         const noop = () => {}
         window.Telegram = { WebApp: {
           initData: ${JSON.stringify(initData)},
-          initDataUnsafe: { user: { id: ${TELEGRAM_USER_ID}, first_name: 'Ada' }${
+          initDataUnsafe: { user: ${JSON.stringify(user)}${
             startParam ? `, start_param: ${JSON.stringify(startParam)}` : ''
           } },
           colorScheme: 'light',
@@ -160,12 +176,12 @@ export async function stubTelegram(page: Page, startParam?: string): Promise<str
     }),
   )
 
-  const launch = new URLSearchParams({
+  const params = new URLSearchParams({
     tgWebAppData: initData,
     tgWebAppVersion: '8.0',
     tgWebAppPlatform: 'android',
   })
-  return `/#${launch.toString()}`
+  return `/#${params.toString()}`
 }
 
 /**
