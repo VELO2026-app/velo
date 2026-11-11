@@ -41,8 +41,12 @@
     <slot>{{ title }}</slot>
   </div>
 
+  <!-- FE-161: an error state carries data-testid="screen-error", which the
+       e2e crash detector fails on. By default `warning` / `notfound` is one;
+       a warning that is a normal outcome (a cancelled practice) says
+       :error="false". -->
   <!-- full (default): icon + title + optional description + optional action. -->
-  <div v-else class="v-empty">
+  <div v-else class="v-empty" :data-testid="isError ? 'screen-error' : undefined">
     <span class="v-empty__icon">
       <slot name="icon"><component :is="resolvedIcon" v-if="resolvedIcon" :size="48" /></slot>
     </span>
@@ -67,11 +71,17 @@ const props = withDefaults(
     description?: string
     /** 'full' (default) = icon + title + desc + action; 'note' = compact card line. */
     variant?: 'full' | 'note'
+    /**
+     * Is this a failure state (data-testid="screen-error" for the e2e crash
+     * detector)? Unset: the `warning` / `notfound` icons are.
+     */
+    error?: boolean
   }>(),
   {
     icon: 'empty',
     description: '',
     variant: 'full',
+    error: undefined,
   },
 )
 
@@ -86,6 +96,11 @@ const ICON_MAP: Record<string, Component> = {
 }
 
 const resolvedIcon = computed<Component | null>(() => ICON_MAP[props.icon] ?? null)
+
+/** The error-state keys: the screen failed to load what it shows. */
+const isError = computed(
+  () => props.error ?? (props.icon === 'warning' || props.icon === 'notfound'),
+)
 </script>
 
 <style scoped>

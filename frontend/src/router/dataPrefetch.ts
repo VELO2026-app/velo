@@ -5,7 +5,7 @@
 // router/prefetch.ts warms the tab screens' code; this warms what they show.
 // Once the first screen of a zone is up and the app is idle, every OTHER
 // tab's data is loaded through the very same cache the screen reads (the
-// useQuery entry, the store), so a tap on the dock renders from memory --
+// Colada entry, the store), so a tap on the dock renders from memory --
 // no skeleton, no jump; the screen's own mount then only revalidates.
 //
 // Rules: once per zone and session, right after the first paint
@@ -24,6 +24,7 @@
 
 import { watch } from 'vue'
 import type { Router } from 'vue-router'
+import type { QueryCache } from '@pinia/colada'
 import { USER_TABS, type TabItem } from '@/router/tabs'
 import { isConstrainedNetwork, whenIdle } from '@/platform/dom'
 
@@ -40,13 +41,18 @@ type Warmer = () => Promise<unknown>
  * first-screen gate, the idle prefetch and the screen's mount share it). */
 export const UPCOMING_FRESH_MS = 10_000
 
+/**
+ * Load one Colada query into the cache its screen reads, unless it is fresh.
+ * Rejects when the request fails (warmTabsData swallows it).
+ */
+async function warmQuery(load: (cache: QueryCache) => Promise<unknown>): Promise<void> {
+  const { useQueryCache } = await import('@pinia/colada')
+  await load(useQueryCache())
+}
+
 async function warmStats(): Promise<void> {
-  const [{ queryCache }, { myStatsQuery }] = await Promise.all([
-    import('@/composables/useQuery'),
-    import('@/composables/queries'),
-  ])
-  const q = myStatsQuery()
-  await queryCache.prefetch(q.key, q.query, q.staleTime, true)
+  const { myStatsQuery } = await import('@/composables/queries/stats')
+  await warmQuery((cache) => cache.refresh(cache.ensure(myStatsQuery())))
 }
 
 /** Per tab path: load that screen's data into the cache it reads. */
@@ -73,16 +79,15 @@ export const TAB_DATA_WARMERS: Readonly<Record<string, Warmer>> = {
     await useDiaryStore().fetchFeed()
   },
   '/user/schools': async () => {
-    const [{ useSchoolsHubStore }, { useAuthStore }, { queryCache }, { userSchoolsQuery }] =
-      await Promise.all([
-        import('@/stores/schoolsHub'),
-        import('@/stores/auth'),
-        import('@/composables/useQuery'),
-        import('@/composables/queries'),
-      ])
+    const [{ useSchoolsHubStore }, { useAuthStore }, { userSchoolsQuery }] = await Promise.all([
+      import('@/stores/schoolsHub'),
+      import('@/stores/auth'),
+      import('@/composables/queries/schools'),
+    ])
     if (!useSchoolsHubStore().hasSchools) return // no tab, nothing to warm
-    const q = userSchoolsQuery(useAuthStore().role ?? '')
-    await queryCache.prefetch(q.key, q.query, q.staleTime, true)
+    const role = useAuthStore().role ?? ''
+    if (!role) return // a token without its user yet: the screen loads for itself
+    await warmQuery((cache) => cache.refresh(cache.ensure(userSchoolsQuery(role))))
   },
   '/user/profile': warmStats,
 }

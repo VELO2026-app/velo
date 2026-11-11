@@ -128,6 +128,8 @@ async function onSubmit(): Promise<void> {
     // Refresh bookings so `has_reflection` is up to date this session -- the
     // practice-detail button reads it.
     void bookingsStore.refreshBookings()
+    // The dashboard's upcoming list carries the same booking flags.
+    bookingsStore.invalidateUpcoming()
   } else {
     toast.error(result.error)
   }

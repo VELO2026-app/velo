@@ -3,7 +3,7 @@
 -->
 
 <template>
-  <div class="not-found velo-kbd-scroll">
+  <div class="not-found velo-kbd-scroll" data-testid="not-found">
     <IconSearch :size="64" class="not-found__icon" />
     <h1 class="not-found__title">404</h1>
     <p class="not-found__text">{{ t('auth.notFoundText') }}</p>

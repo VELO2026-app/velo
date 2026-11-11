@@ -14,7 +14,7 @@ import { createApp, defineComponent, h, nextTick, type App } from 'vue'
 import { createPinia } from 'pinia'
 import { PiniaColada, useQuery, type UseQueryReturn } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
-import { persistPlugin, persistSlot } from '@/composables/queries/persist'
+import { persistSlot } from '@/composables/queries/persist'
 import { flushPersisted, readPersisted, setPersistOwner } from '@/composables/persistedCache'
 
 const KEY = ['bookings', 'stats'] as const
@@ -35,7 +35,7 @@ function start(
   })
   const app = createApp(Screen)
     .use(createPinia())
-    .use(PiniaColada, { ...coladaOptions, plugins: [...coladaOptions.plugins!, persistPlugin] })
+    .use(PiniaColada, { ...coladaOptions, plugins: coladaOptions.plugins })
   app.mount(document.createElement('div'))
   apps.push(app)
   return query
@@ -109,5 +109,16 @@ describe('persistPlugin', () => {
     await flush()
 
     expect(saved()).toBeUndefined()
+  })
+})
+
+describe('the queries that persist (FE-166 step 2)', () => {
+  it('the stats and the schools tab opt in; the master hub does not', async () => {
+    const { myStatsQuery } = await import('@/composables/queries/stats')
+    const { userSchoolsQuery, masterSchoolsQuery } = await import('@/composables/queries/schools')
+
+    expect(myStatsQuery().meta).toEqual({ persist: true })
+    expect(userSchoolsQuery('user').meta).toEqual({ persist: true })
+    expect(masterSchoolsQuery().meta).toBeUndefined()
   })
 })

@@ -3,7 +3,7 @@
 // =============================================================================
 //
 // A Telegram Mini App is reopened and reloaded often; the in-memory screen
-// cache (useQuery, stores) starts empty every time, so the first visit of
+// cache (Colada, stores) starts empty every time, so the first visit of
 // every tab drew a skeleton. A few chosen, small, non-sensitive payloads are
 // mirrored here and shown at once on the next start, then revalidated in the
 // background (stale-while-revalidate -- the hydrated copy always counts as

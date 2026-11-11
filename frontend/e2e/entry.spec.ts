@@ -2,7 +2,7 @@
  * Entry scenarios (FE-157 5A.2): the splash, then the first screen a new and a
  * returning user lands on -- in a browser tab and inside Telegram.
  */
-import { expect, test } from '@playwright/test'
+import { expect, test } from './support/test'
 import { mockApi } from './support/api'
 import { makeUser, mockSignedIn, seedSession, stubTelegram } from './support/fixtures'
 

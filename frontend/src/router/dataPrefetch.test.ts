@@ -10,7 +10,10 @@
 // =============================================================================
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { defineComponent, h } from 'vue'
+import { createApp, defineComponent, h } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 
 const calls: string[] = []
@@ -94,6 +97,10 @@ async function runAll(): Promise<void> {
 beforeEach(() => {
   vi.useFakeTimers()
   calls.length = 0
+  // The stats and schools warmers fill the Colada cache the screens read.
+  const pinia = createPinia()
+  createApp({}).use(pinia).use(PiniaColada, coladaOptions)
+  setActivePinia(pinia)
   constrained.value = false
   if (session.auth) {
     session.auth.token = 'tok'

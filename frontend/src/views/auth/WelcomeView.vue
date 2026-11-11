@@ -28,7 +28,7 @@
 -->
 
 <template>
-  <div class="welcome velo-kbd-scroll">
+  <div class="welcome velo-kbd-scroll" data-testid="welcome">
     <!-- A11Y-AUDIT-20260810 P1: no visible title (the logo carries the wordmark) --
          sr-only heading so screen-reader users navigating by heading still get a
          page label for this screen. -->

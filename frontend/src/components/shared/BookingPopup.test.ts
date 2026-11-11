@@ -27,14 +27,36 @@ import type { PracticeResponse } from '@/api/types'
 const harness = vi.hoisted(() => ({
   routerPush: vi.fn(),
   hasEnough: true,
-  purchasePractice: vi.fn(() => Promise.resolve({})),
-  createBooking: vi.fn(() => Promise.resolve({})),
+  purchasePractice: vi.fn<(practiceId: string, promoCode?: string) => Promise<unknown>>(() =>
+    Promise.resolve({}),
+  ),
+  createBooking: vi.fn<(practiceId: string) => Promise<unknown>>(() => Promise.resolve({})),
 }))
 
 vi.mock('@/api/bookings', () => ({
   purchasePractice: harness.purchasePractice,
   createBooking: harness.createBooking,
   previewPurchase: vi.fn(),
+}))
+
+// The purchase mutation (dependency, FE-166 step 1): what it refreshes is
+// composables/queries/bookings.test.ts's business; the popup owns the choice
+// of endpoint and the error mapping. mutateAsync passes through to the API.
+vi.mock('@/composables/queries/bookings', () => ({
+  usePurchaseBooking: () => ({
+    mutateAsync: ({
+      practiceId,
+      promoCode,
+      viaPurchase,
+    }: {
+      practiceId: string
+      promoCode?: string
+      viaPurchase: boolean
+    }) =>
+      viaPurchase
+        ? harness.purchasePractice(practiceId, promoCode)
+        : harness.createBooking(practiceId),
+  }),
 }))
 
 vi.mock('vue-router', () => ({

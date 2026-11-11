@@ -108,7 +108,8 @@ import { useRouter } from 'vue-router'
 import { VModal, VButton } from '@/components/ui'
 import { useToast } from '@/composables/useToast'
 import { useBalanceStore } from '@/stores/balance'
-import { createBooking, purchasePractice, previewPurchase } from '@/api/bookings'
+import { previewPurchase } from '@/api/bookings'
+import { usePurchaseBooking } from '@/composables/queries/bookings'
 import { ApiResponseError } from '@/api/client'
 import { isOptionEnabled } from '@/platform/instance'
 import { extractApiError } from '@/composables/useApiError'
@@ -133,6 +134,7 @@ const emit = defineEmits<{
 const router = useRouter()
 const toast = useToast()
 const balanceStore = useBalanceStore()
+const purchaseBooking = usePurchaseBooking()
 // tz-i18n phase 2 (2.2a): template labels + CTA + toasts via booking.* keys.
 
 // Promo codes are temporarily hidden in the prototype (kept, not removed).
@@ -246,8 +248,11 @@ async function onPurchase(): Promise<void> {
     // FE-151: with the payments option off the purchase router is closed
     // (BE-182); the bookings router runs the same booking service and stays
     // open -- a free practice is still bookable.
-    if (topupAvailable) await purchasePractice(props.practice.id, appliedPromo)
-    else await createBooking(props.practice.id)
+    await purchaseBooking.mutateAsync({
+      practiceId: props.practice.id,
+      promoCode: appliedPromo,
+      viaPurchase: topupAvailable,
+    })
 
     toast.success(t('booking.toast.booked'))
     resetState()

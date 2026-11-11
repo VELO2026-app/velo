@@ -25,6 +25,8 @@
 // =============================================================================
 
 import { defineStore } from 'pinia'
+import { useQueryCache } from '@pinia/colada'
+import { invalidateAfter } from '@/composables/queries/invalidation'
 import { ref, reactive } from 'vue'
 import { newIdempotencyKey } from '@/api/chats'
 import { ApiResponseError } from '@/api/client'
@@ -100,6 +102,9 @@ export interface PendingDiaryEntry {
 
 /** Diary state: check-in/feedback submit, the unified cursor feed, entry CRUD, master insights. */
 export const useDiaryStore = defineStore('diary', () => {
+  // Colada entries of the booking data go stale with each mutation below
+  // (composables/queries/invalidation.ts holds the map).
+  const queryCache = useQueryCache()
   // Bumped by $reset (the account boundary): an answer that lands after it
   // belongs to the previous account -- it writes nothing and refreshes
   // nothing. On a 401 the reset runs before the failing request's own catch.
@@ -122,6 +127,7 @@ export const useDiaryStore = defineStore('diary', () => {
     const gen = generation
     try {
       await upsertCheckin(practiceId, body)
+      if (gen === generation) void invalidateAfter(queryCache, 'submitCheckin')
       // The check-in is now a feed event and flips the booking's has_checkin
       // flag -- refresh both so the diary feed and dashboard banner update.
       // Not awaited: the check-in is saved, so the «done» screen shows now;
@@ -154,6 +160,7 @@ export const useDiaryStore = defineStore('diary', () => {
     const gen = generation
     try {
       await upsertFeedback(practiceId, body)
+      if (gen === generation) void invalidateAfter(queryCache, 'submitFeedback')
       // The feedback is now a feed event and flips the booking's has_feedback
       // flag -- refresh both so the diary feed and dashboard banner update.
       // Not awaited -- see submitCheckin.
@@ -189,8 +196,10 @@ export const useDiaryStore = defineStore('diary', () => {
   ): Promise<SubmitResult> {
     if (reflectionSubmitting.value) return { ok: false, error: '' }
     reflectionSubmitting.value = true
+    const gen = generation
     try {
       await createReflection(practiceId, body)
+      if (gen === generation) void invalidateAfter(queryCache, 'submitReflection')
       return { ok: true, error: '' }
     } catch (e) {
       const message = extractApiError(e, t('storeErrors.diary.send'))

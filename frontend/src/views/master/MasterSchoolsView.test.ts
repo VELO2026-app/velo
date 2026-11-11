@@ -12,6 +12,9 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
+import { createPinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import MasterSchoolsView from '@/views/master/MasterSchoolsView.vue'
 import * as cgApi from '@/api/schools'
 import type { SchoolMineResponse } from '@/api/types'
@@ -35,12 +38,15 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(MasterSchoolsView).use(createTestI18n())
+  app = createApp(MasterSchoolsView)
+    .use(createTestI18n())
+    .use(createPinia())
+    .use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
-// The list loads through the screen-data cache (useQuery): a settled
+// The list loads through the screen-data cache (Colada): a settled
 // request takes a few more microtasks than the old local ref did.
 async function flush(): Promise<void> {
   for (let i = 0; i < 8; i++) await nextTick()
@@ -186,6 +192,20 @@ describe('MasterSchoolsView', () => {
     expect(text()).toContain('Создайте школу или вступите по ссылке от куратора')
     const create = buttonWith('Создать школу')
     expect(create).toBeTruthy()
+  })
+
+  it('a retry after a failed first load shows the loader while it runs, not the error', async () => {
+    vi.mocked(cgApi.getMySchools).mockRejectedValueOnce(new Error('network'))
+    mount()
+    await flush()
+    expect(text()).toContain('Не удалось загрузить школы')
+
+    vi.mocked(cgApi.getMySchools).mockReturnValueOnce(new Promise(() => {}))
+    buttonWith('Повторить')?.click()
+    await flush()
+
+    expect(host?.querySelector('.mcg__state')).not.toBeNull()
+    expect(text()).not.toContain('Не удалось загрузить школы')
   })
 
   it('load failure: error state with a working retry', async () => {

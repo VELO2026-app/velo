@@ -14,7 +14,11 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { usePracticesStore } from '@/stores/practices'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { createApp } from 'vue'
+import { coladaOptions } from '@/composables/queries/setup'
+import { prefetchPractice, seedPractices, usePracticesStore } from '@/stores/practices'
+import { keys } from '@/composables/queries/keys'
 import { ApiResponseError } from '@/api/client'
 import * as practicesApi from '@/api/practices'
 import type { PracticeResponse } from '@/api/types'
@@ -31,7 +35,10 @@ function fakePractice(overrides: Partial<PracticeResponse> = {}): PracticeRespon
 }
 
 beforeEach(() => {
-  setActivePinia(createPinia())
+  // Colada installed as in app.ts: its query defaults (gcTime) are provided by the plugin.
+  const pinia = createPinia()
+  createApp({}).use(pinia).use(PiniaColada, coladaOptions)
+  setActivePinia(pinia)
   vi.mocked(practicesApi.getPractice).mockReset()
 })
 
@@ -179,6 +186,85 @@ describe('usePracticesStore', () => {
 
       expect(store.selected).toBeNull()
       expect(store.selectedError).not.toBeNull()
+    })
+  })
+
+  describe('the Colada cache entry (FE-166 step 2)', () => {
+    it('a list seed is left stale and never replaces a loaded practice', async () => {
+      vi.mocked(practicesApi.getPractice).mockResolvedValueOnce(
+        fakePractice({ id: 'p1', title: 'Loaded' }),
+      )
+      await usePracticesStore().fetchPractice('p1')
+
+      seedPractices([
+        fakePractice({ id: 'p1', title: 'From list' }),
+        fakePractice({ id: 'p2', title: 'Seed' }),
+      ])
+
+      const cache = useQueryCache()
+      expect(cache.getQueryData<PracticeResponse>(keys.practices.detail('p1'))?.title).toBe(
+        'Loaded',
+      )
+      expect(cache.get(keys.practices.detail('p2'))?.when).toBe(0)
+    })
+
+    it('every entry carries the query options, so Colada can garbage-collect it', async () => {
+      vi.mocked(practicesApi.getPractice).mockResolvedValue(fakePractice({ id: 'p1' }))
+      await usePracticesStore().fetchPractice('p1')
+      seedPractices([fakePractice({ id: 'p2' })])
+
+      const cache = useQueryCache()
+      for (const id of ['p1', 'p2']) {
+        expect(cache.get(keys.practices.detail(id))?.options?.gcTime, id).toBeGreaterThan(0)
+      }
+    })
+
+    it('the route preload shares an answer already on its way and is reused by the screen', async () => {
+      let resolve: (v: PracticeResponse) => void = () => {}
+      vi.mocked(practicesApi.getPractice).mockReturnValueOnce(
+        new Promise<PracticeResponse>((r) => {
+          resolve = r
+        }),
+      )
+      const first = prefetchPractice('p1')
+      const second = prefetchPractice('p1')
+      resolve(fakePractice({ id: 'p1', title: 'Preloaded' }))
+      await Promise.all([first, second])
+      expect(practicesApi.getPractice).toHaveBeenCalledTimes(1)
+
+      const store = usePracticesStore()
+      await store.openPractice('p1')
+      expect(store.selected?.title).toBe('Preloaded')
+      expect(practicesApi.getPractice).toHaveBeenCalledTimes(1)
+    })
+
+    it('an answer landing after the session ended is not written to the cache', async () => {
+      let resolve: (v: PracticeResponse) => void = () => {}
+      vi.mocked(practicesApi.getPractice).mockReturnValueOnce(
+        new Promise<PracticeResponse>((r) => {
+          resolve = r
+        }),
+      )
+      const store = usePracticesStore()
+      const pending = store.fetchPractice('p1')
+      store.$reset()
+      resolve(fakePractice({ id: 'p1' }))
+      await pending
+
+      expect(useQueryCache().getQueryData(keys.practices.detail('p1'))).toBeUndefined()
+      expect(store.selected).toBeNull()
+    })
+
+    it('a practice detail outlives the Colada default of 5 min in memory (30 min gcTime)', async () => {
+      vi.mocked(practicesApi.getPractice).mockResolvedValue(fakePractice({ id: 'p1' }))
+      await usePracticesStore().fetchPractice('p1')
+
+      expect(useQueryCache().get(keys.practices.detail('p1'))?.options?.gcTime).toBe(30 * 60_000)
+    })
+
+    it('a failed preload never rejects', async () => {
+      vi.mocked(practicesApi.getPractice).mockRejectedValueOnce(new Error('offline'))
+      await expect(prefetchPractice('p1')).resolves.toBeUndefined()
     })
   })
 

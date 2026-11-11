@@ -4,7 +4,7 @@
 //
 // The Colada side of composables/persistedCache: a query that opts in with
 // `meta: { persist: true }` is mirrored into the same per-account
-// sessionStorage copy the in-house cache and the stores use, and on the next
+// sessionStorage copy the stores use, and on the next
 // start an empty entry takes that copy at once -- left stale, so its screen
 // revalidates it right away (the rule persistedCache already states).
 //
@@ -16,15 +16,25 @@
 // official persister writes one storage key for the whole filtered cache and
 // knows nothing of accounts.
 //
-// Not registered in coladaOptions yet: no Colada query persists in the pilot.
-// The migration registers it with the first persisted query (the dashboard's
-// upcoming list and stats, the schools tab -- see persistedCache's list).
+// Registered in coladaOptions (FE-166 step 2) with the first persisted
+// queries: the stats (./stats.ts) and the schools tab (./schools.ts). The
+// slot prefix changed with the move (`q:` -> `colada:`), so the first start
+// after the release is one cold start for those two.
 // =============================================================================
 
 import type { PiniaColadaPluginContext, UseQueryEntry } from '@pinia/colada'
 import { readPersisted, writePersisted } from '@/composables/persistedCache'
 
-/** persistedCache slot of one Colada entry (prefix apart from the in-house cache's `q:`). */
+declare module '@pinia/colada' {
+  interface TypesConfig {
+    queryMeta: {
+      /** Mirror this query across reloads (small, non-sensitive payloads only). */
+      persist?: boolean
+    }
+  }
+}
+
+/** persistedCache slot of one Colada entry (prefix apart from the stores' slots). */
 export function persistSlot(keyHash: string): string {
   return `colada:${keyHash}`
 }

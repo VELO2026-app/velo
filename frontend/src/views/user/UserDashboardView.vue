@@ -287,8 +287,9 @@ import { useNotificationsStore } from '@/stores/notifications'
 import { useToast } from '@/composables/useToast'
 import { VHeader } from '@/components/layout'
 import { VButton, VBadge, VStatCard, VSkeletonPracticeCard, VLoadingSwap } from '@/components/ui'
-import { useQuery } from '@/composables/useQuery'
-import { myStatsQuery } from '@/composables/queries'
+import { useQuery } from '@pinia/colada'
+import { myStatsQuery } from '@/composables/queries/stats'
+import { screenQueryState } from '@/composables/queries/screenState'
 import { useLoadingHold } from '@/composables/useLoadingHold'
 import { useRememberedCount } from '@/composables/useRememberedCount'
 import { IconClock, IconCheck, IconBellPlain, IconMeditation } from '@/components/icons'
@@ -323,11 +324,11 @@ const now = useNow(60_000)
 // Cached across visits (they change only after an attended practice), so a
 // return to the dashboard shows the numbers at once. While the FIRST answer
 // is pending the cards show a placeholder, never a false «0». --
-const statsQuery = useQuery(myStatsQuery())
+const statsQuery = useQuery(() => myStatsQuery())
 const stats = statsQuery.data
 // Same loading rule as the blocks (useLoadingHold): no placeholder for a fast
 // answer, at least 450 ms once one was seen.
-const { showSkeleton: statsPending } = useLoadingHold(statsQuery.isPending)
+const { showSkeleton: statsPending } = useLoadingHold(screenQueryState(statsQuery).loading)
 
 // =========================================================================
 // Nearest bookings (shared selection -- the list AND the check-in banner)
@@ -658,7 +659,7 @@ onActivated(() => {
   if (activations++ === 0) return
   resume()
   loadUpcoming()
-  void statsQuery.revalidate()
+  void statsQuery.refresh()
 })
 onDeactivated(pause)
 onUnmounted(pause)

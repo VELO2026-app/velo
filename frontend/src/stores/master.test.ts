@@ -26,6 +26,11 @@ import type { MasterProfileResponse, PracticeResponse } from '@/api/types'
 
 vi.mock('@/api/masters')
 
+// The Colada side of a practice change (FE-166 step 1): which keys the row
+// covers is composables/queries/invalidation.test.ts's business.
+const invalidateAfter = vi.hoisted(() => vi.fn())
+vi.mock('@/composables/queries/invalidation', () => ({ invalidateAfter }))
+
 function fakeProfile(overrides: Partial<MasterProfileResponse> = {}): MasterProfileResponse {
   return {
     user_id: 'master_1',
@@ -53,6 +58,7 @@ beforeEach(() => {
   setActivePinia(createPinia())
   vi.mocked(mastersApi.getMyMasterProfile).mockReset()
   vi.mocked(mastersApi.getMyPractices).mockReset().mockResolvedValue(fakePracticesPage([]))
+  invalidateAfter.mockReset().mockResolvedValue(undefined)
   sessionStorage.clear()
 })
 
@@ -250,5 +256,13 @@ describe('useMasterStore', () => {
       expect(mastersApi.getMyPractices).toHaveBeenCalledTimes(1)
       expect(mastersApi.getMyPractices).toHaveBeenCalledWith('upcoming', 20, 0)
     })
+  })
+})
+
+describe('refreshMyPractices -- the Colada practice entries (FE-166 step 1)', () => {
+  it('marks every practice list and detail stale: a school feed shows the changed practice', async () => {
+    await useMasterStore().refreshMyPractices()
+
+    expect(invalidateAfter).toHaveBeenCalledWith(expect.anything(), 'changePractice')
   })
 })

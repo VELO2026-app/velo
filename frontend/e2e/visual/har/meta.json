@@ -1,0 +1,24 @@
+{
+  "recordedAt": "2026-11-11T10:36:40.426Z",
+  "paths": {
+    "user-dashboard": "/user/dashboard",
+    "user-calendar": "/user/calendar",
+    "practice-detail": "/user/practices/accfa007-d3bf-40ed-9762-960ca5e7cb90",
+    "user-bookings": "/user/bookings",
+    "user-diary": "/user/diary",
+    "user-profile": "/user/profile",
+    "user-school": "/user/schools/2cb518c5-f202-4c29-85fa-21368bec6569",
+    "user-topup": "/user/topup",
+    "not-found": "/404",
+    "master-dashboard": "/master/dashboard",
+    "master-practices": "/master/practices",
+    "master-practice-new": "/master/practices/new",
+    "master-practice-detail": "/master/practices/8ad77882-061a-4454-8a2f-f3e106aa8b36/detail",
+    "master-analytics": "/master/analytics",
+    "master-students": "/master/students",
+    "master-profile": "/master/profile",
+    "admin-dashboard": "/admin/dashboard",
+    "admin-masters": "/admin/masters",
+    "admin-reports": "/admin/reports"
+  }
+}

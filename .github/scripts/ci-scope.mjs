@@ -13,6 +13,9 @@
 //     skip  -- nothing in the PR can change the frontend gate's verdict
 //   drift = true | false   -- run the generated.ts drift check
 //   docker = true | false  -- build the frontend image + smoke it (FE-159)
+//   visual = true | false  -- the PR touches what the screens are drawn from
+//                             (FE-162): styles, tokens, velo-ui, public
+//                             assets, the lockfile
 //
 // Every file lands in exactly one class; the PR takes the strongest one.
 //   docs          -- prose nobody executes: docs/**, diagrams/**,
@@ -49,6 +52,14 @@ const git = (...args) => execFileSync('git', args, { encoding: 'utf8', maxBuffer
 const FORCE_ALL = [/^\.github\/workflows\/ci\.yml$/, /^\.github\/scripts\/ci-scope\.mjs$/, /^frontend\/src\/api\/generated\.ts$/]
 const DOCS = [/^docs\//, /^diagrams\//, /^Design_prototype\//]
 const CODE_TREES = /^(frontend|packages)\//
+// FE-162: paths that can change how a screen looks -> the visual comparison.
+const VISUAL = [
+  /^frontend\/src\/styles\//,
+  /^frontend\/src\/.*variables\.css$/,
+  /^packages\/velo-ui\//,
+  /^frontend\/public\//,
+  /^pnpm-lock\.yaml$/,
+]
 const DOCKER = [
   /^frontend\/Dockerfile$/,
   /^frontend\/nginx/, // nginx.conf and nginx/ (template, entrypoint scripts)
@@ -87,12 +98,14 @@ const RANK = { skip: 0, light: 1, full: 2 }
 let frontend = 'skip'
 let drift = false
 let docker = false
+let visual = false
 const bump = (level) => { if (RANK[level] > RANK[frontend]) frontend = level }
 const report = []
 
 for (const row of git('diff', '--name-status', '--no-renames', base, head).split('\n').filter(Boolean)) {
   const [status, file] = row.split('\t')
   if (DOCKER.some((re) => re.test(file))) docker = true
+  if (VISUAL.some((re) => re.test(file))) visual = true
   let cls
   if (FORCE_ALL.some((re) => re.test(file))) { cls = 'gate'; bump('full'); drift = true; docker = true }
   else if (isDocs(file)) cls = 'docs'
@@ -102,9 +115,9 @@ for (const row of git('diff', '--name-status', '--no-renames', base, head).split
   report.push(`${cls.padEnd(13)} ${status} ${file}`)
 }
 
-const summary = `frontend=${frontend} drift=${drift} docker=${docker}`
+const summary = `frontend=${frontend} drift=${drift} docker=${docker} visual=${visual}`
 console.log(report.join('\n') + `\n\n${summary}`)
-if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `frontend=${frontend}\ndrift=${drift}\ndocker=${docker}\n`)
+if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `frontend=${frontend}\ndrift=${drift}\ndocker=${docker}\nvisual=${visual}\n`)
 if (process.env.GITHUB_STEP_SUMMARY) {
   appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### CI scope: \`${summary}\`\n\n\`\`\`\n${report.join('\n')}\n\`\`\`\n`)
 }

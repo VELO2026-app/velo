@@ -92,6 +92,7 @@
       <VEmptyState
         v-else-if="sdkNotConfigured"
         icon="warning"
+        :error="false"
         :title="t('user.screens.practiceLive.zoomNotConfigured')"
         :description="t('user.screens.practiceLive.zoomServerBroken')"
       />
@@ -99,6 +100,7 @@
       <VEmptyState
         v-else-if="zoomEntry?.kind === 'cancelled'"
         icon="warning"
+        :error="false"
         :title="t('user.screens.practiceLive.cancelled.title')"
         :description="t('user.screens.practiceLive.cancelled.text')"
       />
