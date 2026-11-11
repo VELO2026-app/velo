@@ -186,9 +186,8 @@ export const useDiaryStore = defineStore('diary', () => {
    * @returns `{ ok, error }` so the view can show a toast on failure.
    *
    * The reflection projects nothing into the diary feed, so there is no feed
-   * to refresh here. The booking's has_reflection flag is refreshed by the
-   * view (bookingsStore.refreshBookings), as FeedbackView does for
-   * has_feedback.
+   * to refresh here. The booking's has_reflection flag comes back with the
+   * booking keys, which the success makes stale (INVALIDATES.submitReflection).
    */
   async function submitReflection(
     practiceId: string,
@@ -454,21 +453,9 @@ export const useDiaryStore = defineStore('diary', () => {
    * onto the timeline. Best-effort: a refresh failure must not fail the submit
    * (callers fire it without awaiting; it never rejects).
    *
-   * W27 (PROMPT №438): this used to ALSO call
-   * `useBookingsStore().refreshBookings()`, which was the `diary->bookings` half of
-   * a circular store dependency (bookings.ts imports this store in return). That
-   * call was REDUNDANT, not merely circular: `refreshAfterDiaryMutation` is
-   * reached only from submitCheckin/submitFeedback, and the sole caller of each
-   * -- CheckinView.vue and FeedbackView.vue -- already fires
-   * `bookingsStore.refreshBookings()` itself the moment the submit resolves, and
-   * says so in its own comment. So every check-in and every feedback issued TWO
-   * sequential GET /bookings: this one, awaited, then the view's. Deleting it
-   * removes the duplicate request AND leaves `bookings -> diary` as a plain
-   * one-way dependency. The cycle is gone, not deferred.
-   *
-   * Keeping bookings fresh after a diary mutation is therefore the VIEW's job --
-   * which is already the convention here (CheckinView.vue, FeedbackView.vue). If
-   * a new caller of submitCheckin/submitFeedback ever needs it, it does the same.
+   * The booking flags the same submit flips (has_checkin, has_feedback) come
+   * back with the booking keys, which the submit makes stale through
+   * `invalidateAfter()` (FE-166) -- not from here, and not from the view.
    */
   async function refreshAfterDiaryMutation(): Promise<void> {
     await Promise.allSettled([feed.refreshInPlace()])

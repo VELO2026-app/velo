@@ -203,7 +203,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useNow } from '@/composables/useNow'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'
-import { useBookingsStore } from '@/stores/bookings'
+import { useJoinBooking, useMyBookings } from '@/composables/queries/bookings'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
 import { platform } from '@/platform'
@@ -227,7 +227,9 @@ const CAMERA_HINT = t('user.screens.practiceLive.desktopCameraHint')
 const route = useRoute()
 const router = useRouter()
 const practicesStore = usePracticesStore()
-const bookingsStore = useBookingsStore()
+// The user's booking for this practice: its id for the join, joined_at, has_checkin.
+const { bookings } = useMyBookings()
+const joinBooking = useJoinBooking()
 const toast = useToast()
 
 const practiceId = route.params.practiceId as string
@@ -255,7 +257,7 @@ const practice = computed(() => practicesStore.selected)
 
 /** The current user's booking for this practice (any active-ish status). */
 const myBooking = computed(() =>
-  bookingsStore.bookings.find((b) => b.practice_id === practiceId && b.status !== 'cancelled'),
+  bookings.value.find((b) => b.practice_id === practiceId && b.status !== 'cancelled'),
 )
 
 /** One check-in per practice: once the booking has it, the button hides
@@ -359,11 +361,14 @@ async function onEnter(): Promise<void> {
   try {
     const booking = myBooking.value
     if (booking && booking.joined_at === null) {
-      const result = await bookingsStore.joinBooking(booking.id)
-      // FE-78.2: the gate keys on the machine status (the join endpoint's
-      // only 409 is "already joined"), never on the human-readable text.
-      if (!result.ok && result.status !== 409) {
-        toast.error(result.error)
+      try {
+        await joinBooking.mutateAsync(booking.id)
+      } catch (e) {
+        // FE-78.2: the gate keys on the machine status (the join endpoint's
+        // only 409 is "already joined"), never on the human-readable text.
+        if (!(e instanceof ApiResponseError && e.status === 409)) {
+          toast.error(extractApiError(e, t('storeErrors.bookings.join')))
+        }
       }
     }
     try {
@@ -434,8 +439,6 @@ onMounted(async () => {
   if (practicesStore.selected?.id !== practiceId) {
     void practicesStore.fetchPractice(practiceId)
   }
-  // Needed to resolve the user's booking id for the join gate and has_checkin.
-  void bookingsStore.fetchMyBookings()
   await loadEntry()
 })
 </script>

@@ -85,35 +85,31 @@ vi.mock('@/stores/practices', () => ({
   }),
 }))
 
-// -- bookings store (dependency) --
+// -- the bookings list and the cancel mutation (dependencies, FE-157 4F /
+//    FE-166 step 3): how the list is fetched and what the cancel refreshes is
+//    composables/queries/bookings.test.ts's business; this screen owns what it
+//    derives from the list, the B30 refetch on open, the cancel call, the
+//    double-tap guard and the toasts. `cancelBooking` stands for mutateAsync:
+//    it resolves on success and rejects with the API error. --
 // shallowReactive: the recording watcher must see a later swap of the booking.
 const bookingsState = shallowReactive<{ bookings: BookingWithPracticeResponse[] }>({
   bookings: [],
 })
-const fetchMyBookings = vi.fn()
-const refreshBookings = vi.fn()
-const refreshMyBookings = vi.fn()
-vi.mock('@/stores/bookings', () => ({
-  useBookingsStore: () => ({
-    get bookings() {
-      return bookingsState.bookings
-    },
-    fetchMyBookings,
-    refreshBookings,
-    refreshMyBookings,
-  }),
-}))
-
-// -- the cancel mutation (dependency, FE-157 4F): what it refreshes is
-//    composables/queries/bookings.test.ts's business; this screen owns the
-//    call, the double-tap guard and the toasts. `cancelBooking` stands for
-//    mutateAsync: it resolves on success and rejects with the API error. --
+const refetchMyBookings = vi.fn()
 const cancelBooking = vi.fn()
-vi.mock('@/composables/queries/bookings', () => ({
-  useCancelBooking: () => ({ mutateAsync: cancelBooking }),
-  // The booking popup (a child) books through this one; not exercised here.
-  usePurchaseBooking: () => ({ mutateAsync: vi.fn() }),
-}))
+vi.mock('@/composables/queries/bookings', async () => {
+  const { computed, ref } = await import('vue')
+  return {
+    useMyBookings: () => ({
+      bookings: computed(() => bookingsState.bookings),
+      fetching: ref(false),
+      refetch: refetchMyBookings,
+    }),
+    useCancelBooking: () => ({ mutateAsync: cancelBooking }),
+    // The booking popup (a child) books through this one; not exercised here.
+    usePurchaseBooking: () => ({ mutateAsync: vi.fn() }),
+  }
+})
 
 // -- auth store (dependency): user.id drives isMaster; role gates the manage
 //    kebab (the /master shell's roleGuard would bounce any other role, so the
@@ -305,9 +301,7 @@ beforeEach(() => {
   fetchPractice.mockReset()
   openPractice.mockReset()
   clearSelected.mockReset()
-  fetchMyBookings.mockReset()
-  refreshBookings.mockReset()
-  refreshMyBookings.mockReset()
+  refetchMyBookings.mockReset()
   cancelBooking.mockReset().mockResolvedValue(undefined)
   push.mockReset()
   back.mockReset()
@@ -360,12 +354,12 @@ describe('PracticeDetailView', () => {
       expect(text()).toContain('Вечерняя йога')
     })
 
-    it('fetches the practice and refreshes the bookings on mount (B30: not the cached-skip fetchMyBookings)', async () => {
+    it('fetches the practice and refetches the bookings on mount (B30: not only when stale)', async () => {
       mount()
       await flush()
 
       expect(openPractice).toHaveBeenCalledWith('p1')
-      expect(refreshMyBookings).toHaveBeenCalled()
+      expect(refetchMyBookings).toHaveBeenCalled()
     })
   })
 

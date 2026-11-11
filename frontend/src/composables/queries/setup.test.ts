@@ -170,3 +170,39 @@ describe('the end of a session empties the Colada caches', () => {
     expect(queryCache.getEntries()).toHaveLength(0)
   })
 })
+
+describe('structural sharing (coladaOptions)', () => {
+  /** A Colada cache installed with the production options. */
+  function cacheWithOptions() {
+    const pinia = createPinia()
+    createApp({}).use(pinia).use(PiniaColada, coladaOptions)
+    return useQueryCache(pinia)
+  }
+
+  it('an unchanged answer keeps every shown reference', () => {
+    const cache = cacheWithOptions()
+    const key = keys.bookings.upcoming()
+    const first = [{ id: 'b1', practice: { id: 'p1' } }]
+    cache.setQueryData(key, first)
+
+    cache.setQueryData(key, [{ id: 'b1', practice: { id: 'p1' } }])
+
+    expect(cache.getQueryData(key)).toBe(first)
+  })
+
+  it('a changed answer keeps the references of its unchanged parts', () => {
+    const cache = cacheWithOptions()
+    const key = keys.bookings.upcoming()
+    const kept = { id: 'b1', practice: { id: 'p1' } }
+    cache.setQueryData(key, [kept, { id: 'b2', practice: { id: 'p2' } }])
+
+    cache.setQueryData(key, [
+      { id: 'b1', practice: { id: 'p1' } },
+      { id: 'b2', practice: { id: 'p2', title: 'renamed' } },
+    ])
+
+    const next = cache.getQueryData<Array<{ id: string }>>(key)!
+    expect(next[0]).toBe(kept)
+    expect(next[1]).toMatchObject({ practice: { title: 'renamed' } })
+  })
+})

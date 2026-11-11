@@ -24,8 +24,9 @@
 // CheckinView's are: the re-entry guard reads `diaryStore.feedbackSubmitting`, a
 // ref only the real store flips (diary.ts:98). Mock the diary store and that ref
 // is a frozen `false`, the double-click test exercises nothing, and it passes for
-// the wrong reason. Real stores also let the post-submit refresh be proven at the
-// NETWORK (getMyBookings) rather than as a spy call count (SC-02).
+// the wrong reason. The real stores and the real Colada cache also let the
+// post-submit refresh be proven at the NETWORK (getMyBookings) rather than as a
+// spy call count (SC-02).
 // ONE pinia instance goes to both setActivePinia and app.use (SC-03).
 //
 // TICKS = 12. Counted, not copied (SC-08). The submit chain:
@@ -34,12 +35,12 @@
 //   -> refresh -> await loadMore -> await listDiaryFeed (2) -> loadMore resumes
 //   (3) -> refresh resumes (4) -> allSettled (5) -> refreshAfterDiaryMutation
 //   resumes (6) -> submitFeedback's finally + return (7) -> onSubmit resumes,
-//   sets submitted, fires the FIRE-AND-FORGET `void refreshBookings()` (.vue:127)
-//   (8) -> that chain is itself two deep: pagination.refresh -> await loadMore ->
-//   await getMyBookings (9) -> resumes (10) -> +1 final re-render = ~11.
+//   sets submitted (8); the store's invalidateAfter('submitFeedback') refetches
+//   the bookings list this screen holds -> await getMyBookings (9) -> resumes
+//   (10) -> +1 final re-render = ~11.
 // 12 is one over the deepest chain. This is TWO more than CheckinView's 10
 // because that file's deepest assertion stops at the submit; here the detached
-// refreshBookings tail is asserted at the network, and it is the longest thing
+// bookings refetch is asserted at the network, and it is the longest thing
 // on the screen. The MOUNT chain is much shallower (~3): onMounted ->
 // fetchPractice -> await getPractice -> re-render. Over-counting is harmless
 // (velo-idiom §3); an under-count would fail loudly on the toEqual bodies.
@@ -146,11 +147,13 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
+import { keys } from '@/composables/queries/keys'
 import FeedbackView from '@/views/user/FeedbackView.vue'
 import { usePracticesStore } from '@/stores/practices'
 // The REAL store, read where the assertion is about the has_feedback gate reading
 // the live list rather than a fixture the test handed it.
-import { useBookingsStore } from '@/stores/bookings'
 import { useDiaryStore } from '@/stores/diary'
 import { ApiResponseError } from '@/api/client'
 import { upsertFeedback, listDiaryFeed } from '@/api/diary'
@@ -162,10 +165,10 @@ import type { BookingWithPracticeResponse, PracticeResponse } from '@/api/types'
 // importActual + spread keeps every other export real (notably ApiResponseError
 // via @/api/client, which is never mocked) -- only the network boundary is faked.
 //
-// @/api/bookings is mocked even though this screen never fetches bookings at
-// mount: `void bookingsStore.refreshBookings()` (.vue:127) fires on a successful
-// submit, and an unmocked wrapper would reach the real client. It is also the
-// seam the post-submit refresh is PROVEN at, rather than as a spy call.
+// @/api/bookings: the screen reads the bookings list (useMyBookings, for the
+// has_feedback gate) at mount, and refetches it after a successful submit (the
+// store's invalidation, FE-166). It is the seam the post-submit refresh is
+// PROVEN at, rather than as a spy call.
 vi.mock('@/api/diary', async () => {
   const actual = await vi.importActual<typeof import('@/api/diary')>('@/api/diary')
   return { ...actual, upsertFeedback: vi.fn(), listDiaryFeed: vi.fn() }
@@ -297,8 +300,16 @@ function mount(): void {
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(FeedbackView).use(createTestI18n())
-  app.use(pinia)
+  app.use(pinia).use(PiniaColada, coladaOptions)
   app.mount(host)
+}
+
+/** Write the bookings list straight into the Colada entry the screen reads (as a refetch would). */
+function setBookingsList(items: BookingWithPracticeResponse[]): void {
+  useQueryCache(pinia).setQueryData(keys.bookings.list(), {
+    pages: [bookingsPage(items)],
+    pageParams: [0],
+  })
 }
 
 async function flush(): Promise<void> {
@@ -621,8 +632,8 @@ describe('FeedbackView', () => {
       expect(btn).toBeDefined()
       expect(btn?.disabled).toBe(false)
 
-      // No await: the ref is true, the DOM is stale, the button is still clickable.
-      useBookingsStore().bookings[0]!.has_feedback = true
+      // No await: the list says true, the DOM is stale, the button is still clickable.
+      setBookingsList([booking({ has_feedback: true })])
       btn!.click()
       await flush()
 
@@ -638,7 +649,7 @@ describe('FeedbackView', () => {
       await flush()
       expect(text()).toContain('Как прошла практика?')
 
-      useBookingsStore().bookings[0]!.has_feedback = true
+      setBookingsList([booking({ has_feedback: true })])
       await flush()
 
       expect(successTitle()).toBe('Спасибо за feedback!')
@@ -749,10 +760,10 @@ describe('FeedbackView', () => {
     })
 
     it('refreshes the bookings after a successful submit -- at the NETWORK, not just a spy', async () => {
-      // W27 (diary.ts:218-233): the store deliberately STOPPED refreshing bookings
-      // on the grounds that this view does it itself (.vue:127). If that ever
-      // regresses, has_feedback stays stale and the dashboard keeps offering a
-      // feedback the user already left.
+      // FE-166: the submit marks the booking keys stale (diary store ->
+      // invalidateAfter('submitFeedback')) and the list on screen refetches. If
+      // that ever regresses, has_feedback stays stale and the dashboard keeps
+      // offering a feedback the user already left.
       //
       // The count is 1 -> 2, not 0 -> 1: since №446 this screen loads bookings at
       // MOUNT too, because that list is what the has_feedback gate reads. The
@@ -797,8 +808,8 @@ describe('FeedbackView', () => {
     })
 
     it('a FAILED bookings refresh does not fail the feedback either', async () => {
-      // `void bookingsStore.refreshBookings()` (.vue:127) is fire-and-forget and
-      // runs AFTER submitted flips. A rejection here must not unwind the success
+      // The bookings refetch (invalidateAfter, never awaited by the submit) runs
+      // AFTER submitted flips. A rejection here must not unwind the success
       // screen for a write that already landed.
       getMyBookingsMock.mockRejectedValue(new ApiResponseError(500, 'Бронирования недоступны'))
       mount()

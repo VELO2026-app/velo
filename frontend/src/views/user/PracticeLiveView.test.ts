@@ -2,7 +2,7 @@
 // VELO Frontend -- PracticeLiveView Screen Tests (probekit-screen-test v1.9)
 // =============================================================================
 //
-// 194 lines of script, no test. TWO stores (usePracticesStore, useBookingsStore)
+// 194 lines of script, no test. The practices store and the bookings list (useMyBookings)
 // PLUS a platform boundary (@/platform) PLUS a real SECURITY control
 // (AUDIT-0520-02: a Zoom link is only ever opened when it starts with
 // "https://"). This is the highest-value untested surface on the user board.
@@ -193,22 +193,26 @@ vi.mock('@/stores/practices', () => ({
   }),
 }))
 
-// -- bookings store (dependency) --
+// -- the bookings list and the join mutation (dependencies, FE-166 step 3):
+//    how the list loads and what the join refreshes is
+//    composables/queries/bookings.test.ts's business. `useMyBookings` counts
+//    its readers (the list's query loads itself when read); `joinBooking`
+//    stands for mutateAsync: it resolves on success and rejects with the raw
+//    API error. FE-49: there is no leave mutation -- the screen no longer
+//    consumes one (the leave button is deleted). --
 const bookingsState: { bookings: BookingWithPracticeResponse[] } = { bookings: [] }
-const fetchMyBookings = vi.fn()
+const useMyBookings = vi.fn()
 const joinBooking = vi.fn()
-// FE-49: leaveBooking is deliberately NOT on the mock -- the screen no longer
-// consumes it (the leave button is deleted); if it ever comes back, the call
-// crashes loudly instead of silently passing.
-vi.mock('@/stores/bookings', () => ({
-  useBookingsStore: () => ({
-    get bookings() {
-      return bookingsState.bookings
+vi.mock('@/composables/queries/bookings', async () => {
+  const { computed } = await import('vue')
+  return {
+    useMyBookings: () => {
+      useMyBookings()
+      return { bookings: computed(() => bookingsState.bookings) }
     },
-    fetchMyBookings,
-    joinBooking,
-  }),
-}))
+    useJoinBooking: () => ({ mutateAsync: joinBooking }),
+  }
+})
 
 function practice(overrides: Partial<PracticeResponse> = {}): PracticeResponse {
   return {
@@ -329,7 +333,7 @@ beforeEach(() => {
   practicesState.selected = null
   bookingsState.bookings = []
   fetchPractice.mockReset()
-  fetchMyBookings.mockReset()
+  useMyBookings.mockReset()
   joinBooking.mockReset()
   openLink.mockReset()
   // Default: a booked user with a personal entry -- the ordinary case every
@@ -385,11 +389,12 @@ describe('PracticeLiveView', () => {
 
   // ===========================================================================
   describe('onMounted data fetch', () => {
-    it('fetches the practice when nothing is selected yet, and always fetches my bookings', () => {
+    it('fetches the practice when nothing is selected yet, and always reads my bookings', () => {
       mount()
 
       expect(fetchPractice).toHaveBeenCalledWith('p1')
-      expect(fetchMyBookings).toHaveBeenCalledTimes(1)
+      // Reading the list is what loads it (a Colada query; cached = no request).
+      expect(useMyBookings).toHaveBeenCalledTimes(1)
     })
 
     it('skips re-fetching the practice when it is already the selected one (cache hit)', () => {
@@ -558,7 +563,7 @@ describe('PracticeLiveView', () => {
     it('a fresh booking (never joined): calls joinBooking, then haptic + the SDK entry (F4: was openLink)', async () => {
       practicesState.selected = practice()
       bookingsState.bookings = [booking({ id: 'b1', joined_at: null })]
-      joinBooking.mockResolvedValue({ ok: true, error: '' })
+      joinBooking.mockResolvedValue({ id: 'b1' })
       mount()
       // T-35: the button is disabled until the server's resolution arrives --
       // it can no longer be pressed on a screen that has not been told what
@@ -614,7 +619,7 @@ describe('PracticeLiveView', () => {
     it('the documented 409 "already joined" case (keyed on the machine status, FE-78.2): toast is suppressed, Zoom is still entered', async () => {
       practicesState.selected = practice()
       bookingsState.bookings = [booking({ id: 'b1', joined_at: null })]
-      joinBooking.mockResolvedValue({ ok: false, error: 'Вы уже записаны', status: 409 })
+      joinBooking.mockRejectedValue(new ApiResponseError(409, 'Already joined', 'already_joined'))
       mount()
       // T-35: the button is disabled until the server's resolution arrives --
       // it can no longer be pressed on a screen that has not been told what
@@ -631,7 +636,9 @@ describe('PracticeLiveView', () => {
     it('a REAL join failure (non-409) still toasts; Zoom is still entered -- FE-78.2 scoped the fix to the toast gate only', async () => {
       practicesState.selected = practice()
       bookingsState.bookings = [booking({ id: 'b1', joined_at: null })]
-      joinBooking.mockResolvedValue({ ok: false, error: 'Practice is full', status: 400 })
+      // An unmapped code: the screen words it with its own fallback (ADR:
+      // the screen turns the raw error into text).
+      joinBooking.mockRejectedValue(new ApiResponseError(400, 'Practice is full', 'join_failed'))
       mount()
       // T-35: the button is disabled until the server's resolution arrives --
       // it can no longer be pressed on a screen that has not been told what
@@ -641,7 +648,7 @@ describe('PracticeLiveView', () => {
       enterBtn()?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Practice is full')
+      expect(toastError).toHaveBeenCalledWith('Не удалось войти в практику')
       expect(enterZoomMeeting).toHaveBeenCalledTimes(1)
     })
   })
@@ -689,8 +696,8 @@ describe('PracticeLiveView', () => {
   // FE-49 (product decision 2026-11-02): the leave button is deleted from
   // the screen. It never cancelled anything -- to the person it only left
   // for the dashboard, which the back control already does -- so what needs
-  // proving here is the ABSENCE: no booking state renders it. The store is
-  // not even on the mock anymore (see the useBookingsStore factory above);
+  // proving here is the ABSENCE: no booking state renders it. No leave
+  // mutation is even on the mock (see the queries/bookings factory above);
   // the endpoint wrapper stays in api/bookings.ts with a comment, out of
   // this screen's reach.
   describe('FE-49: the leave button is gone', () => {

@@ -73,11 +73,10 @@
       "overview": "Failed to load the period statistics"
     },
     "bookings": {
-      "selected": "Failed to load the booking",
+      "list": "Failed to load your bookings",
       "upcoming": "Failed to load the nearest practice",
       "cancel": "Failed to cancel the booking",
-      "join": "Failed to join the practice",
-      "skipCheckin": "Failed to skip the check-in"
+      "join": "Failed to join the practice"
     },
     "master": {
       "profile": "Failed to load the master profile"

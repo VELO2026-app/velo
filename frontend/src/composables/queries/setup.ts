@@ -23,6 +23,7 @@ import {
 } from '@pinia/colada'
 import { defineStore } from 'pinia'
 import { persistPlugin } from '@/composables/queries/persist'
+import { replaceEqualDeep } from '@/utils/structuralShare'
 
 /** Default staleness window of every query that does not set its own (ms). */
 export const QUERY_STALE_MS = 30_000
@@ -97,6 +98,31 @@ function accountScope({ pinia }: PiniaColadaPluginContext): void {
 }
 
 /**
+ * Colada plugin: structural sharing for every query answer.
+ *
+ * @remarks
+ * Colada stores each answer as it arrives, so a revalidation that brings the
+ * SAME data hands the screen new objects everywhere -- every computed over it
+ * re-runs and the DOM is patched (a list re-renders, an animation restarts).
+ * The in-house cache and the stores kept the shown references for an
+ * unchanged answer (utils/structuralShare). This keeps that rule: a success
+ * state's data is merged into the data already held -- unchanged parts keep
+ * their references, an unchanged answer keeps all of them.
+ *
+ * Runs before the action (Pinia `$onAction` callbacks run first), on the very
+ * state object the action is about to store.
+ */
+function structuralSharing({ queryCache }: PiniaColadaPluginContext): void {
+  queryCache.$onAction(({ name, args }) => {
+    if (name !== 'setEntryState') return
+    const [entry, state] = args
+    const held: unknown = entry.state.value.data
+    if (state.status !== 'success' || held === undefined) return
+    state.data = replaceEqualDeep(held, state.data)
+  })
+}
+
+/**
  * Options for `app.use(PiniaColada, coladaOptions)`, shared by app.ts and the tests.
  *
  * @remarks
@@ -105,5 +131,5 @@ function accountScope({ pinia }: PiniaColadaPluginContext): void {
  */
 export const coladaOptions: PiniaColadaOptions = {
   queryOptions: { staleTime: QUERY_STALE_MS },
-  plugins: [accountScope, persistPlugin],
+  plugins: [accountScope, structuralSharing, persistPlugin],
 }

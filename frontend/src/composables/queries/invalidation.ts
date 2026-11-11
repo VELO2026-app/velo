@@ -16,6 +16,7 @@
 
 import type { EntryKey, QueryCache } from '@pinia/colada'
 import { keys } from '@/composables/queries/keys'
+import { forgetPersisted } from '@/composables/queries/persist'
 
 /** Each mutation and the query-key prefixes it makes stale. */
 export const INVALIDATES = {
@@ -57,6 +58,8 @@ export type MutationName = keyof typeof INVALIDATES
 
 /**
  * Mark every entry under the mutation's prefixes stale; the active ones refetch now.
+ * A persisted copy under them that this session never loaded is dropped
+ * (./persist.ts, forgetPersisted).
  *
  * @remarks
  * Resolves when those refetches settle and never rejects: a failed refetch is
@@ -68,6 +71,7 @@ export async function invalidateAfter(
   queryCache: QueryCache,
   mutation: MutationName,
 ): Promise<void> {
+  for (const key of INVALIDATES[mutation]) forgetPersisted(queryCache, key)
   await Promise.allSettled(
     INVALIDATES[mutation].map((key) => queryCache.invalidateQueries({ key })),
   )

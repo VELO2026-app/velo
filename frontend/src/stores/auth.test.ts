@@ -39,13 +39,7 @@ import { accountScopePlugin } from '@/platform/session'
 import { flushPersisted, readPersisted, writePersisted } from '@/composables/persistedCache'
 import { api, ApiNetworkError, ApiResponseError } from '@/api/client'
 import * as usersApi from '@/api/users'
-import type {
-  AuthResponse,
-  BookingWithPracticeResponse,
-  MasterProfileResponse,
-  SchoolMineItem,
-  UserResponse,
-} from '@/api/types'
+import type { AuthResponse, MasterProfileResponse, SchoolMineItem, UserResponse } from '@/api/types'
 
 vi.mock('@/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api/client')>()
@@ -88,8 +82,7 @@ function fillAccountStores(): void {
   master.profile = { id: 'master_1' } as unknown as MasterProfileResponse
   master.profileLoaded = true
   const bookings = useBookingsStore()
-  bookings.upcoming = [{ id: 'booking_1' } as BookingWithPracticeResponse]
-  bookings.upcomingLoaded = true
+  bookings.dismissCheckin('practice_1')
   const hub = useSchoolsHubStore()
   hub.mine = [{ id: 'school_1' } as SchoolMineItem]
   hub.canCreate = true
@@ -101,8 +94,7 @@ function expectAccountStoresReset(): void {
   expect(master.profile).toBeNull()
   expect(master.profileLoaded).toBe(false)
   const bookings = useBookingsStore()
-  expect(bookings.upcoming).toEqual([])
-  expect(bookings.upcomingLoaded).toBe(false)
+  expect(bookings.dismissedCheckins).toEqual([])
   const hub = useSchoolsHubStore()
   expect(hub.mine).toEqual([])
   expect(hub.canCreate).toBe(false)

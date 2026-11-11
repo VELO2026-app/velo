@@ -104,6 +104,12 @@ export function removePersisted(name: string): void {
   if (flushTimer === null) flushTimer = setTimeout(flush, FLUSH_DELAY_MS)
 }
 
+/** Names of the current owner's persisted copies that start with `prefix`. */
+export function persistedNames(prefix: string): string[] {
+  if (owner === null) return []
+  return Object.keys(load()).filter((name) => name.startsWith(prefix))
+}
+
 /** Forget everything, every account (sign-out). */
 export function clearPersisted(): void {
   if (flushTimer !== null) clearTimeout(flushTimer)
