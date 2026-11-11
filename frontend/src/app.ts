@@ -50,6 +50,7 @@ import { installGlobalErrorHandlers } from './platform/error-reporter'
 import { accountScopePlugin } from './platform/session'
 import { coladaOptions } from './composables/queries/setup'
 import { readLocaleHint, setLocale } from './locales'
+import { loadInstanceTexts } from './platform/texts'
 import { isSupportedLocale } from './platform/instance'
 
 // Initialize the Telegram SDK (best-effort) before mounting. Safe outside
@@ -82,6 +83,11 @@ installGlobalErrorHandlers(app, router)
 // 'velo:debug-renders' storage flag is set; a no-op in production builds.
 installRenderDebug(app, router)
 
+// Instance text overlays (FE-133, `texts` slot): fetched before the first
+// render so a partner's wording never flashes the built-in strings. Absent
+// package = silent no-op (platform/texts.ts).
+const instanceTexts = loadInstanceTexts()
+
 // Boot locale hint (tz-i18n phase 5): apply the last CHOSEN locale BEFORE the
 // first render -- without this, a reopen shows the default locale for the
 // whole auth round-trip and then flips (the "5-10s of Russian" report). The
@@ -90,6 +96,8 @@ installRenderDebug(app, router)
 // App.vue watcher (same-locale no-op when they agree).
 const localeHint = readLocaleHint()
 if (localeHint && isSupportedLocale(localeHint)) await setLocale(localeHint)
+// Both loads ran side by side; the first render waits for the overlays too.
+await instanceTexts
 
 // Mount into <div id="app"> in index.html.
 app.mount('#app')

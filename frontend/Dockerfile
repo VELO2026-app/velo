@@ -112,6 +112,11 @@ RUN pnpm -C frontend run build \
     && printf '{"release":"%s","commit":"%s"}\n' "$PRIMER_RELEASE" "$PRIMER_COMMIT" \
        > /app/frontend/dist/build-info.json
 
+# FE-133: the product's base texts for validate-texts, one <lang>.json per
+# locale (merged catalogs). They are the product's languages and the messages
+# a `texts` package overrides; the runtime image carries them.
+RUN node frontend/scripts/export-base-texts.mjs /app/base-texts
+
 # ---------------------------------------------------------------------------
 # Stage 3: Serve with Nginx
 # ---------------------------------------------------------------------------
@@ -141,6 +146,15 @@ COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copy built static files from builder.
 COPY --from=builder /app/frontend/dist /usr/share/nginx/html
+
+# FE-133: validate-texts <dir>, the `validate:` of the `texts` slot. The
+# check is the same file the unit suite runs under Node (njs subset); the
+# machine runs it in this image before it switches a package. No node in this
+# image: the njs CLI of the nginx image executes it.
+COPY frontend/scripts/lib/texts-package.mjs /usr/local/lib/primer/package.js
+COPY --chmod=755 frontend/nginx/validate.js /usr/local/lib/primer/validate.js
+COPY --from=builder /app/base-texts /usr/local/lib/primer/texts
+RUN ln -s /usr/local/lib/primer/validate.js /usr/local/bin/validate-texts
 
 EXPOSE 3000
 
