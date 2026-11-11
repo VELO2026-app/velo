@@ -111,7 +111,7 @@ const i18n = createI18n({
   fallbackWarn: false,
 })
 
-// The brand word never lives in the catalogs (tz-i18n §7.2.3): messages
+// The brand word never lives in the catalogs (tz-i18n §7.2 item 3): messages
 // reference it as the linked key @:brand, so every locale that gets messages
 // gets the brand with them (mergeRuntimeMessages). The brand word of THIS
 // build: a skin's displayName wins (tz-whitelabel §1 priority, skin > env);
@@ -175,7 +175,7 @@ export function getLocale(): string {
 }
 
 /**
- * Passport message overlays (tz-whitelabel §7.1): an instance may re-word
+ * Passport message overlays (tz-whitelabel §5): an instance may re-word
  * terminology without forking the base catalogs.
  *
  * @remarks

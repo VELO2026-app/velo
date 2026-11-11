@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- instance checklist (FE-114, F5.4 / tz-whitelabel §6.4)
+// VELO Frontend -- instance checklist (FE-114, F5.4 / tz-whitelabel §6)
 // =============================================================================
 // The §6.4 acceptance checklist, automated where a machine can see it:
 // manifest identity (name/short_name/lang/description; lang+description are

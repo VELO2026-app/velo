@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- build-matrix gate tests (tz-whitelabel §6.1/§4, FE-114,
+// VELO Frontend -- build-matrix gate tests (tz-whitelabel §6/§4, FE-114,
 // FE-152: the skin x edition matrix on PRIMER_EDITION)
 // =============================================================================
 // evaluateMatrix() is the acceptance gate pnpm build:matrix runs after its
@@ -162,7 +162,7 @@ describe('planCells (FE-152: golden x editions, skins x full)', () => {
   })
 })
 
-describe('evaluateMatrix (tz-whitelabel §6.1 gate)', () => {
+describe('evaluateMatrix (tz-whitelabel §6 gate)', () => {
   it('a matrix whose facts match every source of record stays silent', () => {
     expect(evaluateMatrix({ cells: CELLS, facts: GREEN, expected: EXPECTED })).toEqual([])
   })

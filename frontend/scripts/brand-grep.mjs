@@ -1,8 +1,8 @@
 // =============================================================================
 // VELO Frontend -- brand + feature-registry grep gate (FE-114, F5.3)
 // =============================================================================
-// Two greps over the source, both from tz-whitelabel §6.3 / §4 and the
-// brand-places reference tz-i18n §7.2.3. Modeled on no-cyrillic.mjs (string
+// Two greps over the source, both from tz-whitelabel §6 / §4 and the
+// brand-places reference tz-i18n §7.2. Modeled on no-cyrillic.mjs (string
 // literals + Vue template text/attrs, comments stripped).
 //
 // GATE 1 -- the brand word. «VELO» in USER STRINGS only inside the reference
@@ -265,7 +265,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   const { brand, features, switchedOff } = brandGrepReport(files)
   if (brand.length > 0) {
     console.error(
-      `brand-grep: ${brand.length} brand-word hit(s) outside the reference set -- the brand ships via @:brand/skin/passport, never a literal (tz-i18n §7.2.3, tz-whitelabel §6.3):\n`,
+      `brand-grep: ${brand.length} brand-word hit(s) outside the reference set -- the brand ships via @:brand/skin/passport, never a literal (tz-i18n §7.2, tz-whitelabel §6):\n`,
     )
     for (const h of brand) console.error('  ' + h)
   }

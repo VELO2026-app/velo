@@ -14,7 +14,7 @@
 // suite runs BEFORE the build in the Docker image, so the only manifest a test
 // can see is this object -- src/pwa/manifest.test.ts pins its fields.
 //
-// Identity (tz-whitelabel F1, §2.3). The GOLDEN object below carries the
+// Identity (tz-whitelabel §2). The GOLDEN object below carries the
 // golden build's values. For a rebranded build vite.config.ts resolves the
 // instance env (loadEnv: .env files + process.env) and hands it to
 // pwaManifestWithPassport() -- two .env files produce two builds (§2.4)

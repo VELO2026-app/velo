@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- instance-checklist tests (tz-whitelabel §6.4, FE-114)
+// VELO Frontend -- instance-checklist tests (tz-whitelabel §6, FE-114)
 // =============================================================================
 // evaluateChecklist() is the §6.4 acceptance table: every dist fact vs its
 // source of record (skin/passport/golden). Pinned here: a matching build is
@@ -66,7 +66,7 @@ type Checklist = {
 const check = (facts: unknown, expected: unknown): Checklist =>
   evaluateChecklist({ facts, expected }) as Checklist
 
-describe('evaluateChecklist (tz-whitelabel §6.4)', () => {
+describe('evaluateChecklist (tz-whitelabel §6)', () => {
   it('a build whose facts match the sources is green, with the honest rows', () => {
     const { rows, fails } = check(GREEN_FACTS, EXPECTED)
     expect(fails).toEqual([])
