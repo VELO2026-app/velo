@@ -10,17 +10,14 @@
  */
 import { mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { readParams } from '../stack/state'
 import { SESSION_TOKEN_KEY } from '../support/fixtures'
 import { settle, trackApi } from '../support/settle'
 import { test, expect } from '../support/test'
-import { fillPath } from '../sweep/routes'
 import { harOf, META_FILE, type HarMeta } from './har'
 import { SCREENS, rowOf, VIEWPORT } from './screens'
 import { readFileSync } from 'node:fs'
 
 const OUT = resolve(process.env.VISUAL_OUT ?? 'visual-out/head')
-const params = readParams()
 const meta = JSON.parse(readFileSync(META_FILE, 'utf8')) as HarMeta
 
 test.use({ viewport: VIEWPORT })
@@ -29,8 +26,8 @@ mkdirSync(OUT, { recursive: true })
 for (const screen of SCREENS) {
   test(`[${screen.role}] ${screen.name}`, async ({ page, crashes }) => {
     for (const allowance of rowOf(screen).allow?.(screen.role) ?? []) crashes.allow(allowance)
-    const path = fillPath(rowOf(screen), params)
-    expect(path, `no value for a parameter of ${screen.name}`).not.toBeNull()
+    const path = meta.paths[screen.name]
+    expect(path, `${screen.name} is not in har/meta.json -- re-record`).toBeTruthy()
     await page.routeFromHAR(harOf(screen.role), { url: /\/api\//, notFound: 'abort' })
     await page.clock.setFixedTime(meta.recordedAt)
     // Any token: the HAR answers /users/me. (The real one is not needed, and

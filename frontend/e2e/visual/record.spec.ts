@@ -16,6 +16,7 @@ import { ROLES, SCREENS, rowOf, VIEWPORT } from './screens'
 
 const recordedAt = new Date().toISOString()
 const params = readParams()
+const paths: Record<string, string> = {}
 
 for (const role of ROLES) {
   test.describe(`record ${role}`, () => {
@@ -40,6 +41,7 @@ for (const role of ROLES) {
         for (const allowance of rowOf(screen).allow?.(role) ?? []) crashes.allow(allowance)
         const path = fillPath(rowOf(screen), params)
         if (!path) throw new Error(`visual: no params for ${screen.name}`)
+        paths[screen.name] = path
         await page.goto(path)
         await settle(page, tracker)
       }
@@ -53,7 +55,7 @@ test.describe.configure({ mode: 'serial' })
 
 test('scrub the HARs, save the recording time', () => {
   for (const role of ROLES) scrub(harOf(role), tokenOf(role))
-  writeFileSync(META_FILE, JSON.stringify({ recordedAt } satisfies HarMeta, null, 2) + '\n')
+  writeFileSync(META_FILE, JSON.stringify({ recordedAt, paths } satisfies HarMeta, null, 2) + '\n')
 })
 
 /** Drop auth headers and cookies; blank the session token wherever it shows. */

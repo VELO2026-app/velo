@@ -10,4 +10,6 @@ export const harOf = (role: SweepRole): string => resolve(HAR_DIR, `${role}.har`
 export interface HarMeta {
   /** ISO time of the recording: the browser clock stands here when replaying. */
   recordedAt: string
+  /** The URL each screen was recorded at (ids come from the seeded stack, which CI has not). */
+  paths: Record<string, string>
 }
