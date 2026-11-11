@@ -193,6 +193,34 @@ describe('upcomingBookingsQuery', () => {
     expect(readPersisted(slot)).toBeUndefined()
   })
 
+  it('an upcoming entry in memory but off screen is refetched, and its stale copy dropped meanwhile', async () => {
+    // E.g. warmed by the idle prefetch while the user sat on the calendar.
+    const slot = persistSlot(JSON.stringify(keys.bookings.upcoming()))
+    vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([booking('cancelled')])
+    mount(() => {})
+    await queryCache.refresh(queryCache.ensure(upcomingBookingsQuery()))
+    flushPersisted()
+    expect(readPersisted(slot)).toBeDefined()
+
+    let answer!: () => void
+    vi.mocked(bookingsApi.getUpcomingBookings).mockReturnValue(
+      new Promise((resolve) => {
+        answer = () => resolve([])
+      }),
+    )
+    const done = invalidateAfter(queryCache, 'cancelBooking')
+    await flush()
+
+    // No copy can show the cancelled booking while the refetch runs...
+    expect(readPersisted(slot)).toBeUndefined()
+    expect(bookingsApi.getUpcomingBookings).toHaveBeenCalledTimes(2)
+    answer()
+    await done
+    // ...and the fresh answer is what memory and the copy hold afterwards.
+    expect(queryCache.getQueryData(keys.bookings.upcoming())).toEqual([])
+    expect(readPersisted(slot)?.data).toEqual([])
+  })
+
   it('...but leaves the copies of other domains alone', async () => {
     const slot = persistSlot(JSON.stringify(keys.schools.mine('participant', 'user')))
     writePersisted(slot, { schools: [], canCreate: false })

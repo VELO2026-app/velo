@@ -152,6 +152,27 @@ describe('useCancelBooking -- success', () => {
     expect(settled).toBe(true)
   })
 
+  it('waits for the bookings list even when another refetch of the map fails first', async () => {
+    let releaseList!: () => void
+    vi.mocked(bookingsApi.getMyBookings).mockReturnValue(
+      new Promise((resolve) => {
+        releaseList = () => resolve(bookingsPage())
+      }),
+    )
+    // The school feed on screen (practices.root()) fails at once.
+    vi.mocked(schoolsApi.getSchoolPractices).mockRejectedValue(new Error('offline'))
+    let settled = false
+    const done = cancel(VARS).then(() => {
+      settled = true
+    })
+    await flush()
+
+    expect(settled).toBe(false)
+    releaseList()
+    await done
+    expect(settled).toBe(true)
+  })
+
   it('invalidates every Colada key of the map: the feed on screen refetches, the rest go stale', async () => {
     const feedOnScreen = keys.practices.schoolFeed('g1', 5)
     expect(schoolsApi.getSchoolPractices).toHaveBeenCalledTimes(1)
@@ -171,7 +192,7 @@ describe('useCancelBooking -- success', () => {
     expect(when(keys.schools.detail('g1'))).toBe(pageAt)
   })
 
-  it('refreshes the legacy holders: upcoming, practice detail, calendar week, diary', async () => {
+  it('refreshes the legacy holders: practice detail, calendar week, diary, balance', async () => {
     await cancel(VARS)
 
     expect(stores.practices.fetchPractice).toHaveBeenCalledWith('p1')
@@ -277,7 +298,7 @@ describe('usePurchaseBooking', () => {
     expect(when(keys.schools.detail('g1'))).toBe(pageAt)
   })
 
-  it('refreshes the legacy holders: upcoming, calendar week, bookings list, diary', async () => {
+  it('refreshes the legacy holders: calendar week, diary', async () => {
     await purchase(BUY)
 
     expect(when(keys.practices.detail('p1'))).toBe(0)

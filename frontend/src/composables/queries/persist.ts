@@ -100,14 +100,16 @@ function isSubset(part: unknown, whole: unknown): boolean {
 }
 
 /**
- * Drop the persisted copies under `prefix` that this session never loaded.
+ * Drop the persisted copies under `prefix` that no screen shows right now.
  *
  * @remarks
- * The ADR rule for invalidating data that is not in memory: an entry this
- * session holds is refetched (and rewritten) by the invalidation itself, but a
- * copy only on disk would be hydrated on the next read and show the state the
- * mutation just changed -- e.g. a cancelled booking on a dashboard opened
- * after the cancellation, until its own request answers.
+ * The ADR rule for invalidating data that is not on screen: a copy on disk
+ * would be hydrated on the next read -- after a reload, or once its memory
+ * entry was garbage-collected -- and show the state the mutation just
+ * changed (a cancelled booking on a dashboard opened later). An entry on
+ * screen is refetched by the invalidation and rewrites its copy; one in
+ * memory but off screen is refetched too (invalidateAfter) and rewrites it
+ * when that answer lands -- until then there is no copy to lie.
  */
 export function forgetPersisted(queryCache: QueryCache, prefix: EntryKey): void {
   for (const name of persistedNames(SLOT_PREFIX)) {
@@ -118,6 +120,6 @@ export function forgetPersisted(queryCache: QueryCache, prefix: EntryKey): void 
       continue
     }
     if (!Array.isArray(key) || !isPrefixOf(prefix, key)) continue
-    if (queryCache.get(key) === undefined) removePersisted(name)
+    if (!queryCache.get(key)?.active) removePersisted(name)
   }
 }
