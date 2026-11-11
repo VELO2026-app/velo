@@ -176,7 +176,6 @@ root.__media = {
 let trailingComment = null
 if (pendingBefore.length) {
   trailingComment = pendingBefore
-  pendingBefore = []
 }
 
 const doc = {

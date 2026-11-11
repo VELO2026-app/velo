@@ -214,7 +214,7 @@ function setCardRef(el: unknown, index: number): void {
 function onCardKeydown(event: KeyboardEvent, index: number): void {
   if (props.disabled) return
   const last = EMOTIONS.length - 1
-  let target: number | null = null
+  let target: number
   switch (event.key) {
     case 'ArrowRight':
     case 'ArrowUp':

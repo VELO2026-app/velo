@@ -515,15 +515,6 @@ describe('BE-150 layout', () => {
     expect(host!.innerHTML).not.toContain(window.location.origin + '/mcp')
   })
 
-  it('no button sign-in on this server: the steps are not promised, the token is', async () => {
-    vi.mocked(mcpApi.listMcpTokens).mockResolvedValue(list([], { oauth_connect_available: false }))
-    mount()
-    await flush()
-    expect(text('[data-test="mcp-url"]')).toBe(`${BASE}/mcp`)
-    expect(host!.querySelector('[data-test="connect-howto"]')).toBeNull()
-    expect(text('[data-test="no-button-connect"]')).toContain('используйте личный токен')
-  })
-
   it('a refused clipboard for the address says so; the address stays to copy by hand', async () => {
     writeText.mockRejectedValue(new Error('denied'))
     mount()
@@ -577,7 +568,6 @@ describe('BE-150 layout', () => {
   })
 
   it('the new texts are in the product type: "—" and "→", never "--" or "->"', async () => {
-    vi.mocked(mcpApi.listMcpTokens).mockResolvedValue(list([], { oauth_connect_available: false }))
     mount()
     await flush()
     await openDev()

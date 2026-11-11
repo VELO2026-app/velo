@@ -50,9 +50,6 @@ const PHRASES: Record<LoginNotice, string> = {
   get telegram_failed(): string {
     return t('auth.notice.telegram_failed')
   },
-  get not_configured(): string {
-    return t('auth.notice.not_configured')
-  },
   get deactivated(): string {
     return t('auth.notice.deactivated')
   },

@@ -33,6 +33,7 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { computed } from 'vue'
+import { isOptionEnabled } from '@/platform/instance'
 import { formatShortDate, formatTime, formatDuration, formatMoney } from '@/utils/format'
 import { IconCheck } from '@/components/icons'
 import { VBadge } from '@/components/ui'
@@ -92,6 +93,14 @@ const badge = computed<Badge>(() => {
   }
   if (props.practice.is_free) {
     return { label: t('common.free'), variant: 'blue', paid: false }
+  }
+  if (!isOptionEnabled('payments')) {
+    // PM-22 p.2: payments are off -- a paid practice shows no price.
+    return {
+      label: t('user.screens.practiceDetail.state.bookingUnavailable'),
+      variant: 'blue',
+      paid: false,
+    }
   }
   return {
     label: formatMoney(props.practice.price_cents, props.practice.currency),

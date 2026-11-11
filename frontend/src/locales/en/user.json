@@ -52,7 +52,6 @@
         "loadFailed": "Failed to load the connections. Try again later.",
         "copyAsHeader": "Copy as a header",
         "connectHowto": "In claude.ai: Settings → Connectors → Add a custom connector → paste the address → Connect, then log in via Telegram.",
-        "noButtonConnect": "Button sign-in is not set up on this server — use a personal token (below).",
         "noBaseUrl": "The server address is not configured — connection is unavailable.",
         "empty": "No connections yet.",
         "devTitle": "For developers: personal token",
@@ -442,6 +441,7 @@
           "bookFree": "Book for free"
         },
         "state": {
+          "bookingUnavailable": "Booking unavailable",
           "booked": "You are booked",
           "pending": "Pending",
           "completed": "Completed",

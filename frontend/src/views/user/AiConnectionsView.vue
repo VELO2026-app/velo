@@ -5,10 +5,7 @@
     1. How to connect (i18n:user.screens.aiConnections.dev.howTo) -- the MCP
        address (<API base>/mcp, utils/mcpServerUrl) with the copy button
        (i18n:user.screens.aiConnections.copy.cta), and how to add it in
-       claude.ai. When the server has no button sign-in
-       (oauth_connect_available false) the instructions are not promised; the
-       personal token is pointed at. No API base configured -> no address at
-       all (fails closed).
+       claude.ai. No API base configured -> no address at all (fails closed).
     2. Every connection, button-made and personal, with the revoke control
        (i18n:user.screens.aiConnections.revoke.cta).
     3. The developer personal-token block
@@ -54,11 +51,8 @@
             <VButton block variant="secondary" data-test="copy-url" @click="onCopyUrl">
               <IconCopy :size="18" /> {{ t('user.screens.aiConnections.copy.cta') }}
             </VButton>
-            <p v-if="oauthAvailable" class="ai-conn__text" data-test="connect-howto">
+            <p class="ai-conn__text" data-test="connect-howto">
               {{ t('user.screens.aiConnections.connectHowto') }}
-            </p>
-            <p v-else class="ai-conn__notice" data-test="no-button-connect">
-              {{ t('user.screens.aiConnections.noButtonConnect') }}
             </p>
           </template>
           <p v-else class="ai-conn__notice" data-test="no-base-url">
@@ -240,7 +234,6 @@ const tokens = ref<McpTokenItem[]>([])
 /** Scope descriptions, in canonical order, from the list response (BE-148). */
 const scopeLabels = ref<McpScopeLabel[]>([])
 /** The server lets an AI client connect with the button (BE-150). */
-const oauthAvailable = ref(false)
 
 const createOpen = ref(false)
 const name = ref('')
@@ -288,7 +281,6 @@ async function load(): Promise<void> {
     const res = await listMcpTokens()
     tokens.value = res.items
     scopeLabels.value = res.scope_labels
-    oauthAvailable.value = res.oauth_connect_available
     state.value = 'ready'
   } catch (e) {
     state.value = e instanceof ApiResponseError && e.status === 404 ? 'unavailable' : 'error'

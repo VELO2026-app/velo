@@ -11,10 +11,11 @@
 // =============================================================================
 
 import { createTestI18n } from '@/locales/testing'
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, onTestFinished } from 'vitest'
 import { createApp, defineComponent, h, nextTick, type App } from 'vue'
 import CalendarPracticeCard from '@/components/shared/CalendarPracticeCard.vue'
 import type { PracticeResponse } from '@/api/types'
+import { applyInstanceConfig } from '@/platform/instance'
 
 vi.mock('@/composables/useViewerTimezone', async () => {
   const { ref } = await import('vue')
@@ -89,5 +90,22 @@ describe('CalendarPracticeCard -- school practices carry no marker', () => {
     )
     expect(text).toContain('Практика')
     expect(text).not.toContain('Для школы')
+  })
+})
+
+describe('CalendarPracticeCard -- payments option off (FE-163, PM-22 p.2)', () => {
+  it('a paid practice shows no price', async () => {
+    applyInstanceConfig({ options: { payments: 'false' } })
+    onTestFinished(() => applyInstanceConfig(null))
+    const text = await mountCard(practice({ is_free: false, is_paid: false, price_cents: 2500 }))
+    expect(text).not.toContain('25')
+    expect(text).toContain('Запись недоступна')
+  })
+
+  it('a free practice still reads «Бесплатно»', async () => {
+    applyInstanceConfig({ options: { payments: 'false' } })
+    onTestFinished(() => applyInstanceConfig(null))
+    const text = await mountCard(practice({ is_free: true }))
+    expect(text).toContain('Бесплатно')
   })
 })
