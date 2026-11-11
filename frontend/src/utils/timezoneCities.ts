@@ -32,6 +32,7 @@
 // strings (a plain import renders picker rows as JSON dumps).
 import citySeedRuRaw from '@/locales/ru/timezones.json?raw'
 import citySeedEnRaw from '@/locales/en/timezones.json?raw'
+import citySeedUkRaw from '@/locales/uk/timezones.json?raw'
 import { getLocale } from '@/locales'
 
 /** One searchable picker row: display city, canonical IANA zone, search haystack. */
@@ -42,7 +43,7 @@ export interface TimezoneCity {
 }
 
 // The curated rows themselves live in the per-locale seed catalogs
-// (locales/{ru,en}/timezones.json -- same pattern as taxonomy.json's display
+// (locales/{ru,en,uk}/timezones.json -- same pattern as taxonomy.json's display
 // seed): display names are DATA, not UI copy (tz-i18n §3.1 item 6 + §7.2.4 --
 // a non-ru UI reads the localized city seed, not translation keys). The
 // import keeps types + logic here, data there.
@@ -52,13 +53,14 @@ interface CitySeed {
 }
 const parseSeed = (raw: string): CitySeed => JSON.parse(raw) as CitySeed
 const RU_SEED: CitySeed = parseSeed(citySeedRuRaw)
-const SEEDS: Record<string, CitySeed> = { ru: RU_SEED, en: parseSeed(citySeedEnRaw) }
+const EN_SEED: CitySeed = parseSeed(citySeedEnRaw)
+const SEEDS: Record<string, CitySeed> = { ru: RU_SEED, en: EN_SEED, uk: parseSeed(citySeedUkRaw) }
 
-/** The seed for the ACTIVE locale -- falling back to ru when a locale has no
- * city seed yet (uk). Called inside timezoneRows, which the picker wraps
+/** The seed for the ACTIVE locale -- falling back to en when a locale has no
+ * city seed. Called inside timezoneRows, which the picker wraps
  * in a computed: the rows re-derive on a locale switch, same frame. */
 function activeSeed(): { curated: TimezoneCity[]; aliases: TimezoneCity[] } {
-  const seed = SEEDS[getLocale()] ?? RU_SEED
+  const seed = SEEDS[getLocale()] ?? EN_SEED
   return { curated: seed.curated ?? [], aliases: seed.aliases ?? [] }
 }
 
