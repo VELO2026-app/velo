@@ -316,6 +316,24 @@ describe('SchoolMembersView', () => {
     expect(rosterTab('Мастера')).toBeNull()
     expect(rosterTab('Ученики')).toBeNull()
 
+    // A revalidation of the 404'd school (a return to the app, an
+    // invalidation) shows the loader, not "unavailable", while it runs.
+    vi.mocked(cgApi.getSchoolMembers).mockReturnValueOnce(new Promise(() => {}))
+    void useQueryCache()
+      .invalidateQueries({ key: ['schools'] })
+      .catch(() => {})
+    await flush()
+    expect(text()).not.toContain('Школа недоступна')
+    expect(host?.querySelector('.school-members__state')).not.toBeNull()
+    vi.mocked(cgApi.getSchoolMembers).mockRejectedValue(
+      new ApiResponseError(404, 'not found', 'not_found'),
+    )
+    void useQueryCache()
+      .invalidateQueries({ key: ['schools'] })
+      .catch(() => {})
+    await flush()
+    expect(text()).toContain('Школа недоступна')
+
     // The honest exit is going back to the school page -- there is nothing
     // to retry: the school itself is gone for this viewer (P-08).
     const back = (Array.from(host?.querySelectorAll('button') ?? []).find((b) =>
@@ -516,6 +534,25 @@ describe('SchoolMembersView', () => {
     expect(text()).toContain('Заблокированный 2')
   })
 
+  it('after an unblock another tab opens from the loader, not from a cached roster without the person', async () => {
+    vi.mocked(cgApi.getSchoolMembers).mockResolvedValue(page(membersOf('master', ['a1'])))
+    vi.mocked(cgApi.getSchoolBlocks).mockResolvedValue(blocksPage([blocked(1)]))
+    mountWith()
+    await flush()
+    expect(text()).toContain('Участник a1')
+    rosterTab('Удалённые')?.click()
+    await flush()
+
+    unblockButtons()[0]!.click()
+    await flush()
+    vi.mocked(cgApi.getSchoolMembers).mockReturnValue(new Promise(() => {}))
+    rosterTab('Мастера')?.click()
+    await flush()
+
+    expect(text()).not.toContain('Участник a1')
+    expect(host?.querySelector('.school-members__state')).not.toBeNull()
+  })
+
   it('«Разблокировать» 404 (already unblocked): the list is re-read, no error toast', async () => {
     vi.mocked(cgApi.getSchoolBlocks)
       .mockResolvedValueOnce(blocksPage([blocked(1)]))
@@ -637,6 +674,7 @@ describe('SchoolMembersView -- a master of the school (BE-76)', () => {
     )
     expect(host?.querySelector('.school-members__state')).toBeNull()
     expect(cgApi.getSchoolBlocks).not.toHaveBeenCalled()
+    expect(replace).toHaveBeenCalledWith(expect.objectContaining({ query: { kind: 'master' } }))
   })
 
   it('a tap on a student opens the message sheet and writes through openStudentChat -- no navigation', async () => {

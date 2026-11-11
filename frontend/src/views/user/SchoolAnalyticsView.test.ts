@@ -17,8 +17,8 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, reactive, type App } from 'vue'
-import { createPinia } from 'pinia'
-import { PiniaColada } from '@pinia/colada'
+import { createPinia, setActivePinia } from 'pinia'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
 import SchoolAnalyticsView from '@/views/user/SchoolAnalyticsView.vue'
 import * as cgApi from '@/api/schools'
@@ -53,10 +53,13 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
+  // A fresh Pinia + Colada per mount, active, so a test can reach the cache.
+  const pinia = createPinia()
   app = createApp(SchoolAnalyticsView)
     .use(createTestI18n())
-    .use(createPinia())
+    .use(pinia)
     .use(PiniaColada, coladaOptions)
+  setActivePinia(pinia)
   app.mount(host)
   return host
 }
@@ -436,6 +439,25 @@ describe('SchoolAnalyticsView', () => {
     await flush()
 
     expect(text()).toContain('Школа недоступна')
+
+    // A revalidation of the 404'd school shows the loader, not "unavailable",
+    // while it runs (an entry keeps its error during a refetch).
+    vi.mocked(cgApi.getSchoolAnalytics).mockReturnValueOnce(new Promise(() => {}))
+    void useQueryCache()
+      .invalidateQueries({ key: ['schools'] })
+      .catch(() => {})
+    await flush()
+    expect(text()).not.toContain('Школа недоступна')
+    expect(host?.querySelector('.school-analytics__state')).not.toBeNull()
+    vi.mocked(cgApi.getSchoolAnalytics).mockRejectedValue(
+      new ApiResponseError(404, 'not found', 'not_found'),
+    )
+    void useQueryCache()
+      .invalidateQueries({ key: ['schools'] })
+      .catch(() => {})
+    await flush()
+    expect(text()).toContain('Школа недоступна')
+
     buttonWith('К школе')?.click()
     await flush()
     // FE-93: the analytics screen mounts in the master zone only -- the back
