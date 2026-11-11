@@ -68,7 +68,7 @@
         <WeekStrip
           :days="store.days"
           :selected-date="store.selectedDate"
-          :days-with-practices="store.daysWithPractices"
+          :days-with-practices="daysWithPractices"
           :local-date-key="store.localDateKey"
           :max-back-days="store.maxBackDays"
           @select-day="store.selectDay"
@@ -83,10 +83,17 @@
          facet modal has nothing to filter, so the control sits out. -->
     <div v-if="!masterMode && !schoolMode" class="calendar__selector">
       <!-- Collapsed: pill + funnel -->
-      <button v-if="!expanded" type="button" class="calendar__select-pill" @click="expanded = true">
-        <span class="calendar__select-label">{{ t('user.screens.calendar.pickPractices') }}</span>
-        <span class="calendar__funnel" @click.stop="showFilter = true">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <div v-if="!expanded" class="calendar__select-pill">
+        <button type="button" class="calendar__select-expand" @click="expanded = true">
+          <span class="calendar__select-label">{{ t('user.screens.calendar.pickPractices') }}</span>
+        </button>
+        <button
+          type="button"
+          class="calendar__funnel"
+          :aria-label="t('user.screens.calendar.filter')"
+          @click="showFilter = true"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path
               d="M3 5h18l-7 8v6l-4 2v-8L3 5z"
               stroke="currentColor"
@@ -94,8 +101,8 @@
               stroke-linejoin="round"
             />
           </svg>
-        </span>
-      </button>
+        </button>
+      </div>
 
       <!-- Expanded: active-filter chips + collapse -->
       <VCard v-else class="calendar__expanded" padding="sm">
@@ -213,6 +220,7 @@ import { t } from '@/locales'
 import { ref, computed, onMounted, onUnmounted, onActivated } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCalendarStore } from '@/stores/calendar'
+import { useNow } from '@/composables/useNow'
 import { VSkeletonPracticeCard, VLoadingSwap, VEmptyState, VButton, VCard } from '@/components/ui'
 import WeekStrip from '@/components/shared/WeekStrip.vue'
 import { useFloatingHeader } from '@/components/layout/useFloatingHeader'
@@ -309,8 +317,14 @@ function openFilter(): void {
   showFilter.value = true
 }
 
+// The screen's own minute clock: the selected-day list and the strip's dots
+// drop a practice the moment it starts (it can no longer be booked). Owned
+// here, not by the store, so it pauses while the screen is kept alive
+// off-stage.
+const now = useNow(60_000)
 // Practices on the selected day (already sorted by the store).
-const dayPractices = computed<PracticeResponse[]>(() => store.selectedDayPractices)
+const dayPractices = computed<PracticeResponse[]>(() => store.selectedDayPractices(now.value))
+const daysWithPractices = computed<Set<string>>(() => store.daysWithPractices(now.value))
 // Skeleton in the size of the last settled day (see useRememberedCount).
 const daySkeletons = useRememberedCount(
   'calendar-day',
@@ -522,18 +536,29 @@ onActivated(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
   height: var(--velo-size-50);
-  padding: 0 var(--space-5);
   background: var(--velo-primary);
   border: 1px solid var(--velo-glass-border);
   border-radius: var(--radius-full);
-  cursor: pointer;
   transition: opacity var(--transition-fast);
 }
 
 .calendar__select-pill:hover {
   opacity: 0.92;
+}
+
+/* Two sibling buttons share the pill: the label expands, the funnel filters. */
+.calendar__select-expand {
+  flex: 1;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-3) 0 var(--space-5);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  text-align: left;
 }
 
 .calendar__select-label {
@@ -543,10 +568,16 @@ onActivated(() => {
 }
 
 .calendar__funnel {
+  align-self: stretch;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  padding: 0 var(--space-5) 0 var(--space-3);
   color: var(--velo-white);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-full);
+  cursor: pointer;
 }
 
 .calendar__expanded {

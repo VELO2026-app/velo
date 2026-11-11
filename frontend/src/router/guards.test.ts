@@ -18,7 +18,14 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
+import { defineComponent, h } from 'vue'
+import { createMemoryHistory, createRouter } from 'vue-router'
 import {
+  ADMIN_PROFILE_TTL_MS,
+  __resetAdminProfileTtlForTest,
+  installAccessGuard,
+  requirementsGuard,
+  zoneHomeGuard,
   roleRedirect,
   roleGuard,
   masterNoProfileGuard,
@@ -28,6 +35,7 @@ import {
   roleFreshnessGuard,
 } from '@/router/guards'
 import { useAuthStore } from '@/stores/auth'
+import { useUiStore } from '@/stores/ui'
 import { resetAuthState, __setReadyForTest, pendingStartParam } from '@/composables/useAuth'
 import { MASTER_APPLIED_KEY, masterRejectionSeenKey } from '@/utils/constants'
 import type { UserResponse } from '@/api/types'
@@ -94,6 +102,7 @@ describe('router/guards', () => {
     masterStoreState.profile = null
     fetchMyProfile.mockClear()
     refreshRoleIfStale.mockClear()
+    __resetAdminProfileTtlForTest()
   })
 
   afterEach(() => {
@@ -249,6 +258,31 @@ describe('router/guards', () => {
     })
   })
 
+  // FE-157: roleRedirect and roleFreshnessGuard share ONE rejection check
+  // (hasUnseenRejection) -- they must never disagree on who sees the verdict.
+  describe('the unseen-rejection rule is the same for both guards', () => {
+    const toVerdict = (result: unknown) =>
+      JSON.stringify(result) === JSON.stringify({ path: '/master/pending' })
+
+    it.each([
+      ['rejected, unseen', 'user', 'rejected', false, true],
+      ['rejected, seen', 'user', 'rejected', true, false],
+      ['pending', 'user', 'pending', false, false],
+      ['rejected, master role', 'master', 'rejected', false, false],
+      ['never applied', 'user', null, false, false],
+    ] as const)('%s', async (_label, role, status, seen, routed) => {
+      __setReadyForTest(true)
+      setAuthUser({
+        id: 'user_1',
+        role,
+        ...(status ? { master_application: { status } } : {}),
+      })
+      if (seen) localStorage.setItem(masterRejectionSeenKey('user_1'), '1')
+      expect(toVerdict(await call(roleRedirect))).toBe(routed)
+      expect(toVerdict(roleFreshnessGuard({ name: 'user-calendar' }))).toBe(routed)
+    })
+  })
+
   describe('roleGuard', () => {
     it("roleGuard('admin'): admin passes", () => {
       setAuthUser({ role: 'admin' })
@@ -341,6 +375,119 @@ describe('router/guards', () => {
       masterStoreState.profile = { status: 'verified' }
       await call(masterStatusGuard)
       expect(fetchMyProfile).toHaveBeenCalledWith(false)
+    })
+  })
+
+  // FE-157: B1's refetch for an admin used to leave on EVERY check. It now
+  // leaves at most once per ADMIN_PROFILE_TTL_MS per account; in between, the
+  // store's last answer decides.
+  describe('masterStatusGuard: the admin profile TTL', () => {
+    it('a second check inside the window sends no request', async () => {
+      setAuthUser({ role: 'admin' })
+      masterStoreState.profile = { status: 'verified' }
+      expect(await call(masterStatusGuard)).toBe(true)
+      expect(await call(masterStatusGuard)).toBe(true)
+      expect(fetchMyProfile).toHaveBeenCalledTimes(1)
+      expect(fetchMyProfile).toHaveBeenCalledWith(true)
+    })
+
+    it('inside the window the cached answer still decides', async () => {
+      setAuthUser({ role: 'admin' })
+      masterStoreState.profile = { status: 'verified' }
+      expect(await call(masterStatusGuard)).toBe(true)
+      // The store learned of a suspension some other way (a screen's own
+      // forced fetch): no request from the guard, and it reads the news.
+      masterStoreState.profile = { status: 'suspended' }
+      expect(await call(masterStatusGuard)).toEqual({ path: '/master/pending' })
+      expect(fetchMyProfile).toHaveBeenCalledTimes(1)
+    })
+
+    it('once the window has passed, the next check refetches', async () => {
+      vi.useFakeTimers()
+      setAuthUser({ role: 'admin' })
+      masterStoreState.profile = { status: 'verified' }
+      await call(masterStatusGuard)
+      vi.advanceTimersByTime(ADMIN_PROFILE_TTL_MS - 1)
+      await call(masterStatusGuard)
+      expect(fetchMyProfile).toHaveBeenCalledTimes(1)
+      vi.advanceTimersByTime(1)
+      await call(masterStatusGuard)
+      expect(fetchMyProfile).toHaveBeenCalledTimes(2)
+    })
+
+    it("another account is not served by the previous account's window", async () => {
+      setAuthUser({ id: 'admin_a', role: 'admin' })
+      await call(masterStatusGuard)
+      setAuthUser({ id: 'admin_b', role: 'admin' })
+      await call(masterStatusGuard)
+      expect(fetchMyProfile).toHaveBeenCalledTimes(2)
+    })
+
+    it('a real master never forces: the lazy fetch on every check, as before', async () => {
+      setAuthUser({ role: 'master' })
+      masterStoreState.profile = { status: 'verified' }
+      await call(masterStatusGuard)
+      await call(masterStatusGuard)
+      expect(fetchMyProfile).not.toHaveBeenCalledWith(true)
+    })
+  })
+
+  // FE-157: the store keeps no error kind -- a 403 for an unverified
+  // application and a dropped connection both leave it WITHOUT a profile
+  // (profile null, profileMissing false). GET /users/me's
+  // master_application tells them apart; no answer at all is not a verdict.
+  describe('masterStatusGuard: a request without an answer is not a verdict', () => {
+    function stubFetchMe(result: { succeeds: boolean; application?: { status: string } }) {
+      return vi.spyOn(useAuthStore(), 'fetchMe').mockImplementation(async () => {
+        if (result.succeeds && result.application) {
+          setAuthUser({ role: 'master', master_application: result.application })
+        }
+        return result.succeeds
+      })
+    }
+
+    it('no profile, /users/me already says verified: the screen opens, not the verdict screen', async () => {
+      setAuthUser({ role: 'master', master_application: { status: 'verified' } })
+      const fetchMe = stubFetchMe({ succeeds: false })
+      expect(await call(masterStatusGuard)).toBe(true)
+      expect(fetchMe).not.toHaveBeenCalled()
+    })
+
+    it('no profile and nothing known, /users/me unreachable too: the screen opens', async () => {
+      setAuthUser({ role: 'master' })
+      const fetchMe = stubFetchMe({ succeeds: false })
+      expect(await call(masterStatusGuard)).toBe(true)
+      expect(fetchMe).toHaveBeenCalledTimes(1)
+    })
+
+    it('no profile, /users/me says pending (the 403 was a verdict): /master/pending', async () => {
+      setAuthUser({ role: 'master', master_application: { status: 'pending' } })
+      expect(await call(masterStatusGuard)).toEqual({ path: '/master/pending' })
+    })
+
+    it('fresh sign-in (no master_application yet): /users/me is asked once and decides', async () => {
+      setAuthUser({ role: 'master' })
+      const fetchMe = stubFetchMe({ succeeds: true, application: { status: 'rejected' } })
+      expect(await call(masterStatusGuard)).toEqual({ path: '/master/pending' })
+      expect(fetchMe).toHaveBeenCalledTimes(1)
+    })
+
+    it('the master profile request is not repeated within one check', async () => {
+      setAuthUser({ role: 'master', master_application: { status: 'verified' } })
+      await call(masterStatusGuard)
+      expect(fetchMyProfile).toHaveBeenCalledTimes(1)
+      expect(fetchMyProfile).toHaveBeenCalledWith(false)
+    })
+
+    it('a loaded profile still wins over /users/me', async () => {
+      setAuthUser({ role: 'master', master_application: { status: 'verified' } })
+      masterStoreState.profile = { status: 'suspended' }
+      expect(await call(masterStatusGuard)).toEqual({ path: '/master/pending' })
+    })
+
+    it('an admin without a profile keeps the verdict-screen path (the endpoint refuses admins)', async () => {
+      setAuthUser({ role: 'admin', master_application: { status: 'verified' } })
+      expect(await call(masterStatusGuard)).toEqual({ path: '/master/pending' })
     })
   })
 
@@ -511,6 +658,157 @@ describe('router/guards', () => {
 
       expect(result).toBe(true)
       expect(refreshSettled).toBe(false)
+    })
+  })
+
+  // =============================================================================
+  // FE-157: the access guard (installAccessGuard) -- meta.requires replaces the
+  // per-record beforeEnter role/status guards. Driven through a REAL router
+  // (memory history) over a stub table shaped like the master zone, so the
+  // "entering" rule is vue-router's own matching, not a re-implementation.
+  // =============================================================================
+  describe('installAccessGuard + requirementsGuard', () => {
+    const Stub = defineComponent({ render: () => h('div') })
+
+    function accessRouter() {
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [
+          { path: '/', component: Stub },
+          { path: '/user/dashboard', name: 'user-dashboard', component: Stub },
+          { path: '/user/calendar', name: 'user-calendar', component: Stub },
+          { path: '/master/pending', name: 'master-pending', component: Stub },
+          { path: '/master/apply', component: Stub },
+          { path: '/admin/dashboard', component: Stub },
+          {
+            path: '/master',
+            component: Stub,
+            meta: { requires: 'master-role' },
+            children: [
+              { path: 'dashboard', component: Stub, meta: { requires: 'master-application' } },
+              { path: 'inbox', component: Stub },
+              { path: 'practices/:id', component: Stub, meta: { requires: 'verified-master' } },
+              { path: 'groups', component: Stub, meta: { requires: 'verified-master' } },
+            ],
+          },
+        ],
+      })
+      installAccessGuard(router)
+      return router
+    }
+
+    async function go(router: ReturnType<typeof accessRouter>, path: string): Promise<string> {
+      await router.push(path)
+      return router.currentRoute.value.fullPath
+    }
+
+    beforeEach(() => {
+      __setReadyForTest(true)
+    })
+
+    it('the parent role requirement runs first: a user never reaches the status check', async () => {
+      setAuthUser({ role: 'user' })
+      const router = accessRouter()
+      expect(await go(router, '/master/practices/p1')).toBe('/user/dashboard')
+      expect(fetchMyProfile).not.toHaveBeenCalled()
+    })
+
+    it('verified master: the shell and the screen pass', async () => {
+      setAuthUser({ role: 'master' })
+      masterStoreState.profile = { status: 'verified' }
+      const router = accessRouter()
+      expect(await go(router, '/master/practices/p1')).toBe('/master/practices/p1')
+    })
+
+    it('pending master: a verified-master screen redirects, an open one does not', async () => {
+      setAuthUser({ role: 'master' })
+      masterStoreState.profile = { status: 'pending' }
+      const router = accessRouter()
+      expect(await go(router, '/master/groups')).toBe('/master/pending')
+      expect(await go(router, '/master/inbox')).toBe('/master/inbox')
+    })
+
+    it('a deep link into a verified-master screen survives a dropped profile request', async () => {
+      setAuthUser({ role: 'master' })
+      vi.spyOn(useAuthStore(), 'fetchMe').mockResolvedValue(false)
+      const router = accessRouter()
+      expect(await go(router, '/master/practices/p1')).toBe('/master/practices/p1')
+    })
+
+    it('no-application master on the dashboard goes to the apply wizard', async () => {
+      setAuthUser({ role: 'master' })
+      masterStoreState.profileMissing = true
+      const router = accessRouter()
+      expect(await go(router, '/master/dashboard')).toBe('/master/apply')
+    })
+
+    // The beforeEnter rule the 21 per-record guards had: a record the
+    // navigation does not ENTER is not checked again.
+    it('a param change inside one screen does not re-run its check', async () => {
+      setAuthUser({ role: 'master' })
+      masterStoreState.profile = { status: 'verified' }
+      const router = accessRouter()
+      await go(router, '/master/practices/p1')
+      const calls = fetchMyProfile.mock.calls.length
+
+      masterStoreState.profile = { status: 'pending' }
+      expect(await go(router, '/master/practices/p2')).toBe('/master/practices/p2')
+      expect(fetchMyProfile.mock.calls.length).toBe(calls)
+
+      // Entering a sibling record checks it.
+      expect(await go(router, '/master/groups')).toBe('/master/pending')
+    })
+
+    it('a move between two screens of the shell does not re-run the shell role check', async () => {
+      setAuthUser({ role: 'master' })
+      const router = accessRouter()
+      await go(router, '/master/inbox')
+
+      setAuthUser({ role: 'user' })
+      expect(await go(router, '/master/inbox?tab=all')).toBe('/master/inbox?tab=all')
+      expect(await go(router, '/master/dashboard')).toBe('/master/dashboard')
+
+      // Re-entering the shell from outside checks the role again.
+      await go(router, '/user/calendar')
+      expect(await go(router, '/master/inbox')).toBe('/user/dashboard')
+    })
+
+    it('requirementsGuard reads each record, not the merged meta', async () => {
+      setAuthUser({ role: 'user' })
+      const router = accessRouter()
+      const to = router.resolve('/master/practices/p1')
+      // The merged meta carries only the child's requirement ...
+      expect(to.meta.requires).toBe('verified-master')
+      // ... yet the parent's role requirement still decides first.
+      expect(await requirementsGuard(to, router.resolve('/'))).toEqual({ path: '/user/dashboard' })
+    })
+
+    it('P-1 runs in the same guard: a master on the user dashboard goes to the master zone', async () => {
+      setAuthUser({ role: 'master' })
+      const router = accessRouter()
+      expect(await go(router, '/user/dashboard')).toBe('/master/dashboard')
+    })
+  })
+
+  describe('zoneHomeGuard (P-1)', () => {
+    it.each([
+      ['admin', { path: '/admin/dashboard' }],
+      ['master', { path: '/master/dashboard' }],
+      ['user', true],
+    ] as const)('%s opening the user dashboard', (role, expected) => {
+      setAuthUser({ role })
+      expect(zoneHomeGuard({ name: 'user-dashboard', path: '/user/dashboard' })).toEqual(expected)
+    })
+
+    it('the user mode keeps a master on the user dashboard', () => {
+      setAuthUser({ role: 'master' })
+      useUiStore().setUiMode('user')
+      expect(zoneHomeGuard({ name: 'user-dashboard', path: '/user/dashboard' })).toBe(true)
+    })
+
+    it('any other user-zone screen is left alone', () => {
+      setAuthUser({ role: 'admin' })
+      expect(zoneHomeGuard({ name: 'user-calendar', path: '/user/calendar' })).toBe(true)
     })
   })
 })

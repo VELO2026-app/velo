@@ -345,6 +345,8 @@ import {
 import { IconDots, IconStar } from '@/components/icons'
 import SupportMessageBubble from '@/components/admin/SupportMessageBubble.vue'
 import { useToast } from '@/composables/useToast'
+import { useViewerTimezone } from '@/composables/useViewerTimezone'
+import { formatTime as formatClockTime } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 import { ApiResponseError } from '@/api/client'
 import {
@@ -742,10 +744,12 @@ function isStatus(e: unknown, status: number): boolean {
   return e instanceof ApiResponseError && e.status === status
 }
 
+/** Message clock time in the viewer's profile timezone and the active locale. */
+const viewerTz = useViewerTimezone()
+
 function formatTime(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  if (Number.isNaN(new Date(iso).getTime())) return ''
+  return formatClockTime(iso, viewerTz.value)
 }
 
 async function loadTicket(): Promise<void> {

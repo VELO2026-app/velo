@@ -25,6 +25,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@pinia/colada": "1.4.8",
     "@tma.js/sdk-vue": "^1.0.19",
     "@velo/ui": "workspace:*",
     "@zoom/meetingsdk": "6.5.0",

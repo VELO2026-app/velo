@@ -8,7 +8,7 @@
 //                 and 0px when the viewport never mounted (older clients) --
 //                 NOT env(): the branch is by platform, not by "mounted".
 //
-// The SDK is module-mocked: each viewport signal is a Vue ref and useSignal
+// The seam is module-mocked: each viewport signal is a Vue ref and the seam
 // hands it straight back, so the tests drive the same reactivity the real
 // useSignal provides. Standalone is only tested with an unmounted viewport --
 // outside Telegram the viewport never mounts (telegram-sdk.ts never inits it),
@@ -21,22 +21,21 @@ import type { Ref } from 'vue'
 const platformMock = vi.hoisted(() => ({ name: 'standalone' as 'telegram' | 'standalone' }))
 vi.mock('@/platform', () => ({ platform: platformMock }))
 
-vi.mock('@tma.js/sdk-vue', async () => {
+vi.mock('@/platform/tma-viewport', async () => {
   const { ref } = await import('vue')
   return {
-    viewport: {
+    tmaViewportState: {
       isMounted: ref(false),
       safeAreaInsetTop: ref<number | undefined>(0),
       contentSafeAreaInsetTop: ref<number | undefined>(0),
     },
-    useSignal: <T>(signal: Ref<T>): Ref<T> => signal,
   }
 })
 
-import { viewport } from '@tma.js/sdk-vue'
+import { tmaViewportState } from '@/platform/tma-viewport'
 import { STANDALONE_SAFE_TOP, useSafeArea } from '@/composables/useSafeArea'
 
-const vp = viewport as unknown as {
+const vp = tmaViewportState as unknown as {
   isMounted: Ref<boolean>
   safeAreaInsetTop: Ref<number | undefined>
   contentSafeAreaInsetTop: Ref<number | undefined>

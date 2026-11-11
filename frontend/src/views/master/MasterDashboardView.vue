@@ -254,7 +254,12 @@
   <Teleport to="body">
     <div
       v-if="showMasterOnboarding"
+      ref="onboardingEl"
       class="master-onboarding-overlay"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="t('masterScreens.masterOnboarding.welcome.title')"
+      tabindex="-1"
       :style="{ paddingTop: contentSafeTopCss }"
     >
       <MasterOnboardingView @done="onMasterOnboardingDone" />
@@ -264,7 +269,9 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { activeHTMLElement } from '@/platform/dom'
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
+import { useNow } from '@/composables/useNow'
 import { useRouter } from 'vue-router'
 import {
   VButton,
@@ -401,8 +408,7 @@ async function loadUnreadCount(): Promise<void> {
 // soonest first. Symmetric with the user dashboard's reactive 60s clock so a
 // card drops off exactly when its practice ends.
 // =========================================================================
-const now = ref(Date.now())
-let clockInterval: ReturnType<typeof setInterval> | null = null
+const now = useNow(60_000)
 
 // T22-3 (PROMPT №561): practicesUpcoming is already server-ordered nearest
 // first (draft/scheduled/live) -- no client re-sort left to hide the next
@@ -508,6 +514,26 @@ const showMasterOnboarding = computed(() =>
   }),
 )
 
+/** The overlay is a modal dialog: focus moves into it when it opens and
+ *  returns to the element that held it (if still attached) when it closes. */
+const onboardingEl = ref<HTMLElement | null>(null)
+let focusBeforeOnboarding: HTMLElement | null = null
+
+watch(
+  showMasterOnboarding,
+  (open) => {
+    if (open) {
+      focusBeforeOnboarding = activeHTMLElement()
+      void nextTick(() => onboardingEl.value?.focus())
+    } else {
+      const prev = focusBeforeOnboarding
+      focusBeforeOnboarding = null
+      if (prev?.isConnected) prev.focus()
+    }
+  },
+  { immediate: true },
+)
+
 function onMasterOnboardingDone(): void {
   // Hide the overlay immediately (gate → false), then persist best-effort.
   masterStore.onboardingShownThisSession = true
@@ -527,9 +553,6 @@ async function persistMasterOnboarding(): Promise<void> {
 
 // -- Load data on mount --
 onMounted(async () => {
-  clockInterval = setInterval(() => {
-    now.value = Date.now()
-  }, 60_000)
   // Period-scoped stats row (E7); independent of the practices list fetch.
   void loadStats().catch(() => {
     /* leave cards at "—" if the stats fetch fails */
@@ -556,10 +579,6 @@ onMounted(async () => {
   // off the practice (already on masterStore.practices) -- the insights
   // eager-load that used to feed it is gone, one fewer network round-trip.
 })
-
-onUnmounted(() => {
-  if (clockInterval) clearInterval(clockInterval)
-})
 </script>
 
 <style scoped>
@@ -584,6 +603,8 @@ onUnmounted(() => {
    against that stable box instead -- full-bleed coverage, immune to the
    keyboard, on every platform. */
 .master-onboarding-overlay {
+  /* Focus lands on the dialog root programmatically; no ring on a container. */
+  outline: none;
   position: absolute;
   inset: 0;
   z-index: var(--z-popup);

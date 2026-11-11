@@ -221,13 +221,6 @@
       "error": {
         "checkAudience": "Не вдалося перевірити аудиторію"
       },
-      "validation": {
-        "enterTitle": "Уведіть назву",
-        "chooseDirection": "Виберіть напрямок",
-        "positiveNumber": "Уведіть додатне число або залиште порожнім",
-        "chooseGroup": "Виберіть хоча б одну групу",
-        "invalidDateTime": "Некоректні дата або час"
-      },
       "plural": {
         "bookedNoun": "записаний | записаних | записаних"
       },

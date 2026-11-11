@@ -221,13 +221,6 @@
       "error": {
         "checkAudience": "Failed to check the audience"
       },
-      "validation": {
-        "enterTitle": "Enter a title",
-        "chooseDirection": "Choose a direction",
-        "positiveNumber": "Enter a positive number or leave it empty",
-        "chooseGroup": "Choose at least one group",
-        "invalidDateTime": "Invalid date or time"
-      },
       "plural": {
         "bookedNoun": "person booked | people booked"
       },

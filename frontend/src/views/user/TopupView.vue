@@ -45,13 +45,15 @@
 
     <!-- Custom amount -->
     <div class="topup__custom">
-      <div
+      <button
+        type="button"
         class="topup__custom-toggle"
         :class="{ 'topup__custom-toggle--active': customMode }"
+        :aria-pressed="customMode"
         @click="enableCustom"
       >
         {{ t('user.screens.topup.otherAmount') }}
-      </div>
+      </button>
       <VInput
         v-if="customMode"
         ref="customInput"
@@ -292,6 +294,9 @@ onMounted(() => {
 
 /* Custom amount */
 .topup__custom-toggle {
+  display: block;
+  width: 100%;
+  background: transparent;
   padding: var(--space-3) var(--space-4);
   font-family: var(--font-body);
   font-size: var(--velo-fs-16);

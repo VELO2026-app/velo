@@ -88,3 +88,82 @@ describe('route table: school pages by name + the param keys their builders push
     },
   )
 })
+
+describe('route table: access requirements (meta.requires, router/guards.ts)', () => {
+  // The declared records: getRoutes() would also list a shell's '' redirect
+  // child under the shell's own path.
+  const record = (path: string) => router.options.routes.find((r) => r.path === path)
+
+  it('the zone shells require their role', () => {
+    expect(record('/master')?.meta?.requires).toBe('master-role')
+    expect(record('/admin')?.meta?.requires).toBe('admin-role')
+  })
+
+  // Every MasterShell child is classified here on purpose: a new master
+  // screen fails this table until someone decides whether a pending master
+  // may open it. These were the 21 `beforeEnter: masterStatusGuard` routes
+  // and the dashboard's masterNoProfileGuard before FE-157.
+  it('every master shell child declares its requirement, or deliberately none', () => {
+    const children = record('/master')?.children ?? []
+    const table = Object.fromEntries(
+      children
+        .filter((child) => child.name)
+        .map((child) => [child.name, child.meta?.requires ?? null]),
+    )
+    const verified = [
+      'master-practices',
+      'master-practice-new',
+      'master-practice-edit',
+      'master-practice-live',
+      'master-attendance',
+      'master-practice-detail',
+      'master-attendance-roster',
+      'master-practice-reviews',
+      'master-finance',
+      'master-students',
+      'master-student-profile',
+      'master-groups',
+      'master-group-create',
+      'master-group-detail',
+      'master-schools',
+      'master-school-create',
+      'master-school',
+      'master-school-members',
+      'master-school-analytics',
+      'master-school-student',
+      'master-summary',
+    ]
+    const open = [
+      'master-inbox',
+      'master-analytics',
+      'master-profile',
+      'master-edit-profile',
+      'master-notifications',
+      'master-timezone',
+      'master-support',
+      'master-messages',
+      'master-chat',
+      'master-promocodes',
+      'master-promocode-new',
+    ]
+    expect(verified).toHaveLength(21)
+    expect(table).toEqual({
+      'master-dashboard': 'master-application',
+      ...Object.fromEntries(verified.map((name) => [name, 'verified-master'])),
+      ...Object.fromEntries(open.map((name) => [name, null])),
+    })
+  })
+
+  it('no record outside the master and admin shells declares a requirement', () => {
+    const outside = router
+      .getRoutes()
+      .filter((r) => r.meta.requires && !/^\/(master|admin)(\/|$)/.test(r.path))
+      .map((r) => r.path)
+    expect(outside).toEqual([])
+    // The standalone master landings keep their own beforeEnter policies.
+    for (const path of ['/master/apply', '/master/invite/:token', '/master/pending']) {
+      expect(record(path)?.meta?.requires, path).toBeUndefined()
+      expect(record(path)?.beforeEnter, path).toBeTypeOf('function')
+    }
+  })
+})

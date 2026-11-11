@@ -130,15 +130,15 @@ describe('computeKeyboardBottomOffset', () => {
 
 // -- Integration: useViewportGeometry() live, driven through real
 // visualViewport resize events -- same mounting idiom as the retired
-// useKeyboardOpen.test.ts (bare createApp, tma.js SDK module-mocked).
+// useKeyboardOpen.test.ts (bare createApp, tma.js seam module-mocked).
 const viewportMock = vi.hoisted(() => ({
   isMounted: vi.fn(() => false),
   isStable: vi.fn(() => true),
   stableHeight: vi.fn(() => 0),
   height: vi.fn(() => 0),
 }))
-vi.mock('@tma.js/sdk-vue', () => ({
-  viewport: viewportMock,
+vi.mock('@/platform/tma-viewport', () => ({
+  getTmaViewport: () => viewportMock,
 }))
 
 let app: App | null = null

@@ -402,6 +402,7 @@ import { t } from '@/locales'
 import { onDocumentEvent, offDocumentEvent, activeHTMLElement } from '@/platform/dom'
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useLoadingHold } from '@/composables/useLoadingHold'
+import { useChatScroll } from '@/composables/useChatScroll'
 import { useRouter, useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import {
@@ -688,8 +689,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   offDocumentEvent('click', onDocClickCapture, true)
   // [owner pass] keep-bottom teardown, same lifecycle as the rest.
-  feedResizeObserver?.disconnect()
-  feedResizeObserver = null
   composerResizeObserver?.disconnect()
   composerResizeObserver = null
 })
@@ -913,7 +912,7 @@ onMounted(async () => {
     scrollToBottom()
   }
   await nextTick()
-  setupObserver()
+  topSentinel.attach()
   // [owner pass] keep-bottom, attached once the initial position has settled
   // (its own first fire re-pins -- a no-op right after scrollToBottom, and a
   // correct re-pin when a restored offset happens to be near the bottom).
@@ -929,12 +928,34 @@ onMounted(async () => {
 
 // -- Scroll helpers (chat-mode) ----------------------------------------------
 
+const scrollEl = ref<HTMLElement | null>(null)
+const sentinelEl = ref<HTMLElement | null>(null)
+// The screen root -- the coordinate frame the composer clearance is measured
+// against (see refreshComposerClearance).
+const screenEl = ref<HTMLElement | null>(null)
+
+// The anchoring mechanics (keep-bottom, preserved position, sentinels) live in
+// useChatScroll; this view only adds its own side effects around them.
+const chatScroll = useChatScroll({
+  scrollEl,
+  nearBottomPx: 160,
+  // Geometry shifted (keyboard rides the root's height): re-measure the
+  // composer clearance -- the pill is anchored to the root's bottom edge, so
+  // its top moves with every height change of the screen itself.
+  onResize: () => refreshComposerClearance(),
+  // Holding the bottom means the reader is back at "today": a saved mid-history
+  // offset no longer describes where they are, so a return must not restore it.
+  onRepin: () => {
+    diaryStore.feedScrollTop = 0
+  },
+})
+const { rememberBottomState, attachKeepBottom } = chatScroll
+
 function scrollToBottom(): void {
   // Going to the newest entry clears any saved offset (filters/search/compose
   // intentionally jump to the bottom).
   diaryStore.feedScrollTop = 0
-  const el = scrollEl.value
-  if (el) el.scrollTop = el.scrollHeight
+  chatScroll.scrollToBottom()
 }
 
 // -- Keep-bottom on geometry shifts (owner pass) -----------------------------
@@ -947,30 +968,6 @@ function scrollToBottom(): void {
 // state: pinned -> re-pin, instant scrollTop only (never smooth -- a smooth
 // scroll mid-keyboard-animation is a visible double jump); reading history
 // -> untouched. Attached after the initial position settles (see onMounted).
-const KEEP_BOTTOM_NEAR_PX = 160
-
-let pinnedToBottom = true
-
-function rememberBottomState(): void {
-  const el = scrollEl.value
-  if (!el) return
-  pinnedToBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= KEEP_BOTTOM_NEAR_PX
-}
-
-let feedResizeObserver: ResizeObserver | null = null
-
-function attachKeepBottom(): void {
-  if (feedResizeObserver || !scrollEl.value) return
-  feedResizeObserver = new ResizeObserver(() => {
-    // Geometry shifted (keyboard rides the root's height): re-measure the
-    // composer clearance -- the pill is anchored to the root's bottom edge,
-    // so its top moves with every height change of the screen itself -- and
-    // re-pin a pinned reader.
-    refreshComposerClearance()
-    if (pinnedToBottom) scrollToBottom()
-  })
-  feedResizeObserver.observe(scrollEl.value)
-}
 
 // -- Composer clearance (owner fix, 2026-09-08) --------------------------------
 // The pill is an ABSOLUTE overlay: its autogrow used to just expand upward
@@ -1010,7 +1007,7 @@ function attachComposerResize(): void {
       before !== null &&
       composerClearance.value !== null &&
       composerClearance.value > before &&
-      pinnedToBottom
+      chatScroll.isPinned()
     ) {
       void nextTick().then(scrollToBottom)
     }
@@ -1023,8 +1020,7 @@ function attachComposerResize(): void {
 // (operator 2026-06-04).
 function scrollToTop(): void {
   diaryStore.feedScrollTop = 0
-  const el = scrollEl.value
-  if (el) el.scrollTop = 0
+  chatScroll.scrollToTop()
 }
 
 // Composer just created a note: the store refreshed the feed to the newest
@@ -1036,36 +1032,23 @@ async function onComposerCreated(): Promise<void> {
 
 // -- Infinite scroll ---------------------------------------------------------
 
-const scrollEl = ref<HTMLElement | null>(null)
-const sentinelEl = ref<HTMLElement | null>(null)
-// The screen root -- the coordinate frame the composer clearance is measured
-// against (see refreshComposerClearance).
-const screenEl = ref<HTMLElement | null>(null)
-let observer: IntersectionObserver | null = null
-
-function setupObserver(): void {
-  if (observer || !sentinelEl.value) return
-  observer = new IntersectionObserver(
-    (entries) => {
-      const entry = entries[0]
-      if (entry?.isIntersecting && historyCanLoadMore.value && !historyBusy.value) {
-        void onLoadMore()
-      }
-    },
-    {
-      root: scrollEl.value,
-      // Prefetch lead (owner: the scroll must be seamless). The sentinel is
-      // the FIRST element, reached while scrolling UP, so only the TOP margin
-      // matters: ~two screens (1500px) of lead means the older page is in
-      // flight long before the reader reaches the seam -- combined with the
-      // 40-event pages (stores/diary.ts) the thread effectively never runs
-      // out mid-scroll. hasMore/loading below guard the lead to one page
-      // ahead.
-      rootMargin: '1500px 0px 0px 0px',
-    },
-  )
-  observer.observe(sentinelEl.value)
-}
+// Top sentinel of the thread. The sentinel only exists once items render and
+// the results list UNMOUNTS the topzone while a search is active; useChatScroll
+// rebuilds the observer whenever the element is swapped, so the thread's
+// history keeps loading after leaving search.
+//
+// Prefetch lead (owner: the scroll must be seamless). The sentinel is the
+// FIRST element, reached while scrolling UP, so only the TOP margin matters:
+// ~two screens (1500px) of lead means the older page is in flight long before
+// the reader reaches the seam -- combined with the 40-event pages
+// (stores/diary.ts) the thread effectively never runs out mid-scroll.
+// hasMore/loading guard the lead to one page ahead.
+const topSentinel = chatScroll.observeSentinel(sentinelEl, {
+  rootMargin: '1500px 0px 0px 0px',
+  onIntersect: () => {
+    if (historyCanLoadMore.value && !historyBusy.value) void onLoadMore()
+  },
+})
 
 // Load an older page (triggered by scrolling UP to the top sentinel) and
 // preserve the viewport: older cards are prepended at the top, so without
@@ -1073,34 +1056,20 @@ function setupObserver(): void {
 // shift scrollTop by the delta. In a jump window the same mechanics serve
 // the window's own cursor.
 async function onLoadMore(): Promise<void> {
-  const el = scrollEl.value
-  const prevHeight = el?.scrollHeight ?? 0
-  const prevTop = el?.scrollTop ?? 0
-  if (jumpActive.value) {
-    await diaryStore.loadMoreJump()
-    if (diaryStore.jumpError) toast.error(diaryStore.jumpError)
-  } else {
-    await diaryStore.loadMoreFeed()
-    // The feed survives a failed page (the rung is initial-load-only), but
-    // this fires from a scroll sentinel -- there is no button left sitting
-    // there to look broken, so without a toast the user just scrolls into
-    // nothing and is told nothing at all.
-    if (diaryStore.feedLoadMoreError) toast.error(diaryStore.feedLoadMoreError)
-  }
-  await nextTick()
-  if (el) el.scrollTop = prevTop + (el.scrollHeight - prevHeight)
+  await chatScroll.preservePosition(async () => {
+    if (jumpActive.value) {
+      await diaryStore.loadMoreJump()
+      if (diaryStore.jumpError) toast.error(diaryStore.jumpError)
+    } else {
+      await diaryStore.loadMoreFeed()
+      // The feed survives a failed page (the rung is initial-load-only), but
+      // this fires from a scroll sentinel -- there is no button left sitting
+      // there to look broken, so without a toast the user just scrolls into
+      // nothing and is told nothing at all.
+      if (diaryStore.feedLoadMoreError) toast.error(diaryStore.feedLoadMoreError)
+    }
+  })
 }
-
-// The sentinel only exists once items render. The results list UNMOUNTS the
-// topzone while a search is active, so the watcher must also tear the
-// observer down -- otherwise it stays bound to a dead node and the re-mounted
-// sentinel is never observed (the thread's history would silently stop
-// loading after leaving search).
-watch(sentinelEl, (el) => {
-  observer?.disconnect()
-  observer = null
-  if (el) setupObserver()
-})
 
 // -- Results-list pagination ---------------------------------------------------
 //
@@ -1109,33 +1078,14 @@ watch(sentinelEl, (el) => {
 // below the viewport -- no scroll compensation is owed.
 
 const resultsSentinelEl = ref<HTMLElement | null>(null)
-let resultsObserver: IntersectionObserver | null = null
-
-function setupResultsObserver(): void {
-  if (resultsObserver || !resultsSentinelEl.value || !scrollEl.value) return
-  resultsObserver = new IntersectionObserver(
-    (entries) => {
-      const entry = entries[0]
-      if (entry?.isIntersecting && feedHasMore.value && !feedLoading.value) {
-        void diaryStore.loadMoreFeed()
-      }
-    },
-    { root: scrollEl.value, rootMargin: '0px 0px 800px 0px' },
-  )
-  resultsObserver.observe(resultsSentinelEl.value)
-}
-
-watch(resultsSentinelEl, (el) => {
-  resultsObserver?.disconnect()
-  resultsObserver = null
-  if (el) setupResultsObserver()
+chatScroll.observeSentinel(resultsSentinelEl, {
+  rootMargin: '0px 0px 800px 0px',
+  onIntersect: () => {
+    if (feedHasMore.value && !feedLoading.value) void diaryStore.loadMoreFeed()
+  },
 })
 
 onBeforeUnmount(() => {
-  observer?.disconnect()
-  observer = null
-  resultsObserver?.disconnect()
-  resultsObserver = null
   if (flashTimer) {
     clearTimeout(flashTimer)
     flashTimer = null

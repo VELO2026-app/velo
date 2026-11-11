@@ -309,7 +309,8 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
+import { useNow } from '@/composables/useNow'
 import { useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'
 import { useBookingsStore } from '@/stores/bookings'
@@ -327,6 +328,8 @@ import { VHeader } from '@/components/layout'
 import { useAuthStore } from '@/stores/auth'
 import { useSchoolsHubStore } from '@/stores/schoolsHub'
 import { useToast } from '@/composables/useToast'
+import { useCancelBooking } from '@/composables/queries/bookings'
+import { extractApiError } from '@/composables/useApiError'
 import { useLoadingHold } from '@/composables/useLoadingHold'
 import BookingPopup from '@/components/shared/BookingPopup.vue'
 import PracticeSoldOut from '@/components/shared/PracticeSoldOut.vue'
@@ -436,7 +439,7 @@ import { isInCheckinWindow, isInFeedbackWindow } from '@/composables/usePractice
 
 // Reactive clock -- updated every 60s so window computeds re-evaluate
 // without requiring a page reload (C-1 fix).
-const now = ref(Date.now())
+const now = useNow(60_000)
 
 /**
  * Returns the booking matching this practice (any active-ish status).
@@ -800,15 +803,26 @@ function onReflect(): void {
   void router.push({ name: 'user-reflection', params: { practiceId: practice.value.id } })
 }
 
+// FE-157 4F: a Pinia Colada mutation -- it refreshes every screen that showed
+// the booking (composables/queries/invalidation.ts), and resolves once the
+// bookings list above holds the cancelled status.
+const cancelBooking = useCancelBooking()
+
 async function onCancelBooking(): Promise<void> {
   if (!myBooking.value || cancelling.value) return
   cancelling.value = true
-  const result = await bookingsStore.cancelBooking(myBooking.value.id)
-  cancelling.value = false
-  if (!result.ok) {
-    // The store returns { ok, error } but does not raise a toast itself.
-    toast.error(result.error)
+  try {
+    await cancelBooking.mutateAsync({
+      bookingId: myBooking.value.id,
+      practiceId: myBooking.value.practice_id,
+    })
+  } catch (e) {
+    // The mutation rejects with the API error; the text is made here, where
+    // it is shown.
+    toast.error(extractApiError(e, t('storeErrors.bookings.cancel')))
     return
+  } finally {
+    cancelling.value = false
   }
   toast.success(t('user.screens.practiceDetail.cancelledToast'))
   justPurchased.value = false
@@ -817,10 +831,6 @@ async function onCancelBooking(): Promise<void> {
 // =========================================================================
 // Lifecycle
 // =========================================================================
-
-// Reactive clock: re-evaluate window computeds every minute so the button
-// switches without requiring a page reload.
-let clockInterval: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
   const id = route.params.id as string
@@ -831,10 +841,6 @@ onMounted(() => {
   // badge below (attendancePending) would never clear. refreshMyBookings()
   // always re-fetches, without flashing the status row/Zoom card empty.
   void bookingsStore.refreshMyBookings()
-  // Refresh window checks every 60s.
-  clockInterval = setInterval(() => {
-    now.value = Date.now()
-  }, 60_000)
 })
 
 // F-01: Vue Router may reuse this component instance when navigating between
@@ -854,10 +860,6 @@ watch(
     }
   },
 )
-
-onUnmounted(() => {
-  if (clockInterval) clearInterval(clockInterval)
-})
 </script>
 
 <style scoped>

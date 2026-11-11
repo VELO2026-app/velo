@@ -169,14 +169,10 @@ export const useCalendarStore = defineStore('calendar', () => {
   // only the data is refreshed. Reset on a fresh app launch (store recreated).
   const initialized = ref(false)
 
-  // Ticks each minute so the selected-day list drops a practice the moment it
-  // starts (a started practice can no longer be booked). The backend feed
-  // already excludes started practices on fetch; this keeps the open calendar
-  // correct live, without waiting for a reload.
-  const now = ref<number>(Date.now())
-  setInterval(() => {
-    now.value = Date.now()
-  }, 60_000)
+  // "Now" is NOT owned by the store: the derived views below take it as an
+  // argument. The caller (CalendarView) feeds its own useNow() clock, so the
+  // minute tick follows the screen's lifecycle (paused while kept alive
+  // off-stage) instead of whichever component first touched the store.
 
   // F5: the timezone in which THIS VIEWER sees practice times (their profile).
   // Used to bucket practices into calendar days so the day matches the time
@@ -205,30 +201,41 @@ export const useCalendarStore = defineStore('calendar', () => {
   // Markers are computed in the VIEWER'S profile timezone (F5) so a practice
   // shows under the same day its card time is rendered in. Falls back to 'UTC'
   // (never the browser) when the profile timezone is absent.
-  const daysWithPractices = computed<Set<string>>(() => {
+  /**
+   * Day keys (viewer timezone) with at least one practice not yet started.
+   *
+   * @param nowMs - The caller's reactive clock (epoch ms); reading it inside a
+   *   `computed` keeps the markers live as practices start.
+   */
+  function daysWithPractices(nowMs: number): Set<string> {
     const tz = viewerTz.value ?? 'UTC'
     const set = new Set<string>()
     for (const p of weekPractices.value) {
       // Skip already-started practices so a day's dot matches its (filtered)
       // list — a day whose practices have all started shows no dot.
-      if (new Date(p.scheduled_at).getTime() <= now.value) continue
+      if (new Date(p.scheduled_at).getTime() <= nowMs) continue
       set.add(calendarDateInTz(p.scheduled_at, tz))
     }
     return set
-  })
+  }
 
   // -- Derived: practices on the selected day (client-side slice) --
-  const selectedDayPractices = computed<PracticeResponse[]>(() => {
+  /**
+   * The selected day's practices not yet started, sorted ascending.
+   *
+   * @param nowMs - The caller's reactive clock (epoch ms), as in daysWithPractices.
+   */
+  function selectedDayPractices(nowMs: number): PracticeResponse[] {
     const tz = viewerTz.value ?? 'UTC'
     return (
       weekPractices.value
         .filter((p) => calendarDateInTz(p.scheduled_at, tz) === selectedDate.value)
         // Hide already-started practices (can't be booked anymore). Comparison is
         // in epoch ms (tz-independent); for future days every practice passes.
-        .filter((p) => new Date(p.scheduled_at).getTime() > now.value)
+        .filter((p) => new Date(p.scheduled_at).getTime() > nowMs)
         .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
     )
-  })
+  }
 
   // -- Actions --
 

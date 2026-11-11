@@ -8,6 +8,33 @@ import pluginVue from 'eslint-plugin-vue'
 import pluginTsdoc from 'eslint-plugin-tsdoc'
 import globals from 'globals'
 
+// Timezone-hygiene selectors (see the rule below); shared with the platform
+// block, which must repeat them (flat config replaces same-rule options).
+const DATE_SELECTORS = [
+  {
+    selector: "NewExpression[callee.name='Date'][arguments.length=1][arguments.0.type='Literal']",
+    message: 'Date(string) interprets unpredictably -- use luxon DateTime + useViewerTimezone.',
+  },
+  ...[2, 3, 4, 5, 6, 7].map((n) => ({
+    selector: `NewExpression[callee.name='Date'][arguments.length=${n}]`,
+    message:
+      'new Date(y, m, ...) builds in the runtime tz -- use luxon DateTime + useViewerTimezone.',
+  })),
+  {
+    selector: "CallExpression[callee.name='Date']",
+    message: 'Date() without new -- use new Date() or luxon DateTime.',
+  },
+]
+
+// Dynamic import() of the Telegram SDK: no-restricted-imports only sees static
+// imports, so the lazy-loading door needs its own selector. Allowed inside
+// src/platform/ only (that block omits it).
+const TMA_DYNAMIC_IMPORT = {
+  selector: 'ImportExpression[source.value=/^@tma\\.js\\//]',
+  message:
+    'The Telegram SDK is reachable only inside src/platform/ (lazy-loaded seam): use @/platform/tma-viewport.',
+}
+
 export default [
   js.configs.recommended,
 
@@ -109,24 +136,7 @@ export default [
       // timezone -- a real bug class in a timezone product; use luxon
       // DateTime with useViewerTimezone. Legacy sites ride the warning
       // budget (lint-budget.json) until paid off.
-      'no-restricted-syntax': [
-        'warn',
-        {
-          selector:
-            "NewExpression[callee.name='Date'][arguments.length=1][arguments.0.type='Literal']",
-          message:
-            'Date(string) interprets unpredictably -- use luxon DateTime + useViewerTimezone.',
-        },
-        ...[2, 3, 4, 5, 6, 7].map((n) => ({
-          selector: `NewExpression[callee.name='Date'][arguments.length=${n}]`,
-          message:
-            'new Date(y, m, ...) builds in the runtime tz -- use luxon DateTime + useViewerTimezone.',
-        })),
-        {
-          selector: "CallExpression[callee.name='Date']",
-          message: 'Date() without new -- use new Date() or luxon DateTime.',
-        },
-      ],
+      'no-restricted-syntax': ['warn', ...DATE_SELECTORS, TMA_DYNAMIC_IMPORT],
 
       // --- TMA storage seam. ------------------------------------------------
       'no-restricted-properties': [
@@ -197,6 +207,11 @@ export default [
               message:
                 'The kit is imported through its doors only: @/components/ui (or @/components/icons).',
             },
+            {
+              group: ['@tma.js/*'],
+              message:
+                'The Telegram SDK is reachable only inside src/platform/ (lazy-loaded seam): use @/platform/tma-viewport.',
+            },
           ],
         },
       ],
@@ -228,6 +243,11 @@ export default [
             {
               group: ['@velo/ui/*'],
               message: 'The exact barrel specifier only: "@velo/ui".',
+            },
+            {
+              group: ['@tma.js/*'],
+              message:
+                'The Telegram SDK is reachable only inside src/platform/ (lazy-loaded seam): use @/platform/tma-viewport.',
             },
           ],
         },
@@ -270,6 +290,45 @@ export default [
     files: ['src/components/ui/**', 'src/components/icons/**'],
     rules: {
       'no-restricted-imports': 'off',
+    },
+  },
+
+  {
+    // The platform seam is the one place allowed to import @tma.js/*; every
+    // other ban from the P8 block is repeated (flat config replaces, not
+    // merges, same-rule options).
+    files: ['src/platform/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@/components/ui/*', '@/components/ui/*/*'],
+              message: 'Import from the barrel: import { VButton } from "@/components/ui".',
+            },
+            {
+              group: ['@/components/icons/*', '@/components/icons/*/*'],
+              message: 'Import from the barrel: import { IconHome } from "@/components/icons".',
+            },
+            {
+              group: ['@velo/ui', '@velo/ui/*'],
+              message:
+                'The kit is imported through its doors only: @/components/ui (or @/components/icons).',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  {
+    // The platform seam may import() the SDK lazily; the timezone selectors
+    // stay (same-rule options are replaced, not merged).
+    files: ['src/platform/**'],
+    ignores: ['src/**/*.test.ts'],
+    rules: {
+      'no-restricted-syntax': ['warn', ...DATE_SELECTORS],
     },
   },
 

@@ -272,10 +272,10 @@ function dayCellHasDot(b: HTMLButtonElement): boolean {
   return !!b.querySelector('.week-strip__dot--visible')
 }
 function selectPill(): HTMLButtonElement | undefined {
-  return host?.querySelector<HTMLButtonElement>('.calendar__select-pill') ?? undefined
+  return host?.querySelector<HTMLButtonElement>('.calendar__select-expand') ?? undefined
 }
-function funnel(): HTMLElement | undefined {
-  return host?.querySelector<HTMLElement>('.calendar__funnel') ?? undefined
+function funnel(): HTMLButtonElement | undefined {
+  return host?.querySelector<HTMLButtonElement>('.calendar__funnel') ?? undefined
 }
 function collapseBtn(): HTMLButtonElement | undefined {
   return host?.querySelector<HTMLButtonElement>('.calendar__collapse') ?? undefined
@@ -561,6 +561,22 @@ describe('CalendarView', () => {
 
       expect(modalIsOpen()).toBe(true)
       expect(selectPill()).toBeDefined() // still collapsed -- funnel didn't expand
+    })
+
+    it('a11y: the pill holds two sibling buttons (no nested interactive), the funnel is labelled', async () => {
+      mount()
+      await flush()
+
+      const f = funnel()
+      expect(f?.tagName).toBe('BUTTON')
+      expect(f?.getAttribute('type')).toBe('button')
+      expect(f?.getAttribute('aria-label')).toBe('Фильтр')
+      expect(f?.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true')
+      expect(host?.querySelectorAll('.calendar__select-pill button')).toHaveLength(2)
+      expect(host?.querySelector('button button')).toBeNull()
+      // Native buttons are tab stops: neither is taken out of the focus order.
+      expect(selectPill()?.getAttribute('tabindex')).toBeNull()
+      expect(f?.getAttribute('tabindex')).toBeNull()
     })
 
     it('tapping the pill body (not the funnel) expands to the chip row; collapse returns to the pill', async () => {

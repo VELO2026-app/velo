@@ -34,7 +34,7 @@
     <WeekStrip
       :days="store.days"
       :selected-date="store.selectedDate"
-      :days-with-practices="store.daysWithPractices"
+      :days-with-practices="daysWithPractices"
       :local-date-key="store.localDateKey"
       :max-back-days="store.maxBackDays"
       @select-day="store.selectDay"

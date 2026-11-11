@@ -12,7 +12,10 @@
 
   Data: GET /schools/{id} (page + relation + transfer) + the school's
   practices; the feed renders at most five of them and is the page's last
-  element (owner 2026-09-19 -- no rosters, no journal below it).
+  element (owner 2026-09-19 -- no rosters, no journal below it). Both are
+  Pinia Colada queries keyed by the school id (FE-157 4F pilot,
+  composables/queries/schools.ts): a return to the page renders the cached
+  copy at once and revalidates it.
 
   Zone only decides the back target (master-schools vs
   user-my-schools), read off route.name's prefix.
@@ -80,7 +83,7 @@
         :description="t('user.screens.schoolPage.loadFailedHint')"
       >
         <template #action>
-          <VButton variant="outline" @click="load">{{ t('common.retry') }}</VButton>
+          <VButton variant="outline" @click="retry">{{ t('common.retry') }}</VButton>
         </template>
       </VEmptyState>
 
@@ -281,17 +284,13 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import {
-  getSchoolLeavePreview,
-  getSchoolPage,
-  getSchoolPractices,
-  leaveSchool,
-  updateSchool,
-} from '@/api/schools'
+import { useQuery, useQueryCache } from '@pinia/colada'
+import { getSchoolLeavePreview, leaveSchool, updateSchool } from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
-import type { SchoolPageResponse, PracticeResponse } from '@/api/types'
+import type { SchoolPageResponse } from '@/api/types'
+import { forgetSchool, schoolFeedQuery, schoolPageQuery } from '@/composables/queries/schools'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import CalendarPracticeCard from '@/components/shared/CalendarPracticeCard.vue'
@@ -321,15 +320,61 @@ function goBack(): void {
   void router.push(listRoute.value)
 }
 
-// -- Page state --
+// -- Page state (Pinia Colada, FE-157 4F) --
+//
+// Two queries leave together: the header paints as soon as the page payload
+// lands and the feed fills in when its answer does. Each school id has its
+// own entries, so after a route reuse a slow answer for the previous school
+// lands in that school's entry, never on this screen (FE-78.4). A failed
+// REFRESH keeps the copy on screen; only a page with nothing to show turns
+// into the error state.
 
-const loading = ref(true)
-const error = ref(false)
-const notFound = ref(false)
-const page = ref<SchoolPageResponse | null>(null)
-const practices = ref<PracticeResponse[]>([])
-/** The practices feed loads apart from the header: its own lifecycle. */
-const feedState = ref<'loading' | 'ready' | 'failed'>('loading')
+// Owner 2026-09-19: at most FIVE upcoming school practices render, and the
+// feed is the page's last element. The page asks the API for exactly five
+// (the first five of all pages equal the first five of page one); the slice
+// below is a defensive cap.
+const FEED_LIMIT = 5
+
+const queryCache = useQueryCache()
+const pageQuery = useQuery(() => schoolPageQuery(schoolId.value))
+const feedQuery = useQuery(() => schoolFeedQuery({ schoolId: schoolId.value, limit: FEED_LIMIT }))
+
+// Schools left from this screen. Their cache entries go once the screen is
+// gone: dropping them earlier would repaint this page (loader or 404) under
+// the success toast. onUnmounted, not onScopeDispose: Colada releases the
+// entries in its own onUnmounted (registered above, so it runs first), and
+// only a released entry can be removed.
+const leftSchools = new Set<string>()
+onUnmounted(() => {
+  for (const id of leftSchools) forgetSchool(queryCache, id)
+})
+
+/** The server says the school is not there for this viewer (frozen, deleted, mistyped id). */
+const notFound = computed(() => {
+  const e = pageQuery.error.value
+  return e instanceof ApiResponseError && e.status === 404
+})
+/** A 404 wins over a cached copy: the page is gone, whatever was shown before. */
+const page = computed(() => (notFound.value ? null : (pageQuery.data.value ?? null)))
+/** Nothing to show yet and no answer: the full-page loader. */
+const loading = computed(() => pageQuery.status.value === 'pending')
+/** No page to show and the request failed (not a 404): the retry state. */
+const error = computed(() => !page.value && !notFound.value && pageQuery.status.value === 'error')
+/** The feed's own lifecycle: "no upcoming practices" is said only by an answer that has none. */
+const feedState = computed<'loading' | 'ready' | 'failed'>(() => {
+  if (feedQuery.data.value !== undefined) return 'ready'
+  return feedQuery.status.value === 'error' ? 'failed' : 'loading'
+})
+
+/** Write the page as a mutation answered it (edit, transfer) into its cache entry. */
+function setPage(next: SchoolPageResponse): void {
+  queryCache.setQueryData(schoolPageQuery(schoolId.value).key, next)
+}
+
+function retry(): void {
+  void pageQuery.refetch()
+  void feedQuery.refetch()
+}
 
 const relation = computed(() => page.value?.viewer.relation ?? null)
 const isCurator = computed(() => relation.value === 'curator')
@@ -382,12 +427,7 @@ function openPracticesCalendar(): void {
   })
 }
 
-// Owner 2026-09-19: at most FIVE upcoming school practices render, and the
-// feed is the page's last element. The page asks the API for exactly five
-// (the first five of all pages equal the first five of page one); the slice
-// below is a defensive cap.
-const FEED_LIMIT = 5
-const upcomingPractices = computed(() => practices.value.slice(0, FEED_LIMIT))
+const upcomingPractices = computed(() => (feedQuery.data.value ?? []).slice(0, FEED_LIMIT))
 
 // §6 MVP (owner 2026-10-02): the school's analytics screen. FE-93: it mounts
 // in the master zone only -- the user zone has no route for it anymore.
@@ -406,55 +446,6 @@ function openRoster(): void {
     params: { id: schoolId.value },
   })
 }
-
-// FE-78.4: see load() -- bumps on every load attempt; a stale answer is a no-op.
-let loadEpoch = 0
-
-async function load(): Promise<void> {
-  // FE-78.4: route reuse under the same record -- a slow answer for the
-  // PREVIOUS school must never repaint the current one. Every state write
-  // below is guarded by the epoch; a superseded load becomes a no-op
-  // (same pattern as SchoolStudentProfileView's loadVersion).
-  const epoch = ++loadEpoch
-  loading.value = true
-  error.value = false
-  notFound.value = false
-  practices.value = []
-  feedState.value = 'loading'
-  // Both requests leave together; the header paints as soon as the page
-  // payload lands and the practices feed fills in when its answer does.
-  // The feed is a bonus under the header: its failure marks the feed only
-  // instead of replacing the whole page with the error state.
-  void getSchoolPractices(schoolId.value, FEED_LIMIT, 0)
-    .then((res) => {
-      if (epoch !== loadEpoch) return
-      practices.value = res.items
-      feedState.value = 'ready'
-    })
-    .catch(() => {
-      if (epoch === loadEpoch) feedState.value = 'failed'
-    })
-  try {
-    const pageRes = await getSchoolPage(schoolId.value)
-    if (epoch !== loadEpoch) return
-    page.value = pageRes
-  } catch (e) {
-    if (epoch !== loadEpoch) return
-    if (e instanceof ApiResponseError && e.status === 404) {
-      notFound.value = true
-    } else {
-      error.value = true
-    }
-  } finally {
-    if (epoch === loadEpoch) loading.value = false
-  }
-}
-
-onMounted(load)
-// Remount data if the same component instance is reused for another id.
-watch(schoolId, () => {
-  if (schoolId.value) void load()
-})
 
 // -- Advisory preview (the leave dialog) -------------------------------------
 
@@ -517,6 +508,7 @@ async function onLeaveConfirm(): Promise<void> {
   leaving.value = true
   try {
     await leaveSchool(schoolId.value)
+    leftSchools.add(schoolId.value)
     leaveConfirmOpen.value = false
     toast.success(t('user.screens.schoolPage.toast.left'))
     void router.replace(listRoute.value)
@@ -566,13 +558,13 @@ async function onEditSave(): Promise<void> {
     // instead of replacing it; res.transfer carries the pending offer along
     // (an intended widening, see that schema's own docstring).
     if (page.value) {
-      page.value = {
+      setPage({
         ...page.value,
         name: res.name,
         description: res.description,
         avatar_url: res.avatar_url ?? null,
         transfer: res.transfer ?? null,
-      }
+      })
     }
     editOpen.value = false
     toast.success(t('user.screens.schoolPage.toast.updated'))
@@ -594,18 +586,18 @@ async function onEditSave(): Promise<void> {
 // -- Transfer (FE-21) --
 
 function onTransferCancelled(): void {
-  if (page.value) page.value = { ...page.value, transfer: null }
+  if (page.value) setPage({ ...page.value, transfer: null })
 }
 
 function onTransferAccepted(newPage: SchoolPageResponse): void {
   // The accept response IS the page as the new curator sees it -- replace
-  // local state wholesale (relation flips, no reload).
-  page.value = newPage
+  // the cached page wholesale (relation flips, no reload).
+  setPage(newPage)
   toast.success(t('user.screens.schoolPage.toast.transferredToYou'))
 }
 
 function onTransferDeclined(): void {
-  if (page.value) page.value = { ...page.value, transfer: null }
+  if (page.value) setPage({ ...page.value, transfer: null })
 }
 </script>
 

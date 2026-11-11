@@ -23,6 +23,9 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, reactive, type App } from 'vue'
+import { createPinia, type Pinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import SchoolPageView from '@/views/user/SchoolPageView.vue'
 import * as cgApi from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
@@ -47,8 +50,8 @@ vi.mock('@/composables/useToast', () => ({
   useToast: () => ({ success: toastSuccess, error: toastError, info: toastInfo }),
 }))
 
-// CalendarPracticeCard reads the viewer timezone; mock the composable to
-// keep this suite pinia-free (the page itself never touches the store).
+// CalendarPracticeCard reads the viewer timezone; mock the composable so
+// the suite needs no auth store (the page reads no store of its own).
 vi.mock('@/composables/useViewerTimezone', async () => {
   const { ref } = await import('vue')
   return { useViewerTimezone: () => ref('Europe/Moscow') }
@@ -57,10 +60,14 @@ vi.mock('@/composables/useViewerTimezone', async () => {
 let app: App | null = null
 let host: HTMLElement | null = null
 
-function mount(): HTMLElement {
+function mount(pinia: Pinia = createPinia()): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(SchoolPageView).use(createTestI18n())
+  // FE-157 4F: the page's data are Pinia Colada queries -- a fresh Pinia per
+  // mount is a fresh cache, so no test sees another's answers (a test that
+  // reopens the page passes the same Pinia to keep the cache).
+  app.use(pinia).use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
@@ -427,6 +434,49 @@ describe('SchoolPageView -- leave', () => {
 
     expect(cgApi.leaveSchool).toHaveBeenCalledWith('g1')
     expect(replace).toHaveBeenCalledWith({ name: 'user-my-schools' })
+  })
+
+  it('after leaving, a reopen of the school does not paint the old member relation from the cache', async () => {
+    vi.mocked(cgApi.leaveSchool).mockResolvedValue(undefined)
+    const pinia = createPinia()
+    mount(pinia)
+    await flush()
+
+    buttonWith('Покинуть школу')?.click()
+    await flush()
+    buttonExact('Покинуть')?.click()
+    await flush()
+    expect(cgApi.leaveSchool).toHaveBeenCalledWith('g1')
+
+    // The router leaves the screen; the same app session reopens the school
+    // while the server's answer is still on its way.
+    app!.unmount()
+    host!.remove()
+    document.body.innerHTML = ''
+    vi.mocked(cgApi.getSchoolPage).mockReturnValue(new Promise(() => {}))
+    vi.mocked(cgApi.getSchoolPractices).mockReturnValue(new Promise(() => {}))
+    mount(pinia)
+    await flush()
+
+    expect(buttonWith('Покинуть школу')).toBeUndefined()
+    expect(text()).not.toContain('Тихая школа')
+  })
+})
+
+// -- Window focus (FE-157 s4 review #4) ----------------------------------------
+
+describe('SchoolPageView -- return to the app', () => {
+  it('revalidates the page payload only: one GET per return, not two', async () => {
+    mount()
+    await flush()
+    vi.mocked(cgApi.getSchoolPage).mockClear()
+    vi.mocked(cgApi.getSchoolPractices).mockClear()
+
+    document.dispatchEvent(new Event('visibilitychange'))
+    await flush()
+
+    expect(cgApi.getSchoolPage).toHaveBeenCalledTimes(1)
+    expect(cgApi.getSchoolPractices).not.toHaveBeenCalled()
   })
 })
 
@@ -815,7 +865,8 @@ describe('SchoolPageView -- practices feed request', () => {
 
 // =============================================================================
 // FE-78.4: route reuse under the same record -- a slow answer for the
-// PREVIOUS school must never repaint the current one (loadEpoch guard).
+// PREVIOUS school must never repaint the current one (it lands in that
+// school's own cache entry since FE-157 4F; was the loadEpoch guard).
 // =============================================================================
 describe('FE-78.4 -- a superseded load is a no-op', () => {
   it('a slow answer for the previous school never repaints the current one', async () => {

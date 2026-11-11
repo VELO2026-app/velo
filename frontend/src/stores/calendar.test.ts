@@ -16,10 +16,9 @@
 // and more honest than mocking a store the calendar store doesn't call any
 // action on.
 //
-// Time is pinned everywhere below: `now.value` inside the store is set once,
-// at store-creation time, from Date.now() (a setInterval nudges it every 60s,
-// which these tests never advance, so it stays pinned for the test's
-// duration). TZ is stubbed to 'UTC' so the store's LOCAL-timezone date math
+// Time is pinned everywhere below: the derived views take "now" as an
+// argument (the view owns the clock), and the tests pass Date.now() under
+// pinned fake time. TZ is stubbed to 'UTC' so the store's LOCAL-timezone date math
 // (weekAnchor, weekDays, localDateKey) lines up 1:1 with the UTC instants
 // used in fixtures and assertions below -- this is the same technique
 // format.test.ts uses (vi.stubEnv('TZ', ...)) to make local-time-dependent
@@ -352,7 +351,7 @@ describe('useCalendarStore', () => {
       // 21:30 UTC on the 15th stays the 15th under a UTC bucket.
       store.weekPractices = [fakePractice({ id: 'p1', scheduled_at: '2026-06-15T21:30:00Z' })]
 
-      expect(store.daysWithPractices).toEqual(new Set(['2026-06-15']))
+      expect(store.daysWithPractices(Date.now())).toEqual(new Set(['2026-06-15']))
     })
 
     it("buckets by the VIEWER'S profile timezone, not UTC, and drops already-started practices", () => {
@@ -367,7 +366,7 @@ describe('useCalendarStore', () => {
         fakePractice({ id: 'started', scheduled_at: '2026-06-15T10:00:00Z' }),
       ]
 
-      expect(store.daysWithPractices).toEqual(new Set(['2026-06-16']))
+      expect(store.daysWithPractices(Date.now())).toEqual(new Set(['2026-06-16']))
     })
   })
 
@@ -382,7 +381,7 @@ describe('useCalendarStore', () => {
         fakePractice({ id: 'other-day', scheduled_at: '2026-06-16T14:00:00Z' }),
       ]
 
-      expect(store.selectedDayPractices.map((p) => p.id)).toEqual(['early', 'late'])
+      expect(store.selectedDayPractices(Date.now()).map((p) => p.id)).toEqual(['early', 'late'])
     })
 
     it('returns an empty list when nothing matches the selected day', () => {
@@ -390,7 +389,7 @@ describe('useCalendarStore', () => {
       store.selectedDate = '2026-06-19'
       store.weekPractices = [fakePractice({ scheduled_at: '2026-06-15T14:00:00Z' })]
 
-      expect(store.selectedDayPractices).toEqual([])
+      expect(store.selectedDayPractices(Date.now())).toEqual([])
     })
   })
 })
