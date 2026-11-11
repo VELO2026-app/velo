@@ -119,7 +119,7 @@ import { useRememberedCount } from '@/composables/useRememberedCount'
 import { extractApiError } from '@/composables/useApiError'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useAuthStore } from '@/stores/auth'
-import { featureEnabled } from '@/platform/features'
+import { isOptionEnabled } from '@/platform/instance'
 import {
   listNotifications,
   markAllNotificationsRead,
@@ -291,9 +291,9 @@ function routeFor(
     case 'open_feedback':
       return practiceId ? { name: 'user-feedback', params: { practiceId } } : null
     case 'open_wallet':
-      // tz-whitelabel §4: an edition without the payments module has no
+      // tz-whitelabel §4: an instance with the payments option off (FE-151) has no
       // wallet route -- the tap degrades to no navigation, not the 404.
-      return featureEnabled('payments') ? { name: 'user-topup' } : null
+      return isOptionEnabled('payments') ? { name: 'user-topup' } : null
     case 'open_master_application':
       // BE-59: the «get verified» half of the master-appointment story --
       // the verb was named by the backend for exactly this mapping; the

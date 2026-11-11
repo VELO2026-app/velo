@@ -20,7 +20,7 @@
 // path.
 // =============================================================================
 
-import { featureEnabled } from '@/platform/features'
+import { isOptionEnabled } from '@/platform/instance'
 import type { UserRole } from '@/api/types'
 
 /** A router location a deep link resolves to: a named route, its params and query. */
@@ -195,11 +195,11 @@ export function parseStartParam(
     case 'open_feedback':
       return id ? { name: 'user-feedback', params: { practiceId: id } } : null
     case 'open_wallet': // bare (payouts, top-ups) or __<practice_id> (refunds)
-      // tz-whitelabel §4: an edition without the payments module has no
+      // tz-whitelabel §4: an instance with the payments option off (FE-151) has no
       // wallet route in ANY zone -- the master's finance screen and the
-      // user's top-up are the same module (FE-112) -- the tap degrades
+      // user's top-up are the same option (FE-112, FE-151) -- the tap degrades
       // to no navigation, not the 404.
-      if (!featureEnabled('payments')) return null
+      if (!isOptionEnabled('payments')) return null
       return asMaster ? { name: 'master-finance' } : { name: 'user-topup' }
     case 'confirm_waitlist':
       return id ? { name: 'waitlist-confirm', params: { id } } : null

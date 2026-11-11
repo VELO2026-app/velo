@@ -15,10 +15,11 @@
 // =============================================================================
 
 import { createTestI18n } from '@/locales/testing'
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, onTestFinished } from 'vitest'
 import { createApp, h, nextTick, type App } from 'vue'
 import { createPinia, setActivePinia, type Pinia } from 'pinia'
 import BookingPopup from '@/components/shared/BookingPopup.vue'
+import { applyInstanceConfig } from '@/platform/instance'
 import type { PracticeResponse } from '@/api/types'
 
 // Mutable harness state the mocked factories close over -- reset per test in
@@ -174,9 +175,10 @@ describe('BookingPopup · feature gates (tz-whitelabel §4)', () => {
     expect(document.body.textContent).toContain('Пополнить баланс')
   })
 
-  it('an edition WITHOUT payments: the CTA falls back to «Оплатить», never the dead redirect', async () => {
+  it('the payments option OFF: the CTA falls back to «Оплатить», never the dead redirect', async () => {
     harness.hasEnough = false
-    vi.stubEnv('VITE_FEATURES', 'ai')
+    applyInstanceConfig({ options: { payments: 'false' } })
+    onTestFinished(() => applyInstanceConfig(null))
     mountPopup(practice({ is_free: false, price_cents: 5000 }))
     await flush()
     const text = document.body.textContent ?? ''

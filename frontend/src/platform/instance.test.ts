@@ -226,3 +226,77 @@ describe('INSTANCE -- the URL seams read live (getter contract)', () => {
     expect(INSTANCE.telegramBotUrl).toBe('https://telegram.me/veloappbot')
   })
 })
+
+describe('isOptionEnabled -- instance options (FE-151, protocol 5.2.3)', () => {
+  it('the six options of primer.yaml, in its order', async () => {
+    const { OPTION_NAMES } = await loadInstance()
+    expect(OPTION_NAMES).toEqual(['payments', 'schools', 'mcp', 'zoom', 'telegram', 'llm'])
+  })
+
+  it('no options block (local dev, no /config.json) is the golden build: every option on', async () => {
+    const { OPTION_NAMES, applyInstanceConfig, isOptionEnabled } = await loadInstance()
+    for (const name of OPTION_NAMES) expect(isOptionEnabled(name)).toBe(true)
+    applyInstanceConfig({ apiBaseUrl: 'api.example.test' })
+    for (const name of OPTION_NAMES) expect(isOptionEnabled(name)).toBe(true)
+  })
+
+  it("only the literal 'true' turns an option on", async () => {
+    const { applyInstanceConfig, isOptionEnabled } = await loadInstance()
+    applyInstanceConfig({
+      options: { payments: 'true', schools: ' true ', mcp: 'false', zoom: 'TRUE', llm: '1' },
+    })
+    expect(isOptionEnabled('payments')).toBe(true)
+    expect(isOptionEnabled('schools')).toBe(true)
+    expect(isOptionEnabled('mcp')).toBe(false)
+    expect(isOptionEnabled('zoom')).toBe(false)
+    expect(isOptionEnabled('llm')).toBe(false)
+    // Absent from the block: off.
+    expect(isOptionEnabled('telegram')).toBe(false)
+  })
+
+  it('an empty value and an unrendered ${OPTION_X} (the variable unset) are off', async () => {
+    const { applyInstanceConfig, isOptionEnabled } = await loadInstance()
+    applyInstanceConfig({
+      options: { payments: '', schools: '${OPTION_SCHOOLS}', mcp: '   ' },
+    })
+    expect(isOptionEnabled('payments')).toBe(false)
+    expect(isOptionEnabled('schools')).toBe(false)
+    expect(isOptionEnabled('mcp')).toBe(false)
+  })
+
+  it('a block of placeholders only still means "the instance decides": all off', async () => {
+    const { OPTION_NAMES, applyInstanceConfig, isOptionEnabled } = await loadInstance()
+    applyInstanceConfig({
+      options: Object.fromEntries(OPTION_NAMES.map((n) => [n, `\${OPTION_${n.toUpperCase()}}`])),
+    })
+    for (const name of OPTION_NAMES) expect(isOptionEnabled(name)).toBe(false)
+  })
+
+  it('an unknown option is off, whatever the block says', async () => {
+    const { applyInstanceConfig, isOptionEnabled } = await loadInstance()
+    applyInstanceConfig({ options: { payments: 'true', diary: 'true' } })
+    // @ts-expect-error -- an option primer.yaml does not declare
+    expect(isOptionEnabled('diary')).toBe(false)
+  })
+
+  it('the switched-off literal is not a flag: off, and never a value of any seam', async () => {
+    const { applyInstanceConfig, isOptionEnabled } = await loadInstance()
+    applyInstanceConfig({ options: { payments: 'primer-switched-off' } })
+    expect(isOptionEnabled('payments')).toBe(false)
+  })
+
+  it('a malformed options block (not an object) is ignored -- golden', async () => {
+    const { applyInstanceConfig, isOptionEnabled } = await loadInstance()
+    applyInstanceConfig({ options: 'payments' } as never)
+    expect(isOptionEnabled('payments')).toBe(true)
+    applyInstanceConfig({ options: ['payments'] } as never)
+    expect(isOptionEnabled('payments')).toBe(true)
+  })
+
+  it('options never leak into the other seams', async () => {
+    const { INSTANCE, applyInstanceConfig } = await loadInstance()
+    vi.stubEnv('VITE_API_BASE_URL', undefined)
+    applyInstanceConfig({ options: { payments: 'true' } })
+    expect(INSTANCE.apiBaseUrl).toBe('')
+  })
+})

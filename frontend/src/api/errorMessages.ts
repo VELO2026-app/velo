@@ -128,6 +128,9 @@ export const ERROR_CODES = [
   'mcp_token_not_found',
   'mcp_token_name_taken',
   'delivery_window_empty',
+  // FE-151: 409 on a practice becoming paid (created paid, or edited from
+  // free to paid) while the instance's «payments» option is off (BE-182).
+  'payments_unavailable',
   'unauthorized',
   'not_found',
   'forbidden',

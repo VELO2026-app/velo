@@ -16,7 +16,7 @@ import { join } from 'node:path'
 // @ts-expect-error -- *.mjs modules carry no type information
 import { brandGrepReport } from '../../scripts/brand-grep.mjs'
 
-type Report = { brand: string[]; features: string[] }
+type Report = { brand: string[]; features: string[]; switchedOff: string[] }
 
 const scan = (files: Array<[string, string]>): Report =>
   brandGrepReport(files.map(([path, content]) => ({ path, content }))) as Report
@@ -114,7 +114,7 @@ describe('brand-grep: the feature registry monopoly (tz-whitelabel §4)', () => 
         'export function featureEnabled(n) { return featureFlags(import.meta.env.VITE_FEATURES)[n] }\nconst k = `__VELO_FEATURE_${name}__`',
       ],
       ['src/platform/instance.ts', 'features: parseFeatures(import.meta.env.VITE_FEATURES),'],
-      ['src/router/index.ts', '...(__VELO_FEATURE_PAYMENTS__ ? PAYMENTS_USER_ROUTES : []),'],
+      ['src/router/index.ts', '...userRoutes({ ai: __VELO_FEATURE_AI__ ? AI_USER_ROUTES : [] }),'],
       ['env.d.ts', 'declare const __VELO_FEATURE_AI__: boolean\nreadonly VITE_FEATURES?: string'],
       ['vite.config.ts', 'const defines = featureDefines(instanceEnv.VITE_FEATURES)'],
       ['vitest.config.ts', 'define: featureDefines(undefined),'],
@@ -133,8 +133,33 @@ describe('brand-grep: the feature registry monopoly (tz-whitelabel §4)', () => 
   })
 })
 
+describe('brand-grep: the switched-off literal (FE-151, protocol 5.2.3)', () => {
+  it('the literal as a value or a comparison is a hit, in any file', () => {
+    const report = scan([
+      ['src/platform/instance.ts', "const base = raw === 'primer-switched-off' ? '' : raw"],
+      [
+        'src/views/user/SomeView.vue',
+        '<template>\n  <a href="primer-switched-off">x</a>\n</template>',
+      ],
+      ['vite.config.ts', 'const apiBaseUrl = env.API_BASE_URL ?? `primer-switched-off`'],
+    ])
+    expect(report.switchedOff).toHaveLength(3)
+    expect(report.switchedOff[0]).toContain('src/platform/instance.ts')
+  })
+
+  it('a comment naming the literal is not a read', () => {
+    const report = scan([
+      [
+        'src/platform/instance.ts',
+        '// the machine hands primer-switched-off; never read here\nconst a = 1',
+      ],
+    ])
+    expect(report.switchedOff).toEqual([])
+  })
+})
+
 describe('brand-grep: the repo tree', () => {
-  it('passes both gates today', () => {
+  it('passes every gate today', () => {
     const files: Array<{ path: string; content: string }> = []
     const walk = (dir: string): void => {
       for (const name of readdirSync(dir)) {
@@ -151,5 +176,6 @@ describe('brand-grep: the repo tree', () => {
     const report = brandGrepReport(files) as Report
     expect(report.brand).toEqual([])
     expect(report.features).toEqual([])
+    expect(report.switchedOff).toEqual([])
   })
 })

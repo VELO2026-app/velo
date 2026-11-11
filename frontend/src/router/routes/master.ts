@@ -7,9 +7,9 @@
 // them, and for a master the shell chunk loads in parallel with the first
 // screen's chunk and the zone catalog (router/catalogs.ts). Every record
 // that mounts a views/master screen declares meta.catalogs, directly or
-// through the shell record (pinned by router/catalogs.test.ts). The module
-// group is handed back by router/index.ts through its build-time feature
-// gate (routes/user.ts explains why the gate lives there).
+// through the shell record (pinned by router/catalogs.test.ts). The records
+// of an instance option (FE-151: payments, schools) carry meta.option --
+// routes/user.ts explains.
 //
 // Access is declared in meta.requires (router/guards.ts RouteRequirement):
 // the shell record requires `master-role`, the dashboard
@@ -23,30 +23,23 @@ import type { RouteRecordRaw } from 'vue-router'
 import { masterPendingGuard, masterApplyGuard } from '@/router/guards'
 
 /**
- * The «payments» module's master surface: the finance screen (FE-112).
+ * The «payments» option's master surface: the finance screen (FE-112).
  *
- * @remarks tz-whitelabel §4: the payments module is ALL of its surfaces --
- * the user's top-ups (routes/user.ts), this screen and the admin's payout
- * queue (routes/admin.ts). An edition without payments registers none of
- * them, so a feature-cut build carries no chunk of any payment screen
- * (ConfirmPaymentModal rides AdminWithdrawalDetailView's chunk).
+ * @remarks The payments option is ALL of its surfaces -- the user's top-ups
+ * (routes/user.ts), this screen and the admin's payout queue
+ * (routes/admin.ts); each carries meta.option 'payments' (FE-151).
  */
 export const PAYMENTS_MASTER_ROUTES: RouteRecordRaw[] = [
   {
     path: 'finance',
     name: 'master-finance',
-    meta: { requires: 'verified-master', hideTabBar: true },
+    meta: { option: 'payments', requires: 'verified-master', hideTabBar: true },
     component: () => import('@/views/master/MasterFinanceView.vue'),
   },
 ]
 
-/** The module groups of the master zone that router/index.ts lets in. */
-export interface MasterModuleRoutes {
-  payments: readonly RouteRecordRaw[]
-}
-
 /** The /master zone (MasterShell) and the standalone master-zone screens. */
-export function masterRoutes(modules: MasterModuleRoutes): RouteRecordRaw[] {
+export function masterRoutes(): RouteRecordRaw[] {
   return [
     {
       path: '/master',
@@ -193,7 +186,7 @@ export function masterRoutes(modules: MasterModuleRoutes): RouteRecordRaw[] {
         },
         // FE-112 (tz-whitelabel §4): the finance screen is the payments
         // module's master surface -- cut from editions without it.
-        ...modules.payments,
+        ...PAYMENTS_MASTER_ROUTES,
         {
           path: 'students',
           name: 'master-students',
@@ -232,19 +225,19 @@ export function masterRoutes(modules: MasterModuleRoutes): RouteRecordRaw[] {
           // active, so no hideTabBar meta here.
           path: 'schools',
           name: 'master-schools',
-          meta: { requires: 'verified-master' },
+          meta: { option: 'schools', requires: 'verified-master' },
           component: () => import('@/views/master/MasterSchoolsView.vue'),
         },
         {
           path: 'schools/new',
           name: 'master-school-create',
-          meta: { requires: 'verified-master', hideTabBar: true },
+          meta: { option: 'schools', requires: 'verified-master', hideTabBar: true },
           component: () => import('@/views/master/MasterSchoolCreateView.vue'),
         },
         {
           path: 'schools/:id',
           name: 'master-school',
-          meta: { requires: 'verified-master', hideTabBar: true },
+          meta: { option: 'schools', requires: 'verified-master', hideTabBar: true },
           // The SAME page component the user zone mounts (TZ 6.3) -- the
           // server's viewer.relation drives the action set; this route's
           // name prefix is all the view reads to pick its back target.
@@ -256,7 +249,7 @@ export function masterRoutes(modules: MasterModuleRoutes): RouteRecordRaw[] {
           // targets.
           path: 'schools/:id/members',
           name: 'master-school-members',
-          meta: { requires: 'verified-master', hideTabBar: true },
+          meta: { option: 'schools', requires: 'verified-master', hideTabBar: true },
           component: () => import('@/views/user/SchoolMembersView.vue'),
         },
         {
@@ -264,7 +257,7 @@ export function masterRoutes(modules: MasterModuleRoutes): RouteRecordRaw[] {
           // mounts; the zone only picks the back target.
           path: 'schools/:id/analytics',
           name: 'master-school-analytics',
-          meta: { requires: 'verified-master', hideTabBar: true },
+          meta: { option: 'schools', requires: 'verified-master', hideTabBar: true },
           component: () => import('@/views/user/SchoolAnalyticsView.vue'),
         },
         {
@@ -272,7 +265,7 @@ export function masterRoutes(modules: MasterModuleRoutes): RouteRecordRaw[] {
           // component as the user zone; the zone picks the back target.
           path: 'schools/:schoolId/students/:userId',
           name: 'master-school-student',
-          meta: { requires: 'verified-master', hideTabBar: true },
+          meta: { option: 'schools', requires: 'verified-master', hideTabBar: true },
           component: () => import('@/views/user/SchoolStudentProfileView.vue'),
         },
         {
@@ -329,7 +322,7 @@ export function masterRoutes(modules: MasterModuleRoutes): RouteRecordRaw[] {
       // master/student flavour is resolved by GET /schools/invites/{token}.
       path: '/schools/join/:token',
       name: 'school-join',
-      meta: { catalogs: ['master'] },
+      meta: { option: 'schools', catalogs: ['master'] },
       component: () => import('@/views/master/SchoolJoinView.vue'),
     },
     {
@@ -341,7 +334,7 @@ export function masterRoutes(modules: MasterModuleRoutes): RouteRecordRaw[] {
       // school page and the accept endpoint decide who sees what.
       path: '/schools/:id/master-offer',
       name: 'school-master-offer',
-      meta: { catalogs: ['master'] },
+      meta: { option: 'schools', catalogs: ['master'] },
       component: () => import('@/views/master/SchoolMasterOfferView.vue'),
     },
     {

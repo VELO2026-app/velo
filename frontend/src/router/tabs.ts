@@ -15,7 +15,6 @@
 // =============================================================================
 
 import type { Component } from 'vue'
-import type { FeatureName } from '@/platform/features'
 import i18n from '@/locales'
 import {
   IconHome,
@@ -47,10 +46,9 @@ export interface TabItem {
    *  the unconditional default. 'schools' = the account belongs to `>= 1` school
    *  (stores/schoolsHub, any relation); the MASTER zone's shell keeps the
    *  tab also for the admin-issued founding right (can_create_schools).
-   *  tz-whitelabel §4 (F3): a FeatureName is the EDITION level -- checked
-   *  against the feature registry (platform/features), not against server
-   *  data; the module's routes are cut at build time with it. */
-  requires?: 'schools' | FeatureName
+   *  FE-151: 'schools' is also an instance option -- with it off the tab is
+   *  gone whatever the membership (isOptionEnabled, platform/instance). */
+  requires?: 'schools'
 }
 
 /** The user zone's tab bar (UserShell). */
