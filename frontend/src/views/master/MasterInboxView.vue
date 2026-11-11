@@ -48,8 +48,9 @@
   response and is not used -- one page (comms default limit 20) is what the
   owner saw and confirmed; "load more" is future scope.
 
-  BADGE: this screen keeps NO store sync -- the notifications store is the
-  USER dock bell's state; the master dashboard fetches its own badge and
+  BADGE: this screen keeps NO badge sync -- the unread badge query
+  (composables/queries/notifications.ts) is the USER bell's state; the
+  master dashboard fetches its own badge and
   remounts (refetches) on return from here.
 
   Route: /master/notifications (name: 'master-inbox') -- distinct from

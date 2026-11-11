@@ -44,7 +44,7 @@
   carries it in its action slot (right
   side). The header teleports into MobileLayout's island and the fog
   (user-dashboard is a FOG route) dissolves scrolling content under it.
-  The unread presence dot is store-driven (stores/notifications.ts): this
+  The unread presence dot is query-driven (composables/queries/notifications.ts): this
   screen refreshes on mount and keeps the dot fresh with a foreground-only
   60s poll (paused while the tab is hidden; still pure pull -- no
   websocket, per the owner's ruling), the inbox applies the
@@ -68,7 +68,7 @@
         >
           <span class="dashboard__bell-icon">
             <IconBellPlain :size="17" />
-            <span v-if="notifications.unread > 0" class="dashboard__bell-dot" aria-hidden="true" />
+            <span v-if="bellUnread > 0" class="dashboard__bell-dot" aria-hidden="true" />
           </span>
         </button>
       </template>
@@ -284,7 +284,7 @@ import { useRouter } from 'vue-router'
 import { useBookingsStore } from '@/stores/bookings'
 import { upcomingBookingsQuery } from '@/composables/queries/bookings'
 import { extractApiError } from '@/composables/useApiError'
-import { useNotificationsStore } from '@/stores/notifications'
+import { useUnreadBadge } from '@/composables/queries/notifications'
 import { useToast } from '@/composables/useToast'
 import { VHeader } from '@/components/layout'
 import { VButton, VBadge, VStatCard, VSkeletonPracticeCard, VLoadingSwap } from '@/components/ui'
@@ -313,9 +313,10 @@ const router = useRouter()
 
 const bookingsStore = useBookingsStore()
 const toast = useToast()
-// Header bell's unread presence -- store-shared with the inbox screen,
-// which writes server-confirmed badges after its mark-read calls.
-const notifications = useNotificationsStore()
+// Header bell's unread presence -- one cache entry shared with the inbox
+// screen, which writes server-confirmed badges after its mark-read calls
+// (queries/notifications.ts).
+const { unread: bellUnread, refresh: refreshBell, refetch: refetchBell } = useUnreadBadge()
 
 // -- Reactive clock: updated every 60s so alert computeds re-evaluate --
 const now = useNow(60_000)
@@ -610,7 +611,7 @@ function startBellPoll(): void {
   // poll off, and the visibility handler below starts it on return.
   if (bellPollHandle !== null) return
   if (isDocumentHidden()) return
-  bellPollHandle = setInterval(() => void notifications.refreshUnread(), BELL_POLL_MS)
+  bellPollHandle = setInterval(() => void refetchBell(), BELL_POLL_MS)
 }
 
 // Foreground-only, the useRoleFreshness pattern: hidden -> interval off
@@ -621,7 +622,7 @@ function onBellVisibility(): void {
   if (isDocumentHidden()) {
     stopBellPoll()
   } else {
-    void notifications.refreshUnread()
+    void refetchBell()
     startBellPoll()
   }
 }
@@ -642,9 +643,10 @@ function loadUpcoming(): void {
 }
 
 /** Screen on: bell (silent refresh -- a failure keeps the last known value,
- * stores/notifications.ts), and its poll (the minute clock is useNow's, kept-alive aware). */
+ * queries/notifications.ts; skipped if the idle prefetch just answered), and
+ * its poll (the minute clock is useNow's, kept-alive aware). */
 function resume(): void {
-  void notifications.refreshUnread()
+  void refreshBell()
   startBellPoll()
   onDocumentEvent('visibilitychange', onBellVisibility)
 }

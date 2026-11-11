@@ -30,19 +30,36 @@
 // =============================================================================
 
 import { computed } from 'vue'
-import { defineQueryOptions, useQuery, useQueryCache, type QueryCache } from '@pinia/colada'
+import {
+  defineInfiniteQueryOptions,
+  defineQueryOptions,
+  useQuery,
+  useQueryCache,
+  type EntryKey,
+  type QueryCache,
+} from '@pinia/colada'
 import {
   getMySchools,
   getSchoolPage,
   getSchoolPractices,
+  getSchoolAnalytics,
+  getSchoolBlocks,
+  getSchoolMembers,
+  getSchoolRoster,
   getSchoolStudentProfile,
   getSchools,
+  type SchoolAnalyticsPeriod,
 } from '@/api/schools'
 import { isOptionEnabled } from '@/platform/instance'
 import { useAuthStore } from '@/stores/auth'
 import { keys } from '@/composables/queries/keys'
 import { invalidateAfter, type MutationName } from '@/composables/queries/invalidation'
-import type { SchoolMineItem } from '@/api/types'
+import type {
+  SchoolAnalyticsResponse,
+  SchoolBlockedItem,
+  SchoolMineItem,
+  SchoolRosterItem,
+} from '@/api/types'
 
 /** Query options for the school page payload (`GET /schools/{id}`). */
 export const schoolPageQuery = defineQueryOptions((schoolId: string) => ({
@@ -65,6 +82,92 @@ export const schoolStudentQuery = defineQueryOptions(
     staleTime: 0,
   }),
 )
+
+/**
+ * Query options for the curator's analytics of one school for one period
+ * (`GET /masters/me/schools/{id}/analytics?period=`).
+ *
+ * @remarks
+ * Revalidates on every visit (staleTime 0): the figures move with other
+ * people's visits and reviews. A period switch keeps the previous period's
+ * numbers on screen while the new ones load (placeholderData), but only
+ * within one school: another school's numbers under this route, even
+ * briefly, are the stale-data state the screen forbids.
+ */
+export const schoolAnalyticsQuery = defineQueryOptions(
+  ({ schoolId, period }: { schoolId: string; period: SchoolAnalyticsPeriod }) => ({
+    key: keys.schools.analytics(schoolId, period),
+    query: () => getSchoolAnalytics(schoolId, period),
+    staleTime: 0,
+    placeholderData: (
+      previous: SchoolAnalyticsResponse | undefined,
+      previousEntry?: { key: EntryKey },
+    ) => (previousEntry?.key[2] === schoolId ? previous : undefined),
+  }),
+)
+
+/** Rows per page of a school roster. */
+export const SCHOOL_MEMBERS_PAGE_SIZE = 20
+
+/** Where a roster comes from: the curator's member list, the curator's removed tab, a school master's roster. */
+export type SchoolMembersSource = 'members' | 'blocks' | 'roster'
+
+/** One page of any school roster. */
+type SchoolMembersPage = { items: (SchoolRosterItem | SchoolBlockedItem)[]; total: number }
+
+/**
+ * Infinite query options for one roster of a school (SchoolMembersView), for
+ * one tab and one search, SCHOOL_MEMBERS_PAGE_SIZE rows per page.
+ *
+ * @remarks
+ * Revalidates on every visit (staleTime 0): members join, leave and are
+ * removed by other people. Each (school, source, tab, search) is its own
+ * entry, so an answer for an older search or another tab never repaints the
+ * current one.
+ */
+export const schoolMembersQuery = defineInfiniteQueryOptions(
+  ({
+    schoolId,
+    source,
+    kind,
+    search,
+    enabled,
+  }: {
+    schoolId: string
+    source: SchoolMembersSource
+    kind: 'master' | 'student' | 'blocked'
+    search: string
+    enabled: boolean
+  }) => ({
+    key: keys.schools.members(schoolId, { source, kind, search }),
+    query: ({ pageParam }: { pageParam: number }): Promise<SchoolMembersPage> => {
+      const window = { limit: SCHOOL_MEMBERS_PAGE_SIZE, offset: pageParam }
+      if (source === 'blocks') return getSchoolBlocks(schoolId, window)
+      const query = { kind: kind as 'master' | 'student', search: search || undefined, ...window }
+      return source === 'roster'
+        ? getSchoolRoster(schoolId, query)
+        : getSchoolMembers(schoolId, query)
+    },
+    initialPageParam: 0,
+    getNextPageParam: (last: SchoolMembersPage, pages: SchoolMembersPage[]) => {
+      const loaded = pages.reduce((sum, page) => sum + page.items.length, 0)
+      return loaded < last.total ? loaded : null
+    },
+    staleTime: 0,
+    enabled,
+  }),
+)
+
+/**
+ * A school's membership changed from its roster screen (an unblock): drop
+ * every roster of the school nobody holds, so another tab opens from the
+ * loader instead of a stale roster; the held ones the screen re-reads itself.
+ */
+export function forgetSchoolRosters(queryCache: QueryCache, schoolId: string): void {
+  for (const entry of queryCache.getEntries({ key: keys.schools.membersAll(schoolId) })) {
+    if (!entry.active) queryCache.remove(entry)
+  }
+}
 
 /** Query options for the first `limit` upcoming practices of a school (`GET /schools/{id}/practices`). */
 export const schoolFeedQuery = defineQueryOptions(

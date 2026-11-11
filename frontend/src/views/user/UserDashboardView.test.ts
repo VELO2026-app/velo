@@ -137,7 +137,7 @@ import type {
 // lives in @/api/client, untouched -- imported directly below, real class).
 vi.mock('@/api/bookings')
 
-// The floating-header bell reads the notifications store, which calls
+// The floating-header bell reads the unread badge query, which calls
 // listNotifications on this screen's mount -- seam it like every API boundary.
 vi.mock('@/api/notifications')
 

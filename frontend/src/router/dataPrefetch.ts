@@ -60,12 +60,12 @@ async function warmStats(): Promise<void> {
 /** Per tab path: load that screen's data into the cache it reads. */
 export const TAB_DATA_WARMERS: Readonly<Record<string, Warmer>> = {
   '/user/dashboard': async () => {
-    const { useNotificationsStore } = await import('@/stores/notifications')
+    const { refreshUnread } = await import('@/composables/queries/notifications')
     await Promise.all([
       warmUpcoming(),
       warmStats(),
       // The header bell's dot: in place at first paint, not a late pop.
-      useNotificationsStore().refreshUnread(),
+      warmQuery((cache) => refreshUnread(cache)),
     ])
   },
   '/user/calendar': async () => {

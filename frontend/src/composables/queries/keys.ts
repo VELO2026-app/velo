@@ -72,6 +72,22 @@ export const keys = {
     student: (schoolId: string, userId: string) =>
       ['schools', 'detail', schoolId, 'student', userId] as const,
     /**
+     * `GET /masters/me/schools/{id}/analytics?period=` -- the curator's
+     * analytics of one school for one period. Under the school's detail
+     * prefix like `student`, for the same reason.
+     */
+    analytics: (schoolId: string, period: string) =>
+      ['schools', 'detail', schoolId, 'analytics', { period }] as const,
+    /**
+     * One roster of a school, every page loaded so far: the curator's
+     * `/members` or the removed tab's `/blocks`, a school master's `/roster`
+     * (`source`), for one tab and one search. Under the school's detail prefix.
+     */
+    members: (schoolId: string, params: { source: string; kind: string; search: string }) =>
+      ['schools', 'detail', schoolId, 'members', params] as const,
+    /** Prefix of every roster of one school. */
+    membersAll: (schoolId: string) => ['schools', 'detail', schoolId, 'members'] as const,
+    /**
      * `GET /schools/mine` (+ the create right) as one screen shows it: the user
      * zone's schools tab for a role, or the master's schools hub.
      */
@@ -98,6 +114,13 @@ export const keys = {
     /** `GET /masters/me/groups/{id}/members?search=` -- one group's members for one search. */
     members: (groupId: string, search: string) =>
       ['groups', 'members', { groupId, search }] as const,
+  },
+  /** The user-zone bell. */
+  notifications: {
+    /** Prefix of every notification key. */
+    root: () => ['notifications'] as const,
+    /** The unread badge riding `GET /notifications` (no separate unread endpoint exists). */
+    unread: () => ['notifications', 'unread'] as const,
   },
   /** Bookings of the signed-in user and what is derived from them. */
   bookings: {
