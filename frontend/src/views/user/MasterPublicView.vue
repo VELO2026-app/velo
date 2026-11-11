@@ -104,7 +104,7 @@
       :title="t('common.loadFailed')"
       :description="error ?? undefined"
     >
-      <VButton size="sm" @click="loadMaster(masterId)">{{ t('common.retry') }}</VButton>
+      <VButton size="sm" @click="retry">{{ t('common.retry') }}</VButton>
     </VEmptyState>
 
     <!-- Content -->
@@ -328,7 +328,10 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed } from 'vue'
+import { useQuery } from '@pinia/colada'
+import { masterUpcomingQuery, publicMasterQuery } from '@/composables/queries/publicMaster'
+import { screenQueryState } from '@/composables/queries/screenState'
 import { useRoute, useRouter } from 'vue-router'
 import {
   VLoader,
@@ -351,8 +354,6 @@ import CalendarPracticeCard from '@/components/shared/CalendarPracticeCard.vue'
 import ReportUserSheet from '@/components/shared/ReportUserSheet.vue'
 import SendMessageModal from '@/components/shared/SendMessageModal.vue'
 import TargetUserCard from '@/components/shared/TargetUserCard.vue'
-import { getPublicMaster } from '@/api/masters'
-import { getPractices } from '@/api/practices'
 import { blockSchoolMember, demoteSchoolMaster } from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
@@ -364,19 +365,56 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 
-const profile = ref<MasterPublicResponse | null>(null)
-const upcoming = ref<PracticeResponse[]>([])
-const loading = ref(true)
-const error = ref<string | null>(null)
+const masterId = computed(() => String(route.params.id))
+// The roster's master rows navigate here with ?schoolId= -- the curator's
+// school context (see the school-context actions below).
+const schoolId = computed(() => String(route.query.schoolId ?? ''))
+const schoolContext = computed(() => schoolId.value !== '')
+
+// -- Page state (Pinia Colada, FE-166 step 6: queries/publicMaster.ts) --
+//
+// Two queries leave together: the profile paints as soon as it lands, the
+// upcoming practices when theirs does. Each master id has its own entries,
+// so a slow answer for the previous master (B11 item 2: a route reuse, A's
+// page -> B's) lands in A's entry, never on this screen.
+const masterQuery = useQuery(() => publicMasterQuery(masterId.value))
+const upcomingQuery = useQuery(() =>
+  masterUpcomingQuery({ masterId: masterId.value, schoolId: schoolId.value }),
+)
+const masterState = screenQueryState(masterQuery)
+
 /** B11 item 2: 404 (master genuinely doesn't exist) is a DIFFERENT state
  *  from a 5xx/network failure (server down, worth retrying) -- collapsing
  *  them both into the not-found title
  *  (i18n:user.screens.masterPublic.notFound) told the user to give up on a
- *  master who might well exist. Derived from the caught error's own status,
- *  no backend field added. */
-const notFound = ref(false)
+ *  master who might well exist. Derived from the error's own status, no
+ *  backend field added. A 404 wins over a cached copy: the master is gone. */
+const notFound = computed(() => {
+  const e = masterQuery.error.value
+  return e instanceof ApiResponseError && e.status === 404
+})
+const profile = computed<MasterPublicResponse | null>(() =>
+  notFound.value ? null : (masterQuery.data.value ?? null),
+)
+/** Nothing to show yet and an answer awaited (the first load, a retry after a failure). */
+const loading = computed(() => masterQuery.status.value === 'pending' || masterState.loading.value)
+/** The error text of a load with nothing to show (a 404 or a failure). */
+const error = computed<string | null>(() => {
+  if (profile.value || !masterQuery.error.value) return null
+  return extractApiError(
+    masterQuery.error.value,
+    notFound.value
+      ? t('user.screens.masterPublic.profileUnavailable')
+      : t('user.screens.masterPublic.tryLater'),
+  )
+})
+/** Upcoming practices; a failure is non-fatal -- the profile renders without them. */
+const upcoming = computed<PracticeResponse[]>(() => upcomingQuery.data.value ?? [])
 
-const masterId = computed(() => String(route.params.id))
+function retry(): void {
+  void masterQuery.refetch()
+  void upcomingQuery.refetch()
+}
 
 const displayName = computed(
   () => profile.value?.display_name ?? t('user.screens.masterPublic.role.master'),
@@ -393,9 +431,6 @@ const TAG_VARIANTS = ['blue', 'pink', 'sand'] as const
 // (i18n:user.screens.masterPublic.role.switchCta) is the BE-59 demote
 // (wired); block (i18n:common.block) sends the BE-79 block (wired,
 // BE-79 (2)).
-
-const schoolId = computed(() => String(route.query.schoolId ?? ''))
-const schoolContext = computed(() => schoolId.value !== '')
 
 const roleOpen = ref(false)
 type MemberKind = 'student' | 'master'
@@ -527,83 +562,6 @@ function goCreatePractice(): void {
     query: { masterId: masterId.value, schoolId: schoolId.value },
   })
 }
-
-// Bumps on every load attempt (master A -> master B under one reused
-// instance); a superseded answer is a no-op. Same pattern as SchoolPageView.
-let loadEpoch = 0
-
-/** Upcoming practices by this master; a failure is non-fatal (empty list). */
-async function fetchUpcoming(id: string): Promise<PracticeResponse[]> {
-  // Reuse the public feed with a master_id filter + scheduled status. Owner
-  // 2026-10-03: in the curator's school context (?schoolId=) only the
-  // master's practices in THAT school are listed -- the public feed has no
-  // school param, so the page is fetched larger and filtered client-side by
-  // the practices' own school_id (null on personal practices, a foreign
-  // school's id otherwise). Outside the school context the plain feed stands.
-  try {
-    const res = await getPractices(
-      {
-        master_id: id,
-        status: 'scheduled',
-        sort_by: 'scheduled_at',
-        sort_order: 'asc',
-      },
-      schoolContext.value ? 50 : 5,
-      0,
-    )
-    // The <=5 cap is also enforced locally: the owner's 2026-09-30 spec is
-    // "up to 5 cards", independent of any server limit regression.
-    const items = schoolContext.value
-      ? res.items.filter((p) => p.school_id === schoolId.value)
-      : res.items
-    return items.slice(0, 5)
-  } catch {
-    // Non-fatal: the profile still renders without the upcoming list.
-    return []
-  }
-}
-
-async function loadMaster(id: string): Promise<void> {
-  const epoch = ++loadEpoch
-  loading.value = true
-  error.value = null
-  notFound.value = false
-  upcoming.value = []
-  // Both requests leave together; the practices call never rejects, so the
-  // profile failing cannot leave an unhandled rejection behind.
-  const upcomingPromise = fetchUpcoming(id)
-  try {
-    const profileRes = await getPublicMaster(id)
-    const upcomingRes = await upcomingPromise
-    if (epoch !== loadEpoch) return
-    profile.value = profileRes
-    upcoming.value = upcomingRes
-  } catch (e) {
-    if (epoch !== loadEpoch) return
-    const is404 = e instanceof ApiResponseError && e.status === 404
-    notFound.value = is404
-    error.value = extractApiError(
-      e,
-      is404
-        ? t('user.screens.masterPublic.profileUnavailable')
-        : t('user.screens.masterPublic.tryLater'),
-    )
-    profile.value = null
-  } finally {
-    if (epoch === loadEpoch) loading.value = false
-  }
-}
-
-onMounted(() => {
-  void loadMaster(masterId.value)
-})
-
-// B11 item 2: Vue Router reuses this component instance when a navigation
-// only changes route params under the same matched record (master A's
-// public page -> master B's), so onMounted alone never re-fires.
-watch(masterId, (id) => {
-  void loadMaster(id)
-})
 </script>
 
 <style scoped>

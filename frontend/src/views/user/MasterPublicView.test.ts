@@ -22,8 +22,8 @@
 // (no Date.now()/new Date()), no per-route guard beyond the shared root
 // roleRedirect (checked router/index.ts).
 //
-// `loading` starts at `ref(true)` (.vue:142) -- a LITERAL true from setup,
-// not derived from a store default -- so unlike BookingConfirmedView's
+// `loading` is true from setup: the master query's entry is `pending` until
+// its first answer (FE-166 step 6, queries/publicMaster.ts) -- so unlike BookingConfirmedView's
 // finding (a), there is NO pre-onMounted synchronous frame where this screen's
 // own guard mismatches: the loader is already correct on the very first
 // render, before onMounted has run at all. Proven below with a zero-tick
@@ -36,24 +36,22 @@
 // both rendered the identical not-found title
 // (i18n:user.screens.masterPublic.notFound) with no retry. Fixed
 // by deriving `notFound` from `e instanceof ApiResponseError && e.status ===
-// 404` in loadMaster() (.vue) and splitting the template into two
+// 404` (now off the query's error) and splitting the template into two
 // v-else-if rungs: not-found (404, back only, i18n:ui.back) vs.
 // load-failed (anything else, i18n:common.loadFailed, with a
-// i18n:common.retry button that re-runs loadMaster).
+// i18n:common.retry button that refetches both queries).
 // Proven below: a 404 keeps the old title/no-retry; a plain Error and a 500
 // both now get the retryable title instead.
 //
-// TWO INDEPENDENT FETCHES, confirmed NOT parallel and NOT equally fatal:
-// getPractices only runs AFTER getPublicMaster resolves (nested, sequential --
-// .vue:184-203), and its own try/catch is LOCAL: a practices failure never
-// touches `error` or `profile`, so the profile still renders and only the
+// TWO INDEPENDENT FETCHES (two Colada queries since FE-166 step 6), parallel
+// (FE-157) and NOT equally fatal: a practices failure never touches `error`
+// or `profile`, so the profile still renders and only the
 // nearest-practices section (i18n:user.screens.masterPublic.sections.nearest)
 // is silently absent (the header's own comment:
-// "Non-fatal"). A master-fetch failure, conversely, never even calls
-// getPractices (proven below) and always reaches the combined error rung.
+// "Non-fatal"). A master-fetch failure, conversely, always reaches the error
+// rung, whatever the practices answered.
 //
-// FIXED (B11 item 2): the script now `watch`es `masterId` and re-runs the
-// same load on change, so a param-only in-place navigation (Vue Router
+// FIXED (B11 item 2): the queries are keyed on `masterId` and follow it, so a param-only in-place navigation (Vue Router
 // reuses the component instance when only params change under the SAME
 // matched record) re-loads instead of keeping the previous master under a
 // new URL. Covered below by mutating the route param on an already-mounted
@@ -67,6 +65,8 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, reactive, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import MasterPublicView from '@/views/user/MasterPublicView.vue'
 import * as mastersApi from '@/api/masters'
 import * as practicesApi from '@/api/practices'
@@ -159,7 +159,7 @@ function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(MasterPublicView).use(createTestI18n())
-  app.use(pinia)
+  app.use(pinia).use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
@@ -630,6 +630,21 @@ describe('MasterPublicView', () => {
       expect(mastersApi.getPublicMaster).toHaveBeenCalledTimes(2)
       expect(emptyState()).toBeNull()
       expect(content()?.textContent).toContain('Анна Соколова')
+    })
+
+    it('retry: while the retry is in flight the loader replaces the error (no frozen error state)', async () => {
+      // Colada keeps the entry in `error` during a retry; the screen must
+      // still show that something is being tried (queries/screenState.ts).
+      vi.mocked(mastersApi.getPublicMaster).mockRejectedValueOnce(new Error('ECONNRESET'))
+      mount()
+      await flush()
+
+      vi.mocked(mastersApi.getPublicMaster).mockReturnValueOnce(new Promise(() => {}))
+      emptyState()?.querySelector<HTMLButtonElement>('button')?.click()
+      await flush()
+
+      expect(loader()).not.toBeNull()
+      expect(emptyState()).toBeNull()
     })
   })
 
