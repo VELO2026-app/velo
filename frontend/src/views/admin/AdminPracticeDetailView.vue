@@ -392,7 +392,7 @@ onMounted(() => {
   font-family: var(--font-body);
   font-size: var(--velo-fs-16);
   color: var(--velo-error-text);
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .admin-detail__items {

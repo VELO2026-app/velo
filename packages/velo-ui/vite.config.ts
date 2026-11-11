@@ -6,7 +6,7 @@
 // The css bundle is the package's only styling artifact: component styles
 // travel inside the SFCs as-is, values are var(--velo-*) tokens ONLY -- the
 // host paints the kit through its cascade
-//   variables.css -> @velo/ui css bundle -> skin-tokens.css
+//   variables.css -> @velo/ui css bundle -> virtual:skin-tokens.css
 // so the golden build and any skin color it identically (tz-whitelabel §3).
 // vue is a peer dependency and stays external -- it is never bundled.
 //

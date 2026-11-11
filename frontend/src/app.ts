@@ -42,7 +42,7 @@ import './styles/diary-entry-scale.css'
 // converted to CSS when a skin ships, an empty stub otherwise; see platform/skin.ts). The TZ sketch said
 // main.ts, but the app-wide stylesheet order lives HERE, so the generated
 // import sits in the same chain -- hopeful import order is not a mechanism.
-import './styles/skin-tokens.css'
+import 'virtual:skin-tokens.css'
 
 import { initTelegramSdk } from './platform/telegram-sdk'
 import { installRenderDebug } from './platform/render-debug'

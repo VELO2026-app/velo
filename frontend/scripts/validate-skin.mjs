@@ -53,6 +53,7 @@ const PNG_SIZES = {
   'apple-touch-icon-180.png': [180, 180],
 }
 /** Text/background pairs checked when the skin overrides either side. */
+/** @type {[string, string, number][]} */
 const CONTRAST_PAIRS = [
   ['--velo-text-primary', '--velo-bg-card-solid', 4.5],
   ['--velo-text-secondary', '--velo-bg-card-solid', 4.5],
@@ -145,6 +146,7 @@ function deprecatedTokens(tokensDoc) {
  * contrast pairs resolve against). Returns the report; `fails.length === 0`
  * means the package may ship. */
 export function validateSkin(skinDir, frontendDir) {
+  /** @type {{ fails: string[], warns: string[], manual: string[], passed: string[] }} */
   const out = { fails: [], warns: [], manual: [], passed: [] }
   skinDir = resolve(skinDir)
   const assets = join(skinDir, 'assets')
@@ -155,6 +157,8 @@ export function validateSkin(skinDir, frontendDir) {
   for (const problem of pkg.problems) fail(out, `FAIL ${problem}`)
   if (out.fails.length > 0) return out
   const brand = pkg.brand
+  // No problems means the engine read a brand record; the guard narrows it.
+  if (brand === null) return out
   ok(out, `primer-package.yaml: contract "${pkg.contract}"`)
   ok(out, `brand: "${brand.displayName}" / "${brand.shortName}"`)
   for (const dir of ASSET_DIRS) {

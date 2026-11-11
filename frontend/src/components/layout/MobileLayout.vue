@@ -359,6 +359,9 @@ function onTabNavigate(to: string): void {
      react to the measured island height. */
   padding-left: var(--velo-rail-pad-x);
   padding-right: var(--velo-rail-pad-x);
+  /* View Transitions layers (router/viewTransition.ts, global.css): the page
+     and the header island crossfade separately; the dock is named in VTabBar. */
+  view-transition-name: velo-page;
 }
 
 .mobile-layout__main::-webkit-scrollbar {
@@ -369,16 +372,6 @@ function onTabNavigate(to: string): void {
    body overflow alone let the feed scroll through on iOS. */
 html.velo-scroll-locked .mobile-layout__main {
   overflow: hidden;
-}
-
-/* View Transitions layers (router/viewTransition.ts, global.css): the page
-   and the header island crossfade separately; the dock is named in VTabBar. */
-.mobile-layout__main {
-  view-transition-name: velo-page;
-}
-
-.mobile-layout__island {
-  view-transition-name: velo-header;
 }
 
 /* Edge-to-edge fog: TOP-ONLY fade mask for long scrolling lists. Opt-in via
@@ -416,6 +409,7 @@ html.velo-scroll-locked .mobile-layout__main {
   right: 0;
   z-index: var(--z-sticky);
   pointer-events: none;
+  view-transition-name: velo-header;
 }
 
 .mobile-layout__main--fill {

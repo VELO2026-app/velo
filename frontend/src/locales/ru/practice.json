@@ -36,11 +36,6 @@
   "timePicker": {
     "title": "Время практики"
   },
-  "bookingCancel": {
-    "title": "Отменить бронирование?",
-    "keep": "Нет, оставить",
-    "confirm": "Да, отменить"
-  },
   "booking": {
     "title": "Бронирование",
     "labels": {

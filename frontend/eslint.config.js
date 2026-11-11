@@ -342,9 +342,8 @@ export default [
 
   {
     // --- Generated code: not held to the comment standard. ----------------
-    // src/api/generated.ts (the OpenAPI client) and
-    // src/platform/skin-brand.generated.ts are build output of generators
-    // that live in backend/** and carry "DO NOT EDIT" headers. Their
+    // src/api/generated.ts (the OpenAPI client) is build output of a
+    // generator that lives in backend/** and carries a "DO NOT EDIT" header. Its
     // docstrings keep `->`, {placeholders} and @-aliases verbatim (~182
     // TSDoc grammar findings in generated.ts alone): hand-escaping is
     // futile -- the next regen wipes it -- and fixing the generator is a
@@ -362,6 +361,99 @@ export default [
   },
 
   {
-    ignores: ['dist/', 'node_modules/', '*.config.*'],
+    // FE-157 5C: the .mjs build scripts. Same type-aware ruleset as the app,
+    // typed through tsconfig.scripts.json (checkJs); Node globals instead of
+    // the browser's.
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: { ...globals.node },
+      parserOptions: {
+        project: ['./tsconfig.scripts.json'],
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+      // The scripts are untyped JS (implicit-any parameters, JSON.parse
+      // results): the unsafe family would flag ~1300 sites of "any" that the
+      // JSDoc-less code cannot answer. Floating promises, unused vars and the
+      // rest of the type-aware set stay on. Scoped to the .mjs scripts only:
+      // the TypeScript files below keep the full set.
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+    },
+  },
+
+  {
+    // The TypeScript build configs (Vite/Vitest): typed code, so the whole
+    // type-aware set stays on (no no-unsafe-* relaxation), typed through
+    // tsconfig.configs.json (strict, noImplicitAny on); Node globals.
+    files: ['vite.config.ts', 'vitest.config.ts'],
+    languageOptions: {
+      globals: { ...globals.node },
+      parserOptions: {
+        project: ['./tsconfig.configs.json'],
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+    },
+  },
+
+  {
+    // The Playwright suite (e2e/ and its config), typed through
+    // e2e/tsconfig.json. Page callbacks run in the browser, hence both sets
+    // of globals.
+    files: ['e2e/**/*.ts', 'playwright.config.ts'],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.browser },
+      parserOptions: {
+        project: ['./e2e/tsconfig.json'],
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+    },
+  },
+
+  {
+    // node:test registers tests with top-level test(...) calls that return a
+    // promise nobody awaits by design.
+    files: ['scripts/**/*.test.mjs'],
+    rules: { '@typescript-eslint/no-floating-promises': 'off' },
+  },
+
+  {
+    // FE-131 scripts/lib/skin-package.mjs has a .d.mts sidecar: TypeScript
+    // takes the declaration and leaves the .mjs out of tsconfig.scripts.json's
+    // program, so the type-aware rules cannot run on it. Syntax-level rules
+    // still apply; its types are checked through the .d.mts by vue-tsc.
+    files: ['scripts/lib/skin-package.mjs'],
+    ...tseslint.configs.disableTypeChecked,
+  },
+
+  {
+    // eslint.config.js and the other tooling configs stay unlinted; the two
+    // build configs above are linted. The .d.mts type sidecars of the scripts
+    // (FE-131 scripts/lib/skin-package.d.mts) are declarations only, outside
+    // tsconfig.scripts.json; vue-tsc checks them through their TS importers.
+    ignores: [
+      'dist/',
+      'node_modules/',
+      'eslint.config.js',
+      'stylelint.config.*',
+      'scripts/**/*.d.mts',
+    ],
   },
 ]

@@ -4,8 +4,8 @@
 //
 // Covers loginViaTelegram, restoreSession, logout -- per the ranked T1 plan,
 // sequenced after stores/bookings.ts since this store carries the most
-// incidental complexity relative to its money-criticality: a dynamic
-// @/composables/useAuth import inside logout() and storage side effects.
+// incidental complexity relative to its money-criticality: storage side
+// effects and the session-end announcement (platform/session.ts).
 //
 // FE-157: the end of a session resets the other stores through the account
 // scope (platform/session.ts), so the Pinia here is installed in an app with
@@ -19,12 +19,9 @@
 // each carrier by platformName, so these tests assert the actual storage a
 // platform writes, not a stand-in.
 //
-// @/composables/useAuth is mocked WHOLESALE (not partially) specifically so
-// the real module -- which imports useAuthStore from @/stores/auth at module
-// scope, and owns the module-level `isReady` singleton behind
-// waitUntilReady() -- is never evaluated. That singleton/seam is the stage-3
-// blocker (router guards); mocking the whole module here sidesteps it
-// entirely rather than working around it, so nothing from stage 3 leaks in.
+// The composables that react to the session ending (the Telegram logout gate,
+// the role-freshness poll) subscribe through onSessionEnd; their half is in
+// composables/session-end.test.ts.
 //
 // loginViaTelegram calls `api.post` directly (no api/*.ts wrapper), so it is
 // mocked at the @/api/client seam, same pattern as the stage-1 wrapper tests.
@@ -64,9 +61,6 @@ vi.mock('@/api/client', async (importOriginal) => {
 })
 
 vi.mock('@/api/users')
-
-const beginLogout = vi.fn()
-vi.mock('@/composables/useAuth', () => ({ beginLogout }))
 
 const platformClose = vi.fn()
 let platformName: 'telegram' | 'standalone' = 'standalone'
@@ -135,7 +129,6 @@ describe('useAuthStore', () => {
     localStorage.clear()
     vi.mocked(api.post).mockReset()
     vi.mocked(usersApi.getMe).mockReset()
-    beginLogout.mockReset()
     platformClose.mockReset()
     platformName = 'standalone'
   })
@@ -321,11 +314,10 @@ describe('useAuthStore', () => {
       expect(store.user).toBeNull()
       // Standalone phase 3, item 6: the persistent token is gone too.
       expect(localStorage.getItem('velo_token')).toBeNull()
-      expect(beginLogout).not.toHaveBeenCalled()
       expect(platformClose).not.toHaveBeenCalled()
     })
 
-    it('Telegram: arms the logout gate BEFORE clearing session, then closes the Mini App', async () => {
+    it('Telegram: clears the session, then closes the Mini App (the gate: composables/session-end.test.ts)', async () => {
       platformName = 'telegram'
       vi.mocked(api.post).mockResolvedValue(undefined)
       const store = useAuthStore()
@@ -335,7 +327,6 @@ describe('useAuthStore', () => {
 
       await store.logout()
 
-      expect(beginLogout).toHaveBeenCalledTimes(1)
       expectAccountStoresReset()
       expect(store.token).toBeNull()
       expect(platformClose).toHaveBeenCalledTimes(1)

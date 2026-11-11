@@ -1,10 +1,6 @@
 # Auto-generated from OpenAPI schema by backend/scripts/generate_ts_types.py
 # Regenerated via `make gen-types` — never hand-format or it will drift on regen.
 src/api/generated.ts
-# Auto-generated from skin packages by scripts/apply-skin.mjs
-# (`pnpm skin <name>`) — regenerating overwrites any hand-formatting.
-src/platform/skin-brand.generated.ts
-src/styles/skin-tokens.css
 # Written by scripts/sync-figma-variables.mjs and extract-variables-tokens.mjs
 # as JSON.stringify(doc, null, 2); the root lint-staged prettier pass
 # (FE-157) would collapse its short arrays and the next sync would undo it.

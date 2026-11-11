@@ -129,7 +129,7 @@ const shownText = computed<string>(() =>
   border-radius: var(--radius-md);
   background: var(--velo-bg-card-solid);
   color: var(--velo-text-primary);
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .bubble--mine {

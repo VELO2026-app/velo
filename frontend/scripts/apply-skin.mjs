@@ -17,7 +17,7 @@
 
 import { cpSync, existsSync, rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { IGNORED_FILES } from './lib/skin-package.mjs'
 
 const frontendDir = resolve(fileURLToPath(new URL('..', import.meta.url)))
@@ -47,7 +47,7 @@ cpSync(source, target, {
   recursive: true,
   filter: (from) => {
     const parts = from.split(/[\\/]/)
-    return !parts.includes('.git') && !IGNORED_FILES.has(parts.at(-1))
+    return !parts.includes('.git') && !IGNORED_FILES.has(parts.at(-1) ?? '')
   },
 })
 

@@ -123,6 +123,8 @@ const formattedTime = computed(() => formatStopwatch(props.elapsedSec))
 .voice-panel--compact .voice-panel__disc {
   width: 36px;
   height: 36px;
+  /* [FE-26 kept] the skirt below is pure hit area on an already-positioned element. */
+  position: relative;
 }
 
 .voice-panel--compact .voice-panel__ghost::after,
@@ -130,12 +132,6 @@ const formattedTime = computed(() => formatStopwatch(props.elapsedSec))
   content: '';
   position: absolute;
   inset: calc(-1 * var(--space-1));
-}
-
-/* [FE-26 kept] the skirt is pure hit area on an already-positioned element. */
-.voice-panel--compact .voice-panel__ghost,
-.voice-panel--compact .voice-panel__disc {
-  position: relative;
 }
 
 /* ✕: a bare glyph, no filled disc -- the stop control is THE disc of this

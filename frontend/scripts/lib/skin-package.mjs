@@ -106,6 +106,7 @@ const FONT_MAX_BYTES = 2 * 1024 * 1024
 // whole family is refused -- prefixed elements, numeric entities, <style>
 // and style="" (CSS escapes, image-set()), animation (it can rewrite href),
 // src="" attributes. The golden SVGs use none of them.
+/** @type {Array<[RegExp, string]>} */
 const SVG_FORBIDDEN = [
   [/<[A-Za-z_][\w.-]*:/, 'a namespace-prefixed element'],
   // CSS escapes (u\72 l( in a presentation attribute) -- the golden SVGs
@@ -132,7 +133,7 @@ const SVG_FORBIDDEN = [
 ]
 const PNG_MAGIC = '89504e470d0a1a0a'
 /** The closed alphabet of a token value, and the functions it may call. */
-const VALUE_CHARS = /^[A-Za-z0-9 \t\n#%.,()+*\/-]+$/
+const VALUE_CHARS = /^[A-Za-z0-9 \t\n#%.,()+*/-]+$/
 const VALUE_FUNCTIONS = new Set([
   'var',
   'color-mix',
@@ -149,8 +150,16 @@ const VALUE_FUNCTIONS = new Set([
 /** A font family name -- the same rule for brand.fonts and bare.font-body. */
 const FAMILY = /^[A-Za-z0-9 ._-]+$/
 /** initial/inherit/... in a family list invalidate font-family: var(--font-body). */
-const CSS_WIDE_KEYWORDS = new Set(['initial', 'inherit', 'unset', 'revert', 'revert-layer', 'default'])
+const CSS_WIDE_KEYWORDS = new Set([
+  'initial',
+  'inherit',
+  'unset',
+  'revert',
+  'revert-layer',
+  'default',
+])
 /** A display text: no markup, no control characters (it lands in HTML). */
+// eslint-disable-next-line no-control-regex -- matching control characters IS the check
 const UNSAFE_TEXT = /[<>&"\u0000-\u001f\u007f-\u009f\u200e\u200f\u2028-\u202e\u2066-\u2069\ufeff]/
 const NAME = /^[A-Za-z0-9_-]+$/
 const REFERENCE = /^\{([^{}]+)\}$/
@@ -244,10 +253,14 @@ function listFiles(dir, problems) {
 
 /** primer-package.yaml, block form: `key: value` lines, `#` comments. */
 export function parseManifest(text) {
+  /** @type {Record<string, string>} */
   const out = {}
   // A BOM (a Windows editor) and CRLF line ends are not content.
   for (const raw of text.replace(/^\uFEFF/, '').split(/\r?\n/)) {
-    const line = raw.replace(/\s+#.*$/, '').replace(/^#.*$/, '').trimEnd()
+    const line = raw
+      .replace(/\s+#.*$/, '')
+      .replace(/^#.*$/, '')
+      .trimEnd()
     if (line.trim() === '') continue
     const m = line.match(/^([a-z_]+):\s*(.*)$/)
     if (!m) return { error: `cannot read the line "${raw.trim()}" (block form: key: value)` }
@@ -267,7 +280,7 @@ function checkManifest(dir, problems) {
     problems.push(`${MANIFEST}: ${parsed.error}`)
     return null
   }
-  const { schema, contract } = parsed.fields
+  const { schema, contract } = parsed.fields ?? {}
   if (schema !== '1') problems.push(`${MANIFEST}: schema must be 1, got ${schema ?? 'nothing'}`)
   const point = String(contract ?? '').match(/^"(\d+)\.(\d+)"$/)
   if (!point) {
@@ -308,15 +321,14 @@ function collect(node, file, path, tokens, problems) {
     const here = path.concat(key)
     if ('$value' in value) {
       for (const k of Object.keys(value))
-        if (k.startsWith('$') && !TOKEN_KEYS.has(k)) problems.push(`${where}: unknown DTCG key ${k}`)
+        if (k.startsWith('$') && !TOKEN_KEYS.has(k))
+          problems.push(`${where}: unknown DTCG key ${k}`)
       const id = here.join('.')
       if (tokens.has(id)) problems.push(`${where}: declared twice (also in ${tokens.get(id).file})`)
       else tokens.set(id, { file, token: value })
     }
     // A golden token may also be a group (velo.primary and velo.primary.dark).
-    const children = Object.fromEntries(
-      Object.entries(value).filter(([k]) => !k.startsWith('$')),
-    )
+    const children = Object.fromEntries(Object.entries(value).filter(([k]) => !k.startsWith('$')))
     collect(children, file, here, tokens, problems)
   }
 }
@@ -404,7 +416,14 @@ function checkBrand(record, files, problems) {
     problems.push(
       `${where}.fontUrl: a package makes no external request -- ship the font in assets/fonts/ and list it in "fonts"`,
     )
-  const known = new Set(['displayName', 'shortName', 'themeColor', 'backgroundColor', 'fonts', 'fontUrl'])
+  const known = new Set([
+    'displayName',
+    'shortName',
+    'themeColor',
+    'backgroundColor',
+    'fonts',
+    'fontUrl',
+  ])
   for (const key of Object.keys(record))
     if (!known.has(key)) problems.push(`${where}.${key}: unknown field`)
   const fonts = []
@@ -419,7 +438,8 @@ function checkBrand(record, files, problems) {
         if (!FAMILY.test(family)) problems.push(`${at}.family: a plain family name`)
         if (typeof font.file !== 'string' || !FONT_FILE.test(font.file))
           problems.push(`${at}.file: a path assets/fonts/<name>.woff2`)
-        else if (!files.includes(font.file)) problems.push(`${at}.file: ${font.file} is not in the package`)
+        else if (!files.includes(font.file))
+          problems.push(`${at}.file: ${font.file} is not in the package`)
         const weight = font.weight ?? 400
         if (
           !(typeof weight === 'number' && weight >= 1 && weight <= 1000) &&
@@ -455,11 +475,15 @@ function checkAsset(dir, file, problems) {
     if (size > PNG_MAX_BYTES) return problems.push(`${file}: larger than ${PNG_MAX_BYTES} bytes`)
     const head = readFileSync(path).subarray(0, 24)
     if (file.endsWith('.jpg')) {
-      if (head.subarray(0, 3).toString('hex') !== 'ffd8ff') problems.push(`${file}: not a JPEG image`)
+      if (head.subarray(0, 3).toString('hex') !== 'ffd8ff')
+        problems.push(`${file}: not a JPEG image`)
       return
     }
     if (file.endsWith('.webp')) {
-      if (head.subarray(0, 4).toString('latin1') !== 'RIFF' || head.subarray(8, 12).toString('latin1') !== 'WEBP')
+      if (
+        head.subarray(0, 4).toString('latin1') !== 'RIFF' ||
+        head.subarray(8, 12).toString('latin1') !== 'WEBP'
+      )
         problems.push(`${file}: not a WebP image`)
       return
     }
@@ -509,7 +533,7 @@ export function loadSkinPackage(dir, tokensDoc) {
     try {
       doc = JSON.parse(readFileSync(join(dir, file), 'utf8'))
     } catch (e) {
-      problems.push(`${file}: not valid JSON (${e.message})`)
+      problems.push(`${file}: not valid JSON (${e instanceof Error ? e.message : String(e)})`)
       continue
     }
     if (!isObject(doc)) {
@@ -523,11 +547,16 @@ export function loadSkinPackage(dir, tokensDoc) {
 
   let brand = null
   if (brands.length === 0)
-    problems.push(`tokens/: no brand record -- a root $extensions["${BRAND_EXTENSION}"] (tokens/brand.tokens.json)`)
+    problems.push(
+      `tokens/: no brand record -- a root $extensions["${BRAND_EXTENSION}"] (tokens/brand.tokens.json)`,
+    )
   else if (brands.length > 1)
-    problems.push(`tokens/: the brand record is declared in ${brands.map((b) => b.file).join(' and ')} -- one only`)
+    problems.push(
+      `tokens/: the brand record is declared in ${brands.map((b) => b.file).join(' and ')} -- one only`,
+    )
   else brand = checkBrand(brands[0].record, files, problems)
 
+  /** @type {Array<{ order: number, name: string, value: string }>} */
   const decls = []
   for (const [path, { file, token }] of tokens) {
     const target = golden.get(path)
@@ -536,12 +565,20 @@ export function loadSkinPackage(dir, tokensDoc) {
       continue
     }
     if (!skinnable(path)) {
-      problems.push(`${file}: ${path} is a frozen bare token -- a skin sets velo.* and bare.font-body only`)
+      problems.push(
+        `${file}: ${path} is a frozen bare token -- a skin sets velo.* and bare.font-body only`,
+      )
       continue
     }
     const value = cssValue(token.$value, golden, path)
     if (value.error) problems.push(`${file}: ${path}: ${value.error}`)
-    else decls.push({ order: target.order, name: target.cssName, value: value.css })
+    // no error = cssValue produced the CSS text
+    else
+      decls.push({
+        order: target.order,
+        name: target.cssName,
+        value: /** @type {string} */ (value.css),
+      })
   }
   decls.sort((a, b) => a.order - b.order)
 
@@ -554,11 +591,12 @@ export function loadSkinPackage(dir, tokensDoc) {
   const refsOf = (name) =>
     [...(values.get(name) ?? '').matchAll(/var\(\s*(--[A-Za-z0-9-]+)/g)].map((m) => m[1])
   for (const d of decls) {
+    /** @type {Array<[string, string[]]>} */
     const stack = [[d.name, [d.name]]]
     const seen = new Set()
     let cycle = null
     while (stack.length > 0 && !cycle) {
-      const [name, trail] = stack.pop()
+      const [name, trail] = /** @type {[string, string[]]} */ (stack.pop())
       for (const next of refsOf(name)) {
         if (next === d.name) cycle = [...trail, next]
         else if (!seen.has(next)) {
@@ -586,7 +624,9 @@ export function loadSkinPackage(dir, tokensDoc) {
         `fonts: "${family}" ships in assets/fonts/ but bare.font-body is not set -- the app never uses it`,
       )
     else if (!bodyFamilies.includes(family))
-      problems.push(`fonts: bare.font-body must name the shipped family "${family}", got: ${body.value}`)
+      problems.push(
+        `fonts: bare.font-body must name the shipped family "${family}", got: ${body.value}`,
+      )
   }
 
   return {

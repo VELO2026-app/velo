@@ -75,9 +75,6 @@ walk(srcRoot)
 // calling the host's keys) -- the audit must see them from day one.
 walk('../packages/velo-ui/src')
 
-const BLOCK_COMMENT = /\/\*[\s\S]*?\*\//g
-const LINE_COMMENT = /\/\/.*/g
-const HTML_COMMENT = /<!--[\s\S]*?-->/g
 const KEY_CALL = /\bt\(\s*(['"`])([^'"`]+)\1/g
 
 // Quote-aware comment stripper: removes // and /* */ only OUTSIDE string
@@ -256,7 +253,7 @@ function walkCompile(node, path) {
   try {
     compileI18n.global.t(path)
   } catch (e) {
-    compileFails.push(`${path} :: ${String(e.message).slice(0, 100)}`)
+    compileFails.push(`${path} :: ${String(e instanceof Error ? e.message : e).slice(0, 100)}`)
   }
 }
 walkCompile(catalog, '')
@@ -292,7 +289,9 @@ for (const locale of localeDirs) {
     try {
       compileI18n.global.t(path)
     } catch (e) {
-      foreignCompileFails.push(`${locale}: ${path} :: ${String(e.message).slice(0, 90)}`)
+      foreignCompileFails.push(
+        `${locale}: ${path} :: ${String(e instanceof Error ? e.message : e).slice(0, 90)}`,
+      )
     }
   }
   walkCompileLocale(cat, '')

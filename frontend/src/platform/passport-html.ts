@@ -44,7 +44,7 @@ const PASSPORT_HTML_DEFAULTS: Record<string, string> = {
 const FONT_BLOCK = /<!--VELO:FONT-->[\s\S]*<!--\/VELO:FONT-->/
 
 /** A skin with self-hosted fonts (FE-131: assets/fonts/ of the package,
- *  declared by an \@font-face rule in skin-tokens.css) replaces the Google Fonts block
+ *  declared by an \@font-face rule in virtual:skin-tokens.css) replaces the Google Fonts block
  *  with preloads of its own files -- no external request ships with it. */
 function skinFontBlock(skin: SkinPackage): string {
   return [

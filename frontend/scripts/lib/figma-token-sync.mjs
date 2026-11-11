@@ -61,7 +61,11 @@ export function collectLeaves(doc) {
           out.push({ path: p, cssName, value: value.$value, node: value })
         }
       }
-      if (Object.keys(value).some((k) => !k.startsWith('$') && value[k] && typeof value[k] === 'object')) {
+      if (
+        Object.keys(value).some(
+          (k) => !k.startsWith('$') && value[k] && typeof value[k] === 'object',
+        )
+      ) {
         walk(value, p)
       }
     }
@@ -101,7 +105,9 @@ export function buildNameMap(leaves, figmaVariables) {
   for (const v of figmaVariables) {
     const tail = v.name.slice(v.name.lastIndexOf('/') + 1)
     if (byTail.has(tail)) {
-      throw new Error(`name map: Figma suffix collision on "${tail}" (${byTail.get(tail)} vs ${v.name})`)
+      throw new Error(
+        `name map: Figma suffix collision on "${tail}" (${byTail.get(tail)} vs ${v.name})`,
+      )
     }
     byTail.set(tail, v.name)
   }
@@ -155,7 +161,9 @@ export function parseCssValue(css) {
       /^color-mix\(\s*in srgb,\s*(var\(\s*--[A-Za-z0-9-]+\s*\)|#[0-9a-fA-F]{6})\s+([0-9.]+)%,\s*transparent\s*\)$/,
     ))
   ) {
-    const base = m[1].startsWith('var(') ? { kind: 'ref', cssName: m[1].replace(/\s/g, '').slice(4, -1) } : { kind: 'color', rgb: hexToRgb(m[1]), a: 1 }
+    const base = m[1].startsWith('var(')
+      ? { kind: 'ref', cssName: m[1].replace(/\s/g, '').slice(4, -1) }
+      : { kind: 'color', rgb: hexToRgb(m[1]), a: 1 }
     return { kind: 'mix', base, percent: Number(m[2]) }
   }
   if ((m = s.match(/^(-?\d*\.?\d+)(ms|px|deg|%)?$/))) {
@@ -251,10 +259,16 @@ export function figmaToComparable(figValue, figmaById, nameMap, cssNameByFigmaNa
 
 /** The resolvedType of a Figma variable turns raw numbers into magnitudes:
  *  TIMING seconds become ms for the compare. */
-export function figmaToComparableTyped(figValue, resolvedType, figmaById, nameMap, cssNameByFigmaName) {
+export function figmaToComparableTyped(
+  figValue,
+  resolvedType,
+  figmaById,
+  nameMap,
+  cssNameByFigmaName,
+) {
   const base = figmaToComparable(figValue, figmaById, nameMap, cssNameByFigmaName)
   if (base.kind === 'dim' && resolvedType === 'TIMING') {
-    return { kind: 'dim', value: base.value * 1000, unit: 'ms' }
+    return { kind: 'dim', value: Number(base.value) * 1000, unit: 'ms' }
   }
   return base
 }
@@ -312,8 +326,14 @@ export function compareValues(regComparable, figComparable, byCssName) {
     // Dimensions compare MAGNITUDE; the unit (px/ms/deg) is a code-side
     // authoring decision Figma cannot hold. A dimension alias resolves
     // through the ref chain first.
-    const a = regComparable.kind === 'dim' ? regComparable.value : resolveMagnitude(regComparable, byCssName)
-    const b = figComparable.kind === 'dim' ? figComparable.value : resolveMagnitude(figComparable, byCssName)
+    const a =
+      regComparable.kind === 'dim'
+        ? regComparable.value
+        : resolveMagnitude(regComparable, byCssName)
+    const b =
+      figComparable.kind === 'dim'
+        ? figComparable.value
+        : resolveMagnitude(figComparable, byCssName)
     if (a === null || b === null) return { status: 'review', reason: 'dim-unresolvable' }
     if (Math.abs(a - b) <= Math.max(0.51, Math.abs(a) * 0.001)) return { status: 'match' }
     return { status: 'drift', figma: figComparable }
@@ -344,12 +364,13 @@ function alphaToCss(a) {
  *
  * @param {object} regComparable the registry side's parse
  * @param {object} figComparable the figma side's parse
- * @param {number|undefined} resolvedType pass 'TIMING' for durations
+ * @param {string|undefined} resolvedType pass 'TIMING' for durations
  */
 export function reconstructCss(regComparable, figComparable, resolvedType) {
   if (figComparable.kind === 'raw') return figComparable.text
   if (figComparable.kind === 'color') {
-    const regIsHex = regComparable.kind === 'color' && regComparable.a === 1 && figComparable.a === 1
+    const regIsHex =
+      regComparable.kind === 'color' && regComparable.a === 1 && figComparable.a === 1
     if (regIsHex) {
       const [r, g, b] = figComparable.rgb
       return `#${[r, g, b].map((c) => c.toString(16).padStart(2, '0')).join('')}`

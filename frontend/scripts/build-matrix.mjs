@@ -344,6 +344,9 @@ function readAll(dir, ext) {
 function skinRecord(skin) {
   const pkg = loadSkinPackage(skin.source, readGoldenTokens(frontendDir()))
   const decls = pkg.decls.map(([name, value]) => normalizeDecl(`${name}:${value}`))
+  // The matrix packages are known-good fixtures: a null brand means the
+  // package did not load, which loadSkinPackage reports in pkg.problems.
+  if (pkg.brand === null) throw new Error(`${skin.label}: ${pkg.problems.join('; ')}`)
   return { brand: pkg.brand, decls, files: pkg.files }
 }
 
@@ -558,16 +561,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   // Back up the owner's public/skin/ -- restored verbatim, whatever it was.
   const backup = existsSync(publicSkin()) ? mkdtempSync(join(tmpdir(), 'velo-matrix-skin-')) : null
   if (backup) cpSync(publicSkin(), backup, { recursive: true })
-  // The build writes two TRACKED files at config time (vite.config.ts: the
-  // skin-tokens.css cascade + skin-brand.generated.ts); the last cell leaves
-  // ITS versions behind. The restore build regenerates them; --no-restore
-  // puts the pre-run bytes back, or a skin's brand rides into a commit.
-  const generated = [
-    join(frontendDir(), 'src', 'styles', 'skin-tokens.css'),
-    join(frontendDir(), 'src', 'platform', 'skin-brand.generated.ts'),
-  ].map((file) => ({ file, text: readFileSync(file, 'utf8') }))
   const restore = () => {
-    if (!args.restore) for (const { file, text } of generated) writeFileSync(file, text)
     rmSync(publicSkin(), { recursive: true, force: true })
     if (backup) {
       cpSync(backup, publicSkin(), { recursive: true })
@@ -584,6 +578,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
 
   const facts = {}
   const expected = {}
+  /** @type {Error | null} */
   let aborted = null
   try {
     for (const cell of cells) {
@@ -603,12 +598,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         )
     }
   } catch (err) {
-    aborted = err
+    aborted = err instanceof Error ? err : new Error(String(err))
   }
   try {
     restore()
   } catch (restoreErr) {
-    console.error(`build-matrix: restore failed (${restoreErr.message}) -- fix the tree`)
+    console.error(
+      `build-matrix: restore failed (${restoreErr instanceof Error ? restoreErr.message : String(restoreErr)}) -- fix the tree`,
+    )
     process.exit(1)
   }
   if (aborted) {

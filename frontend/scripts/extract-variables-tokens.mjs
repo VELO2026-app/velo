@@ -123,17 +123,6 @@ function blockCommentClosed(t) {
 // Bare families keep their own top-level group (space/radius/font/z/size/
 // transition -- frozen names, not skin-rethemeable; the skin contract section
 // of variables.css lists the Gen-1 branches, all --velo-*).
-const SKIP_LINE = (s) => /^\/\* =+$/.test(s.trim())
-
-function groupFor() {
-  // Bare families are NOT skin-rethemeable (frozen naming rule, file header):
-  // one flat group per full name keeps them collision-free and clearly
-  // second-class. --velo-a-b... maps to velo.a.b... (the skin-contract rule).
-  // DTCG paths are STABLE/INJECTIVE, not a taxonomy -- cssName in 
-  // is authoritative for the CSS.
-  return null
-}
-
 const root = {}
 let order = 0
 const pendingSections = [] // section header comments (=== ... ===) name groups
@@ -153,7 +142,7 @@ for (const e of entries) {
     segs = ['velo', ...e.name.slice(7).split('-')]
   }
   let node = root
-  for (const s of segs.slice(0, -1)) node = (node[s] ??= {})
+  for (const s of segs.slice(0, -1)) node = node[s] ??= {}
   const leafName = segs[segs.length - 1]
   const ext = { pridem: { order, cssName: e.name } }
   if (e.trailing) ext.pridem.trailing = e.trailing
@@ -163,9 +152,10 @@ for (const e of entries) {
   // A LATER token may take a path through an EXISTING token's subtree
   // (--velo-radius-4 arrives after --velo-radius-4-5): merge the token fields
   // INTO the group instead of overwriting the subtree.
-  node[leafName] = existing && typeof existing === 'object' && !('$value' in existing)
-    ? { ...tok, ...existing }
-    : tok
+  node[leafName] =
+    existing && typeof existing === 'object' && !('$value' in existing)
+      ? { ...tok, ...existing }
+      : tok
   order++
 }
 
@@ -173,7 +163,7 @@ for (const e of entries) {
 const overrides = {}
 const mediaLines = mediaBlock.split('\n')
 for (const line of mediaLines) {
-  const m = line.match(/^    (--[\w-]+):\s*(.+);$/)
+  const m = line.match(/^ {4}(--[\w-]+):\s*(.+);$/)
   if (m) overrides[m[1]] = m[2]
 }
 root.__media = {
@@ -191,7 +181,8 @@ if (pendingBefore.length) {
 
 const doc = {
   $schema: 'https://design-tokens.github.io/community-group/format/',
-  $description: 'VELO design tokens -- golden theme (FE-124 track T; generated FROM variables.css by scripts/extract-variables-tokens.mjs at the migration; the GENERATOR direction is variables.css <- tokens.json).',
+  $description:
+    'VELO design tokens -- golden theme (FE-124 track T; generated FROM variables.css by scripts/extract-variables-tokens.mjs at the migration; the GENERATOR direction is variables.css <- tokens.json).',
   $extensions: { pridem: { header, trailingComment, mediaBlock } },
   root,
 }

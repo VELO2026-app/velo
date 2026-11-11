@@ -5,7 +5,7 @@
 // theme values (принцип 2: токены не уезжают), so the showcase imports the
 // GOLDEN variables.css from the application by a pinned relative path --
 // exactly what the app's cascade hands the package in a golden build
-// (variables.css -> @velo/ui css -> skin-tokens.css). A skinned showcase
+// (variables.css -> @velo/ui css -> virtual:skin-tokens.css). A skinned showcase
 // stays a storybook build-time concern, never a package one -- §3.7 made
 // it a MANDATED one: the skin switcher below is that build-time concern.
 //
@@ -17,8 +17,8 @@
 //
 // SKIN MODE (tz-ui-package.md §3.7, шаг 1 витрины): a toolbar "Skin" select
 // injects an etalon skin's token layer as ONE override appended after
-// the golden base -- the same cascade shape the app builds in main.ts
-// (variables.css -> kit css -> skin-tokens.css). The kit components consume
+// the golden base -- the same cascade shape the app builds in app.ts
+// (variables.css -> kit css -> virtual:skin-tokens.css). The kit components consume
 // var(--velo-*) only, so the switch repaints every story with no component
 // change: значения = данные. Golden removes the layer entirely (the base IS
 // golden). The layers come from the virtual module of main.ts, which
@@ -85,7 +85,7 @@ function applySkinLayer(selection: string): void {
     layer = document.createElement('style')
     layer.id = SKIN_LAYER_ID
     // Appended LAST: the override must win the cascade over the golden base
-    // and the kit's own css, the way main.ts orders skin-tokens.css.
+    // and the kit's own css, the way the app (app.ts) orders virtual:skin-tokens.css.
     document.head.appendChild(layer)
   }
   if (layer.textContent !== css) layer.textContent = css

@@ -38,11 +38,13 @@ const stores = vi.hoisted(() => ({
   practices: { selected: null as { id: string } | null, fetchPractice: vi.fn() },
   calendar: { weekPractices: [] as Array<{ id: string }>, loadWeek: vi.fn() },
   diary: { refreshFeed: vi.fn() },
+  balance: { refresh: vi.fn() },
 }))
 vi.mock('@/stores/bookings', () => ({ useBookingsStore: () => stores.bookings }))
 vi.mock('@/stores/practices', () => ({ usePracticesStore: () => stores.practices }))
 vi.mock('@/stores/calendar', () => ({ useCalendarStore: () => stores.calendar }))
 vi.mock('@/stores/diary', () => ({ useDiaryStore: () => stores.diary }))
+vi.mock('@/stores/balance', () => ({ useBalanceStore: () => stores.balance }))
 
 const VARS: CancelBookingVars = { bookingId: 'b7', practiceId: 'p1' }
 const practice = { id: 'p1' } as PracticeResponse
@@ -83,6 +85,7 @@ beforeEach(async () => {
   stores.calendar.weekPractices = [{ id: 'p0' }, { id: 'p1' }]
   stores.calendar.loadWeek.mockReset().mockResolvedValue(undefined)
   stores.diary.refreshFeed.mockReset().mockResolvedValue(undefined)
+  stores.balance.refresh.mockReset().mockResolvedValue(undefined)
 
   app = createApp(Screen).use(createPinia()).use(PiniaColada, coladaOptions)
   app.mount(document.createElement('div'))
@@ -152,6 +155,12 @@ describe('useCancelBooking -- success', () => {
     expect(stores.diary.refreshFeed).toHaveBeenCalledTimes(1)
   })
 
+  it('re-reads the profile at once, so a refund shows in the balance', async () => {
+    await cancel(VARS)
+
+    expect(stores.balance.refresh).toHaveBeenCalledTimes(1)
+  })
+
   it('leaves the practice detail and the calendar alone when they show another practice', async () => {
     stores.practices.selected = { id: 'p9' }
     stores.calendar.weekPractices = [{ id: 'p9' }]
@@ -187,6 +196,7 @@ describe('useCancelBooking -- the session ends while the DELETE is in flight', (
     expect(stores.practices.fetchPractice).not.toHaveBeenCalled()
     expect(stores.calendar.loadWeek).not.toHaveBeenCalled()
     expect(stores.diary.refreshFeed).not.toHaveBeenCalled()
+    expect(stores.balance.refresh).not.toHaveBeenCalled()
     expect(legacyQueryCache.isFresh(legacyKeys.practice('p1'), 60_000)).toBe(true)
   })
 })
@@ -204,6 +214,7 @@ describe('useCancelBooking -- failure', () => {
     expect(stores.practices.fetchPractice).not.toHaveBeenCalled()
     expect(stores.calendar.loadWeek).not.toHaveBeenCalled()
     expect(stores.diary.refreshFeed).not.toHaveBeenCalled()
+    expect(stores.balance.refresh).not.toHaveBeenCalled()
     expect(schoolsApi.getSchoolPractices).toHaveBeenCalledTimes(1)
     expect(when(keys.practices.schoolFeed('g2', 5))).not.toBe(0)
     expect(legacyQueryCache.isFresh(legacyKeys.practice('p1'), 60_000)).toBe(true)

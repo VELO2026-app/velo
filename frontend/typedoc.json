@@ -23,25 +23,18 @@
   // FE-136 exclusions, kept out of both entry expansion (exclude) and the
   // converted documentation set (externalPattern; imported files re-enter
   // the program through imports, where exclude does not apply):
-  //   - generated.ts / *.generated.ts -- the openapi client and skin-brand
-  //     codegen; note `**/generated.ts` must be listed separately: the
+  //   - generated.ts / *.generated.ts -- the openapi client;
+  //     note `**/generated.ts` must be listed separately: the
   //     `*.generated.ts` glob requires a basename prefix before the dot;
   //   - src/locales/** -- translation catalogs, not API surface;
-  //   - *.test.ts / *.golden-test-stub.ts -- unit-test internals.
+  //   - *.test.ts -- unit-test internals.
   // externalPattern replaces the default, so node_modules is restated.
-  "exclude": [
-    "**/*.test.ts",
-    "**/generated.ts",
-    "**/*.generated.ts",
-    "**/*.golden-test-stub.ts",
-    "**/locales/**"
-  ],
+  "exclude": ["**/*.test.ts", "**/generated.ts", "**/*.generated.ts", "**/locales/**"],
   "externalPattern": [
     "**/node_modules/**",
     "**/*.test.ts",
     "**/generated.ts",
     "**/*.generated.ts",
-    "**/*.golden-test-stub.ts",
     "**/locales/**"
   ],
 

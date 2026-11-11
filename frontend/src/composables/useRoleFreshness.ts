@@ -28,6 +28,7 @@
 // =============================================================================
 
 import { onDocumentEvent, offDocumentEvent, isDocumentHidden } from '@/platform/dom'
+import { onSessionEnd } from '@/platform/session'
 import { useAuthStore } from '@/stores/auth'
 
 /** Minimum time between navigation-triggered refetches. Chosen as "fast
@@ -125,6 +126,11 @@ export function startRoleFreshnessPoll(): void {
 export function stopRoleFreshnessPoll(): void {
   clearPoll()
 }
+
+// The session ending (logout, or a dropped session) stops the poll: it must
+// not keep ticking fetchMe() against a cleared session. Subscribed here so
+// stores/auth.ts needs no import of this module (T21-4/T21-5).
+onSessionEnd(() => stopRoleFreshnessPoll())
 
 /** TEST-ONLY. Reset module state between tests -- mirrors
  *  useAuth.ts's resetAuthState() seam. Actually removes the visibilitychange

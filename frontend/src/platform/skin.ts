@@ -2,8 +2,8 @@
 // VELO Frontend -- Skin package reader (tz-whitelabel §3, F2; FE-131)
 // =============================================================================
 // BUILD-side seam: vite.config.ts calls readSkin() at config time to
-// materialize the derivatives tz-whitelabel §1 lists -- skin-tokens.css,
-// index.html theme-color/font, and the manifest identity. It is NEVER
+// materialize the derivatives tz-whitelabel §1 lists -- the skin-tokens.css
+// module, index.html theme-color/font, and the manifest identity. It is NEVER
 // imported by the client bundle (node:fs does not exist in the browser).
 //
 // The package arrives from the deploy machine as public/skin/ (apply: build
@@ -99,19 +99,19 @@ export function skinBackgroundFormat(publicDir: string): 'webp' | 'png' | null {
   return null
 }
 
-/** Content of the generated src/styles/skin-tokens.css: the package's DTCG
+/** Content of the virtual module virtual:skin-tokens.css: the package's DTCG
  *  tokens converted to CSS custom properties (plus an \@font-face rule per
- *  self-hosted font), or the golden stub. Written by vite.config.ts at
- *  config time so the CSS import order in app.ts (variables, then global,
+ *  self-hosted font), or the golden stub. Served by platform/skin-virtual.ts
+ *  at build time so the CSS import order in app.ts (variables, then global,
  *  then skin) is mechanical, never hopeful (tz-whitelabel §3, the cascade
  *  paragraph). */
 export function materializedSkinTokens(publicDir: string, skin: SkinPackage | null): string {
   if (skin === null) {
     return `/* GENERATED -- tz-whitelabel §3 cascade stub.
  * No skin package ships with this build (public/skin/primer-package.yaml
- * absent): this file is intentionally empty and MUST stay imported AFTER
- * global.css in app.ts. A build with a skin overwrites it with the package's
- * tokens converted to CSS.
+ * absent): this module is intentionally empty and MUST stay imported AFTER
+ * global.css in app.ts. A build with a skin serves the package's tokens
+ * converted to CSS instead.
  */
 `
   }

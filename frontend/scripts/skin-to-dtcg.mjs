@@ -79,9 +79,12 @@ export function convertSkin(gen1Dir, tokensDoc) {
   const decls = existsSync(tokensPath) ? parseFlatTokens(readFileSync(tokensPath, 'utf8')) : []
   for (const [name, value] of decls) {
     const golden = byCss.get(name)
-    if (!golden) problems.push(`tokens.css ${name}: not a token of tokens.json (a typo themes nothing)`)
+    if (!golden)
+      problems.push(`tokens.css ${name}: not a token of tokens.json (a typo themes nothing)`)
     else if (!skinnable(golden.path))
-      problems.push(`tokens.css ${name}: a frozen bare token -- a skin sets --velo-* and --font-body only`)
+      problems.push(
+        `tokens.css ${name}: a frozen bare token -- a skin sets --velo-* and --font-body only`,
+      )
     else setPath(tokens, golden.path, value)
   }
   if (problems.length > 0) throw new Error(problems.join('\n'))
@@ -140,7 +143,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       `skin-to-dtcg: ${pkg.decls.length} token(s), ${pkg.files.length} file(s) -> ${to} (contract "${pkg.contract}")`,
     )
   } catch (e) {
-    console.error(`skin-to-dtcg: ${e.message}`)
+    console.error(`skin-to-dtcg: ${e instanceof Error ? e.message : String(e)}`)
     process.exit(1)
   }
 }

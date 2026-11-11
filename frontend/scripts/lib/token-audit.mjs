@@ -152,7 +152,8 @@ const DYNAMIC = /(--[a-zA-Z0-9_-]+-)\$\{/g
  * @param {object} doc parsed tokens.json
  * @param {Array<{file: string, src: string}>} files product + test sources
  *   (NOT variables.css -- it is the generated registry itself)
- * @returns {Array<object>} one row per token, registry order:
+ * @returns {Array<any> & {broadDynamic: Array<{prefix: string, files: string[], covers: number}>}}
+ *   one row per token, registry order:
  *   { cssName, path, value, deprecated, badDeprecated, prod, test, files,
  *     dynamic, refs, referrers, alive }; the array also carries
  *   `broadDynamic`: [{ prefix, files, covers }] for the refused blankets.
@@ -173,7 +174,7 @@ export function auditTokens(doc, files) {
         files: new Set(),
         dynamic: false,
         refs: [...l.value.matchAll(/var\(\s*(--[a-zA-Z0-9_-]+)/g)].map((m) => m[1]),
-        referrers: [],
+        referrers: /** @type {string[]} */ ([]),
         alive: false,
       },
     ]),
@@ -217,7 +218,7 @@ export function auditTokens(doc, files) {
   const queue = [...rows.values()].filter((r) => r.prod > 0 || r.dynamic)
   for (const r of queue) r.alive = true
   while (queue.length > 0) {
-    const r = queue.pop()
+    const r = /** @type {(typeof queue)[number]} */ (queue.pop())
     for (const ref of r.refs) {
       const target = rows.get(ref)
       if (target && !target.alive) {
@@ -227,9 +228,7 @@ export function auditTokens(doc, files) {
     }
   }
 
-  const out = [...rows.values()]
-  out.broadDynamic = broadDynamic
-  return out
+  return Object.assign([...rows.values()], { broadDynamic })
 }
 
 /**
@@ -307,8 +306,8 @@ function walk(dir, out) {
  * @param {string} frontendDir absolute path of frontend/
  * @returns {{doc: object, files: Array<{file: string, src: string}>}}
  *   file paths relative to frontendDir; the generated registry
- *   (styles/variables.css) and the cascade stub (styles/skin-tokens.css,
- *   overwritten by a skin package at build) are not consumers.
+ *   (styles/variables.css) is not a consumer (the skin cascade is the
+ *   virtual:skin-tokens.css module, FE-157 s5 -- nothing on disk).
  */
 export function readTree(frontendDir) {
   const doc = JSON.parse(readFileSync(join(frontendDir, 'tokens.json'), 'utf8'))
@@ -318,7 +317,7 @@ export function readTree(frontendDir) {
     join(frontendDir, '..', 'packages', 'velo-ui', 'src'),
     join(frontendDir, '..', 'packages', 'velo-ui', '.storybook'),
   ]
-  const NOT_CONSUMERS = new Set(['src/styles/variables.css', 'src/styles/skin-tokens.css'])
+  const NOT_CONSUMERS = new Set(['src/styles/variables.css'])
   const files = roots
     .flatMap((r) => walk(r, []))
     .map((abs) => relative(frontendDir, abs))

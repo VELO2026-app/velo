@@ -18,7 +18,7 @@ import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 import VueI18nPlugin from '@intlify/unplugin-vue-i18n/vite'
 import { fileURLToPath, URL } from 'node:url'
-import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, readFileSync, rmSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import { pwaManifestWithPassport } from './src/pwa/manifest'
 import { shellOnlyTransform } from './src/pwa/precache-shell'
@@ -30,10 +30,11 @@ import { keepManifestOutOfPrecache, perLocaleManifest } from './src/pwa/manifest
 // vitest, so the test cannot import this config file).
 import { passportHtmlDefaults } from './src/platform/passport-html'
 // tz-whitelabel F2 (§3): the skin package (public/skin/, deploy-supplied).
-// No package = the golden build; the derivatives (skin-tokens.css cascade,
+// No package = the golden build; the derivatives (the skin-tokens cascade,
 // index.html theme-color/font, manifest identity/colours) materialize HERE,
 // at config time.
-import { materializedSkinTokens, readSkin } from './src/platform/skin'
+import { readSkin } from './src/platform/skin'
+import { skinVirtualModules } from './src/platform/skin-virtual'
 import { ASSET_DIRS, IGNORED_FILES, MANDATORY_ASSETS } from './scripts/lib/skin-package.mjs'
 import { featureDefineMap, resolveFeatureFlags, type EditionTable } from './src/platform/features'
 import type { Plugin } from 'vite'
@@ -49,7 +50,7 @@ const ZOOM_SDK_MODULE =
  * renders /icons/..., the mandala lives on /bg/...). Runs at closeBundle: the
  * golden files are already in dist/, this copies the skin's over them. The
  * publicDir copy also drops the whole package into dist/skin/; only its
- * assets/fonts/ is meant to be served (skin-tokens.css @font-face points
+ * assets/fonts/ is meant to be served (virtual:skin-tokens.css @font-face points
  * there), so everything else -- the manifest, the token sources, a checkout's
  * .git -- is removed from dist/skin/ here (FE-131). The PWA precache ignores
  * skin/** (workbox globIgnores below), so the removal cannot race it.
@@ -190,33 +191,20 @@ export default defineConfig(({ mode }) => {
   // for the runtime accessor, so featureEnabled() can never disagree with
   // the cut chunks.
   const editionEnv = loadEnv(mode, frontendDir, 'PRIMER_')
-  const editions: EditionTable = JSON.parse(
+  const editions = JSON.parse(
     readFileSync(join(frontendDir, '..', 'editions.json'), 'utf8'),
-  )
+  ) as EditionTable
   const defines = featureDefineMap(
     resolveFeatureFlags(editionEnv.PRIMER_EDITION, instanceEnv.VITE_FEATURES, editions),
   )
   const publicDir = join(frontendDir, 'public')
   const skin = readSkin(publicDir)
 
-  // §3 cascade, mechanically: the generated skin-tokens.css (the skin's
-  // token overrides, or the empty stub) is written BEFORE the bundle reads
-  // it -- app.ts imports it strictly after global.css.
-  writeFileSync(
-    join(frontendDir, 'src', 'styles', 'skin-tokens.css'),
-    materializedSkinTokens(publicDir, skin),
-  )
-  // The brand TEXT (tz-whitelabel §1, skin > env): locales/index.ts renders
-  // it through the @:brand link from every catalog string.
-  writeFileSync(
-    join(frontendDir, 'src', 'platform', 'skin-brand.generated.ts'),
-    `/* GENERATED -- the brand text of this build (tz-whitelabel §1/§3). */
-export const SKIN_BRAND: string | null = ${JSON.stringify(skin?.displayName ?? null)}
-`,
-  )
-
   return {
     plugins: [
+      // §3 cascade + the brand text (tz-whitelabel §1): virtual modules, served
+      // from memory -- a build writes nothing into tracked files.
+      skinVirtualModules(publicDir, skin),
       passportHtmlDefaults(skin),
       skinAssetSpill(skin ? join(publicDir, 'skin') : null, join(frontendDir, 'dist')),
       preloadAppChunk(),
@@ -268,7 +256,7 @@ export const SKIN_BRAND: string | null = ${JSON.stringify(skin?.displayName ?? n
           //
           // The globs are the candidates; shellOnly() below cuts assets/ down
           // to the startup closure. Not listed on purpose: onboarding art,
-          // feat-*.png, the blue logo variant, logo-white.svg (welcome screen
+          // the blue logo variant, logo-white.svg (welcome screen
           // only) -- lazy screens fetch them on demand. Zoom SDK, admin and
           // master chunks are not in the startup closure, so they stay out
           // too; the Zoom Meeting SDK (about 5 MB, practice screen only,
@@ -343,6 +331,8 @@ export const SKIN_BRAND: string | null = ${JSON.stringify(skin?.displayName ?? n
                 cacheableResponse: { statuses: [200] },
                 plugins: [
                   {
+                    // Workbox expects a promise; the function is serialised into the SW as-is.
+                    // eslint-disable-next-line @typescript-eslint/require-await
                     cacheWillUpdate: async ({ response }: { response: Response }) =>
                       (response.headers.get('content-type') ?? '').includes('text/html')
                         ? null
