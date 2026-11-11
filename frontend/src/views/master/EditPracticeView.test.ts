@@ -23,8 +23,9 @@
 //
 // PATTERN C (hybrid) -- the two halves are driven through DIFFERENT seams, and
 // mixing them would gut the test (velo-idiom §3 of Step 3):
-//   - DATA half: the practice arrives from useMasterStore's cache OR, on a miss,
-//     from getPractice() (:465-475). The store is a DEPENDENCY, not the thing
+//   - DATA half: the practice arrives from the master's loaded lists
+//     (cachedMyPractice) OR, on a miss, from getPractice(). The lists are a
+//     DEPENDENCY, not the thing
 //     under test, so it is mocked wholesale behind getters over a mutable object
 //     (the guards.test.ts trick, velo-idiom §5); @/api/practices is the other
 //     seam.
@@ -33,8 +34,8 @@
 //     typing into the field, tapping the real teleported DatePickerSheet -- never
 //     by poking `form`. Faking the form would mean asserting our own fixture.
 //
-// NO PINIA. Verified rather than assumed: `useMasterStore` is module-mocked
-// above, and NO child this screen renders resolves a store of its own (grep for
+// NO PINIA. Verified rather than assumed: the master's queries are
+// module-mocked above (and `useQueryCache` with them), and NO child this screen renders resolves a store of its own (grep for
 // use*Store over src/components hits only BookingPopup and RoleSwitchSection,
 // neither of which is in this tree). The PracticeDetailView precedent installs a
 // real Pinia because ITS children need one; ours do not, and installing one to
@@ -130,19 +131,11 @@ const masterState: {
   profile: MasterProfileResponse | null
   profileLoaded: boolean
 } = { practices: [], profile: null, profileLoaded: true }
-const refreshMyPractices = vi.fn()
-vi.mock('@/stores/master', () => ({
-  useMasterStore: () => ({
-    get practices() {
-      return masterState.practices
-    },
-    refreshMyPractices,
-  }),
-}))
-
-// The master profile (composables/queries/master.ts): getters over the same
-// object. Read by the screen (its confirmed methods) and by
-// usePracticeTaxonomyOptions (whether a profile has answered).
+// The master's queries (composables/queries/master.ts), getters over the
+// same object: the profile (its confirmed methods; whether it has answered --
+// usePracticeTaxonomyOptions), the practice lists as a warm cache
+// (masterState.practices), and the post-mutation refresh.
+const myPracticesChanged = vi.fn()
 vi.mock('@/composables/queries/master', () => ({
   useMasterProfile: () => ({
     profile: {
@@ -156,7 +149,12 @@ vi.mock('@/composables/queries/master', () => ({
       },
     },
   }),
+  cachedMyPractice: (_queryCache: unknown, id: string) =>
+    masterState.practices.find((p) => p.id === id),
+  myPracticesChanged: (...args: unknown[]) => myPracticesChanged(...args),
 }))
+// No Pinia here: the screen only hands the query cache to the functions above.
+vi.mock('@pinia/colada', () => ({ useQueryCache: () => ({}) }))
 
 const NOW = new Date('2026-07-20T12:00:00Z')
 
@@ -216,7 +214,7 @@ function mountCached(p: PracticeResponse): HTMLElement {
 }
 
 // onMounted's network branch awaits getPractice() then re-renders; the deepest
-// chain in the file is cancel(): await cancelPractice -> await refreshMyPractices
+// chain in the file is cancel(): await cancelPractice -> await myPracticesChanged
 // -> push -> re-render, and the fire-and-forget ensureTaxonomyCatalog().then()
 // lands somewhere alongside it. Four awaits plus the paint; six leaves margin.
 // (velo-idiom §3: count YOUR chain, do not copy a number. This one is counted.)
@@ -353,7 +351,7 @@ beforeEach(() => {
     .mockResolvedValue(practice({ status: 'cancelled' }))
   vi.mocked(groupsApi.getGroups).mockReset().mockResolvedValue({ items: [] })
   vi.mocked(cgApi.getMySchools).mockReset().mockResolvedValue({ items: [] })
-  refreshMyPractices.mockReset().mockResolvedValue(undefined)
+  myPracticesChanged.mockReset().mockResolvedValue(undefined)
   push.mockReset()
   back.mockReset()
   toastError.mockReset()
@@ -851,7 +849,7 @@ describe('EditPracticeView', () => {
     })
 
     it('on success: says the refunds ran, invalidates the cache, leaves the editor', async () => {
-      // refreshMyPractices is not cosmetic (:592): the list still holds the
+      // myPracticesChanged is not cosmetic (:592): the list still holds the
       // pre-cancel record, and THIS screen loads from that cache (:465) -- a
       // stale entry would re-open a cancelled practice with a live cancel button.
       mountCached(practice({ status: 'scheduled' }))
@@ -863,7 +861,7 @@ describe('EditPracticeView', () => {
       await flush()
 
       expect(toastSuccess).toHaveBeenCalledWith('Практика отменена, возвраты выполнены')
-      expect(refreshMyPractices).toHaveBeenCalled()
+      expect(myPracticesChanged).toHaveBeenCalled()
       expect(push).toHaveBeenCalledWith({ name: 'master-practices' })
     })
 
@@ -889,7 +887,7 @@ describe('EditPracticeView', () => {
       expect(toastError).toHaveBeenCalledWith('Не удалось отменить')
       expect(toastSuccess).not.toHaveBeenCalled()
       expect(push).not.toHaveBeenCalled()
-      expect(refreshMyPractices).not.toHaveBeenCalled()
+      expect(myPracticesChanged).not.toHaveBeenCalled()
     })
 
     it('falls back to a generic message on a non-API error', async () => {
@@ -982,7 +980,7 @@ describe('EditPracticeView', () => {
       expect(practicesApi.deletePractice).toHaveBeenCalledTimes(1)
       expect(practicesApi.deletePractice).toHaveBeenCalledWith('p7')
       expect(toastSuccess).toHaveBeenCalledWith('Черновик удалён')
-      expect(refreshMyPractices).toHaveBeenCalled()
+      expect(myPracticesChanged).toHaveBeenCalled()
       expect(push).toHaveBeenCalledWith({ name: 'master-practices' })
     })
 
@@ -1056,7 +1054,7 @@ describe('EditPracticeView', () => {
 
       expect(practicesApi.updatePractice).toHaveBeenCalledWith('p7', { status: 'scheduled' })
       expect(toastSuccess).toHaveBeenCalledWith('Практика опубликована!')
-      expect(refreshMyPractices).toHaveBeenCalled()
+      expect(myPracticesChanged).toHaveBeenCalled()
       expect(push).toHaveBeenCalledWith({ name: 'master-practices' })
     })
 
@@ -1269,7 +1267,7 @@ describe('EditPracticeView', () => {
       await flush()
 
       expect(toastSuccess).toHaveBeenCalledWith('Сохранено')
-      expect(refreshMyPractices).toHaveBeenCalled()
+      expect(myPracticesChanged).toHaveBeenCalled()
       // Save is not a "leave the screen" action -- unlike publish/cancel/delete.
       expect(push).not.toHaveBeenCalled()
     })

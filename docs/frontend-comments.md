@@ -120,7 +120,7 @@
 ## 8. Примеры (правильно / неправильно)
 
 ```ts
-// ✅ Doc-комментарий (реальный стиль, src/stores/master.ts):
+// ✅ Doc-комментарий (реальный стиль, бывший src/stores/master.ts):
 /**
  * Fetch master profile from API.
  *

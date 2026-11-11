@@ -20,7 +20,7 @@
     - Expanded, has practices: the master's practices (newest-first) as cards.
 
   Selecting a card emits `select` and collapses the block; the parent prefills.
-  Data source = masterStore.practices (real). No backend dependency.
+  Data source = the master's own practice lists (real). No backend dependency.
 -->
 
 <template>

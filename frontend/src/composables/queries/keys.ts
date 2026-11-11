@@ -39,6 +39,14 @@ export const keys = {
     /** `GET /schools/{id}/practices` -- the school's upcoming practices, first `limit`. */
     schoolFeed: (schoolId: string, limit: number) =>
       ['practices', 'list', { schoolId, limit }] as const,
+    /** Prefix of both lists of the signed-in master's own practices. */
+    mineAll: () => ['practices', 'list', { own: true }] as const,
+    /**
+     * `GET /masters/me/practices?bucket=` every page loaded so far: `upcoming`
+     * (draft / scheduled / live, nearest first) or `past` (completed, most
+     * recent first).
+     */
+    mine: (bucket: 'upcoming' | 'past') => ['practices', 'list', { own: true, bucket }] as const,
   },
   /** Schools: the school page and, later, the school lists. */
   schools: {

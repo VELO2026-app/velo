@@ -19,7 +19,7 @@
   attendance.
 
   Submit: POST /api/v1/practices (status defaults to 'draft' in backend).
-  On success -> show toast + navigate to master-practices + refreshMyPractices().
+  On success -> show toast + navigate to master-practices + myPracticesChanged().
 
   Fixes:
     W-2: DURATION_OPTIONS / TIMEZONE_OPTIONS imported from @/utils/practiceOptions
@@ -101,7 +101,7 @@
 
       <!-- ================================================================
            FE-92 follow-up: hidden while a curator targets ANOTHER master --
-           the templates are the CALLER's practices (masterStore.myPractices),
+           the templates are the CALLER's practices (useMyPractices),
            and the curator has no list of the master's. Fields a template
            filled before the switch stay: they are the curator's input now.
            Use template (i18n:masterScreens.createPractice.useTemplate) —
@@ -411,8 +411,8 @@ import {
 } from '@/components/ui'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
-import { useMasterStore } from '@/stores/master'
-import { useMasterProfile } from '@/composables/queries/master'
+import { myPracticesChanged, useMasterProfile, useMyPractices } from '@/composables/queries/master'
+import { useQueryCache } from '@pinia/colada'
 import { createPractice, updatePractice } from '@/api/practices'
 import { getMySchools, getSchoolMembers } from '@/api/schools'
 import { getPublicMaster } from '@/api/masters'
@@ -448,7 +448,12 @@ const router = useRouter()
 const route = useRoute()
 const toast = useToast()
 const authStore = useAuthStore()
-const masterStore = useMasterStore()
+const queryCache = useQueryCache()
+// The use-template block (i18n:masterScreens.createPractice.useTemplate)
+// offers the master's own practices, both lists (cached when the practices
+// list or the dashboard loaded them).
+const upcomingPractices = useMyPractices('upcoming')
+const pastPractices = useMyPractices('past')
 // T21-6 (PROMPT №546): the direction/style pickers filter by this master's
 // OWN confirmed methods (one answer per session; loaded by the guard).
 const { profile: masterProfile } = useMasterProfile()
@@ -653,10 +658,6 @@ const customGroups = usePracticeCustomGroups()
 // the fourth audience option out of the radio.
 const eligibleSchools = ref<AudienceSchoolOption[]>([])
 onMounted(() => {
-  // The use-template block (i18n:masterScreens.createPractice.useTemplate)
-  // offers the master's practices (no-op if already loaded from the
-  // practices list / dashboard).
-  void masterStore.fetchMyPractices()
   void loadPracticeMasterContext()
   // FE-24 (GT P5): the eligible schools. A failure here degrades to "no
   // schools" (the fourth option stays hidden) -- quieter than the groups
@@ -710,7 +711,7 @@ const DIFFICULTY_OPTIONS_CREATE = [
 // first (operator Q2=A — backend list order isn't guaranteed, so sort here).
 //
 // T23-3 (PROMPT №565): a published SERIES must offer ONE entry, not one per
-// generated occurrence -- masterStore.practices carries every child
+// generated occurrence -- the master's lists carry every child
 // individually (each is its own Practice row), so an unrelated series
 // otherwise floods this list with N near-identical cards (the same title
 // three times for three July dates in the owner's report).
@@ -734,7 +735,7 @@ const DIFFICULTY_OPTIONS_CREATE = [
 // applyTemplate's copy list is untouched.
 const templatePractices = computed((): PracticeResponse[] => {
   const bestForGroup = new Map<string, PracticeResponse>()
-  for (const p of masterStore.practices) {
+  for (const p of [...upcomingPractices.practices.value, ...pastPractices.practices.value]) {
     const groupKey = p.parent_practice_id ?? p.id
     const existing = bestForGroup.get(groupKey)
     if (!existing || (existing.parent_practice_id !== null && p.parent_practice_id === null)) {
@@ -855,7 +856,7 @@ async function submit(): Promise<void> {
       finishDraft()
       toast.info(t('masterScreens.createPractice.toast.openExisting'))
       void router.replace({ name: 'master-practice-detail', params: { id: created.id } })
-      void masterStore.refreshMyPractices().catch(() => {})
+      void myPracticesChanged(queryCache)
       return
     }
 
@@ -889,7 +890,7 @@ async function submit(): Promise<void> {
     // Invalidate the cached list so it reloads with the new practice. Fire-and-
     // forget + swallow: master-practices loads its own list on mount, so a missed
     // refresh is harmless and must not turn a successful create into an error path.
-    void masterStore.refreshMyPractices().catch(() => {})
+    void myPracticesChanged(queryCache)
   } catch (e) {
     toast.error(practiceSaveErrorText(e, t('masterScreens.createPractice.toast.createFailed')))
   } finally {

@@ -23,7 +23,7 @@
 // PATTERN C (hybrid). The two halves are driven through DIFFERENT seams, and
 // mixing them would gut the test (SKILL.md Step 3):
 //   - DATA half: the use-template block (i18n:masterScreens.createPractice.useTemplate)
-//     reads useMasterStore's practices cache,
+//     reads the master's practice lists (useMyPractices),
 //     and the direction options come from the taxonomy catalog. Both are
 //     DEPENDENCIES, not the thing under test -> mocked wholesale behind getters
 //     over a mutable object (the guards.test.ts trick, velo-idiom §5).
@@ -33,8 +33,8 @@
 //     the real VDayPicker. Never by poking `form`, which would assert our own
 //     fixture and leave the control -> form -> submit wiring untested.
 //
-// NO PINIA, verified rather than assumed. `useAuthStore` and `useMasterStore` are
-// both module-mocked below, and NO child in this tree resolves a store of its own
+// NO PINIA, verified rather than assumed. `useAuthStore` and the master's
+// queries (with `useQueryCache`) are module-mocked below, and NO child in this tree resolves a store of its own
 // (grep `use\w*Store\(` over src/components hits only BookingPopup, DiaryComposer
 // and RoleSwitchSection -- none of which this screen renders). Installing a real
 // Pinia to look like PracticeDetailView.test.ts would be cargo.
@@ -155,21 +155,12 @@ const masterState: {
   // tests that specifically exercise "profile hasn't loaded" override this.
   profileLoaded: true,
 }
-const fetchMyPractices = vi.fn()
-const refreshMyPractices = vi.fn()
-vi.mock('@/stores/master', () => ({
-  useMasterStore: () => ({
-    get practices() {
-      return masterState.practices
-    },
-    fetchMyPractices,
-    refreshMyPractices,
-  }),
-}))
-
-// The master profile (composables/queries/master.ts): getters over the same
-// object. Read by the screen (its confirmed methods) and by
-// usePracticeTaxonomyOptions (whether a profile has answered).
+// The master's queries (composables/queries/master.ts), getters over the
+// same object: the profile (its confirmed methods; whether it has answered --
+// usePracticeTaxonomyOptions), the practice lists the use-template block
+// offers (upcoming = masterState.practices, past empty), and the
+// post-create refresh.
+const myPracticesChanged = vi.fn()
 vi.mock('@/composables/queries/master', () => ({
   useMasterProfile: () => ({
     profile: {
@@ -183,7 +174,17 @@ vi.mock('@/composables/queries/master', () => ({
       },
     },
   }),
+  useMyPractices: (bucket: string) => ({
+    practices: {
+      get value() {
+        return bucket === 'upcoming' ? masterState.practices : []
+      },
+    },
+  }),
+  myPracticesChanged: (...args: unknown[]) => myPracticesChanged(...args),
 }))
+// No Pinia here: the screen only hands the query cache to the functions above.
+vi.mock('@pinia/colada', () => ({ useQueryCache: () => ({}) }))
 
 const authState: { user: Partial<UserResponse> | null } = { user: null }
 vi.mock('@/stores/auth', () => ({
@@ -243,7 +244,7 @@ function mount(): HTMLElement {
 
 // The mount kicks off ensureTaxonomyCatalog().then(...) -- one await plus the
 // re-render. The DEEPEST chain in the file is submit(): await createPractice ->
-// await updatePractice -> the fire-and-forget refreshMyPractices().catch()
+// await updatePractice -> the fire-and-forget myPracticesChanged()
 // continuation -> the finally's submitting=false -> the paint. Four awaits plus
 // the paint = five; six leaves margin. (velo-idiom §3: count YOUR chain, do not
 // copy a number. This one is counted -- it matches EditPracticeView's six by
@@ -428,8 +429,7 @@ beforeEach(() => {
   vi.mocked(practicesApi.updatePractice)
     .mockReset()
     .mockResolvedValue(practice({ id: 'p_new', status: 'scheduled' }))
-  fetchMyPractices.mockReset().mockResolvedValue(undefined)
-  refreshMyPractices.mockReset().mockResolvedValue(undefined)
+  myPracticesChanged.mockReset().mockResolvedValue(undefined)
   vi.mocked(groupsApi.getGroups).mockReset().mockResolvedValue({ items: [] })
   vi.mocked(cgApi.getMySchools).mockReset().mockResolvedValue({ items: [] })
   // §1.6 delegation: no query context and empty lookups by default -- the
@@ -483,7 +483,6 @@ describe('CreatePracticeView', () => {
       // outright failing) template list must never gate the form, because the
       // master can compose a practice without ever having made one.
       vi.mocked(ensureTaxonomyCatalog).mockReturnValue(new Promise(() => {}))
-      fetchMyPractices.mockReturnValue(new Promise(() => {}))
       mount()
       await flush()
 
@@ -1181,14 +1180,14 @@ describe('CreatePracticeView', () => {
       expect(toastSuccess).toHaveBeenCalledWith('Практика создана!')
       expect(replace).toHaveBeenCalledWith({ name: 'master-practices' })
       expect(push).not.toHaveBeenCalled()
-      expect(refreshMyPractices).toHaveBeenCalled()
+      expect(myPracticesChanged).toHaveBeenCalled()
     })
 
-    it('a failing list refresh does NOT turn a successful create into an error (G1)', async () => {
-      // :873. The refresh is fire-and-forget and swallowed on purpose: the
-      // practice is already created AND published, so surfacing the refresh's
-      // failure would strand the master on a form telling them it failed.
-      refreshMyPractices.mockRejectedValue(new Error('network'))
+    it('a list refresh that never answers does NOT hold the master on the form (G1)', async () => {
+      // The refresh is fire-and-forget (it never rejects: queries/master.ts):
+      // the practice is already created AND published, so the screen leaves
+      // without waiting for the lists.
+      myPracticesChanged.mockReturnValue(new Promise(() => {}))
       mount()
       await flush()
       await fillMinimalForm()

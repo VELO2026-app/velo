@@ -25,10 +25,10 @@
 // PATTERN: B (local-ref) with a store-DEPENDENCY layer. Called out because it
 // reads like Pattern A and is not: practice / attendance / loading / error are
 // this screen's OWN refs (.vue:356-359), filled by direct @/api/practices calls
-// in load() (.vue:571-593). That module is the seam, auto-mocked. The two Pinia
-// stores are not where the state lives -- masterStore contributes a warm CACHE
-// to read through (.vue:575) plus refreshMyPractices() as a post-mutation
-// side-effect, and diaryStore contributes the insights CACHE the PAST hero
+// in load() (.vue:571-593). That module is the seam, auto-mocked. The master's
+// practice lists (Colada) and the diary store are not where the state lives --
+// the lists contribute a warm CACHE to read through (cachedMyPractice) plus
+// myPracticesChanged() as a post-mutation side-effect, and diaryStore contributes the insights CACHE the PAST hero
 // badges read. Both are dependencies, so both are mocked wholesale behind
 // getters over mutable objects (velo-idiom §5). Mocking the API seam alone
 // would leave the cache-hit branch unreachable; mocking the stores alone would
@@ -102,16 +102,14 @@ vi.mock('@/composables/useToast', () => ({
   useToast: () => ({ error: toastError, success: toastSuccess, info: vi.fn() }),
 }))
 
-// -- master store (dependency): the warm cache + the post-mutation refresh --
+// -- the master's practice lists (dependency, composables/queries/master.ts):
+// the warm cache + the post-mutation refresh --
 const masterState: { practices: PracticeResponse[] } = { practices: [] }
-const refreshMyPractices = vi.fn()
-vi.mock('@/stores/master', () => ({
-  useMasterStore: () => ({
-    get practices() {
-      return masterState.practices
-    },
-    refreshMyPractices,
-  }),
+const myPracticesChangedSpy = vi.fn()
+vi.mock('@/composables/queries/master', () => ({
+  cachedMyPractice: (_queryCache: unknown, id: string) =>
+    masterState.practices.find((p) => p.id === id),
+  myPracticesChanged: (...args: unknown[]) => myPracticesChangedSpy(...args),
 }))
 
 // -- diary store (dependency): the insights cache the PAST hero badges read --
@@ -354,7 +352,7 @@ beforeEach(() => {
   loadInsights.mockReset().mockImplementation(async (id: string) => {
     if (insightsFixture) insightsCache.set(id, insightsFixture)
   })
-  refreshMyPractices.mockReset().mockResolvedValue(undefined)
+  myPracticesChangedSpy.mockReset().mockResolvedValue(undefined)
 
   push.mockReset()
   back.mockReset()
@@ -1262,7 +1260,7 @@ describe('MasterPracticeDetailView', () => {
     })
 
     it('on success: toasts, refreshes the master cache, and leaves the screen', async () => {
-      // refreshMyPractices matters: the cache this very screen reads through
+      // myPracticesChangedSpy matters: the cache this very screen reads through
       // (.vue:575) would otherwise keep serving the practice as `scheduled`
       // after it was cancelled.
       vi.mocked(practicesApi.getPractice).mockResolvedValue(practice({ status: 'scheduled' }))
@@ -1274,7 +1272,7 @@ describe('MasterPracticeDetailView', () => {
       await flush()
 
       expect(toastSuccess).toHaveBeenCalledWith('Практика отменена')
-      expect(refreshMyPractices).toHaveBeenCalled()
+      expect(myPracticesChangedSpy).toHaveBeenCalled()
       expect(back).toHaveBeenCalled()
     })
 
@@ -1316,7 +1314,7 @@ describe('MasterPracticeDetailView', () => {
       expect(toastError).toHaveBeenCalledWith('Не удалось отменить практику')
       expect(toastSuccess).not.toHaveBeenCalled()
       expect(back).not.toHaveBeenCalled()
-      expect(refreshMyPractices).not.toHaveBeenCalled()
+      expect(myPracticesChangedSpy).not.toHaveBeenCalled()
     })
 
     it('falls back to a generic message on a non-API error', async () => {
@@ -1399,7 +1397,7 @@ describe('MasterPracticeDetailView', () => {
       await flush()
 
       expect(toastSuccess).toHaveBeenCalledWith('Черновик удалён')
-      expect(refreshMyPractices).toHaveBeenCalled()
+      expect(myPracticesChangedSpy).toHaveBeenCalled()
       expect(back).toHaveBeenCalled()
     })
 

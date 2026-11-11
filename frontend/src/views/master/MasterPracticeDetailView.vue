@@ -400,7 +400,8 @@ import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDiaryStore } from '@/stores/diary'
-import { useMasterStore } from '@/stores/master'
+import { cachedMyPractice, myPracticesChanged } from '@/composables/queries/master'
+import { useQueryCache } from '@pinia/colada'
 import {
   getPractice,
   getAttendance,
@@ -444,7 +445,7 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const diaryStore = useDiaryStore()
-const masterStore = useMasterStore()
+const queryCache = useQueryCache()
 
 const practiceId = route.params.id as string
 
@@ -674,7 +675,7 @@ async function doCancel(scope: 'this' | 'this_and_future'): Promise<void> {
   try {
     await cancelPractice(practiceId, scope)
     toast.success(t('masterScreens.masterPracticeDetail.toast.cancelled'))
-    await masterStore.refreshMyPractices()
+    await myPracticesChanged(queryCache)
     router.back()
   } catch (e) {
     toast.error(extractApiError(e, t('masterScreens.masterPracticeDetail.toast.cancelFailed')))
@@ -690,7 +691,7 @@ async function doDelete(): Promise<void> {
   try {
     await deletePractice(practiceId)
     toast.success(t('masterScreens.masterPracticeDetail.toast.draftDeleted'))
-    await masterStore.refreshMyPractices()
+    await myPracticesChanged(queryCache)
     router.back()
   } catch (e) {
     toast.error(extractApiError(e, t('masterScreens.masterPracticeDetail.toast.deleteFailed')))
@@ -726,7 +727,7 @@ async function load(): Promise<void> {
   // screen-level error.
   const attendanceDone = loadAttendance()
   try {
-    const cached = masterStore.practices.find((p) => p.id === practiceId)
+    const cached = cachedMyPractice(queryCache, practiceId)
     const loaded = cached ?? (await getPractice(practiceId))
     if (epoch !== loadEpoch) return
     practice.value = loaded

@@ -4,7 +4,7 @@
 //
 // 268 lines. A copy-paste SIBLING of AttendanceView (№489's other half) --
 // same route param, same seams (getAttendance/getPractice, @/api/practices),
-// same useMasterStore practices-cache read, same ApiResponseError handling.
+// same practices-cache read (the master's loaded lists), same ApiResponseError handling.
 // Distinct presentation: no mood faces/comments, just an attended/no-show
 // NAME LIST with independent expand/collapse per section.
 //
@@ -14,7 +14,7 @@
 //     cache check internally, .vue:174-178) inside Promise.all.
 //   - THIS screen's load() (.vue:169-187) does the cache check OUTSIDE and
 //     FIRST (synchronously, before Promise.all): `const cached =
-//     masterStore.practices.find(...)`, then passes either
+//     cachedMyPractice(...)`, then passes either
 //     `Promise.resolve()` or `loadPractice()` into Promise.all depending on
 //     the result. Functionally IDENTICAL outcome (a cache hit never calls
 //     getPractice, either way), just a different code SHAPE -- not a bug,
@@ -68,7 +68,9 @@ import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import AttendanceRosterView from '@/views/master/AttendanceRosterView.vue'
 import * as practicesApi from '@/api/practices'
 import { ApiResponseError } from '@/api/client'
-import { useMasterStore } from '@/stores/master'
+import { PiniaColada, setInfiniteQueryData, useQueryCache } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
+import { keys } from '@/composables/queries/keys'
 import type { AttendanceResponse, AttendanceItemResponse, PracticeResponse } from '@/api/types'
 
 vi.mock('@/api/practices')
@@ -247,6 +249,7 @@ beforeEach(() => {
   vi.setSystemTime(NOW)
 
   pinia = createPinia()
+  createApp({}).use(pinia).use(PiniaColada, coladaOptions)
   setActivePinia(pinia)
 
   vi.mocked(practicesApi.getAttendance).mockReset().mockResolvedValue(attendanceResponse())
@@ -341,8 +344,19 @@ describe('AttendanceRosterView', () => {
       expect(statValue('Присутствовало')).toBe('1')
     })
 
-    it('a cached practice in masterStore.practices is used directly -- getPractice is never called', async () => {
-      useMasterStore().practicesUpcoming = [practice({ id: 'p_1', title: 'Кэшированная практика' })]
+    it("a practice in the master's loaded lists is used directly -- getPractice is never called", async () => {
+      // The upcoming list already loaded (queries/master.ts).
+      setInfiniteQueryData(useQueryCache(), keys.practices.mine('upcoming'), {
+        pages: [
+          {
+            items: [practice({ id: 'p_1', title: 'Кэшированная практика' })],
+            total: 1,
+            limit: 20,
+            offset: 0,
+          },
+        ],
+        pageParams: [0],
+      })
       mount()
       await flush()
 
