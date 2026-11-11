@@ -55,7 +55,13 @@
           >
             <template #icon><IconMessages :size="20" /></template>
           </VMenuRow>
-          <VMenuRow :label="t('masterScreens.masterProfile.menu.promocodes')" @click="onPromocodes">
+          <!-- FE-151: promo codes are a payments surface (the backend closes
+               them with the option). -->
+          <VMenuRow
+            v-if="paymentsEnabled"
+            :label="t('masterScreens.masterProfile.menu.promocodes')"
+            @click="onPromocodes"
+          >
             <template #icon><IconPromo :size="20" /></template>
           </VMenuRow>
           <!-- FE-112 (tz-whitelabel §4): the finance screen is the payments

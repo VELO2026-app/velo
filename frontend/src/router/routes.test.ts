@@ -79,6 +79,8 @@ describe('route table: instance options (FE-151, meta.option)', () => {
       'user-topup-success': 'payments',
       'user-topup-cancel': 'payments',
       'master-finance': 'payments',
+      'master-promocodes': 'payments',
+      'master-promocode-new': 'payments',
       'admin-withdrawals': 'payments',
       'admin-withdrawal-detail': 'payments',
       'user-calendar-school': 'schools',

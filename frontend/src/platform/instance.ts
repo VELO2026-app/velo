@@ -150,7 +150,8 @@ export function isOptionEnabled(name: OptionName): boolean {
 
 /**
  * Enabled modules of this instance: absent/empty/'full' means everything;
- * otherwise a comma list of module namespaces ('payments', 'ai', ...).
+ * otherwise a comma list of module namespaces ('ai'; payments is an
+ * instance option since FE-151, see isOptionEnabled).
  * Unknown names simply never match a module id (F3 consumes this,
  * tz-whitelabel §4).
  */

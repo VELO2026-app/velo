@@ -182,6 +182,8 @@ export function parseStartParam(
   // Telegram's 64 and the link did not open.
   const schoolInviteMatch = startParam.match(SCHOOL_INVITE_PARAM)
   if (schoolInviteMatch?.[1]) {
+    // FE-151: with the schools option off the link opens nothing.
+    if (!isOptionEnabled('schools')) return null
     return { name: 'school-join', params: { token: schoolInviteMatch[1] } }
   }
 
@@ -204,8 +206,11 @@ export function parseStartParam(
     case 'confirm_waitlist':
       return id ? { name: 'waitlist-confirm', params: { id } } : null
     case 'open_school':
+      // FE-151: the school verbs degrade like open_wallet with the option off.
+      if (!isOptionEnabled('schools')) return null
       return id ? { name: asMaster ? 'master-school' : 'user-school', params: { id } } : null
     case 'open_master_offer':
+      if (!isOptionEnabled('schools')) return null
       return id ? { name: 'school-master-offer', params: { id } } : null
     case 'open_master_application': // bare (BE-104) or __<school_id> (BE-59)
       // The Telegram button does not know the type, so a rejection lands on

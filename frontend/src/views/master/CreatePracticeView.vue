@@ -441,6 +441,7 @@ import {
   usePracticeForm,
 } from '@/composables/usePracticeForm'
 import type { PracticeResponse } from '@/api/types'
+import { isOptionEnabled } from '@/platform/instance'
 
 const router = useRouter()
 const route = useRoute()
@@ -659,7 +660,9 @@ onMounted(() => {
   // FE-24 (GT P5): the eligible schools. A failure here degrades to "no
   // schools" (the fourth option stays hidden) -- quieter than the groups
   // failure: there is no screen to point at from a practice form, and the
-  // toast would claim a list the user never opened.
+  // toast would claim a list the user never opened. FE-151: with the
+  // schools option off there is no probe -- the option stays hidden.
+  if (!isOptionEnabled('schools')) return
   void getMySchools()
     .then((res) => {
       eligibleSchools.value = res.items
