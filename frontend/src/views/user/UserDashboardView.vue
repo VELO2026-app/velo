@@ -162,6 +162,7 @@
                    the person to the practice screen, where Zoom runs inside
                    VELO (Meeting SDK). -->
               <VButton
+                v-if="zoomEnabled"
                 variant="secondary"
                 block
                 :disabled="zoomStateFor(b) !== 'ready'"
@@ -169,6 +170,10 @@
               >
                 Zoom
               </VButton>
+              <!-- FE-163 (PM-22 p.8): zoom option off -- no button, a plain note. -->
+              <p v-else class="dashboard__online-unavailable">
+                {{ t('common.onlineUnavailable') }}
+              </p>
               <!-- [FE-47] Check-in is NOT RENDERED (not disabled) when the
                    session is already live (the live badge,
                    i18n:user.screens.userDashboard.liveBadge) or the booking
@@ -190,7 +195,7 @@
                  from "still preparing" -- see PracticeLiveView's identical
                  badge for the full rationale. -->
             <VBadge
-              v-if="zoomStateFor(b) === 'failed'"
+              v-if="zoomEnabled && zoomStateFor(b) === 'failed'"
               variant="error"
               class="dashboard__zoom-note"
             >
@@ -203,7 +208,7 @@
                  kind:'unavailable' (PracticeLiveView), so the two surfaces
                  cannot disagree about the same registrant. -->
             <VBadge
-              v-else-if="zoomStateFor(b) === 'unavailable'"
+              v-else-if="zoomEnabled && zoomStateFor(b) === 'unavailable'"
               variant="warning"
               class="dashboard__zoom-note"
             >
@@ -271,6 +276,7 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
+import { isOptionEnabled } from '@/platform/instance'
 import { onDocumentEvent, offDocumentEvent, isDocumentHidden } from '@/platform/dom'
 import { computed, onMounted, onUnmounted, onActivated, onDeactivated } from 'vue'
 import { useNow } from '@/composables/useNow'
@@ -464,6 +470,9 @@ function practiceTitle(b: BookingWithPracticeResponse): string {
  * endpoint exists for the single-practice screen, where the caller may hold
  * no booking at all -- and that screen is where «Zoom» takes him.
  */
+/** Zoom option (FE-163): when off, no «Zoom» entry anywhere on this screen. */
+const zoomEnabled = isOptionEnabled('zoom')
+
 function zoomStateFor(b: BookingWithPracticeResponse): ZoomEntryStateKind {
   return zoomEntryState(
     b.zoom_registrant_ready,
@@ -776,6 +785,13 @@ onUnmounted(pause)
    hug one column next to an empty twin. */
 .dashboard__practice-actions > :only-child {
   grid-column: 1 / -1;
+}
+
+.dashboard__online-unavailable {
+  margin: 0;
+  align-self: center;
+  text-align: center;
+  color: var(--velo-text-muted);
 }
 
 .dashboard__zoom-note {

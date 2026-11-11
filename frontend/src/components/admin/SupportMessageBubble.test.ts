@@ -10,10 +10,11 @@
 // =============================================================================
 
 import { createTestI18n } from '@/locales/testing'
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, onTestFinished } from 'vitest'
 import { createApp, h, nextTick, ref, type App } from 'vue'
 import SupportMessageBubble from '@/components/admin/SupportMessageBubble.vue'
 import type { SupportMessage, SupportTranslationState } from '@/api/support'
+import { applyInstanceConfig } from '@/platform/instance'
 
 let app: App | null = null
 let host: HTMLElement | null = null
@@ -208,5 +209,19 @@ describe('SupportMessageBubble -- layout and the in-flight retry', () => {
     await mount(msg('impossible', true), { retrying: true })
 
     expect(link('Повторить')?.disabled).toBe(true)
+  })
+})
+
+describe('llm option off (FE-163, PM-22 p.11)', () => {
+  it('shows the original, with no toggle, mark or retry', async () => {
+    applyInstanceConfig({ options: { llm: 'false' } })
+    onTestFinished(() => applyInstanceConfig(null))
+    // The option is read when the component is created, so mount after applying it.
+    const el = await mount(msg('impossible', true))
+
+    expect(el.textContent).toContain('Hello')
+    expect(el.textContent).not.toContain('Привет')
+    expect(el.querySelector('.bubble__link')).toBeNull()
+    expect(el.querySelector('.bubble__mark')).toBeNull()
   })
 })

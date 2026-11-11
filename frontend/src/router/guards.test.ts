@@ -822,7 +822,7 @@ describe('router/guards', () => {
         history: createMemoryHistory(),
         routes: [
           { path: '/', component: Stub },
-          { path: '/404', name: 'not-found', component: Stub },
+          { path: '/unavailable', name: 'section-unavailable', component: Stub },
           {
             path: '/user',
             component: Stub,
@@ -858,12 +858,12 @@ describe('router/guards', () => {
       expect(router.currentRoute.value.fullPath).toBe('/user/topup')
     })
 
-    it('an option off: its record lands on /404; another option stays open', async () => {
+    it('an option off: its record lands on /unavailable; another option stays open', async () => {
       applyInstanceConfig({ options: { payments: 'false', schools: 'true' } })
       const router = optionRouter()
       await router.push('/user/dashboard')
       await router.push('/user/topup')
-      expect(router.currentRoute.value.fullPath).toBe('/404')
+      expect(router.currentRoute.value.fullPath).toBe('/unavailable')
       await router.push('/user/schools')
       expect(router.currentRoute.value.fullPath).toBe('/user/schools')
     })
@@ -872,14 +872,14 @@ describe('router/guards', () => {
       applyInstanceConfig({ options: { payments: 'true', schools: '${OPTION_SCHOOLS}' } })
       const router = optionRouter()
       await router.push('/user/schools')
-      expect(router.currentRoute.value.fullPath).toBe('/404')
+      expect(router.currentRoute.value.fullPath).toBe('/unavailable')
     })
 
     it('a parent record carrying the option closes every child', () => {
       applyInstanceConfig({ options: { schools: 'false' } })
       const router = optionRouter()
       expect(optionGuard(router.resolve('/schools/join/t1'))).toEqual({
-        path: '/404',
+        path: '/unavailable',
         replace: true,
       })
       expect(optionGuard(router.resolve('/user/dashboard'))).toBe(true)

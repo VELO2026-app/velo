@@ -442,6 +442,7 @@
           "bookFree": "Book for free"
         },
         "state": {
+          "bookingUnavailable": "Booking unavailable",
           "booked": "You are booked",
           "pending": "Pending",
           "completed": "Completed",
