@@ -129,6 +129,15 @@ export const usePracticesStore = defineStore('practices', () => {
     selectedError.value = null
   }
 
+  /** Back to the initial state at the account boundary (platform/session.ts).
+   * Clearing the fetch id also drops any answer still in flight (F-01 guard). */
+  function $reset(): void {
+    _currentFetchId = null
+    selected.value = null
+    selectedLoading.value = false
+    selectedError.value = null
+  }
+
   return {
     selected,
     selectedLoading,
@@ -136,5 +145,6 @@ export const usePracticesStore = defineStore('practices', () => {
     fetchPractice,
     openPractice,
     clearSelected,
+    $reset,
   }
 })

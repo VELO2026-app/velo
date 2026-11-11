@@ -42,9 +42,14 @@
   the routes' "on a history thread" 409s are a backend backstop, not a state
   this screen can reach.
 
-  DELIBERATELY NOT BUILT (scope trim, stated not silent): polling like
-  ChatThreadScreen has -- a manual refresh
-  (i18n:adminScreens.adminSupportDetail.refresh) covers it; mark-read for admins.
+  POLLING: bounded, and only while a message is in flight. While a message
+  (or a history message) is still being translated, the feeds are re-read
+  every POLL_MS, at most POLL_LIMIT times per cycle; it stops when nothing is
+  in flight or the screen is left. Otherwise there is no polling -- a manual
+  refresh (i18n:adminScreens.adminSupportDetail.refresh) covers it.
+
+  DELIBERATELY NOT BUILT (scope trim, stated not silent): unbounded polling
+  like ChatThreadScreen has; mark-read for admins.
 -->
 
 <template>
@@ -657,8 +662,18 @@ let pollTimer: ReturnType<typeof setTimeout> | null = null
 let polls = 0
 let disposed = false
 
+/** The ticket answered 404: the not-found screen shows, so the feed behind
+ *  it must not keep polling (the feed loads in parallel and may still have
+ *  translations in flight). */
+let ticketMissing = false
+
+function stopPolling(): void {
+  if (pollTimer) clearTimeout(pollTimer)
+  pollTimer = null
+}
+
 function schedulePoll(): void {
-  if (pollTimer || disposed || polls >= POLL_LIMIT) return
+  if (pollTimer || disposed || ticketMissing || polls >= POLL_LIMIT) return
   if (!inFlight(messages.value) && !inFlight(historyMessages.value)) return
   pollTimer = setTimeout(() => {
     pollTimer = null
@@ -749,9 +764,13 @@ async function fetchTicket(): Promise<void> {
   ticketError.value = null
   try {
     ticket.value = await getAdminTicket(ticketId)
+    ticketMissing = false
   } catch (e) {
-    if (isStatus(e, 404)) ticket.value = null
-    else
+    if (isStatus(e, 404)) {
+      ticket.value = null
+      ticketMissing = true
+      stopPolling()
+    } else
       ticketError.value = extractApiError(e, t('adminScreens.adminSupportDetail.ticketLoadError'))
   } finally {
     loadingTicket.value = false
@@ -863,9 +882,11 @@ onBeforeUnmount(() => {
   if (pollTimer) clearTimeout(pollTimer)
 })
 
+// The ticket and its feed leave together: the feed is keyed by the same id,
+// so it does not wait for the ticket row. If the ticket turns out missing
+// (404) the not-found screen simply wins over whatever the feed answered.
 onMounted(async () => {
-  await loadTicket()
-  if (ticket.value) await loadMessages()
+  await Promise.all([loadTicket(), loadMessages()])
 })
 </script>
 

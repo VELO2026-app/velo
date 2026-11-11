@@ -41,11 +41,16 @@ export const useAdminStore = defineStore('admin', () => {
   // A2: pending master method-change requests -> red badge on the dashboard row.
   const pendingMethodChanges = computed((): number => stats.value?.pending_method_changes ?? 0)
 
+  // Bumped by $reset: an answer (or error) that lands after it belongs to the
+  // previous account and must not reach this store.
+  let generation = 0
+
   // Load the dashboard data set (stats + pending-reports count) once. Idempotent:
   // skips while in flight and after a successful load unless `force` is passed.
   async function fetchDashboard(force = false): Promise<void> {
     if (loading.value) return
     if (loaded.value && !force) return
+    const gen = generation
     loading.value = true
     dashboardError.value = ''
     try {
@@ -53,32 +58,50 @@ export const useAdminStore = defineStore('admin', () => {
         getAdminStats(),
         getReports('pending', undefined, 1, 0),
       ])
+      if (gen !== generation) return
       stats.value = s
       pendingReports.value = reports.total
       loaded.value = true
     } catch (e) {
+      if (gen !== generation) return
       // W14 fix (PROMPT №409): every caller fires this with `void` and no
       // .catch(), so an uncaught error here used to be a completely silent
       // unhandled rejection -- badges/stats just never updated, with nothing
       // telling the admin why. Record it so a caller can surface it.
       dashboardError.value = extractApiError(e, t('storeErrors.admin.dashboard'))
     } finally {
-      loading.value = false
+      if (gen === generation) loading.value = false
     }
   }
 
   // Load the period-scoped overview for the stat cards + deltas (D1/D6).
   async function fetchOverview(period: 'week' | 'month', offset = 0): Promise<void> {
+    const gen = generation
     overviewLoading.value = true
     overviewError.value = ''
     try {
-      overview.value = await getAdminStatsOverview(period, offset)
+      const result = await getAdminStatsOverview(period, offset)
+      if (gen === generation) overview.value = result
     } catch (e) {
       // W14 fix: same silent-unhandled-rejection issue as fetchDashboard above.
-      overviewError.value = extractApiError(e, t('storeErrors.admin.overview'))
+      if (gen === generation)
+        overviewError.value = extractApiError(e, t('storeErrors.admin.overview'))
     } finally {
-      overviewLoading.value = false
+      if (gen === generation) overviewLoading.value = false
     }
+  }
+
+  /** Back to the initial state at the account boundary (platform/session.ts). */
+  function $reset(): void {
+    generation += 1
+    stats.value = null
+    pendingReports.value = 0
+    loading.value = false
+    loaded.value = false
+    dashboardError.value = ''
+    overview.value = null
+    overviewLoading.value = false
+    overviewError.value = ''
   }
 
   return {
@@ -95,5 +118,6 @@ export const useAdminStore = defineStore('admin', () => {
     overviewLoading,
     overviewError,
     fetchOverview,
+    $reset,
   }
 })

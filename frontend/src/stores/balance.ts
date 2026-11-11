@@ -53,11 +53,20 @@ export const useBalanceStore = defineStore('balance', () => {
     await authStore.fetchMe()
   }
 
+  /**
+   * Account-boundary reset (platform/session.ts): nothing to clear -- every
+   * value here derives from the auth store's user, which the session end
+   * clears. Present so the store meets the account-scope contract; state
+   * added here later is reset here.
+   */
+  function $reset(): void {}
+
   return {
     balanceCents,
     currency,
     formattedBalance,
     hasEnough,
     refresh,
+    $reset,
   }
 })

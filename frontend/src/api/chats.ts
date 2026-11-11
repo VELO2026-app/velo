@@ -38,6 +38,7 @@
 // =============================================================================
 
 import { api } from '@/api/client'
+import { path, raw } from '@/api/path'
 
 /** P-1 display block: the counterparty as velo knows them. `name` is
  *  "First Last" from Telegram fields and may be null -- the VIEW owns the
@@ -188,7 +189,7 @@ export function listChatMessages(
 ): Promise<ChatMessageList> {
   const qs = new URLSearchParams({ limit: String(limit) })
   if (cursor) qs.set('cursor', cursor)
-  return api.get<ChatMessageList>(`/api/v1/chats/${threadId}/messages?${qs}`)
+  return api.get<ChatMessageList>(path`/api/v1/chats/${threadId}/messages?${raw(qs.toString())}`)
 }
 
 /** RFC4122 v4 uuid for the Idempotency-Key header (BE-163). crypto.randomUUID
@@ -213,7 +214,7 @@ export function sendChatMessage(
   idempotencyKey: string = newIdempotencyKey(),
 ): Promise<ChatMessage> {
   return api.post<ChatMessage>(
-    `/api/v1/chats/${threadId}/messages`,
+    path`/api/v1/chats/${threadId}/messages`,
     { body },
     { 'Idempotency-Key': idempotencyKey },
   )
@@ -221,7 +222,7 @@ export function sendChatMessage(
 
 /** Advance the caller's read pointer of a thread; returns its fresh unread count. */
 export function markChatRead(threadId: string): Promise<ChatUnread> {
-  return api.post<ChatUnread>(`/api/v1/chats/${threadId}/read`, {})
+  return api.post<ChatUnread>(path`/api/v1/chats/${threadId}/read`, {})
 }
 
 /** The caller's unread state across every conversation (the master hub badge source). */

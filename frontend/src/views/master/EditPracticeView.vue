@@ -36,7 +36,8 @@
 
   Fixes:
     W-2: DURATION_OPTIONS / TIMEZONE_OPTIONS imported from @/utils/practiceOptions
-    W-3: anyLoading computed = saving || transitioning || cancelling || deleting.
+    W-3: anyLoading computed = saving || transitioning || cancelling || deleting
+         || refreshing (the server copy still loading behind a cached placeholder).
          All action buttons and Save use :disabled="anyLoading" -- prevents
          concurrent save + publish / save + cancel / etc.
     W-5: confirm dialog overlay click blocked while confirmDialog.loading is true
@@ -398,7 +399,7 @@ import {
 import { ensureTaxonomyCatalog, parseMethods } from '@/utils/methodTaxonomy'
 import { eurStringToCents, centsToEurString } from '@/utils/currency'
 import type { TaxonomyListResponse } from '@/api/taxonomy'
-import type { PracticeAudienceKind, PracticeResponse } from '@/api/types'
+import type { PracticeAudienceKind, PracticeResponse, UpdatePracticeRequest } from '@/api/types'
 import type { GroupListItem } from '@/api/groups'
 import type { AudienceSchoolOption } from '@/components/shared/practiceAudience'
 import PracticeAudiencePicker from '@/components/shared/PracticeAudiencePicker.vue'
@@ -421,6 +422,8 @@ function onBack(): void {
 // -- Practice data --
 const practice = ref<PracticeResponse | null>(null)
 const loading = ref(false)
+/** True while the authoritative `getPractice` runs behind a cached placeholder. */
+const refreshing = ref(false)
 
 // -- Action loading states --
 const saving = ref(false)
@@ -442,7 +445,8 @@ const catalog = ref<TaxonomyListResponse | null>(null)
 // Every action button and the Save button use :disabled="anyLoading".
 // Prevents concurrent save + publish, save + cancel, etc.
 const anyLoading = computed(
-  () => saving.value || transitioning.value || cancelling.value || deleting.value,
+  () =>
+    saving.value || transitioning.value || cancelling.value || deleting.value || refreshing.value,
 )
 
 // -- Confirm dialog state --
@@ -595,6 +599,20 @@ function onDirectionChange(): void {
   form.style = ''
 }
 
+/** Form shape; the baseline and the diff are typed off it. */
+type FormValues = typeof form
+
+/**
+ * What the form held right after the last populate from the server. `save`
+ * diffs against it, so a PATCH carries only what the master changed and
+ * cannot overwrite a field somebody else edited meanwhile with a stale value.
+ */
+let baseline: FormValues | null = null
+
+function snapshotForm(): FormValues {
+  return { ...form, audience_group_ids: [...form.audience_group_ids] }
+}
+
 // -- Populate form from practice --
 function populateForm(p: PracticeResponse): void {
   form.title = p.title
@@ -621,7 +639,7 @@ function populateForm(p: PracticeResponse): void {
   form.contraindications = p.contraindications ?? ''
   form.audience_kind = p.audience_kind ?? 'public'
   // PracticeResponse carries audience_group_NAMES, not ids (see the field's
-  // own docstring in api/types.ts) -- CheckinView composes a message from
+  // docstring in api/generated.ts) -- CheckinView composes a message from
   // the names directly and never needed ids, so the backend never added an
   // id list to this response. Resolving name -> id against customGroups
   // (loaded in onMounted, below) is safe: create_group() 409s on a
@@ -631,6 +649,7 @@ function populateForm(p: PracticeResponse): void {
   // resolved yet when populateForm first runs (the cached-practice branch
   // in onMounted can beat it).
   resolveAudienceGroupIds()
+  baseline = snapshotForm()
 }
 
 // Resolve form.audience_kind === 'groups' names -> ids once customGroups is
@@ -640,6 +659,8 @@ function resolveAudienceGroupIds(): void {
   if (form.audience_kind !== 'groups' || !practice.value) return
   const names = new Set(practice.value.audience_group_names ?? [])
   form.audience_group_ids = customGroups.value.filter((g) => names.has(g.name)).map((g) => g.id)
+  // Resolving ids is part of loading, not an edit: keep the diff base in step.
+  if (baseline) baseline.audience_group_ids = [...form.audience_group_ids]
 }
 
 // -- Load practice --
@@ -671,23 +692,52 @@ onMounted(async () => {
       toast.error(t('masterScreens.createPractice.error.loadGroups'))
     })
 
+  // The form is always filled from the server (`getPractice`): the list cache
+  // may be stale (another editor, a status change) and a PATCH built from it
+  // would write old values back. The cached row is only a placeholder that
+  // spares the master a spinner; Save stays disabled until the fetch lands.
   const cached = masterStore.practices.find((p) => p.id === practiceId)
   if (cached) {
     practice.value = cached
     populateForm(cached)
-    return
+    refreshing.value = true
+  } else {
+    loading.value = true
   }
-  loading.value = true
   try {
-    const p = await getPractice(practiceId)
-    practice.value = p
-    populateForm(p)
+    const fresh = await getPractice(practiceId)
+    applyFresh(fresh)
   } catch (e) {
+    // A failed refresh keeps the placeholder visible but unsaveable would be
+    // a trap: drop it so the master sees the error state, not stale data.
+    practice.value = null
     toast.error(extractApiError(e, t('practice.loadFailed')))
   } finally {
     loading.value = false
+    refreshing.value = false
   }
 })
+
+/**
+ * Replace the placeholder with the server record. Fields the master already
+ * edited on top of the placeholder keep their edits; everything else takes
+ * the fresh value, and the diff base becomes the fresh state.
+ */
+function applyFresh(fresh: PracticeResponse): void {
+  const before = baseline
+  const edited = before ? snapshotForm() : null
+  practice.value = fresh
+  populateForm(fresh)
+  if (!before || !edited) return
+  const target = form as Record<string, unknown>
+  const typedBefore = before as Record<string, unknown>
+  const typedEdited = edited as Record<string, unknown>
+  for (const key of Object.keys(typedEdited)) {
+    if (JSON.stringify(typedEdited[key]) !== JSON.stringify(typedBefore[key])) {
+      target[key] = typedEdited[key]
+    }
+  }
+}
 
 // -- Validate --
 function validate(): boolean {
@@ -724,8 +774,8 @@ function validate(): boolean {
 // True iff the FORM's audience differs from what's currently SAVED on
 // `practice.value` -- gates the stranded-bookers check below so it only
 // ever runs on an actual audience change, never on an unrelated save (e.g.
-// title-only) that happens to resend the same audience_kind/group_ids the
-// practice already has (this screen always sends both on every save).
+// title-only). Since FE-157 the PATCH carries the audience pair only when
+// it changed (buildPatch), but the check stays keyed on the saved practice.
 function audienceChanged(): boolean {
   if (!practice.value) return false
   const savedKind = practice.value.audience_kind ?? 'public'
@@ -800,48 +850,93 @@ async function save(): Promise<void> {
   await commitSave()
 }
 
+/**
+ * Build the PATCH body from what the master changed since the last load.
+ * Unchanged fields are omitted (the backend applies `exclude_unset`), so a
+ * stale form cannot overwrite a concurrent edit of a field it never touched.
+ * Two people editing the SAME field still race (last write wins): the
+ * backend has no version check yet -- see BE-204.
+ * Coupled fields travel together: date/time/timezone, is_free/price, and the
+ * audience pair (the backend checks each pair as a whole).
+ *
+ * @returns the partial body, `null` when nothing changed, or `undefined`
+ *   (after a toast) when the date/time cannot be built.
+ */
+function buildPatch(): UpdatePracticeRequest | null | undefined {
+  const base = baseline
+  if (!base) return null
+  const body: UpdatePracticeRequest = {}
+  const text = (v: string): string | null => v.trim() || null
+
+  if (form.title !== base.title) body.title = form.title.trim()
+  if (form.direction !== base.direction) body.direction = form.direction
+  if (form.difficulty !== base.difficulty) body.difficulty = form.difficulty
+  if (form.style !== base.style) body.style = text(form.style)
+  if (form.description !== base.description) body.description = text(form.description)
+  if (form.what_to_prepare !== base.what_to_prepare) {
+    body.what_to_prepare = text(form.what_to_prepare)
+  }
+  if (form.contraindications !== base.contraindications) {
+    body.contraindications = text(form.contraindications)
+  }
+
+  if (form.date !== base.date || form.time !== base.time || form.timezone !== base.timezone) {
+    // Wall-clock date + time -> UTC instant in the selected timezone (mirrors
+    // CreatePracticeView). Omitted when a field is empty: never send a bad one.
+    if (form.date && form.time) {
+      const dt = DateTime.fromISO(`${form.date}T${form.time}`, { zone: form.timezone })
+      if (!dt.isValid) {
+        toast.error(t('masterScreens.editPractice.validation.invalidDateTime'))
+        return undefined
+      }
+      const iso = dt.toUTC().toISO()
+      if (iso) body.scheduled_at = iso
+    }
+    if (form.timezone !== base.timezone) body.timezone = form.timezone
+  }
+  if (form.duration_minutes !== base.duration_minutes) {
+    body.duration_minutes = parseInt(form.duration_minutes, 10)
+  }
+  if (form.max_participants_raw !== base.max_participants_raw) {
+    body.max_participants = form.max_participants_raw
+      ? parseInt(form.max_participants_raw, 10)
+      : null
+  }
+  if (form.is_free !== base.is_free || form.price_eur_raw !== base.price_eur_raw) {
+    body.is_free = form.is_free
+    body.price_cents = form.is_free ? 0 : priceCents.value
+  }
+
+  // P5 port (PROMPT №606): group_ids only means something for kind 'groups'.
+  // BE-74: school_id is never sent -- the school is fixed at creation.
+  if (audienceChanged()) {
+    body.audience_kind = form.audience_kind
+    body.group_ids = form.audience_kind === 'groups' ? form.audience_group_ids : []
+  }
+
+  return Object.keys(body).length > 0 ? body : null
+}
+
 async function commitSave(): Promise<void> {
   if (saving.value) return
   saving.value = true
   confirmDialog.loading = true
   try {
-    // Convert the wall-clock date + time back to a UTC instant in the
-    // selected timezone (mirrors CreatePracticeView). undefined when either
-    // field is empty so we don't send a bad scheduled_at.
-    let scheduledAt: string | undefined
-    if (form.date && form.time) {
-      const dt = DateTime.fromISO(`${form.date}T${form.time}`, {
-        zone: form.timezone,
-      })
-      if (!dt.isValid) {
-        toast.error(t('masterScreens.editPractice.validation.invalidDateTime'))
-        return
-      }
-      scheduledAt = dt.toUTC().toISO() ?? undefined
+    const body = buildPatch()
+    if (body === undefined) return
+    if (body === null) {
+      // Nothing differs from the server record: no request, no lost-update risk.
+      confirmDialog.visible = false
+      toast.success(t('ui.saved'))
+      return
     }
-
-    const updated = await updatePractice(practiceId, {
-      title: form.title.trim(),
-      direction: form.direction,
-      difficulty: form.difficulty,
-      style: form.style.trim() || null,
-      description: form.description.trim() || null,
-      what_to_prepare: form.what_to_prepare.trim() || null,
-      contraindications: form.contraindications.trim() || null,
-      scheduled_at: scheduledAt ?? null,
-      duration_minutes: parseInt(form.duration_minutes, 10),
-      timezone: form.timezone,
-      max_participants: form.max_participants_raw ? parseInt(form.max_participants_raw, 10) : null,
-      is_free: form.is_free,
-      price_cents: form.is_free ? 0 : priceCents.value,
-      // P5 port (PROMPT №606): group_ids is only meaningful (and only sent
-      // non-empty) for audience_kind='groups'. BE-74: school_id is
-      // NOT sent -- the school is fixed at creation, and an absent field
-      // leaves it as it is (any other value would be a 400).
-      audience_kind: form.audience_kind,
-      group_ids: form.audience_kind === 'groups' ? form.audience_group_ids : [],
-    })
+    // The values this PATCH carries; once it succeeds they are what the
+    // server holds, so the next Save diffs against them. Taken BEFORE the
+    // request: an edit made while it is in flight stays unsaved.
+    const sent = snapshotForm()
+    const updated = await updatePractice(practiceId, body)
     practice.value = updated
+    baseline = sent
     confirmDialog.visible = false
     toast.success(t('ui.saved'))
     await masterStore.refreshMyPractices()

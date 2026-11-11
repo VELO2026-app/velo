@@ -17,6 +17,7 @@
 
 import { api } from '@/api/client'
 import type { McpScope, McpTokenCreated, McpTokenItem, McpTokenListResponse } from '@/api/types'
+import { path, raw } from '@/api/path'
 
 const BASE = '/api/v1/users/me/mcp-tokens'
 
@@ -35,5 +36,5 @@ export function listMcpTokens(): Promise<McpTokenListResponse> {
 
 /** Revoke one of the user's own tokens; repeating it is not an error. */
 export function revokeMcpToken(tokenId: string): Promise<McpTokenItem> {
-  return api.post<McpTokenItem>(`${BASE}/${tokenId}/revoke`)
+  return api.post<McpTokenItem>(path`${raw(BASE)}/${tokenId}/revoke`)
 }

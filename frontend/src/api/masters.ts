@@ -37,6 +37,7 @@ import type {
   MasterStatsResponse,
   PaginatedMasterReviewsResponse,
 } from '@/api/types'
+import { path } from '@/api/path'
 
 /**
  * Submit a master application (3-step form).
@@ -102,7 +103,7 @@ export function updateMasterLanguages(languages: string[]): Promise<MasterProfil
  * or contact data -- safe public subset + practices_count / reviews_count.
  */
 export function getPublicMaster(userId: string): Promise<MasterPublicResponse> {
-  return api.get<MasterPublicResponse>(`/api/v1/masters/${userId}`)
+  return api.get<MasterPublicResponse>(path`/api/v1/masters/${userId}`)
 }
 
 /**
@@ -189,23 +190,12 @@ export function getStudents(limit = 50, offset = 0): Promise<PaginatedStudentsRe
 }
 
 /**
- * T24-20 (PROMPT №638): the backend now returns a `blocked` field on this
- * response (get_master_student_detail's narrow allow-path, so the frontend
- * can swap the profile's bottom action instead of guessing). `generated.ts`
- * is autogen -- regenerated from the OpenAPI schema by the bot on push, not
- * hand-edited here -- so it does not have this field yet and would be wrong
- * to touch directly. This local intersection type covers the gap until the
- * next regen; it is dropped once generated.ts catches up.
- */
-export type StudentDetailResponseWithBlocked = StudentDetailResponse & { blocked: boolean }
-
-/**
  * Fetch one student's aggregate (practices_count, hours, satisfaction_pct,
  * recent check-ins and feedbacks) over THIS master's practices.
  * Note: the response carries no name/avatar — the calling list passes those.
  */
-export function getStudent(id: string): Promise<StudentDetailResponseWithBlocked> {
-  return api.get<StudentDetailResponseWithBlocked>(`/api/v1/masters/me/students/${id}`)
+export function getStudent(id: string): Promise<StudentDetailResponse> {
+  return api.get<StudentDetailResponse>(path`/api/v1/masters/me/students/${id}`)
 }
 
 // =============================================================================

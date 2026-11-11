@@ -14,6 +14,7 @@
 import { api } from '@/api/client'
 import { buildQuery } from '@/api/utils'
 import type { CreateMasterPromoRequest, PaginatedPromosResponse, PromoResponse } from '@/api/types'
+import { path } from '@/api/path'
 
 /** Create a new master promo code. */
 export function createPromo(body: CreateMasterPromoRequest): Promise<PromoResponse> {
@@ -28,5 +29,5 @@ export function getMyPromos(limit = 50, offset = 0): Promise<PaginatedPromosResp
 
 /** Deactivate a promo code (soft -- sets is_active=false; no hard delete). */
 export function deactivatePromo(promoId: string): Promise<PromoResponse> {
-  return api.patch<PromoResponse>(`/api/v1/masters/me/promos/${promoId}/deactivate`)
+  return api.patch<PromoResponse>(path`/api/v1/masters/me/promos/${promoId}/deactivate`)
 }

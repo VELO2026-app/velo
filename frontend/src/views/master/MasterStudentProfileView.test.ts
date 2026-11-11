@@ -75,7 +75,7 @@ import * as mastersApi from '@/api/masters'
 import * as groupsApi from '@/api/groups'
 import * as reportsApi from '@/api/reports'
 import * as chatsApi from '@/api/chats'
-import type { StudentDetailResponseWithBlocked } from '@/api/masters'
+import type { StudentDetailResponse } from '@/api/types'
 import type { StudentCheckinItem, StudentFeedbackItem } from '@/api/types'
 
 vi.mock('@/api/masters')
@@ -115,9 +115,7 @@ function feedback(over: Partial<StudentFeedbackItem> = {}): StudentFeedbackItem 
   return { rating: 5, comment: null, created_at: '2026-06-09T10:00:00Z', ...over }
 }
 
-function detail(
-  over: Partial<StudentDetailResponseWithBlocked> = {},
-): StudentDetailResponseWithBlocked {
+function detail(over: Partial<StudentDetailResponse> = {}): StudentDetailResponse {
   return {
     name: 'Анна Кузнецова',
     avatar_url: null,

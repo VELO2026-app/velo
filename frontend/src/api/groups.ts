@@ -33,110 +33,31 @@
 
 import { api } from '@/api/client'
 import { buildQuery } from '@/api/utils'
+import type {
+  BlockStudentResponse,
+  DistinctTagsResponse,
+  GroupInviteResponse,
+  GroupListResponse,
+  GroupResponse,
+  JoinGroupResponse,
+  PaginatedGroupMembersResponse,
+  PaginatedGroupSearchResponse,
+  StudentGroupsResponse,
+  StudentTagResponse,
+} from '@/api/types'
+import { path, raw } from '@/api/path'
+
+// Kept importable from '@/api/groups' for existing consumers; the shapes are
+// the generated ones (re-exported, not redeclared).
+export type {
+  GroupListItem,
+  GroupMemberItem,
+  GroupSearchMemberItem,
+  StudentGroupItem,
+} from '@/api/types'
 
 /** System group slugs -- never a real group id. */
 export type GroupKind = 'students' | 'deleted' | 'custom'
-
-/** One row of the master's group list (system slug or custom group). */
-export interface GroupListItem {
-  /** A UUID string for a custom group, or the literal "students" / "deleted". */
-  id: string
-  kind: GroupKind
-  name: string
-  members_count: number
-  /** Owner Q4 (PROMPT №610): always null for the two virtual groups and for
-   *  any custom group created before this field existed. Required (not
-   *  optional) -- PROMPT №613: the backend always serializes this key (no
-   *  response_model_exclude_unset), so the wire shape has it present on
-   *  every response, and the hand-written type must mirror that exactly,
-   *  not just "safely" allow it to be missing. */
-  description: string | null
-}
-
-/** The master's group list response. */
-export interface GroupListResponse {
-  items: GroupListItem[]
-}
-
-/** One group as returned by create/rename. */
-export interface GroupResponse {
-  id: string
-  name: string
-  members_count: number
-  description: string | null
-}
-
-/** One member row of a group: the student plus their tag against this master. */
-export interface GroupMemberItem {
-  id: string
-  name: string
-  avatar_url: string | null
-  /** This student's tag against the current master, null if never tagged. */
-  tag: string | null
-}
-
-/** Paginated member list of one group. */
-export interface PaginatedGroupMembersResponse {
-  items: GroupMemberItem[]
-  total: number
-  limit: number
-  offset: number
-}
-
-/** GET /api/v1/masters/me/groups/search (P6). ONE ROW PER (student, group)
- *  MEMBERSHIP, not one row per student -- a student in N of this master's
- *  custom groups appears N times, each row naming a DIFFERENT group. Field
- *  shape copied field-by-field from the backend's GroupSearchMemberItem
- *  (groups_schemas.py) -- generated.ts will carry the authoritative version
- *  once a deploy regenerates it against this backend; this is a temporary
- *  hand-written stand-in, same posture as every other type in this file. */
-export interface GroupSearchMemberItem {
-  student_user_id: string
-  name: string
-  avatar_url: string | null
-  tag: string | null
-  group_id: string
-  group_name: string
-}
-
-/** Paginated cross-group membership search result. */
-export interface PaginatedGroupSearchResponse {
-  items: GroupSearchMemberItem[]
-  total: number
-  limit: number
-  offset: number
-}
-
-/** Tag upsert answer: the student's tag (null when cleared). */
-export interface StudentTagResponse {
-  student_user_id: string
-  tag: string | null
-}
-
-/** Block-student answer, including how many future bookings were cancelled and refunded. */
-export interface BlockStudentResponse {
-  student_user_id: string
-  blocked_at: string
-  /** How many FUTURE confirmed bookings were cancelled + refunded as a
-   *  side effect (payments/refund.py's existing refund_booking() path). */
-  cancelled_bookings_count: number
-}
-
-/** GET /api/v1/masters/me/tags (P3). */
-export interface DistinctTagsResponse {
-  tags: string[]
-}
-
-/** `GET /api/v1/masters/me/students/{id}/groups` (P3). */
-export interface StudentGroupItem {
-  id: string
-  name: string
-}
-
-/** The groups one student belongs to. */
-export interface StudentGroupsResponse {
-  groups: StudentGroupItem[]
-}
 
 /** GET /api/v1/masters/me/groups -- the default students group ("students")
  *  first, custom by created_at, the deleted group ("deleted") last and
@@ -179,14 +100,14 @@ export function renameGroup(
   if (description !== undefined) {
     body.description = description
   }
-  return api.patch<GroupResponse>(`/api/v1/masters/me/groups/${id}`, body)
+  return api.patch<GroupResponse>(path`/api/v1/masters/me/groups/${id}`, body)
 }
 
 /** `DELETE /api/v1/masters/me/groups/{id}` -- delete a custom group (its
  *  memberships cascade; members fall back to the derived default students
  *  group). */
 export function deleteGroup(id: string): Promise<void> {
-  return api.delete(`/api/v1/masters/me/groups/${id}`)
+  return api.delete(path`/api/v1/masters/me/groups/${id}`)
 }
 
 /** `GET /api/v1/masters/me/groups/{id}/members` -- `{id}` accepts
@@ -199,7 +120,9 @@ export function getGroupMembers(
   offset = 0,
 ): Promise<PaginatedGroupMembersResponse> {
   const query = buildQuery({ search: search || undefined, limit, offset })
-  return api.get<PaginatedGroupMembersResponse>(`/api/v1/masters/me/groups/${id}/members${query}`)
+  return api.get<PaginatedGroupMembersResponse>(
+    path`/api/v1/masters/me/groups/${id}/members${raw(query)}`,
+  )
 }
 
 /** GET /api/v1/masters/me/groups/search (P6) -- cross-group people-search,
@@ -217,7 +140,7 @@ export function searchGroupMemberships(
 /** `POST /api/v1/masters/me/groups/{id}/members` -- add-access, not move
  *  (owner-settled): the student keeps every other membership. Idempotent. */
 export function addGroupMember(id: string, studentUserId: string): Promise<void> {
-  return api.post(`/api/v1/masters/me/groups/${id}/members`, {
+  return api.post(path`/api/v1/masters/me/groups/${id}/members`, {
     student_user_id: studentUserId,
   })
 }
@@ -225,7 +148,7 @@ export function addGroupMember(id: string, studentUserId: string): Promise<void>
 /** `DELETE /api/v1/masters/me/groups/{id}/members/{studentUserId}` -- remove
  *  from a CUSTOM group only (system slugs are rejected server-side). */
 export function removeGroupMember(id: string, studentUserId: string): Promise<void> {
-  return api.delete(`/api/v1/masters/me/groups/${id}/members/${studentUserId}`)
+  return api.delete(path`/api/v1/masters/me/groups/${id}/members/${studentUserId}`)
 }
 
 /** `PUT /api/v1/masters/me/students/{studentUserId}/tag` -- upsert the
@@ -237,7 +160,7 @@ export function setStudentTag(
   studentUserId: string,
   tag: string | null,
 ): Promise<StudentTagResponse> {
-  return api.put<StudentTagResponse>(`/api/v1/masters/me/students/${studentUserId}/tag`, {
+  return api.put<StudentTagResponse>(path`/api/v1/masters/me/students/${studentUserId}/tag`, {
     tag,
   })
 }
@@ -246,14 +169,14 @@ export function setStudentTag(
  *  blocked_at, drops the student from every custom group, cancels+refunds
  *  their FUTURE confirmed bookings on this master's practices. */
 export function blockStudent(studentUserId: string): Promise<BlockStudentResponse> {
-  return api.post<BlockStudentResponse>(`/api/v1/masters/me/students/${studentUserId}/block`)
+  return api.post<BlockStudentResponse>(path`/api/v1/masters/me/students/${studentUserId}/block`)
 }
 
 /** `DELETE /api/v1/masters/me/students/{studentUserId}/block` (P3) -- unblock.
  *  The student returns to the default students group automatically (derived);
  *  custom-group memberships are NOT restored, the tag is kept. */
 export function unblockStudent(studentUserId: string): Promise<void> {
-  return api.delete(`/api/v1/masters/me/students/${studentUserId}/block`)
+  return api.delete(path`/api/v1/masters/me/students/${studentUserId}/block`)
 }
 
 /** GET /api/v1/masters/me/tags (P3) -- every distinct tag this master has
@@ -267,19 +190,7 @@ export function getMyTags(): Promise<DistinctTagsResponse> {
  *  CUSTOM groups this student is in for this master (profile group chips).
  *  Never the two virtuals -- they aren't membership rows. */
 export function getStudentGroups(studentUserId: string): Promise<StudentGroupsResponse> {
-  return api.get<StudentGroupsResponse>(`/api/v1/masters/me/students/${studentUserId}/groups`)
-}
-
-/** `POST /api/v1/masters/me/groups/{id}/invite` (P4). */
-export interface GroupInviteResponse {
-  invite_url: string
-}
-
-/** POST /api/v1/masters/groups/join (P4). */
-export interface JoinGroupResponse {
-  group_id: string
-  group_name: string
-  master_name: string
+  return api.get<StudentGroupsResponse>(path`/api/v1/masters/me/students/${studentUserId}/groups`)
 }
 
 /** `POST /api/v1/masters/me/groups/{id}/invite` (P4) -- create-or-return the
@@ -287,7 +198,7 @@ export interface JoinGroupResponse {
  *
  *  @returns The SAME url on repeat calls (idempotent). */
 export function createGroupInvite(id: string): Promise<GroupInviteResponse> {
-  return api.post<GroupInviteResponse>(`/api/v1/masters/me/groups/${id}/invite`)
+  return api.post<GroupInviteResponse>(path`/api/v1/masters/me/groups/${id}/invite`)
 }
 
 /** `POST /api/v1/masters/groups/join` (P4) -- resolve a group-invite token

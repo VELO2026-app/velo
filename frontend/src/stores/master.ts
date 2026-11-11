@@ -60,17 +60,21 @@ export const useMasterStore = defineStore('master', () => {
    */
   async function fetchMyProfile(force = false): Promise<void> {
     if (!force && profileLoaded.value) return
+    const gen = generation
     profileLoading.value = true
     profileError.value = null
     try {
-      profile.value = await getMyMasterProfile()
+      const fresh = await getMyMasterProfile()
+      if (gen !== generation) return // superseded by $reset
+      profile.value = fresh
       profileLoaded.value = true
       profileMissing.value = false
     } catch (e) {
+      if (gen !== generation) return
       profileError.value = extractApiError(e, t('storeErrors.master.profile'))
       profileMissing.value = e instanceof ApiResponseError && e.code === 'master_profile_not_found'
     } finally {
-      profileLoading.value = false
+      if (gen === generation) profileLoading.value = false
     }
   }
 
@@ -120,8 +124,9 @@ export const useMasterStore = defineStore('master', () => {
    */
   async function fetchUpcomingPractices(): Promise<void> {
     if (upcomingLoaded.value) return
+    const gen = generation
     await paginationUpcoming.refreshInPlace()
-    upcomingLoaded.value = true
+    if (gen === generation) upcomingLoaded.value = true
   }
 
   /**
@@ -132,8 +137,9 @@ export const useMasterStore = defineStore('master', () => {
    */
   async function fetchPastPractices(): Promise<void> {
     if (pastLoaded.value) return
+    const gen = generation
     await paginationPast.refresh()
-    pastLoaded.value = true
+    if (gen === generation) pastLoaded.value = true
   }
 
   /**
@@ -153,7 +159,9 @@ export const useMasterStore = defineStore('master', () => {
    * upcoming and it never appears in past either).
    */
   async function refreshMyPractices(): Promise<void> {
+    const gen = generation
     await Promise.all([paginationUpcoming.refreshInPlace(), paginationPast.refresh()])
+    if (gen !== generation) return
     upcomingLoaded.value = true
     pastLoaded.value = true
   }
@@ -177,15 +185,21 @@ export const useMasterStore = defineStore('master', () => {
    * load. Same pattern as bookings.ts's B1 nearest-set refresh.
    */
   async function refreshUpcomingPractices(): Promise<void> {
+    const gen = generation
     await paginationUpcoming.refreshInPlace()
-    upcomingLoaded.value = true
+    if (gen === generation) upcomingLoaded.value = true
   }
 
   // =========================================================================
   // Reset (on logout -- W-1)
   // =========================================================================
 
+  // Account scope (platform/session.ts): $reset bumps it, and an answer that
+  // left before the reset is dropped instead of filling the next account.
+  let generation = 0
+
   function $reset(): void {
+    generation += 1
     profile.value = null
     profileLoading.value = false
     profileError.value = null

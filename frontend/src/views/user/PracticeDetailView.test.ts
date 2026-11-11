@@ -33,7 +33,7 @@
 
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { createApp, nextTick, type App } from 'vue'
+import { createApp, nextTick, shallowReactive, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import PracticeDetailView from '@/views/user/PracticeDetailView.vue'
 import type { BookingWithPracticeResponse, SchoolMineItem, PracticeResponse } from '@/api/types'
@@ -84,7 +84,10 @@ vi.mock('@/stores/practices', () => ({
 }))
 
 // -- bookings store (dependency) --
-const bookingsState: { bookings: BookingWithPracticeResponse[] } = { bookings: [] }
+// shallowReactive: the recording watcher must see a later swap of the booking.
+const bookingsState = shallowReactive<{ bookings: BookingWithPracticeResponse[] }>({
+  bookings: [],
+})
 const fetchMyBookings = vi.fn()
 const refreshBookings = vi.fn()
 const refreshMyBookings = vi.fn()
@@ -873,6 +876,33 @@ describe('PracticeDetailView', () => {
 
       expect(getBookingRecording).toHaveBeenCalledWith('b1')
       expect(button('Посмотреть запись')).toBeDefined()
+    })
+
+    it('FE-157: a slow link for a superseded booking is dropped, not shown', async () => {
+      let resolveOld!: (v: { status: string; url: string }) => void
+      getBookingRecording.mockReturnValueOnce(
+        new Promise((r) => {
+          resolveOld = r
+        }),
+      )
+      practicesState.selected = practice({ scheduled_at: ended, duration_minutes: 60 })
+      bookingsState.bookings = [
+        booking({ id: 'b1', status: 'confirmed' }, { scheduled_at: ended, duration_minutes: 60 }),
+      ]
+      mount()
+      await flush()
+      expect(getBookingRecording).toHaveBeenCalledWith('b1')
+
+      // The booking is cancelled meanwhile: the watcher resets the link and
+      // the (still pending) answer for b1 must not resurrect it.
+      bookingsState.bookings = [
+        booking({ id: 'b1', status: 'cancelled' }, { scheduled_at: ended, duration_minutes: 60 }),
+      ]
+      await flush()
+      resolveOld({ status: 'available', url: 'https://zoom.us/rec/old' })
+      await flush()
+
+      expect(button('Посмотреть запись')).toBeUndefined()
     })
 
     it('a CANCELLED booking never qualifies, even past end', async () => {

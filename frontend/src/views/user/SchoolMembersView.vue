@@ -189,6 +189,7 @@ import { VAvatar, VButton, VEmptyState, VInput, VLoader, VSegmentTrack } from '@
 import VHeader from '@/components/layout/VHeader.vue'
 import { usePagination } from '@/composables/usePagination'
 import { useToast } from '@/composables/useToast'
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
 import { extractApiError } from '@/composables/useApiError'
 import { formatShortDate } from '@/utils/format'
 
@@ -350,18 +351,22 @@ let suppressSearchWatch = false
 // §1.11.3: search re-queries the same endpoint -- debounce 300ms, trim, offset
 // back to 0. refresh() resets the list and bumps usePagination's requestId, so
 // any in-flight older fetch discards its result: the stale-response guard.
-let searchTimer: ReturnType<typeof setTimeout> | undefined
-watch(search, () => {
-  if (suppressSearchWatch) {
-    suppressSearchWatch = false
-    return
-  }
-  clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
+// The timer is cleared on unmount (useDebouncedSearch), so no refresh starts
+// after the screen is gone.
+useDebouncedSearch(
+  search,
+  () => {
     notFound.value = false
-    void refresh()
-  }, 300)
-})
+    return refresh()
+  },
+  {
+    beforeSchedule: () => {
+      if (!suppressSearchWatch) return true
+      suppressSearchWatch = false
+      return false
+    },
+  },
+)
 
 // -- The roster switcher (§1.11) -----------------------------------------------
 

@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "verify": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test",
     "verify:quick": "node scripts/verify-quick.mjs",
-    "lint": "node scripts/lint-budget.mjs && node scripts/no-cyrillic.mjs && node scripts/brand-grep.mjs && node scripts/key-audit.mjs && node scripts/doc-coverage.mjs && pnpm lint:css",
+    "lint": "node scripts/lint-budget.mjs && node scripts/no-cyrillic.mjs && node scripts/brand-grep.mjs && node scripts/key-audit.mjs && node scripts/doc-coverage.mjs && node scripts/api-type-dupes.mjs && pnpm lint:css",
     "lint:css": "stylelint \"src/**/*.{css,vue}\" \"../packages/velo-ui/src/**/*.{css,vue}\"",
     "skin": "node scripts/apply-skin.mjs",
     "build:matrix": "node scripts/build-matrix.mjs",
