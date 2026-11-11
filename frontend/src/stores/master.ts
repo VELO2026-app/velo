@@ -11,76 +11,25 @@ import { defineStore } from 'pinia'
 import { useQueryCache } from '@pinia/colada'
 import { invalidateAfter } from '@/composables/queries/invalidation'
 import { ref, computed } from 'vue'
-import { getMyMasterProfile, getMyPractices } from '@/api/masters'
+import { getMyPractices } from '@/api/masters'
 import { usePagination } from '@/composables/usePagination'
-import { extractApiError } from '@/composables/useApiError'
-import { ApiResponseError } from '@/api/client'
 import { MASTER_APPLIED_KEY } from '@/utils/constants'
-import type { MasterProfileResponse, PracticeResponse } from '@/api/types'
-import i18n from '@/locales'
+import type { PracticeResponse } from '@/api/types'
 
-const { t } = i18n.global
-
-/** Master-zone state: the master profile and the master's own practices list. */
+/**
+ * Master-zone state: the master's own practices list and the onboarding flag
+ * of this session. The master profile is a Colada query
+ * (composables/queries/master.ts, FE-166 step 5).
+ */
 export const useMasterStore = defineStore('master', () => {
   // Colada entries a practice change makes stale (refreshMyPractices).
   const queryCache = useQueryCache()
-  // =========================================================================
-  // Profile
-  // =========================================================================
-
-  const profile = ref<MasterProfileResponse | null>(null)
-  const profileLoading = ref(false)
-  const profileError = ref<string | null>(null)
-
-  // Tracks whether at least one successful fetch has completed.
-  // Used by masterStatusGuard to skip redundant network calls.
-  const profileLoaded = ref(false)
-
-  // CONFIRMED "no application at all" (№257 honest entry): the backend
-  // answered 403 code=master_profile_not_found (distinct from
-  // master_profile_not_verified -- a pending/rejected application). Keyed on
-  // the machine code, NOT on profile===null, so a transient network error
-  // never routes a real master into the apply wizard.
-  const profileMissing = ref(false)
-
   // Per-session suppression for the post-approval onboarding carousel
   // (MasterOnboardingView, Phase D). Set true on done/skip so the overlay does
   // not re-trigger within a session; the persisted server flag
   // (master_onboarding_completed, Zod E15) governs across sessions. Cleared on
   // $reset/logout so a different account in the same tab starts fresh.
   const onboardingShownThisSession = ref(false)
-
-  /**
-   * Fetch master profile from API.
-   *
-   * @param force - If true, always fetches even if already loaded.
-   *                Default false: skips if profileLoaded is true.
-   *
-   * Called by:
-   *   - masterStatusGuard (lazy, force=false)
-   *   - MasterPendingView (polling / manual recheck, force=true)
-   *   - MasterDashboardView (on mount, force=false)
-   */
-  async function fetchMyProfile(force = false): Promise<void> {
-    if (!force && profileLoaded.value) return
-    const gen = generation
-    profileLoading.value = true
-    profileError.value = null
-    try {
-      const fresh = await getMyMasterProfile()
-      if (gen !== generation) return // superseded by $reset
-      profile.value = fresh
-      profileLoaded.value = true
-      profileMissing.value = false
-    } catch (e) {
-      if (gen !== generation) return
-      profileError.value = extractApiError(e, t('storeErrors.master.profile'))
-      profileMissing.value = e instanceof ApiResponseError && e.code === 'master_profile_not_found'
-    } finally {
-      if (gen === generation) profileLoading.value = false
-    }
-  }
 
   // =========================================================================
   // Practices (paginated) -- T22-3/T22-5 (PROMPT №561): TWO independent
@@ -207,11 +156,6 @@ export const useMasterStore = defineStore('master', () => {
 
   function $reset(): void {
     generation += 1
-    profile.value = null
-    profileLoading.value = false
-    profileError.value = null
-    profileLoaded.value = false
-    profileMissing.value = false
     onboardingShownThisSession.value = false
     paginationUpcoming.reset()
     paginationPast.reset()
@@ -222,14 +166,7 @@ export const useMasterStore = defineStore('master', () => {
   }
 
   return {
-    // Profile
-    profile,
-    profileLoading,
-    profileError,
-    profileLoaded,
-    profileMissing,
     onboardingShownThisSession,
-    fetchMyProfile,
 
     // Practices -- combined view (order not meaningful; id-lookup/template use)
     practices,

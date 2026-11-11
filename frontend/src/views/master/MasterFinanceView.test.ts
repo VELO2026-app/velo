@@ -10,10 +10,10 @@
 // masking of the payout account.
 //
 // PATTERN A (store-backed) for the balance + a local-ref form on top:
-//   - available/frozen/payout come from useMasterStore (MasterFinanceView.vue:31-33).
-//     The store is a DEPENDENCY, not the thing under test, so it is mocked
-//     wholesale behind getters over a mutable object -- the guards.test.ts trick
-//     (velo-idiom §5). A real store here would drag its own network path in.
+//   - available/frozen/payout come from the master-profile query
+//     (useMasterProfile). It is a DEPENDENCY, not the thing under test, so it
+//     is mocked wholesale over a mutable object -- the guards.test.ts trick
+//     (velo-idiom §5). A real query here would drag its own network path in.
 //   - the amount input, the payout form and the history are local refs fed by
 //     direct @/api/masters calls -- that is the seam for everything else.
 //
@@ -33,7 +33,7 @@
 
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { createApp, nextTick, type App } from 'vue'
+import { computed, createApp, nextTick, reactive, type App } from 'vue'
 import MasterFinanceView from '@/views/master/MasterFinanceView.vue'
 import * as mastersApi from '@/api/masters'
 import { ApiResponseError } from '@/api/client'
@@ -59,25 +59,28 @@ vi.mock('@/composables/useViewerTimezone', async () => {
   return { useViewerTimezone: () => computed(() => 'UTC') }
 })
 
-// Dependency store behind getters -- tests mutate `profile` instead of
-// re-mocking (velo-idiom §5). `profile` is deliberately a plain reactive-free
-// object: the screen writes to profile.payout directly (MasterFinanceView.vue:160),
-// and these tests assert the API call rather than the re-render for that path.
+// The master profile behind a mutable object -- tests mutate `profile`
+// instead of re-mocking (velo-idiom §5). Reactive, so the re-render after a
+// payout write is observable; `setMasterProfile` applies the screen's update
+// to it, as the Colada write does (composables/queries/master.ts).
 interface Profile {
   available_cents: number
   frozen_cents: number
   payout: PayoutDetails | null
 }
-const masterState: { profile: Profile | null } = { profile: null }
-const fetchMyProfile = vi.fn()
-vi.mock('@/stores/master', () => ({
-  useMasterStore: () => ({
-    get profile() {
-      return masterState.profile
-    },
-    fetchMyProfile,
+const masterState = reactive<{ profile: Profile | null }>({ profile: null })
+const reloadProfile = vi.fn()
+vi.mock('@/composables/queries/master', () => ({
+  useMasterProfile: () => ({
+    profile: computed(() => masterState.profile),
+    reload: reloadProfile,
   }),
+  setMasterProfile: (_queryCache: unknown, update: (p: Profile) => Profile) => {
+    if (masterState.profile) masterState.profile = update(masterState.profile)
+  },
 }))
+// No Pinia here: the screen only hands the query cache to setMasterProfile.
+vi.mock('@pinia/colada', () => ({ useQueryCache: () => ({}) }))
 
 const NOW = new Date('2026-07-20T12:00:00Z')
 
@@ -115,8 +118,8 @@ function mount(): HTMLElement {
   return host
 }
 
-// onMounted awaits fetchMyProfile() THEN reloadHistory() -- two sequential
-// awaits plus the re-render, so three ticks is not enough (velo-idiom §3:
+// onMounted awaits reloadHistory() -- its awaits plus the re-render, so
+// three ticks is not enough (velo-idiom §3:
 // count the awaits, do not copy the number).
 async function flush(): Promise<void> {
   for (let i = 0; i < 6; i++) await nextTick()
@@ -167,7 +170,7 @@ const PAYPAL: PayoutDetails = { method: 'paypal', details: { email: 'master@exam
 beforeEach(() => {
   vi.setSystemTime(NOW)
   masterState.profile = { available_cents: 100000, frozen_cents: 0, payout: PAYPAL }
-  fetchMyProfile.mockReset().mockResolvedValue(undefined)
+  reloadProfile.mockReset().mockResolvedValue({ status: 'success' })
   vi.mocked(mastersApi.getMyWithdrawals).mockReset().mockResolvedValue(page([]))
   vi.mocked(mastersApi.createWithdrawal).mockReset().mockResolvedValue(withdrawal('w1'))
   vi.mocked(mastersApi.updatePayoutDetails).mockReset().mockResolvedValue(PAYPAL)
@@ -404,7 +407,7 @@ describe('MasterFinanceView', () => {
       typeAmount('100')
       await flush()
       vi.mocked(mastersApi.getMyWithdrawals).mockClear()
-      fetchMyProfile.mockClear()
+      reloadProfile.mockClear()
 
       button('Запросить вывод')?.click()
       await flush()
@@ -414,7 +417,7 @@ describe('MasterFinanceView', () => {
         'Запрос на вывод отправлен. Ожидайте решения администратора.',
       )
       expect(amountField()?.value).toBe('')
-      expect(fetchMyProfile).toHaveBeenCalledWith(true)
+      expect(reloadProfile).toHaveBeenCalledTimes(1)
       expect(mastersApi.getMyWithdrawals).toHaveBeenCalled()
     })
 
@@ -554,6 +557,10 @@ describe('MasterFinanceView', () => {
     })
 
     it('saves a bank transfer with the trimmed IBAN', async () => {
+      vi.mocked(mastersApi.updatePayoutDetails).mockResolvedValue({
+        method: 'bank_transfer',
+        details: { iban: 'DE89370400440532013000' },
+      } as PayoutDetails)
       masterState.profile = { available_cents: 100000, frozen_cents: 0, payout: null }
       mount()
       await flush()
@@ -573,6 +580,8 @@ describe('MasterFinanceView', () => {
         details: { iban: 'DE89370400440532013000' },
       })
       expect(toastSuccess).toHaveBeenCalledWith('Реквизиты сохранены')
+      // The answer is written into the profile: the card shows the new method.
+      expect(pick('.finance-view__card-num')).toContain('IBAN ···· 3000')
     })
 
     it('falls back to the generic message when saving fails (unmapped code)', async () => {
@@ -609,6 +618,8 @@ describe('MasterFinanceView', () => {
 
       expect(mastersApi.deletePayout).toHaveBeenCalledTimes(1)
       expect(toastSuccess).toHaveBeenCalledWith('Способ выплаты удалён')
+      // Written into the profile: the card is gone.
+      expect(host?.querySelector('.finance-view__card-x')).toBeNull()
     })
 
     it('a FAILED delete does not claim the method is gone', async () => {

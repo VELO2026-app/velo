@@ -51,13 +51,13 @@ import { MASTER_APPLIED_KEY, masterRejectionSeenKey } from '@/utils/constants'
 import { isOptionEnabled, type OptionName } from '@/platform/instance'
 
 /**
- * The master store, imported on first use (FE-157): only the master-zone
- * guards read it, so a student's startup bundle carries neither the store
- * nor the master API module behind it.
+ * The master-profile queries, imported on first use (FE-157): only the
+ * master-zone guards read them, so a student's startup bundle carries neither
+ * the module nor the master API module behind it. The profile itself is a
+ * Colada entry (composables/queries/master.ts, FE-166 step 5).
  */
-async function loadMasterStore() {
-  const { useMasterStore } = await import('@/stores/master')
-  return useMasterStore()
+async function loadMasterQueries() {
+  return import('@/composables/queries/master')
 }
 
 /**
@@ -286,18 +286,18 @@ export function roleGuard(required: Extract<UserRole, 'master' | 'admin'>): Acce
  * which keep their existing /master/pending verdict flow.
  *
  * Admins browsing /master/* keep today's path (`pending -> admin bounce`), and
- * a transient fetch error never triggers the redirect (profileMissing is
+ * a transient fetch error never triggers the redirect (`missing` is
  * keyed on the machine code, not on profile===null).
  */
 async function noProfileMasterRedirect(): Promise<{ path: string } | null> {
   const auth = useAuthStore()
   if (auth.role !== 'master') return null
 
-  const masterStore = await loadMasterStore()
-  // Lazy-fetch profile (skips network if already loaded this session).
-  await masterStore.fetchMyProfile(false)
+  const { loadMasterProfile } = await loadMasterQueries()
+  // Lazy: no request when a profile is already held this session.
+  const { missing } = await loadMasterProfile()
 
-  return masterStore.profileMissing ? { path: '/master/apply' } : null
+  return missing ? { path: '/master/apply' } : null
 }
 
 /**
@@ -318,10 +318,10 @@ export const masterApplyGuard: NavigationGuardWithThis<undefined> = async () => 
   if (timedOut && auth.role === null) return { path: '/auth-error' }
   if (auth.role === 'admin') return { path: '/admin/dashboard' }
   if (auth.role === 'master') {
-    const master = await loadMasterStore()
-    await master.fetchMyProfile()
-    if (master.profile?.status === 'verified') return { path: '/master/dashboard' }
-    if (master.profile?.status === 'pending') return { path: '/master/pending' }
+    const { loadMasterProfile } = await loadMasterQueries()
+    const { profile } = await loadMasterProfile()
+    if (profile?.status === 'verified') return { path: '/master/dashboard' }
+    if (profile?.status === 'pending') return { path: '/master/pending' }
     return true
   }
   if (
@@ -347,12 +347,10 @@ export const ADMIN_PROFILE_TTL_MS = 15_000
 /** The last admin profile fetch: when, and for which account. */
 let adminProfileFetch: { userId: string | null; at: number } | null = null
 
-type MasterStore = Awaited<ReturnType<typeof loadMasterStore>>
-
 /**
  * Refetch an admin's master profile once ADMIN_PROFILE_TTL_MS has passed
  * since the last fetch, or when that fetch was another account's; within
- * the window the store's answer stands and no request leaves.
+ * the window the cached answer stands and no request leaves.
  *
  * @remarks Stamped whatever the answer: GET /masters/me refuses role=admin
  * (403 from get_current_master, backend auth/dependencies.py), so for an
@@ -360,10 +358,11 @@ type MasterStore = Awaited<ReturnType<typeof loadMasterStore>>
  * after the fetch, so a check racing it waits on the same request (the API
  * client dedupes the GET) instead of reading the store before it lands.
  */
-async function refreshAdminProfile(master: MasterStore, userId: string | null): Promise<void> {
+async function refreshAdminProfile(userId: string | null): Promise<void> {
   const last = adminProfileFetch
   if (last && last.userId === userId && Date.now() - last.at < ADMIN_PROFILE_TTL_MS) return
-  await master.fetchMyProfile(true)
+  const { loadMasterProfile } = await loadMasterQueries()
+  await loadMasterProfile(undefined, { force: true })
   adminProfileFetch = { userId, at: Date.now() }
 }
 
@@ -378,7 +377,7 @@ export function __resetAdminProfileTtlForTest(): void {
 /**
  * A master's application status when GET /masters/me brought no profile.
  *
- * @remarks The master store keeps no error kind: a 403 for an unverified
+ * @remarks Only `master_profile_not_found` is told apart: a 403 for an unverified
  * application (master_profile_not_verified) and a request that never got an
  * answer both leave it without a profile. The session's GET /users/me copy
  * (master_application) tells them apart. It is fetched here once when the
@@ -418,7 +417,7 @@ export const masterStatusGuard: AccessCheck = async () => {
   if (redirect) return redirect
 
   const auth = useAuthStore()
-  const masterStore = await loadMasterStore()
+  const { cachedMasterProfile } = await loadMasterQueries()
 
   // B1 (PROMPT №726): roleGuard('master') admits role=='admin' too (no role
   // change involved -- an admin browses /master/* directly, never switching
@@ -429,14 +428,15 @@ export const masterStatusGuard: AccessCheck = async () => {
   // holding a verified master profile has no such tell: revoke_master's own
   // role-reset is conditional on `user.role == MASTER`, which is false for
   // an admin, so their profile can flip to 'suspended' while role stays
-  // 'admin' -- profileLoaded would otherwise cache the old 'verified'
+  // 'admin' -- the session-long profile would otherwise keep the old 'verified'
   // forever. Refetch for exactly this population, at most once per
   // ADMIN_PROFILE_TTL_MS (FE-157: it used to be on every check); a real
   // master keeps the existing lazy skip-if-loaded behaviour and pays no
   // extra network call at all (noProfileMasterRedirect above made its one
   // lazy fetch).
   if (auth.role === 'master') {
-    const status = masterStore.profile?.status ?? (await applicationStatusWithoutProfile(auth))
+    const status =
+      cachedMasterProfile().profile?.status ?? (await applicationStatusWithoutProfile(auth))
     if (status === undefined) return true
     return status === 'verified' ? true : { path: '/master/pending' }
   }
@@ -444,8 +444,9 @@ export const masterStatusGuard: AccessCheck = async () => {
   // An admin: GET /masters/me refuses role=admin, so no profile is the usual
   // answer, not a lost one -- the verdict screen bounces an admin to the
   // admin dashboard (masterPendingGuard), the path admins always took.
-  await refreshAdminProfile(masterStore, auth.user?.id ?? null)
-  if (!masterStore.profile || masterStore.profile.status !== 'verified') {
+  await refreshAdminProfile(auth.user?.id ?? null)
+  const { profile } = cachedMasterProfile()
+  if (!profile || profile.status !== 'verified') {
     return { path: '/master/pending' }
   }
 

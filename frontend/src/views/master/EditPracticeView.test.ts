@@ -136,13 +136,25 @@ vi.mock('@/stores/master', () => ({
     get practices() {
       return masterState.practices
     },
-    get profile() {
-      return masterState.profile
-    },
-    get profileLoaded() {
-      return masterState.profileLoaded
-    },
     refreshMyPractices,
+  }),
+}))
+
+// The master profile (composables/queries/master.ts): getters over the same
+// object. Read by the screen (its confirmed methods) and by
+// usePracticeTaxonomyOptions (whether a profile has answered).
+vi.mock('@/composables/queries/master', () => ({
+  useMasterProfile: () => ({
+    profile: {
+      get value() {
+        return masterState.profile
+      },
+    },
+    loaded: {
+      get value() {
+        return masterState.profileLoaded
+      },
+    },
   }),
 }))
 

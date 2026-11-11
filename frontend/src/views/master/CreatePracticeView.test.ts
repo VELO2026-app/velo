@@ -150,28 +150,38 @@ const masterState: {
   practices: [],
   profile: null,
   // PROMPT №556: defaults true -- masterStatusGuard (router/guards.ts, meta.requires verified-master) already
-  // awaits fetchMyProfile() before this screen mounts in the real app, so
+  // loads the profile before this screen mounts in the real app, so
   // "not yet loaded" is the abnormal case, not the default one. The two
   // tests that specifically exercise "profile hasn't loaded" override this.
   profileLoaded: true,
 }
 const fetchMyPractices = vi.fn()
 const refreshMyPractices = vi.fn()
-const fetchMyProfile = vi.fn()
 vi.mock('@/stores/master', () => ({
   useMasterStore: () => ({
     get practices() {
       return masterState.practices
     },
-    get profile() {
-      return masterState.profile
-    },
-    get profileLoaded() {
-      return masterState.profileLoaded
-    },
     fetchMyPractices,
     refreshMyPractices,
-    fetchMyProfile,
+  }),
+}))
+
+// The master profile (composables/queries/master.ts): getters over the same
+// object. Read by the screen (its confirmed methods) and by
+// usePracticeTaxonomyOptions (whether a profile has answered).
+vi.mock('@/composables/queries/master', () => ({
+  useMasterProfile: () => ({
+    profile: {
+      get value() {
+        return masterState.profile
+      },
+    },
+    loaded: {
+      get value() {
+        return masterState.profileLoaded
+      },
+    },
   }),
 }))
 
@@ -404,7 +414,6 @@ beforeEach(() => {
   } as MasterProfileResponse
   masterState.profileLoaded = true
   authState.user = { id: 'u1', timezone: 'Europe/Moscow' } as Partial<UserResponse>
-  fetchMyProfile.mockReset().mockResolvedValue(undefined)
   vi.mocked(ensureTaxonomyCatalog).mockReset().mockResolvedValue(null)
   // PROMPT №559: status:'draft' -- matches the REAL backend (create_practice
   // always creates as draft; only the follow-up publish PATCH makes it
@@ -489,7 +498,7 @@ describe('CreatePracticeView', () => {
       // that let a form present a direction/style the master was never
       // confirmed for. An unknown confirmed-set must never read as
       // "everything is allowed"; masterStatusGuard (router/guards.ts, meta.requires verified-master) already
-      // awaits fetchMyProfile() before this screen mounts in the real app, so
+      // loads the profile before this screen mounts in the real app, so
       // this is a defensive state, not the normal one.
       masterState.profile = null
       masterState.profileLoaded = false

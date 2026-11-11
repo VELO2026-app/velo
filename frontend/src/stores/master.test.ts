@@ -2,13 +2,11 @@
 // VELO Frontend -- stores/master.ts Unit Tests (probekit sweep #17)
 // =============================================================================
 //
-// Covers fetchMyProfile (the profileMissing gate -- keyed on the machine
-// error code, not on profile===null, per the store's own №257 comment), the
-// two INDEPENDENT upcoming/past pagination cursors (T22-3/T22-5) including
+// Covers the two INDEPENDENT upcoming/past pagination cursors (T22-3/T22-5) including
 // their `*Loaded` re-fetch guards, the combined fetchMyPractices/practices
 // view, the force-reloads refreshMyPractices/refreshUpcomingPractices, and
-// $reset (profile + both
-// cursors + the sessionStorage applicant marker).
+// $reset (both cursors + the sessionStorage applicant marker). The master
+// profile moved to Colada: composables/queries/master.test.ts.
 //
 // Mocked at the @/api/masters wrapper boundary -- the store's only network
 // dependency (usePagination itself is not a network seam, it just wraps
@@ -19,10 +17,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useMasterStore } from '@/stores/master'
-import { ApiResponseError } from '@/api/client'
 import * as mastersApi from '@/api/masters'
 import { MASTER_APPLIED_KEY } from '@/utils/constants'
-import type { MasterProfileResponse, PracticeResponse } from '@/api/types'
+import type { PracticeResponse } from '@/api/types'
 
 vi.mock('@/api/masters')
 
@@ -30,21 +27,6 @@ vi.mock('@/api/masters')
 // covers is composables/queries/invalidation.test.ts's business.
 const invalidateAfter = vi.hoisted(() => vi.fn())
 vi.mock('@/composables/queries/invalidation', () => ({ invalidateAfter }))
-
-function fakeProfile(overrides: Partial<MasterProfileResponse> = {}): MasterProfileResponse {
-  return {
-    user_id: 'master_1',
-    status: 'verified',
-    display_name: 'Test Master',
-    frozen_cents: 0,
-    available_cents: 10000,
-    min_withdrawal_cents: 5000,
-    withdrawal_fee_cents: 0,
-    created_at: '2026-01-01T00:00:00Z',
-    rejection_reason: null,
-    ...overrides,
-  }
-}
 
 function fakePractice(id: string): PracticeResponse {
   return { id, scheduled_at: '2026-06-15T12:00:00Z' } as PracticeResponse
@@ -56,81 +38,12 @@ function fakePracticesPage(items: PracticeResponse[], total = items.length) {
 
 beforeEach(() => {
   setActivePinia(createPinia())
-  vi.mocked(mastersApi.getMyMasterProfile).mockReset()
   vi.mocked(mastersApi.getMyPractices).mockReset().mockResolvedValue(fakePracticesPage([]))
   invalidateAfter.mockReset().mockResolvedValue(undefined)
   sessionStorage.clear()
 })
 
 describe('useMasterStore', () => {
-  describe('fetchMyProfile', () => {
-    it('on success: stores the profile, marks loaded, clears the missing/error flags', async () => {
-      vi.mocked(mastersApi.getMyMasterProfile).mockResolvedValue(fakeProfile())
-      const store = useMasterStore()
-
-      await store.fetchMyProfile()
-
-      expect(store.profile).toEqual(fakeProfile())
-      expect(store.profileLoaded).toBe(true)
-      expect(store.profileMissing).toBe(false)
-      expect(store.profileError).toBeNull()
-    })
-
-    it('403 master_profile_not_found sets profileMissing true (routes to the apply wizard)', async () => {
-      vi.mocked(mastersApi.getMyMasterProfile).mockRejectedValue(
-        new ApiResponseError(403, 'Профиль мастера не найден', 'master_profile_not_found'),
-      )
-      const store = useMasterStore()
-
-      await store.fetchMyProfile()
-
-      expect(store.profileMissing).toBe(true)
-      expect(store.profileError).toBe('Профиль мастера не найден')
-      expect(store.profileLoaded).toBe(false)
-    })
-
-    it('403 master_profile_not_verified (pending application) does NOT set profileMissing', async () => {
-      vi.mocked(mastersApi.getMyMasterProfile).mockRejectedValue(
-        new ApiResponseError(403, 'Профиль ожидает проверки', 'master_profile_not_verified'),
-      )
-      const store = useMasterStore()
-
-      await store.fetchMyProfile()
-
-      expect(store.profileMissing).toBe(false)
-    })
-
-    it('a transient/network failure does NOT set profileMissing -- only the specific 403 code does', async () => {
-      vi.mocked(mastersApi.getMyMasterProfile).mockRejectedValue(new Error('network down'))
-      const store = useMasterStore()
-
-      await store.fetchMyProfile()
-
-      expect(store.profileMissing).toBe(false)
-      expect(store.profileError).toBe('Не удалось загрузить профиль мастера')
-    })
-
-    it('skips the network call when already loaded and force is not passed', async () => {
-      vi.mocked(mastersApi.getMyMasterProfile).mockResolvedValue(fakeProfile())
-      const store = useMasterStore()
-
-      await store.fetchMyProfile()
-      await store.fetchMyProfile()
-
-      expect(mastersApi.getMyMasterProfile).toHaveBeenCalledTimes(1)
-    })
-
-    it('force=true refetches even when already loaded', async () => {
-      vi.mocked(mastersApi.getMyMasterProfile).mockResolvedValue(fakeProfile())
-      const store = useMasterStore()
-
-      await store.fetchMyProfile()
-      await store.fetchMyProfile(true)
-
-      expect(mastersApi.getMyMasterProfile).toHaveBeenCalledTimes(2)
-    })
-  })
-
   describe('upcoming / past practice cursors (independent, T22-3/T22-5)', () => {
     it('fetchUpcomingPractices calls the "upcoming" bucket and populates its own list/total', async () => {
       const items = [fakePractice('u1'), fakePractice('u2')]
@@ -226,22 +139,17 @@ describe('useMasterStore', () => {
   })
 
   describe('$reset', () => {
-    it('clears the profile, both cursors, both *Loaded flags, and the applicant sessionStorage marker', async () => {
-      vi.mocked(mastersApi.getMyMasterProfile).mockResolvedValue(fakeProfile())
+    it('clears both cursors, both *Loaded flags, the onboarding flag and the applicant sessionStorage marker', async () => {
       vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
         fakePracticesPage([fakePractice('x')], 1),
       )
       sessionStorage.setItem(MASTER_APPLIED_KEY, '1')
       const store = useMasterStore()
-      await store.fetchMyProfile()
       await store.fetchMyPractices()
       store.onboardingShownThisSession = true
 
       store.$reset()
 
-      expect(store.profile).toBeNull()
-      expect(store.profileLoaded).toBe(false)
-      expect(store.profileMissing).toBe(false)
       expect(store.onboardingShownThisSession).toBe(false)
       expect(store.practicesUpcoming).toEqual([])
       expect(store.practicesPast).toEqual([])

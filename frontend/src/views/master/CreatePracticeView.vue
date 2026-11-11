@@ -412,6 +412,7 @@ import {
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { useMasterStore } from '@/stores/master'
+import { useMasterProfile } from '@/composables/queries/master'
 import { createPractice, updatePractice } from '@/api/practices'
 import { getMySchools, getSchoolMembers } from '@/api/schools'
 import { getPublicMaster } from '@/api/masters'
@@ -448,6 +449,9 @@ const route = useRoute()
 const toast = useToast()
 const authStore = useAuthStore()
 const masterStore = useMasterStore()
+// T21-6 (PROMPT №546): the direction/style pickers filter by this master's
+// OWN confirmed methods (one answer per session; loaded by the guard).
+const { profile: masterProfile } = useMasterProfile()
 
 // -- Form state, validation, request body: the shared practice-form model
 // (usePracticeForm). The timezone is the master's profile zone (the field
@@ -608,7 +612,7 @@ watch(selectedMasterId, (id) => {
 // would block a create the backend would accept.
 const { confirmedMethods, directionOptions, styleOptions, onDirectionChange } =
   usePracticeTaxonomyOptions(form, () =>
-    targetsForeignMaster.value ? delegatedMethods.value : masterStore.profile?.methods,
+    targetsForeignMaster.value ? delegatedMethods.value : masterProfile.value?.methods,
   )
 
 // A change of whose methods the pickers offer must not silently keep a pick
@@ -654,9 +658,6 @@ onMounted(() => {
   // practices list / dashboard).
   void masterStore.fetchMyPractices()
   void loadPracticeMasterContext()
-  // T21-6 (PROMPT №546): the direction/style pickers filter by this
-  // master's OWN confirmed methods. No-op if already loaded this session.
-  void masterStore.fetchMyProfile()
   // FE-24 (GT P5): the eligible schools. A failure here degrades to "no
   // schools" (the fourth option stays hidden) -- quieter than the groups
   // failure: there is no screen to point at from a practice form, and the
