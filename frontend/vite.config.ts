@@ -44,6 +44,13 @@ import type { Plugin } from 'vite'
 const ZOOM_SDK_MODULE =
   /[\\/]node_modules[\\/](@zoom[\\/]meetingsdk|react|react-dom|react-redux|redux|redux-thunk|lodash|scheduler|use-sync-external-store|hoist-non-react-statics|react-is)[\\/]/
 
+/** FE-167: a core catalog file of en/uk (not master/admin/timezones). Plain
+ * `.json` ids only: a `?raw`-style import must not drag its importer into the
+ * locale chunk. The zone names repeat ZONE_CATALOGS (src/locales/index.ts);
+ * catalogs.test.ts pins the two together. */
+const LOCALE_CORE_CATALOG =
+  /[\\/]src[\\/]locales[\\/](en|uk)[\\/](?!master\.json|admin\.json|timezones\.json)[^\\/?]+\.json$/
+
 /** tz-whitelabel §3: apply the skin's ASSETS on the build -- the deploy puts
  * the package into public/skin/ (FE-131: the machine's format, assets under
  * assets/), and its files must WIN on the canonical public paths (VeloLogo
@@ -417,8 +424,17 @@ export default defineConfig(({ mode }) => {
           // practice screen's dynamic import (platform/zoom-sdk.ts). The fixed
           // name is what lets the service worker keep it out of the precache
           // (workbox globIgnores above). Nothing else in this app uses React.
+          //
+          // FE-167: the CORE catalog files of en and uk (every domain file
+          // except the zone catalogs and timezones.json) go into ONE chunk
+          // per locale, 'locale-en' / 'locale-uk': a non-ru start made ~16
+          // requests, one per file. ru stays out (its core is eager in the
+          // app chunk); master/admin keep their own chunks, they load with
+          // their zone (locales/index.ts ZONE_CATALOGS).
           manualChunks(id: string): string | undefined {
-            return ZOOM_SDK_MODULE.test(id) ? 'zoom-sdk' : undefined
+            if (ZOOM_SDK_MODULE.test(id)) return 'zoom-sdk'
+            const core = LOCALE_CORE_CATALOG.exec(id)
+            return core ? `locale-${core[1]}` : undefined
           },
         },
       },
