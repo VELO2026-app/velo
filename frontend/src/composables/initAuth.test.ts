@@ -509,9 +509,7 @@ describe('startBrowserLogin', () => {
   })
 
   it('a refused start keeps no mark and goes nowhere', async () => {
-    vi.mocked(api.post).mockRejectedValue(
-      new ApiResponseError(404, 'not configured', 'login_not_configured'),
-    )
+    vi.mocked(api.post).mockRejectedValue(new ApiResponseError(404, 'not found', 'not_found'))
     const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {})
 
     await expect(useAuthStore().startBrowserLogin()).rejects.toBeInstanceOf(ApiResponseError)
@@ -524,7 +522,7 @@ describe('startBrowserLogin', () => {
 
 describe('loginNoticeFor', () => {
   it.each<[string, unknown, LoginNotice]>([
-    ['404', new ApiResponseError(404, 'x', 'login_not_configured'), 'not_configured'],
+    ['404', new ApiResponseError(404, 'x', 'not_found'), 'unavailable'],
     ['400 expired', new ApiResponseError(400, 'x', 'login_expired'), 'expired'],
     ['400 foreign', new ApiResponseError(400, 'x', 'login_foreign'), 'foreign'],
     ['400 telegram', new ApiResponseError(400, 'x', 'telegram_failed'), 'telegram_failed'],

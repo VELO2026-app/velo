@@ -58,7 +58,6 @@
   },
   "transcription": {
     "generic": "Сервіс транскрибації недоступний",
-    "transcription_not_configured": "Голосове введення недоступне",
     "transcription_unavailable": "Сервіс транскрибації недоступний",
     "transcription_failed": "Сервіс транскрибації недоступний",
     "speech_not_recognized": "Не вдалося розпізнати мовлення",

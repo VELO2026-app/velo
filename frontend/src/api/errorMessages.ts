@@ -45,7 +45,7 @@
 // 4 above plus 9 that arrived after GT-15 without a phrase (audio_invalid,
 // audio_too_large, curator_cannot_cancel_series, delivery_window_empty,
 // recipient_override_not_allowed, speech_not_recognized,
-// transcription_failed, transcription_not_configured,
+// transcription_failed,
 // transcription_unavailable -- recorded in the BE-92 report, not added
 // here). Total table size: 38 (34 + the 2 constant-raised codes below +
 // practice_not_found + validation_error).
