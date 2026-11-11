@@ -64,9 +64,10 @@ jobs:
       #   6. Rejected: waiting for the tag -- the step would stay out of CI
       #      with no date.
       PRIDEM_REPOSITORY: inzoddwetrust/primer
-      # BE-193 part 2b: the release with jobs of a stack and the length of a
-      # minted value (DM-22).
-      PRIDEM_COMMIT: 63844b48d9b451ee231f9c0d37617b303fc84fe5
+      # BE-193 part 2b: jobs of a stack and the length of a minted value
+      # (DM-22), and `check` as the runner's own user -- HOME from passwd,
+      # DOCKER_CONFIG at $HOME/.docker (DM-88); no sudo.
+      PRIDEM_COMMIT: c4b380041b3a8937dd1ebd1db439e12b159176a1
     steps:
       - uses: actions/checkout@v4
         with:
