@@ -37,6 +37,7 @@ import { toRaw } from 'vue'
 import { createI18n, type MessageFunction } from 'vue-i18n'
 
 import { toMessageFunctions } from '@/locales/messageFunction'
+import { conformOverlay } from '@/locales/overlayShape'
 import { setRootLang } from '@/platform/dom'
 import { INSTANCE, isSupportedLocale, SUPPORTED_LOCALES, type Locale } from '@/platform/instance'
 import { SKIN_BRAND } from 'virtual:skin-brand'
@@ -136,9 +137,13 @@ const requestedZones = new Set<ZoneCatalog>()
 /** Brand, then the instance overlays, on top of a locale's catalogs. */
 function mergeRuntimeMessages(locale: string): void {
   i18n.global.mergeLocaleMessage(locale, BRAND_MESSAGE)
-  for (const overlay of instanceOverlays.get(locale) ?? []) {
-    i18n.global.mergeLocaleMessage(locale, overlay)
-  }
+  for (const overlay of instanceOverlays.get(locale) ?? []) mergeOverlay(locale, overlay)
+}
+
+/** One overlay on the locale's catalogs, cut to the shape of what it lands on. */
+function mergeOverlay(locale: string, overlay: Messages): void {
+  const base = toRaw(i18n.global.getLocaleMessage(locale))
+  i18n.global.mergeLocaleMessage(locale, conformOverlay(overlay, base))
 }
 
 i18n.global.setLocaleMessage('ru', ruCore)
@@ -176,7 +181,10 @@ export function getLocale(): string {
  * @remarks
  * Overlay strings use the catalog syntax and become message functions
  * (locales/messageFunction.ts) -- the bundle has no compiler to turn them
- * into messages. An overlay wins over the base catalogs for good: it is
+ * into messages. Each overlay is cut to the shape of the catalogs it lands
+ * on (locales/overlayShape.ts): a node of another kind, a forbidden key and
+ * the root `brand` (a skin property) never reach the composer. An overlay
+ * wins over the base catalogs for good: it is
  * merged again after every later catalog load of its locale (a locale
  * switch, a zone entry). A locale whose catalogs are not loaded yet gets
  * its overlay with them.
@@ -184,9 +192,10 @@ export function getLocale(): string {
 export function applyInstanceOverrides(overrides: Partial<Record<string, Messages>>): void {
   for (const [locale, messages] of Object.entries(overrides)) {
     if (!messages) continue
-    const overlay = toMessageFunctions(messages)
+    // Pruned BEFORE conversion (depth, forbidden keys, brand): the conversion recurses.
+    const overlay = toMessageFunctions(conformOverlay(messages, {}))
     instanceOverlays.set(locale, [...(instanceOverlays.get(locale) ?? []), overlay])
-    if (appliedParts.get(locale)?.has('core')) i18n.global.mergeLocaleMessage(locale, overlay)
+    if (appliedParts.get(locale)?.has('core')) mergeOverlay(locale, overlay)
   }
 }
 
