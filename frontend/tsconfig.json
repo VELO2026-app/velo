@@ -25,10 +25,9 @@
     "isolatedModules": true,
     "skipLibCheck": true,
 
-    /* Path aliases — import from '@/stores/auth' instead of '../../../stores/auth' */
-    "baseUrl": ".",
+    /* Path aliases (relative to this file; TS 6 deprecates baseUrl) — import from '@/stores/auth' instead of '../../../stores/auth' */
     "paths": {
-      "@/*": ["src/*"],
+      "@/*": ["./src/*"],
       // FE-117 batch A: the app compiles the kit's SOURCES (see the package
       // README CSS section) -- exact key, no deep subpaths allowed.
       "@velo/ui": ["../packages/velo-ui/src/index.ts"]

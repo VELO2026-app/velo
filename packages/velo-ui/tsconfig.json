@@ -25,10 +25,9 @@
     "isolatedModules": true,
     "skipLibCheck": true,
 
-    /* Path aliases -- import from '@/components/...' instead of '../../../' */
-    "baseUrl": ".",
+    /* Path aliases (relative to this file; TS 6 deprecates baseUrl) -- import from '@/components/...' instead of '../../../' */
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": [
