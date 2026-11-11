@@ -64,7 +64,7 @@ export const INVALIDATES = {
    */
   acceptSchoolMasterOffer: [keys.schools.lists(), keys.practices.root()],
   /**
-   * `POST /schools/{id}/leave`: a membership gone -- the school lists and the
+   * `DELETE /schools/{id}/membership`: a membership gone (leaving) -- the school lists and the
    * hub. Not the school page: the screen that left still shows it under its
    * toast; its entries are dropped on unmount (forgetSchool, ADR).
    */
