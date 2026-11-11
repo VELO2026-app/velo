@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- brand-grep gate tests (tz-whitelabel §6.3, FE-114)
+// VELO Frontend -- brand-grep gate tests (tz-whitelabel §6, FE-114)
 // =============================================================================
 // brandGrepReport() is the pnpm lint grep gate: the brand word outside the
 // reference set, and feature-flag sources outside the registry. Pinned here:
@@ -21,7 +21,7 @@ type Report = { brand: string[]; features: string[]; switchedOff: string[] }
 const scan = (files: Array<[string, string]>): Report =>
   brandGrepReport(files.map(([path, content]) => ({ path, content }))) as Report
 
-describe('brand-grep: the brand word (tz-i18n §7.2.3)', () => {
+describe('brand-grep: the brand word (tz-i18n §7.2)', () => {
   it('a VELO literal in a view string/template/attr is a hit', () => {
     const report = scan([
       [

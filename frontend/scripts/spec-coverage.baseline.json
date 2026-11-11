@@ -1,0 +1,30 @@
+{
+  "uncovered": [
+    "tz-curator#1.1",
+    "tz-curator#1.11.1",
+    "tz-curator#1.11.2",
+    "tz-curator#1.11.3",
+    "tz-curator#1.11.5",
+    "tz-curator#1.11.6",
+    "tz-curator#1.12.1",
+    "tz-curator#1.12.2",
+    "tz-curator#1.12.5",
+    "tz-curator#1.13.1",
+    "tz-curator#1.13.2",
+    "tz-curator#1.13.3",
+    "tz-curator#1.13.4",
+    "tz-curator#1.13.5",
+    "tz-curator#3.1",
+    "tz-curator#3.2",
+    "tz-curator#3.3",
+    "tz-curator#3.5",
+    "tz-curator#5.2",
+    "tz-curator#5.4",
+    "tz-i18n#4.2",
+    "tz-i18n#4.3",
+    "tz-i18n#7.4",
+    "tz-ui-package#1",
+    "tz-ui-package#7.1",
+    "tz-ui-package#7.3"
+  ]
+}

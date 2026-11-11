@@ -55,7 +55,7 @@ describe('pwaManifest -- the single manifest', () => {
     expect(pwaManifest.background_color).toMatch(/^#[0-9a-f]{6}$/i)
   })
 
-  it('identity follows the instance passport (tz-whitelabel F1, §2.3), not literals', () => {
+  it('identity follows the instance passport (tz-whitelabel §2), not literals', () => {
     // vite.config.ts resolves the VITE_* map (loadEnv: .env files +
     // process.env) and hands it to the factory -- two .env files produce two
     // builds (§2.4) without touching this file. Absent keys keep the golden
@@ -94,7 +94,7 @@ describe('pwaManifest -- the single manifest', () => {
 
   it('description speaks the manifest language (lang: ru -> Russian text)', () => {
     // Regression: the description used to be English under lang: 'ru'
-    // (tz-whitelabel §2.3 fixes the mismatch).
+    // (tz-whitelabel §2 fixes the mismatch).
     expect(pwaManifest.description).toBeTruthy()
     expect(pwaManifest.description).toMatch(/\p{Script=Cyrillic}/u)
     expect(pwaManifest.description).not.toMatch(/[a-zA-Z]{4,}/)
