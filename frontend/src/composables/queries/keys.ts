@@ -79,6 +79,13 @@ export const keys = {
     analytics: (schoolId: string, period: string) =>
       ['schools', 'detail', schoolId, 'analytics', { period }] as const,
     /**
+     * One roster of a school, every page loaded so far: the curator's
+     * `/members` or the removed tab's `/blocks`, a school master's `/roster`
+     * (`source`), for one tab and one search. Under the school's detail prefix.
+     */
+    members: (schoolId: string, params: { source: string; kind: string; search: string }) =>
+      ['schools', 'detail', schoolId, 'members', params] as const,
+    /**
      * `GET /schools/mine` (+ the create right) as one screen shows it: the user
      * zone's schools tab for a role, or the master's schools hub.
      */

@@ -31,6 +31,7 @@
 
 import { computed } from 'vue'
 import {
+  defineInfiniteQueryOptions,
   defineQueryOptions,
   useQuery,
   useQueryCache,
@@ -42,6 +43,9 @@ import {
   getSchoolPage,
   getSchoolPractices,
   getSchoolAnalytics,
+  getSchoolBlocks,
+  getSchoolMembers,
+  getSchoolRoster,
   getSchoolStudentProfile,
   getSchools,
   type SchoolAnalyticsPeriod,
@@ -50,7 +54,12 @@ import { isOptionEnabled } from '@/platform/instance'
 import { useAuthStore } from '@/stores/auth'
 import { keys } from '@/composables/queries/keys'
 import { invalidateAfter, type MutationName } from '@/composables/queries/invalidation'
-import type { SchoolAnalyticsResponse, SchoolMineItem } from '@/api/types'
+import type {
+  SchoolAnalyticsResponse,
+  SchoolBlockedItem,
+  SchoolMineItem,
+  SchoolRosterItem,
+} from '@/api/types'
 
 /** Query options for the school page payload (`GET /schools/{id}`). */
 export const schoolPageQuery = defineQueryOptions((schoolId: string) => ({
@@ -94,6 +103,58 @@ export const schoolAnalyticsQuery = defineQueryOptions(
       previous: SchoolAnalyticsResponse | undefined,
       previousEntry?: { key: EntryKey },
     ) => (previousEntry?.key[2] === schoolId ? previous : undefined),
+  }),
+)
+
+/** Rows per page of a school roster. */
+export const SCHOOL_MEMBERS_PAGE_SIZE = 20
+
+/** Where a roster comes from: the curator's member list, the curator's removed tab, a school master's roster. */
+export type SchoolMembersSource = 'members' | 'blocks' | 'roster'
+
+/** One page of any school roster. */
+type SchoolMembersPage = { items: (SchoolRosterItem | SchoolBlockedItem)[]; total: number }
+
+/**
+ * Infinite query options for one roster of a school (SchoolMembersView), for
+ * one tab and one search, SCHOOL_MEMBERS_PAGE_SIZE rows per page.
+ *
+ * @remarks
+ * Revalidates on every visit (staleTime 0): members join, leave and are
+ * removed by other people. Each (school, source, tab, search) is its own
+ * entry, so an answer for an older search or another tab never repaints the
+ * current one.
+ */
+export const schoolMembersQuery = defineInfiniteQueryOptions(
+  ({
+    schoolId,
+    source,
+    kind,
+    search,
+    enabled,
+  }: {
+    schoolId: string
+    source: SchoolMembersSource
+    kind: 'master' | 'student' | 'blocked'
+    search: string
+    enabled: boolean
+  }) => ({
+    key: keys.schools.members(schoolId, { source, kind, search }),
+    query: ({ pageParam }: { pageParam: number }): Promise<SchoolMembersPage> => {
+      const window = { limit: SCHOOL_MEMBERS_PAGE_SIZE, offset: pageParam }
+      if (source === 'blocks') return getSchoolBlocks(schoolId, window)
+      const query = { kind: kind as 'master' | 'student', search: search || undefined, ...window }
+      return source === 'roster'
+        ? getSchoolRoster(schoolId, query)
+        : getSchoolMembers(schoolId, query)
+    },
+    initialPageParam: 0,
+    getNextPageParam: (last: SchoolMembersPage, pages: SchoolMembersPage[]) => {
+      const loaded = pages.reduce((sum, page) => sum + page.items.length, 0)
+      return loaded < last.total ? loaded : null
+    },
+    staleTime: 0,
+    enabled,
   }),
 )
 

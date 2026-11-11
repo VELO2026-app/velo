@@ -17,6 +17,9 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
+import { createPinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import SchoolMembersView from '@/views/user/SchoolMembersView.vue'
 import * as cgApi from '@/api/schools'
 import * as chatsApi from '@/api/chats'
@@ -60,7 +63,10 @@ function mountWith(query: Record<string, string> = {}): HTMLElement {
   routeState.query = query
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(SchoolMembersView).use(createTestI18n())
+  app = createApp(SchoolMembersView)
+    .use(createTestI18n())
+    .use(createPinia())
+    .use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
@@ -357,7 +363,7 @@ describe('SchoolMembersView', () => {
 
     showMore()?.click()
     await flush()
-    // usePagination accumulates offset as the number of LOADED rows (1 after
+    // The next page's offset is the number of LOADED rows (1 after
     // a first page of one fixture row), not the server-echoed offset.
     expect(vi.mocked(cgApi.getSchoolMembers)).toHaveBeenLastCalledWith(
       'g1',
@@ -557,6 +563,8 @@ describe('SchoolMembersView -- a master of the school (BE-76)', () => {
       expect.objectContaining({ kind: 'master' }),
     )
     expect(replace).toHaveBeenCalledWith(expect.objectContaining({ query: { kind: 'master' } }))
+    // The removed tab is the curator's: never asked for a school master.
+    expect(cgApi.getSchoolBlocks).not.toHaveBeenCalled()
   })
 
   it('a tap on a student opens the message sheet and writes through openStudentChat -- no navigation', async () => {
