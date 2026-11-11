@@ -19,9 +19,8 @@
     "noEmit": true,
     "isolatedModules": true,
     "skipLibCheck": true,
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
+      "@/*": ["./src/*"],
       "@velo/ui": ["../packages/velo-ui/src/index.ts"]
     }
   },
