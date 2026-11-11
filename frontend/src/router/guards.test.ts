@@ -12,8 +12,8 @@
 //
 // @/stores/auth is the REAL Pinia store (setActivePinia per test) so
 // role/allowedRoles/masterApplication computeds are exercised for real, not
-// re-implemented in a mock. @/stores/master is mocked wholesale -- its
-// fetchMyProfile() would otherwise hit the network.
+// re-implemented in a mock. The master-profile queries are mocked wholesale --
+// they would otherwise hit the network.
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -64,21 +64,20 @@ function call(guard: unknown): Promise<BareGuardResult> {
   return (guard as () => Promise<BareGuardResult>)()
 }
 
-const masterStoreState: { profileMissing: boolean; profile: { status: string } | null } = {
-  profileMissing: false,
+// The master profile (composables/queries/master.ts): its Colada behaviour
+// is master.test.ts's business; here only what the guards ask for and read.
+// `profileRequest(force)` records each load and whether it was forced.
+const masterProfileState: { missing: boolean; profile: { status: string } | null } = {
+  missing: false,
   profile: null,
 }
-const fetchMyProfile = vi.fn().mockResolvedValue(undefined)
-vi.mock('@/stores/master', () => ({
-  useMasterStore: () => ({
-    get profileMissing() {
-      return masterStoreState.profileMissing
-    },
-    get profile() {
-      return masterStoreState.profile
-    },
-    fetchMyProfile,
-  }),
+const profileRequest = vi.fn()
+vi.mock('@/composables/queries/master', () => ({
+  loadMasterProfile: async (_queryCache?: unknown, options?: { force?: boolean }) => {
+    profileRequest(options?.force ?? false)
+    return { ...masterProfileState }
+  },
+  cachedMasterProfile: () => ({ ...masterProfileState }),
 }))
 
 function setAuthUser(overrides: Partial<UserResponse> & Record<string, unknown> = {}): void {
@@ -100,9 +99,9 @@ describe('router/guards', () => {
     resetAuthState()
     sessionStorage.clear()
     localStorage.clear()
-    masterStoreState.profileMissing = false
-    masterStoreState.profile = null
-    fetchMyProfile.mockClear()
+    masterProfileState.missing = false
+    masterProfileState.profile = null
+    profileRequest.mockClear()
     refreshRoleIfStale.mockClear()
     __resetAdminProfileTtlForTest()
   })
@@ -318,21 +317,21 @@ describe('router/guards', () => {
   })
 
   describe('masterNoProfileGuard', () => {
-    it('non-master role: passes without touching the master store', async () => {
+    it('non-master role: passes without asking for the master profile', async () => {
       setAuthUser({ role: 'user' })
       expect(await call(masterNoProfileGuard)).toBe(true)
-      expect(fetchMyProfile).not.toHaveBeenCalled()
+      expect(profileRequest).not.toHaveBeenCalled()
     })
 
     it('master with no profile at all: redirects to /master/apply', async () => {
       setAuthUser({ role: 'master' })
-      masterStoreState.profileMissing = true
+      masterProfileState.missing = true
       expect(await call(masterNoProfileGuard)).toEqual({ path: '/master/apply' })
     })
 
     it('master with a profile: passes', async () => {
       setAuthUser({ role: 'master' })
-      masterStoreState.profileMissing = false
+      masterProfileState.missing = false
       expect(await call(masterNoProfileGuard)).toBe(true)
     })
   })
@@ -340,19 +339,19 @@ describe('router/guards', () => {
   describe('masterStatusGuard', () => {
     it('no profile at all: redirects to /master/apply (delegates to the no-profile check)', async () => {
       setAuthUser({ role: 'master' })
-      masterStoreState.profileMissing = true
+      masterProfileState.missing = true
       expect(await call(masterStatusGuard)).toEqual({ path: '/master/apply' })
     })
 
     it('profile exists but not verified: redirects to /master/pending', async () => {
       setAuthUser({ role: 'master' })
-      masterStoreState.profile = { status: 'pending' }
+      masterProfileState.profile = { status: 'pending' }
       expect(await call(masterStatusGuard)).toEqual({ path: '/master/pending' })
     })
 
     it('profile verified: passes', async () => {
       setAuthUser({ role: 'master' })
-      masterStoreState.profile = { status: 'verified' }
+      masterProfileState.profile = { status: 'verified' }
       expect(await call(masterStatusGuard)).toBe(true)
     })
 
@@ -362,59 +361,59 @@ describe('router/guards', () => {
     // master profile is revoked mid-session (role stays 'admin', only the
     // profile flips to 'suspended') keeps passing on the stale cached
     // 'verified' value for the rest of the session. These two prove the FIX
-    // by asserting the actual force argument fetchMyProfile is called with --
+    // by asserting the actual force argument profileRequest is called with --
     // confirmed red against the pre-fix code (which always calls it with no
     // argument at all) before this test file was left in its fixed state.
     it('B1: admin role forces a real refetch, even with an already-cached verified profile', async () => {
       setAuthUser({ role: 'admin' })
-      masterStoreState.profile = { status: 'verified' }
+      masterProfileState.profile = { status: 'verified' }
       await call(masterStatusGuard)
-      expect(fetchMyProfile).toHaveBeenCalledWith(true)
+      expect(profileRequest).toHaveBeenCalledWith(true)
     })
 
     it('B1: a real master keeps the lazy skip-if-loaded behaviour -- no forced refetch', async () => {
       setAuthUser({ role: 'master' })
-      masterStoreState.profile = { status: 'verified' }
+      masterProfileState.profile = { status: 'verified' }
       await call(masterStatusGuard)
-      expect(fetchMyProfile).toHaveBeenCalledWith(false)
+      expect(profileRequest).toHaveBeenCalledWith(false)
     })
   })
 
   // FE-157: B1's refetch for an admin used to leave on EVERY check. It now
   // leaves at most once per ADMIN_PROFILE_TTL_MS per account; in between, the
-  // store's last answer decides.
+  // cached answer decides.
   describe('masterStatusGuard: the admin profile TTL', () => {
     it('a second check inside the window sends no request', async () => {
       setAuthUser({ role: 'admin' })
-      masterStoreState.profile = { status: 'verified' }
+      masterProfileState.profile = { status: 'verified' }
       expect(await call(masterStatusGuard)).toBe(true)
       expect(await call(masterStatusGuard)).toBe(true)
-      expect(fetchMyProfile).toHaveBeenCalledTimes(1)
-      expect(fetchMyProfile).toHaveBeenCalledWith(true)
+      expect(profileRequest).toHaveBeenCalledTimes(1)
+      expect(profileRequest).toHaveBeenCalledWith(true)
     })
 
     it('inside the window the cached answer still decides', async () => {
       setAuthUser({ role: 'admin' })
-      masterStoreState.profile = { status: 'verified' }
+      masterProfileState.profile = { status: 'verified' }
       expect(await call(masterStatusGuard)).toBe(true)
-      // The store learned of a suspension some other way (a screen's own
+      // The cache learned of a suspension some other way (a screen's own
       // forced fetch): no request from the guard, and it reads the news.
-      masterStoreState.profile = { status: 'suspended' }
+      masterProfileState.profile = { status: 'suspended' }
       expect(await call(masterStatusGuard)).toEqual({ path: '/master/pending' })
-      expect(fetchMyProfile).toHaveBeenCalledTimes(1)
+      expect(profileRequest).toHaveBeenCalledTimes(1)
     })
 
     it('once the window has passed, the next check refetches', async () => {
       vi.useFakeTimers()
       setAuthUser({ role: 'admin' })
-      masterStoreState.profile = { status: 'verified' }
+      masterProfileState.profile = { status: 'verified' }
       await call(masterStatusGuard)
       vi.advanceTimersByTime(ADMIN_PROFILE_TTL_MS - 1)
       await call(masterStatusGuard)
-      expect(fetchMyProfile).toHaveBeenCalledTimes(1)
+      expect(profileRequest).toHaveBeenCalledTimes(1)
       vi.advanceTimersByTime(1)
       await call(masterStatusGuard)
-      expect(fetchMyProfile).toHaveBeenCalledTimes(2)
+      expect(profileRequest).toHaveBeenCalledTimes(2)
     })
 
     it("another account is not served by the previous account's window", async () => {
@@ -422,21 +421,21 @@ describe('router/guards', () => {
       await call(masterStatusGuard)
       setAuthUser({ id: 'admin_b', role: 'admin' })
       await call(masterStatusGuard)
-      expect(fetchMyProfile).toHaveBeenCalledTimes(2)
+      expect(profileRequest).toHaveBeenCalledTimes(2)
     })
 
     it('a real master never forces: the lazy fetch on every check, as before', async () => {
       setAuthUser({ role: 'master' })
-      masterStoreState.profile = { status: 'verified' }
+      masterProfileState.profile = { status: 'verified' }
       await call(masterStatusGuard)
       await call(masterStatusGuard)
-      expect(fetchMyProfile).not.toHaveBeenCalledWith(true)
+      expect(profileRequest).not.toHaveBeenCalledWith(true)
     })
   })
 
-  // FE-157: the store keeps no error kind -- a 403 for an unverified
-  // application and a dropped connection both leave it WITHOUT a profile
-  // (profile null, profileMissing false). GET /users/me's
+  // FE-157: only "no application at all" is told apart -- a 403 for an
+  // unverified application and a dropped connection both leave no profile
+  // (profile null, missing false). GET /users/me's
   // master_application tells them apart; no answer at all is not a verdict.
   describe('masterStatusGuard: a request without an answer is not a verdict', () => {
     function stubFetchMe(result: { succeeds: boolean; application?: { status: string } }) {
@@ -477,13 +476,13 @@ describe('router/guards', () => {
     it('the master profile request is not repeated within one check', async () => {
       setAuthUser({ role: 'master', master_application: { status: 'verified' } })
       await call(masterStatusGuard)
-      expect(fetchMyProfile).toHaveBeenCalledTimes(1)
-      expect(fetchMyProfile).toHaveBeenCalledWith(false)
+      expect(profileRequest).toHaveBeenCalledTimes(1)
+      expect(profileRequest).toHaveBeenCalledWith(false)
     })
 
     it('a loaded profile still wins over /users/me', async () => {
       setAuthUser({ role: 'master', master_application: { status: 'verified' } })
-      masterStoreState.profile = { status: 'suspended' }
+      masterProfileState.profile = { status: 'suspended' }
       expect(await call(masterStatusGuard)).toEqual({ path: '/master/pending' })
     })
 
@@ -521,7 +520,7 @@ describe('router/guards', () => {
     it('verified master stays in their cabinet', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'master' })
-      masterStoreState.profile = { status: 'verified' }
+      masterProfileState.profile = { status: 'verified' }
       expect(await call(masterApplyGuard)).toEqual({ path: '/master/dashboard' })
     })
   })
@@ -712,19 +711,19 @@ describe('router/guards', () => {
       setAuthUser({ role: 'user' })
       const router = accessRouter()
       expect(await go(router, '/master/practices/p1')).toBe('/user/dashboard')
-      expect(fetchMyProfile).not.toHaveBeenCalled()
+      expect(profileRequest).not.toHaveBeenCalled()
     })
 
     it('verified master: the shell and the screen pass', async () => {
       setAuthUser({ role: 'master' })
-      masterStoreState.profile = { status: 'verified' }
+      masterProfileState.profile = { status: 'verified' }
       const router = accessRouter()
       expect(await go(router, '/master/practices/p1')).toBe('/master/practices/p1')
     })
 
     it('pending master: a verified-master screen redirects, an open one does not', async () => {
       setAuthUser({ role: 'master' })
-      masterStoreState.profile = { status: 'pending' }
+      masterProfileState.profile = { status: 'pending' }
       const router = accessRouter()
       expect(await go(router, '/master/groups')).toBe('/master/pending')
       expect(await go(router, '/master/inbox')).toBe('/master/inbox')
@@ -739,7 +738,7 @@ describe('router/guards', () => {
 
     it('no-application master on the dashboard goes to the apply wizard', async () => {
       setAuthUser({ role: 'master' })
-      masterStoreState.profileMissing = true
+      masterProfileState.missing = true
       const router = accessRouter()
       expect(await go(router, '/master/dashboard')).toBe('/master/apply')
     })
@@ -748,14 +747,14 @@ describe('router/guards', () => {
     // navigation does not ENTER is not checked again.
     it('a param change inside one screen does not re-run its check', async () => {
       setAuthUser({ role: 'master' })
-      masterStoreState.profile = { status: 'verified' }
+      masterProfileState.profile = { status: 'verified' }
       const router = accessRouter()
       await go(router, '/master/practices/p1')
-      const calls = fetchMyProfile.mock.calls.length
+      const calls = profileRequest.mock.calls.length
 
-      masterStoreState.profile = { status: 'pending' }
+      masterProfileState.profile = { status: 'pending' }
       expect(await go(router, '/master/practices/p2')).toBe('/master/practices/p2')
-      expect(fetchMyProfile.mock.calls.length).toBe(calls)
+      expect(profileRequest.mock.calls.length).toBe(calls)
 
       // Entering a sibling record checks it.
       expect(await go(router, '/master/groups')).toBe('/master/pending')

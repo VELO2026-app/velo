@@ -52,10 +52,10 @@
         <div v-if="hasPayout" class="finance-view__card">
           <div class="finance-view__card-text">
             <span class="finance-view__card-num">
-              {{ maskedDetails(masterStore.profile!.payout!) }}
+              {{ maskedDetails(masterProfile!.payout!) }}
             </span>
-            <span v-if="payoutHolder(masterStore.profile!.payout!)" class="finance-view__card-name">
-              {{ payoutHolder(masterStore.profile!.payout!) }}
+            <span v-if="payoutHolder(masterProfile!.payout!)" class="finance-view__card-name">
+              {{ payoutHolder(masterProfile!.payout!) }}
             </span>
           </div>
           <button
@@ -269,7 +269,8 @@ import { IconCheck, IconClose, IconPending } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { getLocale } from '@/locales'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
-import { useMasterStore } from '@/stores/master'
+import { setMasterProfile, useMasterProfile } from '@/composables/queries/master'
+import { useQueryCache } from '@pinia/colada'
 import {
   getMyWithdrawals,
   createWithdrawal,
@@ -290,16 +291,18 @@ const LIMIT = 20
 
 const router = useRouter()
 const toast = useToast()
-const masterStore = useMasterStore()
+const queryCache = useQueryCache()
+// Balances and payout details. Usually already loaded by masterStatusGuard.
+const { profile: masterProfile, reload: reloadProfile } = useMasterProfile()
 const viewerTz = useViewerTimezone()
 
 // ---------------------------------------------------------------------------
-// Balance (derived from master store profile)
+// Balance (derived from the master profile)
 // ---------------------------------------------------------------------------
 
-const availableCents = computed(() => masterStore.profile?.available_cents ?? 0)
-const frozenCents = computed(() => masterStore.profile?.frozen_cents ?? 0)
-const hasPayout = computed(() => masterStore.profile?.payout != null)
+const availableCents = computed(() => masterProfile.value?.available_cents ?? 0)
+const frozenCents = computed(() => masterProfile.value?.frozen_cents ?? 0)
+const hasPayout = computed(() => masterProfile.value?.payout != null)
 
 const formattedAvailable = computed(() =>
   formatMoney(availableCents.value, 'EUR', getLocale(), true),
@@ -346,8 +349,8 @@ function clearFormErrors(): void {
 /** Open the payout form, pre-filling from the existing payout when editing. */
 function openPayoutForm(editing: boolean): void {
   clearFormErrors()
-  if (editing && masterStore.profile?.payout) {
-    const p = masterStore.profile.payout
+  if (editing && masterProfile.value?.payout) {
+    const p = masterProfile.value.payout
     payoutForm.method = p.method
     const d = p.details as Record<string, string>
     payoutForm.iban = d['iban'] ?? ''
@@ -427,7 +430,7 @@ async function savePayout(): Promise<void> {
   savingPayout.value = true
   try {
     const result = await updatePayoutDetails(body)
-    if (masterStore.profile) masterStore.profile.payout = result
+    setMasterProfile(queryCache, (p) => ({ ...p, payout: result }))
     showPayoutForm.value = false
     toast.success(t('masterScreens.masterFinance.toast.detailsSaved'))
   } catch (e) {
@@ -482,7 +485,7 @@ async function removePayout(): Promise<void> {
   savingPayout.value = true
   try {
     await deletePayout()
-    if (masterStore.profile) masterStore.profile.payout = null
+    setMasterProfile(queryCache, (p) => ({ ...p, payout: null }))
     toast.success(t('masterScreens.masterFinance.toast.methodRemoved'))
   } catch (e) {
     toast.error(extractApiError(e, t('masterScreens.masterFinance.toast.methodRemoveFailed')))
@@ -543,7 +546,7 @@ async function submitWithdrawal(): Promise<void> {
     toast.success(t('masterScreens.masterFinance.toast.withdrawalSent'))
     amountInput.value = ''
     // Refresh profile to update available/frozen balances.
-    await masterStore.fetchMyProfile(true)
+    await reloadProfile()
     // Reload withdrawal history from start.
     await reloadHistory()
   } catch (e) {
@@ -631,8 +634,6 @@ function withdrawalDate(w: WithdrawalResponse): string {
 // ---------------------------------------------------------------------------
 
 onMounted(async () => {
-  // Profile is already loaded by masterStatusGuard -- lazy fetch skips if so.
-  await masterStore.fetchMyProfile()
   await reloadHistory()
 })
 </script>

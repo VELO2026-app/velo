@@ -78,9 +78,6 @@
       "cancel": "Failed to cancel the booking",
       "join": "Failed to join the practice"
     },
-    "master": {
-      "profile": "Failed to load the master profile"
-    },
     "calendar": {
       "schoolPractices": "Failed to load the school's practices",
       "calendar": "Failed to load the calendar"

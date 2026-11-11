@@ -38,7 +38,7 @@ import { accountScopePlugin } from '@/platform/session'
 import { flushPersisted, readPersisted, writePersisted } from '@/composables/persistedCache'
 import { api, ApiNetworkError, ApiResponseError } from '@/api/client'
 import * as usersApi from '@/api/users'
-import type { AuthResponse, MasterProfileResponse, UserResponse } from '@/api/types'
+import type { AuthResponse, UserResponse } from '@/api/types'
 
 vi.mock('@/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api/client')>()
@@ -78,8 +78,7 @@ vi.mock('@/platform', async () => {
 /** Put account data into the stores the old hand-kept reset lists covered. */
 function fillAccountStores(): void {
   const master = useMasterStore()
-  master.profile = { id: 'master_1' } as unknown as MasterProfileResponse
-  master.profileLoaded = true
+  master.onboardingShownThisSession = true
   const bookings = useBookingsStore()
   bookings.dismissCheckin('practice_1')
 }
@@ -87,8 +86,7 @@ function fillAccountStores(): void {
 /** The same stores are back to their initial state. */
 function expectAccountStoresReset(): void {
   const master = useMasterStore()
-  expect(master.profile).toBeNull()
-  expect(master.profileLoaded).toBe(false)
+  expect(master.onboardingShownThisSession).toBe(false)
   const bookings = useBookingsStore()
   expect(bookings.dismissedCheckins).toEqual([])
 }
@@ -394,7 +392,7 @@ describe('useAuthStore', () => {
       await expect(fetchPromise).resolves.toBe(true)
       expect(store.token).toBe('tok_2')
       expect(store.user?.id).toBe('user_2')
-      expect(useMasterStore().profileLoaded).toBe(true)
+      expect(useMasterStore().onboardingShownThisSession).toBe(true)
     })
 
     it('a 401 for the current token ends the session and resets the stores', async () => {

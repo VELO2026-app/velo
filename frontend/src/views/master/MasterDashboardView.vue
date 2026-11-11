@@ -43,7 +43,7 @@
 <template>
   <div class="master-dashboard">
     <!-- Loading skeleton -->
-    <template v-if="masterStore.profileLoading && !masterStore.profile">
+    <template v-if="profileLoading">
       <div class="master-dashboard__skeleton">
         <VLoader size="lg" />
       </div>
@@ -291,6 +291,7 @@ import {
   IconHourglass,
 } from '@/components/icons'
 import { useMasterStore } from '@/stores/master'
+import { useMasterProfile } from '@/composables/queries/master'
 import { useAuthStore } from '@/stores/auth'
 import { useSafeArea } from '@/composables/useSafeArea'
 import MasterOnboardingView from '@/views/master/MasterOnboardingView.vue'
@@ -309,6 +310,8 @@ import type { PracticeResponse, MasterStatsResponse } from '@/api/types'
 
 const router = useRouter()
 const masterStore = useMasterStore()
+// Skipped when the guard already loaded it this session.
+const { profile: masterProfile, loading: profileLoading } = useMasterProfile()
 const authStore = useAuthStore()
 const { contentSafeTopCss } = useSafeArea()
 const toast = useToast()
@@ -512,7 +515,7 @@ async function onRetryZoom(p: PracticeResponse): Promise<void> {
 const showMasterOnboarding = computed(() =>
   shouldShowMasterOnboarding({
     role: authStore.role,
-    profileStatus: masterStore.profile?.status,
+    profileStatus: masterProfile.value?.status,
     completed: isMasterOnboardingCompleted(authStore.user),
     shownThisSession: masterStore.onboardingShownThisSession,
   }),
@@ -567,8 +570,6 @@ onMounted(async () => {
   void loadUnreadCount().catch(() => {
     /* leave the badge at 0 if the fetch fails */
   })
-  // Profile stays lazy -- skip if already populated by guard / prior navigation.
-  await masterStore.fetchMyProfile()
   // FE-53: the practice cards are the one section whose numbers move by
   // ANOTHER actor's hand (a student's booking bumps current_participants,
   // their PRE check-in bumps checkin_count) and no push exists, so the lazy

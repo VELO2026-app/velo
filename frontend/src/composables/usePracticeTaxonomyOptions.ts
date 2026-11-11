@@ -10,7 +10,7 @@
 // =============================================================================
 
 import { computed, onMounted, ref, type ComputedRef } from 'vue'
-import { useMasterStore } from '@/stores/master'
+import { useMasterProfile } from '@/composables/queries/master'
 import {
   catalogDirectionOptions,
   catalogStylesForDirection,
@@ -77,7 +77,8 @@ export function usePracticeTaxonomyOptions(
   styleOptions: ComputedRef<StyleOption[]>
   onDirectionChange: () => void
 } {
-  const masterStore = useMasterStore()
+  // Read-only: the screen loads the profile (or masterStatusGuard did).
+  const { loaded: profileLoaded } = useMasterProfile(false)
   const catalog = ref<TaxonomyListResponse | null>(null)
   onMounted(() => {
     void ensureTaxonomyCatalog().then((c) => {
@@ -91,7 +92,7 @@ export function usePracticeTaxonomyOptions(
   })
 
   const directionOptions = computed(() => {
-    const confirmed = masterStore.profileLoaded ? confirmedMethods.value : null
+    const confirmed = profileLoaded.value ? confirmedMethods.value : null
     if (!confirmed) return []
     return catalogDirectionOptions(catalog.value).filter((opt) =>
       confirmed.directions.includes(opt.value),
@@ -99,7 +100,7 @@ export function usePracticeTaxonomyOptions(
   })
 
   const styleOptions = computed(() => {
-    const confirmed = masterStore.profileLoaded ? confirmedMethods.value : null
+    const confirmed = profileLoaded.value ? confirmedMethods.value : null
     if (!confirmed) return []
     const allowed = confirmed.styles[form.direction] ?? []
     return catalogStylesForDirection(catalog.value, form.direction).filter((opt) =>

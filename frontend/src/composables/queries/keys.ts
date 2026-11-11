@@ -57,6 +57,13 @@ export const keys = {
     /** `GET /masters/me/schools` read for one fact: the admin-issued right to found a school (BE-18). */
     createRight: () => ['schools', 'list', 'createRight'] as const,
   },
+  /** The signed-in master's own account (the master zone). */
+  masters: {
+    /** Prefix of every master key. */
+    root: () => ['masters'] as const,
+    /** `GET /masters/me` -- my master profile: status, methods, balance, payout details. */
+    profile: () => ['masters', 'me', 'profile'] as const,
+  },
   /** Bookings of the signed-in user and what is derived from them. */
   bookings: {
     /** Prefix of every booking key. */

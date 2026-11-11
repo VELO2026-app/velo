@@ -359,6 +359,7 @@ import PracticeSchedulePicker from '@/components/shared/PracticeSchedulePicker.v
 import type { AudienceSchoolOption } from '@/components/shared/practiceAudience'
 import { useToast } from '@/composables/useToast'
 import { useMasterStore } from '@/stores/master'
+import { useMasterProfile } from '@/composables/queries/master'
 import {
   getPractice,
   updatePractice,
@@ -390,6 +391,7 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const masterStore = useMasterStore()
+const { profile: masterProfile } = useMasterProfile()
 
 const practiceId = route.params.id as string
 
@@ -498,7 +500,7 @@ const { directionOptions, styleOptions, onDirectionChange } = usePracticeTaxonom
   () =>
     practice.value?.master_methods?.length
       ? practice.value.master_methods
-      : masterStore.profile?.methods,
+      : masterProfile.value?.methods,
 )
 
 // -- Populate form from practice --

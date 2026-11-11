@@ -15,7 +15,8 @@
 //
 // PATTERN C (hybrid), and both halves are driven per the skill's warning that
 // mocking one layer for both guts the test:
-//   - DATA HALF: profile + practices come from a REAL useMasterStore
+//   - DATA HALF: the profile from the REAL Colada query (useMasterProfile),
+//     practices from a REAL useMasterStore
 //     (.vue:219,392-393); role / user / updateProfile from a REAL useAuthStore
 //     (.vue:220). Real stores, not mocked ones -- `nearestPractices` hangs off
 //     the store's reactive pagination list and `isNewMaster` off its `total`,
@@ -91,6 +92,8 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import MasterDashboardView from '@/views/master/MasterDashboardView.vue'
 import * as mastersApi from '@/api/masters'
 import * as usersApi from '@/api/users'
@@ -421,15 +424,15 @@ function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(MasterDashboardView).use(createTestI18n())
-  app.use(pinia)
+  app.use(pinia).use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
 // COUNTED, not copied (velo-idiom §3, SC-08). The deepest chain onMounted
-// (.vue:383-397) kicks off is the SEQUENTIAL profile -> practices one:
-//   (1) await getMyMasterProfile inside fetchMyProfile
-//   (2) fetchMyProfile's promise resolves -> onMounted resumes
+// (.vue:383-397) kicks off is the practices one (the profile query loads
+// alongside it, on its own):
+//   (1)-(2) the profile query's getMyMasterProfile, in parallel
 //   (3) await getMyPractices inside usePagination.loadMore
 //   (4) loadMore resolves -> (5) refresh's continuation -> (6) fetchMyPractices'
 //   (7) onMounted resumes -> the final re-render.
@@ -738,9 +741,9 @@ describe('MasterDashboardView', () => {
 
     it('a FAILED profile load renders a normal-looking dashboard (known gap)', async () => {
       // Asserted because it is what the screen DOES, not because it is right.
-      // fetchMyProfile swallows into profileError (stores/master.ts:65-71), and
-      // this template never binds it -- there is no error rung at all. The
-      // skeleton is gated on `profileLoading && !profile` (.vue:28), which is
+      // The profile query records the error (composables/queries/master.ts),
+      // and this template never binds it -- there is no error rung at all. The
+      // skeleton is gated on `profileLoading` (no profile, request in flight), which is
       // false once the request has failed, so the master sees a complete,
       // confident dashboard built on a profile that never arrived. Reported as
       // a finding; this test is the tripwire for the day it is repaired.

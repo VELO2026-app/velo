@@ -6,8 +6,9 @@
 // (№482/№483/№486): what this screen submits is exactly what an admin later
 // reviews. PATTERN = a THREE-STEP WIZARD over local reactive state (`step`,
 // `form`, `methods`, `experienceLabel`, `langRu`/`langEn`, `uploadedCerts`) +
-// ONE mutating seam (applyMaster, @/api/masters). Real Pinia: useMasterStore
-// (fetchMyProfile spied, only called on the verified/self-provision path) and
+// ONE mutating seam (applyMaster, @/api/masters). Real Pinia and Colada: the
+// master profile (getMyMasterProfile mocked, only called on the
+// verified/self-provision path) and
 // useAuthStore (user.id, read for the localStorage key -- see below). No
 // watch, no store-driven list -- confirmed by reading every import and the
 // whole script end to end.
@@ -43,7 +44,7 @@
 //
 // TWO ENTIRELY DIFFERENT SUCCESS OUTCOMES, gated on `res.status`:
 //   'verified' (self-provision -- an admin who switched into master mode):
-//     masterStore.fetchMyProfile(true), toast i18n:masterScreens.masterApply.toast.profileCreated,
+//     a forced profile refetch (loadMasterProfile), toast i18n:masterScreens.masterApply.toast.profileCreated,
 //     push master-dashboard. NEITHER storage key is touched on this path at all.
 //   anything else (normal application, stays role='user'): sessionStorage
 //     MASTER_APPLIED_KEY='1', localStorage rejection-seen key removed (only
@@ -100,10 +101,12 @@ import MasterApplyView from '@/views/master/MasterApplyView.vue'
 import * as mastersApi from '@/api/masters'
 import * as taxonomyApi from '@/api/taxonomy'
 import { ApiResponseError } from '@/api/client'
-import { useMasterStore } from '@/stores/master'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
+import { cachedMasterProfile, loadMasterProfile } from '@/composables/queries/master'
 import { useAuthStore } from '@/stores/auth'
 import { MASTER_APPLIED_KEY, masterRejectionSeenKey } from '@/utils/constants'
-import type { MasterApplyResponse, UserResponse } from '@/api/types'
+import type { MasterApplyResponse, MasterProfileResponse, UserResponse } from '@/api/types'
 
 vi.mock('@/api/masters')
 vi.mock('@/api/taxonomy')
@@ -173,7 +176,7 @@ function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(MasterApplyView).use(createTestI18n())
-  app.use(pinia)
+  app.use(pinia).use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
@@ -321,7 +324,9 @@ beforeEach(() => {
   vi.mocked(taxonomyApi.getActiveTaxonomy).mockReset().mockRejectedValue(new Error('offline'))
 
   useAuthStore().user = user()
-  vi.spyOn(useMasterStore(), 'fetchMyProfile').mockResolvedValue(undefined)
+  vi.mocked(mastersApi.getMyMasterProfile)
+    .mockReset()
+    .mockResolvedValue({} as MasterProfileResponse)
 
   sessionStorage.clear()
   localStorage.clear()
@@ -758,10 +763,10 @@ describe('MasterApplyView', () => {
       expect(localStorage.getItem(masterRejectionSeenKey('user_1'))).toBeNull()
       expect(toastSuccess).toHaveBeenCalledWith('Заявка отправлена!')
       expect(push).toHaveBeenCalledWith({ name: 'master-pending' })
-      expect(useMasterStore().fetchMyProfile).not.toHaveBeenCalled()
+      expect(mastersApi.getMyMasterProfile).not.toHaveBeenCalled()
     })
 
-    it('self-provision (status="verified"): fetchMyProfile(true), toast + push to master-dashboard, NEITHER storage key touched', async () => {
+    it('self-provision (status="verified"): the profile refetched, toast + push to master-dashboard, NEITHER storage key touched', async () => {
       localStorage.setItem(masterRejectionSeenKey('user_1'), '1') // pre-existing, must survive
       vi.mocked(mastersApi.applyMaster).mockResolvedValue(applyResponse({ status: 'verified' }))
       mount()
@@ -770,12 +775,38 @@ describe('MasterApplyView', () => {
       await fillStep2()
       skipBtn().click()
       await flush()
+      // The forced profile refetch goes through the Colada cache: a few more
+      // microtasks than a bare call.
+      await new Promise((resolve) => setTimeout(resolve, 0))
 
-      expect(useMasterStore().fetchMyProfile).toHaveBeenCalledWith(true)
+      expect(mastersApi.getMyMasterProfile).toHaveBeenCalledTimes(1)
       expect(toastSuccess).toHaveBeenCalledWith('Профиль создан')
       expect(push).toHaveBeenCalledWith({ name: 'master-dashboard' })
       expect(sessionStorage.getItem(MASTER_APPLIED_KEY)).toBeNull()
       expect(localStorage.getItem(masterRejectionSeenKey('user_1'))).toBe('1') // untouched
+    })
+
+    it('self-provision over a profile already held this session still asks the server again', async () => {
+      // The profile is held for the whole session (queries/master.ts): a
+      // lazy load would keep the old verdict and the guard would bounce the
+      // fresh master off the dashboard.
+      vi.mocked(mastersApi.applyMaster).mockResolvedValue(applyResponse({ status: 'verified' }))
+      mount()
+      await flush()
+      vi.mocked(mastersApi.getMyMasterProfile).mockResolvedValueOnce({
+        status: 'rejected',
+      } as MasterProfileResponse)
+      await loadMasterProfile()
+      vi.mocked(mastersApi.getMyMasterProfile).mockClear()
+
+      await fillStep1()
+      await fillStep2()
+      skipBtn().click()
+      await flush()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(mastersApi.getMyMasterProfile).toHaveBeenCalledTimes(1)
+      expect(cachedMasterProfile().profile).toEqual({})
     })
 
     it('authStore.user = null: the normal-path storage write for MASTER_APPLIED_KEY still happens; the localStorage removal is safely skipped (no crash)', async () => {

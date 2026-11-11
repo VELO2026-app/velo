@@ -166,14 +166,15 @@ import {
   IconSupport,
   IconLogout,
 } from '@/components/icons'
-import { useMasterStore } from '@/stores/master'
+import { useMasterProfile } from '@/composables/queries/master'
 import { useAuthStore } from '@/stores/auth'
 import { getChatUnreadSummary } from '@/api/chats'
 import { isOptionEnabled } from '@/platform/instance'
 
 const router = useRouter()
-const masterStore = useMasterStore()
 const authStore = useAuthStore()
+// The display name. GET /masters/me answers only a role=master account.
+const { profile: masterProfile } = useMasterProfile(() => authStore.role === 'master')
 
 // FE-112 (tz-whitelabel §4): hides the withdraw entry
 // (i18n:masterScreens.masterProfile.menu.withdraw) on instances with
@@ -182,7 +183,7 @@ const paymentsEnabled = isOptionEnabled('payments')
 
 const displayName = computed(
   () =>
-    masterStore.profile?.display_name ??
+    masterProfile.value?.display_name ??
     authStore.user?.first_name ??
     t('masterScreens.masterProfile.masterWord'),
 )
@@ -254,12 +255,9 @@ async function onLogout(): Promise<void> {
   void router.replace({ path: '/' })
 }
 
-// -- Lifecycle: load the master profile (display_name) for verified masters. --
-onMounted(async () => {
-  if (authStore.role === 'master') {
-    void loadMessagesCount() // fire-and-forget: never blocks the profile
-    await masterStore.fetchMyProfile()
-  }
+// -- Lifecycle: the messages count, for masters (the profile loads itself, above). --
+onMounted(() => {
+  if (authStore.role === 'master') void loadMessagesCount()
 })
 </script>
 

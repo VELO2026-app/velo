@@ -34,7 +34,7 @@
       class="pending-view__content velo-kbd-scroll"
       :class="{ 'pending-view__content--centered': !refreshing && !statusError && isPending }"
     >
-      <template v-if="refreshing || masterStore.profileLoading">
+      <template v-if="refreshing || profileLoading">
         <VLoader size="lg" />
       </template>
       <VCard v-else-if="statusError" class="pending-view__card">
@@ -158,7 +158,7 @@ import { useRouter } from 'vue-router'
 import { VButton, VLoader, VCard, VConfirmDialog } from '@/components/ui'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
-import { useMasterStore } from '@/stores/master'
+import { useMasterProfile } from '@/composables/queries/master'
 import { withdrawMasterApplication } from '@/api/masters'
 import { extractApiError } from '@/composables/useApiError'
 import {
@@ -170,7 +170,14 @@ import {
 const router = useRouter()
 const toast = useToast()
 const authStore = useAuthStore()
-const masterStore = useMasterStore()
+// Read-only here: the screen asks for the profile itself (refreshStatus, a
+// forced re-check), and only for a role=master account -- for anyone else
+// GET /masters/me answers 403.
+const {
+  profile: masterProfile,
+  loading: profileLoading,
+  reload: reloadProfile,
+} = useMasterProfile(false)
 
 const switching = ref(false)
 const refreshing = ref(false)
@@ -191,7 +198,7 @@ const statusError = ref(false)
 // (A rejected applicant is role='user' with no capability -> shows 'pending'
 //  here; surfacing the rejection to a role='user' account is deferred to T5.)
 const profileStatus = computed(() => {
-  if (authStore.role === 'master') return masterStore.profile?.status ?? 'pending'
+  if (authStore.role === 'master') return masterProfile.value?.status ?? 'pending'
   if (authStore.allowedRoles.includes('master')) return 'verified'
   // T5: a rejected applicant stays role='user' with no capability; the verdict
   // is surfaced on GET /users/me (master_application) so the reject screen is
@@ -211,7 +218,7 @@ const isPending = computed(() => profileStatus.value === 'pending')
 const rejectionReason = computed((): string => {
   if (profileStatus.value !== 'rejected') return ''
   return (
-    masterStore.profile?.rejection_reason ??
+    masterProfile.value?.rejection_reason ??
     authStore.masterApplication?.rejection_reason ??
     t('masterScreens.masterPending.rejected.contactSupport')
   )
@@ -226,8 +233,7 @@ async function refreshStatus(): Promise<void> {
   statusError.value = false
   try {
     if (authStore.role === 'master') {
-      await masterStore.fetchMyProfile(true)
-      if (masterStore.profileError) {
+      if ((await reloadProfile()).status === 'error') {
         statusError.value = true
         return
       }
