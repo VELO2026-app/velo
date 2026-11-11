@@ -86,6 +86,7 @@ export const TAB_DATA_WARMERS: Readonly<Record<string, Warmer>> = {
     ])
     if (!useSchoolsHubStore().hasSchools) return // no tab, nothing to warm
     const role = useAuthStore().role ?? ''
+    if (!role) return // a token without its user yet: the screen loads for itself
     await warmQuery((cache) => cache.refresh(cache.ensure(userSchoolsQuery(role))))
   },
   '/user/profile': warmStats,

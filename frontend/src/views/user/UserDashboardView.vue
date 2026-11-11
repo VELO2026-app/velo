@@ -289,6 +289,7 @@ import { VHeader } from '@/components/layout'
 import { VButton, VBadge, VStatCard, VSkeletonPracticeCard, VLoadingSwap } from '@/components/ui'
 import { useQuery } from '@pinia/colada'
 import { myStatsQuery } from '@/composables/queries/stats'
+import { screenQueryState } from '@/composables/queries/screenState'
 import { useLoadingHold } from '@/composables/useLoadingHold'
 import { useRememberedCount } from '@/composables/useRememberedCount'
 import { IconClock, IconCheck, IconBellPlain, IconMeditation } from '@/components/icons'
@@ -327,7 +328,7 @@ const statsQuery = useQuery(() => myStatsQuery())
 const stats = statsQuery.data
 // Same loading rule as the blocks (useLoadingHold): no placeholder for a fast
 // answer, at least 450 ms once one was seen.
-const { showSkeleton: statsPending } = useLoadingHold(statsQuery.isPending)
+const { showSkeleton: statsPending } = useLoadingHold(screenQueryState(statsQuery).loading)
 
 // =========================================================================
 // Nearest bookings (shared selection -- the list AND the check-in banner)

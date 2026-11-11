@@ -118,6 +118,9 @@ export const userSchoolsQuery = defineQueryOptions((role: string) => ({
     }
   },
   staleTime: 0,
+  // No role = no session (the moment of a logout, before the redirect): the
+  // reactive key moves to role '' and must not send an anonymous GET.
+  enabled: role !== '',
   meta: { persist: true },
 }))
 

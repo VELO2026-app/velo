@@ -119,6 +119,7 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuery } from '@pinia/colada'
 import { masterSchoolsQuery } from '@/composables/queries/schools'
+import { screenQueryState } from '@/composables/queries/screenState'
 import SchoolRow from '@/components/shared/SchoolRow.vue'
 import { IconPlusFilled } from '@/components/icons'
 import { VButton, VEmptyState } from '@/components/ui'
@@ -132,9 +133,8 @@ const router = useRouter()
 // background (staleTime 0: a school created a moment ago is there on the
 // next visit), no spinner on every visit.
 const schoolsQuery = useQuery(() => masterSchoolsQuery())
-const loading = schoolsQuery.isPending
-/** Only an error with nothing to show replaces the list. */
-const error = computed(() => schoolsQuery.error.value != null && !schoolsQuery.data.value)
+/** Only an error with nothing to show (and no retry running) replaces the list. */
+const { loading, failed: error } = screenQueryState(schoolsQuery)
 const schools = computed(() => schoolsQuery.data.value?.schools ?? [])
 /** BE-18: the admin-issued right to found a school. False is the honest
  *  default on a failed flag fetch -- an offered «+» that only ever answers

@@ -217,6 +217,33 @@ describe('SchoolsView', () => {
     expect(host?.querySelector('.schools__add-btn')).toBeTruthy()
   })
 
+  it('a retry after a failed first load shows the loader while it runs, not the error', async () => {
+    vi.mocked(cgApi.getMySchools).mockRejectedValueOnce(new Error('network'))
+    mount()
+    await flush()
+    expect(text()).toContain('Не удалось загрузить школы')
+
+    vi.mocked(cgApi.getMySchools).mockReturnValueOnce(new Promise(() => {}))
+    buttonWith('Повторить')?.click()
+    await flush()
+
+    expect(host?.querySelector('.schools__state')).not.toBeNull()
+    expect(text()).not.toContain('Не удалось загрузить школы')
+  })
+
+  it('the session ending under a mounted tab sends no anonymous /schools/mine', async () => {
+    vi.mocked(cgApi.getMySchools).mockResolvedValue(mineResponse([row('g2', 'student')]))
+    mount()
+    await flush()
+    expect(cgApi.getMySchools).toHaveBeenCalledTimes(1)
+
+    // Logout: the user goes, the role with it, and the query key moves.
+    useAuthStore().user = null
+    await flush()
+
+    expect(cgApi.getMySchools).toHaveBeenCalledTimes(1)
+  })
+
   it('load failure: error state with a retry that works', async () => {
     vi.mocked(cgApi.getMySchools).mockRejectedValueOnce(new Error('network'))
     mount()

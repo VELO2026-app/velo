@@ -231,11 +231,14 @@ const displayName = computed(() => {
 // unread-messages dot must be current). A failed fetch keeps what is shown
 // (NEW-7: the profile never breaks on it).
 const statsQuery = useQuery(() => myStatsQuery(0))
-// Kept alive as a tab root (TabRouterView): a return revalidates quietly
-// (the shown data stays). The first activation is the mount itself.
+// Kept alive as a tab root (TabRouterView): a return refetches quietly (the
+// shown data stays). refetch, not refresh: the entry is shared with the
+// dashboard and the idle prefetch, and whoever ensured it last set its
+// staleTime (5 min) -- a refresh would then skip the unread dot. The first
+// activation is the mount itself.
 let activations = 0
 onActivated(() => {
-  if (activations++ > 0) void statsQuery.refresh()
+  if (activations++ > 0) void statsQuery.refetch()
 })
 const practicesAttended = computed(() => statsQuery.data.value?.practices_attended ?? 0)
 const hoursAttended = computed(() => statsQuery.data.value?.hours_attended ?? 0)

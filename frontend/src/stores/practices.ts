@@ -123,6 +123,9 @@ export const usePracticesStore = defineStore('practices', () => {
     selectedError.value = null
     try {
       const result = await getPractice(id)
+      // The session ended meanwhile ($reset cleared the fetch id): the answer
+      // belongs to the previous account and lands nowhere, cache included.
+      if (_currentFetchId === null) return
       queryCache.setEntryState(practiceEntry(queryCache, id), {
         status: 'success',
         data: result,

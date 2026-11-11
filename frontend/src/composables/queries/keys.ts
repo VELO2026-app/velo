@@ -50,7 +50,11 @@ export const keys = {
   bookings: {
     /** Prefix of every booking key. */
     root: () => ['bookings'] as const,
-    /** `GET /bookings/me/stats` -- attended practices, hours, the unread dot. */
+    /**
+     * `GET /bookings/me/stats` -- attended practices, hours, the unread dot.
+     * Under the bookings root on purpose: every booking mutation can move
+     * these numbers, so it refetches them too (./invalidation.ts).
+     */
     myStats: () => ['bookings', 'stats'] as const,
   },
 }

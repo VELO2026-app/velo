@@ -99,6 +99,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useQuery } from '@pinia/colada'
 import { userSchoolsQuery } from '@/composables/queries/schools'
+import { screenQueryState } from '@/composables/queries/screenState'
 import SchoolRow from '@/components/shared/SchoolRow.vue'
 import { IconPlusFilled } from '@/components/icons'
 import { VButton, VEmptyState, VLoader } from '@/components/ui'
@@ -118,9 +119,8 @@ let activations = 0
 onActivated(() => {
   if (activations++ > 0) void schoolsQuery.refresh()
 })
-const loading = schoolsQuery.isPending
-/** Only an error with nothing to show replaces the list. */
-const error = computed(() => schoolsQuery.error.value != null && !schoolsQuery.data.value)
+/** Only an error with nothing to show (and no retry running) replaces the list. */
+const { loading, failed: error } = screenQueryState(schoolsQuery)
 const schools = computed(() => schoolsQuery.data.value?.schools ?? [])
 /** BE-18: the admin-issued right to found a school. False is the honest
  *  default on a failed flag fetch -- an offered «+» that only ever answers

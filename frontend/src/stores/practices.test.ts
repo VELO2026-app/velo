@@ -238,6 +238,30 @@ describe('usePracticesStore', () => {
       expect(practicesApi.getPractice).toHaveBeenCalledTimes(1)
     })
 
+    it('an answer landing after the session ended is not written to the cache', async () => {
+      let resolve: (v: PracticeResponse) => void = () => {}
+      vi.mocked(practicesApi.getPractice).mockReturnValueOnce(
+        new Promise<PracticeResponse>((r) => {
+          resolve = r
+        }),
+      )
+      const store = usePracticesStore()
+      const pending = store.fetchPractice('p1')
+      store.$reset()
+      resolve(fakePractice({ id: 'p1' }))
+      await pending
+
+      expect(useQueryCache().getQueryData(keys.practices.detail('p1'))).toBeUndefined()
+      expect(store.selected).toBeNull()
+    })
+
+    it('a practice detail outlives the Colada default of 5 min in memory (30 min gcTime)', async () => {
+      vi.mocked(practicesApi.getPractice).mockResolvedValue(fakePractice({ id: 'p1' }))
+      await usePracticesStore().fetchPractice('p1')
+
+      expect(useQueryCache().get(keys.practices.detail('p1'))?.options?.gcTime).toBe(30 * 60_000)
+    })
+
     it('a failed preload never rejects', async () => {
       vi.mocked(practicesApi.getPractice).mockRejectedValueOnce(new Error('offline'))
       await expect(prefetchPractice('p1')).resolves.toBeUndefined()

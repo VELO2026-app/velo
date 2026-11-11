@@ -194,6 +194,20 @@ describe('MasterSchoolsView', () => {
     expect(create).toBeTruthy()
   })
 
+  it('a retry after a failed first load shows the loader while it runs, not the error', async () => {
+    vi.mocked(cgApi.getMySchools).mockRejectedValueOnce(new Error('network'))
+    mount()
+    await flush()
+    expect(text()).toContain('Не удалось загрузить школы')
+
+    vi.mocked(cgApi.getMySchools).mockReturnValueOnce(new Promise(() => {}))
+    buttonWith('Повторить')?.click()
+    await flush()
+
+    expect(host?.querySelector('.mcg__state')).not.toBeNull()
+    expect(text()).not.toContain('Не удалось загрузить школы')
+  })
+
   it('load failure: error state with a working retry', async () => {
     vi.mocked(cgApi.getMySchools).mockRejectedValueOnce(new Error('network'))
     mount()

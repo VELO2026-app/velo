@@ -111,3 +111,14 @@ describe('persistPlugin', () => {
     expect(saved()).toBeUndefined()
   })
 })
+
+describe('the queries that persist (FE-166 step 2)', () => {
+  it('the stats and the schools tab opt in; the master hub does not', async () => {
+    const { myStatsQuery } = await import('@/composables/queries/stats')
+    const { userSchoolsQuery, masterSchoolsQuery } = await import('@/composables/queries/schools')
+
+    expect(myStatsQuery().meta).toEqual({ persist: true })
+    expect(userSchoolsQuery('user').meta).toEqual({ persist: true })
+    expect(masterSchoolsQuery().meta).toBeUndefined()
+  })
+})
