@@ -124,6 +124,28 @@ function todayMidnight(): Date {
   return DateTime.now().startOf('day').toJSDate()
 }
 
+/**
+ * The week the calendar opens on: today's window, no facets, no scope (the
+ * range math of weekParams for today selected on today's window).
+ */
+export function homeWeekParams(): CalendarWeekParams {
+  const today = todayMidnight()
+  const from = new Date(today)
+  from.setDate(from.getDate() - 1)
+  const to = new Date(today)
+  to.setDate(to.getDate() + 6)
+  to.setHours(23, 59, 59, 999)
+  to.setDate(to.getDate() + 1)
+  return {
+    from: from.toISOString(),
+    to: to.toISOString(),
+    filters: {},
+    master: null,
+    schoolFilter: null,
+    school: null,
+  }
+}
+
 /** Calendar screen state: sliding 7-day window, selected day, facet filters, scope -- the week to load. */
 export const useCalendarStore = defineStore('calendar', () => {
   // -- State --
@@ -248,6 +270,19 @@ export const useCalendarStore = defineStore('calendar', () => {
       school: schoolScope.value,
     }
   })
+
+  /**
+   * The week the TAB calendar shows (no master / school scope), without
+   * touching the store: the window the user left it on, or today's on the
+   * session's first entry. For the idle prefetch (router/dataPrefetch.ts),
+   * which must not move an open screen's state.
+   */
+  function tabWeekParams(): CalendarWeekParams {
+    if (initialized.value) {
+      return { ...weekParams.value, master: null, schoolFilter: null, school: null }
+    }
+    return homeWeekParams()
+  }
 
   // -- Actions --
 
@@ -396,6 +431,7 @@ export const useCalendarStore = defineStore('calendar', () => {
     snapToSchoolFeed,
     init,
     $reset,
+    tabWeekParams,
     // helpers (exported for the view: local day key of a Date)
     localDateKey,
   }

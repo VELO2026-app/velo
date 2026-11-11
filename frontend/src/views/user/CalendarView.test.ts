@@ -877,4 +877,22 @@ describe('CalendarView', () => {
       expect(store.weekParams.school).toBeNull()
     })
   })
+
+  describe('leaving a stacked calendar through a route change (FE-178 review)', () => {
+    it('the scope this screen set is cleared even though the route already moved on', async () => {
+      mount({ masterId: 'm1' })
+      await flush()
+      const store = useCalendarStore()
+      expect(store.masterScope).toBe('m1')
+
+      // router.back() to the master profile: the route is the next one by unmount.
+      routeState.params = { id: 'm1' }
+      app?.unmount()
+      host?.remove()
+      app = null
+      host = null
+
+      expect(store.masterScope).toBeNull()
+    })
+  })
 })

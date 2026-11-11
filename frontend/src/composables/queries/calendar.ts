@@ -23,7 +23,12 @@ import { getPractices } from '@/api/practices'
 import { getSchoolPractices } from '@/api/schools'
 import { keys } from '@/composables/queries/keys'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
-import { calendarDateInTz, useCalendarStore, type CalendarWeekParams } from '@/stores/calendar'
+import {
+  calendarDateInTz,
+  homeWeekParams,
+  useCalendarStore,
+  type CalendarWeekParams,
+} from '@/stores/calendar'
 import { seedPractices } from '@/stores/practices'
 import type { PracticeFilters, PracticeResponse } from '@/api/types'
 
@@ -36,19 +41,38 @@ const SCHOOL_FEED_MAX_PAGES = 2
 /** The week params without the school scope: what the practices request depends on. */
 export type CalendarFeedParams = Omit<CalendarWeekParams, 'school'>
 
+/** How long a week no screen shows stays in memory (ms): a step back is instant, a mutation does not refetch a dozen scrolled weeks. */
+export const CALENDAR_WEEK_GC_MS = 60_000
+
+/** The week the calendar opens on (today, no facets, no scope) -- the only one worth a persisted copy. */
+function isHomeWeek(params: CalendarFeedParams): boolean {
+  const home = homeWeekParams()
+  return (
+    params.master === null &&
+    params.from === home.from &&
+    params.to === home.to &&
+    Object.values(params.filters).every((value) => value === undefined)
+  )
+}
+
 /**
  * Query options for one week of the viewer's feed, or of a master's public
  * feed (`GET /practices` with the range, the facets and the scope).
  *
  * @remarks
- * Persisted for the viewer's own feed (no master scope): a cold start draws
- * the week at once, then revalidates. Window focus refetches it: seats and
- * practices change by others' hands. Every answer seeds the practice
- * details (stores/practices.ts), so a tap opens the detail with content.
+ * Only the home week (today, no facets, no scope) is persisted: a cold start
+ * draws it at once, then revalidates. Every other week -- each ribbon scroll
+ * and arrow is a new key -- lives CALENDAR_WEEK_GC_MS off screen, so a
+ * booking mutation refetches the week on screen, not every week scrolled
+ * past. No refetch on window focus, as before the migration: the screen
+ * revalidates on its own return (onActivated). Every answer seeds the
+ * practice details (stores/practices.ts), so a tap opens the detail with
+ * content -- unless the request was cancelled (the session ended, the key
+ * left the screen), whose answer must seed nothing.
  */
 export const calendarWeekQuery = defineQueryOptions((params: CalendarFeedParams) => ({
   key: keys.practices.calendarWeek(params),
-  query: async (): Promise<PracticeResponse[]> => {
+  query: async ({ signal }: { signal: AbortSignal }): Promise<PracticeResponse[]> => {
     const query: PracticeFilters = {
       ...params.filters,
       // Master scope (owner 2026-09-30): the stacked master calendar reads the
@@ -62,7 +86,7 @@ export const calendarWeekQuery = defineQueryOptions((params: CalendarFeedParams)
     }
     // A week (+- 1 day buffer) of practices is small; one page covers it.
     const res = await getPractices(query, 100, 0)
-    seedPractices(res.items)
+    if (!signal.aborted) seedPractices(res.items)
     // School-context master scope (owner 2026-10-03): keep only the master's
     // practices in THAT school; personal ones (school_id null) and other
     // schools' ones are not the curator's business here.
@@ -70,8 +94,9 @@ export const calendarWeekQuery = defineQueryOptions((params: CalendarFeedParams)
       ? res.items.filter((p) => p.school_id === params.schoolFilter)
       : res.items
   },
-  refetchOnWindowFocus: true,
-  meta: { persist: params.master === null },
+  refetchOnWindowFocus: false,
+  gcTime: CALENDAR_WEEK_GC_MS,
+  meta: { persist: isHomeWeek(params) },
 }))
 
 /**
@@ -81,7 +106,7 @@ export const calendarWeekQuery = defineQueryOptions((params: CalendarFeedParams)
  */
 export const schoolCalendarFeedQuery = defineQueryOptions((schoolId: string) => ({
   key: keys.practices.schoolUpcoming(schoolId),
-  query: async (): Promise<PracticeResponse[]> => {
+  query: async ({ signal }: { signal: AbortSignal }): Promise<PracticeResponse[]> => {
     const first = await getSchoolPractices(schoolId, SCHOOL_FEED_PAGE, 0)
     const items = [...first.items]
     const pages = Math.ceil(first.total / SCHOOL_FEED_PAGE)
@@ -90,10 +115,12 @@ export const schoolCalendarFeedQuery = defineQueryOptions((schoolId: string) => 
       if (!res.items.length) break
       items.push(...res.items)
     }
-    seedPractices(items)
+    if (!signal.aborted) seedPractices(items)
     return items
   },
-  refetchOnWindowFocus: true,
+  // As the school page's feed (./schools.ts): booking marks change through
+  // this app's own mutations, which invalidate it.
+  refetchOnWindowFocus: false,
 }))
 
 /** The scope part of a calendar key: entries of another scope never stand in for this one. */
@@ -163,9 +190,14 @@ export function useCalendarWeek() {
       return at >= fromMs && at <= toMs
     })
   })
-  watch(loaded, (week) => {
-    if (week !== undefined) lastShown.value = week
-  })
+  watch(
+    loaded,
+    (week) => {
+      if (week !== undefined) lastShown.value = week
+    },
+    // A week already in the cache at mount (warmed, persisted) counts too.
+    { immediate: true },
+  )
 
   const weekPractices = computed<PracticeResponse[]>(() => {
     if (loaded.value !== undefined) return loaded.value
@@ -174,16 +206,18 @@ export function useCalendarWeek() {
 
   const fetching = computed(() => query.asyncStatus.value === 'loading')
   /**
-   * Nothing of THIS week loaded yet and its request runs -- the skeleton's
-   * condition. While the previous week stands in (placeholder -- `useQuery`
-   * reports it as `success`), only a real reload counts as loading, not a
-   * ribbon scroll's quiet marker refresh.
+   * Nothing of THIS week loaded and its request runs -- the skeleton's
+   * condition, also during a retry after an error. While the previous week
+   * stands in (placeholder -- `useQuery` reports it as `success`), only a
+   * real reload counts as loading, not a ribbon scroll's quiet marker refresh.
    */
   const loading = computed(() => {
     if (!fetching.value) return false
     if (query.isPlaceholderData.value) return !store.quietWindow
-    return query.status.value === 'pending'
+    return query.data.value === undefined
   })
+  /** The last request failed and no other runs: the screen may show the error. */
+  const failed = computed(() => query.error.value != null && !fetching.value)
 
   /**
    * Day keys (viewer timezone) with at least one practice not yet started.
@@ -225,6 +259,7 @@ export function useCalendarWeek() {
     weekPractices,
     loading,
     fetching,
+    failed,
     error: query.error,
     daysWithPractices,
     selectedDayPractices,

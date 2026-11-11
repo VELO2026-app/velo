@@ -37,16 +37,24 @@ vi.mock('@/stores/notifications', () => ({
   }),
 }))
 vi.mock('@/stores/calendar', () => ({
+  homeWeekParams: () => ({
+    from: '2026-06-14T00:00:00.000Z',
+    to: '2026-06-22T23:59:59.999Z',
+    filters: {},
+    master: null,
+    schoolFilter: null,
+    school: null,
+  }),
+  calendarDateInTz: () => '',
   useCalendarStore: () => ({
-    init: () => undefined,
-    weekParams: {
+    tabWeekParams: () => ({
       from: '2026-06-14T00:00:00.000Z',
       to: '2026-06-22T23:59:59.999Z',
       filters: {},
       master: null,
       schoolFilter: null,
       school: null,
-    },
+    }),
   }),
 }))
 // The calendar warmer loads the tab's week through its Colada query.

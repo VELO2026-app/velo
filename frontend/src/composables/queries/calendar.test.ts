@@ -16,9 +16,9 @@ import { createApp, defineComponent, h, nextTick, type App } from 'vue'
 import { createPinia, setActivePinia, type Pinia } from 'pinia'
 import { PiniaColada, useQueryCache } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
-import { useCalendarWeek } from '@/composables/queries/calendar'
+import { calendarWeekQuery, useCalendarWeek } from '@/composables/queries/calendar'
 import { invalidateAfter } from '@/composables/queries/invalidation'
-import { useCalendarStore } from '@/stores/calendar'
+import { homeWeekParams, useCalendarStore } from '@/stores/calendar'
 import { useAuthStore } from '@/stores/auth'
 import { flushPersisted, setPersistOwner } from '@/composables/persistedCache'
 import * as practicesApi from '@/api/practices'
@@ -221,6 +221,74 @@ describe('useCalendarWeek -- loading the week', () => {
     await flush()
 
     expect(week.loading.value).toBe(false)
+  })
+})
+
+describe('useCalendarWeek -- review fixes (FE-178)', () => {
+  it('a week already cached at mount is what a failed quiet refresh keeps', async () => {
+    vi.mocked(practicesApi.getPractices).mockResolvedValue(
+      page([practice('a', '2026-06-16T10:00:00Z')]),
+    )
+    // Warmed by the idle prefetch before the screen opens.
+    const cache = useQueryCache(pinia)
+    const { school: _school, ...feed } = homeWeekParams()
+    await cache.refresh(cache.ensure(calendarWeekQuery(feed)))
+    mount()
+    await flush()
+
+    vi.mocked(practicesApi.getPractices).mockRejectedValue(new Error('network down'))
+    useCalendarStore().shiftDays(3)
+    await flush()
+
+    expect(week.weekPractices.value.map((p) => p.id)).toEqual(['a'])
+  })
+
+  it('a retry after an error shows the loader, not the old error', async () => {
+    vi.mocked(practicesApi.getPractices).mockRejectedValue(new Error('network down'))
+    mount()
+    await flush()
+    expect(week.failed.value).toBe(true)
+
+    vi.mocked(practicesApi.getPractices).mockReturnValue(new Promise(() => {}))
+    void week.refetch()
+    await nextTick()
+
+    expect(week.loading.value).toBe(true)
+    expect(week.failed.value).toBe(false)
+  })
+
+  it('a booking mutation refetches the week on screen and the persisted home week -- not every week scrolled past', async () => {
+    mount()
+    await flush()
+    const store = useCalendarStore()
+    for (let i = 0; i < 4; i++) {
+      store.shiftDays(1)
+      await flush()
+    }
+    vi.mocked(practicesApi.getPractices).mockClear()
+
+    await invalidateAfter(useQueryCache(pinia), 'purchaseBooking')
+
+    const fromDates = vi.mocked(practicesApi.getPractices).mock.calls.map(([q]) => q?.date_from)
+    expect(fromDates.sort()).toEqual(
+      [homeWeekParams().from, useCalendarStore().weekParams.from].sort(),
+    )
+  })
+
+  it('only the home week (today, no facets, no scope) is persisted', async () => {
+    mount()
+    await flush()
+    const cache = useQueryCache(pinia)
+    const persisted = () =>
+      cache.getEntries({ key: ['practices', 'list'] }).filter((e) => e.meta.persist)
+    expect(persisted()).toHaveLength(1)
+
+    useCalendarStore().nextWeek()
+    await flush()
+    useCalendarStore().applyFilters({ direction: ['meditation'] })
+    await flush()
+
+    expect(persisted()).toHaveLength(1)
   })
 })
 

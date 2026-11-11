@@ -73,10 +73,9 @@ export const TAB_DATA_WARMERS: Readonly<Record<string, Warmer>> = {
       import('@/stores/calendar'),
       import('@/composables/queries/calendar'),
     ])
-    const calendar = useCalendarStore()
-    // The tab calendar's own week (no scope): the first entry snaps to today.
-    calendar.init()
-    const { school: _school, ...feed } = calendar.weekParams
+    // The TAB calendar's week (never a stacked calendar's scope), read without
+    // touching the store: an open screen's window must not move.
+    const { school: _school, ...feed } = useCalendarStore().tabWeekParams()
     await warmQuery((cache) => cache.refresh(cache.ensure(calendarWeekQuery(feed))))
   },
   // Memory only: diary text is never persisted (composables/persistedCache).

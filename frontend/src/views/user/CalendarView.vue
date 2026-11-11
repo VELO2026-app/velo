@@ -14,7 +14,8 @@
     - CalendarPracticeCard per practice
     - loading / error / empty states
 
-  Data comes from useCalendarStore (separate from the Dashboard feed).
+  The week comes from useCalendarWeek (a Colada query keyed by the
+  calendar store's window, filters and scope; separate from the Dashboard feed).
   The whole visible week is loaded in one request; the selected-day list
   and dot-markers are derived client-side.
 -->
@@ -271,10 +272,15 @@ const viewerTz = useViewerTimezone()
 const masterMode = computed(() => String(route.params.masterId ?? '') !== '')
 const schoolMode = computed(() => String(route.params.schoolId ?? '') !== '')
 
-if (masterMode.value) {
-  store.setMasterScope(String(route.params.masterId), String(route.query.schoolId ?? '') || null)
-} else if (schoolMode.value) {
-  store.setSchoolScope(String(route.params.schoolId))
+// The scope THIS screen set, remembered: on unmount the route is already the
+// next one (masterMode / schoolMode read it), so they cannot tell which
+// scope to clear.
+const ownMasterScope = masterMode.value ? String(route.params.masterId) : null
+const ownSchoolScope = schoolMode.value ? String(route.params.schoolId) : null
+if (ownMasterScope !== null) {
+  store.setMasterScope(ownMasterScope, String(route.query.schoolId ?? '') || null)
+} else if (ownSchoolScope !== null) {
+  store.setSchoolScope(ownSchoolScope)
 }
 // First entry of the session snaps the window to today; a re-entry keeps it.
 store.init()
@@ -284,7 +290,8 @@ const week = useCalendarWeek()
 /** The error rung's text (ADR: the screen words the raw error). */
 const weekError = computed(() => {
   const error = week.error.value
-  if (error == null) return ''
+  // A retry running: the loader, not the old error.
+  if (error == null || !week.failed.value) return ''
   return extractApiError(
     error,
     schoolMode.value
@@ -294,10 +301,12 @@ const weekError = computed(() => {
 })
 
 onUnmounted(() => {
-  if (masterMode.value) {
+  // Only the scope this screen set, and only while it is still the store's
+  // (a newer stacked calendar may already have set its own).
+  if (ownMasterScope !== null && store.masterScope === ownMasterScope) {
     store.setMasterScope(null)
   }
-  if (schoolMode.value) {
+  if (ownSchoolScope !== null && store.schoolScope === ownSchoolScope) {
     store.setSchoolScope(null)
   }
 })
