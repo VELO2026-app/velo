@@ -117,7 +117,7 @@ jobs:
       # across a code change could pass a file a cold run fails. The cache
       # therefore only saves re-runs and runs whose lint inputs are unchanged.
       - name: Restore ESLint cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             frontend/node_modules/.cache/eslint
@@ -244,7 +244,7 @@ jobs:
 
       - name: Restore the Playwright browser
         id: browser-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
