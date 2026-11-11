@@ -59,7 +59,6 @@
   },
   "transcription": {
     "generic": "The transcription service is unavailable",
-    "transcription_not_configured": "Voice input is unavailable",
     "transcription_unavailable": "The transcription service is unavailable",
     "transcription_failed": "The transcription service is unavailable",
     "speech_not_recognized": "Could not recognize the speech",

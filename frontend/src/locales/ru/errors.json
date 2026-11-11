@@ -59,7 +59,6 @@
   },
   "transcription": {
     "generic": "Сервис транскрибации недоступен",
-    "transcription_not_configured": "Голосовой ввод недоступен",
     "transcription_unavailable": "Сервис транскрибации недоступен",
     "transcription_failed": "Сервис транскрибации недоступен",
     "speech_not_recognized": "Не удалось распознать речь",
