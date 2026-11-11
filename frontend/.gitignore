@@ -44,3 +44,4 @@ npm-debug.log*
 
 # FE-161: the sweep setup state (session tokens, route params)
 e2e/.state/
+visual-out/

@@ -27,7 +27,10 @@
 
 import { defineConfig, devices } from '@playwright/test'
 
+// VISUAL_DIST: serve another build (e2e/visual/run.sh shoots the base and the
+// head build one after the other, on the same port: the HAR matches by URL).
 const PORT = 4173
+const DIST = process.env.VISUAL_DIST ?? 'dist'
 const PREVIEW_URL = `http://127.0.0.1:${PORT}`
 const BASE_URL = process.env.E2E_BASE_URL ?? PREVIEW_URL
 const CI = !!process.env.CI
@@ -62,7 +65,7 @@ export default defineConfig({
     {
       name: 'smoke',
       testMatch: '*.spec.ts',
-      testIgnore: ['sweep/**', 'stack/**'],
+      testIgnore: ['sweep/**', 'stack/**', 'visual/**'],
       use: { baseURL: PREVIEW_URL },
     },
     {
@@ -75,6 +78,18 @@ export default defineConfig({
       dependencies: ['sweep-setup'],
     },
     {
+      // FE-162: the key screens from recorded API answers, no backend. Run
+      // twice by e2e/visual/run.sh (base build, head build).
+      name: 'visual',
+      testMatch: 'visual/visual.spec.ts',
+    },
+    {
+      // FE-162: re-record the HARs against a running seeded stack.
+      name: 'visual-record',
+      testMatch: 'visual/record.spec.ts',
+      dependencies: ['sweep-setup'],
+    },
+    {
       name: 'sweep-webkit',
       testMatch: 'sweep/*.spec.ts',
       dependencies: ['sweep-setup'],
@@ -84,7 +99,7 @@ export default defineConfig({
   // The golden build for smoke, and for the sweep unless E2E_BASE_URL points
   // elsewhere (a dev server already running).
   webServer: {
-    command: `pnpm exec vite preview --host 127.0.0.1 --port ${PORT} --strictPort`,
+    command: `pnpm exec vite preview --outDir ${DIST} --host 127.0.0.1 --port ${PORT} --strictPort`,
     url: PREVIEW_URL,
     reuseExistingServer: !CI,
     timeout: 60_000,

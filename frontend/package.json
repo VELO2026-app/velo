@@ -28,6 +28,8 @@
     "test:e2e:run": "playwright test --project=smoke",
     "e2e:smoke": "playwright test --project=smoke",
     "e2e:sweep": "playwright test --project=sweep",
+    "visual:record": "playwright test --project=visual-record",
+    "visual": "sh e2e/visual/run.sh",
     "e2e:sweep:ci": "playwright test --reporter=github,./e2e/support/crash-reporter.ts"
   },
   "dependencies": {
@@ -62,6 +64,8 @@
     "eslint-plugin-vue": "^10.12.0",
     "globals": "^15.15.0",
     "happy-dom": "^21.0.4",
+    "pixelmatch": "^8.0.0",
+    "pngjs": "^7.0.0",
     "postcss-html": "^2.0.0",
     "prettier": "^3.5.0",
     "stylelint": "^17.16.0",
