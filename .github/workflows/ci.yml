@@ -21,6 +21,13 @@
 #                  runner per cell (`build-matrix.mjs --cell`); matrix-gate
 #                  is the fan-in (invariant d spans cells) and the one check
 #                  to require.
+#   image        — FE-159: docker build of frontend/Dockerfile (gha layer
+#                  cache, never pushed) + the image smoke
+#                  (.github/scripts/docker-smoke.mjs): /config.json rendered
+#                  from the env under primer.yaml names, no brand, no ${...};
+#                  / 200; /health and /ready 404; manifest lang of the
+#                  instance. Catches what only the machine used to see.
+#                  Runs only when scope's `docker` output says so.
 #   drift-check  — regenerate frontend/src/api/generated.ts from the app's own
 #                  OpenAPI schema and fail on any diff. Read-only w.r.t. the
 #                  backend. The generator is deterministic by contract
@@ -37,6 +44,9 @@
 #   comment-only code edits -> lint (lint + format) only
 #   backend/**              -> drift; frontend jobs skipped unless touched too
 #   anything else           -> the full gate
+#   + image only when the PR touches what the image build reads
+#     (Dockerfile, frontend/nginx*, editions.json, lockfile, workspace
+#     manifests, .dockerignore) or the gate itself
 # Pushes to test always run the full gate -- the trunk is the backstop.
 # Skipped jobs report "skipped", which satisfies a required status check.
 #
@@ -72,6 +82,7 @@ jobs:
     outputs:
       frontend: ${{ steps.scope.outputs.frontend || 'full' }}
       drift: ${{ steps.scope.outputs.drift || 'true' }}
+      docker: ${{ steps.scope.outputs.docker || 'true' }}
     steps:
       - uses: actions/checkout@v4
         if: github.event_name == 'pull_request'
@@ -387,6 +398,48 @@ jobs:
           for f in "$RUNNER_TEMP"/facts/*/cell.json; do i=$((i + 1)); cp "$f" "$RUNNER_TEMP/facts-flat/$i.json"; done
           node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
           node frontend/scripts/build-matrix.mjs --check-assets "$RUNNER_TEMP/facts-flat" --skin "$RUNNER_TEMP/ci-skin"
+
+  # FE-159: the image the machine runs. The stand fell three times (05-07.11)
+  # on what no other job builds: the node digest, the Dockerfile's pnpm
+  # filter, the editions.json COPY. Build context = repo root (FE-116), the
+  # machine's two build args. --add-host app (inside the smoke): nginx
+  # resolves the /api upstream at start. Layer cache in the gha backend,
+  # mode=max so the builder stage's layers (the install) are cached too.
+  image:
+    name: image — docker build / smoke
+    needs: scope
+    if: needs.scope.outputs.docker == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build the frontend image (loaded locally, not pushed)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: frontend/Dockerfile
+          build-args: |
+            PRIMER_RELEASE=ci
+            PRIMER_COMMIT=${{ github.sha }}
+          tags: velo-frontend:ci
+          load: true
+          push: false
+          cache-from: type=gha,scope=frontend-image
+          # Written from the trunk only: a PR-ref cache is invisible to other
+          # PRs, and mode=max layers (node_modules) would fill the 10 GB repo
+          # cache and evict the pnpm/Chromium/ESLint caches of ordinary PRs.
+          # PRs still READ the trunk's cache above.
+          cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max,scope=frontend-image' || '' }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Smoke the image (/config.json, /, /health, /ready, manifest)
+        run: node .github/scripts/docker-smoke.mjs velo-frontend:ci "${{ github.sha }}" ci
 
   drift-check:
     name: generated.ts drift
