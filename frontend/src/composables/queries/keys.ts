@@ -72,6 +72,13 @@ export const keys = {
     student: (schoolId: string, userId: string) =>
       ['schools', 'detail', schoolId, 'student', userId] as const,
     /**
+     * `GET /masters/me/schools/{id}/analytics?period=` -- the curator's
+     * analytics of one school for one period. Under the school's detail
+     * prefix like `student`, for the same reason.
+     */
+    analytics: (schoolId: string, period: string) =>
+      ['schools', 'detail', schoolId, 'analytics', { period }] as const,
+    /**
      * `GET /schools/mine` (+ the create right) as one screen shows it: the user
      * zone's schools tab for a role, or the master's schools hub.
      */

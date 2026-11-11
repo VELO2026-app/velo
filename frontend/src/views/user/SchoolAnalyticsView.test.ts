@@ -16,7 +16,10 @@
 
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { createApp, nextTick, type App } from 'vue'
+import { createApp, nextTick, reactive, type App } from 'vue'
+import { createPinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import SchoolAnalyticsView from '@/views/user/SchoolAnalyticsView.vue'
 import * as cgApi from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
@@ -26,12 +29,21 @@ vi.mock('@/api/schools')
 
 const push = vi.fn()
 const replace = vi.fn()
-const routeState = {
+// Reactive, behind getters: a test can move the route under a mounted screen
+// (router reuse between two schools' screens).
+const routeState = reactive({
   name: 'user-school-analytics',
   id: 'g1',
-}
+})
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: { id: routeState.id }, name: routeState.name }),
+  useRoute: () => ({
+    get params() {
+      return { id: routeState.id }
+    },
+    get name() {
+      return routeState.name
+    },
+  }),
   useRouter: () => ({ push, replace }),
 }))
 
@@ -41,7 +53,10 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(SchoolAnalyticsView).use(createTestI18n())
+  app = createApp(SchoolAnalyticsView)
+    .use(createTestI18n())
+    .use(createPinia())
+    .use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
@@ -124,7 +139,8 @@ function analyticsFixture(): SchoolAnalyticsResponse {
 
 describe('SchoolAnalyticsView', () => {
   beforeEach(() => {
-    vi.mocked(cgApi.getSchoolAnalytics).mockResolvedValue(analyticsFixture())
+    routeState.id = 'g1'
+    vi.mocked(cgApi.getSchoolAnalytics).mockReset().mockResolvedValue(analyticsFixture())
   })
 
   afterEach(() => {
@@ -164,6 +180,44 @@ describe('SchoolAnalyticsView', () => {
     expect(text()).toContain('Фидбеки: 1')
     // Bare five-color strips: one per practice, nothing else on them.
     expect(host?.querySelectorAll('.school-analytics__practice-strip')).toHaveLength(2)
+  })
+
+  it('a period switch keeps the previous numbers on screen (aria-busy) until the new ones land', async () => {
+    let answerMonth: (v: SchoolAnalyticsResponse) => void = () => {}
+    vi.mocked(cgApi.getSchoolAnalytics).mockImplementation((_id, period) =>
+      period === 'month'
+        ? new Promise((resolve) => (answerMonth = resolve))
+        : Promise.resolve(analyticsFixture()),
+    )
+    mount()
+    await flush()
+    const before = text()
+
+    buttonWith('Месяц')?.click()
+    await flush()
+
+    expect(host?.querySelector('.school-analytics__state')).toBeNull()
+    expect(host?.querySelector('.school-analytics')?.getAttribute('aria-busy')).toBe('true')
+    expect(text()).toContain('Человек приходило')
+    answerMonth(analyticsFixture())
+    await flush()
+    expect(host?.querySelector('.school-analytics')?.getAttribute('aria-busy')).toBe('false')
+    expect(before).toContain('Человек приходило')
+  })
+
+  it("router reuse: a NEW school starts from the loader, never from the previous school's numbers", async () => {
+    vi.mocked(cgApi.getSchoolAnalytics).mockResolvedValueOnce(analyticsFixture())
+    mount()
+    await flush()
+    expect(text()).toContain('Человек приходило')
+
+    vi.mocked(cgApi.getSchoolAnalytics).mockReturnValueOnce(new Promise(() => {}))
+    routeState.id = 'g2'
+    await flush()
+
+    expect(vi.mocked(cgApi.getSchoolAnalytics)).toHaveBeenLastCalledWith('g2', 'week')
+    expect(text()).not.toContain('Человек приходило')
+    expect(host?.querySelector('.school-analytics__state')).not.toBeNull()
   })
 
   it('the slider refetches with the selected period and swaps the numbers', async () => {

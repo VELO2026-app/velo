@@ -30,19 +30,27 @@
 // =============================================================================
 
 import { computed } from 'vue'
-import { defineQueryOptions, useQuery, useQueryCache, type QueryCache } from '@pinia/colada'
+import {
+  defineQueryOptions,
+  useQuery,
+  useQueryCache,
+  type EntryKey,
+  type QueryCache,
+} from '@pinia/colada'
 import {
   getMySchools,
   getSchoolPage,
   getSchoolPractices,
+  getSchoolAnalytics,
   getSchoolStudentProfile,
   getSchools,
+  type SchoolAnalyticsPeriod,
 } from '@/api/schools'
 import { isOptionEnabled } from '@/platform/instance'
 import { useAuthStore } from '@/stores/auth'
 import { keys } from '@/composables/queries/keys'
 import { invalidateAfter, type MutationName } from '@/composables/queries/invalidation'
-import type { SchoolMineItem } from '@/api/types'
+import type { SchoolAnalyticsResponse, SchoolMineItem } from '@/api/types'
 
 /** Query options for the school page payload (`GET /schools/{id}`). */
 export const schoolPageQuery = defineQueryOptions((schoolId: string) => ({
@@ -63,6 +71,29 @@ export const schoolStudentQuery = defineQueryOptions(
     key: keys.schools.student(schoolId, userId),
     query: () => getSchoolStudentProfile(schoolId, userId),
     staleTime: 0,
+  }),
+)
+
+/**
+ * Query options for the curator's analytics of one school for one period
+ * (`GET /masters/me/schools/{id}/analytics?period=`).
+ *
+ * @remarks
+ * Revalidates on every visit (staleTime 0): the figures move with other
+ * people's visits and reviews. A period switch keeps the previous period's
+ * numbers on screen while the new ones load (placeholderData), but only
+ * within one school: another school's numbers under this route, even
+ * briefly, are the stale-data state the screen forbids.
+ */
+export const schoolAnalyticsQuery = defineQueryOptions(
+  ({ schoolId, period }: { schoolId: string; period: SchoolAnalyticsPeriod }) => ({
+    key: keys.schools.analytics(schoolId, period),
+    query: () => getSchoolAnalytics(schoolId, period),
+    staleTime: 0,
+    placeholderData: (
+      previous: SchoolAnalyticsResponse | undefined,
+      previousEntry?: { key: EntryKey },
+    ) => (previousEntry?.key[2] === schoolId ? previous : undefined),
   }),
 )
 
