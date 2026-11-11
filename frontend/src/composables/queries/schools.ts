@@ -11,10 +11,11 @@
 // staleTime: the page payload 0 -- it revalidates on every visit, the cached
 // copy only removes the spinner; it carries the viewer's relation, which
 // changes outside this app. The feed takes the default window (setup.ts):
-// every mutation that changes a practice's booking marks (purchase, waitlist
-// confirmation, cancellation) invalidates `keys.practices.root()`
-// (./invalidation.ts, FE-166 step 1), so a cached feed is never stale about
-// this app's own bookings.
+// every mutation of this app that changes a practice in it -- a booking made
+// or cancelled, a waitlist spot confirmed, the master's own practice
+// created, edited, cancelled or deleted -- invalidates `keys.practices.root()`
+// (./invalidation.ts, FE-166 step 1). What the window can still hide is
+// another person's change: seats taken by others, another master's edit.
 //
 // Window focus (a return to Telegram): only the page payload revalidates,
 // the feed does not -- Colada's default (refetch when stale) would send

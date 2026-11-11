@@ -49,6 +49,9 @@ export const useBookingsStore = defineStore('bookings', () => {
   // Colada entries of the booking data go stale with each mutation below
   // (composables/queries/invalidation.ts holds the map).
   const queryCache = useQueryCache()
+  // Bumped by $reset: a join / skip answered after it belongs to the previous
+  // session and refreshes nothing.
+  let sessionGeneration = 0
   // -- Status filter --
   const statusFilter = ref<BookingStatus | undefined>(undefined)
 
@@ -213,6 +216,16 @@ export const useBookingsStore = defineStore('bookings', () => {
   }
 
   /**
+   * A booking flag changed on the server (join, check-in skip): the Colada
+   * entries of the map row go stale, and so does the dashboard's upcoming
+   * list -- its banner reads `checkin_skipped` / `joined_at` from it.
+   */
+  function bookingChanged(mutation: 'joinBooking' | 'skipCheckin'): void {
+    void invalidateAfter(queryCache, mutation)
+    invalidateUpcoming()
+  }
+
+  /**
    * Check in to a practice (sets joined_at on the backend).
    * Refreshes the list so joined_at is reflected locally.
    *
@@ -220,9 +233,11 @@ export const useBookingsStore = defineStore('bookings', () => {
    *   (e.g. 409 "Already joined" can be treated as a no-op success).
    */
   async function joinBooking(bookingId: string): Promise<ActionResult> {
+    const gen = sessionGeneration
     try {
       await apiJoinBooking(bookingId)
-      void invalidateAfter(queryCache, 'joinBooking')
+      if (gen !== sessionGeneration) return { ok: true, error: '' } // session ended meanwhile
+      bookingChanged('joinBooking')
       await pagination.refreshInPlace()
       return { ok: true, error: '' }
     } catch (e) {
@@ -241,9 +256,11 @@ export const useBookingsStore = defineStore('bookings', () => {
    * keeping the dashboard banner hidden across reloads (not just this session).
    */
   async function skipCheckin(bookingId: string): Promise<ActionResult> {
+    const gen = sessionGeneration
     try {
       await apiSkipCheckin(bookingId)
-      void invalidateAfter(queryCache, 'skipCheckin')
+      if (gen !== sessionGeneration) return { ok: true, error: '' } // session ended meanwhile
+      bookingChanged('skipCheckin')
       await pagination.refreshInPlace()
       return { ok: true, error: '' }
     } catch (e) {
@@ -260,6 +277,7 @@ export const useBookingsStore = defineStore('bookings', () => {
    * its freshness marker and the detail slot are the previous account's data
    * (auth._clearSession calls this alongside queryCache/clearPersisted). */
   function $reset(): void {
+    sessionGeneration += 1
     upcomingGeneration += 1
     upcomingInFlight = null
     upcomingAt = 0

@@ -106,20 +106,32 @@ export interface PurchaseBookingVars {
 }
 
 /**
- * Refresh the legacy holders of one practice's data after a booking appeared
- * (purchase, waitlist confirmation): the dashboard's upcoming list, the
- * practice detail (cache entry and the one on screen), the calendar week and
- * the bookings list. Each line leaves with its store's migration.
+ * The legacy holders of the data a NEW booking changes (purchase, waitlist
+ * confirmation), as a function of the practice. Built in a component's setup,
+ * like useCancelBooking's. Each line leaves with its store's migration.
+ *
+ * @remarks
+ * Fire-and-forget: the mutation resolves once the server booked, so the
+ * screen's toast and navigation do not wait for these reads (the popup's
+ * double tap is closed by its own flag, unlike the cancel control). Not
+ * refreshed: the practice on screen -- both callers leave it for a screen
+ * that loads the practice on mount (PracticeDetailView.onPurchased,
+ * WaitlistConfirmView.openPractice).
  */
-function refreshPracticeHolders(practiceId: string): Promise<void> {
+function useNewBookingHolders() {
   const bookings = useBookingsStore()
-  const practices = usePracticesStore()
   const calendar = useCalendarStore()
-  bookings.invalidateUpcoming()
-  legacyQueryCache.invalidate(legacyKeys.practice(practiceId))
-  if (practices.selected?.id === practiceId) void practices.fetchPractice(practiceId)
-  if (calendar.weekPractices.some((p) => p.id === practiceId)) void calendar.loadWeek(true)
-  return bookings.refreshMyBookings()
+  const diary = useDiaryStore()
+  return (practiceId: string): void => {
+    // The dashboard's upcoming list (also its persisted copy).
+    bookings.invalidateUpcoming()
+    // The calendar week, when it shows this practice (quiet reload).
+    if (calendar.weekPractices.some((p) => p.id === practiceId)) void calendar.loadWeek(true)
+    // The bookings list (a concurrent identical GET from the screen is deduped by the client).
+    void bookings.refreshMyBookings()
+    // The booking projects a "booking_confirmed" event onto the diary timeline.
+    void diary.refreshFeed()
+  }
 }
 
 /**
@@ -135,6 +147,7 @@ function refreshPracticeHolders(practiceId: string): Promise<void> {
 export function usePurchaseBooking() {
   const queryCache = useQueryCache()
   const scope = useQueryScopeStore()
+  const refreshHolders = useNewBookingHolders()
   return useMutation({
     onMutate: () => ({ sessionGeneration: scope.generation() }),
     // Resolves with nothing: the two endpoints answer different shapes, and
@@ -143,10 +156,10 @@ export function usePurchaseBooking() {
       if (viaPurchase) await purchasePractice(practiceId, promoCode)
       else await createBooking(practiceId)
     },
-    async onSuccess(_data, { practiceId }, { sessionGeneration }) {
+    onSuccess(_data, { practiceId }, { sessionGeneration }) {
       if (sessionGeneration !== scope.generation()) return
       void invalidateAfter(queryCache, 'purchaseBooking')
-      await refreshPracticeHolders(practiceId)
+      refreshHolders(practiceId)
     },
   })
 }
@@ -160,17 +173,24 @@ export interface ConfirmWaitlistVars {
 /**
  * Mutation that confirms a notified waitlist spot, which becomes a booking.
  * Rejects with the raw API error (400 expired / taken, 404 not mine).
+ *
+ * @remarks
+ * The confirmation charges the balance (the backend creates the purchase for
+ * the booking), so the profile is re-read too, as after a cancellation.
  */
 export function useConfirmWaitlist() {
   const queryCache = useQueryCache()
   const scope = useQueryScopeStore()
+  const refreshHolders = useNewBookingHolders()
+  const balance = useBalanceStore()
   return useMutation({
     onMutate: () => ({ sessionGeneration: scope.generation() }),
     mutation: ({ waitlistId }: ConfirmWaitlistVars) => confirmWaitlist(waitlistId),
-    async onSuccess(_data, { practiceId }, { sessionGeneration }) {
+    onSuccess(_data, { practiceId }, { sessionGeneration }) {
       if (sessionGeneration !== scope.generation()) return
       void invalidateAfter(queryCache, 'confirmWaitlist')
-      await refreshPracticeHolders(practiceId)
+      refreshHolders(practiceId)
+      void balance.refresh()
     },
   })
 }

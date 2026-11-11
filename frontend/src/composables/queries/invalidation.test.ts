@@ -33,13 +33,14 @@ type Domain = keyof typeof SAMPLE
 /** Expected stale domains per row -- the map, written out by hand. */
 const EXPECTED: Record<MutationName, Domain[]> = {
   cancelBooking: ['bookings', 'practices'],
-  purchaseBooking: ['bookings', 'practices', 'schools'],
+  purchaseBooking: ['bookings', 'practices'],
   confirmWaitlist: ['bookings', 'practices'],
   joinBooking: ['bookings'],
   skipCheckin: ['bookings'],
   submitCheckin: ['bookings'],
   submitFeedback: ['bookings'],
   submitReflection: ['bookings'],
+  changePractice: ['practices'],
 }
 
 function stale(domain: Domain): boolean {

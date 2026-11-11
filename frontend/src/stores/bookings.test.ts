@@ -267,6 +267,38 @@ describe('useBookingsStore', () => {
     })
   })
 
+  describe('join / skip check-in -- the dashboard list and the session boundary', () => {
+    it('a join marks the upcoming list stale (its banner reads the booking flags)', async () => {
+      vi.mocked(bookingsApi.joinBooking).mockResolvedValue({ id: 'booking_1' } as BookingResponse)
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([])
+      const store = useBookingsStore()
+      await store.fetchUpcoming()
+      vi.mocked(bookingsApi.getUpcomingBookings).mockClear()
+
+      await store.joinBooking('booking_1')
+
+      expect(bookingsApi.getUpcomingBookings).toHaveBeenCalledTimes(1)
+    })
+
+    it('an answer landing after the session ended refreshes nothing', async () => {
+      let answer!: () => void
+      vi.mocked(bookingsApi.skipCheckin).mockReturnValue(
+        new Promise((resolve) => {
+          answer = () => resolve({ id: 'booking_1' } as BookingResponse)
+        }),
+      )
+      const store = useBookingsStore()
+      const pending = store.skipCheckin('booking_1')
+      store.$reset()
+      vi.mocked(bookingsApi.getMyBookings).mockClear()
+      answer()
+      await pending
+
+      expect(invalidateAfter).not.toHaveBeenCalled()
+      expect(bookingsApi.getMyBookings).not.toHaveBeenCalled()
+    })
+  })
+
   // FE-49 (product decision 2026-11-02): the leave button is removed from
   // the UI wholesale, the store action leaveBooking is deleted;
   // api/bookings.ts::leaveBooking stays with a comment (the backend

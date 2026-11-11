@@ -265,26 +265,37 @@ describe('usePurchaseBooking', () => {
     expect(bookingsApi.purchasePractice).not.toHaveBeenCalled()
   })
 
-  it('invalidates practices, bookings and schools: the feed on screen refetches with the new seat', async () => {
+  it('invalidates practices and bookings: the feed on screen refetches with the new seat', async () => {
+    const pageAt = when(keys.schools.detail('g1'))
+
     await purchase(BUY)
     await flush()
 
     expect(schoolsApi.getSchoolPractices).toHaveBeenCalledTimes(2)
     expect(when(keys.practices.schoolFeed('g2', 5))).toBe(0)
     expect(when([...keys.bookings.root(), 'list'])).toBe(0)
-    expect(when(keys.schools.detail('g1'))).toBe(0)
+    // A booking makes nobody a school member: the school page stays.
+    expect(when(keys.schools.detail('g1'))).toBe(pageAt)
   })
 
-  it('refreshes the legacy holders of the practice and the bookings list before it resolves', async () => {
+  it('refreshes the legacy holders: upcoming, calendar week, bookings list, diary', async () => {
     await purchase(BUY)
 
     expect(stores.bookings.invalidateUpcoming).toHaveBeenCalledTimes(1)
     expect(stores.bookings.refreshMyBookings).toHaveBeenCalledTimes(1)
-    expect(stores.practices.fetchPractice).toHaveBeenCalledWith('p1')
-    expect(legacyQueryCache.isFresh(legacyKeys.practice('p1'), 60_000)).toBe(false)
     expect(stores.calendar.loadWeek).toHaveBeenCalledWith(true)
+    // The booking projects a "booking_confirmed" event onto the timeline.
+    expect(stores.diary.refreshFeed).toHaveBeenCalledTimes(1)
+    // The practice on screen is left to the screen that loads it on mount.
+    expect(stores.practices.fetchPractice).not.toHaveBeenCalled()
     // The popup re-reads the balance itself, on success and failure alike.
     expect(stores.balance.refresh).not.toHaveBeenCalled()
+  })
+
+  it('resolves without waiting for the refreshes (the toast and navigation do not wait)', async () => {
+    stores.bookings.refreshMyBookings.mockReturnValue(new Promise(() => {}))
+
+    await expect(purchase(BUY)).resolves.toBeUndefined()
   })
 
   it('rejects with the API error and refreshes nothing', async () => {
@@ -334,7 +345,30 @@ describe('useConfirmWaitlist', () => {
     expect(when(keys.schools.detail('g1'))).toBe(pageAt)
     expect(stores.bookings.invalidateUpcoming).toHaveBeenCalledTimes(1)
     expect(stores.bookings.refreshMyBookings).toHaveBeenCalledTimes(1)
-    expect(stores.practices.fetchPractice).toHaveBeenCalledWith('p1')
+    expect(stores.diary.refreshFeed).toHaveBeenCalledTimes(1)
+    // The confirmation charges the balance.
+    expect(stores.balance.refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('refreshes nothing when the session ended while the confirmation was in flight', async () => {
+    let answer!: () => void
+    vi.mocked(waitlistApi.confirmWaitlist).mockReturnValue(
+      new Promise((resolve) => {
+        answer = () => resolve({} as never)
+      }),
+    )
+    const done = confirmSpot(SPOT)
+    await flush()
+
+    useQueryScopeStore(app!.config.globalProperties.$pinia).$reset()
+    answer()
+    await done
+    await flush()
+
+    expect(stores.bookings.invalidateUpcoming).not.toHaveBeenCalled()
+    expect(stores.diary.refreshFeed).not.toHaveBeenCalled()
+    expect(stores.balance.refresh).not.toHaveBeenCalled()
+    expect(when([...keys.bookings.root(), 'list'])).not.toBe(0)
   })
 
   it('rejects with the API error and refreshes nothing', async () => {
