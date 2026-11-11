@@ -198,7 +198,7 @@
                  showed the SAME disabled "Zoom" button as one still being
                  created, with no way for the master to act on it. -->
             <VButton
-              v-if="zoomStateFor(practice) === 'failed'"
+              v-if="zoomEnabled && zoomStateFor(practice) === 'failed'"
               variant="danger"
               block
               :loading="retryingId === practice.id"
@@ -208,7 +208,7 @@
               {{ t('common.retry') }}
             </VButton>
             <VButton
-              v-else
+              v-else-if="zoomEnabled"
               variant="secondary"
               block
               :disabled="zoomStateFor(practice) !== 'ready'"
@@ -225,7 +225,7 @@
             </VButton>
           </div>
           <VBadge
-            v-if="zoomStateFor(practice) === 'failed'"
+            v-if="zoomEnabled && zoomStateFor(practice) === 'failed'"
             variant="error"
             class="master-dashboard__zoom-note"
           >
@@ -269,6 +269,7 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
+import { isOptionEnabled } from '@/platform/instance'
 import { activeHTMLElement } from '@/platform/dom'
 import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { useNow } from '@/composables/useNow'
@@ -449,6 +450,9 @@ function openPractice(p: PracticeResponse): void {
 // start it" is "is the meeting ACTIVE" -- the same condition the server's
 // ladder puts before its HOST rung. 'failed' (A4 V2 / PROMPT №572) and
 // 'pending' as for every list row (utils/zoomEntryState.ts).
+/** Zoom option (FE-163): when off, no «Zoom» / retry entry on a card. */
+const zoomEnabled = isOptionEnabled('zoom')
+
 function zoomStateFor(p: PracticeResponse): ZoomEntryStateKind {
   return zoomEntryState(p.zoom_meeting_status === 'active', p.zoom_meeting_status)
 }
