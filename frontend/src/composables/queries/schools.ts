@@ -8,16 +8,18 @@
 // entry and never on the current screen -- the guard the page used to keep
 // by hand (loadEpoch).
 //
-// staleTime 0: the page revalidates on every visit, as it did before the
-// pilot -- the cached copy only removes the spinner. Purchases and the other
-// booking mutations are not in the invalidation map yet (./invalidation.ts),
-// so a longer window would show a stale is_paid / is_booked mark after a
-// booking made elsewhere. Raise it once those mutations invalidate
-// `keys.practices.root()`.
+// staleTime: the page payload 0 -- it revalidates on every visit, the cached
+// copy only removes the spinner; it carries the viewer's relation, which
+// changes outside this app. The feed takes the default window (setup.ts):
+// every mutation of this app that changes a practice in it -- a booking made
+// or cancelled, a waitlist spot confirmed, the master's own practice
+// created, edited, cancelled or deleted -- invalidates `keys.practices.root()`
+// (./invalidation.ts, FE-166 step 1). What the window can still hide is
+// another person's change: seats taken by others, another master's edit.
 //
 // Window focus (a return to Telegram): only the page payload revalidates,
-// the feed does not -- with staleTime 0 Colada's default (refetch when
-// stale) would send BOTH GETs on every return. The page carries the viewer's
+// the feed does not -- Colada's default (refetch when stale) would send
+// both GETs on a return after the window. The page carries the viewer's
 // relation, which changes outside this screen (an invite accepted in the bot
 // chat, a curator's removal); the feed's booking marks change through this
 // app's own mutations, which invalidate it (./invalidation.ts).
@@ -44,7 +46,6 @@ export const schoolFeedQuery = defineQueryOptions(
   ({ schoolId, limit }: { schoolId: string; limit: number }) => ({
     key: keys.practices.schoolFeed(schoolId, limit),
     query: async () => (await getSchoolPractices(schoolId, limit, 0)).items,
-    staleTime: 0,
     refetchOnWindowFocus: false,
   }),
 )

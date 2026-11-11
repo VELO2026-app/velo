@@ -1,6 +1,11 @@
 // =============================================================================
-// VELO Frontend -- booking mutations for Pinia Colada (FE-157 4F pilot)
+// VELO Frontend -- booking mutations for Pinia Colada (FE-157 4F, FE-166)
 // =============================================================================
+//
+// Screen-level booking mutations: cancel (the pilot), purchase and waitlist
+// confirmation (FE-166 step 1). The mutations that live in store actions
+// (join, skip check-in, check-in, feedback, reflection) call
+// `invalidateAfter()` from the store; their rows are in ./invalidation.ts too.
 //
 // Cancel a booking: the first mutation on Colada. Before the pilot the
 // bookings store cancelled and refreshed only its own list, so the dashboard's
@@ -14,7 +19,8 @@
 // =============================================================================
 
 import { useMutation, useQueryCache } from '@pinia/colada'
-import { cancelBooking } from '@/api/bookings'
+import { cancelBooking, createBooking, purchasePractice } from '@/api/bookings'
+import { confirmWaitlist } from '@/api/waitlist'
 import { invalidateAfter } from '@/composables/queries/invalidation'
 import { useQueryScopeStore } from '@/composables/queries/setup'
 import { queryCache as legacyQueryCache } from '@/composables/useQuery'
@@ -87,6 +93,104 @@ export function useCancelBooking() {
       refreshLegacyHolders(practiceId)
       void invalidateAfter(queryCache, 'cancelBooking')
       await bookings.refreshMyBookings()
+    },
+  })
+}
+
+/** Variables of the purchase mutation: the practice, and the promo code when one is applied. */
+export interface PurchaseBookingVars {
+  practiceId: string
+  promoCode?: string
+  /** `false` when the instance has the payments option off: book through `POST /bookings` (FE-151). */
+  viaPurchase: boolean
+}
+
+/**
+ * The legacy holders of the data a NEW booking changes (purchase, waitlist
+ * confirmation), as a function of the practice. Built in a component's setup,
+ * like useCancelBooking's. Each line leaves with its store's migration.
+ *
+ * @remarks
+ * Fire-and-forget: the mutation resolves once the server booked, so the
+ * screen's toast and navigation do not wait for these reads (the popup's
+ * double tap is closed by its own flag, unlike the cancel control). Not
+ * refreshed: the practice on screen -- both callers leave it for a screen
+ * that loads the practice on mount (PracticeDetailView.onPurchased,
+ * WaitlistConfirmView.openPractice).
+ */
+function useNewBookingHolders() {
+  const bookings = useBookingsStore()
+  const calendar = useCalendarStore()
+  const diary = useDiaryStore()
+  return (practiceId: string): void => {
+    // The dashboard's upcoming list (also its persisted copy).
+    bookings.invalidateUpcoming()
+    // The calendar week, when it shows this practice (quiet reload).
+    if (calendar.weekPractices.some((p) => p.id === practiceId)) void calendar.loadWeek(true)
+    // The bookings list (a concurrent identical GET from the screen is deduped by the client).
+    void bookings.refreshMyBookings()
+    // The booking projects a "booking_confirmed" event onto the diary timeline.
+    void diary.refreshFeed()
+  }
+}
+
+/**
+ * Mutation that books a practice (purchase, or plain booking when payments
+ * are off) and refreshes everything that showed its seats.
+ *
+ * @remarks
+ * Rejects with the raw API error (the popup maps `practice_full`, 409 and the
+ * rest); nothing is refreshed then. The balance is NOT refreshed here: the
+ * popup re-reads it after success and failure alike (a concurrent operation
+ * may have changed it).
+ */
+export function usePurchaseBooking() {
+  const queryCache = useQueryCache()
+  const scope = useQueryScopeStore()
+  const refreshHolders = useNewBookingHolders()
+  return useMutation({
+    onMutate: () => ({ sessionGeneration: scope.generation() }),
+    // Resolves with nothing: the two endpoints answer different shapes, and
+    // every reader of the new booking reads it from the refreshed holders.
+    async mutation({ practiceId, promoCode, viaPurchase }: PurchaseBookingVars): Promise<void> {
+      if (viaPurchase) await purchasePractice(practiceId, promoCode)
+      else await createBooking(practiceId)
+    },
+    onSuccess(_data, { practiceId }, { sessionGeneration }) {
+      if (sessionGeneration !== scope.generation()) return
+      void invalidateAfter(queryCache, 'purchaseBooking')
+      refreshHolders(practiceId)
+    },
+  })
+}
+
+/** Variables of the waitlist-confirmation mutation. */
+export interface ConfirmWaitlistVars {
+  waitlistId: string
+  practiceId: string
+}
+
+/**
+ * Mutation that confirms a notified waitlist spot, which becomes a booking.
+ * Rejects with the raw API error (400 expired / taken, 404 not mine).
+ *
+ * @remarks
+ * The confirmation charges the balance (the backend creates the purchase for
+ * the booking), so the profile is re-read too, as after a cancellation.
+ */
+export function useConfirmWaitlist() {
+  const queryCache = useQueryCache()
+  const scope = useQueryScopeStore()
+  const refreshHolders = useNewBookingHolders()
+  const balance = useBalanceStore()
+  return useMutation({
+    onMutate: () => ({ sessionGeneration: scope.generation() }),
+    mutation: ({ waitlistId }: ConfirmWaitlistVars) => confirmWaitlist(waitlistId),
+    onSuccess(_data, { practiceId }, { sessionGeneration }) {
+      if (sessionGeneration !== scope.generation()) return
+      void invalidateAfter(queryCache, 'confirmWaitlist')
+      refreshHolders(practiceId)
+      void balance.refresh()
     },
   })
 }

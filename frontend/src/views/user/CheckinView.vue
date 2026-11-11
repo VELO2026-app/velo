@@ -173,6 +173,8 @@ async function onSubmit(): Promise<void> {
     // button all read it. Without this they keep offering a check-in until a
     // full reload (fetchMyBookings is a no-op while the list is non-empty).
     void bookingsStore.refreshBookings()
+    // The dashboard's upcoming list carries the same booking flags.
+    bookingsStore.invalidateUpcoming()
   } else {
     toast.error(closedPracticeMessage(result.code) ?? result.error)
   }

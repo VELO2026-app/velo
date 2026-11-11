@@ -8,6 +8,8 @@
 // =============================================================================
 
 import { defineStore } from 'pinia'
+import { useQueryCache } from '@pinia/colada'
+import { invalidateAfter } from '@/composables/queries/invalidation'
 import { ref, computed } from 'vue'
 import { getMyMasterProfile, getMyPractices } from '@/api/masters'
 import { usePagination } from '@/composables/usePagination'
@@ -21,6 +23,8 @@ const { t } = i18n.global
 
 /** Master-zone state: the master profile and the master's own practices list. */
 export const useMasterStore = defineStore('master', () => {
+  // Colada entries a practice change makes stale (refreshMyPractices).
+  const queryCache = useQueryCache()
   // =========================================================================
   // Profile
   // =========================================================================
@@ -156,10 +160,13 @@ export const useMasterStore = defineStore('master', () => {
    * Force-reload BOTH buckets.
    * Called after create / edit / delete / cancel operations -- any of them
    * can move a practice between buckets (e.g. cancelling removes it from
-   * upcoming and it never appears in past either).
+   * upcoming and it never appears in past either). The same change reaches
+   * every Colada practice list and detail (a school feed shows the
+   * practice), so they go stale here too (INVALIDATES.changePractice).
    */
   async function refreshMyPractices(): Promise<void> {
     const gen = generation
+    void invalidateAfter(queryCache, 'changePractice')
     await Promise.all([paginationUpcoming.refreshInPlace(), paginationPast.refresh()])
     if (gen !== generation) return
     upcomingLoaded.value = true

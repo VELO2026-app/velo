@@ -22,16 +22,25 @@ import { PiniaColada, useQuery, useQueryCache, type QueryCache } from '@pinia/co
 import { coladaOptions, useQueryScopeStore } from '@/composables/queries/setup'
 import { keys } from '@/composables/queries/keys'
 import { schoolFeedQuery } from '@/composables/queries/schools'
-import { useCancelBooking, type CancelBookingVars } from '@/composables/queries/bookings'
+import {
+  useCancelBooking,
+  useConfirmWaitlist,
+  usePurchaseBooking,
+  type CancelBookingVars,
+  type ConfirmWaitlistVars,
+  type PurchaseBookingVars,
+} from '@/composables/queries/bookings'
 import { queryCache as legacyQueryCache } from '@/composables/useQuery'
 import { queryKeys as legacyKeys } from '@/composables/queryKeys'
 import { ApiResponseError } from '@/api/client'
 import * as bookingsApi from '@/api/bookings'
 import * as schoolsApi from '@/api/schools'
+import * as waitlistApi from '@/api/waitlist'
 import type { PracticeResponse } from '@/api/types'
 
 vi.mock('@/api/bookings')
 vi.mock('@/api/schools')
+vi.mock('@/api/waitlist')
 
 const stores = vi.hoisted(() => ({
   bookings: { refreshMyBookings: vi.fn(), invalidateUpcoming: vi.fn() },
@@ -51,6 +60,8 @@ const practice = { id: 'p1' } as PracticeResponse
 
 let app: App | null = null
 let cancel: (vars: CancelBookingVars) => Promise<unknown>
+let purchase: (vars: PurchaseBookingVars) => Promise<unknown>
+let confirmSpot: (vars: ConfirmWaitlistVars) => Promise<unknown>
 let queryCache: QueryCache
 
 /** A screen holding the school feed on screen and the cancel mutation. */
@@ -58,6 +69,8 @@ const Screen = defineComponent({
   setup() {
     useQuery(() => schoolFeedQuery({ schoolId: 'g1', limit: 5 }))
     cancel = useCancelBooking().mutateAsync
+    purchase = usePurchaseBooking().mutateAsync
+    confirmSpot = useConfirmWaitlist().mutateAsync
     queryCache = useQueryCache()
     return () => h('div')
   },
@@ -75,6 +88,15 @@ function when(key: readonly unknown[]): number | undefined {
 
 beforeEach(async () => {
   vi.mocked(bookingsApi.cancelBooking).mockReset().mockResolvedValue(undefined)
+  vi.mocked(bookingsApi.purchasePractice)
+    .mockReset()
+    .mockResolvedValue({} as never)
+  vi.mocked(bookingsApi.createBooking)
+    .mockReset()
+    .mockResolvedValue({} as never)
+  vi.mocked(waitlistApi.confirmWaitlist)
+    .mockReset()
+    .mockResolvedValue({} as never)
   vi.mocked(schoolsApi.getSchoolPractices)
     .mockReset()
     .mockResolvedValue({ items: [practice], total: 1, limit: 5, offset: 0 })
@@ -218,5 +240,145 @@ describe('useCancelBooking -- failure', () => {
     expect(schoolsApi.getSchoolPractices).toHaveBeenCalledTimes(1)
     expect(when(keys.practices.schoolFeed('g2', 5))).not.toBe(0)
     expect(legacyQueryCache.isFresh(legacyKeys.practice('p1'), 60_000)).toBe(true)
+  })
+})
+
+// =============================================================================
+// Booking appears: purchase and waitlist confirmation (FE-166 step 1)
+// =============================================================================
+
+const BUY: PurchaseBookingVars = { practiceId: 'p1', promoCode: 'SPRING', viaPurchase: true }
+const SPOT: ConfirmWaitlistVars = { waitlistId: 'w1', practiceId: 'p1' }
+
+describe('usePurchaseBooking', () => {
+  it('buys through the purchase endpoint with the promo code', async () => {
+    await purchase(BUY)
+
+    expect(bookingsApi.purchasePractice).toHaveBeenCalledWith('p1', 'SPRING')
+    expect(bookingsApi.createBooking).not.toHaveBeenCalled()
+  })
+
+  it('books through POST /bookings when payments are off (FE-151)', async () => {
+    await purchase({ practiceId: 'p1', viaPurchase: false })
+
+    expect(bookingsApi.createBooking).toHaveBeenCalledWith('p1')
+    expect(bookingsApi.purchasePractice).not.toHaveBeenCalled()
+  })
+
+  it('invalidates practices and bookings: the feed on screen refetches with the new seat', async () => {
+    const pageAt = when(keys.schools.detail('g1'))
+
+    await purchase(BUY)
+    await flush()
+
+    expect(schoolsApi.getSchoolPractices).toHaveBeenCalledTimes(2)
+    expect(when(keys.practices.schoolFeed('g2', 5))).toBe(0)
+    expect(when([...keys.bookings.root(), 'list'])).toBe(0)
+    // A booking makes nobody a school member: the school page stays.
+    expect(when(keys.schools.detail('g1'))).toBe(pageAt)
+  })
+
+  it('refreshes the legacy holders: upcoming, calendar week, bookings list, diary', async () => {
+    await purchase(BUY)
+
+    expect(stores.bookings.invalidateUpcoming).toHaveBeenCalledTimes(1)
+    expect(stores.bookings.refreshMyBookings).toHaveBeenCalledTimes(1)
+    expect(stores.calendar.loadWeek).toHaveBeenCalledWith(true)
+    // The booking projects a "booking_confirmed" event onto the timeline.
+    expect(stores.diary.refreshFeed).toHaveBeenCalledTimes(1)
+    // The practice on screen is left to the screen that loads it on mount.
+    expect(stores.practices.fetchPractice).not.toHaveBeenCalled()
+    // The popup re-reads the balance itself, on success and failure alike.
+    expect(stores.balance.refresh).not.toHaveBeenCalled()
+  })
+
+  it('resolves without waiting for the refreshes (the toast and navigation do not wait)', async () => {
+    stores.bookings.refreshMyBookings.mockReturnValue(new Promise(() => {}))
+
+    await expect(purchase(BUY)).resolves.toBeUndefined()
+  })
+
+  it('rejects with the API error and refreshes nothing', async () => {
+    const error = new ApiResponseError(400, 'full', 'practice_full')
+    vi.mocked(bookingsApi.purchasePractice).mockRejectedValue(error)
+
+    await expect(purchase(BUY)).rejects.toBe(error)
+    await flush()
+
+    expect(stores.bookings.invalidateUpcoming).not.toHaveBeenCalled()
+    expect(stores.bookings.refreshMyBookings).not.toHaveBeenCalled()
+    expect(schoolsApi.getSchoolPractices).toHaveBeenCalledTimes(1)
+    expect(when(keys.practices.schoolFeed('g2', 5))).not.toBe(0)
+  })
+
+  it('refreshes nothing when the session ended while the purchase was in flight', async () => {
+    let answer!: () => void
+    vi.mocked(bookingsApi.purchasePractice).mockReturnValue(
+      new Promise((resolve) => {
+        answer = () => resolve({} as never)
+      }),
+    )
+    const done = purchase(BUY)
+    await flush()
+
+    useQueryScopeStore(app!.config.globalProperties.$pinia).$reset()
+    answer()
+    await done
+    await flush()
+
+    expect(stores.bookings.invalidateUpcoming).not.toHaveBeenCalled()
+    expect(stores.bookings.refreshMyBookings).not.toHaveBeenCalled()
+    expect(when(keys.practices.schoolFeed('g2', 5))).not.toBe(0)
+  })
+})
+
+describe('useConfirmWaitlist', () => {
+  it('confirms the spot, invalidates practices and bookings, refreshes the practice holders', async () => {
+    const pageAt = when(keys.schools.detail('g1'))
+
+    await confirmSpot(SPOT)
+    await flush()
+
+    expect(waitlistApi.confirmWaitlist).toHaveBeenCalledWith('w1')
+    expect(when(keys.practices.schoolFeed('g2', 5))).toBe(0)
+    expect(when([...keys.bookings.root(), 'list'])).toBe(0)
+    expect(when(keys.schools.detail('g1'))).toBe(pageAt)
+    expect(stores.bookings.invalidateUpcoming).toHaveBeenCalledTimes(1)
+    expect(stores.bookings.refreshMyBookings).toHaveBeenCalledTimes(1)
+    expect(stores.diary.refreshFeed).toHaveBeenCalledTimes(1)
+    // The confirmation charges the balance.
+    expect(stores.balance.refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('refreshes nothing when the session ended while the confirmation was in flight', async () => {
+    let answer!: () => void
+    vi.mocked(waitlistApi.confirmWaitlist).mockReturnValue(
+      new Promise((resolve) => {
+        answer = () => resolve({} as never)
+      }),
+    )
+    const done = confirmSpot(SPOT)
+    await flush()
+
+    useQueryScopeStore(app!.config.globalProperties.$pinia).$reset()
+    answer()
+    await done
+    await flush()
+
+    expect(stores.bookings.invalidateUpcoming).not.toHaveBeenCalled()
+    expect(stores.diary.refreshFeed).not.toHaveBeenCalled()
+    expect(stores.balance.refresh).not.toHaveBeenCalled()
+    expect(when([...keys.bookings.root(), 'list'])).not.toBe(0)
+  })
+
+  it('rejects with the API error and refreshes nothing', async () => {
+    const error = new ApiResponseError(400, 'expired', 'waitlist_expired')
+    vi.mocked(waitlistApi.confirmWaitlist).mockRejectedValue(error)
+
+    await expect(confirmSpot(SPOT)).rejects.toBe(error)
+    await flush()
+
+    expect(stores.bookings.invalidateUpcoming).not.toHaveBeenCalled()
+    expect(when([...keys.bookings.root(), 'list'])).not.toBe(0)
   })
 })
