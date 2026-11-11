@@ -49,7 +49,7 @@ const EXPECTED: Record<MutationName, Domain[]> = {
   leaveSchool: ['schoolLists'],
   acceptSchoolTransfer: ['schoolLists'],
   renameGroup: ['groupList'],
-  deleteGroup: ['groupList', 'groupMembers'],
+  deleteGroup: ['groupList'],
 }
 
 function stale(domain: Domain): boolean {

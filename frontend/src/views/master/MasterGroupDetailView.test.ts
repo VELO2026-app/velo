@@ -16,7 +16,7 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
-import { createPinia } from 'pinia'
+import { createPinia, type Pinia } from 'pinia'
 import { PiniaColada } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
 import MasterGroupDetailView from '@/views/master/MasterGroupDetailView.vue'
@@ -61,16 +61,16 @@ function customGroups(items: GroupListItem[] = []) {
 }
 
 let writeText: ReturnType<typeof vi.fn>
+// One Pinia per test (beforeEach): two mounts in one test share the cache,
+// as two visits in one session do.
+let pinia: Pinia
 let app: App | null = null
 let host: HTMLElement | null = null
 
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(MasterGroupDetailView)
-    .use(createTestI18n())
-    .use(createPinia())
-    .use(PiniaColada, coladaOptions)
+  app = createApp(MasterGroupDetailView).use(createTestI18n()).use(pinia)
   app.mount(host)
   return host
 }
@@ -101,6 +101,8 @@ function modalOverlay(): HTMLElement | null {
 }
 
 beforeEach(() => {
+  pinia = createPinia()
+  createApp({}).use(pinia).use(PiniaColada, coladaOptions)
   routeParams.id = 'g1'
   routeQuery.name = 'VIP'
   vi.mocked(groupsApi.getGroupMembers).mockReset().mockResolvedValue(page([]))
@@ -217,6 +219,34 @@ describe('MasterGroupDetailView', () => {
       expect(host?.querySelector('.group-detail__state')).toBeNull() // not stuck loading
       expect(text()).toContain('Группа не найдена')
       expect(groupsApi.getGroupMembers).not.toHaveBeenCalled()
+    })
+
+    it('a cached list that predates a NEW group never reads as "not found" while it revalidates', async () => {
+      // The groups screen creates a group without writing this cache: the
+      // copy held from an earlier visit does not know it yet.
+      routeParams.id = 'g_other'
+      vi.mocked(groupsApi.getGroups).mockResolvedValue(customGroups([]))
+      mount()
+      await flush()
+      app?.unmount()
+      host?.remove()
+
+      routeParams.id = 'g1'
+      let answer: (v: ReturnType<typeof customGroups>) => void = () => {}
+      vi.mocked(groupsApi.getGroups).mockReturnValueOnce(new Promise((r) => (answer = r)))
+      vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([member('s1', { name: 'Анна' })]))
+      mount()
+      await flush()
+      expect(text()).not.toContain('Группа не найдена')
+
+      answer(
+        customGroups([
+          { id: 'g1', kind: 'custom', name: 'Новая', members_count: 1, description: null },
+        ]),
+      )
+      await flush()
+      expect(text()).not.toContain('Группа не найдена')
+      expect(text()).toContain('Анна')
     })
 
     it('an EMPTY «Удалённые» (absent from getGroups() because its count is 0) is NOT treated as not-found', async () => {
@@ -646,8 +676,8 @@ describe('MasterGroupDetailView', () => {
       expect(groupsApi.deleteGroup).toHaveBeenCalledWith('g1')
       expect(push).toHaveBeenCalledWith({ name: 'master-groups' })
       // The cached group list is stale now (INVALIDATES.deleteGroup): the
-      // one on screen is asked again, so the groups list the master lands on
-      // does not repaint the deleted group from the cache.
+      // one on screen is asked again, so a later visit to a group screen does
+      // not resolve its header from a list that still holds the deleted group.
       expect(vi.mocked(groupsApi.getGroups).mock.calls.length).toBeGreaterThan(listCalls)
     })
 

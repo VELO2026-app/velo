@@ -203,7 +203,13 @@
         <h3 class="master-public__section-title">
           {{ t('user.screens.masterPublic.sections.nearest') }}
         </h3>
-        <div v-if="upcoming.length" class="master-public__practices">
+        <!-- "Nothing planned" is said only by an answer that has none: while
+             the practices are on their way the section shows a loader
+             (the profile may land first -- the two leave in parallel). -->
+        <div v-if="upcomingLoading" class="master-public__upcoming-loader">
+          <VLoader size="sm" />
+        </div>
+        <div v-else-if="upcoming.length" class="master-public__practices">
           <CalendarPracticeCard
             v-for="p in upcoming"
             :key="p.id"
@@ -410,6 +416,12 @@ const error = computed<string | null>(() => {
 })
 /** Upcoming practices; a failure is non-fatal -- the profile renders without them. */
 const upcoming = computed<PracticeResponse[]>(() => upcomingQuery.data.value ?? [])
+/** No answer yet and one on its way: neither the cards nor the "nothing planned" note. */
+const upcomingLoading = computed(
+  () =>
+    upcomingQuery.data.value === undefined &&
+    (upcomingQuery.status.value === 'pending' || upcomingQuery.asyncStatus.value === 'loading'),
+)
 
 function retry(): void {
   void masterQuery.refetch()
@@ -569,6 +581,12 @@ function goCreatePractice(): void {
   display: flex;
   flex-direction: column;
   min-height: 100%;
+}
+
+.master-public__upcoming-loader {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-4) 0;
 }
 
 .master-public__loader {

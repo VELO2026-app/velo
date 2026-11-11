@@ -11,9 +11,11 @@
 //
 // staleTime 0 for both: other screens still change groups and their members
 // through local state (the groups list, the student profile's add / remove /
-// block), so every visit revalidates; the cached copy only removes the
-// loader. The group mutations of this screen invalidate the list
-// (./invalidation.ts, renameGroup / deleteGroup).
+// block) and never write these entries, so every visit revalidates. The
+// cached members only remove the loader; the cached list paints the header,
+// but whether the group exists is decided only by a settled answer (the
+// screen's groupMissing). The group mutations of this screen invalidate the
+// list (./invalidation.ts, renameGroup / deleteGroup).
 // =============================================================================
 
 import { defineQueryOptions } from '@pinia/colada'

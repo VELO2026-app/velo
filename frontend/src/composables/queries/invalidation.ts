@@ -77,8 +77,12 @@ export const INVALIDATES = {
   acceptSchoolTransfer: [keys.schools.lists()],
   /** `PATCH /masters/me/groups/{id}`: a group's name / description -- the group list. */
   renameGroup: [keys.groups.list()],
-  /** `DELETE /masters/me/groups/{id}`: a group gone -- the list, and its members' entries. */
-  deleteGroup: [keys.groups.root()],
+  /**
+   * `DELETE /masters/me/groups/{id}`: a group gone -- the list. Not the
+   * members' entries: the screen that deleted the group still holds its own
+   * and leaves; refetching it would only ask for a group that is gone.
+   */
+  deleteGroup: [keys.groups.list()],
 } as const satisfies Record<string, readonly EntryKey[]>
 
 /** Name of a mutation that has a row in `INVALIDATES`. */

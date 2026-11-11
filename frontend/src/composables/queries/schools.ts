@@ -54,7 +54,7 @@ export const schoolPageQuery = defineQueryOptions((schoolId: string) => ({
 
 /**
  * Query options for one student's school-scoped profile (curator only,
- * `GET /schools/{id}/students/{userId}`): practices, hours, the pending
+ * `GET /masters/me/schools/{id}/students/{userId}`): practices, hours, the pending
  * master offer. Revalidates on every visit (staleTime 0): the offer and the
  * figures move outside this screen.
  */
@@ -76,7 +76,9 @@ export const schoolFeedQuery = defineQueryOptions(
 )
 
 /**
- * Drop every cached entry of one school (page payload and feeds of any limit).
+ * Drop every cached entry of one school: the page payload, its students' profiles,
+ * and every practice list scoped to it (its feeds of any limit, a master's
+ * upcoming practices in its context).
  *
  * @remarks
  * For after the viewer left the school. An entry nobody holds is removed, so

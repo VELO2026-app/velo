@@ -284,31 +284,43 @@ useDebouncedSearch(search, (query) => {
  * explicit warning). A failed list is best-effort: the members request is
  * the authoritative failure signal.
  */
+/** The list has answered and nothing is in flight: its verdict is current. */
+const listSettled = computed(
+  () => groupsQuery.status.value !== 'pending' && groupsQuery.asyncStatus.value === 'idle',
+)
+// Decided only on a SETTLED answer: a cached copy may predate a group the
+// master just created on the groups screen (which does not write this
+// cache), so while the list revalidates a missing group reads as loading,
+// never as "not found".
 const groupMissing = computed(
   () =>
-    groupsQuery.data.value !== undefined && groupMeta.value === null && kind.value !== 'deleted',
+    listSettled.value &&
+    groupsQuery.data.value !== undefined &&
+    groupMeta.value === null &&
+    kind.value !== 'deleted',
 )
 
 // Sequenced: a genuinely deleted/invalid group must be caught BEFORE the
 // members request, so the error state renders once, from one source. The
-// members wait for the list's first answer (any answer) and never leave for
-// a missing group.
+// members leave once the group is known (in the list, or the system
+// «deleted» group) or the list has settled without a verdict against it (a
+// failed list is best-effort), and never for a missing group.
 const membersQuery = useQuery(() =>
   groupMembersQuery({
     groupId: groupId.value,
     search: debouncedSearch.value,
-    enabled: groupsQuery.status.value !== 'pending' && !groupMissing.value,
+    enabled:
+      groupMeta.value !== null ||
+      kind.value === 'deleted' ||
+      (listSettled.value && !groupMissing.value),
   }),
 )
 const membersState = screenQueryState(membersQuery)
 
 const members = computed<GroupMemberItem[]>(() => membersQuery.data.value ?? [])
+/** No members to show yet and no verdict against them: the loader. */
 const loading = computed(
-  () =>
-    !groupMissing.value &&
-    (groupsQuery.status.value === 'pending' ||
-      membersQuery.status.value === 'pending' ||
-      membersState.loading.value),
+  () => !groupMissing.value && !membersState.failed.value && membersQuery.data.value === undefined,
 )
 const error = computed(() => {
   if (groupMissing.value) return t('masterScreens.masterGroupDetail.notFound')
@@ -317,7 +329,7 @@ const error = computed(() => {
     : ''
 })
 
-/** The retry re-validates the group still exists, then the members follow. */
+/** The retry asks the list and the members again; a missing group's verdict wins once the list settles. */
 function retry(): void {
   void groupsQuery.refetch()
   if (!groupMissing.value) void membersQuery.refetch()

@@ -63,9 +63,11 @@ export const keys = {
     /** `GET /schools/{id}` -- the school page payload with the viewer's relation. */
     detail: (schoolId: string) => ['schools', 'detail', schoolId] as const,
     /**
-     * `GET /schools/{id}/students/{userId}` -- one student's school-scoped
-     * profile (curator only). Under the school's detail prefix, so dropping a
-     * school (forgetSchool) drops it too.
+     * `GET /masters/me/schools/{id}/students/{userId}` -- one student's
+     * school-scoped profile (curator only). Under the school's detail prefix
+     * on purpose, so dropping a school (forgetSchool) drops it too -- which
+     * means `getEntries({ key: detail(id) })` returns these entries as well:
+     * never read their data as a school page.
      */
     student: (schoolId: string, userId: string) =>
       ['schools', 'detail', schoolId, 'student', userId] as const,

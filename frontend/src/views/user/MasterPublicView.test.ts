@@ -57,8 +57,8 @@
 // new URL. Covered below by mutating the route param on an already-mounted
 // instance (no router simulation needed to expose it).
 //
-// TICKS: getPublicMaster (1 await) -> nested getPractices (1 await, only on
-// the success path) -> final re-render. flush() uses 5, generous.
+// TICKS: getPublicMaster and getPractices leave in parallel (two Colada
+// queries), each one await plus the cache hops -> the final re-render.
 // =============================================================================
 
 import { createTestI18n } from '@/locales/testing'
@@ -686,6 +686,17 @@ describe('MasterPublicView', () => {
       expect(upcomingSection()).not.toBeNull()
       expect(upcomingSection()?.textContent).toContain('Пока практик не запланировано')
       expect(practiceCards()).toHaveLength(0)
+    })
+
+    it('while the practices are on their way the section shows a loader, never "nothing planned"', async () => {
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockReturnValue(new Promise(() => {}))
+      mount()
+      await flush()
+
+      expect(content()?.textContent).toContain('Анна Соколова')
+      expect(upcomingSection()?.textContent).not.toContain('Пока практик не запланировано')
+      expect(upcomingSection()?.querySelector('.v-loader')).not.toBeNull()
     })
 
     it('getPractices is called with the master_id derived from the route, not hardcoded', async () => {
