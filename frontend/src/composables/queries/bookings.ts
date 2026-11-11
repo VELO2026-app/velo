@@ -46,7 +46,6 @@ import { keys } from '@/composables/queries/keys'
 import { screenQueryState } from '@/composables/queries/screenState'
 import { useQueryScopeStore } from '@/composables/queries/setup'
 import { useBalanceStore } from '@/stores/balance'
-import { useCalendarStore } from '@/stores/calendar'
 import { useDiaryStore } from '@/stores/diary'
 import { usePracticesStore } from '@/stores/practices'
 
@@ -162,7 +161,6 @@ export function useCancelBooking() {
   const queryCache = useQueryCache()
   const scope = useQueryScopeStore()
   const practices = usePracticesStore()
-  const calendar = useCalendarStore()
   const diary = useDiaryStore()
   const balance = useBalanceStore()
 
@@ -171,8 +169,7 @@ export function useCancelBooking() {
     // The practice on screen (PracticeDetailView) -- refreshed quietly, it is
     // already shown. Its cache entry is a Colada key (practices.root()).
     if (practices.selected?.id === practiceId) void practices.fetchPractice(practiceId)
-    // The calendar week, when it shows this practice (quiet reload).
-    if (calendar.weekPractices.some((p) => p.id === practiceId)) void calendar.loadWeek(true)
+    // The calendar week is a Colada key (practices.root(), FE-166 step 4).
     // The cancellation projects a "booking_cancelled_by_user" event onto the
     // diary timeline.
     void diary.refreshFeed()
@@ -207,8 +204,8 @@ export interface PurchaseBookingVars {
 
 /**
  * The legacy holders of the data a NEW booking changes (purchase, waitlist
- * confirmation), as a function of the practice. Built in a component's setup,
- * like useCancelBooking's. Each line leaves with its store's migration.
+ * confirmation): the diary feed, until the diary moves to Colada. Built in a
+ * component's setup, like useCancelBooking's.
  *
  * @remarks
  * Fire-and-forget: the mutation resolves once the server booked, so the
@@ -219,11 +216,8 @@ export interface PurchaseBookingVars {
  * WaitlistConfirmView.openPractice).
  */
 function useNewBookingHolders() {
-  const calendar = useCalendarStore()
   const diary = useDiaryStore()
-  return (practiceId: string): void => {
-    // The calendar week, when it shows this practice (quiet reload).
-    if (calendar.weekPractices.some((p) => p.id === practiceId)) void calendar.loadWeek(true)
+  return (): void => {
     // The booking projects a "booking_confirmed" event onto the diary timeline.
     void diary.refreshFeed()
   }
@@ -251,10 +245,10 @@ export function usePurchaseBooking() {
       if (viaPurchase) await purchasePractice(practiceId, promoCode)
       else await createBooking(practiceId)
     },
-    onSuccess(_data, { practiceId }, { sessionGeneration }) {
+    onSuccess(_data, _vars, { sessionGeneration }) {
       if (sessionGeneration !== scope.generation()) return
       void invalidateAfter(queryCache, 'purchaseBooking')
-      refreshHolders(practiceId)
+      refreshHolders()
     },
   })
 }
@@ -262,7 +256,6 @@ export function usePurchaseBooking() {
 /** Variables of the waitlist-confirmation mutation. */
 export interface ConfirmWaitlistVars {
   waitlistId: string
-  practiceId: string
 }
 
 /**
@@ -281,10 +274,10 @@ export function useConfirmWaitlist() {
   return useMutation({
     onMutate: () => ({ sessionGeneration: scope.generation() }),
     mutation: ({ waitlistId }: ConfirmWaitlistVars) => confirmWaitlist(waitlistId),
-    onSuccess(_data, { practiceId }, { sessionGeneration }) {
+    onSuccess(_data, _vars, { sessionGeneration }) {
       if (sessionGeneration !== scope.generation()) return
       void invalidateAfter(queryCache, 'confirmWaitlist')
-      refreshHolders(practiceId)
+      refreshHolders()
       void balance.refresh()
     },
   })

@@ -102,8 +102,10 @@
 
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { createApp, nextTick, type App } from 'vue'
+import { createApp, nextTick, reactive, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import CalendarView from '@/views/user/CalendarView.vue'
 import * as practicesApi from '@/api/practices'
 import * as cgApi from '@/api/schools'
@@ -126,13 +128,15 @@ const push = vi.fn()
 const back = vi.fn()
 // Master mode (owner 2026-09-30): the stacked route carries :masterId.
 // Owner 2026-10-03: it may also carry ?schoolId (the curator's school context).
-const routeState = {
+// Reactive, like the real route: a navigation changes what the screen's
+// computeds read (the scope reset on unmount depends on it).
+const routeState = reactive({
   params: {} as Record<string, string>,
   query: {} as Record<string, string | undefined>,
-}
+})
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push, back }),
-  useRoute: () => ({ params: routeState.params, query: routeState.query }),
+  useRoute: () => routeState,
 }))
 
 // -----------------------------------------------------------------------------
@@ -221,6 +225,8 @@ function mount(
   document.body.appendChild(host)
   app = createApp(CalendarView).use(createTestI18n())
   app.use(pinia)
+  // The week is a Colada query (composables/queries/calendar.ts); the cache
+  // lives in this test's Pinia, installed once (beforeEach).
   app.mount(host)
   return host
 }
@@ -307,6 +313,7 @@ beforeEach(() => {
   vi.setSystemTime(NOW)
 
   pinia = createPinia()
+  createApp({}).use(pinia).use(PiniaColada, coladaOptions)
   setActivePinia(pinia)
 
   vi.mocked(practicesApi.getPractices)
@@ -513,7 +520,7 @@ describe('CalendarView', () => {
 
       expect(practicesApi.getPractices).toHaveBeenCalledTimes(1)
 
-      await useCalendarStore().nextWeek()
+      useCalendarStore().nextWeek()
       await flush()
 
       expect(practicesApi.getPractices).toHaveBeenCalledTimes(2)
@@ -858,15 +865,84 @@ describe('CalendarView', () => {
 
       const store = useCalendarStore()
       expect(store.schoolScope).toBe('g7')
-      expect(store.schoolFeed).not.toBeNull()
+      expect(store.weekParams.school).toBe('g7')
+      expect(cgApi.getSchoolPractices).toHaveBeenCalledWith('g7', 100, 0)
 
       app?.unmount()
       host?.remove()
       app = null
       host = null
 
+      // The feed itself is a Colada entry keyed by the school: with the scope
+      // gone, the tab calendar's key is the viewer's own week again.
       expect(store.schoolScope).toBeNull()
-      expect(store.schoolFeed).toBeNull()
+      expect(store.weekParams.school).toBeNull()
+    })
+  })
+
+  describe('leaving a stacked calendar through a route change (FE-178 review)', () => {
+    function leave(): void {
+      app?.unmount()
+      host?.remove()
+      app = null
+      host = null
+    }
+
+    it('master: the scope this screen set is cleared although the route already moved on', async () => {
+      mount({ masterId: 'm1' })
+      await flush()
+      const store = useCalendarStore()
+      expect(store.masterScope).toBe('m1')
+
+      // router.back() to the master profile: the route is the next one by unmount.
+      routeState.params = { id: 'm1' }
+      await nextTick()
+      leave()
+
+      expect(store.masterScope).toBeNull()
+      expect(store.weekParams.master).toBeNull()
+    })
+
+    it('school: the same, for the school scope', async () => {
+      mount({ schoolId: 'g7' })
+      await flush()
+      const store = useCalendarStore()
+      expect(store.schoolScope).toBe('g7')
+
+      routeState.params = { id: 'g7' }
+      await nextTick()
+      leave()
+
+      expect(store.schoolScope).toBeNull()
+    })
+
+    it('a scope another screen set meanwhile is left alone', async () => {
+      mount({ masterId: 'm1' })
+      await flush()
+      const store = useCalendarStore()
+      // A newer stacked calendar took the store over before this one unmounted.
+      store.setMasterScope('m2')
+
+      leave()
+
+      expect(store.masterScope).toBe('m2')
+    })
+
+    it('a retry after an error shows the loader, not the old error', async () => {
+      vi.mocked(practicesApi.getPractices).mockRejectedValue(new Error('offline'))
+      mount()
+      await flush()
+      expect(host?.textContent).toContain('Повторить')
+
+      vi.mocked(practicesApi.getPractices).mockReturnValue(new Promise(() => {}))
+      const retry = [...(host?.querySelectorAll('button') ?? [])].find((b) =>
+        b.textContent?.includes('Повторить'),
+      )
+      retry?.click()
+      await flush()
+
+      expect(host?.textContent).not.toContain('Повторить')
+      expect(loader()).not.toBeNull()
     })
   })
 })

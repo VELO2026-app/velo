@@ -143,10 +143,7 @@ async function onConfirm(): Promise<void> {
   if (confirming.value || !entry.value) return
   confirming.value = true
   try {
-    await confirmSpot.mutateAsync({
-      waitlistId: waitlistId.value,
-      practiceId: entry.value.practice_id,
-    })
+    await confirmSpot.mutateAsync({ waitlistId: waitlistId.value })
     toast.success(t('user.screens.waitlistConfirm.toast.confirmed'))
     openPractice()
   } catch (e) {

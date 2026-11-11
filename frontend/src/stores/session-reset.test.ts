@@ -26,7 +26,6 @@ import { accountScopePlugin, resetAccountScope } from '@/platform/session'
 import { api } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { useAdminStore } from '@/stores/admin'
-import { useCalendarStore } from '@/stores/calendar'
 import { useDiaryStore } from '@/stores/diary'
 import { useNotificationsStore } from '@/stores/notifications'
 import { usePracticesStore } from '@/stores/practices'
@@ -294,7 +293,6 @@ describe('the end of a session leaves every store in its initial state', () => {
     const inFlight = [
       useAdminStore().fetchDashboard(true),
       useAdminStore().fetchOverview('week'),
-      useCalendarStore().loadWeek(),
       useDiaryStore().fetchFeed(),
       useDiaryStore().fetchEntry('entry_1'),
       useDiaryStore().loadInsights('practice_1'),
@@ -303,9 +301,9 @@ describe('the end of a session leaves every store in its initial state', () => {
       useMasterStore().fetchMyProfile(true),
       useMasterStore().fetchUpcomingPractices(),
       useSchoolsHubStore().ensureCurator(),
-      // The bookings store holds no server data since FE-166 step 3; its
-      // queries are Colada entries, emptied by the account scope
-      // (composables/queries/setup.test.ts).
+      // The bookings and calendar stores hold no server data since FE-166
+      // steps 3-4; their queries are Colada entries, emptied by the account
+      // scope (composables/queries/setup.test.ts).
     ]
 
     await useAuthStore().logout()
@@ -320,7 +318,6 @@ describe('the end of a session leaves every store in its initial state', () => {
   const ownRequests: Array<[string, () => Promise<unknown>]> = [
     ['admin dashboard', () => useAdminStore().fetchDashboard(true)],
     ['admin overview', () => useAdminStore().fetchOverview('week')],
-    ['calendar week', () => useCalendarStore().loadWeek()],
     ['diary feed', () => useDiaryStore().fetchFeed()],
     ['diary entry', () => useDiaryStore().fetchEntry('entry_1')],
     ['diary insights', () => useDiaryStore().loadInsights('practice_1')],
