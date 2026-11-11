@@ -22,8 +22,9 @@ import {
   type QueryCache,
 } from '@pinia/colada'
 import { defineStore } from 'pinia'
+import { persistPlugin } from '@/composables/queries/persist'
 
-/** Default staleness window: the same 30 s as the in-house useQuery, so both caches age data alike while they coexist. */
+/** Default staleness window of every query that does not set its own (ms). */
 export const QUERY_STALE_MS = 30_000
 
 /** Pinia id of the account-scope member that empties the Colada caches. */
@@ -104,5 +105,5 @@ function accountScope({ pinia }: PiniaColadaPluginContext): void {
  */
 export const coladaOptions: PiniaColadaOptions = {
   queryOptions: { staleTime: QUERY_STALE_MS },
-  plugins: [accountScope],
+  plugins: [accountScope, persistPlugin],
 }

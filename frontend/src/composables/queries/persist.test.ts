@@ -14,7 +14,7 @@ import { createApp, defineComponent, h, nextTick, type App } from 'vue'
 import { createPinia } from 'pinia'
 import { PiniaColada, useQuery, type UseQueryReturn } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
-import { persistPlugin, persistSlot } from '@/composables/queries/persist'
+import { persistSlot } from '@/composables/queries/persist'
 import { flushPersisted, readPersisted, setPersistOwner } from '@/composables/persistedCache'
 
 const KEY = ['bookings', 'stats'] as const
@@ -35,7 +35,7 @@ function start(
   })
   const app = createApp(Screen)
     .use(createPinia())
-    .use(PiniaColada, { ...coladaOptions, plugins: [...coladaOptions.plugins!, persistPlugin] })
+    .use(PiniaColada, { ...coladaOptions, plugins: coladaOptions.plugins })
   app.mount(document.createElement('div'))
   apps.push(app)
   return query

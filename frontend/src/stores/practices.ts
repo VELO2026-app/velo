@@ -11,7 +11,9 @@
 // history if you need the old paginated-catalog implementation.
 //
 // Stale-while-revalidate (loading system): every fetched practice is kept in
-// the screen-data cache (composables/useQuery). Opening a practice that is
+// the Colada query cache under `keys.practices.detail(id)` (FE-166 step 2),
+// so the booking mutations' invalidation (composables/queries/invalidation)
+// reaches it. Opening a practice that is
 // already known -- seen before, or present in a list the caller passes as a
 // seed -- renders it AT ONCE and refreshes it silently; `selectedLoading`
 // (the skeleton) is only for a practice there is nothing to show for yet. A
@@ -23,8 +25,9 @@ import { ref } from 'vue'
 import { getPractice } from '@/api/practices'
 import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
-import { queryCache } from '@/composables/useQuery'
-import { queryKeys } from '@/composables/queryKeys'
+import { useQueryCache, type QueryCache } from '@pinia/colada'
+import { keys } from '@/composables/queries/keys'
+import { practiceDetailQuery } from '@/composables/queries/practices'
 import type { PracticeResponse } from '@/api/types'
 import i18n from '@/locales'
 
@@ -38,18 +41,54 @@ const PRELOAD_HANDOFF_MS = 3_000
  * navigation is still pending, so the screen usually opens with it in hand.
  * Never rejects -- a failure surfaces when the screen fetches for itself.
  */
-export function prefetchPractice(id: string): Promise<void> {
-  return queryCache.prefetch(queryKeys.practice(id), () => getPractice(id), PRELOAD_HANDOFF_MS)
+export async function prefetchPractice(id: string): Promise<void> {
+  const queryCache = useQueryCache()
+  if (isJustLoaded(queryCache, id)) return
+  const entry = practiceEntry(queryCache, id)
+  // An answer already on its way is shared, not asked for twice.
+  await (entry.pending?.refreshCall ?? queryCache.fetch(entry)).catch(() => undefined)
 }
 
 /** Lists holding full practices (same DTO as the detail) prime the cache so
- * the detail screen opens with content instead of a skeleton. */
+ * the detail screen opens with content instead of a skeleton. A seed never
+ * replaces a loaded practice, and is left stale: its first reader refetches. */
 export function seedPractices(list: readonly PracticeResponse[]): void {
-  for (const practice of list) queryCache.seed(queryKeys.practice(practice.id), practice)
+  const queryCache = useQueryCache()
+  for (const practice of list) {
+    const entry = practiceEntry(queryCache, practice.id)
+    if (entry.state.value.data !== undefined) continue
+    queryCache.setEntryState(entry, { status: 'success', data: practice, error: null })
+    entry.when = 0
+  }
+}
+
+/**
+ * The cache entry of one practice, created with the query's options.
+ *
+ * @remarks
+ * Always through `ensure()`, never a bare `setQueryData()` on an unknown key:
+ * Colada garbage-collects only entries that carry options (gcTime), and the
+ * calendar seeds every week it shows -- without them the cache would only
+ * grow (the in-house cache capped itself at 120 entries).
+ */
+function practiceEntry(queryCache: QueryCache, id: string) {
+  return queryCache.ensure(practiceDetailQuery(id))
+}
+
+/** The practice was loaded within the last PRELOAD_HANDOFF_MS (and not invalidated since). */
+function isJustLoaded(queryCache: QueryCache, id: string): boolean {
+  const entry = queryCache.get(keys.practices.detail(id))
+  return (
+    !!entry &&
+    entry.state.value.status === 'success' &&
+    entry.when > 0 &&
+    Date.now() - entry.when <= PRELOAD_HANDOFF_MS
+  )
 }
 
 /** Single practice detail with stale-while-revalidate over the screen-data cache. */
 export const usePracticesStore = defineStore('practices', () => {
+  const queryCache = useQueryCache()
   // -- Single practice detail --
   const selected = ref<PracticeResponse | null>(null)
   const selectedLoading = ref(false)
@@ -73,9 +112,9 @@ export const usePracticesStore = defineStore('practices', () => {
    */
   async function fetchPractice(id: string, seed?: PracticeResponse): Promise<void> {
     _currentFetchId = id
-    const key = queryKeys.practice(id)
+    const key = keys.practices.detail(id)
     const known =
-      queryCache.get<PracticeResponse>(key) ??
+      queryCache.getQueryData<PracticeResponse>(key) ??
       (selected.value?.id === id ? selected.value : undefined) ??
       seed
     if (known) selected.value = known
@@ -84,7 +123,11 @@ export const usePracticesStore = defineStore('practices', () => {
     selectedError.value = null
     try {
       const result = await getPractice(id)
-      queryCache.setData<PracticeResponse>(key, () => result)
+      queryCache.setEntryState(practiceEntry(queryCache, id), {
+        status: 'success',
+        data: result,
+        error: null,
+      })
       // F-01: discard stale response if user navigated to another practice.
       if (_currentFetchId === id) {
         selected.value = result
@@ -107,9 +150,8 @@ export const usePracticesStore = defineStore('practices', () => {
    * otherwise this is fetchPractice() -- cached or seeded data shows at once.
    */
   function openPractice(id: string): Promise<void> {
-    const key = queryKeys.practice(id)
-    const fresh = queryCache.get<PracticeResponse>(key)
-    if (fresh && queryCache.isFresh(key, PRELOAD_HANDOFF_MS)) {
+    const fresh = queryCache.getQueryData<PracticeResponse>(keys.practices.detail(id))
+    if (fresh && isJustLoaded(queryCache, id)) {
       _currentFetchId = id
       selected.value = fresh
       selectedLoading.value = false

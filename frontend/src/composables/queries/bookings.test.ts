@@ -6,10 +6,10 @@
 // so the dashboard's upcoming list, the practice's seats and the calendar week
 // went on showing the cancelled booking. useCancelBooking now refreshes every
 // holder of that data: the Colada keys of INVALIDATES.cancelBooking and,
-// until they move to Colada, the legacy stores and the in-house cache.
+// until they move to Colada, the legacy stores.
 //
 // The legacy stores are mocked (their own refresh logic has its own tests);
-// Colada and the in-house cache are real, so "stale" and "refetched" are
+// Colada is real, so "stale" and "refetched" are
 // observed on the caches themselves. Covered from the old store test
 // (stores/bookings.test.ts, cancelBooking): the API call, the list refresh,
 // the diary refresh, no side effects on failure.
@@ -30,8 +30,6 @@ import {
   type ConfirmWaitlistVars,
   type PurchaseBookingVars,
 } from '@/composables/queries/bookings'
-import { queryCache as legacyQueryCache } from '@/composables/useQuery'
-import { queryKeys as legacyKeys } from '@/composables/queryKeys'
 import { ApiResponseError } from '@/api/client'
 import * as bookingsApi from '@/api/bookings'
 import * as schoolsApi from '@/api/schools'
@@ -117,7 +115,7 @@ beforeEach(async () => {
   queryCache.setQueryData(keys.practices.schoolFeed('g2', 5), [practice])
   queryCache.setQueryData([...keys.bookings.root(), 'list'], [])
   queryCache.setQueryData(keys.schools.detail('g1'), { name: 'School' })
-  legacyQueryCache.setData(legacyKeys.practice('p1'), () => practice)
+  queryCache.setQueryData(keys.practices.detail('p1'), practice)
 })
 
 afterEach(() => {
@@ -172,7 +170,7 @@ describe('useCancelBooking -- success', () => {
 
     expect(stores.bookings.invalidateUpcoming).toHaveBeenCalledTimes(1)
     expect(stores.practices.fetchPractice).toHaveBeenCalledWith('p1')
-    expect(legacyQueryCache.isFresh(legacyKeys.practice('p1'), 60_000)).toBe(false)
+    expect(when(keys.practices.detail('p1'))).toBe(0)
     expect(stores.calendar.loadWeek).toHaveBeenCalledWith(true)
     expect(stores.diary.refreshFeed).toHaveBeenCalledTimes(1)
   })
@@ -192,7 +190,7 @@ describe('useCancelBooking -- success', () => {
     expect(stores.practices.fetchPractice).not.toHaveBeenCalled()
     expect(stores.calendar.loadWeek).not.toHaveBeenCalled()
     // The cached detail still goes stale: the next open refetches it.
-    expect(legacyQueryCache.isFresh(legacyKeys.practice('p1'), 60_000)).toBe(false)
+    expect(when(keys.practices.detail('p1'))).toBe(0)
   })
 })
 
@@ -219,7 +217,7 @@ describe('useCancelBooking -- the session ends while the DELETE is in flight', (
     expect(stores.calendar.loadWeek).not.toHaveBeenCalled()
     expect(stores.diary.refreshFeed).not.toHaveBeenCalled()
     expect(stores.balance.refresh).not.toHaveBeenCalled()
-    expect(legacyQueryCache.isFresh(legacyKeys.practice('p1'), 60_000)).toBe(true)
+    expect(when(keys.practices.detail('p1'))).not.toBe(0)
   })
 })
 
@@ -239,7 +237,7 @@ describe('useCancelBooking -- failure', () => {
     expect(stores.balance.refresh).not.toHaveBeenCalled()
     expect(schoolsApi.getSchoolPractices).toHaveBeenCalledTimes(1)
     expect(when(keys.practices.schoolFeed('g2', 5))).not.toBe(0)
-    expect(legacyQueryCache.isFresh(legacyKeys.practice('p1'), 60_000)).toBe(true)
+    expect(when(keys.practices.detail('p1'))).not.toBe(0)
   })
 })
 
@@ -283,6 +281,7 @@ describe('usePurchaseBooking', () => {
 
     expect(stores.bookings.invalidateUpcoming).toHaveBeenCalledTimes(1)
     expect(stores.bookings.refreshMyBookings).toHaveBeenCalledTimes(1)
+    expect(when(keys.practices.detail('p1'))).toBe(0)
     expect(stores.calendar.loadWeek).toHaveBeenCalledWith(true)
     // The booking projects a "booking_confirmed" event onto the timeline.
     expect(stores.diary.refreshFeed).toHaveBeenCalledTimes(1)

@@ -12,6 +12,9 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
+import { createPinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import MasterSchoolsView from '@/views/master/MasterSchoolsView.vue'
 import * as cgApi from '@/api/schools'
 import type { SchoolMineResponse } from '@/api/types'
@@ -35,12 +38,15 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(MasterSchoolsView).use(createTestI18n())
+  app = createApp(MasterSchoolsView)
+    .use(createTestI18n())
+    .use(createPinia())
+    .use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
-// The list loads through the screen-data cache (useQuery): a settled
+// The list loads through the screen-data cache (Colada): a settled
 // request takes a few more microtasks than the old local ref did.
 async function flush(): Promise<void> {
   for (let i = 0; i < 8; i++) await nextTick()

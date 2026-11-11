@@ -117,9 +117,8 @@
 import { t } from '@/locales'
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { getSchools, getMySchools } from '@/api/schools'
-import type { SchoolMineItem } from '@/api/types'
-import { useQuery } from '@/composables/useQuery'
+import { useQuery } from '@pinia/colada'
+import { masterSchoolsQuery } from '@/composables/queries/schools'
 import SchoolRow from '@/components/shared/SchoolRow.vue'
 import { IconPlusFilled } from '@/components/icons'
 import { VButton, VEmptyState } from '@/components/ui'
@@ -128,30 +127,11 @@ import { VLoader } from '@/components/ui'
 
 const router = useRouter()
 
-// Tab screen: the list lives in the screen-data cache (useQuery) -- a return
+// Tab screen: the list lives in the screen-data cache (Colada) -- a return
 // through the dock renders the schools at once and refreshes them in the
 // background (staleTime 0: a school created a moment ago is there on the
 // next visit), no spinner on every visit.
-const schoolsQuery = useQuery<{ schools: SchoolMineItem[]; canCreate: boolean }>({
-  key: ['schools', 'mine', 'master-hub'],
-  query: async () => {
-    // Two parallel calls, one payload split: /mine feeds the rows (it alone
-    // carries relation + transfer_offered), the curator list carries only
-    // the create right -- a property of the master, not of any one school.
-    // allSettled, because the two calls are NOT equal: /mine failing means
-    // there is no screen, while the flag call failing only means no «+» --
-    // rows plus the honest no-right hint is strictly better than an error
-    // state over data we already hold.
-    const [mineRes, listRes] = await Promise.allSettled([getMySchools(), getSchools()])
-    if (mineRes.status === 'rejected') throw mineRes.reason
-    return {
-      schools: mineRes.value.items,
-      canCreate:
-        listRes.status === 'fulfilled' ? (listRes.value.can_create_schools ?? false) : false,
-    }
-  },
-  staleTime: 0,
-})
+const schoolsQuery = useQuery(() => masterSchoolsQuery())
 const loading = schoolsQuery.isPending
 /** Only an error with nothing to show replaces the list. */
 const error = computed(() => schoolsQuery.error.value != null && !schoolsQuery.data.value)
@@ -165,7 +145,7 @@ const curated = computed(() => schools.value.filter((school) => school.relation 
 const memberOnly = computed(() => schools.value.filter((school) => school.relation !== 'curator'))
 
 function load(): void {
-  void schoolsQuery.refresh()
+  void schoolsQuery.refetch()
 }
 </script>
 

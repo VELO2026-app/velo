@@ -26,7 +26,6 @@ import { ref, computed } from 'vue'
 import { api, setAuthToken, setOnUnauthorized, ApiResponseError } from '@/api/client'
 import { getMe, updateMe, switchRole as apiSwitchRole } from '@/api/users'
 import { platform } from '@/platform'
-import { queryCache } from '@/composables/useQuery'
 import { clearPersisted, setPersistOwner } from '@/composables/persistedCache'
 import { host } from '@/platform/host'
 import { newMark, rememberLoginMark } from '@/platform/browser-login'
@@ -112,9 +111,9 @@ export const useAuthStore = defineStore(AUTH_STORE_ID, () => {
     notifySessionEnd(reason)
     _setToken(null)
     _setUser(null)
-    // Cached screen data belongs to the account that fetched it -- in
-    // memory and the copy that survives reloads.
-    queryCache.clear()
+    // Cached screen data belongs to the account that fetched it: the copy
+    // that survives reloads goes here, the Colada caches with the account
+    // scope below (composables/queries/setup.ts, useQueryScopeStore).
     clearPersisted()
     setPersistOwner(null)
     // W-1 / FE-157: every other store goes back to its initial state, and

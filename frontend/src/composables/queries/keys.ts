@@ -17,8 +17,6 @@
 // Invalidation is by prefix: `keys.practices.root()` covers every practice
 // detail and list. The mutation -> keys map lives in ./invalidation.ts.
 //
-// The in-house cache (composables/useQuery) keeps its own keys in
-// composables/queryKeys.ts until its three screens move here.
 // =============================================================================
 
 /** Query-key factory for Pinia Colada, grouped by data domain. */
@@ -29,6 +27,8 @@ export const keys = {
     root: () => ['practices'] as const,
     /** Prefix of every practice list. */
     lists: () => ['practices', 'list'] as const,
+    /** `GET /practices/{id}` -- one practice (the detail screen and its flow views). */
+    detail: (practiceId: string) => ['practices', 'detail', practiceId] as const,
     /** `GET /schools/{id}/practices` -- the school's upcoming practices, first `limit`. */
     schoolFeed: (schoolId: string, limit: number) =>
       ['practices', 'list', { schoolId, limit }] as const,
@@ -39,10 +39,18 @@ export const keys = {
     root: () => ['schools'] as const,
     /** `GET /schools/{id}` -- the school page payload with the viewer's relation. */
     detail: (schoolId: string) => ['schools', 'detail', schoolId] as const,
+    /**
+     * `GET /schools/mine` (+ the create right) as one screen shows it: the user
+     * zone's schools tab for a role, or the master's schools hub.
+     */
+    mine: (view: 'participant' | 'master-hub', role = '') =>
+      ['schools', 'list', 'mine', { view, role }] as const,
   },
-  /** Bookings of the signed-in user (no Colada query yet; the root is what mutations invalidate). */
+  /** Bookings of the signed-in user and what is derived from them. */
   bookings: {
     /** Prefix of every booking key. */
     root: () => ['bookings'] as const,
+    /** `GET /bookings/me/stats` -- attended practices, hours, the unread dot. */
+    myStats: () => ['bookings', 'stats'] as const,
   },
 }

@@ -23,8 +23,6 @@ import { cancelBooking, createBooking, purchasePractice } from '@/api/bookings'
 import { confirmWaitlist } from '@/api/waitlist'
 import { invalidateAfter } from '@/composables/queries/invalidation'
 import { useQueryScopeStore } from '@/composables/queries/setup'
-import { queryCache as legacyQueryCache } from '@/composables/useQuery'
-import { queryKeys as legacyKeys } from '@/composables/queryKeys'
 import { useBalanceStore } from '@/stores/balance'
 import { useBookingsStore } from '@/stores/bookings'
 import { useCalendarStore } from '@/stores/calendar'
@@ -66,9 +64,8 @@ export function useCancelBooking() {
   function refreshLegacyHolders(practiceId: string): void {
     // The dashboard's upcoming list (also its persisted copy).
     bookings.invalidateUpcoming()
-    // The practice detail: the in-house cache entry, and the practice on
-    // screen (PracticeDetailView) -- refreshed quietly, it is already shown.
-    legacyQueryCache.invalidate(legacyKeys.practice(practiceId))
+    // The practice on screen (PracticeDetailView) -- refreshed quietly, it is
+    // already shown. Its cache entry is a Colada key (practices.root()).
     if (practices.selected?.id === practiceId) void practices.fetchPractice(practiceId)
     // The calendar week, when it shows this practice (quiet reload).
     if (calendar.weekPractices.some((p) => p.id === practiceId)) void calendar.loadWeek(true)

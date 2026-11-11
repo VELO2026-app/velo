@@ -204,8 +204,8 @@ import {
   IconBrain,
 } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
-import { useQuery } from '@/composables/useQuery'
-import { myStatsQuery } from '@/composables/queries'
+import { useQuery } from '@pinia/colada'
+import { myStatsQuery } from '@/composables/queries/stats'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -226,16 +226,16 @@ const displayName = computed(() => {
 })
 
 // -- Stats (attended practices + hours) from /bookings/me/stats --
-// The dashboard's cache entry (useQuery): a visit renders the last known
+// The dashboard's cache entry (Colada): a visit renders the last known
 // numbers at once instead of 0 -> N, and refreshes them every time (the
 // unread-messages dot must be current). A failed fetch keeps what is shown
 // (NEW-7: the profile never breaks on it).
-const statsQuery = useQuery(myStatsQuery(0))
+const statsQuery = useQuery(() => myStatsQuery(0))
 // Kept alive as a tab root (TabRouterView): a return revalidates quietly
 // (the shown data stays). The first activation is the mount itself.
 let activations = 0
 onActivated(() => {
-  if (activations++ > 0) void statsQuery.revalidate()
+  if (activations++ > 0) void statsQuery.refresh()
 })
 const practicesAttended = computed(() => statsQuery.data.value?.practices_attended ?? 0)
 const hoursAttended = computed(() => statsQuery.data.value?.hours_attended ?? 0)
