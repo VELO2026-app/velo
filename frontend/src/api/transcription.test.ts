@@ -105,7 +105,6 @@ describe('transcribeAudio', () => {
 
 describe('error mapping', () => {
   const CASES: ReadonlyArray<{ code: string; status: number; message: string }> = [
-    { code: 'transcription_not_configured', status: 400, message: 'Голосовой ввод недоступен' },
     { code: 'transcription_unavailable', status: 502, message: 'Сервис транскрибации недоступен' },
     { code: 'transcription_failed', status: 502, message: 'Сервис транскрибации недоступен' },
     { code: 'speech_not_recognized', status: 400, message: 'Не удалось распознать речь' },

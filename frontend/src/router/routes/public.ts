@@ -39,6 +39,13 @@ export const PUBLIC_ROUTES: RouteRecordRaw[] = [
     name: 'not-found',
     component: () => import('@/views/NotFoundView.vue'),
   },
+  // A switched-off instance option's section (FE-163, PM-22 p.13): where
+  // optionGuard sends a navigation, instead of the generic 404.
+  {
+    path: '/unavailable',
+    name: 'section-unavailable',
+    component: () => import('@/views/SectionUnavailableView.vue'),
+  },
   {
     path: '/:pathMatch(.*)*',
     redirect: '/404',

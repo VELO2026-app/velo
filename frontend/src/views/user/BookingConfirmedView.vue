@@ -55,7 +55,7 @@
           <IconSuccess :size="56" />
         </span>
         <h1 class="booking-confirmed__title">{{ t('user.screens.bookingConfirmed.title') }}</h1>
-        <p class="booking-confirmed__text">
+        <p v-if="isOptionEnabled('zoom')" class="booking-confirmed__text">
           {{ t('user.screens.bookingConfirmed.zoomNote') }}
         </p>
       </VCard>
@@ -96,6 +96,7 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
+import { isOptionEnabled } from '@/platform/instance'
 import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'

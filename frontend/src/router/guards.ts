@@ -559,8 +559,9 @@ export async function requirementsGuard(
 }
 
 /**
- * Send a navigation into a switched-off option's section to the 404 screen
- * (FE-151, tz-whitelabel §4).
+ * Send a navigation into a switched-off option's section to the
+ * "section unavailable" screen (FE-151, tz-whitelabel §4; the screen is
+ * FE-163, PM-22 p.13).
  *
  * @remarks The option's code is always in the bundle (variant A) and its
  * records are always registered, so a named push from a leftover link still
@@ -572,7 +573,7 @@ export function optionGuard(to: Pick<RouteLocationNormalized, 'matched'>): Acces
     const option = record.meta.option
     return option !== undefined && !isOptionEnabled(option)
   })
-  return off ? { path: '/404', replace: true } : true
+  return off ? { path: '/unavailable', replace: true } : true
 }
 
 /**

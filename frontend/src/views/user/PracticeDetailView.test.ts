@@ -32,12 +32,13 @@
 // =============================================================================
 
 import { createTestI18n } from '@/locales/testing'
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, onTestFinished } from 'vitest'
 import { createApp, nextTick, shallowReactive, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import PracticeDetailView from '@/views/user/PracticeDetailView.vue'
 import type { BookingWithPracticeResponse, SchoolMineItem, PracticeResponse } from '@/api/types'
 import { ApiResponseError } from '@/api/client'
+import { applyInstanceConfig } from '@/platform/instance'
 
 const push = vi.fn()
 const back = vi.fn()
@@ -410,6 +411,44 @@ describe('PracticeDetailView', () => {
       await flush()
 
       expect(host?.querySelector('.detail__price-row')).toBeNull()
+    })
+  })
+
+  describe('payments option off (FE-163, PM-22 p.2)', () => {
+    beforeEach(() => {
+      applyInstanceConfig({ options: { payments: 'false' } })
+      onTestFinished(() => applyInstanceConfig(null))
+    })
+
+    it('a paid practice, not booked: no price, no book button, «Запись недоступна»', async () => {
+      practicesState.selected = practice({ is_free: false, price_cents: 2500 })
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.detail__price-row')).toBeNull()
+      expect(button('Забронировать')).toBeUndefined()
+      expect(text()).toContain('Запись недоступна')
+    })
+
+    it('a paid practice, already booked: nothing changes -- status, cancel stay', async () => {
+      practicesState.selected = practice({ is_free: false, price_cents: 2500 })
+      bookingsState.bookings = [booking({ status: 'confirmed' })]
+      mount()
+      await flush()
+
+      expect(text()).toContain('Вы записаны')
+      expect(text()).not.toContain('Запись недоступна')
+      expect(button('Отменить бронирование')).toBeDefined()
+    })
+
+    it('a free practice is untouched: price row «Бесплатно» and the book button', async () => {
+      practicesState.selected = practice({ is_free: true, price_cents: 0 })
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.detail__price-value')?.textContent).toContain('Бесплатно')
+      expect(button('Записаться бесплатно')).toBeDefined()
+      expect(text()).not.toContain('Запись недоступна')
     })
   })
 

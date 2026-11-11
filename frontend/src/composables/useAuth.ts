@@ -48,7 +48,6 @@ const isReady = ref(false)
  *                      sign-in (no mark, or a mark for another state);
  *   expired         -- the backend no longer holds the state (taken, late);
  *   telegram_failed -- Telegram did not prove a user;
- *   not_configured  -- browser sign-in is not set up on this server;
  *   deactivated     -- the account is switched off;
  *   rate_limited    -- too many attempts;
  *   unavailable     -- the server answered that it cannot right now;
@@ -59,7 +58,6 @@ export type LoginNotice =
   | 'foreign'
   | 'expired'
   | 'telegram_failed'
-  | 'not_configured'
   | 'deactivated'
   | 'rate_limited'
   | 'unavailable'
@@ -88,8 +86,6 @@ export function loginNoticeFor(error: unknown): LoginNotice {
   if (error instanceof ApiNetworkError || error instanceof ApiTimeoutError) return 'network'
   if (!(error instanceof ApiResponseError)) return 'telegram_failed'
   switch (error.status) {
-    case 404:
-      return 'not_configured'
     case 403:
       return 'deactivated'
     case 429:
