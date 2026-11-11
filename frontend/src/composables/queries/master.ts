@@ -4,14 +4,16 @@
 //
 // The master profile (`GET /masters/me`): status, confirmed methods,
 // languages, balance, payout details. It used to live in stores/master.ts;
-// the store now keeps only client state (the onboarding flag of this
-// session).
+// the store keeps the onboarding flag of this session and, until the next
+// step (FE-179 part 2b), the master's own practices lists.
 //
 // Freshness: one answer per session, as in the store -- the router guards
 // read it on every master-zone navigation, and a refetch per navigation
 // would put a request in front of every screen. Fetched again only where the
 // screen knows it moved: the verdict screen's re-check, after an application,
-// a method change request, a language edit, a withdrawal; payout details are
+// a method change request, a language edit, a withdrawal -- and for an admin,
+// whose profile can flip with no role change, at most every
+// ADMIN_PROFILE_TTL_MS (router/guards.ts); payout details are
 // written from the answer of their own mutation (setMasterProfile).
 // gcTime Infinity: the guards read it outside any component, so nothing
 // holds the entry between screens; the end of a session empties it

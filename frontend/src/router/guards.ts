@@ -355,8 +355,9 @@ let adminProfileFetch: { userId: string | null; at: number } | null = null
  * @remarks Stamped whatever the answer: GET /masters/me refuses role=admin
  * (403 from get_current_master, backend auth/dependencies.py), so for an
  * admin an error IS the usual answer and cannot gate the stamp. Stamped
- * after the fetch, so a check racing it waits on the same request (the API
- * client dedupes the GET) instead of reading the store before it lands.
+ * after the fetch, so a check racing it sends its own forced fetch instead
+ * of reading the cache before the first lands: the second fetch supersedes
+ * the first in the cache, and the API client dedupes the GET itself.
  */
 async function refreshAdminProfile(userId: string | null): Promise<void> {
   const last = adminProfileFetch
