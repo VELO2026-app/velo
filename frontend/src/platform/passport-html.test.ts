@@ -93,14 +93,16 @@ describe('passportHtmlDefaults -- skin derivatives (tz-whitelabel F2, §1/§3)',
     expect(transformSkin(FONT_HTML)).toBe(FONT_HTML)
   })
 
-  it('a skin: themeColor and the font link materialize from brand.json (§1 single source)', () => {
+  it('a skin: themeColor and the font preload materialize from the brand record (§1 single source)', () => {
     resolveWithRoot()
     const plugin = passportHtmlDefaults({
       displayName: 'ШКОЛА',
       shortName: 'Школа',
       themeColor: '#1B2A41',
       backgroundColor: '#F5F1EA',
-      fontUrl: 'https://fonts.example.com/rubik.css',
+      fonts: [
+        { family: 'Rubik', file: 'assets/fonts/rubik-400.woff2', weight: 400, style: 'normal' },
+      ],
     })
     const transformSkin = (html: string): string => {
       const hook = (plugin as unknown as HtmlPlugin).transformIndexHtml
@@ -110,10 +112,25 @@ describe('passportHtmlDefaults -- skin derivatives (tz-whitelabel F2, §1/§3)',
       '<meta name="theme-color" content="#1B2A41" />',
     )
     const out = transformSkin(FONT_HTML)
-    expect(out).toContain('https://fonts.example.com/rubik.css')
+    // FE-131: the package's own font, no external request
+    expect(out).toContain('href="/skin/assets/fonts/rubik-400.woff2" as="font"')
     expect(out).not.toContain('Marmelad')
+    expect(out).not.toContain('googleapis')
     // the tab title follows the skin display name (half-branded tabs read fake)
     expect(transformSkin('<title>VELO</title>')).toBe('<title>ШКОЛА</title>')
+  })
+
+  it('the display name is escaped and never expands as a replace pattern', () => {
+    resolveWithRoot()
+    const plugin = passportHtmlDefaults({
+      displayName: 'A & B $& <i>',
+      shortName: 'AB',
+      themeColor: '#1B2A41',
+      backgroundColor: '#F5F1EA',
+      fonts: [],
+    })
+    const hook = (plugin as unknown as HtmlPlugin).transformIndexHtml
+    expect(hook.handler('<title>VELO</title>')).toBe('<title>A &amp; B $&amp; &lt;i&gt;</title>')
   })
 
   it('no skin: the golden title is untouched', () => {
@@ -147,15 +164,19 @@ describe('real index.html font block -- golden self-host vs skin webfont (FE-157
     expect(existsSync(resolve(process.cwd(), 'public/fonts/marmelad-subset.woff2'))).toBe(true)
   })
 
-  it('skin fontUrl still replaces the block: its stylesheet in, our preload out', () => {
+  it('skin fonts still replace the block: their preloads in, ours out (FE-131)', () => {
     const out = run({
       displayName: 'ШКОЛА',
       shortName: 'Школа',
       themeColor: '#1B2A41',
       backgroundColor: '#F5F1EA',
-      fontUrl: 'https://fonts.example.com/rubik.css',
+      fonts: [
+        { family: 'Rubik', file: 'assets/fonts/rubik-400.woff2', weight: 400, style: 'normal' },
+      ],
     })
-    expect(out).toContain('<link href="https://fonts.example.com/rubik.css" rel="stylesheet" />')
+    expect(out).toContain(
+      '<link rel="preload" href="/skin/assets/fonts/rubik-400.woff2" as="font" type="font/woff2" crossorigin />',
+    )
     expect(out).not.toContain('marmelad-subset')
   })
 })

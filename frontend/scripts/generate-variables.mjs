@@ -54,6 +54,12 @@ for (const { token } of rows) {
   for (const line of p.before ?? []) out.push(line)
   // The value slice is VERBATIM from the source line(s) (leading space and
   // interior newlines included): one template reproduces both shapes 1:1.
+  // FE-150: DTCG `$deprecated` (a string: "<date>: <why>, delete in <generation>";
+  // scripts/lib/token-audit.mjs refuses every other shape)
+  // is the machine-readable source of the deprecation; the CSS mirrors it as
+  // its own comment line right above the declaration (a trailing one would
+  // push the line past prettier's width and get the value re-wrapped).
+  if (typeof token.$deprecated === 'string') out.push(`  /* @deprecated ${token.$deprecated} */`)
   out.push(`  ${p.cssName}:${token.$value};${p.trailing ? ` /* ${p.trailing} */` : ''}`)
 }
 for (const line of ext.trailingComment ?? []) out.push(line)
