@@ -2,7 +2,7 @@
  * Master scenario (FE-157 5A.2): a verified master fills the create-practice
  * form and publishes.
  */
-import { expect, test } from '@playwright/test'
+import { expect, test } from './support/test'
 import { mockApi } from './support/api'
 import {
   freezeClock,

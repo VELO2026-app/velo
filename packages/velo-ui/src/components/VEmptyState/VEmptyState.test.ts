@@ -177,4 +177,19 @@ describe('VEmptyState', () => {
       expect(text()).not.toContain('X')
     })
   })
+
+  describe('error marker (FE-161)', () => {
+    it.each(['warning', 'notfound'])(
+      'icon "%s" marks the state data-testid="screen-error"',
+      async (icon) => {
+        await render({ icon, title: 'Failed' })
+        expect(host?.querySelector('[data-testid="screen-error"]')).not.toBeNull()
+      },
+    )
+
+    it.each(['empty', 'calendar'])('icon "%s" is not an error state', async (icon) => {
+      await render({ icon, title: 'Nothing yet' })
+      expect(host?.querySelector('[data-testid]')).toBeNull()
+    })
+  })
 })

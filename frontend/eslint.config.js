@@ -428,6 +428,27 @@ export default [
   },
 
   {
+    // FE-161: specs take `test`/`expect` from e2e/support/test.ts, which runs
+    // every test under the crash detector. A bare @playwright/test import
+    // would silently opt the spec out.
+    files: ['e2e/**/*.spec.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@playwright/test',
+              importNames: ['test', 'expect'],
+              message: "Import test/expect from './support/test' (the crash detector rides on it).",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  {
     // node:test registers tests with top-level test(...) calls that return a
     // promise nobody awaits by design.
     files: ['scripts/**/*.test.mjs'],
