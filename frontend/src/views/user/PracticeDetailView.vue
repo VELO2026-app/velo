@@ -16,7 +16,7 @@
 
   F4.1: BookingPopup (purchase flow with promo).
   F5 review fix:
-    W-21: booked state derived from bookingsStore instead of local ref.
+    W-21: booked state derived from the bookings list instead of local ref.
   F9.1: Sticky footer action is now context-aware:
     - Not booked + available  -> book (i18n:user.screens.practiceDetail.cta.book)
                                  / book free
@@ -323,7 +323,7 @@ import { computed, ref, onMounted, watch } from 'vue'
 import { useNow } from '@/composables/useNow'
 import { useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'
-import { useBookingsStore } from '@/stores/bookings'
+import { useMyBookings } from '@/composables/queries/bookings'
 import {
   VSkeleton,
   VEmptyState,
@@ -362,7 +362,8 @@ const store = usePracticesStore()
 const { showSkeleton: detailSkeleton, reveal: detailReveal } = useLoadingHold(
   () => store.selectedLoading,
 )
-const bookingsStore = useBookingsStore()
+const myBookings = useMyBookings()
+const bookings = myBookings.bookings
 
 const practice = computed(() => store.selected)
 
@@ -427,14 +428,14 @@ function goEdit(): void {
   void router.push({ name: 'master-practice-edit', params: { id } })
 }
 
-// W-21: Derive booked state from bookingsStore (survives navigation).
+// W-21: Derive booked state from the bookings list (survives navigation).
 // Falls back to local flag for immediate feedback after purchase.
 const justPurchased = ref(false)
 
 const booked = computed(() => {
   if (justPurchased.value) return true
   if (!practice.value) return false
-  return bookingsStore.bookings.some(
+  return bookings.value.some(
     (b) =>
       b.practice_id === practice.value!.id &&
       (b.status === 'confirmed' || b.status === 'pending' || b.status === 'attended'),
@@ -458,7 +459,7 @@ const now = useNow(60_000)
  */
 const myBooking = computed(() => {
   if (!practice.value) return null
-  return bookingsStore.bookings.find((b) => b.practice_id === practice.value!.id) ?? null
+  return bookings.value.find((b) => b.practice_id === practice.value!.id) ?? null
 })
 
 // =========================================================================
@@ -480,7 +481,7 @@ const _ACTIVE_BOOKING_STATUSES = ['confirmed', 'pending', 'attended'] as const
 const myAnyBooking = computed((): BookingWithPracticeResponse | null => {
   if (!practice.value) return null
   const pid = practice.value.id
-  const mine = bookingsStore.bookings.filter((b) => b.practice_id === pid)
+  const mine = bookings.value.filter((b) => b.practice_id === pid)
   if (mine.length === 0) return null
   const active = mine.find((b) =>
     (_ACTIVE_BOOKING_STATUSES as readonly string[]).includes(b.status),
@@ -681,7 +682,7 @@ async function refreshRecording(): Promise<void> {
 }
 
 // immediate: true matters beyond mount-time convenience -- it also covers
-// the case where bookingsStore already held this booking BEFORE this
+// the case where the bookings list already held this booking BEFORE this
 // component was created (e.g. arriving from a list that fetched it first).
 // Without it, the watch would never see a CHANGE to diff against and would
 // never fire at all for an already-cached booking.
@@ -779,9 +780,9 @@ function onPurchased(): void {
   const id = route.params.id as string
   // No fetchPractice here: BookingConfirmedView loads the practice itself,
   // and this detail view reloads via its own onMounted when the user returns
-  // (routes are not kept alive). Refreshing bookings keeps the global store
-  // in sync so the booked state is correct on return.
-  void bookingsStore.refreshBookings()
+  // (routes are not kept alive). The bookings list is refetched by the
+  // purchase itself (INVALIDATES.purchaseBooking), so the booked state is
+  // correct on return.
   // Frame 5: go to the dedicated booking-confirmed screen.
   void router.push({ name: 'user-booking-confirmed', params: { practiceId: id } })
 }
@@ -796,7 +797,7 @@ function onPurchased(): void {
 function onSoldOut(): void {
   soldOut.value = true
   void store.fetchPractice(route.params.id as string)
-  void bookingsStore.refreshBookings()
+  void myBookings.refetch()
 }
 
 /** The find-another-practice action (i18n:shared.soldOut.findOther) `->`
@@ -853,12 +854,12 @@ async function onCancelBooking(): Promise<void> {
 onMounted(() => {
   const id = route.params.id as string
   void store.openPractice(id)
-  // B30: refreshMyBookings() (not fetchMyBookings()) -- the list may already
+  // B30: always refetch on open, not only when stale -- the list may already
   // be cached from a screen visited earlier in the session, taken BEFORE this
-  // practice ended; fetchMyBookings() would then no-op and the attendance
-  // badge below (attendancePending) would never clear. refreshMyBookings()
-  // always re-fetches, without flashing the status row/Zoom card empty.
-  void bookingsStore.refreshMyBookings()
+  // practice ended, and the attendance badge below (attendancePending) would
+  // never clear. The refetch keeps the status row / Zoom card on screen. A
+  // request already running (the first load) is that refetch.
+  if (!myBookings.fetching.value) void myBookings.refetch()
 })
 
 // F-01: Vue Router may reuse this component instance when navigating between

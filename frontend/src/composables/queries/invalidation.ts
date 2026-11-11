@@ -14,8 +14,10 @@
 // leaves when its store moves to Colada and its key joins the row here.
 // =============================================================================
 
-import type { EntryKey, QueryCache } from '@pinia/colada'
+import { toValue } from 'vue'
+import type { EntryKey, QueryCache, UseQueryEntry } from '@pinia/colada'
 import { keys } from '@/composables/queries/keys'
+import { forgetPersisted } from '@/composables/queries/persist'
 
 /** Each mutation and the query-key prefixes it makes stale. */
 export const INVALIDATES = {
@@ -56,19 +58,34 @@ export const INVALIDATES = {
 export type MutationName = keyof typeof INVALIDATES
 
 /**
- * Mark every entry under the mutation's prefixes stale; the active ones refetch now.
+ * Mark every entry under the mutation's prefixes stale and refetch the ones
+ * that matter now: those on screen, and the persisted ones off screen (small,
+ * and their copy must not outlive the change). A persisted copy of an entry
+ * not on screen is dropped first (./persist.ts, forgetPersisted).
  *
  * @remarks
- * Resolves when those refetches settle and never rejects: a failed refetch is
+ * Resolves when EVERY refetch settled -- each awaited on its own, so one that
+ * fails early cannot release a caller still waiting for another (the cancel
+ * control waits for the bookings list). Never rejects: a failed refetch is
  * already recorded on its entry (its screen shows it), and a mutation that
  * succeeded on the server must not turn into an error because a follow-up
- * read failed.
+ * read failed. Entries off screen and not persisted only go stale: their next
+ * reader refetches them.
  */
 export async function invalidateAfter(
   queryCache: QueryCache,
   mutation: MutationName,
 ): Promise<void> {
-  await Promise.allSettled(
-    INVALIDATES[mutation].map((key) => queryCache.invalidateQueries({ key })),
-  )
+  const entries = new Set<UseQueryEntry>()
+  for (const key of INVALIDATES[mutation]) {
+    forgetPersisted(queryCache, key)
+    for (const entry of queryCache.getEntries({ key })) entries.add(entry)
+  }
+  const refetches: Promise<unknown>[] = []
+  for (const entry of entries) {
+    queryCache.invalidate(entry)
+    if (!entry.options || !toValue(entry.options.enabled)) continue
+    if (entry.active || entry.meta.persist === true) refetches.push(queryCache.fetch(entry))
+  }
+  await Promise.allSettled(refetches)
 }

@@ -22,8 +22,13 @@
 // after the release is one cold start for those two.
 // =============================================================================
 
-import type { PiniaColadaPluginContext, UseQueryEntry } from '@pinia/colada'
-import { readPersisted, writePersisted } from '@/composables/persistedCache'
+import type { EntryKey, PiniaColadaPluginContext, QueryCache, UseQueryEntry } from '@pinia/colada'
+import {
+  persistedNames,
+  readPersisted,
+  removePersisted,
+  writePersisted,
+} from '@/composables/persistedCache'
 
 declare module '@pinia/colada' {
   interface TypesConfig {
@@ -79,4 +84,42 @@ export function persistPlugin({ queryCache }: PiniaColadaPluginContext): void {
       }
     }
   })
+}
+
+const SLOT_PREFIX = persistSlot('')
+
+/** `prefix` matches `key` the way Colada matches a key filter: element by element, objects partially. */
+function isPrefixOf(prefix: readonly unknown[], key: readonly unknown[]): boolean {
+  return prefix.every((part, i) => isSubset(part, key[i]))
+}
+
+function isSubset(part: unknown, whole: unknown): boolean {
+  if (part === whole) return true
+  if (!part || !whole || typeof part !== 'object' || typeof whole !== 'object') return false
+  return Object.entries(part).every(([k, v]) => isSubset(v, (whole as Record<string, unknown>)[k]))
+}
+
+/**
+ * Drop the persisted copies under `prefix` that no screen shows right now.
+ *
+ * @remarks
+ * The ADR rule for invalidating data that is not on screen: a copy on disk
+ * would be hydrated on the next read -- after a reload, or once its memory
+ * entry was garbage-collected -- and show the state the mutation just
+ * changed (a cancelled booking on a dashboard opened later). An entry on
+ * screen is refetched by the invalidation and rewrites its copy; one in
+ * memory but off screen is refetched too (invalidateAfter) and rewrites it
+ * when that answer lands -- until then there is no copy to lie.
+ */
+export function forgetPersisted(queryCache: QueryCache, prefix: EntryKey): void {
+  for (const name of persistedNames(SLOT_PREFIX)) {
+    let key: unknown
+    try {
+      key = JSON.parse(name.slice(SLOT_PREFIX.length))
+    } catch {
+      continue
+    }
+    if (!Array.isArray(key) || !isPrefixOf(prefix, key)) continue
+    if (!queryCache.get(key)?.active) removePersisted(name)
+  }
 }

@@ -28,10 +28,10 @@ vi.mock('@/platform/dom', async (importOriginal) => {
   }
 })
 
-vi.mock('@/stores/bookings', () => ({
-  useBookingsStore: () => ({
-    fetchUpcoming: () => {
-      calls.push('upcoming')
+vi.mock('@/stores/notifications', () => ({
+  useNotificationsStore: () => ({
+    refreshUnread: () => {
+      calls.push('bell')
       return Promise.resolve()
     },
   }),
@@ -63,13 +63,17 @@ vi.mock('@/stores/auth', async () => {
   return { useAuthStore: () => auth }
 })
 vi.mock('@/api/bookings', () => ({
+  getUpcomingBookings: () => {
+    calls.push('upcoming')
+    return Promise.resolve([])
+  },
   getMyStats: () => {
     calls.push('stats')
     return Promise.resolve({ practices_attended: 0, hours_attended: 0 })
   },
 }))
 
-const { DATA_PREFETCH_DELAY_MS, installDataPrefetch, warmTabData } =
+const { DATA_PREFETCH_DELAY_MS, TAB_DATA_WARMERS, installDataPrefetch, warmTabData } =
   await import('@/router/dataPrefetch')
 
 const Blank = defineComponent({ render: () => h('div') })
@@ -124,6 +128,16 @@ describe('installDataPrefetch', () => {
     expect(calls).toContain('diary') // after the failing calendar warmer
     expect(calls).toContain('stats') // profile
     expect(calls).not.toContain('upcoming') // the open tab loads itself
+  })
+
+  it('from another tab, the dashboard warmer fills the upcoming entry; within its staleTime it is not asked again', async () => {
+    const router = makeRouter()
+    await router.push('/user/calendar')
+    await runAll()
+    expect(calls.filter((c) => c === 'upcoming')).toHaveLength(1)
+
+    await TAB_DATA_WARMERS['/user/dashboard']!()
+    expect(calls.filter((c) => c === 'upcoming')).toHaveLength(1)
   })
 
   it('once per session: later navigations do not schedule it again', async () => {

@@ -11,7 +11,7 @@
 
   Bookings are fetched page by page (no status filter) and grouped on the
   client; the show-more control (i18n:common.showMore) appends the next page
-  (store.loadMore / store.hasMore, via usePagination). Cancellation now lives
+  (useMyBookings: loadMore / hasMore, a Colada infinite query). Cancellation now lives
   on the detail screens (15/18), so the card is a plain link to the booking
   detail (screen 18).
 
@@ -25,7 +25,7 @@
     <!-- Loading (initial): skeleton cards held for a visible minimum, then
          crossfaded into whichever state lands (VLoadingSwap). -->
     <VLoadingSwap
-      :pending="store.loading && store.bookings.length === 0"
+      :pending="list.loading.value"
       memory-key="my-bookings"
       :revision="bookingsRevision"
     >
@@ -37,12 +37,12 @@
 
       <!-- Error -->
       <VEmptyState
-        v-if="store.error && store.bookings.length === 0"
+        v-if="list.failed.value"
         icon="warning"
         :title="t('common.loadError')"
-        :description="store.error"
+        :description="listError"
       >
-        <VButton size="sm" @click="store.refreshBookings()">{{
+        <VButton size="sm" @click="list.refetch()">{{
           t('user.screens.myBookings.retry')
         }}</VButton>
       </VEmptyState>
@@ -87,10 +87,10 @@
         </section>
 
         <!-- Load more (W-7): the list is paginated -- append the next page, which
-             then re-groups into the two sections above. store.loading guards a
-             double-tap; the button hides once every page is loaded. -->
-        <div v-if="store.hasMore" class="bookings__more">
-          <VButton variant="ghost" block :loading="store.loading" @click="onLoadMore">
+             then re-groups into the two sections above. The list's fetching
+             flag guards a double-tap; the button hides once every page is loaded. -->
+        <div v-if="list.hasMore.value" class="bookings__more">
+          <VButton variant="ghost" block :loading="list.fetching.value" @click="onLoadMore">
             {{ t('common.showMore') }}
           </VButton>
         </div>
@@ -105,7 +105,8 @@ import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { VSkeletonPracticeCard, VLoadingSwap, VEmptyState, VButton } from '@/components/ui'
 import { VHeader } from '@/components/layout'
-import { useBookingsStore } from '@/stores/bookings'
+import { useMyBookings } from '@/composables/queries/bookings'
+import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import BookingCard from '@/components/shared/BookingCard.vue'
 import type { BookingBadge } from '@/components/shared/bookingBadge'
@@ -116,16 +117,19 @@ import type { BookingWithPracticeResponse } from '@/api/types'
 
 const router = useRouter()
 const toast = useToast()
-const store = useBookingsStore()
+const list = useMyBookings()
+const bookings = list.bookings
+/** The first page failed: the error rung's text (ADR: the screen words the raw error). */
+const listError = computed(() => extractApiError(list.error.value, t('storeErrors.bookings.list')))
 const viewerTz = useViewerTimezone()
 // Skeleton in the size of the last answer (see useRememberedCount).
 /** The list's shape (VLoadingSwap revision): a refresh that adds or drops a
  * booking glides the block's height instead of snapping. */
-const bookingsRevision = computed(() => store.bookings.map((b) => b.id).join(','))
+const bookingsRevision = computed(() => bookings.value.map((b) => b.id).join(','))
 const skeletons = useRememberedCount(
   'my-bookings',
-  () => store.bookings.length,
-  () => !store.loading,
+  () => bookings.value.length,
+  () => !list.loading.value,
   { fallback: 3, max: 3 },
 )
 
@@ -133,8 +137,11 @@ const skeletons = useRememberedCount(
 // rung is initial-load-only, :28) -- which, until now, meant the tap did
 // nothing and NOTHING said why. Toast it, as the six admin lists do.
 async function onLoadMore(): Promise<void> {
-  await store.loadMore()
-  if (store.loadMoreError) toast.error(store.loadMoreError)
+  try {
+    await list.loadMore()
+  } catch (e) {
+    toast.error(extractApiError(e, t('storeErrors.bookings.list')))
+  }
 }
 
 // -- Grouping --
@@ -216,8 +223,8 @@ function upcomingRank(b: BookingWithPracticeResponse): number {
  * rest, each group sorted by scheduled time ascending.
  */
 const upcoming = computed(() => {
-  const list = store.bookings.filter(isUpcoming)
-  return [...list].sort((a, b) => {
+  const shown = bookings.value.filter(isUpcoming)
+  return [...shown].sort((a, b) => {
     const rankDiff = upcomingRank(a) - upcomingRank(b)
     if (rankDiff !== 0) return rankDiff
     return new Date(a.practice.scheduled_at).getTime() - new Date(b.practice.scheduled_at).getTime()
@@ -226,8 +233,8 @@ const upcoming = computed(() => {
 
 /** Past bookings: attended / no_show / cancelled, most recent first. */
 const past = computed(() => {
-  const list = store.bookings.filter((b) => !isUpcoming(b))
-  return [...list].sort(
+  const shown = bookings.value.filter((b) => !isUpcoming(b))
+  return [...shown].sort(
     (a, b) =>
       new Date(b.practice.scheduled_at).getTime() - new Date(a.practice.scheduled_at).getTime(),
   )
@@ -276,12 +283,12 @@ function openDetail(b: BookingWithPracticeResponse): void {
 }
 
 onMounted(() => {
-  // B30: refreshMyBookings() (not fetchMyBookings()) -- badgeFor() below reads
-  // a t('user.screens.myBookings.status.counting') (attendance-pending) state off a cached list that may
-  // have been fetched before the practice ended; fetchMyBookings() would
-  // no-op and the badge would never advance to its real verdict.
-  // refreshMyBookings() always re-fetches, without flashing the list empty.
-  void store.refreshMyBookings()
+  // B30: always refetch on open, not only when stale -- badgeFor() below reads
+  // a t('user.screens.myBookings.status.counting') (attendance-pending) state
+  // off a cached list that may have been fetched before the practice ended;
+  // the refetch keeps the list on screen and advances the badge to its verdict.
+  // A request already running (the first load, a stale entry) is that refetch.
+  if (!list.fetching.value) void list.refetch()
 })
 </script>
 

@@ -56,5 +56,9 @@ export const keys = {
      * these numbers, so it refetches them too (./invalidation.ts).
      */
     myStats: () => ['bookings', 'stats'] as const,
+    /** `GET /bookings/me` -- every booking of mine, page by page (newest booked first). */
+    list: () => ['bookings', 'list'] as const,
+    /** `GET /bookings/me/upcoming` -- confirmed and not ended, soonest first (the dashboard). */
+    upcoming: () => ['bookings', 'upcoming'] as const,
   },
 }

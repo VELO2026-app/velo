@@ -32,7 +32,6 @@ import { useNotificationsStore } from '@/stores/notifications'
 import { usePracticesStore } from '@/stores/practices'
 import { useMasterStore } from '@/stores/master'
 import { useSchoolsHubStore } from '@/stores/schoolsHub'
-import { useBookingsStore } from '@/stores/bookings'
 
 type StoreFactory = () => StoreGeneric
 
@@ -304,7 +303,9 @@ describe('the end of a session leaves every store in its initial state', () => {
       useMasterStore().fetchMyProfile(true),
       useMasterStore().fetchUpcomingPractices(),
       useSchoolsHubStore().ensureCurator(),
-      useBookingsStore().fetchUpcoming(),
+      // The bookings store holds no server data since FE-166 step 3; its
+      // queries are Colada entries, emptied by the account scope
+      // (composables/queries/setup.test.ts).
     ]
 
     await useAuthStore().logout()
@@ -328,7 +329,6 @@ describe('the end of a session leaves every store in its initial state', () => {
     ['master profile', () => useMasterStore().fetchMyProfile(true)],
     ['master upcoming practices', () => useMasterStore().fetchUpcomingPractices()],
     ['schools hub probe', () => useSchoolsHubStore().ensureCurator()],
-    ['bookings upcoming', () => useBookingsStore().fetchUpcoming()],
   ]
   for (const [name, run] of ownRequests) {
     it(`after a 401 to the store's own request: ${name}`, async () => {

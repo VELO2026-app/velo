@@ -37,10 +37,6 @@ const INTENT_THROTTLE_MS = 15_000
 
 type Warmer = () => Promise<unknown>
 
-/** An upcoming list answered this recently is not asked for again (the
- * first-screen gate, the idle prefetch and the screen's mount share it). */
-export const UPCOMING_FRESH_MS = 10_000
-
 /**
  * Load one Colada query into the cache its screen reads, unless it is fresh.
  * Rejects when the request fails (warmTabsData swallows it).
@@ -48,6 +44,12 @@ export const UPCOMING_FRESH_MS = 10_000
 async function warmQuery(load: (cache: QueryCache) => Promise<unknown>): Promise<void> {
   const { useQueryCache } = await import('@pinia/colada')
   await load(useQueryCache())
+}
+
+async function warmUpcoming(): Promise<void> {
+  // Fresh within UPCOMING_STALE_MS (the query's staleTime): not asked again.
+  const { upcomingBookingsQuery } = await import('@/composables/queries/bookings')
+  await warmQuery((cache) => cache.refresh(cache.ensure(upcomingBookingsQuery())))
 }
 
 async function warmStats(): Promise<void> {
@@ -58,12 +60,9 @@ async function warmStats(): Promise<void> {
 /** Per tab path: load that screen's data into the cache it reads. */
 export const TAB_DATA_WARMERS: Readonly<Record<string, Warmer>> = {
   '/user/dashboard': async () => {
-    const [{ useBookingsStore }, { useNotificationsStore }] = await Promise.all([
-      import('@/stores/bookings'),
-      import('@/stores/notifications'),
-    ])
+    const { useNotificationsStore } = await import('@/stores/notifications')
     await Promise.all([
-      useBookingsStore().fetchUpcoming({ maxAgeMs: UPCOMING_FRESH_MS }),
+      warmUpcoming(),
       warmStats(),
       // The header bell's dot: in place at first paint, not a late pop.
       useNotificationsStore().refreshUnread(),

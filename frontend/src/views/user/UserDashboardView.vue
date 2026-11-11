@@ -108,7 +108,7 @@
            450 ms once seen, then a crossfade) -- the sections below never
            get pushed down. -->
       <VLoadingSwap
-        :pending="bookingsStore.upcomingLoading && !bookingsStore.upcomingLoaded"
+        :pending="upcomingPending"
         memory-key="dashboard-upcoming"
         :revision="nearestRevision"
       >
@@ -282,7 +282,8 @@ import { computed, onMounted, onUnmounted, onActivated, onDeactivated } from 'vu
 import { useNow } from '@/composables/useNow'
 import { useRouter } from 'vue-router'
 import { useBookingsStore } from '@/stores/bookings'
-import { UPCOMING_FRESH_MS } from '@/router/dataPrefetch'
+import { upcomingBookingsQuery } from '@/composables/queries/bookings'
+import { extractApiError } from '@/composables/useApiError'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useToast } from '@/composables/useToast'
 import { VHeader } from '@/components/layout'
@@ -352,14 +353,21 @@ const { showSkeleton: statsPending } = useLoadingHold(screenQueryState(statsQuer
  * re-ranks on the 60s clock tick.
  *
  * [FE-56] This selection shares its source and candidate rule with the
- * check-in banner below (both read bookingsStore.upcoming through
+ * check-in banner below (both read the upcoming list through
  * utils/nearestBookings), so the two can never disagree. The list caps the
  * pool at 3 cards for display; the banner searches the FULL pool -- see
  * checkinAlert. (The banner used to search the paginated bookings page
  * instead -- see checkinAlert.)
  */
+// The live-or-upcoming bookings (Colada, persisted): a reload paints the last
+// known list at once, then revalidates.
+const upcomingQuery = useQuery(() => upcomingBookingsQuery())
+const upcoming = computed(() => upcomingQuery.data.value ?? [])
+/** Nothing known yet and a request in flight (an EMPTY answer is data, not loading). */
+const upcomingPending = screenQueryState(upcomingQuery).loading
+
 const nearestBookings = computed((): BookingWithPracticeResponse[] =>
-  selectNearestBookings(bookingsStore.upcoming, now.value),
+  selectNearestBookings(upcoming.value, now.value),
 )
 /** The list's shape (VLoadingSwap revision): a row added or dropped glides. */
 const nearestRevision = computed(() => nearestBookings.value.map((b) => b.id).join(','))
@@ -370,7 +378,7 @@ const nearestRevision = computed(() => nearestBookings.value.map((b) => b.id).jo
 const upcomingSkeletons = useRememberedCount(
   'dashboard-upcoming',
   () => nearestBookings.value.length,
-  () => !bookingsStore.upcomingLoading,
+  () => !upcomingPending.value,
   { fallback: 2, max: 3 },
 )
 
@@ -381,13 +389,12 @@ const upcomingSkeletons = useRememberedCount(
 /**
  * First still-checkable booking inside the check-in window, soonest first.
  *
- * [FE-56] The candidate pool is selectActionableBookings(bookingsStore.
- * upcoming) -- the SAME upcoming source and candidate rule that drive the
+ * [FE-56] The candidate pool is selectActionableBookings(upcoming) -- the SAME upcoming source and candidate rule that drive the
  * nearest-practices list (i18n:user.screens.userDashboard.sections.upcoming),
  * but UNCAPPED: the list shows at most 3 cards,
  * and with several practices inside the 24h window at once the first
  * still-checkable one may sit past that cap (e.g. behind a live session and
- * two already checked-in cards). NOT bookingsStore.bookings: that paginated
+ * two already checked-in cards). NOT the bookings list: that paginated
  * page is created_at-ordered and capped, so its first in-window item could be
  * a LATER practice while a sooner one sat in the nearest list -- the banner
  * then offered check-in for the wrong session (the reported bug). The pool
@@ -396,7 +403,7 @@ const upcomingSkeletons = useRememberedCount(
  */
 const checkinAlert = computed((): BookingWithPracticeResponse | null => {
   return (
-    selectActionableBookings(bookingsStore.upcoming, now.value).find((b) => {
+    selectActionableBookings(upcoming.value, now.value).find((b) => {
       // Hide once the user has already checked in (no re-submit via banner).
       if (b.has_checkin) return false
       // Hide if the user persistently skipped this booking's check-in (B2).
@@ -624,11 +631,13 @@ function onBellVisibility(): void {
 // =========================================================================
 
 function loadUpcoming(): void {
-  // W15 fix (PROMPT №409): fetchUpcoming used to swallow its error entirely
-  // (an empty result looked identical to "genuinely nothing upcoming") --
-  // surface it via toast instead of leaving the widget silently blank.
-  void bookingsStore.fetchUpcoming({ maxAgeMs: UPCOMING_FRESH_MS }).then(() => {
-    if (bookingsStore.upcomingError) toast.error(bookingsStore.upcomingError)
+  // Revalidate unless answered within UPCOMING_STALE_MS (the first-screen
+  // gate and the idle prefetch share the entry). W15 (PROMPT №409): a failure
+  // is toasted -- an empty widget must not pass for "genuinely nothing
+  // upcoming"; a list already shown stays.
+  void upcomingQuery.refresh().then(() => {
+    const error = upcomingQuery.error.value
+    if (error != null) toast.error(extractApiError(error, t('storeErrors.bookings.upcoming')))
   })
 }
 

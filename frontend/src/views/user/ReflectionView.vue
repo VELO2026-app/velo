@@ -82,7 +82,6 @@ import { historyHasBack } from '@/platform/history'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'
-import { useBookingsStore } from '@/stores/bookings'
 import { useDiaryStore } from '@/stores/diary'
 import { useToast } from '@/composables/useToast'
 import { platform } from '@/platform'
@@ -94,7 +93,6 @@ import { pickReflectionVariant } from '@/utils/reflectionVariants'
 const route = useRoute()
 const router = useRouter()
 const practicesStore = usePracticesStore()
-const bookingsStore = useBookingsStore()
 const diaryStore = useDiaryStore()
 const toast = useToast()
 
@@ -125,11 +123,8 @@ async function onSubmit(): Promise<void> {
       /* silent fallback */
     }
     submitted.value = true
-    // Refresh bookings so `has_reflection` is up to date this session -- the
-    // practice-detail button reads it.
-    void bookingsStore.refreshBookings()
-    // The dashboard's upcoming list carries the same booking flags.
-    bookingsStore.invalidateUpcoming()
+    // `has_reflection` (the practice-detail button) comes back with the
+    // booking keys the submit made stale (INVALIDATES.submitReflection).
   } else {
     toast.error(result.error)
   }

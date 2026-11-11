@@ -38,13 +38,13 @@ vi.mock('@/api/diary')
 const invalidateAfter = vi.hoisted(() => vi.fn())
 vi.mock('@/composables/queries/invalidation', () => ({ invalidateAfter }))
 
-// The bookings store must stay UNREACHED. If someone re-adds the import and the
-// call, refreshBookings starts getting hit and the negative-space test below
-// fails -- which is the whole point of mocking a store the diary does not use.
-const refreshBookings = vi.fn()
-vi.mock('@/stores/bookings', () => ({
-  useBookingsStore: () => ({ refreshBookings }),
-}))
+// The bookings store must stay UNREACHED. If someone re-adds the import and a
+// call, useBookingsStore starts getting hit and the negative-space tests below
+// fail -- which is the whole point of mocking a store the diary does not use.
+// (Since FE-166 the bookings store holds no server data at all: the booking
+// flags a submit flips come back through invalidateAfter.)
+const useBookingsStore = vi.hoisted(() => vi.fn())
+vi.mock('@/stores/bookings', () => ({ useBookingsStore }))
 
 const CHECKIN: CheckinRequest = { mood: 4, energy: 3, comment: null } as CheckinRequest
 const FEEDBACK: FeedbackRequest = { rating: 5, comment: null } as FeedbackRequest
@@ -68,7 +68,7 @@ beforeEach(() => {
   vi.mocked(diaryApi.createReflection)
     .mockReset()
     .mockResolvedValue({} as never)
-  refreshBookings.mockReset()
+  useBookingsStore.mockReset()
   invalidateAfter.mockReset().mockResolvedValue(undefined)
 })
 
@@ -300,7 +300,7 @@ describe('diary store', () => {
 
       await store.submitExternalActivity(ACTIVITY)
 
-      expect(refreshBookings).not.toHaveBeenCalled()
+      expect(useBookingsStore).not.toHaveBeenCalled()
     })
   })
 
@@ -312,8 +312,9 @@ describe('diary store', () => {
     // themselves the moment the submit resolves, so every check-in and every
     // feedback issued TWO sequential GET /bookings.
     //
-    // Keeping bookings fresh is the view's job, which is the convention this
-    // codebase already follows. If either of these goes red, someone has put the
+    // Since FE-166 neither the store nor the view refreshes bookings by hand:
+    // the submit's invalidateAfter() makes the booking keys stale (asserted in
+    // the submit tests above). If either of these goes red, someone has put the
     // cycle back.
 
     it('submitCheckin does not refresh bookings', async () => {
@@ -321,7 +322,7 @@ describe('diary store', () => {
 
       await store.submitCheckin('p1', CHECKIN)
 
-      expect(refreshBookings).not.toHaveBeenCalled()
+      expect(useBookingsStore).not.toHaveBeenCalled()
     })
 
     it('submitFeedback does not refresh bookings', async () => {
@@ -329,7 +330,7 @@ describe('diary store', () => {
 
       await store.submitFeedback('p1', FEEDBACK)
 
-      expect(refreshBookings).not.toHaveBeenCalled()
+      expect(useBookingsStore).not.toHaveBeenCalled()
     })
 
     it('exactly ONE feed read per submit -- no duplicate refresh', async () => {

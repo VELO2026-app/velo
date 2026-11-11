@@ -25,9 +25,12 @@ import { readSessionJson, removeSessionKeys, writeSessionString } from '@/platfo
 
 // Bumped whenever a persisted payload changes shape. 2 (FE-127): the school
 // rename moved the practice school fields and the schools-list fields, so
-// every v1 copy is a payload this build no longer reads.
+// every v1 copy is a payload this build no longer reads. 3 (FE-166): the
+// in-house cache's `q:` slots and the bookings store's `bookings.upcoming`
+// moved to Colada's `colada:` slots -- nothing reads them any more, and they
+// would sit in the size budget until sign-out.
 /** Format version of the persisted screen cache; a bump orphans every older copy. */
-export const PERSIST_VERSION = 2
+export const PERSIST_VERSION = 3
 /** sessionStorage key prefix shared by every persisted-cache slot. */
 export const PERSIST_PREFIX = 'velo:screen-cache:'
 /** Total budget for the serialized cache (sessionStorage is ~5 MB). */
@@ -102,6 +105,12 @@ export function removePersisted(name: string): void {
   if (!(name in all)) return
   delete all[name]
   if (flushTimer === null) flushTimer = setTimeout(flush, FLUSH_DELAY_MS)
+}
+
+/** Names of the current owner's persisted copies that start with `prefix`. */
+export function persistedNames(prefix: string): string[] {
+  if (owner === null) return []
+  return Object.keys(load()).filter((name) => name.startsWith(prefix))
 }
 
 /** Forget everything, every account (sign-out). */

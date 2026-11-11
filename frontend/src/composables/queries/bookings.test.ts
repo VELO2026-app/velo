@@ -23,6 +23,7 @@ import { coladaOptions, useQueryScopeStore } from '@/composables/queries/setup'
 import { keys } from '@/composables/queries/keys'
 import { schoolFeedQuery } from '@/composables/queries/schools'
 import {
+  useMyBookings,
   useCancelBooking,
   useConfirmWaitlist,
   usePurchaseBooking,
@@ -41,17 +42,20 @@ vi.mock('@/api/schools')
 vi.mock('@/api/waitlist')
 
 const stores = vi.hoisted(() => ({
-  bookings: { refreshMyBookings: vi.fn(), invalidateUpcoming: vi.fn() },
   practices: { selected: null as { id: string } | null, fetchPractice: vi.fn() },
   calendar: { weekPractices: [] as Array<{ id: string }>, loadWeek: vi.fn() },
   diary: { refreshFeed: vi.fn() },
   balance: { refresh: vi.fn() },
 }))
-vi.mock('@/stores/bookings', () => ({ useBookingsStore: () => stores.bookings }))
 vi.mock('@/stores/practices', () => ({ usePracticesStore: () => stores.practices }))
 vi.mock('@/stores/calendar', () => ({ useCalendarStore: () => stores.calendar }))
 vi.mock('@/stores/diary', () => ({ useDiaryStore: () => stores.diary }))
 vi.mock('@/stores/balance', () => ({ useBalanceStore: () => stores.balance }))
+
+/** One page of `GET /bookings/me`. */
+function bookingsPage(items: unknown[] = []) {
+  return { items, total: items.length, limit: 20, offset: 0 } as never
+}
 
 const VARS: CancelBookingVars = { bookingId: 'b7', practiceId: 'p1' }
 const practice = { id: 'p1' } as PracticeResponse
@@ -66,6 +70,8 @@ let queryCache: QueryCache
 const Screen = defineComponent({
   setup() {
     useQuery(() => schoolFeedQuery({ schoolId: 'g1', limit: 5 }))
+    // The bookings list on screen (PracticeDetailView derives its cancel control from it).
+    useMyBookings()
     cancel = useCancelBooking().mutateAsync
     purchase = usePurchaseBooking().mutateAsync
     confirmSpot = useConfirmWaitlist().mutateAsync
@@ -98,8 +104,7 @@ beforeEach(async () => {
   vi.mocked(schoolsApi.getSchoolPractices)
     .mockReset()
     .mockResolvedValue({ items: [practice], total: 1, limit: 5, offset: 0 })
-  stores.bookings.refreshMyBookings.mockReset().mockResolvedValue(undefined)
-  stores.bookings.invalidateUpcoming.mockReset()
+  vi.mocked(bookingsApi.getMyBookings).mockReset().mockResolvedValue(bookingsPage())
   stores.practices.selected = { id: 'p1' }
   stores.practices.fetchPractice.mockReset().mockResolvedValue(undefined)
   stores.calendar.weekPractices = [{ id: 'p0' }, { id: 'p1' }]
@@ -113,7 +118,7 @@ beforeEach(async () => {
   // Off screen: another school's feed, a bookings entry, and the school page
   // (a cancellation does not change it).
   queryCache.setQueryData(keys.practices.schoolFeed('g2', 5), [practice])
-  queryCache.setQueryData([...keys.bookings.root(), 'list'], [])
+  queryCache.setQueryData(keys.bookings.upcoming(), [])
   queryCache.setQueryData(keys.schools.detail('g1'), { name: 'School' })
   queryCache.setQueryData(keys.practices.detail('p1'), practice)
 })
@@ -124,11 +129,12 @@ afterEach(() => {
 })
 
 describe('useCancelBooking -- success', () => {
-  it('cancels the booking, then refreshes the bookings list before it resolves', async () => {
+  it('cancels the booking, then refetches the bookings list on screen before it resolves', async () => {
+    expect(bookingsApi.getMyBookings).toHaveBeenCalledTimes(1)
     let releaseList!: () => void
-    stores.bookings.refreshMyBookings.mockReturnValue(
-      new Promise<void>((resolve) => {
-        releaseList = resolve
+    vi.mocked(bookingsApi.getMyBookings).mockReturnValue(
+      new Promise((resolve) => {
+        releaseList = () => resolve(bookingsPage())
       }),
     )
     let settled = false
@@ -138,8 +144,29 @@ describe('useCancelBooking -- success', () => {
     await flush()
 
     expect(bookingsApi.cancelBooking).toHaveBeenCalledWith('b7')
-    expect(stores.bookings.refreshMyBookings).toHaveBeenCalledTimes(1)
+    expect(bookingsApi.getMyBookings).toHaveBeenCalledTimes(2)
     // The screen's cancel control derives from that list: no second tap.
+    expect(settled).toBe(false)
+    releaseList()
+    await done
+    expect(settled).toBe(true)
+  })
+
+  it('waits for the bookings list even when another refetch of the map fails first', async () => {
+    let releaseList!: () => void
+    vi.mocked(bookingsApi.getMyBookings).mockReturnValue(
+      new Promise((resolve) => {
+        releaseList = () => resolve(bookingsPage())
+      }),
+    )
+    // The school feed on screen (practices.root()) fails at once.
+    vi.mocked(schoolsApi.getSchoolPractices).mockRejectedValue(new Error('offline'))
+    let settled = false
+    const done = cancel(VARS).then(() => {
+      settled = true
+    })
+    await flush()
+
     expect(settled).toBe(false)
     releaseList()
     await done
@@ -160,15 +187,14 @@ describe('useCancelBooking -- success', () => {
     // ...the feed off screen is stale until its screen reads it.
     expect(when(keys.practices.schoolFeed('g2', 5))).toBe(0)
     // keys.bookings.root()
-    expect(when([...keys.bookings.root(), 'list'])).toBe(0)
+    expect(when(keys.bookings.upcoming())).toBe(0)
     // Not in the map: untouched.
     expect(when(keys.schools.detail('g1'))).toBe(pageAt)
   })
 
-  it('refreshes the legacy holders: upcoming, practice detail, calendar week, diary', async () => {
+  it('refreshes the legacy holders: practice detail, calendar week, diary, balance', async () => {
     await cancel(VARS)
 
-    expect(stores.bookings.invalidateUpcoming).toHaveBeenCalledTimes(1)
     expect(stores.practices.fetchPractice).toHaveBeenCalledWith('p1')
     expect(when(keys.practices.detail('p1'))).toBe(0)
     expect(stores.calendar.loadWeek).toHaveBeenCalledWith(true)
@@ -211,8 +237,6 @@ describe('useCancelBooking -- the session ends while the DELETE is in flight', (
     await done
     await flush()
 
-    expect(stores.bookings.refreshMyBookings).not.toHaveBeenCalled()
-    expect(stores.bookings.invalidateUpcoming).not.toHaveBeenCalled()
     expect(stores.practices.fetchPractice).not.toHaveBeenCalled()
     expect(stores.calendar.loadWeek).not.toHaveBeenCalled()
     expect(stores.diary.refreshFeed).not.toHaveBeenCalled()
@@ -229,8 +253,6 @@ describe('useCancelBooking -- failure', () => {
     await expect(cancel(VARS)).rejects.toBe(error)
     await flush()
 
-    expect(stores.bookings.refreshMyBookings).not.toHaveBeenCalled()
-    expect(stores.bookings.invalidateUpcoming).not.toHaveBeenCalled()
     expect(stores.practices.fetchPractice).not.toHaveBeenCalled()
     expect(stores.calendar.loadWeek).not.toHaveBeenCalled()
     expect(stores.diary.refreshFeed).not.toHaveBeenCalled()
@@ -271,16 +293,14 @@ describe('usePurchaseBooking', () => {
 
     expect(schoolsApi.getSchoolPractices).toHaveBeenCalledTimes(2)
     expect(when(keys.practices.schoolFeed('g2', 5))).toBe(0)
-    expect(when([...keys.bookings.root(), 'list'])).toBe(0)
+    expect(when(keys.bookings.upcoming())).toBe(0)
     // A booking makes nobody a school member: the school page stays.
     expect(when(keys.schools.detail('g1'))).toBe(pageAt)
   })
 
-  it('refreshes the legacy holders: upcoming, calendar week, bookings list, diary', async () => {
+  it('refreshes the legacy holders: calendar week, diary', async () => {
     await purchase(BUY)
 
-    expect(stores.bookings.invalidateUpcoming).toHaveBeenCalledTimes(1)
-    expect(stores.bookings.refreshMyBookings).toHaveBeenCalledTimes(1)
     expect(when(keys.practices.detail('p1'))).toBe(0)
     expect(stores.calendar.loadWeek).toHaveBeenCalledWith(true)
     // The booking projects a "booking_confirmed" event onto the timeline.
@@ -292,7 +312,7 @@ describe('usePurchaseBooking', () => {
   })
 
   it('resolves without waiting for the refreshes (the toast and navigation do not wait)', async () => {
-    stores.bookings.refreshMyBookings.mockReturnValue(new Promise(() => {}))
+    vi.mocked(bookingsApi.getMyBookings).mockReturnValue(new Promise(() => {}))
 
     await expect(purchase(BUY)).resolves.toBeUndefined()
   })
@@ -304,8 +324,6 @@ describe('usePurchaseBooking', () => {
     await expect(purchase(BUY)).rejects.toBe(error)
     await flush()
 
-    expect(stores.bookings.invalidateUpcoming).not.toHaveBeenCalled()
-    expect(stores.bookings.refreshMyBookings).not.toHaveBeenCalled()
     expect(schoolsApi.getSchoolPractices).toHaveBeenCalledTimes(1)
     expect(when(keys.practices.schoolFeed('g2', 5))).not.toBe(0)
   })
@@ -325,8 +343,6 @@ describe('usePurchaseBooking', () => {
     await done
     await flush()
 
-    expect(stores.bookings.invalidateUpcoming).not.toHaveBeenCalled()
-    expect(stores.bookings.refreshMyBookings).not.toHaveBeenCalled()
     expect(when(keys.practices.schoolFeed('g2', 5))).not.toBe(0)
   })
 })
@@ -340,10 +356,8 @@ describe('useConfirmWaitlist', () => {
 
     expect(waitlistApi.confirmWaitlist).toHaveBeenCalledWith('w1')
     expect(when(keys.practices.schoolFeed('g2', 5))).toBe(0)
-    expect(when([...keys.bookings.root(), 'list'])).toBe(0)
+    expect(when(keys.bookings.upcoming())).toBe(0)
     expect(when(keys.schools.detail('g1'))).toBe(pageAt)
-    expect(stores.bookings.invalidateUpcoming).toHaveBeenCalledTimes(1)
-    expect(stores.bookings.refreshMyBookings).toHaveBeenCalledTimes(1)
     expect(stores.diary.refreshFeed).toHaveBeenCalledTimes(1)
     // The confirmation charges the balance.
     expect(stores.balance.refresh).toHaveBeenCalledTimes(1)
@@ -364,10 +378,9 @@ describe('useConfirmWaitlist', () => {
     await done
     await flush()
 
-    expect(stores.bookings.invalidateUpcoming).not.toHaveBeenCalled()
     expect(stores.diary.refreshFeed).not.toHaveBeenCalled()
     expect(stores.balance.refresh).not.toHaveBeenCalled()
-    expect(when([...keys.bookings.root(), 'list'])).not.toBe(0)
+    expect(when(keys.bookings.upcoming())).not.toBe(0)
   })
 
   it('rejects with the API error and refreshes nothing', async () => {
@@ -377,7 +390,6 @@ describe('useConfirmWaitlist', () => {
     await expect(confirmSpot(SPOT)).rejects.toBe(error)
     await flush()
 
-    expect(stores.bookings.invalidateUpcoming).not.toHaveBeenCalled()
-    expect(when([...keys.bookings.root(), 'list'])).not.toBe(0)
+    expect(when(keys.bookings.upcoming())).not.toBe(0)
   })
 })
