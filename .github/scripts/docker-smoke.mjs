@@ -14,7 +14,9 @@
 //                            ${...}, no `brand` (a skin property since 09.11),
 //                            no key beyond the declared set. A renamed env
 //                            var (DEFAULT_LOCALE -> DEFAULT_LANGUAGE, FE-158)
-//                            shows up as an empty or unrendered value.
+//                            shows up as an empty or unrendered value. The
+//                            six option flags OPTION_<O> land in the
+//                            `options` block (FE-151), on AND off.
 //   /                     -- 200, the SPA's index.html.
 //   /health, /ready       -- 404: closed in this container (protocol 9.3).
 //   /manifest.webmanifest -- lang of the instance (FE-155), not the golden 'ru'.
@@ -34,20 +36,45 @@ if (!image) {
 
 // The instance environment. Every value differs from any golden default, so
 // a value that did not come from HERE cannot pass. DEFAULT_LANGUAGE is 'en'
-// because the golden manifest is 'ru'.
+// because the golden manifest is 'ru'. The option flags (FE-151) mix 'true'
+// and 'false': the golden build is every option on, and a flag rendered into
+// the wrong key cannot pass both ways.
 const ENV = {
   API_BASE_URL: 'api.example.test',
   TELEGRAM_BOT_URL: 'https://t.me/velo_ci_smoke_bot',
   DEFAULT_LANGUAGE: 'en',
   LANGUAGES: 'en,ru',
+  OPTION_PAYMENTS: 'false',
+  OPTION_SCHOOLS: 'true',
+  OPTION_MCP: 'false',
+  OPTION_ZOOM: 'true',
+  OPTION_TELEGRAM: 'true',
+  OPTION_LLM: 'false',
 }
 // config.json key -> the env var it must carry (nginx/config.json.template).
+// A dotted key is a key inside a block: `options.payments` is
+// config.options.payments.
 const CONFIG = {
   apiBaseUrl: 'API_BASE_URL',
   telegramBotUrl: 'TELEGRAM_BOT_URL',
   defaultLocale: 'DEFAULT_LANGUAGE',
   locales: 'LANGUAGES',
+  'options.payments': 'OPTION_PAYMENTS',
+  'options.schools': 'OPTION_SCHOOLS',
+  'options.mcp': 'OPTION_MCP',
+  'options.zoom': 'OPTION_ZOOM',
+  'options.telegram': 'OPTION_TELEGRAM',
+  'options.llm': 'OPTION_LLM',
 }
+// The value at a dotted CONFIG key, or undefined.
+const at = (obj, key) => key.split('.').reduce((o, k) => (o && typeof o === 'object' ? o[k] : undefined), obj)
+// The keys CONFIG declares at one level: '' -> the top level, 'options' -> the block.
+const declared = (prefix) =>
+  new Set(
+    Object.keys(CONFIG)
+      .filter((k) => (prefix ? k.startsWith(`${prefix}.`) : true))
+      .map((k) => (prefix ? k.slice(prefix.length + 1) : k).split('.')[0]),
+  )
 
 const docker = (...args) => execFileSync('docker', args, { encoding: 'utf8' }).trim()
 
@@ -110,11 +137,19 @@ try {
   check(config !== undefined && typeof config === 'object', '/config.json is valid JSON')
   if (config) {
     for (const [key, env] of Object.entries(CONFIG)) {
-      check(config[key] === ENV[env], `config.${key} = $${env} (${JSON.stringify(ENV[env])}; got ${JSON.stringify(config[key])})`)
+      check(at(config, key) === ENV[env], `config.${key} = $${env} (${JSON.stringify(ENV[env])}; got ${JSON.stringify(at(config, key))})`)
     }
     check(!('brand' in config), 'config has no `brand`')
-    const extra = Object.keys(config).filter((k) => !(k in CONFIG))
+    const top = declared('')
+    const extra = Object.keys(config).filter((k) => !top.has(k))
     check(extra.length === 0, `config has no undeclared keys${extra.length ? ` (got ${extra.join(', ')})` : ''}`)
+    const options = config.options && typeof config.options === 'object' ? config.options : {}
+    const known = declared('options')
+    const extraOptions = Object.keys(options).filter((k) => !known.has(k))
+    check(
+      extraOptions.length === 0,
+      `config.options has no undeclared options${extraOptions.length ? ` (got ${extraOptions.join(', ')})` : ''}`,
+    )
   }
 
   // --- / and the SPA --------------------------------------------------------

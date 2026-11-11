@@ -40,7 +40,6 @@ interface ImportMeta {
 // together with its chunks. Present only in Vite-processed builds; the
 // runtime accessor lives in platform/features.
 declare const __VELO_FEATURE_AI__: boolean
-declare const __VELO_FEATURE_PAYMENTS__: boolean
 
 // The resolved flags set as JSON (FE-130): featureEnabled() reads it so the
 // runtime accessor follows the same edition the literals came from. Pinned

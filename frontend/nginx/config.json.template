@@ -2,5 +2,13 @@
   "apiBaseUrl": "${API_BASE_URL}",
   "telegramBotUrl": "${TELEGRAM_BOT_URL}",
   "defaultLocale": "${DEFAULT_LANGUAGE}",
-  "locales": "${LANGUAGES}"
+  "locales": "${LANGUAGES}",
+  "options": {
+    "payments": "${OPTION_PAYMENTS}",
+    "schools": "${OPTION_SCHOOLS}",
+    "mcp": "${OPTION_MCP}",
+    "zoom": "${OPTION_ZOOM}",
+    "telegram": "${OPTION_TELEGRAM}",
+    "llm": "${OPTION_LLM}"
+  }
 }

@@ -123,7 +123,7 @@
 import { t } from '@/locales'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { featureEnabled } from '@/platform/features'
+import { isOptionEnabled } from '@/platform/instance'
 import { VHeader } from '@/components/layout'
 import { VButton, VEmptyState, VLoader, VSegmentTrack } from '@/components/ui'
 import { IconBellPlain } from '@/components/icons'
@@ -258,6 +258,8 @@ function routeFor(
 
   switch (action) {
     case 'open_school':
+      // FE-151: with the schools option off the row is mark-read only.
+      if (!isOptionEnabled('schools')) return null
       return typeof params.school_id === 'string' && params.school_id
         ? { name: 'master-school', params: { id: params.school_id } }
         : null
@@ -265,16 +267,17 @@ function routeFor(
       // Links: school.master_offered has its own verb now -- the
       // consent screen, by school_id (it used to be a type check on the
       // school-page verb).
+      if (!isOptionEnabled('schools')) return null
       return typeof params.school_id === 'string' && params.school_id
         ? { name: 'school-master-offer', params: { id: params.school_id } }
         : null
     case 'open_practice':
       return practiceId ? { name: 'master-practice-detail', params: { id: practiceId } } : null
     case 'open_wallet':
-      // tz-whitelabel §4 (FE-112): no payments module -- no finance screen
+      // tz-whitelabel §4 (FE-112): payments option off (FE-151) -- no finance screen
       // in the master zone either; the tap degrades to no navigation
       // (the same rule as useAuth's open_wallet).
-      return featureEnabled('payments') ? { name: 'master-finance' } : null
+      return isOptionEnabled('payments') ? { name: 'master-finance' } : null
     case 'open_master_zone':
       // BE-104 master.verified read in master mode (make_master already set
       // role='master'): the zone is this shell's own dashboard.

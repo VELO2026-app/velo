@@ -108,9 +108,9 @@ import { useRouter } from 'vue-router'
 import { VModal, VButton } from '@/components/ui'
 import { useToast } from '@/composables/useToast'
 import { useBalanceStore } from '@/stores/balance'
-import { purchasePractice, previewPurchase } from '@/api/bookings'
+import { createBooking, purchasePractice, previewPurchase } from '@/api/bookings'
 import { ApiResponseError } from '@/api/client'
-import { featureEnabled } from '@/platform/features'
+import { isOptionEnabled } from '@/platform/instance'
 import { extractApiError } from '@/composables/useApiError'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import { formatDate, formatMoney } from '@/utils/format'
@@ -186,10 +186,10 @@ const insufficientBalance = computed(
   () => !props.practice.is_free && !balanceStore.hasEnough(totalCents.value),
 )
 
-// tz-whitelabel §4: an edition without the payments module has no topup
+// tz-whitelabel §4: an instance with the payments option off (FE-151) has no topup
 // screen -- the insufficient-balance path degrades to the plain pay CTA and
 // the honest backend rejection instead of a redirect into the missing route.
-const topupAvailable = featureEnabled('payments')
+const topupAvailable = isOptionEnabled('payments')
 
 const purchaseButtonText = computed(() => {
   if (insufficientBalance.value && topupAvailable) return t('booking.cta.topup')
@@ -231,7 +231,7 @@ async function onPurchase(): Promise<void> {
   if (purchasing.value) return
 
   // Redirect to topup if insufficient balance (tz-whitelabel §4: only when
-  // the edition has the payments module; otherwise the attempt falls through
+  // the payments option is on, FE-151; otherwise the attempt falls through
   // to the backend's own insufficient-funds error -- never a 404 redirect).
   if (insufficientBalance.value && topupAvailable) {
     resetState()
@@ -243,7 +243,11 @@ async function onPurchase(): Promise<void> {
   purchasing.value = true
   try {
     const appliedPromo = promoApplied.value ? promoCode.value : undefined
-    await purchasePractice(props.practice.id, appliedPromo)
+    // FE-151: with the payments option off the purchase router is closed
+    // (BE-182); the bookings router runs the same booking service and stays
+    // open -- a free practice is still bookable.
+    if (topupAvailable) await purchasePractice(props.practice.id, appliedPromo)
+    else await createBooking(props.practice.id)
 
     toast.success(t('booking.toast.booked'))
     resetState()

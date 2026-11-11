@@ -116,6 +116,16 @@ services:
       TELEGRAM_BOT_URL: ${VITE_TELEGRAM_BOT_URL:-}
       DEFAULT_LANGUAGE: ${VITE_DEFAULT_LOCALE:-}
       LANGUAGES: ${VITE_LOCALES:-}
+      # Instance options (FE-151): /config.json `options`. The interim stand
+      # keeps every option on, as it ran before options existed; the
+      # machine's compose (deploy-machine) requires each flag (${VAR:?}).
+      # The image itself reads an unset flag as off.
+      OPTION_PAYMENTS: ${OPTION_PAYMENTS:-true}
+      OPTION_SCHOOLS: ${OPTION_SCHOOLS:-true}
+      OPTION_MCP: ${OPTION_MCP:-true}
+      OPTION_ZOOM: ${OPTION_ZOOM:-true}
+      OPTION_TELEGRAM: ${OPTION_TELEGRAM:-true}
+      OPTION_LLM: ${OPTION_LLM:-true}
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:

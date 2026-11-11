@@ -33,6 +33,13 @@
 // registry's accessors (featureEnabled/hasFeature, allowed anywhere) or the
 // router's define literals.
 //
+// GATE 3 -- the switched-off literal (FE-151; protocol 5.2.3). The machine
+// hands every variable of a switched-off instance option the literal
+// `primer-switched-off`. The code never reads it: an option is known ONLY by
+// its flag (platform/instance.ts isOptionEnabled). The literal anywhere in
+// the code (comments stripped) -- a comparison, a fallback value, an
+// apiBaseUrl default -- is a hit. No file is exempt.
+//
 // Exit 1 on any hit. Wired into `pnpm lint`. brandGrepReport() is exported
 // for the unit suite (src/platform/brand-grep.test.ts).
 // =============================================================================
@@ -205,14 +212,35 @@ function featureHits(files) {
   return hits
 }
 
+// -- gate 3: the switched-off literal --------------------------------------------
+
+const SWITCHED_OFF = 'primer-switched-off'
+
+function switchedOffHits(files) {
+  const hits = []
+  for (const { path, raw } of files) {
+    const { script, template } = cleanParts(raw)
+    if ((script + '\n' + template).includes(SWITCHED_OFF))
+      hits.push(
+        `${path}:~${lineOf(raw, SWITCHED_OFF)} uses the literal ${SWITCHED_OFF} -- an option is known by its flag only (isOptionEnabled)`,
+      )
+  }
+  return hits
+}
+
 // -- the report ----------------------------------------------------------------
 
-/** Both gates over `files` (Array of { path, content }); paths are
+/** The gates over `files` (Array of { path, content }); paths are
  *  frontend-root-relative ('src/...', 'env.d.ts', 'vite.config.ts').
- *  Returns { brand, features } hit lists -- empty lists mean the gate passes. */
+ *  Returns { brand, features, switchedOff } hit lists -- empty lists mean
+ *  the gate passes. */
 export function brandGrepReport(files) {
   const prepared = files.map(({ path, content }) => ({ path, raw: content }))
-  return { brand: brandHits(prepared), features: featureHits(prepared) }
+  return {
+    brand: brandHits(prepared),
+    features: featureHits(prepared),
+    switchedOff: switchedOffHits(prepared),
+  }
 }
 
 // -- CLI -----------------------------------------------------------------------
@@ -234,7 +262,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   walk(SRC_ROOT, files)
   for (const p of ROOT_FILES) files.push({ path: p, content: readFileSync(p, 'utf8') })
 
-  const { brand, features } = brandGrepReport(files)
+  const { brand, features, switchedOff } = brandGrepReport(files)
   if (brand.length > 0) {
     console.error(
       `brand-grep: ${brand.length} brand-word hit(s) outside the reference set -- the brand ships via @:brand/skin/passport, never a literal (tz-i18n §7.2.3, tz-whitelabel §6.3):\n`,
@@ -247,6 +275,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     )
     for (const h of features) console.error('  ' + h)
   }
-  if (brand.length > 0 || features.length > 0) process.exit(1)
+  if (switchedOff.length > 0) {
+    console.error(
+      `brand-grep: ${switchedOff.length} hit(s) of the switched-off literal -- the code never reads it, an option is known by its flag (FE-151, protocol 5.2.3):\n`,
+    )
+    for (const h of switchedOff) console.error('  ' + h)
+  }
+  if (brand.length > 0 || features.length > 0 || switchedOff.length > 0) process.exit(1)
   console.log(`brand-grep: clean (${files.length} files scanned)`)
 }

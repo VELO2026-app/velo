@@ -58,6 +58,9 @@ export interface InstanceConfig {
   defaultLocale?: string
   /** Comma-separated locale codes, as the machine ships them (guide §2.5). */
   locales?: string
+  /** Instance options (FE-151): the value of each option is 'true' or
+   *  'false', from the variable OPTION_NAME of primer.yaml. */
+  options?: Partial<Record<string, string>>
 }
 
 /**
@@ -88,16 +91,67 @@ const UNRENDERED = /^\$\{[A-Z0-9_]+\}$/
 export function applyInstanceConfig(config: InstanceConfig | null | undefined): void {
   const clean: InstanceConfig = {}
   for (const [key, value] of Object.entries(config ?? {})) {
+    if (key === 'options') continue
     if (typeof value === 'string' && !UNRENDERED.test(value.trim())) {
-      clean[key as keyof InstanceConfig] = value
+      ;(clean as Record<string, string>)[key] = value
+    }
+  }
+  // The options block (FE-151) is kept as a block even when every value in
+  // it is a placeholder: its PRESENCE says "the instance decides", and an
+  // option it does not turn on is off (isOptionEnabled).
+  const options: unknown = config?.options
+  if (options !== null && typeof options === 'object' && !Array.isArray(options)) {
+    clean.options = {}
+    for (const [name, value] of Object.entries(options as Record<string, unknown>)) {
+      if (typeof value === 'string' && !UNRENDERED.test(value.trim())) clean.options[name] = value
     }
   }
   runtimeConfig = clean
 }
 
+// =============================================================================
+// Instance options (FE-151; protocol 5.2.3, contract 3 rules 36-43). An
+// option is a capability the INSTANCE turns on across editions; the flag
+// arrives at container start (OPTION_<NAME> -> /config.json `options`), never
+// at build: one image serves instances with and without it, so the code of
+// every option is always in the bundle (variant A, owner 09.11) and only its
+// VISIBILITY follows the flag.
+//
+//   - The value is exactly 'true' or 'false'. Anything else -- empty, an
+//     unrendered ${OPTION_X} (the variable is unset), a typo -- is OFF.
+//   - The machine hands the variables of a switched-off option the literal
+//     `primer-switched-off`. The code never reads that literal (the brand
+//     grep gate pins its absence from src/); an option is known ONLY by its
+//     flag.
+//   - No `options` block at all (local dev: the vite server has no
+//     /config.json; the unit suite) is the golden build: every option on,
+//     the app as it shipped before options existed.
+// =============================================================================
+
+/** The instance options of primer.yaml (`options:`), in its order. */
+export const OPTION_NAMES = ['payments', 'schools', 'mcp', 'zoom', 'telegram', 'llm'] as const
+
+/** One instance option. */
+export type OptionName = (typeof OPTION_NAMES)[number]
+
+/**
+ * Whether the instance turns the option on.
+ *
+ * @param name - the option, as primer.yaml names it
+ * @returns true only for the literal 'true' from /config.json; an unknown
+ *   option is off; without an `options` block (no runtime config) -- on
+ */
+export function isOptionEnabled(name: OptionName): boolean {
+  if (!(OPTION_NAMES as readonly string[]).includes(name)) return false
+  const options = runtimeConfig.options
+  if (options === undefined) return true
+  return options[name]?.trim() === 'true'
+}
+
 /**
  * Enabled modules of this instance: absent/empty/'full' means everything;
- * otherwise a comma list of module namespaces ('payments', 'ai', ...).
+ * otherwise a comma list of module namespaces ('ai'; payments is an
+ * instance option since FE-151, see isOptionEnabled).
  * Unknown names simply never match a module id (F3 consumes this,
  * tz-whitelabel §4).
  */

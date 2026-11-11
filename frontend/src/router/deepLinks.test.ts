@@ -12,9 +12,10 @@
 // composables/useAuth.test.ts -- `velo test` reads it from that path.
 // =============================================================================
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import router from '@/router'
 import { isSchoolInviteParam, parseStartParam, type DeepLinkTarget } from '@/router/deepLinks'
+import { applyInstanceConfig } from '@/platform/instance'
 
 describe('parseStartParam', () => {
   // Links: the BE-59 parameterised form used to stay unmapped -- right while
@@ -71,16 +72,33 @@ describe('parseStartParam', () => {
       expect(parseStartParam(param, role)).toEqual(route)
     })
 
-    // tz-whitelabel §4 (FE-112): an edition without payments has no wallet
+    // FE-112, FE-151: with the payments option off there is no wallet
     // route in ANY zone -- the user's top-up and the master's finance
-    // screen are the same module; both taps degrade to no navigation.
-    it('open_wallet without the payments module -> no route in either zone', () => {
-      vi.stubEnv('VITE_FEATURES', 'ai')
+    // screen are the same option; both taps degrade to no navigation.
+    it('school verbs and the school invite with the schools option off -> no route', () => {
+      const invite = `school__${'a'.repeat(43)}`
+      // Golden: every one of them is a route.
+      expect(parseStartParam(`open_school__${id}`, 'user')).not.toBeNull()
+      expect(parseStartParam(`open_master_offer__${id}`, 'user')).not.toBeNull()
+      expect(parseStartParam(invite, 'user')).not.toBeNull()
+      applyInstanceConfig({ options: { schools: 'false' } })
+      try {
+        expect(parseStartParam(`open_school__${id}`, 'user')).toBeNull()
+        expect(parseStartParam(`open_school__${id}`, 'master')).toBeNull()
+        expect(parseStartParam(`open_master_offer__${id}`, 'user')).toBeNull()
+        expect(parseStartParam(invite, 'user')).toBeNull()
+      } finally {
+        applyInstanceConfig(null)
+      }
+    })
+
+    it('open_wallet with the payments option off -> no route in either zone', () => {
+      applyInstanceConfig({ options: { payments: 'false' } })
       try {
         expect(parseStartParam('open_wallet', 'user')).toBeNull()
         expect(parseStartParam('open_wallet', 'master')).toBeNull()
       } finally {
-        vi.unstubAllEnvs()
+        applyInstanceConfig(null)
       }
     })
 

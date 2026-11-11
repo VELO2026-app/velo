@@ -78,28 +78,28 @@ const SKINS = [
 const CELLS: Cell[] = planCells(EDITIONS, SKINS)
 
 const AI = ['AiSummary-1.js']
-const PAY = ['TopupView-1.js']
-const golden = (assets: number, ai: string[], payments: string[]): Facts => ({
+// FE-151: payments is an instance option, always built -- not a probed module.
+const golden = (assets: number, ai: string[]): Facts => ({
   title: 'VELO',
   theme: '#334D6E',
   assets,
-  chunks: { ai, payments },
+  chunks: { ai },
   leaked: [],
 })
 const skinned = (title: string, theme: string): Facts => ({
   title,
   theme,
   assets: 120,
-  chunks: { ai: AI, payments: PAY },
+  chunks: { ai: AI },
   brandMissing: false,
   tokensMissing: [],
 })
 
 const GREEN: Record<string, Facts> = {
-  'golden/core': golden(100, [], []),
-  'golden/school': golden(100, [], []),
-  'golden/school-payments': golden(110, [], PAY),
-  'golden/full': golden(120, AI, PAY),
+  'golden/core': golden(100, []),
+  'golden/school': golden(100, []),
+  'golden/school-payments': golden(100, []),
+  'golden/full': golden(120, AI),
   'acme/full': skinned('ПРАКТИКА 42', '#1B2A41'),
   'nova/full': skinned('НОВА', '#1B1530'),
 }
@@ -145,9 +145,10 @@ describe('planCells (FE-152: golden x editions, skins x full)', () => {
 
   it('each cell carries the module set of its edition', () => {
     const byName = Object.fromEntries(CELLS.map((c) => [c.name, c.modules]))
-    expect(byName['golden/core']).toEqual({ ai: false, payments: false })
-    expect(byName['golden/school-payments']).toEqual({ ai: false, payments: true })
-    expect(byName['nova/full']).toEqual({ ai: true, payments: true })
+    expect(byName['golden/core']).toEqual({ ai: false })
+    // FE-151: payments in an edition's module list is ignored -- an option.
+    expect(byName['golden/school-payments']).toEqual({ ai: false })
+    expect(byName['nova/full']).toEqual({ ai: true })
   })
 
   it('the chunk probes cover exactly the feature registry', () => {
@@ -210,20 +211,18 @@ describe('evaluateMatrix (tz-whitelabel §6.1 gate)', () => {
     expect(fails[0]).toContain('leaked')
   })
 
-  it('core carrying an ai or payments chunk fails, named (c)', () => {
-    const fails = withFact('golden/core', {
-      chunks: { ai: AI, payments: ['AdminWithdrawalsView-9f.js'] },
-    })
-    expect(fails).toHaveLength(2)
-    expect(fails.join('\n')).toContain('DISABLED ai module')
-    expect(fails.join('\n')).toContain('AdminWithdrawalsView-9f.js')
+  it('core carrying an ai chunk fails, named (c)', () => {
+    const fails = withFact('golden/core', { chunks: { ai: ['AiConnectionsView-9f.js'] } })
+    expect(fails).toHaveLength(1)
+    expect(fails[0]).toContain('DISABLED ai module')
+    expect(fails[0]).toContain('AiConnectionsView-9f.js')
   })
 
   it('an edition losing a module it turns on fails (c)', () => {
-    const fails = withFact('golden/school-payments', { chunks: { ai: [], payments: [] } })
+    const fails = withFact('golden/full', { chunks: { ai: [] } })
     expect(fails).toHaveLength(1)
-    expect(fails[0]).toContain('payments chunks missing')
-    expect(fails[0]).toContain('school-payments')
+    expect(fails[0]).toContain('ai chunks missing')
+    expect(fails[0]).toContain('full')
   })
 
   it('an asset-count drift across the full cells fails (d)', () => {
