@@ -30,8 +30,9 @@
 // =============================================================================
 
 import { defineQueryOptions, type QueryCache } from '@pinia/colada'
-import { getSchoolPage, getSchoolPractices } from '@/api/schools'
+import { getMySchools, getSchoolPage, getSchoolPractices, getSchools } from '@/api/schools'
 import { keys } from '@/composables/queries/keys'
+import type { SchoolMineItem } from '@/api/types'
 
 /** Query options for the school page payload (`GET /schools/{id}`). */
 export const schoolPageQuery = defineQueryOptions((schoolId: string) => ({
@@ -69,3 +70,71 @@ export function forgetSchool(queryCache: QueryCache, schoolId: string): void {
     else queryCache.remove(entry)
   }
 }
+
+// =============================================================================
+// School lists (FE-166 step 2: moved from the in-house cache)
+// =============================================================================
+//
+// Both lists revalidate on every visit (staleTime 0): a school created or
+// joined a moment ago is there on the next one; the cached copy only removes
+// the spinner. Each is two parallel calls, one payload split: /mine feeds the
+// rows (relation and transfer_offered ride only there), the curator list
+// carries the create right. allSettled, because the two calls are NOT equal:
+// /mine failing means there is no screen, while the flag call failing only
+// means no «+» -- rows plus the honest no-right hint beat an error state over
+// data already held.
+
+/** Payload of a schools list screen: the rows, plus the school-create right. */
+export interface SchoolsList {
+  schools: SchoolMineItem[]
+  canCreate: boolean
+}
+
+/**
+ * Query options for the user zone's schools tab (SchoolsView): the schools I
+ * participate in, plus the create right. Persisted across reloads.
+ *
+ * @remarks
+ * The flag lives on the master surface, which answers 403 outside master
+ * mode (FE-93), so it is only dialed there -- anywhere else false is the
+ * honest «+». The curated rows /mine still returns (relation is
+ * role-independent) belong to the master hub's curator tab and would 403
+ * their way through this zone's screens, so they are dropped here.
+ */
+export const userSchoolsQuery = defineQueryOptions((role: string) => ({
+  key: keys.schools.mine('participant', role),
+  query: async (): Promise<SchoolsList> => {
+    const [mineRes, listRes] = await Promise.allSettled([
+      getMySchools(),
+      role === 'master' ? getSchools() : Promise.resolve(null),
+    ])
+    if (mineRes.status === 'rejected') throw mineRes.reason
+    return {
+      schools: mineRes.value.items.filter((g) => g.relation !== 'curator'),
+      canCreate:
+        listRes.status === 'fulfilled' && listRes.value
+          ? (listRes.value.can_create_schools ?? false)
+          : false,
+    }
+  },
+  staleTime: 0,
+  // No role = no session (the moment of a logout, before the redirect): the
+  // reactive key moves to role '' and must not send an anonymous GET.
+  enabled: role !== '',
+  meta: { persist: true },
+}))
+
+/** Query options for the master's schools hub (MasterSchoolsView): every school of mine, plus the create right. */
+export const masterSchoolsQuery = defineQueryOptions(() => ({
+  key: keys.schools.mine('master-hub'),
+  query: async (): Promise<SchoolsList> => {
+    const [mineRes, listRes] = await Promise.allSettled([getMySchools(), getSchools()])
+    if (mineRes.status === 'rejected') throw mineRes.reason
+    return {
+      schools: mineRes.value.items,
+      canCreate:
+        listRes.status === 'fulfilled' ? (listRes.value.can_create_schools ?? false) : false,
+    }
+  },
+  staleTime: 0,
+}))

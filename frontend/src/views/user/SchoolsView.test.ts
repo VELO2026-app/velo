@@ -17,7 +17,9 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
-import { createPinia, setActivePinia } from 'pinia'
+import { createPinia, setActivePinia, type Pinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import SchoolsView from '@/views/user/SchoolsView.vue'
 import { useAuthStore } from '@/stores/auth'
 import * as cgApi from '@/api/schools'
@@ -39,10 +41,13 @@ vi.mock('@/composables/useToast', () => ({
 let app: App | null = null
 let host: HTMLElement | null = null
 
-function mount(role: 'user' | 'master' = 'user'): HTMLElement {
+let pinia: Pinia | null = null
+
+/** Mount the screen; `revisit` keeps the previous mount's Pinia (and so its query cache). */
+function mount(role: 'user' | 'master' = 'user', { revisit = false } = {}): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  const pinia = createPinia()
+  if (!revisit || !pinia) pinia = createPinia()
   setActivePinia(pinia)
   // FE-93: the create right is dialed only in master mode, so the active
   // role is part of this screen's contract -- seed it before the mount.
@@ -51,13 +56,13 @@ function mount(role: 'user' | 'master' = 'user'): HTMLElement {
     role,
     role_switch: { allowed_roles: [role] },
   } as never
-  app = createApp(SchoolsView).use(createTestI18n()).use(pinia)
+  app = createApp(SchoolsView).use(createTestI18n()).use(pinia).use(PiniaColada, coladaOptions)
   // The hub reads the schoolsHub store (the tab probe shares this seam).
   app.mount(host)
   return host
 }
 
-// The list loads through the screen-data cache (useQuery): a settled
+// The list loads through the screen-data cache (Colada): a settled
 // request takes a few more microtasks than the old local ref did.
 async function flush(): Promise<void> {
   for (let i = 0; i < 8; i++) await nextTick()
@@ -128,7 +133,7 @@ describe('SchoolsView', () => {
     app?.unmount()
     host?.remove()
     vi.mocked(cgApi.getMySchools).mockReturnValue(new Promise(() => {}))
-    mount()
+    mount('user', { revisit: true })
     await flush()
 
     expect(host?.querySelector('.schools__state')).toBeNull()
@@ -210,6 +215,33 @@ describe('SchoolsView', () => {
     mount('master')
     await flush()
     expect(host?.querySelector('.schools__add-btn')).toBeTruthy()
+  })
+
+  it('a retry after a failed first load shows the loader while it runs, not the error', async () => {
+    vi.mocked(cgApi.getMySchools).mockRejectedValueOnce(new Error('network'))
+    mount()
+    await flush()
+    expect(text()).toContain('Не удалось загрузить школы')
+
+    vi.mocked(cgApi.getMySchools).mockReturnValueOnce(new Promise(() => {}))
+    buttonWith('Повторить')?.click()
+    await flush()
+
+    expect(host?.querySelector('.schools__state')).not.toBeNull()
+    expect(text()).not.toContain('Не удалось загрузить школы')
+  })
+
+  it('the session ending under a mounted tab sends no anonymous /schools/mine', async () => {
+    vi.mocked(cgApi.getMySchools).mockResolvedValue(mineResponse([row('g2', 'student')]))
+    mount()
+    await flush()
+    expect(cgApi.getMySchools).toHaveBeenCalledTimes(1)
+
+    // Logout: the user goes, the role with it, and the query key moves.
+    useAuthStore().user = null
+    await flush()
+
+    expect(cgApi.getMySchools).toHaveBeenCalledTimes(1)
   })
 
   it('load failure: error state with a retry that works', async () => {

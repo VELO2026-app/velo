@@ -9,7 +9,7 @@
 // prefix goes stale, and the ones on screen refetch at once.
 //
 // While the migration runs, some of the same data still lives in Pinia
-// stores and the in-house cache. Each mutation composable refreshes those
+// stores. Each mutation composable refreshes those
 // holders next to its `invalidateAfter()` call, marked as legacy; a line
 // leaves when its store moves to Colada and its key joins the row here.
 // =============================================================================
