@@ -290,7 +290,12 @@ import { useQuery, useQueryCache } from '@pinia/colada'
 import { getSchoolLeavePreview, leaveSchool, updateSchool } from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
 import type { SchoolPageResponse } from '@/api/types'
-import { forgetSchool, schoolFeedQuery, schoolPageQuery } from '@/composables/queries/schools'
+import {
+  forgetSchool,
+  membershipChanged,
+  schoolFeedQuery,
+  schoolPageQuery,
+} from '@/composables/queries/schools'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import CalendarPracticeCard from '@/components/shared/CalendarPracticeCard.vue'
@@ -508,6 +513,9 @@ async function onLeaveConfirm(): Promise<void> {
   leaving.value = true
   try {
     await leaveSchool(schoolId.value)
+    // The hub (the dock's Schools tab) and the school lists follow; the page
+    // itself is dropped on unmount (forgetSchool). The shell holds the hub.
+    void membershipChanged(queryCache, 'leaveSchool')
     leftSchools.add(schoolId.value)
     leaveConfirmOpen.value = false
     toast.success(t('user.screens.schoolPage.toast.left'))
@@ -593,6 +601,8 @@ function onTransferAccepted(newPage: SchoolPageResponse): void {
   // The accept response IS the page as the new curator sees it -- replace
   // the cached page wholesale (relation flips, no reload).
   setPage(newPage)
+  // The relation turned curator: the lists and the hub follow.
+  void membershipChanged(queryCache, 'acceptSchoolTransfer')
   toast.success(t('user.screens.schoolPage.toast.transferredToYou'))
 }
 

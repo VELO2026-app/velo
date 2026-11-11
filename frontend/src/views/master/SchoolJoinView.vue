@@ -146,8 +146,7 @@ import { useToast } from '@/composables/useToast'
 import { useSafeArea } from '@/composables/useSafeArea'
 import { useAuthStore } from '@/stores/auth'
 import { useQueryCache } from '@pinia/colada'
-import { invalidateAfter } from '@/composables/queries/invalidation'
-import { ensureSchoolsHub } from '@/composables/queries/schools'
+import { membershipChanged } from '@/composables/queries/schools'
 import { IconLock } from '@/components/icons'
 import { VButton, VEmptyState, VLoader } from '@/components/ui'
 import SchoolInviteCard from '@/components/shared/SchoolInviteCard.vue'
@@ -281,8 +280,7 @@ async function join(): Promise<void> {
     // happens HERE, before the navigation lands in a shell that shows the
     // tab at once. Neither rejects: the navigation never fails with a failed
     // read.
-    await invalidateAfter(queryCache, 'joinSchool')
-    await ensureSchoolsHub(queryCache)
+    await membershipChanged(queryCache, 'joinSchool')
     // FE-83: a first-session user meets the onboarding carousel AFTER the
     // join, not before the invitation -- the gate let them straight in. The
     // joined school is remembered locally; the overlay consumes it on done.

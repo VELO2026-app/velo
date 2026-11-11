@@ -35,6 +35,7 @@ import { getMySchools, getSchoolPage, getSchoolPractices, getSchools } from '@/a
 import { isOptionEnabled } from '@/platform/instance'
 import { useAuthStore } from '@/stores/auth'
 import { keys } from '@/composables/queries/keys'
+import { invalidateAfter, type MutationName } from '@/composables/queries/invalidation'
 import type { SchoolMineItem } from '@/api/types'
 
 /** Query options for the school page payload (`GET /schools/{id}`). */
@@ -171,10 +172,12 @@ export const masterSchoolsQuery = defineQueryOptions(() => ({
 // "no right"; a failed probe is retried by the next shell mount (Colada
 // refetches an entry in error), and a failed refresh keeps the last answer.
 // Freshness: like the store before it, one answer per session (staleTime
-// Infinity) -- a mount of another consumer (a practice card, the other zone's
-// shell) asks nothing. A membership change made in this app (a join)
-// invalidates the schools root (./invalidation.ts); one made elsewhere (an
-// invite accepted in the bot) shows from the next session.
+// Infinity) while a shell holds it -- a mount of another consumer (a
+// practice card, the other zone's shell) asks nothing; an entry nobody holds
+// for gcTime is dropped and asked again by the next shell. Every membership
+// change made in this app -- a join, an accepted master offer, a leave, an
+// accepted transfer -- goes through membershipChanged (below); one made
+// elsewhere (an invite accepted in the bot) shows from the next session.
 
 /** Query options for every school I belong to, any relation (`GET /schools/mine` items). */
 export const mySchoolsQuery = defineQueryOptions(() => ({
@@ -231,6 +234,25 @@ export async function ensureSchoolsHub(queryCache: QueryCache = useQueryCache())
     probes.push(queryCache.refresh(queryCache.ensure(schoolCreateRightQuery(true))))
   }
   await Promise.allSettled(probes)
+}
+
+/**
+ * A membership of this account changed: invalidate the mutation's row
+ * (./invalidation.ts), THEN re-read the hub -- in this order, so the re-read
+ * sees the stale mark. A screen outside the shells (the join and master-offer
+ * routes) awaits it before navigating, so the shell it lands in shows the
+ * Schools tab at once; a screen inside a shell may fire and forget (the shell
+ * holds the hub, which the invalidation refetches anyway). Never rejects.
+ */
+export async function membershipChanged(
+  queryCache: QueryCache,
+  mutation: Extract<
+    MutationName,
+    'joinSchool' | 'acceptSchoolMasterOffer' | 'leaveSchool' | 'acceptSchoolTransfer'
+  >,
+): Promise<void> {
+  await invalidateAfter(queryCache, mutation)
+  await ensureSchoolsHub(queryCache)
 }
 
 /** The user-zone tab condition from the cache, outside a component (the idle prefetch). */

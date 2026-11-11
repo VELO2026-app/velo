@@ -48,11 +48,10 @@ vi.mock('@/stores/auth', () => ({
 // (i18n:tabs.schools; the account may have just gained its first school) --
 // since FE-166 step 5 by invalidating INVALIDATES.joinSchool. Mocked: this
 // app mounts without pinia; what the row refreshes is invalidation.test's.
+// The invalidate-then-re-read order inside membershipChanged is
+// schoolsHub.test's; here, that the screen awaits it BEFORE navigating.
 const hubRefresh = vi.hoisted(() => vi.fn())
-vi.mock('@/composables/queries/invalidation', () => ({ invalidateAfter: hubRefresh }))
-// ...and re-reads the hub BEFORE navigating (this route is outside the shells).
-const hubReread = vi.hoisted(() => vi.fn())
-vi.mock('@/composables/queries/schools', () => ({ ensureSchoolsHub: hubReread }))
+vi.mock('@/composables/queries/schools', () => ({ membershipChanged: hubRefresh }))
 vi.mock('@pinia/colada', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@pinia/colada')>()),
   useQueryCache: () => ({}),
@@ -135,8 +134,7 @@ beforeEach(() => {
   replace.mockReset()
   toastSuccess.mockReset()
   toastError.mockReset()
-  hubRefresh.mockReset()
-  hubReread.mockReset()
+  hubRefresh.mockReset().mockResolvedValue(undefined)
 })
 
 afterEach(() => {
@@ -316,7 +314,32 @@ describe('SchoolJoinView -- the join gate', () => {
     // FE-88: the join may have created the account's FIRST school -- the
     // dock's tab probe must be refreshed before landing in the shell.
     expect(hubRefresh).toHaveBeenCalledWith(expect.anything(), 'joinSchool')
-    expect(hubReread).toHaveBeenCalledTimes(1)
+    expect(replace).toHaveBeenCalledWith({ name: 'user-school', params: { id: 'g1' } })
+  })
+
+  it('FE-88: the navigation waits for the hub re-read (the shell must show the tab at once)', async () => {
+    vi.mocked(cgApi.getSchoolInvitePreview).mockResolvedValue(previewResponse())
+    vi.mocked(cgApi.joinSchool).mockResolvedValue({
+      school_id: 'g1',
+      relation: 'student',
+      already_member: false,
+    })
+    let reread!: () => void
+    hubRefresh.mockReturnValue(
+      new Promise<void>((resolve) => {
+        reread = resolve
+      }),
+    )
+    mount()
+    await flush()
+
+    buttonWith('Вступить')?.click()
+    await flush()
+    expect(hubRefresh).toHaveBeenCalledTimes(1)
+    expect(replace).not.toHaveBeenCalled()
+
+    reread()
+    await flush()
     expect(replace).toHaveBeenCalledWith({ name: 'user-school', params: { id: 'g1' } })
   })
 

@@ -27,6 +27,7 @@ const SAMPLE = {
   bookings: [...keys.bookings.root(), 'list'] as EntryKey,
   practices: keys.practices.schoolFeed('g1', 5) as EntryKey,
   schools: keys.schools.detail('g1') as EntryKey,
+  schoolLists: keys.schools.mine('all') as EntryKey,
 }
 type Domain = keyof typeof SAMPLE
 
@@ -41,7 +42,10 @@ const EXPECTED: Record<MutationName, Domain[]> = {
   submitFeedback: ['bookings'],
   submitReflection: ['bookings'],
   changePractice: ['practices'],
-  joinSchool: ['schools', 'practices'],
+  joinSchool: ['schools', 'schoolLists', 'practices'],
+  acceptSchoolMasterOffer: ['schoolLists', 'practices'],
+  leaveSchool: ['schoolLists'],
+  acceptSchoolTransfer: ['schoolLists'],
 }
 
 function stale(domain: Domain): boolean {

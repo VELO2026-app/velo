@@ -44,6 +44,8 @@ export const keys = {
   schools: {
     /** Prefix of every school key. */
     root: () => ['schools'] as const,
+    /** Prefix of every school LIST (the hub, the tabs' lists, the create right) -- not the school pages. */
+    lists: () => ['schools', 'list'] as const,
     /** `GET /schools/{id}` -- the school page payload with the viewer's relation. */
     detail: (schoolId: string) => ['schools', 'detail', schoolId] as const,
     /**

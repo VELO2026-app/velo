@@ -29,6 +29,7 @@ import {
   cachedHasSchools,
   ensureSchoolsHub,
   hasSchoolsFor,
+  membershipChanged,
   useSchoolsHub,
 } from '@/composables/queries/schools'
 import { invalidateAfter } from '@/composables/queries/invalidation'
@@ -210,6 +211,33 @@ describe('the schools hub', () => {
     // The shell the navigation lands in shows the tab at once.
     mountShell()
     expect(hub.hasSchools.value).toBe(true)
+  })
+
+  it('membershipChanged invalidates BEFORE it re-reads: a fresh hub still gets the new answer', async () => {
+    seedRoles(['user'])
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({ items: [] })
+    const cache = useQueryCache(pinia)
+    await ensureSchoolsHub(cache) // a fresh answer, held for the session
+
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({ items: [mineItem()] })
+    await membershipChanged(cache, 'acceptSchoolMasterOffer')
+
+    expect(cgApi.getMySchools).toHaveBeenCalledTimes(2)
+    expect(cachedHasSchools(cache)).toBe(true)
+  })
+
+  it('leaving the last school hides the tab of the shell holding the hub', async () => {
+    seedRoles(['user'])
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({ items: [mineItem()] })
+    mountShell()
+    await flush()
+    expect(hub.hasSchools.value).toBe(true)
+
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({ items: [] })
+    await membershipChanged(useQueryCache(pinia), 'leaveSchool')
+    await flush()
+
+    expect(hub.hasSchools.value).toBe(false)
   })
 
   it('one answer per session: another consumer mounting later asks nothing', async () => {
