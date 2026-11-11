@@ -39,6 +39,12 @@ export const keys = {
     /** `GET /schools/{id}/practices` -- the school's upcoming practices, first `limit`. */
     schoolFeed: (schoolId: string, limit: number) =>
       ['practices', 'list', { schoolId, limit }] as const,
+    /**
+     * `GET /practices?master_id=` -- a master's next scheduled practices as their
+     * public page lists them, in one school's context or none (`schoolId` '').
+     */
+    masterUpcoming: (masterId: string, schoolId: string) =>
+      ['practices', 'list', { masterId, schoolId }] as const,
     /** Prefix of both lists of the signed-in master's own practices. */
     mineAll: () => ['practices', 'list', { own: true }] as const,
     /**
@@ -57,6 +63,15 @@ export const keys = {
     /** `GET /schools/{id}` -- the school page payload with the viewer's relation. */
     detail: (schoolId: string) => ['schools', 'detail', schoolId] as const,
     /**
+     * `GET /masters/me/schools/{id}/students/{userId}` -- one student's
+     * school-scoped profile (curator only). Under the school's detail prefix
+     * on purpose, so dropping a school (forgetSchool) drops it too -- which
+     * means `getEntries({ key: detail(id) })` returns these entries as well:
+     * never read their data as a school page.
+     */
+    student: (schoolId: string, userId: string) =>
+      ['schools', 'detail', schoolId, 'student', userId] as const,
+    /**
      * `GET /schools/mine` (+ the create right) as one screen shows it: the user
      * zone's schools tab for a role, or the master's schools hub.
      */
@@ -65,12 +80,24 @@ export const keys = {
     /** `GET /masters/me/schools` read for one fact: the admin-issued right to found a school (BE-18). */
     createRight: () => ['schools', 'list', 'createRight'] as const,
   },
-  /** The signed-in master's own account (the master zone). */
+  /** Masters: the signed-in master's own account, and other masters' public pages. */
   masters: {
     /** Prefix of every master key. */
     root: () => ['masters'] as const,
     /** `GET /masters/me` -- my master profile: status, methods, balance, payout details. */
     profile: () => ['masters', 'me', 'profile'] as const,
+    /** `GET /masters/{id}` -- a master's public page. */
+    public: (masterId: string) => ['masters', 'public', masterId] as const,
+  },
+  /** The signed-in master's student groups (custom ones and the two system groups). */
+  groups: {
+    /** Prefix of every group key. */
+    root: () => ['groups'] as const,
+    /** `GET /masters/me/groups` -- every group with its name, description and count. */
+    list: () => ['groups', 'list'] as const,
+    /** `GET /masters/me/groups/{id}/members?search=` -- one group's members for one search. */
+    members: (groupId: string, search: string) =>
+      ['groups', 'members', { groupId, search }] as const,
   },
   /** Bookings of the signed-in user and what is derived from them. */
   bookings: {

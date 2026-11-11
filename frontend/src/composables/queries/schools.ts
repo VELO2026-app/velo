@@ -31,7 +31,13 @@
 
 import { computed } from 'vue'
 import { defineQueryOptions, useQuery, useQueryCache, type QueryCache } from '@pinia/colada'
-import { getMySchools, getSchoolPage, getSchoolPractices, getSchools } from '@/api/schools'
+import {
+  getMySchools,
+  getSchoolPage,
+  getSchoolPractices,
+  getSchoolStudentProfile,
+  getSchools,
+} from '@/api/schools'
 import { isOptionEnabled } from '@/platform/instance'
 import { useAuthStore } from '@/stores/auth'
 import { keys } from '@/composables/queries/keys'
@@ -46,6 +52,20 @@ export const schoolPageQuery = defineQueryOptions((schoolId: string) => ({
   refetchOnWindowFocus: true,
 }))
 
+/**
+ * Query options for one student's school-scoped profile (curator only,
+ * `GET /masters/me/schools/{id}/students/{userId}`): practices, hours, the pending
+ * master offer. Revalidates on every visit (staleTime 0): the offer and the
+ * figures move outside this screen.
+ */
+export const schoolStudentQuery = defineQueryOptions(
+  ({ schoolId, userId }: { schoolId: string; userId: string }) => ({
+    key: keys.schools.student(schoolId, userId),
+    query: () => getSchoolStudentProfile(schoolId, userId),
+    staleTime: 0,
+  }),
+)
+
 /** Query options for the first `limit` upcoming practices of a school (`GET /schools/{id}/practices`). */
 export const schoolFeedQuery = defineQueryOptions(
   ({ schoolId, limit }: { schoolId: string; limit: number }) => ({
@@ -56,7 +76,9 @@ export const schoolFeedQuery = defineQueryOptions(
 )
 
 /**
- * Drop every cached entry of one school (page payload and feeds of any limit).
+ * Drop every cached entry of one school: the page payload, its students' profiles,
+ * and every practice list scoped to it (its feeds of any limit, a master's
+ * upcoming practices in its context).
  *
  * @remarks
  * For after the viewer left the school. An entry nobody holds is removed, so

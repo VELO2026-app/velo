@@ -28,6 +28,8 @@ const SAMPLE = {
   practices: keys.practices.schoolFeed('g1', 5) as EntryKey,
   schools: keys.schools.detail('g1') as EntryKey,
   schoolLists: keys.schools.mine('all') as EntryKey,
+  groupList: keys.groups.list() as EntryKey,
+  groupMembers: keys.groups.members('g1', '') as EntryKey,
 }
 type Domain = keyof typeof SAMPLE
 
@@ -46,6 +48,8 @@ const EXPECTED: Record<MutationName, Domain[]> = {
   acceptSchoolMasterOffer: ['schoolLists', 'practices'],
   leaveSchool: ['schoolLists'],
   acceptSchoolTransfer: ['schoolLists'],
+  renameGroup: ['groupList'],
+  deleteGroup: ['groupList'],
 }
 
 function stale(domain: Domain): boolean {

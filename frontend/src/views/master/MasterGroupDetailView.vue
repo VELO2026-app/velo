@@ -185,7 +185,7 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import {
@@ -206,13 +206,11 @@ import { IconShare, IconPen } from '@/components/icons'
 // IconTrash is not re-exported from the icons barrel (same pattern as
 // EntryView.vue's delete action) -- import the component file directly.
 import { IconTrash } from '@/components/icons'
-import {
-  getGroupMembers,
-  getGroups,
-  createGroupInvite,
-  renameGroup,
-  deleteGroup,
-} from '@/api/groups'
+import { createGroupInvite, renameGroup, deleteGroup } from '@/api/groups'
+import { useQuery, useQueryCache } from '@pinia/colada'
+import { groupMembersQuery, masterGroupsQuery } from '@/composables/queries/groups'
+import { invalidateAfter } from '@/composables/queries/invalidation'
+import { screenQueryState } from '@/composables/queries/screenState'
 import { ApiResponseError } from '@/api/client'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import { useToast } from '@/composables/useToast'
@@ -225,6 +223,7 @@ const router = useRouter()
 const { onFieldFocus } = useKeyboardFieldScroll()
 
 const groupId = computed(() => String(route.params.id))
+const queryCache = useQueryCache()
 
 // Owner Q12 (PROMPT №611): route.query is now only a FIRST-PAINT HINT so the
 // header doesn't flash empty while getGroups() is in flight -- it never
@@ -232,9 +231,12 @@ const groupId = computed(() => String(route.params.id))
 // null (a Mini App reload has NO query at all: the app is reopened, not
 // navigated, so the old query-only design rendered a permanently blank
 // group header (an empty name in the header title form) on every reload).
-// `groupMeta` is set by loadGroups()
-// below, matched by this screen's own id.
-const groupMeta = ref<GroupListItem | null>(null)
+// `groupMeta` comes from the group list
+// query below, matched by this screen's own id.
+const groupsQuery = useQuery(() => masterGroupsQuery())
+const groupMeta = computed<GroupListItem | null>(
+  () => groupsQuery.data.value?.find((g) => g.id === groupId.value) ?? null,
+)
 const groupName = computed(() =>
   groupMeta.value ? groupMeta.value.name : String(route.query.name ?? ''),
 )
@@ -259,84 +261,95 @@ const emptyDescription = computed(() =>
     : t('masterScreens.masterGroupDetail.empty.addFirst'),
 )
 
-const members = ref<GroupMemberItem[]>([])
-const loading = ref(true)
-const error = ref('')
 const search = ref('')
 
-// Where THIS group's own name/description come from (owner Q12, PROMPT
-// №611) -- getGroups() returns every group, custom AND the two virtuals, so
-// one fetch resolves groupMeta below. T24-19 (PROMPT №638) removed this
-// screen's own customGroups filter (allGroups.filter(kind==='custom')) --
-// it fed AddToGroupSheet/RemoveFromGroupSheet's chip palette, and both
-// sheets moved to the student profile's own menu, which fetches its own
-// copy (MasterStudentProfileView.vue).
-const allGroups = ref<GroupListItem[]>([])
+// -- The members (Pinia Colada, FE-166 step 6: queries/groups.ts) --
+//
+// Server-side search (?search=), lightly debounced so it doesn't refetch on
+// every keystroke; the timer dies with the component. Each (group, search)
+// pair is its own entry: an answer for an older search never repaints a
+// newer one.
+const debouncedSearch = ref('')
+useDebouncedSearch(search, (query) => {
+  debouncedSearch.value = query
+})
 
-async function loadGroups(): Promise<void> {
-  try {
-    const res = await getGroups()
-    allGroups.value = res.items
-    const match = res.items.find((g) => g.id === groupId.value)
-    if (match) {
-      groupMeta.value = match
-    } else if (kind.value !== 'deleted') {
-      // list_master_groups omits "deleted" ENTIRELY when its count is 0 --
-      // that absence is a normal empty state (zero blocked students right
-      // now), not a not-found. Every other id (a real custom UUID, or
-      // "students" which the backend always includes unconditionally)
-      // being absent means genuinely gone or invalid -- reuse this
-      // screen's own existing error state rather than leaving a blank
-      // header (owner Q12's own explicit warning).
-      error.value = t('masterScreens.masterGroupDetail.notFound')
-    }
-  } catch {
-    // Best-effort: load() below (members) has its own independent error
-    // handling and is the authoritative failure signal for this screen --
-    // a metadata-fetch hiccup alone doesn't need a separate message.
-  }
+/** The list has answered and nothing is in flight: its verdict is current. */
+const listSettled = computed(
+  () => groupsQuery.status.value !== 'pending' && groupsQuery.asyncStatus.value === 'idle',
+)
+
+/**
+ * The group is not in the master's list. list_master_groups omits "deleted"
+ * ENTIRELY when its count is 0 -- that absence is a normal empty state (zero
+ * blocked students right now), not a not-found. Every other id (a real
+ * custom UUID, or "students" which the backend always includes
+ * unconditionally) being absent means genuinely gone or invalid -- this
+ * screen's own error state rather than a blank header (owner Q12's own
+ * explicit warning).
+ *
+ * Decided only on a SUCCESSFUL, settled answer: a cached copy may predate a
+ * group the master just created on the groups screen (which does not write
+ * this cache) -- while the list revalidates the group reads as loading --
+ * and a failed refetch keeps that old copy, so a failure decides nothing (a
+ * failed list is best-effort: the members request is the authoritative
+ * failure signal).
+ */
+const groupMissing = computed(
+  () =>
+    listSettled.value &&
+    groupsQuery.status.value === 'success' &&
+    groupMeta.value === null &&
+    kind.value !== 'deleted',
+)
+
+/** A group the list has not confirmed yet while it revalidates: its cached members wait. */
+const groupUnconfirmed = computed(
+  () => groupMeta.value === null && kind.value !== 'deleted' && !listSettled.value,
+)
+
+// Sequenced: a genuinely deleted/invalid group must be caught BEFORE the
+// members request, so the error state renders once, from one source. The
+// members leave once the group is known (in the list, or the system
+// «deleted» group) or the list has settled without a verdict against it (a
+// failed list is best-effort), and never for a missing group.
+const membersQuery = useQuery(() =>
+  groupMembersQuery({
+    groupId: groupId.value,
+    search: debouncedSearch.value,
+    enabled:
+      groupMeta.value !== null ||
+      kind.value === 'deleted' ||
+      (listSettled.value && !groupMissing.value),
+  }),
+)
+const membersState = screenQueryState(membersQuery)
+
+const members = computed<GroupMemberItem[]>(() => membersQuery.data.value ?? [])
+/** No members to show yet (or a group not confirmed yet) and no verdict against them: the loader. */
+const loading = computed(
+  () =>
+    !groupMissing.value &&
+    !membersState.failed.value &&
+    (membersQuery.data.value === undefined || groupUnconfirmed.value),
+)
+const error = computed(() => {
+  if (groupMissing.value) return t('masterScreens.masterGroupDetail.notFound')
+  return membersState.failed.value
+    ? extractApiError(membersQuery.error.value, t('common.tryAgain'))
+    : ''
+})
+
+/**
+ * The retry asks the list again, and the members too unless the group was
+ * found missing -- read BEFORE the refetch, which unsettles the list at
+ * once. Should the group turn up, the members follow through `enabled`.
+ */
+function retry(): void {
+  const missing = groupMissing.value
+  void groupsQuery.refetch()
+  if (!missing) void membersQuery.refetch()
 }
-
-// Bumps on every members load; an answer for a superseded query is a no-op.
-let loadEpoch = 0
-
-async function load(): Promise<void> {
-  const epoch = ++loadEpoch
-  loading.value = true
-  error.value = ''
-  try {
-    const res = await getGroupMembers(groupId.value, search.value)
-    if (epoch !== loadEpoch) return
-    members.value = res.items
-  } catch (e) {
-    if (epoch !== loadEpoch) return
-    error.value = extractApiError(e, t('common.tryAgain'))
-  } finally {
-    if (epoch === loadEpoch) loading.value = false
-  }
-}
-
-// Server-side search (?search=) -- lightly debounced so it doesn't refetch
-// on every keystroke; the timer dies with the component.
-useDebouncedSearch(search, () => load())
-
-// Sequenced (not parallel with load() below): a genuinely deleted/invalid
-// group must be caught BEFORE attempting the members fetch, so the error
-// state renders once, from one source, instead of racing two independent
-// writers of `error`. The retry button (template) calls this, not load()
-// alone, so a retry also re-validates the group still exists.
-async function retry(): Promise<void> {
-  loading.value = true
-  error.value = ''
-  await loadGroups()
-  if (error.value) {
-    loading.value = false
-    return
-  }
-  await load()
-}
-
-onMounted(retry)
 
 // T24-19 (PROMPT №638): tapping a row now ALWAYS opens the profile -- there
 // is no competing row menu to route around anymore (the tag/add-to-group/
@@ -396,10 +409,10 @@ async function onRenameSave(): Promise<void> {
   try {
     await renameGroup(groupId.value, name, renameDescription.value.trim())
     renameOpen.value = false
-    // Owner Q12/Q10 (PROMPT №611): the screen is now API-driven (groupMeta
-    // above), not route.query -- re-read from getGroups() instead of
-    // rewriting the URL, same source of truth loadGroups() already is.
-    await loadGroups()
+    // Owner Q12/Q10 (PROMPT №611): the screen is API-driven (groupMeta
+    // above), not route.query -- the list is re-read instead of rewriting
+    // the URL.
+    await invalidateAfter(queryCache, 'renameGroup')
   } catch (e) {
     toast.error(extractApiError(e, t('masterScreens.masterGroupDetail.toast.renameFailed')))
   }
@@ -420,6 +433,7 @@ async function onDeleteConfirm(): Promise<void> {
   try {
     await deleteGroup(groupId.value)
     deleteConfirmOpen.value = false
+    void invalidateAfter(queryCache, 'deleteGroup')
     // The group we were viewing no longer exists -- unlike
     // MasterGroupsView's own delete (which stays on the list and
     // reloads), this screen has nothing left to reload.
