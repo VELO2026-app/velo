@@ -196,7 +196,7 @@
             {{ t('user.screens.editProfile.balanceLine', { amount: formattedBalance }) }}
           </div>
           <!-- FE-112 (tz-whitelabel §4): the withdraw step leads to the
-               payments module's finance screen; without the module there is
+               payments option's finance screen; with the option off there is
                nothing to withdraw through -- the balance line and the
                forfeit consent below still tell the truth. -->
           <VButton v-if="paymentsEnabled" variant="primary" block @click="onWithdrawFirst">
@@ -255,7 +255,7 @@ import { useMasterStore } from '@/stores/master'
 import { extractApiError } from '@/composables/useApiError'
 import { submitMethodChangeRequest, updateMasterLanguages } from '@/api/masters'
 import { formatMoney } from '@/utils/format'
-import { featureEnabled } from '@/platform/features'
+import { isOptionEnabled } from '@/platform/instance'
 import { LANGUAGES } from '@/utils/languages'
 import MethodTaxonomyPicker from '@/components/shared/MethodTaxonomyPicker.vue'
 import { flattenMethods, parseMethods, primeMethodTaxonomyCatalog } from '@/utils/methodTaxonomy'
@@ -263,9 +263,9 @@ import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import type { UserUpdate } from '@/api/types'
 
 // FE-112 (tz-whitelabel §4): hides the withdraw-first step
-// (i18n:user.screens.editProfile.withdrawFirst) in editions
-// without the payments module (see the template comment at the button).
-const paymentsEnabled = featureEnabled('payments')
+// (i18n:user.screens.editProfile.withdrawFirst) on instances
+// with the payments option off (FE-151) (see the template comment at the button).
+const paymentsEnabled = isOptionEnabled('payments')
 
 const router = useRouter()
 

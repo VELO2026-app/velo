@@ -4,34 +4,30 @@
 //
 // The shell (with the admin store and API it pulls in) and every screen are
 // lazy (FE-157); the zone catalog loads before the first screen resolves
-// (router/catalogs.ts). The module group is handed back by router/index.ts
-// through its build-time feature gate (routes/user.ts explains why the gate
-// lives there).
+// (router/catalogs.ts). The records of an instance option (FE-151:
+// payments, schools) carry meta.option -- routes/user.ts explains.
 // =============================================================================
 
 import type { RouteRecordRaw } from 'vue-router'
 
-/** The «payments» module's admin surface: the payout queue (FE-112). */
+/** The «payments» option's admin surface: the payout queue (FE-112). */
 export const PAYMENTS_ADMIN_ROUTES: RouteRecordRaw[] = [
   {
     path: 'withdrawals',
     name: 'admin-withdrawals',
+    meta: { option: 'payments' },
     component: () => import('@/views/admin/AdminWithdrawalsView.vue'),
   },
   {
     path: 'withdrawals/:id',
     name: 'admin-withdrawal-detail',
+    meta: { option: 'payments' },
     component: () => import('@/views/admin/AdminWithdrawalDetailView.vue'),
   },
 ]
 
-/** The module groups of the admin zone that router/index.ts lets in. */
-export interface AdminModuleRoutes {
-  payments: readonly RouteRecordRaw[]
-}
-
 /** The /admin zone: AdminShell and its screens. */
-export function adminRoutes(modules: AdminModuleRoutes): RouteRecordRaw[] {
+export function adminRoutes(): RouteRecordRaw[] {
   return [
     {
       path: '/admin',
@@ -73,6 +69,7 @@ export function adminRoutes(modules: AdminModuleRoutes): RouteRecordRaw[] {
           // existing revoke lever is the one moderation action for schools).
           path: 'schools',
           name: 'admin-schools',
+          meta: { option: 'schools' },
           component: () => import('@/views/admin/AdminSchoolsView.vue'),
         },
         {
@@ -140,7 +137,7 @@ export function adminRoutes(modules: AdminModuleRoutes): RouteRecordRaw[] {
         },
         // FE-112 (tz-whitelabel §4): the payout queue is the payments
         // module's admin surface -- cut from editions without it.
-        ...modules.payments,
+        ...PAYMENTS_ADMIN_ROUTES,
         {
           path: 'promos',
           name: 'admin-promos',

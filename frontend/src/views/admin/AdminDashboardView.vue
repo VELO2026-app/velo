@@ -144,8 +144,8 @@
         @click="router.push({ name: 'admin-revenue' })"
       />
       <!-- FE-112 (tz-whitelabel §4): the payout queue is the payments
-           module's admin surface -- an edition without payments has no
-           dashboard entry leading to an unregistered route. -->
+           option's admin surface -- with the option off (FE-151) there is
+           no dashboard entry leading to a closed route. -->
       <VListRow
         v-if="paymentsEnabled"
         :title="t('adminScreens.adminDashboard.payoutsSection')"
@@ -252,15 +252,15 @@ import { getCheckinMetric, getFeedbackMetric, getReturnMetric, getAdminRevenue }
 import { formatMoney } from '@/utils/format'
 import { formatPeriodRange } from '@/utils/periodRange'
 import { useToast } from '@/composables/useToast'
-import { featureEnabled } from '@/platform/features'
+import { isOptionEnabled } from '@/platform/instance'
 
 const router = useRouter()
 const adminStore = useAdminStore()
 const toast = useToast()
 
-// FE-112 (tz-whitelabel §4): hides the payouts card in editions without
-// the payments module (see the template comment at the row).
-const paymentsEnabled = featureEnabled('payments')
+// FE-112 (tz-whitelabel §4): hides the payouts card on instances with
+// the payments option off (FE-151) (see the template comment at the row).
+const paymentsEnabled = isOptionEnabled('payments')
 
 // Period toggle (i18n:common.periodWeek / i18n:common.periodMonth) + stepper
 // offset (0 = current, -1 = previous …).
