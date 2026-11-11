@@ -63,6 +63,9 @@ export const SWEEP: Record<string, SweepRow> = {
     allow: () => [{ reason: 'the 404 screen IS the not-found state', screen: ['not-found'] }],
   },
 
+  // Where a navigation into a switched-off instance option lands (FE-163).
+  'section-unavailable': { path: '/unavailable', roles: S },
+
   // --- user zone (ada) ---------------------------------------------------------
   'user-dashboard': { path: '/user/dashboard', roles: S },
   'user-calendar': { path: '/user/calendar', roles: S },
