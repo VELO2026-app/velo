@@ -343,7 +343,7 @@ onUnmounted(() => {
   width: 126px;
   height: 7px;
   flex-shrink: 0;
-  border-radius: var(--velo-radius-3-5);
+  border-radius: var(--velo-radius-pill);
   background: var(--velo-glass-blue-30);
   margin: 0 auto var(--space-3);
   touch-action: none;
@@ -387,7 +387,7 @@ onUnmounted(() => {
   flex-shrink: 0;
   height: 49px;
   margin-top: var(--velo-inset-row);
-  border-radius: var(--velo-radius-24-5);
+  border-radius: var(--velo-radius-pill);
   background: var(--velo-primary);
   color: var(--velo-white);
   border: 1px solid var(--velo-glass-border);
@@ -423,7 +423,7 @@ onUnmounted(() => {
 .v-sheet__cancel {
   flex: 39 1 0%;
   height: 49px;
-  border-radius: var(--velo-radius-24-5);
+  border-radius: var(--velo-radius-pill);
   background: var(--velo-primary);
   color: var(--velo-white);
   border: 1px solid var(--velo-glass-border);

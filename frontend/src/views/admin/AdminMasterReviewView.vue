@@ -1166,7 +1166,7 @@ onMounted(loadMaster)
 .mreview__photo {
   width: var(--velo-size-104);
   height: var(--velo-size-104);
-  border-radius: var(--velo-radius-14);
+  border-radius: var(--radius-md);
   object-fit: cover;
   margin-bottom: var(--space-2);
 }
