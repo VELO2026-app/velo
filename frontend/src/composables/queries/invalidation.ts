@@ -25,6 +25,25 @@ export const INVALIDATES = {
    * (school feeds, the calendar week) and in its detail.
    */
   cancelBooking: [keys.bookings.root(), keys.practices.root()],
+  /**
+   * `POST /practices/{id}/purchase` or `POST /bookings`: a new booking takes a seat
+   * (every list and the detail of its practice change is_booked / is_paid /
+   * seats) and can make the buyer a member of the practice's school (the
+   * school page carries the viewer's relation).
+   */
+  purchaseBooking: [keys.bookings.root(), keys.practices.root(), keys.schools.root()],
+  /** `POST /waitlist/{id}/confirm`: the waitlist spot becomes a booking, taking a seat. */
+  confirmWaitlist: [keys.bookings.root(), keys.practices.root()],
+  /** `POST /bookings/{id}/join`: sets `joined_at` on the booking. */
+  joinBooking: [keys.bookings.root()],
+  /** `POST /bookings/{id}/skip-checkin`: sets `checkin_skipped` on the booking. */
+  skipCheckin: [keys.bookings.root()],
+  /** `POST /practices/{id}/checkin`: flips `has_checkin` on the booking. */
+  submitCheckin: [keys.bookings.root()],
+  /** `POST /practices/{id}/feedback`: flips `has_feedback` on the booking. */
+  submitFeedback: [keys.bookings.root()],
+  /** `POST /practices/{id}/reflection`: flips `has_reflection` on the booking. */
+  submitReflection: [keys.bookings.root()],
 } as const satisfies Record<string, readonly EntryKey[]>
 
 /** Name of a mutation that has a row in `INVALIDATES`. */

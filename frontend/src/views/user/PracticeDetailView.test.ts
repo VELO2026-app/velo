@@ -111,6 +111,8 @@ vi.mock('@/stores/bookings', () => ({
 const cancelBooking = vi.fn()
 vi.mock('@/composables/queries/bookings', () => ({
   useCancelBooking: () => ({ mutateAsync: cancelBooking }),
+  // The booking popup (a child) books through this one; not exercised here.
+  usePurchaseBooking: () => ({ mutateAsync: vi.fn() }),
 }))
 
 // -- auth store (dependency): user.id drives isMaster; role gates the manage

@@ -32,6 +32,12 @@ import type { CheckinRequest, FeedbackRequest, CreateExternalActivityRequest } f
 
 vi.mock('@/api/diary')
 
+// The Colada side of each submit (FE-166 step 1): which keys a row covers is
+// composables/queries/invalidation.test.ts's business; here, that the submit
+// names its row on success and only then.
+const invalidateAfter = vi.hoisted(() => vi.fn())
+vi.mock('@/composables/queries/invalidation', () => ({ invalidateAfter }))
+
 // The bookings store must stay UNREACHED. If someone re-adds the import and the
 // call, refreshBookings starts getting hit and the negative-space test below
 // fails -- which is the whole point of mocking a store the diary does not use.
@@ -59,7 +65,11 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue({} as never)
   vi.mocked(diaryApi.listDiaryFeed).mockReset().mockResolvedValue(feedPage())
+  vi.mocked(diaryApi.createReflection)
+    .mockReset()
+    .mockResolvedValue({} as never)
   refreshBookings.mockReset()
+  invalidateAfter.mockReset().mockResolvedValue(undefined)
 })
 
 describe('diary store', () => {
@@ -71,6 +81,7 @@ describe('diary store', () => {
 
       expect(diaryApi.upsertCheckin).toHaveBeenCalledWith('p1', CHECKIN)
       expect(result).toEqual({ ok: true, error: '' })
+      expect(invalidateAfter).toHaveBeenCalledWith(expect.anything(), 'submitCheckin')
       // The check-in is projected onto the timeline, so the feed must re-read.
       expect(diaryApi.listDiaryFeed).toHaveBeenCalled()
     })
@@ -88,6 +99,7 @@ describe('diary store', () => {
       expect(result.ok).toBe(false)
       expect(result.error).toBe('Не удалось отправить check-in')
       expect(diaryApi.listDiaryFeed).not.toHaveBeenCalled()
+      expect(invalidateAfter).not.toHaveBeenCalled()
     })
 
     it('a feed-refresh failure does NOT fail the submit', async () => {
@@ -129,6 +141,7 @@ describe('diary store', () => {
 
       expect(diaryApi.upsertFeedback).toHaveBeenCalledWith('p1', FEEDBACK)
       expect(result).toEqual({ ok: true, error: '' })
+      expect(invalidateAfter).toHaveBeenCalledWith(expect.anything(), 'submitFeedback')
       expect(diaryApi.listDiaryFeed).toHaveBeenCalled()
     })
 
@@ -144,6 +157,48 @@ describe('diary store', () => {
 
       expect(result.ok).toBe(false)
       expect(result.error).toBe('Не удалось отправить feedback')
+    })
+  })
+
+  describe('submitReflection (FE-166 step 1)', () => {
+    it('on success: posts the reflection and marks the bookings stale', async () => {
+      const store = useDiaryStore()
+      const body = { comment: null } as Parameters<typeof store.submitReflection>[1]
+
+      const result = await store.submitReflection('p1', body)
+
+      expect(diaryApi.createReflection).toHaveBeenCalledWith('p1', body)
+      expect(result).toEqual({ ok: true, error: '' })
+      expect(invalidateAfter).toHaveBeenCalledWith(expect.anything(), 'submitReflection')
+    })
+
+    it('on failure: marks nothing stale', async () => {
+      vi.mocked(diaryApi.createReflection).mockRejectedValue(
+        new ApiResponseError(409, 'already', 'reflection_already_submitted'),
+      )
+      const store = useDiaryStore()
+
+      const result = await store.submitReflection('p1', { comment: null } as never)
+
+      expect(result.ok).toBe(false)
+      expect(invalidateAfter).not.toHaveBeenCalled()
+    })
+
+    it('an answer landing after the account changed marks nothing stale', async () => {
+      let resolve!: (v: unknown) => void
+      vi.mocked(diaryApi.createReflection).mockReturnValue(
+        new Promise((r) => {
+          resolve = r
+        }) as never,
+      )
+      const store = useDiaryStore()
+
+      const pending = store.submitReflection('p1', { comment: null } as never)
+      store.$reset()
+      resolve({})
+      await pending
+
+      expect(invalidateAfter).not.toHaveBeenCalled()
     })
   })
 

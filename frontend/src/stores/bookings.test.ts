@@ -19,6 +19,12 @@ import type { BookingResponse } from '@/api/types'
 
 vi.mock('@/api/bookings')
 
+// The Colada side of each mutation (FE-166 step 1): which keys a row covers
+// is composables/queries/invalidation.test.ts's business; here, that the
+// action names its row on success and only then.
+const invalidateAfter = vi.hoisted(() => vi.fn())
+vi.mock('@/composables/queries/invalidation', () => ({ invalidateAfter }))
+
 function emptyPage() {
   return { items: [], total: 0, limit: 20, offset: 0 }
 }
@@ -27,6 +33,7 @@ describe('useBookingsStore', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.mocked(bookingsApi.getMyBookings).mockReset().mockResolvedValue(emptyPage())
+    invalidateAfter.mockReset().mockResolvedValue(undefined)
     vi.mocked(bookingsApi.joinBooking).mockReset()
     vi.mocked(bookingsApi.skipCheckin).mockReset()
   })
@@ -235,6 +242,7 @@ describe('useBookingsStore', () => {
       expect(result).toEqual({ ok: true, error: '' })
       expect(bookingsApi.joinBooking).toHaveBeenCalledWith('booking_1')
       expect(bookingsApi.getMyBookings).toHaveBeenCalled()
+      expect(invalidateAfter).toHaveBeenCalledWith(expect.anything(), 'joinBooking')
     })
 
     it('on failure (e.g. 409 already joined): falls back to the generic message and carries the machine status (FE-78.2)', async () => {
@@ -255,6 +263,7 @@ describe('useBookingsStore', () => {
         error: 'Не удалось войти в практику',
         status: 409,
       })
+      expect(invalidateAfter).not.toHaveBeenCalled()
     })
   })
 
@@ -274,6 +283,7 @@ describe('useBookingsStore', () => {
 
       expect(result).toEqual({ ok: true, error: '' })
       expect(bookingsApi.skipCheckin).toHaveBeenCalledWith('booking_1')
+      expect(invalidateAfter).toHaveBeenCalledWith(expect.anything(), 'skipCheckin')
     })
 
     it('on failure: returns the mapped table phrase for a real backend code', async () => {
@@ -288,6 +298,7 @@ describe('useBookingsStore', () => {
       const result = await store.skipCheckin('booking_1')
 
       expect(result).toEqual({ ok: false, error: 'Запрошенный ресурс не найден' })
+      expect(invalidateAfter).not.toHaveBeenCalled()
     })
   })
 })

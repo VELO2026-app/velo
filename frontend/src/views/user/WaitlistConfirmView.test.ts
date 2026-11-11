@@ -21,6 +21,18 @@ import type { PaginatedWaitlistResponse, WaitlistWithPracticeResponse } from '@/
 
 vi.mock('@/api/waitlist')
 
+// The confirm mutation (dependency, FE-166 step 1): what it refreshes is
+// composables/queries/bookings.test.ts's business; this screen owns the call,
+// the states and the toasts. mutateAsync passes through to the mocked API.
+vi.mock('@/composables/queries/bookings', async () => {
+  const api = await import('@/api/waitlist')
+  return {
+    useConfirmWaitlist: () => ({
+      mutateAsync: ({ waitlistId }: { waitlistId: string }) => api.confirmWaitlist(waitlistId),
+    }),
+  }
+})
+
 const push = vi.fn()
 const back = vi.fn()
 vi.mock('vue-router', () => ({

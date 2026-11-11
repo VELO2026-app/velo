@@ -80,7 +80,8 @@
 import { t } from '@/locales'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { confirmWaitlist, getMyWaitlist } from '@/api/waitlist'
+import { getMyWaitlist } from '@/api/waitlist'
+import { useConfirmWaitlist } from '@/composables/queries/bookings'
 import { ApiResponseError } from '@/api/client'
 import type { WaitlistWithPracticeResponse } from '@/api/types'
 import { VButton, VCard, VEmptyState, VLoader } from '@/components/ui'
@@ -101,6 +102,7 @@ const STATE_TEXT: Record<Exclude<State, 'open'>, string> = {
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
+const confirmSpot = useConfirmWaitlist()
 const waitlistId = computed(() => String(route.params.id))
 
 const entry = ref<WaitlistWithPracticeResponse | null>(null)
@@ -141,7 +143,10 @@ async function onConfirm(): Promise<void> {
   if (confirming.value || !entry.value) return
   confirming.value = true
   try {
-    await confirmWaitlist(waitlistId.value)
+    await confirmSpot.mutateAsync({
+      waitlistId: waitlistId.value,
+      practiceId: entry.value.practice_id,
+    })
     toast.success(t('user.screens.waitlistConfirm.toast.confirmed'))
     openPractice()
   } catch (e) {

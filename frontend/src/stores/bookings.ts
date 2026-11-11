@@ -11,6 +11,8 @@
 // =============================================================================
 
 import { defineStore } from 'pinia'
+import { useQueryCache } from '@pinia/colada'
+import { invalidateAfter } from '@/composables/queries/invalidation'
 import { replaceEqualDeep } from '@/utils/structuralShare'
 import { ref } from 'vue'
 import {
@@ -44,6 +46,9 @@ const UPCOMING_PERSIST = 'bookings.upcoming'
 
 /** The user's bookings: paginated list, the dashboard's upcoming slice, join and skip-checkin actions. */
 export const useBookingsStore = defineStore('bookings', () => {
+  // Colada entries of the booking data go stale with each mutation below
+  // (composables/queries/invalidation.ts holds the map).
+  const queryCache = useQueryCache()
   // -- Status filter --
   const statusFilter = ref<BookingStatus | undefined>(undefined)
 
@@ -217,6 +222,7 @@ export const useBookingsStore = defineStore('bookings', () => {
   async function joinBooking(bookingId: string): Promise<ActionResult> {
     try {
       await apiJoinBooking(bookingId)
+      void invalidateAfter(queryCache, 'joinBooking')
       await pagination.refreshInPlace()
       return { ok: true, error: '' }
     } catch (e) {
@@ -237,6 +243,7 @@ export const useBookingsStore = defineStore('bookings', () => {
   async function skipCheckin(bookingId: string): Promise<ActionResult> {
     try {
       await apiSkipCheckin(bookingId)
+      void invalidateAfter(queryCache, 'skipCheckin')
       await pagination.refreshInPlace()
       return { ok: true, error: '' }
     } catch (e) {
