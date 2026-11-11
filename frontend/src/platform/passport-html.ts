@@ -43,14 +43,27 @@ const PASSPORT_HTML_DEFAULTS: Record<string, string> = {
 
 const FONT_BLOCK = /<!--VELO:FONT-->[\s\S]*<!--\/VELO:FONT-->/
 
+/** A skin with self-hosted fonts (FE-131: assets/fonts/ of the package,
+ *  declared by an \@font-face rule in virtual:skin-tokens.css) replaces the Google Fonts block
+ *  with preloads of its own files -- no external request ships with it. */
 function skinFontBlock(skin: SkinPackage): string {
   return [
     '<!--VELO:FONT-->',
-    `    <link rel="preconnect" href="https://fonts.googleapis.com" />`,
-    `    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />`,
-    `    <link href="${skin.fontUrl}" rel="stylesheet" />`,
+    ...skin.fonts.map(
+      (font) =>
+        `    <link rel="preload" href="/skin/${font.file}" as="font" type="font/woff2" crossorigin />`,
+    ),
     '<!--/VELO:FONT-->',
   ].join('\n')
+}
+
+/** HTML text escape for a value that comes from package data. */
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
 }
 
 /** The index.html post-transform.
@@ -72,13 +85,17 @@ export function passportHtmlDefaults(skin: SkinPackage | null = null): Plugin {
           const value = process.env[name] ?? files[name] ?? PASSPORT_HTML_DEFAULTS[name]
           return value ?? placeholder
         })
-        // Skin derivatives (§1: brand.json is the single header-color source).
+        // Skin derivatives (§1: the brand record is the single header-color source).
         out = out.replace(/%VELO_THEME_COLOR%/g, skin?.themeColor ?? GOLDEN_SKIN.themeColor)
         if (skin) {
-          if (skin.fontUrl) out = out.replace(FONT_BLOCK, skinFontBlock(skin))
+          if (skin.fonts.length > 0) out = out.replace(FONT_BLOCK, skinFontBlock(skin))
           // The tab title follows the skin's display name: a branded build
           // whose browser tab still said VELO would read as half-skinned.
-          out = out.replace(/<title>[^<]*<\/title>/, `<title>${skin.displayName}</title>`)
+          // Escaped and substituted through a function: a display name is
+          // package data -- markup must not reach the document, and `$&`
+          // must not expand as a replacement pattern.
+          const title = `<title>${escapeHtml(skin.displayName)}</title>`
+          out = out.replace(/<title>[^<]*<\/title>/, () => title)
         }
         return out
       },

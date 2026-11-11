@@ -16,13 +16,15 @@
 // which keeps the map and the registry from drifting apart.
 //
 // SKIN MODE (tz-ui-package.md §3.7, шаг 1 витрины): a toolbar "Skin" select
-// injects an etalon skin's tokens.css as ONE override layer appended after
+// injects an etalon skin's token layer as ONE override appended after
 // the golden base -- the same cascade shape the app builds in app.ts
 // (variables.css -> kit css -> virtual:skin-tokens.css). The kit components consume
 // var(--velo-*) only, so the switch repaints every story with no component
 // change: значения = данные. Golden removes the layer entirely (the base IS
-// golden). The skin files are read as ?raw build-time inputs from the app's
-// skins/ directory; a skin joins as one import plus one table entry --
+// golden). The layers come from the virtual module of main.ts, which
+// converts the DTCG packages listed in VELO_SKINS (velo carries no skins --
+// partner brands live in their own repositories) with the app's
+// own skin engine (FE-131) -- a new skin package joins with no edit here;
 // showcase tooling, not package code (the boundary law governs src/**,
 // nothing here ships).
 // =============================================================================
@@ -32,7 +34,7 @@ import type { Preview } from '@storybook/vue3-vite'
 import { configureUi } from '../src/i18n'
 
 import '../../../frontend/src/styles/variables.css'
-import goodoCss from '../../../frontend/skins/goodo/tokens.css?raw'
+import skinLayers from 'virtual:velo-skins'
 
 // Golden ru values of the kit registry (UI_I18N_KEYS), spelled out so the
 // витрина needs no app import for the demo dictionary.
@@ -65,11 +67,9 @@ configureUi({ t: (key) => DEMO_MESSAGES[key] ?? key })
 
 // --- the skin layer (§3.7) ---------------------------------------------------
 
-/** The skins, keyed by the toolbar value (tokens.css text). A skin joins by
- *  one entry here -- the toolbar items follow the table. */
-const SKIN_LAYERS: Record<string, string> = {
-  goodo: goodoCss,
-}
+/** The skins, keyed by the toolbar value (the package's token layer as CSS);
+ *  the toolbar items follow the table. */
+const SKIN_LAYERS: Record<string, string> = skinLayers
 
 const SKIN_LAYER_ID = 'velo-skin-layer'
 

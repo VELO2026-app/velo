@@ -435,8 +435,25 @@ export default [
   },
 
   {
+    // FE-131 scripts/lib/skin-package.mjs has a .d.mts sidecar: TypeScript
+    // takes the declaration and leaves the .mjs out of tsconfig.scripts.json's
+    // program, so the type-aware rules cannot run on it. Syntax-level rules
+    // still apply; its types are checked through the .d.mts by vue-tsc.
+    files: ['scripts/lib/skin-package.mjs'],
+    ...tseslint.configs.disableTypeChecked,
+  },
+
+  {
     // eslint.config.js and the other tooling configs stay unlinted; the two
-    // build configs above are linted.
-    ignores: ['dist/', 'node_modules/', 'eslint.config.js', 'stylelint.config.*'],
+    // build configs above are linted. The .d.mts type sidecars of the scripts
+    // (FE-131 scripts/lib/skin-package.d.mts) are declarations only, outside
+    // tsconfig.scripts.json; vue-tsc checks them through their TS importers.
+    ignores: [
+      'dist/',
+      'node_modules/',
+      'eslint.config.js',
+      'stylelint.config.*',
+      'scripts/**/*.d.mts',
+    ],
   },
 ]

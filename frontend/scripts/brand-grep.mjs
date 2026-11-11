@@ -12,8 +12,9 @@
 //   src/platform/skin.ts      GOLDEN_SKIN -- the no-skin build's identity
 //   src/platform/instance.ts  the VITE_BRAND ?? 'VELO' golden default
 //   (the skin brand is a virtual module now, nothing on disk)
-// (index.html placeholders/markers and skins/** are the other reference
-// carriers by design and are not src/ -- nothing to scan there.)
+// (index.html placeholders/markers are the other reference
+// carriers by design and are not src/ -- nothing to scan there; skins live
+// in their own package repositories, FE-131.)
 // Header comments («VELO Frontend --») are NOT user strings: comments are
 // stripped before matching. *.test.ts pin golden copy on purpose (skipped).
 //

@@ -139,10 +139,9 @@
 --velo-pink-500            # *legacy-ramp (VStatCard rose value/delta)
 --velo-primary
 --velo-primary-dark
---velo-radius-24-5
---velo-radius-3-5
 --velo-radius-badge
 --velo-radius-bar-top
+--velo-radius-pill
 --velo-radius-sheet-top
 --velo-rail-pad-x
 --velo-sand-100            # *legacy-ramp (VTag sand bg)

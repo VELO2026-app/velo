@@ -26,6 +26,50 @@ describe('token pipeline round trip (FE-124 track T)', () => {
     expect(await generate()).toBe(css)
   })
 
+  it('a $deprecated token gets its note as a comment line above the declaration (FE-150)', async () => {
+    // Gen-2 emptied the real registry of deprecated tokens, so the emit is
+    // pinned on a miniature: before-lines first, then the note, then the decl.
+    const mini = {
+      $extensions: {
+        pridem: { header: '/* h */\n:root {', trailingComment: [], mediaBlock: '/* m */' },
+      },
+      root: {
+        velo: {
+          a: { $value: ' 1px', $extensions: { pridem: { order: 1, cssName: '--velo-a' } } },
+          b: {
+            $value: ' 2px',
+            $deprecated: '2026-11-10: test, delete in Gen-3',
+            $extensions: {
+              pridem: {
+                order: 2,
+                cssName: '--velo-b',
+                before: ['', '  /* group */'],
+                trailing: 'note',
+              },
+            },
+          },
+        },
+      },
+    }
+    const mod = (await import('../../scripts/generate-variables.mjs')) as unknown as {
+      generateVariables: (doc: unknown) => string
+    }
+    expect(mod.generateVariables(mini)).toBe(
+      [
+        '/* h */',
+        ':root {',
+        '  --velo-a: 1px;',
+        '',
+        '  /* group */',
+        '  /* @deprecated 2026-11-10: test, delete in Gen-3 */',
+        '  --velo-b: 2px; /* note */',
+        '}',
+        '',
+        '/* m */',
+      ].join('\n'),
+    )
+  })
+
   it('tokens.json keeps the DTCG shape the skin packages and Figma share', () => {
     // The skin contract (variables.css, GENERATION 1 section) and step 2 of
     // track T (Figma Variables sync) both speak this document; the root

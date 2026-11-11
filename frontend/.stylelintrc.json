@@ -11,10 +11,13 @@
         "/^font-size$/": ["/^var\\(--/", "inherit"],
         "/^border-radius$/": ["/^var\\(--/", "inherit", "0"],
         "/^box-shadow$/": ["/^var\\(--/", "none"],
-        "/^font-family$/": ["/^var\\(--/", "inherit"]
+        "/^font-family$/": ["/^var\\(--/", "inherit"],
+        "/^font$/": ["/^var\\(--/", "inherit"],
+        "/^line-height$/": ["/^var\\(--/", "inherit", "normal", "0", "1", "1.05", "1.1", "1.2", "1.25", "1.3", "1.35", "1.4", "1.45", "1.5", "1.55", "1.6", "1.7", "16px", "17px", "22px"],
+        "/^letter-spacing$/": ["/^var\\(--/", "inherit", "normal", "0", "0.02em", "0.04em", "0.05em", "-0.5px", "0.2475px", "0.28px", "0.3px", "0.32px", "0.36px", "0.5px", "0.64px", "/^calc\\((0\\.22|0\\.24|0\\.2475|0\\.32)px \\* var\\(--velo-de-k, 1\\)\\)$/"]
       },
       {
-        "message": "Token gate (tz-whitelabel §3.1): font-size / border-radius / box-shadow / font-family take var(--…) tokens only (variables.css); font-family may also be inherit."
+        "message": "Token gate (tz-whitelabel §3.1): font-size / border-radius / box-shadow / font-family take var(--…) tokens only (variables.css); font-family may also be inherit. line-height / letter-spacing (FE-154, 2026-11-10): only the values already in use or a var(--…) token; a new value means reusing an existing step or adding a token. The font shorthand takes inherit or a token only."
       }
     ],
     "declaration-property-value-disallowed-list": [
@@ -29,6 +32,10 @@
     ]
   },
   "overrides": [
+    {
+      "files": ["**/*.css"],
+      "customSyntax": "postcss"
+    },
     {
       "files": ["src/components/icons/IconMoodScale*.vue"],
       "rules": {
