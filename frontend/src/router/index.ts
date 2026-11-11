@@ -32,7 +32,8 @@ import { adminRoutes } from '@/router/routes/admin'
 // Instance options (FE-151: payments, schools, mcp) are not gated here: the
 // flag arrives at container start, so their records are always registered
 // with meta.option, and the access guard's optionGuard sends a navigation
-// into a switched-off option to the same /404.
+// into a switched-off option to the "section unavailable" screen
+// (/unavailable, FE-163).
 const router = createRouter({
   history: createWebHistory(),
   routes: [

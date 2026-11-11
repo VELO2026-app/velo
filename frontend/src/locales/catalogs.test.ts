@@ -6,6 +6,8 @@
 //
 // test-setup.ts preloads every zone catalog into the shared singleton, so
 // each test here works on a FRESH module instance (vi.resetModules).
+import { readFileSync } from 'node:fs'
+
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { compileMessage } from '@/locales/messageFunction'
@@ -171,5 +173,18 @@ describe('instance overlays (applyInstanceOverrides)', () => {
     expect(mod.t('common.skip')).not.toBe('Not now')
     await mod.setLocale('en')
     withoutCompiler(() => expect(mod.t('common.skip')).toBe('Not now'))
+  })
+})
+
+// FE-167: vite.config.ts folds the en/uk core files into one chunk per
+// locale; its regex excludes the zone files by hand. A zone added to
+// ZONE_CATALOGS but not to that regex would ship in every en/uk core chunk.
+describe('locale chunk regex (vite.config.ts)', () => {
+  it('excludes every zone catalog', async () => {
+    const { ZONE_CATALOGS } = await fresh()
+    const config = readFileSync('vite.config.ts', 'utf8')
+    const line = config.split('\n').find((l) => l.includes('(?!master'))
+    expect(line).toBeDefined()
+    for (const zone of ZONE_CATALOGS) expect(line).toContain(`${zone}\\.json`)
   })
 })
