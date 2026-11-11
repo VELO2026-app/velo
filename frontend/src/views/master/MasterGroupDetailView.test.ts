@@ -16,8 +16,9 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
-import { createPinia, type Pinia } from 'pinia'
-import { PiniaColada } from '@pinia/colada'
+import { createPinia, setActivePinia, type Pinia } from 'pinia'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { keys } from '@/composables/queries/keys'
 import { coladaOptions } from '@/composables/queries/setup'
 import MasterGroupDetailView from '@/views/master/MasterGroupDetailView.vue'
 import * as groupsApi from '@/api/groups'
@@ -247,6 +248,60 @@ describe('MasterGroupDetailView', () => {
       await flush()
       expect(text()).not.toContain('Группа не найдена')
       expect(text()).toContain('Анна')
+    })
+
+    it('a FAILED list refetch over a cached list without the group decides nothing: the members load', async () => {
+      routeParams.id = 'g_other'
+      vi.mocked(groupsApi.getGroups).mockResolvedValue(customGroups([]))
+      mount()
+      await flush()
+      app?.unmount()
+      host?.remove()
+
+      routeParams.id = 'g1'
+      vi.mocked(groupsApi.getGroups).mockRejectedValue(new Error('network'))
+      vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([member('s1', { name: 'Анна' })]))
+      mount()
+      await flush()
+
+      expect(text()).not.toContain('Группа не найдена')
+      expect(groupsApi.getGroupMembers).toHaveBeenCalledWith('g1', '')
+      expect(text()).toContain('Анна')
+    })
+
+    it('«Повторить» on "not found" asks the list again but not the members of a missing group', async () => {
+      vi.mocked(groupsApi.getGroups).mockResolvedValue(customGroups([]))
+      mount()
+      await flush()
+      expect(text()).toContain('Группа не найдена')
+
+      Array.from(host?.querySelectorAll('button') ?? [])
+        .find((b) => b.textContent?.includes('Повторить'))
+        ?.click()
+      await flush()
+
+      expect(groupsApi.getGroups).toHaveBeenCalledTimes(2)
+      expect(groupsApi.getGroupMembers).not.toHaveBeenCalled()
+    })
+
+    it('cached members of a group the list no longer confirms wait for the list (no stale roster)', async () => {
+      vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([member('s1', { name: 'Анна' })]))
+      mount()
+      await flush()
+      expect(text()).toContain('Анна')
+      app?.unmount()
+      host?.remove()
+
+      // The group was deleted meanwhile (the list the cache holds no longer
+      // has it), and the list's refetch is on its way.
+      setActivePinia(pinia)
+      useQueryCache().setQueryData(keys.groups.list(), [])
+      vi.mocked(groupsApi.getGroups).mockReturnValueOnce(new Promise(() => {}))
+      mount()
+      await flush()
+
+      expect(text()).not.toContain('Анна')
+      expect(host?.querySelector('.v-loader')).not.toBeNull()
     })
 
     it('an EMPTY «Удалённые» (absent from getGroups() because its count is 0) is NOT treated as not-found', async () => {

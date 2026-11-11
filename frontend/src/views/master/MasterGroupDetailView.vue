@@ -274,6 +274,11 @@ useDebouncedSearch(search, (query) => {
   debouncedSearch.value = query
 })
 
+/** The list has answered and nothing is in flight: its verdict is current. */
+const listSettled = computed(
+  () => groupsQuery.status.value !== 'pending' && groupsQuery.asyncStatus.value === 'idle',
+)
+
 /**
  * The group is not in the master's list. list_master_groups omits "deleted"
  * ENTIRELY when its count is 0 -- that absence is a normal empty state (zero
@@ -281,23 +286,26 @@ useDebouncedSearch(search, (query) => {
  * custom UUID, or "students" which the backend always includes
  * unconditionally) being absent means genuinely gone or invalid -- this
  * screen's own error state rather than a blank header (owner Q12's own
- * explicit warning). A failed list is best-effort: the members request is
- * the authoritative failure signal.
+ * explicit warning).
+ *
+ * Decided only on a SUCCESSFUL, settled answer: a cached copy may predate a
+ * group the master just created on the groups screen (which does not write
+ * this cache) -- while the list revalidates the group reads as loading --
+ * and a failed refetch keeps that old copy, so a failure decides nothing (a
+ * failed list is best-effort: the members request is the authoritative
+ * failure signal).
  */
-/** The list has answered and nothing is in flight: its verdict is current. */
-const listSettled = computed(
-  () => groupsQuery.status.value !== 'pending' && groupsQuery.asyncStatus.value === 'idle',
-)
-// Decided only on a SETTLED answer: a cached copy may predate a group the
-// master just created on the groups screen (which does not write this
-// cache), so while the list revalidates a missing group reads as loading,
-// never as "not found".
 const groupMissing = computed(
   () =>
     listSettled.value &&
-    groupsQuery.data.value !== undefined &&
+    groupsQuery.status.value === 'success' &&
     groupMeta.value === null &&
     kind.value !== 'deleted',
+)
+
+/** A group the list has not confirmed yet while it revalidates: its cached members wait. */
+const groupUnconfirmed = computed(
+  () => groupMeta.value === null && kind.value !== 'deleted' && !listSettled.value,
 )
 
 // Sequenced: a genuinely deleted/invalid group must be caught BEFORE the
@@ -318,9 +326,12 @@ const membersQuery = useQuery(() =>
 const membersState = screenQueryState(membersQuery)
 
 const members = computed<GroupMemberItem[]>(() => membersQuery.data.value ?? [])
-/** No members to show yet and no verdict against them: the loader. */
+/** No members to show yet (or a group not confirmed yet) and no verdict against them: the loader. */
 const loading = computed(
-  () => !groupMissing.value && !membersState.failed.value && membersQuery.data.value === undefined,
+  () =>
+    !groupMissing.value &&
+    !membersState.failed.value &&
+    (membersQuery.data.value === undefined || groupUnconfirmed.value),
 )
 const error = computed(() => {
   if (groupMissing.value) return t('masterScreens.masterGroupDetail.notFound')
@@ -329,10 +340,15 @@ const error = computed(() => {
     : ''
 })
 
-/** The retry asks the list and the members again; a missing group's verdict wins once the list settles. */
+/**
+ * The retry asks the list again, and the members too unless the group was
+ * found missing -- read BEFORE the refetch, which unsettles the list at
+ * once. Should the group turn up, the members follow through `enabled`.
+ */
 function retry(): void {
+  const missing = groupMissing.value
   void groupsQuery.refetch()
-  if (!groupMissing.value) void membersQuery.refetch()
+  if (!missing) void membersQuery.refetch()
 }
 
 // T24-19 (PROMPT №638): tapping a row now ALWAYS opens the profile -- there
