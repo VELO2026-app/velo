@@ -41,6 +41,11 @@ updates:
     ignore:
       - dependency-name: typescript
         versions: ['>=6.1.0']
+      # Vite 8 (Rolldown) is a migration, not a bump: the startup chunk
+      # layout and the precache budget (FE-157 s2) need redoing (PR #69).
+      # Held until a plugin we use requires it -- FE-169.
+      - dependency-name: vite
+        update-types: ['version-update:semver-major']
     groups:
       build:
         group-by: dependency-name
