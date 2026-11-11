@@ -52,6 +52,29 @@ export const INVALIDATES = {
    * it -- a school feed included -- and its detail.
    */
   changePractice: [keys.practices.root()],
+  /**
+   * `POST /schools/join` (the token in the body): a new membership -- every school list and
+   * the hub (the dock's Schools tab), the school page's relation, and the
+   * practice feeds the membership opens.
+   */
+  joinSchool: [keys.schools.root(), keys.practices.root()],
+  /**
+   * `POST /schools/{id}/master-offer/accept`: a new membership (as a master)
+   * -- the school lists and the hub, and the feeds it opens.
+   */
+  acceptSchoolMasterOffer: [keys.schools.lists(), keys.practices.root()],
+  /**
+   * `DELETE /schools/{id}/membership`: a membership gone (leaving) -- the school lists and the
+   * hub. Not the school page: the screen that left still shows it under its
+   * toast; its entries are dropped on unmount (forgetSchool, ADR).
+   */
+  leaveSchool: [keys.schools.lists()],
+  /**
+   * `POST /schools/{id}/transfer/accept`: the relation turns curator -- the
+   * school lists and the hub (a curated school stops counting in the user
+   * zone). The page itself is written from the answer (setQueryData).
+   */
+  acceptSchoolTransfer: [keys.schools.lists()],
 } as const satisfies Record<string, readonly EntryKey[]>
 
 /** Name of a mutation that has a row in `INVALIDATES`. */

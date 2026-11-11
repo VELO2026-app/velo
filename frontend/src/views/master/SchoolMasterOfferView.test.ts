@@ -41,6 +41,16 @@ vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({ role: mockRole }),
 }))
 
+// The new membership re-reads the hub before the navigation (FE-88); the
+// order inside membershipChanged is schoolsHub.test's. This app mounts
+// without pinia, so the cache is a stub.
+const membershipChanged = vi.hoisted(() => vi.fn())
+vi.mock('@/composables/queries/schools', () => ({ membershipChanged }))
+vi.mock('@pinia/colada', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@pinia/colada')>()),
+  useQueryCache: () => ({}),
+}))
+
 let app: App | null = null
 let host: HTMLElement | null = null
 
@@ -94,6 +104,7 @@ beforeEach(() => {
   vi.mocked(cgApi.declineSchoolMasterOffer).mockReset()
   push.mockReset()
   replace.mockReset()
+  membershipChanged.mockReset().mockResolvedValue(undefined)
   toastSuccess.mockReset()
   toastError.mockReset()
 })
@@ -168,7 +179,12 @@ describe('SchoolMasterOfferView -- the accept gate', () => {
 
     expect(cgApi.acceptSchoolMasterOffer).toHaveBeenCalledWith('g1')
     expect(toastSuccess).toHaveBeenCalledWith('Вы теперь мастер школы «Тихая школа»')
+    expect(membershipChanged).toHaveBeenCalledWith(expect.anything(), 'acceptSchoolMasterOffer')
     expect(replace).toHaveBeenCalledWith({ name: 'user-school', params: { id: 'g1' } })
+    // The hub was re-read BEFORE the navigation.
+    expect(membershipChanged.mock.invocationCallOrder[0]!).toBeLessThan(
+      replace.mock.invocationCallOrder[0]!,
+    )
   })
 
   it('a MASTER lands on the master zone school page after accepting', async () => {

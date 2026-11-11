@@ -10,7 +10,7 @@
 // returns are the master list's section), and the create right is only
 // dialed in master mode -- hence the seeded auth role on every mount.
 //
-// The schoolsHub store (the tab probe) runs REAL against the mocked module --
+// The schools hub (the tab probe, useSchoolsHub) runs REAL against the mocked module --
 // it shares the same seam, so one vi.mock serves both.
 // =============================================================================
 
@@ -57,7 +57,7 @@ function mount(role: 'user' | 'master' = 'user', { revisit = false } = {}): HTML
     role_switch: { allowed_roles: [role] },
   } as never
   app = createApp(SchoolsView).use(createTestI18n()).use(pinia).use(PiniaColada, coladaOptions)
-  // The hub reads the schoolsHub store (the tab probe shares this seam).
+  // The hub reads the schools hub queries (the tab probe shares this seam).
   app.mount(host)
   return host
 }

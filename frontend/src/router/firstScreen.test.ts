@@ -20,13 +20,11 @@ vi.mock('@/router/dataPrefetch', () => ({
     },
   },
 }))
-vi.mock('@/stores/schoolsHub', () => ({
-  useSchoolsHubStore: () => ({
-    ensureCurator: () => {
-      shell.calls++
-      return Promise.resolve()
-    },
-  }),
+vi.mock('@/composables/queries/schools', () => ({
+  ensureSchoolsHub: () => {
+    shell.calls++
+    return Promise.resolve()
+  },
 }))
 vi.mock('@/platform/telegram-sdk', () => ({ viewportSettled: () => Promise.resolve() }))
 

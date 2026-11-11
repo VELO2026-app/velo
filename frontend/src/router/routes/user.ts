@@ -239,7 +239,7 @@ export function userRoutes(modules: UserModuleRoutes): RouteRecordRaw[] {
           // the tab bar's own screen: empty state with the create button
           // (i18n:user.screens.schools.create.title) or the
           // flat schools list. Reached from the dock tab and nowhere else;
-          // tab visibility itself is the schoolsHub store's decision.
+          // tab visibility itself is the schools hub's decision (useSchoolsHub).
           path: 'schools',
           name: 'user-schools',
           meta: { option: 'schools' },

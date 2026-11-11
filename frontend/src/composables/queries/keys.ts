@@ -44,14 +44,18 @@ export const keys = {
   schools: {
     /** Prefix of every school key. */
     root: () => ['schools'] as const,
+    /** Prefix of every school LIST (the hub, the tabs' lists, the create right) -- not the school pages. */
+    lists: () => ['schools', 'list'] as const,
     /** `GET /schools/{id}` -- the school page payload with the viewer's relation. */
     detail: (schoolId: string) => ['schools', 'detail', schoolId] as const,
     /**
      * `GET /schools/mine` (+ the create right) as one screen shows it: the user
      * zone's schools tab for a role, or the master's schools hub.
      */
-    mine: (view: 'participant' | 'master-hub', role = '') =>
+    mine: (view: 'participant' | 'master-hub' | 'all', role = '') =>
       ['schools', 'list', 'mine', { view, role }] as const,
+    /** `GET /masters/me/schools` read for one fact: the admin-issued right to found a school (BE-18). */
+    createRight: () => ['schools', 'list', 'createRight'] as const,
   },
   /** Bookings of the signed-in user and what is derived from them. */
   bookings: {

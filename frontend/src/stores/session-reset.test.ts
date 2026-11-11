@@ -30,7 +30,6 @@ import { useDiaryStore } from '@/stores/diary'
 import { useNotificationsStore } from '@/stores/notifications'
 import { usePracticesStore } from '@/stores/practices'
 import { useMasterStore } from '@/stores/master'
-import { useSchoolsHubStore } from '@/stores/schoolsHub'
 
 type StoreFactory = () => StoreGeneric
 
@@ -139,7 +138,6 @@ describe('the store set', () => {
         'master',
         'notifications',
         'practices',
-        'schoolsHub',
       ]),
     )
   })
@@ -300,10 +298,10 @@ describe('the end of a session leaves every store in its initial state', () => {
       usePracticesStore().fetchPractice('practice_1'),
       useMasterStore().fetchMyProfile(true),
       useMasterStore().fetchUpcomingPractices(),
-      useSchoolsHubStore().ensureCurator(),
       // The bookings and calendar stores hold no server data since FE-166
-      // steps 3-4; their queries are Colada entries, emptied by the account
-      // scope (composables/queries/setup.test.ts).
+      // steps 3-4, and the schools hub is no store at all since step 5;
+      // their queries are Colada entries, emptied by the account scope
+      // (composables/queries/setup.test.ts, schoolsHub.test.ts).
     ]
 
     await useAuthStore().logout()
@@ -325,7 +323,6 @@ describe('the end of a session leaves every store in its initial state', () => {
     ['practice detail', () => usePracticesStore().fetchPractice('practice_1')],
     ['master profile', () => useMasterStore().fetchMyProfile(true)],
     ['master upcoming practices', () => useMasterStore().fetchUpcomingPractices()],
-    ['schools hub probe', () => useSchoolsHubStore().ensureCurator()],
   ]
   for (const [name, run] of ownRequests) {
     it(`after a 401 to the store's own request: ${name}`, async () => {

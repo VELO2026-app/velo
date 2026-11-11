@@ -129,13 +129,14 @@ vi.mock('@/stores/auth', () => ({
   }),
 }))
 
-// -- schools hub store (dependency): the BE-63 curator check reads my schools
+// -- the schools hub (dependency): the BE-63 curator check reads my schools
 //    (relation + id are all the screen consumes; items are cast per fixture
 //    like the PracticeResponse one) --
 const schoolsHubState: { mine: SchoolMineItem[] } = { mine: [] }
-vi.mock('@/stores/schoolsHub', () => ({
-  useSchoolsHubStore: () => ({
-    get mine() {
+vi.mock('@/composables/queries/schools', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/composables/queries/schools')>()),
+  useMySchools: () => ({
+    get value() {
       return schoolsHubState.mine
     },
   }),

@@ -72,7 +72,6 @@ vi.mock('@/stores/diary', () => ({
     },
   }),
 }))
-vi.mock('@/stores/schoolsHub', () => ({ useSchoolsHubStore: () => ({ hasSchools: false }) }))
 const session = vi.hoisted(() => ({
   auth: null as null | { token: string | null; user: object | null; role: string },
 }))
