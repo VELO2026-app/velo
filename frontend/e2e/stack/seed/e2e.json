@@ -1,0 +1,179 @@
+{
+  "description": "FE-161: the e2e sweep stack -- every screen of every role must have something to open. Synthetic people only (band 607001-607099), all removed by --reset.",
+  "title_prefix": "[E2E]",
+  "_notes": [
+    "Owner of this file: the frontend e2e contour (frontend/e2e/, docs/agents/e2e.md).",
+    "The sweep reads it; frontend/e2e/stack/global-setup.ts logs in as these people and",
+    "adds through the API what a profile cannot express (a group, a series, a waitlist",
+    "entry, a chat, a support ticket, invite tokens) -- idempotently, by name.",
+    "PEOPLE (telegram_id band 607001-607099, free in every other profile):",
+    "  mira 607001 -- master WITH the right to found schools, curator of 'E2E School';",
+    "  lev  607002 -- second master, member of the school;",
+    "  ada  607011, ben 607012, cara 607013 -- students (ada is the sweep's student);",
+    "  root 607031 -- the sweep's admin: seeded as a plain account, then",
+    "                 `set_role.py 607031 A --yes` (the profile has no admin role).",
+    "PRACTICES: past with check-in and feedback, tomorrow (the 'soon' card -- a",
+    "practice 'today' is not seedable at every hour: seed.py refuses scheduled in the",
+    "past), future paid, future free and FULL (max 2: ada + ben, so cara can join its",
+    "waitlist), a school practice, and the second master's past and future.",
+    "Also fit for tgqa (docs/ai-dev-factory-tz.md 9.2 p.6): deterministic people and",
+    "relative dates, any run day."
+  ],
+  "masters": [
+    {
+      "key": "mira",
+      "telegram_id": 607001,
+      "display_name": "Mira E2E",
+      "can_create_schools": true,
+      "bio": "Synthetic master of the e2e sweep.",
+      "methods": ["yoga — hatha", "meditation — presence", "breathwork"],
+      "experience_years": 7
+    },
+    {
+      "key": "lev",
+      "telegram_id": 607002,
+      "display_name": "Lev E2E",
+      "can_create_schools": false,
+      "bio": "Second synthetic master of the e2e sweep.",
+      "methods": ["meditation — presence", "circles — sharing"],
+      "experience_years": 3
+    }
+  ],
+  "students": [
+    { "key": "ada", "telegram_id": 607011, "first_name": "Ada" },
+    { "key": "ben", "telegram_id": 607012, "first_name": "Ben" },
+    { "key": "cara", "telegram_id": 607013, "first_name": "Cara" },
+    { "key": "root", "telegram_id": 607031, "first_name": "Root" }
+  ],
+  "schools": [
+    {
+      "curator": "mira",
+      "name": "E2E School",
+      "description": "Synthetic school of the e2e sweep.",
+      "masters": ["lev"],
+      "students": ["ada", "ben"]
+    }
+  ],
+  "practices": [
+    {
+      "title": "Past breathwork",
+      "master": "mira",
+      "state": "completed",
+      "day_offset": -2,
+      "hour": 9,
+      "duration_minutes": 45,
+      "practice_type": "live",
+      "direction": "breathwork",
+      "difficulty": "beginner",
+      "max_participants": 12,
+      "description": "Attended, with a check-in and a review.",
+      "attendees": [
+        {
+          "student": "ada",
+          "booking_status": "attended",
+          "checkins": [{ "mood": 8, "comment": "Calm", "type": "pre" }],
+          "feedback": { "rating": 5, "comment": "Very good" }
+        },
+        { "student": "ben", "booking_status": "attended" }
+      ]
+    },
+    {
+      "title": "Tomorrow yoga",
+      "master": "mira",
+      "state": "scheduled",
+      "day_offset": 1,
+      "hour": 9,
+      "duration_minutes": 60,
+      "practice_type": "live",
+      "direction": "yoga",
+      "style": "hatha",
+      "difficulty": "beginner",
+      "max_participants": 15,
+      "description": "The next practice of the student.",
+      "attendees": [{ "student": "ada", "booking_status": "confirmed" }]
+    },
+    {
+      "title": "Paid meditation",
+      "master": "mira",
+      "state": "scheduled",
+      "day_offset": 3,
+      "hour": 18,
+      "duration_minutes": 60,
+      "practice_type": "live",
+      "direction": "meditation",
+      "style": "presence",
+      "difficulty": "beginner",
+      "max_participants": 10,
+      "is_free": false,
+      "price_cents": 1500,
+      "currency": "eur",
+      "description": "A paid practice nobody has booked."
+    },
+    {
+      "title": "Full free yoga",
+      "master": "mira",
+      "state": "scheduled",
+      "day_offset": 2,
+      "hour": 7,
+      "duration_minutes": 30,
+      "practice_type": "live",
+      "direction": "yoga",
+      "style": "hatha",
+      "difficulty": "beginner",
+      "max_participants": 2,
+      "description": "Free and full: cara waits on its waitlist.",
+      "attendees": [
+        { "student": "ada", "booking_status": "confirmed" },
+        { "student": "ben", "booking_status": "confirmed" }
+      ]
+    },
+    {
+      "title": "School meditation",
+      "master": "mira",
+      "state": "scheduled",
+      "day_offset": 4,
+      "hour": 8,
+      "duration_minutes": 45,
+      "practice_type": "live",
+      "direction": "meditation",
+      "style": "presence",
+      "difficulty": "beginner",
+      "max_participants": 20,
+      "audience": { "school": "E2E School" },
+      "description": "Seen by the school's students only."
+    },
+    {
+      "title": "Lev past circle",
+      "master": "lev",
+      "state": "completed",
+      "day_offset": -5,
+      "hour": 19,
+      "duration_minutes": 60,
+      "practice_type": "live",
+      "direction": "circles",
+      "style": "sharing",
+      "difficulty": "beginner",
+      "max_participants": 10,
+      "attendees": [
+        {
+          "student": "ada",
+          "booking_status": "attended",
+          "feedback": { "rating": 4, "comment": "Warm" }
+        }
+      ]
+    },
+    {
+      "title": "Lev future meditation",
+      "master": "lev",
+      "state": "scheduled",
+      "day_offset": 5,
+      "hour": 10,
+      "duration_minutes": 30,
+      "practice_type": "live",
+      "direction": "meditation",
+      "style": "presence",
+      "difficulty": "beginner",
+      "max_participants": 10
+    }
+  ]
+}

@@ -41,3 +41,6 @@ npm-debug.log*
 *.tsbuildinfo
 # ESLint cache (verify-quick lane)
 .eslintcache
+
+# FE-161: the sweep setup state (session tokens, route params)
+e2e/.state/
