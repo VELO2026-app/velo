@@ -38,11 +38,23 @@ vi.mock('@/stores/notifications', () => ({
 }))
 vi.mock('@/stores/calendar', () => ({
   useCalendarStore: () => ({
-    init: () => {
-      calls.push('calendar')
-      return Promise.reject(new Error('offline')) // must not stop the rest
+    init: () => undefined,
+    weekParams: {
+      from: '2026-06-14T00:00:00.000Z',
+      to: '2026-06-22T23:59:59.999Z',
+      filters: {},
+      master: null,
+      schoolFilter: null,
+      school: null,
     },
   }),
+}))
+// The calendar warmer loads the tab's week through its Colada query.
+vi.mock('@/api/practices', () => ({
+  getPractices: () => {
+    calls.push('calendar')
+    return Promise.reject(new Error('offline')) // must not stop the rest
+  },
 }))
 vi.mock('@/stores/diary', () => ({
   useDiaryStore: () => ({

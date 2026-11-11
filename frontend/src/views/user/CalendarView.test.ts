@@ -104,6 +104,8 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import CalendarView from '@/views/user/CalendarView.vue'
 import * as practicesApi from '@/api/practices'
 import * as cgApi from '@/api/schools'
@@ -221,6 +223,8 @@ function mount(
   document.body.appendChild(host)
   app = createApp(CalendarView).use(createTestI18n())
   app.use(pinia)
+  // The week is a Colada query (composables/queries/calendar.ts); the cache
+  // lives in this test's Pinia, installed once (beforeEach).
   app.mount(host)
   return host
 }
@@ -307,6 +311,7 @@ beforeEach(() => {
   vi.setSystemTime(NOW)
 
   pinia = createPinia()
+  createApp({}).use(pinia).use(PiniaColada, coladaOptions)
   setActivePinia(pinia)
 
   vi.mocked(practicesApi.getPractices)
@@ -513,7 +518,7 @@ describe('CalendarView', () => {
 
       expect(practicesApi.getPractices).toHaveBeenCalledTimes(1)
 
-      await useCalendarStore().nextWeek()
+      useCalendarStore().nextWeek()
       await flush()
 
       expect(practicesApi.getPractices).toHaveBeenCalledTimes(2)
@@ -858,15 +863,18 @@ describe('CalendarView', () => {
 
       const store = useCalendarStore()
       expect(store.schoolScope).toBe('g7')
-      expect(store.schoolFeed).not.toBeNull()
+      expect(store.weekParams.school).toBe('g7')
+      expect(cgApi.getSchoolPractices).toHaveBeenCalledWith('g7', 100, 0)
 
       app?.unmount()
       host?.remove()
       app = null
       host = null
 
+      // The feed itself is a Colada entry keyed by the school: with the scope
+      // gone, the tab calendar's key is the viewer's own week again.
       expect(store.schoolScope).toBeNull()
-      expect(store.schoolFeed).toBeNull()
+      expect(store.weekParams.school).toBeNull()
     })
   })
 })

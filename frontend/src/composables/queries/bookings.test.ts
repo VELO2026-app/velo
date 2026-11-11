@@ -43,12 +43,10 @@ vi.mock('@/api/waitlist')
 
 const stores = vi.hoisted(() => ({
   practices: { selected: null as { id: string } | null, fetchPractice: vi.fn() },
-  calendar: { weekPractices: [] as Array<{ id: string }>, loadWeek: vi.fn() },
   diary: { refreshFeed: vi.fn() },
   balance: { refresh: vi.fn() },
 }))
 vi.mock('@/stores/practices', () => ({ usePracticesStore: () => stores.practices }))
-vi.mock('@/stores/calendar', () => ({ useCalendarStore: () => stores.calendar }))
 vi.mock('@/stores/diary', () => ({ useDiaryStore: () => stores.diary }))
 vi.mock('@/stores/balance', () => ({ useBalanceStore: () => stores.balance }))
 
@@ -107,8 +105,6 @@ beforeEach(async () => {
   vi.mocked(bookingsApi.getMyBookings).mockReset().mockResolvedValue(bookingsPage())
   stores.practices.selected = { id: 'p1' }
   stores.practices.fetchPractice.mockReset().mockResolvedValue(undefined)
-  stores.calendar.weekPractices = [{ id: 'p0' }, { id: 'p1' }]
-  stores.calendar.loadWeek.mockReset().mockResolvedValue(undefined)
   stores.diary.refreshFeed.mockReset().mockResolvedValue(undefined)
   stores.balance.refresh.mockReset().mockResolvedValue(undefined)
 
@@ -192,12 +188,11 @@ describe('useCancelBooking -- success', () => {
     expect(when(keys.schools.detail('g1'))).toBe(pageAt)
   })
 
-  it('refreshes the legacy holders: practice detail, calendar week, diary, balance', async () => {
+  it('refreshes the legacy holders: practice detail, diary, balance', async () => {
     await cancel(VARS)
 
     expect(stores.practices.fetchPractice).toHaveBeenCalledWith('p1')
     expect(when(keys.practices.detail('p1'))).toBe(0)
-    expect(stores.calendar.loadWeek).toHaveBeenCalledWith(true)
     expect(stores.diary.refreshFeed).toHaveBeenCalledTimes(1)
   })
 
@@ -207,14 +202,12 @@ describe('useCancelBooking -- success', () => {
     expect(stores.balance.refresh).toHaveBeenCalledTimes(1)
   })
 
-  it('leaves the practice detail and the calendar alone when they show another practice', async () => {
+  it('leaves the practice detail alone when it shows another practice', async () => {
     stores.practices.selected = { id: 'p9' }
-    stores.calendar.weekPractices = [{ id: 'p9' }]
 
     await cancel(VARS)
 
     expect(stores.practices.fetchPractice).not.toHaveBeenCalled()
-    expect(stores.calendar.loadWeek).not.toHaveBeenCalled()
     // The cached detail still goes stale: the next open refetches it.
     expect(when(keys.practices.detail('p1'))).toBe(0)
   })
@@ -238,7 +231,6 @@ describe('useCancelBooking -- the session ends while the DELETE is in flight', (
     await flush()
 
     expect(stores.practices.fetchPractice).not.toHaveBeenCalled()
-    expect(stores.calendar.loadWeek).not.toHaveBeenCalled()
     expect(stores.diary.refreshFeed).not.toHaveBeenCalled()
     expect(stores.balance.refresh).not.toHaveBeenCalled()
     expect(when(keys.practices.detail('p1'))).not.toBe(0)
@@ -254,7 +246,6 @@ describe('useCancelBooking -- failure', () => {
     await flush()
 
     expect(stores.practices.fetchPractice).not.toHaveBeenCalled()
-    expect(stores.calendar.loadWeek).not.toHaveBeenCalled()
     expect(stores.diary.refreshFeed).not.toHaveBeenCalled()
     expect(stores.balance.refresh).not.toHaveBeenCalled()
     expect(schoolsApi.getSchoolPractices).toHaveBeenCalledTimes(1)
@@ -268,7 +259,7 @@ describe('useCancelBooking -- failure', () => {
 // =============================================================================
 
 const BUY: PurchaseBookingVars = { practiceId: 'p1', promoCode: 'SPRING', viaPurchase: true }
-const SPOT: ConfirmWaitlistVars = { waitlistId: 'w1', practiceId: 'p1' }
+const SPOT: ConfirmWaitlistVars = { waitlistId: 'w1' }
 
 describe('usePurchaseBooking', () => {
   it('buys through the purchase endpoint with the promo code', async () => {
@@ -298,11 +289,10 @@ describe('usePurchaseBooking', () => {
     expect(when(keys.schools.detail('g1'))).toBe(pageAt)
   })
 
-  it('refreshes the legacy holders: calendar week, diary', async () => {
+  it('refreshes the legacy holders: diary', async () => {
     await purchase(BUY)
 
     expect(when(keys.practices.detail('p1'))).toBe(0)
-    expect(stores.calendar.loadWeek).toHaveBeenCalledWith(true)
     // The booking projects a "booking_confirmed" event onto the timeline.
     expect(stores.diary.refreshFeed).toHaveBeenCalledTimes(1)
     // The practice on screen is left to the screen that loads it on mount.

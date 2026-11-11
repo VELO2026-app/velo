@@ -69,8 +69,15 @@ export const TAB_DATA_WARMERS: Readonly<Record<string, Warmer>> = {
     ])
   },
   '/user/calendar': async () => {
-    const { useCalendarStore } = await import('@/stores/calendar')
-    await useCalendarStore().init()
+    const [{ useCalendarStore }, { calendarWeekQuery }] = await Promise.all([
+      import('@/stores/calendar'),
+      import('@/composables/queries/calendar'),
+    ])
+    const calendar = useCalendarStore()
+    // The tab calendar's own week (no scope): the first entry snaps to today.
+    calendar.init()
+    const { school: _school, ...feed } = calendar.weekParams
+    await warmQuery((cache) => cache.refresh(cache.ensure(calendarWeekQuery(feed))))
   },
   // Memory only: diary text is never persisted (composables/persistedCache).
   '/user/diary': async () => {

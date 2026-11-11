@@ -21,7 +21,7 @@ import type { PaginatedWaitlistResponse, WaitlistWithPracticeResponse } from '@/
 
 vi.mock('@/api/waitlist')
 
-const confirmVars = vi.hoisted((): Array<{ waitlistId: string; practiceId: string }> => [])
+const confirmVars = vi.hoisted((): Array<{ waitlistId: string }> => [])
 
 // The confirm mutation (dependency, FE-166 step 1): what it refreshes is
 // composables/queries/bookings.test.ts's business; this screen owns the call,
@@ -30,7 +30,7 @@ vi.mock('@/composables/queries/bookings', async () => {
   const api = await import('@/api/waitlist')
   return {
     useConfirmWaitlist: () => ({
-      mutateAsync: (vars: { waitlistId: string; practiceId: string }) => {
+      mutateAsync: (vars: { waitlistId: string }) => {
         confirmVars.push(vars)
         return api.confirmWaitlist(vars.waitlistId)
       },
@@ -141,8 +141,7 @@ describe('WaitlistConfirmView', () => {
     await flush()
 
     expect(waitlistApi.confirmWaitlist).toHaveBeenCalledWith('w1')
-    // The mutation refreshes that entry's practice (composables/queries/bookings).
-    expect(confirmVars.at(-1)).toEqual({ waitlistId: 'w1', practiceId: 'p1' })
+    expect(confirmVars.at(-1)).toEqual({ waitlistId: 'w1' })
     expect(toastSuccess).toHaveBeenCalledWith('Место подтверждено')
     expect(push).toHaveBeenCalledWith({ name: 'practice-detail', params: { id: 'p1' } })
   })

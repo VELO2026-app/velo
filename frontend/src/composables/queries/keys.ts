@@ -29,6 +29,13 @@ export const keys = {
     lists: () => ['practices', 'list'] as const,
     /** `GET /practices/{id}` -- one practice (the detail screen and its flow views). */
     detail: (practiceId: string) => ['practices', 'detail', practiceId] as const,
+    /**
+     * `GET /practices` for one calendar week: the range, the facets and the
+     * master scope (composables/queries/calendar.ts).
+     */
+    calendarWeek: (params: object) => ['practices', 'list', { calendar: params }] as const,
+    /** `GET /schools/{id}/practices`, every page -- the stacked school calendar's whole feed. */
+    schoolUpcoming: (schoolId: string) => ['practices', 'list', { schoolId, all: true }] as const,
     /** `GET /schools/{id}/practices` -- the school's upcoming practices, first `limit`. */
     schoolFeed: (schoolId: string, limit: number) =>
       ['practices', 'list', { schoolId, limit }] as const,
