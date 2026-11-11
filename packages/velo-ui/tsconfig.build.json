@@ -4,6 +4,8 @@
     "noEmit": false,
     "declaration": true,
     "emitDeclarationOnly": true,
+    // TS 6: rootDir is no longer inferred when outDir is set.
+    "rootDir": "src",
     "outDir": "dist/types"
   },
   "include": [

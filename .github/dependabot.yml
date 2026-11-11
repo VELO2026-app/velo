@@ -35,6 +35,12 @@ updates:
       interval: weekly
     cooldown:
       default-days: 14
+    # TypeScript 7 (the native compiler) ships no JS compiler API: vue-tsc
+    # needs typescript/lib/tsc and typescript-eslint supports <6.1 only
+    # (checked 2026-11-11, PR #66). Hold at 6.0.x until both support 7.
+    ignore:
+      - dependency-name: typescript
+        versions: ['>=6.1.0']
     groups:
       build:
         group-by: dependency-name
