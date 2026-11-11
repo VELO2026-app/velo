@@ -117,6 +117,9 @@ export async function watchCrashes(page: Page): Promise<CrashWatch> {
       _source,
       detail: { name?: string; message?: string; source?: string; info?: string; path?: string },
     ) => {
+      // A `window` error event is an uncaught exception: `pageerror` already
+      // reports it as `exception` -- one bug, one signal.
+      if (detail.source === 'window') return
       const where = detail.info ? `${detail.source}/${detail.info}` : detail.source
       raw.push({
         kind: 'reported',

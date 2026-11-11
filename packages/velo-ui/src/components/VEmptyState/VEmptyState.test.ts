@@ -34,6 +34,7 @@ let host: HTMLElement | null = null
 /** VEmptyState's own props (VEmptyState.vue:53-67). */
 interface EmptyStateProps {
   icon?: string
+  error?: boolean
   title: string
   description?: string
   variant?: 'full' | 'note'
@@ -186,6 +187,16 @@ describe('VEmptyState', () => {
         expect(host?.querySelector('[data-testid="screen-error"]')).not.toBeNull()
       },
     )
+
+    it('a warning with :error="false" is not an error state (a normal outcome)', async () => {
+      await render({ icon: 'warning', title: 'Cancelled', error: false })
+      expect(host?.querySelector('[data-testid]')).toBeNull()
+    })
+
+    it('error=true marks any icon', async () => {
+      await render({ icon: 'calendar', title: 'Failed', error: true })
+      expect(host?.querySelector('[data-testid="screen-error"]')).not.toBeNull()
+    })
 
     it.each(['empty', 'calendar'])('icon "%s" is not an error state', async (icon) => {
       await render({ icon, title: 'Nothing yet' })

@@ -14,8 +14,9 @@
  */
 import { randomUUID } from 'node:crypto'
 import { test as setup } from '@playwright/test'
+import { PARAM_KEYS } from '../sweep/routes'
 import { login } from './auth'
-import { apiAs, sessionAlive } from './client'
+import { apiAs, sessionAlive, statusOf } from './client'
 import {
   API_URL,
   PEOPLE,
@@ -131,19 +132,31 @@ setup('sessions and route parameters', async () => {
     })
   }
 
-  // A support ticket and a report, each made once.
+  // A support ticket whose thread comms still knows. The ticket list is the
+  // database's; the messages are the comms stub's, in memory -- after a stub
+  // restart an old ticket answers 404 and the screen would show its
+  // "missing" state. So: the first live ticket, else a new one.
   const tickets = await admin<{ tickets: Array<{ id: string }> }>(
     'GET',
     '/api/v1/support/tickets?limit=20',
   )
+  let ticketId: string | undefined
+  for (const t of tickets.tickets) {
+    if ((await statusOf(tokens, 'admin', `/api/v1/support/threads/${t.id}/messages`)) === 200) {
+      ticketId = t.id
+      break
+    }
+  }
   p.supportTicketId =
-    tickets.tickets[0]?.id ??
+    ticketId ??
     (
       await student<{ ticket: { id: string } }>('POST', '/api/v1/support/tickets', {
         body: { topic: 'technical', body: 'e2e ticket' },
         headers: { 'Idempotency-Key': randomUUID() },
       })
     ).ticket.id
+
+  // A report, made once.
   const reports = await admin<Listed<{ id: string }>>('GET', '/api/v1/admin/reports')
   if (reports.items[0]) {
     p.reportId = reports.items[0].id
@@ -192,7 +205,7 @@ setup('sessions and route parameters', async () => {
     'master_onboarding',
   )
 
-  const empty = Object.entries(p).filter(([, v]) => !v)
-  if (empty.length) throw new Error(`e2e setup: no value for ${empty.map(([k]) => k).join(', ')}`)
+  const empty = PARAM_KEYS.filter((k) => !p[k])
+  if (empty.length) throw new Error(`e2e setup: no value for ${empty.join(', ')}`)
   writeParams(p)
 })

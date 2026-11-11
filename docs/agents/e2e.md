@@ -18,7 +18,7 @@
 - `console` — `console.error`;
 - `api` — ответ `/api/` 5xx или 4xx, который тест не разрешил;
 - `asset` — не загрузился чанк, стиль или шрифт;
-- `screen` — на экране видно состояние ошибки (`data-testid="screen-error"` / `"not-found"`);
+- `screen` — на экране видно состояние ошибки (`data-testid="screen-error"` / `"not-found"`). У `VEmptyState` по умолчанию это иконки `warning` и `notfound`; если `warning` — штатный исход, а не сбой (практика отменена), ставь ему `:error="false"`;
 - `blank` — в `#app` ничего не отрисовано.
 
 Sweep дополнительно проверяет, что вместо экрана не нарисован вход (`splash` / `welcome` / `login`), что URL — тот, что у роута, и что видна `<main>` шелла или заголовок.

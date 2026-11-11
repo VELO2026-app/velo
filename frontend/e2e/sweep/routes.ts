@@ -17,6 +17,32 @@
  */
 import type { CrashAllowance } from '../support/crashes'
 
+/**
+ * Every value the setup (e2e/stack/stack.setup.ts) writes to params.json. A
+ * row may only name these (the coverage test checks it), and the setup must
+ * fill every one of them (it checks itself).
+ */
+export const PARAM_KEYS = [
+  'masterUserId',
+  'studentUserId',
+  'practiceUpcomingId',
+  'practicePastId',
+  'schoolId',
+  'schoolInviteToken',
+  'checkinId',
+  'diaryEntryId',
+  'chatThreadId',
+  'supportTicketId',
+  'reportId',
+  'waitlistId',
+  'groupId',
+  'groupInviteToken',
+  'masterInviteToken',
+] as const
+
+/** A key of params.json. */
+export type ParamKey = (typeof PARAM_KEYS)[number]
+
 /** Who opens a screen. */
 export type SweepRole = 'student' | 'master' | 'admin' | 'cara' | 'ben'
 
@@ -25,10 +51,10 @@ export interface SweepVisit {
   /** The route's full path, exactly as the router has it. */
   path: string
   roles: SweepRole[]
-  /** Route parameter -> key in params.json. */
-  params?: Record<string, string>
+  /** Route parameter -> key in params.json, or `=literal`. */
+  params?: Record<string, ParamKey | `=${string}`>
   /** The URL the screen settles on, for a route that redirects by design. */
-  lands?: RegExp
+  lands?: RegExp | ((role: SweepRole) => RegExp)
   /** Signals this screen produces by design; each with its reason. */
   allow?: (role: SweepRole) => CrashAllowance[]
 }
@@ -41,6 +67,15 @@ export interface SweepSkip {
 
 export type SweepRow = SweepVisit | SweepSkip
 
+/** The zone each role's home is in. */
+const ZONE: Record<SweepRole, string> = {
+  student: 'user',
+  cara: 'user',
+  ben: 'user',
+  master: 'master',
+  admin: 'admin',
+}
+
 const S: SweepRole[] = ['student']
 const M: SweepRole[] = ['master']
 const A: SweepRole[] = ['admin']
@@ -50,7 +85,8 @@ export const SWEEP: Record<string, SweepRow> = {
   root: {
     path: '/',
     roles: ['student', 'master', 'admin'],
-    lands: /\/(user|master|admin)\/dashboard$/,
+    // Each role to ITS zone's dashboard.
+    lands: (role) => new RegExp(`/${ZONE[role]}/dashboard$`),
   },
   'auth-error': {
     path: '/auth-error',

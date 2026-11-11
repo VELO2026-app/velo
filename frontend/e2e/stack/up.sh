@@ -37,6 +37,15 @@ export PYTHONPATH="$ROOT/backend${PYTHONPATH:+:$PYTHONPATH}"
 "$PYTHON" "$ROOT/frontend/e2e/stack/seed_e2e.py"
 "$PYTHON" scripts/set_role.py 607031 A --yes
 
+# A server already on a port would answer /ready with ITS code while the new
+# one dies on bind -- refuse instead of testing a stale stack.
+for port in 8000 8899; do
+  if curl -s -o /dev/null --max-time 2 "http://127.0.0.1:$port/"; then
+    echo "e2e stack: port $port is taken -- stop the old server first" >&2
+    exit 1
+  fi
+done
+
 nohup "$PYTHON" "$ROOT/frontend/e2e/stack/comms-stub.py" --port 8899 \
   >"$LOG_DIR/comms-stub.log" 2>&1 &
 nohup "$PYTHON" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 \

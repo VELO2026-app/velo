@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import router from '@/router'
-import { SWEEP } from '../../e2e/sweep/routes'
+import { PARAM_KEYS, SWEEP } from '../../e2e/sweep/routes'
 
 // =============================================================================
 // VELO Frontend -- the e2e sweep covers every route (FE-161)
@@ -42,6 +42,29 @@ describe('e2e sweep table (e2e/sweep/routes.ts)', () => {
       expect(row.roles.length).toBeGreaterThan(0)
       const declared = [...row.path.matchAll(/:(\w+)/g)].map((m) => m[1])
       expect(Object.keys(row.params ?? {}).sort()).toEqual(declared.sort())
+      // Every source is a literal or a key the setup fills: a typo would
+      // otherwise leave the screen without a value at run time.
+      const keys: readonly string[] = PARAM_KEYS
+      for (const source of Object.values(row.params ?? {})) {
+        if (!source.startsWith('='))
+          expect(keys, `${name}: unknown params.json key`).toContain(source)
+      }
     },
   )
+
+  // A route with a screen but no name has no row and would drop out of the
+  // sweep unnoticed: every component route must be named.
+  it('names every route that renders a screen', () => {
+    const unnamed = router
+      .getRoutes()
+      // A shell (children) is not a screen of its own.
+      .filter(
+        (r) =>
+          r.name === undefined &&
+          r.children.length === 0 &&
+          Object.keys(r.components ?? {}).length > 0,
+      )
+      .map((r) => r.path)
+    expect(unnamed, 'give these routes a name (and a row in e2e/sweep/routes.ts)').toEqual([])
+  })
 })

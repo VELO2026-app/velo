@@ -38,6 +38,15 @@ export function apiAs(tokens: Tokens, person: Person): Api {
   }
 }
 
+/** The status of `GET path` as `person` -- for "does this still exist" checks. */
+export async function statusOf(tokens: Tokens, person: Person, path: string): Promise<number> {
+  const response = await fetch(`${API_URL}${path}`, {
+    headers: { Authorization: `Bearer ${tokens[person] ?? ''}` },
+  })
+  await response.arrayBuffer()
+  return response.status
+}
+
 /** True when `token` still opens a session. */
 export async function sessionAlive(token: string): Promise<boolean> {
   const response = await fetch(`${API_URL}/api/v1/users/me`, {

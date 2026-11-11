@@ -7,7 +7,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import type { SweepRole } from '../sweep/routes'
+import type { ParamKey, SweepRole } from '../sweep/routes'
 import type { TelegramUser } from './auth'
 
 /** The backend the setup calls directly (the browser goes through the frontend's /api proxy). */
@@ -32,8 +32,8 @@ const PARAMS = resolve(STATE_DIR, 'params.json')
 /** Session tokens by person. */
 export type Tokens = Partial<Record<Person, string>>
 
-/** Route-parameter values by key (see e2e/sweep/routes.ts). */
-export type Params = Record<string, string>
+/** Route-parameter values by key (PARAM_KEYS, e2e/sweep/routes.ts). */
+export type Params = Partial<Record<ParamKey, string>>
 
 function read<T>(file: string, fallback: T): T {
   if (!existsSync(file)) return fallback

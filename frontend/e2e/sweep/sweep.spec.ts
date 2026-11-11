@@ -21,6 +21,13 @@ const params = readParams()
 /** Screens App.vue draws INSTEAD of the route (src/views/auth/). */
 const GATES = /^(splash|welcome|login)$/
 
+/** A shell's <main> or a heading that is not part of a gate. */
+const ROUTE_CONTENT = [
+  'main',
+  'h1:not([data-testid=splash] *, [data-testid=welcome] *, [data-testid=login] *)',
+  'h2:not([data-testid=splash] *, [data-testid=welcome] *, [data-testid=login] *)',
+].join(', ')
+
 function escape(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
@@ -32,7 +39,8 @@ for (const [name, entry] of Object.entries(SWEEP)) {
     // run) differ between the listing and the worker.
     test(`[${role}] ${entry.path}`, { tag: `@${name}` }, async ({ page, crashes }) => {
       const path = fillPath(entry, params)
-      test.skip(path === null, `no value for a parameter of ${entry.path} (see params.json)`)
+      // A missing value is a setup bug, not a reason to skip the screen.
+      expect(path, `no value for a parameter of ${entry.path} in params.json`).not.toBeNull()
       for (const allowance of entry.allow?.(role) ?? []) crashes.allow(allowance)
       await signIn(page, role)
       const tracker = trackApi(page)
@@ -40,14 +48,17 @@ for (const [name, entry] of Object.entries(SWEEP)) {
       await page.goto(path!)
       await settle(page, tracker)
 
-      // The route itself is on screen: not a sign-in gate drawn instead of
-      // it, and the URL is where the route (or its by-design redirect) is.
-      await expect(page.getByTestId(GATES), 'a sign-in gate instead of the screen').toHaveCount(0)
-      await expect(page).toHaveURL(entry.lands ?? new RegExp(`${escape(path!)}$`))
+      // The route itself is on screen. Positive first: content OUTSIDE the
+      // sign-in gates App.vue draws instead of the route (their sr-only
+      // headings would satisfy a bare heading check); then no gate at all;
+      // then the URL is the route's (or its by-design redirect).
       await expect(
-        page.getByRole('main').or(page.getByRole('heading')).first(),
+        page.locator(ROUTE_CONTENT).first(),
         'the screen rendered something',
       ).toBeVisible()
+      await expect(page.getByTestId(GATES), 'a sign-in gate instead of the screen').toHaveCount(0)
+      const lands = typeof entry.lands === 'function' ? entry.lands(role) : entry.lands
+      await expect(page).toHaveURL(lands ?? new RegExp(`${escape(path!)}$`))
     })
   }
 }

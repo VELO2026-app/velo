@@ -22,7 +22,11 @@ function isApi(request: Request): boolean {
 }
 
 /** Track the page's in-flight API requests. Call before the first goto. */
-export function trackApi(page: Page): { inFlight(): number; lastChange(): number } {
+export function trackApi(page: Page): {
+  inFlight(): number
+  lastChange(): number
+  restart(): void
+} {
   const pending = new Set<Request>()
   let changed = Date.now()
   const start = (r: Request): void => {
@@ -36,20 +40,46 @@ export function trackApi(page: Page): { inFlight(): number; lastChange(): number
   page.on('request', start)
   page.on('requestfinished', end)
   page.on('requestfailed', end)
-  return { inFlight: () => pending.size, lastChange: () => changed }
+  return {
+    inFlight: () => pending.size,
+    lastChange: () => changed,
+    restart: () => {
+      changed = Math.max(changed, Date.now())
+    },
+  }
 }
 
 /**
- * Wait for the splash to go and the API to stay quiet.
+ * Wait for the app to mount, the splash to go and the API to stay quiet.
+ *
+ * @remarks
+ * The order matters. `goto` resolves on `load`, but the app mounts later
+ * (main.ts awaits the host, /config.json and the app chunk -- none of them
+ * `/api/` traffic). Waiting for "no splash" before anything is mounted would
+ * pass at once and judge an empty page; so first `#app` must have content,
+ * then the splash must be gone, then the API quiet.
  *
  * @param tracker - from trackApi(), attached before the navigation
  */
 export async function settle(page: Page, tracker: ReturnType<typeof trackApi>): Promise<void> {
   const deadline = Date.now() + CEILING_MS
   await page
-    .getByTestId('splash')
-    .waitFor({ state: 'detached', timeout: CEILING_MS })
+    .waitForFunction(
+      () => (document.querySelector('#app')?.childElementCount ?? 0) > 0,
+      undefined,
+      {
+        timeout: CEILING_MS,
+      },
+    )
     .catch(() => {})
+  await page
+    .getByTestId('splash')
+    .waitFor({ state: 'detached', timeout: Math.max(deadline - Date.now(), 1) })
+    .catch(() => {})
+  // The quiet window starts no earlier than now: the requests the mount fired
+  // are already counted, and a screen that has not asked for anything yet
+  // gets its full QUIET_MS to do so.
+  tracker.restart()
   while (Date.now() < deadline) {
     const quietFor = Date.now() - tracker.lastChange()
     if (tracker.inFlight() === 0 && quietFor >= QUIET_MS) return

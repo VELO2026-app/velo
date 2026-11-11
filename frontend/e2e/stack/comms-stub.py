@@ -10,7 +10,7 @@
 # WHY THIS EXISTS: local dev has no comms stack (backend/app/core/config.py:
 # "an EMPTY url makes the proxy answer 502 -- local dev has no comms stack").
 # This stub implements the exact slice of the comms HTTP contract that velo's
-# two proxies call, so the whole chat flow -- «Запрос мастеру» on the booking
+# two proxies call, so the whole chat flow -- "Ask the master" on the booking
 # screen, the messages screens, unread badges -- works on a laptop.
 #
 # RUN (the backend venv already carries FastAPI + uvicorn):
@@ -85,7 +85,7 @@ _prefs: dict[str, dict[str, Any]] = {}       # recipient id -> prefs doc
 
 # Bell inbox: user id -> items, NEWEST FIRST. Populated ONLY by POST /__seed
 # (the outbox relay is off locally, real events never arrive); read marks are
-# kept here so the whole feed UX -- unread dots, «Прочитать всё», per-row read
+# kept here so the whole feed UX -- unread dots, "Read all", per-row read
 # -- is drivable on a laptop.
 _inbox: dict[str, list[dict[str, Any]]] = {}
 
@@ -380,7 +380,7 @@ def _notify_new_message(thread: dict[str, Any], msg: dict[str, Any]) -> None:
         row = {
             "id": str(uuid.uuid4()),
             "type": ntype,
-            "title": "Новое сообщение",
+            "title": "New message",
             "body": msg["body"][:100],
             "action_data": {
                 "action": "open_thread",
