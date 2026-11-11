@@ -16,6 +16,9 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
+import { createPinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import MasterGroupDetailView from '@/views/master/MasterGroupDetailView.vue'
 import * as groupsApi from '@/api/groups'
 import { ApiResponseError } from '@/api/client'
@@ -64,17 +67,20 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(MasterGroupDetailView).use(createTestI18n())
+  app = createApp(MasterGroupDetailView)
+    .use(createTestI18n())
+    .use(createPinia())
+    .use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
 async function flush(): Promise<void> {
-  // Owner Q12 (PROMPT №611): the screen's own load chain is now SEQUENTIAL
-  // (loadGroups() -- resolving name/description + existence -- awaited
-  // BEFORE the members fetch, not parallel), so it needs more ticks to
-  // settle than the previous single-round-trip flow did.
-  for (let i = 0; i < 6; i += 1) {
+  // Owner Q12 (PROMPT №611): the screen's own load chain is SEQUENTIAL
+  // (the group list -- name/description + existence -- answers BEFORE the
+  // members request leaves), and both go through the Colada cache (FE-166
+  // step 6), so it needs more ticks than a single round trip.
+  for (let i = 0; i < 12; i += 1) {
     await nextTick()
   }
 }
@@ -248,6 +254,21 @@ describe('MasterGroupDetailView', () => {
       await flush()
 
       expect(text()).toContain('Анна')
+    })
+
+    it('a retry in flight shows the loader, not the frozen error', async () => {
+      vi.mocked(groupsApi.getGroupMembers).mockRejectedValueOnce(new Error('boom'))
+      mount()
+      await flush()
+
+      vi.mocked(groupsApi.getGroupMembers).mockReturnValue(new Promise(() => {}))
+      Array.from(host?.querySelectorAll('button') ?? [])
+        .find((b) => b.textContent?.includes('Повторить'))
+        ?.click()
+      await flush()
+
+      expect(text()).not.toContain('Не удалось загрузить участников')
+      expect(host?.querySelector('.v-loader')).not.toBeNull()
     })
 
     it('empty (not deleted): "Участников пока нет"', async () => {
@@ -618,11 +639,16 @@ describe('MasterGroupDetailView', () => {
       const confirmBtn = Array.from(modalOverlay()?.querySelectorAll('button') ?? []).find(
         (b) => b.textContent?.trim() === 'Удалить',
       )
+      const listCalls = vi.mocked(groupsApi.getGroups).mock.calls.length
       confirmBtn?.click()
       await flush()
 
       expect(groupsApi.deleteGroup).toHaveBeenCalledWith('g1')
       expect(push).toHaveBeenCalledWith({ name: 'master-groups' })
+      // The cached group list is stale now (INVALIDATES.deleteGroup): the
+      // one on screen is asked again, so the groups list the master lands on
+      // does not repaint the deleted group from the cache.
+      expect(vi.mocked(groupsApi.getGroups).mock.calls.length).toBeGreaterThan(listCalls)
     })
 
     it('a group_in_use rejection toasts a Russian message, never the raw backend detail', async () => {

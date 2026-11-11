@@ -80,6 +80,16 @@ export const keys = {
     /** `GET /masters/{id}` -- a master's public page. */
     public: (masterId: string) => ['masters', 'public', masterId] as const,
   },
+  /** The signed-in master's student groups (custom ones and the two system groups). */
+  groups: {
+    /** Prefix of every group key. */
+    root: () => ['groups'] as const,
+    /** `GET /masters/me/groups` -- every group with its name, description and count. */
+    list: () => ['groups', 'list'] as const,
+    /** `GET /masters/me/groups/{id}/members?search=` -- one group's members for one search. */
+    members: (groupId: string, search: string) =>
+      ['groups', 'members', { groupId, search }] as const,
+  },
   /** Bookings of the signed-in user and what is derived from them. */
   bookings: {
     /** Prefix of every booking key. */

@@ -75,6 +75,10 @@ export const INVALIDATES = {
    * zone). The page itself is written from the answer (setQueryData).
    */
   acceptSchoolTransfer: [keys.schools.lists()],
+  /** `PATCH /masters/me/groups/{id}`: a group's name / description -- the group list. */
+  renameGroup: [keys.groups.list()],
+  /** `DELETE /masters/me/groups/{id}`: a group gone -- the list, and its members' entries. */
+  deleteGroup: [keys.groups.root()],
 } as const satisfies Record<string, readonly EntryKey[]>
 
 /** Name of a mutation that has a row in `INVALIDATES`. */
