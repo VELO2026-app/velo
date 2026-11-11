@@ -238,7 +238,12 @@ const masterInitial = computed(() => {
 }
 
 .practice-list-card__when {
-  width: var(--velo-card-iconcol-w);
+  /* FE-173: min-width, not width. A long date label ("November 13") is wider
+     than the icon column; a fixed width let it overflow its box and paint over
+     the time cell next to it. The cell now grows to fit its text (the time
+     shifts right instead of being overlapped); short labels keep the icon-column
+     alignment. */
+  min-width: var(--velo-card-iconcol-w);
   flex-shrink: 0;
   text-align: center;
   white-space: nowrap;
