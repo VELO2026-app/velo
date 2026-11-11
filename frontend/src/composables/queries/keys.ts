@@ -63,6 +63,13 @@ export const keys = {
     /** `GET /schools/{id}` -- the school page payload with the viewer's relation. */
     detail: (schoolId: string) => ['schools', 'detail', schoolId] as const,
     /**
+     * `GET /schools/{id}/students/{userId}` -- one student's school-scoped
+     * profile (curator only). Under the school's detail prefix, so dropping a
+     * school (forgetSchool) drops it too.
+     */
+    student: (schoolId: string, userId: string) =>
+      ['schools', 'detail', schoolId, 'student', userId] as const,
+    /**
      * `GET /schools/mine` (+ the create right) as one screen shows it: the user
      * zone's schools tab for a role, or the master's schools hub.
      */
