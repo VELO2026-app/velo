@@ -101,7 +101,6 @@
 
   /* Warning (amber) */
   --velo-warning-bg: color-mix(in srgb, var(--velo-peach-300) 40%, transparent);
-  --velo-warning-bg-hover: #fde68a;
   --velo-warning-border: var(--velo-peach-300);
   --velo-warning-text: var(--velo-peach-700);
   --velo-warning-text-light: var(--velo-peach-800);
@@ -111,7 +110,6 @@
   /* Stronger error surface — alerts/legends that read too washed-out at the soft
      --velo-error-bg above (the error pink itself, not the desaturated tint). */
   --velo-error-bg-strong: color-mix(in srgb, var(--velo-pink-300) 25%, transparent);
-  --velo-error-bg-subtle: #fff5f5;
   --velo-error-border: var(--velo-pink-300);
   /* Destructive-action text/icon (log out, delete) — the product's red. Also the
      source for --velo-error-text below. */
@@ -133,26 +131,19 @@
   --velo-error-text: var(--velo-danger-text);
 
   /* Success (green) */
-  --velo-success-bg: rgba(118, 221, 230, 0.4);
   --velo-success-text: var(--velo-teal-700);
 
   /* Info tints removed PROMPT №437 with --velo-info above -- zero consumers, and
      --velo-info-bg duplicated --velo-success-bg byte for byte. */
 
-  /* === Colors: Mood (Phase F9) === */
-  --velo-mood-low: #f795a2;
-  --velo-mood-mid: #fbc088;
-  --velo-mood-high: #76dde6;
-
   /* === Colors: Rating icons (feedback screen) ===
-   * Accent color per rating icon, matching the Figma feedback design:
-   * confused = brand blue, good = rose, fire = peach/orange.
+   * Accent color of the rating icon, matching the Figma feedback design:
+   * good = rose. Its siblings --velo-rating-confused/fire and the mood
+   * accents --velo-mood-low/mid/high were removed in Gen-2 (FE-150).
    * Kept separate from RATING_COLOR (analytics bar fills) on purpose --
    * these are the icon accents on the feedback form, not the analytics bars.
    */
-  --velo-rating-confused: var(--velo-primary-dark); /* #4c6589 */
   --velo-rating-good: var(--velo-pink-500); /* new */
-  --velo-rating-fire: var(--velo-peach-500); /* #d4863c */
 
   /* === Colors: Analytics five-scale strip (tz-mood-scale) ===
    * Segment fills of the analytics distributions (DistributionCard: the
@@ -285,13 +276,6 @@
     var(--velo-white) 25%,
     transparent
   ); /* frosted modal panel (Figma 648:1861) */
-  --velo-write-frost: rgba(
-    255,
-    255,
-    255,
-    0.2
-  ); /* diary write-mode: whitened frosted glass over the feed (not a dark dim); operator-tuned 2026-06-05 */
-  --velo-write-blur: 10px; /* diary write-mode glass blur (scrim + composer field) */
 
   /* === VELΘ: Primitive palette === */
   --velo-teal-400: #76dde6;
@@ -494,9 +478,7 @@
   --velo-white: #ffffff; /* = bg/card-solid; explicit neutral primitive */
   --velo-blue-500: #627a9c; /* = --velo-primary */
   --velo-blue-700: #4c6589; /* = --velo-primary-dark / text-primary */
-  --velo-peach-100: #fde68a; /* NO SOURCE name (= warning-bg-hover) */
   --velo-peach-800: #b45309; /* NO SOURCE name (= warning-text-light) */
-  --velo-pink-50: #fff5f5; /* NO SOURCE name (= error-bg-subtle) */
   --velo-pink-500: #d66674; /* NO SOURCE name (= rating-good) */
 
   /* MOTION SCALE REMOVED — PROMPT №437, operator ruling.
@@ -517,9 +499,8 @@
   /* Effects — flat by design: elevation is not a thing in VELO, depth = glow +
      the white card rim. The three --velo-effect-elevation-* tokens (all `none`,
      zero consumers) were removed PROMPT №437 together with --shadow-sm/md/lg/xl;
-     see the Shadows block above. */
-  --velo-effect-glow: var(--velo-shadow-glow);
-  --velo-effect-focus: 0 0 0 2px var(--velo-blue-500); /* NO SOURCE; 4.39:1 vs white */
+     see the Shadows block above. --velo-effect-glow/focus followed in Gen-2
+     (FE-150, zero consumers); the one live effect is --velo-effect-focus-glass. */
 
   /* =========================================================================
    * WS-3 normalization tokens (appearance-preserving; value = prior literal).
@@ -528,7 +509,6 @@
   /* Radius */
   --velo-radius-9: 9px; /* Support attach-box / thumb radius (between badge 5 / md 15) */
   --velo-radius-10: 10px; /* Report-sheet target-user card (measured, PROMPT №610) */
-  --velo-radius-4-5: 4.5px; /* Report-sheet textarea -- deliberately small, not --radius-md (measured, PROMPT №610) */
   /* Surfaces */
   --velo-divider: color-mix(
     in srgb,
@@ -580,11 +560,8 @@
   /* Border width — hairline stroke, below --velo-banner-border-width(2) /
      --velo-divider-width(3). The default 1px border/divider across admin lists. */
   --velo-border-width: 1px;
-  /* Radius — master-review photo corner (between --velo-radius-9=9 / --radius-md=15). */
-  --velo-radius-14: 14px;
   /* Letter-spacing — uppercase admin labels (value-named, per --text-NN convention). */
-  --velo-letter-spacing-05: 0.5px; /* report-detail label tracking */
-  --velo-letter-spacing-064: 0.64px; /* dashboard section-label tracking */
+  --velo-letter-spacing-05: 0.5px; /* report/support label + dashboard revenue tracking */
   /* Component-size ramp (value-named; extends --velo-size-40/44/46/50 above).
      Admin count-badges, avatars, id circles, week-nav button, review photo. */
   --velo-size-10: 10px; /* bell presence-dot diameter (user dashboard header bell) */
@@ -609,20 +586,14 @@
 
   /* Glass — white alpha ramp. Composer / VTabBar / ExternalActivityCreateView
      share one glass recipe (rim 0.35, field 0.12, ring 0.18, gradient stops
-     0.05/0.15/0.18); 0.01/0.2/0.25 already exist above under their original
-     roles (--velo-glass-white-01 / --velo-write-frost / --velo-glass-white-25);
-     0.2 gets a glass-role twin here so the white ramp is complete and the
-     write-mode role can drift independently. */
+     0.05/0.15/0.18); 0.01/0.25 already exist above under their original
+     roles (--velo-glass-white-01 / --velo-glass-white-25). 0.2 lives here; its
+     write-mode twin --velo-write-frost was removed in Gen-2 (FE-150). */
   --velo-glass-white-05: color-mix(in srgb, var(--velo-white) 5%, transparent);
   --velo-glass-white-12: color-mix(in srgb, var(--velo-white) 12%, transparent);
-  --velo-glass-white-15: rgba(255, 255, 255, 0.15);
   --velo-glass-white-16: color-mix(in srgb, var(--velo-white) 16%, transparent);
   --velo-glass-white-18: color-mix(in srgb, var(--velo-white) 18%, transparent);
-  --velo-glass-white-20: color-mix(
-    in srgb,
-    var(--velo-white) 20%,
-    transparent
-  ); /* = write-frost value, glass role */
+  --velo-glass-white-20: color-mix(in srgb, var(--velo-white) 20%, transparent); /* glass role */
   --velo-glass-white-30: color-mix(
     in srgb,
     var(--velo-white) 30%,
@@ -633,10 +604,7 @@
     var(--velo-white) 35%,
     transparent
   ); /* the glass rim (borders) */
-  --velo-glass-white-55: rgba(255, 255, 255, 0.55); /* inset top highlight */
   --velo-glass-white-70: color-mix(in srgb, var(--velo-white) 70%, transparent); /* active border */
-  --velo-glass-white-75: rgba(255, 255, 255, 0.75); /* inset active highlight */
-  --velo-glass-white-80: rgba(255, 255, 255, 0.8); /* inset focus highlight */
   --velo-glass-white-90: color-mix(
     in srgb,
     var(--velo-white) 90%,
@@ -672,11 +640,12 @@
      sibling of the white ramp above: primary-dark @ 0.6 (value 1:1). */
   --velo-glass-blue-700-60: color-mix(in srgb, var(--velo-blue-700) 60%, transparent);
   /* [F2.0 step-2 addendum] ExternalActivityCreateView save-button focus ring
-     — the glass sibling of --velo-effect-focus above (whole recipe, 1:1). */
+     — the glass sibling of the 2px focus ring --velo-effect-focus (removed in
+     Gen-2, FE-150); whole recipe, 1:1. */
   --velo-effect-focus-glass: 0 0 0 3px var(--velo-glass-blue-15);
 
-  /* Mood-scale secondary fills (IconMoodScale*): the pale fills paired with
-     the --velo-mood-* / --velo-rating-* accents. Named by hue role — one
+  /* Mood-scale secondary fills (IconMoodScale*): the pale fills of the
+     mood-scale faces. Named by hue role — one
      hue serves several scale values, so a per-value name would mislead. */
   --velo-mood-fill-rose: #f9cbd1;
   --velo-mood-fill-teal: #bdecf1;
@@ -687,20 +656,17 @@
      inside fixed <=20px circles/pills) / 10 / 12 / 14 / 16 / 18 / 20 / 22 /
      24 / 28 / 32 / 48. A new size takes the NEAREST step (<=1px off); never
      add a step without the owner. The bare --text-* names are aliases of
-     this ramp (removed in step 4b). --velo-fs-11/13/25 are deprecated
-     contract aliases: Gen-1 keeps the names, Gen-2 deletes them. */
+     this ramp (removed in step 4b). The aliases --velo-fs-11/13/25 were
+     deleted in Gen-2 (FE-150). */
   --velo-fs-8: 8px;
   --velo-fs-10: 10px;
-  --velo-fs-11: var(--velo-fs-12); /* @deprecated 2026-11-01: 11 -> 12, delete in Gen-2 */
   --velo-fs-12: 12px;
-  --velo-fs-13: var(--velo-fs-12); /* @deprecated 2026-11-01: 13 -> 12, delete in Gen-2 */
   --velo-fs-14: 14px;
   --velo-fs-16: 16px;
   --velo-fs-18: 18px;
   --velo-fs-20: 20px;
   --velo-fs-22: 22px;
   --velo-fs-24: 24px;
-  --velo-fs-25: var(--velo-fs-24); /* @deprecated 2026-11-01: 25 -> 24, delete in Gen-2 */
   --velo-fs-28: 28px;
   --velo-fs-32: 32px;
   --velo-fs-48: 48px;
@@ -711,16 +677,15 @@
      by styles/diary-entry-scale.css via --velo-de-k; 1 = off. */
   --velo-diary-entry-scale: 1.15;
 
-  /* Radius ramp + compound shapes (value-named per --velo-radius-9/10/14
-     above; --velo-radius-10 already exists). */
-  --velo-radius-3-5: 3.5px; /* VBottomSheet grab handle */
+  /* Radius ramp + compound shapes (value-named per --velo-radius-9/10
+     above). A corner of exactly half the height is a pill: it takes
+     --velo-radius-pill below, not a value-named step (FE-150). */
   --velo-radius-4: 4px; /* diary thread chips, diary search result rows */
   --velo-radius-8: 8px; /* DiaryThreadCard media */
   --velo-radius-12: 12px; /* external-activity cover, practice-form media */
   --velo-radius-22: 22px; /* composer capsule */
-  --velo-radius-24-5: 24.5px; /* VBottomSheet header block */
-  --velo-radius-31: 31px; /* VAdminTabBar pills */
-  /* Fully-round capsules (VTabBar, Composer). NOT the bare --radius-full
+  /* Fully-round capsules (VTabBar, Composer; VBottomSheet handle and buttons,
+     VAdminTabBar items since FE-150 Gen-2). NOT the bare --radius-full
      (9999px): 999 is the designers' literal; both clamp to a pill, values
      migrate 1:1; no "normalize while we're at it". */
   --velo-radius-pill: 999px;
@@ -728,50 +693,71 @@
   --velo-radius-bar-top: 6px 6px 0 0; /* VBarChart columns */
 
   /* =========================================================================
-   * SKIN-PACKAGE CONTRACT -- GENERATION 1 (tz-whitelabel §3.1, step 3)
-   * Frozen 2026-10-26, after the step-2 migration took the token gate to
-   * zero (pnpm lint:css is part of `pnpm lint`, so CI and the pre-push hook
-   * fail on any raw value outside this file).
+   * SKIN-PACKAGE CONTRACT -- GENERATION 2 = contract "2.0" (FE-150, 2026-11-10)
+   * Generation 1 (tz-whitelabel §3.1, step 3) was frozen 2026-10-26, after
+   * the step-2 migration took the token gate to zero (pnpm lint:css is part
+   * of `pnpm lint`, so CI and the pre-push hook fail on any raw value
+   * outside this file).
    *
-   * A skin package (skin/tokens.css, tz-whitelabel §3) may override the
+   * A skin package (skin/tokens/*.tokens.json, tz-whitelabel §3.2) may set the
    * --velo-* tokens ONLY. The DTCG mapping below is the machine-facing name
-   * each contract branch gets in the skin's brand.json validation (the
+   * each contract branch has in the package's DTCG tokens (the
    * F2 validator reads the same branches). Mapping rule:
    *   --velo-<a>-<b>-<c>  <->  velo.<a>.<b>.<c>
    *
-   * Generation 1 branches (what a skin may retheme):
+   * Branches (what a skin may retheme):
    *   brand color      --velo-primary(-dark), --velo-text-*, --velo-bg-*,
    *                    --velo-border*, --velo-blue-*, --velo-peach-*,
    *                    --velo-pink-*, --velo-teal-*,
    *                    --velo-success/warning/error (+ -bg/-border/-text
    *                    tints), --velo-danger-text, --velo-required-done
    *                    <-> velo.color.*
-   *   accents          --velo-mood-*, --velo-rating-*, --velo-analytics-*,
+   *   accents          --velo-rating-good, --velo-analytics-*,
    *                    --velo-mood-fill-*        <-> velo.accent.*
-   *   glass & fog      --velo-glass-*, --velo-write-* (frost/blur/shadows),
-   *                    --velo-fog-color, --velo-scrim <-> velo.glass.*,
-   *                    velo.fog.color
+   *   glass & fog      --velo-glass-*, --velo-fog-color, --velo-scrim
+   *                    <-> velo.glass.*, velo.fog.color
    *   telegram chrome  --velo-tg-header / --velo-tg-bg / --velo-tg-bg-kbd
    *                    <-> velo.telegram.header / background / keyboard
    *                    (read by NAME via getComputedStyle -- renaming them
    *                    is a breaking platform change, not a retheme)
    *   typography       --velo-fs-8..48 <-> velo.font.size.*; family via
    *                    --font-body (bare, frozen) -- a skin swaps the family
-   *                    through brand.json, which rewrites the link + token
+   *                    through its self-hosted fonts (FE-131) + this token
    *                    SIZE ALIASES (2026-11-01): the bare --text-* size
    *                    names are aliases of --velo-fs-*, so a skin
    *                    overriding velo.font.size.* rethemes them too (step
-   *                    4b removes the bare names). --velo-fs-11/13/25 are
-   *                    deprecated aliases of 12/12/24, kept for Gen-1.
+   *                    4b removes the bare names).
    *   radius           --velo-radius-* <-> velo.radius.*
    *   depth            --velo-shadow-glow(-sm)/glass/toast/switch,
-   *                    --velo-write-shadow-*, --velo-effect-*
+   *                    --velo-write-shadow-*, --velo-effect-focus-glass
    *                    <-> velo.shadow.* / velo.effect.*
    *
    * Generation rules (owner decision 2026-10-24): ADDING a token is free and
    * needs no generation bump. RENAMING or REMOVING a contract token, or
    * changing what a branch means, is GENERATION 2 -- a coordinated skin+app
    * release, announced in this section.
+   *
+   * GENERATION 2 (FE-150, 2026-11-10) -- skin contract "2.0": 22 tokens
+   * with no consumer removed, and 5 rare ramp steps folded into their
+   * neighbours (owner, 10.11). Nothing renamed, no branch changes meaning.
+   *   color     --velo-success-bg, --velo-warning-bg-hover,
+   *             --velo-error-bg-subtle, --velo-peach-100, --velo-pink-50
+   *   accents   --velo-mood-low/mid/high, --velo-rating-confused/fire
+   *   glass     --velo-glass-white-15/55/75/80, --velo-write-frost/blur
+   *   depth     --velo-effect-glow, --velo-effect-focus
+   *   radius    --velo-radius-4-5; folded: --velo-radius-3-5/24-5/31
+   *             -> --velo-radius-pill (each was half its element's
+   *             height; the active admin tab is 63px, so its corner
+   *             grows 0.5px), --velo-radius-14 -> --radius-md (+1px;
+   *             bare, so a skin no longer retunes that photo corner)
+   *   type      --velo-fs-11/13/25 (aliases of 12/12/24); folded:
+   *             --velo-letter-spacing-064 -> --velo-letter-spacing-05
+   * A package that still sets one of them FAILS validate-skin ("not a
+   * token of the product"); this product reads contract 2.x only.
+   * The path for the next removal: DTCG $deprecated in tokens.json
+   * (validate-skin warns, scripts/lib/token-audit.test.mjs keeps the token
+   * consumer-free), then the next generation deletes it.
+   * Report: node scripts/token-audit.mjs
    * ========================================================================= */
 }
 

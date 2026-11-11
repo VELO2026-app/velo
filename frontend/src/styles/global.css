@@ -14,6 +14,9 @@
    sets brand.json fontUrl replaces the preload in index.html; this face then
    simply goes unused and is never fetched. */
 @font-face {
+  /* The face NAME this rule declares (the descriptor --font-body points at),
+     not a property use -- the FE-154 token gate does not apply. */
+  /* stylelint-disable-next-line declaration-property-value-allowed-list */
   font-family: 'Marmelad';
   font-style: normal;
   font-weight: 400;
@@ -393,7 +396,7 @@ ol {
 
 /* === Photo background layer (PROMPT №383) === */
 /* The photo URL is a token so a skin can swap the FORMAT: the golden ships
-   WebP, while already-released skins carry bg/background.png. The build
+   WebP, while already-released skins carry assets/bg/background.png. The build
    (platform/skin.ts materializedSkinTokens) re-points this to whichever file
    the skin package really holds. Also read by the two onboarding overlays. */
 :root {

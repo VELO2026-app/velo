@@ -200,10 +200,13 @@ jobs:
   # tz-whitelabel F5 (FE-114, FE-152): the build matrix IS the whitelabel
   # gate -- golden x every edition of editions.json through PRIMER_EDITION
   # (the machine's channel): a module outside the edition must leave NO
-  # chunks in dist (core: no ai, no payments) -- plus every skins/<name>
-  # x full (brand + tokens from the skin, none of them in golden). One
-  # vite build per cell, one runner per cell; the cell list comes from the
-  # script itself (--list), so a new edition or skin joins the gate without
+  # chunks in dist (core: no ai, no payments) -- plus ONE skin x full cell
+  # on a synthetic package written to the runner's temp dir (velo carries
+  # no skins since FE-131; scripts/make-test-skin.mjs: golden assets, a
+  # contrasting palette, a font) -- the build's skin path (asset spill,
+  # dist/skin prune, @font-face, brand grep) runs on every PR. One vite
+  # build per cell, one runner per cell; the cell list comes from the
+  # script itself (--list), so a new edition joins the gate without
   # touching this file.
   matrix-plan:
     name: matrix — plan
@@ -220,10 +223,13 @@ jobs:
         with:
           node-version: 24
 
-      # --list needs no node_modules (vite is imported lazily).
+      # --list needs no node_modules (vite is imported lazily); neither does
+      # make-test-skin. The skin must exist here too: it names its cell.
       - name: List the cells
         id: plan
-        run: echo "cells=$(node frontend/scripts/build-matrix.mjs --list)" >> "$GITHUB_OUTPUT"
+        run: |
+          node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
+          echo "cells=$(node frontend/scripts/build-matrix.mjs --list --skin "$RUNNER_TEMP/ci-skin")" >> "$GITHUB_OUTPUT"
 
   matrix:
     name: matrix — ${{ matrix.cell }}
@@ -256,9 +262,12 @@ jobs:
       - name: Build + gate the cell
         env:
           CELL: ${{ matrix.cell }}
+        # Every cell job regenerates the synthetic skin (deterministic, no
+        # artifact hop): the cell list and the pre-flight see the same set.
         run: |
           mkdir -p "$RUNNER_TEMP/facts"
-          pnpm -C frontend build:matrix --no-restore --cell "$CELL" --facts-out "$RUNNER_TEMP/facts/cell.json"
+          node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
+          pnpm -C frontend build:matrix --no-restore --skin "$RUNNER_TEMP/ci-skin" --cell "$CELL" --facts-out "$RUNNER_TEMP/facts/cell.json"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -301,7 +310,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/facts-flat"
           i=0
           for f in "$RUNNER_TEMP"/facts/*/cell.json; do i=$((i + 1)); cp "$f" "$RUNNER_TEMP/facts-flat/$i.json"; done
-          node frontend/scripts/build-matrix.mjs --check-assets "$RUNNER_TEMP/facts-flat"
+          node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
+          node frontend/scripts/build-matrix.mjs --check-assets "$RUNNER_TEMP/facts-flat" --skin "$RUNNER_TEMP/ci-skin"
 
   drift-check:
     name: generated.ts drift
