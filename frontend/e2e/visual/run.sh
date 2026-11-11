@@ -10,4 +10,4 @@ head=${2:?head dist dir}
 rm -rf visual-out
 VISUAL_DIST=$base VISUAL_OUT=visual-out/base pnpm exec playwright test --project=visual
 VISUAL_DIST=$head VISUAL_OUT=visual-out/head pnpm exec playwright test --project=visual
-exec node e2e/visual/compare.mjs visual-out
+exec node e2e/visual/compare.ts visual-out

@@ -1,6 +1,6 @@
-// Visual comparison report (FE-162): base/<screen>.png vs head/<screen>.png.
+// Visual comparison report (FE-162), run by node (type stripping): base/<screen>.png vs head/<screen>.png.
 //
-//   node e2e/visual/compare.mjs [dir=visual-out]
+//   node e2e/visual/compare.ts [dir=visual-out]
 //
 // Writes <dir>/report.json and <dir>/report.html (changed screens only: base,
 // head, diff, pixel count), prints the changed screens, and appends them to
@@ -23,8 +23,8 @@ import pixelmatch from 'pixelmatch'
 import { PNG } from 'pngjs'
 
 const dir = resolve(process.argv[2] ?? 'visual-out')
-const png = (side, name) => resolve(dir, side, `${name}.png`)
-const names = (side) =>
+const png = (side: string, name: string): string => resolve(dir, side, `${name}.png`)
+const names = (side: string): string[] =>
   existsSync(resolve(dir, side))
     ? readdirSync(resolve(dir, side))
         .filter((f) => f.endsWith('.png'))
@@ -36,7 +36,7 @@ if (names('base').length === 0 || names('head').length === 0) {
   process.exit(2)
 }
 
-const changed = []
+const changed: Array<{ name: string; reason: string; pixels?: number }> = []
 for (const name of all) {
   if (!existsSync(png('base', name)) || !existsSync(png('head', name))) {
     changed.push({ name, reason: existsSync(png('base', name)) ? 'only in base' : 'only in head' })
@@ -64,7 +64,7 @@ writeFileSync(
   resolve(dir, 'report.json'),
   JSON.stringify({ total: all.length, changed }, null, 2) + '\n',
 )
-const cell = (side, c) =>
+const cell = (side: string, c: { name: string }): string =>
   existsSync(png(side, c.name))
     ? `<td><img src="${side}/${c.name}.png" width="260"></td>`
     : '<td>—</td>'

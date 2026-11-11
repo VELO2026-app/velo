@@ -58,15 +58,22 @@ test('scrub the HARs, save the recording time', () => {
   writeFileSync(META_FILE, JSON.stringify({ recordedAt, paths } satisfies HarMeta, null, 2) + '\n')
 })
 
+/** The parts of a HAR the scrub touches. */
+interface HarPart {
+  headers: Array<{ name: string }>
+  cookies: unknown[]
+}
+interface Har {
+  log: { entries: Array<{ request: HarPart; response: HarPart }> }
+}
+
 /** Drop auth headers and cookies; blank the session token wherever it shows. */
 function scrub(file: string, token: string): void {
-  const har = JSON.parse(readFileSync(file, 'utf8')) as {
-    log: { entries: Array<Record<string, any>> }
-  }
+  const har = JSON.parse(readFileSync(file, 'utf8')) as Har
   const secret = /^(authorization|cookie|set-cookie|x-telegram-init-data)$/i
   for (const entry of har.log.entries) {
     for (const part of [entry.request, entry.response]) {
-      part.headers = part.headers.filter((h: { name: string }) => !secret.test(h.name))
+      part.headers = part.headers.filter((h) => !secret.test(h.name))
       part.cookies = []
     }
   }

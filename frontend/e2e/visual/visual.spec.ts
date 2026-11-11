@@ -2,7 +2,7 @@
  * Visual shots (FE-162): every screen of ./screens.ts, API answered from the
  * HAR of its role (no backend), the clock stood at the recording time. No
  * baselines: the shots go to VISUAL_OUT (e.g. visual-out/head) and
- * ./compare.mjs sets two such folders side by side.
+ * ./compare.ts sets two such folders side by side.
  *
  * A request that is not in the HAR is aborted, which the crash detector
  * reports as a failure: the app now asks for something the recording lacks --
