@@ -44,7 +44,7 @@ export interface TabItem {
   /** Conditional tab (tz-curator.md §1.2): the SHELL drops the tab unless
    *  the named server-side condition holds; VTabBar stays dumb. Omit for
    *  the unconditional default. 'schools' = the account belongs to `>= 1` school
-   *  (stores/schoolsHub, any relation); the MASTER zone's shell keeps the
+   *  (the schools hub, composables/queries/schools.ts, any relation); the MASTER zone's shell keeps the
    *  tab also for the admin-issued founding right (can_create_schools).
    *  FE-151: 'schools' is also an instance option -- with it off the tab is
    *  gone whatever the membership (isOptionEnabled, platform/instance). */
@@ -83,7 +83,7 @@ export const USER_TABS: TabItem[] = [
   // tz-curator.md §1.2 (owner 2026-09-22): the schools tab (i18n:tabs.schools)
   // sits between the diary (i18n:tabs.diary) and profile (i18n:tabs.profile)
   // tabs, shown to anyone who BELONGS to at least one school (the shell
-  // filters by the schoolsHub store) -- curators, masters of, and plain
+  // filters by the schools hub, useSchoolsHub) -- curators, masters of, and plain
   // students in somebody's school alike.
   {
     icon: IconSchool,

@@ -20,6 +20,7 @@
 // =============================================================================
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { applyInstanceConfig } from '@/platform/instance'
 import { createApp, defineComponent, h, nextTick, type App } from 'vue'
 import { createPinia, setActivePinia, type Pinia } from 'pinia'
 import { PiniaColada, useQueryCache } from '@pinia/colada'
@@ -95,7 +96,11 @@ beforeEach(() => {
   vi.mocked(cgApi.getSchools).mockReset()
 })
 
-afterEach(unmountShell)
+afterEach(() => {
+  unmountShell()
+  applyInstanceConfig(null)
+  vi.useRealTimers()
+})
 
 describe('the schools hub', () => {
   it('a plain user with a school gets the tab through /mine alone', async () => {
@@ -188,18 +193,85 @@ describe('the schools hub', () => {
     expect(hub.canCreate.value).toBe(false)
   })
 
-  it('a join refreshes the hub the shell holds: the first school shows the tab', async () => {
+  it('a join re-reads the hub before the navigation, with no shell mounted (the join route is outside the shells)', async () => {
     seedRoles(['user'])
     vi.mocked(cgApi.getMySchools).mockResolvedValue({ items: [] })
     mountShell()
     await flush()
     expect(hub.hasSchools.value).toBe(false)
+    unmountShell() // the join screen replaced the shell
 
     vi.mocked(cgApi.getMySchools).mockResolvedValue({ items: [mineItem()] })
-    await invalidateAfter(useQueryCache(pinia), 'joinSchool')
+    const cache = useQueryCache(pinia)
+    await invalidateAfter(cache, 'joinSchool')
+    await ensureSchoolsHub(cache)
+    expect(cachedHasSchools(cache)).toBe(true)
+
+    // The shell the navigation lands in shows the tab at once.
+    mountShell()
+    expect(hub.hasSchools.value).toBe(true)
+  })
+
+  it('one answer per session: another consumer mounting later asks nothing', async () => {
+    vi.useFakeTimers()
+    seedRoles(['user', 'master'])
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({ items: [mineItem()] })
+    vi.mocked(cgApi.getSchools).mockResolvedValue({ items: [], can_create_schools: false })
+    mountShell()
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(31_000)
+
+    const second = createApp(
+      defineComponent({
+        setup() {
+          useSchoolsHub()
+          return () => h('div')
+        },
+      }),
+    ).use(pinia)
+    second.mount(document.createElement('div'))
+    await vi.advanceTimersByTimeAsync(0)
+    second.unmount()
+
+    expect(cgApi.getMySchools).toHaveBeenCalledTimes(1)
+    expect(cgApi.getSchools).toHaveBeenCalledTimes(1)
+  })
+
+  it('switching to master mode in a mounted shell dials the master surface then', async () => {
+    seedRoles(['user', 'master'], 'user')
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({ items: [] })
+    vi.mocked(cgApi.getSchools).mockResolvedValue({ items: [], can_create_schools: true })
+    mountShell()
+    await flush()
+    expect(cgApi.getSchools).not.toHaveBeenCalled()
+
+    seedRoles(['user', 'master'], 'master')
     await flush()
 
-    expect(hub.hasSchools.value).toBe(true)
+    expect(cgApi.getSchools).toHaveBeenCalledTimes(1)
+    expect(hub.canCreate.value).toBe(true)
+  })
+
+  it('master mode without master CAPABILITY never dials the master surface', async () => {
+    seedRoles(['user'], 'master')
+    vi.mocked(cgApi.getMySchools).mockResolvedValue({ items: [] })
+    mountShell()
+    await flush()
+
+    expect(cgApi.getSchools).not.toHaveBeenCalled()
+  })
+
+  it('FE-151: with the schools option off nothing is asked and no tab shows', async () => {
+    applyInstanceConfig({ options: { payments: 'on' } } as never)
+    seedRoles(['user', 'master'])
+    mountShell()
+    await flush()
+    await ensureSchoolsHub(useQueryCache(pinia))
+
+    expect(cgApi.getMySchools).not.toHaveBeenCalled()
+    expect(cgApi.getSchools).not.toHaveBeenCalled()
+    expect(hub.hasSchools.value).toBe(false)
+    expect(hub.canCreate.value).toBe(false)
   })
 
   it('the end of a session drops the schools (an account switch must not inherit them)', async () => {

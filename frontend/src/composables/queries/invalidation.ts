@@ -53,7 +53,7 @@ export const INVALIDATES = {
    */
   changePractice: [keys.practices.root()],
   /**
-   * `POST /schools/join/{token}`: a new membership -- every school list and
+   * `POST /schools/join` (the token in the body): a new membership -- every school list and
    * the hub (the dock's Schools tab), the school page's relation, and the
    * practice feeds the membership opens.
    */

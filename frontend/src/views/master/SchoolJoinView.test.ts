@@ -50,6 +50,9 @@ vi.mock('@/stores/auth', () => ({
 // app mounts without pinia; what the row refreshes is invalidation.test's.
 const hubRefresh = vi.hoisted(() => vi.fn())
 vi.mock('@/composables/queries/invalidation', () => ({ invalidateAfter: hubRefresh }))
+// ...and re-reads the hub BEFORE navigating (this route is outside the shells).
+const hubReread = vi.hoisted(() => vi.fn())
+vi.mock('@/composables/queries/schools', () => ({ ensureSchoolsHub: hubReread }))
 vi.mock('@pinia/colada', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@pinia/colada')>()),
   useQueryCache: () => ({}),
@@ -133,6 +136,7 @@ beforeEach(() => {
   toastSuccess.mockReset()
   toastError.mockReset()
   hubRefresh.mockReset()
+  hubReread.mockReset()
 })
 
 afterEach(() => {
@@ -312,6 +316,7 @@ describe('SchoolJoinView -- the join gate', () => {
     // FE-88: the join may have created the account's FIRST school -- the
     // dock's tab probe must be refreshed before landing in the shell.
     expect(hubRefresh).toHaveBeenCalledWith(expect.anything(), 'joinSchool')
+    expect(hubReread).toHaveBeenCalledTimes(1)
     expect(replace).toHaveBeenCalledWith({ name: 'user-school', params: { id: 'g1' } })
   })
 

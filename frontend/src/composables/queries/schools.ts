@@ -167,16 +167,21 @@ export const masterSchoolsQuery = defineQueryOptions(() => ({
 // waits for it instead of burning a 403 per shell mount). With the instance
 // option `schools` off (FE-151) neither runs.
 //
-// Fail-closed: no answer (pending, or failed) reads as "no schools" / "no
-// right"; a failed probe is retried by the next shell mount (Colada
-// refetches an entry in error). A membership change made in this app (a
-// join) invalidates the schools root (./invalidation.ts).
+// Fail-closed: until a probe has answered once, it reads as "no schools" /
+// "no right"; a failed probe is retried by the next shell mount (Colada
+// refetches an entry in error), and a failed refresh keeps the last answer.
+// Freshness: like the store before it, one answer per session (staleTime
+// Infinity) -- a mount of another consumer (a practice card, the other zone's
+// shell) asks nothing. A membership change made in this app (a join)
+// invalidates the schools root (./invalidation.ts); one made elsewhere (an
+// invite accepted in the bot) shows from the next session.
 
 /** Query options for every school I belong to, any relation (`GET /schools/mine` items). */
 export const mySchoolsQuery = defineQueryOptions(() => ({
   key: keys.schools.mine('all'),
   query: async (): Promise<SchoolMineItem[]> => (await getMySchools()).items,
   enabled: isOptionEnabled('schools'),
+  staleTime: Number.POSITIVE_INFINITY,
   refetchOnWindowFocus: false,
 }))
 
@@ -190,6 +195,7 @@ export const schoolCreateRightQuery = defineQueryOptions((onMasterSurface: boole
   key: keys.schools.createRight(),
   query: async (): Promise<boolean> => (await getSchools()).can_create_schools ?? false,
   enabled: isOptionEnabled('schools') && onMasterSurface,
+  staleTime: Number.POSITIVE_INFINITY,
   refetchOnWindowFocus: false,
 }))
 
@@ -235,9 +241,15 @@ export function cachedHasSchools(queryCache: QueryCache): boolean {
   )
 }
 
+/** My schools, any relation ([] until the probe answers) -- for a screen that needs only them (a curator check). */
+export function useMySchools() {
+  const mine = useQuery(() => mySchoolsQuery())
+  return computed<SchoolMineItem[]>(() => mine.data.value ?? [])
+}
+
 /**
- * The schools hub for a component (the shells, a curator check): my schools,
- * the tab conditions per zone, the create right.
+ * The schools hub for a shell: my schools, the tab conditions per zone, the
+ * create right.
  */
 export function useSchoolsHub() {
   const auth = useAuthStore()

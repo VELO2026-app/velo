@@ -135,11 +135,9 @@ vi.mock('@/stores/auth', () => ({
 const schoolsHubState: { mine: SchoolMineItem[] } = { mine: [] }
 vi.mock('@/composables/queries/schools', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/composables/queries/schools')>()),
-  useSchoolsHub: () => ({
-    mine: {
-      get value() {
-        return schoolsHubState.mine
-      },
+  useMySchools: () => ({
+    get value() {
+      return schoolsHubState.mine
     },
   }),
 }))

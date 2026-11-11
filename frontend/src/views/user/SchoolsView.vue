@@ -4,7 +4,7 @@
   The schools tab's own screen
   (i18n:user.screens.schools.title; route /user/schools, name user-schools):
   the dock tab is visible only to curators (UserShell filters by the
-  schoolsHub store), and this hub is where it lands.
+  schools hub, useSchoolsHub), and this hub is where it lands.
 
   Per the owner's mockups (Design_prototype/mockups/schools-*.png):
     - no schools -> the default screen with the create-school CTA

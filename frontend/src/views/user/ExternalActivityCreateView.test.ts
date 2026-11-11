@@ -80,7 +80,7 @@ vi.mock('@/stores/auth', () => ({
     get user() {
       return authState.user
     },
-    // schoolsHub (the shell's Schools tab probe, i18n:tabs.schools) reads the store's
+    // the schools hub (the shell's Schools tab probe, i18n:tabs.schools) reads the store's
     // role_switch-derived surface; an empty list = never master-capable here.
     allowedRoles: [],
   }),

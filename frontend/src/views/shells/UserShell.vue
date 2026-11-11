@@ -50,7 +50,7 @@ const router = useRouter()
 // tz-curator.md §1.2 (owner 2026-09-22): the Schools tab (i18n:tabs.schools)
 // follows SCHOOL
 // MEMBERSHIP -- the shell (not VTabBar) drops `requires: 'schools'` tabs
-// unless the schoolsHub store sees the account in at least one school (any
+// unless the schools hub (useSchoolsHub) sees the account in at least one school (any
 // relation). The probe starts on mount; until it settles the tab is simply
 // absent (fail-closed), then appears without a reload.
 // Owner 2026-10-12 (restores 2026-10-02's 77a98d04, supersedes 2026-10-04):

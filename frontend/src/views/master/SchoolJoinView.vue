@@ -147,6 +147,7 @@ import { useSafeArea } from '@/composables/useSafeArea'
 import { useAuthStore } from '@/stores/auth'
 import { useQueryCache } from '@pinia/colada'
 import { invalidateAfter } from '@/composables/queries/invalidation'
+import { ensureSchoolsHub } from '@/composables/queries/schools'
 import { IconLock } from '@/components/icons'
 import { VButton, VEmptyState, VLoader } from '@/components/ui'
 import SchoolInviteCard from '@/components/shared/SchoolInviteCard.vue'
@@ -275,9 +276,13 @@ async function join(): Promise<void> {
     toast.success(t('masterScreens.schoolJoin.joinedToast', { name: preview.value.school.name }))
     // The hub may have answered BEFORE this join (the account's first
     // school): without a fresh read the dock tab stays hidden until a full
-    // reload (FE-88). The invalidation refetches the hub (the shell holds it)
-    // and never rejects -- the navigation never fails with a failed read.
+    // reload (FE-88). This route sits outside the shells, so nothing holds
+    // the hub now -- the invalidation only marks it stale, and the read
+    // happens HERE, before the navigation lands in a shell that shows the
+    // tab at once. Neither rejects: the navigation never fails with a failed
+    // read.
     await invalidateAfter(queryCache, 'joinSchool')
+    await ensureSchoolsHub(queryCache)
     // FE-83: a first-session user meets the onboarding carousel AFTER the
     // join, not before the invitation -- the gate let them straight in. The
     // joined school is remembered locally; the overlay consumes it on done.
