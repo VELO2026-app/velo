@@ -54,7 +54,7 @@
     "@vitejs/plugin-vue": "^6.0.10",
     "@vitest/coverage-v8": "4.1.12",
     "@vue/test-utils": "^2.4.11",
-    "eslint": "^9.20.0",
+    "eslint": "^10.13.0",
     "eslint-plugin-tsdoc": "0.5.4",
     "eslint-plugin-vue": "^10.12.0",
     "globals": "^15.15.0",
