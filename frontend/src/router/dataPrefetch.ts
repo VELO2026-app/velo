@@ -84,15 +84,16 @@ export const TAB_DATA_WARMERS: Readonly<Record<string, Warmer>> = {
     await useDiaryStore().fetchFeed()
   },
   '/user/schools': async () => {
-    const [{ useSchoolsHubStore }, { useAuthStore }, { userSchoolsQuery }] = await Promise.all([
-      import('@/stores/schoolsHub'),
+    const [{ useAuthStore }, { cachedHasSchools, userSchoolsQuery }] = await Promise.all([
       import('@/stores/auth'),
       import('@/composables/queries/schools'),
     ])
-    if (!useSchoolsHubStore().hasSchools) return // no tab, nothing to warm
     const role = useAuthStore().role ?? ''
     if (!role) return // a token without its user yet: the screen loads for itself
-    await warmQuery((cache) => cache.refresh(cache.ensure(userSchoolsQuery(role))))
+    await warmQuery(async (cache) => {
+      if (!cachedHasSchools(cache)) return // no tab, nothing to warm
+      await cache.refresh(cache.ensure(userSchoolsQuery(role)))
+    })
   },
   '/user/profile': warmStats,
 }

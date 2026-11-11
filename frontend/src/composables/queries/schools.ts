@@ -29,8 +29,11 @@
 // moment before the refetch answers.
 // =============================================================================
 
-import { defineQueryOptions, type QueryCache } from '@pinia/colada'
+import { computed } from 'vue'
+import { defineQueryOptions, useQuery, useQueryCache, type QueryCache } from '@pinia/colada'
 import { getMySchools, getSchoolPage, getSchoolPractices, getSchools } from '@/api/schools'
+import { isOptionEnabled } from '@/platform/instance'
+import { useAuthStore } from '@/stores/auth'
 import { keys } from '@/composables/queries/keys'
 import type { SchoolMineItem } from '@/api/types'
 
@@ -138,3 +141,114 @@ export const masterSchoolsQuery = defineQueryOptions(() => ({
   },
   staleTime: 0,
 }))
+
+// =============================================================================
+// The schools hub: does this account see the Schools tab? (FE-166 step 5)
+// =============================================================================
+//
+// One small piece of server truth the SHELLS need before any school screen
+// mounts (tz-curator.md §1.2; this used to be stores/schoolsHub.ts).
+//
+// THE TAB FOLLOWS MEMBERSHIP (owner 2026-09-22, FE-88), not curatorship:
+//   - USER zone: >= 1 JOINED school (FE-93: master / student memberships;
+//     the curated rows /mine still answers -- relation is role-independent
+//     -- are the master list's curator section
+//     (i18n:masterScreens.masterSchools.tab.curator), so a curator switched
+//     to user mode counts their participations only). /schools/mine is a
+//     user surface, so EVERY authenticated account is probed.
+//   - MASTER zone: the same membership (any relation), OR the admin-issued
+//     right to found a school (can_create_schools, BE-18). A right holder
+//     with zero schools keeps their entrance -- the empty hub with its create
+//     CTA (i18n:masterScreens.masterSchools.create) is exactly their screen.
+//
+// The facts ride TWO queries: GET /schools/mine (memberships; everyone) and
+// GET /masters/me/schools (the founding right; only IN MASTER MODE with
+// master capability -- the surface requires the current role, so the probe
+// waits for it instead of burning a 403 per shell mount). With the instance
+// option `schools` off (FE-151) neither runs.
+//
+// Fail-closed: no answer (pending, or failed) reads as "no schools" / "no
+// right"; a failed probe is retried by the next shell mount (Colada
+// refetches an entry in error). A membership change made in this app (a
+// join) invalidates the schools root (./invalidation.ts).
+
+/** Query options for every school I belong to, any relation (`GET /schools/mine` items). */
+export const mySchoolsQuery = defineQueryOptions(() => ({
+  key: keys.schools.mine('all'),
+  query: async (): Promise<SchoolMineItem[]> => (await getMySchools()).items,
+  enabled: isOptionEnabled('schools'),
+  refetchOnWindowFocus: false,
+}))
+
+/**
+ * Query options for the right to found a school (BE-18).
+ *
+ * @param onMasterSurface - In master mode with master capability: only then
+ *   does `/masters/me/schools` answer (403 otherwise).
+ */
+export const schoolCreateRightQuery = defineQueryOptions((onMasterSurface: boolean) => ({
+  key: keys.schools.createRight(),
+  query: async (): Promise<boolean> => (await getSchools()).can_create_schools ?? false,
+  enabled: isOptionEnabled('schools') && onMasterSurface,
+  refetchOnWindowFocus: false,
+}))
+
+/**
+ * The USER-zone tab condition over the /mine answer. FE-93: in user mode only
+ * JOINED schools count; in master mode any relation does. The answer does
+ * not depend on the role, so a role switch recomputes it -- no re-probe.
+ */
+export function hasSchoolsFor(
+  mine: readonly SchoolMineItem[] | undefined,
+  role: string | null,
+): boolean {
+  if (!mine) return false
+  if (role === 'master') return mine.length > 0
+  return mine.some((g) => g.relation !== 'curator')
+}
+
+/** Whether the signed-in account may read the master surface (role master + capability). */
+function onMasterSurface(auth: ReturnType<typeof useAuthStore>): boolean {
+  return auth.role === 'master' && auth.allowedRoles.includes('master')
+}
+
+/**
+ * Load the hub's facts outside a component (the first-screen gate, the idle
+ * prefetch): ensure both entries and refresh them if stale. Never rejects --
+ * a failed probe leaves the tab hidden (fail-closed).
+ */
+export async function ensureSchoolsHub(queryCache: QueryCache = useQueryCache()): Promise<void> {
+  const auth = useAuthStore()
+  if (!isOptionEnabled('schools')) return
+  const probes: Promise<unknown>[] = [queryCache.refresh(queryCache.ensure(mySchoolsQuery()))]
+  if (onMasterSurface(auth)) {
+    probes.push(queryCache.refresh(queryCache.ensure(schoolCreateRightQuery(true))))
+  }
+  await Promise.allSettled(probes)
+}
+
+/** The user-zone tab condition from the cache, outside a component (the idle prefetch). */
+export function cachedHasSchools(queryCache: QueryCache): boolean {
+  return hasSchoolsFor(
+    queryCache.getQueryData<SchoolMineItem[]>(keys.schools.mine('all')),
+    useAuthStore().role,
+  )
+}
+
+/**
+ * The schools hub for a component (the shells, a curator check): my schools,
+ * the tab conditions per zone, the create right.
+ */
+export function useSchoolsHub() {
+  const auth = useAuthStore()
+  const mine = useQuery(() => mySchoolsQuery())
+  const right = useQuery(() => schoolCreateRightQuery(onMasterSurface(auth)))
+  return {
+    /** Schools I belong to, any relation ([] until the probe answers). */
+    mine: computed<SchoolMineItem[]>(() => mine.data.value ?? []),
+    /** The user-zone tab condition (fail-closed). */
+    hasSchools: computed(() => hasSchoolsFor(mine.data.value, auth.role)),
+    /** The founding right (false until the master-surface probe answers). */
+    canCreate: computed(() => right.data.value ?? false),
+  }
+}

@@ -32,8 +32,8 @@ export const FIRST_SCREEN_DATA_CAP_MS = 1000
 async function warmShell(path: string): Promise<void> {
   const zone = path.split('/')[1]
   if (zone !== 'user' && zone !== 'master') return
-  const { useSchoolsHubStore } = await import('@/stores/schoolsHub')
-  await useSchoolsHubStore().ensureCurator()
+  const { ensureSchoolsHub } = await import('@/composables/queries/schools')
+  await ensureSchoolsHub()
 }
 
 function delay(ms: number): Promise<void> {

@@ -34,14 +34,14 @@
 
 <script setup lang="ts">
 import { rootComputedStyle } from '@/platform/dom'
-import { computed, onMounted } from 'vue'
+import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { warmRoute } from '@/router/prefetch'
 import { MobileLayout } from '@/components/layout'
 import TabRouterView from '@/components/layout/TabRouterView.vue'
 import { USER_TABS, type TabItem } from '@/router/tabs'
 import { useKeyboardOpen } from '@/composables/useKeyboardOpen'
-import { useSchoolsHubStore } from '@/stores/schoolsHub'
+import { useSchoolsHub } from '@/composables/queries/schools'
 import { isOptionEnabled } from '@/platform/instance'
 
 const route = useRoute()
@@ -58,15 +58,14 @@ const router = useRouter()
 // account in user mode keeps the full plain-user set (the Diary tab,
 // i18n:tabs.diary, the
 // dashboard's quick access), curator capability or not.
-const schoolsHub = useSchoolsHubStore()
-onMounted(() => {
-  void schoolsHub.ensureCurator()
-})
+// The hub's queries load on mount and retry a failed probe on the next one
+// (composables/queries/schools.ts, useSchoolsHub).
+const schoolsHub = useSchoolsHub()
 
 const visibleTabs = computed<TabItem[]>(() =>
   USER_TABS.filter((tab) => {
     // FE-151: the instance option first, then membership (server data).
-    if (tab.requires === 'schools') return isOptionEnabled('schools') && schoolsHub.hasSchools
+    if (tab.requires === 'schools') return isOptionEnabled('schools') && schoolsHub.hasSchools.value
     return true
   }),
 )

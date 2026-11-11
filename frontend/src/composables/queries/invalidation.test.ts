@@ -41,6 +41,7 @@ const EXPECTED: Record<MutationName, Domain[]> = {
   submitFeedback: ['bookings'],
   submitReflection: ['bookings'],
   changePractice: ['practices'],
+  joinSchool: ['schools', 'practices'],
 }
 
 function stale(domain: Domain): boolean {

@@ -336,7 +336,7 @@ import {
 } from '@/components/ui'
 import { VHeader } from '@/components/layout'
 import { useAuthStore } from '@/stores/auth'
-import { useSchoolsHubStore } from '@/stores/schoolsHub'
+import { useSchoolsHub } from '@/composables/queries/schools'
 import { useToast } from '@/composables/useToast'
 import { useCancelBooking } from '@/composables/queries/bookings'
 import { extractApiError } from '@/composables/useApiError'
@@ -402,15 +402,15 @@ const isMaster = computed(() => !!practice.value && practice.value.master_id ===
 // already be in the master role -- roleGuard('master') on the /master shell
 // silently bounces any other role to /user/dashboard, and auth.switchRole is
 // a tester-only tool, never a navigation step. `schoolsHub.mine` (relation
-// per school) is warmed by both shells' ensureCurator(); a probe still in
+// per school) is the shells' own hub query (useSchoolsHub); a probe still in
 // flight keeps the kebab hidden and lets it appear once the data lands --
 // fail-closed, the same contract the schools tab (i18n:tabs.schools) follows.
 // =========================================================================
-const schoolsHub = useSchoolsHubStore()
+const schoolsHub = useSchoolsHub()
 const isCuratorOfSchool = computed((): boolean => {
   const schoolId = practice.value?.school_id
   if (!schoolId) return false
-  return schoolsHub.mine.some((g) => g.relation === 'curator' && g.id === schoolId)
+  return schoolsHub.mine.value.some((g) => g.relation === 'curator' && g.id === schoolId)
 })
 const isEditableStatus = computed((): boolean => {
   const status = practice.value?.status

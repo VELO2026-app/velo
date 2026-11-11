@@ -45,12 +45,14 @@ vi.mock('@/stores/auth', () => ({
 }))
 
 // FE-88: a successful join must refresh the dock's schools tab probe
-// (i18n:tabs.schools; the
-// account may have just gained its first school). Mocked wholesale: this
-// app mounts without pinia, and the refresh is the only hub seam used here.
-const hubRefresh = vi.fn()
-vi.mock('@/stores/schoolsHub', () => ({
-  useSchoolsHubStore: () => ({ refreshCurator: hubRefresh }),
+// (i18n:tabs.schools; the account may have just gained its first school) --
+// since FE-166 step 5 by invalidating INVALIDATES.joinSchool. Mocked: this
+// app mounts without pinia; what the row refreshes is invalidation.test's.
+const hubRefresh = vi.hoisted(() => vi.fn())
+vi.mock('@/composables/queries/invalidation', () => ({ invalidateAfter: hubRefresh }))
+vi.mock('@pinia/colada', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@pinia/colada')>()),
+  useQueryCache: () => ({}),
 }))
 
 // OnboardingView is a heavy carousel with its own test file; the join flow
@@ -309,7 +311,7 @@ describe('SchoolJoinView -- the join gate', () => {
     expect(toastSuccess).toHaveBeenCalledWith('Вы вступили в школу «Тихая школа»')
     // FE-88: the join may have created the account's FIRST school -- the
     // dock's tab probe must be refreshed before landing in the shell.
-    expect(hubRefresh).toHaveBeenCalledTimes(1)
+    expect(hubRefresh).toHaveBeenCalledWith(expect.anything(), 'joinSchool')
     expect(replace).toHaveBeenCalledWith({ name: 'user-school', params: { id: 'g1' } })
   })
 
@@ -407,7 +409,7 @@ describe('SchoolJoinView -- the join gate', () => {
     // FE-88 still applies: the dock's schools tab probe (i18n:tabs.schools)
     // refreshes even though
     // the navigation into the shell is deferred behind the carousel.
-    expect(hubRefresh).toHaveBeenCalledTimes(1)
+    expect(hubRefresh).toHaveBeenCalledWith(expect.anything(), 'joinSchool')
     expect(replace).not.toHaveBeenCalled()
     // The overlay (and its stub carousel) is Teleported to body.
     expect(document.body.querySelector('.cg-join__onboarding')).toBeTruthy()

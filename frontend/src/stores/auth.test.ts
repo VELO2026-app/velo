@@ -34,12 +34,11 @@ import { setActivePinia, createPinia } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
 import { useMasterStore } from '@/stores/master'
 import { useBookingsStore } from '@/stores/bookings'
-import { useSchoolsHubStore } from '@/stores/schoolsHub'
 import { accountScopePlugin } from '@/platform/session'
 import { flushPersisted, readPersisted, writePersisted } from '@/composables/persistedCache'
 import { api, ApiNetworkError, ApiResponseError } from '@/api/client'
 import * as usersApi from '@/api/users'
-import type { AuthResponse, MasterProfileResponse, SchoolMineItem, UserResponse } from '@/api/types'
+import type { AuthResponse, MasterProfileResponse, UserResponse } from '@/api/types'
 
 vi.mock('@/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api/client')>()
@@ -83,9 +82,6 @@ function fillAccountStores(): void {
   master.profileLoaded = true
   const bookings = useBookingsStore()
   bookings.dismissCheckin('practice_1')
-  const hub = useSchoolsHubStore()
-  hub.mine = [{ id: 'school_1' } as SchoolMineItem]
-  hub.canCreate = true
 }
 
 /** The same stores are back to their initial state. */
@@ -95,9 +91,6 @@ function expectAccountStoresReset(): void {
   expect(master.profileLoaded).toBe(false)
   const bookings = useBookingsStore()
   expect(bookings.dismissedCheckins).toEqual([])
-  const hub = useSchoolsHubStore()
-  expect(hub.mine).toEqual([])
-  expect(hub.canCreate).toBe(false)
 }
 
 function fakeUser(overrides: Partial<UserResponse> = {}): UserResponse {
