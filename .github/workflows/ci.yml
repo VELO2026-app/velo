@@ -265,7 +265,7 @@ jobs:
       - name: Smoke scenarios
         run: pnpm -C frontend test:e2e:run
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-traces
@@ -344,7 +344,7 @@ jobs:
           node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
           pnpm -C frontend build:matrix --no-restore --skin "$RUNNER_TEMP/ci-skin" --cell "$CELL" --facts-out "$RUNNER_TEMP/facts/cell.json"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: matrix-facts-${{ strategy.job-index }}
           path: ${{ runner.temp }}/facts/cell.json
