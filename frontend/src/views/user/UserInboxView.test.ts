@@ -34,7 +34,9 @@ import * as notificationsApi from '@/api/notifications'
 import * as cgApi from '@/api/schools'
 import type { NotificationItem } from '@/api/notifications'
 import type { SchoolMineItem } from '@/api/types'
-import { useNotificationsStore } from '@/stores/notifications'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
+import { keys } from '@/composables/queries/keys'
 import { useAuthStore } from '@/stores/auth'
 
 vi.mock('@/api/notifications')
@@ -125,9 +127,11 @@ function readAllButton(): HTMLElement | undefined {
 }
 
 beforeEach(() => {
-  // The view reads the notifications store (the dock bell's dot) -- give it a
-  // fresh Pinia per test, same house pattern as UserDashboardView.test.ts.
-  setActivePinia(createPinia())
+  // The view writes the bell's badge entry (Colada, queries/notifications.ts)
+  // -- give it a fresh Pinia + Colada per test.
+  const pinia = createPinia()
+  createApp({}).use(pinia).use(PiniaColada, coladaOptions)
+  setActivePinia(pinia)
   push.mockReset()
   back.mockReset()
   toastError.mockReset()
@@ -665,7 +669,7 @@ describe('UserInboxView', () => {
     expect(toastError).toHaveBeenCalledWith('Не удалось отметить прочитанным')
   })
 
-  it('server-confirmed badges reach the dock-bell store (the dot tracks this screen)', async () => {
+  it('server-confirmed badges reach the bell badge entry (the dot tracks this screen)', async () => {
     vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
       items: [item({ id: 'a', read_at: null })],
       next_cursor: null,
@@ -676,13 +680,13 @@ describe('UserInboxView', () => {
     await flush()
 
     // load() applied the feed badge...
-    expect(useNotificationsStore().unread).toBe(1)
+    expect(useQueryCache().getQueryData(keys.notifications.unread())).toBe(1)
 
     readAllButton()?.click()
     await flush()
 
     // ...and mark-all applied the fresh one -- the dock dot clears with it.
-    expect(useNotificationsStore().unread).toBe(0)
+    expect(useQueryCache().getQueryData(keys.notifications.unread())).toBe(0)
   })
 
   it('the back button calls router.back()', async () => {
@@ -846,7 +850,7 @@ describe('UserInboxView', () => {
 
       expect(rows()).toHaveLength(1)
       expect(isUnread(row(0))).toBe(false)
-      expect(useNotificationsStore().unread).toBe(0)
+      expect(useQueryCache().getQueryData(keys.notifications.unread())).toBe(0)
       expect(readAllButton()).toBeFalsy()
       // The only API the bell touched is the feed.
       expect(notificationsApi.listNotifications).toHaveBeenCalledTimes(1)
@@ -870,7 +874,7 @@ describe('UserInboxView', () => {
       await flush()
 
       expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith('srv')
-      expect(useNotificationsStore().unread).toBe(0)
+      expect(useQueryCache().getQueryData(keys.notifications.unread())).toBe(0)
     })
   })
 })

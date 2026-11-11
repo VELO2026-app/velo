@@ -117,7 +117,8 @@ import NotificationRow from '@/components/shared/NotificationRow.vue'
 import { useToast } from '@/composables/useToast'
 import { useRememberedCount } from '@/composables/useRememberedCount'
 import { extractApiError } from '@/composables/useApiError'
-import { useNotificationsStore } from '@/stores/notifications'
+import { useQueryCache } from '@pinia/colada'
+import { applyUnread } from '@/composables/queries/notifications'
 import { useAuthStore } from '@/stores/auth'
 import { isOptionEnabled } from '@/platform/instance'
 import {
@@ -132,7 +133,7 @@ const toast = useToast()
 // The dashboard bell's presence dot (UserDashboardView) reads this store;
 // every server-confirmed badge below keeps it in step with this screen's
 // actions.
-const notifications = useNotificationsStore()
+const queryCache = useQueryCache()
 const auth = useAuthStore()
 
 const loading = ref(true)
@@ -191,7 +192,7 @@ async function load(): Promise<void> {
     const page = await listNotifications()
     items.value = page.items
     unread.value = page.unread
-    notifications.applyUnread(page.unread)
+    applyUnread(queryCache, page.unread)
   } catch (e) {
     error.value = extractApiError(e, t('common.tryAgain'))
   } finally {
@@ -211,7 +212,7 @@ async function markOne(item: NotificationItem): Promise<void> {
   try {
     const result = await markNotificationRead(item.id)
     unread.value = result.unread
-    notifications.applyUnread(result.unread)
+    applyUnread(queryCache, result.unread)
   } catch (e) {
     item.read_at = previousReadAt
     unread.value = previousUnread
@@ -230,7 +231,7 @@ async function markAll(): Promise<void> {
   try {
     const result = await markAllNotificationsRead()
     unread.value = result.unread
-    notifications.applyUnread(result.unread)
+    applyUnread(queryCache, result.unread)
   } catch (e) {
     items.value.forEach((i, idx) => {
       i.read_at = previous[idx] ?? null

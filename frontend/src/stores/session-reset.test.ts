@@ -27,7 +27,6 @@ import { api } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { useAdminStore } from '@/stores/admin'
 import { useDiaryStore } from '@/stores/diary'
-import { useNotificationsStore } from '@/stores/notifications'
 import { usePracticesStore } from '@/stores/practices'
 
 type StoreFactory = () => StoreGeneric
@@ -135,7 +134,6 @@ describe('the store set', () => {
         'calendar',
         'diary',
         'master',
-        'notifications',
         'practices',
       ]),
     )
@@ -293,13 +291,13 @@ describe('the end of a session leaves every store in its initial state', () => {
       useDiaryStore().fetchFeed(),
       useDiaryStore().fetchEntry('entry_1'),
       useDiaryStore().loadInsights('practice_1'),
-      useNotificationsStore().refreshUnread(),
       usePracticesStore().fetchPractice('practice_1'),
       // The bookings and calendar stores hold no server data since FE-166
       // steps 3-4, and neither do the schools hub (no store at all) and the
-      // master store since step 5; their queries are Colada entries, emptied
-      // by the account scope (composables/queries/setup.test.ts,
-      // schoolsHub.test.ts, master.test.ts).
+      // master store since step 5, nor the bell's badge since step 6; their
+      // queries are Colada entries, emptied by the account scope
+      // (composables/queries/setup.test.ts, schoolsHub.test.ts,
+      // master.test.ts, notifications.test.ts).
     ]
 
     await useAuthStore().logout()
@@ -317,7 +315,6 @@ describe('the end of a session leaves every store in its initial state', () => {
     ['diary feed', () => useDiaryStore().fetchFeed()],
     ['diary entry', () => useDiaryStore().fetchEntry('entry_1')],
     ['diary insights', () => useDiaryStore().loadInsights('practice_1')],
-    ['notifications badge', () => useNotificationsStore().refreshUnread()],
     ['practice detail', () => usePracticesStore().fetchPractice('practice_1')],
   ]
   for (const [name, run] of ownRequests) {

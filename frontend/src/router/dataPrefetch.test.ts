@@ -28,13 +28,11 @@ vi.mock('@/platform/dom', async (importOriginal) => {
   }
 })
 
-vi.mock('@/stores/notifications', () => ({
-  useNotificationsStore: () => ({
-    refreshUnread: () => {
-      calls.push('bell')
-      return Promise.resolve()
-    },
-  }),
+vi.mock('@/composables/queries/notifications', () => ({
+  refreshUnread: () => {
+    calls.push('bell')
+    return Promise.resolve()
+  },
 }))
 vi.mock('@/stores/calendar', () => ({
   homeWeekParams: () => ({

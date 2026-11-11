@@ -106,6 +106,13 @@ export const keys = {
     members: (groupId: string, search: string) =>
       ['groups', 'members', { groupId, search }] as const,
   },
+  /** The user-zone bell. */
+  notifications: {
+    /** Prefix of every notification key. */
+    root: () => ['notifications'] as const,
+    /** The unread badge riding `GET /notifications` (no separate unread endpoint exists). */
+    unread: () => ['notifications', 'unread'] as const,
+  },
   /** Bookings of the signed-in user and what is derived from them. */
   bookings: {
     /** Prefix of every booking key. */
