@@ -21,6 +21,9 @@
 #                  seeded with the `e2e` profile (.github/workflows/e2e-stack.yml,
 #                  which also runs nightly on test with WebKit). Advisory
 #                  during burn-in, see the job.
+#   visual       — FE-162: key screens of the head and the base build from
+#                  recorded API answers, pixel-compared; informational, red
+#                  only for a PR labeled `no-visual-change` (see the job).
 #   matrix-plan, matrix, matrix-gate
 #                — the whitelabel build matrix (FE-114, FE-152) fanned out one
 #                  runner per cell (`build-matrix.mjs --cell`); matrix-gate
@@ -71,17 +74,23 @@ on:
     branches: [test]
   pull_request:
     branches: [test]
+    # labeled/unlabeled: FE-162 -- a `visual` / `no-visual-change` label put on
+    # (or taken off) an open PR re-runs the visual job. Nothing else reacts to
+    # them: `scope` is skipped on those events, and every other job needs it.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  # A label event gets its own group: it must not cancel the PR's gate run.
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}${{ (github.event.action == 'labeled' || github.event.action == 'unlabeled') && '-label' || '' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   scope:
     name: scope
+    if: github.event.action != 'labeled' && github.event.action != 'unlabeled'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -302,6 +311,123 @@ jobs:
     with:
       projects: sweep
       advisory: true
+
+  # FE-162: visual-scope decides whether the visual job runs.
+  #   push to test                      -> no
+  #   a label event                     -> only for `visual` / `no-visual-change`
+  #   opened / synchronize / reopened   -> the `visual` or `no-visual-change`
+  #                                        label, or a PR that touches styles,
+  #                                        tokens, velo-ui, public/, the lockfile
+  # `strict` = the PR carries `no-visual-change`: a non-empty report fails.
+  visual-scope:
+    name: visual — scope
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+      strict: ${{ steps.decide.outputs.strict }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - name: Classify the PR diff
+        id: scope
+        run: node .github/scripts/ci-scope.mjs HEAD^1 HEAD
+
+      - name: Decide
+        id: decide
+        env:
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          ACTION: ${{ github.event.action }}
+          CHANGED_LABEL: ${{ github.event.label.name }}
+          PATHS: ${{ steps.scope.outputs.visual }}
+        run: |
+          has() { echo "$LABELS" | grep -q "\"$1\""; }
+          strict=false; has no-visual-change && strict=true
+          run=false
+          case "$ACTION" in
+            labeled|unlabeled)
+              case "$CHANGED_LABEL" in visual|no-visual-change) run=true ;; esac ;;
+            *)
+              if [ "$PATHS" = true ] || has visual || [ "$strict" = true ]; then run=true; fi ;;
+          esac
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "strict=$strict" >> "$GITHUB_OUTPUT"
+
+  # FE-162: what did a refactor PR change on screen? The head build and the
+  # base (origin/test) build, each shot on 19 key screens from recorded API
+  # answers (frontend/e2e/visual/har, no backend), compared pixel by pixel.
+  # Informational by default; with `no-visual-change` a non-empty report fails
+  # the job. The container is Playwright's own image so fonts render the same
+  # every run -- its tag MUST equal @playwright/test (checked below).
+  visual:
+    name: visual — base vs head
+    needs: visual-scope
+    if: needs.visual-scope.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    continue-on-error: ${{ needs.visual-scope.outputs.strict != 'true' }}
+    container: mcr.microsoft.com/playwright:v1.64.1-noble
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The PR merge commit and its first parent (the base tip).
+          fetch-depth: 2
+
+      - name: Mark the workspace safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Base checkout (the PR's base tip)
+        run: git worktree add --detach "$RUNNER_TEMP/base" HEAD^1
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 12.4.2
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install head (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      # The base has its own lockfile: a dependency upgrade is exactly what
+      # this job is for.
+      - name: Install base (frozen lockfile)
+        working-directory: ${{ runner.temp }}/base
+        run: pnpm install --frozen-lockfile
+
+      - name: The image matches @playwright/test
+        working-directory: frontend
+        run: |
+          v=$(pnpm exec playwright --version | awk '{print $2}')
+          [ "$v" = "1.64.1" ] || { echo "playwright $v does not match the image tag v1.64.1 -- update container: above"; exit 1; }
+
+      - name: Build head
+        run: pnpm -C frontend build
+
+      - name: Build base
+        working-directory: ${{ runner.temp }}/base
+        run: pnpm -C frontend build
+
+      - name: Shoot both builds and compare
+        working-directory: frontend
+        env:
+          VISUAL_STRICT: ${{ needs.visual-scope.outputs.strict == 'true' && '1' || '0' }}
+        run: sh e2e/visual/run.sh "$RUNNER_TEMP/base/frontend/dist" dist
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: visual-out
+          path: |
+            frontend/visual-out
+            frontend/test-results
+          retention-days: 7
 
   # tz-whitelabel F5 (FE-114, FE-152): the build matrix IS the whitelabel
   # gate -- golden x every edition of editions.json through PRIMER_EDITION

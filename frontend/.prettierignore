@@ -5,3 +5,5 @@ src/api/generated.ts
 # as JSON.stringify(doc, null, 2); the root lint-staged prettier pass
 # (FE-157) would collapse its short arrays and the next sync would undo it.
 tokens.json
+# FE-162: recorded API answers, machine-written (JSON.stringify), never hand-formatted.
+e2e/visual/har/
