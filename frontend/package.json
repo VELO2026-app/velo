@@ -24,8 +24,11 @@
     "tokens:sync": "node scripts/sync-figma-variables.mjs --rest",
     "test:coverage": "vitest run --coverage && node --test scripts/lib/*.test.mjs",
     "coverage:budget": "node scripts/coverage-budget.mjs",
-    "test:e2e": "pnpm build && playwright test",
-    "test:e2e:run": "playwright test"
+    "test:e2e": "pnpm build && playwright test --project=smoke",
+    "test:e2e:run": "playwright test --project=smoke",
+    "e2e:smoke": "playwright test --project=smoke",
+    "e2e:sweep": "playwright test --project=sweep",
+    "e2e:sweep:ci": "playwright test --reporter=github,./e2e/support/crash-reporter.ts"
   },
   "dependencies": {
     "@pinia/colada": "1.4.8",

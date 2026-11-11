@@ -15,7 +15,7 @@
 -->
 
 <template>
-  <div class="login velo-kbd-scroll">
+  <div class="login velo-kbd-scroll" data-testid="login">
     <div class="login__logo">
       <VeloLogo :size="120" />
     </div>

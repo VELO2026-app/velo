@@ -16,6 +16,11 @@
 #                  vue-tsc + vite build with the FE-153 build-log gate.
 #   e2e          — Playwright smoke scenarios on the golden build served by
 #                  `vite preview`, API mocked (frontend/e2e/); Chromium cached.
+#                  Every test runs under the crash detector (FE-161).
+#   e2e-stack    — FE-161: the sweep -- every route x role on a REAL backend
+#                  seeded with the `e2e` profile (.github/workflows/e2e-stack.yml,
+#                  which also runs nightly on test with WebKit). Advisory
+#                  during burn-in, see the job.
 #   matrix-plan, matrix, matrix-gate
 #                — the whitelabel build matrix (FE-114, FE-152) fanned out one
 #                  runner per cell (`build-matrix.mjs --cell`); matrix-gate
@@ -273,8 +278,8 @@ jobs:
       - name: Build the app (golden)
         run: pnpm -C frontend build
 
-      - name: Smoke scenarios
-        run: pnpm -C frontend test:e2e:run
+      - name: Smoke scenarios (+ crash-detector self-checks)
+        run: pnpm -C frontend e2e:smoke
 
       - uses: actions/upload-artifact@v7
         if: failure()
@@ -282,6 +287,21 @@ jobs:
           name: playwright-traces
           path: frontend/test-results
           retention-days: 7
+
+  # FE-161: the sweep on a real backend. Runs for frontend changes AND for
+  # backend ones (scope `drift`): a renamed response field breaks a screen
+  # without touching frontend/. BURN-IN: advisory (a red sweep does not fail
+  # the check) until 10 green runs in a row on test / two weeks; then the
+  # owner drops `advisory` and makes `e2e-stack — sweep on a real backend`
+  # a required check.
+  e2e-stack:
+    name: e2e-stack
+    needs: scope
+    if: needs.scope.outputs.frontend == 'full' || needs.scope.outputs.drift == 'true'
+    uses: ./.github/workflows/e2e-stack.yml
+    with:
+      projects: sweep
+      advisory: true
 
   # tz-whitelabel F5 (FE-114, FE-152): the build matrix IS the whitelabel
   # gate -- golden x every edition of editions.json through PRIMER_EDITION
